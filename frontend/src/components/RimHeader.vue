@@ -1,0 +1,78 @@
+<template>
+  <!-- =======================
+        顶部功能栏 (Navbar)
+      ======================= -->
+  <header class="m-1 h-14 bg-bg-surface/60 backdrop-blur-md rounded-2xl flex items-center px-3 justify-between border border-white/5 shadow-lg shrink-0 z-50">
+    <!-- 标题 -->
+    <div class="flex items-center gap-4 mx-1 ">
+      <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-white to-gray-400 bg-clip-text text-transparent">
+        <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
+      </h1>
+      <span class="px-2 py-0.5 rounded text-[10px] bg-white/5 text-text-dim border border-white/5">DEV BUILD</span>
+      
+      <div>
+        <h3>Game Version</h3>
+        <span class="text-xs text-text-dim">{{store.settings.game_version}}</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- 设置按钮 -->
+      <button @click="modStore.showSettings = true" title="设置"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+    </div>
+  </header>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useModStore } from '../stores/modStore'
+
+const store = useModStore()
+defineProps({
+  msg: String,
+})
+
+const count = ref(0)
+
+</script>
+
+
+<style scoped>
+.read-the-docs {
+  color: #888;
+}
+
+/* 文本呼吸光晕 */
+@keyframes breathe {
+    0%, 100% { text-shadow: 0 0 5px rgba(59, 130, 246, 0.7), 0 0 10px rgba(59, 130, 246, 0.5); }
+    50% { text-shadow: 0 0 15px rgba(59, 130, 246, 0.9), 0 0 30px rgba(59, 130, 246, 0.7), 0 0 45px rgba(59, 130, 246, 0.5); }
+}
+.animate-breathe { animation: breathe 8s ease-in-out infinite; }
+
+/* 圆形光晕 */
+@layer utilities {
+  .bg-glow {
+    position: relative;
+    isolation: isolate;
+  }
+  .bg-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(59, 130, 246, 0.8) 0%, rgba(59, 130, 246, 0) 70%);
+    filter: blur(5px);
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+  }
+  .hover\:bg-glow:hover::before {
+    opacity: 1;
+  }
+}
+</style>

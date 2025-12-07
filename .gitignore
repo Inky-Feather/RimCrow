@@ -1,0 +1,15 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.vscode/
+.history/
+cache/
+backups/
+*.db
+*.db-*
+# Virtual environments
+.venv
