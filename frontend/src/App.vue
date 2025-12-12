@@ -5,7 +5,7 @@
     <div ref="containerRef" class="flex flex-1 w-full overflow-hidden relative ">
       
       <!-- ================= COLUMN 1: 详情 (Details) ================= -->
-      <div class="h-full p-1 overflow-hidden relative transition-opacity"
+      <div class="h-full p-1 relative transition-opacity"
           :style="{ width: colWidths[0] + 'px' }">
           <div class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
             <ModDetails />
@@ -18,14 +18,9 @@
 
 
       <!-- ================= COLUMN 2: 待选库 (Library) ================= -->
-      <div class="h-full p-1 overflow-hidden relative transition-opacity"
+      <div class="h-full p-1 transition-opacity"
            :style="{ width: colWidths[1] + 'px' }">
-          <div class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
-            <!-- 光圈 -->
-            <div class="absolute inset-0 border-2 border-accent-success/10 rounded-2xl pointer-events-none z-0"></div>
-            <ModList v-model="store.inactiveIds" title="inactive" listColor="primary" />
-
-          </div>
+           <ModList v-model="store.inactiveIds" title="inactive" listColor="primary" />
       </div>
 
       <!-- 分割线 2 -->
@@ -33,13 +28,9 @@
                @mousedown="startResize(1, $event)" />
 
       <!-- ================= COLUMN 3: 启用/排序 (Active) ================= -->
-      <div class="h-full p-1 overflow-hidden relative transition-opacity"
+      <div class="h-full p-1 transition-opacity"
            :style="{ width: colWidths[2] + 'px' }">
-          <div class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
-            
             <ModList v-model="store.activeIds" title="active" :hasSidebar=true listColor="success" />
-            
-          </div>
       </div>
 
       <!-- 分割线 3 -->
@@ -48,23 +39,36 @@
 
 
       <!-- ================= COLUMN 4: 辅助/分组 (Tabs) ================= -->
-      <div class="h-full p-1 flex flex-col overflow-hidden relative transition-opacity"
+      <div class="h-full p-1 flex flex-col transition-opacity relative"
            :style="{ width: colWidths[3] + 'px' }">
-          <div class="flex-1 rounded-t-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 ">
-            <!-- 标签页切换 -->
-            <div class="absolute right-10 flex border-b border-white/5 text-xs font-bold ">
-              <button v-for="tab in ['Temp', 'Groups']" :key="tab" @click="activeTab = tab"
-                class="flex-1 py-2 text-center transition-colors relative m-0.5 cursor-pointer "
-                :class="activeTab === tab ? 'text-accent-secondary' : 'text-gray-500 hover:text-text-main'"
-              >
-                {{ tab }}
-                <!-- <div v-if="activeTab === tab" class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary"></div> -->
-              </button>
-            </div>
+          <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
+            <Transition
+              enter-active-class="transition-opacity duration-300 ease-out"
+              enter-from-class="opacity-0"
+              enter-to-class="opacity-100"
+              leave-active-class="transition-opacity duration-300 ease-in"
+              leave-from-class="opacity-100"
+              leave-to-class="opacity-0">
+              <KeepAlive>
 
-            <ModList v-if="activeTab === 'Temp'" v-model="store.tempIds" title="temp" listColor="warning"/>
-            <GroupList v-if="activeTab === 'Groups'" v-model="store.groupList" variant="group" listColor="special"/>
+                <ModList v-if="activeTab === 'Temp'" v-model="store.tempIds" title="temp" listColor="warning" 
+                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                <GroupList v-else-if="activeTab === 'Groups'" title="Groups" listColor="special" 
+                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
 
+              </KeepAlive>
+            </Transition>
+          </div>
+
+          <!-- 标签页切换 -->
+          <div class="absolute right-15 top-0.5 flex text-xs font-bold ">
+            <button v-for="tab in ['Temp', 'Groups']" :key="tab" @click="activeTab = tab"
+              class="flex-1 py-2 text-center transition-colors relative m-0.5 cursor-pointer "
+              :class="activeTab === tab ? 'text-accent-secondary' : 'text-gray-500 hover:text-text-main'"
+            >
+              {{ tab }}
+              <div v-if="activeTab === tab" class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary"></div>
+            </button>
           </div>
           
           <!-- 按钮组 -->

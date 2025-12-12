@@ -7,15 +7,30 @@ Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://
 - 数据处理
 
   - [x] 加载mod信息
+
   - [x] 建立mod信息数据库
+
   - [x] 加载mod配置列表
+
   - [x] 写入保存mod配置列表
+
   - [ ] 分组/标签数据结构设计
+
   - [ ] 链接数据结构设计
+
   - [ ] 日志功能
+
   - [ ] 删除mod文件
+
   - [ ] 取消mod订阅
-  - [ ] ~~官方dlc处理（信息/排序）~~
+
+  - [ ] ~~官方dlc处理（信息/排序）~~：DLC信息位于`E:\SteamLibrary\steamapps\common\RimWorld\Data\Core\Languages\ChineseSimplified (简体中文).tar\DefInjected\ExpansionDef\ExpansionDefs.xml`
+
+    `E:\SteamLibrary\steamapps\common\RimWorld\Data\Core\Defs\Misc\ExpansionDefs\ExpansionDefs.xml`
+
+  - [ ] 语言包、程序集、xml分类识别
+
+  - [ ] about、Manifest、ModSync信息获取，mod版本、存档支持、依赖/冲突mod、前置/后置mod
 
   
 

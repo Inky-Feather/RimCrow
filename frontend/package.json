@@ -15,8 +15,12 @@
     "markdown-it": "^14.1.0",
     "pinia": "^3.0.4",
     "sortablejs": "^1.15.6",
+    "uuid": "^13.0.0",
     "vue": "^3.5.24",
-    "vue-draggable-plus": "^0.6.0"
+    "vue-draggable-plus": "^0.6.0",
+    "vue-virtual-scroller": "^2.0.0-beta.8",
+    "vue-virtual-sortable": "^3.0.3",
+    "vue3-colorpicker": "^2.3.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",

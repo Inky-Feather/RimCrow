@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { createPinia } from 'pinia' // 加这行
+import { createPinia } from 'pinia' // 注册 Pinia
 import './style.css'
 import App from './App.vue'
 

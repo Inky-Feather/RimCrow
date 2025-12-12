@@ -57,6 +57,8 @@ class ModScanner:
         for folder_name in folder_names:
             mod_path = os.path.join(root_path, folder_name)
             about_xml = os.path.join(mod_path, 'About', 'About.xml')
+            modSync_xml = os.path.join(mod_path, 'About', 'ModSync.xml')    # 部分mod有，存有版本号、是否可加入存档等信息
+            manifest_xml = os.path.join(mod_path, 'About', 'Manifest.xml')    # 部分mod有，存有版本号、依赖模组、不兼容模组、前后置模组等信息
             preview_path = os.path.join(mod_path, 'About', 'Preview.png')
             if not os.path.isfile(preview_path): preview_path = ""
                 
@@ -79,9 +81,9 @@ class ModScanner:
                 root = tree.getroot()
                 
                 # 辅助函数：安全获取文本
-                def get_text(tag):
+                def get_text(tag, default=""):
                     node = root.find(tag)
-                    return node.text if node is not None else ""
+                    return node.text if node is not None else default
                 
 
                 # 获取 packageId，作为唯一标识
@@ -110,7 +112,7 @@ class ModScanner:
                     'author': get_text('author'),
                     'description': get_text('description'),
                     'url': f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}" if workshop_id else get_text('url'),
-                    'version': "Unknown", # XML 中通常没有标准 version 字段，有的放在 supportedVersions
+                    'version': get_text('modVersion', 'UnKnow'), # XML 中有的放在 modVersion 字段，有的放在 ModSync.xml 里的 version 字段
                     'supported_versions': self.parse_list(root, 'supportedVersions'),
                     'dependencies': [], # 需要处理 modDependencies
                     'load_after': self.parse_list(root, 'loadAfter'),

@@ -34,9 +34,9 @@
       />
 
       <!-- 版本标签 -->
-      <div v-if="displayVersions.length" class="absolute top-0 right-2 z-10 pointer-events-none">
+      <div v-show="displayVersions.length" class="absolute top-1 right-2 z-10 pointer-events-none">
         <span v-for="versions in displayVersions" :key="versions" versions
-          class="px-1 py-0.2 m-0.5 rounded-md bg-accent-cool/70 text-amber-50 text-[10px] font-bold text-shadow-2xs border border-accent-cool shadow-md">
+          class="px-1 py-0.4 m-0.5 rounded-md bg-accent-cool/60 text-amber-50 border border-text-main/30 text-[10px] font-bold text-shadow-2xs shadow-md">
           {{ versions }}
         </span>
       </div>
@@ -80,6 +80,8 @@
         </div>
       </div>
 
+      <div>路径：{{ selectedMod?.path }}</div>
+
       <!-- 备注编辑 -->
       <div>
           <label for="notes" class="block text-sm text-gray-500 dark:text-gray-300">备注</label>
@@ -87,9 +89,7 @@
             class="block px-2 h-32 py-2 mt-2 w-full text-[15px] placeholder-gray-400/70 dark:placeholder-gray-500 rounded-lg 
             border border-gray-200 bg-white text-gray-700 focus:border-accent-primary 
             focus:outline-none focus:ring focus:ring-accent-primary focus:ring-opacity-40 dark:border-gray-600 
-            dark:bg-gray-900 dark:text-gray-300 dark:focus:border-accent-primary ">
-          </textarea>
-          <p class="mt-3 text-xs text-gray-400 dark:text-gray-600">可在此输入备注说明或说明翻译。</p>
+            dark:bg-gray-900 dark:text-gray-300 dark:focus:border-accent-primary "></textarea>
       </div>
 
       <!-- Description -->
@@ -113,6 +113,7 @@
           </div>
         </div>
       </div>
+
     </div>
     
   </div>
@@ -232,43 +233,6 @@ watch(
   { immediate: true } // 组件挂载时立即执行一次
 )
 
-// RimWorld 文本清洗函数 ===
-const formatRimWorldText = (text) => {
-  if (!text) return ''
-
-  // 1. 反转义 HTML 实体 (处理 &lt; &gt;)
-  let decoded = text
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-
-  // 2. 转换 Unity 颜色标签 <color=#xxxxxx> -> <span style="color:#xxxxxx">
-  // 支持 hex 颜色和英文颜色名 (red, blue 等)
-  decoded = decoded.replace(/<color=(.*?)>(.*?)<\/color>/gi, (match, colorValue, content) => {
-    return `<span style="color: ${colorValue};">${content}</span>`
-  })
-
-  // 3. 转换加粗 <b> -> <strong>
-  decoded = decoded.replace(/<b>(.*?)<\/b>/gi, '<strong>$1</strong>')
-  
-  // 4. 转换斜体 <i> -> <em>
-  decoded = decoded.replace(/<i>(.*?)<\/i>/gi, '<em>$1</em>')
-
-  // 5. 转换大小 <size=20> (可选：Web通常不需要这么精确，或者转为相对大小)
-  // 这里简单处理：直接移除 size 标签，避免排版混乱，或者转换为百分比
-  decoded = decoded.replace(/<size=.*?>(.*?)<\/size>/gi, '<span style="font-size: 1.2em">$1</span>')
-
-  return decoded
-}
-
-// 计算属性：渲染当前选中的模组描述
-const renderedDescription = computed(() => {
-  if (!selectedMod.value?.description || !selectedMod) return '<span class="text-white/20 italic">No description provided.</span>'
-  
-  // 先处理 Unity 标签，再过 Markdown
-  const rimWorldFormatted = formatRimWorldText(selectedMod.value.description)
-  return md.render(rimWorldFormatted)
-})
 
 </script>
 

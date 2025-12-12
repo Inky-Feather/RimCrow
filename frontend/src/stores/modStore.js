@@ -21,7 +21,7 @@ export const useModStore = defineStore('mods', () => {
   const activeIds = ref([])   // 绑定的 启用 列表
   const tempIds = ref([]) // 临时存放拖拽的 Mod 列表
   const groupList = ref([]) // 分组列表
-  const selectedIds = ref(new Set())  // 多选状态 (使用 Set 实现 O(1) 查找)
+  const selectedIds = ref(new Set())  // 多选状态
 
   // 系统状态
   const isLoading = ref(false)
@@ -45,7 +45,7 @@ export const useModStore = defineStore('mods', () => {
 
   // ==================== 智能计算与 Helpers ====================
 
-  // 获取图片 URL 的辅助函数
+  // 获取缩略图 URL 的辅助函数
   const getAssetUrl = (id) => {
     if (!id || !assetPort.value) return ''
     // 假设后端 AssetServer 路由是 /thumbnails/<id>.webp
@@ -68,7 +68,7 @@ export const useModStore = defineStore('mods', () => {
     }
   }
 
-  // 选中的模组对象列表 (供详情页使用)
+  // 选中的模组对象列表
   const selectedMods = computed(() => {
     return Array.from(selectedIds.value).map(id => getModById(id))
   })
@@ -165,7 +165,7 @@ export const useModStore = defineStore('mods', () => {
   }
 
   // 选择/取消选择 Mod
-  const selectMod = (id, toggle = false) => {
+  const selectMod0 = (id, toggle = false) => {
     if (!id) return
     if (toggle) {
       if (selectedIds.value.has(id)) selectedIds.value.delete(id)
@@ -175,6 +175,67 @@ export const useModStore = defineStore('mods', () => {
       selectedIds.value.add(id)
     }
   }
+  // 选择/取消选择 Mod
+  const selectMod = (id, isMulti = false, isRange = false) => {
+    const lowerId = id.toLowerCase();
+    if (isRange) {
+      // Shift 连选逻辑
+      if (selectedIds.value.size === 0) {
+        selectedIds.value.add(lowerId);
+        return;
+      }
+
+      // 找到当前列表的所有可见ID
+      const currentListIds = [...activeIds.value, ...inactiveIds.value, ...tempIds.value]; // 假设这三者是所有可能的列表
+      
+      // 找到最近一次选择的ID
+      let lastSelectedId = null;
+      // 遍历Set，找到第一个（或最后一个，取决于实现）
+      if (selectedIds.value.size > 0) {
+        lastSelectedId = Array.from(selectedIds.value)[selectedIds.value.size - 1]; 
+      }
+      
+      if (!lastSelectedId) {
+        selectedIds.value.add(lowerId);
+        return;
+      }
+
+      const lastIndex = currentListIds.indexOf(lastSelectedId);
+      const currentIndex = currentListIds.indexOf(lowerId);
+
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        for (let i = start; i <= end; i++) {
+          selectedIds.value.add(currentListIds[i]);
+        }
+      } else {
+        selectedIds.value.add(lowerId); // 如果找不到范围，就只选中当前项
+      }
+
+    } else if (isMulti) {
+      // Ctrl/Meta 多选逻辑
+      if (selectedIds.value.has(lowerId)) {
+        selectedIds.value.delete(lowerId);
+      } else {
+        // 检查是否所有已选项都在同一列表中
+        selectedIds.value.add(lowerId);
+        if (Array.from(selectedIds.value).every(id => activeIds.value.includes(id)) || 
+          Array.from(selectedIds.value).every(id => inactiveIds.value.includes(id)) ||
+          Array.from(selectedIds.value).every(id => tempIds.value.includes(id))) {
+          // 全部在同一列表中，允许多选
+        } else {
+          selectedIds.value.clear();
+          selectedIds.value.add(lowerId);
+        }
+      }
+    } else {
+      // 单选逻辑
+      selectedIds.value.clear();
+      selectedIds.value.add(lowerId);
+    }
+  }
+
   // 清除选择
   const clearSelection = () => {
     selectedIds.value.clear()
@@ -190,10 +251,11 @@ export const useModStore = defineStore('mods', () => {
     isLoading.value = false
     if (res.status === 'success') {
       isDirty.value = false
-      alert("加载顺序已成功保存！") // 暂用 Alert，建议改为 Toast
+      // alert("加载顺序已成功保存！") // 暂用 Alert，建议改为 Toast
     } else {
-      alert("保存错误：" + res.message)
+      // alert("保存错误：" + res.message)
     }
+    return res.status === 'success';
   }
 
   // 监听 activeMods 变化设置 dirty
@@ -201,8 +263,12 @@ export const useModStore = defineStore('mods', () => {
 
   // 启动游戏
   const launchGame = async () => {
-    saveLoadOrder() // 先保存
-    await window.pywebview.api.launch_game()
+    const saved = await saveLoadOrder() // 先保存
+    if (saved) {
+        await window.pywebview.api.launch_game()
+    } else {
+        console.warn("未能启动游戏：加载顺序保存失败。")
+    }
   }
 
   // 应用设置

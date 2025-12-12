@@ -31,6 +31,7 @@ class DatabaseManager:
                 description TEXT,
                 notes TEXT,
                 tags TEXT, -- JSON list
+                sign_color TEXT,
                 preview_path TEXT,
                 gallery_paths TEXT, -- JSON list
                 dependencies TEXT, -- JSON list

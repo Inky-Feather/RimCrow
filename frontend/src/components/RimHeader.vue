@@ -30,15 +30,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import { useModStore } from '../stores/modStore'
 
 const store = useModStore()
-defineProps({
-  msg: String,
-})
-
-const count = ref(0)
 
 </script>
 

@@ -1,20 +1,26 @@
 <!-- ModItem.vue -->
 <template>
-  <div
-    class="relative flex items-center overflow-hidden gap-1.5 p-1 rounded-lg border border-white/5 group shadow-sm"
-    :class="getCardClass(id)" :style="{ '--drag-color': `var(--color-accent-${listColor})` }"
-    @click.stop="$emit('toggle-select')"
-    @mouseenter="handleMouseEnter"
-    @mouseleave="handleMouseLeave"
-    @mousemove="handleMouseMove"
-  >
+  <div class="flex items-center " @mousedown.left="$emit('toggle-select', $event, id)">
+      <!-- 序号（通过位数计算动态调整字体大小） -->
+    <div :style="{ fontSize: 18-(index+1).toString().length*3 + 'px' }" 
+      class="w-6 h-6 min-w-6 min-h-6 mr-1 flex items-center justify-center rounded"
+      :class="props.isSelected ? `text-text-main bg-accent-${listColor}/50` 
+      : `text-accent-${listColor}/50 bg-accent-${listColor}/10 hover:text-text-main hover:bg-accent-${listColor}/50`"
+      @mouseenter="$emit('toggle-select', $event, id, true)">
+      {{ index+1 }}
+    </div>
+    
     <!-- 内容区域 -->
-      <!-- 序号 -->
-      <div :style="{ fontSize: 18-index.toString().length*3 + 'px' }" :class="`w-5 h-5 flex items-center justify-center rounded text-accent-${listColor}/50 bg-accent-${listColor}/10`">{{ index+1 }}</div>
+    <div class="drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg border border-white/5 group shadow-sm"
+      :class="getCardClass(id)" :style="{ '--drag-color': `var(--color-accent-${listColor})` }"
       
-        
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+      @mousemove="handleMouseMove"
+      :data-id="id"
+    >
       <!-- 图标 -->
-      <img v-if="!modData.is_missing && modData.preview_path" :src="modIcon" 
+      <img v-if="!modData.is_missing && modData.preview_path" :src="modIcon" loading="lazy"
         :class="`w-8 h-8 rounded bg-black/50 object-cover border border-accent-${listColor}/30 pointer-events-none`">
       <div v-else-if="modData.is_missing" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
       <div v-else class="w-8 h-8 rounded border-2 border-dashed border-white/10 flex items-center justify-center">
@@ -39,7 +45,7 @@
       </div>
       
       <!-- 缺失警告 -->
-      <button :class="`rounded-4xl p-1 cursor-help 
+      <button v-if="modData.is_missing" :class="`rounded-4xl p-1 cursor-help 
         text-accent-danger hover:scale-110 text-xs font-bold text-shadow-2xs text-shadow-black hover:shadow-bg-deep/50 
         transition-all`">
         <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -47,12 +53,14 @@
           <path d="M24 35V36" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 19.0005L24.0083 29" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
         </svg>
       </button>
+      
     </div>
+  </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { useModStore } from '../stores/modStore'
+import { useModStore } from '../../stores/modStore'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -72,8 +80,7 @@ const modData = computed(() => store.getModById(props.id))
 const modIcon = computed(() => store.getAssetUrl(props.id))
 
 const getCardClass = (id) => {
-  const isSelected = store.selectedIds.has(id)
-  const base = isSelected 
+  const base = props.isSelected 
     ? 'ring-1 ring-accent-success z-10' 
     : 'bg-bg-surface hover:border-white/10 hover:bg-[#2d3a4f]'
   
@@ -82,5 +89,12 @@ const getCardClass = (id) => {
   return `${base} ${missing}`
 }
 
-
+// 这两个函数目前没有实际用处，如果你有悬停效果或拖拽提示，可以实现它们
+const handleMouseEnter = () => { /* console.log('enter', props.id); */ };
+const handleMouseLeave = () => { /* console.log('leave', props.id); */ };
+const handleMouseMove = () => { /* console.log('move', props.id); */ };
 </script>
+
+<style scoped>
+  
+</style>
