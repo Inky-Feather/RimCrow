@@ -17,7 +17,7 @@
       </div>
       <!-- 颜色选择与展开显示 -->
       <div @click.stop title="改变颜色" class="relative inline-flex items-center justify-center text-text-main hover:text-transparent transition-all">
-        <ColorPicker v-model:pureColor="groupData.color" shape="circle" format="hex" picker-type="fk" disable-alpha round-history />
+        <ColorPicker v-model:pureColor="groupData.color" @change="updateGroup" shape="circle" format="hex" picker-type="fk" disable-alpha round-history />
         <svg :class="expanded ? '-rotate-180' : ''" class="absolute pointer-events-none t-0 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>
@@ -31,7 +31,7 @@
       </span>
 
       <span :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-[rgba(var(--rgb-components),1)]`">
-        {{ groupData.modIds.length }}
+        {{ groupData.mod_ids.length }}
       </span>
 
       <!-- 编辑/保存 与 删除 -->
@@ -67,7 +67,7 @@
       :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
       <div class="h-full overflow-hidden">
         <div :class="`p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.1)] rounded-b-lg shadow-2xsl relative`">
-          <div v-show="groupData.modIds.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
+          <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
             可拖拽模组到此
             <!-- 点阵背景 -->
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
@@ -101,7 +101,6 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue' // 引入 ref
-import { useModStore } from '../../stores/modStore'
 import VirtualList from 'vue-virtual-sortable';
 import ModItem from './ModItem.vue'
 import { ColorPicker } from "vue3-colorpicker";
@@ -116,8 +115,7 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
-const store = useModStore()
-const emit = defineEmits(['toggle', 'delete-group', 'remove-item']) // 注册新的事件
+const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group']) // 注册新的事件
 
 // --- 数据传递与事件处理 ---
 // 切换展开状态
@@ -130,7 +128,11 @@ const deleteGroup = () => {
 }
 // 移除模组
 const removeItem = (itemId: string) => {
-  emit('remove-item', props.id, itemId)
+  emit('remove-item', props.id, [itemId])
+}
+// 更新分组信息
+const updateGroup = (data = props.groupData) => {
+  emit('update-group', props.id, data)
 }
 
 // --- 分组名称编辑逻辑 ---
@@ -151,7 +153,7 @@ const toggleEditName = () => {
 const saveGroupName = () => {
   if (editingGroupName.value.trim() && editingGroupName.value !== props.groupData.name) {
     props.groupData.name = editingGroupName.value.trim()
-    store.markDirty() // 标记数据已修改
+    updateGroup()
   }
   isEditingName.value = false
 }
@@ -159,13 +161,12 @@ const saveGroupName = () => {
 // 计算属性：获取和设置分组内的模组 ID 列表
 const getGroupModIds = computed({
   get() {
-    return props.groupData.modIds.map(id => ({ id: id }));
+    return props.groupData.mod_ids.map(id => ({ id: id }));
   },
   set(val: any[]) { // val 将是 { id: string }[]
     const idList = val.map(item => item.id);
-    if (JSON.stringify(props.groupData.modIds) !== JSON.stringify(idList)) { // 只有数据真正改变时才更新
-      props.groupData.modIds = idList;
-      store.markDirty();
+    if (JSON.stringify(props.groupData.mod_ids) !== JSON.stringify(idList)) { // 只有数据真正改变时才更新
+      props.groupData.mod_ids = idList;
     }
   }
 })

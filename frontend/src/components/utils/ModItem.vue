@@ -12,7 +12,8 @@
     
     <!-- 内容区域 -->
     <div class="drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg border border-white/5 group shadow-sm"
-      :class="getCardClass(id)" :style="{ '--drag-color': `var(--color-accent-${listColor})` }"
+      :class="[getCardClass(id), searchMatch ? 'ring-2 ring-yellow-400 scale-[1.02] z-20' : '']" 
+      :style="{ '--drag-color': `var(--color-accent-${listColor})` }"
       
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
@@ -20,7 +21,7 @@
       :data-id="id"
     >
       <!-- 图标 -->
-      <img v-if="!modData.is_missing && modData.preview_path" :src="modIcon" loading="lazy"
+      <img v-if="!modData.is_missing && modData.thumb_url" :src="modData.thumb_url"
         :class="`w-8 h-8 rounded bg-black/50 object-cover border border-accent-${listColor}/30 pointer-events-none`">
       <div v-else-if="modData.is_missing" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
       <div v-else class="w-8 h-8 rounded border-2 border-dashed border-white/10 flex items-center justify-center">
@@ -67,7 +68,8 @@ const props = defineProps({
   index: { type: Number, required: true },
   listColor: { type: String, default: 'primary'}, // 用于不同列表的颜色区分
   isSelected: { type: Boolean, default: false },
-  isDragging: { type: Boolean, default: false } // 用于外部控制样式
+  isDragging: { type: Boolean, default: false }, // 用于外部控制样式
+  searchMatch: { type: Boolean, default: false } // 新增：是否是当前搜索焦点
 })
 
 defineEmits(['toggle-select'])
@@ -77,7 +79,7 @@ const store = useModStore()
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
 const modData = computed(() => store.getModById(props.id))
-const modIcon = computed(() => store.getAssetUrl(props.id))
+// const modIcon = computed(() => store.getIconUrl(props.id))
 
 const getCardClass = (id) => {
   const base = props.isSelected 

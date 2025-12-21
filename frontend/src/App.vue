@@ -1,11 +1,11 @@
 <template>
-  <div class="h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
+  <div class="relative h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
     <RimHeader/>
     <!-- 容器：深色背景，添加内边距 制造悬浮感 -->
     <div ref="containerRef" class="flex flex-1 w-full overflow-hidden relative ">
       
       <!-- ================= COLUMN 1: 详情 (Details) ================= -->
-      <div class="h-full p-1 relative transition-opacity"
+      <div class="h-full p-1 relative transition-opacity min-w-[230px]"
           :style="{ width: colWidths[0] + 'px' }">
           <div class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
             <ModDetails />
@@ -74,7 +74,7 @@
           <!-- 按钮组 -->
           <div class="p-3 rounded-b-2xl grid grid-cols-2 gap-1 bg-bg-surface/80 shadow-2xl ">
             <button class="col-span-1 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] text-gray-300 border border-white/5 transition-all uppercase font-bold"
-              @click="store.scanMods()">{{ store.isLoading ? '扫描中...' : '刷新' }}</button>
+              @click="store.scanMods()">{{ store.scanProgress.scanning ? '扫描中...' : '刷新' }}</button>
             <button class="col-span-1 py-2 rounded-lg bg-accent-primary hover:bg-[#0891b2] text-black text-[10px] font-bold shadow-lg shadow-accent-primary/10 transition-all uppercase"
               @click="store.saveLoadOrder()">保存</button>
             <button class="col-span-2 py-3 rounded-lg bg-accent-success hover:bg-[#059669] text-white text-xs font-bold shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 transition-all uppercase mt-1"
@@ -83,8 +83,13 @@
       </div>
 
     </div>
+    <!-- 状态条 -->
+    <StatusBar class="relative z-20 flex-none" />
+
     <!-- 悬浮面板 -->
-     
+
+    <!-- 设置弹窗 -->
+    <SettingsModal />
   </div>
 </template>
 
@@ -95,6 +100,8 @@ import RimHeader from './components/RimHeader.vue'
 import ModDetails from './components/ModDetails.vue'
 import ModList from './components/ModList.vue'
 import GroupList from './components/GroupList.vue'
+import SettingsModal from './components/SettingsPanel.vue'
+import StatusBar from './components/StatusBar.vue'
 
 const store = useModStore()
 const activeTab = ref('Temp')

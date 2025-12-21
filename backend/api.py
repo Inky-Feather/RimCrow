@@ -1,248 +1,288 @@
 import os
-import base64
-import subprocess
-from backend.database import DatabaseManager
-from backend.scanner import ModScanner
-from backend.detector import GameDetector
-from backend.settings import SettingsManager
-from backend.game_config import ConfigManager
-from backend.server import AssetServer
+from dataclasses import asdict
 
+# 1. 引入配置管理
+from backend.settings import settings
 
-# 这是一个 API 类，前端 JS 可以直接调用这里的方法
+# 2. 引入数据库层
+from backend.database.models import init_db
+from backend.database.dao import ModDAO, GroupDAO
+
+# 3. 引入业务逻辑管理器
+from backend.managers.mgr_game import GameManager
+from backend.managers.mgr_mods_config import LoadOrderManager
+from backend.managers.mgr_files import FileManager
+from backend.scanner.parser_dlc import DLCParser
+from backend.scanner.mod_scanner import ModScanner
+
 class API:
+    """
+    暴露给 pywebview 前端的统一接口类。
+    所有前端调用的 window.pywebview.api.xxx 方法都在这里定义。
+    """
+
     def __init__(self):
-        # 1. 加载设置
-        self.settings = SettingsManager()
-        # 2. 初始化数据库
-        self.db = DatabaseManager()
-        # 3. 初始化工具
+        print("API Layer Initializing...")
+        
+        # 1. 初始化数据库
+        # 数据库文件放在当前工作目录的data目录下
+        db_path = os.path.join(os.getcwd(), 'data', 'mod_manager.db')
+        init_db(db_path)
+        
+        # 2. 实例化各个管理器
+        self.dlc_parser = None # 延迟初始化
+        self.file_mgr = FileManager()    # 实例化 FileManager (它会自动启动 Server 线程)
+        self.game_mgr = GameManager()
+        self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
         self.scanner = ModScanner()
-        self.detector = GameDetector()
-        self.asset_server = AssetServer() # 启动图片服务器
-        print("后台服务已加载。数据库和扫描器已初始化。")
-        
-        # # 4. 如果是第一次运行或没有路径，尝试自动检测
-        # if self.settings.get("first_run") or not self.settings.get("workshop_mods_path"):
-        #     print("首次运行或路径缺失，尝试自动检测...")
-        #     paths = self.detector.get_rimworld_paths()
-        #     if paths:
-        #         self.settings.update_paths(paths)
-                
-        # 5. 初始化配置管理器 (备份/读取核心文件)
-        game_config_path = self.settings.get("game_config_path")
-        self.config_mgr = None
-        if game_config_path and os.path.exists(game_config_path):
-            self.config_mgr = ConfigManager(game_config_path)
-        
-        # 6. 启动时的数据库维护
-        self._startup_maintenance()
-        
-    def _startup_maintenance(self):
-        """启动时维护：扫描Mod信息变化，清理旧Mod，同步Active列表"""
-        # A. 扫描 Mod 信息变化
-        self.scan_current_paths()
-        # B. 清理已删除的 Mod
-        # self.db.cleanup_removed_mods()
-        # C. 可以在这里预加载一次 active 列表，但通常前端加载完毕后请求更好
-        
-    
-    # --- 主要数据交互接口 ---
+        print("API Layer Ready.")
+
+
+    def _ensure_dlc_parser(self):
+        """懒加载 DLC Parser"""
+        if not self.dlc_parser and settings.config.game_install_path:
+            data_dir = os.path.join(settings.config.game_install_path, 'Data')
+            if os.path.exists(data_dir):
+                # 这里初始化会自动处理全量缓存和增量更新
+                self.dlc_parser = DLCParser(data_dir)
+
+
+    # =========================================================================
+    #  1. 初始化与全局数据 (Initialization)
+    # =========================================================================
+
     def get_initial_data(self):
         """
-        前端初始化时调用，一次性返回：
-        1. 是否需要手动设置路径
-        2. 当前数据库的所有 Mod
-        3. 当前 ModsConfig.xml 中的启用列表 (Active List)
+        前端启动时调用，一次性获取所有必要数据。
         """
-        print("前端请求初始化数据……")
-        # 1. 检查路径状态
-        workshop_mods_path = self.settings.get("workshop_mods_path")
-        local_mods_path = self.settings.get("local_mods_path")
-        game_install_path = self.settings.get("game_install_path")
-        game_config_path = self.settings.get("game_config_path")
+        # 1. 检查路径配置是否完善
+        paths_valid = settings.validate_paths() if hasattr(settings, 'validate_paths') else False
+        if not paths_valid and settings.config.game_install_path:
+            # 简单的非空检查兜底
+            paths_valid = os.path.exists(settings.config.game_install_path)
+        self._ensure_dlc_parser()   # 确保 DLC Parser 初始化
+        # 0. 获取游戏版本号
+        game_version = self.game_mgr.get_game_version() if self.game_mgr else ""
+        settings.config.game_version = game_version
+        # 2. 获取所有 Mod 数据 (包含用户自定义数据)
+        all_mods = ModDAO.get_all_mods_with_user_data()
+        # 3. 获取所有分组数据 (结构化)
+        all_groups = GroupDAO.get_all_groups_structured()
+        # 4. 获取当前激活的加载顺序
+        active_load_order = self.load_order_mgr.read_active_mods()
         
-        # 读取游戏版本号
-        game_version = "未知版本"
-        if game_install_path and os.path.exists(game_install_path):
-            version_file = os.path.join(game_install_path, "Version.txt")
-            if os.path.exists(version_file):
-                with open(version_file, "r", encoding="utf-8") as f:
-                    game_version = f.read().strip()
-        self.settings.set("game_version", game_version)
-        
-        # 路径检查
-        paths_valid = False
-        if workshop_mods_path and os.path.exists(workshop_mods_path) \
-        and local_mods_path and os.path.exists(local_mods_path) \
-        and game_install_path and os.path.exists(game_install_path) \
-        and game_config_path and os.path.exists(game_config_path):
-            paths_valid = True
+        # DLC动态翻译注入
+        for mod in all_mods:
+            if self.dlc_parser:
+                # 传入当前语言，Parser 内部会查找缓存
+                self.dlc_parser.translate_record(mod, settings.config.language)
+
+        # 【关键】在这里注入图片 URL
+        for mod in all_mods:
+            pkg_id = mod['package_id']
+            icon_path = mod['icon_path']
+            preview_path = mod['preview_path']
             
-        # 2. 读取 Active List
-        active_ids = []
-        if self.config_mgr:
-            active_ids = self.config_mgr.read_active_mods()
+            # 1. 尝试获取已生成的缩略图路径 (物理路径)
+            thumb_path = self.file_mgr.get_thumbnail_path(pkg_id)
             
-        # 3. 获取 DB 中所有 Mod
-        all_mods = self.db.get_all_mods()
-        
+            # 2. 决定列表图标 (优先用缩略图，没有则用原图)
+            list_thumb_path = thumb_path if thumb_path else preview_path
+            
+            # 3. 转换为 HTTP URL
+            if list_thumb_path:
+                mod['thumb_url'] = self.file_mgr.get_asset_url(list_thumb_path)
+            else:
+                # 前端处理默认图，或者返回特定的 assets 路径
+                mod['thumb_url'] = None 
+            
+            # 4. 详情页大图 URL
+            if preview_path:
+                mod['preview_url'] = self.file_mgr.get_asset_url(preview_path)
+            else:
+                mod['preview_url'] = None
+            
+            # 5. 图标 URL
+            if icon_path:
+                mod['icon_url'] = self.file_mgr.get_asset_url(icon_path)
+            else:
+                mod['icon_url'] = None 
+
         return {
             "status": "success",
             "paths_configured": paths_valid,
-            "settings": self.settings.config,
+            "settings": asdict(settings.config), # 转为字典发给前端
             "all_mods": all_mods,
-            "active_load_order": active_ids, # 前端根据这个ID列表去 all_mods 里找对应数据
-            "asset_server_port": self.asset_server.port # 传给前端的端口号
+            "groups": all_groups,
+            "active_load_order": active_load_order
         }
 
+    # =========================================================================
+    #  2. 设置与路径 (Settings & Paths)
+    # =========================================================================
+
     def auto_detect_paths(self):
-        """前端调用：自动检测路径"""
-        paths = self.detector.get_rimworld_paths()
-        if paths:
-            return {"status": "success", "paths": paths}
-        return {"status": "error", "message": "无法自动找到 RimWorld 路径，请手动指定"}
-    
-    def scan_current_paths(self):
-        """根据设置中的路径进行扫描，默认包含Workshop和本地模组路径"""
-        paths = []
-        p0 = self.settings.get("game_install_path")     # Data 目录-官方DLC
-        p1 = self.settings.get("workshop_mods_path")    # Workshop 模组
-        p2 = self.settings.get("local_mods_path")       # 本地模组
-        if p0: paths.append(os.path.join(p0, "Data"))
-        if p1: paths.append(p1)
-        if p2: paths.append(p2)
+        """自动检测游戏路径"""
+        result = self.game_mgr.auto_detect_paths()
         
-        if not paths:
-            return {"status": "error", "message": "未配置路径"}
-            
-        return self.scan_mods(paths)
+        # 如果检测到了安装路径，自动更新设置
+        if result.get('game_install_path'):
+            settings.update_paths(result)
+            # 重新初始化 LoadOrderManager (因为 Config 路径可能变了)
+            self.load_order_mgr = LoadOrderManager()
+            return {"status": "success", "paths": result}
+        
+        return {"status": "error", "message": "无法自动检测到游戏路径，请手动设置"}
 
-    def scan_mods(self, path_list):
-        """
-        前端调用：扫描。
-        path_list: 可以是一个路径字符串，也可以是路径列表 ['path1', 'path2']
-        """
-        print(f"Python 收到扫描请求，路径: {path_list}")
-        
-        if isinstance(path_list, str): path_list = [path_list]
-        
-        # 1. 获取数据库中现有的 Mod 时间戳，用于增量对比
-        existing_mtimes = self.db.get_all_mods_mtimes()
-        existing_paths = self.db.get_all_mods_path()
-        all_new_mods = []
-        all_missing_mods_ids = []
-        
-        # 2. 遍历所有路径，收集需要更新的 Mod 数据 (内存操作，快)
-        for path in path_list:
-            if os.path.exists(path):
-                new_mods = self.scanner.scan_folder_for_batch(path, existing_mtimes)
-                all_new_mods.extend(new_mods)
-        
-        # 检查是否有已删除的 Mod，有的话更新数据库
-        for pkg_id, existing_path in existing_paths.items():
-            if not os.path.exists(existing_path):
-                all_missing_mods_ids.append(pkg_id)
-                self.db.upsert_fields_by_id(pkg_id, {"path": ''})
-                
-        
-        # 3. 批量写入数据库 (单次 I/O，极快)
-        if all_new_mods:
-            print(f"正在向数据库中更新 {len (all_new_mods)} 个模组……")
-            self.db.save_mods_batch(all_new_mods)
-        if all_missing_mods_ids:
-            print(f"数据库中发现 {len(all_missing_mods_ids)} 个已删除模组……")
-            
-        if not ( all_new_mods or all_missing_mods_ids):
-            print("未检测到任何变化。")
-            
-        # 4. 返回最新全量列表
-        mods = self.db.get_all_mods()
-        return {"status": "success", "count": len(mods), "mods": mods}
-    
-    def save_load_order(self, active_mod_ids):
-        """前端点击应用：保存 Active 列表到 xml"""
-        if not self.config_mgr:
-            return {"status": "error", "message": "Config 路径未设置"}
-            
-        success = self.config_mgr.save_active_mods(active_mod_ids)
-        if success:
-            return {"status": "success", "message": "保存成功"}
-        else:
-            return {"status": "error", "message": "保存失败"}
-
-    # --- 本地资源获取接口 ---
-    def read_image(self, path):
-        """读取本地图片并转换为 Base64 供前端显示"""
-        if not path or not os.path.exists(path):
-            return None
-        
-        try:
-            with open(path, "rb") as f:
-                # 读取二进制数据并转为 Base64 字符串
-                encoded_string = base64.b64encode(f.read()).decode('utf-8')
-                # 简单的扩展名判断
-                ext = os.path.splitext(path)[1].lower()
-                mime_type = "image/png" if ext == ".png" else "image/jpeg"
-                # 返回完整的数据 URI
-                return f"data:{mime_type};base64,{encoded_string}"
-        except Exception as e:
-            print(f"Error reading image {path}: {e}")
-            return None
-    
-    # --- 设置相关接口 ---
-    def get_setting(self, key):
-        """前端调用：获取单个设置项"""
-        return self.settings.get(key)
-    
     def save_setting(self, key, value):
-        """前端调用：设置单个设置项"""
-        self.settings.set(key, value)
-        if key == "game_config_path":
-             if os.path.exists(value):
-                self.config_mgr = ConfigManager(value)
+        """保存单个设置项"""
+        settings.set(key, value)
+        # 如果修改的是路径，可能需要刷新管理器
+        if 'path' in key:
+            self.load_order_mgr = LoadOrderManager()
         return {"status": "success"}
 
-    def get_settings_dict(self):
-        """前端获取所有设置的专用接口"""
-        return self.settings.config
-    
     def save_all_settings(self, settings_obj):
-        """前端一次性保存所有设置"""
+        """保存所有设置 (前端设置面板保存时调用)"""
+        # 批量更新
         for k, v in settings_obj.items():
-            self.settings.set(k, v)
-        # 如果路径变了，尝试重新加载 ConfigMgr
-        if "game_config_path" in settings_obj:
-            p = settings_obj["game_config_path"]
-            if os.path.exists(p):
-                self.config_mgr = ConfigManager(p)
+            settings.set(k, v) # settings.set 内部会自动 save，这里可能稍微有点IO冗余，但安全
+        
+        # 刷新管理器
+        self.load_order_mgr = LoadOrderManager()
         return {"status": "success"}
-    
-    # --- 外部程序调用接口 ---
-    def launch_game(self):
-        """启动 RimWorld"""
-        install_path = str(self.settings.get("game_install_path"))
-        if not install_path or not os.path.exists(install_path):
-            return {"status": "error", "message": "游戏安装路径未设置"}
-        
-        # 尝试寻找可执行文件
-        exes = ["RimWorldWin64.exe", "RimWorldWin.exe", "RimWorldLinux", "RimWorldMac"]
-        target_exe = None
-        for exe in exes:
-            p = os.path.join(install_path, exe)
-            if os.path.exists(p):
-                target_exe = p
-                break
-        
-        if target_exe:
-            try:
-                # 使用 subprocess.Popen 非阻塞启动
-                subprocess.Popen([target_exe], cwd=install_path, creationflags=subprocess.CREATE_NEW_CONSOLE if os.name=='nt' else 0)
-                return {"status": "success", "message": f"游戏已启动:{os.path.basename(target_exe)}"}
-            except Exception as e:
-                return {"status": "error", "message": str(e)}
-        else:
-            return {"status": "error", "message": "在安装目录找不到可执行文件"}
-    
-    # -- 暂时没啥用的接口 ---
 
+    # =========================================================================
+    #  3. Mod 扫描与管理 (Scanning & Mods)
+    # =========================================================================
+
+    def scan_mods(self, specific_paths=None):
+        """
+        触发后台模组扫描。
+        立即返回状态，前端通过监听 'scan-progress' 和 'scan-complete' 事件获取更新。
+        :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
+        """
+        paths_to_scan = []
+        
+        if specific_paths:
+            paths_to_scan = specific_paths
+        else:
+            # 默认扫描策略：DLC + Local + Workshop
+            cfg = settings.config
+            
+            # 1. DLC (Data 目录)
+            if cfg.game_install_path and os.path.exists(cfg.game_install_path):
+                data_dir = os.path.join(cfg.game_install_path, 'Data')
+                if os.path.exists(data_dir):
+                    paths_to_scan.append(data_dir)
+            
+            # 2. Local Mods
+            if cfg.local_mods_path and os.path.exists(cfg.local_mods_path):
+                paths_to_scan.append(cfg.local_mods_path)
+            
+            # 3. Workshop Mods
+            if cfg.workshop_mods_path and os.path.exists(cfg.workshop_mods_path):
+                paths_to_scan.append(cfg.workshop_mods_path)
+
+        if not paths_to_scan:
+            return {"status": "error", "message": "没有配置有效的扫描路径"}
+
+        # 调用异步扫描
+        # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
+        result = self.scanner.scan_paths_async(paths_to_scan, thumbnail_mgr=self.file_mgr)
+        
+        return {
+            "status": "success", 
+            "message": "Background scan started",
+            "details": result
+        }
+
+    def update_mod_user_data(self, package_id, data_dict):
+        """
+        即时保存用户对 Mod 的修改 (标签, 备注, 颜色等)
+        """
+        try:
+            ModDAO.update_user_data(package_id, data_dict)
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    # =========================================================================
+    #  4. 分组管理 (Groups) - 即时保存
+    # =========================================================================
+
+    def get_groups(self):
+        return GroupDAO.get_all_groups_structured()
+
+    def create_group(self, name, color):
+        try:
+            # 后端生成 UUID 并入库
+            new_group = GroupDAO.create_group(name, color)
+            # 返回完整对象供前端渲染
+            return {
+                "status": "success",
+                "group": {
+                    "group_id": new_group.group_id,
+                    "name": new_group.name,
+                    "color": new_group.color,
+                    "sort_index": new_group.sort_index,
+                    "is_expanded": new_group.is_expanded,
+                    "mod_ids": []
+                }
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def delete_group(self, group_id):
+        GroupDAO.delete_group(group_id)
+        return {"status": "success"}
+
+    def update_group(self, group_id, updates):
+        """更新分组属性 (重命名、改色、折叠)"""
+        GroupDAO.update_group_info(group_id, **updates)
+        print(f"更新分组 {group_id} 为 {updates}")
+        return {"status": "success"}
+
+    def group_add_mods(self, group_id, mod_ids):
+        """拖拽 Mod 进分组"""
+        GroupDAO.add_mods_to_group(group_id, mod_ids)
+        return {"status": "success"}
+
+    def group_remove_mods(self, group_id, mod_ids):
+        """从分组移除 Mod"""
+        GroupDAO.remove_mods_from_group(group_id, mod_ids)
+        return {"status": "success"}
+
+    def group_reorder(self, group_id_list):
+        """分组排序"""
+        GroupDAO.reorder_groups(group_id_list)
+        return {"status": "success"}
+
+    def group_content_reorder(self, group_id, mod_id_list):
+        """分组内 Mod 排序"""
+        GroupDAO.reorder_mods_in_group(group_id, mod_id_list)
+        return {"status": "success"}
+
+    # =========================================================================
+    #  5. 加载顺序与游戏启动 (Load Order & Launch)
+    # =========================================================================
+
+    def save_load_order(self, active_ids):
+        """
+        保存当前激活列表到 ModsConfig.xml
+        """
+        success = self.load_order_mgr.save_active_mods(active_ids)
+        if success:
+            return {"status": "success"}
+        return {"status": "error", "message": "Failed to write ModsConfig.xml"}
+
+    def launch_game(self):
+        """启动游戏"""
+        return self.game_mgr.launch_game()
+
+    # =========================================================================
+    #  6. 文件与资源操作 (Files & Assets)
+    # =========================================================================
+
+    def open_path(self, path):
+        return self.file_mgr.open_in_explorer(path)

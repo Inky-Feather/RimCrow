@@ -8,7 +8,7 @@
         {{ title }}
       </span>
       <span :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
-        {{ store.groupList.length }}
+        {{ groupList.length }}
       </span>
     </div>
     <!-- 搜索栏 -->
@@ -43,17 +43,18 @@
       <div class="h-full px-1 relative" @click.self="store.clearSelection()">
 
 
-        <div v-if="store.groupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-gray-600 text-xs select-none pointer-events-none">
+        <div v-if="groupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-gray-600 text-xs select-none pointer-events-none">
             可点击右下角 “ + ” 按钮新建分组
         </div>
 
-        <VirtualList v-model="store.groupList" dataKey="groupId" :keeps="50" class="h-full p-1" 
+        <VirtualList v-model="groupList" dataKey="group_id" :keeps="50" class="h-full p-1" 
           placeholderClass="ghost" wrapClass="space-y-1.5 min-h-full"
 	        :fallbackOnBody="true" :scrollSpeed="{ x: 0, y: 10 }" handle=".drag-handle"
-          :group="{ name: 'groups', pull: true, put: 'groups', revertDrag: true }" :animation="150">
+          :group="{ name: 'groups', pull: true, put: 'groups', revertDrag: true }" :animation="150"
+          @sort-end="groupReorder">
           <template v-slot:item="{ record, index, dataKey }">
             <GroupItem :id="dataKey" :key="dataKey" :index="index" :groupData="record" :list-color="listColor"
-              :expanded="expandedIds.has(record.groupId)" @toggle="toggle" @delete-group="deleteGroup"
+              :expanded="expandedIds.has(record.group_id)" @toggle="toggle" @delete-group="deleteGroup"
               @remove-item="removeMod">
             </GroupItem>
           </template>
@@ -69,7 +70,7 @@
             <button @click="collapseAll" title="收拢全部分组" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
               <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 10L42 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20L42 20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40L24 26L42 40" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button @click="addGroup" title="新建分组" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
+            <button @click="createGroup" title="新建分组" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
               <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.0605 10L24.0239 38" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 24L38 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
@@ -86,7 +87,6 @@ import { computed, ref } from 'vue'
 import { useModStore } from '../stores/modStore'
 import VirtualList from 'vue-virtual-sortable';
 import GroupItem from './utils/GroupItem.vue'
-import { v4 as uuidv4 } from 'uuid'; // 导入 UUID 生成器
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -96,62 +96,47 @@ const props = defineProps({
 
 const store = useModStore()
 
+// 分组列表
+const groupList = computed(() => store.groupList)
 // 用一个 Set 存储所有被展开的 ID
-const expandedIds = ref(new Set<string>()) // 明确 Set 的类型
+const expandedIds = computed(() => new Set(groupList.value.filter(item => item.is_expanded).map(item => item.group_id)))
 
+// 切换分组展开状态
 const toggle = (id: string) => {
   if (expandedIds.value.has(id)) {
-    expandedIds.value.delete(id)
+    store.updateGroup(id, { is_expanded: false })
   } else {
-    expandedIds.value.add(id)
+    store.updateGroup(id, { is_expanded: true })
   }
 }
 
 // 全部展开
 const expandAll = () => {
-  store.groupList.forEach(group => expandedIds.value.add(group.groupId));
+  groupList.value.forEach(group => store.updateGroup(group.group_id, { is_expanded: true }));
 }
 
 // 全部折叠
 const collapseAll = () => {
-  expandedIds.value.clear();
+  groupList.value.forEach(group => store.updateGroup(group.group_id, { is_expanded: false }));
 }
-
-// 删除分组
-const deleteGroup = (groupId: string) => {
-  const index = store.groupList.findIndex(item => item.groupId === groupId);
-  if (index !== -1) {
-    store.groupList.splice(index, 1);
-    store.markDirty();
-    expandedIds.value.delete(groupId); // 同时从展开列表中移除
-  }
-}
-
-// 从分组中移除模组
-const removeMod = (groupId: string, modId: string) => {
-  const group = store.groupList.find(item => item.groupId === groupId);
-  if (group) {
-    const modIndex = group.modIds.indexOf(modId);
-    if (modIndex !== -1) {
-      group.modIds.splice(modIndex, 1);
-      store.markDirty();
-    }
-  }
-}
-
 
 // 新建分组
-const addGroup = () => {
-  const newGroup = {
-    groupId: uuidv4(), // 使用 UUID 生成唯一ID
-    index: store.groupList.length,
-    name: '新分组',
-    color: `#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`, // 随机生成一个十六进制颜色
-    modIds: []
-  };
-  store.groupList.push(newGroup);
-  store.markDirty();
-  expandedIds.value.add(newGroup.groupId); // 新建分组时默认展开
+const createGroup = () => {
+  store.createGroup();
+}
+// 删除分组
+const deleteGroup = (groupId: string) => {
+  store.deleteGroup(groupId);
+  expandedIds.value.delete(groupId); // 同时从展开列表中移除
+}
+// 分组排序
+const groupReorder = () => {
+  store.groupReorder();
+}
+
+// 移除模组
+const removeMod = (groupId: string, modId: Array<string>) => {
+  store.groupRemoveMods(groupId, modId);
 }
 
 </script>

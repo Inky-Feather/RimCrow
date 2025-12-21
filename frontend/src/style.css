@@ -88,31 +88,41 @@ body {
   display: none;
 }
 
-/* 取色器样式优化 */
-/* .vc-colorpicker--container {
-  
-} */
+/* 取色器样式优化（面板背景边框阴影调整） */
 .vc-colorpicker.white {
   background-color: var(--color-glass-light) !important;
   color: var(--color-text-main) !important;
   backdrop-filter: blur(12px) saturate(120%); /*模糊+饱和度增强*/
   -webkit-backdrop-filter: blur(12px) saturate(120%);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);  /*柔和阴影*/
+  box-shadow: 5px 8px 20px rgba(0, 0, 0, 0.5); /*柔和阴影*/
   border-radius: 16px !important;
-  -webkit-border-radius: 16px ;
-  -moz-border-radius: 16px ;
-  -ms-border-radius: 16px ;
-  -o-border-radius: 16px ;
 }
+/* 取色器容器（边框调整） */
+.vc-colorpicker--container {
+  padding: 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 16px !important;
+}
+/* 取色器输入框（背景边框调整） */
 .vc-display .vc-color-input input {
   background-color: var(--color-glass-medium) !important;
   color: var(--color-text-main) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
+/* 取色器切换按钮（禁用点击事件-切换颜色格式） */
+.vc-display .vc-input-toggle {
+  pointer-events: none;
+}
+/* 取色器切换按钮（背景边框调整） */
 .vc-display .vc-input-toggle:hover {
   background-color: var(--color-text-dim) !important;
   color: var(--color-bg-deep) !important;
+  pointer-events: none;
 }
-
+/* 取色器颜色列表（透明背景去除-去除不规则白边） */
+.vc-colorPicker__record .color-list .color-item.transparent {
+  background-image: none !important;
+}
 
 /* 
 :root {

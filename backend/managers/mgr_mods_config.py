@@ -1,0 +1,193 @@
+import os
+import shutil
+import glob
+import datetime
+
+from backend.settings import settings
+from lxml import html
+
+etree = html.etree
+
+class LoadOrderManager:
+    """
+    负责管理 ModsConfig.xml (加载顺序)
+    功能：读取当前激活列表、保存列表、自动备份
+    1. 当天：保留所有操作备份。
+    2. 过去：只保留当天的最后一份。
+    3. 过期：删除超过 30 天的备份（除了最后一份）。
+    4. 兜底：永远保留最新的一份备份。
+    """
+    
+    def __init__(self):
+        # 从全局配置获取路径
+        self.config_dir = settings.config.game_config_path
+        self.mods_config_file = ''
+        
+        if self.config_dir:
+            self.mods_config_file = os.path.join(self.config_dir, "ModsConfig.xml")
+            self._init_backup_dirs()
+
+    def _init_backup_dirs(self):
+        """初始化备份目录结构"""
+        # 在 Config 同级或内部建立备份文件夹，这里建议放在 Config 文件夹内部方便管理
+        # 或者放在软件自己的数据目录下，为了安全起见，我们放在软件目录下的 backups
+        self.backup_root = os.path.join(os.getcwd(), "backups")
+        self.today_dir = os.path.join(self.backup_root, "today")
+        self.earlier_dir = os.path.join(self.backup_root, "earlier")
+        
+        os.makedirs(self.today_dir, exist_ok=True)
+        os.makedirs(self.earlier_dir, exist_ok=True)
+        
+        # 每次初始化（应用启动）时执行一次轮换检查
+        self._rotate_backups()
+
+    def read_active_mods(self):
+        """
+        读取当前的 activeMods 列表
+        :return: [package_id, package_id, ...]
+        """
+        if not self.mods_config_file or not os.path.exists(self.mods_config_file):
+            return []
+        
+        active_list = []
+        try:
+            # 使用 recover=True 容错解析
+            parser = etree.XMLParser(recover=True)
+            tree = etree.parse(self.mods_config_file, parser)
+            root = tree.getroot()
+            # 结构一般是 <ModsConfigData><activeMods><li>id</li>...</activeMods></ModsConfigData>
+            active_node = root.find("activeMods")
+            if active_node is not None:
+                for li in active_node.findall("li"):
+                    if li.text:
+                        # 统一转小写，因为 XML 中 ID 大小写可能不规范，但 ID 实际上不敏感
+                        active_list.append(li.text.strip().lower())
+        except Exception as e:
+            print(f"Error reading ModsConfig.xml: {e}")
+            
+        return active_list
+
+    def save_active_mods(self, active_ids):
+        """
+        保存加载顺序
+        1. 自动备份当前文件
+        2. 写入新列表
+        """
+        if not self.mods_config_file:
+            return False
+
+        # 1. 备份
+        if os.path.exists(self.mods_config_file):
+            self._create_backup()
+
+        # 2. 准备 XML 结构
+        current_version = settings.config.game_version
+        try:
+            # 尝试保留原有的 knownExpansions 等信息
+            parser = etree.XMLParser(remove_blank_text=True)
+            if os.path.exists(self.mods_config_file):
+                tree = etree.parse(self.mods_config_file, parser)
+                root = tree.getroot()
+            else:
+                # 如果文件不存在，创建基本骨架
+                root = etree.Element("ModsConfigData")
+                # 尝试从 settings 获取版本，或者默认 Unknow
+                ver = etree.SubElement(root, "version")
+                ver.text = current_version # 这是一个兜底，理想情况应该读 Version.txt
+                etree.SubElement(root, "activeMods")
+                etree.SubElement(root, "knownExpansions")
+                tree = etree.ElementTree(root)
+
+            # 更新 activeMods 节点，没有则创建
+            active_node = root.find("activeMods")
+            if active_node is None:
+                active_node = etree.SubElement(root, "activeMods")
+            
+            # 清空旧列表
+            active_node.clear()
+            
+            # 写入新列表
+            for mod_id in active_ids:
+                li = etree.SubElement(active_node, "li")
+                li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
+
+            # 格式化写入
+            tree.write(self.mods_config_file, pretty_print=True, xml_declaration=True, encoding="utf-8")
+            print(f"Successfully saved {len(active_ids)} active mods to ModsConfig.xml")
+            return True
+        except Exception as e:
+            print(f"Error saving ModsConfig.xml: {e}")
+            return False
+
+    def _create_backup(self):
+        """创建当前时刻的备份"""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"ModsConfig_{timestamp}.xml"
+        dest = os.path.join(self.today_dir, filename)
+        try:
+            shutil.copy2(self.mods_config_file, dest)
+        except Exception as e:
+            print(f"Backup failed: {e}")
+
+    def _rotate_backups(self):
+        """
+        备份轮换策略：
+        - today 文件夹只保留"今天"的文件，过期的移入 earlier。
+        - earlier 文件夹里，每一天只保留最后一份备份。
+        - 清理超过 retention_days 的备份。
+        """
+        today_str = datetime.date.today().strftime("%Y%m%d")
+        
+        # 1. 移动过期的 today -> earlier
+        files = glob.glob(os.path.join(self.today_dir, "*.xml"))
+        # 按日期分组文件的辅助字典 { "20231101": ["path1", "path2"] }
+        files_by_date = {}
+
+        for f in files:
+            basename = os.path.basename(f)
+            # 解析文件名中的日期 ModsConfig_YYYYMMDD_HHMMSS.xml
+            try:
+                # 提取 YYYYMMDD (索引 11到19)
+                parts = basename.split('_')
+                if len(parts) >= 2:
+                    date_part = parts[1] # YYYYMMDD
+                    if date_part != today_str: # 只处理旧文件
+                        if date_part not in files_by_date:
+                            files_by_date[date_part] = []
+                        files_by_date[date_part].append(f)
+            except:
+                continue
+        
+        # 处理非今天的旧文件
+        for date_str, file_list in files_by_date.items():
+            # 按文件名排序（包含时间，所以最后面的就是最晚的）
+            file_list.sort()
+            # 保留最后一个，移入 earlier
+            last_file = file_list[-1]
+            try:
+                shutil.move(last_file, os.path.join(self.earlier_dir, os.path.basename(last_file)))
+            except: pass
+            
+            # 删除其余
+            for f in file_list[:-1]:
+                try: os.remove(f)
+                except: pass
+
+        # 2. 清理 earlier 中超过保留天数的文件
+        # 假设保留天数在 settings 中
+        retention_days = settings.config.backup_retention_days
+        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml"))
+        
+        cutoff_date = datetime.date.today() - datetime.timedelta(days=retention_days)
+        cutoff_str = cutoff_date.strftime("%Y%m%d")
+
+        for f in earlier_files:
+            basename = os.path.basename(f)
+            try:
+                parts = basename.split('_')
+                if len(parts) >= 2:
+                    date_part = parts[1]
+                    if date_part < cutoff_str:
+                        os.remove(f) # 过期删除
+            except:
+                pass

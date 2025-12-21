@@ -1,0 +1,19 @@
+{
+    "game_install_path": "E:\\SteamLibrary\\steamapps\\common\\RimWorld",
+    "game_config_path": "C:\\Users\\Administrator\\AppData\\LocalLow\\Ludeon Studios\\RimWorld by Ludeon Studios\\Config",
+    "workshop_mods_path": "E:\\SteamLibrary\\steamapps\\workshop\\content\\294100",
+    "local_mods_path": "E:\\SteamLibrary\\steamapps\\common\\RimWorld\\Mods",
+    "game_version": "",
+    "language": "ZH-cn",
+    "theme": "system",
+    "window_width": 1400,
+    "window_height": 900,
+    "font_size": 14,
+    "backup_retention_days": 30,
+    "enable_auto_scan": true,
+    "delete_missing_mods_data": false,
+    "ignored_paths": [
+        ".git",
+        "__pycache__"
+    ]
+}

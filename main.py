@@ -4,7 +4,8 @@ from icecream.builtins import install as ic_install
 ic_install()    # 全局启用 icecream，利用 Python 的动态特性实现“一次安装，到处运行”。
 
 from backend.api import API
-
+from backend.settings import settings
+from backend.utils.event_bus import EventBus
 
 
 # 获取前端文件的路径
@@ -19,8 +20,8 @@ def get_entrypoint():
 
 if __name__ == '__main__':
     api = API()
-    window_width = int(api.settings.get("window_width", "1400"))  # 默认1400px
-    window_height = int(api.settings.get("window_height", "900"))  # 默认900px
+    window_width = int(settings.config.window_width)  # 默认1400px
+    window_height = int(settings.config.window_height)  # 默认900px
     
     # 创建窗口
     window = webview.create_window(
@@ -33,6 +34,7 @@ if __name__ == '__main__':
         background_color='#0f172a', # 与前端背景色一致，防止白屏闪烁
         frameless=False # 可以选择开启无边框模式来实现完全自定义标题栏
     )
-    
+    # 注册窗口到事件总线
+    EventBus.set_window(window) # type: ignore
     # 启动
     webview.start(debug=True) # debug=True 允许在窗口里按 F12 看控制台
