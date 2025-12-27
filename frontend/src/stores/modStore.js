@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { createToastInterface } from 'vue-toastification'
+
 
 // 等待 pywebview 就绪
 const waitForBackend = () => {
@@ -17,13 +19,17 @@ const waitForBackend = () => {
 
 // Mod 管理 Store
 export const useModStore = defineStore('mods', () => {
+  const toast = createToastInterface()
   // 数据状态
   const allModsMap = ref(new Map()) // 使用 Map 加速查找
+  const dataVersion = ref(0) // 数据版本号
+
   const activeIds = ref([]) // 绑定的启用列表
   const tempIds = ref([])   // 临时列表
   const groupList = ref([]) // 分组列表
   
   // 选择状态
+  const currentTargetId = ref('') // 当前目标 ID (定位用)
   const selectedIds = ref(new Set())
   const lastSelectedId = ref(null)      // 最后点击的 ID (用于 Shift 连选定位)
   const lastSelectedListId = ref(null)  // 最后点击所在的列表标识 (防止跨列表连选)
@@ -92,10 +98,12 @@ export const useModStore = defineStore('mods', () => {
       // 检查 settings.enable_auto_scan (假设你在 settings.py 里加了这个字段)
       if (settings.value.enable_auto_scan !== false) {
           console.log("启动自动扫描...")
+          toast.info("自动扫描已启动...")
           scanMods() // 这里调用是异步的，不会阻塞界面
       }
     } catch (e) {
       console.error("初始化失败:", e)
+      toast.error("初始化失败，请检查日志")
     } finally {
       isLoading.value = false
     }
@@ -127,9 +135,24 @@ export const useModStore = defineStore('mods', () => {
       scanProgress.value.scanning = false
       scanProgress.value.message = '扫描完成'
       console.log("扫描统计:", e.detail)
+      toast.success(`扫描完成，共计扫描${e.detail.total}个模组，新增${e.detail.stats.added}个，
+更新${e.detail.stats.updated}个，已知${e.detail.stats.skipped}个。`)
       // [关键] 扫描结束后，主动拉取一次最新数据刷新界面
       await refreshModList()
     })
+  }
+  // 获取加载顺序
+  const openLoadOrder = async (mods_config_file_path=null) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.open_load_order_file(mods_config_file_path)
+    if (res.status === 'success' && res.load_order) {
+      activeIds.value = res.load_order
+      // 如果有指定路径，标记为脏状态，等待保存
+      if (mods_config_file_path) isDirty.value = true
+      else isDirty.value = false
+      console.log("打开加载顺序:", res)
+      toast.success("Mod序列已加载")
+    }
   }
 
   // ===== Mod操作 =====
@@ -144,10 +167,14 @@ export const useModStore = defineStore('mods', () => {
     return {
       package_id: id,
       name: `⚠ 未知模组 (${id})`,
-      author: 'Unknown',
+      author: ['Unknown'],
       is_missing: true,
-      description: '该模组在本地未找到，可能是已订阅但未下载，或已被手动删除。'
+      description: '该模组在本地未找到，可能未下载，或已被手动删除。'
     }
+  }
+  // 获取 Mod 对象列表 (根据 ID 列表筛选)
+  const getModListByIds = (ids) => {
+    return Array.from(allModsMap.value.values()).filter(mod => ids.includes(mod.package_id))
   }
   // 获取图片 URL (基于后端 FileManager)
   const getIconUrl = (id) => {
@@ -172,6 +199,18 @@ export const useModStore = defineStore('mods', () => {
         // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
         const tempMap = new Map()
         res.all_mods.forEach(mod => {
+          // 预先生成搜索索引字符串
+          mod._searchStr = [
+            mod.name,
+            mod.alias_name,
+            mod.package_id,
+            ...(mod.tags || []),
+            mod.author
+          ].filter(Boolean).join(' ').toLowerCase(); // 拼接成一个长字符串
+          
+          // 预先将 Tags 转为小写 Set，加速精确匹配
+          mod._tagsLower = new Set((mod.tags || []).map(t => t.toLowerCase()));
+          
           tempMap.set(mod.package_id.toLowerCase(), mod)
         })
         allModsMap.value = tempMap
@@ -184,6 +223,9 @@ export const useModStore = defineStore('mods', () => {
           showSettings.value = true
         }
       }
+      // 6. 更新数据版本号
+      dataVersion.value ++;
+
       console.log("刷新列表成功:", res)
     } catch (e) {
       console.error("刷新列表失败:", e)
@@ -268,11 +310,12 @@ export const useModStore = defineStore('mods', () => {
       
       if (res.status !== 'success' && res.status !== 'started') {
         console.error("启动扫描失败:", res.message)
+        toast.error("扫描启动失败，请检查日志")
+        return
       }
-      // 注意：我们不需要在这里处理数据更新了
-      // 数据更新逻辑全部移到了 scan-complete 事件监听中
     } catch (e) {
       console.error("扫描请求异常:", e)
+      toast.error("扫描请求异常，请检查日志")
     }
   }
   // 保存Mod加载顺序
@@ -284,7 +327,12 @@ export const useModStore = defineStore('mods', () => {
       const res = await window.pywebview.api.save_load_order(activeIds.value)
       if (res.status === 'success') {
         isDirty.value = false
+        // console.log("保存加载顺序成功:", res)
+        toast.success("Mod序列已保存")
         return true
+      } else {
+        console.error("保存Mod序列失败:", res.message)
+        toast.error("保存Mod序列失败，请检查日志")
       }
     } finally {
       isLoading.value = false
@@ -303,10 +351,15 @@ export const useModStore = defineStore('mods', () => {
         if (mod) {
           Object.assign(mod, userData)
         }
+        toast.success("Mod用户数据已更新")
         return true
+      } else {
+        console.error("更新Mod用户数据失败:", res.message)
+        toast.error("更新Mod用户数据失败，请检查日志")
       }
     } catch (e) {
       console.error(e)
+      toast.error("更新Mod用户数据失败，请检查日志")
     } finally {
       isLoading.value = false
     }
@@ -526,16 +579,17 @@ export const useModStore = defineStore('mods', () => {
     if(res.status === 'success' && res.paths) {
        // 更新本地 setting store
        Object.assign(settings.value, res.paths)
+       toast.success("路径已更新")
     }
   }
 
   return {
     // 状态管理
-    scanProgress, 
-    initialize, 
+    scanProgress, dataVersion,
+    initialize, openLoadOrder,
     // Mod 相关
-    allModsMap, activeIds, tempIds, inactiveIds, selectedIds, selectedMods, lastSelectedId, lastSelectedListId,
-    getModById, getIconUrl, selectMod, clearSelection, refreshModList, scanMods, saveLoadOrder, updateModUserData,
+    allModsMap, activeIds, tempIds, inactiveIds, selectedIds, selectedMods, lastSelectedId, lastSelectedListId, currentTargetId, 
+    getModById, getIconUrl, selectMod, clearSelection, refreshModList, scanMods, saveLoadOrder, updateModUserData, getModListByIds,
 
     // 分组相关
     groupList, 

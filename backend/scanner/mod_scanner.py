@@ -37,7 +37,7 @@ class ModScanner:
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self._is_scanning = False
 
-    def scan_paths_async(self, search_paths, thumbnail_mgr: FileManager):
+    def scan_paths_async(self, search_paths, thumbnail_mgr: FileManager, forced_update=False):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
@@ -46,10 +46,10 @@ class ModScanner:
         
         self._is_scanning = True
         # 提交到线程池
-        self.executor.submit(self._scan_paths_task, search_paths, thumbnail_mgr)
+        self.executor.submit(self._scan_paths_task, search_paths, thumbnail_mgr, forced_update)
         return {'status': 'started'}
 
-    def _scan_paths_task(self, search_paths, thumbnail_mgr):
+    def _scan_paths_task(self, search_paths, thumbnail_mgr, forced_update=False):
         """
         后台执行的扫描主逻辑
         """
@@ -69,7 +69,7 @@ class ModScanner:
                 user_lang = settings.config.language
                 dlc_parser = DLCParser(data_dir)
 
-            existing_mtimes = ModDAO.get_mod_mtimes()
+            existing_mtimes = ModDAO.get_mod_mtimes()   # 从数据库获取已存在的 Mod 时间戳
             
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
             EventBus.emit('scan-progress', {'stage': 'indexing', 'message': '正在索引文件...'})
@@ -115,15 +115,13 @@ class ModScanner:
                         'message': f"正在分析: {folder_name}"
                     })
 
-                # --- 核心处理逻辑 (提取自原 scan_paths) ---
+                # --- 核心处理逻辑 ---
                 is_dlc_dir = (os.path.dirname(mod_path) == data_dir)
                 
-                # ... [这里填入原 scan_paths 循环体内的核心逻辑] ...
-                # 为了代码复用，建议把单个 Mod 处理逻辑抽离成 _process_single_mod
-                
+                # 处理单个 Mod
                 mod_data = self._process_single_mod(
                     mod_path, is_dlc_dir, existing_mtimes, 
-                    dlc_parser, thumbnail_mgr
+                    dlc_parser, thumbnail_mgr, forced_update
                 )
 
                 if mod_data:
@@ -137,7 +135,10 @@ class ModScanner:
                     else:
                         mods_to_upsert.append(mod_data)
                         scanned_package_ids.add(mod_data['package_id'])
-                        stats['updated'] += 1
+                        if mod_data.get('is_new'):
+                            stats['added'] += 1
+                        else:
+                            stats['updated'] += 1
                 
                 # 分批写入
                 if len(mods_to_upsert) >= BATCH_SIZE:
@@ -169,23 +170,33 @@ class ModScanner:
             time.sleep(0.2) 
             
             stats['duration'] = time.time() - start_time
-            self._finish_scan(stats)
+            result = {
+                'status': 'success',
+                'total': stats['added'] + stats['updated'] + stats['skipped'],
+                'stats': stats,
+            }
+            self._finish_scan(result)
 
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self._finish_scan({'error': str(e)})
+            result = {
+                'status': 'error',
+                'message': str(e),
+            }
+            self._finish_scan(result)
         finally:
             self._is_scanning = False
 
     def _finish_scan(self, result):
         """扫描结束，通知前端并发送最终统计"""
-        print(f"Scan finished: {result}")
+        print(f"Scan finished: {result['stats']}")
         # 获取最新全量数据，或者让前端自己再调一次 get_all_mods
         # 建议直接通知前端 "scan-complete"，让前端决定是否刷新列表
+        
         EventBus.emit('scan-complete', result)
 
-    def _process_single_mod(self, mod_path, is_dlc_dir, existing_mtimes, dlc_parser, thumbnail_mgr):
+    def _process_single_mod(self, mod_path, is_dlc_dir, existing_mtimes, dlc_parser, thumbnail_mgr, forced_update=False):
         """
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
@@ -198,8 +209,8 @@ class ModScanner:
 
         # 检查 mtime
         try:
-            mtime = os.path.getmtime(about_file) if os.path.exists(about_file) else 0
-            ctime = os.path.getctime(about_file) if os.path.exists(about_file) else 0
+            mtime = int(os.path.getmtime(about_file)*1000) if os.path.exists(about_file) else 0
+            ctime = int(os.path.getctime(about_file)*1000) if os.path.exists(about_file) else 0
         except OSError:
             mtime = 0; ctime = 0
 
@@ -217,11 +228,12 @@ class ModScanner:
         if not pkg_id: return None
 
         # 增量检查
-        if pkg_id in existing_mtimes and abs(existing_mtimes[pkg_id] - mtime) < 1.0:
+        if (pkg_id in existing_mtimes and abs(existing_mtimes[pkg_id] - mtime) < 1.0) and not forced_update:
             return {'_skipped': True, 'package_id': pkg_id}
-
-        # 完整解析流程 (DLC 注入、Workshop ID、图片、Analyzer...)
-        # ... [将原 scan_paths 中的逻辑搬过来] ...
+        
+        # 新增标记
+        if (pkg_id not in existing_mtimes):
+            mod_data['is_new'] = True
         
         # DLC 注入
         if is_dlc_dir and dlc_parser:

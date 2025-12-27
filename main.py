@@ -15,7 +15,8 @@ def get_entrypoint():
     if os.path.exists(os.path.join(os.getcwd(), "frontend/dist/index.html")):
          return os.path.join(os.getcwd(), "frontend/dist/index.html")
     else:
-        # 开发时，请确保先启动了 frontend 的 npm run dev
+        # 正式打包前，确保先启动了 frontend 的 npm run dev
+        
         return "http://localhost:5173"
 
 if __name__ == '__main__':

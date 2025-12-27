@@ -44,20 +44,20 @@
                 <div class="p-4 rounded-xl bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-between">
                   <div class="text-sm text-accent-primary">
                     <div class="font-bold mb-1">自动配置</div>
-                    <div class="opacity-80 text-xs">尝试自动扫描注册表和默认路径</div>
+                    <div class="opacity-80 text-xs">尝试检测注册表自动获取默认路径</div>
                   </div>
                   <button @click="autoDetect" 
-                    class="px-4 py-2 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-lg text-sm font-bold shadow-lg shadow-accent-primary/20 transition-transform active:scale-95 flex items-center gap-2">
+                    class="px-4 py-2 bg-accent-primary/70 hover:bg-accent-primary text-white rounded-lg text-sm font-bold shadow-lg shadow-accent-primary/20 transition-transform active:scale-95 flex items-center gap-2">
                     <span v-if="detecting" class="animate-spin">⟳</span>
                     自动检测
                   </button>
                 </div>
 
                 <div class="space-y-4">
-                  <InputGroup label="游戏安装目录" v-model="formData.game_install_path" placeholder="例如: D:\Steam\steamapps\common\RimWorld" />
-                  <InputGroup label="配置文件夹 (Config)" v-model="formData.game_config_path" placeholder="自动检测通常能找到 LocalLow 下的路径" />
-                  <InputGroup label="创意工坊模组目录" v-model="formData.workshop_mods_path" placeholder="Steam Workshop content 目录" />
-                  <InputGroup label="本地模组目录" v-model="formData.local_mods_path" placeholder="游戏目录下的 Mods 文件夹" />
+                  <InputGroup label="游戏安装目录" v-model="formData.game_install_path" @browse="handleBrowse('game_install_path')" :is-path="true"  placeholder="例如: D:\Steam\steamapps\common\RimWorld" />
+                  <InputGroup label="配置文件夹 (Config)" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" :is-path="true"  placeholder="自动检测通常能找到 LocalLow 下的路径" />
+                  <InputGroup label="创意工坊模组目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" :is-path="true"  placeholder="Steam Workshop content 目录" />
+                  <InputGroup label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" :is-path="true"  placeholder="游戏目录下的 Mods 文件夹" />
                 </div>
               </div>
 
@@ -122,21 +122,34 @@ import { useModStore } from '../stores/modStore'
 
 // 简单的输入框子组件
 const InputGroup = {
-  props: ['label', 'modelValue', 'placeholder', 'type'],
+  props: ['label', 'modelValue', 'placeholder', 'type', 'isPath'],
   emits: ['update:modelValue'],
   template: `
     <div class="space-y-1.5">
       <label class="text-xs text-text-dim uppercase tracking-wider font-bold ml-1">{{ label }}</label>
-      <div class="relative group">
-         <input 
-            :type="type || 'text'"
-            :value="modelValue" 
+      <div class="relative group flex items-center gap-2">
+        <div class="relative flex-1 ">
+          <input :type="type || 'text'" :value="modelValue" 
             @input="$emit('update:modelValue', $event.target.value)"
             :placeholder="placeholder"
             class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-accent-primary focus:bg-black/40 transition-all font-mono"
           />
-         <div class="absolute inset-0 rounded-lg ring-1 ring-white/0 group-hover:ring-white/10 pointer-events-none transition-all"></div>
+          <div class="absolute inset-0 rounded-lg ring-1 ring-white/0 group-hover:ring-white/10 pointer-events-none transition-all"></div>
+          
+        </div>
+
+        <!-- 浏览按钮 (仅当 is-path 为 true 时显示) -->
+        <button v-if="isPath"
+            @click="$emit('browse')"
+            class="px-3 py-2.5 bg-white/5 hover:bg-accent-primary hover:text-white text-text-dim border border-white/10 rounded-lg transition-all active:scale-95"
+            title="浏览文件夹">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+        </button>
+
       </div>
+
     </div>
   `
 }
@@ -164,28 +177,52 @@ watch(() => store.showSettings, (val) => {
   }
 })
 
-// 自动检测
+// 自动检测路径
 const autoDetect = async () => {
-    if(!window.pywebview) return
-    detecting.value = true
-    try {
-        const res = await window.pywebview.api.auto_detect_paths()
-        if (res.status === 'success' && res.paths) {
-            // 只更新表单，不直接保存，让用户确认
-            Object.assign(formData.value, res.paths)
-        } else {
-            // 可以加个 Toast 提示失败
-            alert('未能自动找到所有路径，请手动填写。')
-        }
-    } finally {
-        detecting.value = false
+  if(!window.pywebview) return
+  detecting.value = true
+  try {
+    const res = await window.pywebview.api.auto_detect_paths()
+    if (res.status === 'success' && res.paths) {
+      // 只更新表单，不直接保存，让用户确认
+      Object.assign(formData.value, res.paths)
+    } else {
+      // 可以加个 Toast 提示失败
+      alert('未能自动找到所有路径，请手动填写。')
     }
+  } finally {
+      detecting.value = false
+  }
 }
 
 // 保存
 const save = () => {
     store.applySettings(formData.value)
 }
+
+// 打开Mod路径
+const openPath = (path) => {
+  if(path) store.openPath(path)
+}
+
+// 打开Url
+const openUrl = (url) => {
+  if(url) window.open(url, '_blank')
+}
+
+// 浏览文件夹
+const handleBrowse = async (fieldKey) => {
+    if(!window.pywebview) return
+    
+    // 调用后端 API
+    const path = await window.pywebview.api.select_folder_dialog(formData.value[fieldKey])
+    
+    // 如果用户选了路径（没点取消），则更新数据
+    if (path) {
+        formData.value[fieldKey] = path
+    }
+}
+
 </script>
 
 <style scoped>

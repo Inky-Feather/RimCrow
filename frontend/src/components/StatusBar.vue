@@ -58,6 +58,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useModStore } from '../stores/modStore'
+import { useToast } from "vue-toastification";
+
+const toast = useToast();
 const store = useModStore()
 
 // 本地状态，用于控制显示延迟

@@ -41,19 +41,22 @@ class LoadOrderManager:
         # 每次初始化（应用启动）时执行一次轮换检查
         self._rotate_backups()
 
-    def read_active_mods(self):
+    def read_active_mods(self, mods_config_file_path=None):
         """
         读取当前的 activeMods 列表
         :return: [package_id, package_id, ...]
         """
-        if not self.mods_config_file or not os.path.exists(self.mods_config_file):
+        if not mods_config_file_path:
+            mods_config_file_path = self.mods_config_file
+        if not mods_config_file_path or not os.path.exists(mods_config_file_path):
+            print(f"ModsConfig.xml not found: {mods_config_file_path}")
             return []
         
         active_list = []
         try:
             # 使用 recover=True 容错解析
             parser = etree.XMLParser(recover=True)
-            tree = etree.parse(self.mods_config_file, parser)
+            tree = etree.parse(mods_config_file_path, parser)
             root = tree.getroot()
             # 结构一般是 <ModsConfigData><activeMods><li>id</li>...</activeMods></ModsConfigData>
             active_node = root.find("activeMods")

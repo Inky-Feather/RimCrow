@@ -86,14 +86,18 @@ class ModXMLParser:
         node = root.find(tag)
         return node.text.strip() if node is not None and node.text else default
 
-    def _get_list(self, root, tag):
+    def _get_list(self, root, tag, if_lower=True):
         """解析简单的 <li>string</li> 列表"""
         items = []
         node = root.find(tag)
         if node is not None:
             for li in node.findall('li'):
+                # 补充：有的Mod依赖于Core，但没有写标准包名
                 if li.text and li.text.strip():
-                    items.append(li.text.strip())
+                    text = li.text.strip().lower() if if_lower else li.text.strip()
+                    if text=='core':
+                        li.text = 'ludeon.rimworld' # 补充：有的Mod依赖于Core，但没有写标准包名
+                    items.append(text)
         return items
 
     # --- 各文件解析逻辑 ---
@@ -154,10 +158,10 @@ class ModXMLParser:
                     pkg_id = self._get_text(li, 'packageId')
                     if pkg_id:
                         dep_item = {
-                            'packageId': pkg_id,
-                            'displayName': self._get_text(li, 'displayName'),
-                            'steamWorkshopUrl': self._get_text(li, 'steamWorkshopUrl'),
-                            'downloadUrl': self._get_text(li, 'downloadUrl')
+                            'package_id': pkg_id.lower(),
+                            'display_name': self._get_text(li, 'displayName'),
+                            'workshop_url': self._get_text(li, 'steamWorkshopUrl').replace('steam://url/CommunityFilePage/', 'https://steamcommunity.com/sharedfiles/filedetails/?id='),
+                            'download_url': self._get_text(li, 'downloadUrl')
                         }
                         data['dependencies_mods'].append(dep_item)
 
@@ -202,9 +206,9 @@ class ModXMLParser:
             # 通常是 <SaveBreaking>True</SaveBreaking>
             sb_text = self._get_text(root, 'SaveBreaking')
             if sb_text.lower() == 'true':
-                data['save_breaking'] = 1
-            elif sb_text.lower() == 'false':
                 data['save_breaking'] = -1
+            elif sb_text.lower() == 'false':
+                data['save_breaking'] = 1
                 
         except Exception:
             pass

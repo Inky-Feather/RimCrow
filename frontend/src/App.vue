@@ -61,14 +61,22 @@
           </div>
 
           <!-- 标签页切换 -->
-          <div class="absolute right-15 top-0.5 flex text-xs font-bold ">
-            <button v-for="tab in ['Temp', 'Groups']" :key="tab" @click="activeTab = tab"
+          <div class="absolute left-22 top-2 flex text-xs font-bold ">
+          <!-- <div class="absolute right-15 top-2 flex text-xs font-bold "> -->
+            <!-- <button v-for="tab in ['Temp', 'Groups']" :key="tab" @click="activeTab = tab"
               class="flex-1 py-2 text-center transition-colors relative m-0.5 cursor-pointer "
               :class="activeTab === tab ? 'text-accent-secondary' : 'text-gray-500 hover:text-text-main'"
             >
               {{ tab }}
               <div v-if="activeTab === tab" class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-primary"></div>
-            </button>
+            </button> -->
+            <FocusTabs 
+              v-model="activeTab" 
+              :tabs="['Temp', 'Groups']" 
+              :blurAmount="3"
+              borderColor="#00ffcc" 
+              class=" top-0 opacity-100"
+            />
           </div>
           
           <!-- 按钮组 -->
@@ -87,7 +95,11 @@
     <StatusBar class="relative z-20 flex-none" />
 
     <!-- 悬浮面板 -->
+    <HoverPanel />
 
+    <!-- 右键菜单 -->
+    <ContextMenu />
+    
     <!-- 设置弹窗 -->
     <SettingsModal />
   </div>
@@ -102,6 +114,11 @@ import ModList from './components/ModList.vue'
 import GroupList from './components/GroupList.vue'
 import SettingsModal from './components/SettingsPanel.vue'
 import StatusBar from './components/StatusBar.vue'
+import FocusTabs from './components/utils/FocusTabs.vue'
+import ContextMenu from './components/ContextMenu.vue'
+import HoverPanel from './components/HoverPanel.vue'
+
+
 
 const store = useModStore()
 const activeTab = ref('Temp')

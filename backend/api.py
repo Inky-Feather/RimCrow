@@ -1,5 +1,6 @@
 import os
 from dataclasses import asdict
+import webview # 引入 webview 库
 
 # 1. 引入配置管理
 from backend.settings import settings
@@ -156,11 +157,12 @@ class API:
     #  3. Mod 扫描与管理 (Scanning & Mods)
     # =========================================================================
 
-    def scan_mods(self, specific_paths=None):
+    def scan_mods(self, specific_paths=None, forced_update=False):
         """
         触发后台模组扫描。
         立即返回状态，前端通过监听 'scan-progress' 和 'scan-complete' 事件获取更新。
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
+        :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
         """
         paths_to_scan = []
         
@@ -189,7 +191,7 @@ class API:
 
         # 调用异步扫描
         # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
-        result = self.scanner.scan_paths_async(paths_to_scan, thumbnail_mgr=self.file_mgr)
+        result = self.scanner.scan_paths_async(paths_to_scan, thumbnail_mgr=self.file_mgr, forced_update=forced_update)
         
         return {
             "status": "success", 
@@ -266,7 +268,17 @@ class API:
     # =========================================================================
     #  5. 加载顺序与游戏启动 (Load Order & Launch)
     # =========================================================================
-
+    def get_load_order(self, mods_config_file_path=None):
+        """
+        获取当前的加载顺序
+        :param mods_config_file_path: ModsConfig.xml 文件路径
+        :return: [package_id, package_id, ...]
+        """
+        active_ids = self.load_order_mgr.read_active_mods(mods_config_file_path)
+        if not active_ids:
+            return {"status": "error", "message": "Failed to read active mods"}
+        return {"status": "success", "load_order": active_ids}
+    
     def save_load_order(self, active_ids):
         """
         保存当前激活列表到 ModsConfig.xml
@@ -286,3 +298,51 @@ class API:
 
     def open_path(self, path):
         return self.file_mgr.open_in_explorer(path)
+    
+    def open_load_order_file(self, mods_config_file_path=None):
+        """
+        打开 ModsConfig.xml 文件
+        """
+        if not mods_config_file_path:
+            mods_config_file_path = self.load_order_mgr.config_dir
+        file = self.select_file_dialog(initial_dir=mods_config_file_path)
+        if not file:
+            return {"status": "error", "message": "未选择文件"}
+        return self.get_load_order(file)
+    
+    
+    def select_folder_dialog(self, initial_dir='', title="选择文件夹"):
+        """
+        打开系统原生的文件夹选择框
+        """
+        # 获取当前活动窗口
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            # 调用原生对话框
+            # allow_multiple=False: 单选
+            result = window.create_file_dialog(
+                webview.FileDialog.FOLDER, 
+                directory=initial_dir if initial_dir else '', 
+                allow_multiple=False
+            )
+            # result 返回的是一个列表 (因为可能多选)，或者 None (取消)
+            if result and len(result) > 0:
+                return result[0]
+        return None
+
+    def select_file_dialog(self, initial_dir='', title="选择文件", file_types=('XML Files (*.xml)', 'All Files (*.*)')):
+        """
+        打开系统原生的文件选择框
+        file_types 示例: ('XML Files (*.xml)', 'All Files (*.*)')
+        """
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            result = window.create_file_dialog(
+                webview.FileDialog.OPEN, 
+                directory=initial_dir if initial_dir else '', 
+                allow_multiple=False,
+                file_types=file_types
+            )
+            if result and len(result) > 0:
+                return result[0]
+        return None

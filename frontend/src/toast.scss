@@ -1,0 +1,46 @@
+
+// Override the variables or import a file that overrides them
+@import "./style.css";
+
+//   --color-accent-danger:    rgb(239,68,68);  /* 红色 - 错误/删除 */
+//   --color-accent-highlight: rgb(236,72,153);  /* 活力粉 - 用于强调/高亮 */
+//   --color-accent-special:   rgb(139,92,246);  /* 明亮紫 - 用于高级功能/特殊状态*/
+//   --color-accent-cool:      rgb(59,130,246);  /* 饱和蓝 - 用于链接/信息补充 */
+//   --color-accent-primary:   rgb(6,182,212);  /* 青色 - 用于选中/主操作 */
+//   --color-accent-success:   rgb(16,185,129);  /* 绿色 - 正常 */
+//   --color-accent-tip:       rgb(132,204,22);  /* 黄绿色 - 辅助成功 */
+//   --color-accent-warm:      rgb(234,179,8);  /* 明亮的黄色 - 用于高亮/注意 */
+//   --color-accent-secondary: rgb(245,158,11);  /* 琥珀色 - 用于分组/警告 */
+//   --color-accent-warning:   rgb(249,115,22);  /* 温暖的橙色 - 用于中等警告/待处理 */
+
+$vt-opacity: 0.3;
+
+$vt-color-default: rgba(6, 182, 212, $vt-opacity);
+$vt-text-color-default: rgb(6,182,212);
+$vt-color-success: rgba(16, 185, 129, $vt-opacity);
+$vt-text-color-success: rgb(16,185,129);
+$vt-color-warning: rgba(234, 179, 8, $vt-opacity);
+$vt-text-color-warning: rgb(234,179,8);
+$vt-color-error: rgba(239, 68, 68, $vt-opacity);
+$vt-text-color-error: rgb(239,68,68);
+$vt-color-info: rgba(148, 163, 184, $vt-opacity);
+$vt-text-color-info: rgb(148,163,184);
+
+
+// Import the regular Vue Toastification stylesheets (or create your own)
+@import "vue-toastification/src/scss/_variables";
+@import "vue-toastification/src/scss/_toastContainer";
+@import "vue-toastification/src/scss/_toast";
+@import "vue-toastification/src/scss/_closeButton";
+@import "vue-toastification/src/scss/_progressBar";
+@import "vue-toastification/src/scss/_icon";
+@import "vue-toastification/src/scss/animations/_bounce";
+
+.#{$vt-namespace}__toast {
+  backdrop-filter: blur(5px);
+//   border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid currentColor;
+}
+.#{$vt-namespace}__progress-bar {
+  background-color: currentColor;
+}

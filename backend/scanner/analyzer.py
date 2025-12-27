@@ -4,6 +4,16 @@ import re
 # 引入通用常量
 from backend.utils.constants import LANGUAGE_MAP
 
+ignored_paths = [
+    'Backups',
+    'Cache',
+    'Logs',
+    'Temp',
+    'Source',
+    '.git',
+    '.vscode',
+]
+
 class ModAnalyzer:
     def __init__(self):
         # 匹配版本号文件夹，如 "1.0", "1.1", "v1.4"
@@ -42,7 +52,7 @@ class ModAnalyzer:
             return self._finalize(info)
 
         # 1. 计算要忽略的路径 (黑名单)
-        ignored_paths = self._get_ignored_version_paths(mod_path)
+        ignored_paths.extend(self._get_ignored_version_paths(mod_path))
 
         # 2. 递归遍历
         for root, dirs, files in os.walk(mod_path):

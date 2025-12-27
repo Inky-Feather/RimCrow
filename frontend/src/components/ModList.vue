@@ -7,71 +7,48 @@
             <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-lg shadow-accent-primary`"></div>
             {{ title }}
             <!-- 状态提示 -->
-            <span v-if="filterQuery" class="text-[10px] text-text-dim">(已筛选)</span>
+            <span v-if="isFiltered" class="text-[10px] text-text-dim">(已筛选)</span>
             <span v-if="sortMode !== 'default'" class="text-[10px] text-text-dim">(已排序)</span>
         </span>
-        <span v-if="filterQuery" :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
+        <span v-if="isFiltered" :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
           {{ displayList.length }} / {{ modelValue.length }}
         </span>
         <span v-else :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">{{ modelValue.length }}</span>
     </div>
     
     <!-- 工具栏 (搜索 & 筛选) -->
-    <div class="px-2 py-1 w-full flex flex-col gap-1 shadow-xl bg-bg-deep/20 z-10">
+    <div class="px-2 py-1 w-full flex flex-col gap-1 shadow-xl bg-bg-deep/20 z-50">
       <!-- 搜索定位 (Find) -->
-      <div class="flex w-full items-center gap-1">
-        <div class="relative flex-1">
-             <input type="text" v-model="searchQuery" @keyup.enter="executeSearch(true)"
-              placeholder="查找: Name, packageId, n:Name, t:Tag..." 
-              :class="`w-full px-2 py-1 pl-6 rounded-lg bg-bg-deep/30 border border-white/10 text-xs text-white 
-              focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 transition-all`" />
-             <!-- 图标 -->
-             <svg class="w-3 h-3 absolute left-1.5 top-1.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-        </div>
-        <button @click="executeSearch(true)" 
-	        :class="`ml-2 px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-          text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-          transition-all`">
-          定位
-        </button>
-      </div>
+      <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" 
+        v-model="searchQuery" v-model:logic="searchLogic" :cacheKey="store.dataVersion || allMods.length"
+        @search="" class="z-10">
+        <template #right>
+          <!-- 定位按钮 -->
+          <button @click="executeSearch(true)" 
+            :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+            text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+            transition-all`">
+            定位
+          </button>
+        </template>
+      </TagsInput>
       <!-- 筛选过滤 (Filter) -->
-      <div class="flex w-full items-center gap-1">
-        <div class="relative flex-1">
-             <!-- <input type="text" v-model="filterQuery" 
-              placeholder="筛选: Name, packageId, n:Name, t:Tag..." 
-              :class="`w-full px-2 py-1 pl-6 rounded-lg bg-bg-deep/30 border border-white/10 text-xs text-white 
-              focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 transition-all`" /> -->
-              
-              <!-- <TagsInput 
-                  v-model="filterTags" 
-                  placeholder="筛选: t:Tag, n:Name..." 
-              /> -->
-
-              <TagsSearch
-                :data="store.allModsMap ? Array.from(store.allModsMap.values()) : []"
-                :schema="{ 
-                  'tags': 'list', 
-                  'name': 'string', 
-                  'author': 'list', 
-                  'package_id': 'string' 
-                }"
-                :default-scope="['name', 'package_id', 'author']"
-                v-model="searchTags"
-                v-model:logic="searchLogic"
-                @search="executeSearch(true)"
-              />
-              
-             <svg class="w-3 h-3 absolute left-1.5 top-1.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-        </div>
-        <!-- 排序切换按钮 -->
-        <button @click="cycleSort" :title="sortMode"
-	        :class="`ml-2 px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-          text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-          transition-all`">
-	        {{ sortIcon }}
-	      </button>
-      </div>
+      <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema"
+        v-model="filterQuery" v-model:logic="filterLogic" :cacheKey="store.dataVersion || allMods.length"
+        @search="" class="z-5">
+        <template #icon>
+          <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+        </template>
+        <template #right>
+          <!-- 排序切换按钮 -->
+          <button @click="cycleSort" :title="sortMode"
+            :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+            text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+            transition-all`">
+            {{ sortIcon }}
+          </button>
+        </template>
+      </TagsInput>
     </div>
     
     <!-- 列表区（底部渐变隐藏） -->
@@ -95,14 +72,14 @@
         </div>
 
         <VirtualList v-model="internalListProxy" ref="vListRef" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="space-y-1" 
-          :fallbackOnBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="(sortMode == 'default' && !isFiltered)"
-          :group="{ name: 'mods', pull: true, put: true, revertDrag: true }" :animation="150" :sort="allowSort" 
+          :fallbackOnBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort"
+          :group="{ name: 'mods', pull: true, put: allowSort, revertDrag: true }" :animation="150" 
           @mousedown.left="handleMousePressed(true)" @mouseup.left="handleMousePressed(false)" @mouseleave="handleMousePressed(false)">
           <template v-slot:item="{ record, index, dataKey }">
-            <ModItem :id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
+            <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
               :is-selected="store.selectedIds.has(dataKey)"
-              :search-match="currentSearchIndex !== -1 && searchResults[currentSearchIndex] === dataKey"
-               @toggle-select="handleClick" >
+              :search-match="currentTargetId === dataKey"
+               @toggle-select="handleClick" v-preview="store.getModById(dataKey)">
             </ModItem>
           </template>
         </VirtualList>
@@ -115,13 +92,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref} from 'vue'
+import { computed, ref, watch } from 'vue'
 import VirtualList from 'vue-virtual-sortable';
 import { useModStore } from '../stores/modStore'
 import ModItem from './utils/ModItem.vue'
-import TagsInput from './utils/TagsInput.vue'
-import TagsSearch from './utils/TagsSearch.vue';
+import TagsInput from './utils/TagsInput.vue';
+import { useToast } from "vue-toastification";
 
+const toast = useToast();
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -133,45 +111,121 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const store = useModStore()
-const vListRef = ref(null)
 
 // --- 1. 搜索与筛选逻辑 ---
 
-const searchQuery = ref('')
-const filterQuery = ref('')
-const filterTags = ref([])
+const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 const sortMode = ref<'default' | 'name' | 'author'>('default')
 
 // 状态
-const searchTags = ref([]) // 存储标签数组
+const searchQuery = ref([])
 const searchLogic = ref('AND') // 存储逻辑关系
+const filterQuery = ref([]) // 存储标签数组
+const filterLogic = ref('AND') // 存储逻辑关系
 
-// --- 新的匹配逻辑 ---
+// 模组搜索字段 schema
+const modSchema = {
+  'tags': 'list', 
+  'name': 'string', 
+  'alias_name': 'string',
+  'author': 'list', 
+  'package_id': 'string',
+}
+// 默认搜索范围
+const defaultSearchScope = ['name', 'alias_name', 'notes', 'description']
+
+// --- 2. 显示列表计算 (Filter -> Sort) ---
+// 仅当允许拖拽排序时 (默认模式且无筛选) 为 True
+// 注意：如果 filtered，禁止排序，因为无法映射回原数组的正确位置
+const isFiltered = computed(() => filterQuery.value.length > 0)
+const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value)
+const allMods = computed(() => store.allModsMap ? Array.from(store.allModsMap.values()) : [])
+const currentTargetId = computed(() => store.currentTargetId)
+const currentTragetIndex = ref(-1)
+
+// 显示列表：筛选 -> 排序
+const displayList = computed(() => {
+  let list = props.modelValue.slice() // 复制一份 ID 列表
+  
+  // 1. 筛选
+  if (filterQuery.value.length > 0) {
+    list = list.filter(id => {
+      const mod = store.getModById(id)
+      return checkMatch(mod, filterQuery.value, filterLogic.value)
+    })
+  }
+
+  // 2. 排序 (仅视觉)
+  if (sortMode.value !== 'default') {
+    list.sort((a, b) => {
+      const mA = store.getModById(a)
+      const mB = store.getModById(b)
+      if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
+      if (sortMode.value === 'author') return (mA?.author || '').localeCompare(mB?.author || '')
+      return 0
+    })
+  }
+  
+  return list
+})
+
+// 检查模组是否匹配所有 检索Tag
 const checkMatch = (mod: any, tags: any[], logic: string) => {
   if (!mod || tags.length === 0) return true
 
   // 对每个 Tag 进行判断
   const results = tags.map(tag => {
     let isMatch = false
+    const isExactMatch = tag.value.endsWith('$')
+    const tagValLower = isExactMatch ? tag.value.toLowerCase().slice(0, -1) : tag.value.toLowerCase()
     
+    // console.log('tag', tagValLower)
+    // console.log(tagValLower.endsWith('$'),'tagValLower', tagValLower.slice(0, -1))
+
     if (tag.type === 'rule') {
       // 结构化匹配 (如 t:Core)
+      // 直接查字段，不再转换 Mod 内容的大小写
       const fieldVal = mod[tag.key]
+      // 列表匹配
       if (Array.isArray(fieldVal)) {
-        // 数组字段 (Tags, Author): 模糊匹配任一元素
-        isMatch = fieldVal.some(v => v.toLowerCase().includes(tag.value.toLowerCase()))
+          // 如果字段是 tags，利用预处理的 Set (O(1) 复杂度)
+          if (tag.key === 'tags' && mod._tagsLower) {
+            // 包含匹配（模糊匹配）
+            if (isExactMatch) {
+              // 精确匹配
+              isMatch = fieldVal.some(v => String(v).toLowerCase() === tagValLower)
+            } else {
+              // 包含匹配（模糊匹配）
+              isMatch = fieldVal.some(v => v.toLowerCase().includes(tagValLower))
+            }
+          } else {
+            if (isExactMatch) {
+              // 精确匹配
+              isMatch = fieldVal.some(v => String(v).toLowerCase() === tagValLower)
+            } else {
+              // 包含匹配（模糊匹配）
+              isMatch = fieldVal.some(v => String(v).toLowerCase().includes(tagValLower))
+            }
+          }
+      // 字符串匹配
       } else if (fieldVal) {
-        // 字符串字段 (Name): 包含
-        isMatch = String(fieldVal).toLowerCase().includes(tag.value.toLowerCase())
+        if (isExactMatch) {
+          // 精确匹配
+          isMatch = String(fieldVal).toLowerCase() === tagValLower
+        } else {
+          // 包含匹配（模糊匹配）
+          isMatch = String(fieldVal).toLowerCase().includes(tagValLower)
+        }
+        // console.log('value',tagValLower,'isExactMatch',isExactMatch,'fieldVal',fieldVal)
       }
     } else {
-      // 纯文本匹配 (遍历 defaultScope)
-      const scope = ['name', 'package_id', 'author'] // 或从 props 传
-      isMatch = scope.some(key => {
-        const val = mod[key]
-        if (Array.isArray(val)) return val.some(v => v.toLowerCase().includes(tag.value.toLowerCase()))
-        return String(val || '').toLowerCase().includes(tag.value.toLowerCase())
-      })
+      // 纯文本匹配：直接检查预处理的索引字符串 (极快)
+      if (mod._searchStr) {
+          isMatch = mod._searchStr.includes(tagValLower)
+      } else {
+          // 兜底逻辑
+           isMatch = defaultSearchScope.some(key => String(mod[key] || '').toLowerCase().includes(tagValLower))
+      }
     }
 
     // 处理排除逻辑
@@ -189,58 +243,10 @@ const checkMatch = (mod: any, tags: any[], logic: string) => {
   }
 }
 
-// 解析查询字符串: "t:Core n:Rim" -> { tags: ['Core'], names: ['Rim'], groups: [] }
-const parseQuery = (query: string) => {
-    const parts = query.toLowerCase().split(/\s+/)
-    const criteria = { tags: [], names: [], groups: [], authors: [] }
-    parts.forEach(p => {
-      if(!p) return
-      if(p.startsWith('t:')) criteria.tags.push(p.slice(2))
-      else if(p.startsWith('g:')) criteria.groups.push(p.slice(2))
-      else if(p.startsWith('n:')) criteria.names.push(p.slice(2))
-      else if(p.startsWith('a:')) criteria.authors.push(p.slice(2))
-      else criteria.names.push(p) // 默认当作名称
-    })
-    return criteria
-}
-
-// --- 2. 显示列表计算 (Filter -> Sort) ---
-
-// 仅当允许拖拽排序时 (默认模式且无筛选) 为 True
-// 注意：如果 filtered，我们通常禁止排序，因为无法映射回原数组的正确位置
-const isFiltered = computed(() => !!filterQuery.value.trim())
-const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value)
-
-const displayList = computed(() => {
-    let list = props.modelValue.slice() // 复制一份 ID 列表
-    
-    // 1. 筛选
-    // 使用新的 searchTags 判断
-    if (searchTags.value.length > 0) {
-        list = list.filter(id => {
-            const mod = store.getModById(id)
-            return checkMatch(mod, searchTags.value, searchLogic.value)
-        })
-    }
-
-    // 2. 排序 (仅视觉)
-    if (sortMode.value !== 'default') {
-        list.sort((a, b) => {
-            const mA = store.getModById(a)
-            const mB = store.getModById(b)
-            if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
-            if (sortMode.value === 'author') return (mA?.author || '').localeCompare(mB?.author || '')
-            return 0
-        })
-    }
-    
-    return list
-})
 
 // VueVirtualSortable 需要对象数组 {id: ...}
 // 这里做一个中间层，处理 displayList 和 modelValue 之间的映射
 // 注意：当处于 Filter/Sort 模式时，Set 操作需要小心，我们只允许"拖出"，
-// "拖入" 或 "重排" 在 Filter 模式下通常会很奇怪，建议此时禁用 put 或 sort。
 const internalListProxy = computed({
     get() {
         return displayList.value.map(id => ({ id }))
@@ -249,7 +255,6 @@ const internalListProxy = computed({
         // 当发生拖拽变化时
         if (!allowSort.value) {
             // 如果处于筛选/排序模式，VirtualList 可能会尝试更新列表
-            // 但我们要拒绝这种更新，或者只处理"移除"的情况
             // 简单处理：如果长度变短了(被拖出)，我们需要在原始 modelValue 中移除对应项
             const newIds = new Set(val.map(v => v.id))
             const removedIds = displayList.value.filter(id => !newIds.has(id))
@@ -271,40 +276,86 @@ const internalListProxy = computed({
 
 // --- 3. 搜索定位逻辑 (Find) ---
 const searchResults = ref<string[]>([])
-const currentSearchIndex = ref(-1)
 
-const executeSearch = (next = true) => {
-    if (!searchQuery.value.trim()) {
-        searchResults.value = []
-        currentSearchIndex.value = -1
-        return
-    }
+// 监听 currentTargetId 变化
+watch(currentTargetId, async (newVal, oldVal) => {
+  if (!newVal || newVal === oldVal) return
+  // 1. 检查目标是否在当前所有的 modelValue 中（不仅是 displayList）
+  if (!props.modelValue.includes(newVal)) {
+    // 如果这个 ID 根本不在当前传进来的列表里（比如它在另一个分组，或者被彻底移除了）
+    console.info(`Item ${newVal} not found in ${props.title} list model.`)
+    // toast.warning(`Item ${newVal} not found in ${props.title} list model.`)
+    return
+  } 
 
-    const criteria = parseQuery(searchQuery.value)
-    // 在当前的 displayList 中查找，这样只能找到可见的
-    const results = displayList.value.filter(id => checkMatch(store.getModById(id), criteria))
-    
-    // 如果结果列表变了，重置
-    if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
-        searchResults.value = results
-        currentSearchIndex.value = -1
-    }
+  // 2. 检查是否被当前的筛选器过滤掉了
+  if (!displayList.value.includes(newVal)) {
+    console.info(`Item ${newVal} is filtered out by current ${props.title} filter.`)
+    toast.warning(`搜索项 ${newVal} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
+    // 策略 A: 自动清除筛选 (推荐)
+    // searchQuery.value = [] // 清空搜索 Tag
+    // filterQuery.value = [] // 清空筛选 Tag
+    // // 等待 Vue 重新计算 displayList
+    // await nextTick()
+  }
 
-    if (results.length === 0) return
-
-    if (next) {
-        currentSearchIndex.value++
-        if (currentSearchIndex.value >= results.length) {
-            currentSearchIndex.value = 0 // 循环
-            // 可以加个 Toast 提示 "回到第一个"
+  // 3. 执行定位
+  const index = displayList.value.indexOf(newVal)
+  if (index !== -1) {
+    // 稍微延迟一下确保虚拟列表渲染就绪
+    setTimeout(() => {
+        if (vListRef.value) {
+            vListRef.value.scrollToKey(newVal)
+            // 可选：添加一个高亮闪烁效果
+            // store.flashItem(newVal) 
         }
+    }, 50)
+    // 延迟一段时间后移除高亮
+    setTimeout(() => {
+      store.currentTargetId = ''
+    }, 2000)
+  }
+})
+
+// 执行搜索
+const executeSearch = (next = true) => {
+  // 清空旧结果
+  if (!searchQuery.value.length) {
+    searchResults.value = []
+    store.currentTargetId = ''
+    currentTragetIndex.value = -1
+    return
+  }
+
+  // 在当前的 displayList 中查找，这样只能找到可见的
+  const results = displayList.value.filter(id => checkMatch(store.getModById(id), searchQuery.value, searchLogic.value))
+  
+  // 如果结果列表变了，重置
+  if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
+    searchResults.value = results
+    currentTragetIndex.value = -1
+  }
+
+  if (results.length === 0) return
+
+  var index = currentTragetIndex.value
+
+  if (next) {
+    index++
+    if (index >= results.length) {
+      index = 0 // 循环
+      // 可以加个 Toast 提示 "回到第一个"
+
     }
-    
-    // 定位
-    const targetId = results[currentSearchIndex.value]
-    if (vListRef.value) {
-        vListRef.value.scrollToKey(targetId)
-    }
+  }
+  // 定位
+  const targetId = results[index]
+  currentTragetIndex.value = index
+  // 先确保目标 ID 在可见范围内
+  if (results.includes(targetId)) {
+    store.currentTargetId = targetId
+  }
+  
 }
 
 // --- 4. 排序切换 ---
@@ -335,6 +386,13 @@ const handleMousePressed = (state:boolean) => {
 }
 // --- 选中与样式 ---
 const handleClick = (event: MouseEvent, id: string, isPull=false) => {
+  // 修正输入框不会对列表项失焦，强制失焦逻辑
+  // 如果当前有获得焦点的元素，且它是一个输入框，则强制让它失焦
+  if (document.activeElement instanceof HTMLElement && 
+     (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+      document.activeElement.blur()
+  }
+
   // 只响应左键点击或拖拽中的进入
   const isLeftButton = event.button === 0 && !isPull;
   const isFromDrag = mousePressed.value && isPull;
@@ -346,8 +404,6 @@ const handleClick = (event: MouseEvent, id: string, isPull=false) => {
   const isRange = event.shiftKey
   store.selectMod(id, isMulti, isRange)
 }
-
-
 
 </script>
 
