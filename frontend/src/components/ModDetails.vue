@@ -30,7 +30,7 @@
         </span>
       </div>
       <!-- 标题 -->
-      <div class="absolute bottom-0 inset-x-0 bg-linear-to-t from-bg-deep/90 to-transparent p-2 pt-12">
+      <div class="@container absolute bottom-0 inset-x-0 bg-linear-to-t from-bg-deep/90 to-transparent p-2 pt-12">
         <!-- 大小：{{ computedFontSize }}  
         字数：{{ selectedMod.name.length }} -->
         <h2 class="font-bold leading-tight line-clamp-2 text-shadow wrap-break-word adaptive-text" 
@@ -81,14 +81,20 @@
           </div>
         </div>
         <!-- Url显示 -->
-        <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 cursor-pointer hover:bg-white/10" @click="openUrl(selectedMod.url)">
-          <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="34.6074" y="3.4939" width="14" height="18" rx="2" transform="rotate(45 34.6074 3.4939)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect x="16.2227" y="21.8787" width="14" height="18" rx="2" transform="rotate(45 16.2227 21.8787)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M31.0723 16.929L16.9301 31.0711" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 " 
+          :class="[selectedMod.source === 'local' ? 'text-text-dim' : 'cursor-pointer hover:bg-white/10']" 
+          @click="openUrl(selectedMod.url)">
+          <!-- <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="34.6074" y="3.4939" width="14" height="18" rx="2" transform="rotate(45 34.6074 3.4939)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect x="16.2227" y="21.8787" width="14" height="18" rx="2" transform="rotate(45 16.2227 21.8787)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M31.0723 16.929L16.9301 31.0711" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg> -->
+          <svg v-if="selectedMod.source==='workshop'" width="28" height="28" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" class="fill-current -m-0.5"><path d="M568 320C568 457 456.8 568 319.6 568C205.8 568 110 491.7 80.6 387.6L175.8 426.9C182.2 459 210.7 483.3 244.7 483.3C283.9 483.3 316.6 450.9 314.9 409.8L399.4 349.6C451.5 350.9 495.2 308.7 495.2 256.1C495.2 204.5 453.2 162.6 401.5 162.6C349.8 162.6 307.8 204.6 307.8 256.1L307.8 257.3L248.6 343C233.1 342.1 217.9 346.4 205.1 355.1L72 300.1C82.2 172.4 189.1 72 319.6 72C456.8 72 568 183 568 320zM227.7 448.3L197.2 435.7C202.8 447.3 212.5 456.5 224.4 461.5C251.3 472.7 282.2 459.9 293.4 433.1C298.8 420.1 298.9 405.8 293.5 392.8C288.1 379.8 278 369.6 265 364.2C252.1 358.8 238.3 359 226.1 363.6L257.6 376.6C277.4 384.8 286.8 407.5 278.5 427.3C270.2 447.2 247.5 456.5 227.7 448.3zM401.5 193.8C435.9 193.8 463.8 221.7 463.8 256.1C463.8 290.5 435.9 318.4 401.5 318.4C367.1 318.4 339.2 290.5 339.2 256.1C339.2 221.7 367.1 193.8 401.5 193.8zM401.6 302.8C427.4 302.8 448.4 281.8 448.4 256C448.4 230.2 427.4 209.2 401.6 209.2C375.8 209.2 354.8 230.2 354.8 256C354.8 281.8 375.8 302.8 401.6 302.8z"/></svg>
+          <svg v-else-if="selectedMod.source==='github'" width="28" height="28" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" class="fill-current -m-0.5"><path d="M237.9 461.4C237.9 463.4 235.6 465 232.7 465C229.4 465.3 227.1 463.7 227.1 461.4C227.1 459.4 229.4 457.8 232.3 457.8C235.3 457.5 237.9 459.1 237.9 461.4zM206.8 456.9C206.1 458.9 208.1 461.2 211.1 461.8C213.7 462.8 216.7 461.8 217.3 459.8C217.9 457.8 216 455.5 213 454.6C210.4 453.9 207.5 454.9 206.8 456.9zM251 455.2C248.1 455.9 246.1 457.8 246.4 460.1C246.7 462.1 249.3 463.4 252.3 462.7C255.2 462 257.2 460.1 256.9 458.1C256.6 456.2 253.9 454.9 251 455.2zM316.8 72C178.1 72 72 177.3 72 316C72 426.9 141.8 521.8 241.5 555.2C254.3 557.5 258.8 549.6 258.8 543.1C258.8 536.9 258.5 502.7 258.5 481.7C258.5 481.7 188.5 496.7 173.8 451.9C173.8 451.9 162.4 422.8 146 415.3C146 415.3 123.1 399.6 147.6 399.9C147.6 399.9 172.5 401.9 186.2 425.7C208.1 464.3 244.8 453.2 259.1 446.6C261.4 430.6 267.9 419.5 275.1 412.9C219.2 406.7 162.8 398.6 162.8 302.4C162.8 274.9 170.4 261.1 186.4 243.5C183.8 237 175.3 210.2 189 175.6C209.9 169.1 258 202.6 258 202.6C278 197 299.5 194.1 320.8 194.1C342.1 194.1 363.6 197 383.6 202.6C383.6 202.6 431.7 169 452.6 175.6C466.3 210.3 457.8 237 455.2 243.5C471.2 261.2 481 275 481 302.4C481 398.9 422.1 406.6 366.2 412.9C375.4 420.8 383.2 435.8 383.2 459.3C383.2 493 382.9 534.7 382.9 542.9C382.9 549.4 387.5 557.3 400.2 555C500.2 521.8 568 426.9 568 316C568 177.3 455.5 72 316.8 72zM169.2 416.9C167.9 417.9 168.2 420.2 169.9 422.1C171.5 423.7 173.8 424.4 175.1 423.1C176.4 422.1 176.1 419.8 174.4 417.9C172.8 416.3 170.5 415.6 169.2 416.9zM158.4 408.8C157.7 410.1 158.7 411.7 160.7 412.7C162.3 413.7 164.3 413.4 165 412C165.7 410.7 164.7 409.1 162.7 408.1C160.7 407.5 159.1 407.8 158.4 408.8zM190.8 444.4C189.2 445.7 189.8 448.7 192.1 450.6C194.4 452.9 197.3 453.2 198.6 451.6C199.9 450.3 199.3 447.3 197.3 445.4C195.1 443.1 192.1 442.8 190.8 444.4zM179.4 429.7C177.8 430.7 177.8 433.3 179.4 435.6C181 437.9 183.7 438.9 185 437.9C186.6 436.6 186.6 434 185 431.7C183.6 429.4 181 428.4 179.4 429.7z"/></svg>
+          <svg v-else-if="selectedMod.source==='local'" width="24" height="24" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" class="fill-current "><path d="M73 39.1C63.6 29.7 48.4 29.7 39.1 39.1C29.8 48.5 29.7 63.7 39 73.1L567 601.1C576.4 610.5 591.6 610.5 600.9 601.1C610.2 591.7 610.3 576.5 600.9 567.2L478.9 445.2C483.1 441.8 487.2 438.1 491 434.3L562.1 363.2C591.4 333.9 607.9 294.1 607.9 252.6C607.9 166.2 537.9 96.1 451.4 96.1C414.1 96.1 378.3 109.4 350.1 133.3C370.4 143.4 388.8 156.8 404.6 172.8C418.7 164.5 434.8 160.1 451.4 160.1C502.5 160.1 543.9 201.5 543.9 252.6C543.9 277.1 534.2 300.6 516.8 318L445.7 389.1C441.8 393 437.6 396.5 433.1 399.6L385.6 352.1C402.1 351.2 415.3 337.7 415.8 321C415.8 319.7 415.8 318.4 415.8 317.1C415.8 230.8 345.9 160.2 259.3 160.2C240.1 160.2 221.4 163.7 203.8 170.4L73 39.1zM257.9 224C258.5 224 259 224 259.6 224C274.7 224 289.1 227.7 301.7 234.2C303.5 235.4 305.3 236.5 307.2 237.3C334 253.6 352 283.2 352 316.9C352 317.3 352 317.7 352 318.1L257.9 224zM378.2 480L224 325.8C225.2 410.4 293.6 478.7 378.1 479.9zM171.7 273.5L126.4 228.2L77.8 276.8C48.5 306.1 32 345.9 32 387.4C32 473.8 102 543.9 188.5 543.9C225.7 543.9 261.6 530.6 289.8 506.7C269.5 496.6 251 483.2 235.2 467.2C221.2 475.4 205.1 479.8 188.5 479.8C137.4 479.8 96 438.4 96 387.3C96 362.8 105.7 339.3 123.1 321.9L171.7 273.3z"/></svg>
+          <svg v-else="selectedMod.source==='other'" width="24" height="24" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" class="fill-current "><path d="M451.5 160C434.9 160 418.8 164.5 404.7 172.7C388.9 156.7 370.5 143.3 350.2 133.2C378.4 109.2 414.3 96 451.5 96C537.9 96 608 166 608 252.5C608 294 591.5 333.8 562.2 363.1L491.1 434.2C461.8 463.5 422 480 380.5 480C294.1 480 224 410 224 323.5C224 322 224 320.5 224.1 319C224.6 301.3 239.3 287.4 257 287.9C274.7 288.4 288.6 303.1 288.1 320.8C288.1 321.7 288.1 322.6 288.1 323.4C288.1 374.5 329.5 415.9 380.6 415.9C405.1 415.9 428.6 406.2 446 388.8L517.1 317.7C534.4 300.4 544.2 276.8 544.2 252.3C544.2 201.2 502.8 159.8 451.7 159.8zM307.2 237.3C305.3 236.5 303.4 235.4 301.7 234.2C289.1 227.7 274.7 224 259.6 224C235.1 224 211.6 233.7 194.2 251.1L123.1 322.2C105.8 339.5 96 363.1 96 387.6C96 438.7 137.4 480.1 188.5 480.1C205 480.1 221.1 475.7 235.2 467.5C251 483.5 269.4 496.9 289.8 507C261.6 530.9 225.8 544.2 188.5 544.2C102.1 544.2 32 474.2 32 387.7C32 346.2 48.5 306.4 77.8 277.1L148.9 206C178.2 176.7 218 160.2 259.5 160.2C346.1 160.2 416 230.8 416 317.1C416 318.4 416 319.7 416 321C415.6 338.7 400.9 352.6 383.2 352.2C365.5 351.8 351.6 337.1 352 319.4C352 318.6 352 317.9 352 317.1C352 283.4 334 253.8 307.2 237.5z"/></svg>
           <div class="flex-1 min-w-0 m-0">
             <div class="text-[10px] text-text-dim uppercase flex justify-between items-center">
-              <span class="min-w-0 truncate">网络地址</span>
+              <span class="min-w-0 truncate">来源地址</span>
               <svg width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 32L33 15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15H33V33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
-            <div class="text-xs text-accent-cool truncate direction-rtl">{{ selectedMod.source }}</div>
+            <div class="text-xs text-accent-cool truncate direction-rtl ">{{ displaySourceType }}</div>
           </div>
           
         </div>
@@ -133,14 +139,14 @@
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 22V36" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22H24L30 22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </StatItem>
           <div v-tooltip="tooltipModType" class="p-1 col-span-2 bg-white/5 rounded-lg border text-text-dim border-white/5 flex items-center justify-center">
-            <svg v-show="selectedMod.mod_type=='LanguagePack'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='XML'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 13L4 25.4322L16 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 13L44 25.4322L32 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 4L21 44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='Assembly'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 29H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='Texture'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 23C20.7614 23 23 20.7614 23 18C23 15.2386 20.7614 13 18 13C15.2386 13 13 15.2386 13 18C13 20.7614 15.2386 23 18 23Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27.7901 26.2194C28.6064 25.1269 30.2528 25.1538 31.0329 26.2725L39.8077 38.8561C40.7322 40.182 39.7835 42.0001 38.1671 42.0001H16L27.7901 26.2194Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='Audio'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M30 34.5C30 32.567 31.567 31 33.5 31H41V34.4C41 36.3882 39.3882 38 37.4 38H33.5C31.567 38 30 36.433 30 34.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M6 38.5C6 36.567 7.567 35 9.5 35H16V38.4C16 40.3882 14.3882 42 12.4 42H9.5C7.567 42 6 40.433 6 38.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 18.044V18.044L41 12.125" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 38V10L41 4V33.6924" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='Mixed'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="5" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 16L16 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 21L21 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="selectedMod.mod_type=='Unknown'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 28.625V24.625C27.3137 24.625 30 21.9387 30 18.625C30 15.3113 27.3137 12.625 24 12.625C20.6863 12.625 18 15.3113 18 18.625" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24 37.625C25.3807 37.625 26.5 36.5057 26.5 35.125C26.5 33.7443 25.3807 32.625 24 32.625C22.6193 32.625 21.5 33.7443 21.5 35.125C21.5 36.5057 22.6193 37.625 24 37.625Z" fill="currentColor"/></svg>
-            <span v-if="selectedMod.mod_type" class="flex-1 truncate">{{ modTypeMap[selectedMod.mod_type] }}</span>
+            <svg v-show="modType=='LanguagePack'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-show="modType=='XML'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 13L4 25.4322L16 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 13L44 25.4322L32 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 4L21 44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+            <svg v-show="modType=='Assembly'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 29H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-show="modType=='Texture'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 23C20.7614 23 23 20.7614 23 18C23 15.2386 20.7614 13 18 13C15.2386 13 13 15.2386 13 18C13 20.7614 15.2386 23 18 23Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27.7901 26.2194C28.6064 25.1269 30.2528 25.1538 31.0329 26.2725L39.8077 38.8561C40.7322 40.182 39.7835 42.0001 38.1671 42.0001H16L27.7901 26.2194Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-show="modType=='Audio'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M30 34.5C30 32.567 31.567 31 33.5 31H41V34.4C41 36.3882 39.3882 38 37.4 38H33.5C31.567 38 30 36.433 30 34.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M6 38.5C6 36.567 7.567 35 9.5 35H16V38.4C16 40.3882 14.3882 42 12.4 42H9.5C7.567 42 6 40.433 6 38.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 18.044V18.044L41 12.125" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 38V10L41 4V33.6924" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-show="modType=='Mixed'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="5" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 16L16 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 21L21 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-show="modType=='Unknown'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 28.625V24.625C27.3137 24.625 30 21.9387 30 18.625C30 15.3113 27.3137 12.625 24 12.625C20.6863 12.625 18 15.3113 18 18.625" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24 37.625C25.3807 37.625 26.5 36.5057 26.5 35.125C26.5 33.7443 25.3807 32.625 24 32.625C22.6193 32.625 21.5 33.7443 21.5 35.125C21.5 36.5057 22.6193 37.625 24 37.625Z" fill="currentColor"/></svg>
+            <span v-if="modType" class="flex-1 truncate">{{ store.modTypeMap[modType] }}</span>
           </div>
         </div>
       </div>
@@ -303,7 +309,7 @@
         
         <!-- 标签管理 (带自动补全) -->
         <div>
-          <label v-tooltip="'可在此添加自定义标签'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">标签*</label>
+          <label v-tooltip="'在此管理Mod标记的自定义标签'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">标签*</label>
           <div class="flex flex-wrap gap-1 mb-2">
             <span v-for="tag in userTags" :key="tag" 
               class="px-1 py-0.5 rounded bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group">
@@ -324,7 +330,7 @@
 
         <!-- 分组 -->
         <div>
-          <label v-tooltip="'可将Mod添加到多个分组'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">分组*</label>
+          <label v-tooltip="'在此管理Mod的所属分组'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">分组*</label>
           <div class="flex flex-wrap gap-1 mb-2">
             <span v-for="group in userGroups" :key="group.group_id" 
               class="px-1 py-0.5 rounded text-xs border border-text-dim/20 flex items-center gap-1 group hover:border-text-dim/80"
@@ -410,6 +416,7 @@
 
 <script setup >
 import { computed, ref, watch } from 'vue'
+import { refDebounced } from '@vueuse/core' // 引入防抖函数
 import { useModStore } from '../stores/modStore'
 import { parseUnityRichText } from '../utils/unityTextParser'
 import ImageCloud from './utils/ImageCloud.vue';
@@ -440,7 +447,6 @@ const StatItem = {
   `
 }
 const store = useModStore()
-const selectedMod = computed(() => store.selectedMods.at(-1)) // 取最后一个选中的
 const userTags = ref([])
 const userAliasName = ref('')
 const userNotes = ref('')
@@ -451,6 +457,14 @@ const showAllDependencies = ref(false);
 const showAllIncompatible = ref(false);
 const showAllLoadBefore = ref(false);
 const showAllLoadAfter = ref(false);
+
+// 1. 获取原始数据
+const rawSelectedMod = computed(() => store.lastSelectedMod)
+
+// 2. 创建一个防抖的引用
+// 含义：当 rawSelectedMod 变化时，debouncedMod 会等待 300ms 且无新变化后才更新
+const selectedMod = refDebounced(rawSelectedMod, 200) 
+const modType = computed(() => store.displayModType(selectedMod.value))
 
 // 监听选中变化，同步本地编辑状态
 watch(selectedMod, (newVal) => {
@@ -477,8 +491,8 @@ const hasDependencies = computed(() => {
 })
 // 根据 mod 名字长度动态调整字体大小
 const computedFontSize = computed(() => {
-  if (store.selectedMods.length === 0) return '1.25vw';
-  const text = store.selectedMods.at(-1).name;
+  if (!selectedMod.value) return '1.25vw';
+  const text = selectedMod.value.name;
   if (!text) return '1.25vw';
   const length = text.length;
 
@@ -494,10 +508,31 @@ const computedFontSize = computed(() => {
   if (length <= 20) return '1.3vw';
   return '1.2vw';
 })
+const computedFontSize0 = computed(() => {
+  const text = displayMod.value?.name;
+  
+  // 默认大小 (比如容器宽度的 10%)
+  if (!text) return 'clamp(2px, 5cqi, 16px)'; 
+  
+  const len = text.length;
+  let cqiRate = 5; // 默认基准：短名字占宽度的 10%
+  if (len > 80) cqiRate = 2;       // 超长：只占 4%
+  else if (len > 60) cqiRate = 3;
+  else if (len > 40) cqiRate = 4;
+  else if (len > 20) cqiRate = 5;  // 中等：占 8%
+  else cqiRate = 6;               // 短：占 10%
+  return `clamp(2px, ${cqiRate}cqi, 16px)`;
+})
+
+const displaySourceType = computed(() => { 
+  return store.sourceTypeMap[selectedMod.value.source] || selectedMod.value.source
+})
+
+
 // 显示版本信息（最多显示5个版本）
 const displayVersions = computed(() => {
   // 获取版本数组，如果不存在则返回空数组
-  const versions = store.selectedMods.at(-1)?.supported_versions || [];
+  const versions = selectedMod.value?.supported_versions || [];
   // 如果版本数量小于等于5，直接返回所有版本
   if (versions.length < 6) {
     return versions;
@@ -515,17 +550,8 @@ const displayVersions = computed(() => {
 const tooltipSaveBreaking = computed((index) => {
   return ['危险：注意！中途启用或停用该Mod会破坏存档！','未知：暂时无法知道该Mod是否会破坏存档。','安全：该Mod不会破坏存档，可放心加入或移除。'][parseInt(selectedMod.value.save_breaking)+1]
 })
-const modTypeMap = {
-  'LanguagePack': '语言包',
-  'XML': '纯XML定义',
-  'Assembly': '含程序集',
-  'Texture': '纹理包',
-  'Audio': '音频包',
-  'Mixed': '混合',
-  'Unknown': '未知类型'
-}
 const tooltipModType = computed(() => {
-  return '模组类型：'+modTypeMap[selectedMod.value.mod_type]+'\n__(粗略判断)__'
+  return '模组类型：'+store.modTypeMap[selectedMod.value.mod_type]+'\n__(粗略判断)__'
 })
 
 
@@ -584,24 +610,20 @@ const saveUserData = () => {
 }
 // 打开Mod路径
 const openPath = () => {
-  if(selectedMod.value?.path) store.openPath(selectedMod.value.path)
+  store.openPath(selectedMod.value.path)
 }
 // 打开Url
 const openUrl = (url) => {
-  if(url) window.open(url, '_blank')
+  store.openUrl(url)
 }
 // 打开SteamUrl
 const openSteamUrl = (url) => {
-  if(url) {
-    url = url.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', 'steam://url/CommunityFilePage/')
-    window.open(url, '_blank')
-  }
+  store.openSteamWorkshopUrl(url)
 }
 // 从分组中移除模组
 const removeModInGroup =(groupId, modId) => {
   store.groupRemoveMods(groupId, [modId]);
 }
-
 
 // 定位Mod位置
 const targetItem = (mod_id) => {

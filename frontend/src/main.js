@@ -7,6 +7,7 @@ import './style.css'
 import App from './App.vue'
 import {vPreview} from './directives/vPreview.js'
 import {vTooltip} from './directives/vTooltip.js'
+import { vSelectableList } from './directives/vSelection' // 引入指令
 
 
 const pinia = createPinia() 
@@ -23,5 +24,6 @@ app.use(pinia)
 
 app.directive('preview', vPreview) // 注册预览面板指令
 app.directive('tooltip', vTooltip) // 注册 Tooltip 指令
+app.directive('selectable-list', vSelectableList) // 注册列表项选择指令
 
 app.mount('#app')

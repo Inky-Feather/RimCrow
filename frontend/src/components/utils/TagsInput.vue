@@ -33,10 +33,10 @@
     </div>
 
     <!-- 主要区域 -->
-    <div class="relative flex-1 z-50 min-w-0 w-6 outline-none" v-tooltip="'在此输入关键词并[[回车]]确认\n可直接'+placeholderText+'\n[[(使用Tab键应用输入建议)]]'">
+    <div class="relative flex-1 z-50 min-w-0 w-6 outline-none">
       <!-- 主输入容器（@keydown.tab.prevent禁止切换焦点功能） -->
       <div @keydown.tab.prevent class="w-full flex items-center gap-1 px-1 pt-0.5 outline-none bg-bg-deep/50 transition-all 
-        border rounded-lg text-text-main border-text-dim/30 focus-within:border-accent-primary focus-within:bg-bg-deep/70 shadow-inner"
+        border rounded-lg text-text-main border-text-dim/30 fshadow-inner"
         :class="`hover:border-accent-${listColor} focus:border-accent-${listColor} focus-within:border-accent-${listColor}`">
         <!-- 图标 -->
         <slot name="icon">
@@ -45,7 +45,7 @@
         <!-- 输入区域 + Tags -->
         <div class=" h-6 flex-1 flex overflow-x-scroll custom-scrollbar outline-none" 
             v-drag-scroll="{step: 20, wheelToHorizontal: true}" 
-            ref="scrollContainer">
+            ref="scrollContainer" v-tooltip="tooltipText">
           <!-- 已生成的 Tags -->  
           <!-- Tags 列表 (使用 TransitionGroup 实现完美动画) -->
           <TransitionGroup v-if="!isExpanded" name="tag-list">
@@ -72,7 +72,7 @@
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           <!-- 展开/收起按钮 -->
-          <button @click="isExpanded = !isExpanded" class="p-1 text-text-dim hover:text-white transition-transform" :class="isExpanded ? 'rotate-180' : ''">
+          <button @click="isExpanded = !isExpanded" v-tooltip="'可展开输入的关键词标签'" class="p-1 text-text-dim hover:text-white transition-transform" :class="isExpanded ? 'rotate-180' : ''">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
         </div>
@@ -142,6 +142,7 @@ import Tag from './Tag.vue'
 const props = defineProps({
   // v-model 绑定的 Tags 数组，即输出结果，格式[{key:'',value:'',exclude:false}]
   modelValue: { type: Array, default: () => [] },
+  placeholder: { type: String, default: '' },
   // 传出外部的逻辑模式 v-model:logic
   logic: { type: String, default: 'AND' },
   // 核心数据源，用于搜索建议
@@ -523,9 +524,15 @@ const handleInput = () => {
 
 // placeholder 提示
 const placeholderText = computed(() => {
-    if (props.modelValue.length > 0) return '添加筛选...'
+    if (props.modelValue.length > 0) return '添加关键词...'
+    if (props.placeholder) return props.placeholder
     const examples = Object.keys(keyMapping.value).slice(0, 3).map(k => `${k}:...`).join(' ')
     return `输入关键词 或 ${examples}`
+})
+// 提示文本
+const tooltipText = computed(() => {
+    const examples = Object.keys(keyMapping.value).slice(0, 3).map(k => `${k}:...`).join(' ')
+    return `在此输入关键词并[[回车]]确认\n可直接输入关键词 或 格式标签 ${examples}\n[[(使用Tab键应用输入建议)]]`
 })
 </script>
 

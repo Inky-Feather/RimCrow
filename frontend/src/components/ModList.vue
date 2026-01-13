@@ -3,13 +3,17 @@
        :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
     <div :class="`px-3 h-8 border-b rounded-t-2xl border-white/5 flex justify-between items-center bg-accent-${listColor}/10`">
-      <span :class="`text-xs font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
-        <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-lg shadow-accent-primary`"></div>
-        {{ title }}
+      <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-1`">
+        <div :class="`w-1.5 h-1.5 mr-1 rounded-full bg-accent-${listColor} shadow-lg shadow-accent-primary`"></div>
+        <span class="mr-1">{{ title }}</span>
         <!-- 状态提示 -->
-        <span v-if="isFiltered" class="text-[10px] text-text-dim">(已筛选)</span>
-        <span v-if="sortMode !== 'default' || !isSortAsc" class="text-[10px] text-text-dim">(已排序)</span>
+        <span v-if="isFiltered" v-tooltip="filterTooltip" @click="clearFilter"
+          class="text-[10px] text-text-main/80 bg-accent-highlight/30 px-1 rounded-full ring-1 ring-accent-special/70 cursor-pointer hover:bg-accent-highlight/60 hover:text-text-main active:scale-95 transition-all">
+          已筛选
+        </span>
+        <span v-if="sortMode !== 'default' || !isSortAsc" v-tooltip="sortTooltip" class="text-[10px] text-text-main/80 bg-accent-highlight/30 px-1 rounded-full">已排序</span>
       </span>
+
       <span class="flex items-center gap-1">
         <!-- 错误指示器 (仅当有错误时显示) -->
         <button v-if="issuesSummary.count > 0" v-tooltip="issueTooltip"
@@ -39,105 +43,108 @@
     
     <!-- 工具栏 (搜索 & 筛选) -->
     <div class="px-2 py-1 w-full flex flex-col gap-1 shadow-xl bg-bg-deep/20 z-50">
-      <!-- 搜索定位 (Find) -->
-      <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
-        v-model="searchQuery" v-model:logic="searchLogic" :cacheKey="store.dataVersion || allMods.length"
-        @search="" class="z-10">
-        <template #right>
-          <div class="flex items-center justify-center gap-0.5">
-            <!-- 定位按钮 -->
-            <button @click="executeSearch(true)" 
-              :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-              text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-              transition-all`">
-              定位
-              <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-warn px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
-            </button>
-            <!-- 视图切换按钮 -->
-            <Motion :class="`p-1 rounded-lg bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
-              :initial="{ rotateX: 0, opacity: 1 }"
-              :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
-              :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-              @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'"
-            >
-              <svg v-if="!isSimpleView" width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-list-icon lucide-layout-list"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
-              <svg v-else width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list-icon lucide-list"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
-            </Motion>
-          </div>
-        </template>
-      </TagsInput>
+      <div class="flex items-center justify-center gap-1">
+        <!-- 搜索定位 (Find) -->
+        <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
+          v-model="searchQuery" v-model:logic="searchLogic" :cacheKey="store.dataVersion || allMods.length"
+          @search="" placeholder="输入关键词定位Mod位置……" class="z-10">
+          <template #right>
+              <!-- 定位按钮 -->
+              <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
+                :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+                transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
+                <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
+              </button>
+          </template>
+        </TagsInput>
+        <!-- 视图切换按钮 -->
+        <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+          :initial="{ rotateX: 0, opacity: 1 }"
+          :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
+          :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
+          @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'"
+        >
+          <svg v-if="!isSimpleView" width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-list-icon lucide-layout-list"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
+          <svg v-else width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list-icon lucide-list"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
+        </Motion>
+      </div>
 
-      <!-- 筛选过滤 (Filter) -->
-      <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
-        v-model="filterQuery" v-model:logic="filterLogic" :cacheKey="store.dataVersion || allMods.length"
-        @search="" class="z-5">
-        <template #icon>
-          <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-        </template>
+      <div class="flex items-center justify-center gap-1">
+        <!-- 筛选过滤 (Filter) -->
+        <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
+          v-model="filterQuery" v-model:logic="filterLogic" :cacheKey="store.dataVersion || allMods.length"
+          @search="" placeholder="输入关键词筛选Mod……" class="z-5">
+          <template #icon>
+            <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+          </template>
 
-        <template #right>
-          <div class="flex items-center justify-center gap-0.5">
-            <!-- 排序切换按钮 -->
-            <button @click="cycleSort" v-tooltip="sortMode"
-              :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-              text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-              transition-all`">
-              {{ sortIcon }}
-            </button>
-            <!-- 排序切换按钮 -->
-            <Motion :class="`p-1 rounded-lg bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
-              :initial="{ rotateX: 0, opacity: 1 }"
-              :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
-              :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-              @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'"
-            >
-              <svg v-if="isSortAsc" width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-narrow-wide-icon lucide-arrow-down-narrow-wide"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
-              <span v-else class="rotate-x-180">
-                <svg width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-narrow-wide-icon lucide-arrow-up-narrow-wide"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
-              </span>
-            </Motion>
-          </div>
-        </template>
-      </TagsInput>
+          <template #right>
+              <!-- 排序切换按钮 -->
+              <button @click="cycleSort" v-tooltip="sortMode"
+                :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+                transition-all`">
+                {{ sortIcon }}
+              </button>
+          </template>
+        </TagsInput>
+        <!-- 排序切换按钮 -->
+        <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+          :initial="{ rotateX: 0, opacity: 1 }"
+          :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
+          :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
+          @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'"
+        >
+          <svg v-if="isSortAsc" width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-narrow-wide-icon lucide-arrow-down-narrow-wide"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
+          <span v-else class="rotate-x-180">
+            <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-narrow-wide-icon lucide-arrow-up-narrow-wide"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+          </span>
+        </Motion>
+      </div>
     </div>
-    
+    <!-- (tabindex="0" @keydown.ctrl.a.prevent="selectAll") 非焦点容器需要 tabindex 才能响应键盘事件 -->
     <!-- 列表区（底部渐变隐藏） -->
     <div class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent"
-	      @click.self="store.clearSelection()" tabindex="0" @keydown.ctrl.a.prevent="selectAll">
+	      @click.self="store.clearSelection()">
       
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar" class="w-14 h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
         <DependencyGraph 
           v-if="allowSort || filterByLine" 
-          :listIds="lineData" 
+          :listIds="lineData" :isFilter="filterByLine.length>0"
           :itemHeight="isSimpleView ? 34 : 54" 
           :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />
       </div>
 
-      <!-- 列表主体 -->
+      <!-- 列表主体部分 -->
       <div @click.self="store.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
-
+        <!-- 列表为空时的提示 -->
         <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
             可拖拽模组到此
             <!-- 点阵背景 -->
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
         </div>
-
+        <!-- 列表 -->
         <virtual-list v-model="internalListProxy" ref="vListRef" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
           :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="50"
-          :group="{ name: 'mods', pull: 'clone', put: allowSort, revertDrag: true }" :animation="150" :size="isSimpleView ? 34 : 54"
+          :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" :size="isSimpleView ? 34 : 54"
           @drop="updateChildren" @drag="startDrag"
-          @mousedown.left="handleMousePressed(true)" @mouseup.left="handleMousePressed(false)" @mouseleave="handleMousePressed(false)">
+          v-selectable-list="{ 
+             data: displayList, 
+             clickClass: 'select-trigger',
+             swipeClass: 'swipe-trigger'
+          }">
           <template v-slot:item="{ record, index, dataKey }">
             <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-              :is-selected="store.selectedIds.includes(dataKey)" :simple="isSimpleView"
-              :search-match="currentTargetId === dataKey"
-               @click-start="handleClickStart" @click-end="handleClickEnd">
+              :is-selected="store.selectedIds.includes(dataKey)" :simple="isSimpleView" 
+              :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0"
+              :search-match="currentTargetId === dataKey">
             </ModItem>
           </template>
         </virtual-list>
@@ -192,6 +199,14 @@ const isSortAsc = ref(true)   // 是否升序排序
 
 const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
+const searchResults = ref<string[]>([]) // 搜索结果数组
+const currentSearchIndex = ref(-1) // 当前搜索项在结果数组中的索引
+const currentTargetId = computed(() => store.currentTargetId)   // 当前搜索定位项ID
+
+const highlightTimer = ref<number>() // 高亮定时器
+
+
+
 const filterQuery = ref([]) // 存储标签数组
 const filterLogic = ref('AND') // 存储逻辑关系
 const filterByLine = ref([])  // 存储筛选线路数组
@@ -204,8 +219,6 @@ const isFilterByIssue = ref(false)  // 是否筛选问题项
 const isFiltered = computed(() => filterQuery.value.length > 0 || isFilterByIssue.value || filterByLine.value?.length > 0)
 const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
 const allMods = computed(() => store.allModsMap ? Array.from(store.allModsMap.values()) : [])
-const searchResults = ref<string[]>([]) // 搜索结果数组
-const currentSearchIndex = ref(-1) // 当前搜索项在结果数组中的索引
 
 
 // ===== 问题项筛选及提示 =====
@@ -255,7 +268,43 @@ const issueTooltip = computed(() => {
     }
   }
   
-  text += `\n\n__[[(点击筛选以查看详情)]]__`
+  text += isFilterByIssue.value ? '\n\n__[[(再次点击取消筛选)]]__' : '\n\n__[[(点击筛选以查看详情)]]__'
+  return text
+})
+
+// 筛选提示
+const filterTooltip = computed(() => {
+  let text = ''
+  if (filterQuery.value.length > 0) {
+    text += `已筛选检索关键词`
+  }
+  if (isFilterByIssue.value) {
+    text += '\n已筛选问题项'
+  }
+  if (filterByLine.value.length > 0) {
+    text += `\n已筛选依赖组`
+  }
+  text = text.trim()
+  text += `\n\n__[[(点击清除所有筛选)]]__`
+  return text
+})
+// 清除筛选
+const clearFilter = () => {
+  filterQuery.value = []
+  isFilterByIssue.value = false
+  filterByLine.value = []
+}
+// 排序提示
+const sortTooltip = computed(() => {
+  let text = ''
+  if (sortMode.value === 'default') {
+    text = '默认排序'
+  } else if (sortMode.value === 'name') {
+    text = '按名称排序'
+  } else if (sortMode.value === 'author') {
+    text = '按作者排序'
+  }
+  text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
   return text
 })
 
@@ -413,8 +462,6 @@ const cycleSort = () => {
 }
 
 // ===== 显示效果处理 =====
-// 当前搜索定位项ID
-const currentTargetId = computed(() => store.currentTargetId) 
 // 监听 currentTargetId 变化
 watch(currentTargetId, async (newVal, oldVal) => {
   if (!newVal || newVal === oldVal) return
@@ -444,12 +491,13 @@ watch(currentTargetId, async (newVal, oldVal) => {
     setTimeout(() => {
         if (vListRef.value) {
             vListRef.value.scrollToKey(newVal)
-            // 可选：添加一个高亮闪烁效果
-            // store.flashItem(newVal) 
         }
     }, 50)
     // 延迟一段时间后移除高亮
-    setTimeout(() => {
+    if (highlightTimer.value) {
+      clearTimeout(highlightTimer.value)
+    }
+    highlightTimer.value = setTimeout(() => {
       store.currentTargetId = ''
     }, 2000)
   }
@@ -481,8 +529,7 @@ const executeSearch = (next = true) => {
     index++
     if (index >= results.length) {
       index = 0 // 循环
-      // 可以加个 Toast 提示 "回到第一个"
-
+      toast.info("已到达最后一个搜索结果，循环回到第一个", { timeout: 2000 })
     }
   }
   // 定位
@@ -495,131 +542,16 @@ const executeSearch = (next = true) => {
   
 }
 
-
-// ===== 选择逻辑 =====
-// 鼠标长按状态辅助函数
-const mousePressed = ref(false);
-const handleMousePressed = (state:boolean) => {
-  mousePressed.value = state;
-}
-// 多选连选逻辑
-const selectedIds = ref(new Set()) // 选中ID集合
-const invertSelectedIds = ref(new Set()) // 反选ID集合
-const lastSelectedId = ref(null)      // 最后点击的 ID (用于 Shift 连选定位)
-// 点击开始时，多选连选逻辑，记录最后点击的ID
-const handleClickStart = (event: MouseEvent, id: string, isPull=false) => {
-  // 修正输入框不会对列表项失焦，强制失焦逻辑
-  // 如果当前有获得焦点的元素，且它是一个输入框，则强制让它失焦
-  if (document.activeElement instanceof HTMLElement && 
-     (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-      document.activeElement.blur()
-  }
-
-  // 只响应左键点击或拖拽中的进入
-  const isLeftButton = event.button === 0 && !isPull;
-  const isFromDrag = mousePressed.value && isPull;
-  if (!(isLeftButton || isFromDrag)) {
-    return
-  }
-  // if (!((event.button == 0 && !isPull)||(mousePressed.value && isPull))) return; // 只响应左键点击或左键拖拽
-  const isMulti = event.ctrlKey || event.metaKey
-  const isRange = event.shiftKey
-  const lowerId = id.toLowerCase();
-  // 找到当前列表的所有可见ID
-  const currentListIds = internalListProxy.value.map(item => item.id.toLowerCase())
-  if (isRange) {
-    // Shift 连选逻辑
-    if (selectedIds.value.size === 0 || !lastSelectedId.value) {
-      selectedIds.value.add(lowerId);
-      return;
-    }
-    
-    // 找到最后一次选择的ID在当前列表中的索引
-    const lastIndex = currentListIds.indexOf(lastSelectedId.value);
-    // 找到当前点击的ID在当前列表中的索引
-    const currentIndex = currentListIds.indexOf(lowerId);
-    
-    if (lastIndex !== -1 && currentIndex !== -1) {
-      const start = Math.min(lastIndex, currentIndex);
-      const end = Math.max(lastIndex, currentIndex);
-      const isForward = lastIndex < currentIndex;
-      for (let i = start; i <= end; i++) {
-        // 如果当前ID已选中，则从选中集合中移除
-        if(selectedIds.value.has(currentListIds[i])) {
-          if(isForward && i === start) continue;
-          else if(!isForward && i === end) continue;
-          invertSelectedIds.value.add(currentListIds[i]);
-        }
-        selectedIds.value.add(currentListIds[i]);
-      }
-    } else {
-      selectedIds.value.add(lowerId); // 如果找不到范围，就只选中当前项
-    }
-
-  } else if (isMulti) {
-    // 如果当前ID已选中，则从选中集合中移除
-    if (selectedIds.value.has(lowerId)) {invertSelectedIds.value.add(lowerId)}
-    // Ctrl/Meta 多选逻辑
-    selectedIds.value.add(lowerId);
-  } else {
-    // 单选逻辑
-    if(selectedIds.value.has(lowerId)) return;  // 点击已选中的项，不做处理，防止影响拖拽等长按操作
-    selectedIds.value.clear();
-    selectedIds.value.add(lowerId);
-  }
-  const selectedIdsArray = currentListIds.filter(id => selectedIds.value.has(id)) // 保持顺序
-  store.selectMod(selectedIdsArray)
-}
-// 点击结束时,主要用于多选反选判定
-const handleClickEnd = (event: MouseEvent, id: string) => {
-  // console.log('点击结束', event, id)
-  const isMulti = event.ctrlKey || event.metaKey
-  const isRange = event.shiftKey
-  const lowerId = id.toLowerCase();
-  const currentListIds = internalListProxy.value.map(item => item.id.toLowerCase())
-  if (isRange || isMulti) {
-    for (const id of invertSelectedIds.value) {
-      selectedIds.value.delete(id);
-    }
-    invertSelectedIds.value.clear();
-  } else {
-    // 单选直接清空已选列表并重新选中当前项
-    selectedIds.value.clear();
-    selectedIds.value.add(lowerId);
-  }
-  if (!isRange) lastSelectedId.value = lowerId;
-  const selectedIdsArray = currentListIds.filter(id => selectedIds.value.has(id)) // 保持顺序
-  store.selectMod(selectedIdsArray)
-}
-// 全选
-const selectAll = (e) => {
-  console.log('全选',e)
-  selectedIds.value = new Set(internalListProxy.value.map(item => item.id.toLowerCase()))
-  store.selectMod(Array.from(selectedIds.value))
-}
 // 开始拖拽时，清空反选集合
 const startDrag = (e) => {
-  invertSelectedIds.value.clear();
   console.log("开始拖拽:", e)
 }
 // 更新子项的排序
 const updateChildren = (e) => {
   const oldIds = props.modelValue // 原始顺序
   const newIds = internalListProxy.value.map(item => item.id)  // 获取当前的最新顺序 ID列表
-  const tempSelectedIds = store.selectedIds
-  selectedIds.value = new Set(tempSelectedIds)
-
-  // const currentListDom = vListRef.value.$el
-  // console.log( e.event.from, e.event.to, currentListDom)
-  // 拖动项来自当前列表
-  // if (e.event.from === currentListDom || e.event.from === e.event.to) {
-  //   console.log(props.title, "列表排序结束:", e)
-  //   if (JSON.stringify(newIds) !== JSON.stringify(oldIds)) {
-  //     emit('update:modelValue', newIds)
-  //     if (props.hasSidebar) store.markDirty() // 只有在有侧边栏时才标记为脏
-  //   }
-  //   return
-  // }
+  let tempSelectedIds = [...store.selectedIds] // 复制已选择项，避免直接修改原数组
+  let signId = oldIds[e.newIndex] // 将原位置的 mod_id 作为标记项
 
   // 筛选状态禁用本列表内的排序
   if (!allowSort.value && e.event.from === e.event.to) {
@@ -627,20 +559,28 @@ const updateChildren = (e) => {
     return
   }
 
+  console.log(props.title, "列表 插入:", e)
+  // 拖动项来自分组
+  if (e.item?.mod_ids?.length) {
+    console.log(props.title, "列表 分组插入:", e)
+    tempSelectedIds = [...e.item.mod_ids]  // 获取分组中的所有 mod_id，避免直接修改分组数据
+    if (!signId) return  // 如果插入位置的原始 mod_id 不存在，直接返回
+  }
+  store.selectMods([...tempSelectedIds]) // 更新已选择项，仅当前值，避免后续标记项污染
+  if (!tempSelectedIds.includes(signId)) {
+    tempSelectedIds.push(signId)  // 如果标记项不在已选择项中，将其添加到末尾，相当于插入到标记项前
+  }
+
   // 拖动项来自其它列表
-  console.log(props.title, "列表插入结束:", e)
   // 去除重复, 保持拖动项的位置（保留除已选项外的其他项，已选择的项后续插入）
-  // const uniqueIds = newIds.filter((id, index) => e.item.id !== id && newIds.indexOf(id) === index || e.item.id === id && index === e.newIndex)
-  const uniqueIds = newIds.filter((id, index) => {
-    // 检测是否是拖动项（值和索引都匹配），是则保留（用于标记位置）
-    if (index === e.newIndex && id === e.item.id) return true
-    // 排除已选择的项（过滤重复）
-    if (tempSelectedIds.includes(id)) return false
-    // 其他未选择项，保留
-    return true
+  const uniqueIds = oldIds.filter((id, index) => {
+    // 检测是否是标记项（值和索引都匹配），是则保留（用于标记位置）
+    if (index === e.newIndex && id === signId) return true
+    if (tempSelectedIds.includes(id)) return false  // 排除已选择的项（过滤重复）
+    return true // 其他未选择项，保留 
   })
-  const newIndex = uniqueIds.indexOf(e.item.id)
-  // 根据拖动项，插入选中项（因选中项包含拖动项，所以插入时需要移除拖动项）
+  const newIndex = uniqueIds.indexOf(signId)
+  // 根据保留的标记项，插入选中项（因选中项包含标记项，所以插入时需要移除拖动项）
   uniqueIds.splice(newIndex, 1, ...tempSelectedIds)
   // 只有顺序真的变了才发请求
   console.log("排序前:", {oldIds: oldIds})
@@ -649,8 +589,8 @@ const updateChildren = (e) => {
     // 从所有列表中移除拖动项防止重复
     store.removeIdsOnAllList(tempSelectedIds)
     emit('update:modelValue', uniqueIds)  // 发送新的顺序到父组件（包括之前移除的拖动项）
-    // 只有在有侧边栏时才标记为脏
-    if (props.hasSidebar) store.markDirty()
+    // 只有在 active 列表才标记为脏
+    if (props.listId==='active') store.markDirty()
   }
 }
 </script>

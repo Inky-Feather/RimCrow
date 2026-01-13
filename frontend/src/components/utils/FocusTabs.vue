@@ -7,7 +7,7 @@
       :key="tab"
       :ref="(el) => (itemRefs[index] = el as HTMLButtonElement)"
       @click="emit('update:modelValue', tab)"
-      class="relative z-10 px-2 py-1 text-xs font-bold transition-all duration-500 cursor-pointer"
+      class="relative z-10 px-2 py-0 transition-all duration-500 cursor-pointer"
       :style="{
         filter: modelValue === tab ? 'blur(0px)' : `blur(${blurAmount}px)`,
         opacity: modelValue === tab ? 1 : 0.4
@@ -97,10 +97,10 @@ onBeforeUnmount(() => {
   transition: border-color 0.3s ease;
 }
 
-.top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 2px; }
-.top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 2px; }
-.bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 2px; }
-.bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 2px; }
+.top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 4px; }
+.top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 4px; }
+.bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 4px; }
+.bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 4px; }
 
 /* 贝塞尔曲线让移动更具有“高级感” */
 .cubic-bezier {

@@ -201,19 +201,13 @@ watch(() => store.showSettings, (val) => {
 
 // 自动检测路径
 const autoDetect = async () => {
-  if(!window.pywebview) return
-  detecting.value = true
-  try {
-    const res = await store.autoDetectPaths(false)
-    if (res) {
-      // 只更新表单，不直接保存，让用户确认
-      Object.assign(formData.value, res.data.paths)
-    } else {
-      // 可以加个 Toast 提示失败
-      alert('未能自动找到所有路径，请手动填写。')
-    }
-  } finally {
-      detecting.value = false
+  const paths = await store.autoDetectPaths(false)
+  if (paths) {
+    // 只更新表单，不直接保存，让用户确认
+    Object.assign(formData.value, paths)
+  } else {
+    // 可以加个 Toast 提示失败
+    toast.warning('未能自动找到所有路径，请手动填写。')
   }
 }
 

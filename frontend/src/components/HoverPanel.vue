@@ -24,46 +24,108 @@
       }"
     >
       <!-- 模式 A: 复杂预览卡片 (data 是对象) -->
-      <div v-if="store.type === 'preview'" class="flex flex-col gap-3">
-        <!-- 预览图区域 -->
-        <div class="relative w-full h-32 rounded-lg overflow-hidden bg-black/50 border border-white/5 group">
-          <img 
-            v-if="store.data?.preview_url" 
-            :src="store.data.preview_url" 
-            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-          <div v-else class="w-full h-full flex items-center justify-center text-text-dim text-xs">
-            无预览图
-          </div>
-          
-          <!-- 版本号 -->
-          <div class="absolute bottom-2 right-2">
-            <span v-if="store.data?.version" class="px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-white text-[10px] font-mono border border-white/10">
-              v{{ store.data.version }}
-            </span>
+      <div v-if="store.type === 'preview'" 
+        class="relative flex flex-col h-full overflow-visible select-none"
+        :style="{ 
+          '--accent-rgb': hexToRgb(store.data.sign_color || '#a1a1aa'),
+          '--accent': store.data.sign_color || '#a1a1aa'
+        }">
+        
+        <!-- 悬浮装饰：分组标签 (破格设计，浮在卡片上方) -->
+        <div v-if="modGroups.length" class="absolute -top-3.5 right-4 flex gap-0.5 z-0 opacity-80 ">
+          <div v-for="g in modGroups" :key="g.group_id" 
+               class="px-1 py-0.5 rounded-t-md text-[10px] font-bold shadow-lg flex items-center gap-1 border-t border-x border-white/10"
+               :style="{ backgroundColor: g.color, color: getContrastColor(g.color) }">
+             {{ g.name }}
           </div>
         </div>
 
-        <!-- 文本信息 -->
-        <div>
-          <h3 class="font-bold text-text-main text-sm leading-tight mb-1 line-clamp-1">{{ modStore.displayModName(store.data) }}</h3>
-          <p class="text-xs text-text-dim mb-2 flex items-center gap-1">
-            <span>{{ store.data?.author }}</span>
-            <span v-if="store.data?.source === 'steam'" class="text-[9px] px-1 bg-[#1b2838] text-blue-300 rounded">Steam</span>
-          </p>
+        <!-- 背景层：图片 + 模糊 + 渐变 -->
+        <div class="absolute inset-0 overflow-hidden rounded-xl bg-bg-deep m-0.5">
+          <img v-if="store.data.preview_url" :src="store.data.preview_url" 
+              class="absolute inset-0 w-full h-full object-cover opacity-90 blur-xs scale-100" />
+          <!-- 渐变遮罩：底部更黑以显示文字 -->
+          <div class="absolute inset-0 bg-linear-to-t from-bg-deep via-bg-deep/70 to-bg-deep/30"></div>
+          <!-- 强调色光晕 -->
+          <div class="absolute -top-10 -right-10 w-32 h-32 bg-[rgb(var(--accent-rgb))] opacity-20 blur-[50px] rounded-full mix-blend-screen"></div>
+        </div>
+
+        <!-- 装饰性边框 -->
+        <div class="absolute inset-0 rounded-xl border-2 border-[rgb(var(--accent-rgb))] opacity-30 pointer-events-none z-0"></div>
+        <div class="absolute -top-px -left-px w-8 h-8 border-t-4 border-l-4 border-[rgb(var(--accent-rgb))] rounded-tl-xl opacity-60 z-0"></div>
+
+        <!-- 内容层 -->
+        <div class="relative z-10 p-4 flex flex-col gap-1 h-full">
           
-          <p class="text-[10px] text-text-dim/80 line-clamp-3 leading-relaxed font-mono">
-            {{ store.data?.description }}
-          </p>
+          <!-- 第一行：元数据 (ID & Ver & Type) -->
+          <div class="flex items-center justify-between text-[10px] font-mono text-text-main/80 border-b border-white/5 pb-1">
+            <span class="truncate opacity-70 tracking-tighter">{{ store.data.package_id }}</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <span v-if="store.data.version" class="text-accent-primary">v{{ store.data.version }}</span>
+              <!-- Mod类型徽章 -->
+              <span class="px-1.5 rounded-sm bg-white/5 border border-white/10 text-white/80">
+                {{ modTypeMap[modStore.displayModType(store.data)] || 'MOD' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- 第二行：标题 -->
+          <div>
+            <!-- 别名 -->
+            <div v-if="store.data.alias_name" class="text-[10px] text-text-dim truncate font-mono ">
+              {{ store.data.name }}
+            </div>
+            <!-- 主名称 -->
+            <h2 class="font-medium truncate">
+              {{ store.data.alias_name ? store.data.alias_name : (store.data.name ? store.data.name : item_id) }}
+            </h2>
+          </div>
+
+          <!-- 第三行：作者与语言 -->
+          <div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-[10px] text-text-dim flex items-center gap-1">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                {{ store.data.author?.join(', ') || 'Unknown' }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-[10px] text-text-dim flex items-center gap-1">
+                <svg width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {{ store.data.supported_languages?.join(', ') || 'Unknown' }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-[10px] text-text-dim flex items-center gap-1">
+                <Milestone :size="15"/>
+                {{ store.data.supported_versions?.join(', ') || 'Unknown' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- 第四行：描述/备注 -->
+          <div class="grow min-h-0 relative">
+            <!-- 如果有备注，显示备注(黄色)，否则显示描述 -->
+            <p v-if="store.data.notes" class="text-[11px] text-accent-warn/90 leading-relaxed line-clamp-3 font-medium italic border-l-2 border-accent-warn pl-2">
+              <span class="text-[9px] opacity-50 not-italic block mb-0.5">NOTES</span>
+              {{ store.data.notes }}
+            </p>
+            <p v-else class="text-[10px] text-text-dim/80 leading-relaxed line-clamp-4 font-mono">
+              {{ cleanDescription }}
+            </p>
+          </div>
+
+          <!-- 第五行：Tags 流 -->
+          <div v-if="store.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-white/5">
+            <span v-for="tag in store.data.tags.slice(0, 7)" :key="tag" 
+                  class="text-[9px] px-1.5 py-px rounded-full bg-white/5 text-white/70 border border-white/5 whitespace-nowrap">
+              #{{ tag }}
+            </span>
+            <span v-if="store.data.tags.length > 7" class="text-[9px] text-text-dim px-1">...</span>
+          </div>
+
         </div>
-        
-        <!-- 底部 Tags -->
-        <div class="pt-2 border-t border-white/5 flex flex-wrap gap-1" v-if="store.data?.tags?.length">
-          <span v-for="tag in store.data.tags.slice(0, 5)" :key="tag" 
-            class="text-[9px] px-1.5 py-0.5 rounded-md bg-accent-primary/10 text-accent-primary border border-accent-primary/10">
-            {{ tag }}
-          </span>
-        </div>
+
       </div>
       <!-- 模式 B: 纯文本 Tooltip (data 是字符串) -->
       <div v-else-if="store.type === 'text'" class="text-xs font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
@@ -80,7 +142,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick,h } from 'vue'
+import { Milestone } from 'lucide-vue-next';
 import { Motion } from 'motion-v'
 import { useHoverStore } from '../stores/hoverStore'
 import { useModStore } from '../stores/modStore'
@@ -130,7 +193,7 @@ const containerClasses = computed(() => {
     return 'shadow-2xl' // 可能只留个阴影，或者连阴影都不要，完全由组件内部控制
   }
   // Preview 样式：宽大、有背景、圆角大
-  return 'p-4 w-[320px] rounded-xl border border-white/10 bg-bg-deep/90 backdrop-blur-xl shadow-2xl flex flex-col gap-3'
+  return 'w-[340px] max-h-[240px] rounded-xl shadow-2xl overflow-visible' 
 })
 // --- 2. 窗口尺寸监听 ---
 const winWidth = ref(window.innerWidth)
@@ -322,6 +385,79 @@ const parseMarkup = (text) => {
   })
 
   return html
+}
+
+// --- 辅助逻辑 ---
+
+// 获取 Mod 所属分组
+const modGroups = computed(() => {
+  if (store.type !== 'preview' || !store.data) return []
+  return modStore.takeGroupsByModId(store.data.package_id)
+})
+
+// 存档破坏性 映射逻辑
+const saveBreakingVal = computed(() => parseInt(store.data?.save_breaking ?? -99))
+
+const saveBreakingColor = computed(() => {
+  const v = saveBreakingVal.value
+  if (v === 1) return 'text-accent-success border-accent-success/30 bg-accent-success/10' // 安全
+  if (v === -1) return 'text-accent-danger border-accent-danger/30 bg-accent-danger/10' // 危险
+  return 'text-text-dim border-white/5' // 未知
+})
+
+const saveBreakingText = computed(() => {
+  const v = saveBreakingVal.value
+  if (v === 1) return 'SAFE'
+  if (v === -1) return 'RISK'
+  return 'UNKN'
+})
+
+// 简单的 SVG 图标渲染函数
+const IconSafe = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' })])
+const IconRisk = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('path', { d: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' }), h('line', { x1:12, y1:9, x2:12, y2:13 }), h('line', { x1:12, y1:17, x2:12, y2:17 })])
+const IconUnknown = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [h('circle', { cx:12, cy:12, r:10 }), h('path', { d: 'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3' }), h('line', { x1:12, y1:17, x2:12, y2:17 })])
+
+const saveBreakingIcon = computed(() => {
+  const v = saveBreakingVal.value
+  if (v === 1) return IconSafe
+  if (v === -1) return IconRisk
+  return IconUnknown
+})
+
+// Mod 类型简写映射
+const modTypeMap = {
+  'LanguagePack': 'LANG',
+  'XML': 'XML',
+  'Assembly': 'DLL',
+  'Texture': 'TEX',
+  'Audio': 'SND',
+  'Mixed': 'MIX',
+  'Unknown': 'UNK'
+}
+
+// 清理描述文本 (移除 HTML 标签，只留纯文本做预览)
+const cleanDescription = computed(() => {
+  const desc = store.data?.description || 'No description available.'
+  return desc.replace(/<[^>]+>/g, '') // 简单移除 HTML 标签
+})
+
+// 计算对比色 (用于分组标签文字颜色)
+const getContrastColor = (hex) => {
+  if (!hex) return '#fff'
+  const r = parseInt(hex.substr(1, 2), 16)
+  const g = parseInt(hex.substr(3, 2), 16)
+  const b = parseInt(hex.substr(5, 2), 16)
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000
+  return (yiq >= 128) ? '#000' : '#fff'
+}
+
+// 颜色转换工具 (如果 script 里没有的话)
+const hexToRgb = (hex) => {
+  if (!hex || typeof hex !== 'string') return '100, 100, 100'
+  let c = hex.substring(1).split('')
+  if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]]
+  c = '0x' + c.join('')
+  return `${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}`
 }
 </script>
 
