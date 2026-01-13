@@ -83,6 +83,7 @@ export const useModStore = defineStore('mods', () => {
   const currentTargetId = ref('') // 当前目标 ID (定位用)
   const selectedIds = ref([])
   const isDraggingGroup = ref(false) // 是否正在拖动分组
+  const currentBackupFile = ref('') // 当前备份文件
 
   // 设置状态
   const showSettings = ref(false) // 是否显示设置弹窗
@@ -94,6 +95,7 @@ export const useModStore = defineStore('mods', () => {
     workshop_mods_path: '',
     local_mods_path: '',
     game_config_path: '',
+    home_path: '',
     game_version: '',
     window_width: 1400,
     window_height: 900,
@@ -199,6 +201,7 @@ export const useModStore = defineStore('mods', () => {
    // 单独抽离刷新列表的方法，用于初始化、扫描完成后、或手动刷新
   const refreshModList = async (isInit = false) => {
     try {
+      isLoading.value = true
       // 调用后端获取全量数据
       const res = await window.pywebview.api.get_initial_data()
       
@@ -246,6 +249,8 @@ export const useModStore = defineStore('mods', () => {
       else { throw new Error(res.message) }
       // 6. 更新数据版本号
       dataVersion.value ++;
+      isDirty.value = false
+      isLoading.value = false
 
       console.log("刷新列表成功:", res)
     } catch (e) {
@@ -343,23 +348,22 @@ export const useModStore = defineStore('mods', () => {
     }
   }
   // 获取加载顺序
-  const getLoadOrder = async (mods_config_file_path=null, isInit=true) => {
-    if (!window.pywebview) return
-    // const res = await window.pywebview.api.open_load_order_file(mods_config_file_path)
-    const res = await window.pywebview.api.get_load_order(mods_config_file_path)
-    if (res.status === 'success') {
-      if(isInit) {
-        activeIds.value = res.data
-        toast.success("Mod序列已加载")
-      }
-      else backupIds.value = res.data
-      // 如果有指定路径，标记为脏状态，等待保存
-      if (mods_config_file_path && isInit) isDirty.value = true
-      else isDirty.value = false
-      console.log("打开加载顺序:", res)
-      return res.data
-    } else {
-      toast.error(`打开加载顺序失败: \n${res.message}`)
+  const getLoadOrder = async (mods_config_file_path=null) => {
+    const order = await getFileOrder(mods_config_file_path)
+    if (order) {
+      activeIds.value = order.active_ids || []
+      toast.success("Mod序列已加载")
+    }
+    // 如果有指定路径，标记为脏状态，等待保存
+    if (mods_config_file_path) isDirty.value = true
+  }
+  // 获取备份加载顺序
+  const getBackupOrder = async (mods_config_file_path=null) => {
+    const order = await getFileOrder(mods_config_file_path)
+    if (order) {
+      backupIds.value = order.active_ids || []
+      currentBackupFile.value = mods_config_file_path
+      // toast.success("备份Mod序列已加载")
     }
   }
   // 保存Mod加载顺序
@@ -384,6 +388,30 @@ export const useModStore = defineStore('mods', () => {
       isLoading.value = false
     }
     return false
+  }
+  const exportLoadOrder = async (target_path=null, trigger_dialog=true) => {
+    if (!window.pywebview) return false
+    try {
+      // 使用默认路径
+      const res = await window.pywebview.api.export_load_order(activeIds.value, target_path, trigger_dialog)
+      if (res.status === 'success') {
+        // console.log("导出加载顺序成功:", res)
+        toast.success("Mod序列已导出")
+        return true
+      } 
+      else { throw new Error(res.message) }
+    } catch (e) {
+      console.error("导出Mod序列异常:", e)
+      toast.error(`导出Mod序列异常: \n${e.message}`)
+    } 
+    return false
+  }
+  // 应用备份列表
+  const applyBackup = () => {
+    if (!backupIds.value) return
+    activeIds.value = backupIds.value
+    isDirty.value = true
+    toast.success("已应用Mod序列")
   }
   // 更新Mod用户数据
   const updateModUserData = async (modId, userData) => {
@@ -702,7 +730,6 @@ export const useModStore = defineStore('mods', () => {
 
     return issuesMap
   })
-
   // 辅助：获取某个 Mod 的最高级别问题
   const getModIssueState = (id) => {
     const issues = modIssues.value.get(id.toLowerCase())
@@ -713,7 +740,6 @@ export const useModStore = defineStore('mods', () => {
     if (issues.some(i => i.level === 'warn')) return 'warn'
     return 'info'
   }
-
   // 动作：忽略/取消忽略问题
   // type: 传入错误类型字符串为忽略该问题；不传(null/undefined)为清空所有忽略(重置)
   const ignoreIssue = async (modId, type) => {
@@ -743,7 +769,6 @@ export const useModStore = defineStore('mods', () => {
         toast.error(`忽略问题失败：${res.message}`)
       }
   }
-
   // 获取指定列表的错误统计
   const getListIssues = (listType) => {
     // 1. 确定目标 ID 集合
@@ -891,6 +916,20 @@ export const useModStore = defineStore('mods', () => {
       }
     }
   }
+  // 从文件获取加载顺序
+  const getFileOrder = async (mods_config_file_path=null) => {
+    if (!window.pywebview) return
+    const res = mods_config_file_path ? 
+      await window.pywebview.api.open_load_order_file(mods_config_file_path) : 
+      await window.pywebview.api.get_load_order()
+    
+    if (res.status === 'success') {
+      console.log("打开加载顺序:", res)
+      return res.data
+    } else {
+      toast.error(`打开加载顺序失败: \n${res.message}`)
+    }
+  }
   // 打开Url
   const openUrl = (url) => {
     if(url) window.open(url, '_blank')
@@ -905,7 +944,12 @@ export const useModStore = defineStore('mods', () => {
   const openPath = async (path) => {
     if(!path) return
     if(!window.pywebview) return
-    await window.pywebview.api.open_path(path)
+    console.log("打开路径:", path)
+    const res = await window.pywebview.api.open_path(path)
+    if(res.status==='error') toast.error(`打开路径异常: \n${res.message}`)
+  }
+  const openBackupPath = async () => {
+    openPath(settings.value.home_path+"\\backups")
   }
   // 获取文件夹路径
   const getFolderPath = async (home_path) => {
@@ -964,11 +1008,23 @@ export const useModStore = defineStore('mods', () => {
       return
     }
   }
+  // 删除文件/文件夹
+  const deletePath = async (path) => {
+    if(!window.pywebview) return
+    const res = await window.pywebview.api.delete_path(path)
+    if(res.status === 'success') {
+      toast.success(`文件/文件夹已删除: \n${path}`)
+      return true
+    } else{
+      toast.error(`删除文件/文件夹异常: \n${res.message}`)
+      return false
+    }
+  }
 
   return {
     // 状态管理
-    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, backups, showDiffDrawer,
-    initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues,
+    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, backups, showDiffDrawer, currentBackupFile,
+    initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues, applyBackup, getBackupOrder, 
 
     // Mod 相关
     allModsMap, backupIds, activeIds, tempIds, inactiveIds, selectedIds, selectedMods, lastSelectedMod, currentTargetId, 
@@ -985,6 +1041,7 @@ export const useModStore = defineStore('mods', () => {
     openSettings, closeSettings, applySettings, saveSetting, markDirty,
 
     // 系统操作
-    launchGame, openPath, openUrl, openSteamWorkshopUrl, autoDetectPaths, getFolderPath, getFilePath, resetDatabase, getBackups,
+    launchGame, openPath, openBackupPath, openUrl, openSteamWorkshopUrl, deletePath, getFileOrder,
+    autoDetectPaths, getFolderPath, getFilePath, resetDatabase, getBackups, exportLoadOrder,
   }
 })

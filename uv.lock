@@ -473,6 +473,7 @@ dependencies = [
     { name = "peewee" },
     { name = "pillow" },
     { name = "pywebview" },
+    { name = "send2trash" },
 ]
 
 [package.metadata]
@@ -482,6 +483,16 @@ requires-dist = [
     { name = "peewee", specifier = ">=3.18.3" },
     { name = "pillow", specifier = ">=12.0.0" },
     { name = "pywebview", specifier = ">=6.1" },
+    { name = "send2trash", specifier = ">=2.0.0" },
+]
+
+[[package]]
+name = "send2trash"
+version = "2.0.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/62/6e/421803dec0c0dfbf5a27e66491ebe6643a461e4f90422f00ea4c68ae24aa/send2trash-2.0.0.tar.gz", hash = "sha256:1761421da3f9930bfe51ed7c45343948573383ad4c27e3acebc91be324e7770d" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/1b/5a/f2f2e5eda25579f754acd83399c522ee03d6acbe001dfe53c8a1ec928b44/send2trash-2.0.0-py3-none-any.whl", hash = "sha256:e70d5ce41dbb890882cc78bc25d137478330b39a391e756fadf82e34da4d85b8" },
 ]
 
 [[package]]

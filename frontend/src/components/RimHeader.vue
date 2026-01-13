@@ -12,7 +12,7 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <button @click="getLoadOrder()" v-tooltip="`获取加载顺序`"
+      <button @click="store.getLoadOrder()" v-tooltip="`获取加载顺序`"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open-icon lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
@@ -37,10 +37,6 @@ import { useToast } from "vue-toastification";
 const toast = useToast();
 const store = useModStore()
 
-// 获取加载顺序
-const getLoadOrder = async () => {
-  await store.getLoadOrder()
-}
 </script>
 
 

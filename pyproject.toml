@@ -10,4 +10,5 @@ dependencies = [
     "peewee>=3.18.3",
     "pillow>=12.0.0",
     "pywebview>=6.1",
+    "send2trash>=2.0.0",
 ]

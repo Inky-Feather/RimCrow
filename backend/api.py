@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass, asdict
 from typing import Any
-import webview # 引入 webview 库
 
 # 1. 引入配置管理
 from backend.settings import settings
@@ -338,28 +337,70 @@ class API:
     # =========================================================================
     #  5. 加载顺序与游戏启动 (Load Order & Launch)
     # =========================================================================
-    def get_load_order(self, mods_config_file_path=None):
+    def get_load_order(self):
         """
         获取当前的加载顺序
         :param mods_config_file_path: ModsConfig.xml 文件路径
         :return: [package_id, package_id, ...]
         """
         try:
-            active_ids = self.load_order_mgr.read_active_mods(mods_config_file_path)
+            active_ids = self.load_order_mgr.read_active_mods()
             if not active_ids:
                 return ApiResponse.error("已启用的Mod为空，或文件读取失败!")
         except Exception as e:
             return ApiResponse.error(f"读取加载顺序文件出错: {e}")
-        return ApiResponse.success(active_ids)
+        return ApiResponse.success({
+            "file": self.load_order_mgr.mods_config_file,
+            "active_ids": active_ids
+        })
+    
+    def open_load_order_file(self, mods_config_file_path=None):
+        """
+        打开 ModsConfig.xml 文件
+        """
+        file = ''
+        # 默认路径为 ModsConfig.xml 所在目录
+        if not mods_config_file_path:
+            mods_config_file_path = self.load_order_mgr.config_dir
+        # 检查路径是否合法，且是否为xml文件
+        if os.path.isfile(mods_config_file_path) and mods_config_file_path.endswith('.xml'):
+            file = mods_config_file_path
+        elif os.path.isdir(mods_config_file_path) :
+            file = self.file_mgr.select_file_dialog(initial_dir=mods_config_file_path)
+        else:
+            file = self.file_mgr.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
+        if not file:
+            return ApiResponse.success("未选择文件")
+        result = {
+            "file": file,
+            "active_ids": self.load_order_mgr.read_active_mods(file)
+        }
+        if not result["active_ids"]:
+            return ApiResponse.error("解析文件出错!")
+        return ApiResponse.success(result)
+    
     
     def save_load_order(self, active_ids):
         """
         保存当前激活列表到 ModsConfig.xml
+        :param active_ids: 激活的 Mod 列表
         """
         success = self.load_order_mgr.save_active_mods(active_ids)
-        if success:
-            return ApiResponse.success()
+        if success: return ApiResponse.success()
         return ApiResponse.error("保存 ModsConfig.xml 时出错!")
+    
+    def export_load_order(self, active_ids, target_path=None, trigger_dialog=True):
+        """
+        导出当前加载顺序到 ModsConfig.xml
+        :param active_ids: 激活的 Mod 列表
+        :param target_path: 导出路径
+        """
+        try:
+            if not target_path and not trigger_dialog: trigger_dialog = True
+            success = self.load_order_mgr.save_active_mods(active_ids, target_path, trigger_dialog)
+            if success: return ApiResponse.success()
+        except Exception as e:
+            return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
     def launch_game(self):
         """启动游戏"""
@@ -376,66 +417,23 @@ class API:
     def open_path(self, path):
         try:
             self.file_mgr.open_in_explorer(path)
+            print(f"打开路径: {path}")
+            return ApiResponse.success()
         except Exception as e:
+            print(f"打开路径时出错: {e}")
             return ApiResponse.error(f"打开路径时出错: {e}")
-        return ApiResponse.success()
     
-    def open_load_order_file(self, mods_config_file_path=None):
-        """
-        打开 ModsConfig.xml 文件
-        """
-        file = ''
-        # 默认路径为 ModsConfig.xml 所在目录
-        if not mods_config_file_path:
-            mods_config_file_path = self.load_order_mgr.config_dir
-        # 检查路径是否合法，且是否为xml文件
-        if os.path.isfile(mods_config_file_path) and mods_config_file_path.endswith('.xml'):
-            file = mods_config_file_path
-        elif os.path.isdir(mods_config_file_path) :
-            file = self.select_file_dialog(initial_dir=mods_config_file_path)
-        else:
-            file = self.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
-        if not file:
-            return ApiResponse.error("未选择文件")
-        return self.get_load_order(file)
+    def delete_path(self, path):
+        """删除文件/文件夹"""
+        try:
+            success = self.file_mgr.delete_path(path)
+            if success:
+                return ApiResponse.success()
+        except Exception as e:
+            return ApiResponse.error(f"删除路径时出错: {e}")
     
     def get_all_backups(self):
         """获取所有备份文件路径"""
         backups = self.load_order_mgr.get_all_backups()
         return ApiResponse.success(backups)
     
-    def select_folder_dialog(self, initial_dir='', title="选择文件夹"):
-        """
-        打开系统原生的文件夹选择框
-        """
-        # 获取当前活动窗口
-        if len(webview.windows) > 0:
-            window = webview.windows[0]
-            # 调用原生对话框
-            # allow_multiple=False: 单选
-            result = window.create_file_dialog(
-                webview.FileDialog.FOLDER, 
-                directory=initial_dir if initial_dir else '', 
-                allow_multiple=False
-            )
-            # result 返回的是一个列表 (因为可能多选)，或者 None (取消)
-            if result and len(result) > 0:
-                return result[0]
-        return None
-
-    def select_file_dialog(self, initial_dir='', file_types=('XML Files (*.xml)', 'All Files (*.*)'), title="选择文件"):
-        """
-        打开系统原生的文件选择框
-        file_types 示例: ('XML Files (*.xml)', 'All Files (*.*)')
-        """
-        if len(webview.windows) > 0:
-            window = webview.windows[0]
-            result = window.create_file_dialog(
-                webview.FileDialog.OPEN, 
-                directory=initial_dir if initial_dir else '', 
-                allow_multiple=False,
-                file_types=file_types
-            )
-            if result and len(result) > 0:
-                return result[0]
-        return None

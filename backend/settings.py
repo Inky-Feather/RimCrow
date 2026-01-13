@@ -20,6 +20,7 @@ class AppConfig:
     game_config_path: str = ""  # RimWorld 配置文件夹 (Ludeon Studios...)
     workshop_mods_path: str = ""
     local_mods_path: str = ""
+    home_path: str = str(Path(os.getcwd())) # 本程序路径
     
     # --- 游戏设置 ---
     game_version: str = ""

@@ -3,6 +3,7 @@ import shutil
 import glob
 import datetime
 
+from backend.managers.mgr_files import FileManager
 from backend.settings import settings
 from lxml import html
 
@@ -72,20 +73,52 @@ class LoadOrderManager:
             
         return active_list
 
-    def save_active_mods(self, active_ids):
+    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False):
         """
-        保存加载顺序
-        1. 自动备份当前文件
-        2. 写入新列表
+        保存加载顺序。
+        :param active_ids: Mod ID 列表
+        :param target_path: 指定保存路径（绝对路径）。如果不传，默认覆盖游戏配置。
+        :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
         """
-        if not self.mods_config_file:
-            return False
+        # 1. 确定最终写入路径
+        write_path = self.mods_config_file
+        
+        if trigger_dialog:
+            # 弹出对话框选择路径
+            # 默认文件名带上时间戳或有意义的名字
+            default_name = f"ModsConfig_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+            parent_dir = os.path.dirname(str(target_path))
+            selected = FileManager.save_file_dialog(
+                initial_dir=parent_dir or self.other_dir,
+                default_filename=default_name,
+            )
+            print(f"用户选择保存路径: {selected}")
+            if not selected:
+                print("用户取消保存")
+                return False
+            write_path = selected
+            
+        elif target_path:
+            # 指定了路径（用于恢复备份等内部逻辑）
+            # 确保父目录存在
+            parent_dir = os.path.dirname(target_path)
+            if not os.path.exists(parent_dir):
+                try:
+                    os.makedirs(parent_dir)
+                except OSError:
+                    print(f"无法创建目录: {parent_dir}")
+                    raise Exception(f"无法创建目录: {parent_dir}")
+            write_path = target_path
 
-        # 1. 备份
-        if os.path.exists(self.mods_config_file):
+        if not write_path:
+            raise Exception("未指定有效保存路径")
+
+        # 2. 只有在覆盖默认配置时，才需要自动备份旧文件
+        # 如果是另存为，没必要备份目标文件（通常目标文件不存在）
+        if write_path == self.mods_config_file and os.path.exists(self.mods_config_file):
             self._create_backup()
 
-        # 2. 准备 XML 结构
+        # 3. 准备 XML 结构 (逻辑保持不变)
         current_version = settings.config.game_version
         try:
             # 尝试保留原有的 knownExpansions 等信息
@@ -116,13 +149,13 @@ class LoadOrderManager:
                 li = etree.SubElement(active_node, "li")
                 li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
 
-            # 格式化写入
-            tree.write(self.mods_config_file, pretty_print=True, xml_declaration=True, encoding="utf-8")
-            print(f"已成功将 {len (active_ids)} 个启用模组保存到 ModsConfig.xml 中")
+            # 4. 格式化写入
+            tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+            print(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
+            
         except Exception as e:
-            print(f"保存 ModsConfig.xml 时出错：{e}")
-            return False
+            raise Exception(f"保存 ModsConfig.xml 时出错：{e}")
 
     def _create_backup(self):
         """创建当前时刻的备份"""

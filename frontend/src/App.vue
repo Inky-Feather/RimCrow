@@ -72,8 +72,8 @@
             
             <!-- 刷新按钮 -->
             <button 
-              class="col-span-1 py-2 rounded-lg bg-white/5 border border-white/5 
-                     text-[10px] text-gray-300 font-bold uppercase tracking-wider
+              class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
+                     text-sm text-gray-300 font-bold uppercase tracking-wider
                      hover:bg-white/10 hover:text-white hover:border-white/20
                      active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
               @click="store.scanMods()"
@@ -85,7 +85,7 @@
             </button>
 
             <!-- 保存按钮 (Dirty 状态提示) -->
-            <button class="col-span-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider
+            <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
                      flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
               :class="[store.isDirty 
                   ? 'bg-accent-warn text-black hover:bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
@@ -103,7 +103,7 @@
             </button>
 
             <!-- 启动游戏 -->
-            <button class="col-span-2 py-3 mt-1 rounded-lg bg-accent-success text-white text-xs font-bold 
+            <button class="col-span-2 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
                      shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
                      transition-all duration-200 uppercase tracking-widest
                      hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
@@ -117,7 +117,7 @@
       </div>
 
     </div>
-    <!-- 对比抽屉 -->
+    <!-- 列表对比抽屉 -->
     <Teleport to="body">
       <Transition 
         enter-active-class="transition-transform duration-300 ease-out"
@@ -128,26 +128,64 @@
         leave-to-class="-translate-x-full"
       >
         <div v-if="store.showDiffDrawer" 
-          class="fixed inset-y-8 top-18 left-0 w-[50vw] z-100 bg-transparent backdrop-blur-xl rounded-r-2xl border-y border-r border-white/10 shadow-[] flex flex-col">
-          
-          <!-- 抽屉内容：Diff 组件 -->
-          <div class="flex-1 overflow-hidden ">
-             <ListDiffView v-if="store.showDiffDrawer"
-               :list-a="store.activeIds" title-a="当前启用"
-               :list-b="store.backupIds||[]" title-b="对比文件"
-               class="rounded-b-none rounded-tl-none col-start-1 row-start-1 w-full"
-             />
+          class="fixed inset-y-8 top-18 left-0 w-[50vw] z-100 flex flex-col"
+        >
+          <!-- 
+            核心修改区域：
+            为了方便定位附属的边角，我们将原有的样式拆分。
+            外层 div 负责定位和尺寸，内层 div 负责样式（模糊、边框、背景）。
+          -->
+
+          <!-- 1. 上方内凹边角 -->
+          <div class="absolute -top-4.5 left-0 w-5 h-5 z-10">
+            <!-- 模糊与背景层：利用 mask 裁剪出内凹形状 -->
+            <div class="w-full h-full bg-bg-surface/80 
+              mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]">
+            </div>
+            <!-- 边框层：SVG 绘制弧线 -->
+            <svg class="absolute inset-0 w-full h-full text-white/10 fill-none pointer-events-none" viewBox="0 0 20 20">
+              <!-- 从左上(0,0) 画弧到 右下(20,20) -->
+              <path d="M0,0 A20,20 0 0,0 20,20" stroke="currentColor" stroke-width="1" />
+            </svg>
           </div>
-          
-          <!-- 底部动作栏 -->
-          <div class="p-2 px-5 bg-black/20 flex items-center justify-between">
-            <h2>加载序列差异对比</h2>
-            <button @click="store.showDiffDrawer = false" class="px-2 py-1 rounded-lg bg-accent-danger/40 hover:bg-accent-danger/70 text-sm font-bold transition-colors">关闭</button>
+
+          <!-- 2. 抽屉主体 -->
+          <div class="flex-1 flex flex-col bg-transparent backdrop-blur-xl rounded-r-2xl border-y border-r border-white/10 shadow-2xl overflow-hidden relative">
+            
+            <!-- 抽屉内容：Diff 组件 -->
+            <div class="flex-1 overflow-hidden">
+                <ListDiffView v-if="store.showDiffDrawer"
+                  :list-a="store.activeIds" title-a="当前启用"
+                  :list-b="store.backupIds||[]" title-b="对比文件"
+                  class="rounded-b-none rounded-tl-none col-start-1 row-start-1 w-full"
+                />
+            </div>
+            
+            <!-- 底部动作栏 -->
+            <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-white/5">
+              <h2 class="text-white/80 font-bold">Mod序列对比</h2>
+              <div class="flex items-center gap-2">
+                <button @click="store.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">加载文件序列</button>
+                <button @click="store.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 3. 下方内凹边角 -->
+          <div class="absolute -bottom-[19px] left-0 w-5 h-5 z-10">
+            <!-- 模糊与背景层 -->
+            <div class="w-full h-full bg-transparent backdrop-blur-xl mask-[radial-gradient(circle_at_100%_100%,transparent_1.25rem,black_1.3rem)]">
+            </div>
+            <!-- 边框层 -->
+            <svg class="absolute inset-0 w-full h-full text-white/10 fill-none pointer-events-none" viewBox="0 0 20 20">
+              <!-- 从右上(20,0) 画弧到 左下(0,20) -->
+              <path d="M20,0 A20,20 0 0,0 0,20" stroke="currentColor" stroke-width="1" />
+            </svg>
           </div>
 
         </div>
       </Transition>
-
     </Teleport>
 
     <!-- 状态条 -->

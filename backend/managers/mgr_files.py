@@ -1,10 +1,13 @@
 import os
+import shutil
 import threading
 import subprocess
 import platform
 from urllib.parse import unquote, quote
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from PIL import Image
+import webview # 引入 webview 库
+from send2trash import send2trash
 
 # 定义缩略图缓存目录
 CACHE_DIR = os.path.join(os.getcwd(), 'cache', 'thumbnails')
@@ -185,7 +188,7 @@ class FileManager:
     def open_in_explorer(path):
         """在资源管理器中打开"""
         if not path or not os.path.exists(path):
-            return {'status': 'error', 'message': '路径不存在'}
+            raise FileNotFoundError('路径不存在！')
 
         if os.path.isfile(path):
             path = os.path.dirname(path)
@@ -198,12 +201,80 @@ class FileManager:
                 subprocess.call(['open', path])
             else:
                 subprocess.call(['xdg-open', path])
-            return {'status': 'success'}
+            return None
         except Exception as e:
-            return {'status': 'error', 'message': str(e)}
+            raise Exception(f"打开路径时出错: {e}")
 
     @staticmethod
     def delete_path(path):
-        """删除文件/文件夹 (慎用)"""
-        # 需谨慎实现
-        pass
+        """删除文件/文件夹"""
+        try:
+            # 转换为绝对路径，避免相对路径问题
+            abs_path = os.path.abspath(path)
+            if os.path.isfile(abs_path) or os.path.isdir(abs_path):
+                send2trash(abs_path)
+                return True
+        except Exception as e:
+            raise Exception(f"删除路径时出错: {e}")
+    
+    @staticmethod
+    def select_folder_dialog(initial_dir='', title="选择文件夹"):
+        """
+        打开系统原生的文件夹选择框
+        """
+        # 获取当前活动窗口
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            # 调用原生对话框
+            # allow_multiple=False: 单选
+            result = window.create_file_dialog(
+                webview.FileDialog.FOLDER, 
+                directory=initial_dir if initial_dir else '', 
+                allow_multiple=False
+            )
+            # result 返回的是一个列表 (因为可能多选)，或者 None (取消)
+            if result and len(result) > 0:
+                return result[0]
+        return None
+
+    @staticmethod
+    def select_file_dialog(initial_dir='', file_types=('XML Files (*.xml)', 'All Files (*.*)'), title="选择文件"):
+        """
+        打开系统原生的文件选择框
+        file_types 示例: ('XML Files (*.xml)', 'All Files (*.*)')
+        """
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            result = window.create_file_dialog(
+                webview.FileDialog.OPEN, 
+                directory=initial_dir if initial_dir else '', 
+                allow_multiple=False,
+                file_types=file_types
+            )
+            if result and len(result) > 0:
+                return result[0]
+        return None
+    
+    @staticmethod
+    def save_file_dialog(initial_dir='', default_filename='ModsConfig.xml', file_types=('XML Files (*.xml)', 'All Files (*.*)')):
+        """
+        打开系统原生的文件保存框
+        """
+        if len(webview.windows) > 0:
+            window = webview.windows[0]
+            # pywebview 的 create_file_dialog 参数：
+            # dialog_type, directory, allow_multiple, save_filename, file_types
+            result = window.create_file_dialog(
+                webview.FileDialog.SAVE, 
+                directory=initial_dir, 
+                save_filename=default_filename, # 设置默认文件名
+                allow_multiple=False,
+                file_types=file_types
+            )
+            print(f"用户选择保存路径: {result}")
+            if result and len(result) > 0:
+                return result[0]
+                
+        return None
+    
+    

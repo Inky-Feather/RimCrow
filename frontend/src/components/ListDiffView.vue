@@ -5,29 +5,35 @@
     <div class="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/5 z-20 shrink-0">
       <!-- 图例 -->
       <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider">
-        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-danger"></span>缺失</div>
-        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-success"></span>新增</div>
-        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-warn"></span>移动</div>
-        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-yellow-100"></span>偏移</div>
-        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-text-dim"></span>一致</div>
+        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-danger"></span>缺失{{ stats.removed }}</div>
+        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-success"></span>新增{{ stats.added }}</div>
+        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-warn"></span>移动{{ stats.moved }}</div>
+        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-yellow-100"></span>偏移{{ stats.movedBlock }}</div>
+        <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-text-dim"></span>一致{{ stats.same }}</div>
       </div>
       
       <!-- 开关组 -->
       <div class="flex items-center gap-4">
-        <label class="flex items-center gap-2 text-[10px] text-text-dim cursor-pointer hover:text-white transition-colors">
-          <input type="checkbox" v-model="colorfulBlocks" class="rounded bg-white/10 border-white/20 text-accent-special focus:ring-0">
-          多彩区块
-        </label>
-        <label class="flex items-center gap-2 text-[10px] text-text-dim cursor-pointer hover:text-white transition-colors">
-          <input type="checkbox" v-model="hideIdentical" class="rounded bg-white/10 border-white/20 text-accent-primary focus:ring-0">
-          折叠长区块
-        </label>
+        <div class="relative flex flex-wrap items-center gap-1">
+          <input v-model="colorfulBlocks" type="checkbox" value="" id="b01" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
+          <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-[10px] text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+            多彩区块
+          </label>
+        </div>
+
+        <div class="relative flex flex-wrap items-center gap-1">
+          <input v-model="hideIdentical" type="checkbox" value="" id="b02" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
+          <label v-tooltip="'折叠一致区块'" for="b02" class="cursor-pointer text-[10px] text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+            折叠长区块
+          </label>
+        </div>
       </div>
+
     </div>
 
     <!-- 2. 标题栏 -->
     <div class="flex items-center border-b border-white/5 bg-black/20 text-[10px] font-bold text-text-dim py-1 z-20 shrink-0">
-      <div class="flex-1 px-2 text-center border-r border-white/5 truncate">{{ titleA }} ({{ listA.length }})</div>
+      <div class="flex-1 px-2 text-center text-accent-success border-r border-white/5 truncate">{{ titleA }} ({{ listA.length }})</div>
       
       <div class="flex-1 px-2 text-center truncate">{{ titleB }} ({{ listB.length }})</div>
     </div>
@@ -146,7 +152,6 @@ import { useDebounceFn } from '@vueuse/core'
 import { getTailwindColorHex, hexToRgba } from '../utils/colorDeal'
 
 
-
 const props = defineProps({
   listA: { type: Array, required: true },
   listB: { type: Array, required: true },
@@ -155,14 +160,16 @@ const props = defineProps({
 })
 
 const store = useModStore()
-const hideIdentical = ref(true)
-const colorfulBlocks = ref(false) // 新增：开关多彩区块
-const listARef = ref(null)
-const listBRef = ref(null)
-const scrollContainer = ref(null)
+const hideIdentical = ref(true) // 开关隐藏相同项
+const colorfulBlocks = ref(false) // 开关多彩区块
+const listARef = ref(null)    // 左侧列表 (List A)
+const listBRef = ref(null)    // 右侧列表 (List B)
+const scrollContainer = ref(null) // 滚动容器，用于同步滚动
 
-const renderBlocks = ref([])
-const renderLines = ref([])
+const renderBlocks = ref([])  // 绘制区块
+const renderLines = ref([])    // 绘制线条
+
+const BLOCK_THRESHOLD = 3    // 块阈值，超过这个距离才认为是块移动
 
 // --- 色彩常量 ---
 const BLOCK_COLORS = [
@@ -174,89 +181,152 @@ const COLOR_ADDED = getTailwindColorHex('accent-success')
 const COLOR_MOVED = getTailwindColorHex('accent-warn') 
 const COLOR_MOVED_GRAY = getTailwindColorHex('text-dim')
 
-const displayNameById = (id) => store.displayModName(id)
+
+const displayNameById = (id) => store.displayModName(id)  // 根据ID获取显示名称
+const displayListA = computed(() => foldList(analysis.value.resA))  // 左侧列表 (List A)，经过折叠处理
+const displayListB = computed(() => foldList(analysis.value.resB))   // 右侧列表 (List B)，经过折叠处理
+
+// 统计缺失、新增、移动（单项移动）、偏移（块移动）、相同项的数量
+const stats = computed(() => {
+  const res = { removed: 0, added: 0, moved: 0, movedBlock: 0, same: 0 }
+  analysis.value.resA.forEach(item => {
+    if (item.type === 'removed') res.removed++
+    else if (item.type === 'moved') res.movedBlock++
+    else if (item.type === 'same') res.same++
+  })
+  analysis.value.resB.forEach(item => {
+    if (item.type === 'added') res.added++
+  })
+  analysis.value.blocks.forEach(block => {
+    if (block.count=== 1) res.moved++
+  })
+  res.movedBlock = res.movedBlock - res.moved
+  return res
+})
 
 // --- 1. 核心算法 ---
-
+/**
+ * 计算分析结果，生成渲染数据
+ * 主要用于比较两个列表（listA 和 listB）的差异，并识别其中的移动、新增、删除和相同元素。
+ * 类似于 diff 算法，但更侧重于识别“块移动”（即连续元素的移动），并支持多彩色标记以增强可视化效果。
+ */
 const analysis = computed(() => {
   const A = props.listA
   const B = props.listB
-  
-  // 初始化预处理
+  // 1. 初始化结果数组 resA 和 resB
+  // 默认假设 A 中的所有元素都被删除了，B 中的所有元素都是新增的。
+  // 如果后续匹配成功，我们会将这些状态修改为 'same' (相同) 或 'moved' (移动)。
+  // originalIndex: 记录元素在原始数组中的位置，用于后续可能的回溯或排序。
+  // count: 默认为 1，表示单个元素。如果发现是连续移动块，这个值会变成块的长度。
   const resA = A.map((id, i) => ({ id, originalIndex: i, type: 'removed', blockId: null, count: 1 }))
   const resB = B.map((id, i) => ({ id, originalIndex: i, type: 'added', blockId: null, count: 1 }))
   
+  // 2. 构建 B 的哈希索引
+  // 目的：为了在遍历 A 时，能以 O(1) 的时间复杂度快速找到当前元素在 B 中的位置。
+  // 结构：Map<id, Array<indexInB>>
+  // 为什么存数组？因为 B 中可能存在重复的 id，我们需要记录它出现的所有位置。
   const mapB = new Map()
   B.forEach((id, i) => {
     if (!mapB.has(id)) mapB.set(id, [])
     mapB.get(id).push(i)
   })
+  
+  let blockCounter = 0 // 用于生成唯一的块 ID (blk-0, blk-1, ...)
+  const blocks = []    // 存储所有识别出的“块”的信息
 
-  let blockCounter = 0
-  const blocks = []
-
+  // 遍历 A 数组，尝试在 B 中寻找匹配
   let i = 0
   while (i < A.length) {
     const id = A[i]
+    
+    // 只有当 A 中的元素在 B 中也存在时，才有可能发生匹配或移动
     if (mapB.has(id)) {
       const possibleIndicesB = mapB.get(id)
-      let bestLen = 0
-      let bestStartB = -1
+      let bestLen = 0       // 记录找到的最长匹配长度
+      let bestStartB = -1   // 记录最长匹配在 B 中的起始位置
 
+      // 3. 贪心算法寻找最长公共子串
+      // A[i] 可能在 B 中出现多次（possibleIndicesB），我们需要找到最“划算”的那个位置。
+      // “划算”的定义：从该位置开始，能和 A[i] 连续匹配的元素数量最多。
       for (const startB of possibleIndicesB) {
         let len = 0
+        // 尝试向后扩展匹配
         while (
-          i + len < A.length && 
-          startB + len < B.length && 
-          A[i + len] === B[startB + len] &&
-          resB[startB + len].type === 'added' 
+          i + len < A.length &&           // A 未越界
+          startB + len < B.length &&      // B 未越界
+          A[i + len] === B[startB + len] && // 元素值必须相等
+          resB[startB + len].type === 'added' // 关键：B 中的元素必须是 'added' 状态
+          // 解释：如果 B 中的元素已经是 'same' 或 'moved'，说明它已经被前面的块“吃掉”了，
+          // 不能重复匹配。这保证了每个元素只属于一个块。
         ) {
           len++
         }
+        // 更新最佳匹配结果
         if (len > bestLen) {
           bestLen = len
           bestStartB = startB
         }
       }
 
+      // 判断是否启用块移动拆分逻辑
+      if (bestLen > 0 && bestLen <= BLOCK_THRESHOLD) {
+        bestLen = 1
+      }
+
+      // 4. 如果找到了有效的匹配块 (长度 > 0)
       if (bestLen > 0) {
         const blockId = `blk-${blockCounter++}`
+        
+        // 判断是否发生了移动：
+        // 如果在 A 中的位置 i 和在 B 中的位置 bestStartB 不一样，说明这块整体移动了。
         const isMoved = i !== bestStartB
-        // 预分配一个循环色，用于“多彩”模式
+        
+        // 预分配一个颜色，用于 UI 渲染时区分不同的块（多彩模式）
         const cyclicColor = BLOCK_COLORS[blockCounter % BLOCK_COLORS.length]
         
+        // 记录块信息
         blocks.push({
           id: blockId,
           cyclicColor, 
           isMoved,
-          startIndexA: i,
-          count: bestLen,
-          startIndexB: bestStartB
+          startIndexA: i,      // 块在 A 中的起始索引
+          count: bestLen,      // 块的长度
+          startIndexB: bestStartB // 块在 B 中的起始索引
         })
 
-        // 更新 Item
+        // 5. 更新 resA 和 resB 中的元素状态
         for (let k = 0; k < bestLen; k++) {
+          // 获取 A 和 B 中对应的元素引用
           const itemA = resA[i + k]
           const itemB = resB[bestStartB + k]
           
-          itemA.type = isMoved ? 'moved' : 'same'
-          itemA.blockId = blockId
-          itemA.cyclicColor = cyclicColor // 记录原始多彩色
-          itemA.count = bestLen // 记录所属块的大小，用于判断单移还是整移
+          // 更新 A 侧元素状态
+          itemA.type = isMoved ? 'moved' : 'same' // 移动 或 未变
+          itemA.blockId = blockId                 // 关联块 ID
+          itemA.cyclicColor = cyclicColor         // 关联颜色
+          itemA.count = bestLen                   // 记录所属块的总长度
           
+          // 更新 B 侧元素状态
           itemB.type = isMoved ? 'moved' : 'same'
           itemB.blockId = blockId
           itemB.cyclicColor = cyclicColor
           itemB.count = bestLen
         }
         
+        // 6. 跳过已处理的元素
+        // 因为我们处理了一个长度为 bestLen 的块，所以 i 应该直接跳过这个块，
+        // 而不是普通的 i++。这提高了效率并防止重复处理。
         i += bestLen
         continue
       }
     }
+    // 如果当前元素在 B 中没找到，或者没找到匹配块，则视为纯粹的删除，继续处理下一个
     i++
   }
 
+  // resA: 包含了删除、移动、未变的元素信息
+  // resB: 包含了新增、移动、未变的元素信息
+  // blocks: 所有识别出的连续块的元数据
   return { resA, resB, blocks }
 })
 
@@ -281,17 +351,15 @@ const getRenderColor = (itemOrBlock) => {
   }
   return 'transparent'
 }
-
 // 计算背景色 (基于 RenderColor 加上透明度)
 const getBgColor = (item) => {
   const color = getRenderColor(item)
   if (color === 'transparent') return 'transparent'
-//   if (!color.startsWith('#')) {
+  if (!color.startsWith('#')) {
     console.error(`Invalid color:`,item,color, COLOR_REMOVED)
-//   }
+  }
   return hexToRgba(color, 0.2) // 统一 10% 透明度
 }
-
 // 计算文字样式类
 const getTextClass = (item) => {
   if (item.type === 'removed') return 'text-accent-danger font-bold'
@@ -304,14 +372,14 @@ const getTextClass = (item) => {
   }
   return 'text-text-dim'
 }
-
+// 计算侧边指示条样式类
 const shouldShowIndicator = (item) => {
   return item.type !== 'same' // 只有非 same 项显示左侧彩条
 }
 
-
 // --- 3. 折叠逻辑 ---
-
+// 折叠逻辑：将连续的 same 和 moved 项折叠为一个占位符，以减少渲染负担
+// 注意：折叠后的列表需要重新计算 uiKey，以便正确渲染
 const foldList = (list) => {
   if (!hideIdentical.value) return list.map(item => ({ ...item, uiKey: item.id }))
 
@@ -367,12 +435,8 @@ const foldList = (list) => {
   return result
 }
 
-const displayListA = computed(() => foldList(analysis.value.resA))
-const displayListB = computed(() => foldList(analysis.value.resB))
-
-
 // --- 4. 绘图逻辑 ---
-
+// 绘制块和线
 const getCoords = (id, containerRef) => {
   if (!containerRef) return null
   const el = containerRef.querySelector(`[data-id="${id}"]`)
@@ -383,7 +447,7 @@ const getCoords = (id, containerRef) => {
     mid: el.offsetTop + el.offsetHeight / 2
   }
 }
-
+// 计算块的颜色
 const draw = () => {
   const blocks = []
   const lines = []
@@ -413,7 +477,7 @@ const draw = () => {
     const cp1x = svgWidth * 0.4
     const cp2x = svgWidth * 0.6
 
-    // 单独移动 (Count == 1) -> 画线
+    // 单独移动 (Count === 1) -> 画线
     if (blk.count === 1) {
       const amid = coordsStartA.mid
       const bmid = coordsStartB.mid
@@ -448,9 +512,7 @@ const draw = () => {
   renderBlocks.value = blocks
   renderLines.value = lines
 }
-
-const debouncedDraw = useDebounceFn(draw, 50)
-
+const debouncedDraw = useDebounceFn(draw, 50) // 50ms 延迟，避免频繁重绘
 // 监听开关，触发重绘
 watch([() => props.listA, () => props.listB, hideIdentical, colorfulBlocks], () => {
   nextTick(debouncedDraw)
@@ -466,7 +528,6 @@ onMounted(() => {
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect()
 })
-
 
 // 定位Mod位置
 const targetItem = (mod_id) => {
