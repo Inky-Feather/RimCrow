@@ -434,6 +434,44 @@ class API:
     
     def get_all_backups(self):
         """获取所有备份文件路径"""
-        backups = self.load_order_mgr.get_all_backups()
-        return ApiResponse.success(backups)
+        try:
+            backups = self.load_order_mgr.get_all_backups()
+            return ApiResponse.success(backups)
+        except Exception as e:
+            return ApiResponse.error(f"获取备份文件时出错: {e}")
     
+    def select_folder_dialog(self, initial_dir=''):
+        """
+        打开系统原生的文件夹选择框
+        """
+        try:
+            folder = self.file_mgr.select_folder_dialog(initial_dir)
+            if folder:
+                return ApiResponse.success(folder)
+        except Exception as e:
+            return ApiResponse.error(f"选择文件夹时出错: {e}")
+        return ApiResponse.error("未选择文件夹")
+    
+    def select_file_dialog(self, initial_dir='', file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+        """
+        打开系统原生的文件选择框
+        """
+        try:
+            file = self.file_mgr.select_file_dialog(initial_dir, file_types)
+            if file:
+                return ApiResponse.success(file)
+        except Exception as e:
+            return ApiResponse.error(f"选择文件时出错: {e}")
+        return ApiResponse.error("未选择文件")
+
+    def save_file_dialog(self, initial_dir='', file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+        """
+        打开系统原生的文件保存框
+        """
+        try:
+            file = self.file_mgr.save_file_dialog(initial_dir, file_types)
+            if file:
+                return ApiResponse.success(file)
+        except Exception as e:
+            return ApiResponse.error(f"保存文件时出错: {e}")
+        return ApiResponse.error("未选择文件")
