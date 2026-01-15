@@ -110,6 +110,19 @@
           </div>
           
         </div>
+        <!-- 已禁用路径 shadow_paths -->
+        <div v-if="selectedMod.shadow_paths?.length" class="col-span-2 flex items-center gap-1 bg-white/5 rounded-lg p-1.5 border border-white/5">
+          <svg class=" text-text-dim" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
+          <div class="flex-1 min-w-0 m-0 space-y-1">
+            <div class="text-[10px] text-text-dim uppercase">已禁用的包名重复Mod</div>
+            <div class="flex flex-col gap-1 text-accent-danger text-xs">
+              <span v-for="path in selectedMod.shadow_paths" :key="path" v-tooltip="path" @click="openPath(path)"
+                class="px-1 truncate rounded bg-accent-danger/20 border border-accent-danger/20 cursor-pointer">
+                {{ path }}
+              </span>
+            </div>
+          </div>
+        </div>
 
       </div>
       
@@ -636,8 +649,9 @@ const saveUserData = () => {
   }
 }
 // 打开Mod路径
-const openPath = () => {
-  store.openPath(selectedMod.value.path)
+const openPath = (path) => {
+  if(path)store.openPath(path)
+  else store.openPath(selectedMod.value.path)
 }
 // 打开Url
 const openUrl = (url) => {

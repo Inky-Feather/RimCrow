@@ -407,7 +407,6 @@ const addTag = (rawInput) => {
   // 清空输入
     inputValue.value = ''
     showSuggestions.value = false
-  emit('search') // 触发父组件搜索
     nextTick(() => { if (scrollContainer.value) scrollContainer.value.scrollLeft = scrollContainer.value.scrollWidth })
 }
 // 删除 Tag
@@ -415,7 +414,6 @@ const removeTag = (index) => {
     const newTags = [...props.modelValue]
     newTags.splice(index, 1)
     emit('update:modelValue', newTags)
-    emit('search')
   // 聚焦回到输入框
   nextTick(() => inputRef.value?.focus())
 }
@@ -459,13 +457,11 @@ const stopEditing = (index, val) => {
     const newTags = [...props.modelValue]
     newTags[index] = updatedTag
     emit('update:modelValue', newTags)
-    emit('search')
   } else if (!val) {
     // 也就是值被清空了，删除 tag
     removeTag(index)
   }
   editingIndex.value = -1
-  // emit('search')
   // 聚焦回到输入框
   nextTick(() => inputRef.value?.focus())
 }
@@ -477,9 +473,10 @@ const cancelEditing = (index) => {
 
 // --- 键盘事件 ---
 const handleKeydown = (e) => {
-  if (e.key === 'Enter' && inputValue.value) {
+  if (e.key === 'Enter') {
     // 直接提交输入
-    addTag(inputValue.value)
+    if(inputValue.value) addTag(inputValue.value)
+    else emit('search')
   } else if (e.key === 'Tab' && showSuggestions.value && suggestionList.value.length > 0) {
     // 优先采纳建议（如果有高亮）
     applySuggestion(suggestionList.value[highlightIndex.value])

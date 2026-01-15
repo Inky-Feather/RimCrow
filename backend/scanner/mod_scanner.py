@@ -213,6 +213,11 @@ class ModScanner:
             # 扫描缺失的Mod，根据设置删除不存在的 Mod 数据
             all_missing_mods = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
             stats['removed'] = len(all_missing_mods['deleted_mods'])
+            logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
+            # 清理失效的 Shadow Paths
+            shadow_cleaned_count = ModDAO.clean_invalid_shadow_paths()
+            if shadow_cleaned_count > 0:
+                logger.info(f"Cleaned {shadow_cleaned_count} invalid shadow paths.")
             
             # 将 map 转换为 list 发送给前端
             # 结构: [{ package_id: '...', items: [...] }, ...]

@@ -149,6 +149,47 @@ class ModDAO:
         return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
         
         
+    @staticmethod
+    def clean_invalid_shadow_paths():
+        """
+        [新增] 清理所有 Mod 中失效的 shadow_paths。
+        遍历检查物理路径是否存在，不存在则移除。
+        返回: 清理了多少个失效路径
+        """
+        cleaned_count = 0
+        
+        # 1. 筛选出可能有 shadow_paths 的记录
+        # 注意：SQLite 中 JSON 存为 TEXT，我们可以简单查不为空的
+        # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
+        mods_with_shadows = Mod.select().where(Mod.shadow_paths.is_null(False))
+        
+        with db.atomic():
+            for mod in mods_with_shadows:
+                current_paths = mod.shadow_paths
+                if not current_paths or not isinstance(current_paths, list):
+                    continue
+                
+                # 2. 过滤有效路径
+                # 判断标准：路径存在，且里面有 About/About.xml.disabled (更严谨)
+                # 或者简单点：只要文件夹还在就行 (宽容)
+                # 这里建议：只要文件夹存在即可，防止用户误删了 .disabled 文件但文件夹还在的情况
+                valid_paths = [
+                    p for p in current_paths 
+                    if p and os.path.exists(p)
+                ]
+                
+                # 3. 如果有变化，更新数据库
+                if len(valid_paths) != len(current_paths):
+                    removed_num = len(current_paths) - len(valid_paths)
+                    cleaned_count += removed_num
+                    
+                    mod.shadow_paths = valid_paths
+                    mod.save()
+                    # print(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
+
+        return cleaned_count
+    
+    
         
 class GroupDAO:
     """

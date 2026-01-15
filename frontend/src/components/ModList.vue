@@ -47,7 +47,7 @@
         <!-- 搜索定位 (Find) -->
         <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
           v-model="searchQuery" v-model:logic="searchLogic" :cacheKey="store.dataVersion || allMods.length"
-          @search="" placeholder="输入关键词定位Mod位置……" class="z-10">
+          @search="executeSearch(true)" placeholder="输入关键词定位Mod位置……" class="z-10">
           <template #right>
               <!-- 定位按钮 -->
               <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
