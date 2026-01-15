@@ -53,6 +53,29 @@ class WebviewHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
+class CustomColoredFormatter(colorlog.ColoredFormatter):
+    """
+    自定义的控制台格式化器
+    能够智能识别是否为 icecream 的调试信息，并去除多余的 logger.py 调用栈信息
+    """
+    def format(self, record):
+        # 保存原始的格式字符串
+        original_fmt = self._style._fmt
+        
+        # 检查是否标记为 icecream 的日志 (在 log_to_debug 中设置)
+        if getattr(record, 'is_icecream', False):
+            # 对于 ic() 的输出，我们移除 %(name)s:%(module)s:%(lineno)d 部分
+            # 因为 ic() 的 message 内容本身就已经包含了原本的文件名和行号
+            # 这样就避免了打印出 "RimModManager:logger:133" 这种无效信息
+            self._style._fmt = '%(log_color)s%(asctime)s | %(levelname)-8s | %(message)s'
+        
+        # 调用父类的 format 方法进行格式化
+        result = super().format(record)
+        
+        # 恢复原始格式，保证普通 logger.info/debug 不受影响
+        self._style._fmt = original_fmt
+        return result
+
 class LoggerManager:
     _instance = None
 
@@ -65,6 +88,7 @@ class LoggerManager:
         # 1. 防止重复初始化 (单例模式下 __init__ 会被多次调用)
         if getattr(self, '_initialized', False):
             return
+        self._initialized = True
 
         # 1. 创建 Logger
         self._logger = logging.getLogger("RimModManager")
@@ -87,11 +111,8 @@ class LoggerManager:
         # 4. Handler: 控制台输出 (Colorlog 美化)
         console_handler = logging.StreamHandler(sys.stdout)
         
-        # 定义颜色方案
-        # log_color 根据日志级别自动变色
-        # cyan, yellow, red 等是 colorlog 支持的颜色
-        # bold 表示加粗
-        color_formatter = colorlog.ColoredFormatter(
+        # 使用我们自定义的 CustomColoredFormatter
+        color_formatter = CustomColoredFormatter(
             fmt='%(log_color)s%(asctime)s | %(levelname)-8s | %(name)s:%(module)s:%(lineno)d - %(message)s',
             datefmt='%H:%M:%S',
             reset=True,
@@ -127,10 +148,12 @@ class LoggerManager:
             # 【核心】将 ic 的输出重定向到 logger.debug
             # 这样 ic() 打印的内容既会在控制台高亮显示（ic自带），也会被写入 log 文件
             def log_to_debug(text):
-                # 移除 icecream 自动添加的 'ic| ' 前缀，保持日志整洁，或者保留看你喜好
-                clean_text = text.replace('ic| ', '') 
+                # 移除 icecream 自动添加的 'ic| ' 前缀
+                # 注意：如果你希望在控制台看到 'IC| '，可以不 replace，或者只在 JSON 里 replace
+                clean_text = text.replace('IC| ', '') 
                 if self._logger:
-                    self._logger.debug(clean_text)
+                    # 【修改点】添加 extra 参数，告诉 Formatter 这是一条来自 icecream 的消息
+                    self._logger.debug(clean_text, extra={'is_icecream': True})
             
             ic.configureOutput(prefix='IC| ', includeContext=True, outputFunction=log_to_debug)
         else:

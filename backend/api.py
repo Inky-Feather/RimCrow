@@ -18,6 +18,7 @@ from backend.managers.mgr_mods_config import LoadOrderManager
 from backend.managers.mgr_files import FileManager
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
+from backend.managers.mgr_game_logs import GameLogManager
 
 
 def log_api_call(func):
@@ -73,6 +74,10 @@ class ApiResponse:
     @classmethod
     def error(cls, message, data=None):
         return asdict(cls(status="error", message=message, data=data))
+    
+    @classmethod
+    def warning(cls, message, data=None):
+        return asdict(cls(status="warning", message=message, data=data))
 
 
 class API:
@@ -94,6 +99,7 @@ class API:
         self.dlc_parser = None # 延迟初始化
         self.file_mgr = FileManager()    # 实例化 FileManager (它会自动启动 Server 线程)
         self.game_mgr = GameManager()
+        self.game_log_mgr = GameLogManager()
         self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
         self.scanner = ModScanner()
         logger.info("API Layer Ready.")
@@ -412,7 +418,7 @@ class API:
         else:
             file = self.file_mgr.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
         if not file:
-            return ApiResponse.success("未选择文件")
+            return ApiResponse.warning("未选择文件")
         result = {
             "file": file,
             "active_ids": self.load_order_mgr.read_active_mods(file)
@@ -427,9 +433,12 @@ class API:
         保存当前激活列表到 ModsConfig.xml
         :param active_ids: 激活的 Mod 列表
         """
-        success = self.load_order_mgr.save_active_mods(active_ids)
-        if success: return ApiResponse.success()
-        return ApiResponse.error("保存 ModsConfig.xml 时出错!")
+        try:
+            success = self.load_order_mgr.save_active_mods(active_ids)
+            if success: return ApiResponse.success()
+            return ApiResponse.warning("取消保存")
+        except Exception as e:
+            return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
     def export_load_order(self, active_ids, target_path=None, trigger_dialog=True):
         """
@@ -441,6 +450,7 @@ class API:
             if not target_path and not trigger_dialog: trigger_dialog = True
             success = self.load_order_mgr.save_active_mods(active_ids, target_path, trigger_dialog)
             if success: return ApiResponse.success()
+            return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
@@ -517,3 +527,43 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.error("未选择文件")
+    
+    
+    # =========================================================================
+    #  7. 日志管理 (Log Management)
+    # =========================================================================
+
+    @log_api_call
+    def get_game_log_files(self):
+        """ 获取游戏日志文件列表 """
+        try:
+            files = self.game_log_mgr.get_log_files()
+            return ApiResponse.success(files)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def read_game_log(self, filename):
+        """ 读取并解析指定的游戏日志 """
+        # 这是一个可能耗时的操作，@log_api_call 会帮我们记录耗时
+        result = self.game_log_mgr.read_and_parse_log(filename)
+        if 'error' in result:
+            return ApiResponse.error(result['error'])
+        return ApiResponse.success(result)
+    
+    @log_api_call
+    def open_log_folder(self):
+        """ 打开日志所在文件夹 """
+        path = settings.config.game_data_path
+        if path and os.path.exists(path):
+            self.file_mgr.open_in_explorer(path)
+            return ApiResponse.success()
+        return ApiResponse.error("日志路径不存在")
+    
+    
+    
+    
+    
+    
+    
+    

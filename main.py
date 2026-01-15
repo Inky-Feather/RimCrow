@@ -1,7 +1,7 @@
 import builtins
 import webview
 import os
-from backend.utils.logger import logger_manager, logger 
+from backend.utils.logger import logger 
 
 
 from icecream import ic as print

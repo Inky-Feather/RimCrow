@@ -107,9 +107,7 @@ class LoadOrderManager:
                 default_filename=default_name,
             )
             print(f"用户选择保存路径: {selected}")
-            if not selected:
-                print("用户取消保存")
-                return False
+            if not selected: return 
             write_path = selected
             
         elif target_path:
