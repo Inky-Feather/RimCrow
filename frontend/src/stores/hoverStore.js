@@ -6,6 +6,7 @@ export const useHoverStore = defineStore('hover', () => {
   // 意图显示状态 (鼠标是否在组件上)
   const isHovering = ref(false)
   const type = ref('preview') // 类型：'preview' | 'text'
+  const isHtml = ref(false) // 标记内容是否为原始 HTML
   
   // 数据与坐标
   const data = ref(null)
@@ -36,18 +37,31 @@ export const useHoverStore = defineStore('hover', () => {
     // console.log('show', content, event)
     // 延迟显示，避免立即显示导致的闪烁
     timer = setTimeout(() => {
+      // 重置 html 标记
+      isHtml.value = false 
+
       // 情况 A: 自定义组件模式
       if (content && content.component) {
         // 必须用 markRaw 包裹组件定义！
         customComponent.value = markRaw(content.component)
         componentProps.value = content.props || {}
         type.value = 'component'
-      } // 情况 B: 普通数据模式
+      }
+      // 情况 B: 传入的是配置对象 { content: '...', html: true }
+      else if (content && typeof content === 'object' && content.content) {
+          data.value = content.content
+          // 如果标记了 html: true，则开启 HTML 模式
+          if (content.html) isHtml.value = true
+          
+          // 如果传入了 type (比如 'preview')，则使用传入的，否则默认为 text
+          type.value = content.type || 'text' 
+      }
+      // 情况 C: 传入的是普通对象 (Mod数据预览)
       else if (typeof content === 'object') {
           data.value = content
           type.value = 'preview'
       } 
-      // 情况 C: 纯文本模式
+      // 情况 D: 纯文本
       else {
           data.value = content
           type.value = 'text'
@@ -75,7 +89,7 @@ export const useHoverStore = defineStore('hover', () => {
   }
 
   return { 
-    isHovering, data, type, targetX, targetY, customComponent, componentProps,
+    isHovering, data, type, isHtml, targetX, targetY, customComponent, componentProps,
     show, hide, updatePosition 
   }
 })

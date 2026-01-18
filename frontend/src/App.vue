@@ -196,6 +196,7 @@
     <div v-show="store.showTestDrawer" class="fixed bottom-4 left-4 w-5/9 h-7/9 bg-black/50 backdrop-blur-md p-4 border border-white/10 overflow-auto z-999">
       <Temp2 />
       <Temp3 />
+      <Temp4 />
     </div>
 
     <!-- 状态条 -->
@@ -234,6 +235,7 @@ import LogViewer from './components/LogViewer.vue'
 import ConflictResolver from './components/ConflictResolver.vue'
 import Temp3 from './components/utils/temp3.vue'
 import Temp2 from './components/utils/temp2.vue'
+import Temp4 from './components/utils/temp4.vue'
 
 
 

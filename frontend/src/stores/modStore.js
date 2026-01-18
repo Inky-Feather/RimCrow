@@ -229,21 +229,22 @@ export const useModStore = defineStore('mods', () => {
         // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
         const tempMap = new Map()
         res.data.all_mods.forEach(mod => {
-          // 预先生成搜索索引字符串
-          mod._searchStr = [
-            mod.name,
-            mod.alias_name,
-            mod.package_id,
-            ...(mod.tags || []),
-            mod.author
-          ].filter(Boolean).join(' ').toLowerCase(); // 拼接成一个长字符串
+          // // 预先生成搜索索引字符串
+          // mod._searchStr = [
+          //   mod.name,
+          //   mod.alias_name,
+          //   mod.package_id,
+          //   ...(mod.tags || []),
+          //   mod.author
+          // ].filter(Boolean).join(' ').toLowerCase(); // 拼接成一个长字符串
+          // // 预先将 Tags 转为小写 Set，加速精确匹配
+          // mod._tagsLower = new Set((mod.tags || []).map(t => t.toLowerCase()));
           
           // 强制保证字段存在
           if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
           if (!Array.isArray(mod.tags)) mod.tags = []
+          if (!Array.isArray(mod.author) && !mod.author) mod.author = ['Unknown'] 
           
-          // 预先将 Tags 转为小写 Set，加速精确匹配
-          mod._tagsLower = new Set((mod.tags || []).map(t => t.toLowerCase()));
           
           tempMap.set(mod.package_id.toLowerCase(), mod)
         })

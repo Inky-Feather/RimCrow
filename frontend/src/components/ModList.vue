@@ -43,21 +43,24 @@
     
     <!-- 工具栏 (搜索 & 筛选) -->
     <div class="px-2 py-1 w-full flex flex-col gap-1 shadow-xl bg-bg-deep/20 z-50">
-      <div class="flex items-center justify-center gap-1">
+      <div class="flex items-center justify-center gap-1 relative">
         <!-- 搜索定位 (Find) -->
-        <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
-          v-model="searchQuery" v-model:logic="searchLogic" :cacheKey="store.dataVersion || allMods.length"
+        <TagsSearch :list-color="listColor" v-model="searchQuery" v-model:logic="searchLogic" 
           @search="executeSearch(true)" placeholder="输入关键词定位Mod位置……" class="z-10">
           <template #right>
-              <!-- 定位按钮 -->
-              <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
-                :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-                transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
-                <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
-              </button>
+            <!-- 定位按钮 -->
+            <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
+              :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+              text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+              transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
+              <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
+            
+            </button>
           </template>
-        </TagsInput>
+        </TagsSearch>
+        <!-- 搜索帮助按钮 -->
+        <label v-tooltip="{content: searchHelpText, html:true}" class="absolute -top-1.5 -right-2.5 size-4 rounded-md text-sm text-center text-text-dim hover:text-text-main">?</label>
+        
         <!-- 视图切换按钮 -->
         <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
           :initial="{ rotateX: 0, opacity: 1 }"
@@ -69,12 +72,11 @@
           <svg v-else width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list-icon lucide-list"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
         </Motion>
       </div>
-
+        
       <div class="flex items-center justify-center gap-1">
         <!-- 筛选过滤 (Filter) -->
-        <TagsInput :suggestionData="allMods" :suggestionSchema="modSchema" :list-color="listColor"
-          v-model="filterQuery" v-model:logic="filterLogic" :cacheKey="store.dataVersion || allMods.length"
-          @search="" placeholder="输入关键词筛选Mod……" class="z-5">
+        <TagsSearch :list-color="listColor" v-model="filterQuery" v-model:logic="filterLogic"
+          placeholder="输入关键词筛选Mod……" class="z-5">
           <template #icon>
             <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
           </template>
@@ -88,7 +90,7 @@
                 {{ sortIcon }}
               </button>
           </template>
-        </TagsInput>
+        </TagsSearch>
         <!-- 排序切换按钮 -->
         <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
           :initial="{ rotateX: 0, opacity: 1 }"
@@ -162,8 +164,10 @@ import VirtualList from 'vue-virtual-sortable';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
 import { useModStore } from '../stores/modStore';
+import { useSearchStore } from '../stores/searchStore';
+import { generateHtmlHelp } from '../modules/search/SearchHelp'
 import ModItem from './utils/ModItem.vue';
-import TagsInput from './utils/TagsInput.vue';
+import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
 
 // 这里 modelValue 接收纯 ID 数组
@@ -177,41 +181,32 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const store = useModStore()
+const searchStore = useSearchStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 
-// 模组搜索字段 schema
-const modSchema = {
-  'tags': 'list', 
-  'name': 'string', 
-  'alias_name': 'string',
-  'author': 'list', 
-  'package_id': 'string',
-}
-// 默认搜索范围
-const defaultSearchScope = ['name', 'alias_name', 'notes', 'description']
-const sortMode = ref<'default' | 'name' | 'author'>('default')  // 排序模式
+
 
 // --- 1. 搜索与筛选逻辑 ---
 // 状态
 const isSimpleView = ref(true) // 是否简单视图
 const isSortAsc = ref(true)   // 是否升序排序
+const sortMode = ref<'default' | 'name' | 'author'>('default')  // 排序模式
 
 const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
 const searchResults = ref<string[]>([]) // 搜索结果数组
 const currentSearchIndex = ref(-1) // 当前搜索项在结果数组中的索引
 const currentTargetId = computed(() => store.currentTargetId)   // 当前搜索定位项ID
-
-const highlightTimer = ref<number>() // 高亮定时器
-
-
+const highlightTimer = ref<number>() // 定位高亮定时器
 
 const filterQuery = ref([]) // 存储标签数组
 const filterLogic = ref('AND') // 存储逻辑关系
 const filterByLine = ref([])  // 存储筛选线路数组
 const isFilterByIssue = ref(false)  // 是否筛选问题项
 
+// 获取 Engine 实例 (computed 确保响应式)
+const engine = computed(() => searchStore.engine)
 
 // --- 2. 显示列表计算 (Filter -> Sort) ---
 // 仅当允许拖拽排序时 (默认模式且无筛选) 为 True
@@ -233,6 +228,19 @@ const toggleIssueFilter = () => {
         // 或者直接修改 displayList 的计算逻辑
     }
 }
+// 清除筛选
+const clearFilter = () => {
+  filterQuery.value = []
+  isFilterByIssue.value = false
+  filterByLine.value = []
+}
+
+// 动态计算帮助文本
+const searchHelpText = computed(() => {
+  if (!engine.value) return 'Loading...';
+  // 这里可以做一层缓存，避免每次 render 都生成字符串
+  return generateHtmlHelp(engine.value);
+})
 // 构造问题详情 Tooltip
 const issueTooltip = computed(() => {
   const summary = issuesSummary.value // Store 返回的对象
@@ -271,7 +279,19 @@ const issueTooltip = computed(() => {
   text += isFilterByIssue.value ? '\n\n__[[(再次点击取消筛选)]]__' : '\n\n__[[(点击筛选以查看详情)]]__'
   return text
 })
-
+// 排序提示
+const sortTooltip = computed(() => {
+  let text = ''
+  if (sortMode.value === 'default') {
+    text = '默认排序'
+  } else if (sortMode.value === 'name') {
+    text = '按名称排序'
+  } else if (sortMode.value === 'author') {
+    text = '按作者排序'
+  }
+  text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
+  return text
+})
 // 筛选提示
 const filterTooltip = computed(() => {
   let text = ''
@@ -286,25 +306,6 @@ const filterTooltip = computed(() => {
   }
   text = text.trim()
   text += `\n\n__[[(点击清除所有筛选)]]__`
-  return text
-})
-// 清除筛选
-const clearFilter = () => {
-  filterQuery.value = []
-  isFilterByIssue.value = false
-  filterByLine.value = []
-}
-// 排序提示
-const sortTooltip = computed(() => {
-  let text = ''
-  if (sortMode.value === 'default') {
-    text = '默认排序'
-  } else if (sortMode.value === 'name') {
-    text = '按名称排序'
-  } else if (sortMode.value === 'author') {
-    text = '按作者排序'
-  }
-  text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
   return text
 })
 
@@ -341,14 +342,18 @@ const displayList = computed(() => {
       return filterByLine.value.includes(id)
     })
   }
-  // 1. 筛选
-  if (filterQuery.value.length > 0) {
-    list = list.filter(id => {
-      const mod = store.takeModById(id)
-      return checkMatch(mod, filterQuery.value, filterLogic.value)
-    })
+  // 3. 标签筛选
+  if (filterQuery.value.length > 0 && engine.value) {
+    // A. 全局搜索符合条件的对象
+    // engine.search 返回的是 Mod 对象数组
+    const matchedObjects = engine.value.search(filterQuery.value, filterLogic.value)
+    // B. 提取 ID 并建立 Set 供快速查找
+    const matchedSet = new Set(matchedObjects.map(m => m.package_id))
+    // C. 取交集 (当前列表 AND 搜索结果)
+    list = list.filter(id => matchedSet.has(id))
   }
-  // 2. 排序 (仅视觉)
+
+  // 4. 排序 (仅视觉)
   if (sortMode.value !== 'default') {
     list.sort((a, b) => {
       const mA = store.takeModById(a)
@@ -373,79 +378,6 @@ const internalListProxy = computed({
     set(val: any[]) {
     }
 })
-// 检查模组是否匹配所有 检索Tag
-const checkMatch = (mod: any, tags: any[], logic: string) => {
-  if (!mod || tags.length === 0) return true
-
-  // 对每个 Tag 进行判断
-  const results = tags.map(tag => {
-    let isMatch = false
-    const isExactMatch = tag.value.endsWith('$')
-    const tagValLower = isExactMatch ? tag.value.toLowerCase().slice(0, -1) : tag.value.toLowerCase()
-    
-    // console.log('tag', tagValLower)
-    // console.log(tagValLower.endsWith('$'),'tagValLower', tagValLower.slice(0, -1))
-
-    if (tag.type === 'rule') {
-      // 结构化匹配 (如 t:Core)
-      // 直接查字段，不再转换 Mod 内容的大小写
-      const fieldVal = mod[tag.key]
-      // 列表匹配
-      if (Array.isArray(fieldVal)) {
-          // 如果字段是 tags，利用预处理的 Set (O(1) 复杂度)
-          if (tag.key === 'tags' && mod._tagsLower) {
-            // 包含匹配（模糊匹配）
-            if (isExactMatch) {
-              // 精确匹配
-              isMatch = fieldVal.some(v => String(v).toLowerCase() === tagValLower)
-            } else {
-              // 包含匹配（模糊匹配）
-              isMatch = fieldVal.some(v => v.toLowerCase().includes(tagValLower))
-            }
-          } else {
-            if (isExactMatch) {
-              // 精确匹配
-              isMatch = fieldVal.some(v => String(v).toLowerCase() === tagValLower)
-            } else {
-              // 包含匹配（模糊匹配）
-              isMatch = fieldVal.some(v => String(v).toLowerCase().includes(tagValLower))
-            }
-          }
-      // 字符串匹配
-      } else if (fieldVal) {
-        if (isExactMatch) {
-          // 精确匹配
-          isMatch = String(fieldVal).toLowerCase() === tagValLower
-        } else {
-          // 包含匹配（模糊匹配）
-          isMatch = String(fieldVal).toLowerCase().includes(tagValLower)
-        }
-        // console.log('value',tagValLower,'isExactMatch',isExactMatch,'fieldVal',fieldVal)
-      }
-    } else {
-      // 纯文本匹配：直接检查预处理的索引字符串 (极快)
-      if (mod._searchStr) {
-          isMatch = mod._searchStr.includes(tagValLower)
-      } else {
-          // 兜底逻辑
-           isMatch = defaultSearchScope.some(key => String(mod[key] || '').toLowerCase().includes(tagValLower))
-      }
-    }
-
-    // 处理排除逻辑
-    return tag.exclude ? !isMatch : isMatch
-  })
-
-  // 根据逻辑组合结果
-  if (logic === 'AND') {
-    return results.every(r => r === true)
-  } else {
-    // OR 逻辑：只要有一个为 True 即可 (注意：排除项通常是强制的，这里简单处理为普通 OR)
-    // 更好的 OR 逻辑通常是：(条件A OR 条件B) AND (非条件C)
-    // 但为了 UI 简单，这里全量 OR
-    return results.some(r => r === true)
-  }
-}
 
 // ===== 排序模式切换 =====
 const sortIcon = computed(() => {
@@ -511,15 +443,21 @@ const executeSearch = (next = true) => {
     currentSearchIndex.value = -1
     return
   }
+  // 检查 Engine 是否存在
+  if (!engine.value) return
 
-  // 在当前的 displayList 中查找，这样只能找到可见的
-  const results = displayList.value.filter(id => checkMatch(store.takeModById(id), searchQuery.value, searchLogic.value))
+   // 1. 全局搜索
+  const matchedObjects = engine.value.search(searchQuery.value, searchLogic.value)
+  const matchedSet = new Set(matchedObjects.map(m => m.package_id))
+
+  // 2. 过滤结果：只定位 *当前可见列表(displayList)* 中的项
+  const results = displayList.value.filter(id => matchedSet.has(id))
   
-  // 如果结果列表变了，重置
   if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
     searchResults.value = results
     currentSearchIndex.value = -1
   }
+
 
   if (results.length === 0) return
 

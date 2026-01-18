@@ -328,6 +328,9 @@ watch(() => store.targetY, (newY) => {
 const parseMarkup = (text) => {
   if (!text) return ''
 
+  // 0. 如果标记为 HTML，则直接返回
+  if (store.isHtml) return text
+
   // 1. HTML 转义 (防止 XSS 和标签冲突)
   let html = text
     .replace(/&/g, "&amp;")

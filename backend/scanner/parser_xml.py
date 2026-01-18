@@ -111,7 +111,7 @@ class ModXMLParser:
             data['package_id'] = self._get_text(root, 'packageId', data['package_id'])
             data['name'] = self._get_text(root, 'name', data['name'])
             author = self._get_text(root, 'author', 'Unknown')
-            author_clean = re.split(r'[,;|&，、]', author.strip())
+            author_clean = re.split(r'\s*[,;\|&，、\+]\s*', author.strip())
             data['author'] = [name.strip() for name in author_clean if name.strip()]
             # 这里有个坑：authors (复数) 和 author (单数)
             if data['author'] == ['Unknown']:

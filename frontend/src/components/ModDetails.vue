@@ -99,7 +99,7 @@
           
         </div>
         <!-- 路径显示 -->
-        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 cursor-pointer hover:bg-white/10" @click="openPath">
+        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 cursor-pointer hover:bg-white/10" @click="openPath(selectedMod.path)">
           <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0">
             <div class="text-[10px] text-text-dim uppercase flex justify-between items-center">
@@ -650,7 +650,8 @@ const saveUserData = () => {
 }
 // 打开Mod路径
 const openPath = (path) => {
-  if(path)store.openPath(path)
+  // console.log('openPath',path)
+  if(typeof path === 'string' && path)store.openPath(path)
   else store.openPath(selectedMod.value.path)
 }
 // 打开Url
