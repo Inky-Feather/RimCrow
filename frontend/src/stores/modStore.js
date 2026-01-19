@@ -55,6 +55,18 @@ const modTypeMap = {
   'Unknown': '未知类型'
 }
 
+const modColorList = [
+  '#ef4444',
+  '#ec4899',
+  '#8b5cf6',
+  '#3b82f6',
+  '#06b6d4',
+  '#10b981',
+  '#84cc16',
+  '#eab308',
+  '#f97316'
+]
+
 // 来源类型显示
 const sourceTypeMap = {
   'core': '游戏本体',
@@ -141,6 +153,68 @@ export const useModStore = defineStore('mods', () => {
   })
   const lastSelectedMod = computed(() => {
     return selectedMods.value.at(-1)
+  })
+  const allModTags = computed(() => {
+    return [...new Set(Array.from(allModsMap.value.values()).flatMap(mod => mod.tags || []))]
+  })
+  // 计算选中项的共有属性
+  // 返回结构：{
+  //   tags: { 'Core': 'all', 'Lib': 'some' }, // all=全有, some=部分有
+  //   groups: { 'g1': 'all', 'g2': 'some' },
+  //   color: '#ff0000' (如果全都一样), 'mixed' (如果不一样), null (全无)
+  // }
+  const selectedStats = computed(() => {
+    const ids = selectedIds.value
+    if (ids.length === 0) return { tags: {}, groups: {}, color: null }
+
+    const firstMod = takeModById(ids[0])
+    if (!firstMod) return {}
+
+    // 1. 初始化统计 (以第一个为基准，或者全量统计)
+    // 为了性能，我们统计“拥有该属性的Mod数量”
+    const tagCounts = {} // { 'Core': 10, 'Lib': 5 }
+    const groupCounts = {}
+    const colors = new Set()
+
+    ids.forEach(id => {
+      const mod = takeModById(id)
+      if (!mod) return
+
+      // 统计 Tags
+      mod.tags?.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1)
+      
+      // 统计 Groups (需配合 groupList)
+      // 效率优化：不要在这里遍历 groupList，太慢。
+      // 应该用 store.groupList 反查，或者 mod 对象里存了 groups。
+      // 假设 mod 没有直接存 groups，需要用 store.takeGroupsByModId
+      const modGroups = takeGroupsByModId(id)
+      modGroups.forEach(g => groupCounts[g.group_id] = (groupCounts[g.group_id] || 0) + 1)
+
+      // 统计 Color
+      colors.add(mod.sign_color)
+    })
+
+    // 2. 生成状态
+    const total = ids.length
+    
+    // Tags 状态
+    const tagState = {}
+    for (const [tag, count] of Object.entries(tagCounts)) {
+      tagState[tag] = (count === total) ? 'all' : 'some'
+    }
+
+    // Group 状态
+    const groupState = {}
+    for (const [gid, count] of Object.entries(groupCounts)) {
+      groupState[gid] = (count === total) ? 'all' : 'some'
+    }
+
+    // Color 状态
+    let colorState = null
+    if (colors.size === 1) colorState = [...colors][0]
+    else if (colors.size > 1) colorState = 'mixed'
+
+    return { tags: tagState, groups: groupState, color: colorState }
   })
 
   // ==== 核心方法 ====
@@ -271,7 +345,7 @@ export const useModStore = defineStore('mods', () => {
       toast.error(`刷新列表失败: \n${e.message}`)
     }
   }
-
+  // 检查后端操作结果
   const checkResult = (res, workname) => {
     console.log(workname, res)
     if (res.status === 'success'){
@@ -332,11 +406,39 @@ export const useModStore = defineStore('mods', () => {
     inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(i))
     tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(i))
   }
-  // 选择 Mod
+  // 选择 Mod (支持联锁自动多选)
   const selectMods = (ids) => {
-    clearSelection();
-    if(typeof ids === 'string') ids = [ids]
-    selectedIds.value = ids
+    if (typeof ids === 'string') ids = [ids]
+    // 使用 Set 去重
+    const finalSelection = new Set()
+    // 联锁检查
+    ids.forEach(id => {
+      // 1. 先把自己加进去
+      finalSelection.add(id)
+      // 2. 向前追溯 (Previuos)
+      let currentId = id
+      while (true) {
+        const mod = takeModById(currentId)
+        if (!mod || !mod.lock_previous_mod) break
+        const prevId = mod.lock_previous_mod.toLowerCase()
+        // 防止死循环 (A->B->A)
+        if (finalSelection.has(prevId)) break
+        finalSelection.add(prevId)
+        currentId = prevId
+      }
+      // 3. 向后追溯 (Next)
+      currentId = id
+      while (true) {
+        const mod = takeModById(currentId)
+        if (!mod || !mod.lock_next_mod) break
+        const nextId = mod.lock_next_mod.toLowerCase()
+        if (finalSelection.has(nextId)) break
+        finalSelection.add(nextId)
+        currentId = nextId
+      }
+    })
+    // 更新状态
+    selectedIds.value = Array.from(finalSelection)
   }
   // 清除选择
   const clearSelection = () => {
@@ -412,6 +514,7 @@ export const useModStore = defineStore('mods', () => {
     }
     return false
   }
+  // 导出Mod加载顺序
   const exportLoadOrder = async (target_path=null, trigger_dialog=true) => {
     if (!window.pywebview) return false
     try {
@@ -453,6 +556,165 @@ export const useModStore = defineStore('mods', () => {
     } catch (e) {
       console.error("更新Mod用户数据异常:", e)
       toast.error(`更新Mod用户数据异常: \n${e.message}`)
+    } finally {
+      isLoading.value = false
+    }
+    return false
+  }
+
+  // === 批量操作 ===
+  // 批量设置颜色
+  const setModsColor = async (modIds, color) => {
+    // 1. 立即更新本地状态 (让用户马上看到变化)
+    modIds.forEach(id => {
+      const mod = takeModById(id)
+      if (mod) mod.sign_color = color
+    })
+    
+    // 2. 发送请求给后端 (持久化)
+    try {
+      const res = await window.pywebview.api.set_mods_color(modIds, color)
+      if (checkResult(res, "批量设置 Mod 颜色")) {
+        toast.success("Mod 颜色已更新", {timeout: 1000})
+        return true
+      } 
+      // 成功了什么都不用做，因为界面已经是最新的了
+    } catch (e) {
+      toast.error(`批量设置颜色失败: ${e}`)
+      await refreshModList() 
+    }
+  }
+  // 批量设置类型
+  const setModsType = async (modIds, type) => {
+    // 1. 立即更新本地状态 (让用户马上看到变化)
+    modIds.forEach(id => {
+      const mod = takeModById(id)
+      if (mod) mod.user_mod_type = type
+    })
+    
+    // 2. 发送请求给后端 (持久化)
+    try {
+      const res = await window.pywebview.api.set_user_mods_type(modIds, type)
+      if (checkResult(res, "批量设置 Mod 类型")) {
+        toast.success("Mod 类型已更新", {timeout: 1000})
+        return true
+      } 
+    } catch (e) {
+      toast.error(`批量设置类型失败: ${e}`)
+      await refreshModList() 
+    }
+  }
+  // 批量添加标签
+  const addModsTags = async (modIds, tags) => {
+    // 1. 立即更新本地状态 (让用户马上看到变化)
+    modIds.forEach(id => {
+      const mod = takeModById(id)
+      if (mod) mod.tags = [...new Set([...(mod.tags || []), ...tags])]  // 自动去重
+    })
+    
+    // 2. 发送请求给后端 (持久化)
+    try {
+      const res = await window.pywebview.api.add_tags_to_mods(modIds, tags)
+      if (checkResult(res, "批量添加 Mod 标签")) {
+        toast.success("Mod 标签已添加", {timeout: 1000})
+        return true
+      } 
+    } catch (e) {
+      toast.error(`批量添加标签失败: ${e}`)
+      await refreshModList() 
+    }
+  }
+  // 批量移除标签
+  const removeModsTags = async (modIds, tags) => {
+    // 1. 立即更新本地状态 (让用户马上看到变化)
+    modIds.forEach(id => {
+      const mod = takeModById(id)
+      if (mod) mod.tags = (mod.tags || []).filter(t => !tags.includes(t))
+    })
+    // 2. 发送请求给后端 (持久化)
+    try {
+      const res = await window.pywebview.api.remove_tags_from_mods(modIds, tags)
+      if (checkResult(res, "批量移除 Mod 标签")) {
+        toast.success("Mod 标签已移除", {timeout: 1000})
+        return true
+      } 
+    } catch (e) {
+      toast.error(`批量移除标签失败: ${e}`)
+      await refreshModList() 
+    }
+  }
+  // 智能切换标签
+  // 如果所有选中项都有该 Tag -> 移除
+  // 如果部分有或都没有 -> 添加 (补全)
+  const selectModsTag = async (tag) => {
+    // 1. 检查当前状态
+    const stats = selectedStats.value.tags[tag] // 'all', 'some', undefined
+    if (stats === 'all') {
+      // 全都有 -> 移除
+      await removeModsTags(selectedIds.value, [tag]) // 需实现 removeModsTags
+    } else {
+      // 部分有或全无 -> 添加
+      await addModsTags(selectedIds.value, [tag])
+    }
+  }
+  // 智能切换分组 (Toggle Group)
+  const selectModsGroup = async (groupId) => {
+    const stats = selectedStats.value.groups[groupId]
+    if (stats === 'all') {
+      await groupRemoveMods(groupId, selectedIds.value)
+    } else {
+      await groupAddMods(groupId, selectedIds.value)
+    }
+  }
+  // 批量设置 Mod 联锁
+  const linkMods = async (modIds) => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      // 更新本地状态
+      modIds.forEach((id, index) => {
+        const mod = takeModById(id)
+        if (mod) {
+          mod.lock_previous_mod = modIds[index-1] || null
+          mod.lock_next_mod = modIds[index+1] || null
+        }
+      })
+      const res = await window.pywebview.api.link_mods(modIds)
+      if (checkResult(res, "批量设置 Mod 联锁")) {
+        toast.success("Mod 已互联", {timeout: 1000})
+        return true
+      }
+    } catch (e) {
+      console.error("批量设置 Mod 联锁异常:", e)
+      toast.error(`批量设置 Mod 联锁异常: \n${e.message}`)
+      await refreshModList() 
+    } finally {
+      isLoading.value = false
+    }
+    return false
+  }
+  // 批量解除 Mod 联锁
+  const unlinkMods = async (modIds) => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      // 更新本地状态
+      modIds.forEach(id => {
+        const mod = takeModById(id)
+        if (mod) {
+          mod.lock_previous_mod = null
+          mod.lock_next_mod = null
+        }
+      })
+      const res = await window.pywebview.api.unlink_mods(modIds)
+      if (checkResult(res, "批量解除 Mod 联锁")) {
+        toast.success("Mod 已解除互联", {timeout: 1000})
+        return true
+      } 
+    } catch (e) {
+      console.error("批量解除 Mod 联锁异常:", e)
+      toast.error(`批量解除 Mod 联锁异常: \n${e.message}`)
+      await refreshModList()
     } finally {
       isLoading.value = false
     }
@@ -642,9 +904,7 @@ export const useModStore = defineStore('mods', () => {
     return groupList.value.find(g => g.group_id === groupId) || null
   }
 
-  // ==========================================
-  //  实时问题分析器
-  // ==========================================
+  // ===== 实时问题分析器 =====
   const modIssues = computed(() => {
     const issuesMap = new Map() // Key: modId, Value: Array<Issue>
     const activeSet = new Set(activeIds.value)
@@ -1030,14 +1290,16 @@ export const useModStore = defineStore('mods', () => {
 
   return {
     // 状态管理
-    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, backups, showDiffDrawer, currentBackupFile,
-    conflictList,
+    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, modColorList, backups, showDiffDrawer, currentBackupFile,
+    conflictList, allModTags, selectedStats,
     initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues, applyBackup, getBackupOrder, 
+    selectModsTag, selectModsGroup, 
 
     // Mod 相关
     allModsMap, backupIds, activeIds, tempIds, inactiveIds, selectedIds, selectedMods, lastSelectedMod, currentTargetId, 
     takeModById, takeModListByIds, displayModName, displayModType, removeIdsOnAllList, getIconUrl, 
     selectMods, clearSelection, scanMods, saveLoadOrder, updateModUserData, 
+    setModsColor, setModsType, addModsTags, removeModsTags, linkMods, unlinkMods,
 
     // 分组相关
     groupList, isDraggingGroup,

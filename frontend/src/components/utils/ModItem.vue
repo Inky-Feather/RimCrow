@@ -1,6 +1,6 @@
 <!-- ModItem.vue -->
 <template>
-  <div class="py-0.5 flex items-center gap-1 select-none" :data-id="item_id"
+  <div class="py-0.5 flex items-center gap-1 select-none relative" :data-id="item_id"
     @contextmenu="handleContextMenu">
     <!-- 序号（通过位数计算动态调整字体大小） -->
     <!-- :style="{ fontSize: 18-(index+1).toString().length*3 + 'px' }" -->
@@ -110,9 +110,9 @@
       </div>
 
       <!-- 分组颜色条 -->
-      <div v-if="modGroups.length" class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
-        <div class="w-full absolute right-0 inset-y-0 flex flex-col scale-95">
-          <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop="console.log(g)"
+      <div class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
+        <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
+          <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
             :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-white`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
             :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`"
             v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}">
@@ -121,13 +121,20 @@
       </div>
 
     </div>
+
+    <!-- 联锁标识 -->
+    <div v-if="modData.lock_next_mod" class="absolute -bottom-3 right-8 opacity-70">
+      <svg class="rotate-90" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, h, nextTick } from 'vue'
 import { useModStore } from '../../stores/modStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
+import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Trash2, Link2, Link2Off, MegaphoneOff, Megaphone, ExternalLink } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -169,7 +176,7 @@ const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
     if (issueState.value === 'warn') return `${select} border-accent-warn/40 border bg-accent-warn/10 hover:bg-accent-warn/20`
-    return `${select} bg-bg-surface border-white/10 hover:border-white/20 hover:bg-[#2d3a4f]` // 原有的选中样式
+    return `${select} bg-bg-surface/20 border-white/10 hover:border-white/20 hover:bg-text-dim/20` // 原有的选中样式
 })
 
 const getModTypeClass = computed(() => {
@@ -184,75 +191,103 @@ const getModTypeClass = computed(() => {
 })
 
 const getCardStyle = (id) => {
-  const base = {'--drag-color': `var(--color-accent-${props.listColor})`}
+  const base = {}
   const color = store.takeModById(id).sign_color
+  // console.log(color)
   if (!color) return base
-  base['--mod-color'] = hexToRgb(color)
   if(!issueState.value) { // 防止覆盖错误样式
-    base['backgroundColor'] = `rgba(${hexToRgb(color)},0.1)`
+    base['backgroundColor'] = hexToRgba(color, 0.1)
   }
-  base['borderColor'] = `rgba(${hexToRgb(color)},0.3)`
+  base['borderColor'] = hexToRgba(color, 0.3)
   base['color'] = color
   return base
 }
 
-// 颜色格式转换
-const hexToRgb = (hex) => {
-  if (!hex || typeof hex !== 'string') return `0, 0, 0`; // 返回纯组件字符串
-  let cleanHex = hex.replace('#', '');
-  if (cleanHex.length === 3) {
-    cleanHex = cleanHex.split('').map(char => char + char).join('');
-  }
-  // 确保是六位
-  if (cleanHex.length !== 6) {
-    console.error(`Invalid hex color: ${hex}`);
-    return `0, 0, 0`;
-  }
-  // 提取 R, G, B 分量，并从十六进制转换为十进制
-  const r = parseInt(cleanHex.substring(0, 2), 16);
-  const g = parseInt(cleanHex.substring(2, 4), 16);
-  const b = parseInt(cleanHex.substring(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
-};
-
+// 1. 定义图标组件变量
+const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
+  [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
+)
 // 右键菜单
-const handleContextMenu = (event) => {
+const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
-  const menuItems = [
-    { label: '打开文件夹', action: () => openFolder() },
-    { divider: true },
-    { label: '删除', level: 'danger', action: () => deleteMod() },
+  // 检查是否选中，若未选中则添加到选中列表
+  if (!store.selectedIds.includes(props.item_id)) {
+    store.selectMods(props.item_id)
+    await nextTick()
+  }
+  // 获取统计信息
+  const stats = store.selectedStats
+  // 通用菜单
+  const commnMenuItems = [
+    { label: '标签管理', icon: Tag, children: [{type: 'grid', columns: 5,
+      children: store.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
+        label: '#'+tag, action: () => store.selectModsTag(tag)
+      }))}]
+    },
+    { label: '分组管理', icon: Group, children: [{type: 'grid', columns: 4,
+      children: store.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
+        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => store.selectModsGroup(group.group_id)
+      }))}]
+    },
+    { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 
+        children:[...store.modColorList.map(c => ({ tooltip: c, color: c, 
+          active: modData.value.sign_color === c, action: () => store.setModsColor(store.selectedIds, c)
+        })), 
+        { icon: X, color: 'transparent', tooltip: '清除', action: () => store.setModsColor(store.selectedIds, null) }]
+      }]
+    },
+    { label: '修改类型', icon: ChessPawn,
+      children: [...Object.entries(store.modTypeMap).map(([key, value]) => ({
+        label: value, action: () => store.setModsType(store.selectedIds, key)
+      })),{ label: 'X 恢复默认', action: () => store.setModsType(store.selectedIds, null) }]
+    }
   ]
+  // 单选菜单
+  const singleMenuItems = [
+    { divider: true },
+    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => store.openUrl(modData.value.url) },
+    { label: '从Steam访问', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
+    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => store.openPath(modData.value.path) },
+    { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteMod() },
+  ]
+  // 多选菜单
+  const selectedMenuItems = [
+    { divider: true },
+    { label: '联锁选中项', icon: Link2, action: () => store.linkMods(store.selectedIds) },
+  ]
+  if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
+    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => store.unlinkMods(store.selectedIds) })
+  }
   const currentIssues = store.modIssues.get(props.item_id.toLowerCase())
   // 如果有错误，添加忽略选项
   if (currentIssues && currentIssues.length > 0) {
-      menuItems.push({ divider: true })
-      // 子菜单列出所有错误
-      menuItems.push({
-          label: '忽略警告...',
-          children: currentIssues.map(issue => ({
-              label: `忽略问题：${store.ISSUE_TITLE_MAP[issue.type] || issue.type}`,
-              level: issue.level,
-              action: () => store.ignoreIssue(props.item_id, issue.type)
-          }))
-      })
+    singleMenuItems.push({ divider: true })
+    // 子菜单列出所有错误
+    singleMenuItems.push({
+      label: '忽略警告...', icon: MegaphoneOff,
+      children: currentIssues.map(issue => ({
+        label: `忽略问题：${store.ISSUE_TITLE_MAP[issue.type] || issue.type}`,
+        level: issue.level,
+        action: () => store.ignoreIssue(props.item_id, issue.type)
+      }))
+    })
   }
   // 如果已经忽略，添加启用提示
   if (modData.value.ignored_issues && modData.value.ignored_issues.length > 0) {
-      menuItems.push({
-          label: '恢复警告',
+      singleMenuItems.push({
+          label: '恢复警告', icon: Megaphone,
           level: 'warn',
           action: () => store.ignoreIssue(props.item_id)
       })
   }
+  // 合并菜单
+  const menuItems = [...commnMenuItems]
+  if (store.selectedIds.length > 1) {
+    menuItems.push(...selectedMenuItems)
+  } else {
+    menuItems.push(...singleMenuItems)
+  }
 
-  menuItems.push({
-      label: '修改类型',
-      children: Object.entries(store.modTypeMap).map(([key, value]) => ({
-        label: value,
-        action: () => store.updateModUserData(props.item_id, {user_mod_type: key})
-      }))
-  })
   menuStore.open(event, menuItems)
 }
 

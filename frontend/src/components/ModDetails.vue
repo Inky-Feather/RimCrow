@@ -1,7 +1,5 @@
 <template>
-  <div v-if="selectedMod" class="flex flex-col h-full p-1 bg-bg-surface/50 select-text"
-    :style="{ '--rgb-components': hexToRgb(selectedMod.sign_color) }">
-    <!-- 使用方法 bg-[rgba(var(--rgb-components),0.2)] -->
+  <div v-if="selectedMod" class="flex flex-col h-full p-1 bg-bg-surface/50 select-text">
     <!-- 1. 顶部大图与标题区 (保持原有设计风格但优化) -->
     <div class="w-full aspect-video opacity-90 backdrop-blur-sm bg-black/40 rounded-xl overflow-hidden relative border border-white/10 shadow-lg group">
       
@@ -318,26 +316,41 @@
       </div>
 
       <!-- A. 用户自定义属性 (标签 & 颜色 & 备注) -->
-      <div class="rounded-xl p-3 border bg-[rgba(var(--rgb-components),0.1)]  border-white/10 backdrop-blur-sm space-y-3">
+      <div class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
         
-        <!-- 标签管理 (带自动补全) -->
+        <!-- 标签管理 -->
         <div>
           <label v-tooltip="'在此管理Mod标记的自定义标签'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">标签*</label>
           <div class="flex flex-wrap gap-1 mb-2">
-            <span v-for="tag in userTags" :key="tag" 
-              class="px-1 py-0.5 rounded bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group">
-              {{ tag }}
-              <button @click="removeTag(tag)" v-tooltip="'移除标签'" class="hover:text-white font-bold opacity-50 group-hover:opacity-100">×</button>
-            </span>
-            <!-- 添加标签输入框 -->
-            <div class="relative">
-              <input type="text" v-model="newTagInput" @keydown.enter="addTag" @blur="newTagInput=''" list="known-tags"
-                placeholder="+ 添加标签" 
-                class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 text-xs text-white focus:border-accent-primary focus:outline-none w-6 focus:w-20 transition-all"/>
-              <datalist id="known-tags">
-                <option v-for="t in store.knownTags" :key="t" :value="t"></option>
-              </datalist>
+            <!-- 现有标签列表 -->
+            <TransitionGroup name="list">
+              <span v-for="tag in userTags" :key="tag" 
+                class="px-1 py-0.5 rounded truncate text-shadow-lg/20 bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group animate-in">
+                {{ tag }}
+                <button @click="removeTag(tag)" v-tooltip="'移除标签'" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-white transition-colors opacity-50 group-hover:opacity-100">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </span>
+            </TransitionGroup>
+
+            <!-- 添加标签输入框 (带自定义下拉建议) -->
+            <div class="relative flex-1 flex" ref="tagInputRef">
+              <input type="text" v-model="tagInput" @focus="showTagSuggest = true" placeholder="+" 
+                @keydown.enter.prevent="confirmAddTag" @keydown.up.prevent="navTag(-1)" @keydown.down.prevent="navTag(1)"
+                @keydown.esc="showTagSuggest = false" v-tooltip="'添加新标签'"
+                class="px-1 py-0.5 w-5 text-center rounded bg-black/20 border border-white/10 text-xs text-text-main placeholder-text-dim/50 focus:flex-1 focus:bg-black/40 focus:border-accent-primary focus:outline-none focus:w-24 transition-all"
+              />
+              <!-- 标签建议下拉框 -->
+              <div v-if="showTagSuggest && filteredKnownTags.length > 0" 
+                  class="absolute left-0 bottom-full mb-1 w-32 max-h-40 overflow-y-auto bg-bg-surface border border-white/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+                <button v-for="(t, idx) in filteredKnownTags" :key="t"  @click="addTag(t)"
+                  class="text-left px-2 py-1 text-xs rounded hover:bg-accent-primary/20 hover:text-accent-primary transition-colors truncate"
+                  :class="{'bg-accent-primary/10 text-accent-primary': idx === tagNavIndex}">
+                  {{ t }}
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
 
@@ -345,24 +358,37 @@
         <div>
           <label v-tooltip="'在此管理Mod的所属分组'" class="text-[10px] uppercase text-text-dim font-bold tracking-wider mb-1 block">分组*</label>
           <div class="flex flex-wrap gap-1 mb-2">
-            <span v-for="group in userGroups" :key="group.group_id" 
-              class="px-1 py-0.5 rounded text-xs border border-text-dim/20 flex items-center gap-1 group hover:border-text-dim/80"
-              :style="{'backgroundColor': `rgba(${hexToRgb(group.color)},0.1)`, 'color': group.color}">
-              {{ group.name }} ({{ group.mod_ids.length }})
-              <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" 
-                v-tooltip="'从该分组移出'" class="size-3 flex justify-center items-center hover:text-white font-bold rounded-full opacity-50 group-hover:opacity-100 hover:bg-accent-danger">
-                ×
+            <!-- 现有分组列表 -->
+            <TransitionGroup name="list">
+              <span v-for="group in userGroups" :key="group.group_id" 
+                class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-white/5 flex items-center gap-1 group hover:border-white/20 transition-colors"
+                :style="{'backgroundColor': hexToRgba(group.color, 0.15), 'color': group.color}">
+                {{ group.name }}
+                <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="'从分组移出'"
+                  class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </span>
+            </TransitionGroup>
+
+            <!-- 添加分组按钮 (Dropdown) -->
+            <div class="relative" ref="groupDropRef" v-tooltip="'添加新分组'">
+              <button @click="toggleGroupDrop" class="px-1 py-1 rounded bg-black/20 border border-white/10 text-xs text-text-dim hover:text-white hover:border-white/30 hover:bg-black/40 transition-all flex items-center gap-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
               </button>
-            </span>
-            <!-- 添加分组输入框 -->
-            <!-- <div class="relative">
-              <input type="text" v-model="newTagInput" @keydown.enter="addTag" @blur="newTagInput=''" list="known-tags"
-                placeholder="+ 添加标签" 
-                class="px-1.5 py-0.5 rounded bg-black/40 border border-white/10 text-xs text-white focus:border-accent-primary focus:outline-none w-6 focus:w-20 transition-all"/>
-              <datalist id="known-tags">
-                <option v-for="t in store.knownTags" :key="t" :value="t"></option>
-              </datalist>
-            </div> -->
+              <!-- 分组选择下拉框 -->
+              <div v-if="showGroupDrop" class="absolute left-0 bottom-full mb-1 w-40 max-h-48 overflow-y-auto bg-bg-surface border border-white/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+                <!-- 搜索过滤 -->
+                <input v-model="groupSearch" ref="groupSearchRef" placeholder="搜索分组..." 
+                  class="mb-1 px-2 py-1 text-xs bg-black/20 rounded border border-white/5 focus:outline-none focus:border-accent-primary" />
+                <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-dim/50 text-center">无可用分组</div>
+                <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
+                  class="text-left px-2 py-1 text-xs rounded hover:bg-white/10 transition-colors truncate flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
+                  {{ g.name }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -455,10 +481,11 @@
 </template>
 
 <script setup >
-import { computed, ref, watch } from 'vue'
-import { refDebounced } from '@vueuse/core' // 引入防抖函数
+import { computed, ref, watch, nextTick } from 'vue'
+import { refDebounced, onClickOutside  } from '@vueuse/core' // 引入防抖函数
 import { useModStore } from '../stores/modStore'
 import { parseUnityRichText } from '../utils/unityTextParser'
+import { hexToRgba, hexToRgb } from '../utils/colorDeal'
 import ImageCloud from './utils/ImageCloud.vue';
 import LampEffect from './utils/LampEffect.vue';
 
@@ -491,7 +518,18 @@ const userTags = ref([])
 const userAliasName = ref('')
 const userNotes = ref('')
 const newTagInput = ref('')
-const presetColors = ['#ef4444', '#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#eab308', '#f97316']
+const presetColors = store.modColorList
+
+// === 标签管理逻辑 ===
+const tagInput = ref('')
+const showTagSuggest = ref(false)
+const tagInputRef = ref(null)
+const tagNavIndex = ref(0) // 键盘导航索引
+// === 分组管理逻辑 ===
+const showGroupDrop = ref(false)
+const groupDropRef = ref(null)
+const groupSearch = ref('')
+const groupSearchRef = ref(null)
 
 const showAllDependencies = ref(false);
 const showAllIncompatible = ref(false);
@@ -516,12 +554,27 @@ watch(selectedMod, (newVal) => {
   }
 }, { immediate: true })
 
-const userGroups = computed(() => {return store.takeGroupsByModId(selectedMod.value?.package_id);})
-
+// 计算可用分组 (排除已加入的)
+const availableGroups = computed(() => {
+  const search = groupSearch.value.toLowerCase().trim()
+  const currentGroupIds = new Set(userGroups.value.map(g => g.group_id))
+  
+  return store.groupList
+    .filter(g => !currentGroupIds.has(g.group_id)) // 排除已加入
+    .filter(g => g.name.toLowerCase().includes(search)) // 搜索过滤
+})
+// 计算过滤后的建议标签 (排除已存在的)
+const filteredKnownTags = computed(() => {
+  const input = tagInput.value.toLowerCase().trim()
+  return store.allModTags
+    .filter(t => !userTags.value.includes(t)) // 排除已添加
+    .filter(t => t.toLowerCase().includes(input)) // 模糊匹配
+    .slice(0, 8) // 最多显示8个
+})
 // 辅助计算：格式化描述（换行转为 <br>）
 const formattedDescription = computed(() => {
   if (!selectedMod.value?.description) return '该Mod未提供描述。'
-  // console.log(selectedMod.value.description)
+  // console.log(parseUnityRichText(selectedMod.value.description, false))
   // 第二个参数 false 表示不移除图片，如果想移除则传 true
   return parseUnityRichText(selectedMod.value.description, false)
 })
@@ -594,16 +647,6 @@ const tooltipModType = computed(() => {
   return '模组类型：'+store.modTypeMap[selectedMod.value.mod_type]+'\n__(粗略判断)__'
 })
 
-
-// 辅助函数：根据 mod 依赖项获取显示名称
-// const displayNameByMod = (dependencies_mod) => {
-//   const mod_id = dependencies_mod.package_id
-//   return store.takeModById(mod_id)?.alias_name || store.takeModById(mod_id)?.name || dependencies_mod.display_name || dependencies_mod.package_id
-// }
-// const displayNameById = (mod_id) => {
-//   return store.takeModById(mod_id)?.alias_name || store.takeModById(mod_id)?.name || mod_id
-// }
-
 const displayNameByMod = (mod) => {
   return store.displayModName(mod);
 }
@@ -618,20 +661,69 @@ const versionIsCompatible = (version) => {
   // 转为浮点数比较版本号，返回 true 表示兼容，false 表示不兼容
   return parseFloat(version) >= parseFloat(game_version)
 }
+const userGroups = computed(() => {return store.takeGroupsByModId(selectedMod.value?.package_id);})
+const toggleGroupDrop = async () => {
+  showGroupDrop.value = !showGroupDrop.value
+  if (showGroupDrop.value) {
+    groupSearch.value = ''
+    await nextTick()
+    groupSearchRef.value?.focus() // 自动聚焦搜索框
+  }
+}
+
+const addGroup = (groupId) => {
+  if (selectedMod.value) {
+    store.groupAddMods(groupId, [selectedMod.value.package_id])
+  }
+  showGroupDrop.value = false
+}
+
+// 点击外部关闭分组下拉
+onClickOutside(groupDropRef, () => {
+  showGroupDrop.value = false
+})
+// 从分组中移除模组
+const removeModInGroup =(groupId, modId) => {
+  store.groupRemoveMods(groupId, [modId]);
+}
 // 添加标签
-const addTag = () => {
-  const val = newTagInput.value.trim()
-  if (val && !userTags.value.includes(val)) {
-    userTags.value.push(val)
+const addTag = (tag) => {
+  if (tag && !userTags.value.includes(tag)) {
+    userTags.value.push(tag)
     saveUserData()
   }
-  newTagInput.value = ''
+  tagInput.value = ''
+  showTagSuggest.value = false
+  tagNavIndex.value = 0
 }
 // 移除标签
 const removeTag = (tag) => {
   userTags.value = userTags.value.filter(t => t !== tag)
   saveUserData()
 }
+// 确认添加 (回车键)
+const confirmAddTag = () => {
+  // 如果有建议项被选中，优先使用建议项
+  if (showTagSuggest.value && filteredKnownTags.value.length > 0) {
+    addTag(filteredKnownTags.value[tagNavIndex.value])
+  } else if (tagInput.value.trim()) {
+    // 否则创建新标签
+    addTag(tagInput.value.trim())
+  }
+}
+// 键盘导航
+const navTag = (step) => {
+  if (!showTagSuggest.value) return
+  const len = filteredKnownTags.value.length
+  if (len === 0) return
+  tagNavIndex.value = (tagNavIndex.value + step + len) % len
+}
+// 点击外部关闭标签建议
+onClickOutside(tagInputRef, () => {
+  showTagSuggest.value = false
+})
+
+
 // 更新颜色
 const updateColor = (color) => {
   if (selectedMod.value) {
@@ -662,34 +754,12 @@ const openUrl = (url) => {
 const openSteamUrl = (url) => {
   store.openSteamWorkshopUrl(url)
 }
-// 从分组中移除模组
-const removeModInGroup =(groupId, modId) => {
-  store.groupRemoveMods(groupId, [modId]);
-}
 
 // 定位Mod位置
 const targetItem = (mod_id) => {
   store.currentTargetId = mod_id
 }
 
-// 颜色格式转换
-const hexToRgb = (hex) => {
-  if (!hex || typeof hex !== 'string') return `0, 0, 0`; // 返回纯组件字符串
-  let cleanHex = hex.replace('#', '');
-  if (cleanHex.length === 3) {
-    cleanHex = cleanHex.split('').map(char => char + char).join('');
-  }
-  // 确保是六位
-  if (cleanHex.length !== 6) {
-    console.error(`Invalid hex color: ${hex}`);
-    return `0, 0, 0`;
-  }
-  // 提取 R, G, B 分量，并从十六进制转换为十进制
-  const r = parseInt(cleanHex.substring(0, 2), 16);
-  const g = parseInt(cleanHex.substring(2, 4), 16);
-  const b = parseInt(cleanHex.substring(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
-};
 </script>
 
 
@@ -718,102 +788,116 @@ const hexToRgb = (hex) => {
   为了确保图片在动画过程中能够重叠，
   img 标签在 template 里已经加了 absolute inset-0 
 */
-  .loader {
-    --size: 250px;
-    --duration: 5s;
-    --logo-color: grey;
-    --background: linear-gradient(
-      0deg,
-      rgba(21, 30, 49, 0.2) 0%,
-      rgba(35, 51, 85, 0.2) 100%
-    );
-    height: var(--size);
-    aspect-ratio: 1;
-    position: relative;
-  }
+.loader {
+  --size: 250px;
+  --duration: 5s;
+  --logo-color: grey;
+  --background: linear-gradient(
+    0deg,
+    rgba(21, 30, 49, 0.2) 0%,
+    rgba(35, 51, 85, 0.2) 100%
+  );
+  height: var(--size);
+  aspect-ratio: 1;
+  position: relative;
+}
 
-  .loader .box {
-    position: absolute;
-    background: rgba(67, 101, 152, 0.15);
-    background: var(--background);
-    border-radius: 50%;
-    border-top: 1px solid rgba(100, 100, 100, 1);
+.loader .box {
+  position: absolute;
+  background: rgba(67, 101, 152, 0.15);
+  background: var(--background);
+  border-radius: 50%;
+  border-top: 1px solid rgba(100, 100, 100, 1);
+  box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
+  backdrop-filter: blur(5px);
+  animation: ripple var(--duration) infinite ease-in-out;
+}
+
+.loader .box:nth-child(1) {
+  inset: 40%;
+  z-index: 99;
+}
+
+.loader .box:nth-child(2) {
+  inset: 30%;
+  z-index: 98;
+  border-color: rgba(100, 100, 100, 0.8);
+  animation-delay: 0.5s;
+}
+
+.loader .box:nth-child(3) {
+  inset: 20%;
+  z-index: 97;
+  border-color: rgba(100, 100, 100, 0.6);
+  animation-delay: 1s;
+}
+
+.loader .box:nth-child(4) {
+  inset: 10%;
+  z-index: 96;
+  border-color: rgba(100, 100, 100, 0.4);
+  animation-delay: 1.5s;
+}
+
+.loader .box:nth-child(5) {
+  inset: 0%;
+  z-index: 95;
+  border-color: rgba(100, 100, 100, 0.2);
+  animation-delay: 2s;
+}
+
+.loader .logo {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 30%;
+}
+
+.loader .logo svg {
+  fill: var(--logo-color);
+  width: 100%;
+  animation: color-change var(--duration) infinite ease-in-out;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
     box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
-    backdrop-filter: blur(5px);
-    animation: ripple var(--duration) infinite ease-in-out;
   }
-
-  .loader .box:nth-child(1) {
-    inset: 40%;
-    z-index: 99;
+  50% {
+    transform: scale(1.3);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 20px 20px -0px;
   }
-
-  .loader .box:nth-child(2) {
-    inset: 30%;
-    z-index: 98;
-    border-color: rgba(100, 100, 100, 0.8);
-    animation-delay: 0.5s;
+  100% {
+    transform: scale(1);
+    box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
   }
+}
 
-  .loader .box:nth-child(3) {
-    inset: 20%;
-    z-index: 97;
-    border-color: rgba(100, 100, 100, 0.6);
-    animation-delay: 1s;
-  }
-
-  .loader .box:nth-child(4) {
-    inset: 10%;
-    z-index: 96;
-    border-color: rgba(100, 100, 100, 0.4);
-    animation-delay: 1.5s;
-  }
-
-  .loader .box:nth-child(5) {
-    inset: 0%;
-    z-index: 95;
-    border-color: rgba(100, 100, 100, 0.2);
-    animation-delay: 2s;
-  }
-
-  .loader .logo {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-content: center;
-    padding: 30%;
-  }
-
-  .loader .logo svg {
+@keyframes color-change {
+  0% {
     fill: var(--logo-color);
-    width: 100%;
-    animation: color-change var(--duration) infinite ease-in-out;
   }
+  50% {
+    fill: white;
+  }
+  100% {
+    fill: var(--logo-color);
+  }
+}
 
-  @keyframes ripple {
-    0% {
-      transform: scale(1);
-      box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
-    }
-    50% {
-      transform: scale(1.3);
-      box-shadow: rgba(0, 0, 0, 0.3) 0px 20px 20px -0px;
-    }
-    100% {
-      transform: scale(1);
-      box-shadow: rgba(0, 0, 0, 0.3) 0px 10px 10px -0px;
-    }
-  }
-
-  @keyframes color-change {
-    0% {
-      fill: var(--logo-color);
-    }
-    50% {
-      fill: white;
-    }
-    100% {
-      fill: var(--logo-color);
-    }
-  }
+/* 列表项动画 */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+  width: 0;
+  margin: 0;
+  padding: 0;
+}
 </style>
