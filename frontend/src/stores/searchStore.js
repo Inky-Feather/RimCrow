@@ -66,12 +66,13 @@ export const useSearchStore = defineStore('search', () => {
         excludeFields: [
             /mods?$/i,
             /stats?$/i,
+            /time$/i,
             /urls?$/i,        // 屏蔽所有以 url 结尾的 (thumb_url, preview_url)
             /paths?$/i,       // 屏蔽所有以 path 结尾的 (install_path)
             /colors?$/i,      // 屏蔽所有以 color 结尾的 (color)
             'description','notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
-            'version','workshop_id','id',
-            'ignored_issues'
+            'version','workshop_id','id','mod_id',
+            'ignored_issues',
         ]
     })
   }

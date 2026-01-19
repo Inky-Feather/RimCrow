@@ -101,8 +101,8 @@ export function generateHtmlHelp(engine) {
 
   // === 顶部：标题 + 状态 ===
   html += `<div class="${C.header}">
-      <span class="font-bold text-white">搜索指令速查</span>
-      <span class="text-[10px] bg-accent-highlight/20 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">CMD MODE</span>
+      <span class="font-bold text-white">搜索说明</span>
+      <span class="text-[10px] bg-accent-highlight/20 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">搜索指令速查</span>
     </div>`;
 
   // === 区域 1：基础语法 (3个核心卡片) ===

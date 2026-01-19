@@ -198,6 +198,8 @@
       <Temp3 />
       <Temp4 />
     </div>
+    
+    <DebugPanel />
 
     <!-- 状态条 -->
     <StatusBar class="relative z-20 flex-none" />
@@ -236,8 +238,7 @@ import ConflictResolver from './components/ConflictResolver.vue'
 import Temp3 from './components/utils/temp3.vue'
 import Temp2 from './components/utils/temp2.vue'
 import Temp4 from './components/utils/temp4.vue'
-
-
+import DebugPanel from './components/DebugPanel.vue'
 
 const store = useModStore()
 

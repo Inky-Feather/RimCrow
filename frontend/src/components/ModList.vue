@@ -54,7 +54,6 @@
               text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
               transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
               <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
-            
             </button>
           </template>
         </TagsSearch>

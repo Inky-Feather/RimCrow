@@ -77,7 +77,7 @@
             </div>
             <!-- 主名称 -->
             <h2 class="font-medium truncate">
-              {{ store.data.alias_name ? store.data.alias_name : (store.data.name ? store.data.name : item_id) }}
+              {{ modStore.displayModName(store.data) }}
             </h2>
           </div>
 
