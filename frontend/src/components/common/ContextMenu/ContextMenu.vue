@@ -24,8 +24,8 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { onClickOutside, useWindowSize, useEventListener } from '@vueuse/core'
-import { useContextMenuStore } from '../stores/contextMenuStore' // 调整你的路径
-import ContextMenuItem from './utils/ContextMenuItem.vue'
+import { useContextMenuStore } from '../../../stores/contextMenuStore' // 调整你的路径
+import ContextMenuItem from './ContextMenuItem.vue'
 
 const store = useContextMenuStore()
 const menuRef = ref(null)

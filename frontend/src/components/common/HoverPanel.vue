@@ -145,8 +145,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick,h } from 'vue'
 import { Milestone } from 'lucide-vue-next';
 import { Motion } from 'motion-v'
-import { useHoverStore } from '../stores/hoverStore'
-import { useModStore } from '../stores/modStore'
+import { useHoverStore } from '../../stores/hoverStore'
+import { useModStore } from '../../stores/modStore'
 
 const store = useHoverStore()
 const modStore = useModStore()

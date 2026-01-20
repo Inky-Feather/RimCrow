@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed bottom-8 left-2 z-[9999] font-mono text-xs">
+  <div class="fixed bottom-8 left-2 z-9999 font-mono text-xs">
     <!-- 开关按钮 -->
     <button @click="isOpen = !isOpen" 
       class="bg-black/80 text-accent-primary border border-accent-primary/50 px-2 py-1 rounded shadow-lg hover:bg-black transition-all mb-1">
