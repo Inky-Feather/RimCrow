@@ -69,8 +69,7 @@ const manualActiveGroupId = ref(null) // 用户手动点击激活的组 ID
 
 // 计算当前选中的最后一个 ID (作为自动高亮的依据)
 const lastSelectedId = computed(() => {
-  const ids = store.selectedIds
-  return ids.length > 0 ? ids[ids.length - 1] : null
+  return store.lastSelectedMod?.package_id || null
 })
 
 // 缓存当前选中项对应的索引集合 (用于快速碰撞检测判定高亮)

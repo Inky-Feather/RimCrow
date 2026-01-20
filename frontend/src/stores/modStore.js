@@ -85,6 +85,7 @@ export const useModStore = defineStore('mods', () => {
   const dataVersion = ref(0) // 数据版本号
 
   const activeIds = ref([]) // 绑定的启用列表
+  const savedActiveIds = ref([]) // 原始启用列表快照
   const backupIds = ref([]) // 备份文件列表
   const inactiveIds = ref([]) // 绑定的禁用列表
   const tempIds = ref([])   // 临时列表
@@ -95,7 +96,8 @@ export const useModStore = defineStore('mods', () => {
   
   // 选择状态
   const currentTargetId = ref('') // 当前目标 ID (定位用)
-  const selectedIds = ref([])
+  const selectedIds = ref([])     // 选中的 Mod ID 列表
+  const lastSelectedMod = ref(null) // 最后选中的 Mod 对象
   const isDraggingGroup = ref(false) // 是否正在拖动分组
   const currentBackupFile = ref('') // 当前备份文件
 
@@ -105,7 +107,6 @@ export const useModStore = defineStore('mods', () => {
   const showLogDrawer = ref(false)// 日志抽屉状态
   const showTestDrawer = ref(false)// 测试抽屉状态
   const isLoading = ref(false)
-  const isDirty = ref(false)
   const settings = ref({
     game_install_path: '',
     workshop_mods_path: '',
@@ -147,12 +148,19 @@ export const useModStore = defineStore('mods', () => {
       return (mA?.name || a).localeCompare(mB?.name || b)
     })
   }
+  // 当前列表是否与快照不一致
+  const isDirty = computed(() => {
+    // 简单数组比较：长度不同，或内容/顺序不同
+    if (activeIds.value.length !== savedActiveIds.value.length) return true
+    // 逐个比较 (比 JSON.stringify 快)
+    for (let i = 0; i < activeIds.value.length; i++) {
+      if (activeIds.value[i] !== savedActiveIds.value[i]) return true
+    }
+    return false
+  })
   // 选中的模组对象列表
   const selectedMods = computed(() => {
     return Array.from(selectedIds.value).map(id => takeModById(id))
-  })
-  const lastSelectedMod = computed(() => {
-    return selectedMods.value.at(-1)
   })
   const allModTags = computed(() => {
     return [...new Set(Array.from(allModsMap.value.values()).flatMap(mod => mod.tags || []))]
@@ -290,7 +298,6 @@ export const useModStore = defineStore('mods', () => {
       isLoading.value = true
       // 调用后端获取全量数据
       const res = await window.pywebview.api.get_initial_data()
-      
       if (res.status === 'success') {
         // 1. 更新设置 (仅初始化时，避免覆盖用户未保存的修改)
         if (isInit && res.data.settings) {
@@ -318,8 +325,6 @@ export const useModStore = defineStore('mods', () => {
           if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
           if (!Array.isArray(mod.tags)) mod.tags = []
           if (!Array.isArray(mod.author) && !mod.author) mod.author = ['Unknown'] 
-          
-          
           tempMap.set(mod.package_id.toLowerCase(), mod)
         })
         allModsMap.value = tempMap
@@ -327,6 +332,10 @@ export const useModStore = defineStore('mods', () => {
         groupList.value = res.data.groups || []
         // 4. 更新激活列表 (通常扫描不会变动 active list，但为了同步“缺失”状态，更新一下也好)
         activeIds.value = (res.data.active_load_order || []).map(id => id.toLowerCase())
+        savedActiveIds.value = [...res.data.active_load_order] || []
+        // 清理临时列表 (Temp - Active)
+        const activeSet = new Set(res.data.active_load_order)
+        tempIds.value = tempIds.value.filter(id => !activeSet.has(id.toLowerCase()))
         inactiveIds.value = takeInactiveIds()
         // 5. 检查路径 (仅初始化时)
         if (isInit && !res.data.paths_configured) {
@@ -336,7 +345,6 @@ export const useModStore = defineStore('mods', () => {
       else { throw new Error(res.message) }
       // 6. 更新数据版本号
       dataVersion.value ++;
-      isDirty.value = false
       isLoading.value = false
 
       console.log("刷新列表成功:", res)
@@ -406,39 +414,99 @@ export const useModStore = defineStore('mods', () => {
     inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(i))
     tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(i))
   }
-  // 选择 Mod (支持联锁自动多选)
-  const selectMods = (ids) => {
-    if (typeof ids === 'string') ids = [ids]
-    // 使用 Set 去重
-    const finalSelection = new Set()
-    // 联锁检查
-    ids.forEach(id => {
-      // 1. 先把自己加进去
-      finalSelection.add(id)
-      // 2. 向前追溯 (Previuos)
-      let currentId = id
-      while (true) {
-        const mod = takeModById(currentId)
-        if (!mod || !mod.lock_previous_mod) break
-        const prevId = mod.lock_previous_mod.toLowerCase()
-        // 防止死循环 (A->B->A)
-        if (finalSelection.has(prevId)) break
-        finalSelection.add(prevId)
-        currentId = prevId
+  // 选择 Mod (支持联锁自动多选 & 智能排序)
+  const selectMods = (ids, lastId) => {
+    // 1. 边界与归一化处理
+    if (!ids) { clearSelection(); return; }
+    const inputIds = Array.isArray(ids) ? ids : [ids];
+    if (inputIds.length === 0) {
+      selectedIds.value = [];
+      lastSelectedMod.value = null;
+      return;
+    }
+    // 2. 建立索引映射 (ID -> 原始输入位置)
+    // 同时也作为快速查找表
+    const inputMap = new Map();
+    inputIds.forEach((id, idx) => inputMap.set(id.toLowerCase(), idx));
+    const finalChunks = []; // 存储 { index: number, items: string[] }
+    const processed = new Set(); // 记录已处理过的输入ID
+    // 3. 遍历输入列表
+    for (let i = 0; i < inputIds.length; i++) {
+      const currentId = inputIds[i].toLowerCase();
+      // 如果该ID已经被包含在之前的某个链条中处理过了，直接跳过
+      if (processed.has(currentId)) continue;
+      const mod = takeModById(currentId);
+      // --- 情况 A: 独立 Mod (无联锁) ---
+      // 快速路径，无需图遍历
+      if (!mod || (!mod.lock_previous_mod && !mod.lock_next_mod)) {
+        finalChunks.push({ index: i, items: [inputIds[i]] }); // 保持原ID大小写
+        processed.add(currentId);
+        continue;
       }
-      // 3. 向后追溯 (Next)
-      currentId = id
+      // --- 情况 B: 联锁 Mod ---
+      // 1. 向前回溯找到链头 (Head)
+      let curr = currentId;
+      const visited = new Set(); // 防死锁
       while (true) {
-        const mod = takeModById(currentId)
-        if (!mod || !mod.lock_next_mod) break
-        const nextId = mod.lock_next_mod.toLowerCase()
-        if (finalSelection.has(nextId)) break
-        finalSelection.add(nextId)
-        currentId = nextId
+        const m = takeModById(curr);
+        if (!m?.lock_previous_mod) break;
+        const prev = m.lock_previous_mod.toLowerCase();
+        if (visited.has(prev)) break; // 环路检测
+        visited.add(prev);
+        curr = prev;
       }
-    })
-    // 更新状态
-    selectedIds.value = Array.from(finalSelection)
+      const head = curr;
+      // 2. 从链头向后构建完整链条，并寻找“锚点”
+      const chainItems = [];
+      let anchorIndex = -1; // 整个链条将要插入的位置
+      curr = head;
+      visited.clear();
+      while (true) {
+        // 加入链条
+        // 注意：这里我们存的是 ID 字符串，如果需要保持原始输入的大小写，
+        // 可以去 inputIds 里找，或者直接用小写（取决于你的需求）
+        // 这里为了简单统一用原始ID（如果存在）或数据库ID
+        const originalInputId = inputIds[inputMap.get(curr)];
+        chainItems.push(originalInputId || curr); // 优先用输入列表里的原始格式
+        // 【核心逻辑】：寻找锚点
+        // 因为我们是从头(Head)到尾遍历链条，所以遇到的第一个“在输入列表中存在”的成员，
+        // 就是逻辑顺序最靠前的成员。我们直接使用它的位置作为锚点。
+        if (anchorIndex === -1 && inputMap.has(curr)) {
+          anchorIndex = inputMap.get(curr);
+        }
+        // 标记为已处理，防止外层循环重复处理
+        if (inputMap.has(curr)) {
+          processed.add(curr);
+        }
+        // 继续向后
+        const m = takeModById(curr);
+        if (!m?.lock_next_mod) break;
+        const next = m.lock_next_mod.toLowerCase();
+        if (visited.has(next)) break; // 环路检测
+        visited.add(next);
+        curr = next;
+      }
+      // 3. 将整个链条加入结果块
+      // 理论上 anchorIndex 一定存在，因为 currentId 本身就在链条里且在输入里
+      finalChunks.push({ 
+        index: anchorIndex, 
+        items: chainItems 
+      });
+    }
+    // 4. 排序并展平
+    // 根据锚点索引重新排序块
+    finalChunks.sort((a, b) => a.index - b.index);
+    const result = finalChunks.flatMap(chunk => chunk.items);
+    // 5. 更新状态
+    selectedIds.value = result;
+    // 处理最后选中项高亮
+    if (lastId) {
+      // 检查 lastId 是否在最终结果中 (大小写敏感处理)
+      const target = result.find(id => id.toLowerCase() === lastId.toLowerCase());
+      lastSelectedMod.value = target ? takeModById(target) : takeModById(result[result.length - 1]);
+    } else {
+      lastSelectedMod.value = takeModById(result[result.length - 1]);
+    }
   }
   // 清除选择
   const clearSelection = () => {
@@ -473,6 +541,26 @@ export const useModStore = defineStore('mods', () => {
       toast.error(`扫描请求异常: \n${e.message}`)
     }
   }
+  // 自动排序 Mod
+  const autoSortMods = async (mod_ids) => {
+    if (!window.pywebview) return
+    if (!mod_ids || mod_ids.length === 0) {
+      mod_ids = activeIds.value
+    }
+    try {
+      const res = await window.pywebview.api.auto_sort_mods(mod_ids)
+      if (checkResult(res, "自动排序Mod")) {
+        activeIds.value = res.data.sorted_ids || []
+        inactiveIds.value = takeInactiveIds()
+        toast.success("Mod序列已自动排序")
+        return true
+      } 
+    } catch (e) {
+      console.error("自动排序Mod异常:", e)
+      toast.error(`自动排序Mod异常: \n${e.message}`)
+    }
+    return false
+  }
   // 获取加载顺序
   const getLoadOrder = async (mods_config_file_path=null) => {
     const order = await getFileOrder(mods_config_file_path)
@@ -480,8 +568,6 @@ export const useModStore = defineStore('mods', () => {
       activeIds.value = order.active_ids || []
       toast.success("Mod序列已加载")
     }
-    // 如果有指定路径，标记为脏状态，等待保存
-    if (mods_config_file_path) isDirty.value = true
   }
   // 获取备份加载顺序
   const getBackupOrder = async (mods_config_file_path=null) => {
@@ -500,7 +586,8 @@ export const useModStore = defineStore('mods', () => {
       // 使用默认路径
       const res = await window.pywebview.api.save_load_order(activeIds.value)
       if (checkResult(res, "保存Mod加载顺序")) {
-        isDirty.value = false
+        savedActiveIds.value = [...activeIds.value] || []
+        inactiveIds.value = takeInactiveIds()
         // console.log("保存加载顺序成功:", res)
         toast.success("Mod序列已保存")
         getBackups()
@@ -535,7 +622,6 @@ export const useModStore = defineStore('mods', () => {
   const applyBackup = () => {
     if (!backupIds.value) return
     activeIds.value = backupIds.value
-    isDirty.value = true
     toast.success("已应用Mod序列")
   }
   // 更新Mod用户数据
@@ -1153,8 +1239,6 @@ export const useModStore = defineStore('mods', () => {
       isLoading.value = false
     }
   }
-  // 辅助：标记脏状态
-  const markDirty = () => { isDirty.value = true }
   // 重置数据库
   const resetDatabase = async () => {
     if (!window.pywebview) return
@@ -1293,7 +1377,7 @@ export const useModStore = defineStore('mods', () => {
     scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, modColorList, backups, showDiffDrawer, currentBackupFile,
     conflictList, allModTags, selectedStats,
     initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues, applyBackup, getBackupOrder, 
-    selectModsTag, selectModsGroup, 
+    selectModsTag, selectModsGroup, autoSortMods,
 
     // Mod 相关
     allModsMap, backupIds, activeIds, tempIds, inactiveIds, selectedIds, selectedMods, lastSelectedMod, currentTargetId, 
@@ -1308,7 +1392,7 @@ export const useModStore = defineStore('mods', () => {
 
     // 设置相关
     showSettings, isLoading, isDirty, settings, showLogDrawer, showTestDrawer,
-    openSettings, closeSettings, applySettings, saveSetting, markDirty,
+    openSettings, closeSettings, applySettings, saveSetting,
 
     // 系统操作
     launchGame, openPath, openBackupPath, openUrl, openSteamWorkshopUrl, deletePath, getFileOrder,

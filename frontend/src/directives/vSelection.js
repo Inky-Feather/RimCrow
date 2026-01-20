@@ -121,19 +121,14 @@ class SelectionManager {
   // --- 全选逻辑 ---
   onKeyDown(e) {
     if (this.config.disabled) return
-    
     // Ctrl + A 或 Meta + A
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
       e.preventDefault() // 阻止默认的全选文本行为
-      
       // 如果列表为空，直接返回
       if (!this.config.data || this.config.data.length === 0) return
-
-      // 执行全选
-      // 注意：这里我们传入的是当前列表的所有 ID
+      // 执行全选，传入的是当前列表的所有 ID
       // 这里的 data 必须是最新的 filtered/sorted 列表 ID 数组
-      this.store.selectMods([...this.config.data])
-      
+      this.store.selectMods([...this.config.data], this.store.lastSelectedMod?.package_id)
       console.log(`[vSelection] Selected all ${this.config.data.length} items.`)
     }
   }
@@ -196,7 +191,7 @@ class SelectionManager {
 
       if (!isMulti && !isRange && !isSelected) {
         // 场景：单选未选中的项 -> 立即选中（为了让用户能立刻拖拽它）
-        this.store.selectMods([itemId])
+        this.store.selectMods([itemId], itemId)
         this.anchorId = itemId 
       }
       
@@ -236,7 +231,6 @@ class SelectionManager {
   // 处理鼠标松开事件
   onMouseUp(e) {
     if (!this.isMouseDown) return
-    
     // 移除视觉选框 (无论是否在滑动模式都尝试移除，确保清洁)
     this.removeSelectionBox()
     this.lastHoveredId = null // 重置
@@ -246,13 +240,11 @@ class SelectionManager {
       this.isMouseDown = false
       return
     }
-
     // 如果发生了拖拽，则不处理点击选择逻辑 (交给 SortableJS 或其他拖拽库处理)
     if (this.isDragging) {
       this.isMouseDown = false
       return
     }
-
     // === 处理纯点击逻辑 (Click End) ===
     // 只有在没有发生拖拽且没在滑动时才触发
     
@@ -279,7 +271,7 @@ class SelectionManager {
       if (isSelected) newSet.delete(itemId)
       else newSet.add(itemId)
       
-      this.store.selectMods(Array.from(newSet))
+      this.store.selectMods(Array.from(newSet), itemId)
       this.anchorId = itemId // 更新锚点
 
     } else {
@@ -287,7 +279,7 @@ class SelectionManager {
       // 场景：点击已选中的项。
       // 在 MouseDown 时为了允许拖拽，我们没有取消其他项。
       // 现在确认是点击（非拖拽），所以清除其他项，只留这一个。
-      this.store.selectMods([itemId])
+      this.store.selectMods([itemId], itemId)
       this.anchorId = itemId
     }
 
@@ -321,7 +313,7 @@ class SelectionManager {
     if (this.setsAreEqual(newSelection, currentStoreSet)) {
         return
     }
-    this.store.selectMods(Array.from(newSelection))
+    this.store.selectMods(Array.from(newSelection), currentId)
   }
 
   // 辅助：Set 比较
@@ -336,30 +328,29 @@ class SelectionManager {
   handleRangeSelect(targetId, keepOthers = false) {
     if (!this.anchorId || !this.config.data.includes(this.anchorId)) {
         // 如果没有锚点，退化为单选并建立锚点
-        this.store.selectMods([targetId])
+        this.store.selectMods([targetId], targetId)
         this.anchorId = targetId
         return
     }
-
+    // 基于索引范围计算，避免线性搜索
+    // 这是一个优化，因为我们通常会在列表中按索引访问元素
+    // 而不是按值搜索。这在大数据集时尤其重要。
     const start = this.getIndexById(this.anchorId)
     const end = this.getIndexById(targetId)
+    // 检查索引是否有效
     if (start === -1 || end === -1) return
-
     const min = Math.min(start, end)
     const max = Math.max(start, end)
-
     let newSet
     if (keepOthers) {
         newSet = new Set(this.store.selectedIds) // Ctrl+Shift: 保留之前的
     } else {
         newSet = new Set() // 纯 Shift: 清空其他的
     }
-
     for (let i = min; i <= max; i++) {
         newSet.add(this.config.data[i])
     }
-
-    this.store.selectMods(Array.from(newSet))
+    this.store.selectMods(Array.from(newSet), targetId)
     // 注意：Shift 连选通常不更新 Anchor，Anchor 依然停留在最初点击的那个位置
     // 这样可以连续调整范围 (例如: 点击1, Shift点10 -> 选中1-10; 保持Shift点5 -> 选中1-5)
   }

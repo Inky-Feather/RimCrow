@@ -132,7 +132,7 @@
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
         </div>
         <!-- 列表 -->
-        <virtual-list v-model="internalListProxy" ref="vListRef" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
+        <virtual-list v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
           :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="50"
           :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" :size="isSimpleView ? 34 : 54"
           @drop="updateChildren" @drag="startDrag"
@@ -158,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import VirtualList from 'vue-virtual-sortable';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
@@ -183,7 +183,7 @@ const store = useModStore()
 const searchStore = useSearchStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
-
+const listKey = ref(0)
 
 
 // --- 1. 搜索与筛选逻辑 ---
@@ -327,7 +327,6 @@ const lineData = computed(() => {
 // 显示列表：筛选 -> 排序
 const displayList = computed(() => {
   let list = props.modelValue.slice() // 复制一份 ID 列表
-  
   // 1. 优先处理错误筛选
   if (isFilterByIssue.value) {
       list = list.filter(id => {
@@ -362,7 +361,6 @@ const displayList = computed(() => {
       return 0
     })
   }
-  
   // 如果需要逆序，反转数组
   if (!isSortAsc.value) list.reverse()
   
@@ -372,9 +370,9 @@ const displayList = computed(() => {
 // 这里做一个中间层，处理 displayList 和 modelValue 之间的映射
 const internalListProxy = computed({
     get() {
-        return displayList.value.map(id => ({ id }))
+      return displayList.value.map(id => ({ id }))
     },
-    set(val: any[]) {
+    set(val) {
     }
 })
 
@@ -484,52 +482,105 @@ const startDrag = (e) => {
   console.log("开始拖拽:", e)
 }
 // 更新子项的排序
-const updateChildren = (e) => {
-  const oldIds = props.modelValue // 原始顺序
-  const newIds = internalListProxy.value.map(item => item.id)  // 获取当前的最新顺序 ID列表
-  let tempSelectedIds = [...store.selectedIds] // 复制已选择项，避免直接修改原数组
-  let signId = oldIds[e.newIndex] // 将原位置的 mod_id 作为标记项
-
-  // 筛选状态禁用本列表内的排序
-  if (!allowSort.value && e.event.from === e.event.to) {
-    console.log(props.title, "列表排序被禁用:", e)
-    return
-  }
-
-  console.log(props.title, "列表 插入:", e)
-  // 拖动项来自分组
+const updateChildren = async (e) => {
+  const oldIds = [...props.modelValue] // 原始数据（即 source of truth）
+  // 这里的 newIds (脏数据) 仅用于计算相对位置，不参与数据重组
+  const dirtyIds = internalListProxy.value.map(item => item.id) 
+  
+  // 1. 获取当前所有需要移动的 ID (处理分组或多选)
+  let movingIds = []
   if (e.item?.mod_ids?.length) {
-    console.log(props.title, "列表 分组插入:", e)
-    tempSelectedIds = [...e.item.mod_ids]  // 获取分组中的所有 mod_id，避免直接修改分组数据
-    if (!signId) return  // 如果插入位置的原始 mod_id 不存在，直接返回
-  }
-  store.selectMods([...tempSelectedIds]) // 更新已选择项，仅当前值，避免后续标记项污染
-  if (!tempSelectedIds.includes(signId)) {
-    tempSelectedIds.push(signId)  // 如果标记项不在已选择项中，将其添加到末尾，相当于插入到标记项前
+    // 拖动的是分组 -> 移动分组内的所有 Mod
+    movingIds = [...e.item.mod_ids]
+    // 顺便更新一下 Store 的选中状态，保持一致性
+    store.selectMods([...movingIds], e.item?.key || null)
+  } else {
+    // 拖动的是列表项 -> 移动当前选中项
+    movingIds = [...store.selectedIds]
+    const draggedId = dirtyIds[e.newIndex] // 注意：这里用脏数据的索引获取当前拖拽的元素ID
+    
+    // 如果拖拽的项不在选中列表中（比如未选中时直接拖），则把它加入
+    if (!movingIds.includes(draggedId) && draggedId) {
+      movingIds.push(draggedId)
+    }
   }
 
-  // 拖动项来自其它列表
-  // 去除重复, 保持拖动项的位置（保留除已选项外的其他项，已选择的项后续插入）
-  const uniqueIds = oldIds.filter((id, index) => {
-    // 检测是否是标记项（值和索引都匹配），是则保留（用于标记位置）
-    if (index === e.newIndex && id === signId) return true
-    if (tempSelectedIds.includes(id)) return false  // 排除已选择的项（过滤重复）
-    return true // 其他未选择项，保留 
-  })
-  const newIndex = uniqueIds.indexOf(signId)
-  // 根据保留的标记项，插入选中项（因选中项包含标记项，所以插入时需要移除拖动项）
-  uniqueIds.splice(newIndex, 1, ...tempSelectedIds)
-  // 只有顺序真的变了才发请求
-  console.log("排序前:", {oldIds: oldIds})
-  console.log("排序后:", {newIds: uniqueIds})
-  if (JSON.stringify(uniqueIds) !== JSON.stringify(oldIds)) {
-    // 从所有列表中移除拖动项防止重复
-    store.removeIdsOnAllList(tempSelectedIds)
-    emit('update:modelValue', uniqueIds)  // 发送新的顺序到父组件（包括之前移除的拖动项）
-    // 只有在 active 列表才标记为脏
-    if (props.listId==='active') store.markDirty()
+  // 2. 核心算法：计算“纯净插入点”
+  // 我们需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
+  // 这样我们就可以在剔除移动项后的 baseList 中找到正确的插入位置
+  let validItemsAbove = 0
+  for (let i = 0; i < e.newIndex; i++) {
+    const idAtLoc = dirtyIds[i]
+    if (!movingIds.includes(idAtLoc)) {
+      validItemsAbove++
+    }
   }
+  
+  // 如果是向下拖拽，Sortable 的 newIndex 包含了拖拽项本身的位置
+  // 3. 构建新列表
+  // 3.1 生成 BaseList：从原始列表中剔除所有移动项
+  const baseList = oldIds.filter(id => !movingIds.includes(id))
+
+  let correctedIndex = validItemsAbove
+  // 只有当插入点不在头部也不在尾部时才需要检查
+  if (correctedIndex > 0 && correctedIndex < baseList.length) {
+    const prevId = baseList[correctedIndex - 1]
+    // 检查前一个元素是否有向后的联锁
+    let curr = prevId
+    while (true) {
+      const mod = store.takeModById(curr)
+      if (!mod || !mod.lock_next_mod) break
+      const nextId = mod.lock_next_mod.toLowerCase()
+      // 关键判断：
+      // 如果 lock_next 指向的 Mod 就在 baseList 中，
+      // 说明链条在 baseList 中是连续存在的。
+      // 我们必须跳过它，不能插在它前面。
+      if (baseList.includes(nextId)) {
+        // 找到 nextId 在 baseList 中的位置
+        const nextIndexInBase = baseList.indexOf(nextId)
+        // 如果 nextId 就在当前插入点或其后方，说明我们插在了链条中间
+        // 将插入点顺延到 nextId 的后面
+        if (nextIndexInBase >= correctedIndex) {
+          correctedIndex = nextIndexInBase + 1
+          curr = nextId // 继续检查 nextId 是否还有 next
+        } else {
+          // nextId 在更前面？说明链条已经乱序了，或者逻辑没问题，停止修正
+          break
+        }
+      } else {
+        // lock_next 指向的元素不在 baseList 中（可能在 movingIds 里，或者被删了）
+        // 这种情况下，链条已经断了，插入在这里是安全的
+        break
+      }
+    }
+  }
+  validItemsAbove = correctedIndex
+
+  // 3.2 插入：在计算出的纯净位置插入移动项
+  const finalList = [...baseList]
+  finalList.splice(validItemsAbove, 0, ...movingIds)
+
+  // 4. 检查是否有变化
+  if (JSON.stringify(finalList) !== JSON.stringify(oldIds)) {
+    // 同步 Store（移除旧位置的引用等，虽然这里逻辑上已经是新的了）
+    store.removeIdsOnAllList(movingIds)
+    // 发出更新
+    emit('update:modelValue', finalList)
+    // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+    await nextTick()
+    // 但直接通过key更新会导致列表重新渲染，导致滚动位置丢失，使用原版滚动定位不准
+    // const offset = vListRef.value?.getOffset()
+    // listKey.value++ // 触发列表重新渲染
+    // nextTick(() => {
+    //   vListRef.value?.scrollToOffset(offset)
+    // })
+  }
+  // 通过翻转排序两次，实现软重绘
+  isSortAsc.value=!isSortAsc.value
+  await nextTick()
+  isSortAsc.value=!isSortAsc.value
 }
+
 </script>
 
 <style scoped>
