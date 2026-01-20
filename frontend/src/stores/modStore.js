@@ -1002,9 +1002,8 @@ export const useModStore = defineStore('mods', () => {
     // 辅助函数：添加问题
     const addIssue = (id, type, level, message, targetId = null) => {
       const mod = takeModById(id)
-
       // 1. 安全检查：确保 ignored_issues 存在且是一个数组
-      const ignoredList = mod.ignored_issues || []
+      const ignoredList = mod?.ignored_issues || []
       if (ignoredList.includes(type)) return
 
       if (!issuesMap.has(id)) issuesMap.set(id, [])
@@ -1022,7 +1021,7 @@ export const useModStore = defineStore('mods', () => {
       const id = mod.package_id.toLowerCase()
 
       // A. 文件丢失检查
-      if (mod.is_missing) {
+      if (mod.is_missing || !mod.path) {
         addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
         continue // 文件都没了，后面的检查没意义
       }
@@ -1059,7 +1058,10 @@ export const useModStore = defineStore('mods', () => {
     // 这里的顺序很重要，activeIds 是有序数组
     activeIds.value.forEach((id, index) => {
       const mod = allModsMap.value.get(id)
-      if (!mod) return
+      if (!mod || mod.is_missing || !mod.path) {
+        addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
+        return
+      }
 
       // C. 依赖检查 (Dependencies)
       if (mod.dependencies_mods) {

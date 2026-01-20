@@ -67,7 +67,7 @@
           <svg class="text-text-dim" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0 space-y-1">
             <div class="text-[10px] text-text-dim uppercase">支持语言</div>
-            <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.supported_languages.join(', ')">
+            <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.supported_languages?.join(', ')">
               <span v-if="selectedMod.supported_languages?.length" v-for="lang in selectedMod.supported_languages" :key="lang" 
                 class="px-1 rounded bg-accent-secondary/20 text-accent-secondary text-xs border border-accent-secondary/20 flex items-center gap-1 group">
                 {{ lang }}
@@ -80,7 +80,7 @@
         </div>
         <!-- Url显示 -->
         <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 " 
-          :class="[selectedMod.source === 'local' ? 'text-text-dim' : 'cursor-pointer hover:bg-white/10']" 
+          :class="[selectedMod.source === 'local' || !selectedMod.url ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-white/10']" 
           @click="openUrl(selectedMod.url)">
           <!-- <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="34.6074" y="3.4939" width="14" height="18" rx="2" transform="rotate(45 34.6074 3.4939)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><rect x="16.2227" y="21.8787" width="14" height="18" rx="2" transform="rotate(45 16.2227 21.8787)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M31.0723 16.929L16.9301 31.0711" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg> -->
           <svg v-if="selectedMod.source==='workshop'" width="28" height="28" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" class="fill-current -m-0.5"><path d="M568 320C568 457 456.8 568 319.6 568C205.8 568 110 491.7 80.6 387.6L175.8 426.9C182.2 459 210.7 483.3 244.7 483.3C283.9 483.3 316.6 450.9 314.9 409.8L399.4 349.6C451.5 350.9 495.2 308.7 495.2 256.1C495.2 204.5 453.2 162.6 401.5 162.6C349.8 162.6 307.8 204.6 307.8 256.1L307.8 257.3L248.6 343C233.1 342.1 217.9 346.4 205.1 355.1L72 300.1C82.2 172.4 189.1 72 319.6 72C456.8 72 568 183 568 320zM227.7 448.3L197.2 435.7C202.8 447.3 212.5 456.5 224.4 461.5C251.3 472.7 282.2 459.9 293.4 433.1C298.8 420.1 298.9 405.8 293.5 392.8C288.1 379.8 278 369.6 265 364.2C252.1 358.8 238.3 359 226.1 363.6L257.6 376.6C277.4 384.8 286.8 407.5 278.5 427.3C270.2 447.2 247.5 456.5 227.7 448.3zM401.5 193.8C435.9 193.8 463.8 221.7 463.8 256.1C463.8 290.5 435.9 318.4 401.5 318.4C367.1 318.4 339.2 290.5 339.2 256.1C339.2 221.7 367.1 193.8 401.5 193.8zM401.6 302.8C427.4 302.8 448.4 281.8 448.4 256C448.4 230.2 427.4 209.2 401.6 209.2C375.8 209.2 354.8 230.2 354.8 256C354.8 281.8 375.8 302.8 401.6 302.8z"/></svg>
@@ -97,7 +97,9 @@
           
         </div>
         <!-- 路径显示 -->
-        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 cursor-pointer hover:bg-white/10" @click="openPath(selectedMod.path)">
+        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 " 
+          :class="[!selectedMod.path ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-white/10']" 
+          @click="openPath(selectedMod.path)">
           <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0">
             <div class="text-[10px] text-text-dim uppercase flex justify-between items-center">
@@ -163,7 +165,7 @@
       </div>
 
       <!-- 时间戳列表 及 其他信息 -->
-      <div class="p-1 space-y-2">
+      <div v-if="!selectedMod.is_missing" class="p-1 space-y-2">
         <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">其他信息</h3>
         <div class="grid grid-flow-col grid-cols-4 grid-rows-2 gap-1.5">
           <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-white/5 rounded-lg border border-white/5">
@@ -316,7 +318,7 @@
       </div>
 
       <!-- A. 用户自定义属性 (标签 & 颜色 & 备注) -->
-      <div class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
+      <div v-if="!selectedMod.is_missing" class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
         
         <!-- 标签管理 -->
         <div>
