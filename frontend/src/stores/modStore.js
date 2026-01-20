@@ -32,6 +32,8 @@ export const ISSUE_TYPE = {
   ERROR_INCOMPATIBLE: 'incompatible',     // 不兼容
   WARN_WRONG_ORDER: 'wrong_order',       // 顺序错了
   WARN_VERSION_MISMATCH: 'version_mismatch', // 版本不对
+  WARN_LINK_MOD_MISSING: 'link_mod_missing', // 联锁模组缺失
+  WARN_LINK_WRONG_ORDER: 'link_wrong_order', // 联锁排序错误
 }
 // 定义类型到中文标题的映射
 const ISSUE_TITLE_MAP = {
@@ -41,6 +43,8 @@ const ISSUE_TITLE_MAP = {
   'incompatible': '模组冲突',
   'wrong_order': '排序错误',
   'version_mismatch': '版本不符',
+  'link_mod_missing': '联锁模组缺失',
+  'link_wrong_order': '联锁排序错误',
   'default': '其他问题'
 }
 
@@ -1033,6 +1037,22 @@ export const useModStore = defineStore('mods', () => {
              `^^版本问题^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${mod.supported_versions.join('··, ··')}··)__`)
         }
       }
+
+      // C. 联锁检查 (Link Mods)
+      if (mod.lock_next_mod || mod.lock_previous_mod) {
+        const allModIds = new Set(allModsMap.value.keys())
+        // 缺失检查
+        if (mod.lock_next_mod && !allModIds.has(mod.lock_next_mod)) {
+          addIssue(id, ISSUE_TYPE.WARN_LINK_MOD_MISSING, ISSUE_LEVEL.WARN, 
+            `^^后置联锁模组缺失^^：${displayModName(mod.lock_next_mod)}`, mod.lock_next_mod)
+          continue
+        }
+        if (mod.lock_previous_mod && !allModIds.has(mod.lock_previous_mod)) {
+          addIssue(id, ISSUE_TYPE.WARN_LINK_MOD_MISSING, ISSUE_LEVEL.WARN, 
+            `^^前置联锁模组缺失^^：${displayModName(mod.lock_previous_mod)}`, mod.lock_previous_mod)
+          continue
+        }
+      }
     }
 
     // 2. 启用列表检查 (遍历 activeIds)
@@ -1061,7 +1081,7 @@ export const useModStore = defineStore('mods', () => {
           // C3. 排序检查 (依赖必须在当前 Mod 之前)
           const depIndex = activeIds.value.indexOf(depId)
           if (depIndex > index) {
-            addIssue(id, ISSUE_TYPE.WRONG_ORDER, ISSUE_LEVEL.WARN, 
+            addIssue(id, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
               `!!依赖后置!!：必须在依赖 [[${displayModName(dep)}]] 之后加载`, depId)
           }
         })
@@ -1090,6 +1110,15 @@ export const useModStore = defineStore('mods', () => {
           }
         })
       }
+      // 联锁排序检查
+      if(mod.lock_previous_mod && activeIds.value[index-1] !== mod.lock_previous_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
+      }
+      if(mod.lock_next_mod && activeIds.value[index+1] !== mod.lock_next_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
+      }
       
       // E. 不兼容检查 (incompatible_mods)
       if (mod.incompatible_mods) {
@@ -1100,6 +1129,34 @@ export const useModStore = defineStore('mods', () => {
               `!!模组冲突!!：与 ${displayModName(lowerBad)} 不兼容`, lowerBad)
           }
         })
+      }
+    })
+    // 3. 禁用列表检查 (遍历 inactiveIds)
+    inactiveIds.value.forEach((id, index) => {
+      const mod = allModsMap.value.get(id)
+      if (!mod) return
+      // 联锁排序检查
+      if(mod.lock_previous_mod && inactiveIds.value[index-1] !== mod.lock_previous_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
+      }
+      if(mod.lock_next_mod && inactiveIds.value[index+1] !== mod.lock_next_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
+      }
+    })
+    // 4. 临时列表检查 (遍历 tempIds)
+    tempIds.value.forEach((id, index) => {
+      const mod = allModsMap.value.get(id)
+      if (!mod) return
+      // 联锁排序检查
+      if(mod.lock_previous_mod && tempIds.value[index-1] !== mod.lock_previous_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
+      }
+      if(mod.lock_next_mod && tempIds.value[index+1] !== mod.lock_next_mod) {
+        addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
       }
     })
 

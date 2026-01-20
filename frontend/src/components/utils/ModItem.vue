@@ -123,10 +123,10 @@
     </div>
 
     <!-- 联锁标识 -->
-     <div v-if="modData.lock_previous_mod" class="absolute -top-3 right-8 opacity-70">
+     <div v-if="modData.lock_previous_mod" class="absolute -top-3 right-8 opacity-70" :class="{'text-accent-warn': linkWarn[0]}">
       <svg class="rotate-90" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
     </div>
-    <div v-if="modData.lock_next_mod" class="absolute -bottom-3 right-11 opacity-70">
+    <div v-if="modData.lock_next_mod" class="absolute -bottom-3 right-11 opacity-70" :class="{'text-accent-warn': linkWarn[1]}">
       <svg class="rotate-90" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
     </div>
   </div>
@@ -134,7 +134,7 @@
 
 <script setup>
 import { computed, h, nextTick } from 'vue'
-import { useModStore } from '../../stores/modStore'
+import { useModStore, ISSUE_TYPE } from '../../stores/modStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
 import { X, FolderInput, Tag, Group, Palette, ChessPawn, Trash2, Link2, Link2Off, MegaphoneOff, Megaphone, ExternalLink } from 'lucide-vue-next';
@@ -165,9 +165,26 @@ const modGroups = computed(() => store.takeGroupsByModId(props.item_id))
 
 const modType = computed(() => store.displayModType(modData.value))
 
+const linkWarn = computed(() => {
+  if (!issues.value) return (false, false)
+  let lockPrev = false
+  let lockNext = false
+  for (const issue of issues.value) {
+    if (issue.type === ISSUE_TYPE.WARN_LINK_WRONG_ORDER || issue.type === ISSUE_TYPE.WARN_LINK_MOD_MISSING) {
+      if (issue.targetId === modData.value.lock_previous_mod) {
+        lockPrev = true
+      } else if (issue.targetId === modData.value.lock_next_mod) {
+        lockNext = true
+      }
+    }
+  }
+  return [lockPrev, lockNext]
+})
+
 // 构造提示文本
 const issueTooltip = computed(() => {
     if (!issues.value) return null
+    // console.log('问题:', issues.value)
     // 换行显示所有错误
     return issues.value.map(i => i.message).join('\n')
 })

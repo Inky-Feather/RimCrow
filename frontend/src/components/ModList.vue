@@ -243,6 +243,7 @@ const searchHelpText = computed(() => {
 // 构造问题详情 Tooltip
 const issueTooltip = computed(() => {
   const summary = issuesSummary.value // Store 返回的对象
+  // console.log('问题摘要:', summary)
   if (summary.count === 0) return null
   const errorInfo = summary.errorCount > 0 ? `!!${summary.errorCount} 个错误!!` : ''
   const warningInfo = summary.warnCount > 0 ? `^^${summary.warnCount} 个警告^^` : ''
@@ -257,7 +258,7 @@ const issueTooltip = computed(() => {
     if (ids.length === 0) continue
     
     const typeName = store.ISSUE_TITLE_MAP[type] || type
-    const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible'].includes(type)
+    const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible','wrong_order'].includes(type)
     
     // 标题颜色: Error 用红(!!), Warn 用黄(^^)
     const titleMark = isError ? '!!' : '^^'
