@@ -29,6 +29,15 @@ class ModDAO:
                  .join(UserModData, on=(Mod.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
                  .dicts())
         return list(query)
+    
+    @staticmethod
+    def get_all_user_data():
+        """
+        获取所有用户数据。
+        返回字典列表，方便前端直接使用。
+        """
+        query = UserModData.select().dicts()
+        return list(query)
 
     @staticmethod
     def get_mod_mtimes():

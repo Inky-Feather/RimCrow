@@ -30,7 +30,8 @@ class ModAnalyzer:
             'supported_languages': ['ZH-cn', 'EN'],
             'file_stats': {'code_dll': 0, 'game_xml': 0, 'patch_xml': 0, 'lang_xml': 0, 'image': 0, 'audio': 0},
             'has_defs': False
-            'has_assemblies': False
+            'has_assemblies': False,
+            'has_tip': False
         }
         """
         info = {
@@ -45,7 +46,8 @@ class ModAnalyzer:
                 'audio': 0,       # 音频
             },
             'has_assemblies': False,
-            'has_defs': False
+            'has_defs': False,
+            'has_tip': False
         }
 
         if not os.path.exists(mod_path):
@@ -83,7 +85,7 @@ class ModAnalyzer:
             # --- 文件统计 ---
             for f in files:
                 ext = f.split('.')[-1].lower()
-                
+                if f.endswith('Tips.xml'): info['has_tip'] = True
                 # XML 分类统计
                 if ext == 'xml':
                     if is_about_dir:
@@ -187,16 +189,18 @@ class ModAnalyzer:
         # 类型判定优先级
         if info['has_assemblies']:
             mod_type = 'Assembly' # 包含代码 (通常也是最复杂的)
-        elif info['has_defs'] or c['patch_xml'] > 0:
-            mod_type = 'XML'      # 只有数据定义
-        elif c['lang_xml'] > 0 and c['game_xml'] == 0 and c['code_dll'] == 0:
-            mod_type = 'LanguagePack' # 纯翻译
+        elif c['lang_xml'] > 0 and ((c['game_xml'] == 0 and c['code_dll'] == 0) or (c['patch_xml']+c['game_xml'] == 1 and info['has_tip'])):
+            mod_type = 'LanguagePack' # 纯翻译（部分翻译包还有Tip文件）
         elif c['image'] > 0 and c['game_xml'] == 0 and c['code_dll'] == 0:
             mod_type = 'Texture'  # 纯贴图
-        elif c['audio'] > 0 and c['game_xml'] == 0:
+        elif c['audio'] > 0 and c['patch_xml']+c['game_xml'] == 1:
             mod_type = 'Audio'    # 纯音乐包 (较少见)
-        else:
-            mod_type = 'Mixed' if (c['game_xml'] > 0 or c['image'] > 0) else 'Unknown'
+        elif (c['game_xml'] > 0 and c['image'] > 0 and c['audio'] > 0) :
+            mod_type = 'Mixed' 
+        elif info['has_defs'] or c['patch_xml'] > 0:
+            mod_type = 'XML'      # 只有数据定义
+        else: 
+            mod_type = 'Unknown'
 
         # 转换 set 为 list
         info['supported_languages'] = list(info['supported_languages'])

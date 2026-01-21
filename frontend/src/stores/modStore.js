@@ -110,6 +110,7 @@ export const useModStore = defineStore('mods', () => {
   const showDiffDrawer = ref(false)
   const showLogDrawer = ref(false)// 日志抽屉状态
   const showTestDrawer = ref(false)// 测试抽屉状态
+  const showRuleDrawer = ref(false)// 规则抽屉状态
   const isLoading = ref(false)
   const settings = ref({
     game_install_path: '',
@@ -584,6 +585,7 @@ export const useModStore = defineStore('mods', () => {
   }
   // 保存Mod加载顺序
   const saveLoadOrder = async () => {
+    if (!isDirty.value) return true
     if (!window.pywebview) return false
     isLoading.value = true
     try {
@@ -1327,20 +1329,19 @@ export const useModStore = defineStore('mods', () => {
   // 启动游戏
   const launchGame = async () => {
     const res = await saveLoadOrder()
-    if (checkResult(res, "保存加载顺序")) {
-      if(settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
-        // 通过 steam 启动游戏
-        openUrl("steam://rungameid/294100")
-        console.log("通过 steam 启动游戏")
-      }else if(settings.value.game_install_path){
-        // 直接启动游戏
-        // await window.pywebview.api.launch_game()
-        console.log("直接启动游戏程序")
-      }
-      else{
-        console.error("启动游戏异常:")
-        toast.error(`启动游戏出现异常！`)
-      }
+    if (!res) return
+    if(settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
+      // 通过 steam 启动游戏
+      openUrl("steam://rungameid/294100")
+      console.log("通过 steam 启动游戏")
+    }else if(settings.value.game_install_path){
+      // 直接启动游戏
+      // await window.pywebview.api.launch_game()
+      console.log("直接启动游戏程序")
+    }
+    else{
+      console.error("启动游戏异常:")
+      toast.error(`启动游戏出现异常！`)
     }
   }
   // 从文件获取加载顺序
@@ -1450,7 +1451,7 @@ export const useModStore = defineStore('mods', () => {
     groupRemoveMods, groupReorder, groupContentReorder, takeGroupsByModId, takeGroupById,
 
     // 设置相关
-    showSettings, isLoading, isDirty, settings, showLogDrawer, showTestDrawer,
+    showSettings, isLoading, isDirty, settings, showLogDrawer, showTestDrawer, showRuleDrawer,
     openSettings, closeSettings, applySettings, saveSetting,
 
     // 系统操作
