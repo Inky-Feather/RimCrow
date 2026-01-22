@@ -56,10 +56,6 @@ class ModDAO:
         """
         if not mods_data_list:
             return
-
-        # 预处理：确保所有 JSON 字段都是 Python 对象（Peewee 会自动序列化），
-        # 并补充默认时间戳（如果是新记录）
-        now = datetime.datetime.now()
         # 1. 获取所有合法的数据库字段名
         # Mod._meta.fields 是一个字典 {field_name: FieldObject}
         valid_field_names = set(Mod._meta.fields.keys()) # type: ignore
@@ -94,6 +90,22 @@ class ModDAO:
                     preserve=preserve_fields # <--- 这里使用自动生成的列表
                 ).execute()
 
+    @staticmethod
+    def batch_update_mods(mods_data_list: List[Dict[str, Any]]):
+        """
+        批量更新 Mod 的特定字段 (仅用于已存在的 Mod)。
+        """
+        if not mods_data_list:
+            return
+        # 获取要更新的字段名 (假设所有字典的 key 是一样的，或者取并集)
+        # 注意：bulk_update 需要模型对象列表，或者字典列表 + 字段列表
+        update_fields = set(mods_data_list[0].keys()) - {'package_id'}
+        # 将字典转换为模型实例 (Peewee bulk_update 需要实例)
+        model_instances = [Mod(**data) for data in mods_data_list]
+        with db.atomic():
+            # batch_size 自动处理分批
+            Mod.bulk_update(model_instances, fields=list(update_fields), batch_size=100)
+    
     @staticmethod
     def update_user_data(package_id: str, data_dict: Dict[str, Any]):
         """

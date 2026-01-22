@@ -145,10 +145,8 @@
           <div class="h-px flex-1 bg-white/5"></div>
         </div>
         <div class="space-y-1">
-          <BackupItem 
-            v-for="item in parsedData.other" 
-            :key="item.path"
-            :item="item"
+          <BackupItem v-for="item in parsedData.other" 
+            :key="item.path" :item="item"
             :is-selected="selectedPath === item.path"
             @select="selectItem"
             @load="handleLoad"
@@ -178,36 +176,30 @@ const BackupItem = {
   props: ['item', 'isSelected'],
   emits: ['select', 'load', 'delete', 'remove', 'exportOrder'],
   template: `
-    <div 
-      class="relative flex items-center py-1 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none"
-      :class="[isSelected ? 'bg-accent-primary/10 border-accent-primary/30 shadow-[inset_0_0_10px_rgba(var(--color-accent-rgb),0.1)]' 
-          : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
-      ]"
-      @click="$emit('select', item)"
-    >
-      
-
+    <div class="relative flex items-center py-1 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none"
+      :class="[isSelected ? 'bg-accent-primary/10 border-accent-primary/30 shadow-[inset_0_0_10px_rgba(var(--color-accent-rgb),0.1)]' : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10' ]"
+      @click="$emit('select', item)">
       <!-- 中间信息 -->
       <div class="flex-1 min-w-0 flex flex-col justify-center">
         <!-- 距离时间/文件名 -->
         
         <div class="flex items-center gap-2">
-            <!-- 左侧图标 -->
-            <div v-if="!item.displayTitle" class="rounded-md px-1 py-0.5 w-17 flex items-center justify-center transition-colors text-[10px] gap-0.5"
-                :class="isSelected ? 'bg-accent-primary/30 text-accent-primary' : 'bg-accent-primary/20 text-text-dim group-hover:text-white'">
-                <svg v-if="item.type === 'today'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <svg v-else-if="item.type === 'earlier'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
-                <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <span>{{ item.distanceNow }}</span>
-            </div>
-            <!-- 具体时间 -->
-            <div class="flex-1 text-[10px] text-text-dim truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-              <span v-if="item.displayTitle" v-tooltip="item.displayTitle" class="text-xs font-medium truncate flex items-center gap-1" :class="isSelected ? 'text-white' : 'text-text-main'">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                {{ item.displayTitle }}
-              </span>
-              <span v-else>{{ item.displayTime }}</span>
-            </div>
+          <!-- 左侧图标 -->
+          <div v-if="!item.displayTitle" class="rounded-md px-1 py-0.5 w-17 flex items-center justify-center transition-colors text-[10px] gap-0.5"
+            :class="isSelected ? 'bg-accent-primary/30 text-accent-primary' : 'bg-accent-primary/20 text-text-dim group-hover:text-white'">
+            <svg v-if="item.type === 'today'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <svg v-else-if="item.type === 'earlier'" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
+            <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span>{{ item.distanceNow }}</span>
+          </div>
+          <!-- 具体时间 -->
+          <div class="flex-1 text-[10px] text-text-dim truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+            <span v-if="item.displayTitle" v-tooltip="item.displayTitle" class="text-xs font-medium truncate flex items-center gap-1" :class="isSelected ? 'text-white' : 'text-text-main'">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              {{ item.displayTitle }}
+            </span>
+            <span >{{ item.displayTime }}</span>
+          </div>
         </div>
       </div>
 
@@ -294,93 +286,92 @@ const parseFileTime = (filename) => {
 
 // 核心：处理数据并生成显示文本
 const parsedData = computed(() => {
-    const process = (files, type) => {
-        return files.map(file => { // file 是 path string
-            const name = file.split(/[/\\]/).pop()
-            const time = parseFileTime(name)
-            
-            let displayTitle = ''
-            let displayTime = '未知时间'
-            let distanceNow = '未知时间'
+  const process = (files, type) => {
+    return files.map(file => { // file 是 path string
+      const name = file.path.split(/[/\\]/).pop()
+      const time = parseFileTime(name) || new Date(file.modify_time) || null
+      
+      let displayTitle = ''
+      let displayTime = '未知时间'
+      let distanceNow = '未知时间'
 
-            if (time) {
-                const now = new Date()
-                // 生成 displayTime (具体时间)
-                displayTime = time.toLocaleString('zh-CN', { 
-                    year: 'numeric', month: '2-digit', day: '2-digit', 
-                    hour: '2-digit', minute: '2-digit', second: '2-digit' 
-                })
-
-                // 生成 displayTitle (相对时间)
-                if (type === 'today') {
-                    // Today: 刚刚, xx分钟前, xx小时前
-                    distanceNow = formatDistanceToNow(time, { locale: zhCN, addSuffix: true })
-                        .replace('大约 ', '')
-                } else if (type === 'earlier') {
-                    // Earlier: 昨天, 前天, xx天前
-                    const diffDays = differenceInCalendarDays(now, time)
-                    if (diffDays === 1) distanceNow = '昨天'
-                    else if (diffDays === 2) distanceNow = '前天'
-                    else distanceNow = `${diffDays} 天前`
-                } else {
-                    // Other: 直接显示文件名去后缀
-                    displayTitle = name.replace('.xml', '')
-                }
-            } else {
-                // 如果是 other 或无法解析时间，直接显示文件名去后缀
-                displayTitle = name.replace('.xml', '')
-            }
-
-            return {
-                path: file,
-                name: name,
-                type: type,
-                time: time, // Date object or null
-                distanceNow,
-                displayTitle,
-                displayTime
-            }
-        }).sort((a, b) => {
-            // 按时间倒序
-            if (a.time && b.time) return b.time - a.time
-            return a.name.localeCompare(b.name)
+      if (time) {
+        const now = new Date()
+        // 生成 displayTime (具体时间)
+        displayTime = time.toLocaleString('zh-CN', { 
+          year: 'numeric', month: '2-digit', day: '2-digit', 
+          hour: '2-digit', minute: '2-digit', second: '2-digit' 
         })
-    }
 
-    return {
-        today: process(rawData.value.today || [], 'today'),
-        earlier: process(rawData.value.earlier || [], 'earlier'),
-        other: process(rawData.value.other || [], 'other'),
-        import: process(rawData.value.import || [], 'import')
-    }
+        // 生成 displayTitle (相对时间)
+        if (type === 'today') {
+          // Today: 刚刚, xx分钟前, xx小时前
+          distanceNow = formatDistanceToNow(time, { locale: zhCN, addSuffix: true }).replace('大约 ', '')
+        } else if (type === 'earlier') {
+          // Earlier: 昨天, 前天, xx天前
+          const diffDays = differenceInCalendarDays(now, time)
+          if (diffDays === 1) distanceNow = '昨天'
+          else if (diffDays === 2) distanceNow = '前天'
+          else distanceNow = `${diffDays} 天前`
+        } else {
+          // Other: 直接显示文件名去后缀
+          displayTitle = name.replace('.xml', '')
+        }
+      } else {
+        // 如果是 other 或无法解析时间，直接显示文件名去后缀
+        displayTitle = name.replace('.xml', '')
+      }
+
+      return {
+        path: file.path,
+        name: name,
+        type: type,
+        time: time,
+        distanceNow,
+        displayTitle,
+        displayTime
+      }
+    }).sort((a, b) => {
+      // 按时间倒序
+      if (a.time && b.time) return b.time - a.time
+      return a.name.localeCompare(b.name)
+    })
+  }
+
+  return {
+    today: process(rawData.value.today || [], 'today'),
+    earlier: process(rawData.value.earlier || [], 'earlier'),
+    other: process(rawData.value.other || [], 'other'),
+    import: process(rawData.value.import || [], 'import')
+  }
 })
 
 const isEmpty = computed(() => {
-    return parsedData.value.today.length === 0 && 
-           parsedData.value.earlier.length === 0 && 
-           parsedData.value.other.length === 0 && 
-           parsedData.value.import.length === 0
+  return parsedData.value.today.length === 0 && 
+          parsedData.value.earlier.length === 0 && 
+          parsedData.value.other.length === 0 && 
+          parsedData.value.import.length === 0
 })
 
 // --- Actions ---
 
 const refresh = async () => {
-    loading.value = true
-    try {
-        await store.getBackups()
-        // 从 store 同步数据 (假设 store.backups 结构是 {today:[], ...})
-        if (store.backups) {
-            Object.assign(rawData.value, store.backups)
-        }
-    } finally {
-        // loading.value = false
+  loading.value = true
+  try {
+    await store.getBackups()
+    // 从 store 同步数据 (假设 store.backups 结构是 {today:[], ...})
+    if (store.backups) {
+      Object.assign(rawData.value, store.backups)
     }
+  } finally {
+    // loading.value = false
+  }
 }
 
 const selectItem = async (item) => {
-    // selectedPath.value = item.path
-    await store.getBackupOrder(item.path)
-    store.showDiffDrawer = true
+  // selectedPath.value = item.path
+  await store.getBackupOrder(item.path)
+  store.showDiffDrawer = true
 }
 
 const handleLoad = async (item) => {
@@ -389,43 +380,43 @@ const handleLoad = async (item) => {
 }
 
 const handleDelete = async (item) => {
-    if (!confirm(`确定要删除此备份文件吗？`)) return
-    // 调用后端删除接口
-    await store.deletePath(item.path)
-    refresh()
+  if (!confirm(`确定要删除此备份文件吗？`)) return
+  // 调用后端删除接口
+  await store.deletePath(item.path)
+  refresh()
 }
 
 const handleRemove = async (item) => {
-    // 调用后端删除接口
-    rawData.value.import = rawData.value.import.filter(i => i.path !== item.path)
-    if (store.currentBackupFile == item.path) {
-        store.currentBackupFile = ''
-        store.backupIds = []
-    }
-    refresh()
+  // 调用后端删除接口
+  rawData.value.import = rawData.value.import.filter(i => i.path !== item.path)
+  if (store.currentBackupFile == item.path) {
+    store.currentBackupFile = ''
+    store.backupIds = []
+  }
+  refresh()
 }
 
 
 
 const exportOrder = async (path) => {
-    // 调用后端另存为接口
-    await store.exportLoadOrder(path)
-    refresh()
+  // 调用后端另存为接口
+  await store.exportLoadOrder(path)
+  refresh()
 }
 
 const loadOrder = async (path) => {
-    // 调用后端加载接口
-    const data = await store.getFileOrder(path)
-    if (data.file) {
-      rawData.value.import.push(data.file)
-      await store.getBackupOrder(data.file)
-      store.showDiffDrawer = true
-    }
-    refresh()
+  // 调用后端加载接口
+  const data = await store.getFileOrder(path)
+  if (data.file) {
+    rawData.value.import.push(data.file)
+    await store.getBackupOrder(data.file)
+    store.showDiffDrawer = true
+  }
+  refresh()
 }
 
 onMounted(() => {
-    refresh()
+  refresh()
 })
 </script>
 

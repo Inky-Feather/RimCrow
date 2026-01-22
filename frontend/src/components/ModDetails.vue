@@ -182,19 +182,23 @@
           <div class="row-span-2 col-span-3 p-2 pr-3 space-y-1 flex flex-col justify-center text-[10px] text-text-dim bg-white/5 rounded-lg border border-white/5">
             <div class="flex justify-between items-center">
               <span class="flex-1 font-bold truncate min-w-0">文件创建时间：</span>
-              {{ selectedMod.file_create_time ? new Date(selectedMod.file_create_time).toLocaleString() : '无' }}
+              {{ selectedMod.file_create_time ? new Date(selectedMod.file_create_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
             </div>
             <div class="flex justify-between items-center">
               <span class="flex-1 font-bold truncate min-w-0">文件修改时间：</span>
-              {{ selectedMod.file_modify_time ? new Date(selectedMod.file_modify_time).toLocaleString() : '无' }}
+              {{ selectedMod.file_modify_time ? new Date(selectedMod.file_modify_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
             </div>
             <div class="flex justify-between items-center">
               <span class="flex-1 font-bold truncate min-w-0">最后启用时间：</span>
-              {{ selectedMod.last_active_time ? new Date(selectedMod.last_active_time).toLocaleString() : '无' }}
+              {{ selectedMod.last_active_time ? new Date(selectedMod.last_active_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
             </div>
+            <!-- <div class="flex justify-between items-center">
+              <span class="flex-1 font-bold truncate min-w-0">最后移动时间：</span>
+              {{ selectedMod.last_moved_time ? new Date(selectedMod.last_moved_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
+            </div> -->
             <div class="flex justify-between items-center">
               <span class="flex-1 font-bold truncate min-w-0">工坊更新时间：</span>
-              {{ selectedMod.mod_update_time ? new Date(selectedMod.mod_update_time).toLocaleString() : '无' }}
+              {{ selectedMod.mod_update_time ? new Date(selectedMod.mod_update_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
             </div>
           </div>
         </div>

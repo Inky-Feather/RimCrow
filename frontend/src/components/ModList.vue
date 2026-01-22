@@ -484,6 +484,7 @@ const startDrag = (e) => {
 }
 // 更新子项的排序
 const updateChildren = async (e) => {
+  // console.log("更新子项排序:", e)
   const oldIds = [...props.modelValue] // 原始数据（即 source of truth）
   // 这里的 newIds (脏数据) 仅用于计算相对位置，不参与数据重组
   const dirtyIds = internalListProxy.value.map(item => item.id) 
@@ -567,6 +568,13 @@ const updateChildren = async (e) => {
     store.removeIdsOnAllList(movingIds)
     // 发出更新
     emit('update:modelValue', finalList)
+    // 更新移动时间
+    store.takeModListByIds(movingIds).forEach(mod => {
+      mod.last_moved_time = Date.now()
+      if(e.event.target !== e.event.from) {
+        mod.last_active_time = Date.now()
+      }
+    })
     // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
     await nextTick()
     // 但直接通过key更新会导致列表重新渲染，导致滚动位置丢失，使用原版滚动定位不准

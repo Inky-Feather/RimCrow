@@ -1,3 +1,5 @@
+from datetime import datetime
+import json
 import os
 import time
 import functools
@@ -180,7 +182,8 @@ class API:
             "settings": asdict(settings.config), # 转为字典发给前端
             "all_mods": all_mods,
             "groups": all_groups,
-            "active_load_order": active_load_order,
+            "active_load_order": active_load_order.get('active_mods', []),
+            "active_load_modify_time": active_load_order.get('modify_time', 0),
             "is_first_db_init": self.is_first_db_init
         }
         self.is_first_db_init = False   # 标记数据库已初始化
@@ -306,7 +309,22 @@ class API:
         # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
         result = self.scanner.scan_paths_async(paths_to_scan, thumbnail_mgr=self.file_mgr, forced_update=forced_update)
         return ApiResponse.success({ "details": result },"后台扫描已启动")
-
+    
+    @log_api_call
+    def update_mod_time(self, mods_data_list: List[Dict[str, Any]]):
+        """
+        更新指定 Mod 列表 的 最后操作时间
+        """
+        try:
+            # 净化数据只保留必要字段
+            valid_fields = ['package_id', 'last_active_time', 'last_moved_time']
+            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
+            # print(f"更新Mod最后操作时间:{mods_data_list}")
+            ModDAO.batch_update_mods(mods_data_list)
+            return ApiResponse.success(message='最后操作时间已更新')
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
     @log_api_call
     def update_mod_user_data(self, package_id: str, data_dict: dict):
         """
@@ -427,7 +445,7 @@ class API:
             return ApiResponse.success(results, "冲突处理完成")
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
-        
+    
     def _add_shadow_path(self, package_id: str, path: str):
         """辅助方法：更新 Mod 的 shadow_paths 字段"""
         try:
@@ -509,14 +527,15 @@ class API:
         :return: [package_id, package_id, ...]
         """
         try:
-            active_ids = self.load_order_mgr.read_active_mods()
-            if not active_ids:
+            res = self.load_order_mgr.read_active_mods()
+            if not res or not res.get('active_mods', []):
                 return ApiResponse.error("已启用的Mod为空，或文件读取失败!")
         except Exception as e:
             return ApiResponse.error(f"读取加载顺序文件出错: {e}")
         return ApiResponse.success({
             "file": self.load_order_mgr.mods_config_file,
-            "active_ids": active_ids
+            "active_ids": res.get('active_mods', []),
+            "modify_time": res.get('modify_time', 0)
         })
     
     def open_load_order_file(self, mods_config_file_path: str|None = None):
@@ -536,9 +555,11 @@ class API:
             file = self.file_mgr.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
         if not file:
             return ApiResponse.warning("未选择文件")
+        res = self.load_order_mgr.read_active_mods(file)
         result = {
             "file": file,
-            "active_ids": self.load_order_mgr.read_active_mods(file)
+            "active_ids": res.get('active_mods', []),
+            "modify_time": res.get('modify_time', 0)
         }
         if not result["active_ids"]:
             return ApiResponse.error("解析文件出错!")
@@ -646,7 +667,7 @@ class API:
     
     
     # =========================================================================
-    #  7. 日志管理 (Log Management)
+    #  10. 日志管理 (Log Management)
     # =========================================================================
 
     @log_api_call

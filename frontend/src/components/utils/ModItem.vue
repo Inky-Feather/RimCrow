@@ -296,11 +296,11 @@ const handleContextMenu = async (event) => {
   }
   // 如果已经忽略，添加启用提示
   if (modData.value.ignored_issues && modData.value.ignored_issues.length > 0) {
-      singleMenuItems.push({
-          label: '恢复警告', icon: Megaphone,
-          level: 'warn',
-          action: () => store.ignoreIssue(props.item_id)
-      })
+    singleMenuItems.push({
+      label: '恢复警告', icon: Megaphone,
+      level: 'warn',
+      action: () => store.ignoreIssue(props.item_id)
+    })
   }
   // 合并菜单
   const menuItems = [...commnMenuItems]

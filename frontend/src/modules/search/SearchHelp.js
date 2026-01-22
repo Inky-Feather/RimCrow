@@ -142,6 +142,9 @@ export function generateHtmlHelp(engine) {
   });
   html += `</div>`; // End Field Grid
 
+  html += `<div>多个搜索条件关系可选 “与”/ “或” 逻辑</div>`;
+  html += `<div class="text-[11px] text-gray-400">与：多个条件同时满足</div>`;
+  html += `<div class="text-[11px] text-gray-400">或：满足任意一个条件即可</div>`;
   html += `</div>`;
   return html;
 }

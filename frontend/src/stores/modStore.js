@@ -90,11 +90,15 @@ export const useModStore = defineStore('mods', () => {
 
   const activeIds = ref([]) // 绑定的启用列表
   const savedActiveIds = ref([]) // 原始启用列表快照
-  const backupIds = ref([]) // 备份文件列表
+  const activeLoadModifyTime = ref(0) // 启动加载顺序修改时间
   const inactiveIds = ref([]) // 绑定的禁用列表
   const tempIds = ref([])   // 临时列表
   const groupList = ref([]) // 分组列表
+
   const backups = ref(null) // 备份列表
+  const backupIds = ref([]) // 备份文件列表
+  const currentBackupFile = ref('') // 当前备份文件
+  const backupLoadModifyTime = ref(0) // 备份加载顺序修改时间
 
   const conflictList = ref([]) // 重复包名冲突列表
   
@@ -103,7 +107,6 @@ export const useModStore = defineStore('mods', () => {
   const selectedIds = ref([])     // 选中的 Mod ID 列表
   const lastSelectedMod = ref(null) // 最后选中的 Mod 对象
   const isDraggingGroup = ref(false) // 是否正在拖动分组
-  const currentBackupFile = ref('') // 当前备份文件
 
   // 设置状态
   const showSettings = ref(false) // 是否显示设置弹窗
@@ -311,6 +314,16 @@ export const useModStore = defineStore('mods', () => {
         if (res.data.is_first_db_init) {
           toast.warning("数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。",{position: "top-center",timeout: 10000})
         }
+
+        // 3. 更新分组 (防止分组内的 Mod 被删了但分组里还有 ID)
+        groupList.value = res.data.groups || []
+        // 4. 更新激活列表 (通常扫描不会变动 active list，但为了同步“缺失”状态，更新一下也好)
+        activeIds.value = (res.data.active_load_order || []).map(id => id.toLowerCase())
+        savedActiveIds.value = [...res.data.active_load_order] || []
+        // 清理临时列表 (Temp - Active)
+        const activeSet = new Set(res.data.active_load_order)
+        tempIds.value = tempIds.value.filter(id => !activeSet.has(id.toLowerCase()))
+        inactiveIds.value = takeInactiveIds()
         // 2. 更新 Mod Map
         // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
         const tempMap = new Map()
@@ -326,6 +339,11 @@ export const useModStore = defineStore('mods', () => {
           // // 预先将 Tags 转为小写 Set，加速精确匹配
           // mod._tagsLower = new Set((mod.tags || []).map(t => t.toLowerCase()));
           
+          // 启用时间
+          if (mod.package_id && activeIds.value.includes(mod.package_id.toLowerCase()) && !mod.last_active_time) {
+            mod.last_active_time = res.data.active_load_modify_time || Date.now()
+          }
+          
           // 强制保证字段存在
           if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
           if (!Array.isArray(mod.tags)) mod.tags = []
@@ -333,15 +351,8 @@ export const useModStore = defineStore('mods', () => {
           tempMap.set(mod.package_id.toLowerCase(), mod)
         })
         allModsMap.value = tempMap
-        // 3. 更新分组 (防止分组内的 Mod 被删了但分组里还有 ID)
-        groupList.value = res.data.groups || []
-        // 4. 更新激活列表 (通常扫描不会变动 active list，但为了同步“缺失”状态，更新一下也好)
-        activeIds.value = (res.data.active_load_order || []).map(id => id.toLowerCase())
-        savedActiveIds.value = [...res.data.active_load_order] || []
-        // 清理临时列表 (Temp - Active)
-        const activeSet = new Set(res.data.active_load_order)
-        tempIds.value = tempIds.value.filter(id => !activeSet.has(id.toLowerCase()))
-        inactiveIds.value = takeInactiveIds()
+
+
         // 5. 检查路径 (仅初始化时)
         if (isInit && !res.data.paths_configured) {
           showSettings.value = true
@@ -364,8 +375,8 @@ export const useModStore = defineStore('mods', () => {
     if (res.status === 'success'){
       return true
       toast.success(`${workname}成功`)
-    }else if(res.status === 'waring'){
-      toast.warning(`${workname}注意: \n${res.message}`)
+    }else if(res.status === 'warning'){
+      toast.warning(`${workname}注意: \n${res.message}`,{timeout: 2000})
     }else toast.error(`${workname}失败: \n${res.message}`)
     return false
   }
@@ -571,6 +582,7 @@ export const useModStore = defineStore('mods', () => {
     const order = await getFileOrder(mods_config_file_path)
     if (order) {
       activeIds.value = order.active_ids || []
+      activeLoadModifyTime.value = order.active_load_modify_time || 0
       toast.success("Mod序列已加载")
     }
   }
@@ -580,12 +592,17 @@ export const useModStore = defineStore('mods', () => {
     if (order) {
       backupIds.value = order.active_ids || []
       currentBackupFile.value = mods_config_file_path
+      backupLoadModifyTime.value = order.active_load_modify_time || 0
+
       // toast.success("备份Mod序列已加载")
     }
   }
   // 保存Mod加载顺序
   const saveLoadOrder = async () => {
-    if (!isDirty.value) return true
+    if (!isDirty.value) {
+      toast.info("Mod序列未修改")
+      return true
+    }
     if (!window.pywebview) return false
     isLoading.value = true
     try {
@@ -597,8 +614,9 @@ export const useModStore = defineStore('mods', () => {
         // console.log("保存加载顺序成功:", res)
         toast.success("Mod序列已保存")
         getBackups()
+        updateModTime() // 更新Mod最后操作时间
         return true
-      } 
+      }
     } catch (e) {
       console.error("保存Mod序列异常:", e)
       toast.error(`保存Mod序列异常: \n${e.message}`)
@@ -648,6 +666,31 @@ export const useModStore = defineStore('mods', () => {
     } catch (e) {
       console.error("更新Mod用户数据异常:", e)
       toast.error(`更新Mod用户数据异常: \n${e.message}`)
+    } finally {
+      isLoading.value = false
+    }
+    return false
+  }
+  // 更新Mod最后操作时间
+  const updateModTime = async () => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      // 提取所有对象的时间属性 {package_id:xxxx, last_active_time:xxxx, last_moved_time:xxxx}
+      const all_mods = Array.from(allModsMap.value.values(), mod => ({
+        package_id: mod.package_id,
+        last_active_time: mod.last_active_time,
+        last_moved_time: mod.last_moved_time
+      }));
+      console.log("更新Mod最后操作时间:", {all_mods_time:all_mods})
+      const res = await window.pywebview.api.update_mod_time(all_mods)
+      if (checkResult(res, "更新Mod最后操作时间")) {
+        toast.success("Mod最后操作时间已更新", {timeout: 1000})
+        return true
+      } 
+    } catch (e) {
+      console.error("更新Mod最后操作时间异常:", e)
+      toast.error(`更新Mod最后操作时间异常: \n${e.message}`)
     } finally {
       isLoading.value = false
     }
@@ -1333,11 +1376,17 @@ export const useModStore = defineStore('mods', () => {
     if(settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
       // 通过 steam 启动游戏
       openUrl("steam://rungameid/294100")
+      toast.success("正在通过 steam 启动游戏……")
       console.log("通过 steam 启动游戏")
     }else if(settings.value.game_install_path){
       // 直接启动游戏
-      // await window.pywebview.api.launch_game()
-      console.log("直接启动游戏程序")
+      const res = await window.pywebview.api.launch_game()
+      if (checkResult(res, "直接启动游戏程序")) {
+        toast.success("直接启动游戏程序成功！")
+      } else {
+        console.error("直接启动游戏程序异常:", res.message)
+        toast.error(`直接启动游戏程序异常: \n${res.message}`)
+      }
     }
     else{
       console.error("启动游戏异常:")
@@ -1435,7 +1484,7 @@ export const useModStore = defineStore('mods', () => {
   return {
     // 状态管理
     scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, modColorList, backups, showDiffDrawer, currentBackupFile,
-    conflictList, allModTags, selectedStats,
+    conflictList, allModTags, selectedStats, activeLoadModifyTime, backupLoadModifyTime, 
     initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues, applyBackup, getBackupOrder, 
     selectModsTag, selectModsGroup, autoSortMods,
 

@@ -19,6 +19,7 @@ export const useSearchStore = defineStore('search', () => {
 
     // === 列表类型 ===
     tags: { type: FIELD_TYPES.LIST, suggest: true, label: '标签' },
+    ignored_issues: { type: FIELD_TYPES.LIST, suggest: true, label: '忽略问题' },
     supported_versions: { type: FIELD_TYPES.LIST, suggest: true, label: '支持版本' },
     supported_languages: { type: FIELD_TYPES.LIST, suggest: true, label: '支持语言' },
 
@@ -72,7 +73,7 @@ export const useSearchStore = defineStore('search', () => {
             /colors?$/i,      // 屏蔽所有以 color 结尾的 (color)
             'description','notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
             'version','workshop_id','id','mod_id',
-            'ignored_issues',
+            // 'ignored_issues',
         ]
     })
   }
