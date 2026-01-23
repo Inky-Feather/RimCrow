@@ -342,6 +342,20 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
+    def set_mods_ignore_issues(self, mods_data_list: List[Dict[str, Any]]):
+        """
+        批量更新用户对 Mod 的修改 (标签, 备注, 颜色等)
+        """
+        try:
+            # 净化数据只保留必要字段
+            valid_fields = ['mod_id', 'ignored_issues']
+            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
+            ModDAO.batch_upsert_user_data(mods_data_list)
+            return ApiResponse.success(message='用户数据已更新')
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
     def set_mods_color(self, mod_ids: List[str], color: str):
         """批量设置 Mod 颜色"""
         try:

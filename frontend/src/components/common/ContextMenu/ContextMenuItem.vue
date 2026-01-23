@@ -1,4 +1,4 @@
-<!-- components/ContextMenuItem.vue -->
+<!-- components/common/ContextMenu/ContextMenuItem.vue -->
 <template>
   <div
     ref="itemRef"
@@ -91,7 +91,7 @@
     <!-- 递归子菜单 (仅针对非 Grid 类型的子菜单) -->
     <Transition name="submenu">
       <div v-if="item.children && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
-        class="absolute top-0 z-50 min-w-40 rounded-xl border border-zinc-200/50 bg-white/80 p-0.5 shadow-xl backdrop-blur-xl dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:shadow-black/40"
+        class="absolute z-50 min-w-40 rounded-xl border border-zinc-200/50 bg-white/80 p-0.5 shadow-xl backdrop-blur-xl dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:shadow-black/40"
         :class="subMenuPositionClass" >
         <ContextMenuItem v-for="(subItem, idx) in item.children" :key="idx"
           :item="subItem" @close-menu="$emit('close-menu')" />
@@ -114,7 +114,8 @@ const itemRef = ref(null)
 const subMenuRef = ref(null)
 const activeSubMenu = ref(false)
 const subMenuSide = ref('right') // 'right' | 'left'
-const { width: windowWidth } = useWindowSize()
+const subMenuVerticalAlign = ref('top') // 'top' | 'bottom'
+const { width: windowWidth, height: windowHeight } = useWindowSize()
 
 // 样式映射
 const levelClass = () => {
@@ -157,12 +158,21 @@ const handleMouseEnter = () => {
     // 动态计算方向：如果右侧放不下，就放左侧
     // 预估子菜单宽度 (Grid 可能会比较宽)
     const subWidth = subMenuRef.value.offsetWidth || 200
+    const subHeight = subMenuRef.value.offsetHeight || 0 // 获取子菜单高度
 
-    // 如果右侧空间不足，显示在左侧
+    // X轴方向判断，如果右侧空间不足，显示在左侧
     if (parentRect.right + subWidth > windowWidth.value) {
       subMenuSide.value = 'left'
     } else {
       subMenuSide.value = 'right'
+    }
+    // Y轴方向判断 (新增逻辑)
+    // 如果 [父元素顶部 + 子菜单高度] 超过了 [屏幕高度 - 底部安全距离(10px)]
+    // 则该子菜单向上展开（底部对齐）
+    if (parentRect.top + subHeight > windowHeight.value - 10) {
+      subMenuVerticalAlign.value = 'bottom'
+    } else {
+      subMenuVerticalAlign.value = 'top'
     }
   })
 }
@@ -177,10 +187,22 @@ const handleMouseLeave = () => {
 
 // 动态计算子菜单位置类名
 const subMenuPositionClass = computed(() => {
-  // 微调位置，让子菜单稍微重叠一点主菜单，操作更顺滑
-  return subMenuSide.value === 'right' 
-    ? 'left-[98%] -ml-1' 
-    : 'right-[98%] -mr-1'
+  let classes = []
+  // X轴
+  if (subMenuSide.value === 'right') {
+    classes.push('left-[98%] -ml-1')
+  } else {
+    classes.push('right-[98%] -mr-1')
+  }
+  // Y轴 
+  if (subMenuVerticalAlign.value === 'bottom') {
+    // 底部对齐：子菜单底部与父菜单项底部对齐
+    classes.push('bottom-0 origin-bottom-left')
+  } else {
+    // 顶部对齐：子菜单顶部与父菜单项顶部对齐
+    classes.push('top-0 origin-top-left')
+  }
+  return classes.join(' ')
 })
 </script>
 <style scoped>

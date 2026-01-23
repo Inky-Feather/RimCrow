@@ -237,31 +237,32 @@ const handleContextMenu = async (event) => {
     store.selectMods(props.item_id)
     await nextTick()
   }
+  const selectedIds = store.selectedIds;
   // 获取统计信息
   const stats = store.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, children: [{type: 'grid', columns: 5,
+    { label: '标签管理', icon: Tag, disabled: !store.allModTags?.length, children: [{type: 'grid', columns: 5,
       children: store.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
         label: '#'+tag, action: () => store.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理', icon: Group, children: [{type: 'grid', columns: 4,
+    { label: '分组管理', icon: Group, disabled: !store.groupList?.length, children: [{type: 'grid', columns: 4,
       children: store.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
         label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => store.selectModsGroup(group.group_id)
       }))}]
     },
     { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 
         children:[...store.modColorList.map(c => ({ tooltip: c, color: c, 
-          active: modData.value.sign_color === c, action: () => store.setModsColor(store.selectedIds, c)
+          active: modData.value.sign_color === c, action: () => store.setModsColor(selectedIds, c)
         })), 
-        { icon: X, color: 'transparent', tooltip: '清除', action: () => store.setModsColor(store.selectedIds, null) }]
+        { icon: X, color: 'transparent', tooltip: '清除', action: () => store.setModsColor(selectedIds, null) }]
       }]
     },
     { label: '修改类型', icon: ChessPawn,
       children: [...Object.entries(store.modTypeMap).map(([key, value]) => ({
-        label: value, action: () => store.setModsType(store.selectedIds, key)
-      })),{ label: 'X 恢复默认', action: () => store.setModsType(store.selectedIds, null) }]
+        label: value, action: () => store.setModsType(selectedIds, key)
+      })),{ label: 'X 恢复默认', action: () => store.setModsType(selectedIds, null) }]
     }
   ]
   // 单选菜单
@@ -275,40 +276,55 @@ const handleContextMenu = async (event) => {
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '联锁选中项', icon: Link2, action: () => store.linkMods(store.selectedIds) },
+    { label: '联锁选中项', icon: Link2, action: () => store.linkMods(selectedIds) },
   ]
   if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
-    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => store.unlinkMods(store.selectedIds) })
+    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => store.unlinkMods(selectedIds) })
   }
-  const currentIssues = store.modIssues.get(props.item_id.toLowerCase())
-  // 如果有错误，添加忽略选项
-  if (currentIssues && currentIssues.length > 0) {
-    singleMenuItems.push({ divider: true })
-    // 子菜单列出所有错误
-    singleMenuItems.push({
-      label: '忽略警告...', icon: MegaphoneOff,
-      children: currentIssues.map(issue => ({
-        label: `忽略问题：${store.ISSUE_TITLE_MAP[issue.type] || issue.type}`,
-        level: issue.level,
-        action: () => store.ignoreIssue(props.item_id, issue.type)
+  // 1. 获取所有选中 Mod 的当前问题并集
+  const allSelectedIssues = selectedIds.flatMap(id => store.modIssues.get(id.toLowerCase()) || []);
+  // 2. 提取唯一的错误类型 (Type Unique Set)
+  const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))];
+
+  // 3. 检查选中项中是否有人已经设置了忽略 (用于显示“恢复警告”)
+  const anyModHasIgnored = selectedIds.some(id => {
+    const m = store.takeModById(id);
+    return m && m.ignored_issues && m.ignored_issues.length > 0;
+  });
+  // 统一的忽略/恢复菜单组
+  const issueManagementItems = [];
+  // A. 如果并集不为空，显示“忽略...”子菜单
+  if (uniqueIssueTypes.length > 0) {
+    issueManagementItems.push({ divider: true });
+    issueManagementItems.push({
+      label: selectedIds.length > 1 ? `批量忽略问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
+      icon: MegaphoneOff,
+      children: uniqueIssueTypes.map(type => ({
+        label: `忽略：${store.ISSUE_TITLE_MAP[type] || type}`,
+        // 这里的 level 可以取该类型在所有 Mod 中的最高级别
+        level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
+        action: () => store.batchIgnoreIssues(selectedIds, type)
       }))
-    })
+    });
   }
-  // 如果已经忽略，添加启用提示
-  if (modData.value.ignored_issues && modData.value.ignored_issues.length > 0) {
-    singleMenuItems.push({
-      label: '恢复警告', icon: Megaphone,
+  // B. 如果有人被忽略了，显示“恢复警告”
+  if (anyModHasIgnored) {
+    // 如果之前没加 divider，补一个
+    if (issueManagementItems.length === 0) issueManagementItems.push({ divider: true });
+    issueManagementItems.push({
+      label: selectedIds.length > 1 ? '恢复所有选中项警告' : '恢复警告',
+      icon: Megaphone,
       level: 'warn',
-      action: () => store.ignoreIssue(props.item_id)
-    })
+      action: () => store.batchIgnoreIssues(selectedIds, null)
+    });
   }
+
   // 合并菜单
-  const menuItems = [...commnMenuItems]
-  if (store.selectedIds.length > 1) {
-    menuItems.push(...selectedMenuItems)
-  } else {
-    menuItems.push(...singleMenuItems)
-  }
+  const menuItems = [
+  ...commnMenuItems,
+  ...(selectedIds.length > 1 ? selectedMenuItems : singleMenuItems),
+  ...issueManagementItems // 插入新的批量忽略逻辑
+];
 
   menuStore.open(event, menuItems)
 }

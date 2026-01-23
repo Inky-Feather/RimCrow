@@ -355,8 +355,9 @@ export const useModStore = defineStore('mods', () => {
         allModsMap.value = tempMap
         // 更新激活加载时间
         activeLoadModifyTime.value = res.data.active_load_modify_time
-        appVersion.value = res.data.app_version
-        build.value = res.data.build
+        // 更新版本信息
+        appVersion.value = res.data.app_version || 'Unknown'
+        build.value = res.data.build || ''
 
         // 5. 检查路径 (仅初始化时)
         if (isInit && !res.data.paths_configured) {
@@ -1224,7 +1225,7 @@ export const useModStore = defineStore('mods', () => {
     if (issues.some(i => i.level === 'warn')) return 'warn'
     return 'info'
   }
-  // 动作：忽略/取消忽略问题
+  // 忽略/取消忽略问题
   // type: 传入错误类型字符串为忽略该问题；不传(null/undefined)为清空所有忽略(重置)
   const ignoreIssue = async (modId, type) => {
       const mod = takeModById(modId)
@@ -1253,6 +1254,60 @@ export const useModStore = defineStore('mods', () => {
         toast.error(`忽略问题失败：${res.message}`)
       }
   }
+  // 批量忽略/取消忽略问题
+  const batchIgnoreIssues = async (modIds, type = null) => {
+    isLoading.value = true;
+    const updates = []; // 准备发送给后端的批量数据
+    try {
+      modIds.forEach((id) => {
+        const mod = takeModById(id);
+        if (!mod || mod.is_missing) return;
+        let currentIgnored = Array.isArray(mod.ignored_issues) ? [...mod.ignored_issues] : [];
+        let needsUpdate = false;
+        if (!type) {
+          // === 模式 A: 恢复所有警告 ===
+          if (currentIgnored.length > 0) {
+            currentIgnored = [];
+            needsUpdate = true;
+          }
+        } else {
+          // === 模式 B: 忽略特定问题 ===
+          const currentModIssues = modIssues.value.get(id.toLowerCase()) || [];
+          const hasThisIssue = currentModIssues.some(i => i.type === type);
+          if (hasThisIssue && !currentIgnored.includes(type)) {
+            currentIgnored.push(type);
+            needsUpdate = true;
+          }
+        }
+        if (needsUpdate) {
+          // 1. 先更新本地 UI 状态 (响应式)
+          mod.ignored_issues = currentIgnored;
+          // 2. 加入批量更新队列
+          updates.push({
+            mod_id: id,
+            ignored_issues: currentIgnored
+          });
+        }
+      });
+      // 如果没有实质性变化，直接返回
+      if (updates.length === 0) return;
+      // 3. 一次性调用后端 API
+      const res = await window.pywebview.api.set_mods_ignore_issues(updates);
+      if (res.status === 'success') {
+        toast.success(type ? `已忽略 ${updates.length} 项问题` : `已恢复 ${updates.length} 项警告`);
+      } else {
+        throw new Error(res.message);
+      }
+    } catch (e) {
+      console.error("批量忽略操作失败:", e);
+      toast.error(`操作失败: ${e.message}`);
+      // 如果失败了，可能需要重新刷新列表以保证数据一致性
+      await refreshModList();
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
   // 获取指定列表的错误统计
   const getListIssues = (listType) => {
     // 1. 确定目标 ID 集合
@@ -1490,7 +1545,7 @@ export const useModStore = defineStore('mods', () => {
     // 状态管理
     scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, modColorList, backups, showDiffDrawer, currentBackupFile,
     conflictList, allModTags, selectedStats, activeLoadModifyTime, backupLoadModifyTime, 
-    initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, getListIssues, applyBackup, getBackupOrder, 
+    initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, applyBackup, getBackupOrder, 
     selectModsTag, selectModsGroup, autoSortMods,
 
     // Mod 相关

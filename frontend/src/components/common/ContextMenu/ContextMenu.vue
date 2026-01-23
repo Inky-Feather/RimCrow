@@ -1,9 +1,8 @@
-<!-- components/ContextMenu.vue -->
+<!-- components/common/ContextMenu/ContextMenu.vue -->
 <template>
   <Teleport to="body">
     <Transition name="scale">
-      <div
-        v-if="store.show"
+      <div v-if="store.show"
         ref="menuRef"
         class="fixed z-9999 min-w-[150px] py-0.5 rounded-xl border border-zinc-200/50 bg-white/80 shadow-2xl backdrop-blur-xl dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:shadow-black/50 ring-1 ring-black/5"
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
