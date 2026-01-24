@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { createToastInterface } from 'vue-toastification'
+import { useRuleStore } from '../stores/ruleStore'
 
 
 // 等待 pywebview 就绪
@@ -81,6 +82,7 @@ const sourceTypeMap = {
   'other': '其它来源'
 }
 
+
 // Mod 管理 Store
 export const useModStore = defineStore('mods', () => {
   const toast = createToastInterface()
@@ -109,6 +111,9 @@ export const useModStore = defineStore('mods', () => {
   const selectedIds = ref([])     // 选中的 Mod ID 列表
   const lastSelectedMod = ref(null) // 最后选中的 Mod 对象
   const isDraggingGroup = ref(false) // 是否正在拖动分组
+
+  
+  const ruleStore = useRuleStore()
 
   // 设置状态
   const showSettings = ref(false) // 是否显示设置弹窗
@@ -308,6 +313,7 @@ export const useModStore = defineStore('mods', () => {
       isLoading.value = true
       // 调用后端获取全量数据
       const res = await window.pywebview.api.get_initial_data()
+      ruleStore.fetchRules()  // 刷新动态规则
       if (res.status === 'success') {
         // 1. 更新设置 (仅初始化时，避免覆盖用户未保存的修改)
         if (isInit && res.data.settings) {
@@ -574,7 +580,25 @@ export const useModStore = defineStore('mods', () => {
       if (checkResult(res, "自动排序Mod")) {
         activeIds.value = res.data.sorted_ids || []
         inactiveIds.value = takeInactiveIds()
-        toast.success("Mod序列已自动排序")
+        toast.success("自动排序完成")
+        if(res.data.warnings?.length > 0) {
+          let warningMessages = ''
+          let warnModRule= []
+          res.data.warnings.forEach(warning => {
+            warningMessages += warning.message + '\n'
+            if(warning.source_id) {
+              warnModRule.push({mod_id: warning.source_id, target_id: warning.target_id||null ,type: warning.rule_type})
+            }
+          })
+          toast.warning(warningMessages,{position: "top-center",timeout: 5000})
+          if (warnModRule.length > 0) {
+            let msg = '请检查以下Mod规则是否正确：\n'
+            warnModRule.forEach(item => {
+              msg += `${displayModName(item.mod_id)} 的 ${item.type.name} 可能存在问题：（${displayModName(item.target_id)}）\n`
+            })
+            toast.warning(msg,{position: "top-center",timeout: 10000})
+          }
+        }
         return true
       } 
     } catch (e) {
@@ -597,9 +621,9 @@ export const useModStore = defineStore('mods', () => {
     const order = await getFileOrder(mods_config_file_path)
     if (order) {
       backupIds.value = order.active_ids || []
-      currentBackupFile.value = mods_config_file_path
-      backupLoadModifyTime.value = order.active_load_modify_time || 0
-
+      currentBackupFile.value = order.file || mods_config_file_path
+      backupLoadModifyTime.value = order.modify_time || 0
+      return {path: currentBackupFile.value, modify_time: backupLoadModifyTime.value}
       // toast.success("备份Mod序列已加载")
     }
   }

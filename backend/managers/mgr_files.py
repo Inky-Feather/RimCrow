@@ -8,9 +8,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from PIL import Image
 import webview # 引入 webview 库
 from send2trash import send2trash
+from backend.settings import CACHE_DIR
 
-# 定义缩略图缓存目录
-CACHE_DIR = os.path.join(os.getcwd(), 'cache', 'thumbnails')
 
 class LocalAssetHandler(SimpleHTTPRequestHandler):
     """

@@ -168,6 +168,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useModStore } from '../stores/modStore'
+import { useConfirmStore } from '../stores/confirmStore'
 import { parse, formatDistanceToNow, differenceInCalendarDays, parseISO } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
@@ -206,7 +207,7 @@ const BackupItem = {
       <!-- 右侧操作 (Hover显示) -->
       <div class="relative w-6 h-6 flex items-center justify-center">
         <div class="absolute -right-2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
-          <button @click.stop="$emit('load', item)" class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer 
+          <button @click.stop="$emit('load',$event, item)" class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer 
             inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
             text-text-dim/70 bg-accent-primary/10 
             hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
@@ -227,7 +228,7 @@ const BackupItem = {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
             </span>
           </button>
-          <button v-else @click.stop="$emit('delete', item)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
+          <button v-else @click.stop="$emit('delete', $event, item)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
             inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
             text-text-dim/70 bg-accent-danger/10 
             hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
@@ -257,6 +258,7 @@ const BackupItem = {
 }
 
 const store = useModStore()
+const confirmStore = useConfirmStore()
 const loading = ref(false)
 const selectedPath = computed(() => store.currentBackupFile)
 
@@ -353,8 +355,7 @@ const isEmpty = computed(() => {
           parsedData.value.import.length === 0
 })
 
-// --- Actions ---
-
+// 刷新备份列表
 const refresh = async () => {
   loading.value = true
   try {
@@ -367,25 +368,37 @@ const refresh = async () => {
     // loading.value = false
   }
 }
-
+// 选择备份项
 const selectItem = async (item) => {
   // selectedPath.value = item.path
   await store.getBackupOrder(item.path)
   store.showDiffDrawer = true
 }
-
-const handleLoad = async (item) => {
-  if (!confirm(`确定要将配置恢复到 [${item.displayTitle}] 的状态吗？\n当前未保存的更改将丢失。`)) return
+// 从备份列表加载
+const handleLoad = async (e, item) => {
+  const confirmed = await confirmStore.open({
+    title: '加载确认',
+    message: `确定要恢复到此备份文件的状态吗？\n当前未保存的更改将丢失。`,
+    mode: 'confirm',
+    type: 'warning'
+  }, e.target)
+  if (!confirmed) return
   await store.getLoadOrder(item.path)
 }
-
-const handleDelete = async (item) => {
-  if (!confirm(`确定要删除此备份文件吗？`)) return
+// 删除备份文件
+const handleDelete = async (e, item) => {
+  const confirmed = await confirmStore.open({
+    title: '删除确认',
+    message: '确定要删除此备份文件吗？',
+    mode: 'confirm',
+    type: 'error'
+  }, e.target)
+  if (!confirmed) return
   // 调用后端删除接口
   await store.deletePath(item.path)
   refresh()
 }
-
+// 从导入列表移除
 const handleRemove = async (item) => {
   // 调用后端删除接口
   rawData.value.import = rawData.value.import.filter(i => i.path !== item.path)
@@ -395,21 +408,19 @@ const handleRemove = async (item) => {
   }
   refresh()
 }
-
-
-
+// 导出当前加载顺序
 const exportOrder = async (path) => {
   // 调用后端另存为接口
   await store.exportLoadOrder(path)
   refresh()
 }
-
+// 从导入列表加载
 const loadOrder = async (path) => {
   // 调用后端加载接口
-  const data = await store.getFileOrder(path)
-  if (data.file) {
-    rawData.value.import.push(data.file)
-    await store.getBackupOrder(data.file)
+  const data = await store.getBackupOrder(path)
+  if (data) {
+    // console.log(data)
+    rawData.value.import.push(data)
     store.showDiffDrawer = true
   }
   refresh()

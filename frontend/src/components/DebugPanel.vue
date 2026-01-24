@@ -30,9 +30,12 @@ import { JsonViewer } from "vue3-json-viewer"
 import "vue3-json-viewer/dist/vue3-json-viewer.css";
 import { useModStore } from '../stores/modStore'
 import { useHoverStore } from '../stores/hoverStore'
+import { useRuleStore } from '../stores/ruleStore'
 
 const modStore = useModStore()
 const hoverStore = useHoverStore()
+const ruleStore = useRuleStore()
+
 const isOpen = ref(false)
 
 // 强制刷新（虽然是响应式的，但有时候手动触发一下比较安心）
@@ -86,6 +89,14 @@ const sanitizedState = computed(() => {
 
     // 5. 进度
     PROGRESS: modStore.scanProgress,
+
+    // 6. 规则
+    RULES: {
+      communityRules: ruleStore.communityModRules,
+      userRules: ruleStore.userModRules,
+      userDynamicRules: ruleStore.userDynamicRules,
+      currentId: ruleStore.currentId,
+    }
   }
 })
 </script>

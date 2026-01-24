@@ -198,6 +198,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { useModStore } from '../stores/modStore'
+import { useConfirmStore } from '../stores/confirmStore'
 
 // 简单的输入框子组件
 const InputGroup = {
@@ -234,6 +235,8 @@ const InputGroup = {
 }
 
 const store = useModStore()
+const confirmStore = useConfirmStore()
+
 const currentTab = ref('paths')
 const detecting = ref(false)
 
@@ -287,10 +290,9 @@ const autoDetect = async () => {
   }
 }
 
-const handleReset = () => {
-    if (confirm('确定要清空数据库吗？这会导致所有分组和自定义备注丢失！')) {
-        store.resetDatabase()
-    }
+const handleReset = async () => {
+    const res = await confirmStore.confirmAction('警告','确定要清空数据库吗？这会导致所有分组和自定义备注丢失！',{type:'error'})
+    if(res) store.resetDatabase()
 }
 
 // 保存

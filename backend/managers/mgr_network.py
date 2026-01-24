@@ -49,3 +49,4 @@ class NetworkManager:
             return _real_getaddrinfo(host, port, family, type, proto, flags)
 
         socket.getaddrinfo = new_getaddrinfo
+

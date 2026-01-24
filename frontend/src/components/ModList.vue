@@ -484,6 +484,11 @@ const startDrag = (e) => {
 }
 // 更新子项的排序
 const updateChildren = async (e) => {
+  // 排序状态下禁止拖拽
+  if (!allowSort.value) {
+    // toast.warning("排序状态下禁止拖拽排序")
+    return
+  }
   // console.log("更新子项排序:", e)
   const oldIds = [...props.modelValue] // 原始数据（即 source of truth）
   // 这里的 newIds (脏数据) 仅用于计算相对位置，不参与数据重组

@@ -38,3 +38,4 @@ lerna-debug.log*
 
 temp*.vue
 build/
+temp/
