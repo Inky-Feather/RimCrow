@@ -135,8 +135,9 @@
 </template>
 
 <script setup>
-import { computed, h, nextTick } from 'vue'
+import { computed, h, nextTick  } from 'vue'
 import { useModStore, ISSUE_TYPE } from '../../stores/modStore'
+import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
 import { X, FolderInput, Tag, Group, Palette, ChessPawn, Trash2, Link2, Link2Off, MegaphoneOff, Megaphone, ExternalLink } from 'lucide-vue-next';
@@ -158,6 +159,7 @@ defineEmits(['contextmenu'])
 
 const store = useModStore()
 const menuStore = useContextMenuStore()
+const ruleStore = useRuleStore()
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
@@ -272,6 +274,7 @@ const handleContextMenu = async (event) => {
     { label: '从Steam访问', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
     { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => store.openPath(modData.value.path) },
     { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteMod() },
+    { label: '编辑规则', action: () => ruleStore.currentId = props.item_id },
   ]
   // 多选菜单
   const selectedMenuItems = [

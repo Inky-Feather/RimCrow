@@ -718,6 +718,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"健康检查失败: {str(e)}")
         
+    
     # =========================================================================
     #  9. 规则管理 (Rule Management)
     # =========================================================================
@@ -726,30 +727,71 @@ class API:
     def get_all_rules(self):
         """
         获取所有规则（用于规则管理界面显示）
+        前端需要完整数据来支持搜索和查看
         """
         return ApiResponse.success({
-            "community_rules_count": len(self.sorter.rule_mgr.community_rules),
+            "community_rules": self.sorter.rule_mgr.community_rules, # 返回完整字典
             "user_mod_rules": self.sorter.rule_mgr.user_mod_rules,
-            "user_dynamic_rules": self.sorter.rule_mgr.user_dynamic_rules
+            "user_dynamic_rules": self.sorter.rule_mgr.user_dynamic_rules,
+            "settings": self.sorter.rule_mgr.settings,
         })
 
     @log_api_call
-    def rule_update_single(self, package_id: str, rule_content: dict):
+    def rule_update_user_mod(self, package_id: str, rule_content: dict):
         """保存单个规则"""
         try:
-            success = self.sorter.rule_mgr.update_single_mod_rule(package_id, rule_content)
+            success = self.sorter.rule_mgr.update_user_mod_rule(package_id, rule_content)
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
             return ApiResponse.error(f"保存失败: {str(e)}")
         
     @log_api_call
-    def rule_delete_single(self, package_id: str):
+    def rule_delete_user_mod(self, package_id: str):
         """删除单个规则"""
         try:
-            success = self.sorter.rule_mgr.delete_single_mod_rule(package_id)
+            success = self.sorter.rule_mgr.delete_user_mod_rule(package_id)
             return ApiResponse.success() if success else ApiResponse.error("删除失败")
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
+    
+    @log_api_call
+    def rule_get_settings(self):
+        """获取规则系统的全局设置 (开关状态、黑名单等)"""
+        return ApiResponse.success(self.sorter.rule_mgr.settings)
+
+    @log_api_call
+    def rule_global_enable(self, key: str, enabled: bool):
+        """
+        设置全局开关
+        key: 'community_mod_rules_enabled' | 'user_mod_rules_enabled' | 'dynamic_rules_enabled'
+        """
+        try:
+            success = self.sorter.rule_mgr.set_global_setting(key, enabled)
+            return ApiResponse.success() if success else ApiResponse.error("设置失败：无效的 Key")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def rule_toggle_community_mod(self, package_id: str, exclude: bool):
+        """
+        针对单个 Mod 禁用/启用社区规则提示 (黑名单操作)
+        """
+        try:
+            success = self.sorter.rule_mgr.toggle_community_mod_exclusion(package_id, exclude)
+            return ApiResponse.success() if success else ApiResponse.error("操作失败")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def rule_toggle_user_mod(self, package_id: str, exclude: bool):
+        """
+        针对单个 Mod 禁用/启用用户自定义单项规则 (黑名单操作)
+        """
+        try:
+            success = self.sorter.rule_mgr.toggle_user_mod_rule_exclusion(package_id, exclude)
+            return ApiResponse.success() if success else ApiResponse.error("操作失败")
+        except Exception as e:
+            return ApiResponse.error(str(e))
     
     @log_api_call
     def rule_toggle_dynamic(self, rule_id: str, enabled: bool):
@@ -780,27 +822,42 @@ class API:
 
     @log_api_call
     def rule_update_community(self, raw_json: str):
-        """重写社区库"""
+        """
+        重写社区库
+        注意：raw_json 可能很大，但在本地传输应该不是问题
+        """
         try:
+            if not raw_json: raw_json = ''
             success = self.sorter.rule_mgr.overwrite_community_rules(raw_json)
             return ApiResponse.success() if success else ApiResponse.error("重写失败")
         except Exception as e:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
-        """弹出对话框并导出"""
+    def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = ''):
+        """
+        弹出对话框并导出
+        file_types 在前端调用时也可以不传，这里给默认值
+        """
         try:
             bundle = self.sorter.rule_mgr.create_export_bundle(dynamic_rule_ids)
-            # 调用文件管理器弹出保存框
-            default_name = f"RimOrder_Rules_{datetime.now().strftime('%m%d')}.json"
-            path = self.file_mgr.save_file_dialog(initial_dir, default_name, file_types)
+            
+            # 使用时间戳作为默认文件名
+            default_name = f"RimOrder_Rules_{datetime.now().strftime('%Y%m%d')}.json"
+            # 注意: file_types 参数格式需要符合 pywebview 的要求
+            path = self.file_mgr.save_file_dialog(
+                initial_dir=initial_dir, 
+                default_filename=default_name, 
+                file_types=('JSON Files (*.json)', 'All Files (*.*)')
+            )
+            
             if path:
                 with open(path, 'w', encoding='utf-8') as f:
                     json.dump(bundle, f, indent=4, ensure_ascii=False)
                 return ApiResponse.success(message="导出成功")
             return ApiResponse.warning("已取消")
         except Exception as e:
+            logger.error(f"Export failed: {e}")
             return ApiResponse.error(str(e))
 
     @log_api_call
@@ -811,12 +868,14 @@ class API:
             if path:
                 with open(path, 'r', encoding='utf-8') as f:
                     bundle = json.load(f)
+                
                 self.sorter.rule_mgr.process_import_bundle(bundle)
                 return ApiResponse.success(message="规则包导入成功")
             return ApiResponse.warning("已取消")
         except Exception as e:
+            logger.error(f"Import failed: {e}")
             return ApiResponse.error(f"导入失败: {e}")
-
+        
     # =========================================================================
     #  10. 日志管理 (Log Management)
     # =========================================================================

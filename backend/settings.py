@@ -6,8 +6,15 @@ from pathlib import Path
 from typing import Dict, Any, List
 
 # 配置文件路径
-CONFIG_DIR = Path(os.getcwd()) / "data"
+HOME_DIR = Path(os.getcwd())
+CONFIG_DIR = HOME_DIR / "data"
 CONFIG_FILE = CONFIG_DIR / "config.json"
+# 定义缩略图缓存目录
+CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
+# 规则文件存放路径
+RULES_DIR = HOME_DIR / "data" / "rules"
+USER_RULES_PATH = RULES_DIR / "user_rules.json"
+COMMUNITY_RULES_PATH = RULES_DIR / "communityRules.json"
 
 @dataclass
 class ProxyConfig:
@@ -42,6 +49,9 @@ class AppConfig:
     workshop_mods_path: str = ""
     local_mods_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
+    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database"
+    community_rules_path: str = str(COMMUNITY_RULES_PATH)
+    user_rules_path: str = str(USER_RULES_PATH)
     
     # --- 游戏设置 ---
     game_version: str = ""

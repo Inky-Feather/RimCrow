@@ -1,181 +1,324 @@
 <template>
-  <div class="flex h-[700px] w-[1000px] bg-bg-deep/95 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-md p-10" @click.self="$emit('close')">
     
-    <!-- 1. 左侧导航栏 -->
-    <div class="w-56 border-r border-white/5 bg-black/20 p-4 flex flex-col gap-2">
-      <h2 class="text-xl font-bold text-white mb-6 flex items-center gap-2 px-2">
-        <svg class="w-5 h-5 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-        规则中心
-      </h2>
+    <div class="flex w-full max-w-6xl h-full max-h-[800px] bg-bg-deep/95 border border-white/10 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
       
-      <nav class="flex-1 space-y-1">
-        <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
-          :class="[currentTab === tab.id ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/30' : 'text-text-dim hover:bg-white/5 border-transparent']"
-          class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-bold transition-all duration-200">
-          <component :is="tab.icon" class="w-4 h-4" />
-          {{ tab.label }}
-        </button>
-      </nav>
-
-      <!-- 底部工具 -->
-      <div class="pt-4 border-t border-white/5 space-y-2">
-        <button @click="handleImport" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold text-text-dim transition-all">导入配置包</button>
-        <button @click="handleExport" class="w-full py-2 rounded-lg bg-accent-primary/10 hover:bg-accent-primary/20 text-xs font-bold text-accent-primary transition-all">导出选中规则</button>
-      </div>
-    </div>
-
-    <!-- 2. 右侧内容区 -->
-    <div class="flex-1 flex flex-col min-w-0">
-      
-      <!-- 头部：搜索与新建 -->
-      <header class="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-white/2">
-        <div class="relative flex-1 max-w-md">
-          <input v-model="search" placeholder="搜索规则名称或描述..." class="w-full bg-black/40 border border-white/10 rounded-full px-4 py-1.5 text-sm text-white focus:border-accent-primary outline-none" />
+      <!-- ================= 左侧侧边栏 ================= -->
+      <aside class="w-64 bg-black/20 border-r border-white/5 flex flex-col">
+        <div class="p-6">
+          <h2 class="text-xl font-bold text-white flex items-center gap-2" @click="ruleStore.fetchRules">
+            <svg class="w-6 h-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            规则中心
+          </h2>
+          <p class="text-xs text-text-dim mt-2">管理排序逻辑与约束</p>
         </div>
-        <button v-if="currentTab === 'dynamic'" @click="createNewRule"
-          class="ml-4 px-6 py-2 bg-accent-primary hover:bg-accent-primary/80 text-black text-xs font-bold rounded-full shadow-lg shadow-accent-primary/20 transition-all">
-          + 新建群组规则
-        </button>
-      </header>
 
-      <!-- 滚动区 -->
-      <div class="flex-1 overflow-y-auto p-8">
+        <nav class="flex-1 px-2 space-y-1">
+          <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+            class="w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-bold transition-all duration-200 group"
+            :class="currentTab === tab.id ? 'bg-accent-primary/10 text-accent-primary border border-accent-primary/20' : 'text-text-dim hover:bg-white/5 border border-transparent'">
+            <div class="flex items-center gap-2">
+              <component :is="tab.icon" class="w-4 h-4 transition-transform group-hover:scale-110" />
+              {{ tab.label }}
+            </div>
+            <span v-if="tab.count !== undefined" class="bg-black/30 px-2 py-0.5 rounded text-[10px] opacity-60">{{ tab.count }}</span>
+          </button>
+        </nav>
+
+        <div class="p-4 border-t border-white/5 space-y-2">
+          <button @click="ruleStore.handleImport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-text-dim transition-all border border-white/5">
+            <Download class="w-3 h-3" /> 导入配置包
+          </button>
+          <button @click="ruleStore.handleExport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-text-dim transition-all border border-white/5">
+            <Share2 class="w-3 h-3" /> 导出配置包
+          </button>
+        </div>
+      </aside>
+
+      <!-- ================= 右侧主内容区 ================= -->
+      <main class="flex-1 flex flex-col min-w-0 bg-white/1">
         
-        <!-- 动态规则列表 -->
-        <div v-if="currentTab === 'dynamic'" class="space-y-4">
-          <div v-for="rule in filteredDynamicRules" :key="rule.rule_id" 
-            class="group bg-white/5 border border-white/10 rounded-2xl p-5 hover:border-accent-primary/50 transition-all">
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <div class="flex items-center gap-3 mb-1">
-                  <h3 class="font-bold text-white">{{ rule.name }}</h3>
-                  <span class="px-2 py-0.5 rounded-md bg-black/40 text-[10px] text-accent-primary border border-white/10">优先级: {{ rule.priority }}</span>
-                </div>
-                <p class="text-xs text-text-dim line-clamp-1">{{ rule.description || '无描述' }}</p>
+        <!-- 顶部工具栏 -->
+        <header class="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-black/10">
+          <!-- 搜索 -->
+          <div class="relative w-72 group">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim group-focus-within:text-accent-primary transition-colors" />
+            <input v-model="searchQuery" placeholder="搜索规则、Mod名称或ID..." 
+              class="w-full bg-black/20 border border-white/10 rounded-full pl-9 pr-4 py-1.5 text-sm text-white focus:border-accent-primary focus:bg-black/40 outline-none transition-all" />
+          </div>
+
+          <!-- 全局开关与操作 -->
+          <div class="flex items-center gap-4">
+            <label v-if="currentTab !== 'dynamic'" class="flex items-center gap-2 cursor-pointer select-none">
+              <div class="relative">
+                <input type="checkbox" v-model="filterInstalled" class="sr-only peer">
+                <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-secondary"></div>
               </div>
-              <div class="flex items-center gap-4">
-                <!-- 开关 -->
-                <button @click="toggleRule(rule)" :class="[rule.enabled ? 'bg-accent-primary' : 'bg-white/10']" class="w-10 h-5 rounded-full relative transition-colors">
-                  <div :class="[rule.enabled ? 'translate-x-5' : 'translate-x-1']" class="absolute top-1 w-3 h-3 bg-white rounded-full transition-transform"></div>
+              <span class="text-xs text-text-dim font-bold">仅显示已安装</span>
+            </label>
+
+            <button v-if="currentTab === 'dynamic'" @click="createDynamicRule"
+              class="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary/80 text-black text-xs font-bold rounded-lg shadow-lg shadow-accent-primary/20 transition-all active:scale-95">
+              <Plus class="w-4 h-4" /> 新建规则
+            </button>
+
+            <label class="flex items-center gap-2 cursor-pointer select-none" :key="currentTab + 'Enable'">
+              <div class="relative">
+                <input type="checkbox" v-model="globalRulesEnable" class="sr-only peer" >
+                <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-success"></div>
+              </div>
+              <span class="text-xs text-text-dim font-bold">启用规则</span>
+            </label>
+          </div>
+        </header>
+
+        <!-- 内容列表 -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+          
+          <!-- 1. 动态规则列表 -->
+          <template v-if="currentTab === 'dynamic'">
+            <div v-for="rule in filteredDynamicRules" :key="rule.rule_id" 
+              class="group relative bg-white/5 border border-white/10 hover:border-accent-primary/30 rounded-xl p-4 transition-all duration-200">
+              
+              <div class="flex justify-between items-start">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm font-bold text-white">{{ rule.name }}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-black/30 text-text-dim border border-white/5">Priority: {{ rule.priority }}</span>
+                    <span v-if="!rule.enabled" class="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">已禁用</span>
+                  </div>
+                  
+                  <!-- 逻辑可视化 -->
+                  <div class="mt-3 flex flex-wrap gap-2 items-center text-xs">
+                    <span class="text-accent-secondary font-bold font-mono">IF</span>
+                    <div class="flex flex-wrap gap-1">
+                      <span v-for="(f, i) in rule.filters" :key="i" class="px-1.5 py-0.5 rounded bg-white/10 text-text-main border border-white/5">
+                        {{ f.field }} {{ formatOperator(f.operator) }} <span class="text-accent-cool">{{ f.value }}</span>
+                      </span>
+                    </div>
+                    <span class="text-accent-primary font-bold font-mono ml-2">THEN</span>
+                    <span class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
+                      {{ formatAction(rule.action) }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 操作区 -->
+                <div class="flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                  <button @click="ruleStore.toggleDynamicRule(rule)" v-tooltip="rule.enabled ? '禁用规则' : '启用规则'"
+                    class="p-2 rounded-lg hover:bg-white/10" :class="rule.enabled ? 'text-accent-success' : 'text-accent-danger'">
+                    <CircleCheckBig v-if="rule.enabled" class="w-4 h-4" />
+                    <CircleOff v-else class="w-4 h-4" />
+                  </button>
+                  <button @click="editDynamicRule(rule)" v-tooltip="'编辑'" class="p-2 rounded-lg hover:bg-white/10 text-text-dim hover:text-white">
+                    <Edit3 class="w-4 h-4" />
+                  </button>
+                  <button @click="deleteDynamicRule(rule, $event)" v-tooltip="'删除'" class="p-2 rounded-lg hover:bg-red-500/10 text-text-dim hover:text-red-400">
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="filteredDynamicRules.length === 0" class="flex flex-col items-center justify-center h-64 text-text-dim/30">
+              <Zap class="w-12 h-12 mb-2" />
+              <p class="text-sm">暂无动态规则</p>
+            </div>
+          </template>
+
+          <!-- 2. 用户规则 & 社区规则列表 (共用结构) -->
+          <template v-else>
+            <div v-if="currentTab === 'community'" class="mb-4 p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
+               <div class="text-xs text-accent-secondary">
+                 <p class="font-bold mb-1">社区规则库 (RimSort)</p>
+                 <p class="opacity-80">包含众多由社区维护的排序建议。此处仅展示与你已安装模组相关的条目。</p>
+               </div>
+               <button @click="ruleStore.updateCommunity" class="px-3 py-1.5 bg-accent-secondary/20 hover:bg-accent-secondary/40 text-accent-secondary rounded-lg text-xs font-bold transition-all border border-accent-secondary/30">
+                 手动更新库
+               </button>
+            </div>
+
+            <div v-for="item in filteredStaticRules" :key="item.id" 
+              class="flex gap-4 p-2 rounded-xl bg-white/2 border border-white/5 hover:bg-white/5 transition-colors">
+              
+              <!-- Mod 信息 -->
+              <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="store.takeModById(item.id)">
+                <div class="w-10 h-10 rounded-lg bg-black/30 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                   <img v-if="item.icon" :src="item.icon" class="w-full h-full object-cover">
+                   <div v-else class="text-[10px] text-text-dim">{{ item.id.substring(0,2) }}</div>
+                </div>
+                <div class="min-w-0">
+                  <div class="text-sm font-bold text-text-main truncate">{{ item.name }}</div>
+                  <div class="text-[10px] text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
+                </div>
+              </div>
+
+              <!-- 规则详情 -->
+              <div class="flex-1 space-y-2 border-l border-white/5 pl-4">
+                <!-- Load After -->
+                <div v-if="item.rules.loadAfter && Object.keys(item.rules.loadAfter).length" class="flex flex-wrap gap-2 items-start">
+                  <span class="text-[10px] font-bold text-accent-warn uppercase mt-0.5">前置:</span>
+                  <div class="flex flex-wrap gap-1">
+                    <span v-for="(info, targetId) in item.rules.loadAfter" :key="targetId" 
+                      v-tooltip="formatTooltip(targetId, info)"
+                      class="px-1.5 py-0.5 rounded bg-accent-warn/10 text-text-main text-[11px] border border-accent-warn/20 truncate max-w-[200px] cursor-help">
+                      {{ getDisplayName(targetId) }}
+                    </span>
+                  </div>
+                </div>
+                <!-- Load Before -->
+                <div v-if="item.rules.loadBefore && Object.keys(item.rules.loadBefore).length" class="flex flex-wrap gap-2 items-start">
+                  <span class="text-[10px] font-bold text-accent-primary uppercase mt-0.5">后置:</span>
+                  <div class="flex flex-wrap gap-1">
+                    <span v-for="(info, targetId) in item.rules.loadBefore" :key="targetId"
+                      v-tooltip="formatTooltip(targetId, info)" 
+                      class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-text-main text-[11px] border border-accent-primary/20 truncate max-w-[200px] cursor-help">
+                      {{ getDisplayName(targetId) }}
+                    </span>
+                  </div>
+                </div>
+                <!-- Incompatible -->
+                <div v-if="item.rules.incompatibleWith && Object.keys(item.rules.incompatibleWith).length" class="flex flex-wrap gap-2 items-start">
+                  <span class="text-[10px] font-bold text-accent-danger uppercase mt-0.5">冲突:</span>
+                  <div class="flex flex-wrap gap-1">
+                    <span v-for="(info, targetId) in item.rules.incompatibleWith" :key="targetId"
+                      v-tooltip="formatTooltip(targetId, info)"
+                      class="px-1.5 py-0.5 rounded bg-accent-danger/10 text-text-main text-[11px] border border-accent-danger/20 truncate max-w-[200px] cursor-help">
+                      {{ getDisplayName(targetId) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 操作 (仅用户规则有删除) -->
+              <div class="shrink-0 flex items-center">
+                <button @click="toggleModRule(item.id)" v-tooltip="isModExcluded(item.id) ? '启用规则' : '禁用规则'"
+                  class="p-2 rounded-lg hover:bg-white/10" :class="!isModExcluded(item.id) ? 'text-accent-success' : 'text-accent-danger'">
+                  <CircleCheckBig v-if="!isModExcluded(item.id)" class="w-4 h-4" />
+                  <CircleOff v-else class="w-4 h-4" />
                 </button>
-                <!-- 动作 -->
-                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button @click="editRule(rule)" class="p-2 hover:bg-white/10 rounded-lg text-text-dim hover:text-white"><Edit2 class="w-4 h-4"/></button>
-                  <button @click="deleteRule(rule)" class="p-2 hover:bg-red-500/20 rounded-lg text-text-dim hover:text-red-400"><Trash2 class="w-4 h-4"/></button>
-                </div>
+
+                <button v-if="currentTab === 'user'" @click="deleteUserModRule(item.id, $event)" class="p-2 text-text-dim hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                  <Trash2 class="w-4 h-4" />
+                </button>
               </div>
-            </div>
-            <!-- 逻辑预览 -->
-            <div class="mt-4 flex items-center gap-2 text-[11px] font-mono text-text-dim/60">
-              <span class="text-accent-secondary">IF</span>
-              <span>({{ rule.filters.length }} filters)</span>
-              <span class="text-accent-primary">THEN</span>
-              <span class="text-white">{{ rule.action.type }} ({{ rule.action.value }})</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- 社区规则看板 (只读展示) -->
-        <div v-if="currentTab === 'community'" class="space-y-6">
-          <div class="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
-            <div>
-              <h3 class="text-emerald-400 font-bold">RimSort 社区规则库</h3>
-              <p class="text-xs text-emerald-400/60 mt-1">当前已载入 {{ communityCount }} 条社区维护的先后关系建议。</p>
             </div>
-            <button @click="updateCommunity" class="px-4 py-2 bg-emerald-500 text-black text-xs font-bold rounded-lg">手动更新库</button>
-          </div>
-          <!-- 搜索展示 -->
-          <div class="grid grid-cols-1 gap-2">
-             <!-- 此处可实现一个简单的社区规则查询器 -->
-          </div>
-        </div>
-
-        <!-- 单项覆盖 -->
-        <div v-if="currentTab === 'single'" class="space-y-2">
-          <div v-for="(content, pid) in userModRules" :key="pid" 
-            class="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-xl">
-            <div class="flex items-center gap-4">
-              <div class="w-8 h-8 rounded bg-accent-primary/20 flex items-center justify-center text-accent-primary font-bold text-xs uppercase">{{ pid[0] }}</div>
-              <div>
-                <div class="text-sm font-bold text-white">{{ pid }}</div>
-                <div class="text-[10px] text-text-dim uppercase">手动设置了 {{ Object.keys(content).length }} 项约束</div>
-              </div>
+            
+            <div v-if="filteredStaticRules.length === 0" class="flex flex-col items-center justify-center h-64 text-text-dim/30">
+              <Shield class="w-12 h-12 mb-2" />
+              <p class="text-sm">没有找到相关规则</p>
             </div>
-            <button @click="deleteSingleRule(pid)" class="text-text-dim hover:text-red-400 p-2"><X class="w-4 h-4"/></button>
-          </div>
-        </div>
+          </template>
 
-      </div>
+        </div>
+      </main>
     </div>
 
-    <!-- 3. 动态规则编辑器 (Overlay Modal) -->
+    <!-- ================= 3. 规则编辑器 (Modal) ================= -->
     <Transition name="fade">
-      <div v-if="editingRule" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-20">
-        <div class="w-full max-w-2xl bg-bg-surface border border-white/10 rounded-3xl shadow-3xl flex flex-col max-h-full">
-           <header class="p-6 border-b border-white/5 flex justify-between items-center">
-             <h2 class="text-lg font-bold text-white">编辑规则: {{ editingRule.name }}</h2>
-             <button @click="editingRule = null"><X class="w-6 h-6"/></button>
+      <div v-if="editingRule" class="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="w-full max-w-2xl bg-bg-surface border border-white/10 rounded-2xl shadow-3xl flex flex-col max-h-[90vh] animate-scale-in">
+           
+           <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/2">
+             <div class="flex items-center gap-3">
+               <div class="w-8 h-8 rounded-lg bg-accent-primary/20 flex items-center justify-center">
+                 <Zap class="w-4 h-4 text-accent-primary" />
+               </div>
+               <h2 class="text-lg font-bold text-white">{{ editingRule.rule_id.startsWith('new_') ? '新建动态规则' : '编辑规则' }}</h2>
+             </div>
+             <button @click="editingRule = null" class="text-text-dim hover:text-white"><X class="w-6 h-6"/></button>
            </header>
            
-           <div class="flex-1 overflow-y-auto p-8 space-y-6">
-             <!-- 基础信息 -->
-             <div class="grid grid-cols-2 gap-4">
-               <div class="space-y-2">
-                 <label class="text-[10px] uppercase font-bold text-text-dim">规则名称</label>
-                 <input v-model="editingRule.name" class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-sm" />
+           <div class="flex-1 overflow-y-auto p-6 space-y-6">
+             
+             <!-- 基础设置 -->
+             <div class="grid grid-cols-12 gap-4">
+               <div class="col-span-8 space-y-1.5">
+                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">规则名称</label>
+                 <input v-model="editingRule.name" placeholder="例如: 汉化包置底" class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
                </div>
-               <div class="space-y-2">
-                 <label class="text-[10px] uppercase font-bold text-text-dim">优先级 (数字越大越靠后应用)</label>
-                 <input type="number" v-model.number="editingRule.priority" class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-sm" />
+               <div class="col-span-4 space-y-1.5">
+                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">优先级 (Priority)</label>
+                 <input type="number" v-model.number="editingRule.priority" class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
+               </div>
+               <div class="col-span-12 space-y-1.5">
+                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">描述 (可选)</label>
+                 <input v-model="editingRule.description" placeholder="规则的备注说明..." class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
                </div>
              </div>
 
              <!-- 条件构建器 -->
-             <div class="space-y-4">
+             <div class="space-y-3">
                <div class="flex items-center justify-between">
-                 <label class="text-[10px] uppercase font-bold text-text-dim">触发条件 ({{ editingRule.logic }})</label>
-                 <button @click="addFilter" class="text-accent-primary text-xs">+ 添加条件</button>
+                 <div class="flex items-center gap-2">
+                   <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">触发条件</label>
+                   <select v-model="editingRule.logic" class="bg-black/30 border border-white/10 rounded text-xs px-2 py-0.5 text-accent-secondary outline-none cursor-pointer">
+                     <option value="AND">满足所有 (AND)</option>
+                     <option value="OR">满足任一 (OR)</option>
+                   </select>
+                 </div>
+                 <button @click="addFilter" class="text-accent-primary text-xs hover:underline flex items-center gap-1"><Plus class="w-3 h-3"/>添加条件</button>
                </div>
-               <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center bg-black/20 p-2 rounded-lg">
-                 <select v-model="filter.field" class="bg-transparent text-xs outline-none w-24">
-                   <option value="package_id">包ID</option>
-                   <option value="author">作者</option>
-                   <option value="tags">标签</option>
-                   <option value="user_mod_type">分类</option>
-                 </select>
-                 <select v-model="filter.operator" class="bg-transparent text-xs outline-none w-24 text-accent-primary">
-                   <option value="contains">包含</option>
-                   <option value="equals">等于</option>
-                   <option value="regex">正则</option>
-                 </select>
-                 <input v-model="filter.value" class="flex-1 bg-white/5 rounded px-2 py-1 text-xs outline-none" />
-                 <button @click="editingRule.filters.splice(idx, 1)" class="text-red-400/50 hover:text-red-400"><Trash2 class="w-3 h-3"/></button>
+               
+               <div class="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5">
+                 <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
+                   <select v-model="filter.field" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none w-28">
+                     <option value="package_id">包 ID</option>
+                     <option value="name">名称</option>
+                     <option value="author">作者</option>
+                     <option value="tags">标签</option>
+                     <option value="user_mod_type">类型</option>
+                   </select>
+                   <select v-model="filter.operator" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-accent-secondary outline-none w-24">
+                     <option value="contains">包含</option>
+                     <option value="not_contains">不包含</option>
+                     <option value="equals">等于</option>
+                     <option value="starts_with">开头是</option>
+                     <option value="ends_with">结尾是</option>
+                     <option value="regex">正则匹配</option>
+                   </select>
+                   <input v-model="filter.value" placeholder="值..." class="flex-1 bg-white/5 border border-white/10 rounded px-3 py-1.5 text-xs text-white focus:border-accent-primary outline-none" />
+                   <button @click="editingRule.filters.splice(idx, 1)" class="p-1.5 text-text-dim hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity"><Trash2 class="w-3.5 h-3.5"/></button>
+                 </div>
+                 <div v-if="editingRule.filters.length === 0" class="text-center py-2 text-xs text-text-dim italic">点击右上角添加筛选条件</div>
                </div>
              </div>
 
              <!-- 动作设置 -->
-             <div class="p-6 bg-accent-primary/5 border border-accent-primary/20 rounded-2xl space-y-4">
-               <label class="text-[10px] uppercase font-bold text-accent-primary">执行动作</label>
-               <div class="flex gap-4">
-                 <select v-model="editingRule.action.type" class="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm flex-1">
-                   <option value="weight_shift">权重偏移 (相对移动)</option>
-                   <option value="weight_set">强制权重 (绝对位置)</option>
-                   <option value="load_after">必须在某ID之后</option>
-                   <option value="load_before">必须在某ID之前</option>
-                   <option value="top">置顶</option>
-                   <option value="bottom">置底</option>
+             <div class="space-y-3">
+               <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">执行动作</label>
+               <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 flex gap-4 items-center">
+                 <select v-model="editingRule.action.type" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-accent-primary outline-none min-w-[140px]">
+                   <option value="weight_shift">权重偏移 (Shift)</option>
+                   <option value="weight_set">强制权重 (Set)</option>
+                   <option value="load_after">必须在某ID后</option>
+                   <option value="load_before">必须在某ID前</option>
+                   <option value="top">强制置顶</option>
+                   <option value="bottom">强制置底</option>
                  </select>
-                 <input v-if="editingRule.action.type !== 'top' && editingRule.action.type !== 'bottom'" 
-                   v-model="editingRule.action.value" 
-                   class="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm w-32" 
-                   :placeholder="editingRule.action.type.includes('weight') ? '数字' : 'PackageID'" />
+                 
+                 <!-- 根据动作类型显示输入框 -->
+                 <div v-if="editingRule.action.type.includes('weight')" class="flex items-center gap-2 flex-1">
+                   <input type="number" v-model.number="editingRule.action.value" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm w-32 text-white outline-none focus:border-accent-primary" />
+                   <span class="text-xs text-text-dim">
+                     {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
+                   </span>
+                 </div>
+                 <div v-else-if="editingRule.action.type.includes('load_')" class="flex-1">
+                   <input v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent-primary font-mono" />
+                 </div>
+                 <div v-else class="text-xs text-text-dim flex-1">
+                   无需参数，匹配项将被移至列表最{{ editingRule.action.type === 'top' ? '前' : '后' }}端。
+                 </div>
                </div>
              </div>
+
            </div>
 
-           <footer class="p-6 border-t border-white/5 flex justify-end gap-3">
-             <button @click="editingRule = null" class="px-6 py-2 rounded-xl hover:bg-white/5 text-sm font-bold text-text-dim">取消</button>
-             <button @click="saveRule" class="px-8 py-2 bg-accent-primary text-black rounded-xl text-sm font-bold shadow-lg">保存规则</button>
+           <footer class="p-4 border-t border-white/5 bg-white/2 flex justify-end gap-3">
+             <button @click="editingRule = null" class="px-5 py-2 rounded-lg hover:bg-white/5 text-sm font-bold text-text-dim transition-colors">取消</button>
+             <button @click="saveDynamicRule" class="px-6 py-2 bg-accent-primary hover:bg-accent-primary/90 text-black rounded-lg text-sm font-bold shadow-lg transition-transform active:scale-95">保存规则</button>
            </footer>
         </div>
       </div>
@@ -186,140 +329,218 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { Edit2, Trash2, X, Shield, User, Zap, Share2 } from 'lucide-vue-next'
+import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff } from 'lucide-vue-next'
 import { useToast } from "vue-toastification"
 import { useModStore } from '../stores/modStore'
-
-const tabs = [
-  { id: 'dynamic', label: '群组规则', icon: Zap },
-  { id: 'single', label: '单项覆盖', icon: User },
-  { id: 'community', label: '社区库', icon: Shield },
-]
+import { useRuleStore } from '../stores/ruleStore'
+import { useConfirmStore } from '../stores/confirmStore'
 
 
+
+const emit = defineEmits(['close'])
 const toast = useToast()
-const search = ref('')
+const store = useModStore()
+const ruleStore = useRuleStore()
+const confirmStore = useConfirmStore()
+
+
+// --- 状态管理 ---
 const currentTab = ref('dynamic')
-const modStore = useModStore()
+const searchQuery = ref('')
+const filterInstalled = ref(true) // 默认开启“仅显示已安装”
 
-// 核心数据状态
-const allRules = ref({ 
-  user_dynamic_rules: [], 
-  user_mod_rules: {}, 
-  community_rules_count: 0 
-});
 
-// 编辑状态
-const editingRule = ref(null);
+const editingRule = ref(null)
 
-// 动态规则过滤与排序
-const filteredDynamicRules = computed(() => {
-  let rules = [...(allRules.value.user_dynamic_rules || [])];
-  const query = search.value.toLowerCase().trim();
-  if (query) {
-    rules = rules.filter(rule => 
-      rule.name.toLowerCase().includes(query) || 
-      (rule.description && rule.description.toLowerCase().includes(query)) ||
-      rule.filters.some(f => f.value.toLowerCase().includes(query))
-    );
-  }
-  return rules.sort((a, b) => a.priority - b.priority);
-});
+const tabs = computed(() => [
+  { id: 'dynamic', label: '动态群组规则', icon: Zap, count: allRules.value.user_dynamic_rules.length },
+  { id: 'user', label: '用户Mod规则', icon: User, count: Object.keys(allRules.value.user_mod_rules).length },
+  { id: 'community', label: '社区Mod规则', icon: Waypoints, count: Object.keys(allRules.value.community_mod_rules).length },
+])
 
-// 社区规则数量
-const communityCount = computed(() => allRules.value.community_rules_count);
+const allRules = computed(() => ({
+  user_mod_rules: ruleStore.userModRules,
+  community_mod_rules: ruleStore.communityModRules,
+  user_dynamic_rules: ruleStore.userDynamicRules,
+  excluded_user_mods_set: new Set(ruleStore.settings?.excluded_user_mods || []),
+  excluded_community_mods_set: new Set(ruleStore.settings?.excluded_community_mods || []),
+}))
 
-// 单项规则列表
-const userModRules = computed(() => allRules.value.user_mod_rules);
+const isModExcluded = (modId) => {
+  if (currentTab.value === 'user') return allRules.value.excluded_user_mods_set.has(modId)
+  if (currentTab.value === 'community') return allRules.value.excluded_community_mods_set.has(modId)
+}
 
-// --- 方法 ---
-
-const fetchRules = async () => {
-  if (!window.pywebview) return;
-  try {
-    const res = await window.pywebview.api.get_all_rules();
-    if (res.status === 'success') {
-      console.log("加载规则成功", res.data);
-      allRules.value = res.data;
+// 规则是否启用
+const globalRulesEnable = computed({
+    get() {
+      if (currentTab.value === 'dynamic') return !!ruleStore.settings?.dynamic_rules_enabled
+      if (currentTab.value === 'user') return !!ruleStore.settings?.user_mod_rules_enabled
+      if (currentTab.value === 'community') return !!ruleStore.settings?.community_mod_rules_enabled
+    },
+    set(val) {
+      if (currentTab.value === 'dynamic') ruleStore.setGlobalEnable('dynamic', val)
+      if (currentTab.value === 'user') ruleStore.setGlobalEnable('user', val)
+      if (currentTab.value === 'community') ruleStore.setGlobalEnable('community', val)
     }
-  } catch (e) {
-    console.error("加载规则失败", e);
-  }
-};
+})
 
-const createNewRule = () => {
+
+// --- 核心过滤逻辑 ---
+
+// 1. 动态规则过滤
+const filteredDynamicRules = computed(() => {
+  let rules = [...(allRules.value.user_dynamic_rules || [])]
+  const q = searchQuery.value.toLowerCase().trim()
+  
+  if (q) {
+    rules = rules.filter(r => 
+      r.name.toLowerCase().includes(q) || 
+      (r.description && r.description.toLowerCase().includes(q))
+    )
+  }
+  return rules.sort((a, b) => a.priority - b.priority)
+})
+
+// 2. 静态规则过滤 (用户单项 & 社区)
+const filteredStaticRules = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  const source = currentTab.value === 'user' ? allRules.value.user_mod_rules : allRules.value.community_mod_rules
+  
+  // 转换为数组方便渲染: [{ id: 'package_id', rules: {...}, name: 'Mod Name', icon: '...' }]
+  let list = Object.entries(source).map(([id, rules]) => {
+    const mod = store.takeModById(id) // 从 store 获取 Mod 信息
+    return {
+      id: id,
+      rules: rules,
+      name: mod?.name || id,
+      icon: mod?.thumb_url || null,
+      isInstalled: mod && !mod.is_missing // 判断是否安装
+    }
+  })
+
+  // 过滤器 1: 仅显示已安装
+  if (filterInstalled.value) {
+    list = list.filter(item => item.isInstalled)
+  }
+
+  // 过滤器 2: 搜索文本
+  if (q) {
+    list = list.filter(item => 
+      item.id.toLowerCase().includes(q) || 
+      item.name.toLowerCase().includes(q)
+    )
+  }
+
+  // 排序：已安装的排前面，然后按名字
+  return list.sort((a, b) => {
+    if (a.isInstalled !== b.isInstalled) return b.isInstalled - a.isInstalled
+    return a.name.localeCompare(b.name)
+  })
+})
+
+// --- 辅助显示方法 ---
+const formatOperator = (op) => {
+  const map = { contains: '包含', equals: '等于', not_contains: '不含', regex: '正则', starts_with: '开头是', ends_with: '结尾是' }
+  return map[op] || op
+}
+// 格式化操作指令
+const formatAction = (act) => {
+  if (act.type === 'weight_shift') return `权重 ${act.value > 0 ? '+' : ''}${act.value}`
+  if (act.type === 'weight_set') return `权重设为 ${act.value}`
+  if (act.type.includes('load_')) return `${act.type === 'load_after' ? 'After' : 'Before'} ${act.value}`
+  return act.type.toUpperCase()
+}
+// 获取 Mod 显示名称
+const getDisplayName = (id) => store.displayModName(id)
+// 格式化动态规则的提示信息
+const formatTooltip = (targetId, info) => {
+  let text = `ID: ${targetId}`
+  if (info.name) text += `\nName: ${Array.isArray(info.name) ? info.name[0] : info.name}`
+  if (info.comment) text += `\n\n说明:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
+  return text
+}
+
+// --- 操作逻辑 ---
+// 创建新的动态规则
+const createDynamicRule = () => {
   editingRule.value = {
-    rule_id: 'rule_' + Date.now(),
+    rule_id: 'new_' + Date.now(),
     name: '',
     description: '',
     enabled: true,
     priority: 100,
     logic: 'AND',
     filters: [{ field: 'package_id', operator: 'contains', value: '' }],
-    action: { type: 'weight_shift', value: 0 }
-  };
-};
-
+    action: { type: 'weight_shift', value: -10 }
+  }
+}
+// 编辑动态规则
+const editDynamicRule = (rule) => {
+  editingRule.value = JSON.parse(JSON.stringify(rule)) // Deep clone
+}
+// 添加检查条件
 const addFilter = () => {
-  editingRule.value.filters.push({ field: 'package_id', operator: 'contains', value: '' });
-};
-
-const editRule = (rule) => {
-  // 深拷贝，防止直接修改列表数据
-  editingRule.value = JSON.parse(JSON.stringify(rule));
-};
-
-const saveRule = async () => {
+  editingRule.value.filters.push({ field: 'package_id', operator: 'contains', value: '' })
+}
+// 保存动态规则
+const saveDynamicRule = async () => {
+  if (!window.pywebview) return
   if (!editingRule.value.name) {
-    toast.error("规则名称不能为空");
-    return;
+    toast.warning("请输入规则名称")
+    return
   }
-  const res = await window.pywebview.api.rule_update_dynamic(editingRule.value);
-  if (res.status === 'success') {
-    toast.success("保存成功");
-    editingRule.value = null;
-    fetchRules();
+  // 如果是新建，生成正式ID
+  if (editingRule.value.rule_id.startsWith('new_')) {
+    editingRule.value.rule_id = 'dyn_' + Date.now()
   }
-};
-
-const deleteRule = async (rule) => {
-  if (!confirm(`确定要删除规则 "${rule.name}" 吗？`)) return;
-  const res = await window.pywebview.api.rule_delete_dynamic(rule.rule_id);
-  if (res.status === 'success') {
-    fetchRules();
+  const res = await ruleStore.saveDynamicRules(editingRule.value)
+  if (res) { editingRule.value = null }
+}
+// 删除动态规则
+const deleteDynamicRule = async (rule, event) => {
+  const confirm = await confirmStore.open({
+    title: '确认删除',
+    message: '确定删除该动态规则吗？',
+    type: 'error',
+    mode: 'confirm',
+  },event.target)
+  if (confirm) {
+    ruleStore.deleteDynamicRule(rule)
   }
-};
+}
 
-const toggleRule = async (rule) => {
-  const res = await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, !rule.enabled);
-  if (res.status === 'success') {
-    rule.enabled = !rule.enabled;
+
+// 删除用户 Mod 规则
+const deleteUserModRule = async (ruleId, event) => {
+  const confirm = await confirmStore.open({
+    title: '确认删除',
+    message: '确定删除该 Mod 规则吗？',
+    type: 'error',
+    mode: 'confirm',
+  },event.target)
+  if (confirm) {
+    ruleStore.deleteUserModRule(ruleId)
   }
-};
-
-const deleteSingleRule = async (pid) => {
-  if (confirm(`确定要删除对 ${pid} 的手动覆盖规则吗？`)) {
-    await window.pywebview.api.rule_delete_single(pid);
-    fetchRules();
+}
+// 切换 Mod 规则状态
+const toggleModRule = (modId) => {
+  if (currentTab.value === 'community') {
+    ruleStore.toggleCommunityModRule(modId)
+  } else if (currentTab.value === 'user') {
+    ruleStore.toggleUserModRule(modId)
   }
-};
+}
 
-// 导入导出
-const handleExport = async () => {
-  // 默认导出所有启用的动态规则 ID
-  const ids = allRules.value.user_dynamic_rules
-    .filter(r => r.enabled)
-    .map(r => r.rule_id);
-  await window.pywebview.api.rule_export_bundle(ids, modStore.settings.home_path);
-};
 
-const handleImport = async () => {
-  const res = await window.pywebview.api.rule_import_bundle();
-  if (res.status === 'success') {
-    fetchRules();
-  }
-};
-
-// 初始化
-onMounted(fetchRules);
 </script>
+
+<style scoped>
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+</style>
