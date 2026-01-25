@@ -50,3 +50,4 @@ class NetworkManager:
 
         socket.getaddrinfo = new_getaddrinfo
 
+

@@ -239,7 +239,7 @@ export const useRuleStore = defineStore('rules', () => {
   }
   // 导出规则
   const handleExport = async () => {
-    const ids = allRules.value.user_dynamic_rules.map(r => r.rule_id)
+    const ids = userDynamicRules.value.map(r => r.rule_id)
     await window.pywebview.api.rule_export_bundle(ids)
   }
   // 导入规则

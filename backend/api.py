@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 from send2trash import send2trash
 
 # 1. 引入配置管理
-from backend.settings import settings
+from backend.settings import settings, RULES_DIR
 from backend.utils.logger import logger
 from backend._version import __version__, __build__
 
@@ -25,6 +25,7 @@ from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
+from backend.managers.mgr_network import NetworkManager
 
 
 def log_api_call(func):
@@ -109,6 +110,7 @@ class API:
         self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
         self.scanner = ModScanner()
         self.sorter = OrderSorter()
+        self.network_mgr = NetworkManager()
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -841,7 +843,7 @@ class API:
         """
         try:
             bundle = self.sorter.rule_mgr.create_export_bundle(dynamic_rule_ids)
-            
+            if not initial_dir: initial_dir = str(RULES_DIR)
             # 使用时间戳作为默认文件名
             default_name = f"RimOrder_Rules_{datetime.now().strftime('%Y%m%d')}.json"
             # 注意: file_types 参数格式需要符合 pywebview 的要求
@@ -875,6 +877,9 @@ class API:
         except Exception as e:
             logger.error(f"Import failed: {e}")
             return ApiResponse.error(f"导入失败: {e}")
+        
+        
+        
         
     # =========================================================================
     #  10. 日志管理 (Log Management)
