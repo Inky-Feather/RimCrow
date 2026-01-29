@@ -3,6 +3,24 @@ import { ref, computed } from 'vue'
 import { useModStore } from './modStore'
 import { createToastInterface } from 'vue-toastification'
 
+// 动态规则支持属性映射
+const DYNAMIC_RULE_PROPS = {
+  'package_id': '包 ID',
+  'name': '名称',
+  'author': '作者',
+  'tags': '标签',
+  'user_mod_type': '类型'
+}
+// 动态规则动作映射
+const DYNAMIC_RULE_ACTIONS = {
+  'weight_shift': '权重偏移 (Shift)',
+  'weight_set': '强制权重 (Set)',
+  'load_after': '必须在某ID后',
+  'load_before': '必须在某ID前',
+  'top': '强制置顶',
+  'bottom': '强制置底',
+}
+
 export const useRuleStore = defineStore('rules', () => {
   const modStore = useModStore()
   const toast = createToastInterface()
@@ -234,8 +252,20 @@ export const useRuleStore = defineStore('rules', () => {
   // --- 导入导出 ---
   // 更新社区库
   const updateCommunity = async () => {
-    await window.pywebview.api.rule_update_community()
-    fetchRules()
+    try {
+        // 调用 API
+        const res = await window.pywebview.api.rule_update_community()
+        
+        if (res.status === 'success') {
+            toast.success("社区库已更新")
+            // 重新获取规则数据 (此时后端内存已是最新)
+            await fetchRules() 
+        } else {
+            throw new Error(res.message)
+        }
+    } catch (error) {
+        toast.error("更新社区库失败: " + error.message)
+    }
   }
   // 导出规则
   const handleExport = async () => {
@@ -250,7 +280,7 @@ export const useRuleStore = defineStore('rules', () => {
   
   return {
     communityModRules, userModRules, userDynamicRules, currentId,
-    targetId, currentConstraints, settings,
+    targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, 
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
     saveDynamicRules, 

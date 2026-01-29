@@ -80,20 +80,24 @@
             <div v-for="rule in filteredDynamicRules" :key="rule.rule_id" 
               class="group relative bg-white/5 border border-white/10 hover:border-accent-primary/30 rounded-xl p-4 transition-all duration-200">
               
-              <div class="flex justify-between items-start">
+              <div class="flex justify-between items-start ">
                 <div class="flex-1">
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-2">
                     <span class="text-sm font-bold text-white">{{ rule.name }}</span>
                     <span class="text-[10px] px-2 py-0.5 rounded bg-black/30 text-text-dim border border-white/5">Priority: {{ rule.priority }}</span>
                     <span v-if="!rule.enabled" class="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">已禁用</span>
+                    <span v-if="rule.description" :title="rule.description" class="flex-1 text-[10px] px-1 py-0.5 text-text-dim ">{{ rule.description }}</span>
                   </div>
                   
                   <!-- 逻辑可视化 -->
                   <div class="mt-3 flex flex-wrap gap-2 items-center text-xs">
                     <span class="text-accent-secondary font-bold font-mono">IF</span>
                     <div class="flex flex-wrap gap-1">
-                      <span v-for="(f, i) in rule.filters" :key="i" class="px-1.5 py-0.5 rounded bg-white/10 text-text-main border border-white/5">
-                        {{ f.field }} {{ formatOperator(f.operator) }} <span class="text-accent-cool">{{ f.value }}</span>
+                      <span v-for="(f, i) in rule.filters" :key="i">
+                        <span v-if="i>0" class="text-accent-cool mr-1">{{ rule.logic }}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-white/10 text-text-main border border-white/5">
+                          {{ ruleStore.DYNAMIC_RULE_PROPS[f.field] }} {{ formatOperator(f.operator) }} <span class="text-accent-cool">{{ f.value }}</span>
+                        </span>
                       </span>
                     </div>
                     <span class="text-accent-primary font-bold font-mono ml-2">THEN</span>
@@ -162,7 +166,7 @@
                     <span v-for="(info, targetId) in item.rules.loadAfter" :key="targetId" 
                       v-tooltip="formatTooltip(targetId, info)"
                       class="px-1.5 py-0.5 rounded bg-accent-warn/10 text-text-main text-[11px] border border-accent-warn/20 truncate max-w-[200px] cursor-help">
-                      {{ getDisplayName(targetId) }}
+                      {{ getDisplayName(targetId, info.name) }}
                     </span>
                   </div>
                 </div>
@@ -173,7 +177,7 @@
                     <span v-for="(info, targetId) in item.rules.loadBefore" :key="targetId"
                       v-tooltip="formatTooltip(targetId, info)" 
                       class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-text-main text-[11px] border border-accent-primary/20 truncate max-w-[200px] cursor-help">
-                      {{ getDisplayName(targetId) }}
+                      {{ getDisplayName(targetId, info.name) }}
                     </span>
                   </div>
                 </div>
@@ -184,7 +188,7 @@
                     <span v-for="(info, targetId) in item.rules.incompatibleWith" :key="targetId"
                       v-tooltip="formatTooltip(targetId, info)"
                       class="px-1.5 py-0.5 rounded bg-accent-danger/10 text-text-main text-[11px] border border-accent-danger/20 truncate max-w-[200px] cursor-help">
-                      {{ getDisplayName(targetId) }}
+                      {{ getDisplayName(targetId, info.name) }}
                     </span>
                   </div>
                 </div>
@@ -264,11 +268,7 @@
                <div class="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5">
                  <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
                    <select v-model="filter.field" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none w-28">
-                     <option value="package_id">包 ID</option>
-                     <option value="name">名称</option>
-                     <option value="author">作者</option>
-                     <option value="tags">标签</option>
-                     <option value="user_mod_type">类型</option>
+                     <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_PROPS" :value="key">{{ label }}</option>
                    </select>
                    <select v-model="filter.operator" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-accent-secondary outline-none w-24">
                      <option value="contains">包含</option>
@@ -290,12 +290,7 @@
                <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">执行动作</label>
                <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 flex gap-4 items-center">
                  <select v-model="editingRule.action.type" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-accent-primary outline-none min-w-[140px]">
-                   <option value="weight_shift">权重偏移 (Shift)</option>
-                   <option value="weight_set">强制权重 (Set)</option>
-                   <option value="load_after">必须在某ID后</option>
-                   <option value="load_before">必须在某ID前</option>
-                   <option value="top">强制置顶</option>
-                   <option value="bottom">强制置底</option>
+                   <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_ACTIONS" :value="key">{{ label }}</option>
                  </select>
                  
                  <!-- 根据动作类型显示输入框 -->
@@ -304,6 +299,7 @@
                    <span class="text-xs text-text-dim">
                      {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
                    </span>
+                   <label class="text-xs text-text-dim italic hover:text-text-main cursor-help" v-tooltip="weightTooltip">?</label>
                  </div>
                  <div v-else-if="editingRule.action.type.includes('load_')" class="flex-1">
                    <input v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent-primary font-mono" />
@@ -328,7 +324,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff } from 'lucide-vue-next'
 import { useToast } from "vue-toastification"
 import { useModStore } from '../stores/modStore'
@@ -447,12 +443,12 @@ const formatOperator = (op) => {
 // 格式化操作指令
 const formatAction = (act) => {
   if (act.type === 'weight_shift') return `权重 ${act.value > 0 ? '+' : ''}${act.value}`
-  if (act.type === 'weight_set') return `权重设为 ${act.value}`
-  if (act.type.includes('load_')) return `${act.type === 'load_after' ? 'After' : 'Before'} ${act.value}`
-  return act.type.toUpperCase()
+  else if (act.type === 'weight_set') return `权重设为 ${act.value}`
+  else if (act.type.includes('load_')) return `在 ${store.displayModName(act.value)} ${act.type === 'load_after' ? '之后' : '之前'}`
+  else return act.type === 'top' ? '置顶' : '置底'
 }
 // 获取 Mod 显示名称
-const getDisplayName = (id) => store.displayModName(id)
+const getDisplayName = (id, defaultName) => store.displayModName(id, defaultName)
 // 格式化动态规则的提示信息
 const formatTooltip = (targetId, info) => {
   let text = `ID: ${targetId}`
@@ -460,6 +456,21 @@ const formatTooltip = (targetId, info) => {
   if (info.comment) text += `\n\n说明:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
   return text
 }
+// 权重说明
+const weightTooltip = `**MOD权重设置规则**
+权重取值范围为 0-1000，数值越低，加载优先级越高（越靠前） 。其中，普通 MOD 的默认权重为 500，若设置权重偏移，将以当前已设定的权重为基准进行偏移调整。
+
+建议按照以下权重区间对 MOD 进行分类设置，具体如下：
+
+[[权重区间]]		[[类别描述]]						[[典型例子]]
+0 - 50			绝对底层框架				Harmony, Prepatcher
+51 - 100		官方内容						Core, Royalty, Ideology, Anomaly
+101 - 200		通用基础库					Vanilla Expanded Framework
+201 - 700		普通功能/内容模组		大多数内容 Mod (物品、种族、派系)
+701 - 800		UI与界面增强				RimHUD, Numbers, InventoryTab
+801 - 950		视觉/汉化/补丁			汉化包 (LanguagePack), 纹理替换
+951 - 1000	末端优化/逻辑处理		Rocketman, Performance Optimize
+`
 
 // --- 操作逻辑 ---
 // 创建新的动态规则

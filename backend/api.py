@@ -26,6 +26,8 @@ from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_network import NetworkManager
+from backend.managers.mgr_download import DownloadManager
+
 
 
 def log_api_call(func):
@@ -111,6 +113,7 @@ class API:
         self.scanner = ModScanner()
         self.sorter = OrderSorter()
         self.network_mgr = NetworkManager()
+        self.download_mgr = DownloadManager()
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -823,16 +826,34 @@ class API:
             return ApiResponse.error(f"删除失败: {str(e)}")
 
     @log_api_call
-    def rule_update_community(self, raw_json: str):
+    def rule_update_community(self):
         """
-        重写社区库
-        注意：raw_json 可能很大，但在本地传输应该不是问题
+        更新社区规则库 (同步阻塞模式)
         """
         try:
-            if not raw_json: raw_json = ''
-            success = self.sorter.rule_mgr.overwrite_community_rules(raw_json)
-            return ApiResponse.success() if success else ApiResponse.error("重写失败")
+            file_folder: str = os.path.dirname(settings.config.community_rules_path)
+            file_name: str = os.path.basename(settings.config.community_rules_path)
+            url = settings.config.community_rules_url
+            if not os.path.exists(file_folder):
+                os.makedirs(file_folder)
+            # print(f"Downloading community rules to: {file_folder}\\{file_name}\nfrom: {url}")
+            # 2. 添加任务 (复用 DownloadManager，这样前端状态栏会有进度条！)
+            task_id = self.download_mgr.add_task(url, file_folder, file_name)
+            # 3. 【关键】阻塞等待下载完成 (最长等待 60秒)
+            logger.info(f"Waiting for community rules download... task_id={task_id}")
+            success = self.download_mgr.wait_for_task(task_id, timeout=60)
+            if not success:
+                # 检查是超时还是下载报错
+                task = self.download_mgr.tasks.get(task_id)
+                error_msg = task.error_msg if task else "Timeout"
+                return ApiResponse.error(f"下载失败: {error_msg}")
+            # 4. 【关键】下载完成后，通知 RuleManager 重新加载磁盘文件
+            self.sorter.rule_mgr.load_all() 
+
+            return ApiResponse.success(message="社区规则库更新完成")
+            
         except Exception as e:
+            logger.error(f"Update community rules failed: {e}")
             return ApiResponse.error(str(e))
 
     @log_api_call
@@ -914,8 +935,33 @@ class API:
     
     
     
+    # =========================================================================
+    #  11. 下载管理 (Download Management)
+    # =========================================================================
     
-    
+    @log_api_call
+    def download_file(self, url: str, target_dir = None, filename = None):
+        """
+        通用文件下载接口
+        :param url: 下载链接 (支持 GitHub blob)
+        :param target_dir: 目标目录 (如果不传，默认下载到 Downloads 或 Temp)
+        :param filename: 重命名文件名
+        """
+        if not target_dir:
+            # 默认下载到应用目录下的 Downloads
+            target_dir = os.path.join(os.getcwd(), "Downloads")
+            os.makedirs(target_dir, exist_ok=True)
+            
+        task_id = self.download_mgr.add_task(url, target_dir, filename)
+        return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
+
+    def cancel_download(self, task_id: str):
+        self.download_mgr.cancel_task(task_id)
+        return ApiResponse.success(message="尝试取消任务")
+
+    def get_active_downloads(self):
+        """获取所有任务状态 (用于 UI 恢复)"""
+        return ApiResponse.success(self.download_mgr.get_tasks_info())
     
     
     

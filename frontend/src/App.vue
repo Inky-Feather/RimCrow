@@ -209,14 +209,10 @@
     </div>
 
     <!-- 测试 -->
-    <div v-show="store.showTestDrawer" class="fixed bottom-4 left-4 w-5/9 h-7/9 bg-black/50 backdrop-blur-md p-4 border border-white/10 overflow-auto z-999">
-      <Temp2 />
-      <Temp3 />
-      <Temp4 />
+    <div v-if="store.settings.debug_mode">
+      <Test v-show="store.showTestDrawer" />
+      <DebugPanel />
     </div>
-    
-    <DebugPanel />
-
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver />
     
@@ -224,9 +220,7 @@
     <SettingsModal />
 
     <!-- 规则面板 -->
-    <!-- <div@click.self="store.showRuleDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999"> -->
-      <RulePanel v-if="store.showRuleDrawer" @close="store.showRuleDrawer = false" />
-    <!-- </div> -->
+    <RulePanel v-if="store.showRuleDrawer" @close="store.showRuleDrawer = false" />
 
     <!-- 状态条 -->
     <StatusBar class="relative z-20 flex-none" />
@@ -259,13 +253,11 @@ import BackupList from './components/BackupList.vue'
 import ListDiffView from './components/ListDiffView.vue'
 import LogViewer from './components/LogViewer.vue'
 import ConflictResolver from './components/ConflictResolver.vue'
-import Temp3 from './components/temp/temp3.vue'
-import Temp2 from './components/temp/temp2.vue'
-import Temp4 from './components/temp/temp4.vue'
 import DebugPanel from './components/DebugPanel.vue'
 import RulePanel from './components/RulePanel.vue'
 import ModRuleEditor from './components/ModRuleEditor.vue'
 import Confirm from './components/common/Confirm.vue'
+import Test from './components/temp/test.vue'
 
 
 

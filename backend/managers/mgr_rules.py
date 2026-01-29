@@ -222,7 +222,7 @@ class RuleManager:
         return True
 
     def overwrite_community_rules(self, raw_json: str):
-        """更新社区规则库"""
+        """覆盖社区规则库"""
         try:
             # 尝试解析，确保格式正确
             data = json.loads(raw_json)

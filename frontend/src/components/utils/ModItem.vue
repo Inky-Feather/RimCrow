@@ -262,7 +262,7 @@ const handleContextMenu = async (event) => {
       }]
     },
     { label: '修改类型', icon: ChessPawn,
-      children: [...Object.entries(store.modTypeMap).map(([key, value]) => ({
+      children: [...Object.entries(store.MOD_TYPE_MAP).map(([key, value]) => ({
         label: value, action: () => store.setModsType(selectedIds, key)
       })),{ label: '恢复默认', level: 'warn', action: () => store.setModsType(selectedIds, null) }]
     }

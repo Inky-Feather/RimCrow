@@ -1,14 +1,17 @@
+<!-- frontend/src/components/StatusBar.vue -->
 <template>
   <!-- 底部固定状态栏 -->
-  <div class="h-6 w-full flex items-center px-3 justify-between text-[10px] text-text-dim select-none relative z-40">
+  <div class="h-6 w-full flex items-center px-3 justify-between text-[10px] text-text-dim select-none relative z-40 bg-bg-deep border-t border-white/5">
     
     <!-- 左侧：常规状态 -->
     <div class="flex items-center gap-4">
+      <!-- 状态指示灯 -->
       <div class="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', store.isDirty ? 'bg-yellow-500' : 'bg-green-500']"></div>
         <span>{{ store.isDirty ? '未保存更改' : '就绪' }}</span>
       </div>
       
+      <!-- 基础统计 -->
       <div>
         模组总数: <span class="text-white">{{ store.allModsMap.size }}</span>
       </div>
@@ -22,36 +25,47 @@
       </div>
     </div>
 
-    <!-- 右侧/中间：扫描进度 (仅扫描时显示) -->
+    <!-- 中间：动态任务进度条 (扫描 OR 下载) -->
     <transition name="slide-up">
-      <div v-show="showProgress" class="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-bg-deep px-4 pt-1 rounded-t-lg border-t border-accent-primary/30 shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
+      <div v-if="activeTask" class="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-bg-surface px-4 pt-1 pb-0.5 rounded-t-lg border-t border-accent-primary/30 shadow-[0_-4px_10px_rgba(0,0,0,0.3)] min-w-[300px] justify-center">
         
-        <!-- 旋转图标 (扫描中显示，完成后变成对号) -->
-        <svg v-if="store.scanProgress.scanning" class="animate-spin h-3 w-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <svg v-else class="h-3 w-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-        </svg>
-        
-        <!-- 进度条 -->
-         <div class="w-48 h-1.5 bg-white/10 rounded-full relative">
-          <div class="h-full bg-accent-primary transition-all rounded-full duration-300 ease-out"
-               :style="{ width: displayPercent + '%' }"></div>
+        <!-- 图标区 -->
+        <template v-if="taskType === 'scan'">
+            <svg class="animate-spin h-3 w-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </template>
+        <template v-else-if="taskType === 'download'">
+            <svg class="h-3 w-3 text-blue-400 animate-bounce" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+        </template>
+
+        <!-- 进度条背景 -->
+        <div class="w-48 h-1.5 bg-white/10 rounded-full relative overflow-hidden">
+          <div class="h-full transition-all duration-300 ease-out rounded-full"
+               :class="taskType === 'scan' ? 'bg-accent-primary' : 'bg-blue-500'"
+               :style="{ width: taskPercent + '%' }"></div>
         </div>
         
         <!-- 文字信息 -->
-        <div class="flex items-center gap-2 min-w-[150px]">
-          <span class="font-mono font-bold text-accent-primary">{{ displayPercent }}%</span>
-          <span class="truncate max-w-[200px] text-[9px]" :class="{'text-accent-success': !store.scanProgress.scanning, 'text-text-dim': store.scanProgress.scanning}">
-            [{{ store.scanProgress.current }}/{{ store.scanProgress.total }}] {{ formatMessage(store.scanProgress.message) }}
+        <div class="flex items-center gap-2 text-[9px] font-mono">
+          <span :class="taskType === 'scan' ? 'text-accent-primary' : 'text-blue-400'" class="font-bold">
+            {{ taskPercent }}%
+          </span>
+          <span class="truncate max-w-[150px] text-text-dim" :title="taskMessage">
+            {{ taskMessage }}
+          </span>
+          <!-- 下载专属：速度 -->
+          <span v-if="taskType === 'download'" class="text-white/50 scale-90">
+             {{ activeTask.speed }}
           </span>
         </div>
       </div>
     </transition>
 
-    <!-- 右侧：版本或设置入口 -->
+    <!-- 右侧：版本 -->
     <div class="flex items-center gap-2 hover:text-white" >
        <span>RimWorld {{ store.settings.game_version || '未知版本' }}</span>
     </div>
@@ -67,39 +81,38 @@ import { useToast } from "vue-toastification";
 const toast = useToast();
 const store = useModStore()
 
-// 本地状态，用于控制显示延迟
-const showProgress = ref(false)
-
-// 监听 Store 的扫描状态
-watch(() => store.scanProgress.scanning, (isScanning) => {
-  if (isScanning) {
-    showProgress.value = true
-  } else {
-    // 扫描结束时，不要立即隐藏
-    // 延迟 800ms，让用户看到 100% 和对号，然后再收起
-    setTimeout(() => {
-      showProgress.value = false
-    }, 800)
-  }
+// 统一任务计算属性
+// 优先级: 扫描 > 下载
+const taskType = computed(() => {
+  if (store.scanProgress.scanning) return 'scan'
+  if (store.activeDownloadTask) return 'download'
+  return null
 })
 
-// 显示的百分比：如果是扫描刚结束的瞬间，强制显示 100%
-const displayPercent = computed(() => {
-  if (!store.scanProgress.scanning && showProgress.value) {
-    return 100
-  }
-  return Math.min(Math.max(store.scanProgress.percent, 0), 100)
+const activeTask = computed(() => {
+  if (taskType.value === 'scan') return store.scanProgress
+  if (taskType.value === 'download') return store.activeDownloadTask
+  return null
 })
 
-// 优化显示：如果消息是路径，只显示文件名
-const formatMessage = (msg) => {
-    if (!msg) return ''
-    if (msg.includes('/') || msg.includes('\\')) {
-        // 简单提取文件名，让界面更清爽
-        return msg.split(/[/\\]/).pop()
-    }
-    return msg
-}
+const taskPercent = computed(() => {
+  if (!activeTask.value) return 0
+  return activeTask.value.percent || 0
+})
+
+const taskMessage = computed(() => {
+  if (!activeTask.value) return ''
+  if (taskType.value === 'scan') {
+    const msg = activeTask.value.message || ''
+    // 简化路径显示
+    return msg.includes('/') || msg.includes('\\') ? msg.split(/[/\\]/).pop() : msg
+  }
+  if (taskType.value === 'download') {
+    return activeTask.value.filename || 'Downloading...'
+  }
+  return ''
+})
+
 </script>
 
 <style scoped>
@@ -110,7 +123,7 @@ const formatMessage = (msg) => {
 
 .slide-up-enter-from,
 .slide-up-leave-to {
-  transform: translate(-50%, 100%);
+  transform: translate(-50%, 100%); /* 从底部滑入 */
   opacity: 0;
 }
 </style>

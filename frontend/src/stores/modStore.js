@@ -50,7 +50,7 @@ const ISSUE_TITLE_MAP = {
 }
 
 // 模组类型映射
-const modTypeMap = {
+const MOD_TYPE_MAP = {
   'LanguagePack': '语言包',
   'XML': '纯XML',
   'Assembly': '含程序集',
@@ -105,14 +105,14 @@ export const useModStore = defineStore('mods', () => {
   const backupLoadModifyTime = ref(0) // 备份加载顺序修改时间
 
   const conflictList = ref([]) // 重复包名冲突列表
-  
+
   // 选择状态
   const currentTargetId = ref('') // 当前目标 ID (定位用)
   const selectedIds = ref([])     // 选中的 Mod ID 列表
   const lastSelectedMod = ref(null) // 最后选中的 Mod 对象
   const isDraggingGroup = ref(false) // 是否正在拖动分组
 
-  
+  const downloadTasks = ref(new Map()) // 使用 Map 存储 {id: taskObject}
   const ruleStore = useRuleStore()
 
   // 设置状态
@@ -240,6 +240,24 @@ export const useModStore = defineStore('mods', () => {
     return { tags: tagState, groups: groupState, color: colorState }
   })
 
+  // 计算属性：当前是否有正在进行的下载
+  const isDownloading = computed(() => {
+    for (const task of downloadTasks.value.values()) {
+      if (task.status === 'running' || task.status === 'pending') return true
+    }
+    return false
+  })
+
+  // 计算属性：获取最活跃的一个任务用于状态栏显示
+  const activeDownloadTask = computed(() => {
+    // 优先返回 Running 的，没有则返回 Pending，再没有返回 Error/Completed
+    const tasks = Array.from(downloadTasks.value.values())
+    return tasks.find(t => t.status === 'running') || 
+           tasks.find(t => t.status === 'pending') || 
+           null
+  })
+
+
   // ==== 核心方法 ====
   // 初始化：获取数据并分类
   const initialize = async () => {
@@ -306,6 +324,22 @@ export const useModStore = defineStore('mods', () => {
       // [关键] 扫描结束后，主动拉取一次最新数据刷新界面
       await refreshModList()
     })
+    // 监听下载进度
+     window.addEventListener('download-progress', (e) => {
+       const d = e.detail
+       // 更新或插入 Map
+       downloadTasks.value.set(d.id, d)
+       
+       // 如果完成了，可以弹个 Toast (可选，防止太吵)
+       if (d.status === 'completed' && d.percent === 100) {
+         // 可以在这里移除任务，或者保留一会
+         // setTimeout(() => downloadTasks.value.delete(d.id), 5000)
+         toast.success(`下载完成: ${d.filename}`)
+       }
+       if (d.status === 'error') {
+         toast.error(`下载失败: ${d.filename}\n${d.error}`)
+       }
+     })
   }
    // 单独抽离刷新列表的方法，用于初始化、扫描完成后、或手动刷新
   const refreshModList = async (isInit = false) => {
@@ -395,15 +429,15 @@ export const useModStore = defineStore('mods', () => {
 
   // ===== Mod操作 =====
   // 显示 Mod 名称（优先 alias_name -> display_name -> name -> package_id）
-  const displayModName = (modOrId) => {
+  const displayModName = (modOrId, defaultName = '未知模组') => {
     let mod = null
     if(typeof modOrId === 'string')
-      mod = takeModById(modOrId)
+      mod = takeModById(modOrId, defaultName)
     else if(modOrId?.package_id)
       mod = modOrId
 
     const res = mod?.alias_name || mod?.display_name || mod?.name || mod?.package_id
-    return res || `⚠ 未知模组 (${modOrId})`
+    return res || `⚠ ${defaultName} (${modOrId})`
   }
   const displayModType = (modOrId) => {
     let mod = null
@@ -415,7 +449,7 @@ export const useModStore = defineStore('mods', () => {
     return res
   }
   // 获取 Mod 对象
-  const takeModById = (id) => {
+  const takeModById = (id, defaultName = '未知模组') => {
     if (!id) return null
     const lowerId = id.toLowerCase()
     if (allModsMap.value.has(lowerId)) {
@@ -424,7 +458,7 @@ export const useModStore = defineStore('mods', () => {
     // 构造缺失模组的“幽灵对象”
     return {
       package_id: id,
-      name: `⚠ 未知模组 (${id})`,
+      name: `⚠ ${defaultName} (${id})`,
       author: ['Unknown'],
       is_missing: true,
       description: '该模组在本地未找到，可能未下载，或已被手动删除。'
@@ -1564,10 +1598,22 @@ export const useModStore = defineStore('mods', () => {
       return true
     }
   }
+  // 下载文件
+  const startDownload = async (url, targetDir = null, filename = null) => {
+    if (!window.pywebview) return
+    try {
+      const res = await window.pywebview.api.download_file(url, targetDir, filename)
+      if (checkResult(res, "添加下载任务")) {
+        // 成功
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   return {
     // 状态管理
-    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, modTypeMap, modColorList, backups, showDiffDrawer, currentBackupFile,
+    scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, MOD_TYPE_MAP, modColorList, backups, showDiffDrawer, currentBackupFile,
     conflictList, allModTags, selectedStats, activeLoadModifyTime, backupLoadModifyTime, 
     initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, applyBackup, getBackupOrder, 
     selectModsTag, selectModsGroup, autoSortMods,
@@ -1587,6 +1633,9 @@ export const useModStore = defineStore('mods', () => {
     showSettings, isLoading, isDirty, settings, showLogDrawer, showTestDrawer, showRuleDrawer, 
     appVersion, build,
     openSettings, closeSettings, applySettings, saveSetting,
+
+    // 下载相关
+    downloadTasks, isDownloading, activeDownloadTask, startDownload,
 
     // 系统操作
     launchGame, openPath, openBackupPath, openUrl, openSteamWorkshopUrl, deletePath, getFileOrder,

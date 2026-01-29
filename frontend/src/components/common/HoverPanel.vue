@@ -64,7 +64,7 @@
               <span v-if="store.data.version" class="text-accent-primary">v{{ store.data.version }}</span>
               <!-- Mod类型徽章 -->
               <span class="px-1.5 rounded-sm bg-white/5 border border-white/10 text-white/80">
-                {{ modTypeMap[modStore.displayModType(store.data)] || 'MOD' }}
+                {{ MOD_TYPE_MAP[modStore.displayModType(store.data)] || 'MOD' }}
               </span>
             </div>
           </div>
@@ -428,7 +428,7 @@ const saveBreakingIcon = computed(() => {
 })
 
 // Mod 类型简写映射
-const modTypeMap = {
+const MOD_TYPE_MAP = {
   'LanguagePack': 'LANG',
   'XML': 'XML',
   'Assembly': 'DLL',
