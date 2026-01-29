@@ -29,102 +29,102 @@
                 @mousedown="startResize(1, $event)" />
 
         <!-- ================= COLUMN 3: 启用/排序 (Active) ================= -->
-        <div class="h-full p-1 transition-opacity"
-            :style="{ width: colWidths[2] + 'px' }">
+        <div class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
               <ModList v-model="store.activeIds" title="启用" :hasSidebar=true listColor="success" listId="active" />
         </div>
 
         <!-- 分割线 3 -->
         <Resizer :active="resizeState.activeIndex === 2" 
                 @mousedown="startResize(2, $event)" />
-
+        <div v-if="store.ruleStore.currentId" class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
+          <ModRuleEditor title="Rule" listColor="warn" />
+        </div>
+        
 
         <!-- ================= COLUMN 4: 辅助/分组 (Tabs) ================= -->
-        <div class="h-full p-1 flex flex-col transition-opacity relative"
-            :style="{ width: colWidths[3] + 'px' }">
-            <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
-              <Transition
-                enter-active-class="transition-opacity duration-300 ease-out"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="transition-opacity duration-300 ease-in"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0">
-                <KeepAlive>
+        <div v-else class="h-full p-1 flex flex-col transition-opacity relative" :style="{ width: colWidths[3] + 'px' }">
+          <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
+            <Transition
+              enter-active-class="transition-opacity duration-300 ease-out"
+              enter-from-class="opacity-0"
+              enter-to-class="opacity-100"
+              leave-active-class="transition-opacity duration-300 ease-in"
+              leave-from-class="opacity-100"
+              leave-to-class="opacity-0">
+              <KeepAlive>
 
-                  <ModList v-if="activeTab === tabs[0]" v-model="store.tempIds" title="temp" listColor="warning" listId="temp"
-                    class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                  <GroupList v-else-if="activeTab === tabs[1]" v-model="store.groupList" title="Groups" listColor="special" 
-                    class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                  <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                <ModList v-if="activeTab === tabs[0]" v-model="store.tempIds" title="Temp" listColor="warning" listId="temp"
+                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                <GroupList v-else-if="activeTab === tabs[1]" v-model="store.groupList" title="Groups" listColor="special" 
+                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
 
-                  <ModRuleEditor v-else-if="activeTab === tabs[3]" title="Rule" listColor="warn" 
-                    class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                  
-                </KeepAlive>
-              </Transition>
-            </div>
+                
+                
+              </KeepAlive>
+            </Transition>
+          </div>
 
-            <!-- 标签页切换 -->
-            <div class="absolute left-7 top-2.5 flex text-sm font-bold ">
-              <FocusTabs v-model="activeTab" :tabs="tabs" 
-              :blurAmount="3" borderColor="#059669" class=" top-0 opacity-100"
-              />
-            </div>
+          <!-- 标签页切换 -->
+          <div class="absolute left-7 top-2.5 flex text-sm font-bold ">
+            <FocusTabs v-model="activeTab" :tabs="tabs" 
+            :blurAmount="3" borderColor="#059669" class=" top-0 opacity-100"
+            />
+          </div>
+          
+          <!-- 按钮组 -->
+          <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
             
-            <!-- 按钮组 -->
-            <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
-              
-              <!-- 刷新按钮 -->
-              <button :class="{'scan': store.scanProgress.scanning}"
-                class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
-                      text-sm text-gray-300 font-bold uppercase tracking-wider
-                      hover:bg-white/10 hover:text-white hover:border-white/20
-                      active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
-                @click="store.scanMods()"
-                :disabled="store.scanProgress.scanning"
-              >
-                <!-- <svg v-if="store.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
-                <span >{{ store.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
-              </button>
-              
-              <!-- 自动排序按钮 -->
-              <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
-                      flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                      @click="store.autoSortMods()"
-              >
-                <span >自动排序</span>
-              </button>
+            <!-- 刷新按钮 -->
+            <button :class="{'scan': store.scanProgress.scanning}"
+              class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
+                    text-sm text-gray-300 font-bold uppercase tracking-wider
+                    hover:bg-white/10 hover:text-white hover:border-white/20
+                    active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
+              @click="store.scanMods()"
+              :disabled="store.scanProgress.scanning"
+            >
+              <!-- <svg v-if="store.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
+              <span >{{ store.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
+            </button>
+            
+            <!-- 自动排序按钮 -->
+            <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
+                    flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
+                    @click="store.autoSortMods()"
+            >
+              <span >自动排序</span>
+            </button>
 
-              <!-- 保存按钮 (Dirty 状态提示) -->
-              <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
-                      flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                :class="[store.isDirty 
-                    ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
-                    : 'bg-accent-primary/60 text-black hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
-                ]"
-                @click="store.saveLoadOrder()"
-              >
-                <!-- Dirty 状态下的流光效果 -->
-                <div v-if="store.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
-                
-                <svg v-if="store.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-                <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                
-                <span>{{ store.isDirty ? '保存变动' : '保存' }}</span>
-              </button>
+            <!-- 保存按钮 (Dirty 状态提示) -->
+            <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
+                    flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
+              :class="[store.isDirty 
+                  ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
+                  : 'bg-accent-primary/60 text-black hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
+              ]"
+              @click="store.saveLoadOrder()"
+            >
+              <!-- Dirty 状态下的流光效果 -->
+              <div v-if="store.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
+              
+              <svg v-if="store.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              
+              <span>{{ store.isDirty ? '保存变动' : '保存' }}</span>
+            </button>
 
-              <!-- 启动游戏 -->
-              <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
-                      shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
-                      transition-all duration-200 uppercase tracking-widest
-                      hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-                @click="store.launchGame()"
-              >
-                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
-                启动游戏
-              </button>
-            </div>
+            <!-- 启动游戏 -->
+            <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
+                    shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
+                    transition-all duration-200 uppercase tracking-widest
+                    hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+              @click="store.launchGame()"
+            >
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
+              启动游戏
+            </button>
+          </div>
 
         </div>
 
@@ -263,9 +263,8 @@ import Test from './components/temp/test.vue'
 
 const store = useModStore()
 
-const tabs = ['临时', '分组', '备份', '规则']
+const tabs = ['临时', '分组', '备份']
 const activeTab = ref(tabs[0])
-const showRuleInspector = ref(false)
 
 // --- 拖拽调整宽度逻辑 ---
 const containerRef = ref(null)

@@ -139,8 +139,9 @@ import { computed, h, nextTick  } from 'vue'
 import { useModStore, ISSUE_TYPE } from '../../stores/modStore'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
+import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Trash2, Link2, Link2Off, MegaphoneOff, Megaphone, ExternalLink } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -160,6 +161,7 @@ defineEmits(['contextmenu'])
 const store = useModStore()
 const menuStore = useContextMenuStore()
 const ruleStore = useRuleStore()
+const confirmStore = useConfirmStore()
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
@@ -226,6 +228,14 @@ const getCardStyle = (id) => {
   base['color'] = color
   return base
 }
+// 删除选中项文件
+const deleteMod = async () => {
+  const res = await confirmStore.confirmAction('警告','确定要删除选中项文件吗？',{type:'error'})
+  if(res) {
+    store.deletePath(modData.value.path)
+    store.refreshModList()
+  }
+}
 
 // 1. 定义图标组件变量
 const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
@@ -274,7 +284,7 @@ const handleContextMenu = async (event) => {
     { label: '从Steam访问', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
     { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => store.openPath(modData.value.path) },
     { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteMod() },
-    { label: '编辑规则', action: () => ruleStore.currentId = props.item_id },
+    { label: '编辑排序规则', icon: PencilRuler, action: () => ruleStore.currentId = props.item_id },
   ]
   // 多选菜单
   const selectedMenuItems = [

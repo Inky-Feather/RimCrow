@@ -1533,6 +1533,7 @@ export const useModStore = defineStore('mods', () => {
       window.open(steamUrl, '_blank')
     }
   }
+
   // 打开路径
   const openPath = async (path) => {
     if(!path) return
@@ -1576,7 +1577,7 @@ export const useModStore = defineStore('mods', () => {
       console.log("获取备份文件:", backups.value)
     }
   }
-  // 辅助：自动检测路径
+  // 自动检测路径
   const autoDetectPaths = async (updateStore=true) => {
     if(!window.pywebview) return
     const res = await window.pywebview.api.auto_detect_paths(false)
@@ -1614,7 +1615,7 @@ export const useModStore = defineStore('mods', () => {
   return {
     // 状态管理
     scanProgress, dataVersion, modIssues, ISSUE_TITLE_MAP, sourceTypeMap, MOD_TYPE_MAP, modColorList, backups, showDiffDrawer, currentBackupFile,
-    conflictList, allModTags, selectedStats, activeLoadModifyTime, backupLoadModifyTime, 
+    conflictList, allModTags, selectedStats, activeLoadModifyTime, backupLoadModifyTime, ruleStore, 
     initialize, getLoadOrder, refreshModList, getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, applyBackup, getBackupOrder, 
     selectModsTag, selectModsGroup, autoSortMods,
 

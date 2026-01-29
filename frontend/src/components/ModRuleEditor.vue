@@ -7,9 +7,10 @@
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
       </span>
-      <span :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
+      <!-- <span :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
         {{ 0 }}
-      </span>
+      </span> -->
+      <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-dim/60 hover:text-text-dim transition-colors">关闭</button>
     </div>
     <!-- 当前选中的MOD -->
     <div class="px-2 py-2 w-full flex items-center gap-2 shadow-xl/10">
@@ -294,18 +295,21 @@ const store = useModStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
-const targetMod = ref(null)
 
 const userAfterRules = computed({ get() { return getUserRules('loadAfter') }, set(val) {} })
 const userBeforeRules = computed({ get() { return getUserRules('loadBefore') }, set(val) {} })
 const userIncompatibleWithRules = computed({ get() { return getUserRules('incompatibleWith') }, set(val) {} })
 
-watch(() => ruleStore.currentId, (newId) => {
-  if (newId) {
-    // 当选择的 Mod 变化时，更新显示的规则
-    targetMod.value = store.takeModById(newId)
-  }
-})
+
+// const targetMod = ref(null)
+// watch(() => ruleStore.currentId, (newId) => {
+//   if (newId) {
+//     // 当选择的 Mod 变化时，更新显示的规则
+//     targetMod.value = store.takeModById(newId)
+//   }
+// })
+
+const targetMod = computed(() => store.takeModById(ruleStore.currentId))
 
 // 1. Native
 const getNativeRules = (type) => {
