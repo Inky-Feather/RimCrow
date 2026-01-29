@@ -15,6 +15,8 @@ CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
 RULES_DIR = HOME_DIR / "data" / "rules"
 USER_RULES_PATH = RULES_DIR / "user_rules.json"
 COMMUNITY_RULES_PATH = RULES_DIR / "communityRules.json"
+# 工具目录
+TOOLS_DIR = HOME_DIR / "tools"
 
 @dataclass
 class ProxyConfig:
@@ -36,6 +38,14 @@ class NetworkConfig:
     # 自定义 Hosts (域名 -> IP 映射)
     hosts: Dict[str, str] = field(default_factory=dict) 
 
+
+
+@dataclass
+class SteamConfig:
+    steamcmd_path: str = str(TOOLS_DIR / "steamcmd" / "steamcmd.exe")
+    use_steam_client: bool = True  # 是否优先尝试使用 Steam 客户端
+    steam_appid: int = 294100      # RimWorld AppID
+
 @dataclass
 class AppConfig:
     """
@@ -49,7 +59,7 @@ class AppConfig:
     workshop_mods_path: str = ""
     local_mods_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
-    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database"
+    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
     community_rules_path: str = str(COMMUNITY_RULES_PATH)
     user_rules_path: str = str(USER_RULES_PATH)
     
@@ -73,6 +83,7 @@ class AppConfig:
     
     # --- 网络设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)
+    steam: SteamConfig = field(default_factory=SteamConfig)
     
     # --- 开发与调试设置 ---
     debug_mode: bool = True  # 开发模式开关

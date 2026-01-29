@@ -276,6 +276,7 @@ export const useModStore = defineStore('mods', () => {
           toast.info("自动扫描已启动...")
           scanMods() // 这里调用是异步的，不会阻塞界面
       }
+      checkSteamTools()
     } catch (e) {
       console.error("初始化失败:", e)
       toast.error("初始化失败，请检查日志")
@@ -1533,6 +1534,38 @@ export const useModStore = defineStore('mods', () => {
       window.open(steamUrl, '_blank')
     }
   }
+  // 取消订阅模组
+  const unsubscribeMod = async (mod_id) => {
+    const workshop_id = takeModById(mod_id).workshop_id
+    if(!workshop_id) return
+    const res = await window.pywebview.api.steam_unsubscribe(workshop_id)
+    if (checkResult(res, "取消订阅模组")) {
+      toast.success(`取消订阅模组 ${mod_id} 成功！`)
+    } else {
+      console.error("取消订阅模组异常:", res.message)
+      toast.error(`取消订阅模组 ${mod_id} 异常: \n${res.message}`)
+    }
+  }
+  const subscribeMod = async (mod_id) => {
+    const workshop_id = takeModById(mod_id).workshop_id
+    if(!workshop_id) return
+    const res = await window.pywebview.api.steam_subscribe(workshop_id)
+    if (checkResult(res, "订阅模组")) {
+      toast.success(`订阅模组 ${mod_id} 成功！`)
+    } else {
+      console.error("订阅模组异常:", res.message)
+      toast.error(`订阅模组 ${mod_id} 异常: \n${res.message}`)
+    }
+  }
+  const checkSteamTools = async () => {
+    const res = await window.pywebview.api.check_steam_tools()
+    if (checkResult(res, "检查Steam工具")) {
+      toast.success(`检查Steam工具成功！`)
+    } else {
+      console.error("检查Steam工具异常:", res.message)
+      toast.error(`检查Steam工具异常: \n${res.message}`)
+    }
+  }
 
   // 打开路径
   const openPath = async (path) => {
@@ -1624,6 +1657,8 @@ export const useModStore = defineStore('mods', () => {
     takeModById, takeModListByIds, displayModName, displayModType, removeIdsOnAllList, getIconUrl, 
     selectMods, clearSelection, scanMods, saveLoadOrder, updateModUserData, 
     setModsColor, setModsType, addModsTags, removeModsTags, linkMods, unlinkMods,
+    // 订阅/取消订阅模组
+    subscribeMod, unsubscribeMod,
 
     // 分组相关
     groupList, isDraggingGroup,

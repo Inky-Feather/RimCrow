@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 import os
+import threading
 import time
 import functools
 import shutil
@@ -27,7 +28,7 @@ from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_network import NetworkManager
 from backend.managers.mgr_download import DownloadManager
-
+from backend.managers.mgr_steam import SteamManager
 
 
 def log_api_call(func):
@@ -114,6 +115,7 @@ class API:
         self.sorter = OrderSorter()
         self.network_mgr = NetworkManager()
         self.download_mgr = DownloadManager()
+        self.steam_mgr = SteamManager()
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -962,6 +964,97 @@ class API:
     def get_active_downloads(self):
         """获取所有任务状态 (用于 UI 恢复)"""
         return ApiResponse.success(self.download_mgr.get_tasks_info())
+    
+    
+    # =========================================================================
+    #  12. Steam 集成 (Steam Integration)
+    # =========================================================================
+
+    @log_api_call
+    def check_steam_tools(self):
+        """
+        前端初始化时调用，检查工具是否就绪。
+        如果有缺失，自动触发下载任务。
+        """
+        # 1. 检查缺失文件并添加下载任务
+        tasks = self.steam_mgr.ensure_tools(self.download_mgr)
+        
+        # 2. 如果有新任务，注册一个回调来处理下载后的解压/部署
+        if tasks:
+            # 我们需要一个简单的方法来监控这些任务的完成
+            # 这里简化处理：启动一个后台线程轮询这些任务状态
+            threading.Thread(target=self._monitor_setup_tasks, args=(tasks,), daemon=True).start()
+            
+        return ApiResponse.success({
+            "steamcmd_ready": self.steam_mgr.steamcmd_ready,
+            "steamworks_ready": self.steam_mgr._is_steam_initialized,
+            "pending_tasks": tasks
+        })
+
+    def _monitor_setup_tasks(self, tasks):
+        """(内部) 监控工具下载任务，完成后执行安装逻辑"""
+        import time
+        from backend.managers.mgr_download import TaskStatus
+        
+        pending = list(tasks)
+        while pending:
+            time.sleep(1)
+            for item in pending[:]:
+                task_id = item['id']
+                task_type = item['type']
+                
+                # 从 DownloadManager 获取状态
+                task = self.download_mgr.tasks.get(task_id)
+                if not task: continue
+                
+                if task.status == TaskStatus.COMPLETED:
+                    # 执行解压或移动
+                    self.steam_mgr.post_download_setup(task_type, task.dest_path)
+                    pending.remove(item)
+                elif task.status == TaskStatus.ERROR:
+                    logger.error(f"Setup task failed: {task_id}")
+                    pending.remove(item)
+
+    @log_api_call
+    def steam_subscribe(self, workshop_id: str):
+        """调用 Steam 客户端订阅"""
+        try:
+            wid = int(workshop_id)
+            success = self.steam_mgr.subscribe_item(wid)
+            if success:
+                return ApiResponse.success(message="已发送订阅请求 (需Steam运行中)")
+            else:
+                return ApiResponse.error("操作失败：SteamAPI 未就绪 (请确保Steam已运行)")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def steam_unsubscribe(self, workshop_id: str):
+        """调用 Steam 客户端取消订阅"""
+        try:
+            wid = int(workshop_id)
+            success = self.steam_mgr.unsubscribe_item(wid)
+            if success:
+                return ApiResponse.success(message="已发送取消订阅请求")
+            else:
+                return ApiResponse.error("操作失败：SteamAPI 未就绪")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def steamcmd_download(self, workshop_ids: list):
+        """
+        使用 SteamCMD 下载/更新 Mod
+        """
+        try:
+            if not self.steam_mgr.steamcmd_ready:
+                return ApiResponse.error("SteamCMD 未安装，正在尝试自动修复，请稍后...")
+            
+            # 启动后台下载
+            self.steam_mgr.download_workshop_items(workshop_ids)
+            return ApiResponse.success(message="SteamCMD 下载任务已启动")
+        except Exception as e:
+            return ApiResponse.error(str(e))
     
     
     

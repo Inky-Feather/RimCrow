@@ -1,13 +1,13 @@
 <template>
   <transition name="fade">
-    <div v-if="visible" class="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div v-if="visible" class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div class="w-5/7 max-h-9/10 flex flex-col bg-bg-deep border border-accent-danger/30 rounded-xl shadow-2xl overflow-hidden">
         
         <!-- Header -->
         <div class="px-6 py-4 bg-accent-danger/10 border-b border-accent-danger/20 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-full bg-accent-danger/20 text-accent-danger animate-pulse">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             </div>
             <div>
               <h2 class="text-lg font-bold text-white">发现模组冲突</h2>
@@ -20,17 +20,16 @@
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
           
           <!-- 循环每一组冲突 -->
-          <div v-for="(group, gIndex) in conflicts" :key="group.package_id" 
-               class="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+          <div v-for="(group, gIndex) in conflicts" :key="group.package_id" class="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
             
             <!-- 组标题 -->
-            <div class="bg-black/20 px-4 py-2 border-b border-white/5 flex justify-between items-center">
-              <div class="font-mono text-sm font-bold text-accent-highlight">{{ group.package_id }}</div>
+            <div class="flex-1 bg-black/20 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+              <div class="font-mono text-sm font-bold text-accent-highlight truncate">{{ group.package_id }}</div>
               <div class="text-[10px] text-text-dim">发现 {{ group.items.length }} 个版本</div>
             </div>
 
             <!-- 版本选项列表 -->
-            <div class="p-3 grid gap-2">
+            <div class="p-3 grid gap-2 grid-cols-1">
               <div v-for="(mod, mIndex) in group.items" :key="mod.path"
                    @click="selectVersion(gIndex, mod.path)"
                    class="relative flex items-center p-3 rounded-lg border transition-all cursor-pointer group/item"
