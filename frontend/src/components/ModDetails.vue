@@ -586,7 +586,7 @@ const formattedDescription = computed(() => {
 })
 // 辅助计算：是否有依赖项或冲突项
 const hasDependencies = computed(() => {
-  return (selectedMod.value?.dependencies_mods?.length > 0) || (selectedMod.value?.incompatible_mods?.length > 0)
+  return (selectedMod.value?.dependencies_mods?.length > 0) || (selectedMod.value?.incompatible_mods?.length > 0) || (selectedMod.value?.load_before_mods?.length > 0) || (selectedMod.value?.load_after_mods?.length > 0)
 })
 // 根据 mod 名字长度动态调整字体大小
 const computedFontSize = computed(() => {

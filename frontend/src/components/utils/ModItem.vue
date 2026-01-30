@@ -236,6 +236,14 @@ const deleteMod = async () => {
     store.refreshModList()
   }
 }
+// 取消订阅模组
+const unsubscribeMod = async () => {
+  const res = await confirmStore.confirmAction('警告','确定要取消订阅选中项吗？Steam 会自动删除已取消订阅的文件！',{type:'error'})
+  if(res) {
+    store.unsubscribeMod(props.item_id)
+    store.refreshModList()
+  }
+}
 
 // 1. 定义图标组件变量
 const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
@@ -287,7 +295,7 @@ const handleContextMenu = async (event) => {
     { label: 'Steam操作', icon: IconSteam, children: [
       { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => store.subscribeMod(props.item_id) },
-      { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => store.unsubscribeMod(props.item_id) },
+      { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
     ]},
   ]
   // 多选菜单

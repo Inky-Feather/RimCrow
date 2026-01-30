@@ -8,7 +8,7 @@
       <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-white to-gray-400 bg-clip-text text-transparent">
         <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
       </h1>
-      <span class="px-2 py-0.5 rounded text-[10px] bg-white/5 text-text-dim border border-white/5 ">{{ store.appVersion }}-{{ store.build }}</span>
+      <span class="px-2 py-0.5 rounded text-[10px] bg-white/5 text-text-dim border border-white/5 ">v {{ store.appVersion }}</span>
     </div>
 
     <div class="flex items-center gap-3">

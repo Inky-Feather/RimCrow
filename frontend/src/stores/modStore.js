@@ -1526,7 +1526,12 @@ export const useModStore = defineStore('mods', () => {
   }
   // 打开Url
   const openUrl = (url) => {
-    if(url) window.open(url, '_blank')
+    if(!url) { toast.warning("网址为空！"); return}
+    if(settings.value.open_url_on_system){
+      window.open(url, '_blank')
+    }else{
+      window.pywebview.api.open_sub_browser(url)
+    }
   }
   const openSteamWorkshopUrl = (url) => {
     if(url) {

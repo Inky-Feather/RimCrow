@@ -72,6 +72,7 @@ class AppConfig:
     window_width: int = 1400
     window_height: int = 900
     font_size: int = 14
+    open_url_on_system: bool = False  # 是否在系统默认浏览器打开链接
     
     # --- 高级设置 ---
     backup_retention_days: int = 30  # 备份保留天数

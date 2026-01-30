@@ -5,6 +5,7 @@ import threading
 import time
 import functools
 import shutil
+import webview
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List
 from send2trash import send2trash
@@ -29,6 +30,7 @@ from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_network import NetworkManager
 from backend.managers.mgr_download import DownloadManager
 from backend.managers.mgr_steam import SteamManager
+from backend.managers.mgr_sub_browser import SubBrowserManager
 
 
 def log_api_call(func):
@@ -90,6 +92,7 @@ class ApiResponse:
         return asdict(cls(status="warning", message=message, data=data))
 
 
+
 class API:
     """
     暴露给 pywebview 前端的统一接口类。
@@ -116,6 +119,7 @@ class API:
         self.network_mgr = NetworkManager()
         self.download_mgr = DownloadManager()
         self.steam_mgr = SteamManager()
+        self.browser_window = SubBrowserManager(self)
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -902,8 +906,6 @@ class API:
             return ApiResponse.error(f"导入失败: {e}")
         
         
-        
-        
     # =========================================================================
     #  10. 日志管理 (Log Management)
     # =========================================================================
@@ -936,9 +938,8 @@ class API:
         return ApiResponse.error("日志路径不存在")
     
     
-    
     # =========================================================================
-    #  11. 下载管理 (Download Management)
+    #  11. 网络与下载管理 (Download Management)
     # =========================================================================
     
     @log_api_call
@@ -965,6 +966,12 @@ class API:
         """获取所有任务状态 (用于 UI 恢复)"""
         return ApiResponse.success(self.download_mgr.get_tasks_info())
     
+    def open_sub_browser(self, url='', title = 'RimModManager'):
+        """打开或更新 浏览器子窗口"""
+        if not self.browser_window: 
+            self.browser_window = SubBrowserManager(self)
+        self.browser_window.open(url, title)
+
     
     # =========================================================================
     #  12. Steam 集成 (Steam Integration)
@@ -1055,6 +1062,8 @@ class API:
             return ApiResponse.success(message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
+    
+    
     
     
     
