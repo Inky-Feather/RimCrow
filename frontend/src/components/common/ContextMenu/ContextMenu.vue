@@ -2,18 +2,17 @@
 <template>
   <Teleport to="body">
     <Transition name="scale">
-      <div v-if="store.show"
-        ref="menuRef"
-        class="fixed z-9999 min-w-[150px] py-0.5 rounded-xl border border-zinc-200/50 bg-white/80 shadow-2xl backdrop-blur-xl dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:shadow-black/50 ring-1 ring-black/5"
+      <div v-if="menuStore.show" ref="menuRef"
+        class="fixed z-9999 min-w-[150px] py-0.5 rounded-xl border border-text-dim/20 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-bg-deep/5 shadow-black/40"
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
         :style="menuStyle"
         @contextmenu.prevent
       >
         <ContextMenuItem 
-          v-for="(item, idx) in store.items" 
-          :key="idx + '-' + store.x + '-' + store.y" 
+          v-for="(item, idx) in menuStore.items" 
+          :key="idx + '-' + menuStore.x + '-' + menuStore.y" 
           :item="item"
-          @close-menu="store.close()"
+          @close-menu="menuStore.close()"
         />
       </div>
     </Transition>
@@ -26,7 +25,7 @@ import { onClickOutside, useWindowSize, useEventListener } from '@vueuse/core'
 import { useContextMenuStore } from '../../../stores/contextMenuStore' // 调整你的路径
 import ContextMenuItem from './ContextMenuItem.vue'
 
-const store = useContextMenuStore()
+const menuStore = useContextMenuStore()
 const menuRef = ref(null)
 const { width: winWidth, height: winHeight } = useWindowSize()
 const enableTransition = ref(false)
@@ -35,8 +34,8 @@ const enableTransition = ref(false)
 const actualX = ref(0)
 const actualY = ref(0)
 
-// 监听 store 打开状态，进行坐标计算
-watch([() => store.show, () => store.x, () => store.y],
+// 监听 menuStore 打开状态，进行坐标计算
+watch([() => menuStore.show, () => menuStore.x, () => menuStore.y],
   async ([show, x, y]) => {
     if (show) {
       // 关键点1：如果是刚刚打开（之前是关闭的），先禁用过渡，防止从 0,0 飞过来
@@ -80,12 +79,12 @@ watch([() => store.show, () => store.x, () => store.y],
 // 监听全局右键事件
 useEventListener(window, 'contextmenu', (e) => {
   // 只有当菜单显示时才处理
-  if (!store.show) return
+  if (!menuStore.show) return
 
   // 这里的逻辑很巧妙：
-  // 如果你在“触发组件”上右键，store.open() 里调用了 event.stopPropagation()
+  // 如果你在“触发组件”上右键，menuStore.open() 里调用了 event.stopPropagation()
   // 所以事件根本不会冒泡到 window，这行代码不会执行，菜单不会被误关闭。
-  store.close()
+  menuStore.close()
   
   // 【不显示浏览器默认菜单】
   e.preventDefault()
@@ -98,12 +97,12 @@ const menuStyle = computed(() => ({
 
 // 点击外部关闭
 onClickOutside(menuRef, () => {
-  store.close()
+  menuStore.close()
 })
 
 // 监听 ESC 键关闭
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && store.show) store.close()
+  if (e.key === 'Escape' && menuStore.show) menuStore.close()
 })
 </script>
 

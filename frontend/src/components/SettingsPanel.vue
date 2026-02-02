@@ -2,7 +2,7 @@
 <template>
   <!-- 遮罩层 (点击背景关闭) -->
   <transition name="fade">
-    <div v-if="store.showSettings" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="store.closeSettings()">
+    <div v-if="appStore.uiState.showSettingsPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="appStore.closeSettingsPanel()">
       
       <!-- 卡片主体 -->
       <transition name="scale">
@@ -180,7 +180,7 @@
 
             <!-- 底部按钮 -->
             <div class="h-20 border-t border-white/5 flex items-center justify-end px-8 gap-4 bg-black/20">
-              <button @click="store.closeSettings()" class="px-6 py-2 rounded-lg text-text-dim hover:text-white hover:bg-white/5 transition-colors text-sm font-bold">
+              <button @click="appStore.closeSettingsPanel()" class="px-6 py-2 rounded-lg text-text-dim hover:text-white hover:bg-white/5 transition-colors text-sm font-bold">
                 取消
               </button>
               <button @click="save" class="px-8 py-2 rounded-lg bg-accent-primary hover:brightness-110 text-white shadow-lg shadow-accent-primary/20 text-sm font-bold transition-all active:scale-95">
@@ -197,7 +197,7 @@
 
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import { useModStore } from '../stores/modStore'
+import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 
 // 简单的输入框子组件
@@ -234,7 +234,7 @@ const InputGroup = {
   `
 }
 
-const store = useModStore()
+const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 
 const currentTab = ref('paths')
@@ -262,10 +262,10 @@ const colors = ['#06b6d4', '#8b5cf6', '#f43f5e', '#10b981', '#f59e0b']
 const formData = ref({})
 
 // 当弹窗打开时，从 Store 同步数据
-watch(() => store.showSettings, (val) => {
+watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
     // 深拷贝 settings 防止污染
-    formData.value = JSON.parse(JSON.stringify(store.settings))
+    formData.value = JSON.parse(JSON.stringify(appStore.settings))
   }
 })
 // 当弹窗打开或 formData 加载完成后，将数组转为字符串显示
@@ -280,7 +280,7 @@ watch(() => formData.value.network?.proxy?.bypass_list, (list) => {
 
 // 自动检测路径
 const autoDetect = async () => {
-  const paths = await store.autoDetectPaths(false)
+  const paths = await appStore.autoDetectPaths(false)
   if (paths) {
     // 只更新表单，不直接保存，让用户确认
     Object.assign(formData.value, paths)
@@ -292,17 +292,17 @@ const autoDetect = async () => {
 
 const handleReset = async () => {
     const res = await confirmStore.confirmAction('警告','确定要清空数据库吗？这会导致所有分组和自定义备注丢失！',{type:'error'})
-    if(res) store.resetDatabase()
+    if(res) appStore.resetDatabase()
 }
 
 // 保存
 const save = () => {
-    store.applySettings(formData.value)
+    appStore.applySettings(formData.value)
 }
 
 // 打开Mod路径
 const openPath = (path) => {
-  if(path) store.openPath(path)
+  if(path) appStore.openPath(path)
 }
 
 // 打开Url
@@ -315,7 +315,7 @@ const handleBrowse = async (fieldKey) => {
     if(!window.pywebview) return
     
     // 调用后端 API
-    const path = await store.getFolderPath(formData.value[fieldKey])
+    const path = await appStore.getFolderPath(formData.value[fieldKey])
     
     // 如果用户选了路径（没点取消），则更新数据
     if (path) {

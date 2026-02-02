@@ -67,7 +67,7 @@
     <div class="grid transition-[grid-template-rows] duration-200 "
       :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
       <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
-      <div class="h-full overflow-hidden" :class="{ 'pointer-events-none': store.isDraggingGroup }">
+      <div class="h-full overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
         <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-white/5 border-x-white/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
           <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
             可拖拽模组到此
@@ -84,7 +84,7 @@
 
               <div class="relative group">
                 <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-                        :is-selected="store.selectedIds.includes(dataKey)" :show-index="false" :simple="true">
+                        :is-selected="modStore.selectedIds.includes(dataKey)" :show-index="false" :simple="true">
                 </ModItem>
                 
                 <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
@@ -110,7 +110,8 @@ import ModItem from './ModItem.vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ColorPicker } from "vue3-colorpicker";
 import "vue3-colorpicker/style.css";
-import { useModStore } from '../../stores/modStore';
+import { useModStore } from '../../stores/modStore1';
+import { useGroupStore } from '../../stores/groupStore';
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -122,7 +123,8 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
-const store = useModStore()
+const modStore = useModStore()
+const groupStore = useGroupStore()
 const internalModList = ref([])
 const vListRef = ref(null)
 const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group', 'update-children'])
@@ -181,7 +183,7 @@ const updateChildren = (e) => {
   console.log("更新子项排序:", e)
   const oldIds = props.groupData.mod_ids  // 原始顺序
   const newIds = internalModList.value.map(item => item.id)  // 获取当前的最新顺序 ID列表
-  const tempSelectedIds = store.selectedIds
+  const tempSelectedIds = modStore.selectedIds
   // 检查是否是当前分组的列表，排除当前列表自身的触发
   const currentListDom = vListRef.value.$el
   if (e.event.from === currentListDom || e.event.from === e.event.to) {

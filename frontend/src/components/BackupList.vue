@@ -68,7 +68,7 @@
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-cog-icon lucide-calendar-cog"><path d="m15.228 16.852-.923-.383"/><path d="m15.228 19.148-.923.383"/><path d="M16 2v4"/><path d="m16.47 14.305.382.923"/><path d="m16.852 20.772-.383.924"/><path d="m19.148 15.228.383-.923"/><path d="m19.53 21.696-.382-.924"/><path d="m20.772 16.852.924-.383"/><path d="m20.772 19.148.924.383"/><path d="M21 10.592V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><path d="M3 10h18"/><path d="M8 2v4"/><circle cx="18" cy="18" r="3"/></svg>
       </button>
-      <button @click="store.openBackupPath" v-tooltip="'打开备份文件夹'" 
+      <button @click="orderStore.openBackupPath" v-tooltip="'打开备份文件夹'" 
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
         <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open-icon lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
@@ -167,7 +167,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useModStore } from '../stores/modStore'
+import { useOrderStore } from '../stores/orderStore'
+import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { parse, formatDistanceToNow, differenceInCalendarDays, parseISO } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -257,10 +258,11 @@ const BackupItem = {
   `
 }
 
-const store = useModStore()
+const appStore = useAppStore()
+const orderStore = useOrderStore()
 const confirmStore = useConfirmStore()
 const loading = ref(false)
-const selectedPath = computed(() => store.currentBackupFile)
+const selectedPath = computed(() => orderStore.currentBackupFile)
 
 // 原始数据
 const rawData = ref({ today: [], earlier: [], other: [], import: [] })
@@ -359,10 +361,10 @@ const isEmpty = computed(() => {
 const refresh = async () => {
   loading.value = true
   try {
-    await store.getBackups()
-    // 从 store 同步数据 (假设 store.backups 结构是 {today:[], ...})
-    if (store.backups) {
-      Object.assign(rawData.value, store.backups)
+    await orderStore.getBackups()
+    // 从 store 同步数据 (orderStore.backups 结构是 {today:[], ...})
+    if (orderStore.backups) {
+      Object.assign(rawData.value, orderStore.backups)
     }
   } finally {
     // loading.value = false
@@ -371,8 +373,8 @@ const refresh = async () => {
 // 选择备份项
 const selectItem = async (item) => {
   // selectedPath.value = item.path
-  await store.getBackupOrder(item.path)
-  store.showDiffDrawer = true
+  await orderStore.getBackupOrder(item.path)
+  appStore.uiState.showDiffDrawer = true
 }
 // 从备份列表加载
 const handleLoad = async (e, item) => {
@@ -383,7 +385,7 @@ const handleLoad = async (e, item) => {
     type: 'warning'
   }, e.target)
   if (!confirmed) return
-  await store.getLoadOrder(item.path)
+  await orderStore.getLoadOrder(item.path)
 }
 // 删除备份文件
 const handleDelete = async (e, item) => {
@@ -395,33 +397,33 @@ const handleDelete = async (e, item) => {
   }, e.target)
   if (!confirmed) return
   // 调用后端删除接口
-  await store.deletePath(item.path)
+  await orderStore.deletePath(item.path)
   refresh()
 }
 // 从导入列表移除
 const handleRemove = async (item) => {
   // 调用后端删除接口
   rawData.value.import = rawData.value.import.filter(i => i.path !== item.path)
-  if (store.currentBackupFile == item.path) {
-    store.currentBackupFile = ''
-    store.backupIds = []
+  if (orderStore.currentBackupFile == item.path) {
+    orderStore.currentBackupFile = ''
+    orderStore.backupIds = []
   }
   refresh()
 }
 // 导出当前加载顺序
 const exportOrder = async (path) => {
   // 调用后端另存为接口
-  await store.exportLoadOrder(path)
+  await orderStore.exportLoadOrder(path)
   refresh()
 }
 // 从导入列表加载
 const loadOrder = async (path) => {
   // 调用后端加载接口
-  const data = await store.getBackupOrder(path)
+  const data = await orderStore.getBackupOrder(path)
   if (data) {
     // console.log(data)
     rawData.value.import.push(data)
-    store.showDiffDrawer = true
+    appStore.uiState.showDiffDrawer = true
   }
   refresh()
 }

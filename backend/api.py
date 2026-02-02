@@ -193,7 +193,7 @@ class API:
                 
         result = {
             "app_version": __version__,
-            "build": __build__,
+            "build_mode": __build__,
             "paths_configured": paths_valid,
             "settings": asdict(settings.config), # 转为字典发给前端
             "all_mods": all_mods,

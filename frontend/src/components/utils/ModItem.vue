@@ -136,7 +136,10 @@
 
 <script setup>
 import { computed, h, nextTick  } from 'vue'
-import { useModStore, ISSUE_TYPE } from '../../stores/modStore'
+import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP } from '../../utils/constants'
+import { useAppStore } from '@/stores/appStore'
+import { useModStore } from '../../stores/modStore1'
+import { useGroupStore } from '../../stores/groupStore'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
@@ -158,18 +161,20 @@ const props = defineProps({
 
 defineEmits(['contextmenu'])
 
-const store = useModStore()
+const appStore = useAppStore()
+const modStore = useModStore()
+const groupStore = useGroupStore()
 const menuStore = useContextMenuStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
-const modData = computed(() => store.takeModById(props.item_id))
-const modGroups = computed(() => store.takeGroupsByModId(props.item_id))
-// const modIcon = computed(() => store.getIconUrl(props.id))
+const modData = computed(() => modStore.takeModById(props.item_id))
+const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
+// const modIcon = computed(() => modStore.getIconUrl(props.id))
 
-const modType = computed(() => store.displayModType(modData.value))
+const modType = computed(() => modStore.displayModType(modData.value))
 
 const linkWarn = computed(() => {
   if (!issues.value) return (false, false)
@@ -196,8 +201,8 @@ const issueTooltip = computed(() => {
 })
 
 // 错误提示
-const issueState = computed(() => store.getModIssueState(props.item_id))
-const issues = computed(() => store.modIssues.get(props.item_id.toLowerCase()))
+const issueState = computed(() => modStore.getModIssueState(props.item_id))
+const issues = computed(() => modStore.modIssues.get(props.item_id.toLowerCase()))
 const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
@@ -218,7 +223,7 @@ const getModTypeClass = computed(() => {
 
 const getCardStyle = (id) => {
   const base = {}
-  const color = store.takeModById(id).sign_color
+  const color = modStore.takeModById(id).sign_color
   // console.log(color)
   if (!color) return base
   if(!issueState.value) { // 防止覆盖错误样式
@@ -232,16 +237,16 @@ const getCardStyle = (id) => {
 const deleteMod = async () => {
   const res = await confirmStore.confirmAction('警告','确定要删除选中项文件吗？',{type:'error'})
   if(res) {
-    store.deletePath(modData.value.path)
-    store.refreshModList()
+    appStore.deletePath(modData.value.path)
+    appStore.refreshData()
   }
 }
 // 取消订阅模组
 const unsubscribeMod = async () => {
   const res = await confirmStore.confirmAction('警告','确定要取消订阅选中项吗？Steam 会自动删除已取消订阅的文件！',{type:'error'})
   if(res) {
-    store.unsubscribeMod(props.item_id)
-    store.refreshModList()
+    appStore.unsubscribeMod(props.item_id)
+    appStore.refreshData()
   }
 }
 
@@ -253,67 +258,67 @@ const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
   // 检查是否选中，若未选中则添加到选中列表
-  if (!store.selectedIds.includes(props.item_id)) {
-    store.selectMods(props.item_id)
+  if (!modStore.selectedIds.includes(props.item_id)) {
+    modStore.selectMods(props.item_id)
     await nextTick()
   }
-  const selectedIds = store.selectedIds;
+  const selectedIds = modStore.selectedIds;
   // 获取统计信息
-  const stats = store.selectedStats
+  const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !store.allModTags?.length, children: [{type: 'grid', columns: 5,
-      children: store.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
-        label: '#'+tag, action: () => store.selectModsTag(tag)
+    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5,
+      children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
+        label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理', icon: Group, disabled: !store.groupList?.length, children: [{type: 'grid', columns: 4,
-      children: store.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
-        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => store.selectModsGroup(group.group_id)
+    { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4,
+      children: groupStore.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
+        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => groupStore.selectModsGroup(group.group_id)
       }))}]
     },
     { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 
-        children:[...store.modColorList.map(c => ({ tooltip: c, color: c, 
-          active: modData.value.sign_color === c, action: () => store.setModsColor(selectedIds, c)
+        children:[...MOD_COLOR_LIST.map(c => ({ tooltip: c, color: c, 
+          active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
         })), 
-        { icon: X, color: 'transparent', tooltip: '清除', action: () => store.setModsColor(selectedIds, null) }]
+        { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }]
       }]
     },
     { label: '修改类型', icon: ChessPawn,
-      children: [...Object.entries(store.MOD_TYPE_MAP).map(([key, value]) => ({
-        label: value, action: () => store.setModsType(selectedIds, key)
-      })),{ label: '恢复默认', level: 'warn', action: () => store.setModsType(selectedIds, null) }]
+      children: [...Object.entries(MOD_TYPE_MAP).map(([key, value]) => ({
+        label: value, action: () => modStore.setModsType(selectedIds, key)
+      })),{ label: '恢复默认', level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     }
   ]
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
     { label: '编辑排序规则', icon: PencilRuler, action: () => ruleStore.currentId = props.item_id },
-    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => store.openUrl(modData.value.url) },
-    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => store.openPath(modData.value.path) },
+    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => appStore.openUrl(modData.value.url) },
+    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
     { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteMod() },
     { label: 'Steam操作', icon: IconSteam, children: [
-      { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
-      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => store.subscribeMod(props.item_id) },
+      { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(modData.value.url) },
+      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeMod(props.item_id) },
       { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
     ]},
   ]
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '联锁选中项', icon: Link2, action: () => store.linkMods(selectedIds) },
+    { label: '联锁选中项', icon: Link2, action: () => modStore.linkMods(selectedIds) },
   ]
   if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
-    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => store.unlinkMods(selectedIds) })
+    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
   }
   // 1. 获取所有选中 Mod 的当前问题并集
-  const allSelectedIssues = selectedIds.flatMap(id => store.modIssues.get(id.toLowerCase()) || []);
+  const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);
   // 2. 提取唯一的错误类型 (Type Unique Set)
   const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))];
 
   // 3. 检查选中项中是否有人已经设置了忽略 (用于显示“恢复警告”)
   const anyModHasIgnored = selectedIds.some(id => {
-    const m = store.takeModById(id);
+    const m = modStore.takeModById(id);
     return m && m.ignored_issues && m.ignored_issues.length > 0;
   });
   // 统一的忽略/恢复菜单组
@@ -325,10 +330,10 @@ const handleContextMenu = async (event) => {
       label: selectedIds.length > 1 ? `批量忽略问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
       icon: MegaphoneOff,
       children: uniqueIssueTypes.map(type => ({
-        label: `忽略：${store.ISSUE_TITLE_MAP[type] || type}`,
+        label: `忽略：${ISSUE_TITLE_MAP[type] || type}`,
         // 这里的 level 可以取该类型在所有 Mod 中的最高级别
         level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
-        action: () => store.batchIgnoreIssues(selectedIds, type)
+        action: () => modStore.batchIgnoreIssues(selectedIds, type)
       }))
     });
   }
@@ -340,7 +345,7 @@ const handleContextMenu = async (event) => {
       label: selectedIds.length > 1 ? '恢复所有选中项警告' : '恢复警告',
       icon: Megaphone,
       level: 'warn',
-      action: () => store.batchIgnoreIssues(selectedIds, null)
+      action: () => modStore.batchIgnoreIssues(selectedIds, null)
     });
   }
 

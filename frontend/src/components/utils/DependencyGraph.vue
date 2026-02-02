@@ -14,7 +14,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { useModStore } from '../../stores/modStore'
+import { useModStore } from '../../stores/modStore1'
 import { useHoverStore } from '../../stores/hoverStore'
 
 const props = defineProps({
@@ -30,7 +30,7 @@ const props = defineProps({
 
 const emit = defineEmits(['lineClick'])
 
-const store = useModStore()
+const modStore = useModStore()
 const hoverStore = useHoverStore()
 const containerRef = ref(null)
 const canvasRef = ref(null)
@@ -69,13 +69,13 @@ const manualActiveGroupId = ref(null) // 用户手动点击激活的组 ID
 
 // 计算当前选中的最后一个 ID (作为自动高亮的依据)
 const lastSelectedId = computed(() => {
-  return store.lastSelectedMod?.package_id || null
+  return modStore.lastSelectedMod?.package_id || null
 })
 
 // 缓存当前选中项对应的索引集合 (用于快速碰撞检测判定高亮)
 const selectedIndicesSet = computed(() => {
   const set = new Set()
-  store.selectedIds.forEach(id => {
+  modStore.selectedIds.forEach(id => {
     // 这里需要反查 id 在 listIds 中的索引
     // 注意：如果 listIds 很大，indexOf 可能稍慢，但通常 UI 响应够用
     // 极致优化可以依赖外部传入 map，但这里直接查即可
@@ -186,7 +186,7 @@ const processGraph = () => {
 
   // 1.1 收集依赖关系 (反转 Child->Parent 为 Parent->Children)
   ids.forEach((childId, childIndex) => {
-    const mod = store.takeModById(childId)
+    const mod = modStore.takeModById(childId)
     if (!mod || !mod.dependencies_mods) return
 
     mod.dependencies_mods.forEach(parentMod => {
@@ -315,7 +315,7 @@ const processGraph = () => {
   })
 }
 
-// 新增：用于存储每个 childIndex 上不同 group 的偏移量映射
+// 用于存储每个 childIndex 上不同 group 的偏移量映射
 // Map<childIndex, Map<groupId, offsetPixels>>
 let childOffsetMap = new Map()
 
@@ -323,26 +323,17 @@ let childOffsetMap = new Map()
 const handleCanvasClick = (e) => {
   // 1. 获取命中的组 (getHitGroup 已经实现了：高亮优先 > 顶层优先)
   const targetGroup = getHitGroup(e)
-
   if (targetGroup) {
     const active = isGroupActive(targetGroup)
-    
     // 情况 A: 该线路已经是激活状态 (通过选中项自动激活 或 之前手动点过)
     if (active) {
-      // 构造 ID 列表: [父项ID, ...子项ID]
-      // 需要转换回原始大小写吗？store.takeModById 应该处理了，这里传递原始 parentId 即可
-      // 注意：store中的mod对象有 dependencies_mods，我们这里只有 indices
-      // 最好从 props.listIds 反查
+      // 构造 ID 列表: [父项ID, ...子项ID], 从 props.listIds 反查
       const childIds = targetGroup.childIndices.map(idx => props.listIds[idx])
       const payload = [targetGroup.parentId, ...childIds] // parentId 已经是 Mod ID 格式
-      
       // 触发事件给父组件
       emit('lineClick', payload)
-      
-      // 此时不应进行手动高亮切换，因为已经是高亮了
       return
     }
-
     // 情况 C: 全局无选中项，点击背景线路 -> 切换手动高亮
     if (manualActiveGroupId.value === targetGroup.id) {
       manualActiveGroupId.value = null
@@ -370,7 +361,7 @@ const handleMouseMove = (e) => {
       hoveredGroup.value = group
       
       // 构造显示内容 (根据你的全局组件支持纯文本还是HTML，这里以模版字符串为例)
-      let content = `{{${group.color}|依赖源:}} ${store.displayModName(group.parentId)}\n包含 ${group.childIndices.length} 个子模组`
+      let content = `{{${group.color}|依赖源:}} ${modStore.displayModName(group.parentId)}\n包含 ${group.childIndices.length} 个子模组`
       if (group.isError) {
         content += `\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!`
       }
@@ -397,7 +388,7 @@ const handleMouseMove = (e) => {
   }
 }
 
-// 3. 新增：鼠标离开处理
+// 3. 鼠标离开处理
 const handleMouseLeave = () => {
   hoverStore.hide() // 确保鼠标移出组件时隐藏
   // console.log('鼠标离开组件')

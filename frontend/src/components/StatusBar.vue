@@ -7,21 +7,21 @@
     <div class="flex items-center gap-4">
       <!-- 状态指示灯 -->
       <div class="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
-        <div :class="['w-1.5 h-1.5 rounded-full', store.isDirty ? 'bg-yellow-500' : 'bg-green-500']"></div>
-        <span>{{ store.isDirty ? '未保存更改' : '就绪' }}</span>
+        <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-yellow-500' : 'bg-green-500']"></div>
+        <span>{{ modStore.isDirty ? '未保存更改' : '就绪' }}</span>
       </div>
       
       <!-- 基础统计 -->
       <div>
-        模组总数: <span class="text-white">{{ store.allModsMap.size }}</span>
+        模组总数: <span class="text-white">{{ modStore.allModsMap.size }}</span>
       </div>
       
       <div>
-        已启用: <span class="text-accent-success font-bold">{{ store.activeIds.length }}</span>
+        已启用: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
       </div>
 
-      <div v-show="store.selectedIds.length > 0">
-        已选择: <span class="text-accent-primary font-bold">{{ store.selectedIds.length }}</span>
+      <div v-show="modStore.selectedIds.length > 0">
+        已选择: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
       </div>
     </div>
 
@@ -67,7 +67,7 @@
 
     <!-- 右侧：版本 -->
     <div class="flex items-center gap-2 hover:text-white" >
-       <span>RimWorld {{ store.settings.game_version || '未知版本' }}</span>
+       <span>RimWorld {{ appStore.settings.game_version || '未知版本' }}</span>
     </div>
 
   </div>
@@ -75,23 +75,25 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useModStore } from '../stores/modStore'
+import { useModStore } from '../stores/modStore1'
+import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification";
 
 const toast = useToast();
-const store = useModStore()
+const modStore = useModStore()
+const appStore = useAppStore()
 
 // 统一任务计算属性
 // 优先级: 扫描 > 下载
 const taskType = computed(() => {
-  if (store.scanProgress.scanning) return 'scan'
-  if (store.activeDownloadTask) return 'download'
+  if (appStore.scanProgress.scanning) return 'scan'
+  if (appStore.activeDownloadTask) return 'download'
   return null
 })
 
 const activeTask = computed(() => {
-  if (taskType.value === 'scan') return store.scanProgress
-  if (taskType.value === 'download') return store.activeDownloadTask
+  if (taskType.value === 'scan') return appStore.scanProgress
+  if (taskType.value === 'download') return appStore.activeDownloadTask
   return null
 })
 
