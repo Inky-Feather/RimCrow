@@ -210,7 +210,7 @@
 
     <!-- 测试 -->
     <div v-if="appStore.settings.debug_mode">
-      <Test v-show="appStore.uiState.showTestDrawer" />
+      <Test class="fixed bottom-4 left-4 " v-show="appStore.uiState.showTestDrawer" />
       <DebugPanel />
     </div>
     <!-- 重复包名冲突弹窗 -->

@@ -71,7 +71,7 @@ const sanitizedState = computed(() => {
       allMods: modStore.allModsMap.size,
       active: modStore.activeIds.length,
       inactive: modStore.inactiveIds.length,
-      groups: modStore.groupList.length,
+      groups: groupStore.groupList.length,
       issues: modStore.modIssues.size
     },
 
@@ -80,7 +80,7 @@ const sanitizedState = computed(() => {
       id: modStore.lastSelectedMod.package_id,
       name: modStore.lastSelectedMod.name,
       tags: modStore.lastSelectedMod.tags,
-      groups: modStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
+      groups: groupStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
       issues: modStore.modIssues.get(modStore.lastSelectedMod.package_id.toLowerCase())
     } : null,
 
