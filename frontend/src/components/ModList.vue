@@ -162,7 +162,7 @@ import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import VirtualList from 'vue-virtual-sortable';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
-import { useModStore } from '../stores/modStore1';
+import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
 import { generateHtmlHelp } from '../modules/search/SearchHelp'
 import ModItem from './utils/ModItem.vue';

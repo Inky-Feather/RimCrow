@@ -14,7 +14,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { useModStore } from '../../stores/modStore1'
+import { useModStore } from '../../stores/modStore'
 import { useHoverStore } from '../../stores/hoverStore'
 
 const props = defineProps({

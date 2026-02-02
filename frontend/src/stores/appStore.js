@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed } from 'vue'
 import { createToastInterface } from 'vue-toastification'
-import { useModStore } from './modStore1'
+import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
 import { useOrderStore } from './orderStore'
 import { useRuleStore } from './ruleStore'

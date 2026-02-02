@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { createToastInterface } from 'vue-toastification'
-import { useModStore } from './modStore1'
+import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
 
 export const useOrderStore = defineStore('order', () => {

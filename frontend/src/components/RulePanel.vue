@@ -327,7 +327,7 @@
 import { ref, computed } from 'vue'
 import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff } from 'lucide-vue-next'
 import { useToast } from "vue-toastification"
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useConfirmStore } from '../stores/confirmStore'
 

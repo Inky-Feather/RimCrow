@@ -101,7 +101,7 @@
 
 <script setup>
 import { ref, watch, reactive } from 'vue'
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification"
 

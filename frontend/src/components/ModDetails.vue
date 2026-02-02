@@ -490,7 +490,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { refDebounced, onClickOutside  } from '@vueuse/core' // 引入防抖函数
 import { MOD_COLOR_LIST, MOD_TYPE_MAP, SOURCE_TYPE_MAP } from '@/utils/constants'
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 import { useAppStore } from '@/stores/appStore'
 import { useGroupStore } from '../stores/groupStore'
 import { parseUnityRichText } from '../utils/unityTextParser'

@@ -1,4 +1,4 @@
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 
 /**
  * 核心逻辑类，用于管理单个列表的交互状态

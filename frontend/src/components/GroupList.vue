@@ -90,7 +90,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 import { useGroupStore } from '../stores/groupStore'
 import VirtualList from 'vue-virtual-sortable';
 import GroupItem from './utils/GroupItem.vue'

@@ -278,7 +278,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useModStore } from '../stores/modStore1'
+import { useModStore } from '../stores/modStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useConfirmStore } from '../stores/confirmStore'
 

@@ -110,7 +110,7 @@ import ModItem from './ModItem.vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ColorPicker } from "vue3-colorpicker";
 import "vue3-colorpicker/style.css";
-import { useModStore } from '../../stores/modStore1';
+import { useModStore } from '../../stores/modStore';
 import { useGroupStore } from '../../stores/groupStore';
 
 const props = defineProps({

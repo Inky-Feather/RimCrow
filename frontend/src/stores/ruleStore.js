@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useModStore } from './modStore1'
+import { useModStore } from './modStore'
 import { createToastInterface } from 'vue-toastification'
 
 // 动态规则支持属性映射

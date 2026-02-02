@@ -239,7 +239,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, h, provide } from 'vue'
-import { useModStore } from './stores/modStore1'
+import { useModStore } from './stores/modStore'
 import { useAppStore } from './stores/appStore'
 import { useRuleStore } from './stores/ruleStore'
 import { useGroupStore } from './stores/groupStore'

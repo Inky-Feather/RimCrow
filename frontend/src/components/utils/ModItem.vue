@@ -138,7 +138,7 @@
 import { computed, h, nextTick  } from 'vue'
 import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP } from '../../utils/constants'
 import { useAppStore } from '@/stores/appStore'
-import { useModStore } from '../../stores/modStore1'
+import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
