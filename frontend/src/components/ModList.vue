@@ -82,11 +82,14 @@
 
           <template #right>
               <!-- 排序切换按钮 -->
-              <button @click="cycleSort" v-tooltip="sortMode"
+              <button @click="isSortChange = !isSortChange" @blur="isSortChange = false" v-tooltip="sortTooltip"
                 :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-                transition-all`">
+                transition-all relative`">
                 {{ sortIcon }}
+                <div v-show="isSortChange" class="absolute min-w-20 h-auto p-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-text-main/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
+                  <div v-for="(icon, mode) in SORT_MODE_MAP" :key="mode" @click="sortMode = mode" class="w-full rounded-md hover:bg-text-dim/30 hover:text-text-main">{{ icon }}</div>
+                </div>
               </button>
           </template>
         </TagsSearch>
@@ -191,7 +194,7 @@ const listKey = ref(0)
 // 状态
 const isSimpleView = ref(true) // 是否简单视图
 const isSortAsc = ref(true)   // 是否升序排序
-const sortMode = ref<'default' | 'name' | 'author'>('default')  // 排序模式
+const sortMode = ref<'default' | 'name' | 'package_id' | 'author' |'last_active_time' | 'last_moved_time'>('default')  // 排序模式
 
 const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
@@ -204,6 +207,8 @@ const filterQuery = ref([]) // 存储标签数组
 const filterLogic = ref('AND') // 存储逻辑关系
 const filterByLine = ref([])  // 存储筛选线路数组
 const isFilterByIssue = ref(false)  // 是否筛选问题项
+
+const isSortChange = ref(false) // 是否排序切换
 
 // 获取 Engine 实例 (computed 确保响应式)
 const engine = computed(() => searchStore.engine)
@@ -282,14 +287,7 @@ const issueTooltip = computed(() => {
 })
 // 排序提示
 const sortTooltip = computed(() => {
-  let text = ''
-  if (sortMode.value === 'default') {
-    text = '默认排序'
-  } else if (sortMode.value === 'name') {
-    text = '按名称排序'
-  } else if (sortMode.value === 'author') {
-    text = '按作者排序'
-  }
+  let text = `按${SORT_MODE_MAP[sortMode.value]}排序`
   text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
   return text
 })
@@ -359,7 +357,11 @@ const displayList = computed(() => {
       const mA = modStore.takeModById(a)
       const mB = modStore.takeModById(b)
       if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
-      if (sortMode.value === 'author') return (mA?.author || '').localeCompare(mB?.author || '')
+      if (sortMode.value === 'author') return (mA?.author?.[0] || '').localeCompare(mB?.author?.[0] || '')
+      if (sortMode.value === 'package_id') return (mA?.package_id || a).localeCompare(mB?.package_id || b)
+      if (sortMode.value === 'last_active_time') return (mA?.last_active_time || 0) - (mB?.last_active_time || 0)
+      if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
+
       return 0
     })
   }
@@ -379,18 +381,17 @@ const internalListProxy = computed({
 })
 
 // ===== 排序模式切换 =====
-const sortIcon = computed(() => {
-    switch(sortMode.value) {
-        case 'name': return 'A-Z'
-        case 'author': return 'User'
-        default: return 'Def'
-    }
-})
-const cycleSort = () => {
-    if (sortMode.value === 'default') sortMode.value = 'name'
-    else if (sortMode.value === 'name') sortMode.value = 'author'
-    else sortMode.value = 'default'
+const SORT_MODE_MAP = {
+  'default': '默认',
+  'name': '名称',
+  'package_id': '包名',
+  'author': '作者',
+  'last_active_time': '启用时间',
+  'last_moved_time': '移动时间',
 }
+const sortIcon = computed(() => {
+  return SORT_MODE_MAP[sortMode.value] || '默认'
+})
 
 // ===== 显示效果处理 =====
 // 监听 currentTargetId 变化

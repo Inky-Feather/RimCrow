@@ -346,7 +346,7 @@ button:focus-visible {
 @layer components {
   /* 统一的输入框玻璃质感 */
   .input-glass {
-    @apply bg-black/40 border border-white/10 rounded-lg transition-all duration-200;
+    @apply bg-black/30 border border-white/10 rounded-lg transition-all duration-200;
   }
   .input-glass:hover {
     @apply border-white/20 bg-black/60;

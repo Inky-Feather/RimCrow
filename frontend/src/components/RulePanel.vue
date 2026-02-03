@@ -222,93 +222,91 @@
     <!-- ================= 3. 规则编辑器 (Modal) ================= -->
     <Transition name="fade">
       <div v-if="editingRule" class="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div class="w-full max-w-2xl bg-bg-surface border border-white/10 rounded-2xl shadow-3xl flex flex-col max-h-[90vh] animate-scale-in">
-           
-           <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/2">
-             <div class="flex items-center gap-3">
-               <div class="w-8 h-8 rounded-lg bg-accent-primary/20 flex items-center justify-center">
-                 <Zap class="w-4 h-4 text-accent-primary" />
-               </div>
-               <h2 class="text-lg font-bold text-white">{{ editingRule.rule_id.startsWith('new_') ? '新建动态规则' : '编辑规则' }}</h2>
-             </div>
-             <button @click="editingRule = null" class="text-text-dim hover:text-white"><X class="w-6 h-6"/></button>
-           </header>
-           
-           <div class="flex-1 overflow-y-auto p-6 space-y-6">
-             
-             <!-- 基础设置 -->
-             <div class="grid grid-cols-12 gap-4">
-               <div class="col-span-8 space-y-1.5">
-                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">规则名称</label>
-                 <input v-model="editingRule.name" placeholder="例如: 汉化包置底" class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
-               </div>
-               <div class="col-span-4 space-y-1.5">
-                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">优先级 (Priority)</label>
-                 <input type="number" v-model.number="editingRule.priority" class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
-               </div>
-               <div class="col-span-12 space-y-1.5">
-                 <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">描述 (可选)</label>
-                 <input v-model="editingRule.description" placeholder="规则的备注说明..." class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-primary outline-none" />
-               </div>
-             </div>
+        <div class="w-full max-w-[70%] bg-bg-surface border border-white/10 rounded-2xl shadow-3xl flex flex-col max-h-[90%] animate-scale-in">
+          
+          <header class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/2">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-accent-primary/20 flex items-center justify-center">
+                <Zap class="w-4 h-4 text-accent-primary" />
+              </div>
+              <h2 class="text-lg font-bold text-white">{{ editingRule.rule_id.startsWith('new_') ? '新建动态规则' : '编辑规则' }}</h2>
+            </div>
+            <button @click="editingRule = null" class="text-text-dim hover:text-white"><X class="w-6 h-6"/></button>
+          </header>
+          
+          <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            
+            <!-- 基础设置 -->
+            <div class="grid grid-cols-12 gap-4">
+              <CommonInput v-model="editingRule.name" label="规则名称" placeholder="例如: 汉化包置底" class="col-span-8" />
+              <CommonNumber v-model.number="editingRule.priority" label="优先级 (Priority)" placeholder="例如: 100" class="col-span-4" />
+              <CommonInput v-model="editingRule.description" label="描述 (可选)" placeholder="规则的备注说明..." class="col-span-12" />
+            </div>
 
-             <!-- 条件构建器 -->
-             <div class="space-y-3">
-               <div class="flex items-center justify-between">
-                 <div class="flex items-center gap-2">
-                   <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">触发条件</label>
-                   <select v-model="editingRule.logic" class="bg-black/30 border border-white/10 rounded text-xs px-2 py-0.5 text-accent-secondary outline-none cursor-pointer">
-                     <option value="AND">满足所有 (AND)</option>
-                     <option value="OR">满足任一 (OR)</option>
-                   </select>
-                 </div>
-                 <button @click="addFilter" class="text-accent-primary text-xs hover:underline flex items-center gap-1"><Plus class="w-3 h-3"/>添加条件</button>
-               </div>
-               
-               <div class="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5">
-                 <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
-                   <select v-model="filter.field" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none w-28">
-                     <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_PROPS" :value="key">{{ label }}</option>
-                   </select>
-                   <select v-model="filter.operator" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-accent-secondary outline-none w-24">
-                     <option value="contains">包含</option>
-                     <option value="not_contains">不包含</option>
-                     <option value="equals">等于</option>
-                     <option value="starts_with">开头是</option>
-                     <option value="ends_with">结尾是</option>
-                     <option value="regex">正则匹配</option>
-                   </select>
-                   <input v-model="filter.value" placeholder="值..." class="flex-1 bg-white/5 border border-white/10 rounded px-3 py-1.5 text-xs text-white focus:border-accent-primary outline-none" />
-                   <button @click="editingRule.filters.splice(idx, 1)" class="p-1.5 text-text-dim hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity"><Trash2 class="w-3.5 h-3.5"/></button>
-                 </div>
-                 <div v-if="editingRule.filters.length === 0" class="text-center py-2 text-xs text-text-dim italic">点击右上角添加筛选条件</div>
-               </div>
-             </div>
+            <!-- 条件构建器 -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <!-- <div class="flex items-center gap-2">
+                  <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">触发条件</label>
+                  <select v-model="editingRule.logic" class="bg-bg-deep/30 border border-white/10 rounded-md text-xs px-2 py-0.5 text-accent-secondary outline-none cursor-pointer">
+                    <option value="AND">满足所有 (AND)</option>
+                    <option value="OR">满足任一 (OR)</option>
+                  </select>
+                </div> -->
+                <CommonSelect class="min-w-45" v-model="editingRule.logic" label="触发条件" mini :options="[{label:'满足所有 (AND)',value:'AND'}, {label:'满足任一 (OR)',value:'OR'}]"></CommonSelect>
+                
+                <button @click="addFilter" class="text-accent-primary text-xs hover:underline flex items-center gap-1"><Plus class="w-3 h-3"/>添加条件</button>
+              </div>
+              
+              <div class="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5">
+                <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
+                  <!-- <select v-model="filter.field" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none w-28">
+                    <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_PROPS" :value="key">{{ label }}</option>
+                  </select> -->
+                  <CommonSelect class="min-w-20" v-model="filter.field" :options="Object.entries(ruleStore.DYNAMIC_RULE_PROPS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
+                  <!-- <select v-model="filter.operator" class="bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-accent-secondary outline-none w-24">
+                    <option value="contains">包含</option>
+                    <option value="not_contains">不包含</option>
+                    <option value="equals">等于</option>
+                    <option value="starts_with">开头是</option>
+                    <option value="ends_with">结尾是</option>
+                    <option value="regex">正则匹配</option>
+                  </select> -->
+                  <CommonSelect class="min-w-30" v-model="filter.operator" :options="Object.entries(ruleStore.DYNAMIC_RULE_OPERATORS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
+                  <!-- <input v-model="filter.value" placeholder="值..." class="flex-1 bg-white/5 border border-white/10 rounded px-3 py-1.5 text-xs text-white focus:border-accent-primary outline-none" /> -->
+                  <CommonInput v-model="filter.value" placeholder="值..." class="flex-1" />
+                  <button @click="editingRule.filters.splice(idx, 1)" class="p-1.5 text-text-dim hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity"><Trash2 class="w-3.5 h-3.5"/></button>
+                </div>
+                <div v-if="editingRule.filters.length === 0" class="text-center py-2 text-xs text-text-dim italic">点击右上角添加筛选条件</div>
+              </div>
+            </div>
 
-             <!-- 动作设置 -->
-             <div class="space-y-3">
-               <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">执行动作</label>
-               <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 flex gap-4 items-center">
-                 <select v-model="editingRule.action.type" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-accent-primary outline-none min-w-[140px]">
-                   <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_ACTIONS" :value="key">{{ label }}</option>
-                 </select>
-                 
-                 <!-- 根据动作类型显示输入框 -->
-                 <div v-if="editingRule.action.type.includes('weight')" class="flex items-center gap-2 flex-1">
-                   <input type="number" v-model.number="editingRule.action.value" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm w-32 text-white outline-none focus:border-accent-primary" />
-                   <span class="text-xs text-text-dim">
-                     {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
-                   </span>
-                   <label class="text-xs text-text-dim italic hover:text-text-main cursor-help" v-tooltip="weightTooltip">?</label>
-                 </div>
-                 <div v-else-if="editingRule.action.type.includes('load_')" class="flex-1">
-                   <input v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent-primary font-mono" />
-                 </div>
-                 <div v-else class="text-xs text-text-dim flex-1">
-                   无需参数，匹配项将被移至列表最{{ editingRule.action.type === 'top' ? '前' : '后' }}端。
-                 </div>
-               </div>
-             </div>
+            <!-- 动作设置 -->
+            <div class="space-y-3">
+              <label class="text-[10px] uppercase font-bold text-text-dim tracking-wider">执行动作</label>
+              <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 flex gap-4 items-center">
+                <!-- <select v-model="editingRule.action.type" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm text-accent-primary outline-none min-w-[140px]">
+                  <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_ACTIONS" :value="key">{{ label }}</option>
+                </select> -->
+                <CommonSelect class="min-w-40" v-model="editingRule.action.type" :options="Object.entries(ruleStore.DYNAMIC_RULE_ACTIONS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
+                
+                <!-- 根据动作类型显示输入框 -->
+                <div v-if="editingRule.action.type.includes('weight')" class="flex items-center gap-2 flex-1">
+                  <!-- <input type="number" v-model.number="editingRule.action.value" class="bg-bg-deep border border-white/10 rounded-lg px-3 py-2 text-sm w-32 text-white outline-none focus:border-accent-primary" /> -->
+                  <CommonNumber v-model.number="editingRule.action.value" />
+                  <span class="text-xs text-text-dim">
+                    {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
+                  </span>
+                  <label class="text-xs text-text-dim italic hover:text-text-main cursor-help" v-tooltip="weightTooltip">?</label>
+                </div>
+                <div v-else-if="editingRule.action.type.includes('load_')" class="flex-1">
+                  <CommonInput v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full" />
+                </div>
+                <div v-else class="text-xs text-text-dim flex-1">
+                  无需参数，匹配项将被移至列表最{{ editingRule.action.type === 'top' ? '前' : '后' }}端。
+                </div>
+              </div>
+            </div>
 
            </div>
 
@@ -330,6 +328,9 @@ import { useToast } from "vue-toastification"
 import { useModStore } from '../stores/modStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useConfirmStore } from '../stores/confirmStore'
+import CommonInput from './common/input/CommonInput.vue'
+import CommonNumber from './common/input/CommonNumber.vue'
+import CommonSelect from './common/input/CommonSelect.vue'
 
 
 

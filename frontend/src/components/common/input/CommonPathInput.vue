@@ -24,7 +24,7 @@
           :value="modelValue"
           @input="$emit('update:modelValue', $event.target.value)"
           placeholder="请输入或粘贴路径..."
-          class="flex-1 bg-transparent text-xs text-white/90 font-mono outline-none min-w-0 placeholder:text-white/10"
+          class="flex-1 bg-transparent text-xs text-white/90 font-mono outline-none min-w-0 "
           :class="{ 'direction-rtl': !isFocused }"
           @focus="isFocused = true"
           @blur="isFocused = false"

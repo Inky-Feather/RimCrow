@@ -73,6 +73,10 @@
                   <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" />
                   <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" />
+                  <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
+                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
+                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
                 </div>
               </section>
 
@@ -147,7 +151,10 @@
                 <h3 class="text-lg font-bold text-white mb-6">开发与调试</h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-6">
-                    <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" />
+                    <CommonSwitch class="col-span-1" label="调试模式" v-model="formData.debug_mode" />
+                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" />
+                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" />
+                    <CommonNumber class="col-span-1" label="自动备份保留天数" v-model="formData.backup_retention_days" :step="1" />
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
                   </div>
@@ -189,9 +196,9 @@ import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 
 // 导入你的 Common UI
-import CommonInput from './common/input/CommonInput.vue'
 import CommonPathInput from './common/input/CommonPathInput.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue'
+import CommonInput from './common/input/CommonInput.vue'
 import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
@@ -219,7 +226,18 @@ const tabs = [
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
-    formData.value = JSON.parse(JSON.stringify(appStore.settings))
+    // 利用 requestAnimationFrame 或 setTimeout
+    // 让浏览器先渲染出弹窗的“背景”和“动画第一帧”，然后再去塞数据
+    requestAnimationFrame(() => {
+      // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)
+      // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
+      try {
+        formData.value = structuredClone(appStore.settings)
+      } catch (e) {
+        // 降级兼容
+        formData.value = JSON.parse(JSON.stringify(appStore.settings))
+      }
+    })
   }
 })
 

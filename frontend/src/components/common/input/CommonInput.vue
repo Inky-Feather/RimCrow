@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonInput.vue -->
 <template>
   <div class="space-y-1.5 w-full">
-    <div class="flex justify-between items-center px-1">
+    <div v-if="label" class="flex justify-between items-center px-1">
       <label class="text-[10px] text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
       <slot name="extra"></slot>
     </div>
@@ -18,7 +18,7 @@
           @input="$emit('update:modelValue', $event.target.value)"
           :placeholder="placeholder"
           :readonly="readonly"
-          class="w-full bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/10 focus:outline-none font-mono"
+          class="w-full bg-transparent px-3 py-2 text-sm text-white focus:outline-none font-mono"
         />
 
         <!-- 密码切换按钮 -->

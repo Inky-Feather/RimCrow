@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonNumber.vue -->
 <template>
-  <div class="space-y-1.5 w-full">
-    <label class="text-[10px] text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
+  <div class="space-y-1.5">
+    <label v-if="label" class="text-[10px] text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
     <div class="flex items-center input-glass overflow-hidden h-9">
       <button @click="change(-1)" class="w-[20%] h-full hover:bg-white/5 text-text-dim hover:text-white transition-colors border-r border-white/5">-</button>
       
