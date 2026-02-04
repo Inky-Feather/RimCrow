@@ -996,7 +996,6 @@ class API:
             
         return ApiResponse.success({
             "steamcmd_ready": self.steam_mgr.steamcmd_ready,
-            "steamworks_ready": self.steam_mgr._is_steam_initialized,
             "pending_tasks": tasks
         })
 

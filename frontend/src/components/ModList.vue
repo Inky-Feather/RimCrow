@@ -194,7 +194,7 @@ const listKey = ref(0)
 // 状态
 const isSimpleView = ref(true) // 是否简单视图
 const isSortAsc = ref(true)   // 是否升序排序
-const sortMode = ref<'default' | 'name' | 'package_id' | 'author' |'last_active_time' | 'last_moved_time'>('default')  // 排序模式
+const sortMode = ref('default')  // 排序模式
 
 const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
@@ -289,6 +289,7 @@ const issueTooltip = computed(() => {
 const sortTooltip = computed(() => {
   let text = `按${SORT_MODE_MAP[sortMode.value]}排序`
   text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
+  text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
   return text
 })
 // 筛选提示
@@ -304,6 +305,7 @@ const filterTooltip = computed(() => {
     text += `\n已筛选依赖组`
   }
   text = text.trim()
+  text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
   text += `\n\n__[[(点击清除所有筛选)]]__`
   return text
 })
@@ -361,6 +363,8 @@ const displayList = computed(() => {
       if (sortMode.value === 'package_id') return (mA?.package_id || a).localeCompare(mB?.package_id || b)
       if (sortMode.value === 'last_active_time') return (mA?.last_active_time || 0) - (mB?.last_active_time || 0)
       if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
+      if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
+      if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
 
       return 0
     })
@@ -388,6 +392,8 @@ const SORT_MODE_MAP = {
   'author': '作者',
   'last_active_time': '启用时间',
   'last_moved_time': '移动时间',
+  'file_create_time': '创建时间',
+  'file_modify_time': '修改时间',
 }
 const sortIcon = computed(() => {
   return SORT_MODE_MAP[sortMode.value] || '默认'

@@ -1,31 +1,77 @@
 # backend/managers/mgr_steam.py
 import os
-from pathlib import Path
+import re
+import sys
 import platform
 import subprocess
-import sys
 import threading
 import time
-import re
-import zipfile
 import shutil
-import webview
 import importlib.util
 from typing import Optional
 
-# 尝试导入 steamworks，如果环境没配好暂时忽略，防止启动报错
-try:
-    from steamworks.steamworks import STEAMWORKS
-except ImportError:
-    STEAMWORKS = None
+# 注意：不要在文件顶层 import steamworks，防止主进程意外加载
+# 只在 run_steam_worker 函数内部 import
 
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
-from backend.settings import settings
-from backend.managers.mgr_download import DownloadManager, TaskStatus
+from backend.managers.mgr_download import TaskStatus
 
 # RimWorld App ID
 RIMWORLD_APP_ID = "294100"
+
+# =========================================================
+#  独立 Worker 函数 (由 main.py 在子进程调用)
+# =========================================================
+def run_steam_worker(action: str, mod_id: int):
+    """
+    这是在一个独立的、短命的进程中运行的。
+    它负责初始化 SteamAPI，执行操作，然后结束。
+    """
+    try:
+        # 在这里才导入库，确保主进程干净
+        from steamworks.steamworks import STEAMWORKS
+    except ImportError:
+        print("ERROR: steamworks-py not found in bundle")
+        return
+
+    # 这里的 cwd 已经被主进程设置为了 tools/steam_agent
+    # 所以直接初始化即可读取到旁边的 steam_appid.txt 和 DLL
+    try:
+        steam = STEAMWORKS()
+        steam.initialize()
+    except Exception as e:
+        print(f"ERROR: Steam init failed: {e}")
+        return
+
+    if not steam:
+        print("ERROR: Steam API not loaded")
+        return
+
+    # 定义回调
+    def callback(res):
+        print(f"Callback: {res}")
+
+    success = False
+    try:
+        if action == "subscribe":
+            steam.Workshop.SubscribeItem(mod_id, callback)
+            success = True
+            print("SUCCESS: Subscription request sent")
+        elif action == "unsubscribe":
+            steam.Workshop.UnsubscribeItem(mod_id, callback)
+            success = True
+            print("SUCCESS: Unsubscription request sent")
+        else:
+            print(f"ERROR: Unknown action {action}")
+    except Exception as e:
+        print(f"ERROR: Action failed: {e}")
+
+    # 给 Steam 客户端一点时间处理请求
+    if success:
+        # 必须稍作等待，让 Steam 客户端接收到 IPC 消息
+        time.sleep(1)
+
 
 class SteamManager:
     _instance = None
@@ -47,44 +93,106 @@ class SteamManager:
         self.steamcmd_dir = os.path.join(self.tools_dir, "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
         
-        # Steamworks 路径
-        self.steamworks_dir = os.path.join(self.tools_dir, "steamworks")
-        self._steam_instance = None
-        self._is_steam_initialized = False
-
+        # Steam Agent 路径 (隔离环境)
+        self.agent_dir = os.path.join(self.tools_dir, "steam_agent")
+        
         # 确保目录存在
         os.makedirs(self.steamcmd_dir, exist_ok=True)
-        os.makedirs(self.steamworks_dir, exist_ok=True)
+        os.makedirs(self.agent_dir, exist_ok=True)
         
-        # 初始化状态
+        # 状态
         self.steamcmd_ready = os.path.exists(self.steamcmd_exe)
         
-        # 尝试初始化 Steamworks (如果本地有 DLL)
-        self._init_steamworks_api()
+        # 准备环境 (只复制 DLL 和 txt，不再生成 py 脚本)
+        self._ensure_agent_environment()
 
     def _get_steamcmd_exe_path(self):
         system = platform.system()
         if system == "Windows":
             return os.path.join(self.steamcmd_dir, "steamcmd.exe")
-        elif system == "Linux":
+        elif system == "Linux": # Linux/Mac 逻辑保持不变
             return os.path.join(self.steamcmd_dir, "steamcmd.sh")
         elif system == "Darwin":
             return os.path.join(self.steamcmd_dir, "steamcmd.sh")
         return ""
 
     # =========================================================
-    #  1. 环境准备 (下载工具)
+    #  1. 环境准备
     # =========================================================
 
-    def ensure_tools(self, download_mgr: DownloadManager):
+    def _ensure_agent_environment(self):
         """
-        检查工具状态：
-        1. SteamCMD: 不存在则下载
-        2. Steamworks DLL: 不存在则尝试从本地库复制
+        初始化 Agent 环境：
+        1. 写入 steam_appid.txt
+        2. 写入 steam_worker.py (从字符串生成)
+        3. 复制 DLLs
         """
-        tasks = []
+        # 1. 创建 steam_appid.txt
+        appid_path = os.path.join(self.agent_dir, "steam_appid.txt")
+        if not os.path.exists(appid_path):
+            with open(appid_path, "w") as f:
+                f.write(RIMWORLD_APP_ID)
+
+        # 2. 检查并复制 DLL (逻辑同上一次修改，保持不变)
+        target_dll = "SteamworksPy64.dll" if platform.system() == "Windows" else "libSteamworksPy.so"
+        target_api = "steam_api64.dll" if platform.system() == "Windows" else "libsteam_api.so"
         
-        # 1. 检查 SteamCMD
+        dst_dll = os.path.join(self.agent_dir, target_dll)
+        dst_api = os.path.join(self.agent_dir, target_api)
+
+        # 如果目标不存在，或者处于开发环境(可能DLL更新了)，尝试复制
+        # 这里简单判断不存在则复制
+        if not os.path.exists(dst_dll) or not os.path.exists(dst_api):
+            logger.info("Initializing Steam Agent DLLs...")
+            self._copy_dlls_to_agent(target_dll, target_api)
+
+    def _copy_dlls_to_agent(self, dll_name, api_name):
+        """
+        在开发环境和打包环境中查找并复制 DLL
+        """
+        search_dirs = []
+        # 1. 确定搜索路径列表
+        if getattr(sys, 'frozen', False):
+            # === 打包环境 (PyInstaller) ===
+            # sys.executable: exe 文件所在目录
+            exe_dir = os.path.dirname(sys.executable)
+            # sys._MEIPASS: PyInstaller 解压临时目录
+            base_dir = getattr(sys, '_MEIPASS', exe_dir)
+            # 添加可能的搜索位置：
+            # A. _MEIPASS 根目录 (如果 spec 文件配置为 binary 放在根目录)
+            search_dirs.append(base_dir)
+            # B. _MEIPASS/steamworks (如果使用了 collect_all 或 add_data 保持了目录结构)
+            search_dirs.append(os.path.join(base_dir, "steamworks"))
+            # C. EXE 同级目录 (用户手动放置 DLL 作为补救)
+            search_dirs.append(exe_dir)
+        else:
+            # === 开发环境 ===
+            try:
+                spec = importlib.util.find_spec("steamworks")
+                if spec and spec.origin:
+                    search_dirs.append(os.path.dirname(spec.origin))
+            except: pass
+            search_dirs.append(self.project_root)
+
+        # 2. 遍历查找并复制
+        for name in [dll_name, api_name]:
+            found = False
+            for directory in search_dirs:
+                src = os.path.join(directory, name)
+                if os.path.exists(src):
+                    try:
+                        shutil.copy2(src, os.path.join(self.agent_dir, name))
+                        logger.info(f"Copied {name} from {directory}")
+                        found = True
+                        break # 找到了就停止当前文件的搜索，处理下一个文件
+                    except Exception as e:
+                        logger.error(f"Copy error: {e}")
+            if not found:
+                logger.warning(f"Could not find {name} in search paths: {search_dirs}")
+
+    def ensure_tools(self, download_mgr):
+        """前端调用的检查接口 (只查 SteamCMD 即可，Agent DLL 自动处理)"""
+        tasks = []
         if not os.path.exists(self.steamcmd_exe):
             logger.info("SteamCMD not found, adding download task...")
             url = ""
@@ -97,153 +205,47 @@ class SteamManager:
             
             tid = download_mgr.add_task(url, self.steamcmd_dir, "steamcmd_package.zip")
             tasks.append({"type": "steamcmd", "id": tid})
-
-        # 2. 检查 SteamworksPy DLLs (必需文件)
-        # 目标文件 (Windows为例)
-        target_dll_name = "SteamworksPy64.dll" if platform.system() == "Windows" else "libSteamworksPy.so"
-        target_api_name = "steam_api64.dll" if platform.system() == "Windows" else "libsteam_api.so"
-        
-        # 检查项目根目录是否有这两个文件
-        root_dll_path = os.path.join(self.project_root, target_dll_name)
-        root_api_path = os.path.join(self.project_root, target_api_name)
-        
-        if not os.path.exists(root_dll_path) or not os.path.exists(root_api_path):
-            logger.info("Steamworks DLLs missing in root, trying to copy from site-packages...")
-            success = self._copy_steamworks_from_package(target_dll_name, target_api_name)
-            
-            if success:
-                logger.info("Steamworks DLLs copied successfully.")
-                # 立即尝试初始化，不需要等待任务回调
-                self._init_steamworks_api()
-            else:
-                logger.error("Failed to find Steamworks DLLs in site-packages. Please reinstall steamworks-py.")
-                # 这里也可以保留原来的下载逻辑作为最后的 fallback，但通常没必要
-
         return tasks
-
-    def _copy_steamworks_from_package(self, dll_name, api_name):
-        """
-        尝试找到 pip 安装的 steamworks 目录，并将其中的 DLL 复制到项目根目录
-        """
-        try:
-            # 找到 steamworks 包的位置
-            spec = importlib.util.find_spec("steamworks")
-            if not spec or not spec.origin:
-                logger.error("Failed to find steamworks package.")
-                return False
-            
-            # 获取包所在的文件夹路径 (例如 .../site-packages/steamworks/__init__.py -> .../site-packages/steamworks)
-            package_dir = os.path.dirname(spec.origin)
-            
-            if getattr(sys, 'frozen', False):
-                # --- 打包后的环境 ---
-                # sys.executable 指向 .exe 文件的绝对路径
-                base_dir = Path(sys.executable).parent
-                # 额外：处理 --contents-directory lib 情况
-                # 如果内部资源在 _MEIPASS 目录下 (即 lib 文件夹内)
-                meipass_dir = Path(getattr(sys, '_MEIPASS', base_dir))
-                package_dir = str(meipass_dir / "steamworks")
-            
-            # 源文件路径
-            src_dll = os.path.join(package_dir, dll_name)
-            src_api = os.path.join(package_dir, api_name)
-            
-            # 目标路径 (项目根目录)
-            dst_dll = os.path.join(self.project_root, dll_name)
-            dst_api = os.path.join(self.project_root, api_name)
-            
-            # 执行复制
-            if os.path.exists(src_dll):
-                shutil.copy2(src_dll, dst_dll)
-            else:
-                logger.warning(f"Source DLL not found: {src_dll}")
-                return False
-
-            if os.path.exists(src_api):
-                shutil.copy2(src_api, dst_api)
-            else:
-                logger.warning(f"Source API not found: {src_api}")
-                # 有些版本的包可能只带了 SteamworksPy64.dll 而依赖系统安装 steam_api64，视情况而定
-                # 但通常包里两个都有
-                return False
-                
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error copying Steamworks files: {e}")
-            return False
-
+        
     def post_download_setup(self, task_type, file_path):
         """下载完成后的解压/配置回调"""
         if task_type == "steamcmd":
-            # 解压
-            try:
+             try:
                 import zipfile
                 if file_path.endswith('.zip'):
                     with zipfile.ZipFile(file_path, 'r') as zip_ref:
                         zip_ref.extractall(self.steamcmd_dir)
-                    os.remove(file_path) # 删除压缩包
+                    os.remove(file_path)
                     self.steamcmd_ready = True
-                    logger.info("SteamCMD installed successfully.")
-                # Linux/Mac 需要 tar 解压和 chmod +x
-            except Exception as e:
+                    logger.info("SteamCMD installed.")
+             except Exception as e:
                 logger.error(f"Failed to extract SteamCMD: {e}")
 
-        elif task_type in ["steamworks_lib", "steam_api"]:
-            # 将 DLL 复制到项目根目录 (Python 加载动态库通常在运行目录查找)
-            try:
-                filename = os.path.basename(file_path)
-                dest = os.path.join(self.project_root, filename)
-                shutil.copy2(file_path, dest)
-                logger.info(f"Deployed {filename} to root.")
-                # 尝试重新初始化
-                self._init_steamworks_api()
-            except Exception as e:
-                logger.error(f"Failed to deploy Steamworks DLL: {e}")
-
     # =========================================================
-    #  2. SteamCMD 功能 (Workshop 下载)
+    #  2. SteamCMD 功能
     # =========================================================
-
     def download_workshop_items(self, mod_ids: list):
-        """
-        调用 SteamCMD 下载模组
-        :return: Thread object (run in background)
-        """
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
         
-        # 构造 SteamCMD 脚本
-        # 格式:
-        # login anonymous
-        # workshop_download_item 294100 <id>
-        # ...
-        # quit
         commands = ["login anonymous"]
         for mid in mod_ids:
             commands.append(f"workshop_download_item {RIMWORLD_APP_ID} {mid}")
         commands.append("quit")
         
-        # 启动线程执行
         t = threading.Thread(target=self._run_steamcmd_process, args=(commands, mod_ids))
         t.start()
         return t
 
     def _run_steamcmd_process(self, commands, mod_ids):
-        """执行 SteamCMD 进程并解析输出"""
-        # 伪造一个 Task ID 用于前端进度条显示
         fake_task_id = "steamcmd_batch_" + str(int(time.time()))
-        
-        # 初始事件
         self._emit_progress(fake_task_id, "Connecting to Steam...", 0, TaskStatus.RUNNING)
 
         try:
-            # 构造进程参数
             args = [self.steamcmd_exe]
             for cmd in commands:
                 args.append(f"+{cmd}")
             
-            # 启动进程 (Windows下隐藏窗口)
             startupinfo = None
             if platform.system() == "Windows":
                 startupinfo = subprocess.STARTUPINFO()
@@ -253,15 +255,13 @@ class SteamManager:
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True, # 文本模式读取
+                text=True,
                 encoding='utf-8',
                 errors='replace',
                 startupinfo=startupinfo,
-                cwd=self.steamcmd_dir # 在 steamcmd 目录运行
+                cwd=self.steamcmd_dir
             )
 
-            # 正则匹配进度: "Update state (0x61) downloading, progress: 25.50 (1234 / 5678)"
-            # 或者 "Redirecting downloading for..."
             progress_pattern = re.compile(r"progress: (\d+\.\d+)")
             success_pattern = re.compile(r"Success\. Downloaded item (\d+)")
 
@@ -273,19 +273,14 @@ class SteamManager:
                 if not line and process.poll() is not None:
                     break
                 if not line: continue
-                
                 line = line.strip()
-                # logger.debug(f"[SteamCMD] {line}") # 调试用，生产环境可能太吵
 
-                # 1. 匹配进度
                 match = progress_pattern.search(line)
                 if match:
                     percent = float(match.group(1))
-                    # 计算总进度: (当前第几个 + 当前文件进度/100) / 总数
                     total_percent = ((current_item_idx + percent / 100) / total_items) * 100
                     self._emit_progress(fake_task_id, f"Downloading item {current_item_idx+1}/{total_items}", int(total_percent), TaskStatus.RUNNING)
 
-                # 2. 匹配完成一个
                 if success_pattern.search(line):
                     current_item_idx += 1
                     logger.info(f"SteamCMD finished one item. ({current_item_idx}/{total_items})")
@@ -300,92 +295,73 @@ class SteamManager:
             self._emit_progress(fake_task_id, str(e), 0, TaskStatus.ERROR)
 
     def _emit_progress(self, tid, msg, percent, status):
-        # 复用 DownloadManager 的事件格式，以便前端 StatusBar 通用
         EventBus.emit("download-progress", {
             "id": tid,
-            "filename": msg, # 借用 filename 字段显示消息
+            "filename": msg,
             "status": status.value,
             "percent": percent,
-            "speed": "SteamCMD", # 特殊标记
+            "speed": "SteamCMD",
             "total": 100,
             "current": percent
         })
-
     # =========================================================
-    #  3. Steamworks 功能 (本地订阅/取消)
+    #  3. 自我调用 (Re-entry) 逻辑
     # =========================================================
-    def _workshop_callback(self, res_struct):
-        """
-        SubscribeItem传入的回调函数（Steam创意工坊订阅完成）
-        :param res_struct: 回调结构体对象
-        """
-        print(f"Workshop callback: {res_struct}")
-        
-        
-    def _init_steamworks_api(self):
-        """初始化 SteamworksPy"""
-        if self._is_steam_initialized: return
-        if not STEAMWORKS: 
-            logger.warning("Steamworks API not found. Please ensure it's in the same directory as this script.")
-            return
 
-        # SteamworksPy 需要当前目录下有 steam_appid.txt
-        appid_path = os.path.join(self.project_root, "steam_appid.txt")
-        if not os.path.exists(appid_path):
-            with open(appid_path, "w") as f:
-                f.write(RIMWORLD_APP_ID)
-
+    def _run_agent(self, action: str, mod_id: int) -> bool:
+        """
+        调用自身 EXE 作为 Worker
+        """
+        # 获取当前运行的可执行文件路径
+        # 在打包环境中，这是 .exe 的路径
+        # 在开发环境中，这是 python.exe 的路径
+        current_exe = sys.executable
+        
+        # 构造命令: [exe, "--steam-worker", action, mod_id]
+        cmd = [current_exe]
+        
+        # 开发环境需要补上 main.py
+        if not getattr(sys, 'frozen', False):
+            # 获取 main.py 的绝对路径
+            main_script = os.path.join(self.project_root, "main.py")
+            cmd.append(main_script)
+            
+        cmd.extend(["--steam-worker", action, str(mod_id)])
+        
         try:
-            # 这里的 binary_path 指的是 steam_api64.dll 所在路径
-            # 如果不传，默认找当前目录。我们在 post_download_setup 中已经复制到根目录了。
-            self._steam_instance = STEAMWORKS()
-            self._steam_instance.initialize()
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            # 关键：cwd 必须设为 agent_dir，这样子进程初始化 Steamworks 时
+            # 才能读取到该目录下的 steam_appid.txt 和 DLL
+            result = subprocess.run(
+                cmd,
+                cwd=self.agent_dir,
+                capture_output=True,
+                text=True,
+                startupinfo=startupinfo,
+                encoding='utf-8'
+            )
             
-            my_steam64 = self._steam_instance.Users.GetSteamID()
-            my_steam_level = self._steam_instance.Users.GetPlayerSteamLevel()
-            print(f'Logged on as {my_steam64}, level: {my_steam_level}')
-            
-            if self._steam_instance:
-                self._is_steam_initialized = True
-                logger.info("Steamworks API initialized successfully.")
+            stdout = result.stdout
+            if "SUCCESS" in stdout:
+                logger.info(f"Agent {action} success: {mod_id}")
+                return True
             else:
-                logger.warning("Steamworks API failed to initialize (Is Steam running?)")
+                logger.error(f"Agent failed. STDOUT: {stdout} \nSTDERR: {result.stderr}")
+                return False
+
         except Exception as e:
-            logger.warning(f"Steamworks init error: {e}")
-            if webview.windows:
-                webview.windows[0].create_confirmation_dialog("Steamworks 初始化失败", "Steamworks API 初始化失败，请确认 Steam 运行后重试。")
+            logger.error(f"Failed to run steam agent: {e}")
+            return False
 
     def subscribe_item(self, published_file_id: int):
-        """订阅模组"""
-        if not self._check_steam_ready(): return False
-        try:
-            # SteamworksPy 接口：Workshop.subscribe(id)
-            self._steam_instance.Workshop.SubscribeItem(published_file_id, self._workshop_callback) # type: ignore
-            logger.info(f"Subscribed to {published_file_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Subscribe failed: {e}")
-            return False
+        return self._run_agent("subscribe", published_file_id)
 
     def unsubscribe_item(self, published_file_id: int):
-        """取消订阅"""
-        if not self._check_steam_ready(): return False
-        try:
-            self._steam_instance.Workshop.UnsubscribeItem(published_file_id, self._workshop_callback) # type: ignore
-            logger.info(f"Unsubscribed from {published_file_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Unsubscribe failed: {e}")
-            return False
-            
-    def is_subscribed(self, published_file_id: int) -> bool:
-        """检查是否已订阅 (需要 SteamworksPy 支持相关接口，此处视版本而定)"""
-        # 注意：基础版 SteamworksPy 可能没暴露 ItemState 查询接口
-        # 这里预留位置，如果库不支持，可能需要扩展 C++ 封装
-        return False
+        return self._run_agent("unsubscribe", published_file_id)
 
-    def _check_steam_ready(self):
-        if not self._is_steam_initialized:
-            # 尝试延迟初始化
-            self._init_steamworks_api()
-        return self._is_steam_initialized
+    def is_subscribed(self, published_file_id: int) -> bool:
+        return False

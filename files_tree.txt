@@ -123,8 +123,6 @@
 │  ├── package.json
 │  └── README.md
 │     
-├── SteamworksPy64.dll
-├── steam_api64.dll
 ├── icon.ico
 ├── uv.lock
 ├── README.md
@@ -135,6 +133,5 @@
 ├── icon.svg
 ├── pyproject.toml
 ├── files_tree.txt
-├── steam_appid.txt
 └── nuitka-crash-report.xml
    
