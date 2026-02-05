@@ -74,9 +74,6 @@
                   <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" />
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
-                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
-                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
-                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
                 </div>
               </section>
 
@@ -118,12 +115,15 @@
                 </div>
               </section>
 
-              <!-- 3. Steam 设置 -->
-              <section v-if="currentTab === 'steam'" class="animate-in fade-in slide-in-from-right-4">
-                <h3 class="text-lg font-bold text-white mb-6">Steam 接口组件</h3>
+              <!-- 3. 社区 设置 -->
+              <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">社区配置管理</h3>
                 <div class="space-y-6">
                   <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
                   <!-- <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" /> -->
+                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
+                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
                 </div>
               </section>
 
@@ -161,9 +161,10 @@
                     <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
                     <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
                     <div class="grid grid-cols-2 gap-6">
-                      <div @click="fetchAiModels">
-                        <CommonSelect label="选择模型" editable v-model="formData.ai.model" :options="currentAiModels" />
-                      </div>
+                      <!-- <div @click="fetchAiModels"> -->
+                        <CommonSelect label="选择模型" editable v-model="formData.ai.model" :options="currentAiModels" placeholder="输入或选择模型"
+                          @visible-change="(val) => val && fetchAiModels()" @change="appStore.saveAIConfig(formData.ai)"/>
+                      <!-- </div> -->
                       <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
                       <CommonInput v-model="testPrompt" placeholder="随便输入一句话，简单测试一下请求是否成功..."></CommonInput>
                       <button class="m-1 h-fit flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-white text-text-dim px-4 py-1.5 w-fit rounded-md" 
@@ -252,7 +253,7 @@ const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const tabs = [
   { id: 'paths', label: '路径配置', icon: FolderTree },
   { id: 'general', label: '界面设置', icon: AppWindow },
-  { id: 'steam', label: 'STEAM', icon: Steam },
+  { id: 'community', label: '社区配置', icon: Steam },
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
@@ -278,9 +279,6 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   }
 })
 
-watch(() => formData.value.ai?.model, (newModel) => {
-  appStore.saveAIConfig(formData.value.ai)
-})
 
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)

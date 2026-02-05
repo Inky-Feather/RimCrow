@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonTagInput.vue -->
 <template>
-  <div class="space-y-1.5 w-full">
-    <label class="text-xs text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
+  <div class="w-full">
+    <label class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 mb-1">{{ label }}</label>
     <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-[42px] content-start focus-within:border-accent-primary/40">
       
       <!-- 已有 Tag -->

@@ -48,7 +48,7 @@
     </div>
 
     <!-- ================= 3. AI 智能辅助栏 (Footer) ================= -->
-    <div class="bg-bg-deep/80 border-t border-white/10 p-3 backdrop-blur-xl z-30">
+    <div v-if="false" class="bg-bg-deep/80 border-t border-white/10 p-3 backdrop-blur-xl z-30">
       <div class="flex items-center gap-2">
         <!-- AI 图标 -->
         <div class="w-8 h-8 rounded-lg bg-linear-to-br from-accent-special to-accent-highlight p-0.5 shadow-lg shadow-accent-special/20 animate-pulse-slow">

@@ -59,7 +59,7 @@ export const useAppStore = defineStore('app', () => {
       font_size: 14,
       tooltip_hover_time: 1000,  // 鼠标悬停显示提示时间 (毫秒)
       show_mod_hover_panel: true,  // 是否显示 Mod 悬停面板
-      
+
       show_mod_details_panel: true,  // 是否显示 Mod 详情面板
       show_icons_cloud: true,  // 是否显示动态图标云
       show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息
@@ -439,7 +439,7 @@ export const useAppStore = defineStore('app', () => {
     if(!window.pywebview) return
     const res = await window.pywebview.api.delete_path(path)
     if (checkResult(res, "删除文件/文件夹")) {
-      toast.success(`文件/文件夹已删除: \n${path}`)
+      toast.success(`已删除: \n${path}`)
       return true
     }
   }
@@ -495,14 +495,14 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 取消订阅模组
-  const unsubscribeMod = async (mod_id) => {
+  const unsubscribeMod = async (mod_id, delete_file = false) => {
     if (!window.pywebview) return
     const modStore = useModStore()
     const workshop_id = modStore.takeModById(mod_id).workshop_id
     if(!workshop_id) return
     const res = await window.pywebview.api.steam_unsubscribe(workshop_id)
     if (checkResult(res, `取消订阅模组 ${modStore.displayNameById(mod_id)}`)) {
-      
+      if(delete_file) deletePath(modStore.takeModById(mod_id).path)
     } else {
       console.error("取消订阅模组异常:", res.message)
     }

@@ -229,10 +229,10 @@ const deleteMod = async () => {
   }
 }
 // 取消订阅模组
-const unsubscribeMod = async () => {
-  const res = await confirmStore.confirmAction('警告','确定要取消订阅选中项吗？Steam 会自动删除已取消订阅的文件！',{type:'error'})
+const unsubscribeMod = async (delete_file = false) => {
+  const res = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
   if(res) {
-    appStore.unsubscribeMod(props.item_id)
+    appStore.unsubscribeMod(props.item_id, delete_file)
     appStore.refreshData()
   }
 }
@@ -289,6 +289,7 @@ const handleContextMenu = async (event) => {
       { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(modData.value.url) },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeMod(props.item_id) },
       { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
+      { label: '取消订阅并删除文件', disabled: modData.value.source!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(true) },
     ]},
   ]
   // 多选菜单
