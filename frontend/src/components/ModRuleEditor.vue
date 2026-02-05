@@ -3,13 +3,10 @@
     :class="`border-2 rounded-2xl border-accent-${listColor}/20`">
     <!-- 标题栏 -->
     <div :class="`px-3 h-8 border-b rounded-t-2xl border-white/5 flex justify-between items-center bg-accent-${listColor}/10`">
-      <span :class="`text-xs font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
+      <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
       </span>
-      <!-- <span :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
-        {{ 0 }}
-      </span> -->
       <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-dim/60 hover:text-text-dim transition-colors">关闭</button>
     </div>
     <!-- 当前选中的MOD -->
@@ -31,9 +28,9 @@
 
         <!-- 前置 -->
         <div class="min-h-20 m-1 pb-2 bg-accent-warn/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-xs font-bold bg-accent-warn/50 backdrop-blur-2xl text-text-main rounded-t-lg">前置</div>
+          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-warn/50 backdrop-blur-2xl text-text-main rounded-t-lg">前置</div>
           
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
             <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadAfter').length }})</span>
             <div class="flex-1 h-px border-b border-accent-tip/30"></div>
@@ -43,7 +40,7 @@
             <ModItem v-for="modId,index in getNativeRules('loadAfter')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
             <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadAfter')).length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-cool/30"></div>
@@ -58,7 +55,7 @@
             </div>
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
             <span class="text-accent-special">用户规则 ({{ userAfterRules.length }})</span>
             <div class="flex-1 h-px border-b border-accent-special/30"></div>
@@ -87,7 +84,7 @@
                       group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
                       v-tooltip="record.comment || '[[__点击添加说明__]]'">
                       <span class="relative transition duration-300 only:-mx-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                       </span>
                     </button>
                     <button @click.stop="removeUserRule('loadAfter', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
@@ -98,7 +95,7 @@
                       group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
                       v-tooltip="'移除'">
                       <span class="relative only:-mx-5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                       </span>
                     </button>
                   </div>
@@ -112,9 +109,9 @@
 
         <!-- 后置 -->
         <div class="min-h-20 m-1 pb-2 bg-accent-primary/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-xs font-bold bg-accent-primary/50 backdrop-blur-2xl text-text-main rounded-t-lg">后置</div>
+          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-primary/50 backdrop-blur-2xl text-text-main rounded-t-lg">后置</div>
           
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
             <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadBefore').length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-tip/30"></div>
@@ -124,7 +121,7 @@
             <ModItem v-for="modId,index in getNativeRules('loadBefore')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
             <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadBefore')).length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-cool/30"></div>
@@ -139,7 +136,7 @@
             </div>
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
             <span class="text-accent-special">用户规则 ({{ userBeforeRules.length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-special/30"></div>
@@ -168,7 +165,7 @@
                       group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
                       v-tooltip="record.comment || '[[__点击添加说明__]]'">
                       <span class="relative transition duration-300 only:-mx-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                       </span>
                     </button>
                     <button @click.stop="removeUserRule('loadBefore', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
@@ -179,7 +176,7 @@
                       group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
                       v-tooltip="'移除'">
                       <span class="relative only:-mx-5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                       </span>
                     </button>
                   </div>
@@ -193,9 +190,9 @@
 
         <!-- 冲突 -->
         <div class="min-h-20 m-1 pb-2 bg-accent-danger/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-xs font-bold bg-accent-danger/50 backdrop-blur-2xl text-text-main rounded-t-lg">冲突</div>
+          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-danger/50 backdrop-blur-2xl text-text-main rounded-t-lg">冲突</div>
           
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
             <span class="text-accent-tip">原始规则 ({{ getNativeRules('incompatibleWith').length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-tip/30"></div>
@@ -205,7 +202,7 @@
             <ModItem v-for="modId,index in getNativeRules('incompatibleWith')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
             <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('incompatibleWith')).length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-cool/30"></div>
@@ -220,7 +217,7 @@
             </div>
           </div>
 
-          <div class="flex items-center text-[10px] text-text-dim px-2 py-1 gap-1">
+          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
             <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
             <span class="text-accent-special">用户规则 ({{ userIncompatibleWithRules.length||0 }})</span>
             <div class="flex-1 h-px border-b border-accent-special/30"></div>
@@ -241,6 +238,7 @@
               <template v-slot:item="{ record, index, dataKey }">
                 <div class="relative group">
                   <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
+                  <!-- 操作按钮 -->
                   <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
                     <button @click.stop="addRuleComm('incompatibleWith', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
                       inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
@@ -249,7 +247,7 @@
                       group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
                       v-tooltip="record.comment || '[[__点击添加说明__]]'">
                       <span class="relative transition duration-300 only:-mx-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                       </span>
                     </button>
                     <button @click.stop="removeUserRule('incompatibleWith', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
@@ -260,7 +258,7 @@
                       group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
                       v-tooltip="'移除'">
                       <span class="relative only:-mx-5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                       </span>
                     </button>
                   </div>
@@ -287,7 +285,7 @@ import VirtualList from 'vue-virtual-sortable';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
-  title: { type: String, default: 'Groups' },
+  title: { type: String, default: 'Rule' },
   listColor: { type: String, default: 'primary' } // danger/highlight/special/cool/primary/success/tip/warn/secondary/warning
 })
 

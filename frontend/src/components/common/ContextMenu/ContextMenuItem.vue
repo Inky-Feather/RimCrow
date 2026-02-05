@@ -1,8 +1,6 @@
 <!-- components/common/ContextMenu/ContextMenuItem.vue -->
 <template>
-  <div
-    ref="itemRef"
-    class="group relative px-1 py-0.5 transition-all duration-200"
+  <div ref="itemRef" class="group relative px-1 py-0.5 transition-all duration-200"
     :class="[item.type === 'grid' ? 'w-full min-w-[200px]' : 'max-w-[200px]']"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
@@ -13,7 +11,7 @@
     <!-- 2. Grid 面板模式 (嵌入式网格) -->
     <div v-else-if="item.type === 'grid'" class="px-1 py-1">
       <!-- 可选的小标题 -->
-      <div v-if="item.label" class="text-[10px] text-text-dim px-1 mb-1.5 font-bold tracking-wider uppercase opacity-60">
+      <div v-if="item.label" class="text-xs text-text-dim px-1 mb-1.5 font-bold tracking-wider uppercase opacity-60">
         {{ item.label }}
       </div>
       
@@ -25,7 +23,7 @@
             // 样式分支 A: 颜色块 (有 label 时不显示)
             !subItem.label ? 'aspect-square w-8 rounded-md' : '',
             // 样式分支 B: 标签块 (有 label 时显示)
-            subItem.label ? 'px-1 py-1 rounded-md text-[11px] min-w-10' : '',
+            subItem.label ? 'px-1 py-1 rounded-md text-[0.8rem] min-w-10' : '',
             // 通用状态样式
             subItem.active ? 'ring-2 ring-text-main z-10 border-transparent bg-text-main/20' : 'border-text-main/10 hover:border-text-main/30 bg-text-main/5 hover:bg-text-main/10',
             // 禁用状态
@@ -67,7 +65,7 @@
 
     <!-- 3. 普通菜单项 -->
     <button v-else :disabled="item.disabled" @click.stop="handleClick(item)"
-      class="flex w-full cursor-default items-center justify-between rounded-md px-1.5 py-1 text-xs font-medium transition-all duration-200 outline-none
+      class="flex w-full cursor-default items-center justify-between rounded-md px-1.5 py-1 text-sm font-medium transition-all duration-200 outline-none
       disabled:cursor-not-allowed disabled:opacity-40
       bg-transparent hover:bg-bg-highlight focus:bg-bg-highlight "
       :class="[levelClass(), activeSubMenu ? 'bg-bg-highlight' : '']"
@@ -81,7 +79,7 @@
 
       <!-- 右侧：快捷键 或 箭头 -->
       <div class="ml-6 flex items-center gap-2 opacity-60">
-        <span v-if="item.shortcut" class="text-[10px] tracking-widest font-sans">{{ item.shortcut }}</span>
+        <span v-if="item.shortcut" class="text-xs tracking-widest font-sans">{{ item.shortcut }}</span>
         <!-- 有子菜单且不是 Grid 模式时显示箭头 -->
         <svg v-if="item.children && item.type !== 'grid'" class="size-3 -mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </div>

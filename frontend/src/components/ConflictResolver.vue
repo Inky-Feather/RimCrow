@@ -7,11 +7,11 @@
         <div class="px-6 py-4 bg-accent-danger/10 border-b border-accent-danger/20 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-full bg-accent-danger/20 text-accent-danger animate-pulse">
-              <svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             </div>
             <div>
               <h2 class="text-lg font-bold text-white">发现模组冲突</h2>
-              <p class="text-xs text-text-dim">检测到 {{ conflicts.length }} 组重复的包ID。请为每一组选择一个<span class="text-accent-success font-bold">保留版本</span>。</p>
+              <p class="text-sm text-text-dim">检测到 {{ conflicts.length }} 组重复的包ID。请为每一组选择一个<span class="text-accent-success font-bold">保留版本</span>。</p>
             </div>
           </div>
         </div>
@@ -25,7 +25,7 @@
             <!-- 组标题 -->
             <div class="flex-1 bg-black/20 px-4 py-2 border-b border-white/5 flex justify-between items-center">
               <div class="font-mono text-sm font-bold text-accent-highlight truncate">{{ group.package_id }}</div>
-              <div class="text-[10px] text-text-dim">发现 {{ group.items.length }} 个版本</div>
+              <div class="text-xs text-text-dim">发现 {{ group.items.length }} 个版本</div>
             </div>
 
             <!-- 版本选项列表 -->
@@ -40,17 +40,17 @@
                 <!-- 选中标记 -->
                 <div class="w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors"
                      :class="selections[gIndex] === mod.path ? 'border-accent-success bg-accent-success text-black' : 'border-white/30'">
-                  <svg v-if="selections[gIndex] === mod.path" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6L9 17l-5-5"/></svg>
+                  <svg v-if="selections[gIndex] === mod.path" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6L9 17l-5-5"/></svg>
                 </div>
 
                 <!-- Mod 信息 -->
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="font-bold text-sm text-white truncate">{{ mod.name }}</span>
-                    <span class="px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-mono text-accent-primary">v{{ mod.version || '?' }}</span>
-                    <span class="text-[10px] text-text-dim border border-white/10 px-1 rounded">{{ mod.source }}</span>
+                    <span class="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono text-accent-primary">v{{ mod.version || '?' }}</span>
+                    <span class="text-xs text-text-dim border border-white/10 px-1 rounded">{{ mod.source }}</span>
                   </div>
-                  <div class="text-[10px] text-text-dim mt-1 truncate font-mono" :title="mod.path">{{ mod.path }}</div>
+                  <div class="text-xs text-text-dim mt-1 truncate font-mono" :title="mod.path">{{ mod.path }}</div>
                 </div>
 
                 <!-- 未选中时的操作配置 (禁用/删除) -->
@@ -58,21 +58,21 @@
                 <div v-if="selections[gIndex] !== mod.path" 
                      class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-white/5"
                      @click.stop>
-                  <span class="text-[10px] text-text-dim">未保留项:</span>
+                  <span class="text-xs text-text-dim">未保留项:</span>
                   <label class="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
                     <input type="radio" :name="`act-${gIndex}-${mIndex}`" value="disable" 
                            v-model="actionMap[mod.path]" class="accent-accent-primary w-3 h-3">
-                    <span class="text-[10px]">禁用</span>
+                    <span class="text-xs">禁用</span>
                   </label>
                   <label class="flex items-center gap-1 cursor-pointer hover:text-accent-danger transition-colors">
                     <input type="radio" :name="`act-${gIndex}-${mIndex}`" value="delete" 
                            v-model="actionMap[mod.path]" class="accent-accent-danger w-3 h-3">
-                    <span class="text-[10px]">删除</span>
+                    <span class="text-xs">删除</span>
                   </label>
                 </div>
                 
                 <!-- 选中状态文字 -->
-                <div v-else class="ml-4 px-3 py-1.5 rounded bg-accent-success/20 text-accent-success text-[10px] font-bold border border-accent-success/20">
+                <div v-else class="ml-4 px-3 py-1.5 rounded bg-accent-success/20 text-accent-success text-xs font-bold border border-accent-success/20">
                   将保留并使用
                 </div>
 
@@ -84,7 +84,7 @@
 
         <!-- Footer -->
         <div class="p-4 bg-black/20 border-t border-white/5 flex justify-between items-center shrink-0">
-          <div class="text-xs text-text-dim">
+          <div class="text-sm text-text-dim">
             <span class="text-accent-warn">注意：</span> 选择删除将直接移除文件至回收站，操作不可逆。
           </div>
           <button @click="submit" :disabled="processing"

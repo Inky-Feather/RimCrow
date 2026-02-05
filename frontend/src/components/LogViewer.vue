@@ -9,7 +9,7 @@
         <!-- 模式切换 Tabs -->
         <div class="flex p-1 bg-black/20 rounded-lg border border-white/5">
           <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
-            class="px-4 py-1 rounded-md text-xs font-bold transition-all duration-300 flex items-center gap-2 relative overflow-hidden"
+            class="px-4 py-1 rounded-md text-sm font-bold transition-all duration-300 flex items-center gap-2 relative overflow-hidden"
             :class="currentTab === tab.id ? 'text-white shadow-lg bg-white/10' : 'text-text-dim hover:text-white hover:bg-white/5'">
             <!-- 激活时的底部光条 -->
             <div v-if="currentTab === tab.id" class="absolute bottom-0 left-0 w-full h-0.5 bg-accent-primary shadow-[0_0_8px_var(--color-accent-primary)]"></div>
@@ -19,7 +19,7 @@
         </div>
 
         <!-- 实时统计看板 -->
-        <div class="flex items-center gap-4 text-[10px] font-mono select-none">
+        <div class="flex items-center gap-4 text-xs font-mono select-none">
           <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-accent-danger/10 border border-accent-danger/20 text-accent-danger">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span class="font-bold">{{ stats.errors }}</span> ERR
@@ -37,7 +37,7 @@
     </div>
 
     <!-- ================= 2. 日志内容区 (Log Stream) ================= -->
-    <div class="flex-1 min-h-0 bg-black/20 font-mono text-xs selection:bg-accent-primary/30 selection:text-white">
+    <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm selection:bg-accent-primary/30 selection:text-white">
       
       <KeepAlive>
         <component :is="currentTabComponent" />
@@ -58,8 +58,8 @@
         </div>
 
         <div class="flex-1">
-          <h3 class="text-xs font-bold text-white mb-0.5">AI 智能诊断</h3>
-          <p class="text-[10px] text-text-dim">
+          <h3 class="text-sm font-bold text-white mb-0.5">AI 智能诊断</h3>
+          <p class="text-xs text-text-dim">
             当前选中 <span class="text-accent-primary font-bold">{{ selectedLogCount }}</span> 条日志。
             <span v-if="selectedLogCount > 0" class="text-accent-success cursor-pointer hover:underline" @click="analyzeLogs">点击开始分析</span>
             <span v-else>请在上方筛选或框选日志以进行分析。</span>
@@ -67,7 +67,7 @@
         </div>
 
         <button @click="analyzeLogs" :disabled="selectedLogCount === 0"
-          class="px-4 py-2 bg-white/5 hover:bg-accent-special hover:text-white border border-white/10 rounded-lg text-xs font-bold text-text-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+          class="px-4 py-2 bg-white/5 hover:bg-accent-special hover:text-white border border-white/10 rounded-lg text-sm font-bold text-text-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
           <span>分析原因</span>
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
         </button>

@@ -21,7 +21,7 @@
           <nav class="flex flex-col relative space-y-1" :style="{ '--total-tabs': tabs.length }">
             <button v-for="(tab, index) in tabs" :key="tab.id"
               @click="currentTab = tab.id"
-              class="relative z-10 flex items-center gap-3 px-4 py-3 text-sm font-bold transition-all duration-300 group"
+              class="relative z-10 flex items-center gap-3 px-4 py-3 text-md font-bold transition-all duration-300 group"
               :class="currentTab === tab.id ? 'text-accent-primary' : 'text-text-dim hover:text-white/70'"
             >
               <component :is="tab.icon" class="size-4" />
@@ -31,16 +31,16 @@
             <!-- 物理 Glider 滑块 -->
             <div class="glider-container absolute left-0 top-0 w-full h-full pointer-events-none">
               <div class="glider absolute -left-6 w-1 h-11 bg-accent-primary shadow-[0_0_15px_#06b6d4] transition-transform duration-500 cubic-bezier"
-                :style="{ transform: `translateY(${tabs.findIndex(t => t.id === currentTab) * 48}px)` }">
+                :style="{ transform: `translateY(${tabs.findIndex(t => t.id === currentTab) * 2.85}rem)` }">
                 <!-- 侧边发光层 -->
-                <div class="absolute left-0 top-0 w-[150px] h-full bg-linear-to-r from-accent-primary/10 to-transparent"></div>
+                <div class="absolute left-0 top-0 w-40 h-full bg-linear-to-r from-accent-primary/10 to-transparent"></div>
               </div>
             </div>
           </nav>
 
           <!-- 底部版本号 -->
           <div class="mt-auto px-4 py-2 border-t border-white/5 opacity-30">
-             <p class="text-[9px] font-mono text-text-dim">V{{ appStore.appVersion }}</p>
+             <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion }}</p>
           </div>
         </aside>
 
@@ -48,7 +48,7 @@
         <main class="flex-1 flex flex-col min-w-0 bg-black/20 relative z-10">
           <!-- 顶部状态条 -->
           <header class="h-14 flex items-center justify-between px-8 border-b border-text-main/5">
-            <span class="text-[10px] font-mono text-text-dim/60 uppercase tracking-[0.3em]">
+            <span class="text-xs font-mono text-text-dim/60 uppercase tracking-[0.3em]">
               / root / {{ currentTab }}
             </span>
             <div class="flex gap-1.5 text-text-dim/20 relative">
@@ -64,7 +64,7 @@
               <section v-if="currentTab === 'paths'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center justify-between mb-6">
                   <h3 class="text-lg font-bold text-white">路径配置</h3>
-                  <button @click="autoDetect" v-tooltip="'尝试通过注册表自动搜索路径'" class="px-3 py-1 bg-accent-primary/10 hover:bg-accent-primary/20 border border-accent-primary/30 rounded text-[10px] font-bold text-accent-primary transition-all">
+                  <button @click="autoDetect" v-tooltip="'尝试通过注册表自动搜索路径'" class="px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
                     自动搜索路径
                   </button>
                 </div>
@@ -93,6 +93,27 @@
                     <CommonNumber label="窗口高度" v-model="formData.window_height" :step="10" />
                   </div> -->
                   <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
+                  <div class="grid grid-cols-2 gap-6">
+                    <CommonNumber label="字体大小" v-model="formData.ui.font_size" :step="1" />
+                    <CommonNumber label="提示悬停时间" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="作者及来源" v-model="formData.ui.show_mod_details_author_info" description="控制详情页中 Mod 作者及来源板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="文件统计" v-model="formData.ui.show_mod_details_files_info" description="控制详情页中 Mod 文件统计板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="其它信息" v-model="formData.ui.show_mod_details_time_info" description="控制详情页中 Mod 其它信息板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="依赖信息" v-model="formData.ui.show_mod_details_dependencies_info" description="控制详情页中 Mod 依赖板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="自定义信息" v-model="formData.ui.show_mod_details_user_info" description="控制详情页中 Mod 自定义信息板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="Mod描述" v-model="formData.ui.show_mod_details_description" description="控制详情页中 Mod 说明板块的显示。" />
+                    </div>
+                    <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
+                    <CommonSwitch label="列表索引" v-model="formData.ui.show_list_index" description="控制列表中索引列的显示。" />
+                    <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" label="列表图标" v-model="formData.ui.show_list_icon" description="控制列表中的所有图标显示，包括简单视图和详细视图。" mini />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 图标" v-model="formData.ui.show_list_mod_icon" description="控制列表中 Mod 图标显示，不影响详细视图。" />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 类型图标" v-model="formData.ui.show_list_modtype_icon" description="控制列表中 Mod 类型图标显示，不影响详细视图。" />
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -130,7 +151,7 @@
               <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center gap-3 mb-6">
                   <h3 class="text-lg font-bold text-white">人工智能</h3>
-                  <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-[9px] font-black uppercase">实验性</span>
+                  <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black uppercase">实验性</span>
                 </div>
                 <div class="space-y-6">
                   <CommonSwitch label="启用 AI 辅助" v-model="formData.ai.enabled" description="用于日志分析、概述模组等功能" />
@@ -139,7 +160,9 @@
                     <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
                     <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
                     <div class="grid grid-cols-2 gap-6">
-                      <CommonInput label="指定模型" v-model="formData.ai.model" />
+                      <CommonSelect label="选择模型" v-model="formData.ai.model" :options="currentAiModels" />
+                      <button class="btn btn-primary" @click="fetchAiModels">刷新模型列表</button>
+                      <button class="btn btn-primary" @click="testModel">测试模型</button>
                       <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
                     </div>
                   </div>
@@ -159,8 +182,8 @@
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
                   </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
-                    <h4 class="text-xs font-bold text-accent-danger uppercase">危险操作区</h4>
-                    <p class="text-[11px] text-accent-danger/60 leading-relaxed">重置操作将清空所有本地数据库缓存、分组信息和自定义备注。该操作不可撤销，请确保已备份您的 Mod 列表。</p>
+                    <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
+                    <p class="text-xs text-accent-danger/60 leading-relaxed">重置操作将清空所有本地数据库缓存、分组信息和自定义备注。该操作不可撤销，请确保已备份您的 Mod 列表。</p>
                     <button @click="handleReset" class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-white border border-accent-danger/30 rounded-lg text-xs font-bold transition-all">
                       立即重置本地数据库
                     </button>
@@ -223,6 +246,8 @@ const tabs = [
   { id: 'dev', label: '开发调试', icon: Terminal },
 ]
 
+const currentAiModels = ref([])
+
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
@@ -257,6 +282,23 @@ const handleBrowse = async (pathKey) => {
   
   const res = await appStore.getFolderPath(current[lastKey])
   if (res) current[lastKey] = res
+}
+
+// 测试模型
+const testModel = async () => {
+  const res = await appStore.chatWithAI("介绍一下自己")
+  if (res) {
+    console.log("模型测试结果:", res)
+    // toast.success("模型测试成功")
+  }
+}
+
+const fetchAiModels = async () => {
+  const models = await appStore.fetchAiModels(formData.value.ai)
+  if (models) currentAiModels.value = models.map(model => ({
+    value: model,
+    label: model
+  }))
 }
 
 const handleReset = async () => {

@@ -2,7 +2,7 @@
 <template>
   <div class="space-y-1.5 w-full">
     <div v-if="label" class="flex justify-between items-center px-1">
-      <label class="text-[10px] text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
+      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
       <slot name="extra"></slot>
     </div>
     

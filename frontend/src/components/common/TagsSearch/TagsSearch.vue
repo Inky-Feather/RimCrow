@@ -8,24 +8,24 @@
           v-tooltip="logicMode === 'AND' ? 
             '当前为^^‘与’^^逻辑，检索满足^^所有^^条件的项\n[[(点击切换为^^‘或’^^逻辑)]]' : 
             '当前为^^‘或’^^逻辑，检索满足^^任意^^条件的项\n[[(点击切换为^^‘与’^^逻辑)]]'"
-          class="shrink-0 w-6 h-6 font-bold cursor-pointer border transition-all relative"
+          class="shrink-0 size-7 font-bold cursor-pointer border transition-all relative"
           :class="[ props.circle ? 'rounded-full' : 'rounded-md',
             logicMode === 'AND' ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/30' : 'bg-accent-warning/20 text-accent-warning border-accent-warning/30',]">
           <!-- 圆形按钮旋转动画 -->
           <div v-if="circle" class="absolute inset-0 flex items-center justify-center ">
-            <svg class="transition-all duration-400 ease-in-out"
+            <svg class="transition-all duration-400 ease-in-out size-4"
                 :class="{'opacity-100 rotate-0': logicMode === 'AND', 'opacity-0 rotate-180': logicMode === 'OR'}" 
-                xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
-            <svg class="transition-all duration-400 ease-in-out absolute"
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
+            <svg class="transition-all duration-400 ease-in-out absolute size-4"
                 :class="{ 'opacity-0 -rotate-180': logicMode === 'AND', 'opacity-100 rotate-0': logicMode === 'OR' }" 
-                xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
           </div>
           <!-- 方形按钮翻转动画 -->
           <div v-else class="absolute inset-0 flex items-center justify-center transition-all duration-500 ease transform-gpu" style="transform-style: preserve-3d;">
-            <svg class="backface-hidden absolute transition-all duration-300" :class="logicMode === 'AND' ? 'rotate-x-0 opacity-100' : 'rotate-x-180 opacity-0'"
-                xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
-            <svg class="backface-hidden absolute transition-all duration-300" :class="logicMode === 'OR' ? 'rotate-x-0 opacity-100' : 'rotate-x-180 opacity-0'"
-                xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
+            <svg class="backface-hidden absolute transition-all duration-300 size-4" :class="logicMode === 'AND' ? 'rotate-x-0 opacity-100' : 'rotate-x-180 opacity-0'"
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></svg>
+            <svg class="backface-hidden absolute transition-all duration-300 size-4" :class="logicMode === 'OR' ? 'rotate-x-0 opacity-100' : 'rotate-x-180 opacity-0'"
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></svg>
           </div>
           
         </button>
@@ -81,7 +81,7 @@
       <!-- 自动补全下拉菜单 -->
       <Transition name="fade-drop">
         <div v-if="showSuggestions && suggestionList.length > 0" ref="suggestionContainer"
-          class="absolute left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto overflow-x-hidden bg-bg-surface/70 border border-white/10 backdrop-blur-md rounded-lg shadow-2xl z-100"
+          class="absolute top-full mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden bg-bg-surface/70 border border-white/10 backdrop-blur-md rounded-lg shadow-2xl z-100"
         >
           <div v-for="(item, index) in suggestionList" :key="index"
             class="pl-1 pr-3 py-1.5 text-xs cursor-pointer flex items-center justify-between group transition-colors"
@@ -91,16 +91,16 @@
           >
             <div class="flex items-center gap-1">
               <!-- 图标/类型指示 -->
-              <span class="text-[10px] w-8 h-4 flex items-center justify-center rounded bg-white/5 font-mono"
+              <span class="text-xs w-8 h-4 flex items-center justify-center rounded bg-white/5 font-mono"
                  :class="item.type === 'key' ? 'text-[rgb(var(--accent-rgb))]' : 'text-green-400'">
                 {{ item.type === 'key' ? 'KEY' : 'VAL' }}
               </span>
               <!-- 内容 -->
-              <span class="font-mono">
-                <!-- item.value 包含了完整输入建议，我们展示 label -->
+              <span class="font-mono ">
+                <!-- item.value 包含了完整输入建议，展示 label -->
                 <span class="text-accent-secondary">
                   {{ item.value.split(':')[0] + ':' }}
-                  <!-- <span v-if="item.meta.matchInfo" class="text-[8px] ml-auto text-accent-warn">
+                  <!-- <span v-if="item.meta.matchInfo" class="text-[0.65rem] ml-auto text-accent-warn">
                       ({{ item.meta.matchInfo }})
                   </span> -->
                 </span>
@@ -110,7 +110,7 @@
               </span>
             </div>
             <!-- 说明 -->
-            <span v-if="item.desc" class="text-[10px] opacity-40">{{ item.desc }}</span>
+            <span v-if="item.desc && item.type !== 'value'" class="shrink-0 text-xs opacity-40">{{ item.desc }}</span>
           </div>
         </div>
       </Transition>

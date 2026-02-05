@@ -32,9 +32,9 @@
         }">
         
         <!-- 悬浮装饰：分组标签 (破格设计，浮在卡片上方) -->
-        <div v-if="modGroups.length" class="absolute -top-3.5 right-4 flex gap-0.5 z-0 opacity-80 ">
+        <div v-if="modGroups.length" class="absolute bottom-full -mb-1 right-4 flex gap-0.5 z-0 opacity-80 ">
           <div v-for="g in modGroups" :key="g.group_id" 
-               class="px-1 py-0.5 rounded-t-md text-[10px] font-bold shadow-lg flex items-center gap-1 border-t border-x border-white/10"
+               class="px-1 py-0.5 rounded-t-md text-xs font-bold shadow-lg flex items-center gap-1 border-t border-x border-white/10"
                :style="{ backgroundColor: g.color, color: getContrastColor(g.color) }">
              {{ g.name }}
           </div>
@@ -58,7 +58,7 @@
         <div class="relative z-10 p-4 flex flex-col gap-1 h-full">
           
           <!-- 第一行：元数据 (ID & Ver & Type) -->
-          <div class="flex items-center justify-between text-[10px] font-mono text-text-main/80 border-b border-white/5 pb-1">
+          <div class="flex items-center justify-between text-xs font-mono text-text-main/80 border-b border-white/5 pb-1">
             <span class="truncate opacity-70 tracking-tighter">{{ hoverStore.data.package_id }}</span>
             <div class="flex items-center gap-2 shrink-0">
               <span v-if="hoverStore.data.version" class="text-accent-primary">v{{ hoverStore.data.version }}</span>
@@ -72,7 +72,7 @@
           <!-- 第二行：标题 -->
           <div>
             <!-- 别名 -->
-            <div v-if="hoverStore.data.alias_name" class="text-[10px] text-text-dim truncate font-mono ">
+            <div v-if="hoverStore.data.alias_name" class="text-xs text-text-dim truncate font-mono ">
               {{ hoverStore.data.name }}
             </div>
             <!-- 主名称 -->
@@ -84,20 +84,20 @@
           <!-- 第三行：作者与语言 -->
           <div>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[10px] text-text-dim flex items-center gap-1">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span class="text-xs text-text-dim flex items-center gap-1">
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 {{ hoverStore.data.author?.join(', ') || 'Unknown' }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[10px] text-text-dim flex items-center gap-1">
-                <svg width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="text-xs text-text-dim flex items-center gap-1">
+                <svg class="size-3.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 {{ hoverStore.data.supported_languages?.join(', ') || 'Unknown' }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[10px] text-text-dim flex items-center gap-1">
-                <Milestone :size="15"/>
+              <span class="text-xs text-text-dim flex items-center gap-1">
+                <Milestone class="size-3.5"/>
                 {{ hoverStore.data.supported_versions?.join(', ') || 'Unknown' }}
               </span>
             </div>
@@ -106,11 +106,10 @@
           <!-- 第四行：描述/备注 -->
           <div class="grow min-h-0 relative">
             <!-- 如果有备注，显示备注(黄色)，否则显示描述 -->
-            <p v-if="hoverStore.data.notes" class="text-[11px] text-accent-warn/90 leading-relaxed line-clamp-3 font-medium italic border-l-2 border-accent-warn pl-2">
-              <span class="text-[9px] opacity-50 not-italic block mb-0.5">NOTES</span>
+            <p v-if="hoverStore.data.notes" class="text-xs text-accent-warn/90 leading-relaxed line-clamp-3 font-medium italic border-l-2 border-accent-warn pl-2">
               {{ hoverStore.data.notes }}
             </p>
-            <p v-else class="text-[10px] text-text-dim/80 leading-relaxed line-clamp-4 font-mono">
+            <p v-else class="text-xs text-text-dim/80 leading-relaxed line-clamp-4 font-mono">
               {{ cleanDescription }}
             </p>
           </div>
@@ -118,17 +117,17 @@
           <!-- 第五行：Tags 流 -->
           <div v-if="hoverStore.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-white/5">
             <span v-for="tag in hoverStore.data.tags.slice(0, 7)" :key="tag" 
-                  class="text-[9px] px-1.5 py-px rounded-full bg-white/5 text-white/70 border border-white/5 whitespace-nowrap">
+                  class="text-[0.65rem] px-1.5 py-px rounded-full bg-white/5 text-white/70 border border-white/5 whitespace-nowrap">
               #{{ tag }}
             </span>
-            <span v-if="hoverStore.data.tags.length > 7" class="text-[9px] text-text-dim px-1">...</span>
+            <span v-if="hoverStore.data.tags.length > 7" class="text-[0.65rem] text-text-dim px-1">...</span>
           </div>
 
         </div>
 
       </div>
       <!-- 模式 B: 纯文本 Tooltip (data 是字符串) -->
-      <div v-else-if="hoverStore.type === 'text'" class="text-xs font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
+      <div v-else-if="hoverStore.type === 'text'" class="text-sm font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
         <!-- {{ parseMarkup(hoverStore.) }} -->
         <div v-html="parseMarkup(hoverStore.data)"></div>
       </div>
@@ -146,9 +145,11 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick,h } from 'vue'
 import { Milestone } from 'lucide-vue-next';
 import { Motion } from 'motion-v'
 import { useHoverStore } from '../../stores/hoverStore'
+import { useAppStore } from '../../stores/appStore'
 import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore';
 
+const appStore = useAppStore()
 const hoverStore = useHoverStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
@@ -158,7 +159,6 @@ const isVisible = ref(false)
 const shouldRender = ref(false) // 用于控制 v-if，确保动画执行完再销毁 DOM
 let showTimer = null
 let hideTimer = null
-const DELAY_MS = 1000
 const lastX = ref(0)
 const lastY = ref(0)
 
@@ -172,7 +172,7 @@ watch(() => hoverStore.isHovering, (hovering) => {
     if (showTimer) clearTimeout(showTimer)
     showTimer = setTimeout(() => {
       isVisible.value = true // 触发 opacity 1 动画
-    }, DELAY_MS)
+    }, appStore.settings.ui.tooltip_hover_time)
   } else {
     if (showTimer) clearTimeout(showTimer)
     isVisible.value = false // 触发 opacity 0 动画
@@ -380,7 +380,7 @@ const parseMarkup = (text) => {
     // [Code/Mono] `text` -> bg-black/30 font-mono
     { 
       regex: /··(.*?)··/g, 
-      repl: '<span class="font-mono text-[10px] bg-white/10 px-1 rounded mx-0.5 text-text-main">$1</span>' 
+      repl: '<span class="font-mono text-xs bg-white/10 px-1 rounded mx-0.5 text-text-main">$1</span>' 
     }
   ]
 

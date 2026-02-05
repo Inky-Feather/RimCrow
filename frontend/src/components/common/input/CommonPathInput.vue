@@ -2,9 +2,9 @@
 <template>
   <div class="space-y-1.5 w-full max-w-full overflow-hidden">
     <div class="flex justify-between items-center px-1">
-      <label class="text-[10px] text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
+      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
       <button v-if="modelValue" @click="openInExplorer" 
-        class="text-[9px] text-accent-primary/60 hover:text-accent-primary transition-colors hover:underline"
+        class="text-xs text-accent-primary/60 hover:text-accent-primary transition-colors hover:underline"
       >
         在资源管理器中打开
       </button>
@@ -16,7 +16,7 @@
         v-tooltip="modelValue || '未配置路径'"
       >
         <!-- 固定前缀标签 -->
-        <div class="shrink-0 mr-2 text-text-dim/40 italic text-[10px] font-mono uppercase select-none">Path</div>
+        <div class="shrink-0 mr-2 text-text-dim/40 italic text-xs font-mono uppercase select-none">Path</div>
         
         <!-- 手动输入框 -->
         <input 
@@ -24,7 +24,7 @@
           :value="modelValue"
           @input="$emit('update:modelValue', $event.target.value)"
           placeholder="请输入或粘贴路径..."
-          class="flex-1 bg-transparent text-xs text-white/90 font-mono outline-none min-w-0 "
+          class="flex-1 bg-transparent text-sm text-white/90 font-mono outline-none min-w-0 "
           :class="{ 'direction-rtl': !isFocused }"
           @focus="isFocused = true"
           @blur="isFocused = false"

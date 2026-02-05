@@ -1,7 +1,7 @@
 // stores/appStore.js
 
 import { defineStore } from 'pinia'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { createToastInterface } from 'vue-toastification'
 import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
@@ -47,18 +47,34 @@ export const useAppStore = defineStore('app', () => {
     community_rules_path: '',
     user_rules_path: '',
 
-    // --- 界面 (UI) ---
+    // --- 系统 ---
     language: 'ZH-cn',
-    theme: 'system',
     window_width: 1400,
     window_height: 900,
-    font_size: 14,
     open_url_on_system: false,
 
-    // --- 高级 (Advanced) ---
-    backup_retention_days: 30,
-    enable_auto_scan: true,
-    delete_missing_mods_data: false,
+    // --- 界面（UI） ---
+    ui: {
+      theme: 'system',
+      font_size: 14,
+      tooltip_hover_time: 1000,  // 鼠标悬停显示提示时间 (毫秒)
+
+      show_mod_details_panel: true,  // 是否显示 Mod 详情面板
+      show_icons_cloud: true,  // 是否显示动态图标云
+      show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息
+      show_mod_details_files_info: true,  // 是否显示 Mod 详情面板文件信息
+      show_mod_details_time_info: true,  // 是否显示 Mod 详情面板时间信息
+      show_mod_details_dependencies_info: true,  // 是否显示 Mod 详情面板依赖信息
+      show_mod_details_user_info: true,  // 是否显示 Mod 详情面板自定义信息
+      show_mod_details_description: true,  // 是否显示 Mod 详情面板描述
+
+      show_dependency_graph: true,  // 是否显示依赖关系图
+      show_list_index: true,  // 是否显示列表索引列
+      show_list_icon: true,       // 是否显示 Mod 图标
+      show_list_mod_icon: true,       // 是否显示 Mod 图标
+      show_list_modtype_icon: true,  // 是否显示 Mod 类型图标
+    },
+
 
     // --- 网络 (Network) - 深度嵌套 ---
     network: {
@@ -91,6 +107,11 @@ export const useAppStore = defineStore('app', () => {
       temperature: 0.7,
       max_tokens: 2000
     },
+    
+    // --- 高级 (Advanced) ---
+    backup_retention_days: 30,
+    enable_auto_scan: true,
+    delete_missing_mods_data: false,
 
     // --- 调试 (Debug) ---
     debug_mode: true,
@@ -116,6 +137,20 @@ export const useAppStore = defineStore('app', () => {
            null
   })
 
+  // 监听字体大小变化，实时更新根字号
+  watch(() => settings.value.ui.font_size, (newSize) => {
+    // 将根字号设置为用户定义的数值
+    // 默认 14px，用户调大到 16px，所有使用 rem 的组件都会等比例变大
+    document.documentElement.style.fontSize = `${newSize}px`;
+  }, { immediate: true });
+  // 像素值缩放函数
+  const scalePx = (basePx, defaultFontSize = 16) => {
+    if (!settings.value.ui.font_size) return basePx;
+    // 核心公式
+    const scaled = basePx * (settings.value.ui.font_size / defaultFontSize);
+    // 返回四舍五入后的整数，防止某些库对浮点数支持不佳导致抖动
+    return Math.round(scaled);
+  };
 
   // === Utils ===
   // 等待后端就绪
@@ -437,8 +472,6 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.check_steam_tools()
     if (checkResult(res, "检查Steam工具")) {
       
-    } else {
-      console.error("检查Steam工具异常:", res.message)
     }
   }
   // 打开Steam创意工坊
@@ -455,11 +488,9 @@ export const useAppStore = defineStore('app', () => {
     const workshop_id = modStore.takeModById(mod_id).workshop_id
     if(!workshop_id) return
     const res = await window.pywebview.api.steam_subscribe(workshop_id)
-    if (checkResult(res, "订阅模组")) {
-      toast.success(`订阅模组 ${mod_id} 成功！`)
+    if (checkResult(res, `订阅模组 ${modStore.displayNameById(mod_id)}`)) {
     } else {
       console.error("订阅模组异常:", res.message)
-      toast.error(`订阅模组 ${mod_id} 异常: \n${res.message}`)
     }
   }
   // 取消订阅模组
@@ -469,11 +500,10 @@ export const useAppStore = defineStore('app', () => {
     const workshop_id = modStore.takeModById(mod_id).workshop_id
     if(!workshop_id) return
     const res = await window.pywebview.api.steam_unsubscribe(workshop_id)
-    if (checkResult(res, "取消订阅模组")) {
-      toast.success(`取消订阅模组 ${mod_id} 成功！`)
+    if (checkResult(res, `取消订阅模组 ${modStore.displayNameById(mod_id)}`)) {
+      
     } else {
       console.error("取消订阅模组异常:", res.message)
-      toast.error(`取消订阅模组 ${mod_id} 异常: \n${res.message}`)
     }
   }
 
@@ -485,8 +515,6 @@ export const useAppStore = defineStore('app', () => {
     if (checkResult(res, "获取AI配置")) {
       res.data.config
       res.data.prompts
-    } else {
-      console.error("获取AI配置异常:", res.message)
     }
   }
   // 保存AI设置
@@ -495,8 +523,22 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.ai_save_config(config_data)
     if (checkResult(res, "保存AI配置",true)) {
       return true
-    } else {
-      console.error("保存AI配置异常:", res.message)
+    }
+  }
+  // 获取AI模型 temp_config: {provider, base_url, api_key}
+  const fetchAiModels = async (temp_config) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.ai_fetch_models(temp_config)
+    if (checkResult(res, "获取AI模型")) {
+      return res.data
+    }
+  }
+  // 与AI聊天
+  const chatWithAI = async (prompt) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.ai_chat(prompt)
+    if (checkResult(res, "与AI聊天")) {
+      return res.data
     }
   }
   // 使用AI功能
@@ -509,17 +551,15 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.ai_execute_task(task_key, params)
     if (checkResult(res, `使用AI ${task_key}`)) {
       return JSON.parse(res.data)
-    } else {
-      console.error(`使用AI ${task_key} 异常:"`, res.message)
     }
   }
 
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, 
-    initialize, checkResult, refreshData, toggleUiState,
+    initialize, checkResult, refreshData, toggleUiState, scalePx,
     launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, openUrl, startDownload, 
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, 
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod,
-    getAiConfig, saveAIConfig, useAI
+    getAiConfig, saveAIConfig, useAI, fetchAiModels, chatWithAI
   }
 })

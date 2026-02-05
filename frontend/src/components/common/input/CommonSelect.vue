@@ -1,12 +1,12 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
   <div class="relative" :class="{'flex items-center' : mini}" ref="target">
-    <label v-if="label" class="text-[10px] text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
+    <label v-if="label" class="text-xs text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
     
     <!-- 触发器 -->
     <button @click="isOpen = !isOpen" type="button"
       class="flex items-center justify-between pl-3 pr-2 input-glass text-sm"
-      :class="{ 'border-accent-primary/50 shadow-[0_0_10px_rgba(6,182,212,0.1)]': isOpen, 'w-full h-9 ': !mini, 'text-[12px] py-0.5 flex-1':mini }"
+      :class="{ 'border-accent-primary/50 shadow-[0_0_10px_rgba(6,182,212,0.1)]': isOpen, 'w-full h-9 ': !mini, 'py-0.5 flex-1':mini }"
     >
       <span v-if="selectedLabel" class="text-white truncate font-medium">{{ selectedLabel }}</span>
       <span v-else class="text-white/20 italic">{{ placeholder }}</span>
@@ -24,7 +24,7 @@
       <div v-if="isOpen" class="absolute z-50 left-0 right-0  p-1 bg-bg-surface/90 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.6)] max-h-60 overflow-y-auto custom-scrollbar"
         :class="[showButton?'mt-1.5 top-full':'mb-1.5 bottom-full']">
         <button v-for="opt in options" :key="opt.value" @click="select(opt.value)"
-          class="w-full flex items-center px-2 py-1 rounded-lg text-xs transition-all duration-200 group"
+          class="w-full flex items-center px-2 py-1 rounded-lg text-sm transition-all duration-200 group"
           :class="modelValue === opt.value ? 'bg-accent-primary/20 text-accent-primary' : 'text-text-dim hover:bg-white/5 hover:text-white'"
         >
           <!-- 选中指示点 -->

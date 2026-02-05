@@ -1,7 +1,6 @@
 <!-- src/components/utils/DependencyGraph.vue -->
 <template>
-  <div 
-    class="relative w-full h-full bg-bg-deep/20 border-r border-white/5 overflow-hidden" 
+  <div class="relative w-full h-full bg-bg-deep/20 border-r border-white/5 overflow-hidden" 
     ref="containerRef"
     @mousedown="handleCanvasClick"
     @mousemove="handleMouseMove"

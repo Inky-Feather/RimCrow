@@ -84,14 +84,14 @@ export function generateHtmlHelp(engine) {
   const C = {
     box: 'text-xs text-gray-300 font-sans overflow-hidden',
     header: 'bg-white/5 py-1 px-2 border-b border-white/10 flex items-center justify-between',
-    sectionTitle: 'text-[10px] uppercase tracking-wider opacity-40 font-bold mt-2 mb-1 px-1',
+    sectionTitle: 'text-[0.65rem] uppercase tracking-wider opacity-40 font-bold mt-2 mb-1 px-1',
     syntaxGrid: 'grid grid-cols-4 gap-1 px-1',
     syntaxItem: 'bg-white/5 rounded px-0.5 py-0.5 flex flex-col items-center justify-center text-center border border-white/5',
     fieldGrid: 'grid grid-cols-2 gap-x-2 gap-y-1 px-1 pb-2', // 双栏布局
     fieldRow: 'flex items-center border-l-2 border-white/15 pl-1 group',
-    keyBadge: 'font-mono font-bold text-accent-primary bg-accent-primary/10 px-1.5 rounded text-[11px] min-w-[20px] text-center border border-accent-primary/20 group-hover:bg-accent-primary/20 transition-colors',
-    label: 'text-gray-400 text-[11px] text-end truncate flex-1',
-    footer: 'bg-white/5 px-3 py-2 text-[10px] text-gray-500 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1'
+    keyBadge: 'font-mono font-bold text-accent-primary bg-accent-primary/10 px-1.5 rounded text-xs min-w-[20px] text-center border border-accent-primary/20 group-hover:bg-accent-primary/20 transition-colors',
+    label: 'text-gray-400 text-xs text-end truncate flex-1',
+    footer: 'bg-white/5 px-3 py-2 text-[0.65rem] text-gray-500 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1'
   };
   // 是否是默认搜索字段
   const defaultMarker = '<span class="text-accent-highlight ml-1" title="默认包含在模糊搜索中">•</span>';
@@ -102,7 +102,7 @@ export function generateHtmlHelp(engine) {
   // === 顶部：标题 + 状态 ===
   html += `<div class="${C.header}">
       <span class="font-bold text-white">搜索说明</span>
-      <span class="text-[10px] bg-accent-highlight/20 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">搜索指令速查</span>
+      <span class="text-[0.65rem] bg-accent-highlight/20 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">搜索指令速查</span>
     </div>`;
 
   // === 区域 1：基础语法 (3个核心卡片) ===
@@ -143,8 +143,8 @@ export function generateHtmlHelp(engine) {
   html += `</div>`; // End Field Grid
 
   html += `<div>多个搜索条件关系可选 “与”/ “或” 逻辑</div>`;
-  html += `<div class="text-[11px] text-gray-400">与：多个条件同时满足</div>`;
-  html += `<div class="text-[11px] text-gray-400">或：满足任意一个条件即可</div>`;
+  html += `<div class="text-xs text-gray-400">与：多个条件同时满足</div>`;
+  html += `<div class="text-xs text-gray-400">或：满足任意一个条件即可</div>`;
   html += `</div>`;
   return html;
 }

@@ -1,25 +1,24 @@
 <!-- components/common/input/CommonTagInput.vue -->
 <template>
   <div class="space-y-1.5 w-full">
-    <label class="text-[10px] text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
+    <label class="text-xs text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
     <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-[42px] content-start focus-within:border-accent-primary/40">
       
       <!-- 已有 Tag -->
       <transition-group name="list">
         <span v-for="tag in modelValue" :key="tag" 
-          class="flex items-center gap-1.5 px-2 py-0.5 bg-accent-primary/10 border border-accent-primary/30 rounded text-xs text-accent-primary font-mono group animate-in">
+          class="flex items-center gap-1.5 px-2 py-0.5 bg-accent-primary/10 border border-accent-primary/30 rounded text-sm text-accent-primary font-mono group animate-in">
           {{ tag }}
           <button @click="remove(tag)" class="opacity-50 hover:opacity-100 hover:text-white transition-opacity">×</button>
         </span>
       </transition-group>
 
       <!-- 输入框 -->
-      <input 
-        v-model="newTag"
+      <input v-model="newTag"
         @keydown.enter.prevent="add"
         @keydown.backspace="handleBackspace"
         placeholder="输入并回车..."
-        class="flex-1 min-w-20 bg-transparent border-none outline-none text-xs text-white py-1 px-1"
+        class="flex-1 min-w-20 bg-transparent border-none outline-none text-sm text-white py-1 px-1"
       />
     </div>
   </div>
