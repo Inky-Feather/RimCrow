@@ -58,7 +58,8 @@ export const useAppStore = defineStore('app', () => {
       theme: 'system',
       font_size: 14,
       tooltip_hover_time: 1000,  // 鼠标悬停显示提示时间 (毫秒)
-
+      show_mod_hover_panel: true,  // 是否显示 Mod 悬停面板
+      
       show_mod_details_panel: true,  // 是否显示 Mod 详情面板
       show_icons_cloud: true,  // 是否显示动态图标云
       show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息

@@ -1,6 +1,7 @@
 // stores/hoverStore.js
 import { defineStore } from 'pinia'
 import { ref, markRaw } from 'vue'
+import { useAppStore } from './appStore'
 
 export const useHoverStore = defineStore('hover', () => {
   // 意图显示状态 (鼠标是否在组件上)
@@ -39,7 +40,7 @@ export const useHoverStore = defineStore('hover', () => {
     timer = setTimeout(() => {
       // 重置 html 标记
       isHtml.value = false 
-
+      const appStore = useAppStore()
       // 情况 A: 自定义组件模式
       if (content && content.component) {
         // 必须用 markRaw 包裹组件定义！
@@ -49,22 +50,23 @@ export const useHoverStore = defineStore('hover', () => {
       }
       // 情况 B: 传入的是配置对象 { content: '...', html: true }
       else if (content && typeof content === 'object' && content.content) {
-          data.value = content.content
-          // 如果标记了 html: true，则开启 HTML 模式
-          if (content.html) isHtml.value = true
-          
-          // 如果传入了 type (比如 'preview')，则使用传入的，否则默认为 text
-          type.value = content.type || 'text' 
+        data.value = content.content
+        // 如果标记了 html: true，则开启 HTML 模式
+        if (content.html) isHtml.value = true
+        
+        // 如果传入了 type (比如 'preview')，则使用传入的，否则默认为 text
+        type.value = content.type || 'text' 
       }
-      // 情况 C: 传入的是普通对象 (Mod数据预览)
+      // 情况 C: 传入的是普通对象 (Mod数据预览) 且设置中允许显示悬浮面板
       else if (typeof content === 'object') {
-          data.value = content
-          type.value = 'preview'
+        if (!appStore.settings.ui.show_mod_hover_panel) return
+        data.value = content
+        type.value = 'preview'
       } 
       // 情况 D: 纯文本
       else {
-          data.value = content
-          type.value = 'text'
+        data.value = content
+        type.value = 'text'
       }
       isHovering.value = true
     }, DELAY_MS)

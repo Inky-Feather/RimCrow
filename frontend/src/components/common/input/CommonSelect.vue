@@ -22,7 +22,7 @@
     <!-- 下拉面板 -->
     <transition name="dropdown" >
       <div v-if="isOpen" class="absolute z-50 left-0 right-0  p-1 bg-bg-surface/90 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_15px_50px_rgba(0,0,0,0.6)] max-h-60 overflow-y-auto custom-scrollbar"
-        :class="[showButton?'mt-1.5 top-full':'mb-1.5 bottom-full']">
+        :class="[showBottom?'mt-1.5 top-full':'mb-1.5 bottom-full']">
         <button v-for="opt in options" :key="opt.value" @click="select(opt.value)"
           class="w-full flex items-center px-2 py-1 rounded-lg text-sm transition-all duration-200 group"
           :class="modelValue === opt.value ? 'bg-accent-primary/20 text-accent-primary' : 'text-text-dim hover:bg-white/5 hover:text-white'"
@@ -48,7 +48,8 @@ const props = defineProps({
   placeholder: { type: String, default: '请选择...' },
   modelValue: [String, Number, Boolean],
   mini: { type: Boolean, default: false },
-  showButton: { type: Boolean, default: false },
+  showBottom: { type: Boolean, default: false },
+  editable: { type: Boolean, default: false },
   options: {
     type: Array,
     default: () => [] // 结构: { label: '中文', value: 'zh' }
@@ -65,7 +66,7 @@ onClickOutside(target, () => isOpen.value = false)
 
 const selectedLabel = computed(() => {
   const found = props.options.find(o => o.value === props.modelValue)
-  return found ? found.label : null
+  return found ? found.label : props.modelValue || null
 })
 
 const select = (val) => {

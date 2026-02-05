@@ -84,7 +84,7 @@
         </div>
 
         <!-- 中间画布 (SVG) -->
-        <div class="w-12 shrink-0 relative z-10 bg-black/20">
+        <div class="w-[48px] shrink-0 relative z-10 bg-black/20">
           <svg class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible">
              <!-- 绘制区块 (fill) -->
              <path v-for="block in renderBlocks" :key="block.id"

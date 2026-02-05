@@ -96,6 +96,7 @@
                   <div class="grid grid-cols-2 gap-6">
                     <CommonNumber label="字体大小" v-model="formData.ui.font_size" :step="1" />
                     <CommonNumber label="提示悬停时间" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
                     <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
                       <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
                       <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
@@ -122,7 +123,7 @@
                 <h3 class="text-lg font-bold text-white mb-6">Steam 接口组件</h3>
                 <div class="space-y-6">
                   <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
-                  <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" />
+                  <!-- <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" /> -->
                 </div>
               </section>
 
@@ -160,10 +161,21 @@
                     <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
                     <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
                     <div class="grid grid-cols-2 gap-6">
-                      <CommonSelect label="选择模型" v-model="formData.ai.model" :options="currentAiModels" />
-                      <button class="btn btn-primary" @click="fetchAiModels">刷新模型列表</button>
-                      <button class="btn btn-primary" @click="testModel">测试模型</button>
+                      <div @click="fetchAiModels">
+                        <CommonSelect label="选择模型" editable v-model="formData.ai.model" :options="currentAiModels" />
+                      </div>
                       <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
+                      <CommonInput v-model="testPrompt" placeholder="随便输入一句话，简单测试一下请求是否成功..."></CommonInput>
+                      <button class="m-1 h-fit flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-white text-text-dim px-4 py-1.5 w-fit rounded-md" 
+                        :class="[testLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
+                        @click="testModel">
+                        <svg v-if="testLoading" class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        测试模型
+                      </button>
+                      <div v-if="testResponse" class="col-span-2 p-4 rounded-2xl text-text-main/80 bg-accent-special/10 border border-white/5">
+                        <div class="text-xs text-text-dim mb-2">响应结果：</div>
+                        {{ testResponse }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -266,6 +278,10 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   }
 })
 
+watch(() => formData.value.ai?.model, (newModel) => {
+  appStore.saveAIConfig(formData.value.ai)
+})
+
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
@@ -284,13 +300,20 @@ const handleBrowse = async (pathKey) => {
   if (res) current[lastKey] = res
 }
 
+// 测试提示词
+const testPrompt = ref("介绍一下自己")
+const testResponse = ref("")
+const testLoading = ref(false)
 // 测试模型
 const testModel = async () => {
-  const res = await appStore.chatWithAI("介绍一下自己")
+  testLoading.value = true
+  const res = await appStore.chatWithAI(testPrompt.value)
   if (res) {
+    testResponse.value = res
     console.log("模型测试结果:", res)
     // toast.success("模型测试成功")
   }
+  testLoading.value = false
 }
 
 const fetchAiModels = async () => {

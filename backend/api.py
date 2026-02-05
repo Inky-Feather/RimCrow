@@ -1109,7 +1109,7 @@ class API:
             return ApiResponse.error(f"连接失败: {str(e)}")
 
     @log_api_call
-    def ai_chat(self, message: str):
+    def ai_chat(self, message: str, config_data: dict):
         """简单的自由对话"""
         try:
             # 使用 'chat' 模板
