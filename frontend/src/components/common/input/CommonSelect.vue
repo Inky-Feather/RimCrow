@@ -1,16 +1,16 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
-  <div class="relative w-full" ref="target">
+  <div class="relative" :class="{'flex items-center' : mini}" ref="target">
     <!-- Label -->
-    <label v-if="label" class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 mb-1"  @click="toggleMenu" >
+    <label v-if="label" class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1" :class="[mini?'':'mb-1']"  @click="toggleMenu" >
       {{ label }}
     </label>
     
     <!-- 主输入区域 -->
     <div class="relative group">
       <input ref="inputRef" type="text" :value="displayLabel" :placeholder="placeholder" :readonly="!editable"
-        :class="[ 'w-full input-glass bg-white/5 border border-white/10 rounded-lg text-sm text-white transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-white/20 placeholder:italic',
-          mini ? 'py-1 px-2 text-xs' : 'h-9 px-3',
+        :class="[ 'input-glass bg-white/5 border border-white/10 rounded-lg text-sm text-white transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-white/20 placeholder:italic',
+          mini ? 'py-1 px-2 text-xs' : 'w-full h-9 px-3',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
         ]"
         @click="toggleMenu"

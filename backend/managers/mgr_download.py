@@ -1,5 +1,6 @@
 # backend/managers/mgr_download.py
 import os
+import re
 import time
 import uuid
 import requests
@@ -8,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional, Callable
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
@@ -69,34 +70,79 @@ class DownloadManager:
             return new_url
         return url
 
-    def add_task(self, url: str, dest_path: str, filename= None) -> str:
-        """
-        添加下载任务
-        :param url: 下载链接
-        :param dest_path: 目标文件夹路径 或 完整文件路径
-        :param filename: (可选) 如果 dest_path 是文件夹，需指定文件名
-        :return: task_id
-        """
+    def add_task(self, url: str, dest_path: str, filename=None) -> str:
         real_url = self._sanitize_url(url)
         
-        # 路径处理逻辑
-        if os.path.isdir(dest_path):
-            if not filename:
-                # 尝试从 URL 猜测文件名
-                parsed = urlparse(real_url)
-                filename = os.path.basename(parsed.path) or "downloaded_file"
-            final_path = os.path.join(dest_path, filename)
-        else:
+        # 1. 预处理路径：如果是完整文件路径，直接提取文件名
+        if not os.path.isdir(dest_path):
             final_path = dest_path
             filename = os.path.basename(final_path)
+        else:
+            # 2. 如果是文件夹，开始多级文件名探测
+            if not filename:
+                filename = self._resolve_filename(real_url)
+            final_path = os.path.join(dest_path, filename)
 
         task = DownloadTask(url=real_url, dest_path=final_path, filename=filename)
         self.tasks[task.task_id] = task
-        logger.info(f"Download task added: {filename} ({task.task_id})")
         
-        # 提交到线程池
+        logger.info(f"添加下载任务: {filename} (ID: {task.task_id})")
         self.executor.submit(self._download_worker, task)
         return task.task_id
+
+    def _resolve_filename(self, url: str) -> str:
+        """
+        全能型文件名解析器
+        """
+        # --- 策略 A: 从 URL 路径中提取并解码 ---
+        parsed = urlparse(url)
+        # unquote 处理 URL 编码的中文，如 %E6%B5%8B%E8%AF%95 -> 测试
+        path_filename = unquote(os.path.basename(parsed.path))
+        
+        # --- 策略 B: 从查询参数中寻找常见关键字 (针对网盘/CDN) ---
+        # 匹配 ?file=xxx, ?name=xxx, ?fileName=xxx 等
+        query_params = ['filename', 'file_name', 'file', 'name']
+        from urllib.parse import parse_qs
+        qs = parse_qs(parsed.query)
+        for param in query_params:
+            for k in qs.keys():
+                if k.lower() == param:
+                    return self._clean_filename(unquote(qs[k][0]))
+
+        # --- 策略 C: 预检 HTTP Headers (最专业的方法) ---
+        # 注意：这会发起一次同步请求，如果对响应速度要求极高，可以跳过此步
+        try:
+            # 使用 HEAD 请求只读取 Header，不下载内容，速度极快
+            # allow_redirects=True 必须开启，因为很多下载是 302 跳转
+            with requests.head(url, timeout=3, allow_redirects=True) as r:
+                # 检查 Content-Disposition
+                cd = r.headers.get('Content-Disposition')
+                if cd:
+                    # 匹配 filename="abc.exe" 或 filename=abc.exe
+                    fname = re.findall(r'filename=["\']?(.*?)["\']?$', cd)
+                    if fname: return self._clean_filename(unquote(fname[0]))
+                    
+                    # 匹配 RFC 5987 标准的 filename*=UTF-8''%e4%bd%a0%e5%a5%bd.txt
+                    fname_rfc = re.findall(r"filename\s*=.*''(.+)", cd)
+                    if fname_rfc: return self._clean_filename(unquote(fname_rfc[0]))
+
+                # 如果 HEAD 请求没拿到结果，尝试从路径名判断
+                if path_filename: return self._clean_filename(path_filename)
+        except Exception as e:
+            logger.warning(f"无法通过网络预检获取文件名: {e}")
+
+        # --- 策略 D: 兜底逻辑 ---
+        if path_filename:
+            return self._clean_filename(path_filename)
+        
+        return "downloaded_file_" + os.urandom(4).hex()
+
+    def _clean_filename(self, filename: str) -> str:
+        """清理文件名中的非法字符，防止系统报错"""
+        # 移除 Windows 下非法的路径字符 \ / : * ? " < > |
+        filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
+        # 去掉首尾空格
+        return filename.strip()
 
     def cancel_task(self, task_id: str):
         if task_id in self.tasks:
@@ -137,11 +183,11 @@ class DownloadManager:
             # 这里的代理配置复用了 requests 对环境变量的支持
             # mgr_network.py 已经设置了 os.environ['HTTP_PROXY']
             # 但为了保险，也可以显式读取 settings
-            proxies = {}
-            proxy_cfg = settings.config.network.proxy
-            if proxy_cfg.enabled and proxy_cfg.host:
-                p_str = f"{proxy_cfg.type}://{proxy_cfg.host}:{proxy_cfg.port}"
-                proxies = {"http": p_str, "https": p_str}
+            # proxies = {}
+            # proxy_cfg = settings.config.network.proxy
+            # if proxy_cfg.enabled and proxy_cfg.host:
+            #     p_str = f"{proxy_cfg.type}://{proxy_cfg.host}:{proxy_cfg.port}"
+            #     proxies = {"http": p_str, "https": p_str}
             
             # 2. 发起请求 (Stream模式)
             # with session.get(task.url, stream=True, proxies=proxies, timeout=15) as response:
@@ -218,6 +264,7 @@ class DownloadManager:
         payload = {
             "id": task.task_id,
             "filename": task.filename,
+            "file_path": task.dest_path,
             "status": task.status.value,
             "total": task.total_size,
             "current": task.downloaded_size,

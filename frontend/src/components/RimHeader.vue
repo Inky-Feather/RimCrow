@@ -12,21 +12,12 @@
     </div>
 
     <div class="flex items-center gap-3">
+
       <button v-if="appStore.settings.debug_mode" @click="appStore.toggleUiState('showTestDrawer')" v-tooltip="`测试页面`"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
-        测试页面
+        测试
       </button>
-
-      <button @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
-        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
-        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-      </button>
-
-      <button @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="`规则页面`"
-        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
-        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
-      </button>
-
+      
       <div v-tooltip="`打开文件夹`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
         <div class="absolute top-full right-0 w-30 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-white/10 shadow-2xl backdrop-blur-sm opacity-0 
@@ -37,6 +28,27 @@
           <button @click="appStore.openPath(appStore.settings.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-white transition bg-transparent" >本地Mod目录</button>
         </div>
       </div>
+
+      <!-- <div v-tooltip="`导入导出`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
+        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+        <div class="absolute top-full right-0 w-30 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-white/10 shadow-2xl backdrop-blur-sm opacity-0 
+          invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
+          <button @click="appStore.openPath(appStore.settings.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-white transition bg-transparent">游戏安装目录</button>
+          <button @click="appStore.openPath(appStore.settings.game_config_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-white transition bg-transparent">游戏配置目录</button>
+          <button @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-white transition bg-transparent">工坊Mod目录</button>
+          <button @click="appStore.openPath(appStore.settings.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-white transition bg-transparent" >本地Mod目录</button>
+        </div>
+      </div> -->
+
+      <button @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
+        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+      </button>
+
+      <button @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="`规则页面`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
+        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+      </button>
 
       <!-- 设置按钮 -->
       <button @click="appStore.openSettingsPanel()" v-tooltip="`设置`"

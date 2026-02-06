@@ -283,8 +283,8 @@
 
             <!-- 动作设置 -->
             <div class="space-y-3">
-              <label class="text-xs uppercase font-bold text-text-dim tracking-wider">执行动作</label>
-              <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-4 flex gap-4 items-center">
+              <label class="text-xs uppercase font-bold text-text-dim tracking-wider mb-1">执行动作</label>
+              <div class="bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-3 flex gap-2 items-center">
                 <CommonSelect class="min-w-40" v-model="editingRule.action.type" :options="Object.entries(ruleStore.DYNAMIC_RULE_ACTIONS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                 
                 <!-- 根据动作类型显示输入框 -->

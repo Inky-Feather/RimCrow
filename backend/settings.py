@@ -17,6 +17,8 @@ CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
 RULES_DIR = HOME_DIR / "data" / "rules"
 USER_RULES_PATH = RULES_DIR / "user_rules.json"
 COMMUNITY_RULES_PATH = RULES_DIR / "communityRules.json"
+COMMUNITY_DB_PATH = RULES_DIR / "data" / "steamDB.json"
+COMMUNITY_INSTEAD_DB_PATH = RULES_DIR / "data" / "replacements.json"
 # 工具目录
 TOOLS_DIR = HOME_DIR / "tools"
 
@@ -92,9 +94,6 @@ class AppConfig:
     workshop_mods_path: str = ""
     local_mods_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
-    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
-    community_rules_path: str = str(COMMUNITY_RULES_PATH)
-    user_rules_path: str = str(USER_RULES_PATH)
     
     # --- 游戏设置 ---
     game_version: str = ""
@@ -108,7 +107,7 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     enable_auto_scan: bool = True             # 启动时自动扫描
-    delete_missing_mods_data: bool = False    # 是否删除数据库中缺失的 Mod 数据
+    delete_missing_mods_data: bool = True    # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False           # 是否在系统默认浏览器打开链接
     
     # --- 功能设置 ---
@@ -116,10 +115,22 @@ class AppConfig:
     steam: SteamConfig = field(default_factory=SteamConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     
+    # --- 社区设置 ---
+    community_db_url: str = "https://github.com/RimSort/Steam-Workshop-Database/blob/main/steamDB.json"
+    community_db_path: str = str(COMMUNITY_DB_PATH)
+    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
+    community_rules_path: str = str(COMMUNITY_RULES_PATH)
+    community_instead_db_url: str = "https://github.com/emipa606/UseThisInstead/blob/main/replacements.json.gz"
+    community_instead_db_path: str = str(COMMUNITY_INSTEAD_DB_PATH)
+    user_rules_path: str = str(USER_RULES_PATH)
+    
     # --- 开发与调试设置 ---
     debug_mode: bool = False  # 开发模式开关
     log_retention_days: int = 7  # 日志保留天数
     log_level: str = "INFO"  # 默认日志等级 DEBUG, INFO, WARNING, ERROR
+    enable_auto_update_check: bool = True  # 自动检查更新开关
+    ignored_update_version: str = ""       # 跳过的版本号
+    last_update_check_time: float = 0      # 上次检查时间（用于限流）
     
 
 class SettingsManager:

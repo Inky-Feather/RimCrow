@@ -1,6 +1,7 @@
 import webview
 import re
 from backend.static_page import LOADING_HTML
+from backend.utils.logger import logger
 
 
     
@@ -58,7 +59,7 @@ class SubBrowserManager:
             if 'steamcommunity.com/sharedfiles/filedetails' in url:
                 self.window.evaluate_js(self._get_injection_js())
         except Exception as e:
-            print(f"Injection skipped: {e}")
+            logger.error(f"Injection skipped: {e}")
 
     def _on_closing(self):
         """窗口关闭时清理引用"""
@@ -67,7 +68,7 @@ class SubBrowserManager:
     def execute_action(self, action, url):
         """执行具体的业务逻辑 (订阅/下载等)"""
         workshop_id = self._extract_id(url)
-        print(f"Steam Action: {action} | ID: {workshop_id}")
+        logger.info(f"Steam Action: {action} | ID: {workshop_id}")
         
         if not workshop_id:
             return {"status": "error", "message": "无法识别模组ID"}

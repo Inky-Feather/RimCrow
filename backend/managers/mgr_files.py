@@ -9,6 +9,7 @@ from PIL import Image
 import webview # 引入 webview 库
 from send2trash import send2trash
 from backend.settings import CACHE_DIR
+from backend.utils.logger import logger
 
 
 class LocalAssetHandler(SimpleHTTPRequestHandler):
@@ -55,7 +56,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 return
             except Exception as e:
                 # 在控制台打印详细中文错误方便调试
-                print(f"Asset Server Error ({local_path if 'local_path' in locals() else 'unknown'}): {e}")
+                logger.error(f"Asset Server Error ({local_path if 'local_path' in locals() else 'unknown'}): {e}")
                 # 发送给客户端的必须是 ASCII 字符，不要发送 str(e) 因为可能包含中文
                 try:
                     self.send_error(500, "Internal Server Error")
@@ -104,9 +105,9 @@ class FileManager:
             
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
-            print(f"File Manager: Asset Server started on port {self._port}")
+            logger.info(f"File Manager: Asset Server started on port {self._port}")
         except Exception as e:
-            print(f"File Manager: Failed to start asset server: {e}")
+            logger.error(f"File Manager: Failed to start asset server: {e}")
 
     def get_asset_url(self, local_path):
         """
@@ -176,7 +177,7 @@ class FileManager:
                 img.save(target_path, 'WEBP', quality=80)
                 return target_path
         except Exception as e:
-            # print(f"Thumbnail error for {package_id}: {e}")
+            logger.error(f"Thumbnail error for {package_id}: {e}")
             return None
 
     # =========================================================
@@ -270,7 +271,7 @@ class FileManager:
                 allow_multiple=False,
                 file_types=file_types
             )
-            print(f"用户选择保存路径: {result}")
+            logger.info(f"用户选择保存路径: {result}")
             if result and len(result) > 0:
                 return result[0]
                 

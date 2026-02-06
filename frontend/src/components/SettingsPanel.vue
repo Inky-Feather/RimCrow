@@ -168,9 +168,9 @@
                       <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
                       <CommonInput v-model="testPrompt" placeholder="随便输入一句话，简单测试一下请求是否成功..."></CommonInput>
                       <button class="m-1 h-fit flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-white text-text-dim px-4 py-1.5 w-fit rounded-md" 
-                        :class="[testLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
+                        :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
                         @click="testModel">
-                        <svg v-if="testLoading" class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        <svg v-if="appStore.aiState.isLoading" class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                         测试模型
                       </button>
                       <div v-if="testResponse" class="col-span-2 p-4 rounded-2xl text-text-main/80 bg-accent-special/10 border border-white/5">
@@ -188,8 +188,27 @@
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-6">
                     <CommonSwitch class="col-span-1" label="调试模式" v-model="formData.debug_mode" />
-                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" />
-                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" />
+                    <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
+                    
+                    <!-- 手动检查按钮 -->
+                    <div class="flex items-center justify-between p-3 input-glass">
+                      <div class="flex flex-col">
+                        <span class="text-sm font-bold text-white">软件版本</span>
+                        <span class="text-xs text-text-dim">当前版本: v{{ appStore.appVersion }}</span>
+                      </div>
+                      <button 
+                        @click="appStore.checkUpdate(true)" 
+                        :disabled="appStore.updateState.isChecking"
+                        class="px-4 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold transition-all"
+                      >
+                        <span v-if="appStore.updateState.isChecking" class="flex items-center gap-2">
+                          <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24">...</svg>检查中
+                        </span>
+                        <span v-else>立即检查更新</span>
+                      </button>
+                    </div>
+                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
+                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
                     <CommonNumber class="col-span-1" label="自动备份保留天数" v-model="formData.backup_retention_days" :step="1" />
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
@@ -301,17 +320,14 @@ const handleBrowse = async (pathKey) => {
 // 测试提示词
 const testPrompt = ref("介绍一下自己")
 const testResponse = ref("")
-const testLoading = ref(false)
 // 测试模型
 const testModel = async () => {
-  testLoading.value = true
   const res = await appStore.chatWithAI(testPrompt.value)
   if (res) {
     testResponse.value = res
     console.log("模型测试结果:", res)
     // toast.success("模型测试成功")
   }
-  testLoading.value = false
 }
 
 const fetchAiModels = async () => {

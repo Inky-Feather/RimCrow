@@ -32,6 +32,7 @@ from backend.managers.mgr_download import DownloadManager
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.managers.mgr_ai import AIManager
+from backend.managers.mgr_update import UpdateManager, UpdateInfo
 
 
 def log_api_call(func):
@@ -122,6 +123,7 @@ class API:
         self.steam_mgr = SteamManager()
         self.ai_mgr = AIManager()
         self.browser_window = SubBrowserManager(self)
+        self.update_mgr = UpdateManager()
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -1048,6 +1050,18 @@ class API:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:
             return ApiResponse.error(str(e))
+        
+    @log_api_call
+    def steam_check_status(self, workshop_id: str):
+        """
+        检查 Mod 是否已在 Steam 客户端完成安装
+        """
+        try:
+            wid = int(workshop_id)
+            is_installed = self.steam_mgr.is_subscribed(wid)
+            return ApiResponse.success({"is_installed": is_installed})
+        except Exception as e:
+            return ApiResponse.error(str(e))
 
     @log_api_call
     def steamcmd_download(self, workshop_ids: list):
@@ -1063,10 +1077,11 @@ class API:
             return ApiResponse.success(message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
+        
     
     
     # =========================================================================
-    #  13. AI 功能 (AI Features) - 新增
+    #  13. AI 功能 (AI Features)
     # =========================================================================
 
     @log_api_call
@@ -1131,3 +1146,41 @@ class API:
             return ApiResponse.error(str(e))
     
     
+    # ==========================================
+    #  更新管理 (Updates)
+    # ==========================================
+    def check_update(self, manual=True):
+        """
+        检查版本更新
+        :param manual: 是否为用户手动触发（手动触发不检查跳过版本）
+        """
+        try:
+            info = self.update_mgr.check_all()
+            # 如果是非手动检查，且版本是被跳过的，则返回无更新
+            if not manual and info.version == settings.config.ignored_update_version:
+                return ApiResponse.success({ "has_update": False })
+            settings.set('last_update_check_time', time.time())
+            # 将 dataclass 转为字典传给前端
+            return ApiResponse.success(asdict(info))
+        except Exception as e:
+            return ApiResponse.error(f"检查更新失败: {str(e)}")
+
+    def install_update(self, temp_exe_path):
+        """
+        启动热更新脚本并关闭主程序
+        :param temp_exe_path: 已经下载好的新版本临时文件路径
+        """
+        try:
+            if not os.path.exists(temp_exe_path):
+                return ApiResponse.error("更新包文件不存在")
+            
+            # 调用管理器执行热交换
+            self.update_mgr.execute_hot_swap(temp_exe_path)
+            return ApiResponse.success(message="更新脚本已启动")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    def ignore_version(self, version_str):
+        """跳过当前版本"""
+        settings.set('ignored_update_version', version_str)
+        return ApiResponse.success()

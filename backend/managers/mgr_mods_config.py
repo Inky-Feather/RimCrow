@@ -2,6 +2,7 @@ import os
 import shutil
 import glob
 import datetime
+from backend.utils.logger import logger
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -10,8 +11,8 @@ if __name__ == "__main__":
     # Path(__file__).resolve() 获取当前文件的绝对路径
     # .parents[2] 表示向上跳 3 级 (文件->scanner->backend->项目根目录)
     project_root = Path(__file__).resolve().parents[2]
-    # 调试打印，确保路径对不对
-    print(f"Project Root: {project_root}")
+    # 调试打印，确保路径正确
+    logger.debug(f"Project Root: {project_root}")
     # sys.path 需要字符串类型，所以要用 str() 转换一下
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -64,7 +65,7 @@ class LoadOrderManager:
         if not mods_config_file_path:
             mods_config_file_path = self.mods_config_file
         if not mods_config_file_path or not os.path.exists(mods_config_file_path):
-            print(f"ModsConfig.xml not found: {mods_config_file_path}")
+            logger.warning(f"ModsConfig.xml not found: {mods_config_file_path}")
             return {
                 'active_mods': [],
                 'modify_time': 0
@@ -78,7 +79,7 @@ class LoadOrderManager:
             root = tree.getroot()
             # 结构一般是 <ModsConfigData><activeMods><li>id</li>...</activeMods></ModsConfigData>
             active_node = root.xpath("//activeMods") or root.xpath("//modIds")
-            if active_node is None: print("无法解析非标准 ModsConfig.xml 文件！")
+            if active_node is None: logger.error("无法解析非标准 ModsConfig.xml 文件！")
             active_node = active_node[0]
             if active_node is not None:
                 for li in active_node.findall("li"):
@@ -86,7 +87,7 @@ class LoadOrderManager:
                         # 统一转小写，因为 XML 中 ID 大小写可能不规范，但 ID 实际上不敏感
                         active_list.append(li.text.strip().lower())
         except Exception as e:
-            print(f"读取 ModsConfig.xml 时出错: {e}")
+            logger.error(f"读取 ModsConfig.xml 时出错: {e}")
             
         return {
             'active_mods': active_list,
@@ -112,7 +113,7 @@ class LoadOrderManager:
                 initial_dir=parent_dir or self.other_dir,
                 default_filename=default_name,
             )
-            print(f"用户选择保存路径: {selected}")
+            logger.info(f"用户选择保存路径: {selected}")
             if not selected: return 
             write_path = selected
             
@@ -124,7 +125,7 @@ class LoadOrderManager:
                 try:
                     os.makedirs(parent_dir)
                 except OSError:
-                    print(f"无法创建目录: {parent_dir}")
+                    logger.error(f"无法创建目录: {parent_dir}")
                     raise Exception(f"无法创建目录: {parent_dir}")
             write_path = target_path
 
@@ -169,10 +170,11 @@ class LoadOrderManager:
 
             # 4. 格式化写入
             tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
-            print(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
+            logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
             
         except Exception as e:
+            logger.error(f"保存 ModsConfig.xml 时出错：{e}")
             raise Exception(f"保存 ModsConfig.xml 时出错：{e}")
 
     def _create_backup(self):
@@ -183,7 +185,7 @@ class LoadOrderManager:
         try:
             shutil.copy2(self.mods_config_file, dest)
         except Exception as e:
-            print(f"Backup failed: {e}")
+            logger.error(f"Backup failed: {e}")
 
     def _rotate_backups(self):
         """

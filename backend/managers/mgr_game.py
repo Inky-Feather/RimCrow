@@ -36,8 +36,12 @@ class GameManager:
         # 2. 检测 安装路径 (主要针对 Windows Steam)
         install_loc = self._detect_steam_install_path()
         
+        # 3. 检测 安装路径
         if install_loc and os.path.exists(install_loc):
-            paths['game_install_path'] = install_loc
+            paths['game_install_path'] = ''
+            # 检测 可执行文件是否存在(多平台)
+            if self._detect_executable(install_loc):
+                 paths['game_install_path'] = install_loc
             
             # 推导 Local Mods
             local_mods = os.path.join(install_loc, "Mods")
@@ -52,17 +56,9 @@ class GameManager:
                 paths['workshop_mods_path'] = workshop_base
 
         return paths
-
-    def launch_game(self):
-        """
-        启动 RimWorld 可执行文件
-        """
-        install_path = settings.config.game_install_path
-        if not install_path or not os.path.exists(install_path):
-            return {"status": "error", "message": "游戏安装路径未配置或不存在"}
-
-        # 寻找可执行文件
-        target_exe = None
+    
+    def _detect_executable(self, install_path):
+        """检测游戏可执行文件"""
         system_name = platform.system()
         
         if system_name == 'Windows':
@@ -77,15 +73,26 @@ class GameManager:
             p = os.path.join(install_path, exe)
             # macOS 特殊处理: 如果是 .app 文件夹，用 open 命令
             if system_name == 'Darwin' and exe.endswith('.app') and os.path.exists(p):
-                target_exe = p
-                break
+                return p
             # 其他情况找文件
             if os.path.isfile(p):
-                target_exe = p
-                break
+                return p
+        return None
+
+    def launch_game(self):
+        """
+        启动 RimWorld 可执行文件
+        """
+        install_path = settings.config.game_install_path
+        if not install_path or not os.path.exists(install_path):
+            return {"status": "error", "message": "游戏安装路径未配置或不存在"}
+
+        # 检测可执行文件
+        system_name = platform.system()
+        target_exe = self._detect_executable(install_path)
         
         if not target_exe:
-             return {"status": "error", "message": f"在安装目录下找不到可执行文件: {candidates}"}
+            return {"status": "error", "message": f"在安装目录下找不到可执行文件: {target_exe}"}
 
         try:
             # 非阻塞启动
