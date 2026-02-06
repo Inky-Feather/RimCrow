@@ -33,20 +33,20 @@ class Mod(BaseModel):
     存储从磁盘扫描到的 Mod 固有信息 (只读/缓存性质)
     """
     # 核心标识
-    package_id = CharField(primary_key=True, index=True) # 包名，如 "ludeon.rimworld" (全小写)
-    workshop_id = CharField(null=True)              # 创意工坊ID
-    name = CharField()                              # 名称
-    author = UTF8JSONField(default=list)            # 作者，可能为多人
-    version = CharField(null=True)                  # Mod版本
-    description = TextField(null=True)              # Mod描述
+    package_id = CharField(primary_key=True, index=True)  # 包名，如 "ludeon.rimworld" (全小写)
+    workshop_id = CharField(null=True)                    # 创意工坊ID
+    name = CharField()                                    # 名称
+    author = UTF8JSONField(default=list)                  # 作者，可能为多人
+    version = CharField(null=True)                        # Mod版本
+    description = TextField(null=True)                    # Mod描述
     
     # 路径与来源
-    path = CharField()                              # 本地储存路径，绝对路径
-    url = CharField(null=True)                      # 网络地址，如 github 仓库地址、steam 创意工坊地址
-    source = CharField(default='local')             # 来源，如 steam, local, git, dlc, other
-    icon_path = CharField(null=True)                # 图标路径
-    preview_path = CharField(null=True)             # 预览图片路径
-    gallery_paths = UTF8JSONField(default=list)     # 画廊图片路径列表，包括本地或网络路径 ['img1.jpg', 'img2.jpg']
+    path = CharField()                                    # 本地储存路径，绝对路径
+    url = CharField(null=True)                            # 网络地址，如 github 仓库地址、steam 创意工坊地址
+    source = CharField(default='local')                   # 来源，如 steam, local, git, dlc, other
+    icon_path = CharField(null=True)                      # 图标路径
+    preview_path = CharField(null=True)                   # 预览图片路径
+    gallery_paths = UTF8JSONField(default=list)           # 画廊图片路径列表，包括本地或网络路径 ['img1.jpg', 'img2.jpg']
     
     # 深度扫描信息 (使用 JSON 存列表，方便扩展)
     supported_versions = UTF8JSONField(default=list)      # 支持游戏版本 ['1.4', '1.5']
@@ -60,11 +60,11 @@ class Mod(BaseModel):
     save_breaking = IntegerField(default=0)               # 是否破坏存档 (ModSync)，-1: 破坏, 0：未知, 1: 不破坏 
     
     # 时间戳 (用于增量扫描)
-    mod_update_time = DateTimeField(null=True)      # mod更新时间（通常为steam workshop），用于记录提示
-    file_create_time = DateTimeField(null=True)     # 文件创建时间，用于记录提示
-    file_modify_time = DateTimeField(null=True)     # 文件修改时间，用于增量扫描更新
-    last_active_time = DateTimeField(null=True)     # 上次启用时间，用于排查错误时找到最近启用的Mod
-    last_moved_time = DateTimeField(null=True)      # 上次调整顺序的时间，用于排查错误时找到最近的修改点
+    mod_update_time = DateTimeField(null=True)            # mod更新时间（通常为steam workshop），用于记录提示
+    file_create_time = DateTimeField(null=True)           # 文件创建时间，用于记录提示
+    file_modify_time = DateTimeField(null=True)           # 文件修改时间，用于增量扫描更新
+    last_active_time = DateTimeField(null=True)           # 上次启用时间，用于排查错误时找到最近启用的Mod
+    last_moved_time = DateTimeField(null=True)            # 上次调整顺序的时间，用于排查错误时找到最近的修改点
     
     # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
     # 格式: ["D:/Mods/Harmony_Old", "E:/Steam/Harmony"]
@@ -75,23 +75,22 @@ class UserModData(BaseModel):
     存储用户对 Mod 的自定义数据 (与 Mod 表 1对1，避免重新扫描时丢失)
     """
     mod_id = ForeignKeyField(Mod, backref='user_data', on_delete='CASCADE', primary_key=True) # 外键关联 Mod 表
-    alias_name = CharField(null=True)           # 别名
-    notes = TextField(null=True)                # 用户备注
-    tags = UTF8JSONField(default=list)          # 用户打的标签 ['排队必备', '前置']
-    sign_color = CharField(null=True)           # 标记颜色，用于在UI中分类突显
-    user_mod_type = CharField(null=True)        # Mod类型，如 'Assembly', 'XML', 'LanguagePack'
-    lock_previous_mod = TextField(null=True)    # 联锁的前一个Mod包名，用于固定两个Mod的顺序
-    lock_next_mod = TextField(null=True)        # 联锁的后一个Mod包名，用于固定两个Mod的顺序
+    alias_name = CharField(null=True)                 # 别名
+    notes = TextField(null=True)                      # 用户备注
+    tags = UTF8JSONField(default=list)                # 用户打的标签 ['排队必备', '前置']
+    sign_color = CharField(null=True)                 # 标记颜色，用于在UI中分类突显
+    user_mod_type = CharField(null=True)              # Mod类型，如 'Assembly', 'XML', 'LanguagePack'
+    lock_previous_mod = TextField(null=True)          # 联锁的前一个Mod包名，用于固定两个Mod的顺序
+    lock_next_mod = TextField(null=True)              # 联锁的后一个Mod包名，用于固定两个Mod的顺序
     ignored_issues = UTF8JSONField(default=list)      # 存储忽略的问题 Key 列表 ["id:type:target", ...]
     
-    # 这里可以添加 'category' 字段，如果一个 Mod 只能属一个主分类
     
 class GroupData(BaseModel):
     """
     用户自定义的分组 (如: "硬核生存包", "魔法包")
     """
     group_id = TextField(primary_key=True)   # 分组ID，主键 uuid
-    name = CharField(default='New Group')            # 分组名称
+    name = CharField(default='New Group')    # 分组名称
     color = CharField(default='#ffffff')   # 分组颜色，用于在UI中分类突显
     sort_index = IntegerField(default=0)     # 分组在UI的显示顺序
     is_expanded = BooleanField(default=True) # UI折叠状态
@@ -114,38 +113,44 @@ class SystemInfo(BaseModel):
 
 def init_db(db_path):
     """初始化数据库"""
-    db.init(db_path, pragmas={
-        'journal_mode': 'wal',  # 提高并发读写性能
-        'cache_size': -1024 * 64
-    })
-    db.connect()    # 连接数据库
-    
-    # 检查数据库版本
-    CURRENT_DB_VERSION = __db_version__ 
-    # 确保基础表存在
-    db.create_tables([SystemInfo], safe=True)
-    # 获取当前数据库版本
-    version_record = SystemInfo.get_or_none(SystemInfo.key == 'db_version')
-    
-    if not version_record:
-        # 情况 A: 全新安装，直接创建所有表，safe=True 表示表存在则不创建
-        db.create_tables([Mod, UserModData, GroupData, GroupMod], safe=True)
-        SystemInfo.create(key='db_version', value=CURRENT_DB_VERSION)
-    else:
-        # 情况 B: 旧版本存在，检查是否需要迁移
-        old_v = version_record.value
-        if old_v != CURRENT_DB_VERSION:
-            logger.info(f"检测到版本更新: {old_v} -> {CURRENT_DB_VERSION}. 正在备份并升级...")
-            # 升级前建议备份 .db 文件
-            import shutil
-            shutil.copy2(db_path, db_path + ".bak")
-            
-            # 执行迁移
-            from backend.database.migrator import run_migrations
-            run_migrations(old_v)
-            
-            # 确保其他新加的表（如果迁移里没写的话）也能创建
+    try:
+        db.init(db_path, pragmas={
+            'journal_mode': 'wal',  # 提高并发读写性能
+            'cache_size': -1024 * 64
+        })
+        db.connect()    # 连接数据库
+        
+        # 检查数据库版本
+        CURRENT_DB_VERSION = __db_version__ 
+        # 确保基础表存在
+        db.create_tables([SystemInfo], safe=True)
+        # 获取当前数据库版本
+        version_record = SystemInfo.get_or_none(SystemInfo.key == 'db_version')
+        
+        if not version_record:
+            # 情况 A: 全新安装，直接创建所有表，safe=True 表示表存在则不创建
             db.create_tables([Mod, UserModData, GroupData, GroupMod], safe=True)
+            SystemInfo.create(key='db_version', value=CURRENT_DB_VERSION)
+        else:
+            # 情况 B: 旧版本存在，检查是否需要迁移
+            old_v = version_record.value
+            if old_v != CURRENT_DB_VERSION:
+                logger.info(f"检测到版本更新: {old_v} -> {CURRENT_DB_VERSION}. 正在备份并升级...")
+                # 升级前建议备份 .db 文件
+                import shutil
+                shutil.copy2(db_path, db_path + ".bak")
+                
+                # 执行迁移
+                from backend.database.migrator import run_migrations
+                run_migrations(old_v)
+                
+                # 确保其他新加的表（如果迁移里没写的话）也能创建
+                db.create_tables([Mod, UserModData, GroupData, GroupMod], safe=True)
+                
+    except Exception as e:
+        import traceback
+        logger.error(f"初始化数据库时出错: {traceback.format_exc()}")
+        return False
     
     
     
@@ -185,5 +190,5 @@ def clear_db():
         return True
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        raise Exception(f"清空数据库时出错: {e}")
+        logger.error(f"清空数据库时出错: {traceback.format_exc()}")
+        return False
