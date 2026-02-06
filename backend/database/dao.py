@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 import uuid
 from peewee import chunked, fn, JOIN
 from backend.database.models import db, Mod, UserModData, GroupData, GroupMod
+from backend.utils.logger import logger
 
 
 # 定义不需要更新的字段名 (黑名单)
@@ -370,7 +371,7 @@ class ModDAO:
                     
                     mod.shadow_paths = valid_paths
                     mod.save()
-                    # print(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
+                    logger.info(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
 
         return cleaned_count
     

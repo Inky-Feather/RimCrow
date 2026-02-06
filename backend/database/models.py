@@ -1,6 +1,7 @@
 import json
 from peewee import Model, Field, SqliteDatabase, CharField, TextField, DateTimeField, ForeignKeyField, BooleanField, IntegerField, CompositeKey
 from backend._version import __db_version__
+from backend.utils.logger import logger 
 
 db = SqliteDatabase(None)
 
@@ -119,7 +120,7 @@ def init_db(db_path):
     })
     db.connect()    # 连接数据库
     # safe=True 表示表存在则不创建
-    db.create_tables([Mod, UserModData, GroupData, GroupMod], safe=True)
+    db.create_tables([Mod, UserModData, GroupData, GroupMod, SystemInfo], safe=True)
     # db.close()  # 关闭数据库连接
     # 检查数据库版本
     CURRENT_DB_VERSION = __db_version__ 
@@ -130,10 +131,10 @@ def init_db(db_path):
             SystemInfo.create(key='db_version', value=CURRENT_DB_VERSION)
         elif ver_record.value != CURRENT_DB_VERSION:
             # 版本不匹配！需要迁移或重置
-            print(f"数据库版本过期: {ver_record.value} -> {CURRENT_DB_VERSION}")
+            logger.warning(f"数据库版本过期: {ver_record.value} -> {CURRENT_DB_VERSION}")
             pass 
     except Exception as e:
-        print(f"DB Version check failed: {e}")
+        logger.error(f"DB Version check failed: {e}")
     
     
 def clear_db():

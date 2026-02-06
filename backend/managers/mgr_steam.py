@@ -240,7 +240,7 @@ class SteamManager:
         return t
 
     def _run_steamcmd_process(self, commands, mod_ids):
-        fake_task_id = "steamcmd_batch_" + str(int(time.time()))
+        fake_task_id = "steamcmd_batch_" + str(time.time_ns() // 1000000)
         self._emit_progress(fake_task_id, "Connecting to Steam...", 0, TaskStatus.RUNNING)
 
         try:
