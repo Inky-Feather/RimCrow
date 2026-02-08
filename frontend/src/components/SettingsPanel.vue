@@ -69,10 +69,10 @@
                   </button>
                 </div>
                 <div class="grid gap-6">
-                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleBrowse('game_install_path')" />
+                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse('game_install_path')" :description="formData.game_info" @blur="checkGamePath"/>
                   <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" />
                   <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
-                  <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" />
+                  <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
                 </div>
               </section>
@@ -249,8 +249,9 @@ import {
 } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
+import { createToastInterface } from 'vue-toastification'
 
-// 导入你的 Common UI
+// 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue'
 import CommonInput from './common/input/CommonInput.vue'
@@ -259,6 +260,7 @@ import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
 
+const toast = createToastInterface()
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 
@@ -302,8 +304,31 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
+  // 自动获取游戏信息
+  checkGamePath()
 }
 
+const checkGamePath = async () => {
+  const gameInfo = await appStore.getGameInfo(formData.value.game_install_path)
+  if (!gameInfo || !gameInfo.exe) {
+    // 游戏版本为空时
+    formData.value['game_info'] = `^^未找到游戏可执行文件，请检查路径是否正确！^^`
+    return
+  }
+  formData.value['local_mods_path'] = formData.value.game_install_path + '\\Mods'
+  formData.value['game_info'] = `游戏版本: ${gameInfo.version}\n游戏路径: ${gameInfo.exe}`
+}
+
+const handleGameBrowse = async () => {
+  let current = formData.value
+  const res = await appStore.getFolderPath(current['game_install_path'])
+  if (res) {
+    current['game_install_path'] = res
+    // 自动获取游戏信息
+    checkGamePath()
+  }
+
+}
 const handleBrowse = async (pathKey) => {
   // 处理嵌套路径 (如 'steam.steamcmd_path')
   const keys = pathKey.split('.')
@@ -314,7 +339,10 @@ const handleBrowse = async (pathKey) => {
   const lastKey = keys[keys.length - 1]
   
   const res = await appStore.getFolderPath(current[lastKey])
-  if (res) current[lastKey] = res
+  if (res) {
+    current[lastKey] = res
+  }
+
 }
 
 // 测试提示词

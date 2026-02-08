@@ -6,10 +6,6 @@
     >
       <!-- 状态图标：Steam 蓝或本地绿 -->
       <div class="relative flex items-center justify-center">
-        <div 
-          class="size-2 rounded-full animate-pulse-soft shadow-[0_0_8px_currentColor]"
-          :class="profileStore.currentProfile?.is_steam ? 'text-blue-400 bg-blue-400' : 'text-accent-success bg-accent-success'"
-        ></div>
         <div class="absolute inset-0 rounded-full bg-current opacity-20 animate-ping"></div>
       </div>
 
@@ -34,13 +30,13 @@
             class="w-full flex items-center gap-3 px-2 py-1 rounded-xl transition-all duration-200 group/item"
             :class="p.id === profileStore.currentProfileId ? 'bg-accent-primary/10 border border-accent-primary/20' : 'hover:bg-white/5 border border-transparent'"
           >
-            <component :is="p.is_steam ? SteamIcon : Folder" class="size-4" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-dim'" />
+            <component :is="p.use_workshop_mods ? SteamIcon : Folder" class="size-4" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-dim'" />
             <div class="flex-1 text-left">
               <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-white/80'">{{ p.name }}</div>
               <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || '未知版本' }}</div>
             </div>
-            <Quote v-tooltip="p.description" class="size-4 text-text-dim hover:text-accent-primary hover:scale-120 transition-all duration-300" />
-            <div v-if="p.id === profileStore.currentProfileId" class="size-2 rounded-full bg-accent-primary shadow-[0_0_8px_#06b6d4]"></div>
+            <Quote v-if="p.description" v-tooltip="p.description" class="size-4 text-text-dim hover:text-accent-primary hover:scale-120 transition-all duration-300" />
+            <div :class="{'opacity-5':p.id !== profileStore.currentProfileId}" class="size-2 rounded-full bg-accent-primary shadow-[0_0_8px_#06b6d4]"></div>
           </button>
         </div>
 

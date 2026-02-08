@@ -1,6 +1,6 @@
 <!-- components/common/input/CommonSwitch.vue -->
 <template>
-  <div :aria-disabled="disabled" class="flex items-center justify-between p-2 aria-disabled:pointer-events-none aria-disabled:opacity-50" 
+  <div :aria-disabled="disabled" class="flex items-center justify-between py-2 px-3 aria-disabled:pointer-events-none aria-disabled:opacity-50" 
     :class="[mini?'':'input-glass']">
     <div class="flex flex-col">
       <span class="text-sm font-bold text-white tracking-wide">{{ label }}

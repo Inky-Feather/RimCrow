@@ -1,5 +1,5 @@
 <template>
-  <div class="relative flex h-full min-h-[400px] w-full flex-col overflow-hidden bg-slate-950 rounded-md">
+  <div class="relative flex h-full min-h-100 w-full flex-col overflow-hidden bg-slate-950 rounded-md">
     
     <!-- 1. 上方空间 -->
     <div class="relative z-20 flex flex-col items-center justify-end ">

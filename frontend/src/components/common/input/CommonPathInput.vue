@@ -12,29 +12,22 @@
       </button>
     </div>
     
-    <div class="flex items-center gap-1.5 group w-full">
+    <div :class="{' opacity-50 cursor-not-allowed pointer-events-none': readOnly}" class="flex items-center gap-1.5 group w-full">
       <!-- 路径显示区 -->
-      <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0"
-        v-tooltip="modelValue || '未配置路径'"
-      >
+      <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0" v-tooltip="modelValue || '未配置路径'" >
         <!-- 固定前缀标签 -->
         <div class="shrink-0 mr-2 text-text-dim/40 italic text-xs font-mono uppercase select-none">Path</div>
         
         <!-- 手动输入框 -->
-        <input 
-          type="text"
-          :value="modelValue"
-          @input="$emit('update:modelValue', $event.target.value)"
+        <input type="text" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)"
           :placeholder="placeholder || '请输入或粘贴路径...'"
           class="flex-1 bg-transparent text-sm text-white/90 font-mono outline-none min-w-0 "
           :class="{ 'direction-rtl': !isFocused }"
-          @focus="isFocused = true"
-          @blur="isFocused = false"
+          @focus="isFocused = true" @blur="isFocused = false; $emit('blur')"
         />
 
         <!-- 路径状态指示灯 -->
-        <div 
-          class="shrink-0 size-1 rounded-full ml-2 transition-all duration-500"
+        <div class="shrink-0 size-1 rounded-full ml-2 transition-all duration-500"
           :class="[
             modelValue ? 'bg-accent-success shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-accent-danger shadow-[0_0_8px_rgba(239,68,68,0.5)]',
             modelValue ? 'opacity-100' : 'opacity-40 animate-pulse'
@@ -44,7 +37,7 @@
       </div>
 
       <!-- 浏览按钮 -->
-      <button @click="$emit('browse')"
+      <button v-if="!readOnly" @click="$emit('browse')"
         class="shrink-0 h-9 w-9 flex items-center justify-center bg-accent-primary/10 border border-accent-primary/30 rounded-lg text-accent-primary hover:bg-accent-primary hover:text-black transition-all duration-300 active:scale-90 shadow-lg"
         v-tooltip="'通过文件浏览器选择'"
       >
@@ -68,7 +61,7 @@ const props = defineProps({
   description: String,
 })
 
-defineEmits(['browse', 'update:modelValue'])
+defineEmits(['browse', 'update:modelValue', 'blur'])
 const appStore = useAppStore()
 
 // 焦点状态管理

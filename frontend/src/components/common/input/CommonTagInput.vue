@@ -4,7 +4,7 @@
     <label class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 mb-1">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
     </label>
-    <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-[42px] content-start focus-within:border-accent-primary/40">
+    <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-6 content-start focus-within:border-accent-primary/40">
       
       <!-- 已有 Tag -->
       <transition-group name="list">

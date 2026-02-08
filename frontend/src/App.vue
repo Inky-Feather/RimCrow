@@ -1,6 +1,6 @@
 <template>
   <div class="relative h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
-    <RimHeader/>
+    <RimHeader class="z-100" />
     
     <!-- 主工作区 -->
     <div class="flex-1 flex flex-col min-h-0 relative">
@@ -114,11 +114,8 @@
           </div>
 
           <!-- 动态分割线 -->
-          <Resizer 
-            v-if="index < visibleColumns.length - 1" 
-            :active="resizeState.activeIndex === index" 
-            @mousedown="startResize(index, $event)" 
-          />
+          <Resizer v-if="index < visibleColumns.length - 1" :active="resizeState.activeIndex === index" 
+            @mousedown="startResize(index, $event)" />
 
         </template>
         
@@ -192,9 +189,7 @@
     </Teleport>
 
     <!-- 日志 -->
-    <div v-show="appStore.uiState.showLogDrawer" @click.self="appStore.uiState.showLogDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999">
-      <LogViewer />
-    </div>
+    <LogViewer />
 
     <!-- 测试 -->
     <div v-if="appStore.settings.debug_mode">
@@ -204,16 +199,14 @@
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver />
 
-    <ProfileDrawer /> <!-- 挂载环境管理抽屉 -->
+    <!-- 环境管理抽屉 -->
+    <ProfileDrawer /> 
     
     <!-- 设置弹窗 -->
     <SettingsModal />
 
     <!-- 规则面板 -->
-    <RulePanel v-if="appStore.uiState.showRuleDrawer" @close="appStore.uiState.showRuleDrawer = false" />
-
-    <!-- 状态条 -->
-    <StatusBar class="relative z-20 flex-none" />
+    <RulePanel />
 
     <!-- 确认弹窗 -->
     <Confirm />
@@ -224,6 +217,8 @@
     <!-- 悬浮面板 -->
     <HoverPanel />
 
+    <!-- 状态条 -->
+    <StatusBar class="relative z-20 flex-none" />
   </div>
 </template>
 
@@ -445,8 +440,7 @@ const Resizer = (props, { emit }) => {
     onMousedown: (e) => emit('mousedown', e)
   }, [
     // 视觉线：平时是细线，Active/Hover 时变色
-    h('div', {
-      class: ['w-px rounded-full transition-all duration-200 ease-out pointer-events-none',
+    h('div', { class: ['w-px rounded-full transition-all duration-200 ease-out pointer-events-none',
         // 高度变化：平时短一点显得优雅，交互时变全高
         props.active ? 'h-9/10' : 'h-2/5 group-hover:h-8/10',
         // 颜色与发光变化
