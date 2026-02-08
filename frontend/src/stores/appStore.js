@@ -8,6 +8,7 @@ import { useGroupStore } from './groupStore'
 import { useOrderStore } from './orderStore'
 import { useRuleStore } from './ruleStore'
 import { useConfirmStore } from './confirmStore'
+import { useProfileStore } from './profileStore'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
@@ -24,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
     showLogDrawer: false,        // 是否显示日志抽屉
     showTestDrawer: false,       // 是否显示测试抽屉
     showRuleDrawer: false,       // 是否显示规则抽屉
+    showProfileDrawer: false,    // 是否显示环境抽屉
   })
   // 扫描进度
   const scanProgress = reactive({
@@ -55,14 +57,17 @@ export const useAppStore = defineStore('app', () => {
   const settings = ref({
     // --- 路径 (Paths) ---
     game_install_path: '',
-    game_data_path: '',
+    user_data_path: '',
     game_config_path: '',
     workshop_mods_path: '',
     local_mods_path: '',
+    use_workshop_mods: true,
     home_path: '',
     community_rules_url: '',
     community_rules_path: '',
     user_rules_path: '',
+    game_version: '',
+    current_profile_id: 'default',
 
     // --- 系统 ---
     language: 'ZH-cn',
@@ -206,8 +211,17 @@ export const useAppStore = defineStore('app', () => {
       await waitForBackend()
       // 注册事件监听
       setupEventListeners()
+
+      // 先获取 Profile 列表和当前 ID
+      const profileStore = useProfileStore()
+      await profileStore.fetchProfiles()
+
       // 获取初始数据 (这里包含 settings, version 等)
-      await refreshData(true) 
+      await refreshData(true)
+      // 同步当前 Profile ID 到 profileStore
+      if (settings.value.current_profile_id) {
+        profileStore.currentProfileId = settings.value.current_profile_id
+      }
       // 自动检查更新逻辑
       if (settings.value.enable_auto_update_check) {
         // 距离上次检查超过1天则检查更新
@@ -404,6 +418,14 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  // 数据库孤立数据清理
+  const performDatabaseCleanup = async () => {
+    const res = await window.pywebview.api.perform_database_cleanup()
+    if (checkResult(res, '数据库深度清理')) {
+      toast.success('无效数据清理完成，正在刷新列表...')
+      await refreshData()
+    }
+  }
   // 变更 UI 状态
   const toggleUiState = (key) => {
     uiState[key] = !uiState[key]
@@ -447,6 +469,14 @@ export const useAppStore = defineStore('app', () => {
         toast.success("路径已更新")
       }
       return res.data.paths
+    }
+  }
+  // 获取游戏信息
+  const getGameInfo = async () => {
+    if(!window.pywebview) return
+    const res = await window.pywebview.api.get_game_info()
+    if (checkResult(res, "获取游戏信息")) {
+      return res.data
     }
   }
   // 打开路径
@@ -601,10 +631,10 @@ export const useAppStore = defineStore('app', () => {
     aiState.isLoading = false
   }
   // 与AI聊天
-  const chatWithAI = async (prompt) => {
+  const chatWithAI = async (prompt, temp_config) => {
     if (!window.pywebview) return
     aiState.isLoading = true
-    const res = await window.pywebview.api.ai_chat(prompt)
+    const res = await window.pywebview.api.ai_chat(prompt, temp_config)
     if (checkResult(res, "与AI聊天")) {
       aiState.isLoading = false
       return res.data
@@ -690,8 +720,9 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, aiState,
-    initialize, checkResult, refreshData, toggleUiState, scalePx,
-    launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, openUrl, startDownload, waitForDownload, 
+    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup,
+    // 游戏相关
+    getGameInfo, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, openUrl, startDownload, waitForDownload, 
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, 
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod, checkUpdate, 
     getAiConfig, saveAIConfig, useAI, fetchAiModels, chatWithAI

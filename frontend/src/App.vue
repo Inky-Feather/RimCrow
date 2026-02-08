@@ -203,6 +203,8 @@
     </div>
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver />
+
+    <ProfileDrawer /> <!-- 挂载环境管理抽屉 -->
     
     <!-- 设置弹窗 -->
     <SettingsModal />
@@ -249,8 +251,11 @@ import DebugPanel from './components/DebugPanel.vue'
 import RulePanel from './components/RulePanel.vue'
 import ModRuleEditor from './components/ModRuleEditor.vue'
 import Confirm from './components/common/Confirm.vue'
-import Test from './components/temp/test.vue'
 import SegmentedTabs from './components/utils/SegmentedTabs.vue'
+import ProfileDrawer from './components/ProfileDrawer.vue'
+import Test from './components/temp/test.vue'
+
+
 
 const appStore = useAppStore()
 const modStore = useModStore()

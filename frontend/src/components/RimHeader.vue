@@ -9,10 +9,11 @@
         <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
       </h1>
       <span class="px-2 py-0.5 rounded text-xs bg-white/5 text-text-dim border border-white/5 ">v {{ appStore.appVersion }}</span>
+      <!-- 环境切换器 -->
+      <ProfileSwitcher />
     </div>
 
     <div class="flex items-center gap-3">
-
       <button v-if="appStore.settings.debug_mode" @click="appStore.toggleUiState('showTestDrawer')" v-tooltip="`测试页面`"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-white transition bg-transparent">
         测试
@@ -65,6 +66,7 @@
 <script setup>
 import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification";
+import ProfileSwitcher from './utils/ProfileSwitcher.vue';
 
 
 const toast = useToast();
