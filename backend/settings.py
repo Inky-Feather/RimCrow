@@ -89,14 +89,16 @@ class AppConfig:
     """
     # --- 路径设置 ---
     game_install_path: str = ""
-    game_data_path: str = ""  # RimWorld 数据文件夹 (Ludeon Studios...)
+    user_data_path: str = ""    # 用户数据文件夹 (Ludeon Studios...)
     game_config_path: str = ""  # RimWorld 配置文件夹 (Ludeon Studios...)
-    workshop_mods_path: str = ""
     local_mods_path: str = ""
+    workshop_mods_path: str = ""
+    use_workshop_mods: bool = True
     home_path: str = str(Path(os.getcwd())) # 本程序路径
     
     # --- 游戏设置 ---
     game_version: str = ""
+    current_profile_id: str = "default"   # 当前激活的环境ID
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言
@@ -189,6 +191,10 @@ class SettingsManager:
                 # 处理 hosts
                 if 'hosts' in net_data:
                     cfg.network.hosts = net_data['hosts']
+                
+# ================================临时变更修复 (记得以后删除)===========================================================
+                if (not cfg.user_data_path and data.get('game_data_path')):
+                    cfg.user_data_path = net_data['game_data_path']
 
             return cfg
 
@@ -247,7 +253,8 @@ class SettingsManager:
 
     def validate_paths(self) -> bool:
         """检查核心路径是否配置且有效"""
-        p1 = self.config.game_install_path
+        from backend.managers.mgr_game import GameManager
+        p1 = GameManager.detect_executable(self.config.game_install_path)
         p2 = self.config.game_config_path
         
         if p1 and os.path.exists(p1) and p2 and os.path.exists(p2):

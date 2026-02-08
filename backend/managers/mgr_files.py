@@ -1,5 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
 import shutil
+import tempfile
 import threading
 import subprocess
 import platform
@@ -81,6 +83,8 @@ class FileManager:
     3. 提供文件/文件夹打开操作
     4. 提供本地路径到 URL 的转换
     """
+    # 定义内部常量，统一管理链接目录名
+    LINK_PREFIX = "_Link_" # 使用统一前缀识别由管理器创建的链接
     
     def __init__(self):
         # 1. 确保存储目录存在
@@ -276,5 +280,160 @@ class FileManager:
                 return result[0]
                 
         return None
+    
+    
+    # =========================================================
+    #  4. 动态链接部署 (Junction/Symlink)
+    # =========================================================
+
+    @staticmethod
+    def sync_links(local_mods_path, workshop_mod_paths: list):
+        """
+        极致增量同步逻辑：
+        1. 只要不在 workshop_mod_paths 里的链接，全部物理删除。
+        2. 指向路径错误的链接，全部删除并重建。
+        3. 已经正确指向的链接，绝对不动（0操作）。
+        """
+        # logger.info(f"Sync links: local_mods_path={local_mods_path}, workshop_mod_paths={workshop_mod_paths}")
+        if not local_mods_path or not os.path.exists(local_mods_path):
+            logger.error("Sync links failed: Local mods path does not exist.")
+            return False
+
+        # --- 1. 准备目标清单 (使用小写 Key 解决 Windows 大小写不敏感问题) ---
+        target_map = {}
+        for src in workshop_mod_paths:
+            if not src: continue
+            wid = os.path.basename(src)
+            link_name = f"{FileManager.LINK_PREFIX}{wid}"
+            # 存入规范化的绝对路径用于比对
+            target_map[link_name.lower()] = {
+                'raw_name': link_name,
+                'src_path': os.path.normpath(os.path.abspath(src))
+            }
+
+        # --- 2. 扫描磁盘并识别“必须删除”的项 ---
+        # 我们遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
+        to_delete_paths = []
+        existing_valid_keys = set()
+
+        try:
+            for name in os.listdir(local_mods_path):
+                # 仅处理由本管理器管理的文件夹/链接 (带前缀)
+                if name.startswith(FileManager.LINK_PREFIX):
+                    name_lower = name.lower()
+                    full_path = os.path.normpath(os.path.join(local_mods_path, name))
+                    
+                    # 判定逻辑：
+                    # A. 这个名字在目标清单里吗？
+                    if name_lower in target_map:
+                        expected_src = target_map[name_lower]['src_path']
+                        # B. 它是否已经正确指向了目标？
+                        if FileManager._is_link_correct(full_path, expected_src):
+                            # 完全正确，记录下来，后续不需要重复创建
+                            existing_valid_keys.add(name_lower)
+                            continue 
+                    
+                    # 如果运行到这里，说明：
+                    # 1. 名字不在目标清单 (不再需要的 Mod)
+                    # 2. 名字在清单但指向错误 (需要重建)
+                    # 3. 这是一个断头链接 (指向的源已删)
+                    to_delete_paths.append(full_path)
+        except OSError as e:
+            logger.error(f"Scan directory failed: {e}")
+
+        # --- 3. 执行物理删除 (针对 Windows Junction 的强力清除) ---
+        if to_delete_paths:
+            logger.info(f"Cleaning {len(to_delete_paths)} stale links...")
+            # 关键优化点：不再循环调用 subprocess，而是批量处理
+            FileManager._remove_entries_windows_batch(to_delete_paths)
+
+        # --- 4. 计算需要补齐的链接 ---
+        links_to_create = []
+        for key, info in target_map.items():
+            if key not in existing_valid_keys:
+                dst_path = os.path.join(local_mods_path, info['raw_name'])
+                links_to_create.append((info['src_path'], dst_path))
+
+        # --- 5. 执行闪电创建 ---
+        if links_to_create:
+            logger.info(f"Creating {len(links_to_create)} missing links...")
+            FileManager._create_links_windows_batch(links_to_create)
+
+        logger.info(f"Sync Result -> Kept: {len(existing_valid_keys)}, Created: {len(links_to_create)}, Deleted: {len(to_delete_paths)}")
+        return True
+
+    @staticmethod
+    def _is_link_correct(link_path, expected_src):
+        """判断链接是否有效且指向正确"""
+        try:
+            # lexists 用于检测路径是否存在（包括断头链接）
+            if not os.path.lexists(link_path): 
+                return False
+            # samefile 会抛出异常如果路径不存在，所以这里必须配合 try
+            # 它能跨越斜杠差异和大小写差异判断物理底层是否一致
+            return os.path.samefile(link_path, expected_src)
+        except:
+            return False
+
+    @staticmethod
+    def _remove_entries_windows_batch(paths: list):
+        """
+        最高效的 Windows 删除方式：
+        将所有 rd 指令写入一个批处理文件，一次性调用。
+        """
+        if not paths: return
+        
+        if platform.system() != 'Windows':
+            # 非 Windows 系统，Python 原生 unlink 极快，不需要批处理
+            for path in paths:
+                try:
+                    if os.path.islink(path): os.unlink(path)
+                    else: shutil.rmtree(path, ignore_errors=True)
+                except: pass
+            return
+
+        # 构造批量删除指令
+        # rd /s /q 强制删除目录或 Junction
+        lines = [f'rd /s /q "{os.path.normpath(p)}"' for p in paths]
+        batch_content = "@echo off\n" + "\n".join(lines)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix="_del.bat", mode="w", encoding="gbk") as tf:
+            tf.write(batch_content)
+            temp_path = tf.name
+
+        try:
+            # 只启动一个进程，执行成百上千条删除指令
+            subprocess.run(temp_path, shell=True, capture_output=True, check=True)
+        except Exception as e:
+            logger.error(f"Batch delete failed: {e}")
+            # 如果批处理失败，尝试最后的原生备份方案
+            for p in paths:
+                try: os.rmdir(p)
+                except: pass
+        finally:
+            if os.path.exists(temp_path): os.remove(temp_path)
+    
+    @staticmethod
+    def _create_links_windows_batch(link_tasks: list):
+        """批处理创建逻辑 (保持之前的高效实现)"""
+        if not link_tasks: return
+        if platform.system() != 'Windows':
+            for src, dst in link_tasks:
+                try: os.symlink(src, dst)
+                except: pass
+            return
+
+        lines = [f'mklink /j "{dst}" "{src}"' for src, dst in link_tasks]
+        batch_content = "@echo off\n" + "\n".join(lines)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bat", mode="w", encoding="gbk") as tf:
+            tf.write(batch_content)
+            temp_path = tf.name
+
+        try:
+            subprocess.run(temp_path, shell=True, capture_output=True, check=True)
+        finally:
+            if os.path.exists(temp_path): os.remove(temp_path)
+    
     
     
