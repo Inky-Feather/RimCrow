@@ -3,15 +3,12 @@
   <Teleport to="body">
     <Transition name="scale">
       <div v-if="menuStore.show" ref="menuRef"
-        class="fixed z-9999 min-w-[150px] py-0.5 rounded-xl border border-text-dim/20 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-bg-deep/5 shadow-black/40"
+        class="fixed z-9999 min-w-[160px] py-[2px] rounded-xl border border-text-dim/20 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-bg-deep/5 shadow-black/40"
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
-        :style="menuStyle"
-        @contextmenu.prevent
+        :style="menuStyle" @contextmenu.prevent
       >
-        <ContextMenuItem 
-          v-for="(item, idx) in menuStore.items" 
-          :key="idx + '-' + menuStore.x + '-' + menuStore.y" 
-          :item="item"
+        <ContextMenuItem v-for="(item, idx) in menuStore.items" 
+          :key="idx + '-' + menuStore.x + '-' + menuStore.y" :item="item"
           @close-menu="menuStore.close()"
         />
       </div>

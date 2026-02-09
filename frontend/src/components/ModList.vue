@@ -109,9 +109,14 @@
         </Motion>
       </div>
     </div>
+    
+    <!-- 如果正在加载中，不渲染虚拟列表，防止 DOM 引擎崩溃 -->
+    <div v-if="appStore.isLoading" class="w-full h-full flex items-center justify-center bg-bg-deep/50 z-50">
+        <div class="animate-spin size-8 border-4 border-accent-primary border-t-transparent rounded-full"></div>
+    </div>
     <!-- (tabindex="0" @keydown.ctrl.a.prevent="selectAll") 非焦点容器需要 tabindex 才能响应键盘事件 -->
     <!-- 列表区（底部渐变隐藏） -->
-    <div class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
+    <div v-else class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent"
         tabindex="0" @keydown.up.prevent="handleKeyNav(-1)"
@@ -129,12 +134,8 @@
           @lineClick="handleLineClick"
         />
       </div>
-      <!-- 如果正在加载中，不渲染虚拟列表，防止 DOM 引擎崩溃 -->
-      <div v-if="appStore.isLoading" class="absolute inset-0 flex items-center justify-center bg-bg-deep/50 z-50">
-          <div class="animate-spin size-8 border-4 border-accent-primary border-t-transparent rounded-full"></div>
-      </div>
       <!-- 列表主体部分 -->
-      <div v-else @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
+      <div @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
         <!-- 列表为空时的提示 -->
         <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed border-text-dim/60 text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
             可拖拽模组到此

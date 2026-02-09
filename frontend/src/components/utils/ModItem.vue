@@ -258,17 +258,17 @@ const handleContextMenu = async (event) => {
   const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5,
+    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配表情',
       children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4,
+    { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4, label: '批量加入分组',
       children: groupStore.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
         label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => modStore.selectModsGroup(group.group_id)
       }))}]
     },
-    { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 
+    { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
         children:[...MOD_COLOR_LIST.map(c => ({ tooltip: c, color: c, 
           active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
         })), 

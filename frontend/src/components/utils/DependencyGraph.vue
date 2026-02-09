@@ -402,12 +402,12 @@ let animationFrameId
 const draw = () => {
   const canvas = canvasRef.value
   const ctx = canvas?.getContext('2d')
-  if (!ctx || !props.scrollElement) return // 等待 DOM 就绪
+  if (!ctx ) return // 等待 DOM 就绪
 
   // 尺寸同步
   const width = canvas.width
   const height = canvas.height
-  const scrollTop = props.scrollElement.getOffset() || 0
+  const scrollTop = props.scrollElement?.getOffset ? props.scrollElement.getOffset() : 0
 
   // 视口优化
   const viewportStart = Math.floor(scrollTop / props.itemHeight)
