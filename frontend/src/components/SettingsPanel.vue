@@ -60,7 +60,7 @@
           <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div class=" mx-auto space-y-10">
 
-              <!-- 1. 路径设置 (Paths) -->
+              <!-- 路径设置 (Paths) -->
               <section v-if="currentTab === 'paths'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center justify-between mb-6">
                   <h3 class="text-lg font-bold text-white">路径配置</h3>
@@ -77,7 +77,7 @@
                 </div>
               </section>
 
-              <!-- 2. 常规设置 (General) -->
+              <!-- 常规设置 (General) -->
               <section v-if="currentTab === 'general'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">界面与环境</h3>
                 <div class="space-y-6">
@@ -91,8 +91,8 @@
                   </div> -->
                   <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
                   <div class="grid grid-cols-2 gap-6">
-                    <CommonNumber label="字体大小" v-model="formData.ui.font_size" :step="1" />
-                    <CommonNumber label="提示悬停时间" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <CommonNumber label="字体大小" description="控制界面字体大小，影响所有控件的内容显示" v-model="formData.ui.font_size" :step="1" />
+                    <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" />
                     <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
                     <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
                       <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
@@ -115,7 +115,27 @@
                 </div>
               </section>
 
-              <!-- 3. 社区 设置 -->
+              <!-- 功能设置 -->
+              <section v-if="currentTab === 'features'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">功能设置</h3>
+                <div class="space-y-6">
+                  <div class="grid grid-cols-2 gap-6">
+                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
+                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
+                    <CommonSelect class="col-span-1" label="排序顺序" v-model="formData.sort_mods_by" showBottom
+                      description="影响自动排序时同档次的Mod顺序，处理优先级是 别名>原名>包名，所以即使Mod没有别名，也能按原名参与排序。" 
+                      :options="[{label:'按别名', value:'alias'},{label:'按原名', value:'name'},{label:'按包名', value:'id'}]" />
+                    <CommonSelect class="col-span-1" label="共存Mod文件夹生成方式" v-model="formData.coexist_mod_name_with" showBottom
+                      description="影响创建共存Mod时的文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名参与排序。" 
+                      :options="[{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias'}]" />
+                    <CommonSwitch class="col-span-1" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" description="关闭后，将使用普通方式启动游戏。" />
+                    <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
+                    <CommonNumber class="col-span-1" label="自动备份保留天数" description="管理自动备份的最长保留时间，手动备份不受影响。" v-model="formData.backup_retention_days" :step="1" />
+                  </div>
+                </div>
+              </section>
+
+              <!-- 社区设置 -->
               <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">社区配置管理</h3>
                 <div class="space-y-6">
@@ -127,7 +147,7 @@
                 </div>
               </section>
 
-              <!-- 4. 网络设置 (Network) -->
+              <!-- 网络设置 (Network) -->
               <section v-if="currentTab === 'network'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">网络协议与代理</h3>
                 <div class="space-y-8">
@@ -148,7 +168,7 @@
                 </div>
               </section>
 
-              <!-- 5. AI 设置 (AI) -->
+              <!-- AI 设置 (AI) -->
               <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center gap-3 mb-6">
                   <h3 class="text-lg font-bold text-white">人工智能</h3>
@@ -182,14 +202,13 @@
                 </div>
               </section>
 
-              <!-- 6. 开发与调试 -->
+              <!-- 开发与调试 -->
               <section v-if="currentTab === 'dev'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">开发与调试</h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-6">
-                    <CommonSwitch class="col-span-1" label="调试模式" v-model="formData.debug_mode" />
+                    <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
                     <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
-                    
                     <!-- 手动检查按钮 -->
                     <div class="flex items-center justify-between p-3 input-glass">
                       <div class="flex flex-col">
@@ -207,9 +226,6 @@
                         <span v-else>立即检查更新</span>
                       </button>
                     </div>
-                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
-                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
-                    <CommonNumber class="col-span-1" label="自动备份保留天数" v-model="formData.backup_retention_days" :step="1" />
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
                   </div>
@@ -243,10 +259,7 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h } from 'vue'
-import { 
-  FolderTree, AppWindow, Globe, Cpu, Terminal, 
-  Search, ShieldAlert, Settings
-} from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { createToastInterface } from 'vue-toastification'
@@ -274,6 +287,7 @@ const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const tabs = [
   { id: 'paths', label: '路径配置', icon: FolderTree },
   { id: 'general', label: '界面设置', icon: AppWindow },
+  { id: 'features', label: '功能设置', icon: Component },
   { id: 'community', label: '社区配置', icon: Steam },
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },

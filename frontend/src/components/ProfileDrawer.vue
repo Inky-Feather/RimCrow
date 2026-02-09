@@ -13,7 +13,7 @@
         </div>
 
         <!-- 2. 主体容器 -->
-        <div class="flex-1 flex flex-col bg-bg-highlight/80 backdrop-blur-xl rounded-l-none rounded-r-2xl border-y border-r transition-all duration-300 border-text-main/10 shadow-3xl overflow-hidden relative"
+        <div class="flex-1 flex flex-col bg-bg-highlight/90 backdrop-blur-xl rounded-l-none rounded-r-2xl border-y border-r transition-all duration-300 border-text-main/10 shadow-3xl overflow-hidden relative"
           :class="{'blur-sm pointer-events-none': profileStore.isLoading}">
           
           <!-- 头部：标题与快速新建 -->
@@ -201,7 +201,7 @@ const openCreate = () => {
   form.description = ''
   form.game_install_path = appStore.settings.game_install_path
   form.user_data_path = ''
-  form.use_workshop_mods = appStore.settings.use_workshop_mods
+  form.use_workshop_mods = false
   form.copy_current_data = false
   isEditing.value = false
   showModal.value = true

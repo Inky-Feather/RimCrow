@@ -166,6 +166,21 @@
           </template>
         </virtual-list>
 
+        <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
+          <!-- 添加未启用的依赖项 -->
+          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length > 0" @click="addInactiveDependency" 
+            v-tooltip="`^^一键添加共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length || 0} 个未启用的依赖项^^`"
+            class="px-1 py-1 bg-accent-secondary/80 text-text-main/50 rounded-md hover:bg-accent-secondary hover:text-text-main transition-all" >
+            <MessageSquarePlus />
+          </button>
+          <!-- 移除所有无效Mod -->
+          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length > 0" @click="removeInvalidMod" 
+            v-tooltip="`^^一键移除共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length || 0} 个无效Mod^^`"
+            class="px-1 py-1 bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all" >
+            <Trash2 />
+          </button>
+        </div>
+
       </div>
 
     </div>
@@ -182,10 +197,11 @@ import { useAppStore } from '../stores/appStore';
 import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
 import { generateHtmlHelp } from '../modules/search/SearchHelp'
-import { ISSUE_TITLE_MAP } from '../utils/constants';
+import { ISSUE_TITLE_MAP, ISSUE_TYPE } from '../utils/constants';
 import ModItem from './utils/ModItem.vue';
 import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
+import { MessageSquarePlus, Trash2 } from 'lucide-vue-next';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -536,8 +552,8 @@ const updateChildren = async (e) => {
   }
 
   // 2. 核心算法：计算“纯净插入点”
-  // 我们需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
-  // 这样我们就可以在剔除移动项后的 baseList 中找到正确的插入位置
+  // 需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
+  // 在剔除移动项后的 baseList 中找到正确的插入位置
   let validItemsAbove = 0
   for (let i = 0; i < e.newIndex; i++) {
     const idAtLoc = dirtyIds[i]
@@ -617,6 +633,50 @@ const updateChildren = async (e) => {
   await nextTick()
   isSortAsc.value=!isSortAsc.value
 }
+// 添加缺失的依赖项
+const addInactiveDependency = async () => {
+  const issuesMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]
+  // 筛选出所有缺失的依赖项
+  const inactiveDependencies = []
+  issuesMods.forEach(id => {
+    modStore.modIssues.get(id).forEach(issue => {
+      // 筛选出缺失的依赖项
+      if(issue.type === ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY) {
+        inactiveDependencies.push(issue.targetId)
+      }
+    })
+  })
+  const uniqueInactiveDependencies = [...new Set(inactiveDependencies)]
+  // console.log('添加缺失的依赖项:', uniqueInactiveDependencies)
+  const oldIds = [...props.modelValue]
+  modStore.removeIdsOnAllList(uniqueInactiveDependencies)
+  oldIds.push(...uniqueInactiveDependencies)
+  emit('update:modelValue', oldIds)
+  // 更新移动时间
+  modStore.takeModListByIds(uniqueInactiveDependencies).forEach(mod => {
+    mod.last_moved_time = Date.now()
+    mod.last_active_time = Date.now()
+  })
+  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+  await nextTick()
+  // 通过翻转排序两次，实现软重绘
+  isSortAsc.value=!isSortAsc.value
+  await nextTick()
+  isSortAsc.value=!isSortAsc.value
+}
+// 移除无效的mod
+const removeInvalidMod = async () => {
+  const invalidMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_FILE]
+  // console.log('移除无效的Mod:', invalidMods)
+  modStore.removeIdsOnAllList(invalidMods)
+  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+  await nextTick()
+  // 通过翻转排序两次，实现软重绘
+  isSortAsc.value=!isSortAsc.value
+  await nextTick()
+  isSortAsc.value=!isSortAsc.value
+}
+
 
 // 点击列表区域时自动获取焦点，确保按键生效
 const focusContainer = (e) => {

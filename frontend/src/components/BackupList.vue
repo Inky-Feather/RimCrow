@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useOrderStore } from '../stores/orderStore'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
@@ -267,6 +267,10 @@ const selectedPath = computed(() => orderStore.currentBackupFile)
 // 原始数据
 const rawData = ref({ today: [], earlier: [], other: [], import: [] })
 
+// 监听备份列表变化，更新原始数据
+watch(() => orderStore.backups, (newVal) => {
+    Object.assign(rawData.value, newVal)
+})
 // 数据长度统计
 const dataCount = computed(() => {
     return {
@@ -360,15 +364,7 @@ const isEmpty = computed(() => {
 // 刷新备份列表
 const refresh = async () => {
   loading.value = true
-  try {
-    await orderStore.getBackups()
-    // 从 store 同步数据 (orderStore.backups 结构是 {today:[], ...})
-    if (orderStore.backups) {
-      Object.assign(rawData.value, orderStore.backups)
-    }
-  } finally {
-    // loading.value = false
-  }
+  await orderStore.getBackups()
 }
 // 选择备份项
 const selectItem = async (item) => {

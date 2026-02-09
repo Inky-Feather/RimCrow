@@ -22,6 +22,7 @@ export const useModStore = defineStore('mods', () => {
   const activeLoadModifyTime = ref(0) // 已激活列表最后修改时间戳
 
   const conflictList = ref([])        // 重复包名冲突列表
+  const coexistenceList = ref([])     // 共存Mod列表
   
   // 选择状态
   const selectedIds = ref([])         // 已选中的 Mod ID
@@ -333,12 +334,23 @@ export const useModStore = defineStore('mods', () => {
   }
   // 扫描完成事件处理
   const scanComplete = async (detail) => {
-    // 处理扫描结果，检测冲突提示
-    if (detail.conflicts && detail.conflicts.length > 0) {
+    let totalCount = 0
+    if (detail.coexistences && detail.coexistences.length > 0) {
+      coexistenceList.value = detail.coexistences
+      if (appStore.settings.show_coexistence_message){
+        console.warn("发现共存:", detail.coexistences)
+        totalCount += detail.coexistences.length
+      }
+    }
+    // 处理扫描结果，检测冲突提示 (包含可共存Mod)
+    if ((detail.conflicts && detail.conflicts.length > 0)) {
       console.warn("发现冲突:", detail.conflicts)
       conflictList.value = detail.conflicts
+      totalCount += detail.conflicts.length
+    }
+    if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning
-      toast.warning(`扫描完成，发现 ${detail.conflicts.length} 个包名重复冲突需要处理！`, {timeout: 10000})
+      toast.warning(`扫描完成，发现 ${totalCount} 个包名重复冲突需要处理！`, {timeout: 10000})
     } else {
       toast.success(`扫描完成，共计扫描${detail.total}个模组，新增${detail.stats.added}个，\n更新${detail.stats.updated}个，删除${detail.stats.removed}个，已知${detail.stats.skipped}个。`,{position: "top-center",timeout: 5000})
     }
@@ -419,7 +431,7 @@ export const useModStore = defineStore('mods', () => {
       }));
       console.log("更新Mod最后操作时间:", {all_mods_time:all_mods})
       const res = await window.pywebview.api.update_mod_time(all_mods)
-      if (!checkResult(res, "更新Mod最后操作时间",true)) {
+      if (!checkResult(res, "更新Mod最后操作时间")) {
         await appStore.refreshData();
         return false
       }
@@ -765,7 +777,7 @@ export const useModStore = defineStore('mods', () => {
 
     return issuesMap
   })
-  // 辅助：获取某个 Mod 的最高级别问题
+  // 辅助：获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
     const issues = modIssues.value.get(id.toLowerCase())
     if (!issues || issues.length === 0) return null
@@ -905,7 +917,7 @@ export const useModStore = defineStore('mods', () => {
   return {
     // State
     allModsMap, dataVersion, inactiveIds, tempIds, activeIds, 
-    savedActiveIds, activeLoadModifyTime, conflictList, 
+    savedActiveIds, activeLoadModifyTime, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, 
 
     // Getters

@@ -165,7 +165,7 @@
             <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-white/5">
               <h2 class="text-white/80 font-bold">Mod序列对比</h2>
               <div class="flex items-center gap-2">
-                <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">加载文件序列</button>
+                <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">应用文件序列</button>
                 <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
               </div>
             </div>

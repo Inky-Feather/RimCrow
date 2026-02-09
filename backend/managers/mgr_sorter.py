@@ -3,6 +3,7 @@ import heapq
 from collections import deque, defaultdict
 from backend.database.dao import ModDAO
 from backend.utils.logger import logger
+from backend.settings import settings
 from backend.managers.mgr_rules import RuleManager
 
 
@@ -407,7 +408,13 @@ class OrderSorter:
             
             # A. 确定排序名称 (Name)
             # 优先用别名 -> 名字 -> ID
-            display_name = first_mod_data.get('alias_name') or first_mod_data.get('name') or first_mod_id
+            if settings.config.sort_mods_by == "alias":
+                display_name = first_mod_data.get('alias_name') or first_mod_data.get('name') or first_mod_id
+            elif settings.config.sort_mods_by == "name":
+                display_name = first_mod_data.get('name') or first_mod_id
+            else:
+                display_name = first_mod_id
+            
             # 移除非字母字符并转小写，确保排序自然 (比如忽略 [1.4] 这种前缀)
             # 这里简单做 lower() strip() 即可，如果想更高级可以去掉 []
             sort_name = display_name.lower().strip()

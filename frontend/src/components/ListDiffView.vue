@@ -1,4 +1,5 @@
 <template>
+
   <div class="flex flex-col h-full bg-bg-surface/80 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
     
     <!-- 1. 顶部工具栏 -->
@@ -143,6 +144,7 @@
       </div>
     </div>
   </div>
+  
 </template>
 
 <script setup>

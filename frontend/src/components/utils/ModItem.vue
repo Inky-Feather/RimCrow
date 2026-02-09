@@ -261,7 +261,7 @@ const handleContextMenu = async (event) => {
     },
     { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4,
       children: groupStore.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
-        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => groupStore.selectModsGroup(group.group_id)
+        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => modStore.selectModsGroup(group.group_id)
       }))}]
     },
     { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 

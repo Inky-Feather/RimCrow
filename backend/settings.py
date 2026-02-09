@@ -111,8 +111,13 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     enable_auto_scan: bool = True             # 启动时自动扫描
-    delete_missing_mods_data: bool = True    # 是否删除数据库中缺失的 Mod 数据
-    open_url_on_system: bool = False           # 是否在系统默认浏览器打开链接
+    delete_missing_mods_data: bool = True     # 是否删除数据库中缺失的 Mod 数据
+    open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
+    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
+    sort_mods_by: str = "name"                # 排序方式: name, id, alias
+    coexist_mod_name_with: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
+    show_coexistence_message: bool = True      # 是否显示共存Mod提示
+    
     
     # --- 功能设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)

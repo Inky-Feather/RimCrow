@@ -424,7 +424,7 @@ class ModDAO:
         
         # 1. 遍历检查文件是否存在 (这一步比较耗时，但必须做)
         # 只查询有 path 的记录，已经为 None 的不用查了
-        query = ModAsset.select(ModAsset.package_id, ModAsset.path).dicts()
+        query = ModAsset.select(ModAsset.path_hash, ModAsset.path).dicts()
         
         for asset in query:
             path = asset['path']

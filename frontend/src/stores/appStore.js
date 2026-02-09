@@ -137,6 +137,10 @@ export const useAppStore = defineStore('app', () => {
     backup_retention_days: 30,
     enable_auto_scan: true,
     delete_missing_mods_data: false,
+    prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
+    sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
+    coexist_mod_name_with: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
+    show_coexistence_message: true,       // 是否显示共存Mod提示
 
     // --- 调试 (Debug) ---
     debug_mode: true,
@@ -236,8 +240,8 @@ export const useAppStore = defineStore('app', () => {
       }
       // 界面渲染完毕后，根据设置决定是否启动后台扫描
       if (settings.value.enable_auto_scan !== false && settings.value.game_install_path) {
-        console.log("启动自动扫描...")
-        toast.info("自动扫描已启动...")
+        console.log("自动扫描开始...")
+        toast.info("自动扫描开始...", {timeout: 1000})
         const modStore = useModStore()
         modStore.scanMods()
       }
@@ -441,7 +445,7 @@ export const useAppStore = defineStore('app', () => {
     const orderStore = useOrderStore()
     const res = await orderStore.saveLoadOrder()
     if (!res) return
-    if((!profile_id || profile_id === 'default') && settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
+    if(settings.value.prefer_steam_launch && (!profile_id || profile_id === 'default') && settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
       // 通过 steam 启动游戏
       window.open("steam://rungameid/294100", '_blank')
       toast.success("正在通过 steam 启动游戏……")
