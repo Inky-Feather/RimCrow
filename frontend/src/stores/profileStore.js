@@ -84,8 +84,7 @@ export const useProfileStore = defineStore('profile', () => {
     if (appStore.checkResult(res, `更新环境 "${updates.name}"`, true)) {
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
-        const modStore = useModStore()
-        await modStore.scanMods()
+        switchProfile(profileId)
       }
     }
   }
@@ -98,8 +97,7 @@ export const useProfileStore = defineStore('profile', () => {
       // 如果删的是当前的，后端会自动切回 default，前端需要同步
       if (profileId === currentProfileId.value) {
         currentProfileId.value = 'default'
-        const modStore = useModStore()
-        await modStore.scanMods()
+        switchProfile('default')
       }
     }
   }
