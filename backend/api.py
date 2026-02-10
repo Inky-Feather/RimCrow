@@ -628,12 +628,14 @@ class API:
     #  4. 分组管理 (Groups) - 即时保存
     # =========================================================================
 
+    @log_api_call
     def get_groups(self):
         context_mods = ModDAO.get_profile_mods() 
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
         return ApiResponse.success(GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids))
 
+    @log_api_call
     def create_group(self, name: str, color: str):
         try:
             # 后端生成 UUID 并入库
@@ -653,31 +655,38 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
 
+    @log_api_call
     def delete_group(self, group_id: str):
         return ApiResponse.success(GroupDAO.delete_group(group_id))
 
+    @log_api_call
     def update_group(self, group_id: str, updates: dict):
         """更新分组属性 (重命名、改色、折叠)"""
         # print(f"更新分组 {group_id} 为 {updates}")
         return ApiResponse.success(GroupDAO.update_group_info(group_id, **updates))
 
+    @log_api_call
     def group_add_mods(self, group_id: str, mod_ids: List[str]):
         """拖拽 Mod 进分组"""
         return ApiResponse.success(GroupDAO.add_mods_to_group(group_id, mod_ids))
 
+    @log_api_call
     def group_remove_mods(self, group_id: str, mod_ids: List[str]):
         """从分组移除 Mod"""
         return ApiResponse.success(GroupDAO.remove_mods_from_group(group_id, mod_ids))
     
+    @log_api_call
     def update_all_expansion_state(self, is_expanded: bool):
         """一次性展开或折叠所有分组"""
         GroupDAO.update_all_expansion_state(is_expanded)
         return ApiResponse.success()
-
+    
+    @log_api_call
     def group_reorder(self, group_id_list: List[str]):
         """分组排序"""
         return ApiResponse.success(GroupDAO.reorder_groups(group_id_list))
-
+    
+    @log_api_call
     def group_content_reorder(self, group_id: str, mod_id_list: List[str]):
         """分组内 Mod 排序"""
         return ApiResponse.success(GroupDAO.reorder_mods_in_group(group_id, mod_id_list))
@@ -705,6 +714,7 @@ class API:
             "modify_time": res.get('modify_time', 0)
         })
     
+    @log_api_call
     def open_load_order_file(self, mods_config_file_path: str|None = None):
         """
         打开 ModsConfig.xml 文件
@@ -732,6 +742,7 @@ class API:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)
     
+    @log_api_call
     def save_load_order(self, active_ids: List[str]):
         """
         保存当前激活列表到 ModsConfig.xml
@@ -744,6 +755,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
+    @log_api_call
     def export_load_order(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True):
         """
         导出当前加载顺序到 ModsConfig.xml
@@ -758,6 +770,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
+    @log_api_call
     def launch_game(self, profile_id: str):
         """启动游戏"""
         try:
@@ -775,6 +788,7 @@ class API:
             logger.error(f"Launch Game Error: {e}")
             return ApiResponse.error(f"启动游戏时出错: {e}")
     
+    @log_api_call
     def get_game_info(self, install_path: str):
         """获取游戏信息"""
         if not install_path:
@@ -795,6 +809,7 @@ class API:
     #  6. 文件与资源操作 (Files & Assets)
     # =========================================================================
 
+    @log_api_call
     def open_path(self, path: str):
         try:
             self.file_mgr.open_in_explorer(path)
@@ -804,6 +819,7 @@ class API:
             print(f"打开路径时出错: {e}")
             return ApiResponse.error(f"打开路径时出错: {e}")
     
+    @log_api_call
     def delete_path(self, path: str):
         """删除文件/文件夹"""
         try:
@@ -812,7 +828,8 @@ class API:
             return ApiResponse.warning("路径不存在或无法删除")
         except Exception as e:
             return ApiResponse.error(f"删除路径时出错: {e}")
-        
+    
+    @log_api_call
     def delete_paths(self, paths: List[str]):
         """批量删除文件/文件夹"""
         try:
@@ -823,6 +840,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"批量删除路径时出错: {e}")
     
+    @log_api_call
     def get_all_backups(self):
         """获取所有备份文件路径"""
         try:
@@ -831,6 +849,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"获取备份文件时出错: {e}")
     
+    @log_api_call
     def select_folder_dialog(self, initial_dir: str = ''):
         """
         打开系统原生的文件夹选择框
@@ -843,6 +862,7 @@ class API:
             return ApiResponse.error(f"选择文件夹时出错: {e}")
         return ApiResponse.warning("未选择文件夹")
     
+    @log_api_call
     def select_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件选择框
@@ -855,6 +875,7 @@ class API:
             return ApiResponse.error(f"选择文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
 
+    @log_api_call
     def save_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件保存框
@@ -866,8 +887,6 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
-    
-    
     
     @log_api_call
     def localize_workshop_mods(self, mod_ids: List[str]):
@@ -1156,14 +1175,17 @@ class API:
         task_id = self.download_mgr.add_task(url, target_dir, filename)
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
+    @log_api_call
     def cancel_download(self, task_id: str):
         self.download_mgr.cancel_task(task_id)
         return ApiResponse.success(message="尝试取消任务")
 
+    @log_api_call
     def get_active_downloads(self):
         """获取所有任务状态 (用于 UI 恢复)"""
         return ApiResponse.success(self.download_mgr.get_tasks_info())
     
+    @log_api_call
     def open_sub_browser(self, url='', title = 'RimModManager'):
         """打开或更新 浏览器子窗口"""
         if not self.browser_window: 
@@ -1347,6 +1369,7 @@ class API:
     # ==========================================
     #  更新管理 (Updates)
     # ==========================================
+    @log_api_call
     def check_update(self, manual=True):
         """
         检查版本更新
@@ -1363,6 +1386,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"检查更新失败: {str(e)}")
 
+    @log_api_call
     def install_update(self, temp_exe_path):
         """
         启动热更新脚本并关闭主程序
@@ -1378,6 +1402,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
 
+    @log_api_call
     def ignore_version(self, version_str):
         """跳过当前版本"""
         settings.set('ignored_update_version', version_str)
@@ -1454,8 +1479,6 @@ class API:
             return ApiResponse.success(message=msg)
         else:
             return ApiResponse.error(msg)
-        
-        
         
         
         

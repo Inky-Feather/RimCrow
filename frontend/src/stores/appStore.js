@@ -372,7 +372,7 @@ export const useAppStore = defineStore('app', () => {
         const modStore = useModStore()
         modStore.scanMods()
     });
-
+    // 监听：游戏暂停
     window.addEventListener('app-suspending', () => {
       console.log('检测到游戏启动，停止所有界面活动...');
       // 1. 设置全局加载状态，屏蔽用户操作
@@ -381,6 +381,11 @@ export const useAppStore = defineStore('app', () => {
       if (scanProgress.scanning) scanProgress.scanning = false;
       // 3. 可以在这里做最后的自动保存
     });
+    // 监听：后端弹窗
+    window.addEventListener('backend-popup', (e) => {
+      console.log('收到后端弹窗:', e)
+      _backendPopup(e)
+    })
   }
 
   // --- 设置相关 ---
@@ -624,6 +629,29 @@ export const useAppStore = defineStore('app', () => {
       // 注册回调
       downloadCallbacks.set(taskId, { resolve, reject, timer })
     })
+  }
+
+  // 后端弹窗
+  const _backendPopup = (event) => {
+    const confirmStore = useConfirmStore()
+    const { mode, title, message, type, duration } = event.detail
+    console.log('后端弹窗:', event.detail)
+    // 模式1: 轻提示 (Toast)
+    if (mode === 'toast') {
+      const toastType = type || 'info' // success, error, warning, info
+      toast[toastType](message, {
+        timeout: duration || 3000
+      })
+    } 
+    // 模式2: 模态框 (Modal/Confirm)
+    else {
+      confirmStore.open({
+        title: title || '系统提示',
+        message: message,
+        type: type || 'info', // info, success, warning, error
+        mode: 'alert', // 强制设为 alert 模式，因为后端无法直接await前端的选择结果(除非用更复杂的Promise桥接)
+      })
+    }
   }
 
   // === Steam客户端交互 ===
