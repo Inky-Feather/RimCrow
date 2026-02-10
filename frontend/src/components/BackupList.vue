@@ -56,6 +56,7 @@
           </button>
         </div>
       </div> -->
+      <HelpCircle v-tooltip="backupRulesTooltip" class="size-5 m-1 text-text-dim transition-colors duration-200 cursor-help hover:text-accent-primary"></HelpCircle>
       <button @click="loadOrder('0')" v-tooltip="'导入Mod加载序列'" 
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
         <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
@@ -172,6 +173,7 @@ import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { parse, formatDistanceToNow, differenceInCalendarDays, parseISO } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { HelpCircle } from 'lucide-vue-next'
 
 // --- 子组件：BackupItem ---
 const BackupItem = {
@@ -292,6 +294,15 @@ const parseFileTime = (filename) => {
     return null
 }
 
+// 备份规则说明
+const backupRulesTooltip = computed(() => {
+    return `**[[自动备份与手动备份说明：]]**
+^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。
+^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。
+^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。
+__备份文件格式：ModsConfig_YYYYMMDD_HHMMSS.xml__`
+})
+
 // 核心：处理数据并生成显示文本
 const parsedData = computed(() => {
   const process = (files, type) => {
@@ -353,7 +364,7 @@ const parsedData = computed(() => {
     import: process(rawData.value.import || [], 'import')
   }
 })
-
+// 检查所有备份列表是否为空
 const isEmpty = computed(() => {
   return parsedData.value.today.length === 0 && 
           parsedData.value.earlier.length === 0 && 

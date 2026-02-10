@@ -355,7 +355,7 @@ const parseMarkup = (text) => {
     // [Bold] **text** -> font-bold
     { 
       regex: /\*\*(.*?)\*\*/g, 
-      repl: '<span class="font-bold text-white text-sm">$1</span>' 
+      repl: '<span class="font-bold text-white text-base">$1</span>' 
     },
     // [Italic] __text__ -> italic opacity-80
     { 
