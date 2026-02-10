@@ -4,11 +4,9 @@ from enum import Enum
 import gc
 import json
 import os
-import re
 import threading
 import time
 import functools
-import shutil
 import uuid
 import webview
 from dataclasses import dataclass, asdict
@@ -20,6 +18,7 @@ from playhouse.shortcuts import model_to_dict
 
 # 1. 引入配置管理
 from backend.settings import settings, RULES_DIR
+from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
@@ -42,6 +41,7 @@ from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.managers.mgr_ai import AIManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
+from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileManager
 
 
@@ -136,7 +136,6 @@ class ApiResponse:
         return obj
 
 
-
 class API:
     """
     暴露给 pywebview 前端的统一接口类。
@@ -151,11 +150,14 @@ class API:
         db_path = os.path.join(os.getcwd(), 'data', 'mod_manager.db')
         self.is_first_db_init = not os.path.exists(db_path) # 标记是否首次初始化数据库
         init_db(db_path)
-        
+        # 当 pywebview 试图序列化 API 给 JS 用时，会试图深入序列化，
+        # 公开属性会导致陷入无限递归（Window -> API -> Window -> ...），最终导致堆栈溢出崩溃
+        self._window = None  # 私有属性
         # 2. 实例化各个管理器
         self.dlc_parser = None # 延迟初始化
         self.file_mgr = FileManager()    # 实例化 FileManager (它会自动启动 Server 线程)
         self.game_mgr = GameManager()
+        self.game_monitor = GameMonitor(self)
         self.profile_mgr = ProfileManager()
         self.game_log_mgr = GameLogManager()
         self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
@@ -177,9 +179,34 @@ class API:
                 # 这里初始化会自动处理全量缓存和增量更新
                 self.dlc_parser = DLCParser(dlc_dir)
     def cleanup(self):
+        # 停止后台扫描任务 (如果有)
+        if hasattr(self, 'scanner'): self.scanner.stop_scan() 
+        # 停止游戏监控
+        if self.game_monitor: self.game_monitor.running = False
+        # 暂停所有事件发送
+        EventBus.pause()
+            
         from backend.database.models import close_db
         logger.info("Closing database connection...")
         close_db()
+    
+    def set_window(self, window: webview.Window):
+        """设置主窗口"""
+        self._window  = window
+        # 绑定 loaded 事件，确保窗口完全就绪后再启动监视器
+        window.events.loaded += self._on_app_loaded
+    
+    def get_window(self):
+        """获取主窗口"""
+        return self._window
+    
+    def _on_app_loaded(self):
+        """主窗口加载完毕回调"""
+        # 确保只启动一次
+        if not self.game_monitor.running:
+            logger.info("UI已就绪，启动游戏监视器...")
+            self.game_monitor.start()
+    
     
     # =========================================================================
     #  1. 初始化与全局数据 (Initialization)

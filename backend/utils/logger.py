@@ -37,6 +37,9 @@ class WebviewHandler(logging.Handler):
     将日志实时推送到前端的 Handler
     """
     def emit(self, record):
+        # 如果 EventBus 没有窗口引用，直接跳过，防止报错
+        # 这里的 _window 是在 EventBus 中定义的类变量
+        if not getattr(EventBus, '_window', None): return 
         try:
             # 格式化为字典对象直接发给前端，不需要再次 JSON 序列化
             log_entry = {
