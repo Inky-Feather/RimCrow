@@ -77,7 +77,7 @@
 
           <VirtualList v-model="internalModList" dataKey="id" :keeps="50" class="max-h-[45vh] min-h-15" ref="vListRef"
             placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-            :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150"
+            :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150" :size="itemHeight"
             @drop="updateChildren" @drag="startDrag"
             v-selectable-list="{ data: groupData.mod_ids, clickClass: 'select-trigger',}">
             <template v-slot:item="{ record, index, dataKey }">
@@ -104,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, ref, nextTick } from 'vue' // 引入 ref
+import { watch, ref, nextTick, computed } from 'vue' // 引入 ref
 import VirtualList from 'vue-virtual-sortable';
 import ModItem from './ModItem.vue'
 import { useDebounceFn } from '@vueuse/core'
@@ -112,6 +112,7 @@ import { ColorPicker } from "vue3-colorpicker";
 import "vue3-colorpicker/style.css";
 import { useModStore } from '../../stores/modStore';
 import { useGroupStore } from '../../stores/groupStore';
+import { useAppStore } from '../../stores/appStore';
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -124,11 +125,14 @@ const props = defineProps({
 })
 
 const modStore = useModStore()
+const appStore = useAppStore()
 const groupStore = useGroupStore()
 const internalModList = ref([])
 const vListRef = ref(null)
 const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group', 'update-children'])
 
+
+const itemHeight = computed(() => appStore.scalePx(30)+4 )
 // 计算属性computed无法直接修改props.groupData.mod_ids，因为它是只读的。
 // 监听 props 变化，同步到本地 (单向数据流：父 -> 子)
 watch(

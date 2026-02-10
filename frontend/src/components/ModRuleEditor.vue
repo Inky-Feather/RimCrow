@@ -70,7 +70,7 @@
 
             <VirtualList v-model="userAfterRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
               placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false"
+              :sortable="false" :size="itemHeight"
               :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
               @drop="onDrop($event,'loadAfter')">
               <template v-slot:item="{ record, index, dataKey }">
@@ -151,7 +151,7 @@
 
             <VirtualList v-model="userBeforeRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
               placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false"
+              :sortable="false" :size="itemHeight"
               :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
               @drop="onDrop($event,'loadBefore')">
               <template v-slot:item="{ record, index, dataKey }">
@@ -232,7 +232,7 @@
 
             <VirtualList v-model="userIncompatibleWithRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
               placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false"
+              :sortable="false" :size="itemHeight"
               :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
               @drop="onDrop($event,'incompatibleWith')">
               <template v-slot:item="{ record, index, dataKey }">
@@ -294,6 +294,7 @@ const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
 
+const itemHeight = computed(() => appStore.scalePx(30)+4 )
 const userAfterRules = computed({ get() { return getUserRules('loadAfter') }, set(val) {} })
 const userBeforeRules = computed({ get() { return getUserRules('loadBefore') }, set(val) {} })
 const userIncompatibleWithRules = computed({ get() { return getUserRules('incompatibleWith') }, set(val) {} })
