@@ -21,9 +21,9 @@
         <div v-if="simple" class="flex items-center gap-1">
 
           <div v-if="showModIcon">
-            <img v-if="!modData.is_missing && modData.thumb_url" :src="modData.thumb_url"
+            <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
               :class="`size-6 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
-            <div v-else-if="modData.is_missing" :class="`size-6 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30`">!</div>
+            <div v-else-if="!modData.path" :class="`size-6 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30`">!</div>
             <div v-else :class="`size-6 rounded border-2 border-dashed border-white/10 flex items-center justify-center`">
               <svg :class="`size-5 opacity-20`" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             </div>
@@ -47,9 +47,9 @@
         </div>
         <!-- 缩略图 -->
         <div v-else class="relative">
-          <img v-if="!modData.is_missing && modData.thumb_url" :src="modData.thumb_url"
+          <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
             :class="`w-10 h-8 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
-          <div v-else-if="modData.is_missing" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
+          <div v-else-if="!modData.path" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
           <div v-else class="w-10 h-10 rounded border-2 border-dashed border-white/10 flex items-center justify-center">
             <svg class="w-6 h-6 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>

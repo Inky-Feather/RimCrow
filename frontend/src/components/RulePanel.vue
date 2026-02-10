@@ -419,7 +419,7 @@ const filteredStaticRules = computed(() => {
       rules: rules,
       name: mod?.name || id,
       icon: mod?.thumb_url || null,
-      isInstalled: mod && !mod.is_missing // 判断是否安装
+      isInstalled: mod && !!mod.path // 判断是否安装
     }
   })
 

@@ -110,7 +110,7 @@ export const useModStore = defineStore('mods', () => {
     return {
       package_id: id,
       name: `⚠ ${defaultName} (${id})`,
-      is_missing: true,
+      path: null,
       description: '该模组在本地未找到，可能未下载，或已被手动删除。'
     }
   }
@@ -667,7 +667,7 @@ export const useModStore = defineStore('mods', () => {
       const id = mod.package_id.toLowerCase()
 
       // A. 文件丢失检查
-      if (mod.is_missing || !mod.path) {
+      if (!mod.path) {
         _addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
         continue // 文件都没了，后面的检查没意义
       }
@@ -704,7 +704,7 @@ export const useModStore = defineStore('mods', () => {
     // 这里的顺序很重要，activeIds 是有序数组
     activeIds.value.forEach((id, index) => {
       const mod = allModsMap.value.get(id)
-      if (!mod || mod.is_missing || !mod.path) {
+      if (!mod || !mod.path) {
         _addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
         return
       }
@@ -857,7 +857,7 @@ export const useModStore = defineStore('mods', () => {
     try {
       modIds.forEach((id) => {
         const mod = takeModById(id);
-        if (!mod || mod.is_missing) return;
+        if (!mod || !mod.path) return;
         let currentIgnored = Array.isArray(mod.ignored_issues) ? [...mod.ignored_issues] : [];
         let needsUpdate = false;
         if (!type) {

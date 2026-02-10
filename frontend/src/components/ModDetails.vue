@@ -159,7 +159,7 @@
       </div>
 
       <!-- 时间戳列表 及 其他信息 -->
-      <div v-if="!selectedMod.is_missing && appStore.settings.ui.show_mod_details_time_info" class="p-1 space-y-2">
+      <div v-if="!!selectedMod.path && appStore.settings.ui.show_mod_details_time_info" class="p-1 space-y-2">
         <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">其他信息</h3>
         <div class="grid grid-flow-col grid-cols-4 grid-rows-2 gap-1.5">
           <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-white/5 rounded-lg border border-white/5">
@@ -214,7 +214,7 @@
             <span v-preview="modStore.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(dep.package_id).is_missing" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
+              <span v-if="!!modStore.takeModById(dep.package_id).path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
               <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
@@ -244,7 +244,7 @@
             <span v-preview="modStore.takeModById(inc)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(inc).is_missing" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+              <span v-if="!!modStore.takeModById(inc).path" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -270,7 +270,7 @@
             <span v-preview="modStore.takeModById(aft)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(aft).is_missing" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+              <span v-if="!!modStore.takeModById(aft).path" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -296,7 +296,7 @@
             <span v-preview="modStore.takeModById(bef)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(bef).is_missing" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+              <span v-if="!!modStore.takeModById(bef).path" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -316,7 +316,7 @@
       </div>
 
       <!-- 用户自定义属性 (标签 & 颜色 & 备注) -->
-      <div v-if="!selectedMod.is_missing && appStore.settings.ui.show_mod_details_user_info" class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
+      <div v-if="!!selectedMod.path && appStore.settings.ui.show_mod_details_user_info" class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
         
         <!-- 标签管理 -->
         <div>

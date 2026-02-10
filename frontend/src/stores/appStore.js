@@ -327,7 +327,6 @@ export const useAppStore = defineStore('app', () => {
     window.addEventListener('download-progress', (e) => {
       const d = e.detail
       downloadTasks.value.set(d.id, d)
-
       // --- 核心：检查是否有正在等待该任务的 Promise ---
       const callback = downloadCallbacks.get(d.id)
       
@@ -340,7 +339,6 @@ export const useAppStore = defineStore('app', () => {
           downloadCallbacks.delete(d.id)
         }
       }
-
       if (d.status === 'error') {
         const errorMsg = `下载失败: ${d.filename}\n${d.error || ''}`
         toast.error(errorMsg)
@@ -373,6 +371,15 @@ export const useAppStore = defineStore('app', () => {
         }
         const modStore = useModStore()
         modStore.scanMods()
+    });
+
+    window.addEventListener('app-suspending', () => {
+      console.log('检测到游戏启动，停止所有界面活动...');
+      // 1. 设置全局加载状态，屏蔽用户操作
+      isLoading.value = true;
+      // 2. 停止所有正在轮询的定时器（如果有的话）
+      if (scanProgress.scanning) scanProgress.scanning = false;
+      // 3. 可以在这里做最后的自动保存
     });
   }
 
