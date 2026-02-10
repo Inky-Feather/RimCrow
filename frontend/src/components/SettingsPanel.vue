@@ -2,7 +2,7 @@
   <transition name="panel-fade">
     <div v-show="appStore.uiState.showSettingsPanel" 
       class="fixed inset-0 z-100 flex items-center justify-center bg-bg-deep/60 backdrop-blur-md"
-      @click.self="appStore.closeSettingsPanel()">
+      @click.self="shakeComponent('#btn-cancel')">
       
       <!-- 主容器 -->
       <div class="relative w-[75%] h-[80%] flex bg-bg-deep/95 border border-text-dim/20 rounded-4xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 duration-300">
@@ -126,7 +126,7 @@
                       description="影响自动排序时同档次的Mod顺序，处理优先级是 别名>原名>包名，所以即使Mod没有别名，也能按原名参与排序。" 
                       :options="[{label:'按别名', value:'alias_name'},{label:'按原名', value:'name'},{label:'按包名', value:'id'}]" />
                     <CommonSelect class="col-span-1" label="共存Mod文件夹生成方式" v-model="formData.coexist_mod_folder_name_type" showBottom
-                      description="影响创建共存Mod时的文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名参与排序。" 
+                      description="影响创建共存Mod时的文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名创建文件夹。" 
                       :options="[{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
                     <CommonSwitch class="col-span-1" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" description="关闭后，将使用普通方式启动游戏。" />
                     <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
@@ -244,7 +244,7 @@
 
           <!-- D. 底部操作栏 -->
           <footer class="h-20 flex items-center justify-end px-10 gap-4 border-t border-white/5 bg-white/2">
-             <button @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-white transition-colors">放弃修改</button>
+             <button id="btn-cancel" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-white transition-colors">放弃修改</button>
              <button @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-black font-black text-sm shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95 transition-all group">
                 <div class="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
                 应用并保存配置
@@ -263,6 +263,7 @@ import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Setting
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { createToastInterface } from 'vue-toastification'
+import { flashComponent, shakeComponent } from '../utils/uiHelper'
 
 // 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
