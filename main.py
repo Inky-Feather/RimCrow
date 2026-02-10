@@ -78,8 +78,6 @@ def on_resized(width, height):
 def on_main_window_closed():
     """窗口关闭时触发"""
     settings.save()  # 保存配置
-    # 这里的 0 是返回码，表示正常退出
-    os._exit(0)
 
 
 def main():
@@ -118,7 +116,6 @@ def main():
      # 获取代理参数
     # Pywebview 目前对代理的直接支持有限，通常需要通过底层 flag 传递
     # 对于 WebView2 (Windows)，可以通过 os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']
-    
     proxy_args = get_webview_proxy_args()
     if proxy_args:
         args = []
