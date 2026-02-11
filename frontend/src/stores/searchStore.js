@@ -25,6 +25,7 @@ export const useSearchStore = defineStore('search', () => {
 
     // === 布尔值 ===
     save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '存档可用' },
+    shadow_paths: { type: FIELD_TYPES.BOOLEAN, label: '存在禁用包名' },
 
     // === 来源 (枚举) ===
     source: { 

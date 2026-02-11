@@ -98,6 +98,10 @@ export const useAppStore = defineStore('app', () => {
       show_list_icon: true,       // 是否显示 Mod 图标
       show_list_mod_icon: true,       // 是否显示 Mod 图标
       show_list_modtype_icon: true,  // 是否显示 Mod 类型图标
+
+      show_group_index: true,  // 是否显示分组索引列
+      show_group_icon: true,  // 是否显示分组图标
+
     },
 
 

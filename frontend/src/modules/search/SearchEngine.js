@@ -48,11 +48,12 @@ export class SearchEngine {
 
     // 2. 过滤 & 初步构建
     candidateFields.forEach(key => {
-      // A. 排除规则检查
-      if (this.isExcluded(key)) return;
 
-      // B. 确定配置源
+      // A. 确定配置源
       const userConfig = userSchema[key];
+      // B. 排除规则检查
+      // 只有当 userConfig 不存在（即非用户强制指定）时，才检查排除规则
+      if (!userConfig && this.isExcluded(key)) return;
       
       // 如果不在数据中且用户没配置，跳过（针对 userSchema 里写了但数据没这个字段的情况，
       // 但通常 userSchema 是“强制”的，所以主要用来过滤 autoDetect 出来的垃圾字段）
@@ -243,11 +244,20 @@ export class SearchEngine {
 
     switch (config.type) {
       case FIELD_TYPES.BOOLEAN:
-        // tag.value 已经在 QueryParser 里转成了 true/false boolean
-        // 注意处理 itemVal 为 null/undefined 的情况，视作 false
-        isMatch = (!!itemVal) === tag.value;
+        //获取值的状态：Positive (有值), Negative (空/False), Null (未定义)
+        const valState = this.getValueState(itemVal);
+        if (tag.value === true) {
+          // 搜索 + : 要求状态为 Positive
+          isMatch = (valState === 'positive');
+        } else if (tag.value === false) {
+          // 搜索 - : 要求状态为 Negative (空数组/False/空字符串)
+          isMatch = (valState === 'negative');
+        } else if (tag.value === null) {
+          // 搜索 _ : 要求状态为 Null
+          isMatch = (valState === 'null');
+        }
         break;
-        
+
       case FIELD_TYPES.LIST:
         if (Array.isArray(itemVal)) {
           // 模糊匹配列表项
@@ -266,7 +276,34 @@ export class SearchEngine {
     return tag.exclude ? !isMatch : isMatch;
   }
 
-  // [新增] 获取字段的“首选简写键” (Preferred Key)
+  /**
+   * 判断值的“三态”
+   * Positive: 有实际内容的 (非空数组、true、非空字符串、非0数字)
+   * Negative: 明确为空的 (false, 0, [], "")
+   * Null:     根本不存在 (null, undefined)
+   */
+  getValueState(val) {
+    if (val === null || val === undefined) return 'null';
+    if (Array.isArray(val)) {
+        return val.length > 0 ? 'positive' : 'negative';
+    }
+    if (typeof val === 'string') {
+        return val.trim().length > 0 ? 'positive' : 'negative';
+    }
+    if (typeof val === 'boolean') {
+        return val ? 'positive' : 'negative';
+    }
+    if (typeof val === 'number') {
+        // 这里看需求：通常 0 视作 false (negative)，非0视作 true
+        // 如果想把 0 当作“有值”，改成 return 'positive'
+        return val !== 0 ? 'positive' : 'negative';
+    }
+    // 对象等其他情况，默认视为有值
+    return 'positive';
+  }
+
+
+  // 获取字段的“首选简写键” (Preferred Key)
   // 逻辑：在所有别名和主键中，找最短的那个。如果长度一样，优先用主键。
   getPreferredKey(key) {
     const config = this.schema[key];
@@ -348,29 +385,47 @@ export class SearchEngine {
         // B1. 布尔值优化：只显示 2 条 (True / False)
         if (config.type === FIELD_TYPES.BOOLEAN) {
             // 找到最简单的真值/假值表达 (通常是 + / - 或 true / false)
-            const trueSign = config.trueValues[2] || config.trueValues[0]; // 优先取 '+'
-            const falseSign = config.falseValues[2] || config.falseValues[0]; // 优先取 '-'
+            const trueSign = config.trueValues[0];  // +
+            const falseSign = config.falseValues[0]; // -
+            const nullSign = config.nullValues[0];   // _
+
+            const valLower = valRaw.toLowerCase();
+            const suggestionsList = [];
 
             // 过滤：如果用户已经输入了 valRaw，比如 "fa"，则只显示 false 的建议
-            if (['true', 'yes', 'on', '+', '1'].some(v => v.startsWith(valRaw.toLowerCase()))) {
-                suggestions.push({
+            // 1. Positive (+/True)
+            if (config.trueValues.some(v => v.startsWith(valLower))) {
+                suggestionsList.push({
                     type: 'value',
-                    label: 'True / Yes',   // UI显示
-                    value: prefix + shortKey + ':' + trueSign, // 实际填入: br:+
-                    desc: 'on / yes',
+                    label: 'True / Has Value',
+                    value: prefix + shortKey + ':' + trueSign,
+                    desc: 'Exists & Not Empty',
                     meta: { isBool: true }
                 });
             }
-            if (['false', 'no', 'off', '-', '0'].some(v => v.startsWith(valRaw.toLowerCase()))) {
-                suggestions.push({
+
+            // 2. Negative (-/False)
+            if (config.falseValues.some(v => v.startsWith(valLower))) {
+                suggestionsList.push({
                     type: 'value',
-                    label: 'False / No',
-                    value: prefix + shortKey + ':' + falseSign, // 实际填入: br:-
-                    desc: 'off / no',
+                    label: 'False / Empty',
+                    value: prefix + shortKey + ':' + falseSign,
+                    desc: 'Empty Array/String or False',
                     meta: { isBool: true }
                 });
             }
-            return suggestions;
+
+            // 3. Null (_/Null) - [新增]
+            if (config.nullValues.some(v => v.startsWith(valLower))) {
+                suggestionsList.push({
+                    type: 'value',
+                    label: 'Null / Missing',
+                    value: prefix + shortKey + ':' + nullSign,
+                    desc: 'Null or Undefined',
+                    meta: { isBool: true }
+                });
+            }
+            return suggestionsList;
         }
 
         // B2. 列表/字符串建议 (去重 + 强转简写)
@@ -432,6 +487,7 @@ export class SearchEngine {
           }
         });
       }
+      return suggestions;
     });
 
     return suggestions;
@@ -439,7 +495,7 @@ export class SearchEngine {
 
   // 辅助：生成用法示例字符串
   getFieldUsage(conf, key) {
-      if (conf.type === FIELD_TYPES.BOOLEAN) return `${key}:+ | ${key}:-`;
+      if (conf.type === FIELD_TYPES.BOOLEAN) return `${key}:+ | ${key}:- | ${key}:_`;
       if (conf.type === FIELD_TYPES.LIST) return `${key}:Value`;
       return `${key}:XXX`;
   }
