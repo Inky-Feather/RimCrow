@@ -34,6 +34,7 @@ class GameMonitor:
 
     def start(self):
         self.running = True
+        EventBus.resume()   # 恢复事件总线
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
 

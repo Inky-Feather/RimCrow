@@ -52,6 +52,7 @@ class ModScanner:
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
+        EventBus.resume()   # 恢复事件总线
         if self._is_scanning:
             return {'status': 'busy', 'message': '扫描已在进行中'}
         

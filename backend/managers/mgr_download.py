@@ -72,6 +72,7 @@ class DownloadManager:
 
     def add_task(self, url: str, dest_path: str, filename=None) -> str:
         real_url = self._sanitize_url(url)
+        EventBus.resume()   # 恢复事件总线，确保下载任务能够正常执行
         
         # 1. 预处理路径：如果是完整文件路径，直接提取文件名
         if not os.path.isdir(dest_path):
