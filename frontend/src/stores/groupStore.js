@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { createToastInterface } from 'vue-toastification'
 import { useAppStore } from './appStore'
 
@@ -29,7 +29,9 @@ export const useGroupStore = defineStore('groups', () => {
   const takeGroupById = (groupId) => {
     return groupList.value.find(g => g.group_id === groupId) || null
   }
-
+  const allGroupNames = computed(() => {
+    return groupList.value.map(g => g.name)
+  })
   // --- 数据操作 ---
   // 获取分组
   const getGroups = async () => {
@@ -51,6 +53,15 @@ export const useGroupStore = defineStore('groups', () => {
   const createGroup = async (name='新分组', color=`#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`) => {
     if (!window.pywebview) return
     try {
+      // console.log("创建分组:", allGroupNames.value, allGroupNames.value.includes(name))
+      if (allGroupNames.value.includes(name)) {
+        // 名称冲突，添加序号
+        let index = 1
+        while (allGroupNames.value.includes(`${name}-${index}`)) {
+          index++
+        }
+        name = `${name}-${index}`
+      }
       const res = await window.pywebview.api.create_group(name, color)
       // console.log("创建分组:", res)
       if (checkResult(res, "创建分组")) {
@@ -229,7 +240,7 @@ export const useGroupStore = defineStore('groups', () => {
 
 
   return {
-    groupList, isDraggingGroup,
+    groupList, isDraggingGroup, allGroupNames,
     takeGroupsByModId, takeGroupById, setGroups, reset, 
     getGroups, createGroup, deleteGroup, updateGroup, 
     groupAddMods, groupRemoveMods, changeAllGroupExpansion, groupReorder, groupContentReorder

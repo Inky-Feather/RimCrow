@@ -6,10 +6,11 @@ import { createToastInterface } from 'vue-toastification'
 
 // 动态规则支持属性映射
 const DYNAMIC_RULE_PROPS = {
-  'package_id': '包 ID',
+  'package_id': '包名',
   'name': '名称',
   'author': '作者',
   'tags': '标签',
+  'groups': '分组', 
   'user_mod_type': '类型'
 }
 // 动态规则动作映射

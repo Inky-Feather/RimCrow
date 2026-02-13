@@ -123,6 +123,7 @@ import "vue3-colorpicker/style.css";
 import { useModStore } from '../../stores/modStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAppStore } from '../../stores/appStore';
+import { createToastInterface } from 'vue-toastification';
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -134,6 +135,7 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
+const toast = createToastInterface()
 const modStore = useModStore()
 const appStore = useAppStore()
 const groupStore = useGroupStore()
@@ -177,7 +179,16 @@ const updateGroup = (data = props.groupData) => {
 // 保存分组名称
 const saveGroupName = () => {
   if (!isEditingName.value) return  // 确保在编辑状态下调用
-  const newName = editingGroupName.value.trim()
+  let newName = editingGroupName.value.trim()
+  if(groupStore.allGroupNames.includes(newName)) {
+    // 名称冲突，添加序号
+    let index = 1
+    while (groupStore.allGroupNames.includes(`${newName}-${index}`)) {
+      index++
+    }
+    newName = `${newName}-${index}`
+    toast.warning(`分组名称已存在，已添加序号 ${index}`)
+  }
   if (newName && newName !== props.groupData.name) {
     emit('update-group', props.id, { name: newName })
   }

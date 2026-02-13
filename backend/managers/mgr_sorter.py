@@ -46,7 +46,7 @@ class OrderSorter:
         # 1. 获取所有 Mod 的联锁数据
         # 注意：为了性能，我们一次性查出所有涉及到的 Mod 数据
         # 即使有的 Mod 不在 active_ids 里，只要它被联锁引用了，也要查
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         active_set = set(id.lower() for id in active_ids)
         visited = set()
@@ -205,7 +205,7 @@ class OrderSorter:
         """
         【常态化提示核心】不排序，仅检查当前顺序是否违背任何规则
         """
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         id_to_idx = {mid.lower(): i for i, mid in enumerate(active_ids)}
         active_set = set(id_to_idx.keys())
@@ -391,7 +391,7 @@ class OrderSorter:
         logger.info(f"Starting sort for {len(active_ids)} mods...")
         # 1. 初始化
         groups = self.build_atomic_groups(active_ids)
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
         group_ids = [id(g) for g in groups]

@@ -250,7 +250,7 @@
                 <!-- 基础设置 -->
                 <div class="grid grid-cols-12 gap-4">
                   <CommonInput v-model="editingRule.name" label="规则名称" placeholder="例如: 汉化包置底" class="col-span-8" />
-                  <CommonNumber v-model.number="editingRule.priority" label="优先级 (Priority)" placeholder="例如: 100" class="col-span-4" step="1" :min="0" :max="1000" />
+                  <CommonNumber v-model.number="editingRule.priority" label="优先级 (Priority)" placeholder="例如: 100" class="col-span-4" :step=1 :min="0" :max="1000" />
                   <CommonInput v-model="editingRule.description" label="描述 (可选)" placeholder="规则的备注说明..." class="col-span-12" />
                 </div>
 
@@ -301,7 +301,7 @@
                     <!-- 根据动作类型显示输入框 -->
                     <div v-if="editingRule.action.type.includes('weight')" class="flex items-center gap-2 flex-1">
                       <!-- <input type="number" v-model.number="editingRule.action.value" class="bg-bg-deep border border-text-main/10 rounded-lg px-3 py-2 text-sm w-32 text-text-main outline-none focus:border-accent-primary" /> -->
-                      <CommonNumber v-model.number="editingRule.action.value" step="1" :min="editingRule.action.type === 'weight_shift' ? -1000 : 0" :max="1000" />
+                      <CommonNumber v-model.number="editingRule.action.value" :step=1 :min="editingRule.action.type === 'weight_shift' ? -1000 : 0" :max="1000" />
                       <span class="text-sm text-text-dim">
                         {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
                       </span>
