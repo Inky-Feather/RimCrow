@@ -21,7 +21,7 @@
         <!-- 手动输入框 -->
         <input type="text" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)"
           :placeholder="placeholder || '请输入或粘贴路径...'"
-          class="flex-1 bg-transparent text-sm text-white/90 font-mono outline-none min-w-0 "
+          class="flex-1 bg-transparent text-sm text-text-main/90 font-mono outline-none min-w-0 "
           :class="{ 'direction-rtl': !isFocused }"
           @focus="isFocused = true" @blur="isFocused = false; $emit('blur')"
         />

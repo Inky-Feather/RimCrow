@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
     :class="`border-2 rounded-2xl border-accent-${listColor}/20`">
     <!-- 标题栏 -->
-    <div :class="`px-3 h-8 border-b rounded-t-2xl border-white/5 flex justify-between items-center bg-accent-${listColor}/10`">
+    <div :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
       <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
@@ -11,12 +11,12 @@
     </div>
     <!-- 当前选中的MOD -->
     <div class="px-2 py-2 w-full flex items-center gap-2 shadow-xl/10">
-      <div class="w-13 h-13 shrink-0 rounded-lg bg-black/40 border border-white/30 flex items-center justify-center overflow-hidden shadow-lg">
+      <div class="w-13 h-13 shrink-0 rounded-lg bg-black/40 border border-text-main/30 flex items-center justify-center overflow-hidden shadow-lg">
         <img v-if="targetMod?.thumb_url" :src="targetMod.thumb_url" class="w-full h-full object-cover">
         <span v-else class="text-xs text-text-dim font-bold font-mono">MOD</span>
       </div>
       <div class="flex-1 truncate">
-        <div class="font-bold text-white truncate">{{ modStore.displayModName(targetMod) }}</div>
+        <div class="font-bold text-text-main truncate">{{ modStore.displayModName(targetMod) }}</div>
         <div class="text-xs font-mono text-text-dim/60 truncate">{{ targetMod?.package_id }}</div>
       </div>
     </div>

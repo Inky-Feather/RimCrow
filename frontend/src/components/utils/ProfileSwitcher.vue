@@ -2,7 +2,7 @@
   <div class="relative group/profile" ref="containerRef">
     <!-- 激活状态显示按钮 -->
     <button @click="isOpen = !isOpen"
-      class="flex items-center gap-3 px-3 py-1 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-accent-primary/50 transition-all duration-300"
+      class="flex items-center gap-3 px-3 py-1 rounded-xl bg-text-main/5 border border-text-main/10 hover:bg-text-main/10 hover:border-accent-primary/50 transition-all duration-300"
     >
       <!-- 状态图标：Steam 蓝或本地绿 -->
       <div class="relative flex items-center justify-center">
@@ -10,7 +10,7 @@
       </div>
 
       <div class="flex flex-col items-start gap-0 ">
-        <span class="text-sm font-black text-white/90 tracking-wide">{{ profileStore.currentProfile?.name || 'Default' }}</span>
+        <span class="text-sm font-black text-text-main/90 tracking-wide">{{ profileStore.currentProfile?.name || 'Default' }}</span>
         <div class="flex items-center gap-1">
             <span class="text-[0.6rem] text-text-dim uppercase tracking-tighter opacity-60">当前环境</span>
             <span class="text-[0.6rem] text-accent-tip bg-accent-success/20 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-60">{{ profileStore.currentProfile?.game_version || '未知版本' }}</span>
@@ -23,16 +23,16 @@
     <!-- 下拉列表 -->
     <Transition name="dropdown">
       <div v-if="isOpen" 
-        class="absolute top-full mt-2 left-0 w-64 bg-bg-surface/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-100">
+        class="absolute top-full mt-2 left-0 w-64 bg-bg-surface/90 backdrop-blur-xl border border-text-main/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-100">
         
         <div class="p-1 space-y-1">
           <button v-for="p in profileStore.profiles" :key="p.id" @click="handleSwitch(p.id)"
             class="w-full flex items-center gap-3 px-2 py-1 rounded-xl transition-all duration-200 group/item"
-            :class="p.id === profileStore.currentProfileId ? 'bg-accent-primary/10 border border-accent-primary/20' : 'hover:bg-white/5 border border-transparent'"
+            :class="p.id === profileStore.currentProfileId ? 'bg-accent-primary/10 border border-accent-primary/20' : 'hover:bg-text-main/5 border border-transparent'"
           >
             <component :is="p.use_workshop_mods ? SteamIcon : Folder" class="size-4" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-dim'" />
             <div class="flex-1 text-left">
-              <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-white/80'">{{ p.name }}</div>
+              <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-main/80'">{{ p.name }}</div>
               <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || '未知版本' }}</div>
             </div>
             <Quote v-if="p.description" v-tooltip="p.description" class="size-4 text-text-dim hover:text-accent-primary hover:scale-120 transition-all duration-300" />
@@ -40,8 +40,8 @@
           </button>
         </div>
 
-        <div class="p-1 border-t border-white/5 bg-white/2">
-          <button @click="openManager" class="w-full py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-black uppercase text-text-dim hover:text-white hover:bg-accent-primary/20 transition-all">
+        <div class="p-1 border-t border-text-main/5 bg-text-main/2">
+          <button @click="openManager" class="w-full py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-black uppercase text-text-dim hover:text-text-main hover:bg-accent-primary/20 transition-all">
             <Settings2 class="size-3" />
             管理环境中心
           </button>

@@ -13,7 +13,7 @@
           <!-- 列容器 -->
           <div class="h-full p-1 transition-opacity relative" :style="{ width: (colWidths[index] || 0) + 'px' }" >
             <!-- 1. 详情 (Details) -->
-            <div v-if="col.type === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
+            <div v-if="col.type === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-text-main/5 shadow-2xl">
               <ModDetails />
             </div>
 
@@ -55,7 +55,7 @@
                 </div>
 
                 <!-- 底部按钮组 -->
-                <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
+                <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-text-main/5">
             
                   <!-- 刷新按钮 -->
                   <button :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
@@ -96,7 +96,7 @@
                     @click="orderStore.saveLoadOrder()"
                   >
                     <!-- Dirty 状态下的流光效果 -->
-                    <div v-if="modStore.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
+                    <div v-if="modStore.isDirty" class="absolute inset-0 bg-text-main/20 -translate-x-full animate-shimmer skew-x-12"></div>
                     
                     <svg v-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
                     <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -105,7 +105,7 @@
                   </button>
 
                   <!-- 启动游戏 -->
-                  <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
+                  <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-text-main text-mdfont-bold 
                           shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
                           transition-all duration-200 uppercase tracking-widest
                           hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
@@ -152,14 +152,14 @@
               mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]">
             </div>
             <!-- 边框层：SVG 绘制弧线 -->
-            <svg class="absolute inset-0 w-full h-full text-white/10 fill-none pointer-events-none" viewBox="0 0 20 20">
+            <svg class="absolute inset-0 w-full h-full text-text-main/10 fill-none pointer-events-none" viewBox="0 0 20 20">
               <!-- 从左上(0,0) 画弧到 右下(20,20) -->
               <path d="M0,0 A20,20 0 0,0 20,20" stroke="currentColor" stroke-width="1" />
             </svg>
           </div>
 
           <!-- 2. 抽屉主体 -->
-          <div class="flex-1 flex flex-col bg-transparent backdrop-blur-xl rounded-r-2xl border-y border-r border-white/10 shadow-2xl overflow-hidden relative">
+          <div class="flex-1 flex flex-col bg-transparent backdrop-blur-xl rounded-r-2xl border-y border-r border-text-main/10 shadow-2xl overflow-hidden relative">
             
             <!-- 抽屉内容：Diff 组件 -->
             <div class="flex-1 overflow-hidden">
@@ -171,11 +171,11 @@
             </div>
             
             <!-- 底部动作栏 -->
-            <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-white/5">
-              <h2 class="text-white/80 font-bold">Mod序列对比</h2>
+            <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-text-main/5">
+              <h2 class="text-text-main/80 font-bold">Mod序列对比</h2>
               <div class="flex items-center gap-2">
                 <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">应用文件序列</button>
-                <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
+                <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-text-main/10 text-xs font-bold transition-all">关闭</button>
               </div>
             </div>
 
@@ -187,7 +187,7 @@
             <div class="w-full h-full bg-transparent backdrop-blur-xl mask-[radial-gradient(circle_at_100%_100%,transparent_1.25rem,black_1.3rem)]">
             </div>
             <!-- 边框层 -->
-            <svg class="absolute inset-0 w-full h-full text-white/10 fill-none pointer-events-none" viewBox="0 0 20 20">
+            <svg class="absolute inset-0 w-full h-full text-text-main/10 fill-none pointer-events-none" viewBox="0 0 20 20">
               <!-- 从右上(20,0) 画弧到 左下(0,20) -->
               <path d="M20,0 A20,20 0 0,0 0,20" stroke="currentColor" stroke-width="1" />
             </svg>
@@ -455,7 +455,7 @@ const Resizer = (props, { emit }) => {
         // 颜色与发光变化
         props.active 
           ? 'bg-accent-special w-2 shadow-[0_0_10px_rgba(var(--color-accent-special),0.8)]' 
-          : 'bg-white/10 group-hover:bg-accent-special/50'
+          : 'bg-text-main/10 group-hover:bg-accent-special/50'
       ]
     })
   ])

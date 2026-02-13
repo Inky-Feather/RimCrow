@@ -2,41 +2,41 @@
   <div class="flex flex-col h-full w-full bg-black/20">
     
     <!-- 1. 功能栏 -->
-    <div class="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-white/2">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-text-main/5 bg-text-main/2">
       <!-- 左侧：文件与刷新 -->
       <div class="flex items-center gap-2">
         <!-- 游戏日志文件选择器 (仅游戏模式显示) -->
         <div class="flex items-center gap-2">
           <div class="relative group/file z-30">
-            <button class="flex items-center gap-2 px-3 py-1 bg-black/30 hover:bg-white/5 border border-white/10 rounded-lg text-sm text-accent-cool transition-colors min-w-40 justify-between">
+            <button class="flex items-center gap-2 px-3 py-1 bg-black/30 hover:bg-text-main/5 border border-text-main/10 rounded-lg text-sm text-accent-cool transition-colors min-w-40 justify-between">
               <span class="truncate">{{ selectedFile || '选择文件...' }}</span>
               <svg class="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
             </button>
             <!-- 下拉菜单 -->
-            <div class="absolute left-0 top-full mt-1 w-64 bg-bg-deep/95 border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl opacity-0 invisible group-hover/file:opacity-100 group-hover/file:visible transition-all duration-200 transform origin-top-right">
+            <div class="absolute left-0 top-full mt-1 w-64 bg-bg-deep/95 border border-text-main/10 rounded-lg shadow-2xl backdrop-blur-xl opacity-0 invisible group-hover/file:opacity-100 group-hover/file:visible transition-all duration-200 transform origin-top-right">
               <div v-for="file in files" :key="file.name" 
                    @click="loadFile(file.name)"
-                   class="px-3 py-2 hover:bg-white/10 cursor-pointer flex items-center justify-between group/item">
+                   class="px-3 py-2 hover:bg-text-main/10 cursor-pointer flex items-center justify-between group/item">
                 <div class="flex flex-col min-w-0">
-                  <span class="text-sm text-white font-mono truncate">{{ file.name }}</span>
+                  <span class="text-sm text-text-main font-mono truncate">{{ file.name }}</span>
                   <span class="text-xs text-text-dim">{{ file.mtime }}</span>
                 </div>
                 <span class="text-xs text-accent-primary bg-accent-primary/10 px-1 rounded">{{ formatBytes(file.size) }}</span>
               </div>
-              <div class="border-t border-white/10 p-1">
-                <button @click="openLogFolder" class="w-full text-center text-xs text-text-dim hover:text-white py-1 hover:bg-white/5 rounded">打开所在文件夹</button>
+              <div class="border-t border-text-main/10 p-1">
+                <button @click="openLogFolder" class="w-full text-center text-xs text-text-dim hover:text-text-main py-1 hover:bg-text-main/5 rounded">打开所在文件夹</button>
               </div>
             </div>
           </div>
         </div>
         
-        <button @click="loadFile(selectedFile)" class="p-1.5 hover:bg-white/10 rounded text-text-dim hover:text-white" title="刷新">
+        <button @click="loadFile(selectedFile)" class="p-1.5 hover:bg-text-main/10 rounded text-text-dim hover:text-text-main" title="刷新">
           <svg class="w-3.5 h-3.5" :class="{'animate-spin': loading}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </div>
 
       <!-- 中间：筛选器 -->
-      <div class="flex items-center gap-1 bg-black/20 p-0.5 rounded border border-white/5">
+      <div class="flex items-center gap-1 bg-black/20 p-0.5 rounded border border-text-main/5">
         <button v-for="lvl in ['INFO','WARNING','ERROR']" :key="lvl"
           @click="filters[lvl] = !filters[lvl]"
           class="px-2 py-0.5 text-xs font-bold rounded transition-all"
@@ -63,7 +63,7 @@
         v-slot="{ item, index, active }"
       >
         <DynamicScrollerItem :item="item" :active="active" :data-index="index">
-          <div class="flex gap-2 group/row rounded-sm border-l-2 transition-colors select-text text-sm font-mono wrap-break-word leading-relaxed hover:bg-white/5"
+          <div class="flex gap-2 group/row rounded-sm border-l-2 transition-colors select-text text-sm font-mono wrap-break-word leading-relaxed hover:bg-text-main/5"
                :class="[
                  item.level === 'ERROR' ? 'border-accent-danger/50 bg-accent-danger/5' : 
                  item.level === 'WARNING' ? 'border-accent-warn/30' : 'border-transparent'
@@ -86,7 +86,7 @@
               <div v-if="item.has_stack || item.details" class="mt-1">
                 <!-- 展开按钮 -->
                 <button @click="item._expanded = !item._expanded" 
-                  class="flex items-center gap-1 text-xs text-text-dim hover:text-white transition-colors select-none mb-1">
+                  class="flex items-center gap-1 text-xs text-text-dim hover:text-text-main transition-colors select-none mb-1">
                   <svg class="w-3 h-3 transition-transform duration-200" :class="item._expanded ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                   <span>{{ item._expanded ? '收起详情' : '展开详情' }}</span>
                   <span class="opacity-50 ml-1 text-[0.7rem]">(StackTrace)</span>
@@ -94,10 +94,10 @@
 
                 <!-- 展开的内容 -->
                 <div v-if="item._expanded && item.has_stack" 
-                     class="pl-2 border-l border-white/10 text-text-dim/70 text-[0.8rem] bg-black/30 rounded p-2 overflow-x-auto">
+                     class="pl-2 border-l border-text-main/10 text-text-dim/70 text-[0.8rem] bg-black/30 rounded p-2 overflow-x-auto">
                    <!-- 游戏日志堆栈 -->
                    <!-- <template >
-                      <div v-for="(line, i) in getStackLines(item)" :key="i" class="whitespace-pre hover:text-white/90">
+                      <div v-for="(line, i) in getStackLines(item)" :key="i" class="whitespace-pre hover:text-text-main/90">
                         
                       </div>
                    </template> -->
@@ -109,7 +109,7 @@
             
               <!-- 计数徽章 (折叠重复项) -->
               <div v-if="item.count > 1" class="shrink-0 pt-0.5 mr-1">
-                <span class="bg-white/10 text-white text-[0.7rem] font-bold px-1.5 py-0.5 rounded-full font-mono">
+                <span class="bg-text-main/10 text-text-main text-[0.7rem] font-bold px-1.5 py-0.5 rounded-full font-mono">
                   x{{ item.count }}
                 </span>
               </div>

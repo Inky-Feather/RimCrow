@@ -24,9 +24,9 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
     // 表格相关 (添加了 tailwind 边框类)
     { regex: /\[table\]\s*/gi, replace: '<table class="w-full border-collapse my-2">' },
     { regex: /\[\/table\]\s*/gi, replace: '</table>' },
-    { regex: /\[tr\]\s*/gi, replace: '<tr class="border-b border-white/10">' },
+    { regex: /\[tr\]\s*/gi, replace: '<tr class="border-b border-text-main/10">' },
     { regex: /\[\/tr\]\s*/gi, replace: '</tr>' },
-    { regex: /\[td\]\s*/gi, replace: '<td class="p-2 border border-white/10">' },
+    { regex: /\[td\]\s*/gi, replace: '<td class="p-2 border border-text-main/10">' },
     { regex: /\[\/td\]\s*/gi, replace: '</td>' },
     // [*]替换为</li><li>，解决无闭合问题
     { regex: /\[list\]\s*/gi, replace: '<ul class="list-disc pl-5 my-2" style="white-space: normal"><li>' },
@@ -37,7 +37,7 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
     { regex: /\[code\]/gi, replace: '<code class="bg-black/30 px-1 rounded font-mono text-xs block p-2 my-2">' },
     { regex: /\[\/code\]/gi, replace: '</code>' },
     // 分割线 
-    { regex: /\[hr\]\s*/gi, replace: '<div class="w-3/4 mx-auto border-t border-white/10 my-4"></div>' },
+    { regex: /\[hr\]\s*/gi, replace: '<div class="w-3/4 mx-auto border-t border-text-main/10 my-4"></div>' },
     { regex: /\[\/hr\]\s*/gi, replace: '' },
     { regex: /\[br\]/gi, replace: '<br>' },
     { regex: /\[p\]/gi, replace: '<p class="mb-2">' },
@@ -100,10 +100,10 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
     // match: 完整匹配字符串；symbol: 捕获的符号 (如 '=')；content: 捕获的标题内容 (如 '更新')
     const text = content ? content.trim() : ''
     if (text) { // --- 带标题的分割线 ---
-      return `<div class="flex w-3/4 items-center mx-auto my-4"><div class="grow border-t border-white/10"></div><span class="text-xs mx-1 text-white/40 font-bold whitespace-nowrap">${text}</span><div class="grow border-t border-white/10"></div></div>`
+      return `<div class="flex w-3/4 items-center mx-auto my-4"><div class="grow border-t border-text-main/10"></div><span class="text-xs mx-1 text-text-main/40 font-bold whitespace-nowrap">${text}</span><div class="grow border-t border-text-main/10"></div></div>`
     } else {// --- 纯分割线 ---
       // (为了保持高度一致，也可以用 Flex 写法，或者用之前的 simple div)
-      return '<div class="w-3/4 mx-auto border-t border-white/10 my-4"></div>'
+      return '<div class="w-3/4 mx-auto border-t border-text-main/10 my-4"></div>'
     }
   })
   // 8. 图片标签
@@ -112,7 +112,7 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
   } else {
     htmlText = htmlText.replace(
       /\[img\](.*?)\[\/img\]\n*/gi, 
-      (_, src) => `<img src="${encodeURI(src)}" alt="unity-img" class="max-w-full rounded-lg border border-white/10" loading="lazy" style="object-fit: contain; margin: 0 auto; margin-top: 5px; margin-bottom: 5px;" />`
+      (_, src) => `<img src="${encodeURI(src)}" alt="unity-img" class="max-w-full rounded-lg border border-text-main/10" loading="lazy" style="object-fit: contain; margin: 0 auto; margin-top: 5px; margin-bottom: 5px;" />`
     )
   }
 

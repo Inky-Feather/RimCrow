@@ -1,11 +1,11 @@
 <template>
-  <div class="h-full flex flex-col font-mono text-xs selection:bg-accent-primary/30 selection:text-white">
+  <div class="h-full flex flex-col font-mono text-xs selection:bg-accent-primary/30 selection:text-text-main">
     <!-- B. 工具栏：筛选与搜索 -->
-      <div class="px-4 py-2 flex items-center gap-3 border-b border-white/5">
+      <div class="px-4 py-2 flex items-center gap-3 border-b border-text-main/5">
         
         <!-- 文件选择 -->
         <div class="relative group/file">
-          <button class="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-text-main transition-colors">
+          <button class="flex items-center gap-2 px-3 py-1.5 bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 rounded-lg text-xs text-text-main transition-colors">
             <svg class="w-3.5 h-3.5 text-accent-cool" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             <span class="max-w-100 truncate">{{ activeFileName }}</span>
             <svg class="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
@@ -13,32 +13,32 @@
           <!-- 下拉菜单预留位 -->
         </div>
 
-        <div class="h-4 w-px bg-white/10 mx-1"></div>
+        <div class="h-4 w-px bg-text-main/10 mx-1"></div>
 
         <!-- 搜索框 -->
         <div class="flex-1 relative group/search">
           <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-dim group-focus-within/search:text-accent-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input v-model="searchQuery" type="text" placeholder="搜索日志内容 (支持 Regex)..." 
-            class="w-full bg-black/20 border border-white/10 rounded-lg py-1.5 pl-8 pr-8 text-xs text-text-main focus:outline-none focus:border-accent-primary/50 focus:bg-black/30 transition-all font-mono placeholder:text-text-dim/50" />
-          <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-white">
+            class="w-full bg-black/20 border border-text-main/10 rounded-lg py-1.5 pl-8 pr-8 text-xs text-text-main focus:outline-none focus:border-accent-primary/50 focus:bg-black/30 transition-all font-mono placeholder:text-text-dim/50" />
+          <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
 
         <!-- 级别筛选 Checkbox -->
-        <div class="flex items-center gap-1 bg-black/20 p-1 rounded-lg border border-white/5">
-          <FilterToggle v-model="filters.info" color="text-white" label="INFO" />
+        <div class="flex items-center gap-1 bg-black/20 p-1 rounded-lg border border-text-main/5">
+          <FilterToggle v-model="filters.info" color="text-text-main" label="INFO" />
           <FilterToggle v-model="filters.warn" color="text-accent-warn" label="WARN" />
           <FilterToggle v-model="filters.error" color="text-accent-danger" label="ERR" />
           <FilterToggle v-model="filters.debug" color="text-accent-cool" label="DEBUG" />
         </div>
 
-        <div class="h-4 w-px bg-white/10 mx-1"></div>
+        <div class="h-4 w-px bg-text-main/10 mx-1"></div>
 
         <!-- 自动滚动开关 -->
         <button @click="autoScroll = !autoScroll" 
           class="p-1.5 rounded-lg border transition-all"
-          :class="autoScroll ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/30' : 'bg-transparent text-text-dim border-transparent hover:bg-white/5'"
+          :class="autoScroll ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/30' : 'bg-transparent text-text-dim border-transparent hover:bg-text-main/5'"
           v-tooltip="'自动滚动到底部'">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
         </button>
@@ -61,7 +61,7 @@
         <template v-else>
           <!-- 虚拟滚动优化：实际场景建议用 virtual-list，这里用 v-for 演示结构 -->
           <div v-for="(log, index) in filteredLogs" :key="log.id || index"
-              class="group/row flex gap-2 py-0.5 px-2 hover:bg-white/5 rounded-sm border-l-2 border-transparent transition-colors wrap-break-word"
+              class="group/row flex gap-2 py-0.5 px-2 hover:bg-text-main/5 rounded-sm border-l-2 border-transparent transition-colors wrap-break-word"
               :class="getLevelBorderClass(log.level)">
             
             <!-- 时间戳 -->
@@ -76,12 +76,12 @@
               <!-- App Log Mode: 结构化展示 -->
               <div class="flex items-baseline gap-2">
                 <span class="text-accent-special opacity-80 select-none">[{{ log.module }}]</span>
-                <span :class="{'text-white': log.level !== 'DEBUG', 'text-text-dim': log.level === 'DEBUG'}">
+                <span :class="{'text-text-main': log.level !== 'DEBUG', 'text-text-dim': log.level === 'DEBUG'}">
                   {{ log.message }}
                 </span>
               </div>
               <!-- 详情折叠区 (如果有 details) -->
-              <div v-if="log.details" class="mt-1 ml-1 pl-2 border-l border-white/10 text-text-dim/70 text-xs whitespace-pre-wrap font-mono bg-black/20 rounded p-1">
+              <div v-if="log.details" class="mt-1 ml-1 pl-2 border-l border-text-main/10 text-text-dim/70 text-xs whitespace-pre-wrap font-mono bg-black/20 rounded p-1">
                 {{ log.details }}
               </div>
             </div>
@@ -104,7 +104,7 @@ const FilterToggle = {
   template: `
     <button @click="$emit('update:modelValue', !modelValue)"
       class="px-2 py-0.5 rounded text-xs font-bold border transition-all duration-200 select-none"
-      :class="modelValue ? [color, 'bg-white/10 border-white/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'">
+      :class="modelValue ? [color, 'bg-text-main/10 border-text-main/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'">
       {{ label }}
     </button>
   `

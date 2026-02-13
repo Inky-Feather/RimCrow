@@ -24,7 +24,7 @@
             <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
               :class="`size-6 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
             <div v-else-if="!modData.path" :class="`size-6 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30`">!</div>
-            <div v-else :class="`size-6 rounded border-2 border-dashed border-white/10 flex items-center justify-center`">
+            <div v-else :class="`size-6 rounded border-2 border-dashed border-text-main/10 flex items-center justify-center`">
               <svg :class="`size-5 opacity-20`" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             </div>
           </div>
@@ -50,7 +50,7 @@
           <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
             :class="`w-10 h-8 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
           <div v-else-if="!modData.path" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
-          <div v-else class="w-10 h-10 rounded border-2 border-dashed border-white/10 flex items-center justify-center">
+          <div v-else class="w-10 h-10 rounded border-2 border-dashed border-text-main/10 flex items-center justify-center">
             <svg class="w-6 h-6 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>
           
@@ -112,7 +112,7 @@
       <div class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
         <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
           <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
-            :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-white`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
+            :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-text-main`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
             :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`"
             v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}">
           </div><!-- 悬浮显示分组信息 -->
@@ -209,7 +209,7 @@ const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
     if (issueState.value === 'warn') return `${select} border-accent-warn/40 border bg-accent-warn/10 hover:bg-accent-warn/20`
-    return `${select} bg-bg-surface/20 border-white/10 hover:border-white/20 hover:bg-text-dim/20` // 原有的选中样式
+    return `${select} bg-bg-surface/20 border-text-main/10 hover:border-text-main/20 hover:bg-text-dim/20` // 原有的选中样式
 })
 
 const getCardStyle = (id) => {

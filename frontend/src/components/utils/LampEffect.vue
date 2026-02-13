@@ -19,7 +19,7 @@
         <!-- 左侧光束 (Conic Gradient) -->
         <div
           :style="{ backgroundImage: `conic-gradient(var(--conic-position), var(--tw-gradient-stops))` }"
-          class="animate-conic-gradient absolute right-1/2 top-0 h-56 w-120 origin-top-right overflow-visible bg-linear-to-b from-cyan-500 via-transparent to-transparent text-white opacity-50 [--conic-position:from_70deg_at_center_top]"
+          class="animate-conic-gradient absolute right-1/2 top-0 h-56 w-120 origin-top-right overflow-visible bg-linear-to-b from-cyan-500 via-transparent to-transparent text-text-main opacity-50 [--conic-position:from_70deg_at_center_top]"
         >
           <div class="absolute bottom-0 left-0 z-20 h-40 w-full bg-slate-950 mask-[linear-gradient(to_top,white,transparent)]"></div>
           <div class="absolute bottom-0 left-0 z-20 h-full w-40 bg-slate-950 mask-[linear-gradient(to_right,white,transparent)]"></div>
@@ -28,7 +28,7 @@
         <!-- 右侧光束 (Conic Gradient) -->
         <div
           :style="{ backgroundImage: `conic-gradient(var(--conic-position), var(--tw-gradient-stops))` }"
-          class="animate-conic-gradient absolute left-1/2 top-0 h-56 w-120 origin-top-left bg-linear-to-b from-transparent via-transparent to-cyan-500 text-white opacity-50 [--conic-position:from_290deg_at_center_top]"
+          class="animate-conic-gradient absolute left-1/2 top-0 h-56 w-120 origin-top-left bg-linear-to-b from-transparent via-transparent to-cyan-500 text-text-main opacity-50 [--conic-position:from_290deg_at_center_top]"
         >
           <div class="absolute bottom-0 right-0 z-20 h-full w-40 bg-slate-950 mask-[linear-gradient(to_left,white,transparent)]"></div>
           <div class="absolute bottom-0 right-0 z-20 h-40 w-full bg-slate-950 mask-[linear-gradient(to_top,white,transparent)]"></div>
