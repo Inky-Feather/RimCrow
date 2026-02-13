@@ -13,7 +13,7 @@ from packaging import version
 from backend._version import __version__
 from backend.utils.lanzou_parser import LanzouParser
 from backend.utils.logger import logger
-from backend.settings import UPDATE_CACHE_DIR
+from backend.settings import settings, UPDATE_CACHE_DIR
 from backend.managers.mgr_download import DownloadManager, TaskStatus, DownloadTask
 from backend.utils.event_bus import EventBus
 
@@ -318,6 +318,7 @@ class UpdateManager:
         2. 生成 Bat 脚本
         3. 启动 Bat 并退出当前进程
         """
+        debug = settings.config.debug_mode or False
         if not zip_path:
             # 如果没传路径，尝试使用当前就绪的
             if self.current_update_info and self.current_update_info.local_file_path and self.current_update_info.local_status == "ready":
@@ -380,66 +381,94 @@ class UpdateManager:
             # 5. 生成高兼容性批处理
             bat_path = os.path.join(install_root, "_finish_update.bat")
             
-	    
+            # --- 【调试修改点 1】: 根据 debug 模式调整 BAT 内容 ---
+            if debug:
+                # 调试模式：显示回显，不自删除，暂停查看结果
+                echo_cmd = "@echo on"
+                pause_cmd = "pause"
+                del_self_cmd = ":: Debug mode - script kept"
+                exit_cmd = ":: exit skipped for debug"
+            else:
+                # 生产模式：关闭回显，自删除，退出
+                echo_cmd = "@echo off"
+                pause_cmd = ""
+                del_self_cmd = '(goto) 2>nul & del "%~f0"'
+                exit_cmd = "exit"
             # 1. chcp 65001 -> 处理 UTF-8 (Python 写入的文件)
             # 2. set "_MEIPASS=" -> 极其重要！清除单文件模式的临时路径变量，防止 DLL 加载错误
             # 3. taskkill -> 确保进程彻底杀掉
-            bat_content = f"""@echo off
+            bat_content = f"""{echo_cmd}
 chcp 65001 > nul
 setlocal
 title RimModManager Updater
 
-echo 正在等待主程序退出...
+echo [DEBUG] Current PID: %PID% 
+echo [DEBUG] Install Root: "{install_root}" 
+echo [DEBUG] Payload Dir: "{payload_dir}" 
+
+echo Waiting for the main program to exit... 
 timeout /t 2 /nobreak > nul
 :kill_process
 taskkill /f /im "{exe_name}" >nul 2>&1
 timeout /t 1 /nobreak > nul
 
 :retry_move
-echo 正在替换文件...
-:: 使用 robocopy 能够更好地处理文件占用和权限
+echo Replacing the file...
+:: Using robocopy can better handle file occupation and permissions. 
 robocopy "{payload_dir}" "{install_root}" /E /IS /IT /MOVE /R:5 /W:2 /XF "{os.path.basename(bat_path)}"
 
+:: A Robocopy exit code < 8 indicates success 
 if %ERRORLEVEL% GEQ 8 (
-    echo 替换失败，请确保程序已关闭。
+    echo [ERROR] Robocopy failed with code %ERRORLEVEL% 
     timeout /t 3
     goto retry_move
 )
 
-echo 正在清理临时文件...
-:: 在启动程序之前删除目录
+echo Cleaning up temporary files... 
+:: Before starting the program, delete the directory 
 if exist "{extract_path}" (
     rd /s /q "{extract_path}"
 )
-:: 如果删除失败，尝试循环等待一会（防止 robocopy 句柄未释放）
+:: If deletion fails, try waiting a moment (in case robocopy handles are not released) 
 if exist "{extract_path}" (
     timeout /t 1 /nobreak > nul
     rd /s /q "{extract_path}"
 )
 
-echo 更新成功，正在清理环境并重启...
+echo Update successful, cleaning up environment and restarting... 
 
-:: 清除 PyInstaller 环境残留，防止 DLL 找不到
+:: Clear PyInstaller environment remnants to prevent DLL not found errors 
 set _MEIPASS=
 set _MEIPASS2=
 set PYI_EXPLODE_PATH=
 
-:: 启动新程序
-start "" /d "{install_root}" "{exe_name}"
+echo [DEBUG] Attempting to start: "{install_root}\{exe_name}" 
+echo [DEBUG] Working Directory: "{install_root}" 
 
-:: 确保脚本退出后能删掉自己
-:: (goto) 2>nul & del "%~f0"
-:: exit
+:: Launch a new program 
+start "" /d "{install_root}" "{exe_name}" 
+
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Failed to restart application! 
+    echo Please manually start: {exe_name} 
+)
+
+:: Ensure that the script deletes itself after exiting. 
+{del_self_cmd}
+{pause_cmd}
+{exit_cmd}
 """
             # 写入批处理（注意编码）
             with open(bat_path, "w", encoding="utf-8") as f:
                 f.write(bat_content)
+                
+            cmd_arg = "/k" if debug else "/c"
             
             # 6. 运行脚本
             subprocess.Popen(
-                ["cmd.exe", "/c", bat_path],
+                ["cmd.exe", cmd_arg, bat_path],
                 cwd=install_root,
-                shell=True,
+                shell=not debug,
                 creationflags=subprocess.CREATE_NEW_CONSOLE
             )
             

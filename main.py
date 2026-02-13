@@ -58,10 +58,6 @@ def get_entrypoint():
     """
     # 定义前端开发服务器地址
     dev_server = "http://localhost:5173"
-    # 1. 优先检测开发服务器端口是否可用
-    if is_port_available("localhost", 5173):
-        print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
-        return dev_server
     
     # 1. 获取程序根目录 (Base Directory)
     if getattr(sys, 'frozen', False):
@@ -75,20 +71,25 @@ def get_entrypoint():
         # __file__ 指向当前 main.py 的位置
         base_dir = Path(__file__).parent.resolve()
         meipass_dir = base_dir
+        if is_port_available("localhost", 5173):
+            print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
+            return dev_server
+            
     # 2. 定义探测路径优先级
-    # 优先级 1: 外部根目录下的 dist (方便手动替换或更新)
-    path_external = base_dir / "frontend" / "dist" / "index.html"
-    # 优先级 2: EXE 同级目录 (如果打包时把 index.html 移动到了顶层)
-    path_root = base_dir / "index.html"
-    # 优先级 3: PyInstaller 内部解压目录 (lib 文件夹内部)
+    # 优先级 1: PyInstaller 内部解压目录 (lib 文件夹内部)
     path_internal = meipass_dir / "frontend" / "dist" / "index.html"
+    # 优先级 2: 外部根目录下的 dist (方便手动替换或更新)
+    path_external = base_dir / "frontend" / "dist" / "index.html"
+    # 优先级 3: EXE 同级目录 (如果打包时把 index.html 移动到了顶层)
+    path_root = base_dir / "index.html"
+    
     # 3. 按优先级执行探测
-    if path_external.exists():
-        return str(path_external)
-    if path_root.exists():
-        return str(path_root)
     if path_internal.exists():
         return str(path_internal)
+    if path_root.exists():
+        return str(path_root)
+    if path_external.exists():
+        return str(path_external)
     # 4. 兜底回退：本地开发服务器
     logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
     return dev_server

@@ -224,16 +224,16 @@ class API:
             paths_valid = self.game_mgr.detect_executable(settings.config.game_install_path) is not None
         self._ensure_dlc_parser()   # 确保 DLC Parser 初始化
         # 初始化profile检查
-        # if settings.config.current_profile_id=='default' and not self.profile_mgr.get_current_profile().game_install_path:
-        #     # 初始化默认profile
-        #     self.profile_mgr.update_profile('default',{
-        #         'name': 'Default',
-        #         'description': 'Default profile',
-        #         'game_version': game_version,
-        #         'game_install_path': settings.config.game_install_path,
-        #         'user_data_path': settings.config.user_data_path,
-        #         'use_workshop_mods': "steamlibrary" in settings.config.game_install_path.lower(),
-        #     })
+        if settings.config.current_profile_id=='default' and not self.profile_mgr.get_current_profile().game_install_path:
+            # 初始化默认profile
+            self.profile_mgr.update_profile('default',{
+                'name': 'Default',
+                'description': 'Default profile',
+                'game_version': settings.config.game_version,
+                'game_install_path': settings.config.game_install_path,
+                'user_data_path': settings.config.user_data_path,
+                'use_workshop_mods': "steamlibrary" in settings.config.game_install_path.lower(),
+            })
         
         # 2. 获取当前环境的 Mod 数据 (包含用户自定义数据), 并排除缺失的 Mod
         # 传入 None 让 DAO 自动读取 settings.current_profile_id
