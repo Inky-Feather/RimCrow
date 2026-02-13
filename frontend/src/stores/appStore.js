@@ -580,7 +580,7 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.select_file_dialog(home_path, file_types)
     if (checkResult(res, "获取文件路径")) {
       return res.data
-    } else if (res.status === 'error') {
+    } else {
         console.error("获取文件路径异常:", res.message)
     }
   }

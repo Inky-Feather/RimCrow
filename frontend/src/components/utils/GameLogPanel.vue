@@ -131,7 +131,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useToast } from 'vue-toastification'
 import { parseUnityRichText } from '../../utils/unityTextParser'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
+import { useAppStore } from '../../stores/appStore'
 
+const appStroe = useAppStore()
 const menuStore = useContextMenuStore()
 const toast = useToast()
 const files = ref([])
@@ -147,24 +149,11 @@ const filteredLogs = computed(() => {
 const init = async () => {
   if (!window.pywebview) return
   const res = await window.pywebview.api.get_game_log_files()
-  if (res.status === 'success') {
+  if (appStroe.checkResult(res, '获取游戏日志文件列表')) {
     files.value = res.data
     if (files.value.length > 0) {
       selectedFile.value = files.value[0].name
       loadFile(selectedFile.value)
-    }
-  }
-}
-
-// 获取游戏日志文件列表
-const fetchGameLogFiles = async () => {
-  if (!window.pywebview) return
-  const res = await window.pywebview.api.get_game_log_files()
-  if (res.status === 'success') {
-    gameLogFiles.value = res.data
-    // 默认加载第一个 (通常是 Player.log)
-    if (gameLogFiles.value.length > 0 && !activeGameLogName.value) {
-      loadGameLog(gameLogFiles.value[0].name)
     }
   }
 }
@@ -175,7 +164,7 @@ const loadFile = async (filename) => {
   selectedFile.value = filename
   try {
     const res = await window.pywebview.api.read_game_log(filename)
-    if (res.status === 'success') {
+    if (appS) {
       // 后端已经做好了去重和分块，直接使用
       logs.value = res.data.blocks.map(b => ({
         ...b,
