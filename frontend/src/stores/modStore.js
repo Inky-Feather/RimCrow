@@ -221,6 +221,16 @@ export const useModStore = defineStore('mods', () => {
     inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(i))
     tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(i))
   }
+  // 批量启用/停用Mod
+  const changeModsActive = (ids, active) => {
+    if(typeof ids === 'string') ids = [ids]
+    removeIdsOnAllList(ids)
+    if(active) {
+      activeIds.value.push(...ids)
+    } else {
+      inactiveIds.value.push(...ids)
+    }
+  }
   // 清除选择
   const clearSelection = () => {
     selectedIds.value = []
@@ -960,7 +970,7 @@ export const useModStore = defineStore('mods', () => {
 
     // Actions
     setMods, reset, takeModById, takeModListByIds, displayModName, displayModType, displayModIcon, 
-    updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, 
+    updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, 
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 

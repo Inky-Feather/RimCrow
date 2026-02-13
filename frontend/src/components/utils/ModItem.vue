@@ -1,7 +1,7 @@
 <!-- ModItem.vue -->
 <template>
   <div class="py-[2px] flex items-center gap-1 select-none relative" :data-id="item_id"
-    @contextmenu="handleContextMenu">
+    @contextmenu="handleContextMenu" @dblclick="handleDoubleClick">
     <!-- 序号（通过位数计算动态调整字体大小） -->
     <!-- :style="{ fontSize: 18-(index+1).toString().length*3 + 'px' }" -->
     <div v-if="showIndex" class="swipe-trigger w-6 h-6 p-3 flex items-center justify-center rounded"
@@ -143,7 +143,7 @@ import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -175,6 +175,9 @@ const confirmStore = useConfirmStore()
 const modData = computed(() => modStore.takeModById(props.item_id))
 const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
 // const modIcon = computed(() => modStore.getIconUrl(props.id))
+
+// 是否启用
+const isActive = computed(() => modStore.activeIds.includes(props.item_id))
 
 const modType = computed(() => modStore.displayModType(modData.value))
 
@@ -224,6 +227,13 @@ const getCardStyle = (id) => {
   base['color'] = color
   return base
 }
+
+// 双击启用/停用 Mod
+const handleDoubleClick = () => {
+  if (appStore.settings.ui.double_click_active_mod) {
+    modStore.changeModsActive([props.item_id], !isActive.value)
+  }
+}
 // 删除选中项文件
 const deleteMod = async () => {
   appStore.deletePath(modData.value.path)
@@ -233,6 +243,7 @@ const deleteModFiles = async () => {
   const paths = modStore.selectedMods.map(m => m.path)
   appStore.deletePaths(paths)
 }
+
 // 取消订阅模组
 const unsubscribeMod = async (delete_file = false) => {
   const res = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
@@ -280,6 +291,9 @@ const handleContextMenu = async (event) => {
         icon: MOD_TYPE_ICON_MAP[key],
         label: value, action: () => modStore.setModsType(selectedIds, key)
       })),{ label: '恢复默认', level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
+    },
+    { label: isActive.value?'停用':'启用', icon: isActive.value? CircleSlash2:CircleCheckBig, 
+      action: () => modStore.changeModsActive(selectedIds, !isActive.value) 
     },
   ]
   // 文件处理菜单

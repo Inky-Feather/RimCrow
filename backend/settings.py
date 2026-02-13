@@ -67,6 +67,7 @@ class UIConfig:
     drag_delay: int = 30            # 拖动判定延迟 (毫秒)
     tooltip_hover_time: int = 1000  # 鼠标悬停显示提示时间 (毫秒)
     show_mod_hover_panel: bool = True  # 是否显示 Mod 悬停面板
+    double_click_active_mod: bool = True  # 是否双击启用/停用 Mod
     
     show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
     show_icons_cloud: bool = True  # 是否显示动态图标云
