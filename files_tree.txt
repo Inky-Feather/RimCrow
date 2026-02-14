@@ -14,6 +14,7 @@
 │   │   ├──  mgr_files.py
 │   │   ├──  mgr_game.py
 │   │   ├──  mgr_game_logs.py
+│   │   ├──  mgr_game_monitor.py
 │   │   ├──  mgr_mods_config.py
 │   │   ├──  mgr_network.py
 │   │   ├──  mgr_profile.py
@@ -44,10 +45,6 @@
 │   └──  static_page.py
 │   
 ├── ·[data]
-├── ·[Downloads]
-│   ├──  414bebd85119f267475dd88ffaf1e66c.zip
-│   └──  RimModManager v0.15.4.zip
-│   
 ├── ·[frontend]
 │   ├── ·[public]
 │   │   └──  vite.svg
@@ -58,7 +55,25 @@
 │   │   │   
 │   │   ├── ·[components]
 │   │   │   ├── ·[common]
+│   │   │   │   ├── ·[ContextMenu]
+│   │   │   │   ├── ·[input]
+│   │   │   │   ├── ·[TagsSearch]
+│   │   │   │   ├──  Confirm.vue
+│   │   │   │   └──  HoverPanel.vue
+│   │   │   │   
 │   │   │   ├── ·[utils]
+│   │   │   │   ├──  AppLogPanel.vue
+│   │   │   │   ├──  DependencyGraph.vue
+│   │   │   │   ├──  FocusTabs.vue
+│   │   │   │   ├──  GameLogPanel.vue
+│   │   │   │   ├──  GroupItem.vue
+│   │   │   │   ├──  ImageCloud.vue
+│   │   │   │   ├──  LampEffect.vue
+│   │   │   │   ├──  LuxBreatheIcon.vue
+│   │   │   │   ├──  ModItem.vue
+│   │   │   │   ├──  ProfileSwitcher.vue
+│   │   │   │   └──  SegmentedTabs.vue
+│   │   │   │   
 │   │   │   ├──  BackupList.vue
 │   │   │   ├──  ConflictResolver.vue
 │   │   │   ├──  DebugPanel.vue
@@ -83,6 +98,11 @@
 │   │   ├── ·[modules]
 │   │   │   └── ·[search]
 │   │   │   
+│   │   │       ├──  QueryParser.js
+│   │   │       ├──  SearchEngine.js
+│   │   │       ├──  SearchHelp.js
+│   │   │       └──  SearchTypes.js
+│   │   │       
 │   │   ├── ·[stores]
 │   │   │   ├──  appStore.js
 │   │   │   ├──  confirmStore.js
@@ -98,6 +118,7 @@
 │   │   ├── ·[utils]
 │   │   │   ├──  colorDeal.js
 │   │   │   ├──  constants.js
+│   │   │   ├──  uiHelper.js
 │   │   │   └──  unityTextParser.js
 │   │   │   
 │   │   ├──  App.vue
@@ -120,11 +141,10 @@
 │   │   ├──  steam_worker.py
 │   │   └──  SteamworksPy64.dll
 │   │   
-│   ├── ·[steamcmd]
-│   │   └──  steamcmd.exe
-│   │   
-│   └── ·[steamworks]
+│   └── ·[steamcmd]
 │   
+│       └──  steamcmd.exe
+│       
 ├──  .gitignore
 ├──  .python-version
 ├──  files_tree.txt
