@@ -255,7 +255,10 @@ class API:
             if self.dlc_parser:
                 # 传入当前语言，Parser 内部会查找缓存
                 self.dlc_parser.translate_record(mod, settings.config.language)
-
+                
+            # 注入清洗后的规则集
+            mod['rules'] = self.sorter.rule_mgr.get_effective_mod_rules(mod['package_id'], mod)
+            
             # 图片 URL 注入
             pkg_id = mod['package_id']
             # 优先使用物理路径（Source Path），即使它是被链接的 Workshop Mod
@@ -989,6 +992,17 @@ class API:
         """获取规则系统的全局设置 (开关状态、黑名单等)"""
         return ApiResponse.success(self.sorter.rule_mgr.settings)
 
+    def change_rule_source_priority(self, rules_sources: List[str]):
+        """
+        改变规则来源的优先级
+        rules_sources: 按优先级排序的规则来源列表
+        """
+        try:
+            success = self.sorter.rule_mgr.change_rule_source_priority(rules_sources)
+            return ApiResponse.success() if success else ApiResponse.error("设置失败")
+        except Exception as e:
+            return ApiResponse.error(f"设置失败: {str(e)}")
+    
     @log_api_call
     def rule_global_enable(self, key: str, enabled: bool):
         """

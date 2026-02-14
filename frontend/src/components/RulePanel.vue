@@ -30,6 +30,49 @@
               </button>
             </nav>
 
+            <!-- ================= 优先级排序 (侧边栏) ================= -->
+            <div class="px-4 py-4 bg-bg-highlight/25 border-text-main/5">
+              <div class="flex items-center justify-between mb-3 px-2">
+                <span class="text-xs font-bold text-text-dim uppercase tracking-widest">
+                  生效优先级
+                  <label v-tooltip="'规则生效优先级，影响自动排序和问题检测的判定。'" class="text-xs text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                </span>
+                <div class="flex gap-2">
+                  <button v-if="isPriorityDirty" @click="resetPriority" v-tooltip="'重置'"
+                    class="text-text-dim hover:text-text-main transition-colors">
+                    <RotateCcw class="w-3.5 h-3.5" />
+                  </button>
+                  <button @click="savePriority" v-tooltip="isPriorityDirty ? '保存优先级修改' : '无变化'"
+                    :class="[isPriorityDirty ? 'text-accent-success scale-110' : 'text-text-dim opacity-50']"
+                    class="transition-all duration-300">
+                    <Save class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="space-y-1 relative">
+                <TransitionGroup name="flip-list">
+                  <div v-for="(source, idx) in localPriority" :key="source"
+                    draggable="true"
+                    @dragstart="onDragStart($event, idx)"
+                    @dragover="onDragOver($event, idx)" 
+                    @dragend="onDragEnd"
+                    class="drag-item flex items-center gap-2 px-3 py-2 bg-text-dim/10 border border-text-main/5 rounded-lg cursor-grab active:cursor-grabbing group transition-colors hover:border-accent-primary/30"
+                    :class="{ 'opacity-20 bg-accent-primary/5 border-accent-primary/50': dragIndex === idx }">
+                    <!-- 内部元素增加 pointer-events-none 防止干扰 dragenter -->
+                    <GripVertical class="pointer-events-none w-3.5 h-3.5 text-text-dim group-hover:text-accent-primary transition-colors" />
+                    <span class="pointer-events-none text-xs font-medium text-text-main/80 select-none">{{ sourceNames[source] }}</span>
+                    <span class="pointer-events-none ml-auto text-[10px] font-mono text-text-dim bg-black/40 w-4 h-4 flex items-center justify-center rounded">
+                      {{ idx + 1 }}
+                    </span>
+                  </div>
+                </TransitionGroup>
+              </div>
+              <p class="text-[10px] text-text-dim/60 mt-2 px-2 leading-relaxed">
+                * 生效优先级：从上到下，优先级从高到低。
+              </p>
+            </div>
+
             <div class="p-4 border-t border-text-main/5 space-y-2">
               <button @click="ruleStore.handleImport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-text-main/5 hover:bg-text-main/10 text-sm text-text-dim transition-all border border-text-main/5">
                 <Download class="w-3 h-3" /> 导入配置包
@@ -333,8 +376,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff } from 'lucide-vue-next'
+import { ref, computed, watch } from 'vue'
+import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff, GripVertical, Save, RotateCcw } from 'lucide-vue-next'
 import { useToast } from "vue-toastification"
 import { useAppStore } from '../stores/appStore'
 import { useModStore } from '../stores/modStore'
@@ -557,7 +600,105 @@ const toggleModRule = (modId) => {
   }
 }
 
+// --- 优先级排序逻辑 ---
+const sourceNames = {
+  user: '用户规则',
+  native: '原版规则',
+  community: '社区规则',
+  dynamic: '动态规则'
+}
 
+// 本地优先级列表，用于拖拽展示
+const localPriority = ref([])
+const dragIndex = ref(null)
+
+// 监听 store 数据变化，初始化本地列表
+watch(() => ruleStore.settings?.rule_source_priority, (newVal) => {
+  if (newVal) localPriority.value = [...newVal]
+}, { immediate: true })
+
+// 是否发生变动（用于保存按钮变色）
+const isPriorityDirty = computed(() => {
+  const original = ruleStore.settings?.rule_source_priority || []
+  return JSON.stringify(localPriority.value) !== JSON.stringify(original)
+})
+
+// 拖拽逻辑
+const onDragStart = (e, index) => {
+  dragIndex.value = index;
+  // 设置拖拽效果，这会固定光标为 "move"
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.dropEffect = 'move';
+  
+  // 兼容火狐：必须设置 setData 才能触发拖拽
+  e.dataTransfer.setData('text/plain', index);
+  
+  // 增加一个类名，用于 CSS 优化
+  e.target.classList.add('is-dragging');
+};
+
+const onDragOver = (e, index) => {
+  e.preventDefault(); // 必须保留，允许投放
+  
+  if (dragIndex.value === null || dragIndex.value === index) return;
+
+  // 获取目标元素的空间信息
+  const targetRect = e.currentTarget.getBoundingClientRect();
+  
+  // 计算目标元素的中点高度
+  const midpoint = targetRect.top + targetRect.height / 2;
+  
+  // 鼠标当前的 Y 坐标
+  const mouseY = e.clientY;
+
+  /**
+   * 缓冲区逻辑：
+   * 1. 如果向上拖拽 (dragIndex > index)，鼠标必须滑过目标项的中点以上
+   * 2. 如果向下拖拽 (dragIndex < index)，鼠标必须滑过目标项的中点以下
+   */
+  const draggingDown = dragIndex.value < index;
+  const draggingUp = dragIndex.value > index;
+
+  if (draggingDown && mouseY < midpoint) return;
+  if (draggingUp && mouseY > midpoint) return;
+
+  // 只有通过了中点判定，才执行交换
+  const list = [...localPriority.value];
+  const item = list.splice(dragIndex.value, 1)[0];
+  list.splice(index, 0, item);
+  
+  localPriority.value = list;
+  dragIndex.value = index;
+};
+
+const onDragEnter = (index) => {
+  // 如果进入的是自身，或者目标索引没变，直接返回
+  if (index === dragIndex.value) return;
+
+  // 核心逻辑：直接操作数组，Vue 的 flip-list 会处理平滑动画
+  const list = [...localPriority.value];
+  const draggedItem = list.splice(dragIndex.value, 1)[0];
+  list.splice(index, 0, draggedItem);
+  
+  localPriority.value = list;
+  dragIndex.value = index; // 更新当前索引，防止抖动
+};
+
+const onDragEnd = (e) => {
+  dragIndex.value = null;
+  e.target.classList.remove('is-dragging');
+};
+
+const savePriority = async () => {
+  if (!isPriorityDirty.value) return
+  const success = await ruleStore.changeRuleSourcePriority(localPriority.value)
+  if (success) {
+  }
+}
+
+const resetPriority = () => {
+  localPriority.value = [...(ruleStore.settings?.rule_source_priority || [])]
+}
 </script>
 
 <style scoped>
@@ -572,4 +713,50 @@ const toggleModRule = (modId) => {
 /* 页面切换动画 */
 .panel-fade-enter-active, .panel-fade-leave-active { transition: opacity 0.4s ease; }
 .panel-fade-enter-from, .panel-fade-leave-to { opacity: 0; }
+
+
+/* 1. 核心：当处于拖拽状态时，禁用列表中所有子元素的鼠标事件 */
+/* 这能防止鼠标进入图标或文字时，意外触发 dragenter 导致抖动 */
+.drag-item * {
+  pointer-events: none;
+}
+
+/* 2. 移除正在拖拽的元素在列表中的视觉干扰，但保留占位 */
+.is-dragging {
+  /* 也可以设置 visibility: hidden 或极低不透明度 */
+  opacity: 0.1; 
+}
+
+/* 3. 修正光标 */
+.cursor-grab {
+  cursor: grab !important;
+}
+.cursor-grabbing {
+  cursor: grabbing !important;
+}
+
+/* 4. Flip List 动画保持平滑 */
+/* 1. 交换时的动画曲线：建议使用 out-expo 或 out-quart，前快后慢有助于视觉对齐 */
+.flip-list-move {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 2. 关键优化：被拖拽的源节点在占位时，不应接收任何 Pointer 事件 */
+/* 这能防止被拖拽的“影子”干扰鼠标判定 */
+.is-dragging {
+  opacity: 0.1;
+  pointer-events: none; 
+}
+
+/* 3. 防止拖拽时文字选中干扰 */
+.drag-item {
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+/* 确保交换时没有多余的布局跳动 */
+.flip-list-enter-active,
+.flip-list-leave-active {
+  transition: none;
+}
 </style>

@@ -402,7 +402,7 @@ export const useModStore = defineStore('mods', () => {
           if (warnModRule.length > 0) {
             let msg = '请检查以下Mod规则是否正确：\n'
             warnModRule.forEach(item => {
-              msg += `${displayModName(item.mod_id)} 的 ${item.type.name} 可能存在问题：（${displayModName(item.target_id)}）\n`
+              msg += `${displayModName(item.mod_id)} 的 ${getSourceText(item.type.name)}规则 可能存在问题：（${displayModName(item.target_id)}）\n`
             })
             toast.warning(msg,{position: "top-center",timeout: 10000})
           }
@@ -656,172 +656,186 @@ export const useModStore = defineStore('mods', () => {
   // --- 实时问题分析 ---
   // 排序问题检测器
   const modIssues = computed(() => {
-    const issuesMap = new Map() // Key: modId, Value: Array<Issue>
-    const activeSet = new Set(activeIds.value)
-    dataVersion.value // 根据数据版本，确保最新
-    
-    // 添加问题（id: 模组ID, type: 问题类型, level: 问题等级, message: 问题描述, targetId: 关联的 Mod ID (如果有)）
-    const _addIssue = (id, type, level, message, targetId = null) => {
-      const mod = takeModById(id)
-      // 确保 ignored_issues 存在且是一个数组
-      const ignoredList = mod?.ignored_issues || []
-      if (ignoredList.includes(type)) return
-      // 确保 issuesMap 存在该模组的记录位置
-      if (!issuesMap.has(id)) issuesMap.set(id, [])
-      issuesMap.get(id).push({ type, level, message, targetId })
-    }
+      const issuesMap = new Map() // Key: modId, Value: Array<Issue>
+      dataVersion.value // 依赖触发器
 
-    // 1. 全局检查，检查通用问题 (遍历所有 Mod)
-    // 包括 inactive 的也要检查版本和文件完整性
-    for (const mod of allModsMap.value.values()) {
-      const id = mod.package_id.toLowerCase()
-
-      // A. 文件丢失检查
-      if (!mod.path) {
-        _addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
-        continue // 文件都没了，后面的检查没意义
+      // 辅助函数：添加问题
+      const _add = (id, type, level, message, targetId = null) => {
+          const mod = allModsMap.value.get(id)
+          if (!mod) return
+          // 忽略检查
+          if (mod.ignored_issues && mod.ignored_issues.includes(type)) return
+          if (!issuesMap.has(id)) issuesMap.set(id, [])
+          issuesMap.get(id).push({ type, level, message, targetId })
       }
 
-      // B. 游戏版本支持检查
-      // 检查 supported_versions 是否包含当前游戏主版本号（前三位）
-      // 例如：mod.supported_versions 是 ["1.4", "1.5"]，游戏版本 settings.game_version 是 "1.5.4104"
-      if (appStore.settings.game_version) {
-        const gameVerMajor = appStore.settings.game_version.substring(0, 3) // 获取当前游戏主版本号（前三位）
-        if (mod.supported_versions && !mod.supported_versions.includes(gameVerMajor)) {
-           _addIssue(id, ISSUE_TYPE.WARN_VERSION_MISMATCH, ISSUE_LEVEL.WARN, 
-             `^^版本问题^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${(mod.supported_versions || []).join('··, ··')}··)__`)
-        }
-      }
+      // -------------------------------------------------
+      // 1. 全局检查 (Global Checks) - 针对每个个体
+      // 范围：所有已加载的 Mod (无论是否启用)
+      // -------------------------------------------------
+      for (const mod of allModsMap.value.values()) {
+          const id = mod.package_id.toLowerCase()
 
-      // C. 联锁检查 (Link Mods)
-      if (mod.lock_next_mod || mod.lock_previous_mod) {
-        const allModIds = new Set(allModsMap.value.keys())
-        // 缺失检查
-        if (mod.lock_next_mod && !allModIds.has(mod.lock_next_mod)) {
-          _addIssue(id, ISSUE_TYPE.WARN_LINK_MOD_MISSING, ISSUE_LEVEL.WARN, 
-            `^^后置联锁模组缺失^^：${displayModName(mod.lock_next_mod)}`, mod.lock_next_mod)
-          continue
-        }
-        if (mod.lock_previous_mod && !allModIds.has(mod.lock_previous_mod)) {
-          _addIssue(id, ISSUE_TYPE.WARN_LINK_MOD_MISSING, ISSUE_LEVEL.WARN, 
-            `^^前置联锁模组缺失^^：${displayModName(mod.lock_previous_mod)}`, mod.lock_previous_mod)
-          continue
-        }
-      }
-    }
-
-    // 2. 启用列表检查 (遍历 activeIds)
-    // 这里的顺序很重要，activeIds 是有序数组
-    activeIds.value.forEach((id, index) => {
-      const mod = allModsMap.value.get(id)
-      if (!mod || !mod.path) {
-        _addIssue(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
-        return
-      }
-
-      // C. 依赖检查 (Dependencies)
-      if (mod.dependencies_mods) {
-        mod.dependencies_mods.forEach(dep => {
-          const depId = dep.package_id.toLowerCase()
-          // C1. 是否完全缺失
-          if (!allModsMap.value.has(depId)) {
-            _addIssue(id, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY, ISSUE_LEVEL.ERROR, 
-              `!!依赖缺失!!：${displayModName(dep)}`, depId)
-            return
+          // A. 文件缺失
+          if (!mod.path) {
+              _add(id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析')
+              continue // 文件都没了，没必要查别的
           }
-          // C2. 是否未启用
-          if (!activeSet.has(depId)) {
-            _addIssue(id, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
-              `!!依赖未启用!!：${displayModName(dep)}`, depId)
-            return
+
+          // B. 版本支持检查
+          if (appStore.settings.game_version) {
+              const gameVerMajor = appStore.settings.game_version.substring(0, 3)
+              if (mod.supported_versions && mod.supported_versions.length > 0 && !mod.supported_versions.includes(gameVerMajor)) {
+                  _add(id, ISSUE_TYPE.WARN_VERSION_MISMATCH, ISSUE_LEVEL.WARN, 
+                        `^^版本不符^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${(mod.supported_versions || []).join('··, ··')}··)__`)
+              }
           }
-          // C3. 排序检查 (依赖必须在当前 Mod 之前)
-          const depIndex = activeIds.value.indexOf(depId)
-          if (depIndex > index) {
-            _addIssue(id, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-              `!!依赖后置!!：必须在依赖 [[${displayModName(dep)}]] 之后加载`, depId)
-          }
-        })
       }
 
-      // D. Load After / Load Before 检查
-      if (mod.load_after_mods) {
-        mod.load_after_mods.forEach(dep => {
-          const depId = dep.toLowerCase()
-          // 排序检查 (前置必须在当前 Mod 之前)
-          const depIndex = activeIds.value.indexOf(depId)
-          if (depIndex !== -1 && depIndex > index) {
-            _addIssue(id, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-              `!!排序错误!!：必须在 [[${displayModName(depId)}]] 之后加载`, depId)
+      // -------------------------------------------------
+      // 2. 启用列表检查 (Active List Checks)
+      // 范围：activeIds 列表
+      // -------------------------------------------------
+      // 构建 Map 以实现 O(1) 查找 active 列表中的索引
+      const activeIndexMap = new Map()
+      const len = activeIds.value.length
+      for (let i = 0; i < len; i++) {
+          activeIndexMap.set(activeIds.value[i].toLowerCase(), i)
+      }
+
+      for (let i = 0; i < len; i++) {
+          const currentId = activeIds.value[i].toLowerCase()
+          const mod = allModsMap.value.get(currentId)
+          if (!mod || !mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
+
+          // const rules = mod.rules // 这是后端计算好的 { dependencies, load_after, incompatible ... }
+          // 兼容性处理：如果后端还没刷新，rules可能为空
+          const rules = mod.rules || { dependencies: [], load_after: [], load_before: [], incompatible: [] }
+          // 记录已经作为“硬依赖”处理过的目标
+          const processedDependencies = new Set()
+
+          // A. 依赖检查 (Dependencies) - 必须存在且启用
+          // 这里的 rules.dependencies 来源于 Native (About.xml)
+          for (const dep of rules.dependencies) {
+              const targetId = dep.target.toLowerCase()
+              processedDependencies.add(targetId) // 标记已处理
+              const targetMod = allModsMap.value.get(targetId)
+              const targetName = targetMod ? displayModName(targetMod) : targetId
+
+              // 缺失：完全没下载
+              if (!targetMod) {
+                  _add(currentId, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY, ISSUE_LEVEL.ERROR, 
+                      `!!依赖缺失!!：缺少前置模组 [[${targetName}]]`, targetId)
+                  continue
+              }
+              // 未启用：下载了但没激活
+              if (!activeIndexMap.has(targetId)) {
+                  _add(currentId, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
+                      `!!依赖未启用!!：未启用前置模组 [[${targetName}]]`, targetId)
+                  continue
+              }
+              // 排序：依赖必须在前面
+              if (activeIndexMap.get(targetId) > i) {
+                    _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                      `!!依赖后置!!：必须在依赖 [[${targetName}]] 之后加载`, targetId)
+              }
           }
-        })
-      }
-      if (mod.load_before_mods) {
-        mod.load_before_mods.forEach(dep => {
-          const depId = dep.toLowerCase()
-          // 排序检查 (前置必须在当前 Mod 之后)
-          const depIndex = activeIds.value.indexOf(depId)
-          if (depIndex !== -1 && depIndex < index) {
-            _addIssue(id, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-              `!!排序错误!!：必须在 [[${displayModName(depId)}]] 之前加载`, depId)
+
+          // B. 排序规则 (Load After) - 仅当目标存在时检查
+          for (const rule of rules.load_after) {
+              const targetId = rule.target.toLowerCase()
+              // 避免重复报错，也避免当依赖缺失时报排序错误
+              if (processedDependencies.has(targetId)) continue
+              // 如果目标没启用，忽略这条排序规则 (Soft Requirement)
+              if (!activeIndexMap.has(targetId)) continue
+              const targetName = displayModName(targetId)
+              const sourceText = getSourceText(rule.source)
+              if (activeIndexMap.get(targetId) > i) {
+                  _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                      `^^排序警告^^：根据 __${sourceText}__ 规则，应在 [[${targetName}]] 之后加载`, targetId)
+              }
           }
-        })
-      }
-      
-      // E. 不兼容检查 (incompatible_mods)
-      if (mod.incompatible_mods) {
-        mod.incompatible_mods.forEach(badId => {
-          const lowerBad = badId.toLowerCase()
-          if (activeSet.has(lowerBad)) {
-            _addIssue(id, ISSUE_TYPE.ERROR_INCOMPATIBLE, ISSUE_LEVEL.ERROR, 
-              `!!模组冲突!!：与 ${displayModName(lowerBad)} 不兼容`, lowerBad)
+
+          // C. 排序规则 (Load Before) - 仅当目标存在时检查
+          for (const rule of rules.load_before) {
+              const targetId = rule.target.toLowerCase()
+              // LoadBefore 通常不会是 Dependency，但也做个防守
+              if (processedDependencies.has(targetId)) continue
+              if (!activeIndexMap.has(targetId)) continue
+              const targetName = displayModName(targetId)
+              const sourceText = getSourceText(rule.source)
+              if (activeIndexMap.get(targetId) < i) {
+                  _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                      `^^排序警告^^：根据 __${sourceText}__ 规则，应在 [[${targetName}]] 之前加载`, targetId)
+              }
           }
-        })
+
+          // D. 冲突检查 (Incompatible) - 目标存在即报错
+          for (const rule of rules.incompatible) {
+              const targetId = rule.target.toLowerCase()
+              if (activeIndexMap.has(targetId)) {
+                  const targetName = displayModName(targetId)
+                  const sourceText = getSourceText(rule.source)
+                  // 如果有 detail (比如社区规则的备注)，加上去
+                  const extra = rule.detail?.comment ? ` (${rule.detail.comment})` : ''
+                  _add(currentId, ISSUE_TYPE.ERROR_INCOMPATIBLE, ISSUE_LEVEL.ERROR, 
+                      `!!模组冲突!!：__${sourceText}__ 规则指出与 [[${targetName}]] 不兼容${extra}`, targetId)
+              }
+          }
+
+          // E. 联锁检查 (Chain Check - Active)
+          // 检查当前列表的前后是否符合 lock 要求
+          _checkChainLink(mod, i, activeIds.value, _add)
       }
 
-      // F. 联锁排序检查
-      if(mod.lock_previous_mod && activeIds.value[index-1] !== mod.lock_previous_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
-      }
-      if(mod.lock_next_mod && activeIds.value[index+1] !== mod.lock_next_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
-      }
-    })
+      // -------------------------------------------------
+      // 3. 停用列表/临时列表 (Inactive/Temp Checks)
+      // 范围：仅检查联锁完整性
+      // -------------------------------------------------
+      _checkListChain(inactiveIds.value, _add)
+      _checkListChain(tempIds.value, _add)
 
-    // 3. 禁用列表检查 (遍历 inactiveIds)
-    inactiveIds.value.forEach((id, index) => {
-      const mod = allModsMap.value.get(id)
-      if (!mod) return
-      // 联锁排序检查
-      if(mod.lock_previous_mod && inactiveIds.value[index-1] !== mod.lock_previous_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
-      }
-      if(mod.lock_next_mod && inactiveIds.value[index+1] !== mod.lock_next_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
-      }
-    })
-
-    // 4. 临时列表检查 (遍历 tempIds)
-    tempIds.value.forEach((id, index) => {
-      const mod = allModsMap.value.get(id)
-      if (!mod) return
-      // 联锁排序检查
-      if(mod.lock_previous_mod && tempIds.value[index-1] !== mod.lock_previous_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：前一个模组应为 [[${displayModName(mod.lock_previous_mod)}]]`, mod.lock_previous_mod)
-      }
-      if(mod.lock_next_mod && tempIds.value[index+1] !== mod.lock_next_mod) {
-        _addIssue(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁排序错误^^：后一个模组应为 [[${displayModName(mod.lock_next_mod)}]]`, mod.lock_next_mod)
-      }
-    })
-
-    return issuesMap
+      return issuesMap
   })
+
+  // 辅助：检查整个列表的联锁
+  const _checkListChain = (list, addFunc) => {
+      const len = list.length
+      for (let i = 0; i < len; i++) {
+          const id = list[i].toLowerCase()
+          const mod = allModsMap.value.get(id)
+          if (mod) {
+              _checkChainLink(mod, i, list, addFunc)
+          }
+      }
+  }
+
+  // 辅助：检查单个 Mod 的前后联锁
+  const _checkChainLink = (mod, index, list, addFunc) => {
+      const id = mod.package_id.toLowerCase()
+      
+      // 检查前一个
+      if (mod.lock_previous_mod) {
+          const prevId = mod.lock_previous_mod.toLowerCase()
+          // 如果我是列表第一个，或者前一个不是 lock_previous_mod
+          if (index === 0 || list[index - 1].toLowerCase() !== prevId) {
+              const prevName = displayModName(prevId)
+              addFunc(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧跟在 [[${prevName}]] 之后`, prevId)
+          }
+      }
+
+      // 检查后一个
+      if (mod.lock_next_mod) {
+          const nextId = mod.lock_next_mod.toLowerCase()
+          // 如果我是列表最后一个，或者后一个不是 lock_next_mod
+          if (index === list.length - 1 || list[index + 1].toLowerCase() !== nextId) {
+              const nextName = displayModName(nextId)
+              addFunc(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧接 [[${nextName}]] 之前`, nextId)
+          }
+      }
+  }
   // 辅助：获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
     const issues = modIssues.value.get(id.toLowerCase())
@@ -830,6 +844,16 @@ export const useModStore = defineStore('mods', () => {
     if (issues.some(i => i.level === 'error')) return 'error'
     if (issues.some(i => i.level === 'warn')) return 'warn'
     return 'info'
+  }
+  // 辅助：获取规则来源的中文名称（用于显示）
+  const getSourceText = (source) => {
+      switch(source) {
+          case 'native': return '原版';
+          case 'community': return '社区';
+          case 'user': return '用户';
+          case 'dynamic': return '动态';
+          default: return '未知';
+      }
   }
   // 忽略/取消忽略问题
   // type: 传入错误类型字符串为忽略该问题；不传(null/undefined)为清空所有忽略(重置)

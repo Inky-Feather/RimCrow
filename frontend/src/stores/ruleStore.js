@@ -46,7 +46,15 @@ export const useRuleStore = defineStore('rules', () => {
   const communityRulesUpdateTime = ref(0)
   const userModRules = ref({})   // { pkg_id: { loadAfter: ... } }
   const userDynamicRules = ref([])
-  const settings = ref({})
+  const settings = ref({
+    community_mod_rules_enabled: true,    // 全局社区规则总开关
+    user_mod_rules_enabled: true,         // 全局用户单项规则总开关
+    dynamic_rules_enabled: true,          // 全局动态规则总开关
+    excluded_community_mods: [],          // 被禁用的社区 Mod ID 列表 (黑名单)
+    excluded_user_mods: [],               // 被禁用的用户 Mod ID 列表 (黑名单)
+    // 规则优先级配置：索引越小，优先级越高 (默认: 用户 > 原生 > 社区 > 动态)
+    rule_source_priority: ["user", "native", "community", "dynamic"]
+  })
 
   const currentId = ref(null)
   
@@ -151,8 +159,7 @@ export const useRuleStore = defineStore('rules', () => {
       toast.error(res.message)
       fetchRules() // 回滚
     } else {
-      // 成功后触发健康检查 (因为规则变了)
-      // modStore.checkHealth() // 需在组件侧或这里调用
+      modStore.scanMods()
     }
   }
   // 移除单项规则中的mod
@@ -176,6 +183,7 @@ export const useRuleStore = defineStore('rules', () => {
     }
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
     if (!appStore.checkResult(res, '移除用户规则')) fetchRules()
+    modStore.scanMods()
   }
   // 修改单项规则说明
    const updateComment = async (targetModId, type, otherModId, comment) => {
@@ -189,12 +197,27 @@ export const useRuleStore = defineStore('rules', () => {
     userModRules.value[pid][type][other] = rule[type][other]
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
     if (!appStore.checkResult(res, '更新用户规则说明')) fetchRules()
+    modStore.scanMods()
   }
   // 删除用户单项规则
   const deleteUserModRule = async (id) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_user_mod(id)
-    if (!appStore.checkResult(res, '删除用户规则', true)) fetchRules()
+    if (appStore.checkResult(res, '删除用户规则', true)) {
+      fetchRules()
+      modStore.scanMods()
+    }
+  }
+  // 改变规则来源的优先级
+  const changeRuleSourcePriority = async (rules_sources) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.change_rule_source_priority(rules_sources)
+    if (appStore.checkResult(res, '改变规则优先级', true)) {
+      fetchRules()
+      modStore.scanMods()
+      return true
+    }
+    return false
   }
   // 设置全局规则开关
   const setGlobalEnable = async (key, enabled) => {
@@ -302,7 +325,7 @@ export const useRuleStore = defineStore('rules', () => {
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
-    saveDynamicRules, 
+    saveDynamicRules, changeRuleSourcePriority,
     setGlobalEnable, toggleCommunityModRule, toggleUserModRule,
   }
 })
