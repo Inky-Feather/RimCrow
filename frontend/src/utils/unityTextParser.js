@@ -95,7 +95,7 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
   // - 可选的空格
   // - 3个以上的分隔符（星号、减号、等号、下划线、破折号）
   // - 可选的】或]结尾
-  const dividerRegex = /(?:^|\n)[\t ]*[【\[\(]?\s*([\*\.\-—=_─~]){2,} *(.*?) *(?:[\*\.\-—=_─~]{2,})\s*[】\]\)]?[\t \s]*/g
+  const dividerRegex = /(?:^|\n)[\t ]*[【\[\(]?\s*([\*\.\-—―=_─~]{2,}) *(.*?) *(?:[\*\.\-—―=_─~]{2,})\s*[】\]\)]?[\t \s]*/g
   htmlText = htmlText.replace(dividerRegex, (match, symbol, content) => {
     // match: 完整匹配字符串；symbol: 捕获的符号 (如 '=')；content: 捕获的标题内容 (如 '更新')
     const text = content ? content.trim() : ''

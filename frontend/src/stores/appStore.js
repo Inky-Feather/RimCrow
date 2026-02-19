@@ -58,6 +58,23 @@ export const useAppStore = defineStore('app', () => {
   // Key: task_id, Value: { resolve, reject, timeout }
   const downloadCallbacks = new Map()
 
+  // 定义默认布局配置
+  const DEFAULT_DETAILS_LAYOUT = [
+    { id: 'basic_info', visible: true }, // 包ID、作者、链接、路径
+    { id: 'files_info', visible: true },
+    { id: 'time_info', visible: true },
+    { id: 'relations_info', visible: true },
+    { id: 'user_info', visible: true }, // 标签、备注、分组
+    { id: 'description', visible: true },
+  ]
+  const DETAILS_LAYOUT_MAPS = {
+    basic_info: {label: '基础信息', desc:'控制详情页中 Mod 作者及来源板块的显示。'},
+    files_info: {label: '文件统计', desc:'控制详情页中 Mod 文件统计板块的显示。'},
+    time_info: {label: '其它信息', desc:'控制详情页中 Mod 其它信息板块的显示。'},
+    relations_info: {label: '依赖关系', desc:'控制详情页中 Mod 依赖板块的显示。'},
+    user_info: {label: '自定义信息', desc:'控制详情页中 Mod 自定义信息板块的显示。'},
+    description: {label: 'Mod描述', desc:'控制详情页中 Mod 说明板块的显示。'},
+  }
   // 全局设置
   const settings = ref({
     // --- 路径 (Paths) ---
@@ -96,12 +113,14 @@ export const useAppStore = defineStore('app', () => {
 
       show_mod_details_panel: true,  // 是否显示 Mod 详情面板
       show_icons_cloud: true,  // 是否显示动态图标云
-      show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息
-      show_mod_details_files_info: true,  // 是否显示 Mod 详情面板文件信息
-      show_mod_details_time_info: true,  // 是否显示 Mod 详情面板时间信息
-      show_mod_details_dependencies_info: true,  // 是否显示 Mod 详情面板依赖信息
-      show_mod_details_user_info: true,  // 是否显示 Mod 详情面板自定义信息
-      show_mod_details_description: true,  // 是否显示 Mod 详情面板描述
+
+      mod_details_layout: JSON.parse(JSON.stringify(DEFAULT_DETAILS_LAYOUT)), 
+      // show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息
+      // show_mod_details_files_info: true,  // 是否显示 Mod 详情面板文件信息
+      // show_mod_details_time_info: true,  // 是否显示 Mod 详情面板时间信息
+      // show_mod_details_dependencies_info: true,  // 是否显示 Mod 详情面板依赖信息
+      // show_mod_details_user_info: true,  // 是否显示 Mod 详情面板自定义信息
+      // show_mod_details_description: true,  // 是否显示 Mod 详情面板描述
 
       show_dependency_graph: true,  // 是否显示依赖关系图
       show_list_index: true,  // 是否显示列表索引列
@@ -917,7 +936,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, aiState,
+    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, aiState, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup,
     // 游戏相关
     getGameInfo, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, startDownload, waitForDownload, 

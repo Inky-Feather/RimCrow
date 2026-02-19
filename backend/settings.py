@@ -80,12 +80,21 @@ class UIConfig:
     
     show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
     show_icons_cloud: bool = True  # 是否显示动态图标云
-    show_mod_details_author_info: bool = True  # 是否显示 Mod 详情面板作者信息
-    show_mod_details_files_info: bool = True  # 是否显示 Mod 详情面板文件信息
-    show_mod_details_time_info: bool = True  # 是否显示 Mod 详情面板时间信息
-    show_mod_details_dependencies_info: bool = True  # 是否显示 Mod 详情面板依赖信息
-    show_mod_details_user_info: bool = True  # 是否显示 Mod 详情面板自定义信息
-    show_mod_details_description: bool = True  # 是否显示 Mod 详情面板描述
+    
+    mod_details_layout: List[Dict[str, Any]] = field(default_factory=lambda: [
+        { 'id': 'basic_info', 'visible': True }, # 包ID、作者、链接、路径
+        { 'id': 'files_info', 'visible': True },
+        { 'id': 'time_info', 'visible': True },
+        { 'id': 'relations_info', 'visible': True },
+        { 'id': 'user_info', 'visible': True }, # 标签、备注、分组
+        { 'id': 'description', 'visible': True },
+    ])
+    # show_mod_details_author_info: bool = True  # 是否显示 Mod 详情面板作者信息
+    # show_mod_details_files_info: bool = True  # 是否显示 Mod 详情面板文件信息
+    # show_mod_details_time_info: bool = True  # 是否显示 Mod 详情面板时间信息
+    # show_mod_details_dependencies_info: bool = True  # 是否显示 Mod 详情面板依赖信息
+    # show_mod_details_user_info: bool = True  # 是否显示 Mod 详情面板自定义信息
+    # show_mod_details_description: bool = True  # 是否显示 Mod 详情面板描述
 
     show_dependency_graph: bool = True  # 是否显示依赖关系图
     show_list_index: bool = True  # 是否显示列表索引列
