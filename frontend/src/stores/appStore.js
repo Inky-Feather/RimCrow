@@ -69,6 +69,9 @@ export const useAppStore = defineStore('app', () => {
     local_mods_path: '',
     workshop_mods_path: '',
     use_workshop_mods: true,
+    run_commands: [],
+    steam_exe_path: '',
+    prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
     home_path: '',
     community_rules_url: '',
     community_rules_path: '',
@@ -148,7 +151,6 @@ export const useAppStore = defineStore('app', () => {
     backup_retention_days: 30,
     enable_auto_scan: true,
     delete_missing_mods_data: false,
-    prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
@@ -524,12 +526,14 @@ export const useAppStore = defineStore('app', () => {
     const orderStore = useOrderStore()
     const res = await orderStore.saveLoadOrder()
     if (!res) return
-    if(settings.value.prefer_steam_launch && (!profile_id || profile_id === 'default') && settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
-      // 通过 steam 启动游戏
-      window.open("steam://rungameid/294100", '_blank')
-      toast.success("正在通过 steam 启动游戏……")
-      console.log("通过 steam 启动游戏")
-    }else if(profile_id || settings.value.game_install_path){
+    // if(settings.value.prefer_steam_launch && (!profile_id || profile_id === 'default') && settings.value.game_install_path?.includes("SteamLibrary\\steamapps\\common")){
+    //   // 通过 steam 启动游戏
+    //   window.open("steam://run/294100", '_blank')
+    //   // window.open("steam://rungameid/294100", '_blank')
+    //   toast.success("正在通过 steam 启动游戏……")
+    //   console.log("通过 steam 启动游戏")
+    // }else 
+    if(profile_id || settings.value.game_install_path){
       if (!window.pywebview) return
       // 直接启动游戏
       const res = await window.pywebview.api.launch_game(profile_id)

@@ -180,6 +180,7 @@ class API:
                 # 这里初始化会自动处理全量缓存和增量更新
                 self.dlc_parser = DLCParser(dlc_dir)
     def cleanup(self):
+        """关闭数据库清理资源"""
         # 停止后台扫描任务 (如果有)
         if hasattr(self, 'scanner'): self.scanner.stop_scan() 
         # 停止游戏监控
@@ -355,22 +356,23 @@ class API:
     def auto_detect_paths(self, update_config: bool = True):
         """自动检测游戏路径"""
         result = self.game_mgr.auto_detect_paths()
-        
+        steam_exe_path = self.steam_mgr.get_steam_path()
+        if not result: return ApiResponse.error("无法自动检测到游戏路径，请手动设置！")
+        result['steam_exe_path'] = steam_exe_path if steam_exe_path else ''
+        if update_config:   # 仅当请求时更新配置
+            settings.update_paths(result)
         # 如果检测到了安装路径，自动更新设置
         if result.get('game_install_path'):
-            if update_config:   # 仅当请求时更新配置
-                settings.update_paths(result)
-                # 重新初始化 LoadOrderManager (因为 Config 路径可能变了)
-                self.load_order_mgr = LoadOrderManager()
+            # 重新初始化 LoadOrderManager (因为 Config 路径可能变了)
+            self.load_order_mgr = LoadOrderManager()
             return ApiResponse.success({"paths": result})
-        
-        return ApiResponse.error("无法自动检测到游戏路径，请手动设置！")
+        return ApiResponse.warning("仅检测到部分路径，请手动设置！",{"paths": result})
 
     @log_api_call
     def save_setting(self, key: str, value: Any):
         """保存单个设置项"""
         # 如果修改的是核心路径，同步到当前环境
-        if key in ['game_install_path', 'user_data_path', 'use_workshop_mods']:
+        if key in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
             pid = settings.config.current_profile_id
             # 更新数据库中的 Profile
             updates = {key: value}
@@ -391,7 +393,7 @@ class API:
         # 批量更新
         for k, v in settings_obj.items():
             # 如果修改的是核心路径，同步到当前环境
-            if k in ['game_install_path', 'user_data_path', 'use_workshop_mods']:
+            if k in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
                 pid = settings.config.current_profile_id
                 # 更新数据库中的 Profile
                 updates = {k: v}
@@ -778,13 +780,26 @@ class API:
     def launch_game(self, profile_id: str):
         """启动游戏"""
         try:
-            # 1. 获取当前 Profile 的启动参数
-            launch_args = self.profile_mgr.get_launch_args(profile_id) 
-            # 2. 调用游戏管理器启动游戏
-            self.game_mgr.launch_game(custom_args=launch_args)
+            if not profile_id: profile_id = self.profile_mgr.current_profile.id
+            if not profile_id: return ApiResponse.error("未指定 Profile ID")
+            profile = self.profile_mgr.get_profile(profile_id)
+            logger.debug(f"launch_game: profile_id={profile_id}, prefer_steam={settings.config.prefer_steam_launch}, steam_exe={settings.config.steam_exe_path}, is_steam={profile.is_steam}")
+            # 检查 Steam 配置是否完整
+            if(settings.config.prefer_steam_launch and settings.config.steam_exe_path and profile.is_steam):
+                # 1. 获取当前 Profile 的启动参数（仅包含游戏相关参数）
+                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+                logger.debug(f"launch_game_steam: extra_args={extra_args}")
+                # 2. 调用 Steam 管理器启动游戏
+                self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+            else:
+                # 1. 获取当前 Profile 的启动参数
+                launch_args = self.profile_mgr.get_launch_args(profile_id) 
+                logger.debug(f"launch_game: launch_args={launch_args}")
+                # 2. 调用游戏管理器启动游戏
+                self.game_mgr.launch_game(custom_args=launch_args)
+            
             # 3. 记录最后一次游玩时间到数据库
-            current_pid = settings.config.current_profile_id
-            self.profile_mgr.update_profile(current_pid, {
+            self.profile_mgr.update_profile(profile_id, {
                 "last_played_time": current_ms()
             })
             return ApiResponse.success(message="游戏启动成功，祝你游玩愉快！")
@@ -800,11 +815,13 @@ class API:
         try:
             exe = self.game_mgr.detect_executable(install_path)
             version = self.game_mgr.get_game_version(install_path)
+            is_steam = os.path.normpath(install_path).lower().rfind(os.path.join('steamlibrary', 'steamapps', 'common')) != -1
             if not exe :
                 return ApiResponse.warning("无法获取游戏信息，请检查游戏安装路径是否正确！")
             return ApiResponse.success({
                 "exe": exe,
-                "version": version
+                "version": version,
+                "is_steam": is_steam,
             })
         except Exception as e:
             return ApiResponse.error(f"获取游戏信息时出错: {e}")
@@ -904,7 +921,7 @@ class API:
         # 这里的退回顺序逻辑直接在 Python 循环中处理，清晰易维护
         query = (ModAsset.select(ModAsset, UserModData.alias_name)
                  .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop')
+                 .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop') # type: ignore
                  .dicts())
         try:
             # 2. 执行任务

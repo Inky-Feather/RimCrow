@@ -149,3 +149,8 @@ export const SOURCE_TYPE_MAP = {
   'local': '本地文件',
   'other': '其它来源'
 }
+
+export const RUN_COMMAND_TAGS = [
+  { value: '-popupwindow', label: '无边框窗口模式' },
+  { value: '-quicktest', label: '快速测试' },
+]

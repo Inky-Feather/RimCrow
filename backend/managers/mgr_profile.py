@@ -61,7 +61,9 @@ class ProfileManager:
         game_saves_path = os.path.join(data_dir, "Saves")
         if not os.path.exists(game_saves_path):
             os.makedirs(game_saves_path)
-            
+        
+        isSteam = os.path.normpath(data.get('game_install_path','')).lower().rfind(os.path.join('steamlibrary', 'steamapps', 'common')) != -1
+        
         # 如果需要继承数据
         if copy_current_data:
             self._clone_user_data(settings.config.game_config_path, data_dir)
@@ -74,7 +76,9 @@ class ProfileManager:
                 user_data_path=data_dir,
                 game_install_path=data.get('game_install_path', settings.config.game_install_path),
                 game_version=GameManager.get_game_version(data.get('game_install_path', settings.config.game_install_path)),
-                use_workshop_mods=data.get('use_workshop_mods', False)
+                use_workshop_mods=data.get('use_workshop_mods', False),
+                is_steam=isSteam,
+                run_commands=data.get('run_commands', [])
             )
         # 同步到磁盘
         self._sync_profile_to_disk(profile)
@@ -82,10 +86,12 @@ class ProfileManager:
     
     def update_profile(self, profile_id: str, data: Dict[str, Any]):
         """更新环境配置"""
+        if not profile_id:  raise ValueError("Profile ID is required")
         if profile_id not in [p.id for p in GameProfile.select()]: 
             raise ValueError(f"Profile not found: {profile_id}")
         if 'id' in data: del data['id']
         data['game_version'] = GameManager.get_game_version(data.get('game_install_path', settings.config.game_install_path))
+        data['is_steam'] = os.path.normpath(data.get('game_install_path','')).lower().rfind(os.path.join('steamlibrary', 'steamapps', 'common')) != -1
         query = GameProfile.update(**data).where(GameProfile.id == profile_id)
         query.execute()
         # 获取更新后的对象并同步到磁盘
@@ -121,6 +127,13 @@ class ProfileManager:
             self.activate_profile('default')
             
         return True
+    
+    def get_profile(self, profile_id: str) -> GameProfile:
+        """获取指定 Profile 对象"""
+        profile = GameProfile.get_or_none(GameProfile.id == profile_id)
+        if not profile:
+            raise ValueError(f"Profile not found: {profile_id}")
+        return profile
 
     def get_current_profile(self) -> GameProfile:
         """获取当前激活的 Profile 对象"""
@@ -145,6 +158,7 @@ class ProfileManager:
         2. ModScanner 对 Core/DLC 的判定路径
         3. LoadOrderManager 读取的 XML 文件位置
         """
+        if not profile_id: profile_id = 'default'
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         if not profile: return False
         self.current_profile = profile
@@ -176,6 +190,9 @@ class ProfileManager:
         # 控制是否扫描工坊
         settings.config.use_workshop_mods = profile.use_workshop_mods if profile.id != 'default' else True
         
+        # 合并自定义参数
+        settings.config.run_commands = profile.run_commands if profile.run_commands else []
+        
         # 强制持久化到 config.json
         settings.save()
         
@@ -188,29 +205,25 @@ class ProfileManager:
         """
         if not profile_id:
             profile_id = self.current_profile.id
-        if profile_id == 'default': return []
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         if not profile: return []
-        args = [GameManager.detect_executable(str(profile.game_install_path))]
-        # 核心：注入数据隔离参数
-        if profile.user_data_path:
-            args.append(f"-savedatafolder={str(profile.user_data_path)}")
+        # 获取当前 Profile 的 EXE 路径
+        args = [GameManager.detect_executable(profile.game_install_path)]
+        # 核心：注入数据隔离参数（非默认环境）
+        if profile.user_data_path and profile_id != 'default':
+            # 必须使用绝对路径，并处理可能的空格（Popen 会自动处理列表项的空格）
+            args.append(f"-savedatafolder={os.path.abspath(profile.user_data_path)}")
+        # 合并自定义参数
+        if profile.run_commands:
+            args.extend(profile.run_commands)
             
         return args
-    def get_launch_args_only(self):
+    def get_launch_args_only(self, profile_id: str = ''):
         """
         获取当前 Profile 的命令行参数（不含 EXE 路径）
+        :param profile_id: 环境ID，默认当前环境
         """
-        profile = self.get_current_profile()
-        args = []
-        
-        # 隔离存档与配置目录 (核心)
-        if profile and profile.id != 'default':
-            # 必须使用绝对路径，并处理可能的空格（Popen 会自动处理列表项的空格）
-            data_path = os.path.abspath(str(profile.user_data_path))
-            args.append(f"-savedatafolder={data_path}")
-            
-        # 可以在此处添加其他参数，如 -nomousegrab 等
+        args = self.get_launch_args(profile_id)[1:]
         return args
 
     def _clone_user_data(self, src_config_dir, target_root):
@@ -235,10 +248,10 @@ class ProfileManager:
         """
         # 1. 如果没有自定义隔离路径（例如使用系统默认路径的 Default 环境），则不写入
         # 防止污染用户的 AppData
-        if not profile.user_data_path or not os.path.exists(str(profile.user_data_path)):
+        if not profile.user_data_path or not os.path.exists(profile.user_data_path):
             return
 
-        json_path = os.path.join(str(profile.user_data_path), "profile.json")
+        json_path = os.path.join(profile.user_data_path, "profile.json")
         
         try:
             # 2. 序列化模型

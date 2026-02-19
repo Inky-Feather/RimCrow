@@ -13,6 +13,23 @@ import builtins
 # from icecream.builtins import install as ic_install
 # ic_install()    # 全局启用 icecream，利用 Python 的动态特性实现“一次安装，到处运行”。
 
+
+# 强制切换工作目录到 exe 所在文件夹
+# 解决任务栏启动找不到配置文件的问题
+def setup_working_directory():
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的 exe
+        application_path = os.path.dirname(sys.executable)
+    else:
+        # 如果是开发环境 (py 脚本)
+        application_path = os.path.dirname(os.path.abspath(__file__))
+    
+    # 切换工作目录
+    os.chdir(application_path)
+    # 顺便把这个路径加到 sys.path，防止导包报错
+    sys.path.insert(0, application_path)
+
+setup_working_directory()
     
 def get_webview_proxy_args():
     """生成 WebView2 的启动参数"""

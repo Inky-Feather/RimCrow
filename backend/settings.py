@@ -4,11 +4,20 @@ import json
 import os
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
+import sys
 from typing import Dict, Any, List
 
 
 # 配置文件路径
 HOME_DIR = Path(os.getcwd())
+# 获取 exe 所在的真实目录
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包模式
+    HOME_DIR = Path(sys.executable).parent
+else:
+    # 开发模式
+    HOME_DIR = Path(__file__).resolve().parent.parent
+
 CONFIG_DIR = HOME_DIR / "data"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 UPDATE_CACHE_DIR = HOME_DIR / "updates"
@@ -103,11 +112,14 @@ class AppConfig:
     local_mods_path: str = ""
     workshop_mods_path: str = ""
     use_workshop_mods: bool = True
+    steam_exe_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
     
     # --- 游戏设置 ---
     game_version: str = ""
     current_profile_id: str = "default"   # 当前激活的环境ID
+    run_commands: List[str] = field(default_factory=list)
+    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言
@@ -120,7 +132,6 @@ class AppConfig:
     enable_auto_scan: bool = True             # 启动时自动扫描
     delete_missing_mods_data: bool = True     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
-    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
