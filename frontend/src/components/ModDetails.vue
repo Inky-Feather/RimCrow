@@ -10,10 +10,10 @@
           class="absolute inset-0 w-full h-full object-cover"/>
         <!-- 文字提示兜底 -->
         <div v-else-if="!selectedMod.preview_url" class="absolute inset-0 flex items-center justify-center text-gray-600 bg-bg-surface">
-           <div class="text-center">
-             <div class="text-4xl mb-2 opacity-20">IMG</div>
-             <div class="text-xs">图片不存在</div>
-           </div>
+          <div class="text-center">
+            <div class="text-4xl mb-2 opacity-20">IMG</div>
+            <div class="text-xs">图片不存在</div>
+          </div>
         </div>
       </Transition>
       <!-- Mod版本 -->

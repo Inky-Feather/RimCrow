@@ -462,7 +462,7 @@ class SteamManager:
         if not steam_exe or not os.path.exists(steam_exe):
             steam_exe = self.get_steam_path()
             if not steam_exe or not os.path.exists(steam_exe):
-                logger.error("未找到 Steam.exe，回退到 URL 协议启动")
+                logger.warning("未找到 Steam.exe，回退到 URL 协议启动")
                 # os.startfile(f"steam://rungameid/{app_id}")
                 os.startfile(f"steam://run/{app_id}")
                 return
