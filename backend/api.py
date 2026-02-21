@@ -954,19 +954,6 @@ class API:
             logger.error(f"Auto sort failed: {e}", exc_info=True)
             return ApiResponse.error(f"排序失败: {str(e)}")
         
-    @log_api_call
-    def check_load_order_health(self, active_ids: List[str]):
-        """
-        常态化健康检查：检测当前顺序是否违反 About.xml、社区规则或用户规则
-        前端通常在拖拽停止后调用
-        """
-        try:
-            issues = self.sorter.check_health(active_ids)
-            # 返回的是 List[dict]，每个 dict 包含 mod_id, type, level, message, source
-            return ApiResponse.success(issues)
-        except Exception as e:
-            return ApiResponse.error(f"健康检查失败: {str(e)}")
-        
     
     # =========================================================================
     #  9. 规则管理 (Rule Management)

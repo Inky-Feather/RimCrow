@@ -67,6 +67,7 @@ class ModAsset(BaseModel):
     author = cast(list[str], UTF8JSONField(default=list))            # 作者，可能为多人
     version = cast(str, CharField(null=True))                        # Mod版本
     description = cast(str, TextField(null=True))                    # Mod描述
+    descriptions_by_version = cast(dict, UTF8JSONField(default=dict))  # 按版本的描述 {'1.4': '...', '1.5': '...'}
     
     # 路径与来源
     path = cast(str, CharField())                                    # 本地储存路径，绝对路径
@@ -81,10 +82,11 @@ class ModAsset(BaseModel):
     supported_languages = cast(list[str], UTF8JSONField(default=list))     # 支持的语言 ['zh-cn', 'en']
     file_stats = cast(dict, UTF8JSONField(default=dict))                   # 文件统计 {'xml_count': 50, 'dll_count': 50, 'img_count': 50, 'audio_count': 50}
     mod_type = cast(str, CharField(default='XML'))                         # Mod类型，如 'Assembly', 'XML', 'LanguagePack'
-    dependencies_mods = cast(list[str], UTF8JSONField(default=list))       # 依赖Mod ['ludeon.rimworld','ludeon.rimworld2']
-    load_after_mods = cast(list[str], UTF8JSONField(default=list))         # 前置Mod ['ludeon.rimworld','ludeon.rimworld2']
-    load_before_mods = cast(list[str], UTF8JSONField(default=list))        # 后置Mod ['ludeon.rimworld','ludeon.rimworld2']
-    incompatible_mods = cast(list[str], UTF8JSONField(default=list))                 # 不兼容Mod ['ludeon.rimworld','ludeon.rimworld2']
+    # 结构: list[dict] -> [{'package_id': '...', 'version_requirement': ['all'|'1.5'], 'alternatives': [], 'is_force': False, ...}]
+    dependencies_mods = cast(list[dict], UTF8JSONField(default=list))       # 依赖Mod 
+    load_after_mods = cast(list[dict], UTF8JSONField(default=list))         # 前置Mod
+    load_before_mods = cast(list[dict], UTF8JSONField(default=list))        # 后置Mod 
+    incompatible_mods = cast(list[dict], UTF8JSONField(default=list))                 # 不兼容Mod 
     save_breaking = cast(Optional[bool], BooleanField(default=None, null=True))     # 是否破坏存档 (ModSync)，True: 破坏, False：不破坏, None：未知
     
     # 时间戳 (用于增量扫描)
@@ -96,7 +98,7 @@ class ModAsset(BaseModel):
     
     # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
     # 格式: ["D:/Mods/Harmony_Old", "E:/Steam/Harmony"]
-    shadow_paths = cast(list[str], UTF8JSONField(default=list))                 # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
+    shadow_paths = cast(list[str], UTF8JSONField(default=list))         # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
     
 
 class UserModData(BaseModel):

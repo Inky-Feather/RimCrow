@@ -46,14 +46,15 @@ export const ISSUE_LEVEL = {
 
 // 错误类型枚举
 export const ISSUE_TYPE = {
-  ERROR_MISSING_FILE: 'missing_file',      // 本地文件丢失
-  ERROR_MISSING_DEPENDENCY: 'missing_dependency', // 缺前置 (完全没装)
+  ERROR_MISSING_FILE: 'missing_file',               // 本地文件丢失
+  ERROR_MISSING_DEPENDENCY: 'missing_dependency',   // 缺前置 (完全没装)
   ERROR_INACTIVE_DEPENDENCY: 'inactive_dependency', // 前置没启用
-  ERROR_INCOMPATIBLE: 'incompatible',     // 不兼容
-  WARN_WRONG_ORDER: 'wrong_order',       // 顺序错了
-  WARN_VERSION_MISMATCH: 'version_mismatch', // 版本不对
-  WARN_LINK_MOD_MISSING: 'link_mod_missing', // 联锁模组缺失
-  WARN_LINK_WRONG_ORDER: 'link_wrong_order', // 联锁排序错误
+  ERROR_INCOMPATIBLE: 'incompatible',               // 不兼容
+  WARN_WRONG_ORDER: 'wrong_order',                  // 顺序错了
+  WARN_VERSION_MISMATCH: 'version_mismatch',        // 版本不对
+  WARN_LINK_MOD_MISSING: 'link_mod_missing',        // 联锁模组缺失
+  WARN_LINK_WRONG_ORDER: 'link_wrong_order',        // 联锁排序错误
+  INFO_ALTERNATIVE_USED: 'info_alternative_used',   // 依赖替代
 }
 
 // 定义类型到中文标题的映射
@@ -66,6 +67,7 @@ export const ISSUE_TITLE_MAP = {
   'version_mismatch': '版本不符',
   'link_mod_missing': '联锁模组缺失',
   'link_wrong_order': '联锁排序错误',
+  'info_alternative_used': '依赖替代',
   'default': '其他问题'
 }
 

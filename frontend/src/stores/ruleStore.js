@@ -90,10 +90,10 @@ export const useRuleStore = defineStore('rules', () => {
     // 1. Native (About.xml) - 从 modStore 获取
     const mod = modStore.takeModById(pid)
     if (mod) {
-      mod.load_after_mods?.forEach(id => result.loadAfter.push({ id, source: 'native' }))
+      mod.load_after_mods?.forEach(d => result.loadAfter.push({ id: d.package_id, source: 'native' }))
     //   mod.dependencies_mods?.forEach(d => result.loadAfter.push({ id: d.package_id, source: 'native' }))
-      mod.load_before_mods?.forEach(id => result.loadBefore.push({ id, source: 'native' }))
-      mod.incompatible_mods?.forEach(id => result.incompatible.push({ id, source: 'native' }))
+      mod.load_before_mods?.forEach(d => result.loadBefore.push({ id: d.package_id, source: 'native' }))
+      mod.incompatible_mods?.forEach(d => result.incompatible.push({ id: d.package_id, source: 'native' }))
     }
 
     // 2. Community Rules
@@ -186,7 +186,7 @@ export const useRuleStore = defineStore('rules', () => {
     modStore.scanMods()
   }
   // 修改单项规则说明
-   const updateComment = async (targetModId, type, otherModId, comment) => {
+  const updateComment = async (targetModId, type, otherModId, comment) => {
     if (!window.pywebview) return
     const pid = targetModId.toLowerCase()
     const other = otherModId.toLowerCase()

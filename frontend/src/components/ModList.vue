@@ -144,7 +144,7 @@
         </div>
         <!-- 列表 -->
           <!-- :size="isSimpleView ? 34 : 54" -->
-        <VirtualList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
+        <VirtualList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1 pb-10" placeholderClass="ghost" wrapClass="" 
           :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="appStore.settings.ui.drag_delay"
           :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
           :size="itemHeight"
@@ -169,14 +169,14 @@
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
           <!-- 添加未启用的依赖项 -->
-          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length > 0" @click="addInactiveDependency" 
-            v-tooltip="`^^一键添加共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length || 0} 个未启用的依赖项^^`"
+          <button v-if="inactiveDependenciesToAdd.length > 0" @click="addInactiveDependency" 
+            v-tooltip="`^^一键添加共计 ${inactiveDependenciesToAdd.length} 个未启用的依赖项^^`"
             class="px-1 py-1 bg-accent-secondary/80 text-text-main/50 rounded-md hover:bg-accent-secondary hover:text-text-main transition-all" >
             <MessageSquarePlus />
           </button>
           <!-- 移除所有无效Mod -->
-          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length > 0" @click="removeInvalidMod" 
-            v-tooltip="`^^一键移除共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length || 0} 个无效Mod^^`"
+          <button v-if="invalidModsToRemove.length > 0" @click="removeInvalidMod" 
+            v-tooltip="`^^一键移除共计 ${invalidModsToRemove.length} 个无效Mod^^`"
             class="px-1 py-1 bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all" >
             <Trash2 />
           </button>
@@ -280,6 +280,16 @@ const searchHelpText = computed(() => {
   // 这里可以做一层缓存，避免每次 render 都生成字符串
   return generateHtmlHelp(engine.value);
 })
+// 提取真正需要被添加的、去重后的依赖项列表
+const inactiveDependenciesToAdd = computed(() => {
+  // 仅当当前列表真的有依赖报错时，才去执行精准提取（性能优化）
+  if (!issuesSummary.value.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length) return []
+  return modStore.getMissingLocalDependencies(props.modelValue)
+})
+// 提取需要被移除的无效 Mod 列表（这个其实是一一对应的，为了模板整洁也包装一下）
+const invalidModsToRemove = computed(() => {
+  return issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_FILE] || []
+})
 // 构造问题详情 Tooltip
 const issueTooltip = computed(() => {
   const summary = issuesSummary.value // Store 返回的对象
@@ -288,34 +298,27 @@ const issueTooltip = computed(() => {
   const errorInfo = summary.errorCount > 0 ? `!!${summary.errorCount} 个错误!!` : ''
   const warningInfo = summary.warnCount > 0 ? `^^${summary.warnCount} 个警告^^` : ''
   let text = `**发现 ${summary.count} 个问题**（${errorInfo} ${warningInfo}）`
-
   // 遍历 stats 对象生成详情
   // 格式: 
   // !!缺失前置(10):!!
   // ModA | ModB | ... | __及其他 7 项__
-  
   for (const [type, ids] of Object.entries(summary.stats)) {
     if (ids.length === 0) continue
-    
     const typeName = ISSUE_TITLE_MAP[type] || type
     const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible','wrong_order'].includes(type)
-    
     // 标题颜色: Error 用红(!!), Warn 用黄(^^)
     const titleMark = isError ? '!!' : '^^'
     text += `\n${titleMark}${typeName} (${ids.length}):${titleMark}`
-    
     // 列出前 3 个
     const previewIds = ids.slice(0, 3)
     previewIds.forEach(id => {
       text += `\n  • ${modStore.displayModName(id)}`
     })
-    
     // 剩余数量提示
     if (ids.length > 3) {
       text += `\n  __...及其他 ${ids.length - 3} 项__`
     }
   }
-  
   text += isFilterByIssue.value ? '\n\n__[[(再次点击取消筛选)]]__' : '\n\n__[[(点击筛选以查看详情)]]__'
   return text
 })
@@ -329,15 +332,9 @@ const sortTooltip = computed(() => {
 // 筛选提示
 const filterTooltip = computed(() => {
   let text = ''
-  if (filterQuery.value.length > 0) {
-    text += `已筛选检索关键词`
-  }
-  if (isFilterByIssue.value) {
-    text += '\n已筛选问题项'
-  }
-  if (filterByLine.value.length > 0) {
-    text += `\n已筛选依赖组`
-  }
+  if (filterQuery.value.length > 0) { text += `已筛选检索关键词` }
+  if (isFilterByIssue.value) { text += '\n已筛选问题项' }
+  if (filterByLine.value.length > 0) { text += `\n已筛选依赖组` }
   text = text.trim()
   text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
   text += `\n\n__[[(点击清除所有筛选)]]__`
@@ -485,14 +482,11 @@ const executeSearch = (next = true) => {
   }
   // 检查 Engine 是否存在
   if (!engine.value) return
-
    // 1. 全局搜索
   const matchedObjects = engine.value.search(searchQuery.value, searchLogic.value)
   const matchedSet = new Set(matchedObjects.map(m => m.package_id))
-
   // 2. 过滤结果：只定位 *当前可见列表(displayList)* 中的项
   const results = displayList.value.filter(id => matchedSet.has(id))
-  
   if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
     searchResults.value = results
     currentSearchIndex.value = -1
@@ -530,7 +524,6 @@ const updateChildren = async (e) => {
   const oldIds = [...props.modelValue] // 原始数据（即 source of truth）
   // 这里的 newIds (脏数据) 仅用于计算相对位置，不参与数据重组
   const dirtyIds = internalListProxy.value.map(item => item.id) 
-  
   // 1. 获取当前所有需要移动的 ID (处理分组或多选)
   let movingIds = []
   if (e.item?.mod_ids?.length) {
@@ -542,13 +535,11 @@ const updateChildren = async (e) => {
     // 拖动的是列表项 -> 移动当前选中项
     movingIds = [...modStore.selectedIds]
     const draggedId = dirtyIds[e.newIndex] // 注意：这里用脏数据的索引获取当前拖拽的元素ID
-    
     // 如果拖拽的项不在选中列表中（比如未选中时直接拖），则把它加入
     if (!movingIds.includes(draggedId) && draggedId) {
       movingIds.push(draggedId)
     }
   }
-
   // 2. 核心算法：计算“纯净插入点”
   // 需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
   // 在剔除移动项后的 baseList 中找到正确的插入位置
@@ -559,12 +550,10 @@ const updateChildren = async (e) => {
       validItemsAbove++
     }
   }
-  
   // 如果是向下拖拽，Sortable 的 newIndex 包含了拖拽项本身的位置
   // 3. 构建新列表
   // 3.1 生成 BaseList：从原始列表中剔除所有移动项
   const baseList = oldIds.filter(id => !movingIds.includes(id))
-
   let correctedIndex = validItemsAbove
   // 只有当插入点不在头部也不在尾部时才需要检查
   if (correctedIndex > 0 && correctedIndex < baseList.length) {
@@ -577,8 +566,7 @@ const updateChildren = async (e) => {
       const nextId = mod.lock_next_mod.toLowerCase()
       // 关键判断：
       // 如果 lock_next 指向的 Mod 就在 baseList 中，
-      // 说明链条在 baseList 中是连续存在的。
-      // 我们必须跳过它，不能插在它前面。
+      // 说明链条在 baseList 中是连续存在的。 必须跳过，不能插在它前面。
       if (baseList.includes(nextId)) {
         // 找到 nextId 在 baseList 中的位置
         const nextIndexInBase = baseList.indexOf(nextId)
@@ -633,25 +621,15 @@ const updateChildren = async (e) => {
 }
 // 添加缺失的依赖项
 const addInactiveDependency = async () => {
-  const issuesMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]
-  // 筛选出所有缺失的依赖项
-  const inactiveDependencies = []
-  issuesMods.forEach(id => {
-    modStore.modIssues.get(id).forEach(issue => {
-      // 筛选出缺失的依赖项
-      if(issue.type === ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY) {
-        inactiveDependencies.push(issue.targetId)
-      }
-    })
-  })
-  const uniqueInactiveDependencies = [...new Set(inactiveDependencies)]
+  const missingIds = inactiveDependenciesToAdd.value
+  if (missingIds.length === 0) return
   // console.log('添加缺失的依赖项:', uniqueInactiveDependencies)
   const oldIds = [...props.modelValue]
-  modStore.removeIdsOnAllList(uniqueInactiveDependencies)
-  oldIds.push(...uniqueInactiveDependencies)
+  modStore.removeIdsOnAllList(missingIds)
+  oldIds.push(...missingIds)
   emit('update:modelValue', oldIds)
   // 更新移动时间
-  modStore.takeModListByIds(uniqueInactiveDependencies).forEach(mod => {
+  modStore.takeModListByIds(missingIds).forEach(mod => {
     mod.last_moved_time = Date.now()
     mod.last_active_time = Date.now()
   })
@@ -664,7 +642,8 @@ const addInactiveDependency = async () => {
 }
 // 移除无效的mod
 const removeInvalidMod = async () => {
-  const invalidMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_FILE]
+  const invalidMods = invalidModsToRemove.value
+  if (invalidMods.length === 0) return
   // console.log('移除无效的Mod:', invalidMods)
   modStore.removeIdsOnAllList(invalidMods)
   // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
@@ -687,40 +666,30 @@ const focusContainer = (e) => {
 const handleKeyNav = (direction) => {
   const list = displayList.value // 当前经过筛选/排序后的 ID 数组
   if (!list.length) return
-
   // 确定当前选中的索引
   const currentId = modStore.lastSelectedMod?.package_id
   const currentIndex = list.indexOf(currentId)
-
   // 计算下一个索引
   let nextIndex = currentIndex + direction
-
   // 边界保护：循环选择或停止
   if (nextIndex < 0) nextIndex = 0
   if (nextIndex >= list.length) nextIndex = list.length - 1
-
   if (nextIndex === currentIndex) return
-
   const nextId = list[nextIndex]
-
   // 4. 更新 Store 选中状态
   // 建议：键盘导航通常视为单选，所以传入 [nextId]
   modStore.selectMods([nextId], nextId)
-
   // 5. 同步滚动 (关键点)
   const vList = vListRef.value
   if (vList) {
     const currentOffset = vList.getOffset()
     const viewHeight = vList.$el.clientHeight // 视口高度
-    
     // 计算目标项的像素区间
     const itemTop = nextIndex * itemHeight.value
     const itemBottom = itemTop + itemHeight.value
-
     // 策略 A: 保持相对位置不变 (最丝滑)
     // 逻辑：直接按位移滚动。如果向上移，offset 就减一个 itemHeight
     vList.scrollToOffset(currentOffset + (direction * itemHeight.value))
-
     // 策略 B: 只有当超出视口时才滚动 (标准做法)
     /*
     if (itemTop < currentOffset) {

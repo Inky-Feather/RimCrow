@@ -121,76 +121,26 @@ class RuleManager:
         self.save_user_rules()
         return True
     
-    def collect_constraints(self, mod_id: str, mod_full_data: dict) -> List[Dict]:
+    def _is_version_compatible(self, requirements: list) -> bool:
         """
-        核心聚合函数：根据当前的【全局开关】和【黑名单】，返回该 Mod 生效的全部约束
+        检查规则是否适用于当前游戏版本
+        requirements: ['all'] 或 ['1.5', '1.6']
         """
-        mid_l = mod_id.lower()
-        all_res = []
-
-        # 1. 原生规则 (About.xml) - 永远不受开关影响
-        for p in mod_full_data.get('dependencies_mods', []):
-            all_res.append({"target": p['package_id'].lower(), "type": "after", "source": {"name": "原生依赖", "type": "native"}})
-        for p in mod_full_data.get('load_after_mods', []):
-            all_res.append({"target": p.lower(), "type": "after", "source": {"name": "原生前置", "type": "native"}})
-        for p in mod_full_data.get('load_before_mods', []):
-            all_res.append({"target": p.lower(), "type": "before", "source": {"name": "原生后置", "type": "native"}})
-        for p in mod_full_data.get('incompatible_mods', []):
-            all_res.append({"target": p.lower(), "type": "incompatible", "source": {"name": "原生冲突", "type": "native"}})
-
-        # 2. 社区规则 (Community Rules)
-        if self.settings.get("community_mod_rules_enabled", True):  # 全局开关
-            if mid_l not in self.settings.get("excluded_community_mods", []): # 黑名单过滤
-                comm = self.community_rules.get(mid_l, {})
-                for t, info in comm.get("loadAfter", {}).items():
-                    all_res.append({"target": t.lower(), "type": "after", "source": {"name": "社区规则", "type": "community", "info": info}})
-                for t, info in comm.get("loadBefore", {}).items():
-                    all_res.append({"target": t.lower(), "type": "before", "source": {"name": "社区规则", "type": "community", "info": info}})
-                for t, info in comm.get("incompatibleWith", {}).items():
-                    all_res.append({"target": t.lower(), "type": "incompatible", "source": {"name": "社区规则", "type": "community", "info": info}})
-
-        # 3. 用户单项规则 (User Single Rules)
-        if self.settings.get("user_mod_rules_enabled", True): # 全局开关
-            user_entry = self.user_mod_rules.get(mid_l, {})
-            # 校验单项开关
-            is_enabled = not mid_l in self.settings.get("excluded_user_mods", [])
-            if is_enabled:
-                rules = user_entry["rules"] if isinstance(user_entry, dict) and "rules" in user_entry else user_entry
-                for t, info in rules.get("loadAfter", {}).items():
-                    all_res.append({"target": t.lower(), "type": "after", "source": {"name": "用户规则", "type": "user", "info": info}})
-                for t, info in rules.get("loadBefore", {}).items():
-                    all_res.append({"target": t.lower(), "type": "before", "source": {"name": "用户规则", "type": "user", "info": info}})
-                for t, info in rules.get("incompatibleWith", {}).items():
-                    all_res.append({"target": t.lower(), "type": "incompatible", "source": {"name": "用户规则", "type": "user", "info": info}})
-
-        # 4. 动态规则 (Dynamic Rules)
-        if self.settings.get("dynamic_rules_enabled", True): # 全局开关
-            matched_dyn = self.get_matching_dynamic_rules(mod_full_data)
-            for rule in matched_dyn:
-                act = rule.get("action", {})
-                # 这里不仅返回先后顺序，还要返回权重操作
-                all_res.append({
-                    "type": "dynamic",
-                    "action": act,
-                    "rule_name": rule['name']
-                })
-
-        return all_res
-
-    def _parse_static_rules(self, content: dict, source: str) -> List[Dict]:
-        """解析 loadAfter/loadBefore 结构"""
-        res = []
-        for r_type in ["loadAfter", "loadBefore", "incompatibleWith"]:
-            if r_type in content:
-                for target_id, info in content[r_type].items():
-                    res.append({
-                        "type": r_type,
-                        "target": target_id.lower(),
-                        "source": source,
-                        "info": info
-                    })
-        return res
-
+        if requirements is None: return False
+        # 如果包含 'all'，或者列表为空（默认兼容），直接通过
+        if isinstance(requirements, list) and ('all' in requirements or not requirements):
+            return True
+        
+        # 获取当前游戏版本 (例如 "1.5.4100" -> "1.5")
+        # 注意：settings.config.game_version 可能为空，需兜底
+        current_ver = settings.config.game_version
+        if not current_ver:
+            return True # 无法确定版本时，默认放行，或者你可以选择严格模式 return False
+            
+        short_ver = current_ver[:3] # 取前三位 "1.5"
+        # logger.debug(f"Current game version: {current_ver}, short version: {short_ver}, requirements: {requirements}")
+        return short_ver in requirements
+    
     # =========================================================================
     # 1. 规则 CRUD (核心逻辑)
     # =========================================================================
@@ -266,9 +216,7 @@ class RuleManager:
         target = str(filter_item.get("value", "")).lower()
         # 获取实际值，支持点分语法 (例如 metadata.author)
         actual = mod_data.get(field)
-
         if actual is None: return False
-        
         # 统一转为字符串列表进行匹配
         if isinstance(actual, list):
             actual_strs = [str(i).lower() for i in actual]
@@ -331,76 +279,116 @@ class RuleManager:
             "load_before": {}
         }
 
-        def _merge_rule(category, target, source_type, info=None):
-            target = target.lower()
-            current = rules_map[category].get(target)
+        def _merge_rule(category: str, target_id: str, source_type: str, source_name: str, 
+                        is_force: bool = False, alternatives: list = [], detail: Any = None):
+            target_id = target_id.lower()
+            if not target_id: return
+            
             new_p_idx = self.get_source_priority(source_type)
-            # 逻辑：如果当前没有规则，或者新规则的优先级索引更小（更靠前），则覆盖
-            if not current or new_p_idx < current['priority_idx']:
-                rules_map[category][target] = {
-                    "source": source_type,
-                    "priority_idx": new_p_idx,
-                    "detail": info
+            current = rules_map[category].get(target_id)
+            
+            # 如果当前没有规则，或者新规则的优先级更高(索引更小)，则覆盖
+            should_override = False
+            if not current:
+                should_override = True  # 规则不存在，直接写入
+            elif is_force and not current['is_force']:
+                should_override = True  # 新规则是强制的，旧的不是，直接降维覆盖（无视来源优先级）
+            elif is_force == current['is_force'] and new_p_idx < current['priority_idx']:
+                should_override = True  # 二者同为强制(或同为非强制)，遵循来源优先级（如：用户的强制 覆盖 原版的强制）
+                
+            if should_override:
+                rules_map[category][target_id] = {
+                    "target_id": target_id,
+                    "type": category,
+                    "version_requirement": ["all"], # 输出时已是清洗过的，统一标为 all 即可
+                    "alternatives": alternatives or [],
+                    "is_force": is_force,
+                    "source": {
+                        "type": source_type,
+                        "name": source_name,
+                        "detail": detail
+                    },
+                    "priority_idx": new_p_idx # 内部计算字段，最终剔除
                 }
 
-        # 1. Native (About.xml) - Priority 4
-        # 依赖是特殊的，通常只有 Native 有，但为了统一结构也放这里
-        for p in mod_full_data.get('dependencies_mods', []):
-            rules_map["dependencies"][p['package_id'].lower()] = {"source": "native", "detail": None}
-        for p in mod_full_data.get('incompatible_mods', []):
-            _merge_rule("incompatible", p, "native")
-        for p in mod_full_data.get('load_after_mods', []):
-            _merge_rule("load_after", p, "native")
-        for p in mod_full_data.get('load_before_mods', []):
-            _merge_rule("load_before", p, "native")
+        # 1. Native (About.xml) - 优先级: native
+        # 不受黑名单机制影响，严格执行游戏版本过滤
+        native_mapping = {
+            'dependencies_mods': ('dependencies', '原生依赖'),
+            'load_after_mods': ('load_after', '原生前置'),
+            'load_before_mods': ('load_before', '原生后置'),
+            'incompatible_mods': ('incompatible', '原生冲突')
+        }
+        for field, (cat, name) in native_mapping.items():
+            for rule in mod_full_data.get(field, []):
+                # 兼容部分未完全转换的旧格式
+                if isinstance(rule, str):
+                    rule = {"package_id": rule, "version_requirement": ['all'], "alternatives": [], "is_force": False}
+                
+                # 核心：版本过滤 (过滤掉不属于当前游戏版本的规则)
+                if self._is_version_compatible(rule.get('version_requirement')): # type: ignore
+                    _merge_rule(
+                        category=cat,
+                        target_id=rule.get('package_id', ''),
+                        source_type="native",
+                        source_name=name,
+                        is_force=rule.get('is_force', False),
+                        alternatives=rule.get('alternatives', []),
+                        detail={"versions": rule.get('version_requirement')}
+                    )
 
-        # 2. Community Rules - Priority 3
+        # 2. Community Rules
+        # 受全局开关和黑名单控制
         if self.settings.get("community_mod_rules_enabled", True) and \
            mid_l not in self.settings.get("excluded_community_mods", []):
             comm = self.community_rules.get(mid_l, {})
             for t, info in comm.get("loadAfter", {}).items():
-                _merge_rule("load_after", t, "community", info)
+                _merge_rule("load_after", t, "community", "社区规则", detail=info)
             for t, info in comm.get("loadBefore", {}).items():
-                _merge_rule("load_before", t, "community", info)
+                _merge_rule("load_before", t, "community", "社区规则", detail=info)
             for t, info in comm.get("incompatibleWith", {}).items():
-                _merge_rule("incompatible", t, "community", info)
+                _merge_rule("incompatible", t, "community", "社区规则", detail=info)
 
         # 3. User Rules - Priority 2
+        # 受全局开关和黑名单控制
         if self.settings.get("user_mod_rules_enabled", True) and \
            mid_l not in self.settings.get("excluded_user_mods", []):
             user = self.user_mod_rules.get(mid_l, {})
             rules = user.get("rules", user) # 兼容旧格式
             if isinstance(rules, dict):
                 for t, info in rules.get("loadAfter", {}).items():
-                    _merge_rule("load_after", t, "user", info)
+                    _merge_rule("load_after", t, "user", "用户规则", detail=info)
                 for t, info in rules.get("loadBefore", {}).items():
-                    _merge_rule("load_before", t, "user", info)
+                    _merge_rule("load_before", t, "user", "用户规则", detail=info)
                 for t, info in rules.get("incompatibleWith", {}).items():
-                    _merge_rule("incompatible", t, "user", info)
+                    _merge_rule("incompatible", t, "user", "用户规则", detail=info)
 
         # 4. Dynamic Rules - Priority 1
+        # 仅提取图约束 (load_after / load_before)，其余权重操作交由排序器处理
         if self.settings.get("dynamic_rules_enabled", True):
             matched = self.get_matching_dynamic_rules(mod_full_data)
             for rule in matched:
                 act = rule.get("action", {})
-                info = {"name": rule.get("name")}
+                rule_name = rule.get("name", "动态规则")
                 if act.get("type") == "load_after":
-                    _merge_rule("load_after", act.get("value"), "dynamic", info)
+                    _merge_rule("load_after", act.get("value"), "dynamic", rule_name)
                 elif act.get("type") == "load_before":
-                    _merge_rule("load_before", act.get("value"), "dynamic", info)
+                    _merge_rule("load_before", act.get("value"), "dynamic", rule_name)
 
-        # 转换为前端友好的 List 结构，并移除 priority 字段
-        final_result = {}
+        # 5. 格式化输出
+        final_result = {
+            "dependencies": [],
+            "load_after": [],
+            "load_before": [],
+            "incompatible": []
+        }
         for cat, targets in rules_map.items():
-            final_result[cat] = []
             for tid, data in targets.items():
-                final_result[cat].append({
-                    "target": tid,
-                    "source": data["source"],
-                    "detail": data.get("detail")
-                })
+                del data['priority_idx'] # 剔除内部计算字段
+                final_result[cat].append(data)
         
         return final_result
+    
     
     # =========================================================================
     # 3. 导入导出 (Bundle)

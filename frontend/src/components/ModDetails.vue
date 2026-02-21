@@ -250,12 +250,12 @@
             <div v-if="selectedMod.incompatible_mods?.length" class="space-y-1">
               <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-danger">冲突于</div>
               <!-- 不兼容项列表 -->
-              <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc" 
+              <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc.package_id" 
                   class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
-                <span v-preview="modStore.takeModById(inc)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc) }}</span>
+                <span v-preview="modStore.takeModById(inc.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(inc).path" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+                  <span v-if="!!modStore.takeModById(inc.package_id).path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -278,10 +278,10 @@
               <!-- 前置加载项列表 -->
               <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft" 
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
-                <span v-preview="modStore.takeModById(aft)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft) }}</span>
+                <span v-preview="modStore.takeModById(aft.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(aft).path" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+                  <span v-if="!!modStore.takeModById(aft.package_id).path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -304,10 +304,10 @@
               <!-- 后置加载项列表 -->
               <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef" 
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
-                <span v-preview="modStore.takeModById(bef)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef) }}</span>
+                <span v-preview="modStore.takeModById(bef.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(bef).path" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+                  <span v-if="!!modStore.takeModById(bef.package_id).path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>

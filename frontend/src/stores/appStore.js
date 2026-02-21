@@ -171,6 +171,7 @@ export const useAppStore = defineStore('app', () => {
     enable_auto_scan: true,
     delete_missing_mods_data: false,
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
+    auto_activate_dependencies: false,     // 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
 

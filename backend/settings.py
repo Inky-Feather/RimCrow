@@ -142,6 +142,7 @@ class AppConfig:
     delete_missing_mods_data: bool = True     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
+    auto_activate_dependencies: bool = False   # 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
     
