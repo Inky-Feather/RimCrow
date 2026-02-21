@@ -58,9 +58,9 @@
                 <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-text-main/5">
             
                   <!-- 刷新按钮 -->
-                  <button :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
+                  <div :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
                     class="col-span-1 py-1 rounded-lg bg-text-main/5 border border-text-main/5 group
-                          text-sm text-gray-300 font-bold uppercase tracking-wider relative
+                          text-sm text-gray-300 font-bold uppercase tracking-wider relative cursor-pointer
                           hover:bg-text-main/10 hover:text-text-main hover:border-text-main/20
                           active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
                     @click="modStore.scanMods()"
@@ -77,7 +77,7 @@
                       强制刷新
                     </button>
 
-                  </button>
+                  </div>
                   <!-- 自动排序按钮 -->
                   <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
