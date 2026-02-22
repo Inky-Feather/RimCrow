@@ -227,17 +227,17 @@ class SteamManager:
     # =========================================================
     #  2. SteamCMD 功能
     # =========================================================
-    def download_workshop_items(self, mod_ids: list):
+    def download_workshop_items(self, workshop_ids: list):
         EventBus.resume()   # 恢复事件总线
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
         
         commands = ["login anonymous"]
-        for mid in mod_ids:
+        for mid in workshop_ids:
             commands.append(f"workshop_download_item {RIMWORLD_APP_ID} {mid}")
         commands.append("quit")
         
-        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, mod_ids))
+        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, workshop_ids))
         t.start()
         return t
 
@@ -479,5 +479,6 @@ class SteamManager:
         # 启动
         subprocess.Popen(cmd)
         logger.debug(f"通过 Steam 命令启动 RimWorld: {cmd}")
+    
     
     

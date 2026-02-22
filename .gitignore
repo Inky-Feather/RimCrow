@@ -17,6 +17,8 @@ test/
 *.db
 *.db-*
 *.log
+steamcmd/
+steam_agent/
 
 # IDE & System
 .vscode/
@@ -43,3 +45,5 @@ lerna-debug.log*
 temp*.vue
 build/
 temp/
+tools/steamcmd/steamcmd.exe
+tools/steamcmd/steamcmd.exe

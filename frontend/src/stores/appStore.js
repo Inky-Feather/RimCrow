@@ -733,6 +733,13 @@ export const useAppStore = defineStore('app', () => {
       
     }
   }
+  const downloadWorkshopItems = async (workshop_ids) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.steamcmd_download(workshop_ids)
+    if (checkResult(res, "下载创意工坊项目")) {
+      toast.success(`开始下载 ${workshop_ids.length} 个创意工坊项目`)
+    }
+  }
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (url) => {
     if(url) {
@@ -872,7 +879,6 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 触发操作 (下载 OR 安装)
-  // 这个函数绑定到弹窗的 "立即更新/立即安装" 按钮上
   const _performUpdateAction = async () => {
       const info = updateState.info
       if (!info) return
@@ -945,6 +951,6 @@ export const useAppStore = defineStore('app', () => {
     getGameInfo, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, startDownload, waitForDownload, 
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase,
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod, checkUpdate, 
-    getAiConfig, saveAIConfig, useAI, fetchAiModels, chatWithAI
+    getAiConfig, saveAIConfig, useAI, fetchAiModels, chatWithAI, downloadWorkshopItems, 
   }
 })
