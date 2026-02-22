@@ -387,8 +387,8 @@ class ModScanner:
         # 物理路径作为哈希主键
         path_hash = generate_path_hash(mod_path)
         # 增量比对 - 第一阶段：仅比对修改时间
-        snapshot = existing_snapshots.get('path_hash')
-        # 如果关闭了开关，或者强制更新，则不计算
+        snapshot = existing_snapshots.get(path_hash)
+        # 在开启开关或者强制更新的情况下，才需要计算大小
         need_size_check = settings.config.enable_file_size_scan or forced_update
 
         # 增量检测逻辑 (Time AND Size)
@@ -471,11 +471,13 @@ class ModScanner:
         # 深度分析
         analysis_info = self.analyzer.analyze(mod_path)
         
-        final_size = 0
+        final_size = snapshot.get('size', 0)
         # 新增标记
         if (path_hash not in existing_snapshots):
             mod_data['is_new'] = True
-            final_size = get_folder_size(mod_path)
+            final_size = get_folder_size(mod_path) # 新增 Mod 时，计算大小
+        elif (need_size_check):
+            final_size = get_folder_size(mod_path) # 增量 Mod 时，在需要检测大小的情况下，计算大小
             
         mod_data.update({
             'path_hash': path_hash,
