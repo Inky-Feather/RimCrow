@@ -60,8 +60,8 @@ class ModAsset(BaseModel):
     """
     # 唯一标识符：使用路径的哈希值，确保同一路径只存一条
     path_hash = cast(str, CharField(primary_key=True))               # 路径哈希值，主键
-    # 核心标识
-    package_id = cast(str, CharField(index=True))                    # 包名，如 "ludeon.rimworld" (全小写)
+    # 核心标识，指定 collation='NOCASE'，SQLite 内部对比时将忽略大小写
+    package_id = cast(str, CharField(index=True, collation='NOCASE')) # 包名，如 "ludeon.rimworld" (全小写)
     workshop_id = cast(str, CharField(null=True))                    # 创意工坊ID
     name = cast(str, CharField())                                    # 名称
     author = cast(list[str], UTF8JSONField(default=list))            # 作者，可能为多人
@@ -108,7 +108,7 @@ class UserModData(BaseModel):
     """
     存储用户对 Mod 的自定义数据 (与 Mod 表 1对1，避免重新扫描时丢失)
     """
-    mod_id = cast(str, CharField(primary_key=True))              # 关联 Mod 表
+    mod_id = cast(str, CharField(primary_key=True, collation='NOCASE'))              # 关联 Mod 表
     alias_name = cast(Optional[str], CharField(null=True))                 # 别名
     notes = cast(Optional[str], TextField(null=True))                      # 用户备注
     tags = cast(list[str], UTF8JSONField(default=list))                # 用户打的标签 ['排队必备', '前置']
@@ -134,7 +134,7 @@ class GroupMod(BaseModel):
     分组与 Mod 的多对多关系表 (Junction Table)
     """
     group_id = cast(str, ForeignKeyField(GroupData, backref='mods', on_delete='CASCADE'))
-    mod_id = cast(str, ForeignKeyField(UserModData, backref='groups', on_delete='CASCADE'))
+    mod_id = cast(str, ForeignKeyField(UserModData, backref='groups', on_delete='CASCADE', collation='NOCASE'))
     sort_index = cast(int, IntegerField(default=0)) # Mod 在该分组内的排序
 
     class Meta:

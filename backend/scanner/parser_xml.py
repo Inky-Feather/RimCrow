@@ -80,9 +80,10 @@ class ModXMLParser:
             self._parse_modsync(modsync_path, data)
             
 
-        # 数据清洗：确保 package_id 全小写 (RimWorld 内部逻辑不区分大小写)
+        # package_id 去除首尾空格
+        # todo ： 当前的 package_id 全部转换为小写，后续需要根据实际情况处理，可能需要保留原始格式
         if data["package_id"]:
-            data["package_id"] = data["package_id"].lower()
+            data["package_id"] = data["package_id"].strip().lower()
         
         # 处理 icon_path 相对路径
         if data["icon_path"]:

@@ -230,7 +230,7 @@
                 <span v-preview="modStore.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(dep.package_id).path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
+                  <span v-if="!!modStore.takeModById(dep.package_id)?.path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                   <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
@@ -260,7 +260,7 @@
                 <span v-preview="modStore.takeModById(inc.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(inc.package_id).path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+                  <span v-if="!!modStore.takeModById(inc.package_id)?.path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -286,7 +286,7 @@
                 <span v-preview="modStore.takeModById(aft.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(aft.package_id).path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+                  <span v-if="!!modStore.takeModById(aft.package_id)?.path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -312,7 +312,7 @@
                 <span v-preview="modStore.takeModById(bef.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef.package_id) }}</span>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(bef.package_id).path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+                  <span v-if="!!modStore.takeModById(bef.package_id)?.path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>

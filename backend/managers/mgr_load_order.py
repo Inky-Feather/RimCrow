@@ -79,6 +79,7 @@ class LoadOrderManager:
             root = tree.getroot()
             # 结构一般是 <ModsConfigData><activeMods><li>id</li>...</activeMods></ModsConfigData>
             active_node = root.xpath("//activeMods") or root.xpath("//modIds")
+            # active_node = root.find("./activeMods") or root.find("./modIds")
             if active_node is None: logger.error("无法解析非标准 ModsConfig.xml 文件！")
             active_node = active_node[0]
             if active_node is not None:

@@ -469,6 +469,7 @@ export const useModStore = defineStore('mods', () => {
     try {
       // 提取所有对象的时间属性 {package_id:xxxx, last_active_time:xxxx, last_moved_time:xxxx}
       const all_mods = Array.from(allModsMap.value.values(), mod => ({
+        path_hash: mod.path_hash,
         package_id: mod.package_id,
         last_active_time: mod.last_active_time,
         last_moved_time: mod.last_moved_time
@@ -873,7 +874,7 @@ export const useModStore = defineStore('mods', () => {
           }
         }
       }
-      
+
     }
 
     // -------------------------------------------------

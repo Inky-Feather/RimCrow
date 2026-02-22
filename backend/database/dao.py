@@ -77,9 +77,9 @@ class ModDAO:
         combined_cond = combined_cond & active_cond
         # 执行查询：(Path A OR Path B) AND (Joined UserData)
         query = (ModAsset.select(ModAsset, UserModData)
-                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(combined_cond) # 组合 OR 条件
-                 .dicts())
+                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                .where(combined_cond) # 组合 OR 条件
+                .dicts())
 
         # 预加载分组映射 (Preload Group Mapping)，建立 { package_id: ["分组A", "分组B"] } 的映射
         group_map = {}
@@ -87,8 +87,8 @@ class ModDAO:
             # 联查 GroupMod 和 GroupData，只取必要的字段
             # SELECT gm.mod_id, g.name FROM groupmod gm JOIN groupdata g ON gm.group_id = g.group_id
             g_query = (GroupMod.select(GroupMod.mod_id, GroupData.name)
-                       .join(GroupData, on=(GroupMod.group_id == GroupData.group_id))
-                       .dicts())
+                    .join(GroupData, on=(GroupMod.group_id == GroupData.group_id))
+                    .dicts())
             
             for row in g_query:
                 mid = row['mod_id'].lower()
@@ -167,9 +167,9 @@ class ModDAO:
         返回字典列表，方便前端直接使用。
         """
         query = (ModAsset.select(ModAsset, UserModData)
-                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(cast(Any, ModAsset.path).is_null(False) | (not ignore_missing))
-                 .dicts())
+                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                .where(cast(Any, ModAsset.path).is_null(False) | (not ignore_missing))
+                .dicts())
         return list(query)
     
     @staticmethod
@@ -189,7 +189,7 @@ class ModDAO:
         Value: { mtime, size, package_id }
         """
         # 我们需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
-        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_modify_time, ModAsset.file_size, ModAsset.package_id ).dicts()
+        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_modify_time, ModAsset.file_size, ModAsset.package_id, ModAsset.disabled ).dicts()
         
         snapshots = {}
         for row in query:
@@ -197,7 +197,8 @@ class ModDAO:
             snapshots[row['path_hash']] = {
                 'mtime': row['file_modify_time'] or 0,
                 'size': row['file_size'] or 0,
-                'package_id': row['package_id'] # 缓存 ID
+                'package_id': row['package_id'].lower(), # 缓存 ID
+                'disabled': row['disabled']
             }
         return snapshots
 

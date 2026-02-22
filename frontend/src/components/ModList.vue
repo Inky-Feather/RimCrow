@@ -116,9 +116,9 @@
     </div>
     <!-- (tabindex="0" @keydown.ctrl.a.prevent="selectAll") 非焦点容器需要 tabindex 才能响应键盘事件 -->
     <!-- 列表区（底部渐变隐藏） -->
-    <div v-else class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
+    <div v-else ref="listContainerRef" class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
-        after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent"
+        after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent focus:outline-none"
         tabindex="0" @keydown.up.prevent="handleKeyNav(-1)"
         @keydown.down.prevent="handleKeyNav(1)"
         @click="focusContainer"
@@ -222,7 +222,7 @@ const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 const listKey = ref(0)
 
 const searchTagsRef = ref(null)
-
+const listContainerRef = ref(null)
 
 // --- 1. 搜索与筛选逻辑 ---
 // 状态
@@ -659,7 +659,7 @@ const removeInvalidMod = async () => {
 
 // 点击列表区域时自动获取焦点，确保按键生效
 const focusContainer = (e) => {
-  // e.currentTarget.focus()
+  e.currentTarget.focus()
 }
 /**
  * 3. 键盘导航核心函数

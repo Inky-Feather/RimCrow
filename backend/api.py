@@ -29,7 +29,7 @@ from backend.database.dao import ModDAO, GroupDAO
 
 # 3. 引入业务逻辑管理器
 from backend.managers.mgr_game import GameManager
-from backend.managers.mgr_mods_config import LoadOrderManager
+from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_files import FileManager
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
@@ -568,15 +568,14 @@ class API:
                         results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
                         continue
                     if action == 'disable':
-                        # 方案：重命名 About.xml -> About.xml.disabled
+                        # 重命名 About.xml -> About.xml.disabled
                         about_xml = os.path.join(target_path, 'About', 'About.xml')
                         disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
                         # 检查 About.xml 是否存在
                         if os.path.exists(about_xml):
                             try:
                                 # 如果目标已存在，先删除旧的disabled (极其罕见)
-                                if os.path.exists(disabled_xml):
-                                    os.remove(disabled_xml)
+                                if os.path.exists(disabled_xml): os.remove(disabled_xml)
                                 os.rename(about_xml, disabled_xml)
                                 # 更新数据库状态为 disabled = True
                                 ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
@@ -588,8 +587,11 @@ class API:
                                     
                                 results.append({'path': target_path, 'status': 'success'})
                             except Exception as e:
+                                logger.error(f"Disable mod failed: {e}")
                                 results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
                         else:
+                            # 可能是 XML 已经不在了，但为了保险，标记数据库
+                            ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
                             results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
 
                     elif action == 'delete':
@@ -922,9 +924,9 @@ class API:
         # 1. 准备任务 (使用 JOIN 一次性查出所有需要的数据)
         # 这里的退回顺序逻辑直接在 Python 循环中处理，清晰易维护
         query = (ModAsset.select(ModAsset, UserModData.alias_name)
-                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop') # type: ignore
-                 .dicts())
+                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop') # type: ignore
+                .dicts())
         try:
             # 2. 执行任务
             res = self.file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)

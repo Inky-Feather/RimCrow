@@ -370,9 +370,9 @@ class ModScanner:
         # 如果没有 About.xml，但有 .disabled，说明这是被管理器禁用的重复项，直接跳过（视为不存在）
         if not os.path.exists(about_file):
             if os.path.exists(disabled_file):
-                # about_file = disabled_file  
-                # is_disabled = True
-                return None  # 这是一个被禁用的影子 Mod，本次扫描忽略
+                about_file = disabled_file  
+                is_disabled = True
+                # return None  # 这是一个被禁用的影子 Mod，本次扫描忽略
             if not is_dlc_dir:
                 return None # 既不是 DLC 也没有 About.xml，无效
         
@@ -391,9 +391,25 @@ class ModScanner:
         # 在开启开关或者强制更新的情况下，才需要计算大小
         need_size_check = settings.config.enable_file_size_scan or forced_update
 
+        # 如果快照存在且被禁用，直接跳过
+        if snapshot and is_disabled:
+            return {
+                '_skipped': True, 
+                'path_hash': path_hash,
+                'package_id': snapshot['package_id'],
+                'path': mod_path, 
+                'mtime': mtime,
+                'file_size': snapshot['size'], # 复用旧大小
+                'disabled': is_disabled
+            }
+            
+        disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
+        
         # 增量检测逻辑 (Time AND Size)
         # 如果快照存在且修改时间一致
-        if snapshot and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update:
+        if disabled_change: pass
+        
+        elif snapshot and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update :
             # 修改时间没变，此时我们通过开关决定是否开启“深层大小检测”
             if need_size_check:
                 # 优化点：只有在修改时间没变时，才执行耗时的 get_folder_size
@@ -407,7 +423,7 @@ class ModScanner:
                         'path': mod_path, 
                         'mtime': mtime,
                         'file_size': current_size,
-                        'disabled': False
+                        'disabled': is_disabled
                     }
                 # 走到这里说明大小变了，需要继续向下解析
             else:
@@ -419,13 +435,13 @@ class ModScanner:
                     'path': mod_path, 
                     'mtime': mtime,
                     'file_size': snapshot['size'], # 复用旧大小
-                    'disabled': False
+                    'disabled': is_disabled
                 }
         
         # 解析 XML (CPU 密集)
         # parser 内部如果处理异常会返回默认空结构，这里直接调
         mod_data = self.xml_parser.parse(mod_path)
-        pkg_id = mod_data.get('package_id')
+        pkg_id = mod_data.get('package_id','').lower()
         
         # DLC 兜底 ID
         if is_dlc_dir and not pkg_id:
@@ -471,7 +487,7 @@ class ModScanner:
         # 深度分析
         analysis_info = self.analyzer.analyze(mod_path)
         
-        final_size = snapshot.get('size', 0)
+        final_size = snapshot.get('size', 0) if snapshot and 'size' in snapshot else 0
         # 新增标记
         if (path_hash not in existing_snapshots):
             mod_data['is_new'] = True

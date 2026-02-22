@@ -273,6 +273,7 @@ const submit = async () => {
   localConflicts.value.forEach((group) => {
     const pid = group.package_id;    // 这一组的 package_id
     const keepPath = selections[pid];
+    const keepPathHash = group.items.find(item => item.path === keepPath).path_hash
     // 遍历该组所有项
     group.items.forEach(mod => {
       if (mod.path !== keepPath) {
@@ -281,7 +282,7 @@ const submit = async () => {
           action: actionMap[mod.path],
           target_path: mod.path,
           keep_id: pid,
-          keep_path_hash: mod.path_hash,
+          keep_path_hash: keepPathHash,
         })
       }
     })
