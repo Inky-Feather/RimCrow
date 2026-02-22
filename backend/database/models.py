@@ -95,10 +95,13 @@ class ModAsset(BaseModel):
     file_modify_time = cast(int, BigIntegerField(default=0))            # 文件修改时间，用于增量扫描更新
     last_active_time = cast(int, BigIntegerField(default=0))            # 上次启用时间，用于排查错误时找到最近启用的Mod
     last_moved_time = cast(int, BigIntegerField(default=0))             # 上次调整顺序的时间，用于排查错误时找到最近的修改点
+    # 文件夹总大小 (字节)，用于增量检测内部文件变动
+    file_size = cast(int, BigIntegerField(default=0)) 
     
     # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
     # 格式: ["D:/Mods/Harmony_Old", "E:/Steam/Harmony"]
     shadow_paths = cast(list[str], UTF8JSONField(default=list))         # 存储重复但被禁用(About.xml.disabled)的同名Mod路径
+    disabled = cast(bool, BooleanField(default=False))                  # 是否禁用
     
 
 class UserModData(BaseModel):

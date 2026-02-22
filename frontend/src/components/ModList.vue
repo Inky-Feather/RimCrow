@@ -396,6 +396,7 @@ const displayList = computed(() => {
       if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
       if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
       if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
+      if (sortMode.value === 'file_size') return (mA?.file_size || 0) - (mB?.file_size || 0)
 
       return 0
     })
@@ -425,6 +426,7 @@ const SORT_MODE_MAP = {
   'last_moved_time': '移动时间',
   'file_create_time': '创建时间',
   'file_modify_time': '修改时间',
+  'file_size': '文件大小',
 }
 const sortIcon = computed(() => {
   return SORT_MODE_MAP[sortMode.value] || '默认'

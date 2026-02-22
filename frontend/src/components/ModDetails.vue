@@ -135,9 +135,13 @@
           
           <!-- 文件统计 -->
           <div v-if="selectedMod.file_stats && block.id === 'files_info'" class="p-1 space-y-2">
-            <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">
+            <h3 class="flex items-center gap-1 text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">
               {{ appStore.DETAILS_LAYOUT_MAPS[block.id].label }}
               <span v-tooltip="'注意：本统计仅涵盖通用文件，及 Mod 所支持的游戏最高版本对应的文件（不涉及其他游戏版本的文件）。'" class="text-text-dim/50 hover:text-text-main">⚠︎</span>
+              <!-- 文件大小 -->
+              <span class="text-[0.65rem] text-text-dim font-normal flex-1 flex items-center justify-end px-1">
+                大小: {{ formatFileSize(selectedMod.file_size) }}
+              </span>
             </h3>
             <div class="grid grid-cols-4 gap-1.5 text-center text-text-dim">
               <StatItem v-tooltip="'定义XML文件数量'" label="Defs" :value="selectedMod.file_stats.game_xml || 0" >
@@ -159,6 +163,7 @@
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 22V36" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22H24L30 22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
               <div v-tooltip="tooltipModType" class="p-1 col-span-2 bg-text-main/5 rounded-lg border text-text-dim border-text-main/5 flex items-center justify-center">
+                <!-- 模组类型 -->
                 <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="size-6 opacity-75" />
                 <span v-if="modType" class="flex-1 truncate">{{ MOD_TYPE_MAP[modType] }}</span>
               </div>
@@ -520,6 +525,7 @@ import { useAppStore } from '../stores/appStore'
 import { useGroupStore } from '../stores/groupStore'
 import { parseUnityRichText } from '../utils/unityTextParser'
 import { hexToRgba, hexToRgb } from '../utils/colorDeal'
+import { formatFileSize } from '../utils/uiHelper'
 import ImageCloud from './utils/ImageCloud.vue';
 import LampEffect from './utils/LampEffect.vue';
 import LuxBreatheIcon from './utils/LuxBreatheIcon.vue'

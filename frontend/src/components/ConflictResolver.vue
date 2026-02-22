@@ -268,16 +268,11 @@ const selectVersion = (packageId, path) => {
 
 const submit = async () => {
   processing.value = true
-
   // 构造操作列表
   const operations = []
-
   localConflicts.value.forEach((group) => {
-    const pid = group.package_id;
+    const pid = group.package_id;    // 这一组的 package_id
     const keepPath = selections[pid];
-
-    // 这一组的 package_id
-
     // 遍历该组所有项
     group.items.forEach(mod => {
       if (mod.path !== keepPath) {
@@ -285,12 +280,12 @@ const submit = async () => {
         operations.push({
           action: actionMap[mod.path],
           target_path: mod.path,
-          keep_id: pid
+          keep_id: pid,
+          keep_path_hash: mod.path_hash,
         })
       }
     })
   })
-
   if (operations.length === 0) {
     toast.info("未检测到需要执行的操作");
     visible.value = false;

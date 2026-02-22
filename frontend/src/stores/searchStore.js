@@ -74,8 +74,9 @@ export const useSearchStore = defineStore('search', () => {
             /urls?$/i,        // 屏蔽所有以 url 结尾的 (thumb_url, preview_url)
             /paths?$/i,       // 屏蔽所有以 path 结尾的 (install_path)
             /colors?$/i,      // 屏蔽所有以 color 结尾的 (color)
-            'description','notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
-            'version','workshop_id','id','mod_id', 'path_hash','rules',
+            'description','descriptions_by_version' ,'notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
+            'version','workshop_id','id','mod_id', 'path_hash','rules', 'disabled',
+            'file_size',
             // 'ignored_issues',
         ]
     })

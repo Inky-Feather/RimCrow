@@ -3,7 +3,7 @@ from functools import reduce
 import operator
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 import uuid
 from peewee import chunked, fn, JOIN
 from backend.database.models import GameProfile, db, ModAsset, UserModData, GroupData, GroupMod
@@ -59,19 +59,22 @@ class ModDAO:
         
         # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
         # 注意：SQLite 的 LIKE 不区分大小写(默认情况)，但为了保险最好在 Python 层再严谨校验一次
+        path_field = cast(Any, ModAsset.path) # 类型断言，告诉类型检查器 path_field 是一个 Any 字段，以便不会因Peewee类型检查而报错
         if local_root:
-            conditions.append(ModAsset.path.contains(local_root)) # 宽泛匹配，防止盘符差异
+            conditions.append(path_field.contains(local_root)) # 宽泛匹配，防止盘符差异
         
         # 条件 B: 路径包含 Workshop Root (仅当启用工坊时)
         if use_workshop_mods and workshop_root:
-            conditions.append(ModAsset.path.contains(workshop_root))
+            conditions.append(path_field.contains(workshop_root))
             
-        if not conditions:
-            return [] # 没有任何有效路径配置
+        if not conditions: return [] # 没有任何有效路径配置
 
         # 使用 reduce 和 operator.or_ 替代 fn.OR
         # 这会生成标准的 (condition1 OR condition2 OR ...) 结构
         combined_cond = reduce(operator.or_, conditions)
+        # 追加过滤条件，不读取已被禁用的 Mod。
+        active_cond = (ModAsset.disabled == False) | (cast(Any, ModAsset.disabled).is_null(True))
+        combined_cond = combined_cond & active_cond
         # 执行查询：(Path A OR Path B) AND (Joined UserData)
         query = (ModAsset.select(ModAsset, UserModData)
                  .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
@@ -147,10 +150,10 @@ class ModDAO:
         # 清理 UserModData
         # 删除 mod_id 不在 existing_ids 中的记录
         with db.atomic():
-            deleted_user_data = UserModData.delete().where(UserModData.mod_id.not_in(ModAsset.package_id)).execute()
+            deleted_user_data = UserModData.delete().where(cast(Any, UserModData.mod_id).not_in(ModAsset.package_id)).execute()
             # 清理 GroupMod (分组关联)
             # 这一步通常由数据库外键级联处理，但为了保险手动清理
-            deleted_group_mod = GroupMod.delete().where(GroupMod.mod_id.not_in(ModAsset.package_id)).execute()
+            deleted_group_mod = GroupMod.delete().where(cast(Any, GroupMod.mod_id).not_in(ModAsset.package_id)).execute()
         return {
             'deleted_user_configs': deleted_user_data,
             'deleted_group_relations': deleted_group_mod
@@ -165,7 +168,7 @@ class ModDAO:
         """
         query = (ModAsset.select(ModAsset, UserModData)
                  .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(ModAsset.path.is_null(False) | (not ignore_missing))
+                 .where(cast(Any, ModAsset.path).is_null(False) | (not ignore_missing))
                  .dicts())
         return list(query)
     
@@ -179,13 +182,24 @@ class ModDAO:
         return list(query)
 
     @staticmethod
-    def get_mod_mtimes():
+    def get_mod_snapshots():
         """
-        获取所有 Mod 的修改时间戳，用于增量扫描对比。
-        :return: {package_id: float}
+        获取所有 Mod 的物理快照。
+        Key: path_hash (物理路径哈希)
+        Value: { mtime, size, package_id }
         """
-        query = ModAsset.select(ModAsset.package_id, ModAsset.file_modify_time).dicts()
-        return {row['package_id']: row['file_modify_time'] for row in query}
+        # 我们需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
+        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_modify_time, ModAsset.file_size, ModAsset.package_id ).dicts()
+        
+        snapshots = {}
+        for row in query:
+            # 只有 path_hash 才是物理文件的唯一身份证
+            snapshots[row['path_hash']] = {
+                'mtime': row['file_modify_time'] or 0,
+                'size': row['file_size'] or 0,
+                'package_id': row['package_id'] # 缓存 ID
+            }
+        return snapshots
 
     @staticmethod
     def batch_upsert_mods(mods_data_list: List[Dict[str, Any]]):
@@ -234,9 +248,9 @@ class ModDAO:
         批量更新 Mod 的特定字段 (仅用于已存在的 Mod)。
         """
         if not mods_data_list: return
-        # 获取要更新的字段名 (假设所有字典的 key 是一样的，或者取并集)
+        # 获取要更新的字段名
         # 注意：bulk_update 需要模型对象列表，或者字典列表 + 字段列表
-        update_fields = set(mods_data_list[0].keys()) - {'package_id'}
+        update_fields = set(mods_data_list[0].keys()) - {'path_hash'}
         # 将字典转换为模型实例 (Peewee bulk_update 需要实例)
         model_instances = [ModAsset(**data) for data in mods_data_list]
         with db.atomic():
@@ -370,7 +384,7 @@ class ModDAO:
         
         with db.atomic():
             # 1. 查出已有的记录
-            existing_records = UserModData.select().where(UserModData.mod_id.in_(mod_ids))
+            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
             existing_map = {r.mod_id_id: r for r in existing_records} # Peewee 中外键ID属性常带_id后缀
             batch_data = []
             for mid in mod_ids:
@@ -401,7 +415,7 @@ class ModDAO:
 
         with db.atomic():
             # 1. 查出已有的记录（只查涉及的 Mod）
-            existing_records = UserModData.select().where(UserModData.mod_id.in_(mod_ids))
+            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
             existing_map = {r.mod_id_id: r for r in existing_records}
             
             batch_data = []
@@ -465,10 +479,10 @@ class ModDAO:
             if delete:
                 # 如果要删除，直接删，不需要先 update
                 # chunked 并不是必须的，除非一次性删几万条，这里直接 in_ 即可
-                ModAsset.delete().where(ModAsset.path_hash.in_(total_invalid_mods)).execute()
+                ModAsset.delete().where(cast(Any, ModAsset.path_hash).in_(total_invalid_mods)).execute()
             else:
                 # 如果不删除，只是标记为丢失 (path = '')
-                ModAsset.update(path='').where(ModAsset.path_hash.in_(deleted_mods)).execute()
+                ModAsset.update(path='').where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
         
         return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
     
@@ -484,7 +498,7 @@ class ModDAO:
         # 1. 筛选出可能有 shadow_paths 的记录
         # 注意：SQLite 中 JSON 存为 TEXT，我们可以简单查不为空的
         # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
-        mods_with_shadows = ModAsset.select().where(ModAsset.shadow_paths.is_null(False))
+        mods_with_shadows = ModAsset.select().where(cast(Any, ModAsset.shadow_paths).is_null(False))
         
         with db.atomic():
             for mod in mods_with_shadows:
@@ -655,7 +669,7 @@ class GroupDAO:
         """从分组移除 Mod"""
         query = GroupMod.delete().where(
             (GroupMod.group_id == group_id) & 
-            (GroupMod.mod_id.in_(mod_ids))
+            (cast(Any, GroupMod.mod_id).in_(mod_ids))
         )
         return query.execute()
 

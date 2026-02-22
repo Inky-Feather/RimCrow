@@ -24,7 +24,7 @@ from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, UserModData, init_db
+from backend.database.models import ModAsset, UserModData, init_db, db
 from backend.database.dao import ModDAO, GroupDAO
 
 # 3. 引入业务逻辑管理器
@@ -461,7 +461,7 @@ class API:
         """
         try:
             # 净化数据只保留必要字段
-            valid_fields = ['package_id', 'last_active_time', 'last_moved_time']
+            valid_fields = ['path_hash', 'last_active_time', 'last_moved_time']
             mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
             # print(f"更新Mod最后操作时间:{mods_data_list}")
             ModDAO.batch_update_mods(mods_data_list)
@@ -560,54 +560,56 @@ class API:
         """
         results = []
         try:
-            for op in operations:
-                action = op.get('action')
-                target_path = op.get('target_path')
-                
-                if not target_path or not os.path.exists(target_path):
-                    results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
-                    continue
+            with db.atomic(): # 开启事务，确保文件和数据库操作的原子性
+                for op in operations:
+                    action = op.get('action')
+                    target_path = op.get('target_path')
+                    if not target_path or not os.path.exists(target_path):
+                        results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
+                        continue
+                    if action == 'disable':
+                        # 方案：重命名 About.xml -> About.xml.disabled
+                        about_xml = os.path.join(target_path, 'About', 'About.xml')
+                        disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
+                        # 检查 About.xml 是否存在
+                        if os.path.exists(about_xml):
+                            try:
+                                # 如果目标已存在，先删除旧的disabled (极其罕见)
+                                if os.path.exists(disabled_xml):
+                                    os.remove(disabled_xml)
+                                os.rename(about_xml, disabled_xml)
+                                # 更新数据库状态为 disabled = True
+                                ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
+                                # 尝试更新 shadow_paths，如果失败（Mod不存在）则忽略
+                                # 因为下次扫描时，保留的 Mod 会入库。
+                                keep_path_hash = op.get('keep_path_hash')
+                                if keep_path_hash:
+                                    self._add_shadow_path(keep_path_hash, target_path)
+                                    
+                                results.append({'path': target_path, 'status': 'success'})
+                            except Exception as e:
+                                results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
+                        else:
+                            results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
 
-                if action == 'disable':
-                    # 方案：重命名 About.xml -> About.xml.disabled
-                    about_xml = os.path.join(target_path, 'About', 'About.xml')
-                    disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
-                    
-                    if os.path.exists(about_xml):
+                    elif action == 'delete':
+                        # 方案：移入回收站
                         try:
-                            # 如果目标已存在，先删除旧的disabled (极其罕见)
-                            if os.path.exists(disabled_xml):
-                                os.remove(disabled_xml)
-                            os.rename(about_xml, disabled_xml)
-                            
-                            # 尝试更新 shadow_paths，如果失败（Mod不存在）则忽略
-                            # 因为下次扫描时，保留的 Mod 会入库。
-                            keep_id = op.get('keep_id')
-                            if keep_id:
-                                self._add_shadow_path(keep_id, target_path)
-                                
+                            send2trash(os.path.abspath(target_path))
+                            # 文件删除后，立刻从数据库彻底抹除记录
+                            ModAsset.delete().where(ModAsset.path == target_path).execute()
                             results.append({'path': target_path, 'status': 'success'})
                         except Exception as e:
                             results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
-                    else:
-                        results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
-
-                elif action == 'delete':
-                    # 方案：移入回收站
-                    try:
-                        send2trash(os.path.abspath(target_path))
-                        results.append({'path': target_path, 'status': 'success'})
-                    except Exception as e:
-                        results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
 
             return ApiResponse.success(results, "冲突处理完成")
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
-    def _add_shadow_path(self, package_id: str, path: str):
+    def _add_shadow_path(self, keep_path_hash: str, path: str):
         """辅助方法：更新 Mod 的 shadow_paths 字段"""
         try:
-            mod = ModAsset.get_or_none(ModAsset.package_id == package_id)
+            mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
             if mod:
                 # 获取现有列表 (peewee JSON field 自动反序列化)
                 current_paths = mod.shadow_paths or []

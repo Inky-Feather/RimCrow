@@ -80,3 +80,26 @@ export function pulseComponent(target, options = {}) {
     mode: 'pulse'
   })
 }
+
+
+
+/**
+ * 格式化文件大小
+ * @param {number|string} bytes 字节数
+ * @param {number} decimals 保留小数位数，默认为 2
+ * @returns {string} 格式化后的字符串 (如: 1.25 MB)
+ */
+export function formatFileSize(bytes, decimals = 2) {
+    if (bytes === 0) return '0 B';
+    if (!bytes || isNaN(parseFloat(bytes)) || !isFinite(bytes)) return '-';
+
+    const k = 1024; // 计算机通常使用 1024 进制
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+    // 计算单位索引
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    // 格式化输出：字节数 / 1024的i次方，并保留小数
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
