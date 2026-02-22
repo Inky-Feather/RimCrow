@@ -45,5 +45,3 @@ lerna-debug.log*
 temp*.vue
 build/
 temp/
-tools/steamcmd/steamcmd.exe
-tools/steamcmd/steamcmd.exe
