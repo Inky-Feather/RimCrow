@@ -275,7 +275,7 @@
 
         <!-- ================= 3. 规则编辑器 (Modal) ================= -->
         <Transition name="fade">
-          <div v-if="editingRule" class="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div v-if="editingRule" class="fixed inset-0 z-60 flex items-center justify-center bg-bg-deep/30 backdrop-blur-sm p-4">
             <div class="w-full max-w-[70%] bg-bg-surface border border-text-main/10 rounded-2xl shadow-3xl flex flex-col max-h-[90%] animate-scale-in">
               
               <header class="px-6 py-4 border-b border-text-main/5 flex justify-between items-center bg-text-main/2">
@@ -300,13 +300,7 @@
                 <!-- 条件构建器 -->
                 <div class="space-y-3">
                   <div class="flex items-center justify-between">
-                    <!-- <div class="flex items-center gap-2">
-                      <label class="text-xs uppercase font-bold text-text-dim tracking-wider">触发条件</label>
-                      <select v-model="editingRule.logic" class="bg-bg-deep/30 border border-text-main/10 rounded-md text-sm px-2 py-0.5 text-accent-secondary outline-none cursor-pointer">
-                        <option value="AND">满足所有 (AND)</option>
-                        <option value="OR">满足任一 (OR)</option>
-                      </select>
-                    </div> -->
+                    
                     <CommonSelect class="min-w-45" v-model="editingRule.logic" label="触发条件" mini :options="[{label:'满足所有 (AND)',value:'AND'}, {label:'满足任一 (OR)',value:'OR'}]"></CommonSelect>
                     
                     <button @click="addFilter" class="text-accent-primary text-sm hover:underline flex items-center gap-1"><Plus class="w-3 h-3"/>添加条件</button>
@@ -314,18 +308,9 @@
                   
                   <div class="space-y-2 bg-black/20 rounded-xl p-3 border border-text-main/5">
                     <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
-                      <!-- <select v-model="filter.field" class="bg-text-main/5 border border-text-main/10 rounded px-2 py-1.5 text-sm text-text-main outline-none w-28">
-                        <option v-for="(label, key) in ruleStore.DYNAMIC_RULE_PROPS" :value="key">{{ label }}</option>
-                      </select> -->
+                      
                       <CommonSelect class="min-w-20" v-model="filter.field" :options="Object.entries(ruleStore.DYNAMIC_RULE_PROPS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
-                      <!-- <select v-model="filter.operator" class="bg-text-main/5 border border-text-main/10 rounded px-2 py-1.5 text-sm text-accent-secondary outline-none w-24">
-                        <option value="contains">包含</option>
-                        <option value="not_contains">不包含</option>
-                        <option value="equals">等于</option>
-                        <option value="starts_with">开头是</option>
-                        <option value="ends_with">结尾是</option>
-                        <option value="regex">正则匹配</option>
-                      </select> -->
+                      
                       <CommonSelect class="min-w-30" v-model="filter.operator" :options="Object.entries(ruleStore.DYNAMIC_RULE_OPERATORS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                       <!-- <input v-model="filter.value" placeholder="值..." class="flex-1 bg-text-main/5 border border-text-main/10 rounded px-3 py-1.5 text-sm text-text-main focus:border-accent-primary outline-none" /> -->
                       <CommonInput v-model="filter.value" placeholder="值..." class="flex-1" />
@@ -351,7 +336,8 @@
                       <label class="text-sm text-text-dim italic hover:text-text-main cursor-help" v-tooltip="weightTooltip">?</label>
                     </div>
                     <div v-else-if="editingRule.action.type.includes('load_')" class="flex-1">
-                      <CommonInput v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full" />
+                      <!-- <CommonInput v-model="editingRule.action.value" placeholder="目标 Mod 的 PackageID" class="w-full" /> -->
+                      <CommonSelect v-model="editingRule.action.value" :options="modIdList" editable ></CommonSelect>
                     </div>
                     <div v-else class="text-sm text-text-dim flex-1">
                       无需参数，匹配项将被移至列表最{{ editingRule.action.type === 'top' ? '前' : '后' }}端。
@@ -418,6 +404,8 @@ const allRules = computed(() => ({
   excluded_user_mods_set: new Set(ruleStore.settings?.excluded_user_mods || []),
   excluded_community_mods_set: new Set(ruleStore.settings?.excluded_community_mods || []),
 }))
+
+const modIdList = computed(() => Array.from(modStore.allModsMap.values(), mod => ({label: modStore.displayModName(mod)+' ('+mod.package_id+')', value: mod.package_id})))
 
 const isModExcluded = (modId) => {
   if (currentTab.value === 'user') return allRules.value.excluded_user_mods_set.has(modId)
