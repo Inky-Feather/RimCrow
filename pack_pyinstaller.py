@@ -95,13 +95,14 @@ def packApplication(main_file="main.py", icon_path="", name="", version="1.0.0",
         # 2. 构建命令
         cmd = [
             "uv", "run", "pyinstaller", # 使用uv运行pyinstaller
-            "-F",  # 打包成单个文件
-            # "-D",  # 打包成目录
+            # "-F",  # 打包成单个文件
+            "-D",  # 打包成目录
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
             "--contents-directory", "lib",
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
+            "--collect-data", "litellm",
             "--clean",  # 清理旧构建文件
             "--upx-dir", r"D:\Environment\upx-5.0.0-win64",  # 指定 UPX 路径
             "-n", name,  # 指定名称

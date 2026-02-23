@@ -441,12 +441,14 @@ echo Update successful, cleaning up environment and restarting...
 set _MEIPASS=
 set _MEIPASS2=
 set PYI_EXPLODE_PATH=
+set PYTHONPATH=
+set PYTHONHOME=
 
-echo [DEBUG] Attempting to start: "{install_root}\{exe_name}" 
+echo [DEBUG] Attempting to start: "{install_root}\\{exe_name}" 
 echo [DEBUG] Working Directory: "{install_root}" 
 
-:: Launch a new program 
-start "" /d "{install_root}" "{exe_name}" 
+:: Launch a new program (Use the /i parameter to make start ignore the current cmd window environment) 
+start "" /i /d "{install_root}" "{exe_name}" 
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Failed to restart application! 
@@ -479,3 +481,5 @@ if %ERRORLEVEL% NEQ 0 (
         except Exception as e:
             logger.error(f"Failed to prepare update: {e}")
             raise e
+        
+        

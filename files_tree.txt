@@ -75,6 +75,7 @@
 │   │   │   │   ├──  ProfileSwitcher.vue
 │   │   │   │   └──  SegmentedTabs.vue
 │   │   │   │   
+│   │   │   ├──  AiReviewModal.vue
 │   │   │   ├──  BackupList.vue
 │   │   │   ├──  ConflictResolver.vue
 │   │   │   ├──  DebugPanel.vue
@@ -85,6 +86,7 @@
 │   │   │   ├──  ModList.vue
 │   │   │   ├──  ModRuleEditor.vue
 │   │   │   ├──  ProfileDrawer.vue
+│   │   │   ├──  PromptManager.vue
 │   │   │   ├──  RimHeader.vue
 │   │   │   ├──  RulePanel.vue
 │   │   │   ├──  SettingsPanel.vue
