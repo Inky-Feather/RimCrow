@@ -975,7 +975,7 @@ export const useAppStore = defineStore('app', () => {
   const _showInstallPrompt = async (data) => {
     const confirmStore = useConfirmStore()
     const ok = await confirmStore.confirmAction(
-      `确认安装更新（）？`,
+      `确认安装更新？`,
       `压缩包已经下载到：${data.path}\n是否继续安装更新？安装后将重启应用程序。`,
       { confirmText: '确认安装', cancelText: '取消', type: 'warning' }
     )

@@ -169,8 +169,13 @@
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
           <!-- 添加未启用的依赖项 -->
-          <button v-if="inactiveDependenciesToAdd.length > 0" @click="addInactiveDependency" 
+          <button v-if="inactiveDependenciesToAdd.length > 0" @click="addInactiveMods(inactiveDependenciesToAdd)" 
             v-tooltip="`^^一键添加共计 ${inactiveDependenciesToAdd.length} 个未启用的依赖项^^`"
+            class="px-1 py-1 bg-accent-secondary/80 text-text-main/50 rounded-md hover:bg-accent-secondary hover:text-text-main transition-all" >
+            <GitPullRequestCreate />
+          </button>
+          <button v-if="inactiveLanguageModsToAdd.length > 0" @click="addInactiveMods(inactiveLanguageModsToAdd)" 
+            v-tooltip="`^^一键添加共计 ${inactiveLanguageModsToAdd.length} 个未启用的语言包^^`"
             class="px-1 py-1 bg-accent-secondary/80 text-text-main/50 rounded-md hover:bg-accent-secondary hover:text-text-main transition-all" >
             <MessageSquarePlus />
           </button>
@@ -202,7 +207,7 @@ import { ISSUE_TITLE_MAP, ISSUE_TYPE } from '../utils/constants';
 import ModItem from './utils/ModItem.vue';
 import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
-import { MessageSquarePlus, Trash2 } from 'lucide-vue-next';
+import { GitPullRequestCreate, MessageSquarePlus, Trash2 } from 'lucide-vue-next';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -258,6 +263,7 @@ const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
 const issuesSummary = computed(() => modStore.getListIssues(props.listId))
+
 // 切换问题项筛选
 const toggleIssueFilter = () => {
     isFilterByIssue.value = !isFilterByIssue.value
@@ -285,6 +291,11 @@ const inactiveDependenciesToAdd = computed(() => {
   // 仅当当前列表真的有依赖报错时，才去执行精准提取（性能优化）
   if (!issuesSummary.value.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length) return []
   return modStore.getMissingLocalDependencies(props.modelValue)
+})
+// 提取真正需要被添加的、去重后的语言包项列表
+const inactiveLanguageModsToAdd = computed(() => {
+  if (!issuesSummary.value.stats[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]?.length) return []
+  return modStore.getMissingLanguagePacks(props.modelValue)
 })
 // 提取需要被移除的无效 Mod 列表（这个其实是一一对应的，为了模板整洁也包装一下）
 const invalidModsToRemove = computed(() => {
@@ -622,8 +633,7 @@ const updateChildren = async (e) => {
   isSortAsc.value=!isSortAsc.value
 }
 // 添加缺失的依赖项
-const addInactiveDependency = async () => {
-  const missingIds = inactiveDependenciesToAdd.value
+const addInactiveMods = async (missingIds) => {
   if (missingIds.length === 0) return
   // console.log('添加缺失的依赖项:', uniqueInactiveDependencies)
   const oldIds = [...props.modelValue]

@@ -970,6 +970,21 @@ export const useModStore = defineStore('mods', () => {
     })
     return Array.from(toActivate)
   }
+  // 提取当前列表所有未启用的有效语言包 ID
+  const getMissingLanguagePacks = (targetIds) => {
+    const toActivate = new Set()
+    targetIds.forEach(id => {
+      const issues = modIssues.value.get(id.toLowerCase())
+      if (issues) {
+        issues.forEach(issue => {
+          if (issue.type === ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK && issue.targetId) {
+            toActivate.add(issue.targetId)
+          }
+        })
+      }
+    })
+    return Array.from(toActivate)
+  }
 
   // 辅助：获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
@@ -1119,6 +1134,6 @@ export const useModStore = defineStore('mods', () => {
     scanMods, scanComplete, autoSortMods, localizeSelectedMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
-    getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getMissingLocalDependencies,
+    getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getMissingLocalDependencies, getMissingLanguagePacks,
   }
 })
