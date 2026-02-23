@@ -161,3 +161,32 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
   // 如果内容包含 html 标签，或者是纯文本，统一包裹
   return `<div class="unity-content text-sm leading-relaxed" style="white-space: ${whiteSpace};">${htmlText}</div>`
 }
+
+
+export const cleanRichText = (text, max_length=500) => {
+    if (!text) return "";
+    let clean = text;
+    // 1. 移除 Unity 标签 (如 <color=#ff0000>...</color>, <b>...</b>)
+    // 采用非贪婪匹配移除所有 <...> 格式的标签
+    clean = clean.replace(/<[^>]+>/g, '');
+    // 2. 移除 Steam/BBCode 链接标签，但保留中间的文字内容
+    // 匹配 [url=xxxx]显示文字[/url] -> 替换为 "显示文字"
+    clean = clean.replace(/\[url=[^\]]*\]([^\[]+)\[\/url\]/gi, '$1');
+    // 3. 移除其它 BBCode 标签 (如 [list], [img], [b], [i] 等)
+    // 匹配所有 [...] 格式的标签
+    clean = clean.replace(/\[[^\]]+\]/g, '');
+    // 4. 移除 Markdown 格式的链接 (如果描述里有的话)
+    // 匹配 [显示文字](http://...) -> 替换为 "显示文字"
+    clean = clean.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+    // 5. 移除裸露的 URL (http/https/ftp)
+    // AI 不需要具体的网址来理解 Mod 的功能
+    clean = clean.replace(/(https?|ftp):\/\/[^\s/$.?#].[^\s]*/gi, '');
+    // 6. 极致压缩：去除多余换行、制表符
+    // 将 2 个及以上的换行/空格合并为 1 个，并去除首尾空格
+    clean = clean.replace(/\s{2,}/g, ' ').replace(/\n+/g, '\n').trim();
+    // 7. 长度兜底拦截 (AI 只需要前 300-500 字通常就足够理解功能了)
+    if (clean.length > max_length) {
+        clean = clean.substring(0, max_length) + "...";
+    }
+    return clean;
+};
