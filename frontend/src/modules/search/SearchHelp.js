@@ -122,7 +122,7 @@ export function generateHtmlHelp(engine) {
     </div>
     <div class="${C.syntaxItem}">
       <span class="opacity-60">判断搜索</span>
-      <span class="font-mono bg-text-main/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span></span>
+      <span class="font-mono bg-text-main/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span>/<span class="text-accent-warn">_</span></span>
     </div>
   </div>`;
 
@@ -142,6 +142,7 @@ export function generateHtmlHelp(engine) {
   });
   html += `</div>`; // End Field Grid
 
+  html += `<div>判断搜索支持三态搜索：true / false / null  ( + / - / _ )</div>`;
   html += `<div>多个搜索条件关系可选 “与”/ “或” 逻辑</div>`;
   html += `<div class="text-xs text-gray-400">与：多个条件同时满足</div>`;
   html += `<div class="text-xs text-gray-400">或：满足任意一个条件即可</div>`;

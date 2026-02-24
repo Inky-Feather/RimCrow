@@ -104,7 +104,8 @@
                       ({{ item.meta.matchInfo }})
                   </span> -->
                 </span>
-                <span :class="highlightIndex === index ? 'text-text-main' : 'text-gray-300'">
+                <span :class="highlightIndex === index ? 'text-text-main' : 'text-gray-300'"
+                  :style="{'color': item.color || 'currentColor', 'font-weight': item.color ? 'bold' : 'normal'}">
                   {{ item.type === 'value' ? item.label : '' }}
                 </span>
               </span>
@@ -183,6 +184,8 @@ const suggestionList = computed(() => {
 
 // 提交 Tag
 const addTag = (rawInput) => {
+  if(!rawInput && inputValue.value) rawInput = inputValue.value
+  if(!rawInput) return
   const input = rawInput.trim()
   if (!input) return
   
@@ -355,6 +358,10 @@ const tagTooltip = (item) => {
   if(item.type!=='key') return ''
   return `**${item.desc}**\n原始格式：${item.meta.fullKey}\n其它格式：${item.meta.aliases}\n使用示例：${item.meta.usage}`
 }
+
+  defineExpose({
+		addTag
+	})
 </script>
 
 <style scoped>

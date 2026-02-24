@@ -4,11 +4,20 @@ import json
 import os
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
+import sys
 from typing import Dict, Any, List
 
 
 # 配置文件路径
 HOME_DIR = Path(os.getcwd())
+# 获取 exe 所在的真实目录
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包模式
+    HOME_DIR = Path(sys.executable).parent
+else:
+    # 开发模式
+    HOME_DIR = Path(__file__).resolve().parent.parent
+
 CONFIG_DIR = HOME_DIR / "data"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 UPDATE_CACHE_DIR = HOME_DIR / "updates"
@@ -47,12 +56,14 @@ class NetworkConfig:
 @dataclass
 class AIConfig:
     enabled: bool = False
+    api_type: str = "custom"  # 可选值: 'official' 或 'custom'
     provider: str = "openai"  # openai, anthropic, google
     base_url: str = "https://api.openai.com/v1"  # 允许自定义，如 DeepSeek, LocalAI
     api_key: str = ""
     model: str = "gpt-3.5-turbo"
-    temperature: float = 0.7
-    max_tokens: int = 2000
+    temperature: float = 0.7     # 温度参数（控制输出随机性）
+    max_tokens: int = 5000       # 最大令牌数（限制模型输出长度）
+    max_concurrency: int = 3     # 最大并发请求数（避免被API封锁）
 
 @dataclass
 class SteamConfig:
@@ -69,14 +80,25 @@ class UIConfig:
     show_mod_hover_panel: bool = True  # 是否显示 Mod 悬停面板
     double_click_active_mod: bool = True  # 是否双击启用/停用 Mod
     
-    show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
+    # 主界面布局配置
+    main_layout: List[Dict[str, Any]] = field(default_factory=lambda: [
+        { 'id': 'details', 'visible': True },
+        { 'id': 'library', 'visible': True },
+        { 'id': 'active', 'visible': True },
+        { 'id': 'sidebar', 'visible': True },
+    ])
+    
     show_icons_cloud: bool = True  # 是否显示动态图标云
-    show_mod_details_author_info: bool = True  # 是否显示 Mod 详情面板作者信息
-    show_mod_details_files_info: bool = True  # 是否显示 Mod 详情面板文件信息
-    show_mod_details_time_info: bool = True  # 是否显示 Mod 详情面板时间信息
-    show_mod_details_dependencies_info: bool = True  # 是否显示 Mod 详情面板依赖信息
-    show_mod_details_user_info: bool = True  # 是否显示 Mod 详情面板自定义信息
-    show_mod_details_description: bool = True  # 是否显示 Mod 详情面板描述
+    
+    # Mod 详情面板布局配置
+    mod_details_layout: List[Dict[str, Any]] = field(default_factory=lambda: [
+        { 'id': 'basic_info', 'visible': True }, # 包ID、作者、链接、路径
+        { 'id': 'files_info', 'visible': True },
+        { 'id': 'time_info', 'visible': True },
+        { 'id': 'relations_info', 'visible': True },
+        { 'id': 'user_info', 'visible': True }, # 标签、备注、分组
+        { 'id': 'description', 'visible': True },
+    ])
 
     show_dependency_graph: bool = True  # 是否显示依赖关系图
     show_list_index: bool = True  # 是否显示列表索引列
@@ -103,11 +125,14 @@ class AppConfig:
     local_mods_path: str = ""
     workshop_mods_path: str = ""
     use_workshop_mods: bool = True
+    steam_exe_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
     
     # --- 游戏设置 ---
     game_version: str = ""
     current_profile_id: str = "default"   # 当前激活的环境ID
+    run_commands: List[str] = field(default_factory=list)
+    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言
@@ -118,12 +143,14 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     enable_auto_scan: bool = True             # 启动时自动扫描
+    enable_file_size_scan: bool = True         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = True     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
-    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
+    auto_activate_dependencies: bool = False   # 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
+    check_language_support: bool = True        # 是否检查语言支持
     
     
     # --- 功能设置 ---
@@ -224,10 +251,6 @@ class SettingsManager:
             
             # 3. 递归更新 (核心逻辑)
             self._recursive_update(config, data)
-                
-# ================================临时变更修复 (记得以后删除)===========================================================
-            if (not config.user_data_path and data.get('game_data_path')):
-                config.user_data_path = data['game_data_path']
 
             # 检查旧版配置位置
             legacy_game_data = data.get('network', {}).get('game_data_path')
@@ -275,6 +298,14 @@ class SettingsManager:
                 # 尝试转换，或者打印警告
                 # value = target_type(value)
                 pass
+            # 如果设置的是 ai 字段，且传入的是字典，将其转换为 AIConfig 对象
+            if key == 'ai' and isinstance(value, dict):
+                from backend.settings import AIConfig
+                value = AIConfig(**value)
+            # 如果设置的是 network 字段，且传入的是字典
+            elif key == 'network' and isinstance(value, dict):
+                # 这里逻辑较深，可以根据需要递归转换，或者保持目前做法
+                pass 
             
             setattr(self.config, key, value)
             self.save()

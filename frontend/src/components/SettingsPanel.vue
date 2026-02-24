@@ -63,7 +63,9 @@
               <!-- 路径设置 (Paths) -->
               <section v-if="currentTab === 'paths'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center justify-between mb-6">
-                  <h3 class="text-lg font-bold text-text-main">路径配置</h3>
+                  <h3 class="text-lg font-bold text-text-main">路径配置
+                    <label v-tooltip="'此处会直接修改当前环境的路径配置'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                  </h3>
                   <button @click="autoDetect" v-tooltip="'尝试通过注册表自动搜索路径'" class="px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
                     自动搜索路径
                   </button>
@@ -71,8 +73,13 @@
                 <div class="grid gap-6">
                   <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse('game_install_path')" :description="formData.game_info" @blur="checkGamePath"/>
                   <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" />
-                  <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
+                  <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" description="该设置所有环境通用" />
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
+                  <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
+                  <div class="p-2 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
+                    <CommonSwitch label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" mini description="开启后将优先使用Steam启动Steam版游戏。该设置所有环境通用" />
+                    <CommonPathInput :class="{' pointer-events-none opacity-50':!formData.prefer_steam_launch}" label="Steam程序路径" v-model="formData.steam_exe_path" @browse="handleBrowse('steam_exe_path')" />
+                  </div>
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
                 </div>
               </section>
@@ -81,29 +88,49 @@
               <section v-if="currentTab === 'general'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">界面与环境</h3>
                 <div class="space-y-6">
-                  <div class="grid grid-cols-2 gap-6 aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="true">
+                  <div class="grid grid-cols-2 gap-4 aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="true">
                     <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'ZH-cn'}, {label:'English', value:'EN'}]" />
                     <CommonSelect label="配色方案" v-model="formData.theme" :options="[{label:'自动同步系统', value:'system'}, {label:'黑曜石', value:'dark'}]" />
                   </div>
-                  <!-- <div class="grid grid-cols-2 gap-6">
+                  <!-- <div class="grid grid-cols-2 gap-4">
                     <CommonNumber label="窗口宽度" v-model="formData.window_width" :step="10" />
                     <CommonNumber label="窗口高度" v-model="formData.window_height" :step="10" />
                   </div> -->
                   <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
-                  <div class="grid grid-cols-2 gap-6">
+                  <div class="grid grid-cols-2 gap-4">
                     <CommonNumber label="字体大小" description="控制界面字体大小，影响所有控件的内容显示" v-model="formData.ui.font_size" :step="1" :min="8" :max="40" />
                     <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" :min="100" :max="5000" />
                     <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
                     <CommonSwitch label="双击启用/停用 Mod" v-model="formData.ui.double_click_active_mod" description="控制 Mod 列表中双击启用/停用 Mod 动作。" />
+                    
                     <div class="col-span-2 p-2 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
-                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="作者及来源" v-model="formData.ui.show_mod_details_author_info" description="控制详情页中 Mod 作者及来源板块的显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="文件统计" v-model="formData.ui.show_mod_details_files_info" description="控制详情页中 Mod 文件统计板块的显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="其它信息" v-model="formData.ui.show_mod_details_time_info" description="控制详情页中 Mod 其它信息板块的显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="依赖信息" v-model="formData.ui.show_mod_details_dependencies_info" description="控制详情页中 Mod 依赖板块的显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="自定义信息" v-model="formData.ui.show_mod_details_user_info" description="控制详情页中 Mod 自定义信息板块的显示。" />
-                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="Mod描述" v-model="formData.ui.show_mod_details_description" description="控制详情页中 Mod 说明板块的显示。" />
+                      <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">主页布局
+                        <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <VueDraggable class="col-span-2 flex gap-1" 
+                        ref="el" v-model="formData.ui.main_layout" :animation="150">
+                        <div v-for="item, index in formData.ui.main_layout" class="flex items-center ">
+                          <CommonSwitch class="flex-1 cursor-move" :key="item.id" :label="appStore.MAIN_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.MAIN_LAYOUT_MAPS[item.id].desc" />
+                        </div>
+                      </VueDraggable>
+                      
+                    </div>
+
+                    <div class="col-span-2 p-2 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="getDataById('details', formData.ui.main_layout).visible" description="可关闭Mod详情栏。" />
+                      <CommonSwitch class="col-span-2" :disabled="!getDataById('details', formData.ui.main_layout).visible" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
+                      
+                      <span class="col-span-2 text-xs ml-2 mt-2">Mod 详情布局
+                        <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <VueDraggable class="col-span-2 flex flex-col gap-1 p-2 rounded-xl bg-text-main/5 border border-text-main/10" 
+                        ref="el" v-model="formData.ui.mod_details_layout" :animation="150" :disabled="!getDataById('details', formData.ui.main_layout).visible">
+                        <div v-for="item, index in formData.ui.mod_details_layout" class="flex items-center ">
+                          <span class="p-1 mr-1 rounded-md bg-accent-primary/30">{{ index }}</span>
+                          <CommonSwitch class="flex-1 cursor-move" :disabled="!getDataById('details', formData.ui.main_layout).visible" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
+                        </div>
+                      </VueDraggable>
+                      
                     </div>
                     <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
                     <CommonSwitch label="列表索引" v-model="formData.ui.show_list_index" description="控制列表中索引列的显示。" />
@@ -124,17 +151,19 @@
               <section v-if="currentTab === 'features'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">功能设置</h3>
                 <div class="space-y-6">
-                  <div class="grid grid-cols-2 gap-6">
+                  <div class="grid grid-cols-2 gap-4">
                     <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
+                    <CommonSwitch class="col-span-1" label="扫描时检查文件大小" v-model="formData.enable_file_size_scan" description="开启后，扫描时会自动检查 Mod 的文件大小，以此识别新增或更新的内容。该功能会增加扫描耗时，但能显著提高文件变动的识别精度。" />
                     <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
+                    <CommonSwitch class="col-span-1" label="自动激活依赖项" v-model="formData.auto_activate_dependencies" description="开启后，自动排序时将会自动激活停用的依赖项。" />
+                    <CommonSwitch class="col-span-1" label="检查语言支持" v-model="formData.check_language_support" description="开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。" />
+                    <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
                     <CommonSelect class="col-span-1" label="排序顺序" v-model="formData.sort_mods_by" showBottom
                       description="影响自动排序时同档次的Mod顺序，处理优先级是 别名>原名>包名，所以即使Mod没有别名，也能按原名参与排序。" 
                       :options="[{label:'按别名', value:'alias_name'},{label:'按原名', value:'name'},{label:'按包名', value:'id'}]" />
                     <CommonSelect class="col-span-1" label="共存Mod文件夹生成方式" v-model="formData.coexist_mod_folder_name_type" showBottom
                       description="影响创建共存Mod时的文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名创建文件夹。" 
                       :options="[{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
-                    <CommonSwitch class="col-span-1" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" description="关闭后，将使用普通方式启动游戏。" />
-                    <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
                     <CommonNumber class="col-span-1" label="自动备份保留天数" description="管理自动备份的最长保留时间，手动备份不受影响。" v-model="formData.backup_retention_days" :step="1" :min="0" :max="365" />
                   </div>
                 </div>
@@ -144,7 +173,7 @@
               <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">社区配置管理</h3>
                 <div class="space-y-6">
-                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
+                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steamcmd_path')" />
                   <!-- <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" /> -->
                   <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
                   <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
@@ -175,32 +204,87 @@
 
               <!-- AI 设置 (AI) -->
               <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
-                <div class="flex items-center gap-3 mb-6">
-                  <h3 class="text-lg font-bold text-text-main">人工智能</h3>
-                  <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black uppercase">实验性</span>
+                <div class="mb-6 flex items-center justify-between">
+                  <h3 class="text-lg font-bold text-text-main flex items-center gap-2">
+                    人工智能
+                    <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black uppercase">实验性</span>
+                  </h3>
+
+                  <button v-if="formData.ai.enabled" @click="appStore.uiState.showPromptManager = true"
+                    class="px-4 py-1.5 rounded-lg bg-accent-special/10 hover:bg-accent-special/20 text-accent-special border border-accent-special/30 text-xs font-bold transition-colors flex items-center gap-2">
+                    <Drama class="size-4" /> 提示词管理
+                  </button>
                 </div>
                 <div class="space-y-6">
                   <CommonSwitch label="启用 AI 辅助" v-model="formData.ai.enabled" description="用于日志分析、概述模组等功能" />
                   <div v-if="formData.ai.enabled" class="space-y-6 animate-in slide-in-from-top-2">
-                    <CommonSelect label="请求类型" v-model="formData.ai.provider" :options="[{label:'OpenAI', value:'openai'},{label:'Anthropic', value:'anthropic'},{label:'Gemini', value:'gemini'}]" />
-                    <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
-                    <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
-                    <div class="grid grid-cols-2 gap-6">
-                      <!-- <div @click="fetchAiModels"> -->
-                        <CommonSelect label="选择模型" editable v-model="formData.ai.model" :options="currentAiModels" placeholder="输入或选择模型"
-                          @visible-change="(val) => val && fetchAiModels()" @change="appStore.saveAIConfig(formData.ai)"/>
-                      <!-- </div> -->
-                      <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
-                      <CommonInput v-model="testPrompt" placeholder="随便输入一句话，简单测试一下请求是否成功..."></CommonInput>
-                      <button class="m-1 h-fit flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-4 py-1.5 w-fit rounded-md" 
-                        :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
-                        @click="testModel">
-                        <svg v-if="appStore.aiState.isLoading" class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                        测试模型
-                      </button>
-                      <div v-if="testResponse" class="col-span-2 p-4 rounded-2xl text-text-main/80 bg-accent-special/10 border border-text-main/5">
-                        <div class="text-xs text-text-dim mb-2">响应结果：</div>
-                        {{ testResponse }}
+                      
+                    <!-- 2. 动态表单区 -->
+                    <div class="p-4 rounded-xl bg-text-main/5 border border-text-main/10 space-y-5">
+                      <!-- 1. API 模式切换器 -->
+                      <div class="flex bg-black/40 p-1.5 rounded-lg border border-text-main/10 w-fit gap-1">
+                        <button @click="handleApiTypeChange('official')" 
+                          class="px-4 py-1 rounded-md text-sm font-bold transition-all duration-300"
+                          :class="formData.ai.api_type === 'official' ? 'bg-accent-special text-black shadow-[0_0_15px_rgba(var(--color-accent-special),0.4)]' : 'text-text-dim hover:text-text-main'">
+                          官方原生 API
+                        </button>
+                        <button @click="handleApiTypeChange('custom')" 
+                          class="px-4 py-1 rounded-md text-sm font-bold transition-all duration-300"
+                          :class="formData.ai.api_type === 'custom' ? 'bg-accent-special text-black shadow-[0_0_15px_rgba(var(--color-accent-special),0.4)]' : 'text-text-dim hover:text-text-main'">
+                          自定义代理 / 本地部署
+                        </button>
+                      </div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <!-- 厂商/协议选择 -->
+                        <CommonSelect :label="formData.ai.api_type === 'official' ? '服务提供商' : '接口协议标准'" 
+                          v-model="formData.ai.provider" :options="currentAiProviders" @change="handleProviderChange"/>
+                        <!-- 模型选择 (带刷新动作) -->
+                        <div class="relative flex items-end gap-2">
+                          <div class="flex-1">
+                            <!-- 加上 editable 允许用户手输未被探测到的模型名 -->
+                            <CommonSelect label="选择模型"  editable v-model="formData.ai.model" :options="currentAiModels" 
+                              placeholder="下拉选择或手动输入模型名" @visible-change="(val) => val && fetchAiModels()"/>
+                          </div>
+                          <!-- 对于自定义模式，提供显式的刷新按钮让用户主动拉取 -->
+                          <button v-if="formData.ai.api_type === 'custom'" @click="fetchAiModels" v-tooltip="'重新从 Base URL 获取模型列表'" 
+                            class="h-9 px-3 bg-black/30 hover:bg-accent-special/20 text-accent-special border border-accent-special/30 rounded-lg flex items-center justify-center transition-colors">
+                            <svg class="size-4" :class="{'animate-spin': appStore.aiState.isLoading}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
+                          </button>
+                        </div>
+
+                        <!-- Base URL (自定义必填，官方高级选填) -->
+                        <CommonInput label="Base URL" v-model="formData.ai.base_url" class="col-span-2" 
+                          :placeholder="formData.ai.api_type === 'custom' ? '例如: http://127.0.0.1:11434 或 https://api.deepseek.com/v1' : '默认官方地址，除非使用反代否则留空'" 
+                          :description="formData.ai.api_type === 'custom' ? '填写代理服务器或本地工具(如 LM Studio/Ollama)的地址。' : '高级选项：如果您使用了 Cloudflare Worker 等进行反代，请填入。'"
+                        />
+                        <!-- API Key -->
+                        <CommonInput label="API Key" v-model="formData.ai.api_key" is-password class="col-span-2" 
+                        :placeholder="formData.ai.api_type === 'custom' ? '本地部署通常留空，中转 API 必填' : 'sk-...'" 
+                        />
+                      </div>
+
+                    </div>
+
+                    <!-- 3. 测试与高级参数区 -->
+                    <div class="grid grid-cols-2 gap-4">
+                      <CommonNumber label="最大 Token 限制" v-model="formData.ai.max_tokens" :step="100" :min="500" />
+                      <CommonNumber label="最大并发限制" v-model="formData.ai.max_concurrency" :step="1" :min="1" :max="100" description="同时处理的请求数，建议根据 API 限制设为 3-5 之间。" />
+                      <CommonNumber label="输出随机性" v-model="formData.ai.temperature" :step="0.1" :min="0" :max="2.0" description="值 (Temperature) 越高创造性越强，越低越严谨。推荐0.7左右。" />
+                      
+                      <!-- 测试区 -->
+                      <div class="col-span-2 pt-2 border-t border-text-main/5 flex gap-3">
+                        <CommonInput label="测试输入" class="flex-1" v-model="testPrompt" placeholder="简单输入一句话测试连接 (如：你是谁？)" @keydown.enter="testModel"></CommonInput>
+                        <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
+                          :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
+                          @click="testModel">
+                          <svg v-if="appStore.aiState.isLoading" class="animate-spin size-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          发起测试
+                        </button>
+                      </div>
+                      <div v-if="testResponse" class="col-span-2 p-4 rounded-xl text-text-main/80 bg-accent-special/10 border border-text-main/10 relative">
+                        <button @click="testResponse=''" class="absolute top-2 right-2 text-text-dim hover:text-text-main">×</button>
+                        <div class="text-xs text-text-dim mb-1 font-bold">AI 响应结果：</div>
+                        <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ testResponse }}</div>
                       </div>
                     </div>
                   </div>
@@ -211,7 +295,7 @@
               <section v-if="currentTab === 'dev'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">开发与调试</h3>
                 <div class="space-y-6">
-                  <div class="grid grid-cols-2 gap-6">
+                  <div class="grid grid-cols-2 gap-4">
                     <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
                     <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
                     <!-- 手动检查按钮 -->
@@ -264,11 +348,12 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { createToastInterface } from 'vue-toastification'
 import { flashComponent, shakeComponent } from '../utils/uiHelper'
+import { VueDraggable } from 'vue-draggable-plus'
 
 // 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
@@ -279,6 +364,7 @@ import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
 import { color } from 'motion-v'
+import { RUN_COMMAND_TAGS } from '../utils/constants'
 
 const toast = createToastInterface()
 const appStore = useAppStore()
@@ -301,14 +387,15 @@ const tabs = [
   { id: 'dev', label: '开发调试', icon: Terminal },
 ]
 
-const currentAiModels = ref([])
+const currentAiProviders = ref([])  // AI厂商或代理协议列表
+const currentAiModels = ref([])     // 当前AI的模型列表
 
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
     // 利用 requestAnimationFrame 或 setTimeout
     // 让浏览器先渲染出弹窗的“背景”和“动画第一帧”，然后再去塞数据
-    requestAnimationFrame(() => {
+    requestAnimationFrame(async () => {
       // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)
       // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
       try {
@@ -317,18 +404,32 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
         // 降级兼容
         formData.value = JSON.parse(JSON.stringify(appStore.settings))
       }
+
+      // 如果 AI 已启用，且面板刚打开，加载初始的厂商和模型列表
+      if (formData.value.ai) {
+        await loadAiProviders(formData.value.ai.api_type)
+        if (formData.value.ai.provider) {
+          await fetchAiModels()
+        }
+      }
+
     })
   }
 })
 
+// 通过ID获取数据项
+const getDataById = (id, datas) => {
+  return datas.find(item => item.id === id)
+}
 
+// 自动检测路径
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
   // 自动获取游戏信息
   checkGamePath()
 }
-
+// 检查游戏路径是否有效
 const checkGamePath = async () => {
   const gameInfo = await appStore.getGameInfo(formData.value.game_install_path)
   if (!gameInfo || !gameInfo.exe) {
@@ -339,7 +440,7 @@ const checkGamePath = async () => {
   formData.value['local_mods_path'] = formData.value.game_install_path + '\\Mods'
   formData.value['game_info'] = `游戏版本: ${gameInfo.version}\n游戏路径: ${gameInfo.exe}`
 }
-
+// 手动选择游戏路径
 const handleGameBrowse = async () => {
   let current = formData.value
   const res = await appStore.getFolderPath(current['game_install_path'])
@@ -348,8 +449,8 @@ const handleGameBrowse = async () => {
     // 自动获取游戏信息
     checkGamePath()
   }
-
 }
+// 手动选择其他路径
 const handleBrowse = async (pathKey) => {
   // 处理嵌套路径 (如 'steam.steamcmd_path')
   const keys = pathKey.split('.')
@@ -358,14 +459,13 @@ const handleBrowse = async (pathKey) => {
     current = current[keys[i]]
   }
   const lastKey = keys[keys.length - 1]
-  
   const res = await appStore.getFolderPath(current[lastKey])
   if (res) {
     current[lastKey] = res
   }
-
 }
 
+// ======= AI 集成 ======
 // 测试提示词
 const testPrompt = ref("介绍一下自己")
 const testResponse = ref("")
@@ -374,19 +474,45 @@ const testModel = async () => {
   const res = await appStore.chatWithAI(testPrompt.value, formData.value.ai)
   if (res) {
     testResponse.value = res
-    console.log("模型测试结果:", res)
-    // toast.success("模型测试成功")
+    // console.log("模型测试结果:", res)
+    toast.success("模型测试成功")
   }
 }
 
+// 切换 API 模式 (Official <-> Custom)
+const handleApiTypeChange = async (type) => {
+  formData.value.ai.api_type = type
+  formData.value.ai.provider = '' // 清空原厂选择
+  formData.value.ai.model = ''    // 清空原模型
+  currentAiModels.value = []
+  await loadAiProviders(type)
+}
+// 切换厂商/协议时，如果是官方模式，立即获取模型；若是代理模式，清空让用户重新获取
+const handleProviderChange = async () => {
+  formData.value.ai.model = ''
+  if (formData.value.ai.api_type === 'official') {
+    await fetchAiModels()
+  } else {
+    currentAiModels.value = [] // 代理模式需要base_url，等用户填好自己点下拉框获取
+  }
+}
+// 加载厂商列表
+const loadAiProviders = async (api_type) => {
+  const providers = await appStore.getAiProviders(api_type)
+  currentAiProviders.value = providers || []
+}
+// 拉取模型列表 (兼容旧的，组装为 CommonSelect 接受的结构)
 const fetchAiModels = async () => {
-  const models = await appStore.fetchAiModels(formData.value.ai)
-  if (models) currentAiModels.value = models.map(model => ({
-    value: model,
-    label: model
-  }))
+  const models = await appStore.getAiModels(formData.value.ai)
+  if (models) {
+    currentAiModels.value = models.map(m => ({ value: m, label: m }))
+  } else {
+    currentAiModels.value = []
+  }
 }
 
+
+// ====== 数据处理 ======
 const handleReset = async () => {
   const ok = await confirmStore.confirmAction('确认重置', '这将抹除所有本地缓存数据，确定继续？', { type: 'error' })
   if (ok) appStore.resetDatabase()

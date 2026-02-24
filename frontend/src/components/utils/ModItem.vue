@@ -98,13 +98,16 @@
         
       </div>
       
-      <!-- 缺失警告 -->
+      <!-- 问题警告 -->
       <div v-if="issueState" :class="[`rounded-4xl cursor-help text-sm font-bold
         hover:scale-110  text-shadow-2xs text-shadow-black hover:shadow-bg-deep/50 transition-all`,
-        issueState === 'error' ? 'text-accent-danger' : issueState === 'warn'? 'text-accent-warn':'text-accent-primary']"
+        issueState === 'error' ? 'text-accent-danger' : issueState === 'warn'? 'text-accent-warn': issueState === 'info'? 'text-text-dim':'text-accent-primary']"
         v-tooltip="issueTooltip">
-        <svg class="size-4.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="issueState !== 'info'" class="size-4.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>
+        </svg>
+        <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
         </svg>
       </div>
 
@@ -135,7 +138,7 @@
 
 <script setup>
 import { computed, h, nextTick  } from 'vue'
-import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../utils/constants'
+import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../utils/constants'
 import { useAppStore } from '../../stores/appStore'
 import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore'
@@ -143,7 +146,7 @@ import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -234,6 +237,7 @@ const handleDoubleClick = () => {
     modStore.changeModsActive([props.item_id], !isActive.value)
   }
 }
+// 点击处理
 const handleClick = (e) => {
   if (e.altKey) { //  alt 键点击触发
     ruleStore.currentId = props.item_id
@@ -258,7 +262,13 @@ const deleteModFiles = async () => {
   const paths = modStore.selectedMods.map(m => m.path)
   appStore.deletePaths(paths)
 }
-
+// 批量生成别名备注
+const generateAliasNotes = async () => {
+  const res = await appStore.startAiBatchTask('batch_alias_generation', modStore.selectedMods)
+  if (res) {
+    console.log('批量生成别名备注',res)
+  }
+}
 // 取消订阅模组
 const unsubscribeMod = async (delete_file = false) => {
   const res = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
@@ -284,7 +294,7 @@ const handleContextMenu = async (event) => {
   const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配表情',
+    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
       children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
@@ -295,10 +305,10 @@ const handleContextMenu = async (event) => {
       }))}]
     },
     { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
-        children:[...MOD_COLOR_LIST.map(c => ({ tooltip: c, color: c, 
-          active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
-        })), 
-        { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }]
+        children:[...Object.entries(MOD_SIGN_COLOR_MAP).map(([c, name]) => ({ tooltip: name, color: c, 
+            active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
+          })), { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }
+        ]
       }]
     },
     { label: '修改类型', icon: ChessPawn,
@@ -337,6 +347,7 @@ const handleContextMenu = async (event) => {
   const selectedMenuItems = [
     { divider: true },
     { label: '联锁选中项', icon: Link2, action: () => modStore.linkMods(selectedIds) },
+    { label: '批量生成别名备注', icon: BotMessageSquare, action: () => generateAliasNotes() },
   ]
   if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
     selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })

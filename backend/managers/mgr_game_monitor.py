@@ -86,7 +86,7 @@ class GameMonitor:
             # 5. 最小化并清理内存
             # 延时一点点确保页面已经卸载，避免 WebView2 还在处理 JS
             time.sleep(0.5) 
-            window.minimize()
+            # window.minimize()
             self._trim_memory()
             
         except Exception as e:
@@ -107,7 +107,7 @@ class GameMonitor:
             target_url = self.resume_url if self.resume_url else get_entrypoint()
             
             window.load_url(target_url)
-            window.restore()
+            # window.restore()
             
             # 2. 【关键】延迟恢复事件总线
             # 必须等待 Vue 前端完全加载并重新挂载事件监听器，否则事件会丢失或报错

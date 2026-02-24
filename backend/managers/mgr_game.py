@@ -55,6 +55,9 @@ class GameManager:
             if os.path.exists(workshop_base):
                 paths['workshop_mods_path'] = workshop_base
 
+        # 如果所有路径都为空，返回 None
+        if not any(paths.values()): return None
+        
         return paths
     
     @staticmethod
@@ -121,7 +124,8 @@ class GameManager:
             else: # Linux
                 cmd = [target_exe] + args
                 subprocess.Popen(cmd, cwd=install_path)
-
+            from backend.utils.logger import logger 
+            logger.debug(f"通过游戏本体命令启动 RimWorld: {cmd}")
             return True
         except Exception as e:
             raise Exception(f"执行启动指令失败: {str(e)}")

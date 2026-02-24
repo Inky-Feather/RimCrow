@@ -37,7 +37,7 @@
           </div>
           <div class="px-2 relative">
             <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="modId,index in getNativeRules('loadAfter')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
+            <ModItem v-for="mod,index in getNativeRules('loadAfter')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
           </div>
 
           <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
@@ -118,7 +118,7 @@
           </div>
           <div class="px-2 relative">
             <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="modId,index in getNativeRules('loadBefore')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
+            <ModItem v-for="mod,index in getNativeRules('loadBefore')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
           </div>
 
           <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
@@ -199,7 +199,7 @@
           </div>
           <div class="px-2 relative">
             <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="modId,index in getNativeRules('incompatibleWith')" :key="modId" :item_id="modId" :index="index" simple :showIndex="false" />
+            <ModItem v-for="mod,index in getNativeRules('incompatibleWith')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
           </div>
 
           <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">

@@ -102,6 +102,7 @@ def packApplication(main_file="main.py", icon_path="", name="", version="1.0.0",
             "--contents-directory", "lib",
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
+            "--collect-data", "litellm",
             "--clean",  # 清理旧构建文件
             "--upx-dir", r"D:\Environment\upx-5.0.0-win64",  # 指定 UPX 路径
             "-n", name,  # 指定名称
@@ -243,7 +244,7 @@ if __name__ == "__main__":
     APP_MAIN = 'main.py'
     APP_NAME = 'RimModManager'
     APP_VERSION = __version__  # 在这里修改版本号
-    APP_COMPANY = ''
+    APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
 
     # 1. 执行打包

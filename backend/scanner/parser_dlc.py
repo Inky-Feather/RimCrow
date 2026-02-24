@@ -54,8 +54,7 @@ class DLCParser:
 
         # 确定 DLC Key (Core, Royalty, Ideology...)
         def_key = None
-        if pkg_id == 'ludeon.rimworld': 
-            def_key = 'Core'    # Core 特殊处理
+        if pkg_id == 'ludeon.rimworld':  def_key = 'Core'    # Core 特殊处理
         elif pkg_id.startswith('ludeon.rimworld.'):
             # ludeon.rimworld.royalty -> Royalty (首字母大写)
             def_key = pkg_id.split('.')[-1].capitalize()
@@ -303,7 +302,7 @@ class DLCParser:
                 def_name, prop = tag.split('.', 1)
                 if def_name not in trans_map: trans_map[def_name] = {}
                 trans_map[def_name][prop] = text.strip().replace('\\n', '\n')
-            logger.debug(f"[DLCParser] Parsed trans_map: {trans_map}")
+            # logger.debug(f"[DLCParser] Parsed trans_map: {trans_map}")
         except Exception as e:
             logger.error(f"[DLCParser] Error parsing XML: {e}")
             pass

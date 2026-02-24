@@ -257,7 +257,6 @@ class FileManager:
 
         return success_count, error_list
     
-    
     @staticmethod
     def select_folder_dialog(initial_dir=''):
         """

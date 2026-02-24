@@ -1,11 +1,10 @@
 import multiprocessing
-import socket
 import sys
 import os
-from pathlib import Path
 from backend.utils.logger import logger 
 from backend.settings import settings
 from backend.utils.event_bus import EventBus
+from validate_environment import get_entrypoint, validate_environment
 
 from icecream import ic
 import builtins
@@ -13,6 +12,24 @@ import builtins
 # from icecream.builtins import install as ic_install
 # ic_install()    # 全局启用 icecream，利用 Python 的动态特性实现“一次安装，到处运行”。
 
+
+
+# 强制切换工作目录到 exe 所在文件夹
+# 解决任务栏启动找不到配置文件的问题
+def setup_working_directory():
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的 exe
+        application_path = os.path.dirname(sys.executable)
+    else:
+        # 如果是开发环境 (py 脚本)
+        application_path = os.path.dirname(os.path.abspath(__file__))
+    
+    # 切换工作目录
+    os.chdir(application_path)
+    # 顺便把这个路径加到 sys.path，防止导包报错
+    sys.path.insert(0, application_path)
+
+setup_working_directory()
     
 def get_webview_proxy_args():
     """生成 WebView2 的启动参数"""
@@ -34,65 +51,6 @@ def get_webview_proxy_args():
         "proxy_bypass_list": bypass_str
     }
 
-def is_port_available(host: str = "localhost", port: int = 5173, timeout: float = 0.5) -> bool:
-    """
-    检测指定主机的端口是否可达（用于判断前端开发服务器是否启动）
-    :param host: 主机地址
-    :param port: 端口号
-    :param timeout: 超时时间（秒），避免阻塞
-    :return: 端口可达返回 True，否则 False
-    """
-    try:
-        # 创建 socket 连接，检测端口是否开放
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except (socket.timeout, ConnectionRefusedError, OSError):
-        # 超时/连接拒绝/系统错误，均视为端口不可用
-        return False
-
-# 获取前端文件的路径
-def get_entrypoint():
-    """
-    获取前端入口地址
-    支持：开发模式、PyInstaller 标准模式、PyInstaller lib 归拢模式
-    """
-    # 定义前端开发服务器地址
-    dev_server = "http://localhost:5173"
-    
-    # 1. 获取程序根目录 (Base Directory)
-    if getattr(sys, 'frozen', False):
-        # --- 打包后的环境 ---
-        # sys.executable 指向 .exe 文件的绝对路径
-        base_dir = Path(sys.executable).parent
-        # 额外：处理 --contents-directory lib 情况
-        # 如果内部资源在 _MEIPASS 目录下 (即 lib 文件夹内)
-        meipass_dir = Path(getattr(sys, '_MEIPASS', base_dir))
-    else:
-        # __file__ 指向当前 main.py 的位置
-        base_dir = Path(__file__).parent.resolve()
-        meipass_dir = base_dir
-        if is_port_available("localhost", 5173):
-            print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
-            return dev_server
-            
-    # 2. 定义探测路径优先级
-    # 优先级 1: PyInstaller 内部解压目录 (lib 文件夹内部)
-    path_internal = meipass_dir / "frontend" / "dist" / "index.html"
-    # 优先级 2: 外部根目录下的 dist (方便手动替换或更新)
-    path_external = base_dir / "frontend" / "dist" / "index.html"
-    # 优先级 3: EXE 同级目录 (如果打包时把 index.html 移动到了顶层)
-    path_root = base_dir / "index.html"
-    
-    # 3. 按优先级执行探测
-    if path_internal.exists():
-        return str(path_internal)
-    if path_root.exists():
-        return str(path_root)
-    if path_external.exists():
-        return str(path_external)
-    # 4. 兜底回退：本地开发服务器
-    logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
-    return dev_server
 
     
 def on_resized(width, height):
@@ -106,6 +64,9 @@ def on_main_window_closed():
 
 
 def main():
+    # 0. 先校验环境，有问题直接弹原生框并退出
+    validate_environment()
+    
     # 1. Windows 打包后的多进程支持 (必须放在最前面)
     multiprocessing.freeze_support()
 
@@ -141,16 +102,21 @@ def main():
      # 获取代理参数
     # Pywebview 目前对代理的直接支持有限，通常需要通过底层 flag 传递
     # 对于 WebView2 (Windows)，可以通过 os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']
+    additional_args = []
     proxy_args = get_webview_proxy_args()
     if proxy_args:
-        args = []
         if 'proxy_server' in proxy_args:
-            args.append(f"--proxy-server={proxy_args['proxy_server']}")
+            additional_args.append(f"--proxy-server={proxy_args['proxy_server']}")
         if 'proxy_bypass_list' in proxy_args:
-            args.append(f"--proxy-bypass-list={proxy_args['proxy_bypass_list']}")
+            additional_args.append(f"--proxy-bypass-list={proxy_args['proxy_bypass_list']}")
+    
+    # [关键] 解决部分机器黑屏/闪退问题
+    # --disable-features=RendererCodeIntegrity: 解决部分杀毒软件注入导致渲染进程崩溃
+    # --disable-gpu: 最后的手段，解决显卡兼容性
+    # additional_args.append("--disable-features=RendererCodeIntegrity") 
             
-        # 设置环境变量传给 WebView2
-        os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = " ".join(args)
+    # 设置环境变量传给 WebView2
+    os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = " ".join(additional_args)
     
     # 创建窗口
     window = webview.create_window(

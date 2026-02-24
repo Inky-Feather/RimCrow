@@ -13,24 +13,24 @@
           <!-- 列容器 -->
           <div class="h-full p-1 transition-opacity relative" :style="{ width: (colWidths[index] || 0) + 'px' }" >
             <!-- 1. 详情 (Details) -->
-            <div v-if="col.type === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-text-main/5 shadow-2xl">
+            <div v-if="col.id === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-text-main/5 shadow-2xl">
               <ModDetails />
             </div>
 
             <!-- 2. 待选库 (Library) -->
-            <div v-else-if="col.type === 'library'" class="h-full">
-               <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
+            <div v-else-if="col.id === 'library'" class="h-full">
+              <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
             </div>
 
             <!-- 3. 启用/排序 (Active) - 包含规则编辑器逻辑 -->
-            <div v-else-if="col.type === 'active'" class="h-full">
-               <ModList v-model="modStore.activeIds" title="启用" :hasSidebar="true" listColor="success" listId="active" />
+            <div v-else-if="col.id === 'active'" class="h-full">
+              <ModList v-model="modStore.activeIds" title="启用" :hasSidebar="true" listColor="success" listId="active" />
             </div>
 
             <!-- 4. 辅助/分组 (Sidebar Tabs) -->
-            <div v-else-if="col.type === 'sidebar'" class="h-full">
-               <!-- 这里保留原有的逻辑：如果有规则ID，显示编辑器，否则显示列表 -->
-               <ModRuleEditor v-if="ruleStore.currentId" title="规则" listColor="warn" />
+            <div v-else-if="col.id === 'sidebar'" class="h-full">
+              <!-- 这里保留原有的逻辑：如果有规则ID，显示编辑器，否则显示列表 -->
+              <ModRuleEditor v-if="ruleStore.currentId" title="规则" listColor="warn" />
               <div v-else class="h-full flex flex-col relative">
                 <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
                   <Transition
@@ -58,9 +58,9 @@
                 <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-text-main/5">
             
                   <!-- 刷新按钮 -->
-                  <button :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
+                  <div :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
                     class="col-span-1 py-1 rounded-lg bg-text-main/5 border border-text-main/5 group
-                          text-sm text-gray-300 font-bold uppercase tracking-wider relative
+                          text-sm text-gray-300 font-bold uppercase tracking-wider relative cursor-pointer
                           hover:bg-text-main/10 hover:text-text-main hover:border-text-main/20
                           active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
                     @click="modStore.scanMods()"
@@ -77,7 +77,7 @@
                       强制刷新
                     </button>
 
-                  </button>
+                  </div>
                   <!-- 自动排序按钮 -->
                   <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
@@ -208,6 +208,11 @@
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver />
 
+    <!-- AI 生成数据弹窗 -->
+    <AiReviewModal />
+    <!-- 提示词管理器 -->
+    <PromptManager />
+
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
     
@@ -258,6 +263,8 @@ import Confirm from './components/common/Confirm.vue'
 import SegmentedTabs from './components/utils/SegmentedTabs.vue'
 import ProfileDrawer from './components/ProfileDrawer.vue'
 import Test from './components/temp/test.vue'
+import AiReviewModal from './components/AiReviewModal.vue'
+import PromptManager from './components/PromptManager.vue'
 
 
 
@@ -274,36 +281,9 @@ const activeTab = ref(tabs[0])
 const containerRef = ref(null)
 
 
-// 列配置定义
-// id: 唯一标识
-// show: 返回 boolean，决定是否显示
-// type: 用于在模板中区分渲染哪个组件
-const columnConfig = [
-  { 
-    id: 'details', 
-    type: 'details',
-    show: () => appStore.settings.ui.show_mod_details_panel 
-  },
-  { 
-    id: 'library', 
-    type: 'library',
-    show: () => true // 假设库常驻，也可以改为配置
-  },
-  { 
-    id: 'active', 
-    type: 'active',
-    show: () => true 
-  },
-  { 
-    id: 'sidebar', 
-    type: 'sidebar',
-    show: () => true // 同样可以绑定设置
-  }
-]
-
 // 计算当前可见的列
 const visibleColumns = computed(() => {
-  return columnConfig.filter(col => col.show())
+  return appStore.settings.ui.main_layout.filter(col => col['visible'])
 })
 
 // 动态宽度管理

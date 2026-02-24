@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import platform
+import winreg
 import subprocess
 import threading
 import time
@@ -226,17 +227,17 @@ class SteamManager:
     # =========================================================
     #  2. SteamCMD 功能
     # =========================================================
-    def download_workshop_items(self, mod_ids: list):
+    def download_workshop_items(self, workshop_ids: list):
         EventBus.resume()   # 恢复事件总线
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
         
         commands = ["login anonymous"]
-        for mid in mod_ids:
+        for mid in workshop_ids:
             commands.append(f"workshop_download_item {RIMWORLD_APP_ID} {mid}")
         commands.append("quit")
         
-        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, mod_ids))
+        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, workshop_ids))
         t.start()
         return t
 
@@ -307,6 +308,7 @@ class SteamManager:
             "total": 100,
             "current": percent
         })
+
     # =========================================================
     #  3. 自我调用 (Re-entry) 逻辑
     # =========================================================
@@ -361,9 +363,11 @@ class SteamManager:
             return False
 
     def subscribe_item(self, published_file_id: int):
+        """订阅 Workshop Mod"""
         return self._run_agent("subscribe", published_file_id)
 
     def unsubscribe_item(self, published_file_id: int):
+        """取消订阅 Workshop Mod"""
         return self._run_agent("unsubscribe", published_file_id)
 
     def _get_acf_path(self):
@@ -430,3 +434,51 @@ class SteamManager:
         # 这其实更符合用户的期望：只有下载完了才能用。
         ids = self.get_installed_workshop_ids()
         return int(published_file_id) in ids
+    
+
+    # =========================================================
+    #  4. Steam本体操作
+    # =========================================================
+    
+    def get_steam_path(self):
+        """从注册表获取 Steam 安装路径"""
+        try:
+            # 尝试读取 64位 注册表
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam")
+            path, _ = winreg.QueryValueEx(key, "InstallPath")
+            return os.path.join(path, "steam.exe")
+        except:
+            try:
+                # 尝试读取 32位 注册表
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam")
+                path, _ = winreg.QueryValueEx(key, "InstallPath")
+                return os.path.join(path, "steam.exe")
+            except:
+                return None
+
+    def launch_via_steam_cmd(self, app_id=RIMWORLD_APP_ID, extra_args=None):
+        steam_exe = settings.config.steam_exe_path or self.get_steam_path()
+        # 如果找不到 Steam.exe，回退到原来的 URL 方式
+        if not steam_exe or not os.path.exists(steam_exe):
+            steam_exe = self.get_steam_path()
+            if not steam_exe or not os.path.exists(steam_exe):
+                logger.warning("未找到 Steam.exe，回退到 URL 协议启动")
+                # os.startfile(f"steam://rungameid/{app_id}")
+                os.startfile(f"steam://run/{app_id}")
+                return
+        # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
+        cmd = [steam_exe, "-applaunch", str(app_id)]
+        # 如果你的管理器本身也有需要注入的参数（例如隔离配置文件的参数）
+        # 注意：这里传递的参数会追加在 Steam 内部设置的参数后面
+        if extra_args:
+            # 确保参数是列表形式
+            if isinstance(extra_args, list):
+                cmd.extend(extra_args)
+            else:
+                cmd.append(extra_args)
+        # 启动
+        subprocess.Popen(cmd)
+        logger.debug(f"通过 Steam 命令启动 RimWorld: {cmd}")
+    
+    
+    

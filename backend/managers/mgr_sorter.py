@@ -54,16 +54,21 @@ class OrderSorter:
 
         # 辅助函数：深度优先搜索构建链条
         def trace_chain(current_id: str, current_chain: List[str], auto_activated: List[str]):
-            if current_id in visited:
-                return
+            """
+            递归构建一个 Mod 链条
+            Args:
+                current_id: 当前 Mod 的 ID
+                current_chain: 当前链条的 Mod ID 列表
+                auto_activated: 自动激活的 Mod ID 列表
+            """
+            if current_id in visited: return
             visited.add(current_id)
             # 如果当前 ID 不在激活列表中，记录为自动激活
             if current_id not in active_set:
                 auto_activated.append(current_id)
             current_chain.append(current_id)
             mod_info = mod_map.get(current_id)
-            if not mod_info:
-                return
+            if not mod_info: return
             # 寻找下一个
             next_id = mod_info.get('lock_next_mod')
             if next_id:
@@ -137,108 +142,6 @@ class OrderSorter:
         # 5. 默认权重 (普通 Mod)
         return 500
 
-    def _get_all_constraints(self, mid: str, mod_full_data: dict) -> List[Tuple[str, str, dict]]:
-        """
-        现在的逻辑：直接问 RuleManager 拿已经过滤好的生效规则
-        """
-        # 1. 拿原始聚合数据
-        raw_constraints = self.rule_mgr.collect_constraints(mid, mod_full_data)
-        
-        # 2. 格式化为排序器兼容的元组 (target, type, info)
-        # 过滤掉 dynamic 类型（因为 dynamic 是在计算权重环节处理的，不属于构图约束）
-        formatted = []
-        for c in raw_constraints:
-            if c['type'] != 'dynamic':
-                formatted.append((c['target'], c['type'], c['source']))
-        
-        return formatted
-
-    def _get_all_constraints0(self, mid: str, mod_full_data: dict) -> List[Tuple[str, str, dict]]:
-        """
-        核心函数：获取一个 Mod 涉及的所有先后约束
-        返回: [(target_id, type, source_info), ...]
-        type: 'after' | 'before' | 'incompatible'
-        """
-        mid = mid.lower()
-        constraints = []
-        # 1. Native (About.xml)
-        for p in mod_full_data.get('dependencies_mods', []):
-            constraints.append((p['package_id'].lower(), 'after', {"name": "原生依赖", "type": "native"}))
-        for p in mod_full_data.get('load_after_mods', []):
-            constraints.append((p.lower(), 'after', {"name": "原生前置", "type": "native"}))
-        for p in mod_full_data.get('load_before_mods', []):
-            constraints.append((p.lower(), 'before', {"name": "原生后置", "type": "native"}))
-        for p in mod_full_data.get('incompatible_mods', []):
-            constraints.append((p.lower(), 'incompatible', {"name": "原生冲突", "type": "native"}))
-
-        # 2. Community Rules (JSON)
-        comm = self.rule_mgr.community_rules.get(mid, {})
-        for target, info in comm.get("loadAfter", {}).items():
-            constraints.append((target.lower(), 'after', {"name": "社区前置", "type": "community", "info": info}))
-        for target, info in comm.get("loadBefore", {}).items():
-            constraints.append((target.lower(), 'before', {"name": "社区后置", "type": "community", "info": info}))
-        for target, info in comm.get("incompatibleWith", {}).items():
-            constraints.append((target.lower(), 'incompatible', {"name": "社区冲突", "type": "community", "info": info}))
-
-        # 3. User Single Rules
-        user_s = self.rule_mgr.user_mod_rules.get(mid, {})
-        for target, info in user_s.get("loadAfter", {}).items():
-            constraints.append((target.lower(), 'after', {"name": "用户前置", "type": "user", "info": info}))
-        for target, info in user_s.get("loadBefore", {}).items():
-            constraints.append((target.lower(), 'before', {"name": "用户后置", "type": "user", "info": info}))
-        for target, info in user_s.get("incompatibleWith", {}).items():
-            constraints.append((target.lower(), 'incompatible', {"name": "用户冲突", "type": "user", "info": info}))
-
-        # 4. User Dynamic Rules (仅处理明确的 LoadAfter/Before 动作)
-        matched_dyn = self.rule_mgr.get_matching_dynamic_rules(mod_full_data)
-        for rule in matched_dyn:
-            act = rule.get("action", {})
-            if act['type'] == 'load_after':
-                constraints.append((act['value'].lower(), 'after', {"name": rule['name'], "type": "user_dynamic"}))
-            elif act['type'] == 'load_before':
-                constraints.append((act['value'].lower(), 'before', {"name": rule['name'], "type": "user_dynamic"}))
-
-        return constraints
-
-
-    def check_health(self, active_ids: List[str]) -> List[dict]:
-        """
-        【常态化提示核心】不排序，仅检查当前顺序是否违背任何规则
-        """
-        all_mods_data = ModDAO.get_profile_mods()
-        mod_map = {m['package_id'].lower(): m for m in all_mods_data}
-        id_to_idx = {mid.lower(): i for i, mid in enumerate(active_ids)}
-        active_set = set(id_to_idx.keys())
-        
-        issues = []
-        for mid in active_ids:
-            mid_l = mid.lower()
-            m_data = mod_map.get(mid_l, {})
-            rules = self._get_all_constraints(mid_l, m_data)
-            
-            for target_id, r_type, source in rules:
-                if target_id not in active_set: continue
-                t_idx = id_to_idx[target_id]
-                m_idx = id_to_idx[mid_l]
-                if r_type == 'after' and t_idx > m_idx:
-                    issues.append({
-                        "mod_id": mid, "type": "wrong_order", "level": "warn",
-                        "message": f"排序错误：应位于 [[{target_id}]] 之后 ({source['name']})",
-                        "target_id": target_id, "source": source
-                    })
-                elif r_type == 'before' and t_idx < m_idx:
-                    issues.append({
-                        "mod_id": mid, "type": "wrong_order", "level": "warn",
-                        "message": f"排序错误：应位于 [[{target_id}]] 之前 ({source['name']})",
-                        "target_id": target_id, "source": source
-                    })
-                elif r_type == 'incompatible':
-                    issues.append({
-                        "mod_id": mid, "type": "incompatible", "level": "error",
-                        "message": f"模组冲突：与 [[{target_id}]] 不兼容 ({source['name']})",
-                        "target_id": target_id, "source": source
-                    })
-        return issues
 
     # =========================================================================
     # 加权图构建与循环消解
@@ -258,7 +161,7 @@ class OrderSorter:
     
     def _build_weighted_graph(self, groups: List[AtomicGroup], mod_map: Dict[str, dict], mod_to_group: Dict[str, AtomicGroup]):
         """
-        构建带权重的依赖图
+        构建带权重的依赖图，支持 Alternatives 备选连线和 is_force 绝对优先权
         返回: 
           adj: Dict[int, Dict[int, int]]  adj[u][v] = weight (表示 u 必须在 v 之前，权重 weight)
           edge_info: Dict[tuple, list] 记录每条边是由哪些具体规则生成的，用于报错
@@ -270,15 +173,27 @@ class OrderSorter:
             gid = id(g)
             for mid in g.mod_ids:
                 effective_rules = self.rule_mgr.get_effective_mod_rules(mid, mod_map.get(mid, {}))
-                # 将 effective_rules 展平为 (target, type, source_str, detail)
+                # 将 effective_rules 展平为 (target_id, type, source_dict, is_force)
                 flat_rules = []
-                for r in effective_rules['load_after']:
-                    flat_rules.append((r['target'], 'after', r['source'], r['detail']))
-                for r in effective_rules['load_before']:
-                    flat_rules.append((r['target'], 'before', r['source'], r['detail']))
+                # 1. 解析 Dependencies (作为极强的 load_after 处理)
+                for r in effective_rules.get('dependencies', []):
+                    # 如果依赖和备选都在，主包和备选包都要连线 (A 必须在 B和C 之后)
+                    targets_to_link = [r['target_id']] + r.get('alternatives', [])
+                    for t in targets_to_link:
+                        # 依赖关系天然带有强约束性质，但仍遵循 r.get('is_force') 以防特殊指定
+                        flat_rules.append((t, 'after', r['source'], r.get('is_force', True)))
+                        
+                # 2. 解析 Load After / Before
+                for r in effective_rules.get('load_after', []):
+                    flat_rules.append((r['target_id'], 'after', r['source'], r.get('is_force', False)))
+                for r in effective_rules.get('load_before', []):
+                    flat_rules.append((r['target_id'], 'before', r['source'], r.get('is_force', False)))
                     
-                for target_id, r_type, source_str, detail in flat_rules:
+                # 3. 注入到图
+                for target_id, r_type, source_info, is_force in flat_rules:
+                    # 如果目标根本没被激活，跳过连线
                     if target_id not in mod_to_group: continue
+                    
                     target_group = mod_to_group[target_id]
                     target_gid = id(target_group)
                     if target_gid == gid: continue  # 忽略组内约束
@@ -286,22 +201,24 @@ class OrderSorter:
                     # 确定方向：u -> v 表示 u 必须在 v 之前
                     # load_after: target -> self
                     # load_before: self -> target
-                    if r_type == 'after':
-                        u, v = target_gid, gid
-                    elif r_type == 'before':
-                        u, v = gid, target_gid
+                    if r_type == 'after': u, v = target_gid, gid
+                    elif r_type == 'before': u, v = gid, target_gid
                     else: continue # incompatible 不参与拓扑排序构图
 
                     # 动态计算权重
-                    weight = self.get_rule_weight(source_str)
+                    source_type = source_info.get('type', 'unknown')
+                    weight = self.get_rule_weight(source_type)
+                    # 如果是 is_force，提高权重，使该边在破环时几乎不可能被切断
+                    if is_force:  weight += 1000000 
 
                     # 记录边信息 (可能有多条规则指向同一条边)
                     edge_key = (u, v)
                     edge_details[edge_key].append({
                         "source_mod": mid,
                         "target_mod": target_id,
-                        "rule_source": {"name": source_str, "type": source_str, "detail": detail}, # 构造兼容的结构
-                        "weight": weight
+                        "rule_source": source_info,
+                        "weight": weight,
+                        "is_force": is_force
                     })
 
                     # 更新图中的权重（保留同方向中最强的权重）
@@ -405,10 +322,47 @@ class OrderSorter:
         最终排序：原子组 -> 权重修正 -> 依赖构图 -> 权重传播 -> 拓扑排序 (带名称稳定性)
         """
         logger.info(f"Starting sort for {len(active_ids)} mods...")
-        # 1. 初始化
-        groups = self.build_atomic_groups(active_ids)
         all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
+        # --- 0. 依赖项自动修补 (受开关控制) ---
+        active_set = set(id.lower() for id in active_ids)
+        auto_activated_deps = []
+        
+        # 默认 False 保持保守行为
+        if settings.config.auto_activate_dependencies or False:
+            changed = True
+            # 因为被自动激活的依赖可能还有它自己的依赖，所以需要循环挖掘直到没有新增
+            while changed:
+                changed = False
+                for mid in list(active_set):
+                    m_data = mod_map.get(mid, {})
+                    rules = self.rule_mgr.get_effective_mod_rules(mid, m_data)
+                    
+                    for dep in rules.get('dependencies', []):
+                        target = dep['target_id']
+                        alts = dep.get('alternatives', [])
+                        
+                        # 如果主目标或任一备选目标已在激活列表中，则视为满足，跳过
+                        if target in active_set or any(alt in active_set for alt in alts):
+                            continue
+                            
+                        # 缺失依赖，尝试优先激活主目标
+                        if target in mod_map:
+                            active_set.add(target)
+                            auto_activated_deps.append(target)
+                            changed = True
+                        else:
+                            # 主目标本地没有，尝试激活存在于本地的备选包
+                            for alt in alts:
+                                if alt in mod_map:
+                                    active_set.add(alt)
+                                    auto_activated_deps.append(alt)
+                                    changed = True
+                                    break
+        
+        expanded_active_ids = list(active_set)
+        # 1. 将扩展后的激活列表转化为原子组
+        groups = self.build_atomic_groups(expanded_active_ids)
         mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
         group_ids = [id(g) for g in groups]
         groups_by_id = {id(g): g for g in groups}
@@ -445,17 +399,15 @@ class OrderSorter:
             for mid in g.mod_ids:
                 m_data = mod_map.get(mid, {})
                 w = self.calculate_mod_base_weight(m_data)
-                # 同样利用聚合函数拿动态动作
-                # 这样可以确保动态规则的全局开关在这里也能生效
-                raw_constraints = self.rule_mgr.collect_constraints(mid, m_data)
-                
-                for c in raw_constraints:
-                    if c['type'] == 'dynamic':
-                        act = c['action']
-                        if act['type'] == 'weight_shift': w += act['value']
-                        elif act['type'] == 'weight_set': w = act['value']
-                        elif act['type'] == 'top': w = 0
-                        elif act['type'] == 'bottom': w = 1000
+                # 确保动态规则的全局开关在这里也能生效
+                if self.rule_mgr.settings.get("dynamic_rules_enabled", True):
+                    matched_dyn = self.rule_mgr.get_matching_dynamic_rules(m_data)
+                    for rule in matched_dyn:
+                        act = rule.get("action", {})
+                        if act.get('type') == 'weight_shift': w += act.get('value', 0)
+                        elif act.get('type') == 'weight_set': w = act.get('value', w)
+                        elif act.get('type') == 'top': w = 0
+                        elif act.get('type') == 'bottom': w = 1000
                 weights.append(w)
             group_base_weights[id(g)] = min(weights) if weights else 500
         # 3. 构建加权依赖图
@@ -538,16 +490,20 @@ class OrderSorter:
 
         # 9. 输出结果
         final_list = []
-        all_auto_activated = []
+        interlock_auto_activated  = []
         for g in sorted_groups:
             final_list.extend(g.mod_ids)
-            all_auto_activated.extend(g.auto_activated)
+            interlock_auto_activated .extend(g.auto_activated)
+        
+        # 10. 合并自动激活的依赖项，形成最终的自动激活列表
+        all_auto_activated = list(set(interlock_auto_activated + auto_activated_deps))
 
         return {
             "sorted_ids": final_list,
             "auto_activated": all_auto_activated,
             "warnings": cycle_warnings # 包含冲突消解的日志
         }
+    
     
     
     

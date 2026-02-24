@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -16,20 +17,33 @@ from datetime import datetime
 from peewee import Model, JOIN
 from playhouse.shortcuts import model_to_dict
 
+# --- 模块测试准备 ---
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    # Path(__file__).resolve() 获取当前文件的绝对路径
+    # .parents[2] 表示向上跳 3 级 (文件->scanner->backend->项目根目录)
+    project_root = Path(__file__).resolve().parents[1]
+    # 调试打印，确保路径正确
+    print(f"Project Root: {project_root}")
+    # sys.path 需要字符串类型，所以要用 str() 转换一下
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
 # 1. 引入配置管理
 from backend.settings import settings, RULES_DIR
 from backend.utils.event_bus import EventBus
-from backend.utils.logger import logger
 from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
+from backend.utils.logger import logger
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, UserModData, init_db
+from backend.database.models import ModAsset, UserModData, init_db, db
 from backend.database.dao import ModDAO, GroupDAO
 
 # 3. 引入业务逻辑管理器
 from backend.managers.mgr_game import GameManager
-from backend.managers.mgr_mods_config import LoadOrderManager
+from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_files import FileManager
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
@@ -184,6 +198,7 @@ class API:
                 # 这里初始化会自动处理全量缓存和增量更新
                 self.dlc_parser = DLCParser(dlc_dir)
     def cleanup(self):
+        """关闭数据库清理资源"""
         # 停止后台扫描任务 (如果有)
         if hasattr(self, 'scanner'): self.scanner.stop_scan() 
         # 停止游戏监控
@@ -359,22 +374,23 @@ class API:
     def auto_detect_paths(self, update_config: bool = True):
         """自动检测游戏路径"""
         result = self.game_mgr.auto_detect_paths()
-        
+        steam_exe_path = self.steam_mgr.get_steam_path()
+        if not result: return ApiResponse.error("无法自动检测到游戏路径，请手动设置！")
+        result['steam_exe_path'] = steam_exe_path if steam_exe_path else ''
+        if update_config:   # 仅当请求时更新配置
+            settings.update_paths(result)
         # 如果检测到了安装路径，自动更新设置
         if result.get('game_install_path'):
-            if update_config:   # 仅当请求时更新配置
-                settings.update_paths(result)
-                # 重新初始化 LoadOrderManager (因为 Config 路径可能变了)
-                self.load_order_mgr = LoadOrderManager()
+            # 重新初始化 LoadOrderManager (因为 Config 路径可能变了)
+            self.load_order_mgr = LoadOrderManager()
             return ApiResponse.success({"paths": result})
-        
-        return ApiResponse.error("无法自动检测到游戏路径，请手动设置！")
+        return ApiResponse.warning("仅检测到部分路径，请手动设置！",{"paths": result})
 
     @log_api_call
     def save_setting(self, key: str, value: Any):
         """保存单个设置项"""
         # 如果修改的是核心路径，同步到当前环境
-        if key in ['game_install_path', 'user_data_path', 'use_workshop_mods']:
+        if key in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
             pid = settings.config.current_profile_id
             # 更新数据库中的 Profile
             updates = {key: value}
@@ -395,7 +411,7 @@ class API:
         # 批量更新
         for k, v in settings_obj.items():
             # 如果修改的是核心路径，同步到当前环境
-            if k in ['game_install_path', 'user_data_path', 'use_workshop_mods']:
+            if k in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
                 pid = settings.config.current_profile_id
                 # 更新数据库中的 Profile
                 updates = {k: v}
@@ -463,7 +479,7 @@ class API:
         """
         try:
             # 净化数据只保留必要字段
-            valid_fields = ['package_id', 'last_active_time', 'last_moved_time']
+            valid_fields = ['path_hash', 'last_active_time', 'last_moved_time']
             mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
             # print(f"更新Mod最后操作时间:{mods_data_list}")
             ModDAO.batch_update_mods(mods_data_list)
@@ -549,6 +565,21 @@ class API:
             return ApiResponse.success(message="标签已移除")
         except Exception as e:
             return ApiResponse.error(str(e))
+        
+    @log_api_call
+    def batch_update_user_data(self, user_data_list: List[Dict[str, Any]]):
+        """
+        通用批量更新用户自定义数据 (别名、备注、标签等)
+        user_data_list 结构示例: [{'mod_id': 'xxx', 'alias_name': 'yyy', 'notes': 'zzz'}]
+        """
+        try:
+            # 过滤掉没有 mod_id 的非法数据
+            valid_list = [d for d in user_data_list if 'mod_id' in d]
+            if valid_list:
+                ModDAO.batch_upsert_user_data(valid_list)
+            return ApiResponse.success(message=f'已成功应用 {len(valid_list)} 项数据')
+        except Exception as e:
+            return ApiResponse.error(str(e))
     
     @log_api_call
     def resolve_scan_conflicts(self, operations: List[Dict]):
@@ -562,54 +593,58 @@ class API:
         """
         results = []
         try:
-            for op in operations:
-                action = op.get('action')
-                target_path = op.get('target_path')
-                
-                if not target_path or not os.path.exists(target_path):
-                    results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
-                    continue
+            with db.atomic(): # 开启事务，确保文件和数据库操作的原子性
+                for op in operations:
+                    action = op.get('action')
+                    target_path = op.get('target_path')
+                    if not target_path or not os.path.exists(target_path):
+                        results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
+                        continue
+                    if action == 'disable':
+                        # 重命名 About.xml -> About.xml.disabled
+                        about_xml = os.path.join(target_path, 'About', 'About.xml')
+                        disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
+                        # 检查 About.xml 是否存在
+                        if os.path.exists(about_xml):
+                            try:
+                                # 如果目标已存在，先删除旧的disabled (极其罕见)
+                                if os.path.exists(disabled_xml): os.remove(disabled_xml)
+                                os.rename(about_xml, disabled_xml)
+                                # 更新数据库状态为 disabled = True
+                                ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
+                                # 尝试更新 shadow_paths，如果失败（Mod不存在）则忽略
+                                # 因为下次扫描时，保留的 Mod 会入库。
+                                keep_path_hash = op.get('keep_path_hash')
+                                if keep_path_hash:
+                                    self._add_shadow_path(keep_path_hash, target_path)
+                                    
+                                results.append({'path': target_path, 'status': 'success'})
+                            except Exception as e:
+                                logger.error(f"Disable mod failed: {e}")
+                                results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
+                        else:
+                            # 可能是 XML 已经不在了，但为了保险，标记数据库
+                            ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
+                            results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
 
-                if action == 'disable':
-                    # 方案：重命名 About.xml -> About.xml.disabled
-                    about_xml = os.path.join(target_path, 'About', 'About.xml')
-                    disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
-                    
-                    if os.path.exists(about_xml):
+                    elif action == 'delete':
+                        # 方案：移入回收站
                         try:
-                            # 如果目标已存在，先删除旧的disabled (极其罕见)
-                            if os.path.exists(disabled_xml):
-                                os.remove(disabled_xml)
-                            os.rename(about_xml, disabled_xml)
-                            
-                            # 尝试更新 shadow_paths，如果失败（Mod不存在）则忽略
-                            # 因为下次扫描时，保留的 Mod 会入库。
-                            keep_id = op.get('keep_id')
-                            if keep_id:
-                                self._add_shadow_path(keep_id, target_path)
-                                
+                            send2trash(os.path.abspath(target_path))
+                            # 文件删除后，立刻从数据库彻底抹除记录
+                            ModAsset.delete().where(ModAsset.path == target_path).execute()
                             results.append({'path': target_path, 'status': 'success'})
                         except Exception as e:
                             results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
-                    else:
-                        results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
-
-                elif action == 'delete':
-                    # 方案：移入回收站
-                    try:
-                        send2trash(os.path.abspath(target_path))
-                        results.append({'path': target_path, 'status': 'success'})
-                    except Exception as e:
-                        results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
 
             return ApiResponse.success(results, "冲突处理完成")
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
-    def _add_shadow_path(self, package_id: str, path: str):
+    def _add_shadow_path(self, keep_path_hash: str, path: str):
         """辅助方法：更新 Mod 的 shadow_paths 字段"""
         try:
-            mod = ModAsset.get_or_none(ModAsset.package_id == package_id)
+            mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
             if mod:
                 # 获取现有列表 (peewee JSON field 自动反序列化)
                 current_paths = mod.shadow_paths or []
@@ -782,13 +817,26 @@ class API:
     def launch_game(self, profile_id: str):
         """启动游戏"""
         try:
-            # 1. 获取当前 Profile 的启动参数
-            launch_args = self.profile_mgr.get_launch_args(profile_id) 
-            # 2. 调用游戏管理器启动游戏
-            self.game_mgr.launch_game(custom_args=launch_args)
+            if not profile_id: profile_id = self.profile_mgr.current_profile.id
+            if not profile_id: return ApiResponse.error("未指定 Profile ID")
+            profile = self.profile_mgr.get_profile(profile_id)
+            logger.debug(f"launch_game: profile_id={profile_id}, prefer_steam={settings.config.prefer_steam_launch}, steam_exe={settings.config.steam_exe_path}, is_steam={profile.is_steam}")
+            # 检查 Steam 配置是否完整
+            if(settings.config.prefer_steam_launch and settings.config.steam_exe_path and profile.is_steam):
+                # 1. 获取当前 Profile 的启动参数（仅包含游戏相关参数）
+                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+                logger.debug(f"launch_game_steam: extra_args={extra_args}")
+                # 2. 调用 Steam 管理器启动游戏
+                self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+            else:
+                # 1. 获取当前 Profile 的启动参数
+                launch_args = self.profile_mgr.get_launch_args(profile_id) 
+                logger.debug(f"launch_game: launch_args={launch_args}")
+                # 2. 调用游戏管理器启动游戏
+                self.game_mgr.launch_game(custom_args=launch_args)
+            
             # 3. 记录最后一次游玩时间到数据库
-            current_pid = settings.config.current_profile_id
-            self.profile_mgr.update_profile(current_pid, {
+            self.profile_mgr.update_profile(profile_id, {
                 "last_played_time": current_ms()
             })
             return ApiResponse.success(message="游戏启动成功，祝你游玩愉快！")
@@ -804,11 +852,13 @@ class API:
         try:
             exe = self.game_mgr.detect_executable(install_path)
             version = self.game_mgr.get_game_version(install_path)
+            is_steam = os.path.normpath(install_path).lower().rfind(os.path.join('steamlibrary', 'steamapps', 'common')) != -1
             if not exe :
                 return ApiResponse.warning("无法获取游戏信息，请检查游戏安装路径是否正确！")
             return ApiResponse.success({
                 "exe": exe,
-                "version": version
+                "version": version,
+                "is_steam": is_steam,
             })
         except Exception as e:
             return ApiResponse.error(f"获取游戏信息时出错: {e}")
@@ -907,9 +957,9 @@ class API:
         # 1. 准备任务 (使用 JOIN 一次性查出所有需要的数据)
         # 这里的退回顺序逻辑直接在 Python 循环中处理，清晰易维护
         query = (ModAsset.select(ModAsset, UserModData.alias_name)
-                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                 .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop')
-                 .dicts())
+                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.source == 'workshop') # type: ignore
+                .dicts())
         try:
             # 2. 执行任务
             res = self.file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)
@@ -940,19 +990,6 @@ class API:
         except Exception as e:
             logger.error(f"Auto sort failed: {e}", exc_info=True)
             return ApiResponse.error(f"排序失败: {str(e)}")
-        
-    @log_api_call
-    def check_load_order_health(self, active_ids: List[str]):
-        """
-        常态化健康检查：检测当前顺序是否违反 About.xml、社区规则或用户规则
-        前端通常在拖拽停止后调用
-        """
-        try:
-            issues = self.sorter.check_health(active_ids)
-            # 返回的是 List[dict]，每个 dict 包含 mod_id, type, level, message, source
-            return ApiResponse.success(issues)
-        except Exception as e:
-            return ApiResponse.error(f"健康检查失败: {str(e)}")
         
     
     # =========================================================================
@@ -1424,27 +1461,32 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def ai_fetch_models(self, temp_config: dict):
-        """
-        获取模型列表 (用于配置页面的下拉菜单)
-        :param temp_config: 前端表单中的临时配置 {provider, base_url, api_key}
-        """
+    def ai_get_providers(self, api_type: str = "official"):
+        """获取厂商或代理协议列表"""
         try:
-            models = self.ai_mgr.fetch_available_models(temp_config)
-            return ApiResponse.success(models)
+            providers = self.ai_mgr.get_providers(api_type)
+            return ApiResponse.success(providers)
         except Exception as e:
-            return ApiResponse.error(f"连接失败: {str(e)}")
+            return ApiResponse.error(f"获取厂商列表失败: {str(e)}")
 
     @log_api_call
-    def ai_chat(self, message: str, config_data: dict=None): # type: ignore
-        """简单的自由对话"""
+    def ai_get_models(self, temp_config: dict):
+        """
+        获取模型列表 (替代原来的 ai_fetch_models)
+        自带缓存机制，极速响应。
+        :param temp_config: 前端表单中的临时配置 {api_type, provider, base_url, api_key}
+        """
         try:
-            if config_data:
-                provider = self.ai_mgr.get_provider(override_config=config_data)
-                result = provider.chat('hello, I want to chat with you.', message)
-            else:
-                # 使用 'chat' 模板
-                result = self.ai_mgr.execute_task('chat', {'message': message})
+            models = self.ai_mgr.get_models(temp_config)
+            return ApiResponse.success(models)
+        except Exception as e:
+            return ApiResponse.error(f"获取模型列表失败: {str(e)}")
+
+    @log_api_call
+    def ai_chat(self, message: str, config_data: dict={}):
+        """测试对话"""
+        try:
+            result = self.ai_mgr.test_chat(message, config_data)
             return ApiResponse.success(result)
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -1461,7 +1503,90 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
     
+    @log_api_call
+    def ai_execute_batch_task(self, task_key: str, items: list, variables: dict = {}):
+        """
+        发起异步批量 AI 任务。
+        前端调用此接口后会立即返回 task_id，随后通过 EventBus 监听进度。
+        """
+        if not settings.config.ai.enabled:
+            return ApiResponse.error("AI 功能未启用")
+            
+        if not variables:
+            variables = {}
+
+        # 1. 生成唯一的任务 ID，供前端监听特定频道
+        task_event_id = str(uuid.uuid4())
+
+        # 2. 定义后台运行的工作线程
+        def background_worker():
+            # 为这个新线程创建一个全新的事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # 运行我们写好的批量调度引擎
+                results = loop.run_until_complete(
+                    self.ai_mgr.execute_batch_task_async(task_key, items, variables, task_event_id)
+                )
+                # 任务彻底完成后，发送 complete 事件
+                EventBus.emit(f'ai-batch-complete', {
+                    'task_event_id': task_event_id,
+                    'status': 'success', 
+                    'data': results
+                })
+                # 可选：你可以直接在这里调用 ModDAO 批量入库
+                # if results:
+                #     self._save_ai_results_to_db(results)
+            except Exception as e:
+                logger.error(f"Background AI task failed: {e}", exc_info=True)
+                EventBus.emit(f'ai-batch-complete', {
+                    'task_event_id': task_event_id,
+                    'status': 'error', 
+                    'message': str(e)
+                })
+            finally:
+                loop.close()
+
+        # 3. 启动守护线程（不阻塞当前 pywebview 的请求）
+        threading.Thread(target=background_worker, daemon=True).start()
+
+        # 4. 立即返回响应给前端，让前端开始监听
+        return ApiResponse.success({
+            "task_event_id": task_event_id,
+            "total_items": len(items)
+        }, message="批量任务已在后台启动")
     
+    @log_api_call
+    def ai_get_prompts(self):
+        """获取所有提示词"""
+        return ApiResponse.success(self.ai_mgr.prompts)
+
+    @log_api_call
+    def ai_save_prompt(self, prompt_id: str, prompt_data: dict):
+        """保存提示词"""
+        try:
+            res = self.ai_mgr.save_prompt(prompt_id, prompt_data)
+            return ApiResponse.success(res)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ai_delete_prompt(self, prompt_id: str):
+        """删除提示词"""
+        try:
+            res = self.ai_mgr.delete_prompt(prompt_id)
+            return ApiResponse.success(res)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ai_reset_prompts(self):
+        """恢复默认提示词"""
+        try:
+            res = self.ai_mgr.reset_system_prompts()
+            return ApiResponse.success(res)
+        except Exception as e:
+            return ApiResponse.error(str(e))
     
     # ==========================================
     #  用户配置环境管理 (Profiles)
@@ -1536,4 +1661,6 @@ class API:
         
         
         
-        
+if __name__ == "__main__":
+    valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
+    print(valid_field_names)

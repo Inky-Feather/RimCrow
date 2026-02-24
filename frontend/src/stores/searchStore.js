@@ -4,6 +4,7 @@ import { ref, computed, watch } from 'vue'
 import { useModStore } from './modStore'
 import { SearchEngine } from '../modules/search/SearchEngine'
 import { FIELD_TYPES } from '../modules/search/SearchTypes'
+import { MOD_SIGN_COLOR_MAP } from '../utils/constants'
 
 export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()
@@ -19,13 +20,15 @@ export const useSearchStore = defineStore('search', () => {
 
     // === 列表类型 ===
     tags: { type: FIELD_TYPES.LIST, suggest: true, label: '标签' },
+    groups: { type: FIELD_TYPES.LIST, suggest: true, label: '分组' },
     ignored_issues: { type: FIELD_TYPES.LIST, suggest: true, label: '忽略问题' },
     supported_versions: { type: FIELD_TYPES.LIST, suggest: true, label: '支持版本' },
     supported_languages: { type: FIELD_TYPES.LIST, suggest: true, label: '支持语言' },
 
     // === 布尔值 ===
-    save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '存档可用' },
+    save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '是否坏档' },
     shadow_paths: { type: FIELD_TYPES.BOOLEAN, label: '存在禁用包名' },
+    is_local: { type: FIELD_TYPES.BOOLEAN, label: '是否本地' },
 
     // === 来源 (枚举) ===
     source: { 
@@ -34,11 +37,18 @@ export const useSearchStore = defineStore('search', () => {
       label: '来源',
     },
     mod_type: { 
-        type: FIELD_TYPES.STRING, 
-        suggest: true, 
-        label: '类型',
-        getter: (mod) => modStore.displayModType(mod)
+      type: FIELD_TYPES.STRING, 
+      suggest: true, 
+      label: '类型',
+      getter: (mod) => modStore.displayModType(mod)
     },
+    sign_color:{
+      type: FIELD_TYPES.STRING, 
+      suggest: true, 
+      label: '标记颜色',
+      label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || '无',
+      color_getter: (color) => color || '#ffffff',
+    }
     
     // === 时间 (假设 mod 对象里有 updated_at) ===
     // last_updated: {
@@ -72,8 +82,9 @@ export const useSearchStore = defineStore('search', () => {
             /urls?$/i,        // 屏蔽所有以 url 结尾的 (thumb_url, preview_url)
             /paths?$/i,       // 屏蔽所有以 path 结尾的 (install_path)
             /colors?$/i,      // 屏蔽所有以 color 结尾的 (color)
-            'description','notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
-            'version','workshop_id','id','mod_id', 'path_hash',
+            'description','descriptions_by_version' ,'notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
+            'version','id','mod_id', 'path_hash','rules', 'disabled',
+            'file_size',
             // 'ignored_issues',
         ]
     })

@@ -12,18 +12,18 @@ def run_migrations(old_version):
     if old_version == "2":
         _2to3(old_version)
         old_version = "3"
-
-    # 情况 2: 从版本 2 升级到版本 3 ... (以此类推)
-    # if old_version == "2":
-    #     ...
+    if old_version == "3":
+        _3to4()
+        old_version = "4"
     
     # 最后更新版本号
     SystemInfo.update(value=old_version).where(SystemInfo.key == 'db_version').execute()
     
     
 def _2to3(old_version):
-    """
-    数据库迁移主函数
+    """数据库迁移主函数
+    将Mod表更新为ModAsset，
+    并将UserModData和GroupMod更新为新的关联表。
     """
     # 1. 备份原始数据
     # init_db 里已经备份过 .db 文件，这里可以直接操作
@@ -200,4 +200,48 @@ def _2to3(old_version):
         # 最好是记录错误，让程序以空库或半迁移状态启动，或者回滚 .bak
         raise e
     
-    
+def _3to4():
+    """从版本 3 升级到版本 4
+    将旧的 Integer 逻辑转换为新的 Boolean (Null) 逻辑
+    旧: -1 (破坏), 0 (未知), 1 (不破坏)
+    新: 1 (True, 破坏), NULL (None, 未知), 0 (False, 不破坏)
+    """
+    try:
+        # 1. 检查字段是否存在
+        columns = {f.name: f for f in db.get_columns('modasset')}
+        if 'save_breaking' not in columns:
+            logger.warning("字段 save_breaking 不存在，跳过迁移")
+            return
+        
+        migrator = SqliteMigrator(db)
+
+        with db.atomic(): # 使用事务确保原子性
+            # 第一步：转换现有值为临时占位符（避开 NOT NULL 约束）
+            # 逻辑：-1 -> 1(True), 1 -> 0(False), 0 -> 3(临时占位)
+            db.execute_sql("""
+                UPDATE modasset SET save_breaking = CASE 
+                    WHEN save_breaking = -1 THEN 1 
+                    WHEN save_breaking = 1  THEN 0 
+                    WHEN save_breaking = 0  THEN 3 
+                    ELSE save_breaking 
+                END
+                WHERE save_breaking IN (-1, 0, 1);
+            """)
+
+            # 第二步：利用 Migrator 移除 NOT NULL 约束
+            # 在 SQLite 中，这会触发：创建新表 -> 拷贝数据 -> 替换旧表
+            logger.info("正在重构表结构以移除 save_breaking 的 NOT NULL 约束...")
+            migrate(
+                migrator.drop_not_null('modasset', 'save_breaking'),
+            )
+
+            # 第三步：将占位符 3 转换为真正的 NULL
+            db.execute_sql("UPDATE modasset SET save_breaking = NULL WHERE save_breaking = 3;")
+            
+        logger.info("✅ 已完成 save_breaking 字段的数据迁移与结构更新")
+        
+    except Exception as e:
+        logger.error(f"迁移 save_breaking 时出错: {e}")
+        raise # 抛出异常以便上层回滚或停止升级
+
+

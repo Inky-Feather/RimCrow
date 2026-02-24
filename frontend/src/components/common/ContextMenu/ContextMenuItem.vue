@@ -1,6 +1,6 @@
 <!-- components/common/ContextMenu/ContextMenuItem.vue -->
 <template>
-  <div ref="itemRef" class="group relative px-[4px] py-[4px] transition-all duration-200"
+  <div v-if="item" ref="itemRef" class="group relative px-[4px] py-[4px] transition-all duration-200"
     :class="[item.type === 'grid' ? 'w-full min-w-[200px]' : 'max-w-[200px]']"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"

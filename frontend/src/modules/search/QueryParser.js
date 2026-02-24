@@ -44,8 +44,10 @@ export class QueryParser {
         
         // 布尔值处理: 将 +, true 转换为 true (boolean)
         if (config.type === FIELD_TYPES.BOOLEAN) {
-          if (config.trueValues.includes(valueRaw.toLowerCase())) processedValue = true;
-          else if (config.falseValues.includes(valueRaw.toLowerCase())) processedValue = false;
+          const vLower = valueRaw.toLowerCase();
+          if (config.trueValues.includes(vLower)) processedValue = true;
+          else if (config.falseValues.includes(vLower)) processedValue = false;
+          else if (config.nullValues.includes(vLower)) processedValue = null; // 必须显式解析 null 值
           // 如果都不是，可能用户输入了一半，暂且保留原字符串供后续逻辑处理，或者标记无效
         }
 
