@@ -67,11 +67,11 @@ export const useAppStore = defineStore('app', () => {
   // 定义默认布局配置
   const DEFAULT_DETAILS_LAYOUT = [
     { id: 'basic_info', visible: true }, // 包ID、作者、链接、路径
-    { id: 'files_info', visible: true },
-    { id: 'time_info', visible: true },
-    { id: 'relations_info', visible: true },
+    { id: 'files_info', visible: true },  // 文件统计
+    { id: 'time_info', visible: true },  // 其它信息
+    { id: 'relations_info', visible: true },  // 依赖关系
     { id: 'user_info', visible: true }, // 标签、备注、分组
-    { id: 'description', visible: true },
+    { id: 'description', visible: true }, // Mod 描述
   ]
   const DETAILS_LAYOUT_MAPS = {
     basic_info: {label: '基础信息', desc:'控制详情页中 Mod 作者及来源板块的显示。'},
@@ -81,6 +81,19 @@ export const useAppStore = defineStore('app', () => {
     user_info: {label: '自定义信息', desc:'控制详情页中 Mod 自定义信息板块的显示。'},
     description: {label: 'Mod描述', desc:'控制详情页中 Mod 说明板块的显示。'},
   }
+  const DEFAULT_MAIN_LAYOUT = [
+    { id: 'details', visible: true }, // Mod 详情面板
+    { id: 'library', visible: true }, // Mod 停用列表
+    { id: 'active', visible: true },  // Mod 启用列表
+    { id: 'sidebar', visible: true },  // 侧边功能栏
+  ]
+  const MAIN_LAYOUT_MAPS = {
+    details: {label: 'Mod详情', desc:'控制主界面中 Mod 详情面板的显示。'},
+    library: {label: '停用列表', desc:'控制主界面中 Mod 停用列表的显示。'},
+    active: {label: '启用列表', desc:'控制主界面中 Mod 启用列表的显示。'},
+    sidebar: {label: '侧边栏', desc:'控制主界面中侧边功能栏的显示。'},
+  }
+
   // 全局设置
   const settings = ref({
     // --- 路径 (Paths) ---
@@ -117,10 +130,10 @@ export const useAppStore = defineStore('app', () => {
       show_mod_hover_panel: true,  // 是否显示 Mod 悬停面板
       double_click_active_mod: true,  // 是否双击启用/停用 Mod
 
-      show_mod_details_panel: true,  // 是否显示 Mod 详情面板
-      show_icons_cloud: true,  // 是否显示动态图标云
+      main_layout: JSON.parse(JSON.stringify(DEFAULT_MAIN_LAYOUT)),  // 主界面布局配置
 
-      mod_details_layout: JSON.parse(JSON.stringify(DEFAULT_DETAILS_LAYOUT)), 
+      show_icons_cloud: true,  // 是否显示动态图标云
+      mod_details_layout: JSON.parse(JSON.stringify(DEFAULT_DETAILS_LAYOUT)),   // Mod 详情面板布局配置
 
       show_dependency_graph: true,  // 是否显示依赖关系图
       show_list_index: true,  // 是否显示列表索引列
@@ -1051,7 +1064,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, 
-    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, 
+    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup,
     // 游戏相关
     getGameInfo, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 

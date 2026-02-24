@@ -80,9 +80,17 @@ class UIConfig:
     show_mod_hover_panel: bool = True  # 是否显示 Mod 悬停面板
     double_click_active_mod: bool = True  # 是否双击启用/停用 Mod
     
-    show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
+    # 主界面布局配置
+    main_layout: List[Dict[str, Any]] = field(default_factory=lambda: [
+        { 'id': 'details', 'visible': True },
+        { 'id': 'library', 'visible': True },
+        { 'id': 'active', 'visible': True },
+        { 'id': 'sidebar', 'visible': True },
+    ])
+    
     show_icons_cloud: bool = True  # 是否显示动态图标云
     
+    # Mod 详情面板布局配置
     mod_details_layout: List[Dict[str, Any]] = field(default_factory=lambda: [
         { 'id': 'basic_info', 'visible': True }, # 包ID、作者、链接、路径
         { 'id': 'files_info', 'visible': True },

@@ -102,18 +102,32 @@
                     <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" :min="100" :max="5000" />
                     <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
                     <CommonSwitch label="双击启用/停用 Mod" v-model="formData.ui.double_click_active_mod" description="控制 Mod 列表中双击启用/停用 Mod 动作。" />
+                    
                     <div class="col-span-2 p-2 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
-                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
-                      <CommonSwitch class="col-span-2" :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
+                      <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">主页布局
+                        <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <VueDraggable class="col-span-2 flex gap-1" 
+                        ref="el" v-model="formData.ui.main_layout" :animation="150">
+                        <div v-for="item, index in formData.ui.main_layout" class="flex items-center ">
+                          <CommonSwitch class="flex-1 cursor-move" :key="item.id" :label="appStore.MAIN_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.MAIN_LAYOUT_MAPS[item.id].desc" />
+                        </div>
+                      </VueDraggable>
+                      
+                    </div>
+
+                    <div class="col-span-2 p-2 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="getDataById('details', formData.ui.main_layout).visible" description="可关闭Mod详情栏。" />
+                      <CommonSwitch class="col-span-2" :disabled="!getDataById('details', formData.ui.main_layout).visible" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
                       
                       <span class="col-span-2 text-xs ml-2 mt-2">Mod 详情布局
                         <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                       </span>
                       <VueDraggable class="col-span-2 flex flex-col gap-1 p-2 rounded-xl bg-text-main/5 border border-text-main/10" 
-                        ref="el" v-model="formData.ui.mod_details_layout" :animation="150" :disabled="!formData.ui.show_mod_details_panel">
+                        ref="el" v-model="formData.ui.mod_details_layout" :animation="150" :disabled="!getDataById('details', formData.ui.main_layout).visible">
                         <div v-for="item, index in formData.ui.mod_details_layout" class="flex items-center ">
                           <span class="p-1 mr-1 rounded-md bg-accent-primary/30">{{ index }}</span>
-                          <CommonSwitch class="flex-1 cursor-move" :disabled="!formData.ui.show_mod_details_panel" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
+                          <CommonSwitch class="flex-1 cursor-move" :disabled="!getDataById('details', formData.ui.main_layout).visible" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
                         </div>
                       </VueDraggable>
                       
@@ -403,14 +417,19 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   }
 })
 
+// 通过ID获取数据项
+const getDataById = (id, datas) => {
+  return datas.find(item => item.id === id)
+}
 
+// 自动检测路径
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
   // 自动获取游戏信息
   checkGamePath()
 }
-
+// 检查游戏路径是否有效
 const checkGamePath = async () => {
   const gameInfo = await appStore.getGameInfo(formData.value.game_install_path)
   if (!gameInfo || !gameInfo.exe) {
@@ -421,7 +440,7 @@ const checkGamePath = async () => {
   formData.value['local_mods_path'] = formData.value.game_install_path + '\\Mods'
   formData.value['game_info'] = `游戏版本: ${gameInfo.version}\n游戏路径: ${gameInfo.exe}`
 }
-
+// 手动选择游戏路径
 const handleGameBrowse = async () => {
   let current = formData.value
   const res = await appStore.getFolderPath(current['game_install_path'])
@@ -430,8 +449,8 @@ const handleGameBrowse = async () => {
     // 自动获取游戏信息
     checkGamePath()
   }
-
 }
+// 手动选择其他路径
 const handleBrowse = async (pathKey) => {
   // 处理嵌套路径 (如 'steam.steamcmd_path')
   const keys = pathKey.split('.')
@@ -440,12 +459,10 @@ const handleBrowse = async (pathKey) => {
     current = current[keys[i]]
   }
   const lastKey = keys[keys.length - 1]
-  
   const res = await appStore.getFolderPath(current[lastKey])
   if (res) {
     current[lastKey] = res
   }
-
 }
 
 // ======= AI 集成 ======

@@ -294,7 +294,7 @@ const handleContextMenu = async (event) => {
   const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分标签',
+    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
       children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]

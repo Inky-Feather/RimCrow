@@ -13,22 +13,22 @@
           <!-- 列容器 -->
           <div class="h-full p-1 transition-opacity relative" :style="{ width: (colWidths[index] || 0) + 'px' }" >
             <!-- 1. 详情 (Details) -->
-            <div v-if="col.type === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-text-main/5 shadow-2xl">
+            <div v-if="col.id === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-text-main/5 shadow-2xl">
               <ModDetails />
             </div>
 
             <!-- 2. 待选库 (Library) -->
-            <div v-else-if="col.type === 'library'" class="h-full">
+            <div v-else-if="col.id === 'library'" class="h-full">
               <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
             </div>
 
             <!-- 3. 启用/排序 (Active) - 包含规则编辑器逻辑 -->
-            <div v-else-if="col.type === 'active'" class="h-full">
+            <div v-else-if="col.id === 'active'" class="h-full">
               <ModList v-model="modStore.activeIds" title="启用" :hasSidebar="true" listColor="success" listId="active" />
             </div>
 
             <!-- 4. 辅助/分组 (Sidebar Tabs) -->
-            <div v-else-if="col.type === 'sidebar'" class="h-full">
+            <div v-else-if="col.id === 'sidebar'" class="h-full">
               <!-- 这里保留原有的逻辑：如果有规则ID，显示编辑器，否则显示列表 -->
               <ModRuleEditor v-if="ruleStore.currentId" title="规则" listColor="warn" />
               <div v-else class="h-full flex flex-col relative">
@@ -281,36 +281,9 @@ const activeTab = ref(tabs[0])
 const containerRef = ref(null)
 
 
-// 列配置定义
-// id: 唯一标识
-// show: 返回 boolean，决定是否显示
-// type: 用于在模板中区分渲染哪个组件
-const columnConfig = [
-  { 
-    id: 'details', 
-    type: 'details',
-    show: () => appStore.settings.ui.show_mod_details_panel 
-  },
-  { 
-    id: 'library', 
-    type: 'library',
-    show: () => true // 库常驻，也可以改为配置
-  },
-  { 
-    id: 'active', 
-    type: 'active',
-    show: () => true 
-  },
-  { 
-    id: 'sidebar', 
-    type: 'sidebar',
-    show: () => true // 同样可以绑定设置
-  }
-]
-
 // 计算当前可见的列
 const visibleColumns = computed(() => {
-  return columnConfig.filter(col => col.show())
+  return appStore.settings.ui.main_layout.filter(col => col['visible'])
 })
 
 // 动态宽度管理
