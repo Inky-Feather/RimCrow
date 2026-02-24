@@ -601,7 +601,7 @@ export const useAppStore = defineStore('app', () => {
     if(profile_id || settings.value.game_install_path){
       if (!window.pywebview) return
       // 直接启动游戏
-      const res = await window.pywebview.api.launch_game(profile_id)
+      const res = await window.pywebview.api.game_launch(profile_id)
       if (checkResult(res, "直接启动游戏程序")) {
         toast.success("直接启动游戏程序成功！")
       } else {
@@ -631,7 +631,7 @@ export const useAppStore = defineStore('app', () => {
   const getGameInfo = async (path) => {
     if(!path) return
     if(!window.pywebview) return
-    const res = await window.pywebview.api.get_game_info(path)
+    const res = await window.pywebview.api.game_info_get(path)
     if (checkResult(res, "获取游戏信息")) {
       return res.data
     }
@@ -641,14 +641,14 @@ export const useAppStore = defineStore('app', () => {
     if(!window.pywebview) return
     if(!path) return
     console.log("打开路径:", path)
-    const res = await window.pywebview.api.open_path(path)
+    const res = await window.pywebview.api.path_open(path)
     checkResult(res, "打开路径")
   }
   // 获取文件路径
   const getFilePath = async (home_path, file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')) => {
     if(!window.pywebview) return
     // 调用后端 API
-    const res = await window.pywebview.api.select_file_dialog(home_path, file_types)
+    const res = await window.pywebview.api.file_select_dialog(home_path, file_types)
     if (checkResult(res, "获取文件路径")) {
       return res.data
     } else {
@@ -659,7 +659,7 @@ export const useAppStore = defineStore('app', () => {
   const getFolderPath = async (home_path) => {
     if(!window.pywebview) return
     // 调用后端 API
-    const res = await window.pywebview.api.select_folder_dialog(home_path)
+    const res = await window.pywebview.api.folder_select_dialog(home_path)
     if (checkResult(res, "获取文件夹路径")) {
         return res.data
     } else if (res.status === 'error') {
@@ -675,7 +675,7 @@ export const useAppStore = defineStore('app', () => {
       { type: 'error' }
     );
     if(!confirm) return
-    const res = await window.pywebview.api.delete_path(path)
+    const res = await window.pywebview.api.path_delete(path)
     if (checkResult(res, "删除文件/文件夹")) {
       toast.success(`已删除: \n${path}`)
       // 刷新Mod列表
@@ -693,7 +693,7 @@ export const useAppStore = defineStore('app', () => {
       { type: 'error' }
     );
     if(!confirm) return
-    const res = await window.pywebview.api.delete_paths(paths)
+    const res = await window.pywebview.api.paths_delete(paths)
     if (checkResult(res, "批量删除文件/文件夹")) {
       toast.success(`已删除 ${paths.length} 个文件/文件夹`)
       // 刷新Mod列表
@@ -956,7 +956,7 @@ export const useAppStore = defineStore('app', () => {
       updateState.progress = 0
       
       try {
-        const res = await window.pywebview.api.check_update(manual)
+        const res = await window.pywebview.api.update_check(manual)
         if (checkResult(res, "检查更新")) {
           const info = res.data
           if (info.has_update) {
@@ -974,7 +974,7 @@ export const useAppStore = defineStore('app', () => {
               _performUpdateAction()
             } else if (!manual) {
               // 如果是启动时的自动弹窗点取消，则询问是否不再提醒该版本
-              await window.pywebview.api.ignore_version(info.version)
+              await window.pywebview.api.update_ignore_version(info.version)
             }
           } else if (manual) {
             toast.success("当前已是最新版本")
@@ -1013,7 +1013,7 @@ export const useAppStore = defineStore('app', () => {
       }
 
       // 调用统一接口
-      const res = await window.pywebview.api.trigger_update_action()
+      const res = await window.pywebview.api.update_trigger_action()
       
       if (checkResult(res,'开始下载更新包')) {
           // 如果后端开始下载，这里不需要做什么，因为 EventListener 会接管进度条

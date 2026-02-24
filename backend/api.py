@@ -54,7 +54,6 @@ from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.managers.mgr_ai import AIManager
-from backend.managers.mgr_steam_history import SteamHistoryManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
@@ -185,7 +184,6 @@ class API:
         self.steam_mgr = SteamManager()
         self.ai_mgr = AIManager()
         self.browser_window = SubBrowserManager(self)
-        self.steam_history_mgr = SteamHistoryManager()
         self.workshop_db_mgr = WorkshopDBManager()
         self.update_mgr = UpdateManager()
         logger.info("API Layer Ready.")
@@ -197,6 +195,7 @@ class API:
             if os.path.exists(dlc_dir):
                 # 这里初始化会自动处理全量缓存和增量更新
                 self.dlc_parser = DLCParser(dlc_dir)
+    
     def cleanup(self):
         """关闭数据库清理资源"""
         # 停止后台扫描任务 (如果有)
@@ -366,7 +365,19 @@ class API:
             import traceback
             traceback.print_exc()
             return ApiResponse.error(str(e))
-
+    
+    @log_api_call
+    def perform_database_cleanup(self):
+        """手动触发：清理无效的 UserModData、GroupMod 和 ModAsset"""
+        try:
+            # 1. 清理文件已不存在的 ModAsset
+            missing = ModDAO.find_missing_mods(delete=True)
+            # 2. 清理孤立的用户数据和分组关联
+            ModDAO.clean_orphaned_data()
+            return ApiResponse.success(message="数据库清理完成")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
     # =========================================================================
     #  2. 设置与路径 (Settings & Paths)
     # =========================================================================
@@ -473,116 +484,7 @@ class API:
         return ApiResponse.success({ "details": result },"后台扫描已启动")
     
     @log_api_call
-    def update_mod_time(self, mods_data_list: List[Dict[str, Any]]):
-        """
-        更新指定 Mod 列表 的 最后操作时间
-        """
-        try:
-            # 净化数据只保留必要字段
-            valid_fields = ['path_hash', 'last_active_time', 'last_moved_time']
-            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
-            # print(f"更新Mod最后操作时间:{mods_data_list}")
-            ModDAO.batch_update_mods(mods_data_list)
-            return ApiResponse.success(message='最后操作时间已更新')
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def update_mod_user_data(self, package_id: str, data_dict: dict):
-        """
-        即时保存用户对 Mod 的修改 (标签, 备注, 颜色等)
-        """
-        try:
-            ModDAO.update_user_data(package_id, data_dict)
-            return ApiResponse.success()
-        except Exception as e:
-            return ApiResponse.error(str(e))
-
-    @log_api_call
-    def set_mods_ignore_issues(self, mods_data_list: List[Dict[str, Any]]):
-        """
-        批量更新用户对 Mod 的修改 (标签, 备注, 颜色等)
-        """
-        try:
-            # 净化数据只保留必要字段
-            valid_fields = ['mod_id', 'ignored_issues']
-            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
-            ModDAO.batch_upsert_user_data(mods_data_list)
-            return ApiResponse.success(message='用户数据已更新')
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def set_mods_color(self, mod_ids: List[str], color: str):
-        """批量设置 Mod 颜色"""
-        try:
-            ModDAO.set_mods_color(mod_ids, color)
-            return ApiResponse.success(message="颜色已设置")
-        except Exception as e:
-            return ApiResponse.error((mod_ids, color, str(e)))
-    
-    @log_api_call
-    def set_user_mods_type(self, mod_ids: List[str], new_type: str):
-        """批量设置用户自定义 Mod 类型"""
-        try:
-            ModDAO.set_user_mods_type(mod_ids, new_type)
-            return ApiResponse.success(message="类型已设置")
-        except Exception as e:
-            return ApiResponse.error(str(e))
-
-    @log_api_call
-    def link_mods(self, mod_ids: List[str]):
-        """批量设置 Mod 联锁"""
-        try:
-            result = ModDAO.link_mods(mod_ids)
-            return ApiResponse.success(data=result)
-        except Exception as e:
-            return ApiResponse.error(str(e))
-        
-    @log_api_call
-    def unlink_mods(self, mod_ids: List[str]):
-        """批量解除 Mod 联锁"""
-        try:
-            result = ModDAO.unlink_mods(mod_ids)
-            return ApiResponse.success(data=result)
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def add_tags_to_mods(self, mod_ids: List[str], tags: List[str]):
-        """批量添加标签"""
-        try:
-            ModDAO.add_tags_to_mods(mod_ids, tags)
-            return ApiResponse.success(message="标签已添加")
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def remove_tags_from_mods(self, mod_ids: List[str], tags: List[str]):
-        """批量移除标签"""
-        try:
-            ModDAO.remove_tags_from_mods(mod_ids, tags)
-            return ApiResponse.success(message="标签已移除")
-        except Exception as e:
-            return ApiResponse.error(str(e))
-        
-    @log_api_call
-    def batch_update_user_data(self, user_data_list: List[Dict[str, Any]]):
-        """
-        通用批量更新用户自定义数据 (别名、备注、标签等)
-        user_data_list 结构示例: [{'mod_id': 'xxx', 'alias_name': 'yyy', 'notes': 'zzz'}]
-        """
-        try:
-            # 过滤掉没有 mod_id 的非法数据
-            valid_list = [d for d in user_data_list if 'mod_id' in d]
-            if valid_list:
-                ModDAO.batch_upsert_user_data(valid_list)
-            return ApiResponse.success(message=f'已成功应用 {len(valid_list)} 项数据')
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def resolve_scan_conflicts(self, operations: List[Dict]):
+    def scan_conflicts_resolve(self, operations: List[Dict]):
         """
         处理扫描发现的冲突。
         operations: List[Dict]
@@ -656,30 +558,128 @@ class API:
             logger.error(f"Error updating shadow paths: {e}")
     
     @log_api_call
-    def perform_database_cleanup(self):
-        """手动触发：清理无效的 UserModData、GroupMod 和 ModAsset"""
+    def mod_time_update(self, mods_data_list: List[Dict[str, Any]]):
+        """
+        更新指定 Mod 列表 的 最后操作时间
+        """
         try:
-            # 1. 清理文件已不存在的 ModAsset
-            missing = ModDAO.find_missing_mods(delete=True)
-            # 2. 清理孤立的用户数据和分组关联
-            ModDAO.clean_orphaned_data()
-            return ApiResponse.success(message="数据库清理完成")
+            # 净化数据只保留必要字段
+            valid_fields = ['path_hash', 'last_active_time', 'last_moved_time']
+            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
+            # print(f"更新Mod最后操作时间:{mods_data_list}")
+            ModDAO.batch_update_mods(mods_data_list)
+            return ApiResponse.success(message='最后操作时间已更新')
         except Exception as e:
             return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mod_user_data_update(self, package_id: str, data_dict: dict):
+        """
+        即时保存用户对 Mod 的修改 (标签, 备注, 颜色等)
+        """
+        try:
+            ModDAO.update_user_data(package_id, data_dict)
+            return ApiResponse.success()
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mods_user_data_update(self, user_data_list: List[Dict[str, Any]]):
+        """
+        通用批量更新用户自定义数据 (别名、备注、标签等)
+        user_data_list 结构示例: [{'mod_id': 'xxx', 'alias_name': 'yyy', 'notes': 'zzz'}]
+        """
+        try:
+            # 过滤掉没有 mod_id 的非法数据
+            valid_list = [d for d in user_data_list if 'mod_id' in d]
+            if valid_list:
+                ModDAO.batch_upsert_user_data(valid_list)
+            return ApiResponse.success(message=f'已成功应用 {len(valid_list)} 项数据')
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mods_ignore_issues_update(self, mods_data_list: List[Dict[str, Any]]):
+        """
+        批量更新用户对 Mod 的修改
+        """
+        try:
+            # 净化数据只保留必要字段
+            valid_fields = ['mod_id', 'ignored_issues']
+            mods_data_list = [{k: v for k, v in mod.items() if k in valid_fields} for mod in mods_data_list]
+            ModDAO.batch_upsert_user_data(mods_data_list)
+            return ApiResponse.success(message='用户数据已更新')
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mods_sign_color_update(self, mod_ids: List[str], color: str):
+        """批量设置 Mod 颜色"""
+        try:
+            ModDAO.set_mods_color(mod_ids, color)
+            return ApiResponse.success(message="颜色已设置")
+        except Exception as e:
+            return ApiResponse.error((mod_ids, color, str(e)))
+    
+    @log_api_call
+    def mods_user_mod_type_update(self, mod_ids: List[str], new_type: str):
+        """批量设置用户自定义 Mod 类型"""
+        try:
+            ModDAO.set_user_mods_type(mod_ids, new_type)
+            return ApiResponse.success(message="类型已设置")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mods_link(self, mod_ids: List[str]):
+        """批量设置 Mod 联锁"""
+        try:
+            result = ModDAO.link_mods(mod_ids)
+            return ApiResponse.success(data=result)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+        
+    @log_api_call
+    def mods_unlink(self, mod_ids: List[str]):
+        """批量解除 Mod 联锁"""
+        try:
+            result = ModDAO.unlink_mods(mod_ids)
+            return ApiResponse.success(data=result)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mods_add_tags(self, mod_ids: List[str], tags: List[str]):
+        """批量添加标签"""
+        try:
+            ModDAO.add_tags_to_mods(mod_ids, tags)
+            return ApiResponse.success(message="标签已添加")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def mods_remove_tags(self, mod_ids: List[str], tags: List[str]):
+        """批量移除标签"""
+        try:
+            ModDAO.remove_tags_from_mods(mod_ids, tags)
+            return ApiResponse.success(message="标签已移除")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+        
     
     # =========================================================================
     #  4. 分组管理 (Groups) - 即时保存
     # =========================================================================
 
     @log_api_call
-    def get_groups(self):
+    def groups_get(self):
         context_mods = ModDAO.get_profile_mods() 
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
         return ApiResponse.success(GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids))
 
     @log_api_call
-    def create_group(self, name: str, color: str):
+    def group_create(self, name: str, color: str):
         try:
             # 后端生成 UUID 并入库
             new_group = GroupDAO.create_group(name, color)
@@ -699,11 +699,11 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def delete_group(self, group_id: str):
+    def group_delete(self, group_id: str):
         return ApiResponse.success(GroupDAO.delete_group(group_id))
 
     @log_api_call
-    def update_group(self, group_id: str, updates: dict):
+    def group_update(self, group_id: str, updates: dict):
         """更新分组属性 (重命名、改色、折叠)"""
         # print(f"更新分组 {group_id} 为 {updates}")
         return ApiResponse.success(GroupDAO.update_group_info(group_id, **updates))
@@ -719,7 +719,7 @@ class API:
         return ApiResponse.success(GroupDAO.remove_mods_from_group(group_id, mod_ids))
     
     @log_api_call
-    def update_all_expansion_state(self, is_expanded: bool):
+    def groups_expansion_all(self, is_expanded: bool):
         """一次性展开或折叠所有分组"""
         GroupDAO.update_all_expansion_state(is_expanded)
         return ApiResponse.success()
@@ -734,12 +734,13 @@ class API:
         """分组内 Mod 排序"""
         return ApiResponse.success(GroupDAO.reorder_mods_in_group(group_id, mod_id_list))
 
+
     # =========================================================================
     #  5. 加载顺序与游戏启动 (Load Order & Launch)
     # =========================================================================
     
     @log_api_call
-    def get_load_order(self):
+    def load_order_get(self):
         """
         获取当前的加载顺序
         :param mods_config_file_path: ModsConfig.xml 文件路径
@@ -758,7 +759,7 @@ class API:
         })
     
     @log_api_call
-    def open_load_order_file(self, mods_config_file_path: str|None = None):
+    def load_order_file_open(self, mods_config_file_path: str|None = None):
         """
         打开 ModsConfig.xml 文件
         """
@@ -786,7 +787,7 @@ class API:
         return ApiResponse.success(result)
     
     @log_api_call
-    def save_load_order(self, active_ids: List[str]):
+    def load_order_save(self, active_ids: List[str]):
         """
         保存当前激活列表到 ModsConfig.xml
         :param active_ids: 激活的 Mod 列表
@@ -799,7 +800,7 @@ class API:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
     @log_api_call
-    def export_load_order(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True):
+    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True):
         """
         导出当前加载顺序到 ModsConfig.xml
         :param active_ids: 激活的 Mod 列表
@@ -814,7 +815,16 @@ class API:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
     @log_api_call
-    def launch_game(self, profile_id: str):
+    def backups_get_all(self):
+        """获取所有备份文件路径"""
+        try:
+            backups = self.load_order_mgr.get_all_backups()
+            return ApiResponse.success(backups)
+        except Exception as e:
+            return ApiResponse.error(f"获取备份文件时出错: {e}")
+    
+    @log_api_call
+    def game_launch(self, profile_id: str):
         """启动游戏"""
         try:
             if not profile_id: profile_id = self.profile_mgr.current_profile.id
@@ -845,8 +855,12 @@ class API:
             return ApiResponse.error(f"启动游戏时出错: {e}")
     
     @log_api_call
-    def get_game_info(self, install_path: str):
-        """获取游戏信息"""
+    def game_info_get(self, install_path: str):
+        """
+        获取游戏信息
+        :param install_path: 游戏安装路径
+        :return: {"exe": str, "version": str, "is_steam": bool}
+        """
         if not install_path:
             return ApiResponse.error("未指定游戏安装路径")
         try:
@@ -863,12 +877,13 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"获取游戏信息时出错: {e}")
 
+
     # =========================================================================
     #  6. 文件与资源操作 (Files & Assets)
     # =========================================================================
 
     @log_api_call
-    def open_path(self, path: str):
+    def path_open(self, path: str):
         try:
             self.file_mgr.open_in_explorer(path)
             logger.info(f"打开路径: {path}")
@@ -878,7 +893,7 @@ class API:
             return ApiResponse.error(f"打开路径时出错: {e}")
     
     @log_api_call
-    def delete_path(self, path: str):
+    def path_delete(self, path: str):
         """删除文件/文件夹"""
         try:
             success = self.file_mgr.delete_path(path)
@@ -888,7 +903,7 @@ class API:
             return ApiResponse.error(f"删除路径时出错: {e}")
     
     @log_api_call
-    def delete_paths(self, paths: List[str]):
+    def paths_delete(self, paths: List[str]):
         """批量删除文件/文件夹"""
         try:
             success_count, error_list = self.file_mgr.delete_paths(paths)
@@ -899,16 +914,7 @@ class API:
             return ApiResponse.error(f"批量删除路径时出错: {e}")
     
     @log_api_call
-    def get_all_backups(self):
-        """获取所有备份文件路径"""
-        try:
-            backups = self.load_order_mgr.get_all_backups()
-            return ApiResponse.success(backups)
-        except Exception as e:
-            return ApiResponse.error(f"获取备份文件时出错: {e}")
-    
-    @log_api_call
-    def select_folder_dialog(self, initial_dir: str = ''):
+    def folder_select_dialog(self, initial_dir: str = ''):
         """
         打开系统原生的文件夹选择框
         """
@@ -921,7 +927,7 @@ class API:
         return ApiResponse.warning("未选择文件夹")
     
     @log_api_call
-    def select_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def file_select_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件选择框
         """
@@ -934,7 +940,7 @@ class API:
         return ApiResponse.warning("未选择文件")
 
     @log_api_call
-    def save_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def file_save_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件保存框
         """
@@ -970,8 +976,9 @@ class API:
         
         return ApiResponse.success(message="本地化任务已在后台启动")
     
+    
     # =========================================================================
-    #  7. 排序管理 (Sort Management)
+    #  7. 排序与管理 (Sort & Rule Management)
     # =========================================================================
 
     @log_api_call
@@ -990,14 +997,9 @@ class API:
         except Exception as e:
             logger.error(f"Auto sort failed: {e}", exc_info=True)
             return ApiResponse.error(f"排序失败: {str(e)}")
-        
     
-    # =========================================================================
-    #  9. 规则管理 (Rule Management)
-    # =========================================================================
-
     @log_api_call
-    def get_all_rules(self):
+    def rules_get_all(self):
         """
         获取所有规则（用于规则管理界面显示）
         前端需要完整数据来支持搜索和查看
@@ -1106,47 +1108,6 @@ class API:
             return ApiResponse.error(f"删除失败: {str(e)}")
 
     @log_api_call
-    def rule_update_community(self):
-        """
-        更新社区规则库
-        """
-        try:
-            # 1. 路径准备
-            # 注意：settings.config.community_rules_path 是完整文件路径 (例如 .../rules/community.json)
-            full_path = settings.config.community_rules_path
-            file_folder = os.path.dirname(full_path)
-            file_name = os.path.basename(full_path)
-            url = settings.config.community_rules_url
-            
-            if not os.path.exists(file_folder):
-                os.makedirs(file_folder, exist_ok=True)
-
-            logger.info(f"Start updating community rules from: {url}")
-            # 定义回调函数：下载完了自动加载规则
-            def on_rules_ready(task):
-                logger.info("Rules ready, reloading...")
-                self.sorter.rule_mgr.load_all()
-                EventBus.send_toast("社区规则库更新完毕！", type="success")
-            
-            def on_rules_error(task):
-                logger.error(f"Rules download failed: {task.error_msg}")
-                EventBus.send_toast("社区规则库更新失败！", type="error")
-
-            task_id = self.download_mgr.add_task(
-                url=url, 
-                dest_dir=file_folder, 
-                filename=file_name,
-                on_complete=on_rules_ready,
-                on_error=on_rules_error
-            )
-
-            return ApiResponse.success(data={"task_id": task_id}, message="社区规则库开始更新")
-            
-        except Exception as e:
-            logger.error(f"Update community rules failed: {e}")
-            return ApiResponse.error(f"系统错误: {str(e)}")
-
-    @log_api_call
     def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = ''):
         """
         弹出对话框并导出
@@ -1188,10 +1149,51 @@ class API:
         except Exception as e:
             logger.error(f"Import failed: {e}")
             return ApiResponse.error(f"导入失败: {e}")
-        
-        
+    
+    @log_api_call
+    def update_community_rule(self):
+        """
+        更新社区规则库
+        """
+        try:
+            # 1. 路径准备
+            # 注意：settings.config.community_rules_path 是完整文件路径 (例如 .../rules/community.json)
+            full_path = settings.config.community_rules_path
+            file_folder = os.path.dirname(full_path)
+            file_name = os.path.basename(full_path)
+            url = settings.config.community_rules_url
+            
+            if not os.path.exists(file_folder):
+                os.makedirs(file_folder, exist_ok=True)
+
+            logger.info(f"Start updating community rules from: {url}")
+            # 定义回调函数：下载完了自动加载规则
+            def on_rules_ready(task):
+                logger.info("Rules ready, reloading...")
+                self.sorter.rule_mgr.load_all()
+                EventBus.send_toast("社区规则库更新完毕！", type="success")
+            
+            def on_rules_error(task):
+                logger.error(f"Rules download failed: {task.error_msg}")
+                EventBus.send_toast("社区规则库更新失败！", type="error")
+
+            task_id = self.download_mgr.add_task(
+                url=url, 
+                dest_dir=file_folder, 
+                filename=file_name,
+                on_complete=on_rules_ready,
+                on_error=on_rules_error
+            )
+
+            return ApiResponse.success(data={"task_id": task_id}, message="社区规则库开始更新")
+            
+        except Exception as e:
+            logger.error(f"Update community rules failed: {e}")
+            return ApiResponse.error(f"系统错误: {str(e)}")
+
+    
     # =========================================================================
-    #  10. 日志管理 (Log Management)
+    #  8. 日志管理 (Log Management)
     # =========================================================================
 
     @log_api_call
@@ -1223,7 +1225,7 @@ class API:
     
     
     # =========================================================================
-    #  11. 网络与下载管理 (Download Management)
+    #  9. 网络与下载管理 (Download Management)
     # =========================================================================
     
     @log_api_call
@@ -1243,7 +1245,7 @@ class API:
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
     @log_api_call
-    def cancel_download(self, task_id: str):
+    def download_cancel(self, task_id: str):
         self.download_mgr.cancel_task(task_id)
         return ApiResponse.success(message="尝试取消任务")
 
@@ -1259,11 +1261,12 @@ class API:
             self.browser_window = SubBrowserManager(self)
         self.browser_window.open(url, title)
 
+
     # ==========================================
-    #  更新管理 (Updates)
+    #  10. 更新管理 (Updates)
     # ==========================================
     @log_api_call
-    def check_update(self, manual=True):
+    def update_check(self, manual=True):
         """
         检查版本更新
         :param manual: 是否为用户手动触发
@@ -1287,7 +1290,7 @@ class API:
             return ApiResponse.error(f"检查更新失败: {str(e)}")
 
     @log_api_call
-    def trigger_update_action(self):
+    def update_trigger_action(self):
         """
         [统一入口] 触发更新操作
         根据当前状态，自动决定是 '开始下载' 还是 '直接安装'
@@ -1312,14 +1315,14 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def ignore_version(self, version_str):
+    def update_ignore_version(self, version_str):
         """跳过当前版本"""
         settings.set('ignored_update_version', version_str)
         return ApiResponse.success()
     
     
     # =========================================================================
-    #  12. Steam 集成 (Steam Integration)
+    #  11. Steam 集成 (Steam Integration)
     # =========================================================================
 
     @log_api_call
@@ -1419,18 +1422,9 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
         
-    @log_api_call
-    def get_mod_history_local(self, mod_id: str):
-        """获取本地记录 (日志分析 + ACF读取)，速度快"""
-        try:
-            data = self.steam_history_mgr.get_detailed_history(mod_id)
-            return ApiResponse.success(data)
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
     
     # =========================================================================
-    #  13. AI 功能 (AI Features)
+    #  12. AI 功能 (AI Features)
     # =========================================================================
 
     @log_api_call
@@ -1588,21 +1582,22 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
     
+    
     # ==========================================
-    #  用户配置环境管理 (Profiles)
+    #  13. 用户配置环境管理 (Profiles)
     # ==========================================
     @log_api_call
-    def get_profiles(self):
+    def profiles_get(self):
         '''获取所有环境配置'''
         return ApiResponse.success(self.profile_mgr.get_all_profiles())
 
     @log_api_call
-    def get_current_profile(self):
+    def profile_get_current(self):
         '''获取当前环境配置'''
         return ApiResponse.success(self.profile_mgr.get_current_profile())
     
     @log_api_call
-    def create_profile(self, data: Dict[str, Any], copy_current_data: bool = False):
+    def profile_create(self, data: Dict[str, Any], copy_current_data: bool = False):
         try:
             self.profile_mgr.create_profile(data, copy_current_data)
             return ApiResponse.success(message="环境创建成功")
@@ -1610,17 +1605,17 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def update_profile(self, pid: str, data: Dict[str, Any]):
+    def profile_update(self, pid: str, data: Dict[str, Any]):
         try:
             self.profile_mgr.update_profile(pid, data)
             if pid == settings.config.current_profile_id:
-                self.activate_profile(pid)
+                self.profile_activate(pid)
             return ApiResponse.success(message="配置已更新")
         except Exception as e:
             return ApiResponse.error(str(e))
         
     @log_api_call
-    def delete_profile(self, pid):
+    def profile_delete(self, pid):
         try:
             self.profile_mgr.delete_profile(pid)
             return ApiResponse.success(message="环境已删除")
@@ -1628,7 +1623,7 @@ class API:
             return ApiResponse.error(str(e))
     
     @log_api_call
-    def activate_profile(self, pid):
+    def profile_activate(self, pid):
         """
         切换环境。
         前端调用此方法后，应该紧接着调用 get_initial_data 刷新界面。
@@ -1645,13 +1640,13 @@ class API:
         return ApiResponse.error("切换失败，环境不存在")
     
     @log_api_call
-    def scan_orphaned_profiles(self):
+    def profiles_scan_orphaned(self):
         """扫描可恢复的配置"""
         orphans = self.profile_mgr.scan_orphaned_profiles()
         return ApiResponse.success(orphans)
 
     @log_api_call
-    def import_orphaned_profile(self, profile_data):
+    def profile_import_orphaned(self, profile_data):
         """导入选定的配置"""
         success, msg = self.profile_mgr.import_profile_from_disk(profile_data)
         if success:
@@ -1659,8 +1654,66 @@ class API:
         else:
             return ApiResponse.error(msg)
         
-        
-        
+    
+    # ==========================================
+    #  14. 外置数据管理 (External Data)
+    # ==========================================
+    @log_api_call
+    def update_external_data(self, data_type: str):
+        """
+        更新外置数据（例如工坊数据库和替代数据库）
+        """
+        try:
+            if data_type == "workshop_db":
+                # 1. 路径准备
+                # 注意：settings.config.community_workshop_db_path 是完整文件路径 (例如 .../steamDB.json)
+                full_path = settings.config.community_workshop_db_path
+                file_folder = os.path.dirname(full_path)
+                file_name = os.path.basename(full_path)
+                url = settings.config.community_workshop_db_url
+            elif data_type == "instead_db":
+                # 1. 路径准备
+                # 注意：settings.config.community_instead_db_path 是完整文件路径 (例如 .../replacements.json)
+                full_path = settings.config.community_instead_db_path
+                file_folder = os.path.dirname(full_path)
+                file_name = os.path.basename(full_path)
+                url = settings.config.community_instead_db_url
+            else:
+                return ApiResponse.error(f"无效的数据库类型 {data_type}")
+            
+            if not os.path.exists(file_folder):
+                os.makedirs(file_folder, exist_ok=True)
+
+            logger.info(f"Start updating community {data_type} from: {url}")
+            # 定义回调函数：下载完了自动加载规则
+            def on_db_ready(task):
+                logger.info(f"{data_type} ready, reloading...")
+                self.sorter.rule_mgr.load_all()
+                EventBus.send_toast(f"社区 {data_type} 数据库更新完毕！", type="success")
+            
+            def on_db_error(task):
+                logger.error(f"{data_type} download failed: {task.error_msg}")
+                EventBus.send_toast(f"社区 {data_type} 数据库更新失败！", type="error")
+
+            task_id = self.download_mgr.add_task(
+                url=url, 
+                dest_dir=file_folder, 
+                filename=file_name,
+                on_complete=on_db_ready,
+                on_error=on_db_error
+            )
+
+            return ApiResponse.success(data={"task_id": task_id}, message=f"社区 {data_type} 数据库开始更新")
+            
+        except Exception as e:
+            logger.error(f"Update community {data_type} failed: {e}")
+            return ApiResponse.error(f"系统错误: {str(e)}")
+    
+    
 if __name__ == "__main__":
-    valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
-    print(valid_field_names)
+    # valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
+    # print(valid_field_names)
+    steam_mgr=SteamManager()
+    installed_workshop_ids = steam_mgr.get_installed_workshop_ids()
+    print(len(installed_workshop_ids))
+    pass

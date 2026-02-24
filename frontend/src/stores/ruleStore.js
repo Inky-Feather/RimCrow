@@ -67,7 +67,7 @@ export const useRuleStore = defineStore('rules', () => {
   const fetchRules = async () => {
     if (!window.pywebview) return
     try {
-      const res = await window.pywebview.api.get_all_rules()
+      const res = await window.pywebview.api.rules_get_all()
       if (appStore.checkResult(res, '获取规则')) {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time

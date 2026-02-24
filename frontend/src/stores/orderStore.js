@@ -60,7 +60,7 @@ export const useOrderStore = defineStore('order', () => {
     appStore.isLoading = true
     try {
       // 使用默认路径
-      const res = await window.pywebview.api.save_load_order(modStore.activeIds)
+      const res = await window.pywebview.api.load_order_save(modStore.activeIds)
       if (checkResult(res, "保存Mod加载顺序")) {
         modStore.savedActiveIds = [...modStore.activeIds] || []
         modStore.updateInactiveIds()
@@ -84,7 +84,7 @@ export const useOrderStore = defineStore('order', () => {
     try {
       const modStore = useModStore()
       // 使用默认路径
-      const res = await window.pywebview.api.export_load_order(modStore.activeIds, target_path, trigger_dialog)
+      const res = await window.pywebview.api.load_order_export(modStore.activeIds, target_path, trigger_dialog)
       if (checkResult(res, "导出Mod加载顺序")) {
         // console.log("导出加载顺序成功:", res)
         toast.success("Mod序列已导出")
@@ -100,8 +100,8 @@ export const useOrderStore = defineStore('order', () => {
   const getFileOrder = async (mods_config_file_path=null) => {
     if (!window.pywebview) return
     const res = mods_config_file_path ? 
-      await window.pywebview.api.open_load_order_file(mods_config_file_path) : 
-      await window.pywebview.api.get_load_order()
+      await window.pywebview.api.load_order_file_open(mods_config_file_path) : 
+      await window.pywebview.api.load_order_get()
     
     if (checkResult(res, "打开加载顺序")) {
       console.log("打开加载顺序:", res)
@@ -115,7 +115,7 @@ export const useOrderStore = defineStore('order', () => {
   // 获取所有备份文件路径 {today: [], earlier: [], other: []}
   const getBackups = async () => {
     if(!window.pywebview) return
-    const res = await window.pywebview.api.get_all_backups()
+    const res = await window.pywebview.api.backups_get_all()
     if (checkResult(res, "获取备份文件")) {
       // 更新本地 store
       backups.value = res.data

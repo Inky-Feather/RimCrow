@@ -38,7 +38,7 @@ export const useGroupStore = defineStore('groups', () => {
     if (!window.pywebview) return
     appStore.isLoading = true
     try {
-      const res = await window.pywebview.api.get_groups()
+      const res = await window.pywebview.api.groups_get()
       if (checkResult(res, "获取分组")) {
         groupList.value = res.data.groups || []
       }
@@ -62,7 +62,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
         name = `${name}-${index}`
       }
-      const res = await window.pywebview.api.create_group(name, color)
+      const res = await window.pywebview.api.group_create(name, color)
       // console.log("创建分组:", res)
       if (checkResult(res, "创建分组")) {
         groupList.value.push(res.data.group)
@@ -83,7 +83,7 @@ export const useGroupStore = defineStore('groups', () => {
   const deleteGroup = async (groupId) => {
     if (!window.pywebview) return
     try {
-      const res = await window.pywebview.api.delete_group(groupId)
+      const res = await window.pywebview.api.group_delete(groupId)
       // console.log("删除分组:", res)
       if (checkResult(res, "删除分组", true)) {
         // 从列表中移除
@@ -104,7 +104,7 @@ export const useGroupStore = defineStore('groups', () => {
       const group = groupList.value.find(g => g.group_id === groupId)
       if (group) Object.assign(group, updates)
       else return false
-      const res = await window.pywebview.api.update_group(groupId, updates)
+      const res = await window.pywebview.api.group_update(groupId, updates)
       // console.log("更新分组:", res)
       if (!checkResult(res, "更新分组")) {
         // 失败时才重新拉取数据进行还原
@@ -174,7 +174,7 @@ export const useGroupStore = defineStore('groups', () => {
     try {
       // 更新本地分组
       groupList.value.forEach(group => group.is_expanded = isExpanded)
-      const res = await window.pywebview.api.update_all_expansion_state(isExpanded)
+      const res = await window.pywebview.api.groups_expansion_all(isExpanded)
       // console.log("批量展开切换:", res)
       if (!checkResult(res, "批量展开切换")) {
         // 失败时才重新拉取数据进行还原

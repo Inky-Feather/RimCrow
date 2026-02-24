@@ -27,7 +27,7 @@ export const useProfileStore = defineStore('profile', () => {
   // 获取环境列表
   const fetchProfiles = async () => {
     if (!window.pywebview) return
-    const res = await window.pywebview.api.get_profiles()
+    const res = await window.pywebview.api.profiles_get()
     if (appStore.checkResult(res, '获取环境列表')) {
       profiles.value = res.data
       console.log('获取环境列表:', profiles.value)
@@ -38,7 +38,7 @@ export const useProfileStore = defineStore('profile', () => {
   const createProfile = async (data, copyCurrentData = false) => {
     isLoading.value = true
     try {
-      const res = await window.pywebview.api.create_profile(data, copyCurrentData)
+      const res = await window.pywebview.api.profile_create(data, copyCurrentData)
       if (appStore.checkResult(res, `创建环境 "${data.name}"`,true)) {
         await fetchProfiles()
         return true
@@ -55,7 +55,7 @@ export const useProfileStore = defineStore('profile', () => {
     appStore.isLoading = true
     isLoading.value = true
     try {
-      const res = await window.pywebview.api.activate_profile(profileId)
+      const res = await window.pywebview.api.profile_activate(profileId)
       if (appStore.checkResult(res, '切换环境')) {
         currentProfileId.value = profileId
         // 【关键逻辑】环境切换后，重置并刷新所有数据
@@ -76,7 +76,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 更新环境信息
   const updateProfile = async (profileId, updates) => {
-    const res = await window.pywebview.api.update_profile(profileId, updates)
+    const res = await window.pywebview.api.profile_update(profileId, updates)
     if (appStore.checkResult(res, `更新环境 "${updates.name}"`, true)) {
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
@@ -87,7 +87,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 删除环境
   const deleteProfile = async (profileId) => {
-    const res = await window.pywebview.api.delete_profile(profileId)
+    const res = await window.pywebview.api.profile_delete(profileId)
     if (appStore.checkResult(res, '删除环境')) {
       await fetchProfiles()
       // 如果删的是当前的，后端会自动切回 default，前端需要同步
@@ -100,7 +100,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 扫描孤立配置
   const scanOrphans = async () => {
-    const res = await window.pywebview.api.scan_orphaned_profiles()
+    const res = await window.pywebview.api.profiles_scan_orphaned()
     if (appStore.checkResult(res, '扫描待恢复环境')) {
       orphanedProfiles.value = res.data
     }
@@ -108,7 +108,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 导入孤立配置
   const importOrphan = async (profileData) => {
-    const res = await window.pywebview.api.import_orphaned_profile(profileData)
+    const res = await window.pywebview.api.profile_import_orphaned(profileData)
     if (appStore.checkResult(res, '导入环境')) {
       toast.success('环境配置已恢复')
       await fetchProfiles()

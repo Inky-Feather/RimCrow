@@ -449,7 +449,7 @@ export const useModStore = defineStore('mods', () => {
       // 更新本地 Map
       const mod = allModsMap.value.get(modId.toLowerCase())
       if (mod) Object.assign(mod, userData)
-      const res = await window.pywebview.api.update_mod_user_data(modId, userData)
+      const res = await window.pywebview.api.mod_user_data_update(modId, userData)
       if (!checkResult(res, "更新Mod用户数据", true)) {
         await appStore.refreshData();
         return false
@@ -475,7 +475,7 @@ export const useModStore = defineStore('mods', () => {
         last_moved_time: mod.last_moved_time
       }));
       console.log("更新Mod最后操作时间:", {all_mods_time:all_mods})
-      const res = await window.pywebview.api.update_mod_time(all_mods)
+      const res = await window.pywebview.api.mod_time_update(all_mods)
       if (!checkResult(res, "更新Mod最后操作时间")) {
         await appStore.refreshData();
         return false
@@ -500,7 +500,7 @@ export const useModStore = defineStore('mods', () => {
         if (mod) mod.sign_color = color
       })
       // 发送请求给后端
-      const res = await window.pywebview.api.set_mods_color(modIds, color)
+      const res = await window.pywebview.api.mods_sign_color_update(modIds, color)
       if (!checkResult(res, "批量设置 Mod 颜色", true)) {
         await appStore.refreshData();
         return false
@@ -522,7 +522,7 @@ export const useModStore = defineStore('mods', () => {
         if (mod) mod.user_mod_type = type
       })
       // 发送请求给后端
-      const res = await window.pywebview.api.set_user_mods_type(modIds, type)
+      const res = await window.pywebview.api.mods_user_mod_type_update(modIds, type)
       if (!checkResult(res, "批量设置 Mod 类型", true)) {
         await appStore.refreshData();
         return false
@@ -544,7 +544,7 @@ export const useModStore = defineStore('mods', () => {
         if (mod) mod.tags = [...new Set([...(mod.tags || []), ...tags])]  // 自动去重
       })
       // 发送请求给后端
-      const res = await window.pywebview.api.add_tags_to_mods(modIds, tags)
+      const res = await window.pywebview.api.mods_add_tags(modIds, tags)
       if (!checkResult(res, "批量添加 Mod 标签", true)) {
         await appStore.refreshData();
         return false
@@ -566,7 +566,7 @@ export const useModStore = defineStore('mods', () => {
         if (mod) mod.tags = (mod.tags || []).filter(t => !tags.includes(t))
       })
       // 发送请求给后端
-      const res = await window.pywebview.api.remove_tags_from_mods(modIds, tags)
+      const res = await window.pywebview.api.mods_remove_tags(modIds, tags)
       if (!checkResult(res, "批量移除 Mod 标签", true)) {
         await appStore.refreshData();
         return false
@@ -612,7 +612,7 @@ export const useModStore = defineStore('mods', () => {
         }
       })
       // 发送请求给后端
-      const res = await window.pywebview.api.link_mods(modIds)
+      const res = await window.pywebview.api.mods_link(modIds)
       if (!checkResult(res, "批量设置 Mod 联锁", true)) {
         await appStore.refreshData();
         return false
@@ -638,7 +638,7 @@ export const useModStore = defineStore('mods', () => {
           mod.lock_next_mod = null
         }
       })
-      const res = await window.pywebview.api.unlink_mods(modIds)
+      const res = await window.pywebview.api.mods_unlink(modIds)
       if (!checkResult(res, "批量解除 Mod 联锁", true)) {
         await appStore.refreshData();
         return false
@@ -666,7 +666,7 @@ export const useModStore = defineStore('mods', () => {
       })
       
       // 2. 发送请求给后端
-      const res = await window.pywebview.api.batch_update_user_data(updatesList)
+      const res = await window.pywebview.api.mods_user_data_update(updatesList)
       if (!checkResult(res, "批量更新Mod数据", true)) {
         await appStore.refreshData()
         return false
@@ -1063,7 +1063,7 @@ export const useModStore = defineStore('mods', () => {
       // 如果没有实质性变化，直接返回
       if (updates.length === 0) return;
       // 3. 一次性调用后端 API
-      const res = await window.pywebview.api.set_mods_ignore_issues(updates);
+      const res = await window.pywebview.api.mods_ignore_issues_update(updates);
       if (checkResult(res, "批量忽略/取消忽略问题")) {
         toast.success(type ? `已忽略 ${updates.length} 项问题` : `已恢复 ${updates.length} 项警告`);
       } else {

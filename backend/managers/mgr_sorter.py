@@ -126,8 +126,7 @@ class OrderSorter:
             return 60
         # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
         mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
-        # if pkg_id == 'optimizer.zh':
-        #     logger.info(f"optimizer.zh 权重: {mod_type},{mod_data.get('mod_type', 'Unknown')}, mod_data: {mod_data}")
+        
         if mod_type == 'LanguagePack':
             return 900  # 汉化包置底
         if mod_type == 'Texture':

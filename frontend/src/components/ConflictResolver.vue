@@ -294,7 +294,7 @@ const submit = async () => {
     return;
   }
   try {
-    const res = await window.pywebview.api.resolve_scan_conflicts(operations)
+    const res = await window.pywebview.api.scan_conflicts_resolve(operations)
     if (appStore.checkResult(res, '处理冲突')) {
       toast.success("冲突已解决，正在刷新列表...")
       // 关键：先清理 Store 中的状态，防止弹窗逻辑因异步扫描再次触发

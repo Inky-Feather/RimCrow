@@ -9,7 +9,9 @@ import threading
 import time
 import shutil
 import importlib.util
-from typing import Optional
+from typing import Optional, cast
+
+from json_repair import repair_json
 from backend.utils.logger import logger
 
 # 注意：不要在文件顶层 import steamworks，防止主进程意外加载
@@ -370,71 +372,6 @@ class SteamManager:
         """取消订阅 Workshop Mod"""
         return self._run_agent("unsubscribe", published_file_id)
 
-    def _get_acf_path(self):
-        """获取 appworkshop_294100.acf 的路径"""
-        # 依赖 settings 中的 workshop_mods_path
-        # 典型路径: .../steamapps/workshop/content/294100
-        # ACF 路径: .../steamapps/workshop/appworkshop_294100.acf
-        ws_path = settings.config.workshop_mods_path
-        if not ws_path or not os.path.exists(ws_path):
-            return None
-        
-        try:
-            # 回退两级找到 workshop 目录
-            workshop_root = os.path.dirname(os.path.dirname(ws_path))
-            acf_file = os.path.join(workshop_root, f"appworkshop_{RIMWORLD_APP_ID}.acf")
-            if os.path.exists(acf_file):
-                return acf_file
-        except:
-            pass
-        return None
-
-    def get_installed_workshop_ids(self) -> set:
-        """
-        解析 ACF 文件，获取所有已安装的 Workshop Mod ID
-        返回: set(int)
-        """
-        acf_path = self._get_acf_path()
-        if not acf_path:
-            return set()
-
-        installed_ids = set()
-        try:
-            with open(acf_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-
-            # VDF 格式解析
-            # 结构: "WorkshopItemsInstalled" { "123" { ... } "456" { ... } }
-            # 我们只需要提取 "WorkshopItemsInstalled" 块里的 Key
-            
-            # 1. 找到 WorkshopItemsInstalled 块
-            # 使用简单的字符串查找或者正则
-            # 正则非贪婪匹配块内容
-            block_match = re.search(r'"WorkshopItemsInstalled"\s*\{(.*?)\}', content, re.DOTALL)
-            if block_match:
-                block_content = block_match.group(1)
-                # 2. 提取所有 ID (即块中的键)
-                # 格式: "ModID" { ... }
-                ids = re.findall(r'"(\d+)"\s*\{', block_content)
-                for i in ids:
-                    installed_ids.add(int(i))
-                    
-        except Exception as e:
-            logger.error(f"Failed to parse ACF for validation: {e}")
-            
-        return installed_ids
-
-    def is_subscribed(self, published_file_id: int) -> bool:
-        """
-        检查是否已订阅且已安装 (通过本地 ACF 文件验证)
-        这是最快且最准确的方法
-        """
-        # 注意：这里判断的是“本地已安装”，Steam 客户端认为“下载完”才算安装。
-        # 如果只是点了订阅但还没下载完，这里会返回 False。
-        # 这其实更符合用户的期望：只有下载完了才能用。
-        ids = self.get_installed_workshop_ids()
-        return int(published_file_id) in ids
-    
 
     # =========================================================
     #  4. Steam本体操作
@@ -480,5 +417,208 @@ class SteamManager:
         subprocess.Popen(cmd)
         logger.debug(f"通过 Steam 命令启动 RimWorld: {cmd}")
     
+    
+    # =========================================================
+    #  5. ACF 文件解析
+    # =========================================================
+
+    def _get_acf_path(self):
+        """获取 appworkshop_294100.acf 的路径"""
+        # 依赖 settings 中的 workshop_mods_path
+        # 典型路径: .../steamapps/workshop/content/294100
+        # ACF 路径: .../steamapps/workshop/appworkshop_294100.acf
+        ws_path = settings.config.workshop_mods_path
+        if not ws_path or not os.path.exists(ws_path): return None
+        
+        try:
+            # 回退两级找到 workshop 目录
+            workshop_root = os.path.dirname(os.path.dirname(ws_path))
+            acf_file = os.path.join(workshop_root, f"appworkshop_{RIMWORLD_APP_ID}.acf")
+            if os.path.exists(acf_file):
+                return acf_file
+        except:
+            pass
+        return None
+    
+    def get_acf_json(self) -> dict:
+        """
+        解析 ACF 文件，返回 JSON 格式数据
+        返回: dict
+        {
+            "appid": "294100",
+            "SizeOnDisk": "7959848359",
+            "NeedsUpdate": "0",
+            "NeedsDownload": "0",
+            "TimeLastUpdated": "1771947626",
+            "TimeLastAppRan": "1771885460",
+            "LastBuildID": "20659247",
+            "WorkshopItemsInstalled": {
+                "704181221": {
+                    "size": "2280283",
+                    "timeupdated": "1752526039",
+                    "manifest": "9102468959570688452"
+                },
+                ......
+            },
+            "WorkshopItemDetails": {
+                "704181221": {
+                    "manifest": "9102468959570688452",
+                    "timeupdated": "1752526039",
+                    "timetouched": "1771879580",
+                    "subscribedby": "448102596",
+                    "latest_timeupdated": "1752526039",
+                    "latest_manifest": "9102468959570688452"
+                },
+                ......
+            }
+        }
+        """
+        acf_path = self._get_acf_path()
+        if not acf_path: return {}
+        try:
+            with open(acf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            # VDF 格式解析
+            # 结构: "WorkshopItemsInstalled" { "123" { ... } "456" { ... } }
+            # print("ACF文件内容：\n",content[:1000])
+            # 正则替换：将所有非 JSON 格式的键值对转换为 JSON 格式
+            json_content = re.sub(r'(^\s*"[^"]+")', r'\1:', content, flags=re.M)
+            json_content = re.sub(r'(["\}]$)', r'\1,', json_content, flags=re.M)
+            # print("转换后的JSON内容：\n",json_content[:1000])
+            json_data = cast(dict, repair_json('{'+json_content+'}', return_objects=True))
+            # print("解析后的JSON数据：\n",json_data.get('AppWorkshop',{}).get('WorkshopItemsInstalled',{}).keys())
+            return json_data.get('AppWorkshop',{})
+        
+        except Exception as e:
+            logger.error(f"[get_acf_json] Failed to parse ACF for validation: {e}")
+            
+        return {}
+
+    def get_installed_workshop_ids(self) -> set:
+        """
+        解析 ACF 文件，获取所有已安装的 Workshop Mod ID
+        返回: set(int)
+        """
+        acf_json = self.get_acf_json()
+        if not acf_json: return set()
+        try:
+            installed_ids = set()
+            installed_ids.update(map(int,acf_json.get('WorkshopItemsInstalled',{}).keys()))
+        except Exception as e:
+            logger.error(f"Failed to parse installed Workshop IDs from ACF: {e}")
+            
+        return installed_ids
+
+    def is_subscribed(self, published_file_id: int) -> bool:
+        """
+        检查是否已订阅且已安装 (通过本地 ACF 文件验证)
+        这是最快且最准确的方法
+        """
+        # 注意：这里判断的是“本地已安装”，Steam 客户端认为“下载完”才算安装。
+        # 如果只是点了订阅但还没下载完，这里会返回 False。
+        # 这其实更符合用户的期望：只有下载完了才能用。
+        ids = self.get_installed_workshop_ids()
+        return int(published_file_id) in ids
+    
+    
+    def get_steam_log_path(self):
+        """
+        推断 Steam 客户端日志路径
+        通常在 Steam 安装目录/logs/workshop_log.txt
+        """
+        # 尝试从游戏安装目录反推 Steam 目录
+        # 典型路径: .../Steam/steamapps/common/RimWorld -> .../Steam/logs
+        if not settings.config.game_install_path:
+            return None
+            
+        try:
+            # 向上找 3 层: RimWorld -> common -> steamapps -> Steam
+            steam_root = os.path.abspath(os.path.join(settings.config.game_install_path, "../../.."))
+            log_dir = os.path.join(steam_root, "logs")
+            log_file = os.path.join(log_dir, "workshop_log.txt")
+            
+            if os.path.exists(log_file):
+                return log_file
+            
+            # 如果反推失败，尝试默认路径 (Windows)
+            if platform.system() == "Windows":
+                default_path = r"C:\Program Files (x86)\Steam\logs\workshop_log.txt"
+                if os.path.exists(default_path):
+                    return default_path
+        except:
+            pass
+        return None
+
+    def parse_local_download_history(self, mod_id: str = '') :
+        """
+        解析 workshop_log.txt 获取下载历史
+        :param mod_id: 如果提供，只返回该 Mod 的记录
+        """
+        log_path = self.get_steam_log_path()
+        if not log_path:
+            logger.warning("Steam workshop_log.txt not found.")
+            return []
+
+        history = []
+        # 正则匹配示例: 
+        # [2023-10-27 10:00:00] [AppID 294100] Download complete: 123456789
+        # 注意：日志格式可能随 Steam 版本微调，以下通过匹配关键字段提取
+        
+        # 匹配时间戳和操作
+        # 格式通常是: [YYYY-MM-DD HH:MM:SS] ...
+        line_pattern = re.compile(r'^\[(.*?)\] (.*)')
+        
+        try:
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # 倒序读取，获取最新的记录
+                lines = f.readlines()
+                for line in reversed(lines):
+                    match = line_pattern.match(line)
+                    if not match: continue
+                    
+                    timestamp_str = match.group(1)
+                    content = match.group(2)
+                    
+                    # 过滤只看 RimWorld (294100)
+                    if RIMWORLD_APP_ID not in content:
+                        continue
+                        
+                    # 提取 Mod ID
+                    # 常见日志: "Download complete: 818773962" 或 "Update complete"
+                    # 我们寻找包含 Mod ID 的行
+                    id_match = re.search(r'\b(\d{9,10})\b', content)
+                    if not id_match: continue
+                    
+                    found_id = id_match.group(1)
+                    
+                    if mod_id and found_id != str(mod_id):
+                        continue
+
+                    # 判定操作类型
+                    action = "Unknown"
+                    if "Download complete" in content:
+                        action = "Downloaded"
+                    elif "Update complete" in content or "downloading" in content.lower():
+                        action = "Updated"
+                    elif "Download started" in content:
+                        action = "Started"
+                    else:
+                        continue # 忽略不重要的行
+
+                    history.append({
+                        "mod_id": found_id,
+                        "time": timestamp_str,
+                        "action": action,
+                        "raw": content
+                    })
+                    
+                    # 限制返回数量，防止过多
+                    if len(history) > 100 and not mod_id:
+                        break
+                        
+        except Exception as e:
+            logger.error(f"Failed to parse steam log: {e}")
+            
+        return history
     
     

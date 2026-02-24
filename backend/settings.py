@@ -28,7 +28,7 @@ CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
 RULES_DIR = HOME_DIR / "data" / "rules"
 USER_RULES_PATH = RULES_DIR / "user_rules.json"
 COMMUNITY_RULES_PATH = RULES_DIR / "communityRules.json"
-COMMUNITY_DB_PATH = RULES_DIR / "data" / "steamDB.json"
+COMMUNITY_WORKSHOP_DB_PATH = RULES_DIR / "data" / "steamDB.json"
 COMMUNITY_INSTEAD_DB_PATH = RULES_DIR / "data" / "replacements.json"
 # 工具目录
 TOOLS_DIR = HOME_DIR / "tools"
@@ -159,12 +159,12 @@ class AppConfig:
     ai: AIConfig = field(default_factory=AIConfig)
     
     # --- 社区设置 ---
-    community_db_url: str = "https://github.com/RimSort/Steam-Workshop-Database/blob/main/steamDB.json"
-    community_db_path: str = str(COMMUNITY_DB_PATH)
-    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
-    community_rules_path: str = str(COMMUNITY_RULES_PATH)
+    community_workshop_db_url: str = "https://github.com/RimSort/Steam-Workshop-Database/blob/main/steamDB.json"
+    community_workshop_db_path: str = str(COMMUNITY_WORKSHOP_DB_PATH)
     community_instead_db_url: str = "https://github.com/emipa606/UseThisInstead/blob/main/replacements.json.gz"
     community_instead_db_path: str = str(COMMUNITY_INSTEAD_DB_PATH)
+    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
+    community_rules_path: str = str(COMMUNITY_RULES_PATH)
     user_rules_path: str = str(USER_RULES_PATH)
     
     # --- 开发与调试设置 ---
