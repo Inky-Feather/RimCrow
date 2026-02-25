@@ -13,11 +13,11 @@ import importlib.util
 from dateutil import parser
 from typing import Optional, cast
 from json_repair import repair_json
+from pathlib import Path
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
     import sys
-    from pathlib import Path
     # Path(__file__).resolve() 获取当前文件的绝对路径
     # .parents[2] 表示向上跳 3 级 (文件->scanner->backend->项目根目录)
     project_root = Path(__file__).resolve().parents[2]
@@ -105,8 +105,8 @@ class SteamManager:
         self.project_root = os.getcwd()
         self.tools_dir = os.path.join(self.project_root, "tools")
         # Steam 安装目录
-        self.steam_dir = os.path.dirname(settings.config.steam_exe_path) or self.get_steam_path()
-        self.steam_exe = settings.config.steam_exe_path or self.get_steam_path(True)
+        self.steam_dir = settings.config.steam_path or self.get_steam_path()
+        self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True) 
         # SteamCMD 路径
         self.steamcmd_dir = os.path.join(self.tools_dir, "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
@@ -404,15 +404,13 @@ class SteamManager:
                 return None
 
     def launch_via_steam_cmd(self, app_id=RIMWORLD_APP_ID, extra_args=None):
-        steam_exe = self.steam_exe
+        steam_exe = str(self.steam_exe) if self.steam_exe else None
         # 如果找不到 Steam.exe，回退到原来的 URL 方式
         if not steam_exe or not os.path.exists(steam_exe):
-            steam_exe = self.get_steam_path()
-            if not steam_exe or not os.path.exists(steam_exe):
-                logger.warning("未找到 Steam.exe，回退到 URL 协议启动")
-                # os.startfile(f"steam://rungameid/{app_id}")
-                os.startfile(f"steam://run/{app_id}")
-                return
+            logger.warning("未找到 Steam.exe，回退到 URL 协议启动")
+            # os.startfile(f"steam://rungameid/{app_id}")
+            os.startfile(f"steam://run/{app_id}")
+            return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]
         # 如果你的管理器本身也有需要注入的参数（例如隔离配置文件的参数）
@@ -450,7 +448,7 @@ class SteamManager:
             pass
         return None
     
-    def get_acf_json(self, acf_path: str|None=None) -> dict:
+    def get_acf_json(self, acf_path: str|Path|None=None) -> dict:
         """
         解析 ACF 文件，返回 JSON 格式数据
         返回: dict
@@ -525,7 +523,7 @@ class SteamManager:
             det = details.get(item_id, {})
             
             parsed_acf[item_id] = {
-                "item_id": item_id,
+                "workshop_id": item_id,
                 "size_bytes": int(inst.get("size", 0)),
                 # 本地实际落地文件的清单ID
                 "local_manifest": inst.get("manifest") or det.get("manifest"),
@@ -533,8 +531,8 @@ class SteamManager:
                 "remote_manifest": det.get("latest_manifest", det.get("manifest")),
                 
                 # 模组作者发布版本的真实时间
-                "upload_time_installed": format_timestamp(inst.get("timeupdated") or det.get("timeupdated")),
-                "upload_time_latest": format_timestamp(det.get("latest_timeupdated") or det.get("timeupdated")),
+                "installed_version_time": format_timestamp(inst.get("timeupdated") or det.get("timeupdated")),
+                "latest_version_time": format_timestamp(det.get("latest_timeupdated") or det.get("timeupdated")),
                 
                 # Steam客户端最后一次检查该Mod状态的时间
                 "last_checked_time": format_timestamp(det.get("timetouched")),
@@ -597,12 +595,12 @@ class SteamManager:
             
         return None
 
-    def parse_workshop_log(self, target_appid: str=RIMWORLD_APP_ID) -> dict:
+    def parse_workshop_log(self, log_path: str|Path|None=None, target_appid: str=RIMWORLD_APP_ID) -> dict:
         """
         解析 Steam workshop_log.txt，提取指定 AppID 的模组操作历史。
         按时间先后顺序遍历，因此最终字典中保留的始终是该模组的“最新”状态。
         """
-        log_path = self._get_steam_log_path()
+        log_path = log_path or self._get_steam_log_path()
         if not log_path: return {}
         with open(log_path, 'r', encoding='utf-8') as f:
             log_content = f.read()
@@ -627,7 +625,7 @@ class SteamManager:
             # 初始化记录
             if item_id not in items_history:
                 items_history[item_id] = {
-                    "item_id": item_id,
+                    "workshop_id": item_id,
                     "log_last_download_time": None,      # 最后一次成功下载的时间
                     "log_last_subscribed_time": None,    # 最后一次订阅的时间
                     "log_last_unsubscribed_time": None,  # 最后一次取消订阅的时间
@@ -664,33 +662,25 @@ class SteamManager:
 
         return items_history
     
-    def merge_workshop_data(self) -> list:
+    def _merge_acf_and_log(self, acf_data: dict, log_data: dict) -> list:
         """
-        合并日志和ACF数据，并生成一份极其详尽的 JSON 列表供管理器直接使用。
+        合并 ACF 数据和日志数据，填充缺失字段。
         """
-        # 获取分别解析后的字典结构
-        log_data = self.parse_workshop_log()
-        acf_json = self.get_acf_json()
-        acf_data = self.parse_acf_data(acf_json)
         # 取并集：有的模组可能被删了只在历史日志里有，有的只在ACF里有
         all_item_ids = set(log_data.keys()).union(acf_data.keys())
-        
         merged_list =[]
-        
         for item_id in sorted(all_item_ids, key=lambda x: int(x)): # 按ID排序方便查看
             item_log = log_data.get(item_id, {})
             item_acf = acf_data.get(item_id, {})
-            
             # 构建合理的最终字典
             merged_item = {
                 "workshop_id": item_id,
-                "status": {
-                    "is_subscribed": item_log.get("is_subscribed"),    # 从日志推断的订阅状态
-                    "is_installed": item_acf.get("is_installed", False), # 文件是否真实存在
-                    "needs_update": item_acf.get("needs_update", False), # 是否有更新等待下载
-                    "has_error": bool(item_log.get("log_last_error")),   # 下载/校验是否报错
-                    "error_detail": item_log.get("log_last_error")
-                },
+                "is_subscribed": item_log.get("is_subscribed"),    # 从日志推断的订阅状态
+                "is_installed": item_acf.get("is_installed", False), # 文件是否真实存在
+                "needs_update": item_acf.get("needs_update", False), # 是否有更新等待下载
+                "has_error": bool(item_log.get("log_last_error")),   # 下载/校验是否报错
+                "error_detail": item_log.get("log_last_error"),
+                
                 # --- 物理信息 (以 ACF 为准) ---
                 "size_bytes": item_acf.get("size_bytes", 0),
 
@@ -704,8 +694,8 @@ class SteamManager:
                 "time_unsubscribed": item_log.get("log_last_unsubscribed_time"),
                 
                 # 模组作者最后一次在创意工坊上传更新的时间 (当前安装版 与 线上最新版)
-                "time_upload_installed": item_acf.get("upload_time_installed"),
-                "time_upload_latest": item_acf.get("upload_time_latest"),
+                "installed_version_time": item_acf.get("installed_version_time"),
+                "latest_version_time": item_acf.get("latest_version_time"),
                 
                 # Steam客户端最后一次验证该Mod状态的时间
                 "time_last_checked": item_acf.get("last_checked_time"),
@@ -716,11 +706,41 @@ class SteamManager:
             
         return merged_list
     
+    def workshop_merged_data(self) -> list:
+        """
+        合并日志和ACF数据，并生成一份极其详尽的 JSON 列表供管理器直接使用。
+        """
+        # 获取分别解析后的字典结构
+        log_data = self.parse_workshop_log()
+        acf_json = self.get_acf_json()
+        acf_data = self.parse_acf_data(acf_json)
+        # 合并数据
+        return self._merge_acf_and_log(acf_data, log_data)
+        
     
+    def steamcmd_merged_data(self) -> list:
+        """
+        获取 steamcmd 下载的创意工坊模组的ACF数据
+        """
+        steamcmd_acf_path = Path(self.steamcmd_dir) / "steamapps" / "workshop" / f"appworkshop_{RIMWORLD_APP_ID}.vdf"
+        steamcmd_log_path = Path(self.steamcmd_dir) / "logs" / "workshop_log.txt"
+        if steamcmd_acf_path.exists():
+            acf_json = self.get_acf_json(steamcmd_acf_path)
+            acf_data = self.parse_acf_data(acf_json)
+        else:
+            acf_data = {}
+        if steamcmd_log_path.exists():
+            log_data = self.parse_workshop_log(log_path=steamcmd_log_path)
+        else:
+            log_data = {}
+        
+        # 合并数据
+        return self._merge_acf_and_log(acf_data, log_data)
+        
 
 if __name__ == "__main__":
     steam_mgr = SteamManager()
-    data = steam_mgr.merge_workshop_data()
+    data = steam_mgr.workshop_merged_data()
     if data:
         print(f"Total items: {len(data)} First item:\n", data[0])
     

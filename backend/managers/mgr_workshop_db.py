@@ -3,7 +3,9 @@ import gzip
 import os
 from pathlib import Path
 from collections import defaultdict
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional
+
+from dateutil import parser
 
 from backend.utils.logger import logger
 from backend.settings import settings
@@ -27,16 +29,16 @@ class WorkshopDBManager:
         self.pkg_id_index: Dict[str, List[str]] = defaultdict(list)
 
         # 结构: [ { "oldWorkshopId":..., "newWorkshopId":... }, ... ]
-        self.replacements_rules: List[Dict[str, Any]] = []
+        self.instead_db: List[Dict[str, Any]] = []
         
         # 索引: 为了快速查找，建立 (key_type, value) -> Rule 的映射
         # key 可以是 oldWorkshopId 或 oldPackageId
-        self.replacement_index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self.instead_index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
         # 元数据版本信息
         self.db_versions = {
-            "community_rules": None,
-            "replacements": None
+            "workshop": 0,
+            "instead": 0
         }
 
         # 初始化加载
@@ -44,26 +46,26 @@ class WorkshopDBManager:
 
     def load_all(self):
         """加载所有外部数据库文件"""
-        self._load_community_rules_db()
-        self._load_replacements_db()
-        logger.info(f"WorkshopDB loaded. Entries: {len(self.workshop_db)}, Replacements: {len(self.replacements_rules)}")
+        self._load_workshop_db()
+        self._load_instead_db()
+        logger.info(f"WorkshopDB loaded. Entries: {len(self.workshop_db)}, InsteadDB: {len(self.instead_db)}")
 
     # =========================================================================
     # 1. 加载逻辑 (Loader Logic)
     # =========================================================================
 
-    def _load_community_rules_db(self):
-        """加载 Community Rules (包含 Workshop 详情)"""
-        path = Path(settings.config.community_rules_path)
+    def _load_workshop_db(self):
+        """加载 Workshop DB (包含 Workshop 详情)"""
+        path = Path(settings.config.community_workshop_db_path)
         if not path.exists():
-            logger.warning(f"Community rules DB not found at {path}")
+            logger.warning(f"Workshop DB not found at {path}")
             return
 
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
-            self.db_versions["community_rules"] = data.get("version")
+            # 获取时间戳转为毫秒戳
+            self.db_versions["workshop"] = int(data.get("version",0))*1000
             raw_db = data.get("database", {})
             
             # 清空旧数据
@@ -83,8 +85,8 @@ class WorkshopDBManager:
         except Exception as e:
             logger.error(f"Failed to load community rules DB: {e}")
 
-    def _load_replacements_db(self):
-        """加载 Replacements (支持 .json 和 .json.gz)"""
+    def _load_instead_db(self):
+        """加载 Instead DB (支持 .json 和 .json.gz)"""
         path = Path(settings.config.community_instead_db_path)
         if not path.exists():
             # 尝试找找有没有加了 .gz 后缀的文件 (如果配置路径没带.gz但文件是.gz)
@@ -92,7 +94,7 @@ class WorkshopDBManager:
             if path_gz.exists():
                 path = path_gz
             else:
-                logger.warning(f"Replacements DB not found at {path}")
+                logger.warning(f"Instead DB not found at {path}")
                 return
 
         try:
@@ -108,25 +110,29 @@ class WorkshopDBManager:
                     content = json.load(f)
                     
             if not content:
-                logger.warning("Replacements DB content is empty")
+                logger.warning("Instead DB content is empty")
                 return
-            self.db_versions["replacements"] = content.get("version")
-            self.replacements_rules = content.get("rules", [])
+            
+            time_str = content.get("version","0")
+            # 将 2024-09-04 07:26:36 格式转为毫秒戳
+            time_stamp = int(parser.parse(time_str).timestamp() * 1000)
+            self.db_versions["instead"] = time_stamp
+            self.instead_db = content.get("rules", [])
             # 清空索引
-            self.replacement_index.clear()
+            self.instead_index.clear()
             # 构建快速查找索引
-            for rule in self.replacements_rules:
+            for rule in self.instead_db:
                 # 索引1: 通过 WorkshopID 查找
                 if "oldWorkshopId" in rule and rule["oldWorkshopId"]:
                     key = f"wid:{rule['oldWorkshopId']}"
                     # 使用setdefault初始化空列表，避免KeyError
-                    self.replacement_index.setdefault(key, []).append(rule)
+                    self.instead_index.setdefault(key, []).append(rule)
                 # 索引2: 通过 PackageID 查找 (转小写)
                 if "oldPackageId" in rule and rule["oldPackageId"]:
                     pid_lower = rule["oldPackageId"].lower()
                     key = f"pid:{pid_lower}"
                     # 使用setdefault初始化空列表，避免KeyError
-                    self.replacement_index.setdefault(key, []).append(rule)
+                    self.instead_index.setdefault(key, []).append(rule)
 
         except Exception as e:
             logger.error(f"Failed to load replacements DB: {e}")
@@ -153,10 +159,10 @@ class WorkshopDBManager:
         return ids[0] if ids else None
 
     # =========================================================================
-    # 3. 替换逻辑 (Replacement Logic)
+    # 3. 替换逻辑 (Instead Logic)
     # =========================================================================
 
-    def check_replacement(self, mod_identifier: str, is_steam_id: bool = True, game_version: str = "1.5") -> Optional[Dict[str, Any]]:
+    def check_instead(self, mod_identifier: str, is_steam_id: bool = True, game_version: str = "1.5") -> Optional[Dict[str, Any]]:
         """
         检查某个模组是否有推荐的替换品。
         
@@ -169,7 +175,7 @@ class WorkshopDBManager:
             Dict: 替换规则详情, 包含 newWorkshopId, reason 等。如果没有替换则返回 None。
         """
         key = f"wid:{mod_identifier}" if is_steam_id else f"pid:{mod_identifier.lower()}"
-        rules = self.replacement_index.get(key, [])
+        rules = self.instead_index.get(key, [])
 
         if not rules:
             return None
@@ -184,7 +190,7 @@ class WorkshopDBManager:
             
             # 2. 返回推荐信息
             return {
-                "type": "replacement",
+                "type": "instead",
                 "old_name": rule.get("oldName", "Unknown Mod"),
                 "new_name": rule.get("newName"),
                 "new_id": rule.get("newWorkshopId"),
