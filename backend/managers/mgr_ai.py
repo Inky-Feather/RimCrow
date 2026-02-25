@@ -64,9 +64,9 @@ class AIManager:
         if api_type == 'custom':
             # 自定义模式：返回固定的标准协议
             return [
-                {"value": "openai_compatible", "label": "OpenAI 兼容协议 (vLLM/中转/LM Studio)"},
+                {"value": "openai", "label": "OpenAI 兼容协议 (vLLM/中转/LM Studio)"},
                 {"value": "ollama", "label": "Ollama 本地协议"},
-                {"value": "gemini_compatible", "label": "Google Gemini 兼容协议 (中转/代理)"}
+                {"value": "gemini", "label": "Google Gemini 兼容协议 (中转/代理)"}
             ]
             
         # 官方模式：动态获取 LiteLLM 支持的真实厂商
@@ -102,7 +102,9 @@ class AIManager:
         # 1. 官方模式：直接从 LiteLLM 内存字典获取，无网络延迟，无需缓存
         if api_type == 'official':
             if not provider: return []
-            return litellm.models_by_provider.get(provider, [])
+            models = list(litellm.models_by_provider.get(provider, []))
+            models.sort(key=lambda x: x.lower())
+            return models
             
         # 2. 自定义模式：需要发起网络请求
         base_url = config_dict.get('base_url', '').rstrip('/')
@@ -116,6 +118,7 @@ class AIManager:
             timestamp, cached_models = self._model_cache[cache_key]
             if time.time() - timestamp < self._cache_ttl:
                 logger.debug(f"AI Models Cache hit for {base_url}")
+                cached_models.sort(key=lambda x: x.lower())
                 return cached_models
                 
         # 缓存未命中，发起请求
@@ -124,7 +127,8 @@ class AIManager:
         # 写入缓存
         if models: # 只有获取成功才缓存，防止缓存错误的空结果
             self._model_cache[cache_key] = (time.time(), models)
-            
+        # 按名称排序
+        models.sort(key=lambda x: x.lower())
         return models
 
     def _fetch_custom_models(self, provider: str, base_url: str, api_key: str) -> List[str]:
@@ -136,7 +140,7 @@ class AIManager:
                 resp = requests.get(f"{base_url}/api/tags", timeout=10)
                 if resp.status_code == 200:
                     return [m['name'] for m in resp.json().get('models', [])]
-            elif provider == 'gemini_compatible':
+            elif provider == 'gemini':
                 # Gemini 协议通常在 URL 中带 key，或者从 Header 取
                 resp = requests.get(f"{base_url}/v1/models", params={"key": api_key}, timeout=10)
                 if resp.status_code == 200:
@@ -207,11 +211,11 @@ class AIManager:
             
             if cfg.provider == 'ollama':
                 kwargs["model"] = f"ollama/{cfg.model}"
-            elif cfg.provider == 'gemini_compatible':
+            elif cfg.provider == 'gemini':
                 # 强制使用 gemini/ 前缀路由，LiteLLM 将采用 Google 协议格式
                 kwargs["model"] = f"gemini/{cfg.model}"
             else:
-                # openai_compatible 
+                # openai 
                 # 这里加上 openai/ 前缀是 LiteLLM 的终极奥义，它会强制按 OpenAI 官方数据结构请求你的目标 base_url
                 kwargs["model"] = f"openai/{cfg.model}"
 

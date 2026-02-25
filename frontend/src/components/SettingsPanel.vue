@@ -174,10 +174,32 @@
                 <h3 class="text-lg font-bold text-text-main mb-6">社区配置管理</h3>
                 <div class="space-y-6">
                   <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steamcmd_path')" />
-                  <!-- <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" /> -->
-                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                  <div class="flex items-end gap-1.5">
+                    <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                    <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
+                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                      <Download class="size-5" :class="{'animate-bounce': ruleStore.isLoading}" />
+                    </button>
+                  </div>
                   <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
                   <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
+                  <div class="py-2 pt-5 place-self-center w-[95%] border-b border-text-dim/20"></div>
+                  <div class="flex items-end gap-1.5">
+                    <CommonInput label="社区工坊数据库 URL" v-model="formData.community_workshop_db_url" />
+                    <button @click="updateExternalDB('workshop_db')" v-tooltip="'下载更新 社区工坊数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['workshop_db'] }"
+                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                      <Download class="size-5" :class="{'animate-bounce': downloadState['workshop_db']}" />
+                    </button>
+                  </div>
+                  <CommonPathInput label="社区工坊数据库路径" v-model="formData.community_workshop_db_path" @browse="handleBrowse('community_workshop_db_path')" />
+                  <div class="flex items-end gap-1.5">
+                    <CommonInput label="社区替代Mod数据库" v-model="formData.community_instead_db_url" />
+                    <button @click="updateExternalDB('instead_db')" v-tooltip="'下载更新 社区替代Mod数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['instead_db'] }"
+                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                      <Download class="size-5" :class="{'animate-bounce': downloadState['instead_db']}" />
+                    </button>
+                  </div>
+                  <CommonPathInput label="社区替代Mod数据库路径" v-model="formData.community_instead_db_path" @browse="handleBrowse('community_instead_db_path')" />
                 </div>
               </section>
 
@@ -185,20 +207,20 @@
               <section v-if="currentTab === 'network'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">网络协议与代理</h3>
                 <div class="space-y-8">
-                   <div class="p-4 rounded-2xl bg-text-main/2 border border-text-main/5 space-y-6">
-                      <CommonSwitch label="启用代理服务" v-model="formData.network.proxy.enabled" />
-                      <div v-if="formData.network.proxy.enabled" class="grid grid-cols-6 gap-3 animate-in zoom-in-95">
-                        <CommonSelect class="col-span-2" label="协议" v-model="formData.network.proxy.type" :options="[{label:'HTTP', value:'http'},{label:'SOCKS5', value:'socks5'}]" />
-                        <CommonInput class="col-span-3" label="主机地址" v-model="formData.network.proxy.host" placeholder="127.0.0.1" />
-                        <CommonNumber class="col-span-1" label="端口" v-model="formData.network.proxy.port" :step="1" :min="1" :max="65535" />
-                        <CommonInput class="col-span-3" label="用户名" v-model="formData.network.proxy.username" />
-                        <CommonInput class="col-span-3" label="密码" v-model="formData.network.proxy.password" is-password />
-                        <div class="col-span-6">
-                           <CommonTagInput label="不走代理的域名 (Bypass)" v-model="formData.network.proxy.bypass_list" />
-                        </div>
+                  <div class="p-4 rounded-2xl bg-text-main/2 border border-text-main/5 space-y-6">
+                    <CommonSwitch label="启用代理服务" v-model="formData.network.proxy.enabled" :description="'启用代理服务，所有网络请求将通过代理服务器处理，部分外置数据下载、更新检查、简介图片加载、内部浏览器访问等功能可能需要该配置才能正常使用。\n\n也可以在软件外部自行配置全局网络环境。'" mini />
+                    <div v-if="formData.network.proxy.enabled" class="grid grid-cols-6 gap-3 animate-in zoom-in-95">
+                      <CommonSelect class="col-span-2" label="协议" v-model="formData.network.proxy.type" :options="[{label:'HTTP', value:'http'},{label:'SOCKS5', value:'socks5'}]" />
+                      <CommonInput class="col-span-3" label="主机地址" v-model="formData.network.proxy.host" placeholder="127.0.0.1" />
+                      <CommonNumber class="col-span-1" label="端口" v-model="formData.network.proxy.port" :step="1" :min="1" :max="65535" />
+                      <CommonInput class="col-span-3" label="用户名" v-model="formData.network.proxy.username" />
+                      <CommonInput class="col-span-3" label="密码" v-model="formData.network.proxy.password" is-password />
+                      <div class="col-span-6">
+                          <CommonTagInput label="不走代理的域名" v-model="formData.network.proxy.bypass_list" />
                       </div>
-                   </div>
-                   <CommonKVEditor label="自定义 Hosts 映射" v-model="formData.network.hosts" />
+                    </div>
+                  </div>
+                  <CommonKVEditor label="自定义 Hosts 映射" v-model="formData.network.hosts" />
                 </div>
               </section>
 
@@ -348,12 +370,11 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama } from 'lucide-vue-next'
-import { useAppStore } from '../stores/appStore'
-import { useConfirmStore } from '../stores/confirmStore'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download } from 'lucide-vue-next'
 import { createToastInterface } from 'vue-toastification'
 import { flashComponent, shakeComponent } from '../utils/uiHelper'
 import { VueDraggable } from 'vue-draggable-plus'
+import { color } from 'motion-v'
 
 // 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
@@ -363,11 +384,14 @@ import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
-import { color } from 'motion-v'
 import { RUN_COMMAND_TAGS } from '../utils/constants'
+import { useRuleStore } from '../stores/ruleStore'
+import { useAppStore } from '../stores/appStore'
+import { useConfirmStore } from '../stores/confirmStore'
 
 const toast = createToastInterface()
 const appStore = useAppStore()
+const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
 const currentTab = ref('paths')
@@ -387,6 +411,11 @@ const tabs = [
   { id: 'dev', label: '开发调试', icon: Terminal },
 ]
 
+
+const downloadState = ref({
+  workshop_db: false,
+  instead_db: false,
+})
 const currentAiProviders = ref([])  // AI厂商或代理协议列表
 const currentAiModels = ref([])     // 当前AI的模型列表
 
@@ -511,6 +540,13 @@ const fetchAiModels = async () => {
   }
 }
 
+// 更新外部数据库
+const updateExternalDB = async (dbType) => {
+  downloadState.value[dbType] = true
+  await appStore.updateExternalDB(dbType)
+
+  downloadState.value[dbType] = false
+}
 
 // ====== 数据处理 ======
 const handleReset = async () => {

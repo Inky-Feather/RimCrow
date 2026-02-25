@@ -490,7 +490,7 @@ class RuleManager:
                         target_gid = local_group_map[g_name]
                     else:
                         # 创建新分组
-                        new_group = GroupDAO.create_group(g_name, g.get('color', '#ffffff'))
+                        new_group = GroupDAO.create_group(g_name, g.get('color', '#ffffff')) # type: ignore
                         target_gid = new_group.group_id
                         local_group_map[g_name] = target_gid # 更新映射
 

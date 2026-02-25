@@ -103,15 +103,24 @@ export const useAppStore = defineStore('app', () => {
     game_config_path: '',
     game_dlc_path: '',
     local_mods_path: '',
+
     workshop_mods_path: '',
     use_workshop_mods: true,
+
     run_commands: [],
     steam_exe_path: '',
     prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
+
     home_path: '',
+    user_rules_path: '',
+
     community_rules_url: '',
     community_rules_path: '',
-    user_rules_path: '',
+    community_workshop_db_url: '',
+    community_workshop_db_path: '',
+    community_instead_db_url: '',
+    community_instead_db_path: '',
+    
     game_version: '',
     current_profile_id: 'default',
 
@@ -848,13 +857,11 @@ export const useAppStore = defineStore('app', () => {
   // 获取AI模型 temp_config: {provider, base_url, api_key}
   const getAiModels = async (temp_config) => {
     if (!window.pywebview) return
-    aiState.isLoading = true
     const res = await window.pywebview.api.ai_get_models(temp_config)
     if (checkResult(res, "获取AI模型")) {
       aiState.isLoading = false
       return res.data
     }
-    aiState.isLoading = false
   }
   // 与AI聊天
   const chatWithAI = async (prompt, temp_config) => {
