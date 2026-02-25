@@ -29,7 +29,6 @@
           <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" >
             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>
           </svg>
-          
           <!-- 计数 -->
           <span>{{ issuesSummary.count }}</span>
         </button>
@@ -150,9 +149,9 @@
           @keydown.down.prevent="handleKeyNav(1)"
           @click="focusContainer"
           v-selectable-list="{ 
-             data: displayList, 
-             clickClass: 'select-trigger',
-             swipeClass: 'swipe-trigger'
+            data: displayList, 
+            clickClass: 'select-trigger',
+            swipeClass: 'swipe-trigger'
           }">
           <template v-slot:item="{ record, index, dataKey }">
             <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
@@ -195,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, nextTick } from 'vue';
+import { computed, ref, watch, onMounted, nextTick, onBeforeUnmount } from 'vue';
 import VirtualList from 'vue-virtual-sortable';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
@@ -692,56 +691,7 @@ const removeInvalidMod = async () => {
   isSortAsc.value=!isSortAsc.value
 }
 
-
-// 点击列表区域时自动获取焦点，确保按键生效
-const focusContainer = (e) => {
-  e.currentTarget.focus()
-}
-/**
- * 3. 键盘导航核心函数
- * @param {number} direction -1 为向上，1 为向下
- */
-const handleKeyNav = (direction) => {
-  const list = displayList.value // 当前经过筛选/排序后的 ID 数组
-  if (!list.length) return
-  // 确定当前选中的索引
-  const currentId = modStore.lastSelectedMod?.package_id
-  const currentIndex = list.indexOf(currentId)
-  // 计算下一个索引
-  let nextIndex = currentIndex + direction
-  // 边界保护：循环选择或停止
-  if (nextIndex < 0) nextIndex = 0
-  if (nextIndex >= list.length) nextIndex = list.length - 1
-  if (nextIndex === currentIndex) return
-  const nextId = list[nextIndex]
-  // 4. 更新 Store 选中状态
-  // 建议：键盘导航通常视为单选，所以传入 [nextId]
-  modStore.selectMods([nextId], nextId)
-  // 5. 同步滚动 (关键点)
-  const vList = vListRef.value
-  if (vList) {
-    const currentOffset = vList.getOffset()
-    const viewHeight = vList.$el.clientHeight // 视口高度
-    // 计算目标项的像素区间
-    const itemTop = nextIndex * itemHeight.value
-    const itemBottom = itemTop + itemHeight.value
-    // 策略 A: 保持相对位置不变 (最丝滑)
-    // 逻辑：直接按位移滚动。如果向上移，offset 就减一个 itemHeight
-    vList.scrollToOffset(currentOffset + (direction * itemHeight.value))
-    // 策略 B: 只有当超出视口时才滚动 (标准做法)
-    /*
-    if (itemTop < currentOffset) {
-      // 超出顶部
-      vList.scrollToOffset(itemTop)
-    } else if (itemBottom > currentOffset + viewHeight) {
-      // 超出底部
-      vList.scrollToOffset(itemBottom - viewHeight)
-    }
-    */
-  }
-}
-
-
+// 问题提示右键菜单
 const issueContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
   // 通用菜单
@@ -812,6 +762,104 @@ const issueContextMenu = async (event) => {
 
   menuStore.open(event, menuItems)
 }
+
+// 点击列表区域时自动获取焦点，确保按键生效
+const focusContainer = (e) => {
+  e.currentTarget.focus()
+}
+/**
+ * 3. 键盘导航核心函数
+ * @param {number} direction -1 为向上，1 为向下
+ */
+const handleKeyNav = (direction) => {
+  const list = displayList.value // 当前经过筛选/排序后的 ID 数组
+  if (!list.length) return
+  // 确定当前选中的索引
+  const currentId = modStore.lastSelectedMod?.package_id
+  const currentIndex = list.indexOf(currentId)
+  // 计算下一个索引
+  let nextIndex = currentIndex + direction
+  // 边界保护：循环选择或停止
+  if (nextIndex < 0) nextIndex = 0
+  if (nextIndex >= list.length) nextIndex = list.length - 1
+  if (nextIndex === currentIndex) return
+  const nextId = list[nextIndex]
+  // 4. 更新 Store 选中状态
+  // 建议：键盘导航通常视为单选，所以传入 [nextId]
+  modStore.selectMods([nextId], nextId)
+  // 5. 同步滚动 (关键点)
+  const vList = vListRef.value
+  if (vList) {
+    const currentOffset = vList.getOffset()
+    const viewHeight = vList.$el.clientHeight // 视口高度
+    // 计算目标项的像素区间
+    const itemTop = nextIndex * itemHeight.value
+    const itemBottom = itemTop + itemHeight.value
+    // 策略 A: 保持相对位置不变 (最丝滑)
+    // 逻辑：直接按位移滚动。如果向上移，offset 就减一个 itemHeight
+    vList.scrollToOffset(currentOffset + (direction * itemHeight.value))
+    // 策略 B: 只有当超出视口时才滚动 (标准做法)
+    /*
+    if (itemTop < currentOffset) {
+      // 超出顶部
+      vList.scrollToOffset(itemTop)
+    } else if (itemBottom > currentOffset + viewHeight) {
+      // 超出底部
+      vList.scrollToOffset(itemBottom - viewHeight)
+    }
+    */
+  }
+}
+
+
+// --- 记录滚动位置 ---
+// v-if 切换到 loading 时，该组件内部的 v-else 块会触发卸载
+// 这是抓取当前滚动位置的最后机会
+onBeforeUnmount(() => {
+  savePosition();
+});
+const savePosition = () => {
+  // 只有当虚拟列表存在且不在加载状态时才记录
+  if (vListRef.value) {
+    const offset = vListRef.value.getOffset();
+    if (offset > 0) {
+      appStore.recordScroll(props.listId, offset);
+      // console.log(`[Scroll] Saved ${props.listId}: ${offset}`);
+    }
+  }
+};
+// --- 恢复滚动位置 ---
+onMounted(() => {
+  // 如果组件挂载时不是加载状态，说明数据已经在那了，直接尝试恢复
+  if (!appStore.isLoading) {
+    restorePosition();
+  }
+});
+// --- 监听加载状态变化 ---
+watch(() => appStore.isLoading, async (loading) => {
+  // console.log(`[Scroll] Loading state changed to ${loading}`);
+  if (loading) {
+    // 刚开始加载：如果在外面手动触发加载，这里也是一个记录点
+    // 但注意：如果是 v-if 切换，组件可能已经开始销毁流程了
+    savePosition();
+  } else {
+    // 加载完成：等待 DOM 渲染
+    await nextTick();
+    restorePosition();
+  }
+});
+const restorePosition = () => {
+  const savedOffset = appStore.getScroll(props.listId);
+  if (savedOffset > 0 && vListRef.value) {
+    // 虚拟列表恢复位置的“黄金组合”：nextTick + 微小延迟
+    nextTick(() => {
+      setTimeout(() => {
+        vListRef.value?.scrollToOffset(savedOffset);
+        // console.log(`[Scroll] Restored ${props.listId}: ${savedOffset}`);
+      }, 30); // 30ms 足够让大部分虚拟列表完成初始化计算
+    });
+  }
+};
 </script>
 
 <style scoped>

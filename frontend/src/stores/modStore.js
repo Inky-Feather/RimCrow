@@ -879,8 +879,7 @@ export const useModStore = defineStore('mods', () => {
         // 如果 Mod 本身就没有声明支持的语言列表（通常意味着没有文本或是框架），直接跳过检查
         if (!mod.supported_languages || mod.supported_languages.length === 0) {
           // pass
-        } 
-        else {
+        } else {
           // 检查自身是否直接支持当前语言
           const modSupportsLang = mod.supported_languages?.some(l => l.toLowerCase() === targetLang.toLowerCase())
           // 如果自身不支持，且自身不是语言包本体
@@ -901,6 +900,26 @@ export const useModStore = defineStore('mods', () => {
                   `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_MISSING_LANGUAGE]}^^：不支持当前语言，且未在本地发现相关语言包`)
               }
             }
+          } // 自身是语言包，检查是否存在前置或依赖，且目标Mod是否启用
+          else if(isSelfLangPack) {
+            // 检查是否存在依赖或前置，如果都不存在，提示语言包指向对象未知，用户可手动指定前置对象
+            const modDependencies = mod.rules.dependencies?.map(d => d.target_id.toLowerCase()) || []
+            const modLoadAfter = mod.rules.load_after?.map(d => d.target_id.toLowerCase()) || []
+            const allRelatedModIds = [...modDependencies, ...modLoadAfter]
+            if(allRelatedModIds.length === 0) {
+              _add(currentId, ISSUE_TYPE.WARN_UNKNOWN_TARGET, ISSUE_LEVEL.WARN,
+                `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_UNKNOWN_TARGET]}^^：语言包指向对象未知，可在规则编辑器手动指定前置对象`)
+            }
+            // 如果存在依赖或前置，检测是否有任意一个启用(部分语言包支持多个Mod，只要有一个启用即可)，
+            // 如果未启用则提示用户存在多余的语言包，或者提示指向对象未启用
+            else {
+              const anyActive = allRelatedModIds.some(id => activeIndexMap.has(id))
+              if(!anyActive) {
+                _add(currentId, ISSUE_TYPE.WARN_INACTIVE_TARGET, ISSUE_LEVEL.WARN,
+                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_TARGET]}^^：语言包指向对象未启用，请检查该语言包是否多余`)
+              }
+            }
+
           }
         }
       }
@@ -915,7 +934,6 @@ export const useModStore = defineStore('mods', () => {
     _checkListChain(tempIds.value, _add)
     return issuesMap
   })
-
   // 辅助：检查整个列表的联锁
   const _checkListChain = (list, addFunc) => {
     const len = list.length
@@ -927,7 +945,6 @@ export const useModStore = defineStore('mods', () => {
       }
     }
   }
-
   // 辅助：检查单个 Mod 的前后联锁
   const _checkChainLink = (mod, index, list, addFunc) => {
     const id = mod.package_id.toLowerCase()
@@ -954,7 +971,6 @@ export const useModStore = defineStore('mods', () => {
       }
     }
   }
-
   // 提取当前列表所有未启用的有效依赖项 ID
   const getMissingLocalDependencies = (targetIds) => {
     const toActivate = new Set()
@@ -985,8 +1001,7 @@ export const useModStore = defineStore('mods', () => {
     })
     return Array.from(toActivate)
   }
-
-  // 辅助：获取某个 Mod 问题的最高级别
+  // 获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
     const issues = modIssues.value.get(id.toLowerCase())
     if (!issues || issues.length === 0) return null

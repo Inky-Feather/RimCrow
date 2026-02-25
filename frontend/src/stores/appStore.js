@@ -30,6 +30,10 @@ export const useAppStore = defineStore('app', () => {
     showAiReviewModal: false,    // 是否显示 AI 弹窗
     showPromptManager: false,    // 是否显示提示词管理器
   })
+  // 存储各个列表的滚动偏移量
+  // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
+  const scrollRegistry = ref(new Map());
+
   // 扫描进度
   const scanProgress = reactive({
     scanning: false, // 是否正在扫描中
@@ -548,13 +552,12 @@ export const useAppStore = defineStore('app', () => {
         }else{
           await refreshData()
         }
-
       }
     } catch (e) {
       console.error("应用设置异常:", e)
       toast.error(`应用设置异常: \n${e.message}`)
     } finally {
-        isLoading.value = false
+      isLoading.value = false
     }
   }
   // 重置数据库
@@ -593,6 +596,14 @@ export const useAppStore = defineStore('app', () => {
   const toggleUiState = (key) => {
     uiState[key] = !uiState[key]
   }
+  // 记录滚动位置状态
+  const recordScroll = (listId, offset) => {
+    scrollRegistry.value.set(listId, offset);
+  };
+  // 获取滚动位置状态
+  const getScroll = (listId) => {
+    return scrollRegistry.value.get(listId) || 0;
+  };
   
   // === 系统操作 ===
   // 启动游戏
@@ -1049,7 +1060,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, 
     aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS,
-    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup,
+    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll,
     // 游戏相关
     getGameInfo, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, 
