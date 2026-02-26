@@ -53,6 +53,7 @@ class NetworkConfig:
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
     # 自定义 Hosts (域名 -> IP 映射)
     hosts: Dict[str, str] = field(default_factory=dict) 
+    write_to_system_hosts: bool = False
 
 @dataclass
 class AIConfig:
@@ -289,28 +290,33 @@ class SettingsManager:
     def set(self, key: str, value: Any):
         """
         设置配置项并自动保存。
-        支持: settings.set('language', 'en')
+        自动处理嵌套字典到 Dataclass 的转换，一劳永逸。
         """
-        if hasattr(self.config, key):
-            # 类型校验（简单的做一下防止 int 变 str）
-            target_type = type(getattr(self.config, key))
-            if target_type != type(value) and target_type != str: # str比较宽松
-                # 尝试转换，或者打印警告
-                # value = target_type(value)
-                pass
-            # 如果设置的是 ai 字段，且传入的是字典，将其转换为 AIConfig 对象
-            if key == 'ai' and isinstance(value, dict):
-                from backend.settings import AIConfig
-                value = AIConfig(**value)
-            # 如果设置的是 network 字段，且传入的是字典
-            elif key == 'network' and isinstance(value, dict):
-                # 这里逻辑较深，可以根据需要递归转换，或者保持目前做法
-                pass 
-            
-            setattr(self.config, key, value)
-            self.save()
-        else:
+        if not hasattr(self.config, key):
             print(f"Warning: Attempted to set unknown setting key: {key}")
+            return
+
+        current_attr = getattr(self.config, key)
+        # 如果当前属性是一个 dataclass，且传入的值是个字典
+        # 走递归更新，把字典里的值一个个填进对象里，而不是粗暴地覆盖对象
+        if is_dataclass(current_attr) and isinstance(value, dict):
+            self._recursive_update(current_attr, value)
+        else:
+            # 基础类型（str, int, bool, list）直接覆盖
+            setattr(self.config, key, value)
+            
+        self.save()
+
+    # 强烈建议新增这个方法供 api.save_all_settings 使用
+    def update_from_dict(self, data_dict: Dict[str, Any]):
+        """
+        全量/批量更新配置项。
+        前端传来的整坨 JSON dict，直接丢进这里，自动完成所有对象的嵌套解析。
+        """
+        if not isinstance(data_dict, dict):
+            return
+        self._recursive_update(self.config, data_dict)
+        self.save()
 
     def update_paths(self, paths_dict: Dict[str, str]):
         """批量更新路径"""

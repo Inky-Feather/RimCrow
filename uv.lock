@@ -1316,6 +1316,27 @@ wheels = [
 ]
 
 [[package]]
+name = "pip"
+version = "26.0.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/48/83/0d7d4e9efe3344b8e2fe25d93be44f64b65364d3c8d7bc6dc90198d5422e/pip-26.0.1.tar.gz", hash = "sha256:c4037d8a277c89b320abe636d59f91e6d0922d08a05b60e85e53b296613346d8" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/de/f0/c81e05b613866b76d2d1066490adf1a3dbc4ee9d9c839961c3fc8a6997af/pip-26.0.1-py3-none-any.whl", hash = "sha256:bdb1b08f4274833d62c1aa29e20907365a2ceb950410df15fc9521bad440122b" },
+]
+
+[[package]]
+name = "pip-system-certs"
+version = "5.3"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "pip" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/7d/6a/563b05a4f6c9ddc205c98bb413e74221368efb98b8fb9cca96b578b8930c/pip_system_certs-5.3.tar.gz", hash = "sha256:19c8bf9957bcce7d69c4dbc2d0b2ef13de1984d53f50a59012e6dbbad0af67c6" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/9f/57/752b63c609affae8f26ae0f1d1103d6ea7e707ad45943f62f7422936071d/pip_system_certs-5.3-py3-none-any.whl", hash = "sha256:3fbb5de62e374a99b688b1ad06e64ee5c4aeb633ef23e3a677d32e3e84fd863c" },
+]
+
+[[package]]
 name = "propcache"
 version = "0.4.1"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2000,6 +2021,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "certifi" },
     { name = "colorlog" },
     { name = "icecream" },
     { name = "json-repair" },
@@ -2011,6 +2033,7 @@ dependencies = [
     { name = "pathspec" },
     { name = "peewee" },
     { name = "pillow" },
+    { name = "pip-system-certs" },
     { name = "psutil" },
     { name = "pyinstaller" },
     { name = "python-dateutil" },
@@ -2023,6 +2046,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
+    { name = "certifi", specifier = ">=2026.1.4" },
     { name = "colorlog", specifier = ">=6.10.1" },
     { name = "icecream", specifier = ">=2.1.8" },
     { name = "json-repair", specifier = ">=0.58.0" },
@@ -2034,6 +2058,7 @@ requires-dist = [
     { name = "pathspec", specifier = ">=1.0.4" },
     { name = "peewee", specifier = ">=3.18.3" },
     { name = "pillow", specifier = ">=12.0.0" },
+    { name = "pip-system-certs", specifier = ">=5.3" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pyinstaller", specifier = ">=6.18.0" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },

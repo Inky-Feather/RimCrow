@@ -1,53 +1,152 @@
 # backend/managers/mgr_network.py
 import os
 import socket
+import atexit
+import platform
 from backend.settings import settings
 
 class NetworkManager:
     def __init__(self):
+        # 保存原始的 getaddrinfo，防止重复 patch 导致死循环
+        self._original_getaddrinfo = socket.getaddrinfo
+        self._is_socket_patched = False
+        
+        # 定义系统 Hosts 文件路径
+        if platform.system() == "Windows":
+            self.sys_hosts_path = r"C:\Windows\System32\drivers\etc\hosts"
+        else:
+            self.sys_hosts_path = "/etc/hosts"
+            
+        self.marker_start = "# --- RimModManager Hosts Start ---\n"
+        self.marker_end = "# --- RimModManager Hosts End ---\n"
+
+        # 注册退出时的清理函数
+        atexit.register(self.restore_system_hosts)
+
+        # 首次初始化
+        self.apply()
+
+    def apply(self):
+        """
+        供外部调用的刷新方法。
+        当你在 UI 或代码中修改了 settings 后，调用此方法即可立即生效。
+        """
         self.apply_proxy_settings()
-        self.patch_socket_for_hosts()
+        
+        cfg = settings.config.network
+        # 假设 settings 里加了一个开关：是否写入系统 hosts
+        if getattr(cfg, 'write_to_system_hosts', False):
+            success = self.write_to_system_hosts()
+            if not success:
+                # 如果没权限写入系统，降级使用 Python 层的 Socket 劫持
+                self.patch_socket_for_hosts()
+        else:
+            self.restore_system_hosts() # 清理可能残留的系统 Hosts
+            self.patch_socket_for_hosts()
 
     def apply_proxy_settings(self):
-        """应用代理设置到环境变量"""
+        """应用代理设置到环境变量（支持动态覆盖）"""
         cfg = settings.config.network.proxy
         
         if cfg.enabled and cfg.host and cfg.port:
-            auth = f"{cfg.username}:{cfg.password}@" if cfg.username else ""
+            auth = f"{cfg.username}:{cfg.password}@" if getattr(cfg, 'username', None) else ""
             proxy_url = f"{cfg.type}://{auth}{cfg.host}:{cfg.port}"
             
             os.environ['HTTP_PROXY'] = proxy_url
             os.environ['HTTPS_PROXY'] = proxy_url
             
-            # 处理 bypass (requests 库识别 NO_PROXY)
-            # 格式: "google.com, .example.com"
-            if cfg.bypass_list:
+            if getattr(cfg, 'bypass_list', None):
                 os.environ['NO_PROXY'] = ",".join(cfg.bypass_list)
         else:
-            # 清除代理
             os.environ.pop('HTTP_PROXY', None)
             os.environ.pop('HTTPS_PROXY', None)
             os.environ.pop('NO_PROXY', None)
 
     def patch_socket_for_hosts(self):
-        """
-        [黑科技] 运行时修改 socket.getaddrinfo 实现自定义 Hosts。
-        这会影响所有 Python 层的域名解析。
-        """
-        hosts_map = settings.config.network.hosts
-        if not hosts_map: return
-
-        _real_getaddrinfo = socket.getaddrinfo
+        """Python 运行时 Socket 劫持（动态读取最新配置，无死循环风险）"""
+        if self._is_socket_patched:
+            return  # 已经劫持过了，不需要重新包一层
 
         def new_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-            # 如果命中 Hosts 配置，直接替换 IP
-            if host in hosts_map:
-                # print(f"Hosts Redirect: {host} -> {hosts_map[host]}")
-                target_ip = hosts_map[host]
-                return _real_getaddrinfo(target_ip, port, family, type, proto, flags)
+            # 【关键修改】：每次发请求时，实时去 settings 里面拿最新的 hosts 配置
+            current_hosts_map = settings.config.network.hosts
+            if current_hosts_map and host in current_hosts_map:
+                target_ip = current_hosts_map[host]
+                return self._original_getaddrinfo(target_ip, port, family, type, proto, flags)
             
-            return _real_getaddrinfo(host, port, family, type, proto, flags)
+            return self._original_getaddrinfo(host, port, family, type, proto, flags)
 
         socket.getaddrinfo = new_getaddrinfo
+        self._is_socket_patched = True
+
+    # ================= 系统 Hosts 修改逻辑 =================
+
+    def write_to_system_hosts(self) -> bool:
+        """将 Hosts 写入操作系统。返回 True 表示成功，False 表示无权限"""
+        hosts_map = settings.config.network.hosts
+        if not hosts_map:
+            self.restore_system_hosts()
+            return True
+
+        # 构建我们要写入的文本块
+        block_lines = [self.marker_start]
+        for domain, ip in hosts_map.items():
+            block_lines.append(f"{ip}\t{domain}\n")
+        block_lines.append(self.marker_end)
+        custom_block = "".join(block_lines)
+
+        try:
+            # 1. 先读取现有内容
+            with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # 2. 清理掉旧的我们的标记块
+            content = self._remove_custom_block(content)
+
+            # 3. 加上新的标记块（确保换行）
+            if not content.endswith('\n'):
+                content += '\n'
+            content += custom_block
+
+            # 4. 写回文件
+            with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            return True
+
+        except PermissionError:
+            print("[警告] 无法写入系统 Hosts，请以管理员身份运行。已降级为内部劫持。")
+            return False
+        except Exception as e:
+            print(f"[错误] 修改系统 Hosts 失败: {e}")
+            return False
+
+    def restore_system_hosts(self):
+        """恢复系统 Hosts（退出时自动调用）"""
+        try:
+            with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            if self.marker_start in content:
+                clean_content = self._remove_custom_block(content)
+                with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
+                    f.write(clean_content)
+        except PermissionError:
+            pass # 没权限就算了，说明一开始也没写进去
+        except FileNotFoundError:
+            pass
+
+    def _remove_custom_block(self, content: str) -> str:
+        """从字符串中安全移除被 Marker 包裹的区域"""
+        start_idx = content.find(self.marker_start)
+        end_idx = content.find(self.marker_end)
+        
+        if start_idx != -1 and end_idx != -1:
+            end_idx += len(self.marker_end)
+            # 拼接开头和结尾部分
+            return content[:start_idx] + content[end_idx:]
+        return content
 
 
+# 实例化单例
+network_mgr = NetworkManager()

@@ -49,7 +49,7 @@ from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
-from backend.managers.mgr_network import NetworkManager
+from backend.managers.mgr_network import network_mgr
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
@@ -173,7 +173,6 @@ class API:
         self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
         self.scanner = ModScanner()
         self.sorter = OrderSorter()
-        self.network_mgr = NetworkManager()
         self.download_mgr = DownloadManager()
         self.steam_mgr = SteamManager()
         self.ai_mgr = AIManager()
@@ -395,40 +394,54 @@ class API:
     @log_api_call
     def save_setting(self, key: str, value: Any):
         """保存单个设置项"""
-        # 如果修改的是核心路径，同步到当前环境
-        if key in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
-            pid = settings.config.current_profile_id
-            # 更新数据库中的 Profile
-            updates = {key: value}
-            if key == 'use_workshop_mods': updates = {'use_workshop_mods': value}
-            self.profile_mgr.update_profile(pid, updates)
-            # 应用并触发同步逻辑
-            self.profile_mgr.activate_profile(pid)
-        # 如果修改的是路径，可能需要刷新管理器
-        elif 'path' in key:
-            self.load_order_mgr = LoadOrderManager()
-        else:
-            settings.set(key, value)
+        try:
+            # 如果修改的是核心路径，同步到当前环境
+            if key in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
+                pid = settings.config.current_profile_id
+                # 更新数据库中的 Profile
+                updates = {key: value}
+                if key == 'use_workshop_mods': updates = {'use_workshop_mods': value}
+                self.profile_mgr.update_profile(pid, updates)
+                # 应用并触发同步逻辑
+                self.profile_mgr.activate_profile(pid)
+            # 如果修改的是路径，可能需要刷新管理器
+            elif 'path' in key:
+                self.load_order_mgr = LoadOrderManager()
+            elif key == 'network':
+                network_mgr.apply() # 应用网络设置
+            else:
+                settings.set(key, value)
+                
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            logger.error(f"Save setting {key} failed: {str(e)}")
+            return ApiResponse.error(f"保存设置失败：{str(e)}")
         return ApiResponse.success(data=asdict(settings.config))
 
     @log_api_call
     def save_all_settings(self, settings_obj: dict):
         """保存所有设置 (前端设置面板保存时调用)"""
-        # 批量更新
-        for k, v in settings_obj.items():
-            # 如果修改的是核心路径，同步到当前环境
-            if k in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
-                pid = settings.config.current_profile_id
-                # 更新数据库中的 Profile
-                updates = {k: v}
-                if k == 'use_workshop_mods': updates = {'use_workshop_mods': v}
-                self.profile_mgr.update_profile(pid, updates)
-            settings.set(k, v) # settings.set 内部会自动 save，这里可能稍微有点IO冗余，但安全
-        
-        # 应用并触发同步逻辑
-        self.profile_mgr.activate_profile(pid)
-        # 刷新管理器
-        self.load_order_mgr = LoadOrderManager()
+        try:
+            # 批量更新
+            for k, v in settings_obj.items():
+                # 如果修改的是核心路径，同步到当前环境
+                if k in ['game_install_path', 'user_data_path', 'use_workshop_mods', 'run_commands']:
+                    pid = settings.config.current_profile_id
+                    # 更新数据库中的 Profile
+                    updates = {k: v}
+                    if k == 'use_workshop_mods': updates = {'use_workshop_mods': v}
+                    self.profile_mgr.update_profile(pid, updates)
+                settings.set(k, v) # settings.set 内部会自动 save，这里可能稍微有点IO冗余，但安全
+            
+            self.profile_mgr.activate_profile(pid)  # 应用并触发同步逻辑
+            self.load_order_mgr = LoadOrderManager()    # 刷新管理器
+            network_mgr.apply() # 应用网络设置
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            logger.error(f"Save all settings failed: {str(e)}")
+            return ApiResponse.error(f"保存所有设置失败：{str(e)}")
         return ApiResponse.success(data=asdict(settings.config))
     
 
@@ -444,38 +457,44 @@ class API:
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
         :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
         """
-        paths_to_scan = []
-        if specific_paths: paths_to_scan = specific_paths
-        else:
-            # 确保当前 Profile 已激活
-            self.profile_mgr.activate_profile(settings.config.current_profile_id)
-            # 根据 Settings 动态构建扫描路径
-            cfg = settings.config
-            # 1. DLC (Data 目录)
-            if cfg.game_dlc_path and os.path.exists(cfg.game_dlc_path):
-                dlc_path = cfg.game_dlc_path
-                if os.path.exists(dlc_path):
-                    paths_to_scan.append(dlc_path)
-            # 2. Local Mods (当前环境的 Mods 目录)
-            if cfg.local_mods_path and os.path.exists(cfg.local_mods_path):
-                paths_to_scan.append(cfg.local_mods_path)
-            # 3. Workshop Mods (公共工坊目录)
-            # Profile 禁用了 Workshop (use_workshop_mods=False)，则不再扫描
-            if cfg.workshop_mods_path and os.path.exists(cfg.workshop_mods_path) and cfg.use_workshop_mods:
-                paths_to_scan.append(cfg.workshop_mods_path)
-        if not paths_to_scan:
-            return ApiResponse.error("没有配置有效的扫描路径")
-        # 调用异步扫描
-        # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
-        # 1. 扫描所有路径入库
-        # 2. 识别 Local vs Workshop 冲突
-        # 3. 读取 settings.config.local_mods_path 和 workshop_mods_path
-        # 4. 执行 FileManager.clear_links 部署软链接
-        result = self.scanner.scan_paths_async(
-            paths_to_scan, 
-            thumbnail_mgr=self.file_mgr, 
-            forced_update=forced_update
-        )
+        try:
+            paths_to_scan = []
+            if specific_paths: paths_to_scan = specific_paths
+            else:
+                # 确保当前 Profile 已激活
+                self.profile_mgr.activate_profile(settings.config.current_profile_id)
+                # 根据 Settings 动态构建扫描路径
+                cfg = settings.config
+                # 1. DLC (Data 目录)
+                if cfg.game_dlc_path and os.path.exists(cfg.game_dlc_path):
+                    dlc_path = cfg.game_dlc_path
+                    if os.path.exists(dlc_path):
+                        paths_to_scan.append(dlc_path)
+                # 2. Local Mods (当前环境的 Mods 目录)
+                if cfg.local_mods_path and os.path.exists(cfg.local_mods_path):
+                    paths_to_scan.append(cfg.local_mods_path)
+                # 3. Workshop Mods (公共工坊目录)
+                # Profile 禁用了 Workshop (use_workshop_mods=False)，则不再扫描
+                if cfg.workshop_mods_path and os.path.exists(cfg.workshop_mods_path) and cfg.use_workshop_mods:
+                    paths_to_scan.append(cfg.workshop_mods_path)
+            if not paths_to_scan:
+                return ApiResponse.error("没有配置有效的扫描路径")
+            # 调用异步扫描
+            # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
+            # 1. 扫描所有路径入库
+            # 2. 识别 Local vs Workshop 冲突
+            # 3. 读取 settings.config.local_mods_path 和 workshop_mods_path
+            # 4. 执行 FileManager.clear_links 部署软链接
+            result = self.scanner.scan_paths_async(
+                paths_to_scan, 
+                thumbnail_mgr=self.file_mgr, 
+                forced_update=forced_update
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            logger.error(f"Scan mods failed: {str(e)}")
+            return ApiResponse.error(f"扫描模组失败：{str(e)}")
         return ApiResponse.success({ "details": result },"后台扫描已启动")
     
     @log_api_call
