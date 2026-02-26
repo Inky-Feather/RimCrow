@@ -14,6 +14,7 @@ from dateutil import parser
 from typing import Optional, cast
 from json_repair import repair_json
 from pathlib import Path
+import requests
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -717,7 +718,6 @@ class SteamManager:
         # 合并数据
         return self._merge_acf_and_log(acf_data, log_data)
         
-    
     def steamcmd_merged_data(self) -> list:
         """
         获取 steamcmd 下载的创意工坊模组的ACF数据
@@ -737,10 +737,46 @@ class SteamManager:
         # 合并数据
         return self._merge_acf_and_log(acf_data, log_data)
         
+    
+    def get_collection_items(self, collection_id: str) -> list:
+        # 不论传入的是链接字符串还是整数，都提取数字
+        collection_id_match = re.search(r'\d+', collection_id)
+        if collection_id_match:
+            collection_id = collection_id_match.group()
+        else:
+            logger.error(f"无法从传入参数获取合集ID: {collection_id}")
+            return []
+        url = "https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/"
+        data = {
+            "collectioncount": "1",
+            "publishedfileids[0]": str(collection_id)
+        }
+        response = requests.post(url, data=data)
+        # print(response.text)
+        json_data = response.json()
+        # 解析返回的 JSON 数据，提取所有子模组的 ID
+        items =[]
+        try:
+            children = json_data['response']['collectiondetails'][0]['children']
+            for child in children:
+                if child['filetype'] == 0: # 0 代表普通模组
+                    items.append(child['publishedfileid'])
+        except KeyError as e:
+            logger.error(f"合集解析失败或合集为空: {e}")
+            
+        return items
 
 if __name__ == "__main__":
     steam_mgr = SteamManager()
     data = steam_mgr.workshop_merged_data()
     if data:
         print(f"Total items: {len(data)} First item:\n", data[0])
-    
+    data2 = steam_mgr.steamcmd_merged_data()
+    if data2:
+        print(f"Total items: {len(data2)} First item:\n", data2[0])
+
+    # 测试获取一个合集的内容
+    url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3670074636"
+    mod_ids = steam_mgr.get_collection_items(url)
+    print(f"该合集包含以下模组: {mod_ids}")
+        
