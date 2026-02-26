@@ -46,8 +46,8 @@ const inputRef = ref(null)
 const localValue = ref('')
 
 // 计算样式（逻辑从父组件移过来）
-// 注意：你需要把父组件的 colorPalette 逻辑也移过来，或者通过 Props 传入颜色类名
-// 这里为了演示，假设你把 getTagStyle 逻辑封装到了一个单独的 js 文件，或者直接复制过来
+// 注意：需要把父组件的 colorPalette 逻辑也移过来，或者通过 Props 传入颜色类名
+// 这里为了演示，假设把 getTagStyle 逻辑封装到了一个单独的 js 文件，或者直接复制过来
 const tagStyle = computed(() => {
     // 这里简单复制之前的逻辑，实际建议提取公共工具函数
     const colorPalette = [

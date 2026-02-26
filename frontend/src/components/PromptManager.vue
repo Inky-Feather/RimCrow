@@ -17,7 +17,7 @@
             </div>
             <div>
               <h2 class="text-lg font-black text-text-main tracking-widest">提示词管理中心</h2>
-              <p class="text-[0.65rem] text-text-dim uppercase font-mono mt-0.5">管理你的提示词模板</p>
+              <p class="text-[0.65rem] text-text-dim uppercase font-mono mt-0.5">管理提示词模板</p>
             </div>
           </div>
           <div class="flex items-center gap-3">

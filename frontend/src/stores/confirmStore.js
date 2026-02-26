@@ -16,7 +16,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     placeholder: '',
     confirmText: '确定',
     cancelText: '取消',
-    targetRect: null,  // 目标元素的位置信息 (用于迷你弹窗)
+    targetRect: null,  // 目标元素的位置信息 (用于迷弹窗)
     validation: null,  // 输入验证函数 (val) => boolean
   })
 
@@ -27,7 +27,7 @@ export const useConfirmStore = defineStore('confirm', () => {
   /**
    * 打开弹窗的核心方法
    * @param {Object} options 配置项
-   * @param {HTMLElement|Event} [target] 可选：触发源，传入则变为迷你跟随弹窗
+   * @param {HTMLElement|Event} [target] 可选：触发源，传入则变为迷跟随弹窗
    */
   const open = (options, target = null) => {
     // 1. 重置状态
@@ -47,7 +47,7 @@ export const useConfirmStore = defineStore('confirm', () => {
       ...options
     })
 
-    // 3. 计算位置 (如果是迷你模式)
+    // 3. 计算位置 (如果是迷模式)
     if (target) {
       const el = target instanceof Event ? target.target : target
       if (el && el.getBoundingClientRect) {
@@ -82,7 +82,7 @@ export const useConfirmStore = defineStore('confirm', () => {
   // 取消操作
   const cancel = () => {
     // Confirm/Prompt 模式下，取消通常意味着 Promise resolve(false) 或 reject
-    // 这里我们约定：Confirm 返回 false，Prompt 返回 null
+    // 这里约定：Confirm 返回 false，Prompt 返回 null
     if (state.mode === 'confirm') resolvePromise && resolvePromise(false)
     else resolvePromise && resolvePromise(null)
     
@@ -96,7 +96,7 @@ export const useConfirmStore = defineStore('confirm', () => {
   
   const prompt = (title, placeholder, options) => open({ title, placeholder, mode: 'prompt', ...options })
   
-  // 迷你弹窗便捷入口
+  // 迷弹窗便捷入口
   const popover = (target, title, message) => open({ title, message, mode: 'confirm' }, target)
 
   return { 

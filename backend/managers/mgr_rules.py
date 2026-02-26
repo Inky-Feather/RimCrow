@@ -135,7 +135,7 @@ class RuleManager:
         # 注意：settings.config.game_version 可能为空，需兜底
         current_ver = settings.config.game_version
         if not current_ver:
-            return True # 无法确定版本时，默认放行，或者你可以选择严格模式 return False
+            return True # 无法确定版本时，默认放行，或者可以选择严格模式 return False
             
         short_ver = current_ver[:3] # 取前三位 "1.5"
         # logger.debug(f"Current game version: {current_ver}, short version: {short_ver}, requirements: {requirements}")
@@ -397,7 +397,7 @@ class RuleManager:
     def create_export_bundle(self, dynamic_rule_ids: List[str]):
         """生成规则包"""
         # 1. 过滤要导出的动态规则，如果 ids 为空列表，则不导出任何动态规则？
-        # 或者我们定义：如果 ids 为 None，导出所有启用规则
+        # 或者定义：如果 ids 为 None，导出所有启用规则
         if dynamic_rule_ids is None:
             export_dynamic = [r for r in self.user_dynamic_rules if r.get('enabled', True)]
         else:

@@ -188,7 +188,7 @@ class ModDAO:
         Key: path_hash (物理路径哈希)
         Value: { mtime, size, package_id }
         """
-        # 我们需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
+        # 需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
         query = ModAsset.select( ModAsset.path_hash, ModAsset.file_modify_time, ModAsset.file_size, ModAsset.package_id, ModAsset.disabled ).dicts()
         
         snapshots = {}
@@ -497,7 +497,7 @@ class ModDAO:
         cleaned_count = 0
         
         # 1. 筛选出可能有 shadow_paths 的记录
-        # 注意：SQLite 中 JSON 存为 TEXT，我们可以简单查不为空的
+        # 注意：SQLite 中 JSON 存为 TEXT，可以简单查不为空的
         # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
         mods_with_shadows = ModAsset.select().where(cast(Any, ModAsset.shadow_paths).is_null(False))
         

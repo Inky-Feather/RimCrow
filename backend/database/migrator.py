@@ -102,7 +102,7 @@ def _2to3(old_version):
                         
                         old_group_mods.append(item)
                         
-                        # 【关键修复】：如果这个Mod在分组里，但不在UserModData里，我们需要标记它
+                        # 【关键修复】：如果这个Mod在分组里，但不在UserModData里，需要标记它
                         if pkg_id not in user_data_map:
                             missing_user_data_ids.add(pkg_id)
         except Exception as e:

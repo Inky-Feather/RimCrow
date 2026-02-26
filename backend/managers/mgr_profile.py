@@ -295,7 +295,7 @@ class ProfileManager:
         
         try:
             # 2. 序列化模型
-            # Peewee 的 model_to_dict 会把 datetime 对象转好，但为了保险我们手动处理一下非 JSON 类型
+            # Peewee 的 model_to_dict 会把 datetime 对象转好，但为了保险手动处理一下非 JSON 类型
             data = model_to_dict(profile)
             
             # 处理 datetime 转字符串

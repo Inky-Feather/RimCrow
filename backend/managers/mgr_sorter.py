@@ -44,7 +44,7 @@ class OrderSorter:
         第一步：将激活列表转化为原子组列表
         """
         # 1. 获取所有 Mod 的联锁数据
-        # 注意：为了性能，我们一次性查出所有涉及到的 Mod 数据
+        # 注意：为了性能，一次性查出所有涉及到的 Mod 数据
         # 即使有的 Mod 不在 active_ids 里，只要它被联锁引用了，也要查
         all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
@@ -431,7 +431,7 @@ class OrderSorter:
         # 如果 A(900) -> B(500)，根据拓扑序 A 必须在 B 前面，此时 A 的权重应被拉低到 500 甚至更低，以便在堆中优先弹出
         effective_weights = group_base_weights.copy()
         # 简单的传播算法：如果 u -> v，u 应该比 v 早。
-        # 在 Kahn 算法的 PriorityQueue 中，我们希望早出来的权重小。
+        # 在 Kahn 算法的 PriorityQueue 中，希望早出来的权重小。
         # 这里的 propagate 逻辑可以保留之前的，或者简化。
         # 原逻辑：child 的权重小于 parent，则 parent 权重降级。
         # adj[u] = {v: w} 表示 u -> v，即 u 在前。

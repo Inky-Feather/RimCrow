@@ -20,7 +20,7 @@
               label="显示共存问题" mini description="关闭后，仅显示冲突的包ID，不显示版本共存问题"
               class="w-45 text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-text-main transition-colors"
             />
-            <button v-tooltip="'我管你这的那的，下次再说！'" class="text-sm text-text-dim hover:text-accent-danger transition-colors" @click="visible = false">
+            <button v-tooltip="'我管这的那的，下次再说！'" class="text-sm text-text-dim hover:text-accent-danger transition-colors" @click="visible = false">
               <x-circle></x-circle>
             </button>
           </div>

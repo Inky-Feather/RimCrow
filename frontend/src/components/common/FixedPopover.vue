@@ -164,7 +164,7 @@ onUnmounted(stopListeners)
   opacity: 0;
 }
 
-/* 兼容你软件的背景模糊质感（可选，也可在 slot 内容里写） */
+/* 兼容软件的背景模糊质感（可选，也可在 slot 内容里写） */
 :deep(.fixed) {
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(16px);

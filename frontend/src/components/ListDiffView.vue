@@ -217,7 +217,7 @@ const analysis = computed(() => {
   const B = props.listB
   // 1. 初始化结果数组 resA 和 resB
   // 默认假设 A 中的所有元素都被删除了，B 中的所有元素都是新增的。
-  // 如果后续匹配成功，我们会将这些状态修改为 'same' (相同) 或 'moved' (移动)。
+  // 如果后续匹配成功，会将这些状态修改为 'same' (相同) 或 'moved' (移动)。
   // originalIndex: 记录元素在原始数组中的位置，用于后续可能的回溯或排序。
   // count: 默认为 1，表示单个元素。如果发现是连续移动块，这个值会变成块的长度。
   const resA = A.map((id, i) => ({ id, originalIndex: i, type: 'removed', blockId: null, count: 1 }))
@@ -226,7 +226,7 @@ const analysis = computed(() => {
   // 2. 构建 B 的哈希索引
   // 目的：为了在遍历 A 时，能以 O(1) 的时间复杂度快速找到当前元素在 B 中的位置。
   // 结构：Map<id, Array<indexInB>>
-  // 为什么存数组？因为 B 中可能存在重复的 id，我们需要记录它出现的所有位置。
+  // 为什么存数组？因为 B 中可能存在重复的 id，需要记录它出现的所有位置。
   const mapB = new Map()
   B.forEach((id, i) => {
     if (!mapB.has(id)) mapB.set(id, [])
@@ -248,7 +248,7 @@ const analysis = computed(() => {
       let bestStartB = -1   // 记录最长匹配在 B 中的起始位置
 
       // 3. 贪心算法寻找最长公共子串
-      // A[i] 可能在 B 中出现多次（possibleIndicesB），我们需要找到最“划算”的那个位置。
+      // A[i] 可能在 B 中出现多次（possibleIndicesB），需要找到最“划算”的那个位置。
       // “划算”的定义：从该位置开始，能和 A[i] 连续匹配的元素数量最多。
       for (const startB of possibleIndicesB) {
         let len = 0
@@ -316,7 +316,7 @@ const analysis = computed(() => {
         }
         
         // 6. 跳过已处理的元素
-        // 因为我们处理了一个长度为 bestLen 的块，所以 i 应该直接跳过这个块，
+        // 因为处理了一个长度为 bestLen 的块，所以 i 应该直接跳过这个块，
         // 而不是普通的 i++。这提高了效率并防止重复处理。
         i += bestLen
         continue

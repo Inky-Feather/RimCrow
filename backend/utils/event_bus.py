@@ -54,7 +54,7 @@ class EventBus:
             cls._window.evaluate_js(js_code)
         except WebViewException:
             # 窗口可能还没准备好，或者已经关闭
-            # 这种情况下，我们静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
+            # 这种情况下，静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
             import sys
             print(f"[EventBus Error] Window not ready for event: {event_name}", file=sys.stderr)
         except Exception as e:

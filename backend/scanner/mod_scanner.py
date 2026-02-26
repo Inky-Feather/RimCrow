@@ -138,7 +138,7 @@ class ModScanner:
                 )
 
                 if mod_data:
-                    # 如果是增量跳过，我们需要补全 package_id 以便后续逻辑使用
+                    # 如果是增量跳过，需要补全 package_id 以便后续逻辑使用
                     # _process_single_mod 返回 {'_skipped': True, 'package_id': ...}
                     pid = mod_data['package_id'].lower()
                     
@@ -189,7 +189,7 @@ class ModScanner:
                 # 情况 A: 只有一个实例 -> 直接入库
                 if len(entries) == 1:
                     mod = entries[0]
-                    if not mod.get('_skipped'): # 跳过的不需要重新 Upsert，除非你想更新 timestamp
+                    if not mod.get('_skipped'): # 跳过的不需要重新 Upsert，除非想更新 timestamp
                         mods_to_upsert.append(mod)
                     
                     # 收集部署信息
@@ -410,7 +410,7 @@ class ModScanner:
         if disabled_change: pass
         
         elif snapshot and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update :
-            # 修改时间没变，此时我们通过开关决定是否开启“深层大小检测”
+            # 修改时间没变，此时通过开关决定是否开启“深层大小检测”
             if need_size_check:
                 # 优化点：只有在修改时间没变时，才执行耗时的 get_folder_size
                 current_size = get_folder_size(mod_path)

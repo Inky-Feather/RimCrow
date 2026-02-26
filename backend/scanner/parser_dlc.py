@@ -190,7 +190,7 @@ class DLCParser:
                 del current_meta[fname]
                 # 尝试移除对应的翻译数据 (可能比较困难，因为 key 转换了)
                 # 简单做法：如果是清理，因为这一步比较少见，不处理 trans 里的残留脏数据也不会崩，
-                # 下次全量重建自然没了。或者我们可以反向存一个 mapping。
+                # 下次全量重建自然没了。或者可以反向存一个 mapping。
                 is_dirty = True
 
         # 5. 如果有变动，写入磁盘

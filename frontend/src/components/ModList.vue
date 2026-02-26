@@ -609,7 +609,7 @@ const updateChildren = async (e) => {
       if (baseList.includes(nextId)) {
         // 找到 nextId 在 baseList 中的位置
         const nextIndexInBase = baseList.indexOf(nextId)
-        // 如果 nextId 就在当前插入点或其后方，说明我们插在了链条中间
+        // 如果 nextId 就在当前插入点或其后方，说明插在了链条中间
         // 将插入点顺延到 nextId 的后面
         if (nextIndexInBase >= correctedIndex) {
           correctedIndex = nextIndexInBase + 1

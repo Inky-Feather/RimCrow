@@ -291,7 +291,7 @@ class SelectionManager {
     } else {
       // --- 单选 ---
       // 场景：点击已选中的项。
-      // 在 MouseDown 时为了允许拖拽，我们没有取消其他项。
+      // 在 MouseDown 时为了允许拖拽，没有取消其他项。
       // 现在确认是点击（非拖拽），所以清除其他项，只留这一个。
       this.modStore.selectMods([itemId], itemId)
       this.anchorId = itemId
@@ -347,7 +347,7 @@ class SelectionManager {
         return
     }
     // 基于索引范围计算，避免线性搜索
-    // 这是一个优化，因为我们通常会在列表中按索引访问元素
+    // 这是一个优化，因为通常会在列表中按索引访问元素
     // 而不是按值搜索。这在大数据集时尤其重要。
     const start = this.getIndexById(this.anchorId)
     const end = this.getIndexById(targetId)

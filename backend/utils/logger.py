@@ -66,7 +66,7 @@ class CustomColoredFormatter(colorlog.ColoredFormatter):
         
         # 检查是否标记为 icecream 的日志 (在 log_to_debug 中设置)
         if getattr(record, 'is_icecream', False):
-            # 对于 ic() 的输出，我们移除 %(name)s:%(module)s:%(lineno)d 部分
+            # 对于 ic() 的输出，移除 %(name)s:%(module)s:%(lineno)d 部分
             # 因为 ic() 的 message 内容本身就已经包含了原本的文件名和行号
             # 这样就避免了打印出 "RimModManager:logger:133" 这种无效信息
             self._style._fmt = '%(log_color)s%(asctime)s | %(levelname)-8s | %(message)s'
@@ -130,7 +130,7 @@ class LoggerManager:
             try:
                 console_handler = logging.StreamHandler(sys.stdout)
         
-                # 使用我们自定义的 CustomColoredFormatter
+                # 使用自定义的 CustomColoredFormatter
                 color_formatter = CustomColoredFormatter(
                     fmt='%(log_color)s%(asctime)s | %(levelname)-8s | %(name)s:%(module)s:%(lineno)d - %(message)s',
                     datefmt='%H:%M:%S',
@@ -173,7 +173,7 @@ class LoggerManager:
             # 这样 ic() 打印的内容既会在控制台高亮显示（ic自带），也会被写入 log 文件
             def log_to_debug(text):
                 # 移除 icecream 自动添加的 'ic| ' 前缀
-                # 注意：如果你希望在控制台看到 'IC| '，可以不 replace，或者只在 JSON 里 replace
+                # 注意：如果希望在控制台看到 'IC| '，可以不 replace，或者只在 JSON 里 replace
                 clean_text = text.replace('IC| ', '') 
                 if self._logger:
                     # 【修改点】添加 extra 参数，告诉 Formatter 这是一条来自 icecream 的消息

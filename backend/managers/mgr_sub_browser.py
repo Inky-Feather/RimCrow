@@ -75,7 +75,7 @@ class SubBrowserManager:
 
         # 具体的业务实现
         if action == 'subscribe':
-            # 这里调用你的订阅逻辑
+            # 这里调用订阅逻辑
             self.main_api.steam_subscribe(workshop_id)
         elif action == 'unsubscribe':
             # 取消订阅逻辑

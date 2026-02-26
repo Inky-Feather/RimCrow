@@ -212,7 +212,7 @@ class LanzouParser:
                 raw_url = f"{res_json['dom']}/file/{res_json['url']}"
                 
                 # 4. 重要：不要用 HEAD，改用 GET 配合 allow_redirects=False
-                # 这样我们可以精准拿到 302 的 Location 头部，且不会被 CDN 拦截
+                # 这样可以精准拿到 302 的 Location 头部，且不会被 CDN 拦截
                 try:
                     # 模拟真实点击跳转
                     r = self.session.get(raw_url, allow_redirects=False, headers={'Referer': ifr_url})

@@ -99,7 +99,7 @@ const sanitizedState = computed(() => {
 </script>
 
 <style scoped>
-/* 覆盖 json-viewer 默认的浅色背景，适配你的暗色主题 */
+/* 覆盖 json-viewer 默认的浅色背景，适配暗色主题 */
 :deep(.jv-container) {
   background: transparent !important;
   font-family: 'JetBrains Mono', monospace;

@@ -19,7 +19,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { onClickOutside, useWindowSize, useEventListener } from '@vueuse/core'
-import { useContextMenuStore } from '../../../stores/contextMenuStore' // 调整你的路径
+import { useContextMenuStore } from '../../../stores/contextMenuStore' // 调整路径
 import ContextMenuItem from './ContextMenuItem.vue'
 
 const menuStore = useContextMenuStore()
@@ -36,7 +36,7 @@ watch([() => menuStore.show, () => menuStore.x, () => menuStore.y],
   async ([show, x, y]) => {
     if (show) {
       // 关键点1：如果是刚刚打开（之前是关闭的），先禁用过渡，防止从 0,0 飞过来
-      // 我们可以通过判断 menuRef 是否存在来猜测，或者简单粗暴地每次计算前先关掉
+      // 可以通过判断 menuRef 是否存在来猜测，或者简单粗暴地每次计算前先关掉
       if (!menuRef.value) {
         enableTransition.value = false
       }
@@ -79,7 +79,7 @@ useEventListener(window, 'contextmenu', (e) => {
   if (!menuStore.show) return
 
   // 这里的逻辑很巧妙：
-  // 如果你在“触发组件”上右键，menuStore.open() 里调用了 event.stopPropagation()
+  // 如果在“触发组件”上右键，menuStore.open() 里调用了 event.stopPropagation()
   // 所以事件根本不会冒泡到 window，这行代码不会执行，菜单不会被误关闭。
   menuStore.close()
   

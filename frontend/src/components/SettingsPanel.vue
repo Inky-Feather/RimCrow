@@ -317,7 +317,7 @@
                       
                       <!-- 测试区 -->
                       <div class="col-span-2 pt-2 border-t border-text-main/5 flex gap-3">
-                        <CommonInput label="测试输入" class="flex-1" v-model="testPrompt" placeholder="简单输入一句话测试连接 (如：你是谁？)" @keydown.enter="testModel"></CommonInput>
+                        <CommonInput label="测试输入" class="flex-1" v-model="testPrompt" placeholder="简单输入一句话测试连接 (如：是谁？)" @keydown.enter="testModel"></CommonInput>
                         <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
                           :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
                           @click="testModel">

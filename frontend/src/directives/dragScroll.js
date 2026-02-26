@@ -78,7 +78,7 @@ export default {
       
       // 🟢 优化：只在拖拽开始时阻止默认行为（防止选中文字），但不阻止点击子元素
       // 注意：为了让 focus 生效，这里通常需要允许 mousedown 默认行为的一小部分，
-      // 但为了体验，我们手动 focus，并阻止文本选择
+      // 但为了体验，手动 focus，并阻止文本选择
       e.preventDefault(); 
       el.focus({ preventScroll: true }); // 手动聚焦，且防止浏览器自动跳动视口
       

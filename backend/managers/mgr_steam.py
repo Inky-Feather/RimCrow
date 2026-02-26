@@ -491,7 +491,7 @@ class SteamManager:
         
         # 3. 注册新任务并唤醒监控线程
         with self._monitor_lock:
-            # 即便 target_ids 全部都是 is_perfect，我们也建一个空任务让监控线程秒回 100%
+            # 即便 target_ids 全部都是 is_perfect，也建一个空任务让监控线程秒回 100%
             # 这能保证前端的 Promise 必然被 Resolve！
             self._active_tasks[task_id] = {
                 "targets": target_ids,
@@ -670,7 +670,7 @@ class SteamManager:
             return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]
-        # 如果你的管理器本身也有需要注入的参数（例如隔离配置文件的参数）
+        # 如果管理器本身也有需要注入的参数（例如隔离配置文件的参数）
         # 注意：这里传递的参数会追加在 Steam 内部设置的参数后面
         if extra_args:
             # 确保参数是列表形式

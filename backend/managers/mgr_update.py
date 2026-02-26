@@ -234,7 +234,7 @@ class UpdateManager:
         filename = f"update_v{info.version}.zip"
         
         # 调用 DownloadManager
-        # 注意：这里我们传入回调函数，让 DownloadManager 在完成后通知我们
+        # 注意：这里传入回调函数，让 DownloadManager 在完成后通知
         task_id = self.download_mgr.add_task(
             url=info.download_url,
             dest_dir=str(UPDATE_CACHE_DIR),
@@ -258,8 +258,8 @@ class UpdateManager:
             return
 
         # 2. 生成/保存元数据 (Manifest)
-        # 我们需要从 current_update_info 恢复数据，或者从 task 中传递上下文
-        # 简单起见，我们假设 current_update_info 仍然是有效的
+        # 需要从 current_update_info 恢复数据，或者从 task 中传递上下文
+        # 简单起见，假设 current_update_info 仍然是有效的
         info = self.current_update_info
         if info:
             info.local_file_path = task.dest_path

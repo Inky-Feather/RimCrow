@@ -231,7 +231,7 @@ def clear_db():
         # 3. 显式开启事务
         with db.atomic():
             # 删除所有表 (cascade=True 会处理外键依赖，但 SQLite 对 cascade 支持有限，
-            # 所以我们手动按依赖顺序删，或者直接 drop_tables)
+            # 所以手动按依赖顺序删，或者直接 drop_tables)
             # 注意顺序：先删依赖别人的(GroupMod, UserModData)，再删被依赖的(Mod, GroupData)
             db.drop_tables([GroupMod, UserModData, GameProfile, ModAsset, GroupData])
         

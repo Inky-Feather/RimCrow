@@ -12,7 +12,7 @@ export function generateSearchHelp(engine) {
   const entries = Object.entries(engine.schema);
   
   // 1. 按类型分组或按重要性排序
-  // 这里我们简单按字母顺序，或者你可以优先展示用户 Schema 定义的字段
+  // 这里简单按字母顺序，或者可以优先展示用户 Schema 定义的字段
   entries.sort((a, b) => {
       // 让配置了 Label 的排前面 (通常是重要字段)
       if (a[1].label && !b[1].label) return -1;

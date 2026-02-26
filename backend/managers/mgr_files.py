@@ -250,7 +250,7 @@ class FileManager:
                     success_count += 1
                 else:
                     # 如果路径本来就不存在，可以视为删除成功的一种
-                    # 或者记录为跳过，这里我们直接累加成功，减少用户困惑
+                    # 或者记录为跳过，这里直接累加成功，减少用户困惑
                     success_count += 1
                     
             except Exception as e:
@@ -474,7 +474,7 @@ class FileManager:
             }
 
         # --- 2. 扫描磁盘并识别“必须删除”的项 ---
-        # 我们遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
+        # 遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
         to_delete_paths = []
         existing_valid_keys = set()
 

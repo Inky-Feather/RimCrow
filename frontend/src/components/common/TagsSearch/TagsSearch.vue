@@ -177,7 +177,7 @@ const editingIndex = ref(-1)  // 当前正在编辑的标签索引
 // --- 搜索逻辑 ---
 // 动态计算建议列表
 const suggestionList = computed(() => {
-  // 如果引擎还没初始化好，或者没有输入，返回空（或者你想默认显示 keys，取决于 Engine 实现）
+  // 如果引擎还没初始化好，或者没有输入，返回空（或者想默认显示 keys，取决于 Engine 实现）
   if (!engine.value) return []
   return engine.value.getSuggestions(inputValue.value)
 })
@@ -268,7 +268,7 @@ const stopEditing = (index, val) => {
     removeTag(index)
   } else if (val !== props.modelValue[index].value) {
     // 尝试重新解析，因为用户可能把 value 改成了 key:value 格式，或者改了值
-    // 这里为了简单，我们假设用户只改值，保留 key。
+    // 这里为了简单，假设用户只改值，保留 key。
     // 如果想要强大的编辑，可以用 parser 重新解析 val，看是否生成新的结构
     
     // 简单版：只更新 displayValue 和 value

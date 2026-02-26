@@ -120,7 +120,7 @@ class ApiResponse:
         """递归将模型和日期转换为 JSON 可接受的类型"""
         # 1. 处理 Peewee 模型对象
         if isinstance(obj, Model):
-            # recurse=True 自动处理关联表，但通常我们建议只转单表
+            # recurse=True 自动处理关联表，但通常建议只转单表
             return cls.serialize_data(model_to_dict(obj))
         # 2. 处理日期和时间
         if isinstance(obj, (datetime, date)):
@@ -324,7 +324,7 @@ class API:
             time.sleep(0.5) # 给操作系统一点缓冲时间
             # 关键：对于 SqliteExtDatabase，有时候即使 close 了，
             # 内部连接池可能还持有引用。如果是 Peewee，通常 close 足够。
-            # 但为了保险，我们可以设为 None 或者再次 init。
+            # 但为了保险，可以设为 None 或者再次 init。
             
             # 2. 定义文件路径
             db_dir = os.path.join(os.getcwd(), 'data')
@@ -1243,7 +1243,7 @@ class API:
     @log_api_call
     def read_game_log(self, filename: str):
         """ 读取并解析指定的游戏日志 """
-        # 这是一个可能耗时的操作，@log_api_call 会帮我们记录耗时
+        # 这是一个可能耗时的操作，@log_api_call 会帮记录耗时
         result = self.game_log_mgr.read_and_parse_log(filename)
         if 'error' in result:
             return ApiResponse.error(result['error'])
@@ -1371,7 +1371,7 @@ class API:
         
         # 2. 如果有新任务，注册一个回调来处理下载后的解压/部署
         if tasks:
-            # 我们需要一个简单的方法来监控这些任务的完成
+            # 需要一个简单的方法来监控这些任务的完成
             # 这里简化处理：启动一个后台线程轮询这些任务状态
             threading.Thread(target=self._monitor_setup_tasks, args=(tasks,), daemon=True).start()
             
@@ -1561,7 +1561,7 @@ class API:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                # 运行我们写好的批量调度引擎
+                # 运行写好的批量调度引擎
                 results = loop.run_until_complete(
                     self.ai_mgr.execute_batch_task_async(task_key, items, variables, task_event_id)
                 )
@@ -1571,7 +1571,7 @@ class API:
                     'status': 'success', 
                     'data': results
                 })
-                # 可选：你可以直接在这里调用 ModDAO 批量入库
+                # 可选：可以直接在这里调用 ModDAO 批量入库
                 # if results:
                 #     self._save_ai_results_to_db(results)
             except Exception as e:

@@ -152,7 +152,7 @@ def validate_environment():
         sys.exit(1)
 
     # 2. 检测前端入口文件是否存在 (防止打包丢失资源)
-    # 这里假设你之前的 get_entrypoint 逻辑
+    # 这里假设之前的 get_entrypoint 逻辑
     entry = get_entrypoint()
     if not entry.startswith('http'):
         # 转换回普通路径进行检查

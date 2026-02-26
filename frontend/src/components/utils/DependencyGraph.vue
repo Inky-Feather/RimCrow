@@ -128,7 +128,7 @@ const getHitGroup = (e) => {
       if (g.visualLane !== clickLane) return false
       
       // 必须在垂直有效范围内 [minIndex, maxIndex]
-      // 这里的逻辑保证了：如果你点击的位置超出了上层短线的范围，
+      // 这里的逻辑保证了：如果点击的位置超出了上层短线的范围，
       // 短线会被过滤掉，从而露出了下层的长线
       if (rowIndex < g.minIndex || rowIndex > g.maxIndex) return false
       
@@ -164,7 +164,7 @@ const getHitGroup = (e) => {
     
     // 优先级 B: 只存在 Normal 线路 (视觉最上层优先)
     if (normalHits.length > 0) {
-      // 取最上层的 Normal 线 (这就是你要求的“符合视觉直觉”)
+      // 取最上层的 Normal 线 (这就是要求的“符合视觉直觉”)
       return normalHits[normalHits.length - 1]
     }
   }
@@ -228,7 +228,7 @@ const processGraph = () => {
     g.maxIndex = Math.max(...all)
     // 检测是否包含向上依赖（只要有一个子项在父项上面，或者全部在上面）
     // 简化处理：如果 min < parentIndex，说明有子项在父项上面，视为 Error（或者部分 Error）
-    // 为了视觉清晰，我们将含有向上依赖的组标记为 Error
+    // 为了视觉清晰，将含有向上依赖的组标记为 Error
     if (g.minIndex < g.parentIndex) g.isError = true
     return g
   })
@@ -359,7 +359,7 @@ const handleMouseMove = (e) => {
     if (hoveredGroup.value !== group) {
       hoveredGroup.value = group
       
-      // 构造显示内容 (根据你的全局组件支持纯文本还是HTML，这里以模版字符串为例)
+      // 构造显示内容 (根据全局组件支持纯文本还是HTML，这里以模版字符串为例)
       let content = `{{${group.color}|依赖源:}} ${modStore.displayModName(group.parentId)}\n包含 ${group.childIndices.length} 个子模组`
       if (group.isError) {
         content += `\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!`

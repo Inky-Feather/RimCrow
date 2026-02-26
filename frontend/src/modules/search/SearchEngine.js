@@ -19,7 +19,7 @@ export class SearchEngine {
     this.excludeRules = (options.excludeFields || []).map(rule => {
       if (rule instanceof RegExp) return rule;
       // 将字符串简易通配符转为正则: '*path' -> /path$/
-      // 如果你更喜欢完全正则，这里可以只处理字符串精确匹配
+      // 如果更喜欢完全正则，这里可以只处理字符串精确匹配
       // 下面是一个支持 *通配符 的简易转换实现
       const pattern = rule.replace(/\*/g, '.*'); 
       return new RegExp(`^${pattern}$`);
@@ -156,7 +156,7 @@ export class SearchEngine {
       }
 
       // 3. 选出最佳可用别名
-      // 我们只选 *一个* 最短/最好的可用别名，以免污染命名空间
+      // 只选 *一个* 最短/最好的可用别名，以免污染命名空间
       let bestAlias = null;
       
       for (const candidate of candidates) {

@@ -183,7 +183,7 @@
                 <div v-if="currentTab === 'community'" class="mb-4 p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
                   <div class="text-sm text-accent-secondary">
                     <p class="font-bold mb-1">社区规则库 (RimSort)</p>
-                    <p class="opacity-80">包含众多由社区维护的排序建议。此处仅展示与你已安装模组相关的条目。</p>
+                    <p class="opacity-80">包含众多由社区维护的排序建议。此处仅展示与已安装模组相关的条目。</p>
                   </div>
                   <div class="flex flex-col items-center gap-2">
                     <button @click="ruleStore.updateCommunity" class="px-3 py-1.5 bg-accent-secondary/20 hover:bg-accent-secondary/40 text-accent-secondary rounded-lg text-sm font-bold transition-all border border-accent-secondary/30">

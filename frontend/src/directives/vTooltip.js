@@ -22,7 +22,7 @@ export const vTooltip = {
     const handleEnter = (e) => {
       // 记录当前触发指令的元素，方便 unmounted 时判断
       el._isHovering = true 
-      // binding.value 就是你传给指令的数据 (例如: modData)
+      // binding.value 就是传给指令的数据 (例如: modData)
       hoverStore.show(el._tipValue, e)
     }
     

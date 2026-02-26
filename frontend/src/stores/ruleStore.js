@@ -140,7 +140,7 @@ export const useRuleStore = defineStore('rules', () => {
     const pid = targetModId.toLowerCase()
     const other = otherModId.toLowerCase()
     // 获取或初始化当前规则对象
-    // 注意：我们需要深拷贝，不能直接改 ref
+    // 注意：需要深拷贝，不能直接改 ref
     const rule = JSON.parse(JSON.stringify(userModRules.value[pid] || {}))
     // 初始化子对象
     if (!rule[type]) rule[type] = {}

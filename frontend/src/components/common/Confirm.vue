@@ -174,9 +174,9 @@ const containerStyle = computed(() => {
   if (top + ESTIMATED_HEIGHT > winH.value) {
     // 空间不足，放上面
     // 注意：这里需要配合 CSS translateY(-100%) 或者直接计算 bottom 坐标
-    // 为了简单，我们计算 top 坐标为：目标顶部 - 弹窗高度 - 间隙
+    // 为了简单，计算 top 坐标为：目标顶部 - 弹窗高度 - 间隙
     // 但因为高度不确定，更好的方式是用 bottom 定位
-    // 这里我们简单处理：假设高度固定，实际项目中可用 Floating UI
+    // 这里简单处理：假设高度固定，实际项目中可用 Floating UI
     top = rect.top - GAP - ESTIMATED_HEIGHT 
     transformOriginY = 'bottom'
   }

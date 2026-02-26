@@ -182,7 +182,7 @@ class AIManager:
         """
         核心路由：组装 LiteLLM 需要的参数，彻底分离官方与代理逻辑
         """
-        # 如果 AI 设置中明确关闭了代理，即使全局开启了，我们也对 AI 进程屏蔽它
+        # 如果 AI 设置中明确关闭了代理，即使全局开启了，也对 AI 进程屏蔽它
         if not settings.config.network.use_proxy_on_ai:
             os.environ.pop('HTTP_PROXY', None)
             os.environ.pop('HTTPS_PROXY', None)
@@ -215,7 +215,7 @@ class AIManager:
         # 2. 路由分支
         if cfg.api_type == 'official':
             # 官方原生模式
-            # 如果模型名称未自带提供商前缀（如 gpt-4o 没有 openai/ 前缀），LiteLLM 也能自动识别，但为了极致安全，我们显式传入 custom_llm_provider
+            # 如果模型名称未自带提供商前缀（如 gpt-4o 没有 openai/ 前缀），LiteLLM 也能自动识别，但为了极致安全，显式传入 custom_llm_provider
             kwargs["model"] = cfg.model
             kwargs["custom_llm_provider"] = cfg.provider
             kwargs["api_key"] = cfg.api_key or "dummy_key"
@@ -234,7 +234,7 @@ class AIManager:
                 kwargs["model"] = f"gemini/{cfg.model}"
             else:
                 # openai 
-                # 这里加上 openai/ 前缀是 LiteLLM 的终极奥义，它会强制按 OpenAI 官方数据结构请求你的目标 base_url
+                # 这里加上 openai/ 前缀是 LiteLLM 的终极奥义，它会强制按 OpenAI 官方数据结构请求目标 base_url
                 kwargs["model"] = f"openai/{cfg.model}"
 
         # 核心逻辑：判断 AI 代理开关
@@ -245,7 +245,7 @@ class AIManager:
                 kwargs["proxy_url"] = proxy_url
         else:
             # 2. 如果 AI 明确关闭了代理，但全局代理可能开着
-            # 为了防止 LiteLLM 自动读取环境变量，我们要显式告诉它：不要代理
+            # 为了防止 LiteLLM 自动读取环境变量，要显式告诉它：不要代理
             kwargs["proxy_url"] = None 
         
         return kwargs
@@ -428,7 +428,7 @@ class AIManager:
             logger.info(f"AI Task [Round {attempt+1}]: {len(pending_items)} pending items -> {len(chunks)} chunks.")
             
             semaphore = asyncio.Semaphore(max_concurrency)
-            # 这里必须把 chunk 自身也传给 zip，因为我们需要知道发出去的是谁
+            # 这里必须把 chunk 自身也传给 zip，因为需要知道发出去的是谁
             chunk_tasks = []
             
             for idx, chunk in enumerate(chunks):
@@ -506,7 +506,7 @@ class AIManager:
             'message': f"推理结束！成功: {len(successful_ids)}, 失败: {failed_count}"
         })
         
-        # 返回你指定的结构化数据
+        # 返回指定的结构化数据
         return {
             "success_count": len(successful_ids),
             "failed_count": failed_count,

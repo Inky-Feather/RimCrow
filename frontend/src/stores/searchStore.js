@@ -9,7 +9,7 @@ import { MOD_SIGN_COLOR_MAP } from '../utils/constants'
 export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()
   
-  // 1. 定义 Schema (你的“配置中心”)
+  // 1. 定义 Schema (“配置中心”)
   // 统一配置、别名、来源、布尔值等
   const searchSchema = {
     // === 基础信息 ===

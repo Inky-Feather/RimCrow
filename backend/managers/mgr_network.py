@@ -30,7 +30,7 @@ class NetworkManager:
     def apply(self):
         """
         供外部调用的刷新方法。
-        当你在 UI 或代码中修改了 settings 后，调用此方法即可立即生效。
+        当在 UI 或代码中修改了 settings 后，调用此方法即可立即生效。
         """
         self.apply_proxy_settings()
         
@@ -108,7 +108,7 @@ class NetworkManager:
         if not hosts_map:
             self.restore_system_hosts()
             return True
-        # 构建我们要写入的文本块
+        # 构建要写入的文本块
         block_lines = [self.marker_start]
         for domain, ip in hosts_map.items():
             block_lines.append(f"{ip}\t{domain}\n")
@@ -118,7 +118,7 @@ class NetworkManager:
             # 1. 先读取现有内容
             with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            # 2. 清理掉旧的我们的标记块
+            # 2. 清理掉旧的的标记块
             content = self._remove_custom_block(content)
             # 3. 加上新的标记块（确保换行）
             if not content.endswith('\n'):
