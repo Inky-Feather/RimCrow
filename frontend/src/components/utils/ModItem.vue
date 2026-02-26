@@ -271,9 +271,24 @@ const generateAliasNotes = async () => {
 }
 // 取消订阅模组
 const unsubscribeMod = async (delete_file = false) => {
-  const res = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
-  if(res) {
-    appStore.unsubscribeMod(props.item_id, delete_file)
+  // 只选择包含workshop_id的项目
+  const paths = [];
+  const workshop_ids = [];
+  // 遍历数组，同时收集两个字段
+  modStore.selectedMods.forEach(m => {
+    // 只选择包含 workshop_id 的项目
+    if (m.workshop_id) {
+      paths.push(m.path);
+      workshop_ids.push(m.workshop_id);
+    }
+  });
+
+  const check = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}（${workshop_ids.length} 项）吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
+  if(check) {
+    const res = await appStore.unsubscribeMod(workshop_ids)
+    if (res && delete_file) {
+      appStore.deletePaths(paths)
+    }
   }
 }
 
@@ -289,46 +304,48 @@ const handleContextMenu = async (event) => {
     modStore.selectMods(props.item_id)
     await nextTick()
   }
-  const selectedIds = modStore.selectedIds;
+  const selectedIds = modStore.selectedIds; 
+  const selectedCountStr = selectedIds.length>1?` (${selectedIds.length})`:''
+  modStore.lastSelectedMod=modStore.takeModById(props.item_id)  // 记录最后选中的模组
   // 获取统计信息
   const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
+    { label: '标签管理'+ selectedCountStr , icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
       children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4, label: '批量加入分组',
+    { label: '分组管理'+ selectedCountStr, icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4, label: '批量加入分组',
       children: groupStore.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
         label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => modStore.selectModsGroup(group.group_id)
       }))}]
     },
-    { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
+    { label: '标记颜色'+ selectedCountStr, icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
         children:[...Object.entries(MOD_SIGN_COLOR_MAP).map(([c, name]) => ({ tooltip: name, color: c, 
             active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
           })), { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }
         ]
       }]
     },
-    { label: '修改类型', icon: ChessPawn,
+    { label: '修改类型'+ selectedCountStr, icon: ChessPawn,
       children: [...Object.entries(MOD_TYPE_MAP).map(([key, value]) => ({ 
         icon: MOD_TYPE_ICON_MAP[key],
         label: value, action: () => modStore.setModsType(selectedIds, key)
       })),{ label: '恢复默认', level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },
-    { label: (isActive.value?'停用选中项':'启用选中项') , icon: isActive.value? CircleSlash2:CircleCheckBig, 
+    { label: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig, 
       action: () => modStore.changeModsActive(selectedIds, !isActive.value) 
     },
   ]
   // 文件处理菜单
   const fileMenuItems = [
     { divider: true },
-    { label: '创建本地共存', icon: Copy,
+    { label: '创建本地共存'+ selectedCountStr, icon: Copy,
       disabled: !modStore.selectedMods.some(m => m.source === 'workshop'),
       action: () => modStore.localizeSelectedMods(),
     },
-    { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
+    { label: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
   ]
   // 单选菜单
   const singleMenuItems = [
@@ -339,18 +356,18 @@ const handleContextMenu = async (event) => {
     { label: 'Steam操作', icon: IconSteam, disabled: modData.value.source!=='workshop', children: [
       { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(modData.value.url) },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeMod(props.item_id) },
-      { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
-      { label: '取消订阅并删除文件', disabled: modData.value.source!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(true) },
+      { label: '取消订阅'+ selectedCountStr, disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
+      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.source!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(true) },
     ]},
   ]
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '联锁选中项', icon: Link2, action: () => modStore.linkMods(selectedIds) },
-    { label: '批量生成别名备注', icon: BotMessageSquare, action: () => generateAliasNotes() },
+    { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
+    { label: '联锁选中项'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) },
   ]
   if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
-    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
+    selectedMenuItems.push({ label: '解除联锁'+ selectedCountStr, icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
   }
   // 1. 获取所有选中 Mod 的当前问题并集
   const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);
@@ -393,7 +410,8 @@ const handleContextMenu = async (event) => {
   // 合并菜单
   const menuItems = [
   ...commnMenuItems,
-  ...(selectedIds.length > 1 ? selectedMenuItems : singleMenuItems),
+  ...singleMenuItems,
+  ...selectedMenuItems,
   ...issueManagementItems, // 插入新的批量忽略逻辑
   ...fileMenuItems, // 插入文件处理菜单
 ];

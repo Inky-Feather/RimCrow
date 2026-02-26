@@ -36,6 +36,7 @@ from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
 from backend.utils.logger import logger
+from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
 from backend.database.models import ModAsset, UserModData, init_db, db
@@ -49,7 +50,6 @@ from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
-from backend.managers.mgr_network import network_mgr
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
@@ -1405,11 +1405,10 @@ class API:
                     pending.remove(item)
 
     @log_api_call
-    def steam_subscribe(self, workshop_id: str):
+    def steam_subscribe(self, workshop_ids: str):
         """调用 Steam 客户端订阅"""
         try:
-            wid = int(workshop_id)
-            success = self.steam_mgr.subscribe_item(wid)
+            success = self.steam_mgr.subscribe_items(workshop_ids)
             if success:
                 return ApiResponse.success(message="已发送订阅请求 (需Steam运行中)")
             else:
@@ -1418,18 +1417,17 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def steam_unsubscribe(self, workshop_id: str):
+    def steam_unsubscribe(self, workshop_ids: str):
         """调用 Steam 客户端取消订阅"""
         try:
-            wid = int(workshop_id)
-            success = self.steam_mgr.unsubscribe_item(wid)
+            success = self.steam_mgr.unsubscribe_items(workshop_ids)
             if success:
                 return ApiResponse.success(message="已发送取消订阅请求")
             else:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:
             return ApiResponse.error(str(e))
-        
+    
     @log_api_call
     def steam_check_status(self, workshop_id: str):
         """
@@ -1456,7 +1454,17 @@ class API:
             return ApiResponse.success(message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
-        
+    
+    @log_api_call
+    def steam_collection_items_get(self, collection_id: str):
+        """
+        获取订阅合集列表
+        """
+        try:
+            workshop_ids = self.steam_mgr.get_collection_items(collection_id)
+            return ApiResponse.success(workshop_ids)
+        except Exception as e:
+            return ApiResponse.error(str(e))
     
     # =========================================================================
     #  12. AI 功能 (AI Features)

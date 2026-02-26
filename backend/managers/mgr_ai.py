@@ -7,6 +7,9 @@ import asyncio
 from typing import List, Dict, Any
 from dataclasses import asdict
 
+# 禁用远程模型成本映射
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 # 引入 LiteLLM 的异步和同步方法
 import litellm
 from litellm import completion, acompletion
@@ -133,16 +136,22 @@ class AIManager:
 
     def _fetch_custom_models(self, provider: str, base_url: str, api_key: str) -> List[str]:
         """(内部方法) 发送网络请求探测代理/本地服务的模型列表"""
+        proxies = None
+        if settings.config.network.use_proxy_on_ai:
+            from backend.managers.mgr_network import network_mgr
+            url = network_mgr.get_proxy_url()
+            if url: proxies = {"http": url, "https": url}
+            
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         try:
             # Ollama 格式探测
             if provider == 'ollama':
-                resp = requests.get(f"{base_url}/api/tags", timeout=10)
+                resp = requests.get(f"{base_url}/api/tags", proxies=proxies, timeout=10)
                 if resp.status_code == 200:
                     return [m['name'] for m in resp.json().get('models', [])]
             elif provider == 'gemini':
                 # Gemini 协议通常在 URL 中带 key，或者从 Header 取
-                resp = requests.get(f"{base_url}/v1/models", params={"key": api_key}, timeout=10)
+                resp = requests.get(f"{base_url}/v1/models", params={"key": api_key}, proxies=proxies, timeout=10)
                 if resp.status_code == 200:
                     # 返回结果通常是 models/gemini-1.5-pro，需要剥离 models/ 前缀
                     return [m['name'].replace('models/', '') for m in resp.json().get('models', []) 
@@ -153,7 +162,7 @@ class AIManager:
                 endpoints = ["/models"] if base_url.endswith("/v1") else ["/v1/models", "/models"]
                 for endpoint in endpoints:
                     try:
-                        resp = requests.get(f"{base_url}{endpoint}", headers=headers, timeout=10)
+                        resp = requests.get(f"{base_url}{endpoint}", headers=headers, proxies=proxies, timeout=10)
                         if resp.status_code == 200:
                             data = resp.json()
                             if 'data' in data: # OpenAI 标准格式
@@ -173,6 +182,15 @@ class AIManager:
         """
         核心路由：组装 LiteLLM 需要的参数，彻底分离官方与代理逻辑
         """
+        # 如果 AI 设置中明确关闭了代理，即使全局开启了，我们也对 AI 进程屏蔽它
+        if not settings.config.network.use_proxy_on_ai:
+            os.environ.pop('HTTP_PROXY', None)
+            os.environ.pop('HTTPS_PROXY', None)
+        else:
+            # 确保应用最新的全局代理设置
+            from backend.managers.mgr_network import network_mgr
+            network_mgr.apply_proxy_settings()
+            
         from backend.settings import AIConfig
         raw_cfg = settings.config.ai
         cfg = AIConfig(**raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
@@ -219,6 +237,17 @@ class AIManager:
                 # 这里加上 openai/ 前缀是 LiteLLM 的终极奥义，它会强制按 OpenAI 官方数据结构请求你的目标 base_url
                 kwargs["model"] = f"openai/{cfg.model}"
 
+        # 核心逻辑：判断 AI 代理开关
+        if settings.config.network.use_proxy_on_ai:
+            from backend.managers.mgr_network import network_mgr
+            proxy_url = network_mgr.get_proxy_url()
+            if proxy_url:
+                kwargs["proxy_url"] = proxy_url
+        else:
+            # 2. 如果 AI 明确关闭了代理，但全局代理可能开着
+            # 为了防止 LiteLLM 自动读取环境变量，我们要显式告诉它：不要代理
+            kwargs["proxy_url"] = None 
+        
         return kwargs
 
     def _extract_json_from_text(self, text: str, is_batch: bool = False):

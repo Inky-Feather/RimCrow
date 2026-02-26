@@ -22,6 +22,7 @@ DATA_DIR = HOME_DIR / "data"                # 数据目录
 CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径
 UPDATE_CACHE_DIR = HOME_DIR / "updates"     # 更新目录
 TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
+MODS_DIR = HOME_DIR / "mods"                # 模组目录
 
 # 定义缩略图缓存目录
 CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
@@ -53,7 +54,9 @@ class NetworkConfig:
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
     # 自定义 Hosts (域名 -> IP 映射)
     hosts: Dict[str, str] = field(default_factory=dict) 
-    write_to_system_hosts: bool = False
+    write_to_system_hosts: bool = False         # 是否将自定义 Hosts 写入系统 hosts 文件
+    use_proxy_on_steamcmd: bool = False         # SteamCMD 是否使用代理
+    use_proxy_on_ai: bool = False               # AI 是否使用代理
 
 @dataclass
 class AIConfig:
@@ -126,9 +129,11 @@ class AppConfig:
     game_dlc_path: str = ""     # RimWorld DLC 文件夹
     local_mods_path: str = ""
     workshop_mods_path: str = ""
+    steamcmd_mods_path: str = str(TOOLS_DIR / "steamcmd" / "steamapps" / "workshop" / "content" / "294100")
     use_workshop_mods: bool = True
     steam_path: str = ""
     home_path: str = str(Path(os.getcwd())) # 本程序路径
+    mods_path: str = str(MODS_DIR)  # 本程序默认模组路径
     
     # --- 游戏设置 ---
     game_version: str = ""
@@ -231,6 +236,10 @@ class SettingsManager:
                 # 这里可以加一些简单的类型保护，比如防止把 str 赋给 int
                 # 但 Python 鸭子类型通常允许直接赋值，除非为了极高的健壮性
                 setattr(target_obj, key, value)
+                # 4. 特殊处理：如果是 steamcmd_path，更新 steamcmd_mods_path
+                if key == 'steamcmd_path':
+                    settings.set('steamcmd_mods_path', str(Path(value) / "steamapps" / "workshop" / "content" / "294100"))
+                
 
     def _load(self) -> AppConfig:
         """
@@ -246,18 +255,14 @@ class SettingsManager:
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
             # 2. 实例化默认配置 (这里已经包含了所有定义的默认值)
             config = AppConfig()
-            
             # 3. 递归更新 (核心逻辑)
             self._recursive_update(config, data)
-
             # 检查旧版配置位置
             legacy_game_data = data.get('network', {}).get('game_data_path')
             if not config.user_data_path and legacy_game_data:
                 config.user_data_path = legacy_game_data
-
             return config
 
         except Exception as e:

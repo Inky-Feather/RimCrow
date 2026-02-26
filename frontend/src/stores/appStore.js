@@ -116,6 +116,8 @@ export const useAppStore = defineStore('app', () => {
     prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
 
     home_path: '',
+    steam_mods_path: '',
+    mods_path: '',
     user_rules_path: '',
 
     community_rules_url: '',
@@ -171,7 +173,10 @@ export const useAppStore = defineStore('app', () => {
         password: '',
         bypass_list: ['127.0.0.1', 'localhost']
       },
-      hosts: {} // Object: { 'domain': 'ip' }
+      hosts: {},                      // Object: { 'domain': 'ip' }
+      write_to_system_hosts: false,   // 是否将自定义 Hosts 写入系统 hosts 文件
+      use_proxy_on_steamcmd: false,   // SteamCMD 是否使用代理
+      use_proxy_on_ai: false          // AI 是否使用代理
     },
 
     // --- Steam ---
@@ -818,28 +823,32 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 订阅模组
-  const subscribeMod = async (mod_id) => {
+  const subscribeMod = async (workshop_ids) => {
     if (!window.pywebview) return
-    const modStore = useModStore()
-    const workshop_id = modStore.takeModById(mod_id).workshop_id
-    if(!workshop_id) return
-    const res = await window.pywebview.api.steam_subscribe(workshop_id)
-    if (checkResult(res, `订阅模组 ${modStore.displayNameById(mod_id)}`)) {
-    } else {
-      console.error("订阅模组异常:", res.message)
+    if(!workshop_ids) return
+    const res = await window.pywebview.api.steam_subscribe(workshop_ids)
+    if (checkResult(res, `订阅 ${workshop_ids.length} 个创意工坊项目`)) {
+      toast.success(`订阅 ${workshop_ids.length} 个创意工坊项目成功，正在下载中...`)
     }
   }
   // 取消订阅模组
-  const unsubscribeMod = async (mod_id, delete_file = false) => {
+  const unsubscribeMod = async (workshop_ids) => {
+    if (!window.pywebview) return false
+    if(!workshop_ids) return false
+    // const modStore = useModStore()
+    // const workshop_ids = modStore.takeModListByIds(mod_ids).filter(m => m.workshop_id).map(m => m.workshop_id)
+    const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
+    if (checkResult(res, `取消订阅 ${workshop_ids.length} 个创意工坊项目`,true)) {
+      // if(delete_file) workshop_ids.forEach(id => deletePath(modStore.takeModById(id).path))
+      return true
+    }
+    return false
+  }
+  const getCollectionItems = async (collection_id) => {
     if (!window.pywebview) return
-    const modStore = useModStore()
-    const workshop_id = modStore.takeModById(mod_id).workshop_id
-    if(!workshop_id) return
-    const res = await window.pywebview.api.steam_unsubscribe(workshop_id)
-    if (checkResult(res, `取消订阅模组 ${modStore.displayNameById(mod_id)}`)) {
-      if(delete_file) deletePath(modStore.takeModById(mod_id).path)
-    } else {
-      console.error("取消订阅模组异常:", res.message)
+    const res = await window.pywebview.api.steam_collection_items_get(collection_id)
+    if (checkResult(res, `获取订阅合集列表 ${collection_id}`)) {
+      return res.data
     }
   }
 
@@ -1070,7 +1079,7 @@ export const useAppStore = defineStore('app', () => {
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll,
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
-    startDownload, waitForDownload, downloadWorkshopItems, 
+    startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase,
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod, checkUpdate, updateExternalDB,
     // AI处理

@@ -456,7 +456,7 @@ class FileManager:
         2. 指向路径错误的链接，全部删除并重建。
         3. 已经正确指向的链接，绝对不动（0操作）。
         """
-        # logger.info(f"Sync links: local_mods_path={local_mods_path}, workshop_mod_paths={workshop_mod_paths}")
+        logger.info(f"Sync links: local_mods_path={local_mods_path}, workshop_mod_paths={workshop_mod_paths}")
         if not local_mods_path or not os.path.exists(local_mods_path):
             logger.error("Sync links failed: Local mods path does not exist.")
             return False

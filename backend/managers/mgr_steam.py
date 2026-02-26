@@ -32,6 +32,7 @@ if __name__ == "__main__":
 # 只在 run_steam_worker 函数内部 import
 from backend.utils.logger import logger
 from backend.settings import settings
+from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
 
@@ -41,10 +42,10 @@ RIMWORLD_APP_ID = "294100"
 # =========================================================
 #  独立 Worker 函数 (由 main.py 在子进程调用)
 # =========================================================
-def run_steam_worker(action: str, mod_id: int):
+def run_steam_worker(action: str, payload: str):
     """
-    这是在一个独立的、短命的进程中运行的。
-    它负责初始化 SteamAPI，执行操作，然后结束。
+    独立进程运行的 Steam API 代理。
+    支持处理单个 ID 或以逗号分隔的批量 ID。
     """
     try:
         # 在这里才导入库，确保主进程干净
@@ -66,30 +67,50 @@ def run_steam_worker(action: str, mod_id: int):
         logger.error("ERROR: Steam API not loaded")
         return
 
-    # 定义回调
+    # 解析传入的 payload（支持单个 ID 整数或逗号分隔的字符串）
+    mod_ids =[int(x.strip()) for x in str(payload).split(',') if x.strip().isdigit()]
+    if not mod_ids:
+        logger.error("ERROR: No valid mod IDs provided")
+        return
+
+    completed_callbacks = 0
+    total_requests = len(mod_ids)
+
+    # 闭包回调函数：记录 Steam 客户端的响应
     def callback(res):
-        logger.info(f"Callback: {res}")
+        nonlocal completed_callbacks
+        completed_callbacks += 1
+        logger.info(f"Callback ({completed_callbacks}/{total_requests}): {res}")
 
     success = False
     try:
-        if action == "subscribe":
-            steam.Workshop.SubscribeItem(mod_id, callback)
-            success = True
-            logger.info("SUCCESS: Subscription request sent")
-        elif action == "unsubscribe":
-            steam.Workshop.UnsubscribeItem(mod_id, callback)
-            success = True
-            logger.info("SUCCESS: Unsubscription request sent")
-        else:
-            logger.error(f"ERROR: Unknown action {action}")
+        for mod_id in mod_ids:
+            if action in ("subscribe", "subscribe_batch"):
+                steam.Workshop.SubscribeItem(mod_id, callback)
+            elif action in ("unsubscribe", "unsubscribe_batch"):
+                steam.Workshop.UnsubscribeItem(mod_id, callback)
+            else:
+                logger.error(f"ERROR: Unknown action {action}")
+                return
+        success = True
+        logger.info(f"SUCCESS: {action} request sent for {total_requests} items")
     except Exception as e:
         logger.error(f"ERROR: Action failed: {e}")
 
-    # 给 Steam 客户端一点时间处理请求
+    # 智能等待机制：等待回调完成，而不是死等固定的时间
     if success:
-        # 必须稍作等待，让 Steam 客户端接收到 IPC 消息
-        time.sleep(1)
-
+        # 每项最多给 0.5 秒缓冲，总超时下限为 2 秒，上限 15 秒
+        timeout = max(2.0, min(15.0, total_requests * 0.5))
+        start_time = time.time()
+        
+        while completed_callbacks < total_requests:
+            if time.time() - start_time > timeout:
+                logger.warning(f"TIMEOUT: Only received {completed_callbacks}/{total_requests} callbacks.")
+                break
+            time.sleep(0.1) # 短暂休眠，防止 CPU 空转
+            
+        # 在退出前额外给 Steam 客户端 0.5 秒处理底层的 IPC 状态
+        time.sleep(0.5)
 
 class SteamManager:
     _instance = None
@@ -118,6 +139,14 @@ class SteamManager:
         os.makedirs(self.agent_dir, exist_ok=True)
         # 状态
         self.steamcmd_ready = os.path.exists(self.steamcmd_exe)
+        # 文件修改时间记录，减少磁盘 IO
+        self._last_acf_mtime = 0
+        self._last_log_mtime = 0
+        self._cached_merged_data = []
+        # 中央任务调度器状态
+        self._monitor_lock = threading.Lock()
+        self._active_tasks = {}          # 存放所有正在执行的任务 { task_id: dict }
+        self._monitor_running = False    # 标记主监控线程是否存活
         
         # 准备环境 (只复制 DLL 和 txt，不再生成 py 脚本)
         self._ensure_agent_environment()
@@ -222,11 +251,11 @@ class SteamManager:
             tid = download_mgr.add_task(url, self.steamcmd_dir, "steamcmd_package.zip")
             tasks.append({"type": "steamcmd", "id": tid})
         return tasks
-        
+    
     def post_download_setup(self, task_type, file_path):
         """下载完成后的解压/配置回调"""
         if task_type == "steamcmd":
-             try:
+            try:
                 import zipfile
                 if file_path.endswith('.zip'):
                     with zipfile.ZipFile(file_path, 'r') as zip_ref:
@@ -234,7 +263,7 @@ class SteamManager:
                     os.remove(file_path)
                     self.steamcmd_ready = True
                     logger.info("SteamCMD installed.")
-             except Exception as e:
+            except Exception as e:
                 logger.error(f"Failed to extract SteamCMD: {e}")
 
     # =========================================================
@@ -244,25 +273,41 @@ class SteamManager:
         EventBus.resume()   # 恢复事件总线
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
+        # 生成一个 Task ID 并返回给前端，以便前端监听
+        task_id = "steamcmd_batch_" + str(time.time_ns() // 1000000)
         
         commands = ["login anonymous"]
         for mid in workshop_ids:
             commands.append(f"workshop_download_item {RIMWORLD_APP_ID} {mid}")
         commands.append("quit")
-        
-        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, workshop_ids))
+        t = threading.Thread(target=self._run_steamcmd_process, args=(commands, workshop_ids, task_id))
         t.start()
         return t
 
-    def _run_steamcmd_process(self, commands, mod_ids):
-        fake_task_id = "steamcmd_batch_" + str(time.time_ns() // 1000000)
-        self._emit_progress(fake_task_id, "Connecting to Steam...", 0, TaskStatus.RUNNING)
+    def _run_steamcmd_process(self, commands, mod_ids, task_id):
+        # 1. 复制当前主进程的环境变量
+        current_env = os.environ.copy()
+        # 2. 检查开关：如果开启了 SteamCMD 代理，则合并代理环境变量
+        if settings.config.network.use_proxy_on_steamcmd:
+            proxy_env = network_mgr.get_proxy_env()
+            current_env.update(proxy_env)
+            logger.info("SteamCMD will run WITH proxy.")
+        else:
+            # 如果关闭代理，确保环境变量里没有残留的代理设置
+            current_env.pop("HTTP_PROXY", None)
+            current_env.pop("HTTPS_PROXY", None)
+            current_env.pop("ALL_PROXY", None)
+            logger.info("SteamCMD will run WITHOUT proxy.")
+        
+        target_dir = settings.config.steamcmd_mods_path
+        # 初始化状态
+        self._emit_progress_event(task_id, "正在连接Steam服务器...", 0, TaskStatus.RUNNING, target_dir, "SteamCMD")
 
         try:
             args = [self.steamcmd_exe]
             for cmd in commands:
                 args.append(f"+{cmd}")
-            
+            # Windows 下隐藏控制台窗口
             startupinfo = None
             if platform.system() == "Windows":
                 startupinfo = subprocess.STARTUPINFO()
@@ -272,14 +317,19 @@ class SteamManager:
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                env=current_env,    # 传递合并后的环境变量
                 text=True,
                 encoding='utf-8',
                 errors='replace',
                 startupinfo=startupinfo,
-                cwd=self.steamcmd_dir
+                cwd=self.steamcmd_dir,
+                bufsize=1 # 行缓冲
             )
 
+            # 增强版正则：SteamCMD 的输出格式多样
             progress_pattern = re.compile(r"progress: (\d+\.\d+)")
+            # 也可以匹配 [ 25%] 这种格式
+            bracket_pattern = re.compile(r"\[\s*(\d+)%\]")
             success_pattern = re.compile(r"Success\. Downloaded item (\d+)")
 
             current_item_idx = 0
@@ -287,101 +337,307 @@ class SteamManager:
             
             while True:
                 line = process.stdout.readline() # type: ignore
-                if not line and process.poll() is not None:
-                    break
+                if not line and process.poll() is not None: break
                 if not line: continue
                 line = line.strip()
 
-                match = progress_pattern.search(line)
-                if match:
-                    percent = float(match.group(1))
-                    total_percent = ((current_item_idx + percent / 100) / total_items) * 100
-                    self._emit_progress(fake_task_id, f"Downloading item {current_item_idx+1}/{total_items}", int(total_percent), TaskStatus.RUNNING)
+                # 解析百分比进度
+                percent_val = 0
+                m_prog = progress_pattern.search(line)
+                m_bracket = bracket_pattern.search(line)
+                
+                if m_prog:
+                    percent_val = float(m_prog.group(1))
+                elif m_bracket:
+                    percent_val = float(m_bracket.group(1))
 
-                if success_pattern.search(line):
+                if percent_val > 0:
+                    # 整体百分比 = (已完成数 + 当前项进度) / 总数
+                    total_percent = ((current_item_idx + percent_val / 100) / total_items) * 100
+                    self._emit_progress_event(
+                        task_id, 
+                        f"正在下载 ({current_item_idx + 1}/{total_items})", 
+                        int(total_percent), 
+                        TaskStatus.RUNNING, 
+                        target_dir, "SteamCMD"
+                    )
+
+                item_id = success_pattern.search(line)
+                if item_id: item_id = item_id.group(1)
+                
+                # 解析成功单项
+                if item_id:
                     current_item_idx += 1
-                    logger.info(f"SteamCMD finished one item. ({current_item_idx}/{total_items})")
+                    # 每完成一个，强制刷新一次进度
+                    total_percent = (current_item_idx / total_items) * 100
+                    logger.info(f"SteamCMD finished one item: {item_id}. ({current_item_idx}/{total_items}) ")
+                    self._emit_progress_event(
+                        task_id, 
+                        f"正在下载 ({current_item_idx}/{total_items})", 
+                        int(total_percent), 
+                        TaskStatus.RUNNING if current_item_idx < total_items else TaskStatus.COMPLETED, 
+                        target_dir, "SteamCMD"
+                    )
 
             if process.returncode == 0:
-                self._emit_progress(fake_task_id, "All downloads completed", 100, TaskStatus.COMPLETED)
+                self._emit_progress_event(task_id, f"全部下载完成 ({total_items})", 100, TaskStatus.COMPLETED, target_dir, "SteamCMD")
             else:
-                self._emit_progress(fake_task_id, f"SteamCMD exited with code {process.returncode}", 0, TaskStatus.ERROR)
+                self._emit_progress_event(task_id, f"SteamCMD 异常退出: {process.returncode}", 0, TaskStatus.ERROR, target_dir, "SteamCMD")
 
         except Exception as e:
             logger.error(f"SteamCMD execution failed: {e}")
-            self._emit_progress(fake_task_id, str(e), 0, TaskStatus.ERROR)
-
-    def _emit_progress(self, tid, msg, percent, status):
-        EventBus.emit("download-progress", {
-            "id": tid,
-            "filename": msg,
-            "status": status.value,
-            "percent": percent,
-            "speed": "SteamCMD",
-            "total": 100,
-            "current": percent
-        })
+            self._emit_progress_event(task_id, str(e), 0, TaskStatus.ERROR, target_dir, "SteamCMD")
+            
 
     # =========================================================
     #  3. 自我调用 (Re-entry) 逻辑
     # =========================================================
-
-    def _run_agent(self, action: str, mod_id: int) -> bool:
+    
+    def _execute_steam_action(self, action: str, ids: int | str | list) -> bool:
         """
-        调用自身 EXE 作为 Worker
+        核心执行器：支持 int, str 或 list 类型的输入
         """
-        # 获取当前运行的可执行文件路径
-        # 在打包环境中，这是 .exe 的路径
-        # 在开发环境中，这是 python.exe 的路径
-        current_exe = sys.executable
-        
-        # 构造命令: [exe, "--steam-worker", action, mod_id]
-        cmd = [current_exe]
-        
-        # 开发环境需要补上 main.py
-        if not getattr(sys, 'frozen', False):
-            # 获取 main.py 的绝对路径
-            main_script = os.path.join(self.project_root, "main.py")
-            cmd.append(main_script)
-            
-        cmd.extend(["--steam-worker", action, str(mod_id)])
-        
-        try:
-            startupinfo = None
-            if platform.system() == "Windows":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            # 关键：cwd 必须设为 agent_dir，这样子进程初始化 Steamworks 时
-            # 才能读取到该目录下的 steam_appid.txt 和 DLL
-            result = subprocess.run(
-                cmd,
-                cwd=self.agent_dir,
-                capture_output=True,
-                text=True,
-                startupinfo=startupinfo,
-                encoding='utf-8'
-            )
-            
-            stdout = result.stdout
-            if "SUCCESS" in stdout:
-                logger.info(f"Agent {action} success: {mod_id}")
-                return True
-            else:
-                logger.error(f"Agent failed. STDOUT: {stdout} \nSTDERR: {result.stderr}")
-                return False
-
-        except Exception as e:
-            logger.error(f"Failed to run steam agent: {e}")
+        # 1. 类型检查与归一化，兼容 "12345" 或 12345
+        if isinstance(ids, (int, str)): id_list = [str(ids)]
+        elif isinstance(ids, list): id_list = [str(i) for i in ids]
+        else:
+            logger.error(f"Invalid ID type: {type(ids)}")
             return False
+        if not id_list: return True
 
-    def subscribe_item(self, published_file_id: int):
-        """订阅 Workshop Mod"""
-        return self._run_agent("subscribe", published_file_id)
+        # 2. 分块处理 (避免命令行超长)
+        BATCH_SIZE = 50
+        all_success = True
+        current_exe = sys.executable
+        is_frozen = getattr(sys, 'frozen', False)
+        for i in range(0, len(id_list), BATCH_SIZE):
+            batch = id_list[i : i + BATCH_SIZE]
+            payload = ",".join(batch)
+            cmd = [current_exe]
+            if not is_frozen:
+                cmd.append(os.path.join(self.project_root, "main.py"))
+            cmd.extend(["--steam-worker", action, payload])
+            try:
+                # 统一使用隐藏窗口启动
+                si = None
+                if platform.system() == "Windows":
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                result = subprocess.run(
+                    cmd, cwd=self.agent_dir, capture_output=True, 
+                    text=True, startupinfo=si, encoding='utf-8'
+                )
+                if "SUCCESS" not in result.stdout:
+                    logger.error(f"Steam Agent Error: {result.stdout}")
+                    all_success = False
+            except Exception as e:
+                logger.error(f"Failed to run steam agent: {e}")
+                all_success = False
 
-    def unsubscribe_item(self, published_file_id: int):
-        """取消订阅 Workshop Mod"""
-        return self._run_agent("unsubscribe", published_file_id)
+        return all_success
+
+
+    def subscribe_items(self, ids: int | str | list):
+        """订阅模组入口"""
+        return self._submit_task("subscribe", ids)
+
+    def unsubscribe_items(self, ids: int | str | list):
+        """取消订阅模组入口"""
+        return self._submit_task("unsubscribe", ids)
+
+    def _submit_task(self, action: str, ids: int | str | list):
+        """统一的任务提交器：包含去重发送、冲突修剪、并注册到中央监控池"""
+        target_ids = [str(ids)] if isinstance(ids, (int, str)) else [str(i) for i in ids]
+        target_ids = list(set(target_ids)) # 去重
+        
+        # --- 新增核心逻辑：冲突修剪 (Target Pruning) ---
+        with self._monitor_lock:
+            for tid, existing_task in list(self._active_tasks.items()):
+                # 如果遇到动作相反的任务（例如：旧任务正在订阅，新任务要移除）
+                if existing_task["action"] != action:
+                    # 计算有冲突的 Mod ID 交集
+                    overlap = set(existing_task["targets"]).intersection(set(target_ids))
+                    if overlap:
+                        # 从旧任务的目标列表中剔除冲突的 ID
+                        existing_task["targets"] =[x for x in existing_task["targets"] if x not in overlap]
+                        existing_task["total"] = len(existing_task["targets"])
+                        logger.info(f"冲突拦截: 从任务 {tid} 中移除了 {len(overlap)} 个冲突项。")
+                        # 妙手：如果旧任务的目标被扣光了(total=0)，下一次轮询时进度会自动变成 100% 并自我销毁！
+
+        # 1. 发送 Steam 指令 (过滤掉已经完美的项)
+        current_data = self.workshop_merged_data()
+        data_dict = {str(item['workshop_id']): item for item in current_data}
+        
+        to_action =[]
+        ws_base_path = settings.config.workshop_mods_path
+        
+        for mid in target_ids:
+            item = data_dict.get(mid)
+            folder_exists = bool(ws_base_path and os.path.exists(os.path.join(ws_base_path, mid)))
+            
+            if action == "subscribe":
+                is_perfect = item and item.get('is_installed') and not item.get('needs_update') and folder_exists
+                if not is_perfect:
+                    to_action.append(mid)
+            else: # unsubscribe
+                if item and item.get('is_installed') or folder_exists:
+                    to_action.append(mid)
+
+        if to_action:
+            self._execute_steam_action(action, to_action)
+
+        # 2. 生成唯一 Task ID
+        task_id = f"steam_{action}_{int(time.time() * 1000)}"
+        
+        # 3. 注册新任务并唤醒监控线程
+        with self._monitor_lock:
+            # 即便 target_ids 全部都是 is_perfect，我们也建一个空任务让监控线程秒回 100%
+            # 这能保证前端的 Promise 必然被 Resolve！
+            self._active_tasks[task_id] = {
+                "targets": target_ids,
+                "total": len(target_ids),
+                "action": action,
+                "start_time": time.time()
+            }
+            
+            if not self._monitor_running:
+                self._monitor_running = True
+                threading.Thread(target=self._master_monitor_loop, daemon=True).start()
+                
+        return task_id
+
+    def abort_monitor_task(self, task_id: str):
+        """
+        供前端 UI '取消任务' 按钮调用。
+        仅仅是从监控列表中移除该任务（不再发送进度事件），
+        注意：这不会停止 Steam 本身的下载，若要停止下载请调用 unsubscribe_item。
+        """
+        with self._monitor_lock:
+            if task_id in self._active_tasks:
+                self._active_tasks.pop(task_id)
+                logger.info(f"主动终止了对任务的监控: {task_id}")
+                
+                # 给前端发送一个被终止的状态，让 Promise 能够 Reject
+                self._emit_progress_event(
+                    tid=task_id,
+                    msg="任务已取消",
+                    percent=0,
+                    status=TaskStatus.ERROR,
+                    file_path=settings.config.workshop_mods_path, 
+                    title="Steam 托管",
+                    error="用户主动取消了任务监控"
+                )
+                return True
+        return False
+    
+    def _master_monitor_loop(self):
+        ws_base_path = settings.config.workshop_mods_path
+        
+        while True:
+            with self._monitor_lock:
+                if not self._active_tasks:
+                    self._monitor_running = False
+                    break
+                current_tasks = dict(self._active_tasks)
+
+            try:
+                current_data = self.workshop_merged_data()
+                data_dict = {str(item['workshop_id']): item for item in current_data}
+                
+                tasks_to_remove =[]
+
+                for tid, task in current_tasks.items():
+                    targets = task["targets"]
+                    total = task["total"]
+                    action = task["action"]
+                    start_time = task["start_time"]
+                    
+                    finished_count = 0
+                    errors =[]
+                    
+                    # 如果目标被全部修剪光了 (total == 0)
+                    if total == 0:
+                        percent = 100
+                        status = TaskStatus.COMPLETED
+                        msg = "任务已被取消或覆盖"
+                    else:
+                        for mid in targets:
+                            item = data_dict.get(mid)
+                            folder_exists = bool(ws_base_path and os.path.exists(os.path.join(ws_base_path, mid)))
+                            
+                            if action == "subscribe":
+                                if item and item.get('is_installed') and not item.get('needs_update') and folder_exists:
+                                    finished_count += 1
+                                elif item and item.get('has_error') and item.get('error_detail'):
+                                    errors.append(f"Mod {mid}: {item.get('error_detail')}")
+                                    
+                            elif action == "unsubscribe":
+                                is_installed_acf = item.get('is_installed') if item else False
+                                # 条件1：完美移除 (物理消失 + Steam记录消失)
+                                if not is_installed_acf and not folder_exists:
+                                    finished_count += 1
+                                # 条件2：容错放行 (物理已经消失，且指令发出了超过 3 秒)
+                                # 对付手动删文件导致 Steam 装死不更新 ACF 的情况
+                                elif not folder_exists and (time.time() - start_time > 3):
+                                    finished_count += 1
+
+                        # 计算独立进度
+                        percent = int((finished_count / total) * 100)
+                        status = TaskStatus.RUNNING
+                        
+                        if finished_count == total:
+                            status = TaskStatus.COMPLETED
+                        elif errors and (len(errors) + finished_count >= total):
+                            status = TaskStatus.ERROR
+                        elif time.time() - start_time > 1800:
+                            status = TaskStatus.ERROR
+                            errors.append("Steam 响应超时")
+
+                        # 修复这里的越界报错！
+                        action_zh = "订阅" if action == "subscribe" else "移除"
+                        if total > 1:
+                            msg = f"Steam {action_zh} 完成 ({finished_count}/{total})" if (finished_count==total) else f"Steam {action_zh}中 ({finished_count}/{total})"
+                        else:
+                            msg = f"{action_zh}模组 {targets[0]}"
+
+                    # 发送独立的事件给前端
+                    self._emit_progress_event(
+                        tid=tid,
+                        msg=msg,
+                        percent=percent,
+                        status=status,
+                        file_path=settings.config.workshop_mods_path, 
+                        title="Steam 托管",
+                        error="; ".join(errors) if errors else None
+                    )
+
+                    if status in[TaskStatus.COMPLETED, TaskStatus.ERROR]:
+                        tasks_to_remove.append(tid)
+
+                if tasks_to_remove:
+                    with self._monitor_lock:
+                        for tid in tasks_to_remove:
+                            self._active_tasks.pop(tid, None)
+
+            except Exception as e:
+                logger.error(f"[Master Monitor Loop] 轮询时遇到波动: {e}", exc_info=True)
+                
+            time.sleep(3)
+    
+    def _emit_progress_event(self, tid, msg, percent, status, file_path='', title='', error=None):
+        """对接 EventBus 格式"""
+        payload = {
+            "id": tid,
+            "filename": msg,
+            "file_path": file_path, # Steam 模组路径由前端根据 ID 自行推断或暂不填
+            "status": status.value,
+            "total": 100,
+            "current": percent,
+            "percent": percent,
+            "speed": title,
+            "error": error
+        }
+        EventBus.emit("download-progress", payload)
 
 
     # =========================================================
@@ -706,6 +962,24 @@ class SteamManager:
             merged_list.append(merged_item)
             
         return merged_list
+    
+    def _get_merged_data_efficiently(self):
+        """带有脏检查的高效数据获取"""
+        acf_path = self._get_acf_path()
+        log_path = self._get_steam_log_path()
+        
+        # 检查文件是否变动
+        acf_mtime = os.path.getmtime(acf_path) if acf_path and os.path.exists(acf_path) else 0
+        log_mtime = os.path.getmtime(log_path) if log_path and os.path.exists(log_path) else 0
+        
+        if acf_mtime == self._last_acf_mtime and log_mtime == self._last_log_mtime:
+            return self._cached_merged_data
+        
+        # 只有变动时才解析
+        self._cached_merged_data = self.workshop_merged_data()
+        self._last_acf_mtime = acf_mtime
+        self._last_log_mtime = log_mtime
+        return self._cached_merged_data
     
     def workshop_merged_data(self) -> list:
         """

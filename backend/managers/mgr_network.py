@@ -4,6 +4,7 @@ import socket
 import atexit
 import platform
 from backend.settings import settings
+from backend.utils.logger import logger
 
 class NetworkManager:
     def __init__(self):
@@ -51,17 +52,38 @@ class NetworkManager:
         if cfg.enabled and cfg.host and cfg.port:
             auth = f"{cfg.username}:{cfg.password}@" if getattr(cfg, 'username', None) else ""
             proxy_url = f"{cfg.type}://{auth}{cfg.host}:{cfg.port}"
-            
             os.environ['HTTP_PROXY'] = proxy_url
             os.environ['HTTPS_PROXY'] = proxy_url
-            
             if getattr(cfg, 'bypass_list', None):
                 os.environ['NO_PROXY'] = ",".join(cfg.bypass_list)
         else:
             os.environ.pop('HTTP_PROXY', None)
             os.environ.pop('HTTPS_PROXY', None)
             os.environ.pop('NO_PROXY', None)
+    
+    def get_proxy_url(self) -> str:
+        """获取当前的代理 URL 字符串"""
+        cfg = settings.config.network.proxy
+        if cfg.enabled and cfg.host and cfg.port:
+            auth = f"{cfg.username}:{cfg.password}@" if cfg.username else ""
+            return f"{cfg.type}://{auth}{cfg.host}:{cfg.port}"
+        return ""
 
+    def get_proxy_env(self) -> dict:
+        """获取用于 subprocess 的代理环境变量字典"""
+        proxy_url = self.get_proxy_url()
+        if not proxy_url: return {}
+        env = {
+            "HTTP_PROXY": proxy_url,
+            "HTTPS_PROXY": proxy_url,
+            "ALL_PROXY": proxy_url, # SteamCMD 有时也看这个
+        }
+        # 注入绕过列表
+        if settings.config.network.proxy.bypass_list:
+            env["NO_PROXY"] = ",".join(settings.config.network.proxy.bypass_list)
+        return env
+
+    # ====================== Hosts 配置 =======================
     def patch_socket_for_hosts(self):
         """Python 运行时 Socket 劫持（动态读取最新配置，无死循环风险）"""
         if self._is_socket_patched:
@@ -79,46 +101,39 @@ class NetworkManager:
         socket.getaddrinfo = new_getaddrinfo
         self._is_socket_patched = True
 
-    # ================= 系统 Hosts 修改逻辑 =================
-
+    # ---------------- 系统 Hosts 修改逻辑 ---------------
     def write_to_system_hosts(self) -> bool:
         """将 Hosts 写入操作系统。返回 True 表示成功，False 表示无权限"""
         hosts_map = settings.config.network.hosts
         if not hosts_map:
             self.restore_system_hosts()
             return True
-
         # 构建我们要写入的文本块
         block_lines = [self.marker_start]
         for domain, ip in hosts_map.items():
             block_lines.append(f"{ip}\t{domain}\n")
         block_lines.append(self.marker_end)
         custom_block = "".join(block_lines)
-
         try:
             # 1. 先读取现有内容
             with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-
             # 2. 清理掉旧的我们的标记块
             content = self._remove_custom_block(content)
-
             # 3. 加上新的标记块（确保换行）
             if not content.endswith('\n'):
                 content += '\n'
             content += custom_block
-
             # 4. 写回文件
             with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
             return True
 
         except PermissionError:
-            print("[警告] 无法写入系统 Hosts，请以管理员身份运行。已降级为内部劫持。")
+            logger.warning("[警告] 无法写入系统 Hosts，请以管理员身份运行。已降级为内部劫持。")
             return False
         except Exception as e:
-            print(f"[错误] 修改系统 Hosts 失败: {e}")
+            logger.error(f"[错误] 修改系统 Hosts 失败: {e}")
             return False
 
     def restore_system_hosts(self):
@@ -126,7 +141,6 @@ class NetworkManager:
         try:
             with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-
             if self.marker_start in content:
                 clean_content = self._remove_custom_block(content)
                 with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
