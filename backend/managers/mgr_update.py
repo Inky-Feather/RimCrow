@@ -13,12 +13,12 @@ from packaging import version
 from backend._version import __version__
 from backend.utils.lanzou_parser import LanzouParser
 from backend.utils.logger import logger
-from backend.settings import settings, UPDATE_CACHE_DIR
+from backend.settings import settings, UPDATE_DIR
 from backend.managers.mgr_download import DownloadManager, TaskStatus, DownloadTask
 from backend.utils.event_bus import EventBus
 
 # 确保缓存目录存在
-os.makedirs(UPDATE_CACHE_DIR, exist_ok=True)
+os.makedirs(UPDATE_DIR, exist_ok=True)
 @dataclass
 class UpdateInfo:
     has_update: bool
@@ -51,11 +51,11 @@ class LocalSource(UpdateSource):
     用于离线更新或避免重复下载。
     """
     def check(self) -> Optional[UpdateInfo]:
-        if not os.path.exists(UPDATE_CACHE_DIR):
+        if not os.path.exists(UPDATE_DIR):
             return None
         
         # 扫描所有元数据文件
-        json_files = glob.glob(os.path.join(UPDATE_CACHE_DIR, "*.json"))
+        json_files = glob.glob(os.path.join(UPDATE_DIR, "*.json"))
         best_candidate: Optional[UpdateInfo] = None
         
         for jf in json_files:
@@ -192,7 +192,7 @@ class UpdateManager:
         """在缓存目录查找特定版本的 zip"""
         # 假设文件名包含版本号，或者通过 json 查找
         # 方案 A: 查 JSON (更准确)
-        json_path = os.path.join(UPDATE_CACHE_DIR, f"update_v{version_str}.json")
+        json_path = os.path.join(UPDATE_DIR, f"update_v{version_str}.json")
         if os.path.exists(json_path):
             try:
                 with open(json_path, 'r', encoding='utf-8') as f:
@@ -205,7 +205,7 @@ class UpdateManager:
         # 方案 B: 盲猜文件名
         potential_names = [f"update_v{version_str}.zip", f"RimModManager_v{version_str}.zip"]
         for name in potential_names:
-            p = os.path.join(UPDATE_CACHE_DIR, name)
+            p = os.path.join(UPDATE_DIR, name)
             if os.path.exists(p):
                 return p
         return None
@@ -237,7 +237,7 @@ class UpdateManager:
         # 注意：这里传入回调函数，让 DownloadManager 在完成后通知
         task_id = self.download_mgr.add_task(
             url=info.download_url,
-            dest_dir=str(UPDATE_CACHE_DIR),
+            dest_dir=str(UPDATE_DIR),
             filename=filename,
             expected_hash=info.file_hash, # 如果源提供了 Hash，这里会自动校验
             on_complete=self._on_download_complete,
@@ -289,7 +289,7 @@ class UpdateManager:
         """保存 update_vX.X.X.json"""
         try:
             filename = f"update_v{info.version}.json"
-            path = os.path.join(UPDATE_CACHE_DIR, filename)
+            path = os.path.join(UPDATE_DIR, filename)
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(info.to_dict(), f, indent=2, ensure_ascii=False)
         except Exception as e:
@@ -298,7 +298,7 @@ class UpdateManager:
     def _clean_old_cache(self):
         """保留最近2个版本，删除其他的"""
         try:
-            files = glob.glob(os.path.join(UPDATE_CACHE_DIR, "*.json"))
+            files = glob.glob(os.path.join(UPDATE_DIR, "*.json"))
             if len(files) <= 2: return
             # 按时间排序
             files.sort(key=os.path.getmtime)

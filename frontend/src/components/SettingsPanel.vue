@@ -198,7 +198,7 @@
               <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">社区配置管理</h3>
                 <div class="space-y-6">
-                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" :check="formData.check_info?.steamcmd_path" />
+                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" :check="formData.check_info?.steamcmd_path" />
                   <div class="flex items-end gap-1.5">
                     <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
                     <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
@@ -533,7 +533,7 @@ const handleGameBrowse = async () => {
 }
 // 手动选择其他路径
 const handleBrowse = async (pathKey, fileTypes) => {
-  // 处理嵌套路径 (如 'steam.steamcmd_path')
+  // 处理嵌套路径 (如 'steamcmd_path')
   const keys = pathKey.split('.')
   let current = formData.value
   for (let i = 0; i < keys.length - 1; i++) {

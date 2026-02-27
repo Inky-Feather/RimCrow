@@ -31,6 +31,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 
 # 1. 引入配置管理
+from backend.database.models_ext import WorkshopMeta
 from backend.settings import settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__
@@ -55,9 +56,12 @@ from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.managers.mgr_ai import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
+# from backend.managers.mgr_workshop_db_old import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileManager
+from backend.database.dao_ext import ExtDAO
+from backend.managers.mgr_steam_api import SteamWebAPI
 
 
 def log_api_call(func):
@@ -1457,17 +1461,6 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
     
-    @log_api_call
-    def steam_collection_items_get(self, collection_id: str):
-        """
-        获取订阅合集列表
-        """
-        try:
-            workshop_ids = self.steam_mgr.get_collection_items(collection_id)
-            return ApiResponse.success(workshop_ids)
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
     # =========================================================================
     #  12. AI 功能 (AI Features)
     # =========================================================================
@@ -1728,18 +1721,15 @@ class API:
             
             if not os.path.exists(file_folder):
                 os.makedirs(file_folder, exist_ok=True)
-
             logger.info(f"Start updating community {data_type} from: {url}")
-            # 定义回调函数：下载完了自动加载规则
+            # 定义回调函数
             def on_db_ready(task):
                 logger.info(f"{data_type} ready, reloading...")
-                self.sorter.rule_mgr.load_all()
+                # self.sorter.rule_mgr.load_all()
                 EventBus.send_toast(f"社区 {data_type} 数据库更新完毕！", type="success")
-            
             def on_db_error(task):
                 logger.error(f"{data_type} download failed: {task.error_msg}")
                 EventBus.send_toast(f"社区 {data_type} 数据库更新失败！", type="error")
-
             task_id = self.download_mgr.add_task(
                 url=url, 
                 dest_dir=file_folder, 
@@ -1754,12 +1744,190 @@ class API:
             logger.error(f"Update community {data_type} failed: {e}")
             return ApiResponse.error(f"系统错误: {str(e)}")
     
+    @log_api_call
+    def lifecycle_check_updates(self):
+        """
+        生命周期核心：精准识别【工坊目录】与【管理器目录】各自的更新状态
+        """
+        # 1. 分别获取两个来源的本地状态 (来自 SteamManager 的解析结果)
+        # workshop_merged_data 内部解析的是 Steam 客户端的 ACF/LOG
+        workshop_local_list = self.steam_mgr.workshop_merged_data()
+        # steamcmd_merged_data 内部解析的是 管理器目录下的 ACF/LOG (SteamCMD专用)
+        manager_local_list = self.steam_mgr.steamcmd_merged_data()
+        # 2. 收集所有需要查询的工坊 ID (去重)
+        all_wids = set()
+        for m in workshop_local_list: all_wids.add(m['workshop_id'])
+        for m in manager_local_list: all_wids.add(m['workshop_id'])
+        if not all_wids: return ApiResponse.success({"updates": []})
+        # 3. 一次性从缓存/网络获取所有涉及 ID 的云端最新时间
+        online_details = SteamWebAPI.fetch_item_details(list(all_wids))
+        updates_available = []
+        # 4. 定义内部比对逻辑
+        def compare_and_add(local_item, source_label):
+            wid = local_item['workshop_id']
+            online_info = online_details.get(wid)
+            if not online_info: return
+            # 本地时间取：ACF 记录时间 或 日志下载时间
+            local_time = local_item.get('time_downloaded') or local_item.get('installed_version_time') or 0
+            online_time = online_info.get('time_updated', 0)
+            # 容差 1 小时。如果云端时间 > 本地时间，则标记
+            if online_time > local_time + 3600 * 1000:
+                updates_available.append({
+                    "workshop_id": wid,
+                    "title": online_info["title"],
+                    "source": source_label, # 告诉前端是 'workshop' 还是 'manager' 需更新
+                    "local_time": local_time,
+                    "online_time": online_time,
+                    "preview_url": online_info["preview_url"]
+                })
+        # 5. 执行两次独立比对
+        for m in workshop_local_list:
+            if m.get('is_installed'):
+                compare_and_add(m, 'workshop')
+        for m in manager_local_list:
+            if m.get('is_installed'):
+                compare_and_add(m, 'manager')
+        return ApiResponse.success({"updates": updates_available})
+
+    @log_api_call
+    def lifecycle_resolve_dependencies(self, active_package_ids: list):
+        """
+        一键检测前置依赖：扫描当前启用的包，找出缺失的依赖，并直接转换为可下载的工坊 ID
+        """
+        # 1. 搜集当前启用的所有 Mod 数据
+        installed_mods = ModDAO.get_profile_mods()
+        installed_pids = set([m['package_id'].lower() for m in installed_mods])
+        missing_dependencies = {} # { "workshop_id": "name" }
+        # 2. 遍历启用的 Mod，提取依赖要求
+        for pid in active_package_ids:
+            pid = pid.lower()
+            mod_data = next((m for m in installed_mods if m['package_id'].lower() == pid), None)
+            # 来源 A: 本地 About.xml 解析出的 rules
+            if mod_data and 'rules' in mod_data:
+                for dep in mod_data['rules'].get('dependencies', []):
+                    target_pid = dep['target_id'].lower()
+                    if target_pid not in installed_pids:
+                        # 缺失！通过外置数据库反查工坊 ID
+                        wid = ExtDAO.get_workshop_id_by_package(target_pid)
+                        if wid:
+                            missing_dependencies[wid] = target_pid # 暂存
+            # 来源 B: 直接查询外置数据库 (Ext_DB) 中的依赖
+            # (即使本地没写，社区库可能记录了隐藏依赖)
+            self_wid = ExtDAO.get_workshop_id_by_package(pid)
+            if self_wid:
+                # 调用 ext_db 的模型查询该 Mod 的全量云端依赖
+                meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == self_wid)
+                if meta and meta.dependencies:
+                    for dep_wid, dep_name in meta.dependencies.items():
+                        # 反查依赖项的包名看本地有没有装
+                        dep_meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == dep_wid)
+                        dep_pid = dep_meta.package_id if dep_meta else None
+                        if dep_pid and dep_pid not in installed_pids:
+                            missing_dependencies[dep_wid] = dep_name
+        if not missing_dependencies:
+            return ApiResponse.success({"missing": []}, message="前置依赖完整，无需补充。")
+        # 3. 补充线上详情供 UI 渲染 (名称、封面)
+        details = SteamWebAPI.fetch_item_details(list(missing_dependencies.keys()))
+        result = []
+        for wid, fallback_name in missing_dependencies.items():
+            info = details.get(wid, {})
+            result.append({
+                "workshop_id": wid,
+                "name": info.get("title", fallback_name),
+                "preview_url": info.get("preview_url", "")
+            })
+        return ApiResponse.success({"missing": result})
+
+    @log_api_call
+    def lifecycle_fetch_collection(self, collection_id: str):
+        """
+        合集解析与下载预检：一键解析合集，对比本地，返回哪些需下载、哪些已存在
+        """
+        # 1. 抓取合集信息
+        coll_info = SteamWebAPI.fetch_item_details([collection_id])
+        if not coll_info: return ApiResponse.error("无法获取合集信息")
+        # 2. 抓取子项列表
+        child_wids = SteamWebAPI.fetch_collection_children(collection_id)
+        if not child_wids: return ApiResponse.error("合集为空或解析失败")
+        # 3. 获取子项详情
+        children_details = SteamWebAPI.fetch_item_details(child_wids)
+        
+        print("合集信息:",coll_info)
+        print("子项 ID:",child_wids)
+        print("子项详情:",list(children_details.values())[:2])
+        
+        # 4. 对比本地 ACF 安装记录
+        installed_wids = self.steam_mgr.get_installed_workshop_ids()
+        installed_str_wids = set([str(w) for w in installed_wids])
+        result_children = []
+        for wid in child_wids:
+            info = children_details.get(wid, {})
+            result_children.append({
+                "workshop_id": wid,
+                "title": info.get("title", f"Mod {wid}"),
+                "preview_url": info.get("preview_url", ""),
+                "is_installed": wid in installed_str_wids
+            })
+        return ApiResponse.success({
+            "collection": coll_info[collection_id],
+            "children": result_children,
+            "total": len(child_wids),
+            "need_download": len([c for c in result_children if not c['is_installed']])
+        })
     
+    @log_api_call
+    def get_mod_workshop_detail(self, workshop_id: str, force_refresh: bool = False):
+        """
+        获取单个 Mod 的完整工坊详情（含截图、长介绍、在线状态）
+        """
+        if not workshop_id: return ApiResponse.error("无效的工坊 ID")
+        # 1. 调度：从缓存或网络获取
+        details = SteamWebAPI.fetch_item_details([workshop_id], force_refresh=force_refresh)
+        info = details.get(str(workshop_id))
+        if not info: return ApiResponse.error("无法从 Steam 获取该模组详情")
+        print(info)
+        
+        # 将原始截图 URL 转换为代理缓存 URL
+        cache_screenshots = []
+        for raw_url in info.get("screenshots", []):
+            cache_url = self.file_mgr.get_gallery_url(workshop_id, raw_url)
+            cache_screenshots.append(cache_url)
+        
+        # 2. 注入替代建议（利用我们之前的 ExtDAO）
+        # 需要先查出这个工坊 ID 对应的 PackageID
+        from backend.database.dao_ext import ExtDAO
+        from backend.managers.mgr_workshop_db import WorkshopDBManager
+        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == str(workshop_id))
+        replacement = None
+        if meta: replacement = WorkshopDBManager().check_replacement(meta.package_id, settings.config.game_version)
+        # 3. 组合最终对象
+        return ApiResponse.success({
+            "workshop_id": workshop_id,
+            "title": info["title"],
+            "description": info["description"],
+            "screenshots": cache_screenshots, # 这里的 URL 列表直接发给前端 v-for
+            "preview_url": info["preview_url"],
+            "online_time": info["time_updated"],
+            "replacement": replacement # 如果有替代品，这里会包含 new_id 和 new_name
+        })
+        
 if __name__ == "__main__":
     # valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
     # print(valid_field_names)
     # steam_mgr=SteamManager()
     # installed_workshop_ids = steam_mgr.get_installed_workshop_ids()
     # print(len(installed_workshop_ids))
-    print(settings.config.community_instead_db_path)
+    # print(settings.config.community_instead_db_path)
+    api=API()
+    # api.update_external_db('workshop_db')
+    # res = api.lifecycle_check_updates()
+    # print(res)
+    
+    # res = api.lifecycle_fetch_collection("3670074636")
+    # print(res)
+    
+    res = api.get_mod_workshop_detail("3671245310", force_refresh=True)
+    print(res)
+    
+    
     pass

@@ -130,7 +130,7 @@ class SteamManager:
         self.steam_dir = settings.config.steam_path or self.get_steam_path()
         self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True) 
         # SteamCMD 路径
-        self.steamcmd_dir = settings.config.steam.steamcmd_path or os.path.join(self.tools_dir, "steamcmd")
+        self.steamcmd_dir = settings.config.steamcmd_path or os.path.join(self.tools_dir, "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
         # Steam Agent 路径 (隔离环境)
         self.agent_dir = os.path.join(self.tools_dir, "steam_agent")
@@ -1012,39 +1012,6 @@ class SteamManager:
         return self._merge_acf_and_log(acf_data, log_data)
         
     
-    def get_collection_items(self, collection_id: str) -> dict:
-        """
-        根据合集ID获取合集下的所有子模组ID
-        
-        """
-        # 不论传入的是链接字符串还是整数，都提取数字
-        collection_id_match = re.search(r'\d+', collection_id)
-        if collection_id_match:
-            collection_id = collection_id_match.group()
-        else:
-            logger.error(f"无法从传入参数获取合集ID: {collection_id}")
-            return {}
-        url = "https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/"
-        data = {
-            "collectioncount": "1",
-            "publishedfileids[0]": str(collection_id)
-        }
-        response = requests.post(url, data=data)
-        # print(response.text)
-        json_data = response.json()
-        # print(json_data)
-        # 解析返回的 JSON 数据，提取所有子模组的 ID
-        items =[]
-        try:
-            children = json_data['response']['collectiondetails'][0]['children']
-            for child in children:
-                if child['filetype'] == 0: # 0 代表普通模组
-                    items.append(child['publishedfileid'])
-        except KeyError as e:
-            logger.error(f"Get collection {collection_id} items failed: {e}")
-            
-        return {"collection_id": collection_id, "workshop_ids": items}
-
 if __name__ == "__main__":
     steam_mgr = SteamManager()
     data = steam_mgr.workshop_merged_data()
@@ -1055,7 +1022,7 @@ if __name__ == "__main__":
         print(f"Total items: {len(data2)} First item:\n", data2[0])
 
     # 测试获取一个合集的内容
-    url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3670074636"
-    mod_ids = steam_mgr.get_collection_items(url)
-    print(f"该合集包含以下模组: {mod_ids}")
+    # url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3670074636"
+    # mod_ids = steam_mgr.get_collection_items(url)
+    # print(f"该合集包含以下模组: {mod_ids}")
         

@@ -22,12 +22,13 @@ else:
 
 DATA_DIR = HOME_DIR / "data"                # 数据目录
 CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径
-UPDATE_CACHE_DIR = HOME_DIR / "updates"     # 更新目录
+UPDATE_DIR = HOME_DIR / "updates"     # 更新目录
 TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
 MODS_DIR = HOME_DIR / "mods"                # 模组目录
-
-# 定义缩略图缓存目录
-CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
+CACHE_DIR = HOME_DIR / "cache"                # 缓存目录
+# 定义缓存目录
+GALLERY_CACHE_DIR = CACHE_DIR / "gallery"       # 定义画廊缓存目录
+THUMBNAIL_CACHE_DIR = CACHE_DIR / "thumbnails"  # 定义缩略图缓存目录
 # 规则存放路径
 RULES_DIR = DATA_DIR / "rules"
 USER_RULES_PATH = RULES_DIR / "user_rules.json"             # 用户规则路径
@@ -71,12 +72,6 @@ class AIConfig:
     temperature: float = 0.7     # 温度参数（控制输出随机性）
     max_tokens: int = 5000       # 最大令牌数（限制模型输出长度）
     max_concurrency: int = 3     # 最大并发请求数（避免被API封锁）
-
-@dataclass
-class SteamConfig:
-    steamcmd_path: str = str(TOOLS_DIR / "steamcmd")
-    use_steam_client: bool = True  # 是否优先尝试使用 Steam 客户端
-    steam_appid: int = 294100      # RimWorld AppID
 
 @dataclass
 class UIConfig:
@@ -134,7 +129,9 @@ class AppConfig:
     use_workshop_mods: bool = True  # 是否使用公共工坊模组
     steam_path: str = ""          # Steam 安装路径
     home_path: str = str(Path(os.getcwd())) # 本程序路径
+    
     # steamcmd 下载路径
+    steamcmd_path: str = str(TOOLS_DIR / "steamcmd")
     steamcmd_mods_path: str = str(TOOLS_DIR / "steamcmd" / "steamapps" / "workshop" / "content" / "294100")
     self_mods_path: str = str(MODS_DIR)  # 本程序默认模组路径
     use_self_mods: bool = True          # 是否使用本程序模组
@@ -183,7 +180,6 @@ class AppConfig:
     
     # --- 功能设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)
-    steam: SteamConfig = field(default_factory=SteamConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     
 
@@ -266,8 +262,8 @@ class SettingsManager:
         统一管理所有依赖路径的计算逻辑。
         """
         # 根据 steamcmd_path 计算 steamcmd_mods_path
-        if self.config.steam.steamcmd_path:
-            new_path = str(Path(self.config.steam.steamcmd_path) / "steamapps" / "workshop" / "content" / "294100")
+        if self.config.steamcmd_path:
+            new_path = str(Path(self.config.steamcmd_path) / "steamapps" / "workshop" / "content" / "294100")
             self.config.steamcmd_mods_path = new_path
     
     def get(self, key: str) -> Any:
@@ -284,12 +280,11 @@ class SettingsManager:
         设置配置项并自动处理路径同步逻辑
         """
         if not hasattr(self.config, key):
-            # 处理嵌套情况，例如 set('steam', {'steamcmd_path': '...'})
             print(f"Warning: Unknown key {key}")
             return
         # 记录关键路径的旧值用于比对
         old_self_mods_path = self.config.self_mods_path
-        old_steamcmd_path = self.config.steam.steamcmd_path
+        old_steamcmd_path = self.config.steamcmd_path
         current_attr = getattr(self.config, key)
         if is_dataclass(current_attr) and isinstance(value, dict):
             self._recursive_update(current_attr, value)
@@ -306,7 +301,7 @@ class SettingsManager:
                 move_old_data=self.config.move_old_self_mods
             )
         # 3. 如果 steamcmd_path 变了，也触发同步
-        if old_steamcmd_path != self.config.steam.steamcmd_path:
+        if old_steamcmd_path != self.config.steamcmd_path:
             from backend.managers.mgr_files import FileManager
             FileManager.sync_steamcmd_root_link()
         self.save()
@@ -327,12 +322,12 @@ class SettingsManager:
         全量更新，同样需要处理逻辑触发
         """
         old_self_mods_path = self.config.self_mods_path
-        old_steamcmd_path = self.config.steam.steamcmd_path
+        old_steamcmd_path = self.config.steamcmd_path
         self._recursive_update(self.config, data_dict)
         self._sync_derived_paths()
         # 检查并同步
         if old_self_mods_path != self.config.self_mods_path or \
-           old_steamcmd_path != self.config.steam.steamcmd_path:
+           old_steamcmd_path != self.config.steamcmd_path:
             from backend.managers.mgr_files import FileManager
             FileManager.sync_steamcmd_root_link(
                 old_mods_path=old_self_mods_path,

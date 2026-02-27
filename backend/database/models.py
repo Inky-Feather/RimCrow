@@ -16,6 +16,7 @@ class BaseModel(Model):
         database = db
         
 
+
 # 定义一个不转义中文的 JSONField
 class UTF8JSONField(Field):
     field_type = 'TEXT'  # 在 SQLite 中存为 TEXT
@@ -142,6 +143,17 @@ class GroupMod(BaseModel):
         # 联合主键，防止同一个 Mod 在同一个组里出现两次
         primary_key = CompositeKey('group_id', 'mod_id')
 
+class SteamItemCache(BaseModel):
+    """缓存 Steam Web API 拉取的在线信息 (Mod / 合集通用)"""
+    workshop_id = cast(str, CharField(primary_key=True))
+    title = cast(str, CharField(null=True))
+    description = cast(str, TextField(null=True))                   # 前端解析 BBCode
+    preview_url = cast(str, CharField(null=True))
+    screenshots = cast(list[str], UTF8JSONField(default=list)) 
+    time_updated = cast(int, BigIntegerField(default=0))            # 线上最新修改时间
+    last_sync_time = cast(int, BigIntegerField(default=current_ms)) # 缓存拉取时间
+
+
 class SystemInfo(BaseModel):
     key = cast(str, CharField(primary_key=True))
     value = cast(str, CharField())
@@ -158,7 +170,7 @@ def init_db(db_path):
         db.connect()    # 连接数据库
         
         # 定义所有模型列表
-        all_models = [ModAsset, GameProfile, UserModData, GroupData, GroupMod, SystemInfo]
+        all_models = [ModAsset, GameProfile, UserModData, GroupData, GroupMod, SystemInfo, SteamItemCache]
         # 1. 确保基础表存在
         db.create_tables(all_models, safe=True)
         # 2. 【核心】自动同步字段变动 (解决 no such column 报错)
@@ -188,13 +200,11 @@ def init_db(db_path):
             # 升级前建议备份 .db 文件
             import shutil
             shutil.copy2(db_path, db_path + ".bak")
-            
             # 执行迁移
             from backend.database.migrator import run_migrations
             run_migrations(old_v)
-            
             # 确保其他新加的表（如果迁移里没写的话）也能创建
-            db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod], safe=True)
+            db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod, SteamItemCache], safe=True)
             
         return True
     except Exception as e:
@@ -225,23 +235,19 @@ def clear_db():
         # 1. 确保连接是打开的
         if db.is_closed():
             db.connect()
-        
         # 2. 临时关闭外键约束 (防止删除顺序导致的报错)
         db.execute_sql('PRAGMA foreign_keys = OFF;')
-        
         # 3. 显式开启事务
         with db.atomic():
             # 删除所有表 (cascade=True 会处理外键依赖，但 SQLite 对 cascade 支持有限，
             # 所以手动按依赖顺序删，或者直接 drop_tables)
             # 注意顺序：先删依赖别人的(GroupMod, UserModData)，再删被依赖的(Mod, GroupData)
             db.drop_tables([GroupMod, UserModData, GameProfile, ModAsset, GroupData])
-        
         # 4. 【关键】执行 VACUUM
         # 这会物理清除数据库文件中的所有数据页，重置所有自增 ID，
         # 并强制同步 WAL 文件。这相当于把 .db 文件变成了一个全新的空文件。
         # 注意：VACUUM 不能在事务块 (atomic) 内部执行。
         db.execute_sql('VACUUM;')
-        
         # 5. 重新创建表
         with db.atomic():
             db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod])
@@ -253,7 +259,6 @@ def clear_db():
                 game_install_path=settings.config.game_install_path or "", # 防止 None 报错
                 user_data_path=settings.config.user_data_path or "",
             )
-            
         # 6. 恢复外键约束
         db.execute_sql('PRAGMA foreign_keys = ON;')
         
@@ -296,5 +301,5 @@ def auto_upgrade_schema(db, models):
                 logger.info(f"表 {table_name} 结构同步成功")
             except Exception as e:
                 logger.error(f"表 {table_name} 结构同步失败: {e}")
-                
+    
 

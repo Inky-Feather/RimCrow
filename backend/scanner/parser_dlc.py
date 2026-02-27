@@ -4,6 +4,7 @@ import json
 import glob
 from backend.utils.logger import logger
 import xml.etree.ElementTree as ET  # <-- 使用标准库
+from backend.settings import CACHE_DIR
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -19,7 +20,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 from backend.utils.constants import LANGUAGE_MAP
 
-CACHE_DIR = os.path.join(os.getcwd(), 'cache')
+
 CACHE_FILE = os.path.join(CACHE_DIR, 'dlc_i18n_all.json')
 
 class DLCParser:

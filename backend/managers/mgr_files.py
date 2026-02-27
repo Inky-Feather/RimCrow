@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -12,10 +13,11 @@ from typing import Any, Dict, List
 from urllib.parse import unquote, quote
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from PIL import Image
+import requests
 import webview # 引入 webview 库
 from send2trash import send2trash
 from backend.managers.mgr_game import GameManager
-from backend.settings import CACHE_DIR
+from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 
@@ -32,11 +34,9 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 # 1. 解析参数
                 query_part = self.path.split('path=', 1)[1]
                 local_path = unquote(query_part) # 解码 URL
-
                 # 2. 安全与存在性检查
                 if os.path.exists(local_path) and os.path.isfile(local_path):
                     self.send_response(200)
-                    
                     # 3. 设置 MIME 类型
                     ext = os.path.splitext(local_path)[1].lower()
                     ctype = 'application/octet-stream'
@@ -44,12 +44,10 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                     elif ext in ['.jpg', '.jpeg']: ctype = 'image/jpeg'
                     elif ext == '.webp': ctype = 'image/webp'
                     elif ext == '.gif': ctype = 'image/gif'
-                    
                     self.send_header('Content-type', ctype)
                     self.send_header('Access-Control-Allow-Origin', '*') # 允许跨域
                     self.send_header('Cache-Control', 'max-age=604800') # 强缓存7天(本地文件很少变)
                     self.end_headers()
-                    
                     # 4. 写入文件流 (零拷贝传输)
                     with open(local_path, 'rb') as f:
                         # shutil.copyfileobj(f, self.wfile) # 这种方式更高效
@@ -72,12 +70,66 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                     pass # 如果发送错误信息时连接也断了，就彻底忽略
                 return
         
-        # 其他请求直接 400
-        self.send_error(400, "Invalid Request Path")
+        # 处理 /gallery 请求
+        # 格式: /gallery?wid=123&url=https://...
+        if self.path.startswith('/gallery?'):
+            try:
+                # 1. 解析参数
+                from urllib.parse import urlparse, parse_qs
+                query = parse_qs(urlparse(self.path).query)
+                wid = query.get('wid', ['unknown'])[0]
+                remote_url = query.get('url', [None])[0]
+                if not remote_url:
+                    self.send_error(400, "Missing URL")
+                    return
+                # 2. 生成本地缓存路径
+                # 按照 workshop_id 分文件夹，文件名使用 URL 的 MD5 以防冲突
+                url_hash = hashlib.md5(remote_url.encode('utf-8')).hexdigest()
+                save_dir = GALLERY_CACHE_DIR / wid
+                save_dir.mkdir(parents=True, exist_ok=True)
+                # 简单判断后缀，默认为 jpg
+                ext = ".jpg"
+                if ".png" in remote_url.lower(): ext = ".png"
+                local_path = save_dir / f"{url_hash}{ext}"
+                # 3. 检查缓存：如果没有则下载
+                if not local_path.exists():
+                    logger.debug(f"Downloading gallery image to cache: {local_path}")
+                    resp = requests.get(remote_url, timeout=15)
+                    if resp.status_code == 200:
+                        with open(local_path, 'wb') as f:
+                            f.write(resp.content)
+                    else:
+                        self.send_error(404, "Remote image not found")
+                        return
+                # 4. 复用已有的文件发送逻辑
+                self._serve_file(str(local_path))
+                
+            except Exception as e:
+                logger.error(f"Gallery Proxy Error: {e}")
+                self.send_error(500)
+            return
+
+        self.send_error(404)
 
     def log_message(self, format, *args):
         # 重写此方法以屏蔽控制台日志输出，保持清爽
         pass
+    
+    def _serve_file(self, local_path):
+        """通用文件发送逻辑（抽取自原 do_GET）"""
+        ext = os.path.splitext(local_path)[1].lower()
+        ctype = 'image/jpeg'
+        if ext == '.png': ctype = 'image/png'
+        elif ext == '.webp': ctype = 'image/webp'
+        
+        self.send_response(200)
+        self.send_header('Content-type', ctype)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'max-age=2592000') # 缓存 30 天
+        self.end_headers()
+        with open(local_path, 'rb') as f:
+            self.wfile.write(f.read())
+
 
 
 class FileManager:
@@ -94,8 +146,10 @@ class FileManager:
     
     def __init__(self):
         # 1. 确保存储目录存在
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR, exist_ok=True)
+        if not os.path.exists(THUMBNAIL_CACHE_DIR):
+            os.makedirs(THUMBNAIL_CACHE_DIR, exist_ok=True)
+        if not os.path.exists(GALLERY_CACHE_DIR):
+            os.makedirs(GALLERY_CACHE_DIR, exist_ok=True)
             
         # 2. 启动 HTTP Server
         self._port = 0
@@ -133,13 +187,19 @@ class FileManager:
     # =========================================================
     #  2. 缩略图管理 (Thumbnail)
     # =========================================================
-
+    def get_gallery_url(self, workshop_id, remote_url):
+        """生成指向本地服务器的代理 URL"""
+        if not remote_url: return ""
+        from urllib.parse import quote
+        safe_url = quote(remote_url)
+        return f"http://127.0.0.1:{self._port}/gallery?wid={workshop_id}&url={safe_url}"
+    
     def get_thumbnail_path(self, package_id):
         """
         获取某个 Mod 已生成的缩略图路径 (物理路径)。
         如果不存在返回 None。
         """
-        target_path = os.path.join(CACHE_DIR, f"{package_id}.webp")
+        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
         if os.path.exists(target_path):
             return target_path
         return None
@@ -150,11 +210,8 @@ class FileManager:
         如果缩略图已存在且未过期，直接返回路径；否则重新生成。
         :return: 缩略图的绝对路径 (str) 或 None
         """
-        if not original_path or not os.path.exists(original_path):
-            return None
-
-        target_path = os.path.join(CACHE_DIR, f"{package_id}.webp")
-
+        if not original_path or not os.path.exists(original_path): return None
+        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
         # 检查是否需要重新生成 (存在性 + 修改时间)
         need_generate = True
         if os.path.exists(target_path):
@@ -164,10 +221,7 @@ class FileManager:
                     need_generate = False
             except OSError:
                 pass
-
-        if not need_generate:
-            return target_path
-
+        if not need_generate: return target_path
         # 开始生成
         try:
             with Image.open(original_path) as img:
@@ -179,10 +233,8 @@ class FileManager:
                         img = img.convert('RGBA')
                 else:
                     img = img.convert('RGB')
-                
                 # 缩放 (长宽最大 128px)
                 img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                
                 # 保存 (WEBP 格式，体积小速度快)
                 img.save(target_path, 'WEBP', quality=80)
                 return target_path
