@@ -6,6 +6,7 @@ import winreg
 import ctypes
 import webbrowser # 这个库用来打开浏览器
 from pathlib import Path
+from backend.settings import HOME_DIR, BASE_RESOURCE_DIR
 
 
 def is_port_available(host: str = "localhost", port: int = 5173, timeout: float = 0.5) -> bool:
@@ -43,28 +44,17 @@ def get_entrypoint():
     dev_server = "http://localhost:5173"
     
     # 1. 获取程序根目录 (Base Directory)
-    if getattr(sys, 'frozen', False):
-        # --- 打包后的环境 ---
-        # sys.executable 指向 .exe 文件的绝对路径
-        base_dir = Path(sys.executable).parent
-        # 额外：处理 --contents-directory lib 情况
-        # 如果内部资源在 _MEIPASS 目录下 (即 lib 文件夹内)
-        meipass_dir = Path(getattr(sys, '_MEIPASS', base_dir))
-    else:
-        # __file__ 指向当前 main.py 的位置
-        base_dir = Path(__file__).parent.resolve()
-        meipass_dir = base_dir
-        if is_port_available("localhost", 5173):
-            print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
-            return dev_server
+    if not getattr(sys, 'frozen', False) and is_port_available("localhost", 5173):
+        print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
+        return dev_server
             
     # 2. 定义探测路径优先级
     # 优先级 1: PyInstaller 内部解压目录 (lib 文件夹内部)
-    path_internal = meipass_dir / "frontend" / "dist" / "index.html"
+    path_internal = BASE_RESOURCE_DIR / "frontend" / "dist" / "index.html"
     # 优先级 2: 外部根目录下的 dist (方便手动替换或更新)
-    path_external = base_dir / "frontend" / "dist" / "index.html"
+    path_external = HOME_DIR / "frontend" / "dist" / "index.html"
     # 优先级 3: EXE 同级目录 (如果打包时把 index.html 移动到了顶层)
-    path_root = base_dir / "index.html"
+    path_root = HOME_DIR / "index.html"
     
     # 如果用户的 Windows 用户名包含中文、空格，或者软件安装路径包含特殊字符，
     # WebView2 在解析本地 file:// 链接时可能会因为没有正确转义而失败。

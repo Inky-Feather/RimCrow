@@ -8,7 +8,7 @@ import multiprocessing
 import sys
 import os
 from backend.utils.logger import logger 
-from backend.settings import settings
+from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
 from validate_environment import get_entrypoint, validate_environment
 
@@ -22,17 +22,9 @@ import builtins
 # 强制切换工作目录到 exe 所在文件夹
 # 解决任务栏启动找不到配置文件的问题
 def setup_working_directory():
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的 exe
-        application_path = os.path.dirname(sys.executable)
-    else:
-        # 如果是开发环境 (py 脚本)
-        application_path = os.path.dirname(os.path.abspath(__file__))
-    
-    # 切换工作目录
-    os.chdir(application_path)
+    os.chdir(HOME_DIR)
     # 顺便把这个路径加到 sys.path，防止导包报错
-    sys.path.insert(0, application_path)
+    sys.path.insert(0, str(HOME_DIR))
 
 # 执行逻辑：如果是 steam-worker 模式，跳过 chdir
 if "--steam-worker" not in sys.argv:
@@ -43,7 +35,6 @@ else:
     app_path = os.path.dirname(os.path.abspath(__file__))
     if getattr(sys, 'frozen', False):
         app_path = os.path.dirname(sys.executable)
-    
     if app_path not in sys.path:
         sys.path.insert(0, app_path)
     
@@ -115,7 +106,7 @@ def main():
     window_width = int(settings.config.window_width)  # 默认1400px
     window_height = int(settings.config.window_height)  # 默认900px
     
-     # 获取代理参数
+    # 获取代理参数
     # Pywebview 目前对代理的直接支持有限，通常需要通过底层 flag 传递
     # 对于 WebView2 (Windows)，可以通过 os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']
     additional_args = []

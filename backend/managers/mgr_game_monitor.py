@@ -3,6 +3,7 @@ import time
 import threading
 import psutil
 import ctypes
+from backend.settings import DATA_DIR
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
 
@@ -20,8 +21,8 @@ class GameMonitor:
         self.psapi = ctypes.windll.psapi
         self.kernel32 = ctypes.windll.kernel32
 
-        # 准备静默页面的路径 (建议生成一个真实的 html 文件)
-        self.idle_page_path = os.path.abspath(os.path.join(os.getcwd(), 'data', 'idle.html'))
+        # 准备静默页面的路径 (生成一个真实的 html 文件)
+        self.idle_page_path = str(DATA_DIR / 'idle.html')
         self._create_idle_page()
 
     def _create_idle_page(self):

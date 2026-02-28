@@ -194,7 +194,8 @@ class FileManager:
         safe_url = quote(remote_url)
         return f"http://127.0.0.1:{self._port}/gallery?wid={workshop_id}&url={safe_url}"
     
-    def get_thumbnail_path(self, package_id):
+    @staticmethod
+    def get_thumbnail_path(package_id):
         """
         获取某个 Mod 已生成的缩略图路径 (物理路径)。
         如果不存在返回 None。
@@ -649,6 +650,106 @@ class FileManager:
         finally:
             if os.path.exists(temp_path): os.remove(temp_path)
     
+    @staticmethod
+    def sync_links_fast(local_mods_path, workshop_mod_paths: list):
+        """极致性能的增量同步逻辑 (纯 Python 原生实现，0 Shell 调用)"""
+        if not local_mods_path or not os.path.exists(local_mods_path):
+            return False
+
+        # 1. 准备目标清单 (统一转小写进行防呆匹配)
+        target_map = {}
+        for src in workshop_mod_paths:
+            if not src: continue
+            wid = os.path.basename(os.path.normpath(src))
+            link_name = f"{FileManager.LINK_PREFIX}{wid}"
+            target_map[link_name.lower()] = {
+                'raw_name': link_name,
+                'src_path': os.path.normpath(os.path.abspath(src))
+            }
+
+        to_delete_paths = []
+        links_to_create = []
+        existing_valid_keys = set()
+
+        # 2. 极速扫描与判定
+        try:
+            with os.scandir(local_mods_path) as it:
+                for entry in it:
+                    if entry.name.startswith(FileManager.LINK_PREFIX):
+                        name_lower = entry.name.lower()
+                        
+                        # 判定 A: 在目标清单中？
+                        if name_lower in target_map:
+                            expected_src = target_map[name_lower]['src_path']
+                            # 判定 B: 链接指向是否正确？(使用无 IO 开销的 readlink)
+                            if FileManager._is_link_correct_fast(entry.path, expected_src):
+                                existing_valid_keys.add(name_lower)
+                                continue
+                                
+                        # 指向错误、或者是多余的链接，加入删除队列
+                        to_delete_paths.append(entry.path)
+        except OSError as e:
+            from backend.utils.logger import logger
+            logger.error(f"Scan links failed: {e}")
+
+        # 3. 计算缺失的链接
+        for key, info in target_map.items():
+            if key not in existing_valid_keys:
+                dst_path = os.path.join(local_mods_path, info['raw_name'])
+                links_to_create.append((info['src_path'], dst_path))
+
+        # 4. 执行极速删除 (os.rmdir 对于 Junction 是瞬间且安全的，不会删除原文件)
+        for path in to_delete_paths:
+            try:
+                # 尝试用 unlink (适用于软链接)，如果报错则用 rmdir (适用于 Junction/目录)
+                if os.path.islink(path): os.unlink(path)
+                else: os.rmdir(path)
+            except Exception:
+                pass # 忽略占用等特殊情况
+
+        # 5. 执行极速创建
+        if links_to_create:
+            FileManager._create_links_fast(links_to_create)
+
+        return True
+
+    @staticmethod
+    def _is_link_correct_fast(link_path, expected_src):
+        """无磁盘 IO 开销的链接判定"""
+        try:
+            # os.readlink 在新版 Python 中可直接读取 Windows Junction
+            actual_target = os.readlink(link_path)
+            # 统一路径格式对比
+            return os.path.normpath(actual_target).lower() == os.path.normpath(expected_src).lower()
+        except OSError:
+            # 如果 readlink 失败，降级使用传统方法
+            try:
+                if not os.path.lexists(link_path): return False
+                return os.path.samefile(link_path, expected_src)
+            except:
+                return False
+
+    @staticmethod
+    def _create_links_fast(link_tasks: list):
+        """调用底层 API 极速创建链接"""
+        is_windows = platform.system() == 'Windows'
+        if is_windows:
+            try:
+                import _winapi # 导入 Windows 底层 API
+            except ImportError:
+                is_windows = False
+
+        for src, dst in link_tasks:
+            try:
+                if is_windows:
+                    # 使用底层 CreateJunction，速度极快且不需要管理员权限
+                    _winapi.CreateJunction(src, dst)
+                else:
+                    os.symlink(src, dst)
+            except Exception as e:
+                from backend.utils.logger import logger
+                logger.error(f"Failed to link {dst} -> {src}: {e}")
+    
     # =========================================================
     #  5. SteamCMD 根目录重定向 (Root Redirect)
     # =========================================================
@@ -938,3 +1039,4 @@ class PathChecker:
             return {}
         
     
+file_mgr = FileManager()

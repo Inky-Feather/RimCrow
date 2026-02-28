@@ -48,7 +48,7 @@ class ModScanner:
             self._stop_requested = True
             logger.warning("Scan interruption requested by user.")
             
-    def scan_paths_async(self, search_paths, thumbnail_mgr: FileManager, forced_update=False):
+    def scan_paths_async(self, search_paths, forced_update=False):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
@@ -59,10 +59,10 @@ class ModScanner:
         self._is_scanning = True
         self._stop_requested = False  # 启动前重置标志
         # 提交到线程池
-        self.executor.submit(self._scan_paths_task, search_paths, thumbnail_mgr, forced_update)
+        self.executor.submit(self._scan_paths_task, search_paths, forced_update)
         return {'status': 'started'}
 
-    def _scan_paths_task(self, search_paths, thumbnail_mgr, forced_update=False):
+    def _scan_paths_task(self, search_paths, forced_update=False):
         """
         后台执行的扫描主逻辑
         """
@@ -71,29 +71,22 @@ class ModScanner:
         db.connect(reuse_if_open=True) # 确保线程有连接
         try:
             EventBus.emit('scan-start')
-            
             # --- 0. 预检查与准备 ---
             valid_paths = [p for p in search_paths if p and os.path.exists(p)]
             if not valid_paths:
                 self._finish_scan({'error': '没有有效路径'})
                 return
-
             # 初始化 DLC Parser
             dlc_dir = next((p for p in valid_paths if os.path.basename(p).lower() == 'data'), None)
             dlc_parser = DLCParser(dlc_dir) if dlc_dir else None
-
             existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
-            
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
             EventBus.emit('scan-progress', {'stage': 'indexing', 'message': '正在索引文件...'})
-            
             mod_folders = [] # [(folder_path, is_dlc), ...]
-            
             for base_path in valid_paths:
                 try:
                     # 判断是否是 DLC 目录 (Data)
                     is_data_dir = (os.path.basename(base_path).lower() == 'data')
-                    
                     with os.scandir(base_path) as it:
                         for entry in it:
                             if entry.is_dir():
@@ -102,11 +95,9 @@ class ModScanner:
                                 mod_folders.append((entry.path, is_data_dir))
                 except OSError as e:
                     logger.warning(f"无法访问路径 {base_path}: {e}")
-
             total_count = len(mod_folders)
             # 优化：根据总数动态决定发送频率
             report_interval = max(1, total_count // 50) 
-            
             # --- 2. 扫描与解析阶段 ---
             # 使用 temp_registry 暂存所有扫描结果，而不是一边扫一边入库
             # 结构: { package_id: [mod_data_1, mod_data_2] }
@@ -114,7 +105,6 @@ class ModScanner:
             scanned_package_ids = set()
             stats = {'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0}
             start_time = time.time()
-
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
@@ -134,18 +124,15 @@ class ModScanner:
                 # 处理单个 Mod
                 mod_data = self._process_single_mod(
                     mod_path, is_dlc, existing_snapshots, 
-                    dlc_parser, thumbnail_mgr, forced_update
+                    dlc_parser, forced_update
                 )
-
                 if mod_data:
                     # 如果是增量跳过，需要补全 package_id 以便后续逻辑使用
                     # _process_single_mod 返回 {'_skipped': True, 'package_id': ...}
                     pid = mod_data['package_id'].lower()
-                    
                     # 记录到暂存区
                     temp_registry[pid].append(mod_data)
                     scanned_package_ids.add(pid)
-                    
                     if mod_data.get('_skipped'):
                         stats['skipped'] += 1
                     elif mod_data.get('is_new'):
@@ -213,7 +200,7 @@ class ModScanner:
                         # 实际上，如果发生冲突（多个实例），其中一个是 skipped，只要涉及多实例判定，强制全部重读，确保 source/path 准确。
                         full_mod = self._process_single_mod(
                             mod['path'], (os.path.basename(os.path.dirname(mod['path'])).lower() == 'data'),
-                            existing_snapshots, dlc_parser, thumbnail_mgr, forced_update=True
+                            existing_snapshots, dlc_parser, forced_update=True
                         )
                         if full_mod:
                             mod.update(full_mod) # 更新为完整数据
@@ -298,7 +285,7 @@ class ModScanner:
                     
             # 调用 FileManager 执行部署
             # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
-            success = FileManager.sync_links(local_mods_root, final_links_to_create)
+            success = FileManager.sync_links_fast(local_mods_root, final_links_to_create)
             if final_links_to_create:
                 deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
 
@@ -331,6 +318,8 @@ class ModScanner:
             duration = time.time() - start_time
             logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error("Scan task failed", exc_info=True)
             self._finish_scan({'status': 'error', 'message': str(e)})
         finally:
@@ -376,7 +365,7 @@ class ModScanner:
             # 记录 (路径, ID) 元组
             workshop_paths_list.append((mod_data['path'], pid))
         
-    def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, thumbnail_mgr, forced_update=False):
+    def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False):
         """
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
@@ -491,13 +480,13 @@ class ModScanner:
         # print(f"is_contained: {is_contained}, abs_path: {abs_path}, abs_base: {abs_base}")
             
         # Source 补全逻辑
-        if workshop_id and keywords in mod_path.lower():
+        if is_contained:
+            mod_data['source'] = 'self'
+        elif workshop_id and keywords in mod_path.lower():
             mod_data['url'] = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
             mod_data['source'] = 'workshop'
         elif is_dlc_dir:
             mod_data['source'] = 'dlc' if pkg_id != 'ludeon.rimworld' else 'core'
-        elif is_contained:
-            mod_data['source'] = 'self'
         elif 'github.com' in mod_data.get('url', '').lower():
             mod_data['source'] = 'github'
         elif mod_data.get('url', ''):
@@ -539,8 +528,9 @@ class ModScanner:
         })
 
         # 缩略图生成 (耗时操作，线程池内执行)
-        if thumbnail_mgr and mod_data.get('preview_path'):
-            thumbnail_mgr.ensure_thumbnail(pkg_id, mod_data['preview_path'])
+        if mod_data.get('preview_path'):
+            from backend.managers.mgr_files import file_mgr
+            file_mgr.ensure_thumbnail(pkg_id, mod_data['preview_path'])
             
         return mod_data
 

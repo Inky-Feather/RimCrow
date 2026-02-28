@@ -103,6 +103,10 @@ def packApplication(main_file="main.py", icon_path="", name="", version="1.0.0",
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
             "--collect-data", "litellm",
+            # 排除一些可能导致问题的模块
+            "--exclude-module", "setuptools",  # 排除这个模块， 避免打包时出现问题
+            "--exclude-module", "pkg_resources", # 通常这两个是一起出现的，建议一并排除
+            
             "--clean",  # 清理旧构建文件
             "--upx-dir", r"D:\Environment\upx-5.0.0-win64",  # 指定 UPX 路径
             "-n", name,  # 指定名称
@@ -246,7 +250,7 @@ if __name__ == "__main__":
     APP_VERSION = __version__  # 在这里修改版本号
     APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
-
+    os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
     # 1. 执行打包
     print(f'=== 开始打包 {APP_NAME} v{APP_VERSION} ===')
     packApplication(APP_MAIN, ICON_PATH, APP_NAME, version=APP_VERSION, company=APP_COMPANY)

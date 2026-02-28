@@ -31,7 +31,7 @@ if __name__ == "__main__":
 # 注意：不要在文件顶层 import steamworks，防止主进程意外加载
 # 只在 run_steam_worker 函数内部 import
 from backend.utils.logger import logger
-from backend.settings import settings
+from backend.settings import BASE_RESOURCE_DIR, HOME_DIR, TOOLS_DIR, settings
 from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
@@ -124,16 +124,15 @@ class SteamManager:
     def __init__(self):
         if self._initialized: return
         self._initialized = True
-        self.project_root = os.getcwd()
-        self.tools_dir = os.path.join(self.project_root, "tools")
+        self.tools_dir = TOOLS_DIR
         # Steam 安装目录
         self.steam_dir = settings.config.steam_path or self.get_steam_path()
         self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True) 
         # SteamCMD 路径
-        self.steamcmd_dir = settings.config.steamcmd_path or os.path.join(self.tools_dir, "steamcmd")
+        self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
         # Steam Agent 路径 (隔离环境)
-        self.agent_dir = os.path.join(self.tools_dir, "steam_agent")
+        self.agent_dir = str(TOOLS_DIR / "steam_agent")
         # 确保目录存在
         os.makedirs(self.steamcmd_dir, exist_ok=True)
         os.makedirs(self.agent_dir, exist_ok=True)
@@ -198,18 +197,13 @@ class SteamManager:
         search_dirs = []
         # 1. 确定搜索路径列表
         if getattr(sys, 'frozen', False):
-            # === 打包环境 (PyInstaller) ===
-            # sys.executable: exe 文件所在目录
-            exe_dir = os.path.dirname(sys.executable)
-            # sys._MEIPASS: PyInstaller 解压临时目录
-            base_dir = getattr(sys, '_MEIPASS', exe_dir)
             # 添加可能的搜索位置：
             # A. _MEIPASS 根目录 (如果 spec 文件配置为 binary 放在根目录)
-            search_dirs.append(base_dir)
+            search_dirs.append(str(BASE_RESOURCE_DIR))
             # B. _MEIPASS/steamworks (如果使用了 collect_all 或 add_data 保持了目录结构)
-            search_dirs.append(os.path.join(base_dir, "steamworks"))
+            search_dirs.append(str(BASE_RESOURCE_DIR / "steamworks"))
             # C. EXE 同级目录 (用户手动放置 DLL 作为补救)
-            search_dirs.append(exe_dir)
+            search_dirs.append(str(HOME_DIR))
         else:
             # === 开发环境 ===
             try:
@@ -217,7 +211,6 @@ class SteamManager:
                 if spec and spec.origin:
                     search_dirs.append(os.path.dirname(spec.origin))
             except: pass
-            search_dirs.append(self.project_root)
 
         # 2. 遍历查找并复制
         for name in [dll_name, api_name]:
@@ -415,7 +408,7 @@ class SteamManager:
             payload = ",".join(batch)
             cmd = [current_exe]
             if not is_frozen:
-                cmd.append(os.path.join(self.project_root, "main.py"))
+                cmd.append(str(BASE_RESOURCE_DIR / "main.py"))
             cmd.extend(["--steam-worker", action, payload])
             try:
                 # 统一使用隐藏窗口启动
@@ -830,11 +823,14 @@ class SteamManager:
         ids = self.get_installed_workshop_ids()
         return int(published_file_id) in ids
 
-    def _get_steam_log_path(self):
+    def _get_steam_log_path(self, use_steamcmd: bool = False):
         """
         推断 Steam 客户端日志路径
         通常在 Steam 安装目录/logs/workshop_log.txt
         """
+        if use_steamcmd: 
+            return str(Path(self.steamcmd_dir) / "logs" / "workshop_log.txt")
+        
         # 确保有 Steam 安装目录
         if not self.steam_dir: return None
             
@@ -846,7 +842,7 @@ class SteamManager:
             if platform.system() == "Windows":
                 default_path = r"C:\Program Files (x86)\Steam\logs\workshop_log.txt"
                 if os.path.exists(default_path):
-                    return default_path
+                    return str(default_path)
         except Exception as e:
             logger.error(f"Failed to parse Steam log path: {e}")
             
@@ -1010,7 +1006,72 @@ class SteamManager:
         
         # 合并数据
         return self._merge_acf_and_log(acf_data, log_data)
+    
+    def get_item_timeline(self, workshop_id: str, is_steamcmd: bool = False) -> list:
+        """
+        解析 workshop_log.txt，提取特定 Mod 的所有历史轨迹
+        返回按时间降序的事件列表
+        """
+        log_path = self._get_steam_log_path(is_steamcmd)
+        if not log_path or not os.path.exists(log_path): return []
         
+        timeline = []
+        target_id_str = str(workshop_id)
+        
+        # 预编译正则，提升性能
+        log_pattern = re.compile(r'\[(.*?)\] \[AppID 294100\] (.*)')
+        
+        # 定义动作映射，让前端展示更好看
+        ACTION_MAP = {
+            "Subscribed to item": {"action": "subscribe", "title": "订阅成功", "color": "primary"},
+            "added subscribed item": {"action": "subscribe", "title": "创建订阅项目", "color": "primary"},
+            "changed cached item": {"action": "update", "title": "同步更新", "color": "success"},
+            "Unsubscribed from item": {"action": "unsubscribe", "title": "取消订阅", "color": "danger"},
+            "removing unsubscribed": {"action": "remove", "title": "移除取订项目", "color": "danger"},
+            "removing unused item": {"action": "remove", "title": "移除无用项目", "color": "danger"},
+            "Starting Workshop download": {"action": "download", "title": "开始下载", "color": "danger"},
+            "failed": {"action": "error", "title": "操作失败", "color": "danger"}
+        }
+
+        try:
+            with open(log_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    match = log_pattern.match(line.strip())
+                    if not match: continue
+                    time_str, msg = match.groups()
+                    # 只抓取包含该 ID 的日志
+                    if f"item {target_id_str}" in msg or f"handle {target_id_str}" in msg:
+                        time_stamp = int(parser.parse(time_str).timestamp() * 1000)
+                        # 判定行为类型
+                        event_type = "info"
+                        event_title = "未知动作"
+                        event_color = "text-dim"
+                        for key, meta in ACTION_MAP.items():
+                            if key in msg:
+                                event_type = meta["action"]
+                                event_title = meta["title"]
+                                event_color = meta["color"]
+                                break
+                        # 如果是 result : OK 且包含了下载相关的上下文
+                        if "result : OK" in msg and "Download" in msg:
+                            event_type = "download_ok"
+                            event_title = "下载/更新成功"
+                            event_color = "success"
+                        timeline.append({
+                            "time": time_stamp,
+                            "type": event_type,
+                            "title": event_title,
+                            "desc": msg,
+                            "color": event_color
+                        })
+                        
+            # 按时间倒序（最新的在最前）
+            timeline.sort(key=lambda x: x['time'], reverse=True)
+            return timeline
+            
+        except Exception as e:
+            logger.error(f"解析时间线失败: {e}")
+            return []
     
 if __name__ == "__main__":
     steam_mgr = SteamManager()

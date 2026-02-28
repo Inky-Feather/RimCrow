@@ -7,17 +7,23 @@ from pathlib import Path
 import sys
 from typing import Dict, Any, List
 
-from regex import T
 
+# 1. 资源目录：存放前端文件、内置工具 (对应开发时的项目根目录)
+if getattr(sys, 'frozen', False):
+    # 打包后，指向临时解压目录
+    BASE_RESOURCE_DIR = Path(getattr(sys, '_MEIPASS'))
+else:
+    # 开发时，指向当前文件所在目录的上一级（项目根目录）
+    BASE_RESOURCE_DIR = Path(__file__).resolve().parent.parent
 
 # 配置文件路径
 HOME_DIR = Path(os.getcwd())
 # 获取 exe 所在的真实目录
 if getattr(sys, 'frozen', False):
-    # PyInstaller 打包模式
+    # PyInstaller 打包模式 时，指向 exe 所在目录
     HOME_DIR = Path(sys.executable).parent
 else:
-    # 开发模式
+    # 开发模式, 指向当前文件所在目录的上一级（项目根目录）
     HOME_DIR = Path(__file__).resolve().parent.parent
 
 DATA_DIR = HOME_DIR / "data"                # 数据目录
@@ -26,6 +32,7 @@ UPDATE_DIR = HOME_DIR / "updates"     # 更新目录
 TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
 MODS_DIR = HOME_DIR / "mods"                # 模组目录
 CACHE_DIR = HOME_DIR / "cache"                # 缓存目录
+BACKUP_DIR = HOME_DIR / "backups"                # 备份目录
 # 定义缓存目录
 GALLERY_CACHE_DIR = CACHE_DIR / "gallery"       # 定义画廊缓存目录
 THUMBNAIL_CACHE_DIR = CACHE_DIR / "thumbnails"  # 定义缩略图缓存目录
@@ -171,6 +178,9 @@ class AppConfig:
     enable_auto_update_check: bool = True  # 自动检查更新开关
     ignored_update_version: str = ""       # 跳过的版本号
     last_update_check_time: float = 0      # 上次检查时间（用于限流）
+    last_version: str = ""                 # 之前的版本号(用于判断是否更新过了)
+    last_run_time: float = 0               # 上次运行时间（用于判断Mod是否存在变动）
+    run_count: int = 0                     # 运行次数（用于判断是否需要重新扫描）
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言

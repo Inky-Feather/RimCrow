@@ -18,7 +18,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 
 from backend.managers.mgr_files import FileManager
-from backend.settings import settings
+from backend.settings import BACKUP_DIR, settings
 from lxml import html
 etree = html.etree
 
@@ -44,10 +44,10 @@ class LoadOrderManager:
     def _init_backup_dirs(self):
         """初始化备份目录结构"""
         # 在软件目录下用 backups 文件夹存储备份
-        self.backup_root = os.path.join(os.getcwd(), "backups")
-        self.today_dir = os.path.join(self.backup_root, "today")
-        self.earlier_dir = os.path.join(self.backup_root, "earlier")
-        self.other_dir = os.path.join(self.backup_root, "other")
+        self.backup_root = str(BACKUP_DIR)
+        self.today_dir = str(BACKUP_DIR / "today")
+        self.earlier_dir = str(BACKUP_DIR / "earlier")
+        self.other_dir = str(BACKUP_DIR / "other")
         
         # 创建目录
         os.makedirs(self.today_dir, exist_ok=True)

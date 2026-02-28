@@ -8,6 +8,8 @@ import colorlog  # 引入 colorlog
 from logging.handlers import TimedRotatingFileHandler
 from icecream import ic
 
+from backend.settings import DATA_DIR
+
 # 定义日志格式
 class JSONFormatter(logging.Formatter):
     """
@@ -98,9 +100,9 @@ class LoggerManager:
         self._logger.propagate = False # 防止重复打印
 
         # 2. 准备路径
-        log_dir = os.path.join(os.getcwd(), 'data', 'logs')
+        log_dir = str(DATA_DIR / 'logs')
         os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, 'app.log')
+        log_file = str(DATA_DIR / 'logs' / 'app.log')
 
         # 3. Handler: 文件输出 (JSON 结构化，按天轮转)
         file_handler = TimedRotatingFileHandler(
