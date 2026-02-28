@@ -271,45 +271,36 @@ class ModScanner:
                     txn.rollback() # 万一出错，回滚所有改动
                     raise e
             
-            deploy_msg = "Skipped deployment"
             
-            if settings.config.use_self_mods :
-                # --- 6. 自动部署链接 (Deployment) ---
-                if local_mods_root and os.path.exists(local_mods_root):
-                    # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Workshop Mod
-                    final_links_to_create = []
-                    for w_path, w_id in self_mods_paths_for_deploy:
-                        if w_id not in local_mod_ids_for_deploy:
-                            final_links_to_create.append(w_path)
-                        else:
-                            # 被本地遮蔽，忽略
-                            pass
-                    # 调用 FileManager 执行部署
-                    # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
-                    success = FileManager.sync_links(local_mods_root, final_links_to_create)
-                    deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
-            else: FileManager.sync_links(local_mods_root, [])
+            # --- 6. 自动部署链接 (Deployment) ---
+            deploy_msg = "跳过链接部署"
+            final_links_to_create = []
+            if settings.config.use_self_mods and local_mods_root and os.path.exists(local_mods_root):
+                # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Workshop Mod
+                for w_path, w_id in self_mods_paths_for_deploy:
+                    if w_id not in local_mod_ids_for_deploy:
+                        final_links_to_create.append(w_path)
+                    else:
+                        # 被本地遮蔽，忽略
+                        pass
             
             logger.debug(f"Skip deployment: {settings.config.use_workshop_mods}, current_profile {settings.config.current_profile_id != 'default'}")
-            if settings.config.use_workshop_mods and settings.config.current_profile_id != 'default':
-                # --- 6. 自动部署链接 (Deployment) ---
-                if local_mods_root and os.path.exists(local_mods_root):
-                    # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
-                    self_mods_ids_for_deploy = [w_id for w_path, w_id in self_mods_paths_for_deploy]
-                    final_links_to_create = []
-                    for w_path, w_id in workshop_paths_for_deploy:
-                        if w_id not in local_mod_ids_for_deploy and w_id not in self_mods_ids_for_deploy:
-                            final_links_to_create.append(w_path)
-                        else:
-                            # 被本地遮蔽，忽略
-                            pass
+            if settings.config.use_workshop_mods and settings.config.current_profile_id != 'default' \
+                and local_mods_root and os.path.exists(local_mods_root):
+                # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
+                self_mods_ids_for_deploy = [w_id for w_path, w_id in self_mods_paths_for_deploy]
+                for w_path, w_id in workshop_paths_for_deploy:
+                    if w_id not in local_mod_ids_for_deploy and w_id not in self_mods_ids_for_deploy:
+                        final_links_to_create.append(w_path)
+                    else:
+                        # 被本地遮蔽，忽略
+                        pass
                     
-                    # 调用 FileManager 执行部署
-                    # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
-                    success = FileManager.sync_links(local_mods_root, final_links_to_create)
-                    deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
-            else: FileManager.sync_links(local_mods_root, [])
-            
+            # 调用 FileManager 执行部署
+            # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
+            success = FileManager.sync_links(local_mods_root, final_links_to_create)
+            if final_links_to_create:
+                deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time

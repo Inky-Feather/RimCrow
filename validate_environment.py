@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import socket
 import sys
@@ -23,6 +24,13 @@ def is_port_available(host: str = "localhost", port: int = 5173, timeout: float 
         # 超时/连接拒绝/系统错误，均视为端口不可用
         return False
 
+# 部分用户的 Windows 注册表中缺少 .js 或 .css 的 MIME 类型定义。
+# WebView2 处于安全考虑，如果收到的文件类型是 text/plain 而不是 application/javascript，会拒绝执行该脚本。
+def fix_mime_types():
+    # 强制让 Python 识别这些扩展名
+    mimetypes.add_type('application/javascript', '.js')
+    mimetypes.add_type('text/css', '.css')
+    mimetypes.add_type('image/svg+xml', '.svg')
 
 # 获取前端文件的路径
 def get_entrypoint():
@@ -30,6 +38,7 @@ def get_entrypoint():
     获取前端入口地址
     支持：开发模式、PyInstaller 标准模式、PyInstaller lib 归拢模式
     """
+    fix_mime_types()
     # 定义前端开发服务器地址
     dev_server = "http://localhost:5173"
     
@@ -57,13 +66,16 @@ def get_entrypoint():
     # 优先级 3: EXE 同级目录 (如果打包时把 index.html 移动到了顶层)
     path_root = base_dir / "index.html"
     
+    # 如果用户的 Windows 用户名包含中文、空格，或者软件安装路径包含特殊字符，
+    # WebView2 在解析本地 file:// 链接时可能会因为没有正确转义而失败。
+    # 使用 pathlib 的 as_uri() 方法强制转换为标准的 URI 格式。同时在vite.config.js中设置base: './'。
     # 3. 按优先级执行探测
     if path_internal.exists():
-        return str(path_internal)
+        return path_internal.absolute().as_uri()
     if path_root.exists():
         return str(path_root)
     if path_external.exists():
-        return str(path_external)
+        return path_external.absolute().as_uri() 
     # 4. 兜底回退：本地开发服务器
     from backend.utils.logger import logger 
     logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
