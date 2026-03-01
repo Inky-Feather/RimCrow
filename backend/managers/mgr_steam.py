@@ -124,7 +124,6 @@ class SteamManager:
     def __init__(self):
         if self._initialized: return
         self._initialized = True
-        self.tools_dir = TOOLS_DIR
         # Steam 安装目录
         self.steam_dir = settings.config.steam_path or self.get_steam_path()
         self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True) 
@@ -458,8 +457,7 @@ class SteamManager:
                         # 妙手：如果旧任务的目标被扣光了(total=0)，下一次轮询时进度会自动变成 100% 并自我销毁！
 
         # 1. 发送 Steam 指令 (过滤掉已经完美的项)
-        current_data = self.workshop_merged_data()
-        data_dict = {str(item['workshop_id']): item for item in current_data}
+        data_dict = self.workshop_merged_data()
         
         to_action =[]
         ws_base_path = settings.config.workshop_mods_path
@@ -534,8 +532,7 @@ class SteamManager:
                 current_tasks = dict(self._active_tasks)
 
             try:
-                current_data = self.workshop_merged_data()
-                data_dict = {str(item['workshop_id']): item for item in current_data}
+                data_dict = self.workshop_merged_data()
                 
                 tasks_to_remove =[]
 
@@ -851,77 +848,84 @@ class SteamManager:
     def parse_workshop_log(self, log_path: str|Path|None=None, target_appid: str=RIMWORLD_APP_ID) -> dict:
         """
         解析 Steam workshop_log.txt，提取指定 AppID 的模组操作历史。
-        按时间先后顺序遍历，因此最终字典中保留的始终是该模组的“最新”状态。
+        归并相似动作，智能识别【订阅、取订、更新、同步】的最新时间。
         """
         log_path = log_path or self._get_steam_log_path()
-        if not log_path: return {}
-        with open(log_path, 'r', encoding='utf-8') as f:
-            log_content = f.read()
-        
-        target_appid = str(target_appid)
-        # 正则匹配日志基础结构: [时间] [AppID] 消息内容
+        if not log_path or not os.path.exists(log_path): return {}
+        # 预编译正则：匹配时间、AppID、以及包含 item 或 handle 的消息
         log_pattern = re.compile(r'\[(.*?)\] \[AppID (\d+)\] (.*)')
-        
+        id_pattern = re.compile(r'(?:item|handle) (\d+)')
+        target_appid_str = str(target_appid)
         items_history = {}
-        for line in log_content.strip().split('\n'):
-            match = log_pattern.match(line)
-            if not match: continue
-            time_str, appid, msg = match.groups()
-            # 将 2024-09-04 07:26:36 格式转为毫秒戳
-            time_stamp = int(parser.parse(time_str).timestamp() * 1000)
-            if appid != target_appid: continue
-            # 使用正则提取消息中的 item_id (几乎所有针对具体Mod的日志都会带有 item <id> 格式)
-            item_match = re.search(r'item (\d+)', msg)
-            if not item_match: continue
-            item_id = item_match.group(1)
-            
-            # 初始化记录
-            if item_id not in items_history:
-                items_history[item_id] = {
-                    "workshop_id": item_id,
-                    "log_last_download_time": None,      # 最后一次成功下载的时间
-                    "log_last_subscribed_time": None,    # 最后一次订阅的时间
-                    "log_last_unsubscribed_time": None,  # 最后一次取消订阅的时间
-                    "log_last_manifest": None,           # 日志中最后一次看到的清单ID
-                    "log_last_error": None,              # 最后一次报错信息
-                    "is_subscribed": None                # 当前订阅状态（True/False）
-                }
-                
-            item = items_history[item_id]
-
-            # 匹配具体行为并更新最新状态
-            if "result : OK" in msg:
-                item["log_last_download_time"] = time_stamp
-                item["log_last_error"] = None  # 下载成功，清除之前的报错
-                
-            elif "Subscribed to item" in msg:
-                item["log_last_subscribed_time"] = time_stamp
-                item["is_subscribed"] = True
-                
-            elif "Unsubscribed from item" in msg or "removing unsubscribed item" in msg:
-                item["log_last_unsubscribed_time"] = time_stamp
-                item["is_subscribed"] = False
-                
-            elif "failed :" in msg or "skipping item" in msg:
-                # 提取错误原因，例如 "Access Denied"
-                error_match = re.search(r'(?:failed :|result =)\s*(.*)', msg)
-                if error_match:
-                    item["log_last_error"] = error_match.group(1).strip()
-                    
-            # 提取清单变化 (manifest/handle)
-            manifest_match = re.search(r'new (?:manifest|handle) (\d+)', msg)
-            if manifest_match:
-                item["log_last_manifest"] = manifest_match.group(1)
-
-        return items_history
+        # 定义动作组关键词，用于智能归类
+        GROUP_SUBSCRIBE = ["Subscribed to item", "added subscribed item"]
+        GROUP_UNSUBSCRIBE = ["Unsubscribed from item", "removing unsubscribed", "removing unused item"]
+        GROUP_SYNC = ["changed cached item"]
+        GROUP_ERROR = ["failed :", "skipping item", "error"]
+        try:
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    line = line.strip()
+                    match = log_pattern.match(line)
+                    if not match: continue
+                    time_str, appid, msg = match.groups()
+                    if appid != target_appid_str: continue
+                    # 提取 Workshop ID
+                    id_match = id_pattern.search(msg)
+                    if not id_match: continue
+                    item_id = id_match.group(1)
+                    # 初始化记录项
+                    if item_id not in items_history:
+                        items_history[item_id] = {
+                            "workshop_id": item_id,
+                            "log_last_download_time": None,      # 下载完成时间
+                            "log_last_subscribed_time": None,    # 订阅时间 (含创建订阅)
+                            "log_last_unsubscribed_time": None,  # 取订时间 (含移除项目)
+                            "log_last_sync_time": None,          # 元数据同步时间
+                            "log_last_manifest": None,           # 清单 ID
+                            "log_last_error": None,              # 错误信息
+                            "is_subscribed": None                # 逻辑订阅状态
+                        }
+                    item = items_history[item_id]
+                    time_stamp = int(parser.parse(time_str).timestamp() * 1000)
+                    # --- 智能归类解析 ---
+                    # 1. 订阅动作组
+                    if any(k in msg for k in GROUP_SUBSCRIBE):
+                        item["log_last_subscribed_time"] = time_stamp
+                        item["is_subscribed"] = True
+                    # 2. 取订/移除动作组
+                    elif any(k in msg for k in GROUP_UNSUBSCRIBE):
+                        item["log_last_unsubscribed_time"] = time_stamp
+                        item["is_subscribed"] = False
+                    # 3. 同步/缓存变动组 (新增)
+                    elif any(k in msg for k in GROUP_SYNC):
+                        item["log_last_sync_time"] = time_stamp
+                    # 4. 下载成功逻辑
+                    if "result : OK" in msg:
+                        item["log_last_download_time"] = time_stamp
+                        item["log_last_error"] = None # 成功时清理旧错误
+                    # 5. 错误识别组
+                    elif any(k in msg for k in GROUP_ERROR):
+                        error_match = re.search(r'(?:failed :|result =|error)\s*(.*)', msg, re.I)
+                        if error_match:
+                            item["log_last_error"] = error_match.group(1).strip()
+                    # 6. 提取清单 ID
+                    manifest_match = re.search(r'new (?:manifest|handle) (\d+)', msg)
+                    if manifest_match:
+                        item["log_last_manifest"] = manifest_match.group(1)
+            return items_history
+        except Exception as e:
+            from backend.utils.logger import logger
+            logger.error(f"解析全量日志失败: {e}", exc_info=True)
+            return {}
     
-    def _merge_acf_and_log(self, acf_data: dict, log_data: dict) -> list:
+    def _merge_acf_and_log(self, acf_data: dict, log_data: dict) -> dict:
         """
         合并 ACF 数据和日志数据，填充缺失字段。
         """
         # 取并集：有的模组可能被删了只在历史日志里有，有的只在ACF里有
         all_item_ids = set(log_data.keys()).union(acf_data.keys())
-        merged_list =[]
+        merged_dict = {}
         for item_id in sorted(all_item_ids, key=lambda x: int(x)): # 按ID排序方便查看
             item_log = log_data.get(item_id, {})
             item_acf = acf_data.get(item_id, {})
@@ -952,12 +956,13 @@ class SteamManager:
                 
                 # Steam客户端最后一次验证该Mod状态的时间
                 "time_last_checked": item_acf.get("last_checked_time"),
+                "time_last_sync": item_log.get("log_last_sync_time"),
             }
             # 容错：如果日志里记录没有订阅，但ACF显示安装，则有可能处于“孤儿”状态(退订未删)
             # 容错：有些刚发起的下载，在ACF里还没生成，但在日志里存在
-            merged_list.append(merged_item)
+            merged_dict[item_id] = merged_item
             
-        return merged_list
+        return merged_dict
     
     def _get_merged_data_efficiently(self):
         """带有脏检查的高效数据获取"""
@@ -977,9 +982,29 @@ class SteamManager:
         self._last_log_mtime = log_mtime
         return self._cached_merged_data
     
-    def workshop_merged_data(self) -> list:
+    def workshop_merged_data(self) -> dict:
         """
         合并日志和ACF数据，并生成一份极其详尽的 JSON 列表供管理器直接使用。
+        返回格式：
+        [
+            {
+                "workshop_id": "123456789",
+                "is_subscribed": true,
+                "is_installed": true,
+                "needs_update": false,
+                "has_error": false,
+                "error_detail": null,
+                "size_bytes": 123456789,
+                "local_manifest": "12345678901234567890",
+                "remote_manifest": "12345678901234567890",
+                "time_downloaded": "2023-01-01 00:00:00",
+                "time_subscribed": "2023-01-01 00:00:00",
+                "time_unsubscribed": null,
+                "installed_version_time": "2023-01-01 00:00:00",
+                "latest_version_time": "2023-01-01 00:00:00",
+                "time_last_checked": "2023-01-01 00:00:00",
+            }
+        ]
         """
         # 获取分别解析后的字典结构
         log_data = self.parse_workshop_log()
@@ -988,9 +1013,10 @@ class SteamManager:
         # 合并数据
         return self._merge_acf_and_log(acf_data, log_data)
         
-    def steamcmd_merged_data(self) -> list:
+    def steamcmd_merged_data(self) -> dict:
         """
         获取 steamcmd 下载的创意工坊模组的ACF数据
+        返回格式与 workshop_merged_data 相同
         """
         steamcmd_acf_path = Path(self.steamcmd_dir) / "steamapps" / "workshop" / f"appworkshop_{RIMWORLD_APP_ID}.vdf"
         steamcmd_log_path = Path(self.steamcmd_dir) / "logs" / "workshop_log.txt"
@@ -1010,77 +1036,127 @@ class SteamManager:
     def get_item_timeline(self, workshop_id: str, is_steamcmd: bool = False) -> list:
         """
         解析 workshop_log.txt，提取特定 Mod 的所有历史轨迹
-        返回按时间降序的事件列表
+        逻辑：时间倒序为主，同时间按 ACTION_MAP 顺序倒序（显示该时刻最后的动作），并去重
         """
         log_path = self._get_steam_log_path(is_steamcmd)
         if not log_path or not os.path.exists(log_path): return []
         
-        timeline = []
         target_id_str = str(workshop_id)
+        raw_events = []
         
-        # 预编译正则，提升性能
+        # 预编译正则
         log_pattern = re.compile(r'\[(.*?)\] \[AppID 294100\] (.*)')
         
-        # 定义动作映射，让前端展示更好看
+        # 动作映射：顺序代表了在同一时间点发生的逻辑先后顺序
+        # 我们给每个动作一个数字优先级 (index)
         ACTION_MAP = {
             "Subscribed to item": {"action": "subscribe", "title": "订阅成功", "color": "primary"},
-            "added subscribed item": {"action": "subscribe", "title": "创建订阅项目", "color": "primary"},
-            "changed cached item": {"action": "update", "title": "同步更新", "color": "success"},
+            "added subscribed item": {"action": "subscribe", "title": "创建项目", "color": "primary"},
+            "changed cached item": {"action": "update", "title": "检测更新", "color": "success"},
+            "requested by App": {"action": "download", "title": "请求下载", "color": "primary"},
+            "Starting Workshop download": {"action": "download", "title": "开始下载", "color": "primary"},
             "Unsubscribed from item": {"action": "unsubscribe", "title": "取消订阅", "color": "danger"},
-            "removing unsubscribed": {"action": "remove", "title": "移除取订项目", "color": "danger"},
-            "removing unused item": {"action": "remove", "title": "移除无用项目", "color": "danger"},
-            "Starting Workshop download": {"action": "download", "title": "开始下载", "color": "danger"},
+            "removing unsubscribed": {"action": "remove", "title": "移除项目", "color": "danger"},
+            "removing unused item": {"action": "remove", "title": "清理冗余", "color": "danger"},
             "failed": {"action": "error", "title": "操作失败", "color": "danger"}
         }
+        
+        # 将 key 提取为列表，方便获取优先级 index
+        PRIORITY_KEYS = list(ACTION_MAP.keys())
 
         try:
-            with open(log_path, 'r', encoding='utf-8') as f:
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
-                    match = log_pattern.match(line.strip())
+                    line = line.strip()
+                    if not line or target_id_str not in line: continue
+                    
+                    match = log_pattern.match(line)
                     if not match: continue
+                    
                     time_str, msg = match.groups()
-                    # 只抓取包含该 ID 的日志
-                    if f"item {target_id_str}" in msg or f"handle {target_id_str}" in msg:
-                        time_stamp = int(parser.parse(time_str).timestamp() * 1000)
-                        # 判定行为类型
-                        event_type = "info"
-                        event_title = "未知动作"
-                        event_color = "text-dim"
-                        for key, meta in ACTION_MAP.items():
-                            if key in msg:
-                                event_type = meta["action"]
-                                event_title = meta["title"]
-                                event_color = meta["color"]
-                                break
-                        # 如果是 result : OK 且包含了下载相关的上下文
-                        if "result : OK" in msg and "Download" in msg:
-                            event_type = "download_ok"
-                            event_title = "下载/更新成功"
-                            event_color = "success"
-                        timeline.append({
-                            "time": time_stamp,
-                            "type": event_type,
-                            "title": event_title,
-                            "desc": msg,
-                            "color": event_color
-                        })
-                        
-            # 按时间倒序（最新的在最前）
-            timeline.sort(key=lambda x: x['time'], reverse=True)
-            return timeline
+                    
+                    # 判定行为
+                    event_type = "info"
+                    event_title = "未知动作"
+                    event_color = "text-dim"
+                    priority = -1 # 默认优先级
+                    
+                    # 匹配定义好的动作
+                    for idx, key in enumerate(PRIORITY_KEYS):
+                        if key in msg:
+                            meta = ACTION_MAP[key]
+                            event_type = meta["action"]
+                            event_title = meta["title"]
+                            event_color = meta["color"]
+                            priority = idx
+                            break
+                    
+                    # 特殊逻辑：下载/更新成功 (这是逻辑上的最后一步)
+                    if "result : OK" in msg and ("Download" in msg or "download" in msg):
+                        event_type = "download_ok"
+                        event_title = "下载成功"
+                        event_color = "success"
+                        priority = 100 # 极高优先级，确保在同一秒内排在最前
+                    
+                    # 如果依然没匹配到关键动作，且不是我们要找的 ID 相关消息，则丢弃
+                    if priority == -1 and not ("result : OK" in msg):
+                        continue
+
+                    time_stamp = int(parser.parse(time_str).timestamp() * 1000)
+                    
+                    raw_events.append({
+                        "time": time_stamp,
+                        "type": event_type,
+                        "title": event_title,
+                        "desc": msg,
+                        "color": event_color,
+                        "priority": priority # 仅用于内部排序
+                    })
+            
+            if not raw_events: return []
+
+            # --- 核心排序逻辑 ---
+            # 1. 时间倒序 (x['time'] 越大越靠前)
+            # 2. 优先级倒序 (x['priority'] 越大越靠前，代表同一秒内的最终状态)
+            raw_events.sort(key=lambda x: (-x['time'], -x['priority']))
+
+            # --- 流式去重 ---
+            final_timeline = []
+            for e in raw_events:
+                if not final_timeline:
+                    final_timeline.append(e)
+                    continue
+                
+                last = final_timeline[-1]
+                # 如果【时间一致】且【标题一致】，视为重复动作（例如重复的请求），只保留最高优先级的那个
+                # if e['time'] == last['time'] and e['title'] == last['title']:
+                #     continue
+                
+                # 如果时间一致但动作不同，由于上面已经按 priority 排过序了，
+                # 此时 e 的优先级一定低于 last，且由于是不同动作，我们会保留它们（形成精细的时间线）
+                # 但如果用户希望一秒内只报一个最关键的，可以去掉标题判断。这里建议保留标题判断。
+                final_timeline.append(e)
+
+            # 格式化输出：将时间戳转回可读字符串发送给前端，或者由前端处理
+            # 这里建议保留时间戳，增加一个 human_time 字段
+            for item in final_timeline:
+                # 移除内部使用的 priority 字段
+                item.pop("priority")
+                
+            return final_timeline
             
         except Exception as e:
-            logger.error(f"解析时间线失败: {e}")
+            logger.error(f"解析 Mod {target_id_str} 时间线失败: {e}", exc_info=True)
             return []
     
 if __name__ == "__main__":
     steam_mgr = SteamManager()
     data = steam_mgr.workshop_merged_data()
     if data:
-        print(f"Total items: {len(data)} First item:\n", data[0])
+        print(f"Total items: {len(data)} First item:\n", data)
     data2 = steam_mgr.steamcmd_merged_data()
     if data2:
-        print(f"Total items: {len(data2)} First item:\n", data2[0])
+        print(f"Total items: {len(data2)} First item:\n", data2)
 
     # 测试获取一个合集的内容
     # url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3670074636"

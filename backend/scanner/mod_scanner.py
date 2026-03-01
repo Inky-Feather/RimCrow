@@ -220,11 +220,10 @@ class ModScanner:
                             'items': group,         # 发送冲突的具体条目
                             'type': 'same_directory' # 标记类型：同级目录冲突
                         })
-                
                 if has_hard_conflict:
                     # 发生硬冲突，暂时都不入库，让用户去修
                     logger.warning(f"Hard conflict detected for {pid}")
-                    continue
+                    # continue
                 # --- 检查软冲突 (跨目录遮蔽/共存) ---
                 # 走到这里说明 len(entries) > 1 且没有硬冲突
                 final_coexistences.append({
@@ -261,6 +260,7 @@ class ModScanner:
             
             # --- 6. 自动部署链接 (Deployment) ---
             deploy_msg = "跳过链接部署"
+            logger.debug(f"Skip deployment: {settings.config.use_workshop_mods} and {settings.config.use_self_mods}, current_profile {settings.config.current_profile_id != 'default'}")
             final_links_to_create = []
             if settings.config.use_self_mods and local_mods_root and os.path.exists(local_mods_root):
                 # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Workshop Mod
@@ -271,8 +271,7 @@ class ModScanner:
                         # 被本地遮蔽，忽略
                         pass
             
-            logger.debug(f"Skip deployment: {settings.config.use_workshop_mods}, current_profile {settings.config.current_profile_id != 'default'}")
-            if settings.config.use_workshop_mods and settings.config.current_profile_id != 'default' \
+            if settings.config.use_workshop_mods and settings.config.use_self_mods and settings.config.current_profile_id != 'default' \
                 and local_mods_root and os.path.exists(local_mods_root):
                 # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
                 self_mods_ids_for_deploy = [w_id for w_path, w_id in self_mods_paths_for_deploy]

@@ -17,7 +17,7 @@ from litellm.exceptions import RateLimitError, ServiceUnavailableError
 import requests
 from json_repair import repair_json
 
-from backend.settings import settings
+from backend.settings import DATA_DIR, settings
 from backend.utils.logger import logger
 from backend.utils.constants import get_lang_by_code
 from backend.utils.event_bus import EventBus
@@ -44,7 +44,7 @@ class AIManager:
         
         # 加载提示词库
         self.prompts = {}
-        self.prompt_file = os.path.join(os.getcwd(), 'data', 'prompts.json')
+        self.prompt_file = str(DATA_DIR / 'prompts.json')
         # 1. 确保目录存在
         os.makedirs(os.path.dirname(self.prompt_file), exist_ok=True)
         # 2. 检查并生成默认配置

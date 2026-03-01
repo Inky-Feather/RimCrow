@@ -20,12 +20,12 @@ if __name__ == "__main__":
 from backend.utils.logger import logger
 from backend.settings import settings
 # from backend.managers.mgr_network import network_mgr
-from backend.database.models import SteamItemCache, db
+from backend.database.models_ext import SteamItemCache, WorkshopMeta, ext_db
 
 class SteamWebAPI:
     """Steam 官方无密钥开放接口，极致轻量"""
     BASE_URL = "https://api.steampowered.com"
-    CACHE_TTL_MS = 1 * 24 * 60 * 60 * 1000  # 缓存有效期 24 小时
+    CACHE_TTL_MS = 15 * 24 * 60 * 60 * 1000  # 缓存有效期 24 小时
     
     @classmethod
     def fetch_item_details(cls, workshop_ids: list, force_refresh=False) -> dict:
@@ -97,13 +97,70 @@ class SteamWebAPI:
                             "last_sync_time": current_time
                         })
                     # 批量更新缓存
-                    with db.atomic():
+                    with ext_db.atomic():
                         SteamItemCache.insert_many(cache_batch).on_conflict_replace().execute()
                         
                 except Exception as e:
                     logger.error(f"Steam API 请求失败: {e}")
 
         return results
+    
+    @classmethod
+    def get_or_fetch_details(cls, workshop_id: str):
+        """获取单个模组详情（缓存命中则直接返回，否则触发拉取）"""
+        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
+        current_time = int(time.time() * 1000)
+
+        # 检查是否需要更新缓存
+        if not meta or not meta.description or (current_time - meta.last_sync_time > cls.CACHE_TTL_MS):
+            cls.fetch_and_cache_batch([workshop_id])
+            meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
+            
+        if not meta: return None
+        
+        return {
+            "workshop_id": meta.workshop_id,
+            "title": meta.name,
+            "package_id": meta.package_id,
+            "description": meta.description,
+            "preview_url": meta.preview_url,
+            "time_updated": meta.time_updated,
+            "dependencies": meta.dependencies
+        }
+
+    @classmethod
+    def fetch_and_cache_batch(cls, workshop_ids: list):
+        """批量从 Steam 获取并写入外置数据库"""
+        if not workshop_ids: return
+        current_time = int(time.time() * 1000)
+        
+        for i in range(0, len(workshop_ids), 100):
+            batch_ids = workshop_ids[i:i+100]
+            url = f"{cls.BASE_URL}/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
+            data = {"itemcount": len(batch_ids)}
+            for idx, wid in enumerate(batch_ids):
+                data[f"publishedfileids[{idx}]"] = str(wid) # type: ignore
+            
+            try:
+                res = requests.post(url, data=data, timeout=10)
+                res_data = res.json().get("response", {}).get("publishedfiledetails", [])
+                
+                with ext_db.atomic():
+                    for item in res_data:
+                        wid = str(item.get("publishedfileid"))
+                        # SQLite Upsert (On Conflict Update)
+                        WorkshopMeta.insert(
+                            workshop_id=wid,
+                            description=item.get("description", ""),
+                            preview_url=item.get("preview_url", ""),
+                            time_updated=int(item.get("time_updated", 0)) * 1000,
+                            last_sync_time=current_time
+                        ).on_conflict(
+                            conflict_target=[WorkshopMeta.workshop_id],
+                            preserve=[WorkshopMeta.description, WorkshopMeta.preview_url, WorkshopMeta.time_updated, WorkshopMeta.last_sync_time]
+                        ).execute()
+            except Exception as e:
+                logger.error(f"Steam API 同步失败: {e}")
 
     @classmethod
     def fetch_collection_children(cls, collection_id: str) -> list:

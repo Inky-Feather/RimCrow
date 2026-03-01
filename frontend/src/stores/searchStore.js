@@ -8,7 +8,8 @@ import { MOD_SIGN_COLOR_MAP } from '../utils/constants'
 
 export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()
-  
+  const STORE_MAP = {'local': '本地', 'self': '管理器', 'workshop': '创意工坊'}
+
   // 1. 定义 Schema (“配置中心”)
   // 统一配置、别名、来源、布尔值等
   const searchSchema = {
@@ -28,7 +29,6 @@ export const useSearchStore = defineStore('search', () => {
     // === 布尔值 ===
     save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '是否坏档' },
     shadow_paths: { type: FIELD_TYPES.BOOLEAN, label: '存在禁用包名' },
-    is_local: { type: FIELD_TYPES.BOOLEAN, label: '是否本地' },
 
     // === 来源 (枚举) ===
     source: { 
@@ -48,7 +48,13 @@ export const useSearchStore = defineStore('search', () => {
       label: '标记颜色',
       label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || '无',
       color_getter: (color) => color || '#ffffff',
-    }
+    },
+    store: { 
+      type: FIELD_TYPES.STRING, 
+      suggest: true, 
+      label: '储存位置', 
+      label_getter: (store) => STORE_MAP[store] || '未知' 
+    },
     
     // === 时间 (假设 mod 对象里有 updated_at) ===
     // last_updated: {

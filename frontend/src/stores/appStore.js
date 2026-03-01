@@ -29,6 +29,7 @@ export const useAppStore = defineStore('app', () => {
     showProfileDrawer: false,    // 是否显示环境抽屉
     showAiReviewModal: false,    // 是否显示 AI 弹窗
     showPromptManager: false,    // 是否显示提示词管理器
+    showWorkspace: false,    // 是否显示工坊更新管理中心
   })
   // 存储各个列表的滚动偏移量
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
@@ -62,6 +63,7 @@ export const useAppStore = defineStore('app', () => {
   })
   const aiBatchResults = ref([]) // 存储实时返回的 AI 数据
 
+  const taskPool = reactive(new Map());
   // 下载任务
   const downloadTasks = ref(new Map()) // 使用 Map 存储 {id: taskObject}
   // 存储任务回调的 Map
@@ -178,13 +180,6 @@ export const useAppStore = defineStore('app', () => {
       write_to_system_hosts: false,   // 是否将自定义 Hosts 写入系统 hosts 文件
       use_proxy_on_steamcmd: false,   // SteamCMD 是否使用代理
       use_proxy_on_ai: false          // AI 是否使用代理
-    },
-
-    // --- Steam ---
-    steam: {
-      steamcmd_path: '',
-      use_steam_client: true,
-      steam_appid: 294100
     },
 
     // --- AI ---
@@ -510,6 +505,15 @@ export const useAppStore = defineStore('app', () => {
       // 2. 停止所有正在轮询的定时器（如果有的话）
       if (scanProgress.scanning) scanProgress.scanning = false;
       // 3. 可以在这里做最后的自动保存
+    });
+    window.addEventListener('global-progress', (e) => {
+      const task = e.detail;
+      taskPool.set(task.id, task);
+      
+      // 如果任务完成或失败，延迟 3 秒从 UI 移除
+      if (['success', 'failed', 'cancelled'].includes(task.status)) {
+        setTimeout(() => taskPool.delete(task.id), 3000);
+      }
     });
     // 监听：后端弹窗
     window.addEventListener('backend-popup', (e) => {
@@ -954,9 +958,9 @@ export const useAppStore = defineStore('app', () => {
     
     // 提取必要字段减小发给大模型的体积
     const items = modsList.map(m => ({
-        package_id: m.package_id,
-        name: m.name,
-        description: cleanRichText(m.description,1000)
+      package_id: m.package_id,
+      name: m.name,
+      description: cleanRichText(m.description,1000)
     }))
     
     await window.pywebview.api.ai_execute_batch_task(task_key, items, {})
@@ -987,38 +991,37 @@ export const useAppStore = defineStore('app', () => {
   // === 更新相关函数 ===
   // 检查更新
   const checkUpdate = async (manual = true) => {
-      updateState.isChecking = true
-      updateState.downloadStatus = 'idle' // 重置状态
-      updateState.progress = 0
-      
-      try {
-        const res = await window.pywebview.api.update_check(manual)
-        if (checkResult(res, "检查更新")) {
-          const info = res.data
-          if (info.has_update) {
-            updateState.hasUpdate = true
-            updateState.info = info
-            // 弹出全局确认框
-            const confirmStore = useConfirmStore()
-            const ok = await confirmStore.confirmAction(
-              `发现新版本 v${info.version}`,
-              `来源: ${info.source_name}<br/>文件大小: ${info.file_size || '未知'}<br/>更新内容:<br/>${info.changelog}`,
-              { confirmText: '立即更新', cancelText: manual ? '以后再说' : '忽略此版本', type: 'success', isHtml: true }
-            )
-            if (ok) {
-              // 触发下载
-              _performUpdateAction()
-            } else if (!manual) {
-              // 如果是启动时的自动弹窗点取消，则询问是否不再提醒该版本
-              await window.pywebview.api.update_ignore_version(info.version)
-            }
-          } else if (manual) {
-            toast.success("当前已是最新版本")
+    updateState.isChecking = true
+    updateState.downloadStatus = 'idle' // 重置状态
+    updateState.progress = 0
+    try {
+      const res = await window.pywebview.api.update_check(manual)
+      if (checkResult(res, "检查更新")) {
+        const info = res.data
+        if (info.has_update) {
+          updateState.hasUpdate = true
+          updateState.info = info
+          // 弹出全局确认框
+          const confirmStore = useConfirmStore()
+          const ok = await confirmStore.confirmAction(
+            `发现新版本 v${info.version}`,
+            `来源: ${info.source_name}<br/>文件大小: ${info.file_size || '未知'}<br/>更新内容:<br/>${info.changelog}`,
+            { confirmText: '立即更新', cancelText: manual ? '以后再说' : '忽略此版本', type: 'success', isHtml: true }
+          )
+          if (ok) {
+            // 触发下载
+            _performUpdateAction()
+          } else if (!manual) {
+            // 如果是启动时的自动弹窗点取消，则询问是否不再提醒该版本
+            await window.pywebview.api.update_ignore_version(info.version)
           }
+        } else if (manual) {
+          toast.success("当前已是最新版本")
         }
-      } finally {
-        updateState.isChecking = false
       }
+    } finally {
+      updateState.isChecking = false
+    }
   }
   const _showInstallPrompt = async (data) => {
     const confirmStore = useConfirmStore()
@@ -1032,44 +1035,44 @@ export const useAppStore = defineStore('app', () => {
   }
   // 触发操作 (下载 OR 安装)
   const _performUpdateAction = async () => {
-      const info = updateState.info
-      if (!info) return
-      // 如果是 Ready 状态，弹出最后确认框 (因为会重启)
-      if (info.local_status === 'ready' || updateState.downloadStatus === 'ready') {
-            const confirmStore = useConfirmStore()
-            const ok = await confirmStore.confirmAction(
-              "准备重启",
-              "安装包已准备就绪。点击确认将关闭当前程序并自动安装更新。",
-              { confirmText: '立即重启安装', type: 'warning' }
-            )
-            if (!ok) return
-      }
+    const info = updateState.info
+    if (!info) return
+    // 如果是 Ready 状态，弹出最后确认框 (因为会重启)
+    if (info.local_status === 'ready' || updateState.downloadStatus === 'ready') {
+      const confirmStore = useConfirmStore()
+      const ok = await confirmStore.confirmAction(
+        "准备重启",
+        "安装包已准备就绪。点击确认将关闭当前程序并自动安装更新。",
+        { confirmText: '立即重启安装', type: 'warning' }
+      )
+      if (!ok) return
+    }
 
-      // 调用统一接口
-      const res = await window.pywebview.api.update_trigger_action()
-      if (checkResult(res,'开始下载更新包')) {
-          // 如果后端开始下载，这里不需要做什么，因为 EventListener 会接管进度条
-          if (res.data && res.data.status === 'downloading') {
-              updateState.downloadStatus = 'downloading'
-              toast.info("开始下载更新包...")
-          }
-      } else {
-          toast.error(res.message)
+    // 调用统一接口
+    const res = await window.pywebview.api.update_trigger_action()
+    if (checkResult(res,'开始下载更新包')) {
+      // 如果后端开始下载，这里不需要做什么，因为 EventListener 会接管进度条
+      if (res.data && res.data.status === 'downloading') {
+        updateState.downloadStatus = 'downloading'
+        toast.info("开始下载更新包...")
       }
+    } else {
+      toast.error(res.message)
+    }
   }
   // 更新外置数据库
   const updateExternalDB = async (type) => {
     try {
-        // 调用 API
-        const res = await window.pywebview.api.update_external_db(type)
-        if (checkResult(res, `更新外置数据库 ${type}`)) {
-          const task_id = res.data.task_id
-          const filePath = await waitForDownload(task_id)
-          // 重新获取数据
-          // await fetchRules() 
-        }
+      // 调用 API
+      const res = await window.pywebview.api.update_external_db(type)
+      if (checkResult(res, `更新外置数据库 ${type}`)) {
+        const task_id = res.data.task_id
+        const filePath = await waitForDownload(task_id)
+        // 重新获取数据
+        // await fetchRules() 
+      }
     } catch (error) {
-        toast.error("更新社区库失败: " + error.message)
+      toast.error("更新社区库失败: " + error.message)
     }
   }
 

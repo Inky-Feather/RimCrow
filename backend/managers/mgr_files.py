@@ -656,6 +656,7 @@ class FileManager:
         if not local_mods_path or not os.path.exists(local_mods_path):
             return False
 
+        from backend.utils.logger import logger
         # 1. 准备目标清单 (统一转小写进行防呆匹配)
         target_map = {}
         for src in workshop_mod_paths:
@@ -675,19 +676,22 @@ class FileManager:
         try:
             with os.scandir(local_mods_path) as it:
                 for entry in it:
-                    if entry.name.startswith(FileManager.LINK_PREFIX):
-                        name_lower = entry.name.lower()
-                        
-                        # 判定 A: 在目标清单中？
-                        if name_lower in target_map:
-                            expected_src = target_map[name_lower]['src_path']
-                            # 判定 B: 链接指向是否正确？(使用无 IO 开销的 readlink)
-                            if FileManager._is_link_correct_fast(entry.path, expected_src):
-                                existing_valid_keys.add(name_lower)
-                                continue
-                                
+                    if not entry.name.startswith(FileManager.LINK_PREFIX): continue
+                    
+                    name_lower = entry.name.lower()
+                    # 判定 B: 链接指向是否正确？(使用无 IO 开销的 readlink)
+                    expected_src = target_map[name_lower]['src_path']
+                    if not FileManager._is_link_correct(entry.path, expected_src):
+                        to_delete_paths.append(entry.path)
+                        continue
+                    # 判定 A: 在目标清单中？
+                    if name_lower not in target_map.keys():
                         # 指向错误、或者是多余的链接，加入删除队列
                         to_delete_paths.append(entry.path)
+                        continue
+                        
+                    existing_valid_keys.add(name_lower)
+                
         except OSError as e:
             from backend.utils.logger import logger
             logger.error(f"Scan links failed: {e}")
@@ -697,7 +701,8 @@ class FileManager:
             if key not in existing_valid_keys:
                 dst_path = os.path.join(local_mods_path, info['raw_name'])
                 links_to_create.append((info['src_path'], dst_path))
-
+        
+        logger.info(f"Delete links: {to_delete_paths}")
         # 4. 执行极速删除 (os.rmdir 对于 Junction 是瞬间且安全的，不会删除原文件)
         for path in to_delete_paths:
             try:
@@ -707,27 +712,12 @@ class FileManager:
             except Exception:
                 pass # 忽略占用等特殊情况
 
+        logger.info(f"Create links: {links_to_create}")
         # 5. 执行极速创建
         if links_to_create:
             FileManager._create_links_fast(links_to_create)
 
         return True
-
-    @staticmethod
-    def _is_link_correct_fast(link_path, expected_src):
-        """无磁盘 IO 开销的链接判定"""
-        try:
-            # os.readlink 在新版 Python 中可直接读取 Windows Junction
-            actual_target = os.readlink(link_path)
-            # 统一路径格式对比
-            return os.path.normpath(actual_target).lower() == os.path.normpath(expected_src).lower()
-        except OSError:
-            # 如果 readlink 失败，降级使用传统方法
-            try:
-                if not os.path.lexists(link_path): return False
-                return os.path.samefile(link_path, expected_src)
-            except:
-                return False
 
     @staticmethod
     def _create_links_fast(link_tasks: list):
