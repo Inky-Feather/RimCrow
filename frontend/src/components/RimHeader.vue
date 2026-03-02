@@ -19,10 +19,10 @@
         测试
       </button>
 
-      <button @click="appStore.uiState.showWorkspace = true" v-tooltip="`资源控制中枢`"
+      <button @click="appStore.uiState.showWorkspace = true" v-tooltip="`库存管理中枢`"
           class="px-4 py-1.5 rounded-xl bg-accent-special/10 hover:bg-accent-special/20 border border-accent-special/30 text-accent-special text-sm font-bold shadow-[0_0_10px_rgba(16,185,129,0.2)] transition-all flex items-center gap-2">
         <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-        资源枢纽
+        库存枢纽
       </button>
 
       <button @click="appStore.toggleUiState('showAiReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !appStore.aiBatchResults.length}"

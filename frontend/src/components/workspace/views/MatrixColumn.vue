@@ -11,7 +11,7 @@
         </h3>
         <div class="flex gap-2">
           <span class="text-[0.65rem] font-mono text-text-dim bg-black/40 px-2 py-0.5 rounded-md border border-text-main/5">
-            {{ formatFileSize(workspaceStore.librariesSize[sourceType]) }}
+            {{ formatFileSize(workspaceStore.librariesSize[storeType]) }}
           </span>
           <span class="text-[0.65rem] font-mono text-text-main bg-black/40 px-2 py-0.5 rounded-md border border-text-main/5">
             {{ mods.length }} 项
@@ -25,7 +25,7 @@
           <input v-model="searchQuery" placeholder="在此域检索..." 
             class="w-full bg-black/60 border border-text-main/10 rounded-lg pl-3 pr-2 py-1.5 text-xs text-text-main focus:border-accent-primary outline-none transition-colors" />
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center w-full justify-end gap-2">
           <CommonSelect v-model="filterState" mini 
             :options="[
               { label: '显示所有', value: 'default' }, 
@@ -77,7 +77,7 @@
             
             <MatrixItem class="timeline-trigger"
               :mod="record"
-              :sourceType="sourceType"
+              :storeType="storeType"
               :lastPlayedTime="lastPlayedTime"
               @contextmenu="handleContextMenu"
               @click="$emit('open-timeline', record)"
@@ -114,7 +114,7 @@ import { useConfirmStore } from '../../../stores/confirmStore'
 const props = defineProps({
   title: String,
   iconColor: String,
-  sourceType: String,
+  storeType: String,
   mods: Array,
   tooltip: String
 })
@@ -163,7 +163,12 @@ const displayMods = computed(() => {
     if (sortBy.value === 'size') return (b.file_size || 0) - (a.file_size || 0)
     if (sortBy.value === 'mtime') return (b.file_modify_time || 0) - (a.file_modify_time || 0)
     if (sortBy.value === 'ctime') return (b.file_create_time || 0) - (a.file_create_time || 0)
-    if (sortBy.value === 'change') return (b.steam_status?.time_last_sync || 0) - (a.steam_status?.time_last_sync || 0)
+    if (sortBy.value === 'change') {
+      if (props.storeType === 'workshop') return (b.steam_status?.time_last_sync || 0) - (a.steam_status?.time_last_sync || 0)
+      else if(props.storeType === 'self') return (b.steam_status?.time_download || 0) - (a.steam_status?.time_download || 0)
+      else return (b.file_modify_time || 0) - (a.file_modify_time || 0)
+    }
+    
     return 0
   })
 
