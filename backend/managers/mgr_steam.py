@@ -1090,20 +1090,16 @@ class SteamManager:
                             event_color = meta["color"]
                             priority = idx
                             break
-                    
                     # 特殊逻辑：下载/更新成功 (这是逻辑上的最后一步)
                     if "result : OK" in msg and ("Download" in msg or "download" in msg):
                         event_type = "download_ok"
                         event_title = "下载成功"
                         event_color = "success"
                         priority = 100 # 极高优先级，确保在同一秒内排在最前
-                    
                     # 如果依然没匹配到关键动作，且不是我们要找的 ID 相关消息，则丢弃
                     if priority == -1 and not ("result : OK" in msg):
                         continue
-
                     time_stamp = int(parser.parse(time_str).timestamp() * 1000)
-                    
                     raw_events.append({
                         "time": time_stamp,
                         "type": event_type,
@@ -1112,7 +1108,6 @@ class SteamManager:
                         "color": event_color,
                         "priority": priority # 仅用于内部排序
                     })
-            
             if not raw_events: return []
 
             # --- 核心排序逻辑 ---
@@ -1151,15 +1146,16 @@ class SteamManager:
     
 if __name__ == "__main__":
     steam_mgr = SteamManager()
-    data = steam_mgr.workshop_merged_data()
-    if data:
-        print(f"Total items: {len(data)} First item:\n", data)
-    data2 = steam_mgr.steamcmd_merged_data()
-    if data2:
-        print(f"Total items: {len(data2)} First item:\n", data2)
+    # data = steam_mgr.workshop_merged_data()
+    # if data:
+    #     print(f"Total items: {len(data)} First item:\n", data)
+    # data2 = steam_mgr.steamcmd_merged_data()
+    # if data2:
+    #     print(f"Total items: {len(data2)} First item:\n", data2)
 
     # 测试获取一个合集的内容
     # url = "https://steamcommunity.com/sharedfiles/filedetails/?id=3670074636"
     # mod_ids = steam_mgr.get_collection_items(url)
     # print(f"该合集包含以下模组: {mod_ids}")
-        
+    timeline = steam_mgr.get_item_timeline("3424068498")
+    print(timeline)

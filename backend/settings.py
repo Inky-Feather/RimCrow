@@ -135,7 +135,7 @@ class AppConfig:
     workshop_mods_path: str = ""   # RimWorld 公共工坊模组文件夹
     use_workshop_mods: bool = True  # 是否使用公共工坊模组
     steam_path: str = ""          # Steam 安装路径
-    home_path: str = str(Path(os.getcwd())) # 本程序路径
+    home_path: str = str(HOME_DIR) # 本程序路径
     
     # steamcmd 下载路径
     steamcmd_path: str = str(TOOLS_DIR / "steamcmd")
@@ -220,7 +220,7 @@ class SettingsManager:
         if not DATA_DIR.exists():
             DATA_DIR.mkdir(parents=True)
         # 确保日志目录存在
-        log_dir = Path(os.getcwd()) / "data" / "logs"
+        log_dir = DATA_DIR / "logs"
         if not log_dir.exists():
             log_dir.mkdir(parents=True)
             

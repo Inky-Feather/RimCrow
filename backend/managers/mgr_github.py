@@ -6,7 +6,7 @@ import zipfile
 import shutil
 import time
 from backend.utils.logger import logger
-from backend.settings import settings
+from backend.settings import DATA_DIR, settings
 from backend.database.models import GithubModRecord, GithubTimeline, db
 from backend.managers.mgr_download import TaskStatus
 from backend.utils.tools import current_ms
@@ -85,7 +85,7 @@ class GithubManager:
             self.record_timeline(repo_url, "error", f"下载失败: {task.error_msg}")
 
         # 推入全局下载队列 (下载到 data/Downloads)
-        dl_dir = os.path.join(os.getcwd(), "data", "Downloads")
+        dl_dir = str(DATA_DIR / "Downloads")
         task_id = self.download_mgr.add_task(
             url=download_url,
             dest_dir=dl_dir,

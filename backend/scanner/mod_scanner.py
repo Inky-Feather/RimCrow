@@ -69,6 +69,19 @@ class ModScanner:
         logger.info(f"Scan started. Paths: {search_paths}")
         start_time = time.time()
         db.connect(reuse_if_open=True) # 确保线程有连接
+        stats = {'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0}
+        with db.atomic() as txn:
+            try:
+                # --- 5. 清理失效数据 ---
+                # 扫描缺失的 Mod (物理文件没了)
+                deletion_result = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
+                stats['removed'] = len(deletion_result['deleted_mods'])
+                logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
+                # 清理失效的 Shadow Paths
+                ModDAO.clean_invalid_shadow_paths()
+            except Exception as e:
+                txn.rollback() # 万一出错，回滚所有改动
+                raise e
         try:
             EventBus.emit('scan-start')
             # --- 0. 预检查与准备 ---
@@ -103,7 +116,6 @@ class ModScanner:
             # 结构: { package_id: [mod_data_1, mod_data_2] }
             temp_registry = defaultdict(list)
             scanned_package_ids = set()
-            stats = {'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0}
             start_time = time.time()
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
@@ -245,14 +257,8 @@ class ModScanner:
             # 这是数据安全最关键的一步
             with db.atomic() as txn:
                 try:
-                    if mods_to_upsert: ModDAO.batch_upsert_mods(mods_to_upsert)
-                    # --- 5. 清理失效数据 ---
-                    # 扫描缺失的 Mod (物理文件没了)
-                    deletion_result = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
-                    stats['removed'] = len(deletion_result['deleted_mods'])
-                    logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
-                    # 清理失效的 Shadow Paths
-                    ModDAO.clean_invalid_shadow_paths()
+                    if mods_to_upsert: 
+                        ModDAO.batch_upsert_mods(mods_to_upsert)
                 except Exception as e:
                     txn.rollback() # 万一出错，回滚所有改动
                     raise e
@@ -467,21 +473,10 @@ class ModScanner:
         # 路径与来源分析
         workshop_id = self._resolve_workshop_id(mod_path)
         mod_data['workshop_id'] = workshop_id
-        keywords = os.path.join('workshop', 'content', '294100').lower()
         
-        
-        # 统一转为绝对路径 + 处理末尾分隔符
-        abs_path = os.path.normpath(mod_path).lower()
-        abs_base = os.path.normpath(settings.config.self_mods_path).lower()
-        abs_local = os.path.normpath(settings.config.local_mods_path).lower()
-        # 最终检测（同时判断空值）
-        is_contained = bool(abs_path and abs_base and (abs_path !=abs_local) and abs_path.startswith(abs_base))
-        # print(f"is_contained: {is_contained}, abs_path: {abs_path}, abs_base: {abs_base}")
             
         # Source 补全逻辑
-        if is_contained:
-            mod_data['source'] = 'self'
-        elif workshop_id and keywords in mod_path.lower():
+        if workshop_id:
             mod_data['url'] = f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
             mod_data['source'] = 'workshop'
         elif is_dlc_dir:
@@ -492,6 +487,22 @@ class ModScanner:
             mod_data['source'] = 'other'
         else:
             mod_data['source'] = 'local'
+        
+
+        # 路径标准化 (用于 Python 端比对，统一转小写)
+        # 标准化路径用于严格匹配 (增加结尾分隔符确保匹配精确)
+        def norm(p): return os.path.normpath(p).lower() + os.sep if p else ""
+        L_PATH = norm(os.path.normpath(settings.config.local_mods_path).lower())
+        W_PATH = norm(settings.config.workshop_mods_path)
+        S_PATH = norm(settings.config.self_mods_path)
+        # 补充 store
+        m_path = norm(mod_path)
+        if S_PATH and m_path.startswith(S_PATH) and (S_PATH != L_PATH):
+            mod_data['store'] = 'self'
+        elif W_PATH and m_path.startswith(W_PATH):
+            mod_data['store'] = 'workshop'
+        else:
+            mod_data['store'] = 'local'
         
         # 补充 supported_versions
         if mod_data.get('source','').lower() == 'core':

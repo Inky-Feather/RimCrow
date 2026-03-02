@@ -679,14 +679,18 @@ class FileManager:
                     if not entry.name.startswith(FileManager.LINK_PREFIX): continue
                     
                     name_lower = entry.name.lower()
-                    # 判定 B: 链接指向是否正确？(使用无 IO 开销的 readlink)
-                    expected_src = target_map[name_lower]['src_path']
-                    if not FileManager._is_link_correct(entry.path, expected_src):
-                        to_delete_paths.append(entry.path)
-                        continue
                     # 判定 A: 在目标清单中？
                     if name_lower not in target_map.keys():
                         # 指向错误、或者是多余的链接，加入删除队列
+                        to_delete_paths.append(entry.path)
+                        continue
+                    # 判定 B: 链接指向是否正确？(使用无 IO 开销的 readlink)
+                    expected_src = target_map.get(name_lower, {}).get('src_path')
+                    if not expected_src:
+                        # 目标清单中不存在此链接，加入删除队列
+                        to_delete_paths.append(entry.path)
+                        continue
+                    if not FileManager._is_link_correct(entry.path, expected_src):
                         to_delete_paths.append(entry.path)
                         continue
                         

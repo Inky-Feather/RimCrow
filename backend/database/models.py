@@ -74,6 +74,7 @@ class ModAsset(BaseModel):
     path = cast(str, CharField())                                    # 本地储存路径，绝对路径
     url = cast(str, CharField(null=True))                            # 网络地址，如 github 仓库地址、steam 创意工坊地址
     source = cast(str, CharField(default='local'))                   # 来源，如 steam, local, git, dlc, other, self
+    store = cast(str, CharField(default='local'))                   # 存储位置，如 local, self, workshop
     icon_path = cast(str, CharField(null=True))                      # 图标路径
     preview_path = cast(str, CharField(null=True))                   # 预览图片路径
     gallery_paths = cast(list[str], UTF8JSONField(default=list))           # 画廊图片路径列表，包括本地或网络路径 ['img1.jpg', 'img2.jpg']
@@ -142,16 +143,23 @@ class GroupMod(BaseModel):
         # 联合主键，防止同一个 Mod 在同一个组里出现两次
         primary_key = CompositeKey('group_id', 'mod_id')
 
-class SteamItemCache(BaseModel):
-    """缓存 Steam Web API 拉取的在线信息 (Mod / 合集通用)"""
-    workshop_id = cast(str, CharField(primary_key=True))
-    title = cast(str, CharField(null=True))
-    description = cast(str, TextField(null=True))                   # 前端解析 BBCode
-    preview_url = cast(str, CharField(null=True))
-    screenshots = cast(list[str], UTF8JSONField(default=list)) 
-    time_updated = cast(int, BigIntegerField(default=0))            # 线上最新修改时间
-    last_sync_time = cast(int, BigIntegerField(default=current_ms)) # 缓存拉取时间
-
+class GithubModRecord(BaseModel):
+    """GitHub 模组订阅记录"""
+    repo_url = CharField(primary_key=True)    # 完整仓库地址 https://github.com/user/repo
+    owner = CharField()                       # 仓库作者
+    repo_name = CharField()                   # 仓库名
+    install_type = CharField(default="source")# 偏好类型: source(源码) 或 release(发行版)
+    installed_version = CharField(null=True)  # 当前安装的版本(Release的TagName 或 源码的CommitHash)
+    target_branch = CharField(default="main") # 绑定的分支(通常是 main 或 master)
+    local_folder = CharField(null=True)       # 实际解压到的物理文件夹名称
+    last_check_time = BigIntegerField(default=0)
+    
+class GithubTimeline(BaseModel):
+    """主动记录的 GitHub 操作时间线"""
+    repo_url = CharField(index=True)
+    time = BigIntegerField(default=current_ms)
+    action = CharField()  # subscribe, download, update, extract_ok, error
+    message = TextField()
 
 class SystemInfo(BaseModel):
     key = cast(str, CharField(primary_key=True))
@@ -169,7 +177,7 @@ def init_db(db_path):
         db.connect()    # 连接数据库
         
         # 定义所有模型列表
-        all_models = [ModAsset, GameProfile, UserModData, GroupData, GroupMod, SystemInfo, SteamItemCache]
+        all_models = [ModAsset, GameProfile, UserModData, GroupData, GroupMod, SystemInfo, GithubModRecord, GithubTimeline]
         # 1. 确保基础表存在
         db.create_tables(all_models, safe=True)
         # 2. 【核心】自动同步字段变动 (解决 no such column 报错)
@@ -203,7 +211,7 @@ def init_db(db_path):
             from backend.database.migrator import run_migrations
             run_migrations(old_v)
             # 确保其他新加的表（如果迁移里没写的话）也能创建
-            db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod, SteamItemCache], safe=True)
+            db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod, SystemInfo, GithubModRecord, GithubTimeline], safe=True)
             
         return True
     except Exception as e:

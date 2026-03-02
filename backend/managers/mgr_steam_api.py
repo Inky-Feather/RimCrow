@@ -20,15 +20,15 @@ if __name__ == "__main__":
 from backend.utils.logger import logger
 from backend.settings import settings
 # from backend.managers.mgr_network import network_mgr
-from backend.database.models_ext import SteamItemCache, WorkshopMeta, ext_db
+from backend.database.models_ext import WorkshopMeta, ext_db
 
 class SteamWebAPI:
     """Steam 官方无密钥开放接口，极致轻量"""
     BASE_URL = "https://api.steampowered.com"
-    CACHE_TTL_MS = 15 * 24 * 60 * 60 * 1000  # 缓存有效期 24 小时
+    CACHE_TTL_MS = 1 * 24 * 60 * 60 * 1000  # 缓存有效期 1 天
     
     @classmethod
-    def fetch_item_details(cls, workshop_ids: list, force_refresh=False) -> dict:
+    def fetch_item_details(cls, workshop_ids: list, force_refresh=False, only_cache=False, cache_ttl_hours=None) :
         """
         获取 Mod 或 合集 的详情，自带本地 SQLite 缓存拦截。
         返回格式: { "12345": { "title": "...", "time_updated": 123, ... } }
@@ -38,12 +38,14 @@ class SteamWebAPI:
         current_time = int(time.time() * 1000)
         results = {}
         ids_to_fetch = []
+        # 自定义缓存有效期
+        cache_ttl_ms = cache_ttl_hours * 60 * 60 * 1000 if cache_ttl_hours else cls.CACHE_TTL_MS
 
         # 1. 检查本地缓存
         if not force_refresh:
-            cached_items = SteamItemCache.select().where(SteamItemCache.workshop_id.in_(workshop_ids)) # type: ignore
+            cached_items = WorkshopMeta.select().where(WorkshopMeta.workshop_id.in_(workshop_ids)) # type: ignore
             for item in cached_items:
-                if current_time - item.last_sync_time < cls.CACHE_TTL_MS:
+                if current_time - item.last_sync_time < cache_ttl_ms:
                     results[item.workshop_id] = {
                         "title": item.title,
                         "description": item.description,
@@ -55,7 +57,10 @@ class SteamWebAPI:
             ids_to_fetch = [wid for wid in workshop_ids if wid not in results]
         else:
             ids_to_fetch = workshop_ids
-
+            
+        # 仅返回缓存数据
+        if only_cache: return results, ids_to_fetch
+    
         # 2. 从网络获取缺失的数据
         if ids_to_fetch:
             logger.debug(f"需要从 Steam API 获取 {len(ids_to_fetch)} 条数据")
@@ -96,36 +101,45 @@ class SteamWebAPI:
                             **detail,
                             "last_sync_time": current_time
                         })
+                    
+                    # 获取 user_data_list 中出现过的所有键，取交集，确保只更新传入的字段
+                    input_keys = set().union(*(d.keys() for d in cache_batch))
+                    update_fields = [
+                        field for field in WorkshopMeta._meta.sorted_fields  # type: ignore
+                        if field.name in input_keys and field.name != "workshop_id"
+                    ]
                     # 批量更新缓存
                     with ext_db.atomic():
-                        SteamItemCache.insert_many(cache_batch).on_conflict_replace().execute()
+                        WorkshopMeta.insert_many(cache_batch).on_conflict(
+                            conflict_target=[WorkshopMeta.workshop_id],
+                            preserve=update_fields
+                        ).execute()
                         
                 except Exception as e:
                     logger.error(f"Steam API 请求失败: {e}")
 
-        return results
+        return results, ids_to_fetch
     
     @classmethod
     def get_or_fetch_details(cls, workshop_id: str):
         """获取单个模组详情（缓存命中则直接返回，否则触发拉取）"""
         meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
         current_time = int(time.time() * 1000)
-
         # 检查是否需要更新缓存
         if not meta or not meta.description or (current_time - meta.last_sync_time > cls.CACHE_TTL_MS):
             cls.fetch_and_cache_batch([workshop_id])
             meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
-            
         if not meta: return None
-        
+        screenshots = cls._fetch_screenshots_via_scraper(workshop_id)
         return {
             "workshop_id": meta.workshop_id,
             "title": meta.name,
             "package_id": meta.package_id,
             "description": meta.description,
             "preview_url": meta.preview_url,
+            "screenshots": screenshots,
             "time_updated": meta.time_updated,
-            "dependencies": meta.dependencies
+            "dependencies_mods": meta.dependencies_mods
         }
 
     @classmethod
@@ -133,14 +147,12 @@ class SteamWebAPI:
         """批量从 Steam 获取并写入外置数据库"""
         if not workshop_ids: return
         current_time = int(time.time() * 1000)
-        
         for i in range(0, len(workshop_ids), 100):
             batch_ids = workshop_ids[i:i+100]
             url = f"{cls.BASE_URL}/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
             data = {"itemcount": len(batch_ids)}
             for idx, wid in enumerate(batch_ids):
                 data[f"publishedfileids[{idx}]"] = str(wid) # type: ignore
-            
             try:
                 res = requests.post(url, data=data, timeout=10)
                 res_data = res.json().get("response", {}).get("publishedfiledetails", [])
@@ -155,7 +167,7 @@ class SteamWebAPI:
                             preview_url=item.get("preview_url", ""),
                             time_updated=int(item.get("time_updated", 0)) * 1000,
                             last_sync_time=current_time
-                        ).on_conflict(
+                        ).on_conflict()(
                             conflict_target=[WorkshopMeta.workshop_id],
                             preserve=[WorkshopMeta.description, WorkshopMeta.preview_url, WorkshopMeta.time_updated, WorkshopMeta.last_sync_time]
                         ).execute()
@@ -194,31 +206,25 @@ class SteamWebAPI:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept-Language': f'{steam_lang};q=0.9,en;q=0.8'
             }
-            
             logger.debug(f"Triggering Scraper Fallback for Mod: {workshop_id}")
             resp = requests.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
             html_content = resp.text
-
             # 核心：正则匹配变量内容
             # 匹配 rgScreenshotURLs = { ... }; 
             pattern = re.compile(r'rgScreenshotURLs\s*=\s*\{(.*?)\};', re.DOTALL)
             match = pattern.search(html_content)
-            
             if match:
                 js_object_content = match.group(1)
                 # 进一步提取所有引号中的 URL
                 # 匹配格式如 'id': 'https://...'
                 url_pattern = re.compile(r"'(https://images\.steamusercontent\.com/ugc/.*?)'")
                 urls = url_pattern.findall(js_object_content)
-                
                 # 去重并清洗（过滤掉空白和重复）
                 for u in urls:
                     if u and u not in screenshots:
                         screenshots.append(u)
-            
             logger.info(f"Scraper found {len(screenshots)} screenshots for {workshop_id}")
-            
         except Exception as e:
             logger.error(f"Scraper Fallback failed for {workshop_id}: {e}")
             
@@ -233,8 +239,12 @@ if __name__ == "__main__":
     #  # 测试用例：解析 Mod 详情
     mod_id = '3671245310'
     
-    details = SteamWebAPI.fetch_item_details([mod_id], True)
+    # details = SteamWebAPI.fetch_item_details([mod_id], True)
+    details = SteamWebAPI.get_or_fetch_details(mod_id)
     print(f"Mod {mod_id} 详情: {details}")
     
-    screenshots = SteamWebAPI._fetch_screenshots_via_scraper(mod_id)
-    print(f"Mod 截图: {screenshots}")
+    # screenshots = SteamWebAPI._fetch_screenshots_via_scraper(mod_id)
+    # print(f"Mod 截图: {screenshots}")
+    
+    
+    
