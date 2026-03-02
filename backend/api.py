@@ -1995,81 +1995,103 @@ class API:
         return ApiResponse.success(message="合集已移出名录")
 
     @log_api_call
-    def collection_add_and_fetch(self, collection_id: str):
-        """解析、保存并返回合集完整数据 (初次接入调用)"""
-        return self.lifecycle_fetch_collection(collection_id, is_adding=True)
-
-    @log_api_call
-    def lifecycle_fetch_collection(self, collection_id: str, is_adding: bool = False):
+    def lifecycle_fetch_collection(self, collection_id: str):
         """
-        核心合集解析器：
-        1. 获取合集详情
-        2. 获取子模组列表
-        3. 对比本地已安装状态
-        4. 【关键】反查外置库获取 package_id
-        5. 同步数据到数据库快照
+        合集加载引擎 (分步模式)：
+        1. 立即从数据库返回缓存数据 (包含上一次的子项快照)
+        2. 启动后台线程，执行：网络解析 -> 状态对比 -> 存库 -> EventBus 通知刷新
         """
         coll_id = str(collection_id)
         
-        # 1. 抓取合集本身信息
-        coll_meta, ids_to_fetch = SteamWebAPI.fetch_item_details([coll_id])
-        if not coll_meta or coll_id not in coll_meta:
-            return ApiResponse.error("无法从 Steam 获取合集元数据，请检查网络或 ID 是否正确")
+        # --- 第一阶段：同步返回缓存 ---
+        cached_coll = CollectionDAO.get_collection_by_id(coll_id)
         
-        main_info = coll_meta[coll_id]
+        # 即使有缓存，我们也需要根据当前本地文件实时修正 is_installed 状态
+        # 否则用户刚下完 Mod，点开合集显示的还是旧的“未安装”
+        initial_data = None
+        if cached_coll:
+            # 实时计算安装状态 (基于快照)
+            workshop_installed = self.steam_mgr.get_installed_workshop_ids()
+            manager_installed_ids = [int(m['workshop_id']) for m in self.steam_mgr.steamcmd_merged_data().values() if m.get('is_installed')]
+            all_installed_set = set([str(wid) for wid in (list(workshop_installed) + manager_installed_ids)])
+            
+            processed_children = []
+            for child in (cached_coll.children or []):
+                child['is_installed'] = child['workshop_id'] in all_installed_set
+                processed_children.append(child)
+            
+            initial_data = {
+                "collection": model_to_dict(cached_coll),
+                "children": processed_children,
+                "total": cached_coll.total,
+                "need_download": len([c for c in processed_children if not c['is_installed']]),
+                "is_cache": True # 标记这是缓存
+            }
 
-        # 2. 抓取子项 ID 列表
-        child_wids = SteamWebAPI.fetch_collection_children(coll_id)
-        if not child_wids:
-            # 有些合集可能真的为空
-            return ApiResponse.success({
-                "collection": main_info,
-                "children": [],
-                "total": 0, "need_download": 0
+        # --- 第二阶段：启动异步更新任务 ---
+        # 无论是否有缓存，都在后台刷一遍最新的
+        threading.Thread(target=self._bg_refresh_collection, args=(coll_id,), daemon=True).start()
+
+        return ApiResponse.success(initial_data)
+
+    def _bg_refresh_collection(self, coll_id: str):
+        """后台刷新任务 (网络密集 + 数据库写入)"""
+        try:
+            logger.debug(f"开始后台刷新合集: {coll_id}")
+            # 1. 抓取最新子项 ID 列表
+            child_wids = SteamWebAPI.fetch_collection_children(coll_id)
+            
+            # 2. 抓取所有项（含合集本身）的最新详情 (利用你新改的 fetch_item_details)
+            # 这里的 batch_ids 包含合集 ID 自己
+            all_ids = list(set([coll_id] + child_wids))
+            online_results, _ = SteamWebAPI.fetch_item_details(all_ids, force_refresh=True)
+            
+            if coll_id not in online_results: return
+            main_info = online_results[coll_id]
+
+            # 3. 反查 PackageID
+            from backend.database.models_ext import WorkshopMeta
+            meta_records = WorkshopMeta.select(WorkshopMeta.workshop_id, WorkshopMeta.package_id).where(WorkshopMeta.workshop_id.in_(child_wids))
+            pid_map = {str(m.workshop_id): m.package_id for m in meta_records}
+
+            # 4. 计算安装状态
+            workshop_installed = self.steam_mgr.get_installed_workshop_ids()
+            manager_installed_ids = [int(m['workshop_id']) for m in self.steam_mgr.steamcmd_merged_data() if m.get('is_installed')]
+            all_installed_set = set([str(wid) for wid in (list(workshop_installed) + manager_installed_ids)])
+
+            # 5. 组装并准备持久化
+            final_children = []
+            for wid in child_wids:
+                info = online_results.get(wid, {})
+                final_children.append({
+                    "workshop_id": wid,
+                    "package_id": pid_map.get(wid),
+                    "title": info.get("title", f"Mod {wid}"),
+                    "preview_url": info.get("preview_url", ""),
+                    "is_installed": wid in all_installed_set
+                })
+
+            total = len(final_children)
+            missing = len([c for c in final_children if not c['is_installed']])
+
+            # 6. 存入数据库
+            CollectionDAO.upsert_collection(coll_id, main_info, final_children, total, missing)
+
+            # 7. 通过 EventBus 通知前端：数据已就绪，请刷新
+            EventBus.emit('workspace-collection-updated', {
+                "id": coll_id,
+                "data": {
+                    "collection": main_info,
+                    "children": final_children,
+                    "total": total,
+                    "need_download": missing,
+                    "is_cache": False
+                }
             })
+            logger.debug(f"后台刷新合集完成: {coll_id}")
 
-        # 3. 批量获取子项详情 (封面、标题)
-        children_details, ids_to_fetch = SteamWebAPI.fetch_item_details(child_wids)
-
-        # 4. 获取本地所有已安装的 Workshop ID 集合 (统合两个来源)
-        # 包括 Steam 客户端目录 和 管理器下载目录
-        workshop_installed = self.steam_mgr.get_installed_workshop_ids() # 原生
-        manager_installed_data = self.steam_mgr.steamcmd_merged_data()   # 管理器
-        manager_installed_ids = [int(m['workshop_id']) for m in manager_installed_data.values() if m.get('is_installed')]
-        
-        all_installed_ids = set([str(wid) for wid in (list(workshop_installed) + manager_installed_ids)])
-
-        # 5. 【增强】去外置数据库批量反查 package_id，以便前端覆写加载顺序
-        from backend.database.models_ext import WorkshopMeta
-        # 批量查，一次 SQL 搞定
-        meta_records = WorkshopMeta.select(WorkshopMeta.workshop_id, WorkshopMeta.package_id).where(WorkshopMeta.workshop_id.in_(child_wids))
-        pid_map = {str(m.workshop_id): m.package_id for m in meta_records}
-
-        # 6. 组装 Children 数据
-        result_children = []
-        for wid in child_wids:
-            info = children_details.get(wid, {})
-            result_children.append({
-                "workshop_id": wid,
-                "package_id": pid_map.get(wid), # 后端在这里把 package_id 补上
-                "title": info.get("title", f"Mod {wid}"),
-                "preview_url": info.get("preview_url", ""),
-                "is_installed": wid in all_installed_ids
-            })
-
-        # 7. 计算统计
-        total_count = len(result_children)
-        missing_count = len([c for c in result_children if not c['is_installed']])
-
-        # 8. 【持久化】将最新快照同步到数据库
-        CollectionDAO.upsert_collection(coll_id, main_info, total_count, missing_count)
-
-        return ApiResponse.success({
-            "collection": main_info,
-            "children": result_children,
-            "total": total_count,
-            "need_download": missing_count
-        })
+        except Exception as e:
+            logger.error(f"后台刷新合集失败: {e}", exc_info=True)
     
     # GitHub 相关接口
     

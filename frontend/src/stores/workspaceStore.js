@@ -79,10 +79,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   // 监听后端推送
   const setupListeners = () => {
+    // 监听 Mod 在线状态更新
     window.addEventListener('workspace-online-update', (e) => {
       const onlineMap = e.detail // { "123": { title, time_updated, ... } }
       console.log("收到批量在线状态更新", onlineMap)
-      
       // 在 workshop 和 self 列表中寻找匹配的 Mod 并更新
       const updateList = (list) => {
         list.forEach(mod => {
@@ -101,6 +101,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       updateList(librariesMods.workshop)
       updateList(librariesMods.self)
     })
+    // 监听合集更新
+    window.addEventListener('workspace-collection-updated', (e) => {
+    const updated = e.detail // { id, data: { collection, children, ... } }
+    // 如果当前用户正在看的正是这个合集，立即无感替换数据
+    if (collections.activeId === updated.id) {
+      collections.activeDetails = updated.data.collection
+      collections.activeChildren = updated.data.children
+      collections.isChildrenLoading = false
+    }
+    // 同时更新右侧名录列表中的统计数字
+    const target = collections.savedList.find(c => c.id === updated.id)
+    if (target) {
+      Object.assign(target, {
+        total: updated.data.total,
+        need_download: updated.data.need_download,
+        preview_url: updated.data.collection.preview_url,
+        title: updated.data.collection.title
+      })
+    }
+  })
   }
 
   // 拉取无遮蔽的三个库全量数据
@@ -296,25 +316,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   // 获取并展开选中合集的内部阵列 (动态计算缺失状态)
   const selectCollection = async (coll) => {
-    if (!window.pywebview) return
     collections.activeId = coll.id
     collections.isChildrenLoading = true
-    try {
-      // 每次点击重新获取最新状态，确保 is_installed 准确
-      const res = await window.pywebview.api.lifecycle_fetch_collection(coll.id)
-      if (checkResult(res, '获取合集内容详情')) {
-        collections.activeDetails = res.data.collection || coll
-        collections.activeChildren = res.data.children || []
-        
-        // 同步更新左侧名录中该卡片的统计数字 (比如用户刚刚下好了一些，数字变了)
-        const target = collections.savedList.find(c => c.id === coll.id)
-        if (target) {
-          target.need_download = res.data.need_download
-          target.total = res.data.total
-        }
+    
+    // 这步会立即返回数据库里的旧数据 (或者为 null)
+    const res = await window.pywebview.api.lifecycle_fetch_collection(coll.id)
+    if (res.status === 'success' && res.data) {
+      collections.activeDetails = res.data.collection
+      collections.activeChildren = res.data.children
+      // 如果返回的是缓存，我们依然保持 loading 状态（或者显示一个“同步中”的小标志）
+      if (!res.data.is_cache) {
+        collections.isChildrenLoading = false
       }
-    } finally {
-      collections.isChildrenLoading = false
     }
   }
 

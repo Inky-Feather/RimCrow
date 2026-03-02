@@ -855,16 +855,22 @@ class CollectionDAO:
         return list(SubscribedCollection.select().order_by(SubscribedCollection.created_time.desc()).dicts()) # type: ignore
 
     @staticmethod
-    def upsert_collection(coll_id: str, data: dict, total: int, need_download: int):
-        """保存或更新合集快照"""
+    def get_collection_by_id(coll_id: str):
+        """获取单个合集的完整缓存"""
+        return SubscribedCollection.get_or_none(SubscribedCollection.id == str(coll_id))
+
+    @staticmethod
+    def upsert_collection(coll_id: str, meta: dict, children: list, total: int, need_download: int):
+        """持久化合集及其子项的所有元数据"""
         return SubscribedCollection.insert(
             id=str(coll_id),
-            title=data.get('title'),
-            description=data.get('description'),
-            preview_url=data.get('preview_url'),
+            title=meta.get('title'),
+            description=meta.get('description'),
+            preview_url=meta.get('preview_url'),
+            children=children, # 存入完整的子项列表快照
             total=total,
             need_download=need_download,
-            time_updated=data.get('time_updated', 0)
+            time_updated=meta.get('time_updated', 0)
         ).on_conflict_replace().execute()
 
     @staticmethod

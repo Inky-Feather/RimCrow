@@ -175,6 +175,10 @@ class SubscribedCollection(BaseModel):
     # 时间戳
     time_updated = cast(int, BigIntegerField(default=0)) # 合集在 Steam 上的最后更新时间
     created_time = cast(int, BigIntegerField(default=current_ms))
+    # 存储子项数据的快照：JSON 数组格式
+    # 结构: [{"workshop_id": "...", "package_id": "...", "title": "...", "preview_url": "...", "is_installed": bool}]
+    children = cast(list, UTF8JSONField(default=list))
+    
 
 class SystemInfo(BaseModel):
     key = cast(str, CharField(primary_key=True))

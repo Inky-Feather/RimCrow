@@ -7,9 +7,11 @@ except ImportError:
 import multiprocessing
 import sys
 import os
+from decimal import __version__
 from backend.utils.logger import logger 
 from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
+from backend.utils.tools import current_ms
 from validate_environment import get_entrypoint, validate_environment
 
 from icecream import ic
@@ -67,6 +69,9 @@ def on_resized(width, height):
     
 def on_main_window_closed():
     """窗口关闭时触发"""
+    settings.set('last_run_time', current_ms())
+    settings.set('run_count', settings.get('run_count') + 1)
+    settings.set('last_version', __version__)
     settings.save()  # 保存配置
 
 
