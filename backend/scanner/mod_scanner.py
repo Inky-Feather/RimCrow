@@ -249,24 +249,24 @@ class ModScanner:
                 # 数据库会存储多条记录 (path不同，path_hash不同，主键不冲突)
                 # 查询时由 DAO 根据 Profile 过滤，部署时由下方逻辑过滤
                 for mod in entries:
-                    mods_to_upsert.append(mod)
+                    # 优化：跳过未变动的 Mod，避免无意义的数据库重写
+                    if not mod.get('_skipped'): mods_to_upsert.append(mod)
                     self._classify_for_deploy(mod, local_mods_root,self_mods_root, workshop_mods_root, 
                         local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy)
 
             # --- 4. 批量入库 ---
             # 这是数据安全最关键的一步
-            with db.atomic() as txn:
-                try:
-                    if mods_to_upsert: 
-                        ModDAO.batch_upsert_mods(mods_to_upsert)
-                except Exception as e:
-                    txn.rollback() # 万一出错，回滚所有改动
-                    raise e
+            try:
+                if mods_to_upsert: 
+                    ModDAO.batch_upsert_mods(mods_to_upsert)
+            except Exception as e:
+                txn.rollback() # 万一出错，回滚所有改动
+                raise e
             
             
             # --- 6. 自动部署链接 (Deployment) ---
             deploy_msg = "跳过链接部署"
-            logger.debug(f"Skip deployment: {settings.config.use_workshop_mods} and {settings.config.use_self_mods}, current_profile {settings.config.current_profile_id != 'default'}")
+            logger.debug(f"Skip deployment: use_workshop_mods={settings.config.use_workshop_mods}, use_self_mods={settings.config.use_self_mods}, current_profile_not_default={settings.config.current_profile_id != 'default'}")
             final_links_to_create = []
             if settings.config.use_self_mods and local_mods_root and os.path.exists(local_mods_root):
                 # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Workshop Mod
@@ -277,7 +277,7 @@ class ModScanner:
                         # 被本地遮蔽，忽略
                         pass
             
-            if settings.config.use_workshop_mods and settings.config.use_self_mods and settings.config.current_profile_id != 'default' \
+            if settings.config.use_workshop_mods and settings.config.current_profile_id != 'default' \
                 and local_mods_root and os.path.exists(local_mods_root):
                 # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
                 self_mods_ids_for_deploy = [w_id for w_path, w_id in self_mods_paths_for_deploy]
@@ -318,10 +318,10 @@ class ModScanner:
                 'deploy_message': deploy_msg
             }
             self._finish_scan(result)
-            logger.info(f"Scan finished. {stats}. {deploy_msg}")
 
             duration = time.time() - start_time
-            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}")
+            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, \
+                        Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {deploy_msg}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -342,7 +342,6 @@ class ModScanner:
 
     def _finish_scan(self, result):
         """扫描结束，通知前端并发送最终统计"""
-        logger.info(f"Scan finished: {result['stats']}")
         # 获取最新全量数据，或者让前端自己再调一次 get_all_mods
         # 建议直接通知前端 "scan-complete"，让前端决定是否刷新列表
         
@@ -352,23 +351,21 @@ class ModScanner:
         """
         辅助函数：将 Mod 分类以便后续部署。
         """
-        if not mod_data.get('path'): return
+        mod_path = mod_data.get('path')
+        if not mod_path: return
         
-        mod_path = os.path.normpath(mod_data['path']).lower()
+        mod_path_norm = os.path.normpath(mod_path).lower()
         pid = mod_data['package_id'].lower()
         
         # 判断 Local
-        if local_root and local_root in mod_path:
+        if local_root and mod_path_norm.startswith(local_root):
             local_ids_set.add(pid)
-            return
         # 判断 Self Mod
-        if self_mods_root and self_mods_root in mod_path:
-            self_mods_paths_list.append((mod_data['path'], pid))
-            return
+        elif self_mods_root and mod_path_norm.startswith(self_mods_root):
+            self_mods_paths_list.append((mod_path, pid)) # 保留原大小写路径用于部署
         # 判断 Workshop (如果是 DLC 也不需要部署)
-        if workshop_root and workshop_root in mod_path:
-            # 记录 (路径, ID) 元组
-            workshop_paths_list.append((mod_data['path'], pid))
+        elif workshop_root and mod_path_norm.startswith(workshop_root):
+            workshop_paths_list.append((mod_path, pid))
         
     def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False):
         """
@@ -458,9 +455,11 @@ class ModScanner:
         # DLC 兜底 ID
         if is_dlc_dir and not pkg_id:
             folder = os.path.basename(mod_path)
-            if folder.lower() == 'core': pkg_id = 'ludeon.rimworld'
-            else: pkg_id = f'ludeon.rimworld.{folder.lower()}'
-            mod_data['package_id'] = pkg_id
+            if folder.lower() == 'core': 
+                mod_data['package_id_raw'] = 'Ludeon.RimWorld'
+            else: 
+                mod_data['package_id_raw'] = f'Ludeon.RimWorld.{folder.capitalize()}'
+            mod_data['package_id'] = mod_data['package_id_raw'].lower()
 
         if not pkg_id: return None
         

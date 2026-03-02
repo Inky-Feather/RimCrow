@@ -93,6 +93,10 @@
                     <span class="text-[0.7rem] px-1 text-text-dim font-mono opacity-50 truncate">{{ p.user_data_path }}</span>
                   </span>
 
+                  <div class=" w-fit bg-accent-special/70 backdrop-blur-xl px-1 py-0.5 rounded-sm text-[0.65rem] text-text-main">
+                    上次运行：{{ p.last_played_time ? formatDate(p.last_played_time) : '未运行' }}
+                  </div>
+
                 </div>
 
               </div>
@@ -189,6 +193,7 @@ import CommonPathInput from './common/input/CommonPathInput.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import { RUN_COMMAND_TAGS } from '../utils/constants'
+import { formatDate } from '../utils/uiHelper'
 
 const toast = createToastInterface()
 const profileStore = useProfileStore()

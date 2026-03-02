@@ -129,7 +129,35 @@
         </template>
         
       </div>
+
     </div>
+
+    <!-- 游戏运行中的临时浮动指示器 -->
+    <Transition
+      enter-active-class="transition-all duration-500 ease-out"
+      enter-from-class="-translate-y-full opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition-all duration-300 ease-in"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="-translate-y-full opacity-0"
+    >
+      <div v-if="appStore.isGameRunning" 
+        class="fixed top-5 left-1/2 -translate-x-1/2 z-9999 flex items-center bg-black/80 backdrop-blur-md border border-accent-tip/30 p-1.5 pl-4 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+        
+        <div class="flex items-center gap-2 mr-4 text-sm font-bold text-text-main">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-tip opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-accent-tip shadow-[0_0_10px_#eab308]"></span>
+          </span>
+          游戏正在后台运行
+        </div>
+
+        <button @click="appStore.enterSleepMode()"
+          class="px-4 py-1.5 bg-accent-primary/20 hover:bg-accent-tip text-accent-tip hover:text-black rounded-full text-xs font-bold transition-all border border-accent-tip/30">
+          恢复低功耗休眠
+        </button>
+      </div>
+    </Transition>
 
     <!-- 列表对比抽屉 -->
     <Teleport to="body">
@@ -385,6 +413,14 @@ let resizeObserver = null
 
 onMounted(() => {
   console.log("应用已启动，正在初始化存储……")
+  // 确保 API 存在
+  if (window.pywebview) {
+    window.pywebview.api.monitor_frontend_ready()
+  } else {
+    window.addEventListener('pywebviewready', () => {
+      window.pywebview.api.monitor_frontend_ready()
+    })
+  }
   appStore.initialize()  // 初始化存储（加载数据）
   
   // === 动态尺寸调整 ===

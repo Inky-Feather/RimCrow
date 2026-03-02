@@ -54,13 +54,13 @@ export const useOrderStore = defineStore('order', () => {
       setTimeout(() => {
         toast.info("Mod序列未修改无须保存",{timeout: 1000})
       }, 100);
-      return true
+      // return true
     }
     if (!window.pywebview) return false
     appStore.isLoading = true
     try {
       // 使用默认路径
-      const res = await window.pywebview.api.load_order_save(modStore.activeIds)
+      const res = await window.pywebview.api.load_order_save(modStore.activeIds, modStore.isDirty)
       if (checkResult(res, "保存Mod加载顺序")) {
         modStore.savedActiveIds = [...modStore.activeIds] || []
         modStore.updateInactiveIds()

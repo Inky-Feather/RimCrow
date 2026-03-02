@@ -19,6 +19,7 @@ export const useAppStore = defineStore('app', () => {
   const appVersion = ref('')     // 应用版本号
   const buildMode = ref('')      // 构建模式
   const isLoading = ref(false)   // 加载状态
+  const isGameRunning = ref(false) // 新增：全局游戏运行状态
   
   // UI 状态
   const uiState = reactive({
@@ -509,6 +510,11 @@ export const useAppStore = defineStore('app', () => {
       if (scanProgress.scanning) scanProgress.scanning = false;
       // 3. 可以在这里做最后的自动保存
     });
+    // 监听游戏状态变化
+    window.addEventListener('game-status-changed', (e) => {
+      isGameRunning.value = e.detail.running
+    })
+    // 通用进度更新
     window.addEventListener('global-progress', (e) => {
       const task = e.detail;
       taskPool.set(task.id, task);
@@ -645,6 +651,12 @@ export const useAppStore = defineStore('app', () => {
     else{
       console.error("启动游戏异常:")
       toast.error(`启动游戏出现异常！`)
+    }
+  }
+  // 触发睡眠 API
+  const enterSleepMode = () => {
+    if (window.pywebview) {
+      window.pywebview.api.monitor_force_sleep()
     }
   }
   // 自动检测路径
@@ -1082,8 +1094,8 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, 
-    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS,
-    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll,
+    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, isGameRunning, 
+    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode,
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems,

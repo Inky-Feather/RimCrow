@@ -145,6 +145,14 @@ class SteamManager:
         self._monitor_lock = threading.Lock()
         self._active_tasks = {}          # 存放所有正在执行的任务 { task_id: dict }
         self._monitor_running = False    # 标记主监控线程是否存活
+        # 添加内存缓存
+        self._cached_ws_map = None
+        self._last_ws_log_mtime = 0
+        self._last_ws_acf_mtime = 0
+        # 添加内存缓存
+        self._cached_cmd_map = None
+        self._last_cmd_log_mtime = 0
+        self._last_cmd_acf_mtime = 0
         
         # 准备环境 (只复制 DLL 和 txt，不再生成 py 脚本)
         self._ensure_agent_environment()
@@ -1007,11 +1015,26 @@ class SteamManager:
         ]
         """
         # 获取分别解析后的字典结构
+        log_path = self._get_steam_log_path()
+        acf_path = self._get_acf_path()
+        # 获取文件的最新修改时间 (os.path.getmtime 非常快)
+        log_mtime = os.path.getmtime(log_path) if log_path and os.path.exists(log_path) else 0
+        acf_mtime = os.path.getmtime(acf_path) if acf_path and os.path.exists(acf_path) else 0
+        # 命中缓存，直接返回内存数据 (0 开销！)
+        if self._cached_ws_map is not None and \
+           log_mtime == self._last_ws_log_mtime and \
+           acf_mtime == self._last_ws_acf_mtime:
+            return self._cached_ws_map
+        # 只有文件真变了，才去跑耗时的正则和 JSON 解析
         log_data = self.parse_workshop_log()
         acf_json = self.get_acf_json()
         acf_data = self.parse_acf_data(acf_json)
-        # 合并数据
-        return self._merge_acf_and_log(acf_data, log_data)
+        
+        self._cached_ws_map = self._merge_acf_and_log(acf_data, log_data)
+        self._last_ws_log_mtime = log_mtime
+        self._last_ws_acf_mtime = acf_mtime
+        
+        return self._cached_ws_map
         
     def steamcmd_merged_data(self) -> dict:
         """
@@ -1020,6 +1043,16 @@ class SteamManager:
         """
         steamcmd_acf_path = Path(self.steamcmd_dir) / "steamapps" / "workshop" / f"appworkshop_{RIMWORLD_APP_ID}.vdf"
         steamcmd_log_path = Path(self.steamcmd_dir) / "logs" / "workshop_log.txt"
+        
+        # 获取文件的最新修改时间 (os.path.getmtime 非常快)
+        log_mtime = os.path.getmtime(steamcmd_log_path) if steamcmd_log_path and os.path.exists(steamcmd_log_path) else 0
+        acf_mtime = os.path.getmtime(steamcmd_acf_path) if steamcmd_acf_path and os.path.exists(steamcmd_acf_path) else 0
+        # 命中缓存，直接返回内存数据 (0 开销！)
+        if self._cached_cmd_map is not None and \
+           log_mtime == self._last_cmd_log_mtime and \
+           acf_mtime == self._last_cmd_acf_mtime:
+            return self._cached_cmd_map
+        
         if steamcmd_acf_path.exists():
             acf_json = self.get_acf_json(steamcmd_acf_path)
             acf_data = self.parse_acf_data(acf_json)
@@ -1029,9 +1062,13 @@ class SteamManager:
             log_data = self.parse_workshop_log(log_path=steamcmd_log_path)
         else:
             log_data = {}
+        # 合并数据
+        self._cached_cmd_map = self._merge_acf_and_log(acf_data, log_data)
+        self._last_cmd_log_mtime = log_mtime
+        self._last_cmd_acf_mtime = acf_mtime
         
         # 合并数据
-        return self._merge_acf_and_log(acf_data, log_data)
+        return self._cached_cmd_map
     
     def get_item_timeline(self, workshop_id: str, is_steamcmd: bool = False) -> list:
         """

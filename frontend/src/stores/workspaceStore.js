@@ -72,34 +72,61 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 初始化数据
   const initData = async () => {
     console.log("初始化 Workspace 数据...")
-    await fetchLibrariesMods()
-    await fetchGithubRepos()
-    await fetchSavedCollections()
-    setupListeners()
+    setupListeners() // 必须先挂载监听器，防止后端推送太快漏接
+    // 并发拉取基础数据，让 UI 瞬间填满
+    await Promise.all([
+      fetchLibrariesMods(),
+      fetchGithubRepos(),
+      fetchSavedCollections() 
+    ])
   }
   // 监听后端推送
   const setupListeners = () => {
-    // 监听 Mod 在线状态更新
+    // 【监听 A】: 三域列表的在线状态静默更新
+    // payload 格式: { "12345": { title: "...", time_updated: 17000000, preview_url: "..." }, ... }
     window.addEventListener('workspace-online-update', (e) => {
-      const onlineMap = e.detail // { "123": { title, time_updated, ... } }
-      console.log("收到批量在线状态更新", onlineMap)
-      // 在 workshop 和 self 列表中寻找匹配的 Mod 并更新
-      const updateList = (list) => {
-        list.forEach(mod => {
+      const onlineMap = e.detail
+      console.log("[Workspace] 收到 Steam 在线状态批量推送:", Object.keys(onlineMap).length, "条记录")
+      // 定义合并逻辑：寻找对应 ID 的 Mod 并注入在线数据
+      const mergeOnlineData = (modList) => {
+        modList.forEach(mod => {
           const wid = String(mod.workshop_id)
           if (onlineMap[wid]) {
-            const info = onlineMap[wid]
-            mod.online_info = info
-            
-            // 实时计算更新标记
+            const onlineInfo = onlineMap[wid]
+            // 将云端详情挂载到 mod 对象上
+            mod.online_info = onlineInfo
+            // 实时计算更新标记 (核心逻辑)
+            // 获取本地的下载时间或安装时间
             const localTime = mod.steam_status?.time_downloaded || 
                               mod.steam_status?.installed_version_time || 0
-            mod.has_update = info.time_updated > (localTime + 3600 * 1000)
+            // 如果云端更新时间 > 本地时间 + 1小时容差，标记为有更新
+            mod.has_update = onlineInfo.time_updated > (localTime + 3600 * 1000)
           }
         })
       }
-      updateList(librariesMods.workshop)
-      updateList(librariesMods.self)
+      // 执行合并 (由于 librariesMods 是 reactive，修改内部对象会触发 Vue 重新渲染对应 DOM)
+      mergeOnlineData(librariesMods.workshop)
+      mergeOnlineData(librariesMods.self)
+    })
+    // 【监听 B】: GitHub 在线状态静默更新
+    // payload 格式: { "https://github.com/...": { latest_release_tag: "v1.2", ... }, ... }
+    window.addEventListener('github-online-update', (e) => {
+      const updatedReposMap = e.detail
+      console.log("[Workspace] 收到 GitHub 在线状态推送:", Object.keys(updatedReposMap).length, "条记录")
+
+      github.subscribedRepos.forEach(repo => {
+        if (updatedReposMap[repo.repo_url]) {
+          const freshInfo = updatedReposMap[repo.repo_url]
+          
+          // 比较本地记录的 tag 和线上最新的 tag，判断是否需要更新
+          // 假设你本地记录当前安装版本的字段叫 installed_tag (如果没有请在模型里加一个或用其他方式判定)
+          const localTag = repo.installed_tag || '' 
+          const onlineTag = freshInfo.latest_release_tag || ''
+          
+          repo.online_info = freshInfo
+          repo.has_update = (onlineTag !== '' && localTag !== onlineTag)
+        }
+      })
     })
     // 监听合集更新
     window.addEventListener('workspace-collection-updated', (e) => {
@@ -120,6 +147,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         title: updated.data.collection.title
       })
     }
+    const self_workshop_ids = librariesMods.self.map(mod => mod.workshop_id)
+    const workshop_workshop_ids = librariesMods.workshop.map(mod => mod.workshop_id)
+    const local_package_ids = librariesMods.local.map(mod => mod.package_id)
+
+    collections.activeChildren.forEach(child => {
+      child.is_self = self_workshop_ids.includes(child.workshop_id)
+      child.is_workshop = workshop_workshop_ids.includes(child.workshop_id)
+      child.is_local = local_package_ids.includes(child.package_id)
+    })
   })
   }
 
@@ -128,29 +164,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!window.pywebview) return
     isFetching.value = true
     try {
+      // 这个 API 现在只负责去读本地 SQLite 和内存缓存，响应时间应该 < 50ms
       const res = await window.pywebview.api.workspace_get_all_domains()
-      if (checkResult(res, '获取三个库全量数据')) {
-        librariesMods.local = res.data.local
-        librariesMods.workshop = res.data.workshop
-        librariesMods.self = res.data.self
-        
-        const needRefresh = res.data.need_refresh || []
-        if (needRefresh && needRefresh.length > 0) {
-          window.pywebview.api.workspace_trigger_online_refresh(needRefresh)
-          // 立即启动异步在线更新检查
-          // const allWids = [
-          //   ...librariesMods.workshop.map(m => m.workshop_id),
-          //   ...librariesMods.self.map(m => m.workshop_id)
-          // ].filter(id => id && id !== 'None')
-          // if (allWids.length > 0) {
-          //   window.pywebview.api.workspace_trigger_online_refresh(allWids)
-          // }
-        }
+      if (checkResult(res, '获取所有库数据')) {
+        // 直接替换数组引用
+        librariesMods.local = res.data.local || []
+        librariesMods.workshop = res.data.workshop || []
+        librariesMods.self = res.data.self || []
+        // 渲染完毕！如果后端在此接口中发现了需要触发的在线查询，
+        // 后端会自己开启线程并发 `workspace-online-update` 事件。
       }
     } finally {
       isFetching.value = false
     }
   }
+
   // 搜索缓存工坊数据库
   const doNexusSearch = async (queryStr = nexusSearch.query, page = 1) => {
     if (!window.pywebview || queryStr.length < 2) return
@@ -226,9 +254,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!window.pywebview) return
     github.isLoading = true
     try {
+      // 瞬间返回带缓存的数据
       const res = await window.pywebview.api.github_get_subscribed()
-      if (checkResult(res, '获取Github订阅列表')) {
-        github.subscribedRepos = res.data
+      if (checkResult(res, '获取Github订阅')) {
+        github.subscribedRepos = res.data || []
       }
     } finally {
       github.isLoading = false

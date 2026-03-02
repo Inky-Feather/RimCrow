@@ -179,11 +179,13 @@ class ModDAO:
         for asset in all_assets:
             path = os.path.normpath(asset['path']).lower()
             # 1. 尝试获取已生成的缩略图路径 (物理路径)
-            thumb_path = file_mgr.get_thumbnail_path(asset['package_id'])
-            # 2. 决定列表图标 (优先用缩略图，没有则用原图)
-            list_thumb_path = thumb_path if thumb_path else asset['preview_path']
-            # 3. 转换为 HTTP URL
-            asset['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
+            # thumb_path = file_mgr.get_thumbnail_path(asset['package_id'])
+            # # 2. 决定列表图标 (优先用缩略图，没有则用原图)
+            # list_thumb_path = thumb_path if thumb_path else asset['preview_path']
+            # # 3. 转换为 HTTP URL
+            # asset['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
+            
+            asset['thumb_url'] = file_mgr.get_asset_url(asset['preview_path']) # 直接把原图发过去，提高效率
             # 4. 详情页大图 URL
             asset['preview_url'] = file_mgr.get_asset_url(asset['preview_path']) if asset['preview_path'] else None
             # 5. 图标 URL

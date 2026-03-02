@@ -241,11 +241,11 @@ const handleContextMenu = (event, targetMod) => {
       { label: '取消订阅', disabled: targetMod.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod(targetMod) },
       { label: '取订并删除', disabled: targetMod.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(targetMod,true) },
     ]},
-    { label: '复制到', icon: Copy, children: [
-      { label: '本地', disabled: targetMod.store=='local', icon: FolderDot, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
-      { label: '创意工坊', disabled: targetMod.store=='workshop', icon: IconSteam, action: () => appStore.subscribeMod(props.item_id) },
-      { label: '管理器', disabled: targetMod.store=='self', icon: IconSelf, action: () => unsubscribeMod() },
-    ]},
+    // { label: '复制到', icon: Copy, children: [
+    //   { label: '本地', disabled: targetMod.store=='local', icon: FolderDot, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
+    //   { label: '创意工坊', disabled: targetMod.store=='workshop', icon: IconSteam, action: () => appStore.subscribeMod(props.item_id) },
+    //   { label: '管理器', disabled: targetMod.store=='self', icon: IconSelf, action: () => unsubscribeMod() },
+    // ]},
     { label: targetMod.disabled?'解禁':'禁用', disabled: !targetMod.path, icon: targetMod.disabled? LockOpen: Lock, level: targetMod.disabled?'warn':'danger', action: () => modStore.disableMods([targetMod.path_hash],!targetMod.disabled) },
     { label: '删除', disabled: !targetMod.path, icon: Trash2, level: 'danger', action: () => appStore.deletePaths([targetMod.path]) },
   ]

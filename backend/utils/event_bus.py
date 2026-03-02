@@ -1,4 +1,6 @@
 # backend/utils/event_bus.py
+import threading
+
 from webview import WebViewException, Window
 
 from backend.utils.tools import current_ms
@@ -7,6 +9,7 @@ class EventBus:
     _instance = None   # 存储单例实例的变量
     _window = None
     _paused = False  # 暂停标志
+    _lock = threading.Lock() # 线程锁
     
     
     def __new__(cls):
@@ -36,32 +39,41 @@ class EventBus:
         前端监听: window.addEventListener('pywebview-event', (e) => { ... })
         使用 evaluate_js 原生 CustomEvent，兼容性好。
         """
-        # 如果暂停或窗口不存在，直接丢弃事件
-        if cls._paused or not cls._window: 
-            print(f"[EventBus] Event {event_name} dropped: paused={cls._paused}, window={cls._window}")
-            return
+        with cls._lock:
+            if cls._paused or not cls._window:  return
+            # 【核心修复】：增加窗口就绪状态的预检
+            # 如果窗口正在加载 URL (idle <-> vue 切换中)，evaluate_js 会抛出不可逆异常
+            if not hasattr(cls._window, 'evaluate_js'): return
+            
+            # 如果暂停或窗口不存在，直接丢弃事件
+            if cls._paused or not cls._window: 
+                print(f"[EventBus] Event {event_name} dropped: paused={cls._paused}, window={cls._window}")
+                return
         
-        import json
-        try:
-            # 构造 JS 代码触发 CustomEvent
-            # 前端监听: window.addEventListener('scan-progress', (e) => console.log(e.detail))
-            js_payload = json.dumps(data)
-            # 使用 setTimeout 0 异步执行，减少对 Python 线程的阻塞
-            js_code = f"""
-                setTimeout(() => {{
-                    if (window.dispatchEvent) window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: {js_payload} }}));
-                }}, 0);
-            """
-            # 在主线程执行 JS (pywebview 可以在任意线程调用 evaluate_js，它内部会处理线程安全)
-            cls._window.evaluate_js(js_code)
-        except WebViewException:
-            # 窗口可能还没准备好，或者已经关闭
-            # 这种情况下，静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
-            import sys
-            print(f"[EventBus Error] Window not ready for event: {event_name}", file=sys.stderr)
-        except Exception as e:
-            import sys
-            print(f"[EventBus Error] Unknown error: {e}", file=sys.stderr)
+            import json
+            try:
+                # 构造 JS 代码触发 CustomEvent
+                # 前端监听: window.addEventListener('scan-progress', (e) => console.log(e.detail))
+                js_payload = json.dumps(data)
+                # 使用 setTimeout 0 异步执行，减少对 Python 线程的阻塞
+                js_code = f"""
+                    setTimeout(() => {{
+                        if (window.dispatchEvent) {{
+                            const detail = JSON.parse({json.dumps(js_payload)});
+                            window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: detail }}));
+                        }}
+                    }}, 0);
+                """
+                # 在主线程执行 JS (pywebview 可以在任意线程调用 evaluate_js，它内部会处理线程安全)
+                cls._window.evaluate_js(js_code)
+            except WebViewException:
+                # 窗口可能还没准备好，或者已经关闭
+                # 这种情况下，静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
+                import sys
+                print(f"[EventBus Error] Window not ready for event: {event_name}", file=sys.stderr)
+            except Exception as e:
+                import sys
+                print(f"[EventBus Error] Unknown error: {e}", file=sys.stderr)
 
     @classmethod
     def send_toast(cls, message: str, type: str = 'info', duration: int = 3000):

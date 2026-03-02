@@ -95,16 +95,31 @@ class LoadOrderManager:
             'modify_time': modify_time
         }
 
-    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False):
+    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True):
         """
         保存加载顺序。
         :param active_ids: Mod ID 列表
         :param target_path: 指定保存路径（绝对路径）。如果不传，默认覆盖游戏配置。
         :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
         """
+        # 1. 建立 逻辑ID -> 原始ID 的映射表
+        from backend.database.models import ModAsset
+        # 一次性从数据库查询所有已安装 Mod 的 ID 映射
+        # 这里使用 package_id (小写) 作为键
+        id_map = {
+            m.package_id: m.package_id_raw 
+            for m in ModAsset.select(ModAsset.package_id, ModAsset.package_id_raw)
+            if m.package_id_raw
+        }
+        # 2. 准备最终要写入 XML 的 ID 列表
+        final_raw_ids = []
+        for pid in active_ids:
+            # 如果数据库里存了原始大小写，就用原始的；否则用现在的（兜底）
+            raw_id = id_map.get(pid.lower(), pid)
+            final_raw_ids.append(raw_id)
+        
         # 1. 确定最终写入路径
         write_path = self.mods_config_file
-        
         if trigger_dialog:
             # 弹出对话框选择路径
             # 默认文件名带上时间戳或有意义的名字
@@ -132,9 +147,9 @@ class LoadOrderManager:
 
         if not write_path: raise Exception("未指定有效保存路径")
 
-        # 2. 只有在覆盖默认配置时，才需要自动备份旧文件
+        # 2. 只有在覆盖默认配置时并且 is_dirty 为 True 时，才需要自动备份旧文件
         # 如果是另存为，没必要备份目标文件（通常目标文件不存在）
-        if write_path == self.mods_config_file and os.path.exists(self.mods_config_file):
+        if write_path == self.mods_config_file and os.path.exists(self.mods_config_file) and is_dirty:
             self._create_backup()
 
         # 3. 准备 XML 结构 (逻辑保持不变)
@@ -164,7 +179,7 @@ class LoadOrderManager:
             active_node.clear()
             
             # 写入新列表
-            for mod_id in active_ids:
+            for mod_id in final_raw_ids:
                 li = etree.SubElement(active_node, "li")
                 li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
 

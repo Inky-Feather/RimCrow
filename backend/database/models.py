@@ -63,6 +63,7 @@ class ModAsset(BaseModel):
     path_hash = cast(str, CharField(primary_key=True))               # 路径哈希值，主键
     # 核心标识，指定 collation='NOCASE'，SQLite 内部对比时将忽略大小写
     package_id = cast(str, CharField(index=True, collation='NOCASE')) # 包名，如 "ludeon.rimworld" (全小写)
+    package_id_raw = cast(str, CharField(null=True))                 # 原始包名，如 "Ludeon.RimWorld" (保持大小写)
     workshop_id = cast(str, CharField(null=True))                    # 创意工坊ID
     name = cast(str, CharField())                                    # 名称
     author = cast(list[str], UTF8JSONField(default=list))            # 作者，可能为多人
@@ -152,7 +153,9 @@ class GithubModRecord(BaseModel):
     installed_version = CharField(null=True)  # 当前安装的版本(Release的TagName 或 源码的CommitHash)
     target_branch = CharField(default="main") # 绑定的分支(通常是 main 或 master)
     local_folder = CharField(null=True)       # 实际解压到的物理文件夹名称
-    last_check_time = BigIntegerField(default=0)
+    online_info_cache = cast(dict, UTF8JSONField(default=dict))
+    last_sync_time = cast(int, BigIntegerField(default=0)) # 上次刷新时间
+    
     
 class GithubTimeline(BaseModel):
     """主动记录的 GitHub 操作时间线"""

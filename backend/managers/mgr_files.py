@@ -582,14 +582,13 @@ class FileManager:
         """判断链接是否有效且指向正确"""
         try:
             # lexists 用于检测路径是否存在（包括断头链接）
-            if not os.path.lexists(link_path): 
-                return False
+            if not os.path.lexists(link_path): return False
             # samefile 会抛出异常如果路径不存在，所以这里必须配合 try
             # 它能跨越斜杠差异和大小写差异判断物理底层是否一致
             return os.path.samefile(link_path, expected_src)
         except:
             return False
-
+    
     @staticmethod
     def _remove_entries_windows_batch(paths: list):
         """
@@ -677,7 +676,9 @@ class FileManager:
             with os.scandir(local_mods_path) as it:
                 for entry in it:
                     if not entry.name.startswith(FileManager.LINK_PREFIX): continue
-                    
+                    to_delete_paths.append(entry.path)
+                    continue
+                
                     name_lower = entry.name.lower()
                     # 判定 A: 在目标清单中？
                     if name_lower not in target_map.keys():
@@ -706,7 +707,7 @@ class FileManager:
                 dst_path = os.path.join(local_mods_path, info['raw_name'])
                 links_to_create.append((info['src_path'], dst_path))
         
-        logger.info(f"Delete links: {to_delete_paths}")
+        # logger.info(f"Delete links: {to_delete_paths}")
         # 4. 执行极速删除 (os.rmdir 对于 Junction 是瞬间且安全的，不会删除原文件)
         for path in to_delete_paths:
             try:
@@ -716,7 +717,7 @@ class FileManager:
             except Exception:
                 pass # 忽略占用等特殊情况
 
-        logger.info(f"Create links: {links_to_create}")
+        # logger.info(f"Create links: {links_to_create}")
         # 5. 执行极速创建
         if links_to_create:
             FileManager._create_links_fast(links_to_create)

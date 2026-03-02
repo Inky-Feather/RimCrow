@@ -43,6 +43,7 @@ class DLCParser:
         # 2. 同步并加载翻译缓存 (核心逻辑)
         # self.translations 结构: { 'zh-cn': {'Royalty': {...}}, 'fr': {...} }
         self.translations = self._sync_cache()
+        self._translate_cache = {}
 
     def translate_record(self, mod_record, target_lang_code):
         """
@@ -50,6 +51,9 @@ class DLCParser:
         """
         # 初步筛选
         pkg_id = mod_record.get('package_id', '').lower()
+        cached_trans = self._translate_cache.get(pkg_id)
+        if cached_trans: return cached_trans
+        
         if mod_record.get('source') != 'dlc' and 'ludeon.rimworld' not in pkg_id:
             return mod_record
 
@@ -81,6 +85,7 @@ class DLCParser:
                 if trans.get('description'):
                     mod_record['description'] = trans['description']
 
+        self._translate_cache[pkg_id] = mod_record
         return mod_record
 
     def enrich_data(self, mod_data, mod_path):
@@ -98,6 +103,7 @@ class DLCParser:
         if folder_name.lower() == 'core':
             # 确保 Core 的 ID 正确（防止 About.xml 有误）
             mod_data['package_id'] = "ludeon.rimworld"
+            mod_data['package_id_raw'] = "Ludeon.RimWorld"
             mod_data['url'] = "https://rimworldgame.com"
             mod_data['source'] = 'core'
         # 2. 匹配官方定义 (ExpansionDefs)
@@ -307,6 +313,8 @@ class DLCParser:
         except Exception as e:
             logger.error(f"[DLCParser] Error parsing XML: {e}")
             pass
+        
+
 if __name__ == '__main__':
     dlc_parser = DLCParser(r'E:\SteamLibrary\steamapps\common\RimWorld\Data')
     data = dlc_parser.translate_record({

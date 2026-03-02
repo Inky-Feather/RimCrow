@@ -730,6 +730,29 @@ class API:
         """分组内 Mod 排序"""
         return ApiResponse.success(GroupDAO.reorder_mods_in_group(group_id, mod_id_list))
 
+    @log_api_call
+    def monitor_force_wake(self):
+        """强制唤醒主界面 (当游戏运行时)"""
+        if self.game_monitor:
+            self.game_monitor.force_wake()
+        return ApiResponse.success()
+
+    @log_api_call
+    def monitor_force_sleep(self):
+        """手动返回静默模式"""
+        if self.game_monitor:
+            self.game_monitor.force_sleep()
+        return ApiResponse.success()
+    
+    @log_api_call
+    def monitor_frontend_ready(self):
+        """前端 Vue 挂载完毕后，主动调用此接口通知后端"""
+        EventBus.resume()
+        if self.game_monitor:
+            # 告诉前端当前的游戏状态
+            EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running})
+        logger.info("[EventBus] 收到前端就绪信号，事件总线已恢复")
+        return ApiResponse.success()
 
     # =========================================================================
     #  5. 加载顺序与游戏启动 (Load Order & Launch)
@@ -783,7 +806,7 @@ class API:
         return ApiResponse.success(result)
     
     @log_api_call
-    def load_order_save(self, active_ids: List[str]):
+    def load_order_save(self, active_ids: List[str], is_dirty: bool=True):
         """
         保存当前激活列表到 ModsConfig.xml
         :param active_ids: 激活的 Mod 列表
@@ -791,7 +814,8 @@ class API:
         if not settings.config.game_config_path or not os.path.exists(settings.config.game_config_path): 
             return ApiResponse.error("未指定游戏配置路径")
         try:
-            success = self.load_order_mgr.save_active_mods(active_ids)
+            
+            success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty)
             if success: return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
@@ -1905,34 +1929,48 @@ class API:
         # 为 workshop 域注入数据
         for mod in matrix['workshop']:
             wid = str(mod.get('workshop_id'))
-            if wid in ws_map:
-                # 将 Steam 状态（订阅时间、真实下载时间等）直接合并进 mod 字典
-                # 为了前端方便，把这些信息放在 'steam_info' 字段下，或者直接扁平化合并
-                mod['steam_status'] = ws_map[wid]
+            # 将 Steam 状态（订阅时间、真实下载时间等）直接合并进 mod 字典
+            # 为了前端方便，把这些信息放在 'steam_info' 字段下，或者直接扁平化合并
+            if wid in ws_map: mod['steam_status'] = ws_map[wid]
+            
         # 为 self (管理器) 域注入数据
         for mod in matrix['self']:
             wid = str(mod.get('workshop_id'))
-            if wid in mg_map:
-                mod['steam_status'] = mg_map[wid]
-        # 4. 特殊处理：标记可更新状态
+            if wid in mg_map: mod['steam_status'] = mg_map[wid]
+        
+        # 立即返回基础数据！(让 UI 秒现)
+        # 前端拿到数据后，立刻显示出三个列表。
+        response = ApiResponse.success(matrix)
+        
+        # 4. 后台触发在线比对，标记可更新状态
         # 获取所有涉及的 WID
         all_wids = list(ws_map.keys()) + list(mg_map.keys())
+        import threading
+        threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
+
+        return response
+    
+    def _bg_check_online_updates(self, all_wids: list):
+        """后台静默检测，完成后通过 EventBus 推送"""
         online_info, ids_to_fetch = SteamWebAPI.fetch_item_details(all_wids, only_cache=True)
-        matrix['need_refresh'] = ids_to_fetch
-        def mark_update(mod_list):
-            for mod in mod_list:
-                wid = str(mod.get('workshop_id'))
-                if wid in online_info and 'steam_status' in mod:
-                    local_time = mod['steam_status'].get('time_downloaded') or \
-                                mod['steam_status'].get('installed_version_time') or 0
-                    online_time = online_info[wid].get('time_updated', 0)
-                    # 注入更新标记, 云端更新时间大于本地下载时间 + 1h 则认为有更新
-                    mod['has_update'] = online_time > (local_time + 3600 * 1000)
-                    mod['online_info'] = online_info[wid] # 顺便存一份云端简介和标题
-        mark_update(matrix['workshop'])
-        mark_update(matrix['self'])
+        # 把算好的 online_info 推给前端，前端进行响应式合并
+        from backend.utils.event_bus import EventBus
+        EventBus.emit('workspace-online-update', online_info)
         
-        return ApiResponse.success(matrix)
+        # matrix['need_refresh'] = ids_to_fetch
+        # def mark_update(mod_list):
+        #     for mod in mod_list:
+        #         wid = str(mod.get('workshop_id'))
+        #         if wid in online_info and 'steam_status' in mod:
+        #             local_time = mod['steam_status'].get('time_downloaded') or \
+        #                         mod['steam_status'].get('installed_version_time') or 0
+        #             online_time = online_info[wid].get('time_updated', 0)
+        #             # 注入更新标记, 云端更新时间大于本地下载时间 + 1h 则认为有更新
+        #             mod['has_update'] = online_time > (local_time + 3600 * 1000)
+        #             mod['online_info'] = online_info[wid] # 顺便存一份云端简介和标题
+        # mark_update(matrix['workshop'])
+        # mark_update(matrix['self'])
+        # return ApiResponse.success(matrix)
     
     @log_api_call
     def workspace_trigger_online_refresh(self, workshop_ids: list):
@@ -2056,7 +2094,7 @@ class API:
 
             # 4. 计算安装状态
             workshop_installed = self.steam_mgr.get_installed_workshop_ids()
-            manager_installed_ids = [int(m['workshop_id']) for m in self.steam_mgr.steamcmd_merged_data() if m.get('is_installed')]
+            manager_installed_ids = [int(m['workshop_id']) for m in self.steam_mgr.steamcmd_merged_data().values() if m.get('is_installed')]
             all_installed_set = set([str(wid) for wid in (list(workshop_installed) + manager_installed_ids)])
 
             # 5. 组装并准备持久化
@@ -2127,9 +2165,54 @@ class API:
     def github_get_subscribed(self):
         """获取所有已订阅的 Github 仓库"""
         records = list(GithubModRecord.select().dicts())
-        for record in records:
-            record["online_info"] = self.github_mgr.fetch_repo_info(record["repo_url"])
+        for r in records:
+            # 将缓存的字典暴露给前端的 online_info 字段
+            r["online_info"] = r.get("online_info_cache", {})
+        # 2. 启动后台静默更新线程 (不阻塞当前请求)
+        threading.Thread(target=self._bg_refresh_github_subs, args=(records,), daemon=True).start()
+
         return ApiResponse.success(records)
+
+    def _bg_refresh_github_subs(self, records: list):
+        """
+        后台多线程并发刷新 GitHub 数据
+        """
+        if not records: return
+        
+        updated_records = {}
+        # 使用线程池并发请求 GitHub API，避免串行卡顿
+        # 假设有 5 个订阅，5 个线程同时发请求，耗时取决于最慢的一个 (通常 < 500ms)
+        def fetch_single(record):
+            repo_url = record["repo_url"]
+            info = self.github_mgr.fetch_repo_info(repo_url)
+            return repo_url, info
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # 提交所有任务
+            futures = [executor.submit(fetch_single, r) for r in records]
+            for future in futures:
+                try:
+                    repo_url, info = future.result()
+                    if "error" not in info:
+                        updated_records[repo_url] = info
+                except Exception as e:
+                    logger.error(f"后台刷新 GitHub Repo 失败: {e}")
+
+        # 如果没有成功获取到任何数据，直接结束
+        if not updated_records: return
+        # 批量更新数据库的缓存
+        from backend.database.models import db, GithubModRecord
+        import time
+        current_time = int(time.time() * 1000)
+        with db.atomic():
+            for repo_url, info in updated_records.items():
+                GithubModRecord.update(
+                    online_info_cache=info,
+                    last_sync_time=current_time
+                ).where(GithubModRecord.repo_url == repo_url).execute()
+        # 【核心】通过 EventBus 将最新数据推给前端 Vue
+        EventBus.emit('github-online-update', updated_records)
+        logger.info(f"后台 GitHub 数据刷新完成，已推送 {len(updated_records)} 条更新")
 
     @log_api_call
     def github_trigger_download(self, url: str, install_type: str, version: str):

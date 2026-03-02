@@ -103,3 +103,11 @@ export function formatFileSize(bytes, decimals = 2) {
     // 格式化输出：字节数 / 1024的i次方，并保留小数
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
+
+
+export function formatDate(dateString) {
+  return new Date(dateString).toLocaleString('zh-CN', { 
+    year: 'numeric', month: '2-digit', day: '2-digit', 
+    hour: '2-digit', minute: '2-digit'
+  })
+}

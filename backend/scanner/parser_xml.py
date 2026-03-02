@@ -20,6 +20,7 @@ class ModXMLParser:
     26-2-19：适配 RimWorld 1.6 规范，支持合并版本限定、强制加载及备用包名。
     返回的元数据字典包含以下字段：
         - package_id: 模组的唯一标识符
+        - package_id_raw: 原始包名，保持大小写
         - name: 模组名称
         - author: 模组作者
         - version: 模组版本号
@@ -43,6 +44,7 @@ class ModXMLParser:
         data = {
             # --- 基础信息 ---
             "package_id": "",
+            "package_id_raw": "",
             "name": "",
             "author": ["Unknown"],
             "version": "",
@@ -144,12 +146,12 @@ class ModXMLParser:
                     ver_str = self._extract_version_from_tag(ver_node.tag)
                     # 遍历内部 li
                     for li in ver_node.findall("li"):
-                        pid = li.text.strip().lower() if li.text else None
+                        pid = li.text.strip() if li.text else None
                         if not pid: continue
                         if pid == "core": pid = "ludeon.rimworld"   # 补充：有的Mod依赖于Core，但没有写标准包名
                         
                         entry = merged_map[pid]
-                        entry["package_id"] = pid
+                        entry["package_id"] = pid.lower()
                         entry["version_requirement"].add(ver_str)
                         if is_force_flag: entry["is_force"] = True
 
@@ -255,6 +257,7 @@ class ModXMLParser:
 
             # 基础文本
             data["package_id"] = self._get_text(root, "packageId", data["package_id"])
+            data["package_id_raw"] = self._get_text(root, "packageId", data["package_id"]).strip()
             data["name"] = self._get_text(root, "name", data["name"])
             data["description"] = self._get_text(root, "description", data["description"])
             data["url"] = self._get_text(root, "url", data["url"])

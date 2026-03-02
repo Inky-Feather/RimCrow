@@ -16,7 +16,8 @@ class GameMonitor:
         self.game_process_name = "RimWorldWin64.exe" 
         self.is_game_running = False
         self.resume_url = None
-        
+        # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
+        self.manual_override_idle = False 
         # Windows API
         self.psapi = ctypes.windll.psapi
         self.kernel32 = ctypes.windll.kernel32
@@ -49,76 +50,59 @@ class GameMonitor:
                         game_found = True
                         break
                 
+                # 状态机跃迁逻辑更新
                 if game_found and not self.is_game_running:
-                    self._on_game_start()
+                    self.is_game_running = True
+                    # 通知前端游戏开始了（无论是否静默，前端都需要知道这个状态）
+                    EventBus.emit('game-status-changed', {'running': True})
+                    if not self.manual_override_idle:
+                        self._enter_idle_mode()
+                        
                 elif not game_found and self.is_game_running:
-                    self._on_game_exit()
+                    self.is_game_running = False
+                    self.manual_override_idle = False # 游戏退出，重置手动状态
+                    EventBus.emit('game-status-changed', {'running': False})
+                    self._exit_idle_mode()
                 
                 time.sleep(5 if game_found else 2)
             except Exception as e:
                 # print(f"[Monitor] Error: {e}")
                 time.sleep(5)
 
-    def _on_game_start(self):
-        logger.info("[Monitor] 游戏启动，进入静默模式")
+    def _enter_idle_mode(self):
+        """进入静默模式 (原 _on_game_start)"""
+        logger.info("[Monitor] 游戏运行中，进入静默模式")
         window = self.api.get_window()
         if not window: return
-        
         try:
-            self.is_game_running = True
-            
-            # 0. 记忆当前地址 (如果在正常页面)
             curr = window.get_current_url()
             if curr and 'idle.html' not in curr and 'data:text' not in curr:
                 self.resume_url = curr
             
-            # 1. 通知前端：停止发送请求
-            # 这里的事件名可以叫 'app-suspending'
             EventBus.emit('app-suspending')
-            # 2. 给 300ms 延时。这足以让绝大多数已经发出的 API 请求完成往返
-            # 同时也让前端有时间显示“正在保存配置”之类的提示
-            # time.sleep(0.3) 
-            # 3. 暂停事件流，防止切换过程中 Logger 发送日志导致报错
             EventBus.pause()
-            # 停止后台扫描任务 (如果有)
-            if hasattr(self.api, 'scanner'): self.api.scanner.stop_scan() 
-            # 4. 执行页面切换
-            window.load_url(f"file://{self.idle_page_path}")
-            # 5. 最小化并清理内存
-            # 延时一点点确保页面已经卸载，避免 WebView2 还在处理 JS
-            time.sleep(0.5) 
-            # window.minimize()
-            self._trim_memory()
             
+            if hasattr(self.api, 'scanner'): self.api.scanner.stop_scan() 
+            
+            window.load_url(f"file://{self.idle_page_path}")
+            time.sleep(0.5) 
+            self._trim_memory()
         except Exception as e:
             logger.error(f"[Monitor] Enter silent mode failed: {e}")
-            EventBus.resume() # 失败则恢复
+            EventBus.resume()
 
-    def _on_game_exit(self):
-        logger.info("[Monitor] 游戏关闭，恢复界面")
+    def _exit_idle_mode(self):
+        """恢复主界面"""
+        logger.info("[Monitor] 恢复主界面")
         window = self.api.get_window()
         if not window: return
-        
         try:
-            self.is_game_running = False
-            
-            # 1. 恢复 URL
-            # 如果没有记忆的 URL，则通过 main.py 的逻辑获取默认入口
             from main import get_entrypoint
             target_url = self.resume_url if self.resume_url else get_entrypoint()
-            
             window.load_url(target_url)
-            # window.restore()
-            
-            # 2. 【关键】延迟恢复事件总线
-            # 必须等待 Vue 前端完全加载并重新挂载事件监听器，否则事件会丢失或报错
-            def delay_resume():
-                time.sleep(3) # 给前端 23 秒钟初始化 Pinia 和 DOM
-                EventBus.resume()
-                logger.info("[Monitor] EventBus resumed")
-                
-            threading.Thread(target=delay_resume, daemon=True).start()
-                
+            # 不要在这里 sleep 和 resume！
+            # 让前端在 onMounted 时主动调用 API 恢复
+            logger.info("[Monitor] 等待前端 UI 唤醒确认...")
         except Exception as e:
             logger.error(f"[Monitor] Resume failed: {e}")
             EventBus.resume()
@@ -132,3 +116,19 @@ class GameMonitor:
                 self.kernel32.CloseHandle(handle)
                 logger.info("[Monitor] 内存物理占用已强制释放")
         except: pass
+        
+    def force_wake(self):
+        """玩家在 idle.html 点击了强制唤醒"""
+        if self.is_game_running:
+            logger.info("[Monitor] 玩家强制唤醒主界面")
+            self.manual_override_idle = True
+            self._exit_idle_mode()
+            
+    def force_sleep(self):
+        """玩家在主界面点击了重新进入静默"""
+        if self.is_game_running:
+            logger.info("[Monitor] 玩家手动返回静默模式")
+            self.manual_override_idle = False
+            self._enter_idle_mode()
+
+
