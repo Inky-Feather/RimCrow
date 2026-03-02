@@ -153,6 +153,33 @@ class RuleManager:
         self.save_user_rules()
         return True
 
+    def set_user_mod_absolute_position(self, package_id: str, position: str, comment: str = ""):
+        """
+        设置某个 Mod 的绝对位置属性 (top / bottom / none)
+        """
+        pid = package_id.lower().strip()
+        if pid not in self.user_mod_rules:
+            self.user_mod_rules[pid] = {}
+            
+        rule = self.user_mod_rules[pid]
+        
+        # 先清理旧状态
+        rule.pop("loadTop", None)
+        rule.pop("loadBottom", None)
+        
+        # 赋予新状态
+        if position == "top":
+            rule["loadTop"] = {"value": True, "comment": comment}
+        elif position == "bottom":
+            rule["loadBottom"] = {"value": True, "comment": comment}
+            
+        # 如果这个 Mod 没有任何规则了，清理掉它
+        if not rule:
+            del self.user_mod_rules[pid]
+            
+        self.save_user_rules()
+        return True
+    
     def delete_user_mod_rule(self, package_id: str):
         """删除某个 Mod 的所有自定义单项规则"""
         pid = package_id.lower().strip()
@@ -264,7 +291,8 @@ class RuleManager:
             "dependencies": { "target_id": { "source": "native" } },
             "incompatible": { "target_id": { "source": "community", "detail": "..." } },
             "load_after":   { "target_id": { "source": "native" } },  # Native 覆盖了 Community
-            "load_before":  { ... }
+            "load_before":  { ... },
+            "weight_override": {"type": "top"|"bottom", "source": "user", "detail": "..."}
         }
         """
         mid_l = mod_id.lower()
@@ -276,9 +304,22 @@ class RuleManager:
             "dependencies": {},
             "incompatible": {},
             "load_after": {},
-            "load_before": {}
+            "load_before": {},
+            "weight_override": None # 用于记录绝对位置覆盖（置顶/置底）
         }
-
+        
+        # 辅助函数：处理置顶/置底优先级覆盖
+        def _apply_weight_override(w_type: str, source_type: str, detail: Any = None):
+            new_p_idx = self.get_source_priority(source_type)
+            current = rules_map["weight_override"]
+            
+            # 如果没有，或者新来源优先级更高(索引更小)，则覆盖
+            if not current or new_p_idx < current['priority_idx']:
+                rules_map["weight_override"] = {
+                    "type": w_type,
+                    "source": {"type": source_type, "detail": detail},
+                    "priority_idx": new_p_idx
+                }
         def _merge_rule(category: str, target_id: str, source_type: str, source_name: str, 
                         is_force: bool = False, alternatives: list = [], detail: Any = None):
             target_id = target_id.lower()
@@ -348,6 +389,14 @@ class RuleManager:
                 _merge_rule("load_before", t, "community", "社区规则", detail=info)
             for t, info in comm.get("incompatibleWith", {}).items():
                 _merge_rule("incompatible", t, "community", "社区规则", detail=info)
+            # 解析 loadTop 和 loadBottom
+            # 格式例如: "loadBottom": {"value": True, "comment": "必须置底"}
+            isTop = comm.get("loadTop", {}).get("value") 
+            isBottom = comm.get("loadBottom", {}).get("value") 
+            if isTop is not None and (isTop is True or isTop.lower() == "true"):
+                _apply_weight_override("top", "community", comm.get("loadTop", {}).get("comment"))
+            elif isBottom is not None and (isBottom is True or isBottom.lower() == "true"):
+                _apply_weight_override("bottom", "community", comm.get("loadBottom", {}).get("comment"))
 
         # 3. User Rules - Priority 2
         # 受全局开关和黑名单控制
@@ -362,6 +411,14 @@ class RuleManager:
                     _merge_rule("load_before", t, "user", "用户规则", detail=info)
                 for t, info in rules.get("incompatibleWith", {}).items():
                     _merge_rule("incompatible", t, "user", "用户规则", detail=info)
+                # 解析 loadTop 和 loadBottom
+                # 格式例如: "loadBottom": {"value": True, "comment": "必须置底"}
+                isTop = comm.get("loadTop", {}).get("value") 
+                isBottom = comm.get("loadBottom", {}).get("value") 
+                if isTop is not None and (isTop is True or isTop.lower() == "true"):
+                    _apply_weight_override("top", "community", comm.get("loadTop", {}).get("comment"))
+                elif isBottom is not None and (isBottom is True or isBottom.lower() == "true"):
+                    _apply_weight_override("bottom", "community", comm.get("loadBottom", {}).get("comment"))
 
         # 4. Dynamic Rules - Priority 1
         # 仅提取图约束 (load_after / load_before)，其余权重操作交由排序器处理
@@ -382,10 +439,17 @@ class RuleManager:
             "load_before": [],
             "incompatible": []
         }
-        for cat, targets in rules_map.items():
-            for tid, data in targets.items():
+        for cat in ["dependencies", "load_after", "load_before", "incompatible"]:
+            for tid, data in rules_map[cat].items():
                 del data['priority_idx'] # 剔除内部计算字段
                 final_result[cat].append(data)
+        
+        # 附加绝对位置规则 (如果有)
+        if rules_map["weight_override"]:
+            del rules_map["weight_override"]['priority_idx']
+            final_result["weight_override"] = rules_map["weight_override"]
+        else:
+            final_result["weight_override"] = []
         
         return final_result
     

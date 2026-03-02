@@ -6,7 +6,7 @@
 
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-md p-10" @click.self="appStore.uiState.showRuleDrawer = false">
         
-        <div class="flex w-full max-w-6xl h-full max-h-[90vh] bg-bg-deep/95 border border-text-main/10 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
+        <div class="flex w-full max-w-9/10 h-full max-h-[90vh] bg-bg-deep/95 border border-text-main/10 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
           
           <!-- ================= 左侧侧边栏 ================= -->
           <aside class="w-64 bg-black/20 border-r border-text-main/5 flex flex-col">
@@ -205,10 +205,23 @@
                       <img v-if="item.icon" :src="item.icon" class="w-full h-full object-cover">
                       <div v-else class="text-xs text-text-dim">{{ item.id.substring(0,2) }}</div>
                     </div>
-                    <div class="min-w-0">
+                    <div class="min-w-0 flex flex-col gap-1"> 
                       <div class="text-sm font-bold text-text-main truncate">{{ item.name }}</div>
                       <div class="text-xs text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
+
+                      <span v-if="item.rules.loadTop?.value"
+                        v-tooltip="formatTooltip(item.id, item.rules.loadTop?.comment)"
+                        class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-tip/10 text-text-main text-[0.8rem] border border-accent-tip/20 truncate cursor-help">
+                        强制置顶
+                      </span>
+                      <span v-else-if="item.rules.loadBottom?.value"
+                        v-tooltip="formatTooltip(item.id, item.rules.loadBottom?.comment)"
+                        class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
+                        强制置底
+                      </span>
+
                     </div>
+
                   </div>
 
                   <!-- 规则详情 -->
@@ -312,8 +325,12 @@
                       <CommonSelect class="min-w-20" v-model="filter.field" :options="Object.entries(ruleStore.DYNAMIC_RULE_PROPS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                       
                       <CommonSelect class="min-w-30" v-model="filter.operator" :options="Object.entries(ruleStore.DYNAMIC_RULE_OPERATORS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
-                      <!-- <input v-model="filter.value" placeholder="值..." class="flex-1 bg-text-main/5 border border-text-main/10 rounded px-3 py-1.5 text-sm text-text-main focus:border-accent-primary outline-none" /> -->
-                      <CommonInput v-model="filter.value" placeholder="值..." class="flex-1" />
+                      
+                      <div v-if="filter.field === 'package_id'" class="flex-1">
+                        <CommonSelect v-model="filter.value" :options="modIdList" editable ></CommonSelect>
+                      </div>
+                      <CommonInput v-else v-model="filter.value" placeholder="值..." class="flex-1" />
+                      
                       <button @click="editingRule.filters.splice(idx, 1)" class="p-1.5 text-text-dim hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity"><Trash2 class="w-3.5 h-3.5"/></button>
                     </div>
                     <div v-if="editingRule.filters.length === 0" class="text-center py-2 text-sm text-text-dim italic">点击右上角添加筛选条件</div>

@@ -286,7 +286,6 @@ const unsubscribeMod = async (delete_file = false) => {
       workshop_ids.push(m.workshop_id);
     }
   });
-
   const check = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}（${workshop_ids.length} 项）吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
   if(check) {
     const res = await appStore.unsubscribeMod(workshop_ids)

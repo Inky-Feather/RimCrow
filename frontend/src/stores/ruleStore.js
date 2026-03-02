@@ -209,6 +209,35 @@ export const useRuleStore = defineStore('rules', () => {
       modStore.scanMods()
     }
   }
+  // 获取某个 Mod 当前的绝对位置状态
+  const getAbsolutePosition = (modId) => {
+    const pid = modId?.toLowerCase()
+    if (!pid) return 'none'
+    // 优先看用户规则
+    const user = userModRules.value[pid]
+    if (user) {
+      if (user.loadTop?.value) return { pos: 'top', source: 'user', comment: user.loadTop.comment }
+      if (user.loadBottom?.value) return { pos: 'bottom', source: 'user', comment: user.loadBottom.comment }
+    }
+    // 次优先看社区规则
+    const comm = communityModRules.value[pid]
+    if (comm) {
+      if (comm.loadTop?.value) return { pos: 'top', source: 'community', comment: comm.loadTop.comment }
+      if (comm.loadBottom?.value) return { pos: 'bottom', source: 'community', comment: comm.loadBottom.comment }
+    }
+    return { pos: 'none', source: null }
+  }
+
+  // 设置绝对位置
+  const setAbsolutePosition = async (modId, position, comment = '') => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.rule_set_user_mod_absolute_position(modId, position, comment)
+    if (appStore.checkResult(res, '设置绝对排序位置')) {
+      fetchRules() // 刷新本地数据
+      modStore.scanMods() // 触发重新计算
+    }
+  }
+
   // 改变规则来源的优先级
   const changeRuleSourcePriority = async (rules_sources) => {
     if (!window.pywebview) return
@@ -328,6 +357,7 @@ export const useRuleStore = defineStore('rules', () => {
     communityModRules, communityRulesUpdateTime, userModRules, userDynamicRules, currentId, isLoading,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
+    getAbsolutePosition, setAbsolutePosition,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
     saveDynamicRules, changeRuleSourcePriority,
     setGlobalEnable, toggleCommunityModRule, toggleUserModRule,

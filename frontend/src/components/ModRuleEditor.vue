@@ -21,254 +21,290 @@
       </div>
     </div>
 
+    <div class="px-3 pb-2">
+      <!-- 绝对位置控制板 (Absolute Position) -->
+      <div class="py-1 px-2 bg-text-main/5 border border-text-main/10 rounded-xl flex flex-col items-center justify-center">
+        <div class="flex items-center justify-between w-full">
+          
+          <span class="text-sm font-bold text-text-main flex items-center gap-2">
+            加载位置
+            <label v-tooltip="'强制让此 Mod 在启用列表中前置顶或置底。'" class="text-text-dim cursor-help italic underline hover:text-text-main">?</label>
+            <span v-if="absPos.source === 'community'" class="text-[0.6rem] px-1.5 py-0.5 bg-accent-cool/20 text-accent-cool rounded border border-accent-cool/30">社区建议</span>
+          </span>
+          <!-- 开关组 (Segmented Control) -->
+          <div class="flex items-center bg-black/40 rounded-lg p-1 border border-text-main/10 shadow-inner">
+            <!-- 置顶 -->
+            <button @click="handlePosChange('top')"
+              class="px-1 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1"
+              :class="absPos.pos === 'top' ? 'bg-accent-warn text-black shadow-lg' : 'text-text-dim hover:text-text-main'">
+              <ArrowUpToLine class="size-3" /> 置顶
+            </button>
+            <!-- 默认 -->
+            <button @click="handlePosChange('none')"
+              class="px-1 py-1 text-xs font-bold rounded-md transition-all"
+              :class="absPos.pos === 'none' ? 'bg-text-main/20 text-text-main shadow-lg' : 'text-text-dim hover:text-text-main'">
+              默认
+            </button>
+            <!-- 置底 -->
+            <button @click="handlePosChange('bottom')"
+              class="px-1 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1"
+              :class="absPos.pos === 'bottom' ? 'bg-accent-primary text-black shadow-lg' : 'text-text-dim hover:text-text-main'">
+              <ArrowDownToLine class="size-3" /> 置底
+            </button>
+          </div>
+        </div>
+        <span class="text-xs text-text-dim mt-0.5" v-if="absPos.comment">"{{ absPos.comment }}"</span>
+      </div>
+    </div>
+
     <!-- 列表区 -->
     <div class="overflow-y-auto flex-1 pb-0.5 after:pointer-events-none 
-        after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
-        after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent">
-
-        <!-- 前置 -->
-        <div class="min-h-20 m-1 pb-2 bg-accent-warn/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-warn/50 backdrop-blur-2xl text-text-main rounded-t-lg">前置</div>
-          
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
-            <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadAfter').length }})</span>
-            <div class="flex-1 h-px border-b border-accent-tip/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="mod,index in getNativeRules('loadAfter')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
-          </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
-            <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadAfter')).length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-cool/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
-            <div class="relative" v-for="(value, modId) in getCommunityRules('loadAfter')">
-              <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
-              <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
-                <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
-            <span class="text-accent-special">用户规则 ({{ userAfterRules.length }})</span>
-            <div class="flex-1 h-px border-b border-accent-special/30"></div>
-          </div>
-          <div class="px-2 min-h-15 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
-            <div v-show="userAfterRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
-              可拖拽模组到此
-              <!-- 点阵背景 -->
-              <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
-            </div>
-
-            <VirtualList v-model="userAfterRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
-              placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
-              :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
-              @drop="onDrop($event,'loadAfter')">
-              <template v-slot:item="{ record, index, dataKey }">
-                <div class="relative group">
-                  <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
-                  <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
-                    <button @click.stop="addRuleComm('loadAfter', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-primary/10 
-                      hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
-                      group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
-                      v-tooltip="record.comment || '[[__点击添加说明__]]'">
-                      <span class="relative transition duration-300 only:-mx-6">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                      </span>
-                    </button>
-                    <button @click.stop="removeUserRule('loadAfter', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-danger/10 
-                      hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
-                      group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
-                      group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                      v-tooltip="'移除'">
-                      <span class="relative only:-mx-5">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
-                      </span>
-                    </button>
-                  </div>
-
-                </div>
-              </template>
-            </VirtualList>
-          </div>
-
+      after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
+      after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent">
+      
+      <!-- 前置 -->
+      <div class="min-h-20 m-1 pb-2 bg-accent-warn/10 rounded-lg relative">
+        <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-warn/50 backdrop-blur-2xl text-text-main rounded-t-lg">前置</div>
+        
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
+          <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadAfter').length }})</span>
+          <div class="flex-1 h-px border-b border-accent-tip/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
+          <ModItem v-for="mod,index in getNativeRules('loadAfter')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
         </div>
 
-        <!-- 后置 -->
-        <div class="min-h-20 m-1 pb-2 bg-accent-primary/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-primary/50 backdrop-blur-2xl text-text-main rounded-t-lg">后置</div>
-          
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
-            <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadBefore').length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-tip/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="mod,index in getNativeRules('loadBefore')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
-          </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
-            <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadBefore')).length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-cool/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
-            <div class="relative" v-for="(value, modId) in getCommunityRules('loadBefore')">
-              <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
-              <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
-                <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-              </div>
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
+          <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadAfter')).length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-cool/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
+          <div class="relative" v-for="(value, modId) in getCommunityRules('loadAfter')">
+            <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
+            <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
+              <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
             </div>
           </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
-            <span class="text-accent-special">用户规则 ({{ userBeforeRules.length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-special/30"></div>
-          </div>
-          <div class="px-2 min-h-15 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
-            <div v-show="userBeforeRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
-              可拖拽模组到此
-              <!-- 点阵背景 -->
-              <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
-            </div>
-
-            <VirtualList v-model="userBeforeRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
-              placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
-              :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
-              @drop="onDrop($event,'loadBefore')">
-              <template v-slot:item="{ record, index, dataKey }">
-                <div class="relative group">
-                  <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
-                  <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
-                    <button @click.stop="addRuleComm('loadBefore', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-primary/10 
-                      hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
-                      group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
-                      v-tooltip="record.comment || '[[__点击添加说明__]]'">
-                      <span class="relative transition duration-300 only:-mx-6">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                      </span>
-                    </button>
-                    <button @click.stop="removeUserRule('loadBefore', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-danger/10 
-                      hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
-                      group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
-                      group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                      v-tooltip="'移除'">
-                      <span class="relative only:-mx-5">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
-                      </span>
-                    </button>
-                  </div>
-
-                </div>
-              </template>
-            </VirtualList>
-          </div>
-
         </div>
 
-        <!-- 冲突 -->
-        <div class="min-h-20 m-1 pb-2 bg-accent-danger/10 rounded-lg relative">
-          <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-danger/50 backdrop-blur-2xl text-text-main rounded-t-lg">冲突</div>
-          
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
-            <span class="text-accent-tip">原始规则 ({{ getNativeRules('incompatibleWith').length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-tip/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
-            <ModItem v-for="mod,index in getNativeRules('incompatibleWith')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
-          </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
-            <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('incompatibleWith')).length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-cool/30"></div>
-          </div>
-          <div class="px-2 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
-            <div class="relative" v-for="(value, modId) in getCommunityRules('incompatibleWith')">
-              <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
-              <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
-                <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
-            <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
-            <span class="text-accent-special">用户规则 ({{ userIncompatibleWithRules.length||0 }})</span>
-            <div class="flex-1 h-px border-b border-accent-special/30"></div>
-          </div>
-          <div class="px-2 min-h-15 relative">
-            <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
-            <div v-show="userIncompatibleWithRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
-              可拖拽模组到此
-              <!-- 点阵背景 -->
-              <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
-            </div>
-
-            <VirtualList v-model="userIncompatibleWithRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
-              placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-              :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
-              :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
-              @drop="onDrop($event,'incompatibleWith')">
-              <template v-slot:item="{ record, index, dataKey }">
-                <div class="relative group">
-                  <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
-                  <!-- 操作按钮 -->
-                  <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
-                    <button @click.stop="addRuleComm('incompatibleWith', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-primary/10 
-                      hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
-                      group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
-                      v-tooltip="record.comment || '[[__点击添加说明__]]'">
-                      <span class="relative transition duration-300 only:-mx-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
-                      </span>
-                    </button>
-                    <button @click.stop="removeUserRule('incompatibleWith', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
-                      inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
-                      text-text-dim/70 bg-accent-danger/10 
-                      hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
-                      group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
-                      group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                      v-tooltip="'移除'">
-                      <span class="relative only:-mx-5">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
-                      </span>
-                    </button>
-                  </div>
-
-                </div>
-              </template>
-            </VirtualList>
-          </div>
-
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
+          <span class="text-accent-special">用户规则 ({{ userAfterRules.length }})</span>
+          <div class="flex-1 h-px border-b border-accent-special/30"></div>
         </div>
+        <div class="px-2 min-h-15 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
+          <div v-show="userAfterRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
+            可拖拽模组到此
+            <!-- 点阵背景 -->
+            <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+          </div>
+
+          <VirtualList v-model="userAfterRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
+            placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
+            :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
+            :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
+            @drop="onDrop($event,'loadAfter')">
+            <template v-slot:item="{ record, index, dataKey }">
+              <div class="relative group">
+                <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
+                <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
+                  <button @click.stop="addRuleComm('loadAfter', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-primary/10 
+                    hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
+                    group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
+                    v-tooltip="record.comment || '[[__点击添加说明__]]'">
+                    <span class="relative transition duration-300 only:-mx-6">
+                      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    </span>
+                  </button>
+                  <button @click.stop="removeUserRule('loadAfter', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-danger/10 
+                    hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
+                    group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
+                    group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
+                    v-tooltip="'移除'">
+                    <span class="relative only:-mx-5">
+                      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                    </span>
+                  </button>
+                </div>
+
+              </div>
+            </template>
+          </VirtualList>
+        </div>
+
+      </div>
+
+      <!-- 后置 -->
+      <div class="min-h-20 m-1 pb-2 bg-accent-primary/10 rounded-lg relative">
+        <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-primary/50 backdrop-blur-2xl text-text-main rounded-t-lg">后置</div>
+        
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
+          <span class="text-accent-tip">原始规则 ({{ getNativeRules('loadBefore').length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-tip/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
+          <ModItem v-for="mod,index in getNativeRules('loadBefore')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
+        </div>
+
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
+          <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('loadBefore')).length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-cool/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
+          <div class="relative" v-for="(value, modId) in getCommunityRules('loadBefore')">
+            <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
+            <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
+              <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
+          <span class="text-accent-special">用户规则 ({{ userBeforeRules.length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-special/30"></div>
+        </div>
+        <div class="px-2 min-h-15 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
+          <div v-show="userBeforeRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
+            可拖拽模组到此
+            <!-- 点阵背景 -->
+            <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+          </div>
+
+          <VirtualList v-model="userBeforeRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
+            placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
+            :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
+            :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
+            @drop="onDrop($event,'loadBefore')">
+            <template v-slot:item="{ record, index, dataKey }">
+              <div class="relative group">
+                <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
+                <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
+                  <button @click.stop="addRuleComm('loadBefore', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-primary/10 
+                    hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
+                    group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
+                    v-tooltip="record.comment || '[[__点击添加说明__]]'">
+                    <span class="relative transition duration-300 only:-mx-6">
+                      <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    </span>
+                  </button>
+                  <button @click.stop="removeUserRule('loadBefore', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-danger/10 
+                    hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
+                    group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
+                    group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
+                    v-tooltip="'移除'">
+                    <span class="relative only:-mx-5">
+                      <svg class="size-4" xmlns="http://www.w3.org/2000/svg"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                    </span>
+                  </button>
+                </div>
+
+              </div>
+            </template>
+          </VirtualList>
+        </div>
+
+      </div>
+
+      <!-- 冲突 -->
+      <div class="min-h-20 m-1 pb-2 bg-accent-danger/10 rounded-lg relative">
+        <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-danger/50 backdrop-blur-2xl text-text-main rounded-t-lg">冲突</div>
+        
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
+          <span class="text-accent-tip">原始规则 ({{ getNativeRules('incompatibleWith').length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-tip/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class=" absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg"></div>
+          <ModItem v-for="mod,index in getNativeRules('incompatibleWith')" :key="mod.package_id" :item_id="mod.package_id" :index="index" simple :showIndex="false" />
+        </div>
+
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
+          <span class="text-accent-cool">社区规则 ({{ Object.keys(getCommunityRules('incompatibleWith')).length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-cool/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
+          <div class="relative" v-for="(value, modId) in getCommunityRules('incompatibleWith')">
+            <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
+            <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
+              <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
+          <span class="text-accent-special">用户规则 ({{ userIncompatibleWithRules.length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-special/30"></div>
+        </div>
+        <div class="px-2 min-h-15 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
+          <div v-show="userIncompatibleWithRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
+            可拖拽模组到此
+            <!-- 点阵背景 -->
+            <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+          </div>
+
+          <VirtualList v-model="userIncompatibleWithRules" dataKey="id" :keeps="50" class="h-full min-h-15" handle="0"
+            placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
+            :sortable="false" :size="itemHeight" :delay="appStore.settings.ui.drag_delay"
+            :group="{ name: '00', pull:false, put:['mods'], revertDrag: true }" :animation="150"
+            @drop="onDrop($event,'incompatibleWith')">
+            <template v-slot:item="{ record, index, dataKey }">
+              <div class="relative group">
+                <ModItem :item_id="dataKey" :index="index" :key="dataKey":show-index="false" :simple="true"></ModItem>
+                <!-- 操作按钮 -->
+                <div class="absolute right-1 top-1/2 -translate-y-1/2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
+                  <button @click.stop="addRuleComm('incompatibleWith', dataKey, $event)" class="group z-50 h-5 px-2.5 relative rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-primary/10 
+                    hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100 
+                    group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
+                    v-tooltip="record.comment || '[[__点击添加说明__]]'">
+                    <span class="relative transition duration-300 only:-mx-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    </span>
+                  </button>
+                  <button @click.stop="removeUserRule('incompatibleWith', dataKey)" class="w-0 h-0 px-1 translate-x-3 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer 
+                    inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300 
+                    text-text-dim/70 bg-accent-danger/10 
+                    hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
+                    group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
+                    group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
+                    v-tooltip="'移除'">
+                    <span class="relative only:-mx-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-minus-icon lucide-circle-minus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                    </span>
+                  </button>
+                </div>
+
+              </div>
+            </template>
+          </VirtualList>
+        </div>
+
+      </div>
 
     </div>
   </div>
@@ -279,6 +315,7 @@ import { computed, ref, watch } from 'vue'
 import { useModStore } from '../stores/modStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useConfirmStore } from '../stores/confirmStore'
+import { ArrowUpToLine, ArrowDownToLine } from 'lucide-vue-next'
 
 import ModItem from './utils/ModItem.vue'
 import VirtualList from 'vue-virtual-sortable';
@@ -309,6 +346,10 @@ const userIncompatibleWithRules = computed({ get() { return getUserRules('incomp
 //     targetMod.value = modStore.takeModById(newId)
 //   }
 // })
+// 获取当前位置状态
+const absPos = computed(() => {
+  return ruleStore.getAbsolutePosition(targetMod.value?.package_id) || { pos: 'none' }
+})
 
 const targetMod = computed(() => modStore.takeModById(ruleStore.currentId))
 
@@ -367,6 +408,24 @@ const onDrop = async (e, ruleType) => {
   if (!sourceId || sourceId === targetMod.value?.package_id) return
   // 调用 RuleStore 添加规则
   await ruleStore.addUserModRule(targetMod.value?.package_id, ruleType, sourceId)
+}
+
+// 改变位置
+const handlePosChange = async (pos) => {
+  if (absPos.value.pos === pos) return // 无变化
+  
+  let comment = ''
+  if (pos !== 'none') {
+    // 弹出输入框要求写个备注（可选）
+    comment = await confirmStore.open({
+      title: pos === 'top' ? '设为置顶' : '设为置底',
+      placeholder: '选填：为什么要强制放到这？',
+      mode: 'prompt'
+    })
+    if (comment === null) return // 用户点击了取消
+  }
+  
+  await ruleStore.setAbsolutePosition(targetMod.value?.package_id, pos, comment)
 }
 </script>
 

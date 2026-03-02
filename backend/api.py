@@ -31,8 +31,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 
 # 1. 引入配置管理
-from backend.database.models_ext import WorkshopMeta
-from backend.settings import settings, RULES_DIR
+from backend.settings import DATA_DIR, HOME_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
@@ -40,15 +39,17 @@ from backend.utils.logger import logger
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, UserModData, init_db, db
+from backend.database.models import ModAsset, UserModData, GithubModRecord, GithubTimeline, init_db, db
 from backend.database.dao import ModDAO, GroupDAO
+from backend.database.models_ext import WorkshopMeta, ext_db
+from backend.database.dao_ext import ExtDAO
 
 # 3. 引入业务逻辑管理器
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_load_order import LoadOrderManager
-from backend.managers.mgr_files import FileManager, PathChecker
+from backend.managers.mgr_files import file_mgr, PathChecker
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
@@ -60,8 +61,9 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileManager
-from backend.database.dao_ext import ExtDAO
 from backend.managers.mgr_steam_api import SteamWebAPI
+from backend.managers.mgr_github import GithubManager
+from playhouse.shortcuts import model_to_dict
 
 
 def log_api_call(func):
@@ -161,7 +163,7 @@ class API:
         
         # 1. 初始化数据库
         # 数据库文件放在当前工作目录的data目录下
-        db_path = os.path.join(os.getcwd(), 'data', 'mod_manager.db')
+        db_path = str(DATA_DIR / 'mod_manager.db')
         self.is_first_db_init = not os.path.exists(db_path) # 标记是否首次初始化数据库
         init_db(db_path)
         # 当 pywebview 试图序列化 API 给 JS 用时，会试图深入序列化，
@@ -169,7 +171,6 @@ class API:
         self._window = None  # 私有属性
         # 2. 实例化各个管理器
         self.dlc_parser = None # 延迟初始化
-        self.file_mgr = FileManager()    # 实例化 FileManager (它会自动启动 Server 线程)
         self.game_mgr = GameManager()
         self.game_monitor = GameMonitor(self)
         self.profile_mgr = ProfileManager()
@@ -183,6 +184,7 @@ class API:
         self.browser_window = SubBrowserManager(self)
         self.workshop_db_mgr = WorkshopDBManager()
         self.update_mgr = UpdateManager()
+        self.github_mgr = GithubManager(self.download_mgr)
         logger.info("API Layer Ready.")
 
     def _ensure_dlc_parser(self):
@@ -281,21 +283,16 @@ class API:
             # 前端展示的是源文件的缩略图
             preview_path = mod.get('preview_path')
             icon_path = mod.get('icon_path')
-            
             # 1. 尝试获取已生成的缩略图路径 (物理路径)
-            thumb_path = self.file_mgr.get_thumbnail_path(pkg_id)
-            
+            thumb_path = file_mgr.get_thumbnail_path(pkg_id)
             # 2. 决定列表图标 (优先用缩略图，没有则用原图)
             list_thumb_path = thumb_path if thumb_path else preview_path
-            
             # 3. 转换为 HTTP URL
-            mod['thumb_url'] = self.file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
-            
+            mod['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
             # 4. 详情页大图 URL
-            mod['preview_url'] = self.file_mgr.get_asset_url(preview_path) if preview_path else None
-            
+            mod['preview_url'] = file_mgr.get_asset_url(preview_path) if preview_path else None
             # 5. 图标 URL
-            mod['icon_url'] = self.file_mgr.get_asset_url(icon_path) if icon_path else None
+            mod['icon_url'] = file_mgr.get_asset_url(icon_path) if icon_path else None
                 
         result = {
             "app_version": __version__,
@@ -332,8 +329,8 @@ class API:
             # 但为了保险，可以设为 None 或者再次 init。
             
             # 2. 定义文件路径
-            db_dir = os.path.join(os.getcwd(), 'data')
-            db_path = os.path.join(db_dir, 'mod_manager.db')
+            db_dir = str(DATA_DIR)
+            db_path = str(DATA_DIR / 'mod_manager.db')
             wal_path = db_path + '-wal'
             shm_path = db_path + '-shm'
 
@@ -491,11 +488,7 @@ class API:
             # 2. 识别 Local vs Workshop 冲突
             # 3. 读取 settings.config.local_mods_path 和 workshop_mods_path
             # 4. 执行 FileManager.clear_links 部署软链接
-            result = self.scanner.scan_paths_async(
-                paths_to_scan, 
-                thumbnail_mgr=self.file_mgr, 
-                forced_update=forced_update
-            )
+            result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -515,67 +508,50 @@ class API:
         """
         results = []
         try:
-            with db.atomic(): # 开启事务，确保文件和数据库操作的原子性
+            # 开启事务，保证数据库操作的一致性
+            with db.atomic():
                 for op in operations:
                     action = op.get('action')
-                    target_path = op.get('target_path')
-                    if not target_path or not os.path.exists(target_path):
-                        results.append({'path': target_path, 'status': 'error', 'msg': '路径不存在'})
-                        continue
+                    path = op.get('target_path')
+                    keep_hash = op.get('keep_path_hash')
+                    if not path: continue
+                    success = False
+                    msg = ""
                     if action == 'disable':
-                        # 重命名 About.xml -> About.xml.disabled
-                        about_xml = os.path.join(target_path, 'About', 'About.xml')
-                        disabled_xml = os.path.join(target_path, 'About', 'About.xml.disabled')
-                        # 检查 About.xml 是否存在
-                        if os.path.exists(about_xml):
-                            try:
-                                # 如果目标已存在，先删除旧的disabled (极其罕见)
-                                if os.path.exists(disabled_xml): os.remove(disabled_xml)
-                                os.rename(about_xml, disabled_xml)
-                                # 更新数据库状态为 disabled = True
-                                ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
-                                # 尝试更新 shadow_paths，如果失败（Mod不存在）则忽略
-                                # 因为下次扫描时，保留的 Mod 会入库。
-                                keep_path_hash = op.get('keep_path_hash')
-                                if keep_path_hash:
-                                    self._add_shadow_path(keep_path_hash, target_path)
-                                    
-                                results.append({'path': target_path, 'status': 'success'})
-                            except Exception as e:
-                                logger.error(f"Disable mod failed: {e}")
-                                results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
-                        else:
-                            # 可能是 XML 已经不在了，但为了保险，标记数据库
-                            ModAsset.update(disabled=True).where(ModAsset.path == target_path).execute()
-                            results.append({'path': target_path, 'status': 'skipped', 'msg': 'About.xml not found'})
-
+                        # 1. 执行物理与数据库禁用
+                        success, msg = ModDAO.set_mod_disabled_status(path, disable=True)
+                        # 2. 如果提供了保留项的 Hash，记录阴影路径
+                        if success and keep_hash:
+                            ModDAO.add_shadow_path(keep_hash, path)
                     elif action == 'delete':
-                        # 方案：移入回收站
-                        try:
-                            send2trash(os.path.abspath(target_path))
-                            # 文件删除后，立刻从数据库彻底抹除记录
-                            ModAsset.delete().where(ModAsset.path == target_path).execute()
-                            results.append({'path': target_path, 'status': 'success'})
-                        except Exception as e:
-                            results.append({'path': target_path, 'status': 'error', 'msg': str(e)})
-
+                        # 执行物理删除
+                        success, msg = ModDAO.delete_mod_physically(path)
+                    results.append({
+                        'path': path,
+                        'status': 'success' if success else 'error',
+                        'msg': msg if not success else ''
+                    })
             return ApiResponse.success(results, "冲突处理完成")
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
-    def _add_shadow_path(self, keep_path_hash: str, path: str):
-        """辅助方法：更新 Mod 的 shadow_paths 字段"""
+    @log_api_call
+    def mods_disable(self, path_hashes: List[str], disabled: bool = True):
+        """
+        禁用或启用指定 Mod。
+        :param package_id: Mod 的 package_id
+        :param disabled: 是否禁用 (True) 或启用 (False)
+        """
         try:
-            mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
-            if mod:
-                # 获取现有列表 (peewee JSON field 自动反序列化)
-                current_paths = mod.shadow_paths or []
-                if path not in current_paths:
-                    current_paths.append(path)
-                    mod.shadow_paths = current_paths
-                    mod.save()
+            for path_hash in path_hashes:
+                # 1. 校验 path_hash 是否存在
+                mod = ModAsset.get_or_none(ModAsset.path_hash == path_hash)
+                if not mod: continue
+                # 2. 执行禁用/启用操作
+                ModDAO.set_mod_disabled_status(mod.path, disabled)
+            return ApiResponse.success(message=f"Mod {'已禁用' if disabled else '已启用'}")
         except Exception as e:
-            logger.error(f"Error updating shadow paths: {e}")
+            return ApiResponse.error(str(e))
     
     @log_api_call
     def mod_time_update(self, mods_data_list: List[Dict[str, Any]]):
@@ -791,9 +767,9 @@ class API:
         if os.path.isfile(mods_config_file_path) and (mods_config_file_path.endswith('.xml') or mods_config_file_path.endswith('.rws')):
             file = mods_config_file_path
         elif os.path.isdir(mods_config_file_path) :
-            file = self.file_mgr.select_file_dialog(initial_dir=mods_config_file_path)
+            file = file_mgr.select_file_dialog(initial_dir=mods_config_file_path)
         else:
-            file = self.file_mgr.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
+            file = file_mgr.select_file_dialog(initial_dir=self.load_order_mgr.config_dir)
         if not file:
             return ApiResponse.warning("未选择文件")
         res = self.load_order_mgr.read_active_mods(file)
@@ -926,7 +902,7 @@ class API:
     @log_api_call
     def path_open(self, path: str):
         try:
-            self.file_mgr.open_in_explorer(path)
+            file_mgr.open_in_explorer(path)
             logger.info(f"打开路径: {path}")
             return ApiResponse.success()
         except Exception as e:
@@ -937,7 +913,7 @@ class API:
     def path_delete(self, path: str):
         """删除文件/文件夹"""
         try:
-            success = self.file_mgr.delete_path(path)
+            success = file_mgr.delete_path(path)
             if success: return ApiResponse.success()
             return ApiResponse.warning("路径不存在或无法删除")
         except Exception as e:
@@ -947,7 +923,7 @@ class API:
     def paths_delete(self, paths: List[str]):
         """批量删除文件/文件夹"""
         try:
-            success_count, error_list = self.file_mgr.delete_paths(paths)
+            success_count, error_list = file_mgr.delete_paths(paths)
             if success_count == len(paths):
                 return ApiResponse.success()
             return ApiResponse.warning(f"成功删除 {success_count} 个路径，{len(error_list)} 个路径删除失败")
@@ -960,7 +936,7 @@ class API:
         打开系统原生的文件夹选择框
         """
         try:
-            folder = self.file_mgr.select_folder_dialog(initial_dir)
+            folder = file_mgr.select_folder_dialog(initial_dir)
             if folder:
                 return ApiResponse.success(folder)
         except Exception as e:
@@ -973,7 +949,7 @@ class API:
         打开系统原生的文件选择框
         """
         try:
-            file = self.file_mgr.select_file_dialog(initial_dir, file_types)
+            file = file_mgr.select_file_dialog(initial_dir, file_types)
             if file:
                 return ApiResponse.success(file)
         except Exception as e:
@@ -986,7 +962,7 @@ class API:
         打开系统原生的文件保存框
         """
         try:
-            file = self.file_mgr.save_file_dialog(initial_dir, file_types)
+            file = file_mgr.save_file_dialog(initial_dir, file_types)
             if file:
                 return ApiResponse.success(file)
         except Exception as e:
@@ -1009,7 +985,7 @@ class API:
                 .dicts())
         try:
             # 2. 执行任务
-            res = self.file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)
+            res = file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)
             if not res: return ApiResponse.warning("没有可转换的工坊模组")
         except Exception as e:
             logger.error(f"Localize workshop mods failed: {e}", exc_info=True)
@@ -1061,7 +1037,16 @@ class API:
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
             return ApiResponse.error(f"保存失败: {str(e)}")
-        
+    
+    @log_api_call
+    def rule_set_user_mod_absolute_position(self, package_id: str, position: str, comment: str = ""):
+        """ position: 'top', 'bottom', 或 'none' """
+        try:
+            success = self.sorter.rule_mgr.set_user_mod_absolute_position(package_id, position, comment)
+            return ApiResponse.success() if success else ApiResponse.error("保存失败")
+        except Exception as e:
+            return ApiResponse.error(f"保存失败: {str(e)}")
+    
     @log_api_call
     def rule_delete_user_mod(self, package_id: str):
         """删除单个规则"""
@@ -1160,7 +1145,7 @@ class API:
             # 使用时间戳作为默认文件名
             default_name = f"RimOrder_Rules_{datetime.now().strftime('%Y%m%d')}.json"
             # 注意: file_types 参数格式需要符合 pywebview 的要求
-            path = self.file_mgr.save_file_dialog(
+            path = file_mgr.save_file_dialog(
                 initial_dir=initial_dir, 
                 default_filename=default_name, 
                 file_types=('JSON Files (*.json)', 'All Files (*.*)')
@@ -1179,7 +1164,7 @@ class API:
     def rule_import_bundle(self):
         """弹出对话框并导入"""
         try:
-            path = self.file_mgr.select_file_dialog(file_types=('JSON Files (*.json)',))
+            path = file_mgr.select_file_dialog(file_types=('JSON Files (*.json)',))
             if path:
                 with open(path, 'r', encoding='utf-8') as f:
                     bundle = json.load(f)
@@ -1260,7 +1245,7 @@ class API:
         """ 打开日志所在文件夹 """
         path = settings.config.user_data_path
         if path and os.path.exists(path):
-            self.file_mgr.open_in_explorer(path)
+            file_mgr.open_in_explorer(path)
             return ApiResponse.success()
         return ApiResponse.error("日志路径不存在")
     
@@ -1279,7 +1264,7 @@ class API:
         """
         if not target_dir:
             # 默认下载到应用目录下的 Downloads
-            target_dir = os.path.join(os.getcwd(), "Downloads")
+            target_dir = str(HOME_DIR / 'Downloads')
             os.makedirs(target_dir, exist_ok=True)
             
         task_id = self.download_mgr.add_task(url, target_dir, filename)
@@ -1725,6 +1710,7 @@ class API:
             # 定义回调函数
             def on_db_ready(task):
                 logger.info(f"{data_type} ready, reloading...")
+                self.workshop_db_mgr.load_all_cache()
                 # self.sorter.rule_mgr.load_all()
                 EventBus.send_toast(f"社区 {data_type} 数据库更新完毕！", type="success")
             def on_db_error(task):
@@ -1751,16 +1737,14 @@ class API:
         """
         # 1. 分别获取两个来源的本地状态 (来自 SteamManager 的解析结果)
         # workshop_merged_data 内部解析的是 Steam 客户端的 ACF/LOG
-        workshop_local_list = self.steam_mgr.workshop_merged_data()
+        workshop_local_data = self.steam_mgr.workshop_merged_data()
         # steamcmd_merged_data 内部解析的是 管理器目录下的 ACF/LOG (SteamCMD专用)
-        manager_local_list = self.steam_mgr.steamcmd_merged_data()
+        manager_local_data = self.steam_mgr.steamcmd_merged_data()
         # 2. 收集所有需要查询的工坊 ID (去重)
-        all_wids = set()
-        for m in workshop_local_list: all_wids.add(m['workshop_id'])
-        for m in manager_local_list: all_wids.add(m['workshop_id'])
+        all_wids = set(workshop_local_data.keys()) | set(manager_local_data.keys())
         if not all_wids: return ApiResponse.success({"updates": []})
         # 3. 一次性从缓存/网络获取所有涉及 ID 的云端最新时间
-        online_details = SteamWebAPI.fetch_item_details(list(all_wids))
+        online_details, ids_to_fetch = SteamWebAPI.fetch_item_details(list(all_wids))
         updates_available = []
         # 4. 定义内部比对逻辑
         def compare_and_add(local_item, source_label):
@@ -1781,12 +1765,12 @@ class API:
                     "preview_url": online_info["preview_url"]
                 })
         # 5. 执行两次独立比对
-        for m in workshop_local_list:
+        for m in workshop_local_data.values():
             if m.get('is_installed'):
                 compare_and_add(m, 'workshop')
-        for m in manager_local_list:
+        for m in manager_local_data.values():
             if m.get('is_installed'):
-                compare_and_add(m, 'manager')
+                compare_and_add(m, 'self')
         return ApiResponse.success({"updates": updates_available})
 
     @log_api_call
@@ -1817,8 +1801,8 @@ class API:
             if self_wid:
                 # 调用 ext_db 的模型查询该 Mod 的全量云端依赖
                 meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == self_wid)
-                if meta and meta.dependencies:
-                    for dep_wid, dep_name in meta.dependencies.items():
+                if meta and meta.dependencies_mods:
+                    for dep_wid, dep_name in meta.dependencies_mods.items():
                         # 反查依赖项的包名看本地有没有装
                         dep_meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == dep_wid)
                         dep_pid = dep_meta.package_id if dep_meta else None
@@ -1827,7 +1811,7 @@ class API:
         if not missing_dependencies:
             return ApiResponse.success({"missing": []}, message="前置依赖完整，无需补充。")
         # 3. 补充线上详情供 UI 渲染 (名称、封面)
-        details = SteamWebAPI.fetch_item_details(list(missing_dependencies.keys()))
+        details, ids_to_fetch = SteamWebAPI.fetch_item_details(list(missing_dependencies.keys()))
         result = []
         for wid, fallback_name in missing_dependencies.items():
             info = details.get(wid, {})
@@ -1844,13 +1828,13 @@ class API:
         合集解析与下载预检：一键解析合集，对比本地，返回哪些需下载、哪些已存在
         """
         # 1. 抓取合集信息
-        coll_info = SteamWebAPI.fetch_item_details([collection_id])
+        coll_info, ids_to_fetch = SteamWebAPI.fetch_item_details([collection_id])
         if not coll_info: return ApiResponse.error("无法获取合集信息")
         # 2. 抓取子项列表
         child_wids = SteamWebAPI.fetch_collection_children(collection_id)
         if not child_wids: return ApiResponse.error("合集为空或解析失败")
         # 3. 获取子项详情
-        children_details = SteamWebAPI.fetch_item_details(child_wids)
+        children_details, ids_to_fetch = SteamWebAPI.fetch_item_details(child_wids)
         
         # print("合集信息:",coll_info)
         # print("子项 ID:",child_wids)
@@ -1882,23 +1866,20 @@ class API:
         """
         if not workshop_id: return ApiResponse.error("无效的工坊 ID")
         # 1. 调度：从缓存或网络获取
-        details = SteamWebAPI.fetch_item_details([workshop_id], force_refresh=force_refresh)
+        details, ids_to_fetch = SteamWebAPI.fetch_item_details([workshop_id], force_refresh=force_refresh)
         info = details.get(str(workshop_id))
         if not info: return ApiResponse.error("无法从 Steam 获取该模组详情")
         
         # 将原始截图 URL 转换为代理缓存 URL
         cache_screenshots = []
         for raw_url in info.get("screenshots", []):
-            cache_url = self.file_mgr.get_gallery_url(workshop_id, raw_url)
+            cache_url = file_mgr.get_gallery_url(workshop_id, raw_url)
             cache_screenshots.append(cache_url)
         
-        # 2. 注入替代建议（利用我们之前的 ExtDAO）
-        # 需要先查出这个工坊 ID 对应的 PackageID
-        from backend.database.dao_ext import ExtDAO
-        from backend.managers.mgr_workshop_db import WorkshopDBManager
+        # 需要先查出这个工坊 ID 对应的 PackageID, 才能查询替代建议
         meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == str(workshop_id))
         replacement = None
-        if meta: replacement = WorkshopDBManager().check_replacement(meta.package_id, settings.config.game_version)
+        if meta: replacement = self.workshop_db_mgr.check_replacement(meta.package_id, settings.config.game_version)
         # 3. 组合最终对象
         return ApiResponse.success({
             "workshop_id": workshop_id,
@@ -1909,7 +1890,165 @@ class API:
             "online_time": info["time_updated"],
             "replacement": replacement # 如果有替代品，这里会包含 new_id 和 new_name
         })
+    
+    @log_api_call
+    def workspace_get_all_domains(self):
+        """
+        三域数据全量获取 (统合 DB、ACF、Log 数据)
+        """
+        # 1. 获取数据库基础数据 (含有 URL)
+        matrix = ModDAO.get_triple_domain_assets()
+        # 2. 获取 Steam 状态数据 (ACF/Log)
+        ws_map = self.steam_mgr.workshop_merged_data()
+        mg_map = self.steam_mgr.steamcmd_merged_data()
+        # 3. 融合数据
+        # 为 workshop 域注入数据
+        for mod in matrix['workshop']:
+            wid = str(mod.get('workshop_id'))
+            if wid in ws_map:
+                # 将 Steam 状态（订阅时间、真实下载时间等）直接合并进 mod 字典
+                # 为了前端方便，把这些信息放在 'steam_info' 字段下，或者直接扁平化合并
+                mod['steam_status'] = ws_map[wid]
+        # 为 self (管理器) 域注入数据
+        for mod in matrix['self']:
+            wid = str(mod.get('workshop_id'))
+            if wid in mg_map:
+                mod['steam_status'] = mg_map[wid]
+        # 4. 特殊处理：标记可更新状态
+        # 获取所有涉及的 WID
+        all_wids = list(ws_map.keys()) + list(mg_map.keys())
+        online_info, ids_to_fetch = SteamWebAPI.fetch_item_details(all_wids, only_cache=True)
+        matrix['need_refresh'] = ids_to_fetch
+        def mark_update(mod_list):
+            for mod in mod_list:
+                wid = str(mod.get('workshop_id'))
+                if wid in online_info and 'steam_status' in mod:
+                    local_time = mod['steam_status'].get('time_downloaded') or \
+                                mod['steam_status'].get('installed_version_time') or 0
+                    online_time = online_info[wid].get('time_updated', 0)
+                    # 注入更新标记, 云端更新时间大于本地下载时间 + 1h 则认为有更新
+                    mod['has_update'] = online_time > (local_time + 3600 * 1000)
+                    mod['online_info'] = online_info[wid] # 顺便存一份云端简介和标题
+        mark_update(matrix['workshop'])
+        mark_update(matrix['self'])
         
+        return ApiResponse.success(matrix)
+    
+    @log_api_call
+    def workspace_trigger_online_refresh(self, workshop_ids: list):
+        """
+        第二阶段：异步网络请求，通过 EventBus 分批推送最新状态
+        """
+        def worker():
+            from backend.managers.mgr_steam_api import SteamWebAPI
+            from backend.utils.event_bus import EventBus
+            
+            # 100 个一组分批请求，防止 URL 过长或单次请求过久
+            for i in range(0, len(workshop_ids), 100):
+                batch = workshop_ids[i:i+100]
+                # 这里调用真实的联网请求
+                online_data = SteamWebAPI.fetch_item_details(batch, force_refresh=True)
+                
+                # 每完成一批，立即推送
+                EventBus.emit('workspace-online-update', online_data)
+                
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
+        return ApiResponse.success(message="后台更新检查已启动")
+    
+    @log_api_call
+    def nexus_search(self, query: str, page: int = 1):
+        """离线库搜索"""
+        data = ExtDAO.search_nexus(query, page)
+        return ApiResponse.success(data)
+
+    @log_api_call
+    def nexus_get_details(self, workshop_id: str):
+        """获取云端详细图文"""
+        details = SteamWebAPI.get_or_fetch_details(workshop_id)
+        if details:
+            return ApiResponse.success(details)
+        return ApiResponse.error("未找到模组详情")
+
+    @log_api_call
+    def workspace_get_mod_timeline(self, workshop_id: str, is_steamcmd: bool = False):
+        """获取 Mod 变动轨迹"""
+        return ApiResponse.success(self.steam_mgr.get_item_timeline(workshop_id, is_steamcmd))
+    
+    @log_api_call
+    def workspace_get_nexus_detail(self, workshop_id: str):
+        """获取缓存详情"""
+        # 如果缓存中没有，或者太旧，这里可以先返回缓存，然后异步触发一次拉取
+        return ApiResponse.success(ExtDAO.get_nexus_detail(workshop_id))
+    
+    
+    # GitHub 相关接口
+    
+    @log_api_call
+    def github_fetch_info(self, url: str):
+        """解析并获取远程仓库信息"""
+        res = self.github_mgr.fetch_repo_info(url)
+        if "error" in res: return ApiResponse.error(res["error"])
+        return ApiResponse.success(res)
+
+    @log_api_call
+    def github_subscribe(self, payload: dict):
+        """添加订阅到数据库"""
+        url = payload.get("url")
+        if not url: return ApiResponse.error("URL 不能为空")
+        
+        with db.atomic():
+            record, created = GithubModRecord.get_or_create(
+                repo_url=url,
+                defaults={
+                    "owner": payload.get("owner"),
+                    "repo_name": payload.get("repo"),
+                    "target_branch": payload.get("default_branch"),
+                    "install_type": payload.get("install_type", "source")
+                }
+            )
+            # 如果是新建的，写入初始日志
+            if created:
+                self.github_mgr.record_timeline(url, "subscribe", "已添加 GitHub 仓库监听记录")
+        return self.github_get_subscribed() # 返回最新列表
+
+    @log_api_call
+    def github_get_subscribed(self):
+        """获取所有已订阅的 Github 仓库"""
+        records = list(GithubModRecord.select().dicts())
+        return ApiResponse.success(records)
+
+    @log_api_call
+    def github_trigger_download(self, url: str, install_type: str, version: str):
+        """触发下载与安装流程"""
+        task_id = self.github_mgr.trigger_download(url, install_type, version)
+        return ApiResponse.success({"task_id": task_id}, message="GitHub 部署任务已启动")
+
+    @log_api_call
+    def github_get_timeline(self, url: str):
+        """获取某仓库的本地操作时间线"""
+        logs = list(GithubTimeline.select().where(GithubTimeline.repo_url == url).order_by(GithubTimeline.time.desc()).dicts())
+        result=[]
+        title_map = {"subscribe": "订阅", "download": "下载", "update": "更新", "extract": "解压", "success":'部署成功', "error": "错误"}
+        color_map = {"subscribe": "primary", "download": "info", "update": "tip", "extract": "info", "success": "success", "error": "danger"}
+        for log in logs:
+            result.append({
+                "time": log["time"],
+                "type": log["action"],
+                "desc": log["message"],
+                "title": title_map[log["action"]],
+                "color": color_map[log["action"]],
+            })
+        return ApiResponse.success(logs)
+        
+    @log_api_call
+    def github_remove_subscription(self, url: str):
+        """移除订阅，可选连带删除文件(前端应另行调用删除文件API)"""
+        GithubModRecord.delete().where(GithubModRecord.repo_url == url).execute()
+        GithubTimeline.delete().where(GithubTimeline.repo_url == url).execute()
+        return ApiResponse.success(message="已移除订阅记录")
+    
+    
 if __name__ == "__main__":
     # valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
     # print(valid_field_names)

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, cast
 import uuid
 from peewee import chunked, fn, JOIN
 from backend.database.models import GameProfile, db, ModAsset, UserModData, GroupData, GroupMod
+from backend.managers.mgr_files import file_mgr
 from backend.settings import settings
 from backend.utils.logger import logger
 
@@ -37,12 +38,14 @@ class ModDAO:
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         
         if profile:
-            local_root = profile.game_install_path
+            local_root = os.path.join(profile.game_install_path, "Mods")
+            data_root = os.path.join(profile.game_install_path, "Data")
             use_workshop_mods = profile.use_workshop_mods
             use_self_mods = profile.use_self_mods
         else:
             # Default 环境兜底
-            local_root = settings.config.game_install_path
+            local_root = os.path.join(settings.config.game_install_path, "Mods")
+            data_root = os.path.join(settings.config.game_install_path, "Data")
             use_workshop_mods = settings.config.use_workshop_mods
             use_self_mods = settings.config.use_self_mods
             
@@ -50,30 +53,28 @@ class ModDAO:
         self_mods_root = settings.config.self_mods_path
 
         # 路径标准化 (用于 Python 端比对，统一转小写)
+        # 标准化路径用于严格匹配 (增加结尾分隔符确保匹配精确)
+        def norm(p): return os.path.normpath(p).lower() + os.sep if p else ""
+        
+        L_PATH = norm(local_root)
+        D_PATH = norm(data_root)
+        W_PATH = norm(workshop_root)
+        S_PATH = norm(self_mods_root)
+
+        # 2. 构造查询条件 (只拉取当前环境涉及到的物理路径)
+        conditions = []
+        # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
+        if L_PATH: conditions.append(ModAsset.path.startswith(L_PATH))
+        if D_PATH: conditions.append(ModAsset.path.startswith(D_PATH))
+        # 条件 C: 路径包含 Workshop Root (仅当启用工坊时)
+        if use_workshop_mods and W_PATH: conditions.append(ModAsset.path.startswith(W_PATH)) # 宽泛匹配，防止盘符差异
+        # 条件 B: 路径包含 Self Mods Path (仅当启用管理器Mod时)
+        if use_self_mods and S_PATH: conditions.append(ModAsset.path.startswith(S_PATH))
+        
         if local_root: local_root = os.path.normpath(local_root).lower()
+        if data_root: data_root = os.path.normpath(data_root).lower()
         if workshop_root: workshop_root = os.path.normpath(workshop_root).lower()
         if self_mods_root: self_mods_root = os.path.normpath(self_mods_root).lower()
-
-        # 2. 数据库查询 (SQL Filtering)
-        # 目的：只拉取属于当前 Local 目录的，或者属于公共 Workshop 的模组。
-        # 避免把其他 Profile 的 Local Mod 拉进来。
-        
-        # 构造 OR 查询条件
-        conditions = []
-        
-        # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
-        # 注意：SQLite 的 LIKE 不区分大小写(默认情况)，但为了保险最好在 Python 层再严谨校验一次
-        path_field = cast(Any, ModAsset.path) # 类型断言，告诉类型检查器 path_field 是一个 Any 字段，以便不会因Peewee类型检查而报错
-        if local_root:
-            conditions.append(path_field.contains(local_root)) # 宽泛匹配，防止盘符差异
-        
-        # 条件 B: 路径包含 Workshop Root (仅当启用工坊时)
-        if use_workshop_mods and workshop_root:
-            conditions.append(path_field.contains(workshop_root))
-            
-        # 条件 C: 路径包含 Self Mods Path (仅当启用管理器Mod时)
-        if use_self_mods and self_mods_root:
-            conditions.append(path_field.contains(self_mods_root))
             
         if not conditions: return [] # 没有任何有效路径配置
 
@@ -81,14 +82,24 @@ class ModDAO:
         # 这会生成标准的 (condition1 OR condition2 OR ...) 结构
         combined_cond = reduce(operator.or_, conditions)
         # 追加过滤条件，不读取已被禁用的 Mod。
-        active_cond = (ModAsset.disabled == False) | (cast(Any, ModAsset.disabled).is_null(True))
-        combined_cond = combined_cond & active_cond
+        active_cond = (ModAsset.disabled == False) | (ModAsset.disabled.is_null()) # type: ignore
         # 执行查询：(Path A OR Path B) AND (Joined UserData)
         query = (ModAsset.select(ModAsset, UserModData)
                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                .where(combined_cond) # 组合 OR 条件
+                .where(combined_cond & active_cond) # 组合 OR 条件
                 .dicts())
+         # 3. 核心仲裁逻辑：实现 Local > Self > Workshop
+        # 我们先对查询结果按优先级排序，这样后处理时高优先级的自然会覆盖低优先级的
+        def get_priority(mod):
+            m_path = norm(mod['path'])
+            if D_PATH and m_path.startswith(D_PATH): return 0 # 最高优先级
+            if L_PATH and m_path.startswith(L_PATH): return 1
+            if S_PATH and m_path.startswith(S_PATH): return 2
+            if W_PATH and m_path.startswith(W_PATH): return 3
+            return 9
 
+        # 关键：按优先级【从低到高】排序，这样循环时高优先级会覆盖前面的
+        sorted_mods = sorted(list(query), key=get_priority, reverse=True)
         # 预加载分组映射 (Preload Group Mapping)，建立 { package_id: ["分组A", "分组B"] } 的映射
         group_map = {}
         try:
@@ -109,65 +120,99 @@ class ModDAO:
         # 3. 内存处理 (Python Logic)
         # 实现 "Local Trumps Workshop" (本地优先于工坊)
         merged_map = {} # { package_id: mod_data }
-        for mod in query:
-            # 路径清洗
-            if not mod['path']: continue
-            mod_path = os.path.normpath(mod['path']).lower()
-            pkg_id = mod['package_id'] # 注意：数据库里已经是小写了
-            # 注入分组名称列表
-            mod['groups'] = group_map.get(pkg_id, [])
-            # 判定来源类型
-            is_local_mod = False
-            if local_root and local_root in mod_path:
-                is_local_mod = True
-                mod['is_local'] = True # 标记供前端展示文件夹图标
-            # 判定是否是 DLC (Data 目录下的)
-            # 也可以简单判断：source == 'dlc' 或 'core'
-            is_dlc = mod.get('source') in ['core', 'dlc']
-            # 冲突仲裁逻辑：
-            # 1. 如果是 Local Mod 或 DLC -> 强制覆盖 (优先级最高)
-            # 2. 如果是 Workshop Mod -> 只有当 Dictionary 里还没这个 ID 时才加入
-            if is_local_mod or is_dlc:
-                merged_map[pkg_id] = mod
-            elif self_mods_root in mod_path:
-                # 是 Self Mod
-                # 只有当不存在 同名 Local Mod 时才加入
-                if pkg_id not in merged_map:
-                    mod['is_local'] = True # 标记供前端展示 管理器Mod 图标
-                    merged_map[pkg_id] = mod
-                else:
-                    # 记录 "被遮蔽" 的信息
-                    merged_map[pkg_id]['_shadowed_self'] = True
-            else:
-                # 是 Workshop Mod
-                # 只有当不存在 同名 Local Mod 时才加入
-                if pkg_id not in merged_map:
-                    mod['is_local'] = False # 标记供前端展示 Steam 图标
-                    merged_map[pkg_id] = mod
-                else:
-                    # 记录 "被遮蔽" 的信息
-                    merged_map[pkg_id]['_shadowed_workshop'] = True
+        for mod in sorted_mods:
+            pkg_id = mod['package_id'].lower()
+            # 标记来源供 UI 显示图标
+            # m_path = norm(mod['path'])
+            # if (L_PATH and m_path.startswith(L_PATH)) or (D_PATH and m_path.startswith(D_PATH)):
+            #     mod['store'] = 'local'
+            # elif S_PATH and m_path.startswith(S_PATH):
+            #     mod['store'] = 'self'
+            # elif W_PATH and m_path.startswith(W_PATH):
+            #     mod['store'] = 'workshop'
+            # else:
+            #     mod['store'] = 'unknown'
+            merged_map[pkg_id] = mod
+            
+            # 记录遮蔽信息 (覆盖策略：高优先级在后)
+            if pkg_id in merged_map:
+                # 记录被遮蔽的记录
+                # 例如：如果 merged_map 里已经是 Local，现在的 mod 是 Workshop
+                # 可以在这里给被选中的那个 Mod 增加一个属性，告诉前端它遮蔽了谁
+                merged_map[pkg_id]['_has_shadow_version'] = True
+                
+            
 
         return list(merged_map.values())
 
     @staticmethod
-    def clean_orphaned_data():
+    def get_triple_domain_assets():
         """
-        清理孤立的 UserModData 和 GroupMod。
-        即：删除那些没有任何 ModAsset 关联的配置数据（彻底丢失的 Mod）。
+        全量获取三域 Mod 资产，不进行 Profile 遮蔽过滤。
+        返回格式: { 'workshop': [], 'manager': [], 'local': [] }
         """
-        # 清理 UserModData
-        # 删除 mod_id 不在 existing_ids 中的记录
-        with db.atomic():
-            deleted_user_data = UserModData.delete().where(cast(Any, UserModData.mod_id).not_in(ModAsset.package_id)).execute()
-            # 清理 GroupMod (分组关联)
-            # 这一步通常由数据库外键级联处理，但为了保险手动清理
-            deleted_group_mod = GroupMod.delete().where(cast(Any, GroupMod.mod_id).not_in(ModAsset.package_id)).execute()
-        return {
-            'deleted_user_configs': deleted_user_data,
-            'deleted_group_relations': deleted_group_mod
-        }
-    
+        # 1. 直接查询 ModAsset 全表，并关联 UserModData
+        all_assets = (ModAsset.select(ModAsset, UserModData)
+                      .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                      .dicts())
+        result = {'workshop': [], 'self': [], 'local': [], 'missing': [], 'unknown': []}
+        
+        # # 1. 解析环境上下文 (Context Resolution)
+        profile_id = settings.config.current_profile_id
+        # 获取环境配置
+        # 兜底逻辑：如果 ID 是 default 或者 库里没查到，就用 settings 的全局配置
+        profile = GameProfile.get_or_none(GameProfile.id == profile_id)
+        if profile:
+            local_root = os.path.join(profile.game_install_path, "Mods")
+            dlc_root = os.path.join(profile.game_install_path, "Data")
+        else:
+            # Default 环境兜底
+            local_root = os.path.join(settings.config.game_install_path, "Mods")
+            dlc_root = os.path.join(settings.config.game_install_path, "Data")
+        
+        # # 获取管理器和工坊的基准路径 (用于判断来源)
+        # manager_root = os.path.normpath(settings.config.self_mods_path).lower()
+        # workshop_root = os.path.normpath(settings.config.workshop_mods_path).lower()
+        local_root = local_root.lower()
+        dlc_root = dlc_root.lower()
+
+        for asset in all_assets:
+            path = os.path.normpath(asset['path']).lower()
+            # 1. 尝试获取已生成的缩略图路径 (物理路径)
+            thumb_path = file_mgr.get_thumbnail_path(asset['package_id'])
+            # 2. 决定列表图标 (优先用缩略图，没有则用原图)
+            list_thumb_path = thumb_path if thumb_path else asset['preview_path']
+            # 3. 转换为 HTTP URL
+            asset['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
+            # 4. 详情页大图 URL
+            asset['preview_url'] = file_mgr.get_asset_url(asset['preview_path']) if asset['preview_path'] else None
+            # 5. 图标 URL
+            asset['icon_url'] = file_mgr.get_asset_url(asset['icon_path']) if asset['icon_path'] else None
+            
+            # # 分流逻辑
+            # if workshop_root and workshop_root in path:
+            #     result['workshop'].append(asset)
+            # elif manager_root and manager_root in path:
+            #     result['self'].append(asset)
+            # elif local_root and local_root in path or dlc_root and dlc_root in path:
+            #     # 剩下的默认为 local (当前环境或其他环境的 Mods 目录)
+            #     result['local'].append(asset)
+            
+            store = asset['store']
+            if store == 'workshop':
+                result['workshop'].append(asset)
+            elif store == 'self':
+                result['self'].append(asset)
+            elif local_root and local_root in path or dlc_root and dlc_root in path:
+                result['local'].append(asset)
+            elif not asset['path']:
+                result['missing'].append(asset)
+            else:
+                result['unknown'].append(asset)
+                # logger.warning(f"未知存储域: {store}")
+            
+        return result
+        
     @staticmethod
     def get_all_mods_with_user_data(ignore_missing: bool = False):
         """
@@ -454,6 +499,104 @@ class ModDAO:
                 ModDAO.batch_upsert_user_data(batch_data)
     
     @staticmethod
+    def set_mod_disabled_status(path: str, disable: bool = True):
+        """
+        物理禁用/启用 Mod：重命名 About.xml 并同步数据库状态
+        """
+        about_xml = os.path.join(path, 'About', 'About.xml')
+        disabled_xml = about_xml + '.disabled'
+
+        src = about_xml if disable else disabled_xml
+        dst = disabled_xml if disable else about_xml
+
+        # 1. 物理文件操作
+        if os.path.exists(src):
+            try:
+                if os.path.exists(dst): os.remove(dst) # 清理残留
+                os.rename(src, dst)
+            except Exception as e:
+                return False, f"文件操作失败: {e}"
+        else:
+            # 如果文件不存在，可能是已经被手动删改，但我们仍需同步数据库以防万一
+            pass
+
+        # 2. 数据库状态更新
+        ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
+        return True, "成功"
+
+    @staticmethod
+    def delete_mod_physically(path: str):
+        """
+        物理删除 Mod (移入回收站) 并抹除数据库记录
+        """
+        from send2trash import send2trash
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            try:
+                send2trash(abs_path)
+                # 级联删除 UserModData/GroupMod 通常由外键处理
+                ModAsset.delete().where(ModAsset.path == path).execute()
+                return True, "成功"
+            except Exception as e:
+                return False, f"删除失败: {e}"
+        return False, "路径不存在"
+
+    @staticmethod
+    def add_shadow_path(keep_path_hash: str, shadow_path: str):
+        """
+        为“保留的 Mod”记录“被遮蔽的 Mod”路径
+        """
+        mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
+        if mod:
+            current_paths = mod.shadow_paths or []
+            if shadow_path not in current_paths:
+                current_paths.append(shadow_path)
+                mod.shadow_paths = current_paths
+                mod.save()
+                return True
+        return False
+    
+    @staticmethod
+    def clean_invalid_shadow_paths():
+        """
+        清理所有 Mod 中失效的 shadow_paths。
+        遍历检查物理路径是否存在，不存在则移除。
+        返回: 清理了多少个失效路径
+        """
+        cleaned_count = 0
+        
+        # 1. 筛选出可能有 shadow_paths 的记录
+        # 注意：SQLite 中 JSON 存为 TEXT，可以简单查不为空的
+        # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
+        mods_with_shadows = ModAsset.select().where(cast(Any, ModAsset.shadow_paths).is_null(False))
+        
+        with db.atomic():
+            for mod in mods_with_shadows:
+                current_paths = mod.shadow_paths
+                if not current_paths or not isinstance(current_paths, list):
+                    continue
+                
+                # 2. 过滤有效路径
+                # 判断标准：路径存在，且里面有 About/About.xml.disabled (更严谨)
+                # 或者简单点：只要文件夹还在就行 (宽容)
+                # 这里建议：只要文件夹存在即可，防止用户误删了 .disabled 文件但文件夹还在的情况
+                valid_paths = [
+                    p for p in current_paths 
+                    if p and os.path.exists(p)
+                ]
+                
+                # 3. 如果有变化，更新数据库
+                if len(valid_paths) != len(current_paths):
+                    removed_num = len(current_paths) - len(valid_paths)
+                    cleaned_count += removed_num
+                    
+                    mod.shadow_paths = valid_paths
+                    mod.save()
+                    logger.info(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
+
+        return cleaned_count
+    
+    @staticmethod
     def find_missing_mods(delete: bool = False):
         """
         查找并处理数据库中路径无效的 Mod。
@@ -497,47 +640,24 @@ class ModDAO:
         return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
     
     @staticmethod
-    def clean_invalid_shadow_paths():
+    def clean_orphaned_data():
         """
-        清理所有 Mod 中失效的 shadow_paths。
-        遍历检查物理路径是否存在，不存在则移除。
-        返回: 清理了多少个失效路径
+        清理孤立的 UserModData 和 GroupMod。
+        即：删除那些没有任何 ModAsset 关联的配置数据（彻底丢失的 Mod）。
         """
-        cleaned_count = 0
-        
-        # 1. 筛选出可能有 shadow_paths 的记录
-        # 注意：SQLite 中 JSON 存为 TEXT，可以简单查不为空的
-        # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
-        mods_with_shadows = ModAsset.select().where(cast(Any, ModAsset.shadow_paths).is_null(False))
-        
+        # 清理 UserModData
+        # 删除 mod_id 不在 existing_ids 中的记录
         with db.atomic():
-            for mod in mods_with_shadows:
-                current_paths = mod.shadow_paths
-                if not current_paths or not isinstance(current_paths, list):
-                    continue
-                
-                # 2. 过滤有效路径
-                # 判断标准：路径存在，且里面有 About/About.xml.disabled (更严谨)
-                # 或者简单点：只要文件夹还在就行 (宽容)
-                # 这里建议：只要文件夹存在即可，防止用户误删了 .disabled 文件但文件夹还在的情况
-                valid_paths = [
-                    p for p in current_paths 
-                    if p and os.path.exists(p)
-                ]
-                
-                # 3. 如果有变化，更新数据库
-                if len(valid_paths) != len(current_paths):
-                    removed_num = len(current_paths) - len(valid_paths)
-                    cleaned_count += removed_num
-                    
-                    mod.shadow_paths = valid_paths
-                    mod.save()
-                    logger.info(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
-
-        return cleaned_count
+            deleted_user_data = UserModData.delete().where(cast(Any, UserModData.mod_id).not_in(ModAsset.package_id)).execute()
+            # 清理 GroupMod (分组关联)
+            # 这一步通常由数据库外键级联处理，但为了保险手动清理
+            deleted_group_mod = GroupMod.delete().where(cast(Any, GroupMod.mod_id).not_in(ModAsset.package_id)).execute()
+        return {
+            'deleted_user_configs': deleted_user_data,
+            'deleted_group_relations': deleted_group_mod
+        }
     
     
-        
 class GroupDAO:
     """
     管理分组逻辑。

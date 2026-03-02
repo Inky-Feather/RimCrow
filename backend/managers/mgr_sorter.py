@@ -397,7 +397,19 @@ class OrderSorter:
             # C. 计算权重
             for mid in g.mod_ids:
                 m_data = mod_map.get(mid, {})
+                # 计算默认基础权重 (类型/作者等)
                 w = self.calculate_mod_base_weight(m_data)
+                
+                # 获取该 Mod 生效的所有规则
+                effective_rules = self.rule_mgr.get_effective_mod_rules(mid, m_data)
+                # 【核心新增】应用绝对位置覆盖 (Top / Bottom)
+                override = effective_rules.get("weight_override")
+                if override:
+                    if override["type"] == "top":
+                        w = 0 
+                    elif override["type"] == "bottom":
+                        w = 1000 # 极高数字，确保沉底
+                
                 # 确保动态规则的全局开关在这里也能生效
                 if self.rule_mgr.settings.get("dynamic_rules_enabled", True):
                     matched_dyn = self.rule_mgr.get_matching_dynamic_rules(m_data)
@@ -408,6 +420,7 @@ class OrderSorter:
                         elif act.get('type') == 'top': w = 0
                         elif act.get('type') == 'bottom': w = 1000
                 weights.append(w)
+            # 一个原子组如果有多个 Mod 联锁，取最小的权重作为整个组的启动权重
             group_base_weights[id(g)] = min(weights) if weights else 500
         # 3. 构建加权依赖图
         adj, edge_details = self._build_weighted_graph(groups, mod_map, mod_to_group)
