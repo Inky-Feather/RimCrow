@@ -4,8 +4,10 @@
 │   ├── ·[database]
 │   │   ├──  __init__.py
 │   │   ├──  dao.py
+│   │   ├──  dao_ext.py
 │   │   ├──  migrator.py
-│   │   └──  models.py
+│   │   ├──  models.py
+│   │   └──  models_ext.py
 │   │   
 │   ├── ·[managers]
 │   │   ├──  __init__.py
@@ -15,14 +17,19 @@
 │   │   ├──  mgr_game.py
 │   │   ├──  mgr_game_logs.py
 │   │   ├──  mgr_game_monitor.py
+│   │   ├──  mgr_github.py
 │   │   ├──  mgr_load_order.py
 │   │   ├──  mgr_network.py
 │   │   ├──  mgr_profile.py
 │   │   ├──  mgr_rules.py
 │   │   ├──  mgr_sorter.py
 │   │   ├──  mgr_steam.py
+│   │   ├──  mgr_steam_api.py
+│   │   ├──  mgr_steamcmd_core.py
 │   │   ├──  mgr_sub_browser.py
-│   │   └──  mgr_update.py
+│   │   ├──  mgr_update.py
+│   │   ├──  mgr_workshop_db.py
+│   │   └──  mgr_workshop_db_old.py
 │   │   
 │   ├── ·[scanner]
 │   │   ├──  __init__.py
@@ -47,6 +54,7 @@
 ├── ·[data]
 ├── ·[frontend]
 │   ├── ·[public]
+│   │   ├──  icon.svg
 │   │   └──  vite.svg
 │   │   
 │   ├── ·[src]
@@ -75,6 +83,11 @@
 │   │   │   │   ├──  ProfileSwitcher.vue
 │   │   │   │   └──  SegmentedTabs.vue
 │   │   │   │   
+│   │   │   ├── ·[workspace]
+│   │   │   │   ├── ·[components]
+│   │   │   │   ├── ·[views]
+│   │   │   │   └──  WorkspaceOverlay.vue
+│   │   │   │   
 │   │   │   ├──  AiReviewModal.vue
 │   │   │   ├──  BackupList.vue
 │   │   │   ├──  ConflictResolver.vue
@@ -90,7 +103,8 @@
 │   │   │   ├──  RimHeader.vue
 │   │   │   ├──  RulePanel.vue
 │   │   │   ├──  SettingsPanel.vue
-│   │   │   └──  StatusBar.vue
+│   │   │   ├──  StatusBar.vue
+│   │   │   └──  UpdateModal.vue
 │   │   │   
 │   │   ├── ·[directives]
 │   │   │   ├──  dragScroll.js
@@ -116,11 +130,13 @@
 │   │   │   ├──  orderStore.js
 │   │   │   ├──  profileStore.js
 │   │   │   ├──  ruleStore.js
-│   │   │   └──  searchStore.js
+│   │   │   ├──  searchStore.js
+│   │   │   └──  workspaceStore.js
 │   │   │   
 │   │   ├── ·[utils]
 │   │   │   ├──  colorDeal.js
 │   │   │   ├──  constants.js
+│   │   │   ├──  tools.js
 │   │   │   ├──  uiHelper.js
 │   │   │   └──  unityTextParser.js
 │   │   │   
@@ -136,6 +152,7 @@
 │   ├──  README.md
 │   └──  vite.config.js
 │   
+├── ·[mods]
 ├── ·[test]
 ├── ·[tools]
 │   ├── ·[steam_agent]
