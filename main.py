@@ -62,8 +62,7 @@ else:
 def get_webview_proxy_args():
     """生成 WebView2 的启动参数"""
     cfg = settings.config.network.proxy
-    if not cfg.enabled:
-        return {}
+    if not cfg.enabled: return {}
     # 构造代理服务器字符串
     # WebView2 (Chromium) 格式: --proxy-server="http://user:pass@1.2.3.4:8080"
     # 注意：Chromium 对带密码的代理支持有限，通常建议本地无密码代理
@@ -113,6 +112,12 @@ def main():
         
         # 干完活直接退出，不要启动 GUI
         sys.exit(0)
+        
+    # 加载启动屏
+    try:
+        import pyi_splash # type: ignore
+    except ImportError:
+        pyi_splash = None
 
     # 只有主进程才会执行到这里，此时再导入 GUI 库
     # 避免 Worker 进程加载浏览器内核，节省内存并防止冲突
@@ -168,7 +173,8 @@ def main():
     # 注册窗口到事件总线
     EventBus.set_window(window) # type: ignore
     # 捕获全局未处理异常
-    try: # 启动
+    try: # 启动主窗口
+        if pyi_splash: pyi_splash.close()
         webview.start(api.cleanup, debug=settings.config.debug_mode) # debug=True 允许在窗口里按 F12 看控制台
     except Exception as e:
         logger.critical("Application crashed!", exc_info=True)
