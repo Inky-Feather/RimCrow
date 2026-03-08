@@ -8,13 +8,14 @@
       @mouseleave="handleMouseLeave"
       class="matrix-select-trigger flex items-center gap-2 p-1.5 rounded-lg border transition-all cursor-pointer group bg-text-dim/10"
       :class="[
-        isSelected ? 'border-accent-tip/60 ring-1 ring-accent-tip/90 hover:bg-accent-tip/20 hover:border-accent-tip/90' :
+        mod.is_missing ? 'opacity-70 grayscale border-dashed border-accent-danger/50 bg-accent-danger/5 hover:bg-accent-danger/10 hover:border-accent-danger/30' :
         storeType === 'workshop' ? 'border-accent-primary/10 hover:bg-accent-primary/10 hover:border-accent-primary/30' :
         storeType === 'self' ? 'border-accent-success/10 hover:bg-accent-success/10 hover:border-accent-success/30' :
-        'border-accent-warn/10 hover:bg-accent-warn/10 hover:border-accent-warn/30'
+        'border-accent-warn/10 hover:bg-accent-warn/10 hover:border-accent-warn/30', 
+        isSelected ? 'border-accent-tip/60 ring-1 ring-accent-tip/90 hover:bg-accent-tip/20 hover:border-accent-tip/90':''
       ]">
       
-      <!-- 头像 -->
+      <!-- 图标 -->
       <img v-if="mod.preview_path" :src="appStore.getThumbUrl(mod.package_id, mod.preview_path)" class="size-10 rounded object-cover border border-text-main/10 shadow-sm opacity-80 group-hover:opacity-100" />
       <div v-else class="size-10 rounded bg-black/40 border border-text-main/10 flex items-center justify-center">
         <span class="text-[0.6rem] text-text-dim/50 font-bold uppercase">NO IMG</span>
@@ -49,7 +50,7 @@
         </span>
       </div>
 
-      <!-- NEW 角标 -->
+      <!-- 状态角标 -->
       <div class="absolute top-0 left-1 z-100 scale-90 flex items-center justify-center gap-1">
         <span v-if="isNew" title="新增" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-primary animate-pulse">
           NEW
@@ -65,6 +66,9 @@
         </span>
         <span v-if="!mod.path" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           DELETED
+        </span>
+        <span v-if="mod.is_missing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+          MISSING
         </span>
       </div>
     </div>
@@ -180,22 +184,18 @@ const handleMouseEnter = () => {
     showPopover.value = true
   }, 400)
 }
-
 const handleMouseLeave = () => {
   if (showTimer) clearTimeout(showTimer)
   hideTimer = setTimeout(() => {
     showPopover.value = false
   }, 200) // 给 200ms 时间让鼠标可以移到 popover 上
 }
-
 const clearHideTimer = () => {
   if (hideTimer) clearTimeout(hideTimer)
 }
-
 const hidePopover = () => {
   handleMouseLeave()
 }
-
 const calculatePosition = () => {
   if (!itemRef.value) return
   const rect = itemRef.value.getBoundingClientRect()

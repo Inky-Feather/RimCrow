@@ -36,7 +36,7 @@ from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, HOME_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_changelog_since
-from backend.utils.tools import current_ms
+from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.logger import logger
 from backend.managers.mgr_network import network_mgr
 
@@ -1141,6 +1141,89 @@ class API:
         
         return ApiResponse.success(message="本地化任务已在后台启动")
     
+    @log_api_call
+    def workspace_transfer_mods(self, path_hashes: list, target_store: str, mode: str = 'copy'):
+        """
+        跨库转移模组 (复制 / 移动)
+        :param target_store: 'local' 或 'self'
+        :param mode: 'copy' 或 'move'
+        """
+        if not self.active_context: 
+            return ApiResponse.error("未指定环境")
+        # 1. 拦截非法目标
+        if target_store == 'workshop':
+            return ApiResponse.error("为了保证 Steam 同步机制不被破坏，禁止手动向创意工坊目录导入文件。")
+        # 2. 确定目标根目录
+        target_root = ""
+        if target_store == 'local':
+            target_root = self.active_context.local_mods_path
+        elif target_store == 'self':
+            target_root = settings.config.self_mods_path
+        if not target_root or not os.path.exists(target_root):
+            return ApiResponse.error(f"目标库 {target_store} 的目录未配置或不存在！")
+        # 3. 查出源文件信息
+        from backend.database.models import ModAsset
+        source_mods = ModAsset.select(ModAsset.path, ModAsset.package_id, ModAsset.store, ModAsset.name).where(ModAsset.path_hash.in_(path_hashes)).dicts() # type: ignore
+        source_mods = list(source_mods)
+        if not source_mods: return ApiResponse.error("未找到指定的源文件")
+        # 4. 执行物理操作
+        import shutil
+        success_count = 0
+        errors = []
+        # 确定文件夹命名策略
+        name_strategy = settings.config.coexist_mod_folder_name_type
+        for mod in source_mods:
+            src_path = mod['path']
+            # 防御：禁止对工坊项目执行 Move 操作
+            current_mode = mode
+            if mod['store'] == 'workshop' and mode == 'move':
+                current_mode = 'copy' # 强制降级为复制
+            # 生成目标文件夹名称
+            # 策略：如果是去 Local，遵循命名设置；如果是去 Self，且有 workshop_id，最好以 ID 命名
+            if target_store == 'self' and mod.get('workshop_id'):
+                folder_name = mod['workshop_id']
+            else:
+                # 简单处理：使用原始文件夹名。如果你想更智能，可以调用 file_mgr.generate_folder_name
+                folder_name = os.path.basename(src_path)
+            dst_path = os.path.join(target_root, folder_name)
+            # 防止重名覆盖
+            counter = 1
+            while os.path.exists(dst_path):
+                dst_path = os.path.join(target_root, f"{folder_name}_{counter}")
+                counter += 1
+            try:
+                if current_mode == 'move':
+                    shutil.move(src_path, dst_path)
+                else:
+                    shutil.copytree(src_path, dst_path)
+                success_count += 1
+            except Exception as e:
+                errors.append(f"{mod['name']}: {str(e)}")
+        
+        # 物理操作完成后，同步更新数据库记录，避免前端全量扫描
+        with db.atomic():
+            for mod in source_mods:
+                if mode == 'move':
+                    # 如果是移动，更新 path 和 store
+                    # 注意：path_hash 也要重新生成，因为物理路径变了
+                    new_path = os.path.join(target_root, os.path.basename(mod['path']))
+                    new_hash = generate_path_hash(new_path)
+                    ModAsset.update(
+                        path=new_path,
+                        path_hash=new_hash,
+                        store=target_store
+                    ).where(ModAsset.path_hash == mod['path_hash']).execute()
+                else:
+                    # 如果是复制，直接 return success 然后让前端触发异步扫描
+                    pass
+
+        msg = f"成功转移 {success_count} 个模组。"
+        if errors:
+            msg += f" {len(errors)} 个失败。"
+            return ApiResponse.warning(msg, data={"errors": errors})
+        
+        return ApiResponse.success(message=msg)
+    
     
     # =========================================================================
     #  7. 排序与管理 (Sort & Rule Management)
@@ -1585,6 +1668,9 @@ class API:
     @log_api_call
     def steam_subscribe(self, workshop_ids: str):
         """调用 Steam 客户端订阅"""
+        # 前置拦截
+        if not self.steam_mgr.is_steam_running():
+            return ApiResponse.warning("Steam 客户端未运行", data={"action": "need_start_steam"})
         try:
             success = self.steam_mgr.subscribe_items(workshop_ids)
             if success:
@@ -1597,6 +1683,9 @@ class API:
     @log_api_call
     def steam_unsubscribe(self, workshop_ids: str):
         """调用 Steam 客户端取消订阅"""
+        # 前置拦截
+        if not self.steam_mgr.is_steam_running():
+            return ApiResponse.warning("Steam 客户端未运行", data={"action": "need_start_steam"})
         try:
             success = self.steam_mgr.unsubscribe_items(workshop_ids)
             if success:
@@ -1605,6 +1694,23 @@ class API:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:
             return ApiResponse.error(str(e))
+    
+    @log_api_call
+    def steam_cancle_task(self, task_id):
+        """取消 Steam 客户端任务"""
+        success = self.steam_mgr.abort_monitor_task(task_id)
+        if success:
+            return ApiResponse.success(message="已取消任务")
+        else:
+            return ApiResponse.error("操作失败：SteamAPI 未就绪")
+    
+    @log_api_call
+    def steam_launch_client(self):
+        """前端主动调用唤醒 Steam"""
+        success = self.steam_mgr.start_steam()
+        if success:
+            return ApiResponse.success(message="正在唤起 Steam 客户端，请等待其完全加载...")
+        return ApiResponse.error("无法定位 Steam 路径，请手动打开！")
     
     @log_api_call
     def steam_check_status(self, workshop_id: str):
@@ -1961,6 +2067,7 @@ class API:
                 compare_and_add(m, 'self')
         return ApiResponse.success({"updates": updates_available})
 
+    @log_api_call
     def get_replacement_suggestion(self, package_id: str):
         """
         获取 Mod 替换建议：根据当前启用的 Mod，查询是否有更好的替代版本
@@ -1971,7 +2078,6 @@ class API:
         if not ext_mod: return ApiResponse.warning(f"Mod {package_id} 没有替换建议")
         return ApiResponse.success({"replacement": ext_mod})
         
-
     @log_api_call
     def lifecycle_resolve_dependencies(self, active_package_ids: list):
         """
@@ -2091,6 +2197,7 @@ class API:
             "replacement": replacement # 如果有替代品，这里会包含 new_id 和 new_name
         })
     
+    @log_api_call
     def get_workshop_ids_by_package_ids_map(self, package_ids: list[str]):
         """
         根据 PackageID 获取对应的 WorkshopID 映射
@@ -2113,49 +2220,72 @@ class API:
         ws_map = self.steam_mgr.workshop_merged_data()
         mg_map = self.steam_mgr.steamcmd_merged_data()
         
-        install_workshop_ids = []
-        # 3. 融合数据
-        # 为 workshop 域注入数据
+        install_workshop_ids = set()
+        # install_self_ids = set()
+        
+        # 3. 为已有的物理模组注入 Steam 状态
         for mod in matrix['workshop']:
             wid = str(mod.get('workshop_id'))
-            if mod.get('path'): install_workshop_ids.append(wid)
+            if mod.get('path'): install_workshop_ids.add(wid)
             # 将 Steam 状态（订阅时间、真实下载时间等）直接合并进 mod 字典
             # 为了前端方便，把这些信息放在 'steam_info' 字段下，或者直接扁平化合并
             if wid in ws_map: mod['steam_status'] = ws_map[wid]
+            mod['is_missing'] = False # 初始化标记
         
-        isntall_self_ids = []
         # 为 self (管理器) 域注入数据
         for mod in matrix['self']:
             wid = str(mod.get('workshop_id'))
-            if mod.get('path'): isntall_self_ids.append(wid)
+            # if mod.get('path'): install_self_ids.add(wid)
             if wid in mg_map: mod['steam_status'] = mg_map[wid]
+            mod['is_missing'] = False
         
-        res = {}
-        res['download_status'] = { id: data for id, data in mg_map.items() if data.get('is_installed') }
-        res['subscribed_status'] = { id: data for id, data in ws_map.items() if data.get('is_subscribed') }
-        res['missing_status'] = { id: data for id, data in mg_map.items() if data.get('is_subscribed') and not data.get('is_installed') }
+        for mod in matrix['local']:
+            mod['is_missing'] = False
         
+        # 4. 核心逻辑：找出“已订阅但物理丢失”的模组 (Ghost Mods)
+        # 找出 ACF 中标记已订阅，但物理文件没被扫描到的 ID
+        ghost_ws_ids = set([wid for wid, data in ws_map.items() if data.get('is_subscribed')]) - install_workshop_ids
+        # ghost_self_ids = set([wid for wid, data in mg_map.items() if data.get('is_subscribed')]) - install_self_ids
         
-        afc_subscribed = set(res['subscribed_status'].keys())
-        acf_missing = set(res['missing_status'].keys())
-        path_missing = afc_subscribed - set(install_workshop_ids)
-        res['missing_workshop_ids'] = path_missing | acf_missing
-        res['subscribed_workshop_ids'] = afc_subscribed
-        res['installed_all_ids'] = set(install_workshop_ids) | set(isntall_self_ids)
+        # 5. 从 ExtDB (外置社区库) 中获取这些幽灵模组的信息，使其在 UI 上能显示名字和图片
+        all_ghost_ids = list(ghost_ws_ids)
+        ghost_meta_map = {}
+        if all_ghost_ids:
+            from backend.database.models_ext import WorkshopMeta
+            metas = WorkshopMeta.select(WorkshopMeta.workshop_id, WorkshopMeta.name, WorkshopMeta.preview_url).where(WorkshopMeta.workshop_id.in_(all_ghost_ids)).dicts()
+            ghost_meta_map = {str(m['workshop_id']): m for m in metas}
+
+        # 构造幽灵模组对象并塞回对应列表
+        def create_ghost(wid, store_type, steam_status):
+            meta = ghost_meta_map.get(wid, {})
+            return {
+                "workshop_id": wid,
+                "package_id": f"ghost.{wid}", # 临时包名防止前端 key 报错
+                "name": meta.get('name') or f"未知/已下架模组 ({wid})",
+                "preview_url": meta.get('preview_url'),
+                "path": "", # 路径为空
+                "path_hash": f"ghost_{store_type}_{wid}", # 临时唯一哈希
+                "store": store_type,
+                "source": "workshop",
+                "is_missing": True, 
+                "steam_status": steam_status
+            }
+        for wid in ghost_ws_ids:
+            matrix['workshop'].append(create_ghost(wid, 'workshop', ws_map.get(wid)))
+            
+        res = {
+            "workshop": matrix['workshop'],
+            "self": matrix['self'],
+            "local": matrix['local']
+        }
         
-        res.update(matrix)
-        
-        # 立即返回基础数据！(让 UI 秒现)
-        # 前端拿到数据后，立刻显示出三个列表。
-        response = ApiResponse.success(res)
-        
-        # 4. 后台触发在线比对，标记可更新状态
+        # 6. 后台触发在线比对，标记可更新状态
         # 获取所有涉及的 WID
         all_wids = list(ws_map.keys()) + list(mg_map.keys())
         import threading
         threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
 
-        return response
+        return ApiResponse.success(res)
     
     def _bg_check_online_updates(self, all_wids: list):
         """后台静默检测，完成后通过 EventBus 推送"""
@@ -2203,8 +2333,24 @@ class API:
     
     @log_api_call
     def nexus_search(self, query: str, page: int = 1):
-        """离线库搜索"""
-        data = ExtDAO.search_nexus(query, page)
+        """离线库搜索 + 在线静默预热"""
+        # 1. 从本地 SQLite 获取当前页的数据 (瞬间完成)
+        data = ExtDAO.search_nexus(query, page, page_size=100)
+        items = data['items']
+        if items:
+            # 2. 提取 ID 列表，去 Steam 检查是否有更新 (利用你已有的缓存机制)
+            workshop_ids = [item['workshop_id'] for item in items]
+            # 只取缓存或触发网络请求更新 DB。因为你设置了 1天的 TTL，大部分情况下也是瞬间返回
+            online_info, _ = SteamWebAPI.fetch_item_details(workshop_ids, force_refresh=False)
+            
+            # 3. 将最新的封面和名字合并回 items
+            for item in items:
+                wid = item['workshop_id']
+                if wid in online_info:
+                    item['preview_url'] = online_info[wid].get('preview_url', item['preview_url'])
+                    item['name'] = online_info[wid].get('title', item['name'])
+                    item['time_updated'] = online_info[wid].get('time_updated', item.get('time_updated'))
+
         return ApiResponse.success(data)
 
     @log_api_call
@@ -2220,11 +2366,6 @@ class API:
         """获取 Mod 变动轨迹"""
         return ApiResponse.success(self.steam_mgr.get_item_timeline(workshop_id, is_steamcmd))
     
-    @log_api_call
-    def workspace_get_nexus_detail(self, workshop_id: str):
-        """获取缓存详情"""
-        # 如果缓存中没有，或者太旧，这里可以先返回缓存，然后异步触发一次拉取
-        return ApiResponse.success(ExtDAO.get_nexus_detail(workshop_id))
     
     
     

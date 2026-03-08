@@ -34,6 +34,7 @@
               { label: '仅显示新增', value: 'new' }, 
               { label: '仅显示已禁用', value: 'disabled' }, 
               { label: '仅显示已删除', value: 'deleted' }, 
+              { label: '仅显示缺失', value: 'missing' }, 
             ]">
           </CommonSelect>
 
@@ -116,7 +117,7 @@ import { useProfileStore } from '../../../stores/profileStore'
 import { useWorkspaceStore } from '../../../stores/workspaceStore'
 import CommonSelect from '../../common/input/CommonSelect.vue'
 import { Motion } from 'motion-v'
-import { Activity, Copy, DownloadCloud, ExternalLink, Flag, FlagOff, FolderDot, FolderInput, Lock, LockOpen, Trash2 } from 'lucide-vue-next'
+import { Activity, Copy, DownloadCloud, ExternalLink, ArrowRightLeft, Flag, FlagOff, FolderDot, FolderInput, Lock, LockOpen, Trash2 } from 'lucide-vue-next'
 import { IconSelf, IconSteam } from '../../../utils/constants'
 import { useConfirmStore } from '../../../stores/confirmStore'
 
@@ -174,6 +175,7 @@ const displayMods = computed(() => {
       if (filterState.value === 'new') return isNew(m)
       if (filterState.value === 'disabled') return m.disabled
       if (filterState.value === 'deleted') return !m.path
+      if (filterState.value === 'missing') return m.is_missing
       return false
     })
   }
@@ -240,7 +242,7 @@ const unsubscribeMod = async (path_hashs, delete_file = false) => {
     }
   }
 }
-
+// 下载选中项
 const downloadMods = async (path_hashs) => {
   const workshop_ids = getModsData(path_hashs, 'workshop_id')
   const res = await appStore.downloadWorkshopItems(workshop_ids)
@@ -253,30 +255,54 @@ const handleContextMenu = async (event, targetMod) => {
   
   if (!localSelectedIds.value.includes(targetMod.path_hash)) {
     handleSelect([targetMod.path_hash], targetMod.path_hash)
-    // await nextTick()
   }
+  
   const selectedNumStr = localSelectedIds.value.length > 1 ? ` (${localSelectedIds.value.length} 项)` : ''
-  // 菜单
+  const isMissing = targetMod.is_missing;
+
+  // 动态构建菜单
   const menuItems = [
-    // { divider: true },
-    { label: '查看变动', icon: Activity, action: () => emit('open-timeline', targetMod) },
-    { label: '访问网页', disabled: !targetMod.url, icon: ExternalLink, action: () => appStore.openUrl(targetMod.url) },
-    { label: '打开文件夹', disabled: !targetMod.path, icon: FolderInput, action: () => appStore.openPath(targetMod.path) },
-    { label: '下载到管理器' + selectedNumStr, disabled: !targetMod.workshop_id, icon: DownloadCloud, action: () => downloadMods(localSelectedIds.value) },
-    { label: 'Steam操作', icon: IconSteam, disabled: targetMod.source!=='workshop', children: [
-      { label: '访问创意工坊', disabled: targetMod.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
-      { label: '订阅模组' + selectedNumStr, disabled: (!targetMod.workshop_id || targetMod.steam_status?.is_subscribed), icon: Flag, action: () => appStore.subscribeMod(getModsData(localSelectedIds.value, 'workshop_id')) },
-      { label: '取消订阅' + selectedNumStr, disabled: targetMod.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value) },
-      { label: '取订并删除' + selectedNumStr, disabled: targetMod.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, true) },
-    ]},
-    // { label: '复制到', icon: Copy, children: [
-    //   { label: '本地', disabled: targetMod.store=='local', icon: FolderDot, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
-    //   { label: '创意工坊', disabled: targetMod.store=='workshop', icon: IconSteam, action: () => appStore.subscribeMod(props.item_id) },
-    //   { label: '管理器', disabled: targetMod.store=='self', icon: IconSelf, action: () => unsubscribeMod() },
-    // ]},
-    { label: targetMod.disabled?'解禁':'禁用' + selectedNumStr, disabled: !targetMod.path, icon: targetMod.disabled? LockOpen: Lock, level: targetMod.disabled?'warn':'danger', action: () => modStore.disableMods(localSelectedIds.value, !targetMod.disabled) },
-    { label: '删除' + selectedNumStr, disabled: !targetMod.path, icon: Trash2, level: 'danger', action: () => appStore.deletePaths(getModsData(localSelectedIds.value, 'path')) },
+
   ]
+
+  // 1. 常规信息操作
+  if(!isMissing) {
+    menuItems.push({ label: '查看变动', icon: Activity, action: () => emit('open-timeline', targetMod) })
+    menuItems.push({ label: '打开文件夹', icon: FolderInput, action: () => appStore.openPath(targetMod.path) })
+  }
+  menuItems.push({ divider: true })
+
+  // 2. 跨库物理转移 (Copy / Move)
+  if(!isMissing) {
+    menuItems.push({ 
+      label: '转移...' + selectedNumStr, icon: ArrowRightLeft, children: [
+        { label: '复制到 游戏本地库', disabled: targetMod.store == 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'copy') },
+        { label: '复制到 管理器库', disabled: targetMod.store == 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'copy') },
+        { divider: true },
+        // 移动操作 (如果是工坊则不可移动)
+        { label: '移动到 游戏本地库', disabled: targetMod.store == 'local' || targetMod.store == 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'move') },
+        { label: '移动到 管理器库', disabled: targetMod.store == 'self' || targetMod.store == 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'move') },
+      ]
+    })
+  }
+  menuItems.push({ label: '下载到管理器' + selectedNumStr, disabled: !targetMod.workshop_id, icon: DownloadCloud, action: () => downloadMods(localSelectedIds.value) },)
+  // 3. Steam API 相关操作
+  menuItems.push({ label: 'Steam操作', icon: IconSteam, children: [
+      { label: '访问创意工坊', disabled: targetMod.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
+    { label: '订阅模组' + selectedNumStr, disabled: (!targetMod.workshop_id || targetMod.steam_status?.is_subscribed), icon: Flag, action: () => appStore.subscribeMod(getModsData(localSelectedIds.value, 'workshop_id')) },
+    { label: '取消订阅' + selectedNumStr, disabled: targetMod.store !== 'workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) },
+  ]})
+
+  // 4. 破坏性操作
+  menuItems.push({ divider: true })
+  if(!isMissing) {
+    menuItems.push({ label: targetMod.disabled ? '解禁' : '禁用' + selectedNumStr, icon: targetMod.disabled ? LockOpen : Lock, level: targetMod.disabled ? 'warn' : 'danger', action: () => modStore.disableMods(localSelectedIds.value, !targetMod.disabled) })
+    menuItems.push({ label: '删除文件' + selectedNumStr, icon: Trash2, level: 'danger', action: () => appStore.deletePaths(getModsData(localSelectedIds.value, 'path')) })
+  } else {
+    // 对于缺失项，提供一键清除幽灵记录的功能（取消订阅）
+    menuItems.push({ label: '清理此失效订阅' + selectedNumStr, icon: Trash2, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) })
+  }
+
   menuStore.open(event, menuItems)
 }
 

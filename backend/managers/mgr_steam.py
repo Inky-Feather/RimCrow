@@ -282,6 +282,59 @@ class SteamManager:
             except Exception as e:
                 logger.error(f"Failed to extract SteamCMD: {e}")
 
+    def is_steam_running(self) -> bool:
+        """跨平台检测 Steam 进程是否存活"""
+        try:
+            sys_name = platform.system()
+            if sys_name == "Windows":
+                # 隐藏控制台窗口
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                # 使用内置 tasklist 过滤，/NH 去掉表头提升解析速度
+                res = subprocess.run(
+                    ['tasklist', '/FI', 'IMAGENAME eq steam.exe', '/NH'], 
+                    capture_output=True, text=True, startupinfo=si
+                )
+                return 'steam.exe' in res.stdout.lower()
+            elif sys_name == "Darwin": # MacOS
+                res = subprocess.run(['ps', '-A'], capture_output=True, text=True)
+                return 'steam.app' in res.stdout.lower()
+            else: # Linux
+                res = subprocess.run(['ps', '-A'], capture_output=True, text=True)
+                return 'steam' in res.stdout.lower()
+        except Exception as e:
+            logger.error(f"Check steam process failed: {e}")
+            return False
+
+    def start_steam(self) -> bool:
+        """尝试启动 Steam 客户端"""
+        if self.is_steam_running():
+            return True
+            
+        steam_exe = str(self.steam_exe) if self.steam_exe else None
+        
+        # 找不到执行文件时的兜底策略：使用系统协议唤醒
+        if not steam_exe or not os.path.exists(steam_exe):
+            try:
+                if platform.system() == "Windows":
+                    os.startfile("steam://open/main")
+                    return True
+            except:
+                pass
+            return False
+            
+        try:
+            # 独立进程启动，绝不阻塞当前程序的运行
+            if platform.system() == "Windows":
+                subprocess.Popen([steam_exe])
+            else:
+                subprocess.Popen([steam_exe])
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start Steam: {e}")
+            return False
+    
+    
     # =========================================================
     #  2. SteamCMD 功能
     # =========================================================
@@ -493,7 +546,9 @@ class SteamManager:
                 if not is_perfect:
                     to_action.append(mid)
             else: # unsubscribe
-                if item and item.get('is_installed') or folder_exists:
+                # 【核心修复】：只要物理存在、ACF记录存在、或者日志说它还订阅着，都要去退订！
+                is_sub = item.get('is_subscribed') if item else False
+                if folder_exists or (item and item.get('is_installed')) or is_sub:
                     to_action.append(mid)
 
         if to_action:
@@ -582,12 +637,21 @@ class SteamManager:
                                     
                             elif action == "unsubscribe":
                                 is_installed_acf = item.get('is_installed') if item else False
+                                is_subscribed = item.get('is_subscribed') if item else False
                                 # 条件1：完美移除 (物理消失 + Steam记录消失)
                                 if not is_installed_acf and not folder_exists:
                                     finished_count += 1
                                 # 条件2：容错放行 (物理已经消失，且指令发出了超过 3 秒)
                                 # 对付手动删文件导致 Steam 装死不更新 ACF 的情况
                                 elif not folder_exists and (time.time() - start_time > 3):
+                                    finished_count += 1
+                                # 条件3：日志明确表示已经退订 
+                                # (应对 Steam 延迟删文件，或游戏运行中锁定文件的情况)
+                                elif item and is_subscribed is False:
+                                    finished_count += 1
+                                # 条件4：兜底超时放行 
+                                # (如果向 Steam 发出退订指令超过 10 秒，强行认定完成，防止卡 0%)
+                                elif time.time() - start_time > 10:
                                     finished_count += 1
 
                         # 计算独立进度
@@ -787,7 +851,6 @@ class SteamManager:
         for item_id in all_item_ids:
             inst = installed.get(item_id, {})
             det = details.get(item_id, {})
-            
             parsed_acf[item_id] = {
                 "workshop_id": item_id,
                 "size_bytes": int(inst.get("size", 0)),
@@ -795,16 +858,14 @@ class SteamManager:
                 "local_manifest": inst.get("manifest") or det.get("manifest"),
                 # 线上(或缓存的最新)目标清单ID
                 "remote_manifest": det.get("latest_manifest", det.get("manifest")),
-                
                 # 模组作者发布版本的真实时间
                 "installed_version_time": format_timestamp(inst.get("timeupdated") or det.get("timeupdated")),
                 "latest_version_time": format_timestamp(det.get("latest_timeupdated") or det.get("timeupdated")),
-                
                 # Steam客户端最后一次检查该Mod状态的时间
                 "last_checked_time": format_timestamp(det.get("timetouched")),
-                
                 # 是否确实安装在硬盘上
-                "is_installed": item_id in installed
+                "is_installed": item_id in installed,
+                "is_subscribed": item_id in details 
             }
             # 衍生判断：是否需要更新 (本地与线上清单不一致，且都存在)
             loc_man = parsed_acf[item_id]["local_manifest"]
@@ -951,7 +1012,7 @@ class SteamManager:
             # 构建合理的最终字典
             merged_item = {
                 "workshop_id": item_id,
-                "is_subscribed": item_log.get("is_subscribed"),    # 从日志推断的订阅状态
+                "is_subscribed": item_acf.get("is_subscribed"),    # 从日志推断的订阅状态
                 "is_installed": item_acf.get("is_installed", False), # 文件是否真实存在
                 "needs_update": item_acf.get("needs_update", False), # 是否有更新等待下载
                 "has_error": bool(item_log.get("log_last_error")),   # 下载/校验是否报错
@@ -959,7 +1020,6 @@ class SteamManager:
                 
                 # --- 物理信息 (以 ACF 为准) ---
                 "size_bytes": item_acf.get("size_bytes", 0),
-
                 "local_manifest": item_acf.get("local_manifest") or item_log.get("log_last_manifest"),
                 "remote_manifest": item_acf.get("remote_manifest"),
 

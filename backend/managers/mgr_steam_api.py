@@ -1,6 +1,7 @@
 # backend/managers/mgr_steam_api.py
 from pathlib import Path
 import re
+from urllib import response
 import requests
 import time
 
@@ -17,6 +18,8 @@ if __name__ == "__main__":
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+from backend.database.dao_ext import ExtDAO
+from playhouse.shortcuts import model_to_dict
 from backend.utils.logger import logger
 from backend.settings import settings
 # from backend.managers.mgr_network import network_mgr
@@ -121,7 +124,7 @@ class SteamWebAPI:
         return results, ids_to_fetch
     
     @classmethod
-    def get_or_fetch_details(cls, workshop_id: str):
+    def get_or_fetch_details_old(cls, workshop_id: str):
         """获取单个模组详情（缓存命中则直接返回，否则触发拉取）"""
         meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
         current_time = int(time.time() * 1000)
@@ -130,7 +133,13 @@ class SteamWebAPI:
             cls.fetch_and_cache_batch([workshop_id])
             meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
         if not meta: return None
-        screenshots = cls._fetch_screenshots_via_scraper(workshop_id)
+        screenshots = meta.screenshots
+        if not screenshots:
+            screenshots = cls._fetch_screenshots_via_scraper(workshop_id)
+            WorkshopMeta.update(
+                screenshots=screenshots
+            ).where(WorkshopMeta.workshop_id == workshop_id).execute()
+            
         return {
             "workshop_id": meta.workshop_id,
             "title": meta.name,
@@ -141,6 +150,34 @@ class SteamWebAPI:
             "time_updated": meta.time_updated,
             "dependencies_mods": meta.dependencies_mods
         }
+    @classmethod
+    def get_or_fetch_details(cls, workshop_id: str):
+        """获取单个模组详情，包含图文、同作者推荐、反向依赖、替代方案"""
+        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == workshop_id)
+        current_time = int(time.time() * 1000)
+        # 1. 检查是否需要更新缓存
+        if not meta or not meta.description or (current_time - meta.last_sync_time > cls.CACHE_TTL_MS):
+            cls.fetch_and_cache_batch([workshop_id])
+        # 2. 检查和抓取截图
+        screenshots = meta.screenshots
+        if not screenshots:
+            screenshots = cls._fetch_screenshots_via_scraper(workshop_id)
+            if screenshots:
+                WorkshopMeta.update(
+                    screenshots=screenshots
+                ).where(WorkshopMeta.workshop_id == workshop_id).execute()
+        # 3. 从外置数据库获取详细信息
+        detail = ExtDAO.get_nexus_detail_extended(workshop_id)
+        if not detail or not detail.get('meta',{}): return None
+        
+        response = detail.get('meta',{})
+        response.update({
+            "replacement_mod": detail.get("replacement_mod"),           # 替代模组
+            "same_author_mods": detail.get("same_author_mods", []),     # 同作者的其它模组
+            "dependents_mods": detail.get("dependents_mods", [])        # 其它依赖于该对象的模组
+        })
+        # 4. 返回标准化的“全家桶”结构
+        return response
 
     @classmethod
     def fetch_and_cache_batch(cls, workshop_ids: list):

@@ -4,19 +4,56 @@ import { ref, reactive, computed } from 'vue'
 import { useAppStore } from './appStore'
 import { checkResult } from '../utils/tools'
 import { createToastInterface } from 'vue-toastification'
+import { useConfirmStore } from './confirmStore'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
+const confirmStore = useConfirmStore()
   
+  // 1. 已订阅的工坊 ID (仅统计创意工坊域)
+  const subscribedWorkshopIds = computed(() => {
+    return new Set(
+      librariesMods.workshop
+        .filter(m => m.steam_status?.is_subscribed)
+        .map(m => String(m.workshop_id))
+    )
+  })
+  // 2. 缺失的工坊 ID (仅统计创意工坊域)
+  const missingWorkshopIds = computed(() => {
+    return new Set(
+      librariesMods.workshop
+        .filter(m => m.is_missing)
+        .map(m => String(m.workshop_id))
+    )
+  })
+  // 3. 全局已安装的 ID (工坊 + 管理器 + 本地)
+  // 只要 path 不为空，且没有标记 is_missing，就算已安装
+  const installedAllIds = computed(() => {
+    const all = [
+      ...librariesMods.workshop,
+      ...librariesMods.self,
+      ...librariesMods.local
+    ]
+    return new Set(
+      all.filter(m => m.path && !m.is_missing).map(m => String(m.workshop_id))
+    )
+  })
+  // 4. 提供一个快捷判断函数供 NexusBrowser 使用
+  const getModStatus = (workshopId) => {
+    const wid = String(workshopId)
+    return {
+      isSubscribed: subscribedWorkshopIds.value.has(wid),
+      isInstalled: installedAllIds.value.has(wid),
+      isMissing: missingWorkshopIds.value.has(wid)
+    }
+  }
+
   // 1. 三个库的数据
   const librariesMods = reactive({
     local: [],
     workshop: [],
     self: [],
-    missing_workshop_ids:[],
-    subscribed_workshop_ids:[],
-    installed_all_ids:[]
   })
   const librariesSize = computed(() => {
     const results ={
@@ -25,9 +62,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       local: 0,
       total: 0,
     }
-    results.workshop = librariesMods.workshop.length > 0 ? librariesMods.workshop.reduce((acc, mod) => acc + mod.file_size, 0) : 0
-    results.self = librariesMods.self.length > 0 ? librariesMods.self.reduce((acc, mod) => acc + mod.file_size, 0) : 0
-    results.local = librariesMods.local.length > 0 ? librariesMods.local.reduce((acc, mod) => acc + mod.file_size, 0) : 0
+    results.workshop = librariesMods.workshop.length > 0 ? librariesMods.workshop.reduce((acc, mod) => acc + (mod.file_size || 0), 0) : 0
+    results.self = librariesMods.self.length > 0 ? librariesMods.self.reduce((acc, mod) => acc + (mod.file_size || 0), 0) : 0
+    results.local = librariesMods.local.length > 0 ? librariesMods.local.reduce((acc, mod) => acc + (mod.file_size || 0), 0) : 0
     results.total = results.workshop + results.self + results.local
     return results
   })
@@ -35,12 +72,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const nexusSearch = reactive({
     query: '',
     page: 1,
+    hasMore: true, // 是否还有下一页
     results: [],
     total: 0,
-    isLoading: false,
+    isLoading: false,       // 首次加载/搜索加载
+    isLoadMore: false,      // 滚动到底部加载更多
+    // --- 详情区状态 ---
     selectedId: null,
     detailData: null,
-    isDetailLoading: false
+    isDetailLoading: false,
+    historyStack: [],       // 记录浏览路径: [id1, id2, id3]
   })
   // 3. 时间线抽屉状态
   const timeline = reactive({
@@ -174,9 +215,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         librariesMods.local = res.data.local || []
         librariesMods.workshop = res.data.workshop || []
         librariesMods.self = res.data.self || []
-        librariesMods.missing_workshop_ids = res.data.missing_workshop_ids || []
-        librariesMods.subscribed_workshop_ids = res.data.subscribed_workshop_ids || []
-        librariesMods.installed_all_ids = res.data.installed_all_ids || []
 
         // 渲染完毕！如果后端在此接口中发现了需要触发的在线查询，
         // 后端会自己开启线程并发 `workspace-online-update` 事件。
@@ -186,25 +224,53 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  // 搜索缓存工坊数据库
-  const doNexusSearch = async (queryStr = nexusSearch.query, page = 1) => {
-    if (!window.pywebview || queryStr.length < 2) return
-    nexusSearch.isLoading = true
+  // 搜索缓存工坊数据库 (支持重置或追加)
+  const doNexusSearch = async (queryStr = '', isAppend = false) => {
+    if (!window.pywebview) return
+    // 防御性拦截
+    if (nexusSearch.isLoading || nexusSearch.isLoadMore) return
+    if (isAppend && !nexusSearch.hasMore) return
+    // 状态设置
+    if (isAppend) {
+      nexusSearch.isLoadMore = true
+      nexusSearch.page += 1
+    } else {
+      nexusSearch.isLoading = true
+      nexusSearch.page = 1
+      nexusSearch.results = [] // 清空旧数据
+    }
+    nexusSearch.query = queryStr
     try {
-      nexusSearch.query = queryStr
-      nexusSearch.page = page
-      const res = await window.pywebview.api.nexus_search(queryStr, page)
-      if (checkResult(res, '搜索缓存工坊数据库')) {
-        nexusSearch.results = res.data.items
-        nexusSearch.total = res.data.total
+      const res = await window.pywebview.api.nexus_search(queryStr, nexusSearch.page)
+      if (checkResult(res, '工坊检索')) {
+        const newItems = res.data.items || []
+        if (isAppend) {
+          // 核心修复：不要用 push！使用展开运算符创建新数组引用！
+          // nexusSearch.results.push(...newItems)
+          nexusSearch.results = [...nexusSearch.results, ...newItems] 
+        } else {
+          nexusSearch.results = newItems
+          nexusSearch.total = res.data.total
+        }
+        // 判断是否还有下一页
+        nexusSearch.hasMore = nexusSearch.results.length < res.data.total
       }
     } finally {
       nexusSearch.isLoading = false
+      nexusSearch.isLoadMore = false
     }
   }
-  // 获取云端详情
-  const fetchNexusDetails = async (workshop_id) => {
-    if (!window.pywebview) return
+  // 获取云端详情 (包含网页抓取截图)
+  // isNavigate: 是否是通过点击“推荐卡片”触发的内部跳转
+  const fetchNexusDetails = async (workshop_id, isNavigate = false) => {
+    if (!window.pywebview || nexusSearch.selectedId === workshop_id) return
+    // 如果是点击左侧主列表，清空历史记录，重新开始
+    if (!isNavigate) {
+      nexusSearch.historyStack = []
+    } else if (nexusSearch.selectedId) {
+      // 如果是内部跳转，将当前 ID 压入栈中
+      nexusSearch.historyStack.push(nexusSearch.selectedId)
+    }
     nexusSearch.selectedId = workshop_id
     nexusSearch.isDetailLoading = true
     try {
@@ -216,6 +282,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       nexusSearch.isDetailLoading = false
     }
   }
+  // 详情页后退功能
+  const goBackNexusDetail = async () => {
+    if (nexusSearch.historyStack.length === 0) return
+    const prevId = nexusSearch.historyStack.pop()
+    await fetchNexusDetails(prevId, true)
+    // 抵消刚刚 push 进去的动作
+    nexusSearch.historyStack.pop() 
+  }
+
 
   // 打开并加载模组变更时间线
   const openTimeline = async (workshopId, modName, is_steamcmd=false) => {
@@ -382,6 +457,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return []
   }
 
+  const modTransfer = async (path_hashs, target_store, mode) => {
+    const check = await confirmStore.confirmAction(
+      '确认转移',
+      `确定要将选中的模组 ${mode === 'move' ? '移动' : '复制'} 到 [${target_store === 'local' ? '游戏本地' : '管理器'}] 库吗？`,
+      { type: 'info' }
+    )
+    if(check) {
+      appStore.isLoading = true
+      const res = await window.pywebview.api.workspace_transfer_mods(path_hashs, target_store, mode)
+      if(appStore.checkResult(res, "库间转移")) {
+        // 成功后刷新三大库数据
+        fetchLibrariesMods()
+      }
+      appStore.isLoading = false
+    }
+  }
   
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (workshop_id, on_steam=true) => {
@@ -393,9 +484,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   return {
     librariesMods, isFetching, librariesSize,
-    nexusSearch, timeline,
+    nexusSearch, timeline, subscribedWorkshopIds, installedAllIds, missingWorkshopIds, getModStatus, modTransfer,
     fetchLibrariesMods, doNexusSearch, fetchNexusDetails, openTimeline, openTimelineGithub, setupListeners,
-    github, fetchGithubRepos, fetchGithubTimeline, initData, openSteamWorkshopUrl, getWorkshopIdsByPackageIdsMap,
+    github, fetchGithubRepos, fetchGithubTimeline, initData, openSteamWorkshopUrl, getWorkshopIdsByPackageIdsMap, goBackNexusDetail,
     collections, fetchSavedCollections, addCollection, removeCollection, selectCollection
   }
 })

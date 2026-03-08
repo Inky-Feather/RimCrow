@@ -915,24 +915,71 @@ export const useAppStore = defineStore('app', () => {
   // 订阅模组
   const subscribeMod = async (workshop_ids) => {
     if (!window.pywebview) return
-    if(!workshop_ids) return
+    if (!workshop_ids || workshop_ids.length === 0) return
     const res = await window.pywebview.api.steam_subscribe(workshop_ids)
     if (checkResult(res, `订阅 ${workshop_ids.length} 个创意工坊项目`)) {
       toast.success(`订阅 ${workshop_ids.length} 个创意工坊项目成功，正在下载中...`)
+      return true
+    }
+    else if (res.data && res.data.action === "need_start_steam") {
+      const confirmStore = (await import('./confirmStore')).useConfirmStore()
+      const ok = await confirmStore.confirmAction(
+        'Steam 未运行', 
+        '调用官方 API 订阅模组需要启动 Steam 客户端。\n是否现在启动 Steam？', 
+        { type: 'warning', confirmText: '立即启动 Steam' }
+      )
+      if (ok) {
+        const launchRes = await window.pywebview.api.steam_launch_client()
+        if (checkResult(launchRes, "启动 Steam 客户端")) {
+          // 因为 Steam 启动并登录账号通常需要 10-30 秒，建议提示用户等待后再操作
+          toast.info("Steam 正在启动...\n请在登录完毕后，再次点击订阅按钮！", { timeout: 8000 })
+        } else {
+          toast.error(launchRes.message)
+        }
+      }
+      return false
+    } 
+    // 其它常规报错
+    else {
+      toast.error(`订阅失败: ${res.message}`)
+      return false
     }
   }
   // 取消订阅模组
   const unsubscribeMod = async (workshop_ids) => {
     if (!window.pywebview) return false
-    if(!workshop_ids) return false
+    if (!workshop_ids || workshop_ids.length === 0) return
     // const modStore = useModStore()
     // const workshop_ids = modStore.takeModListByIds(mod_ids).filter(m => m.workshop_id).map(m => m.workshop_id)
     const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
     if (checkResult(res, `取消订阅 ${workshop_ids.length} 个创意工坊项目`,true)) {
       // if(delete_file) workshop_ids.forEach(id => deletePath(modStore.takeModById(id).path))
+      toast.success(`已发送取消订阅请求`)
       return true
     }
-    return false
+    else if (res.data && res.data.action === "need_start_steam") {
+      const confirmStore = (await import('./confirmStore')).useConfirmStore()
+      const ok = await confirmStore.confirmAction(
+        'Steam 未运行', 
+        '调用官方 API 取消订阅需要启动 Steam 客户端。\n是否现在启动 Steam？', 
+        { type: 'warning', confirmText: '立即启动 Steam' }
+      )
+      
+      if (ok) {
+        const launchRes = await window.pywebview.api.steam_launch_client()
+        if (launchRes.status === 'success') {
+          toast.info("Steam 正在启动...\n请在登录完毕后，再次执行取消订阅操作！", { timeout: 8000 })
+        } else {
+          toast.error(launchRes.message)
+        }
+      }
+      return false
+    } 
+    // 其它常规报错
+    else {
+      toast.error(`取消订阅失败: ${res.message}`)
+      return false
+    }
   }
   // 获取订阅合集列表
   const getCollectionItems = async (collection_id) => {
