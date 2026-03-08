@@ -45,7 +45,7 @@ export const useRuleStore = defineStore('rules', () => {
   const communityModRules = ref({}) // { pkg_id: { loadAfter: ... } }
   const communityRulesUpdateTime = ref(0)
   const userModRules = ref({})   // { pkg_id: { loadAfter: ... } }
-  const workshopRules = ref({}) // { pkg_id: [dep_pid1, dep_pid2, ...] }
+  const workshopModRules = ref({}) // { pkg_id: [dep_pid1, dep_pid2, ...] }
   const userDynamicRules = ref([])
   const settings = ref({
     community_mod_rules_enabled: true,    // 全局社区规则总开关
@@ -77,7 +77,7 @@ export const useRuleStore = defineStore('rules', () => {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time
         userModRules.value = res.data.user_mod_rules
-        workshopRules.value = res.data.workshop_rules
+        workshopModRules.value = res.data.workshop_rules
         userDynamicRules.value = res.data.user_dynamic_rules
         settings.value = res.data.settings
       }
@@ -125,7 +125,7 @@ export const useRuleStore = defineStore('rules', () => {
     }
 
     // 4. Workshop Rules
-    const workshop = workshopRules.value[pid]
+    const workshop = workshopModRules.value[pid]
     if (workshop) {
       Object.keys(user.loadAfter || {}).forEach(id => 
         result.loadAfter.push({ id, source: 'workshop' }))
@@ -379,7 +379,7 @@ export const useRuleStore = defineStore('rules', () => {
   }
   
   return {
-    communityModRules, communityRulesUpdateTime, workshopRules, userModRules, userDynamicRules, currentId, isLoading,
+    communityModRules, communityRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     getAbsolutePosition, setAbsolutePosition,

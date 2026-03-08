@@ -454,7 +454,7 @@ const tabs = computed(() => [
 const allRules = computed(() => ({
   user_mod_rules: ruleStore.userModRules,
   community_mod_rules: ruleStore.communityModRules,
-  workshop_mod_rules: ruleStore.workshopRules,
+  workshop_mod_rules: ruleStore.workshopModRules,
   user_dynamic_rules: ruleStore.userDynamicRules,
   excluded_user_mods_set: new Set(ruleStore.settings?.excluded_user_mods || []),
   excluded_community_mods_set: new Set(ruleStore.settings?.excluded_community_mods || []),

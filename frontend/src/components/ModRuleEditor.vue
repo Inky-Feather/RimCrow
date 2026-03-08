@@ -21,9 +21,9 @@
       </div>
     </div>
 
-    <div class="px-3 pb-2">
+    <div class="px-1 pb-1">
       <!-- 绝对位置控制板 (Absolute Position) -->
-      <div class="py-1 px-2 bg-text-main/5 border border-text-main/10 rounded-xl flex flex-col items-center justify-center">
+      <div class="py-1 px-2 bg-text-main/5 border border-text-main/10 rounded-lg flex flex-col items-center justify-center">
         <div class="flex items-center justify-between w-full">
           
           <span class="text-sm font-bold text-text-main flex items-center gap-2">
@@ -84,6 +84,21 @@
         <div class="px-2 relative">
           <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
           <div class="relative" v-for="(value, modId) in getCommunityRules('loadAfter')">
+            <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
+            <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
+              <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
+          <div class="w-1 h-1 rounded-full bg-accent-warning shadow-[0_0_8px_var(--color-accent-warning)]"></div>
+          <span class="text-accent-warning">工坊规则 ({{ Object.keys(getWorkshopRules('loadAfter')).length||0 }})</span>
+          <div class="flex-1 h-px border-b border-accent-warning/30"></div>
+        </div>
+        <div class="px-2 relative">
+          <div class="absolute top-0 left-0 h-full w-full bg-accent-cool/20 blur-lg"></div>
+          <div class="relative" v-for="(value, modId) in getWorkshopRules('loadAfter')">
             <ModItem :key="modId" :item_id="modId" :index="0" simple :showIndex="false" list-color="cool" />
             <div v-if="value.comment" v-tooltip="formatCommTooltip(value)" class="absolute right-2 top-0 h-full flex items-center justify-center">
               <svg class="w-5 h-5 opacity-50 text-accent-cool hover:text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
@@ -367,7 +382,13 @@ const getCommunityRules = (type) => {
   if (!rules || !rules[type]) return []
   return rules[type]
 }
-// 3. User
+// 3. Workshop
+const getWorkshopRules = (type) => {
+  const rules = ruleStore.workshopModRules[targetMod.value?.package_id]
+  if (!rules || !rules[type]) return []
+  return rules[type]
+}
+// 4. User
 const getUserRules = (type) => {
   const rules = ruleStore.userModRules[targetMod.value?.package_id]
   if (!rules || !rules[type]) return []
