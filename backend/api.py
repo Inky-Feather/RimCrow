@@ -332,6 +332,7 @@ class API:
     def monitor_frontend_ready(self):
         """前端 Vue 挂载完毕后，主动调用此接口通知后端"""
         EventBus.resume()
+        EventBus.mark_ready() # 激活 EventBus
         if self.game_monitor:
             # 告诉前端当前的游戏状态
             EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running})
@@ -963,7 +964,8 @@ class API:
         if not self.active_context.game_config_path or not os.path.exists(self.active_context.game_config_path): 
             return ApiResponse.error("未指定游戏配置路径")
         try:
-            success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty) if self.load_order_mgr else False
+            use_raw_ids = settings.config.use_raw_ids
+            success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty, use_raw_ids=use_raw_ids) if self.load_order_mgr else False
             if success: return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
@@ -999,6 +1001,7 @@ class API:
         try:
             if not profile_id: profile_id = self.profile_mgr.current_profile.id
             if not profile_id: return ApiResponse.error("未指定 Profile ID")
+            msg=''
             profile = self.profile_mgr.get_profile(profile_id)
             logger.debug(f"launch_game: profile_id={profile_id}, prefer_steam={settings.config.prefer_steam_launch}, steam_path={settings.config.steam_path}, is_steam={profile.is_steam}")
             # 检查 Steam 配置是否完整
@@ -1008,18 +1011,20 @@ class API:
                 logger.debug(f"launch_game_steam: extra_args={extra_args}")
                 # 2. 调用 Steam 管理器启动游戏
                 self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+                msg='通过 Steam 启动游戏'
             else:
                 # 1. 获取当前 Profile 的启动参数
                 launch_args = self.profile_mgr.get_launch_args_only(profile_id) 
                 logger.debug(f"launch_game: launch_args={launch_args}")
                 # 2. 调用游戏管理器启动游戏
                 self.game_mgr.launch_game(game_install_path=profile.game_install_path, custom_args=launch_args)
+                msg='直接启动游戏'
             
             # 3. 记录最后一次游玩时间到数据库
             self.profile_mgr.update_profile(profile_id, {
                 "last_played_time": current_ms()
             })
-            return ApiResponse.success(message="游戏启动成功，祝你游玩愉快！")
+            return ApiResponse.success(message=f"{msg}成功，祝你游玩愉快！")
         except Exception as e:
             logger.error(f"Launch Game Error: {e}")
             return ApiResponse.error(f"启动游戏时出错: {e}")

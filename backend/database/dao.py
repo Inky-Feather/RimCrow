@@ -431,7 +431,7 @@ class ModDAO:
         with db.atomic():
             # 1. 查出已有的记录
             existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
-            existing_map = {r.mod_id_id: r for r in existing_records} # Peewee 中外键ID属性常带_id后缀
+            existing_map = {r.mod_id: r for r in existing_records} # Peewee 中外键ID属性常带_id后缀
             batch_data = []
             for mid in mod_ids:
                 record = existing_map.get(mid)
@@ -462,18 +462,13 @@ class ModDAO:
         with db.atomic():
             # 1. 查出已有的记录（只查涉及的 Mod）
             existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
-            existing_map = {r.mod_id_id: r for r in existing_records}
-            
+            existing_map = {r.mod_id: r for r in existing_records}
             batch_data = []
             for mid in mod_ids:
                 record = existing_map.get(mid)
-                
                 # 如果数据库里没记录，或者记录里没标签，直接跳过（不用更新）
-                if not record or not record.tags:
-                    continue
-                
+                if not record or not record.tags: continue
                 current_tags = record.tags # 这是一个 list
-                
                 # 过滤逻辑：保留不在 remove_set 中的标签
                 # 使用列表推导式保持原有顺序（虽然 Tag 顺序通常不重要，但保持更好）
                 new_tags = [t for t in current_tags if t not in remove_set]

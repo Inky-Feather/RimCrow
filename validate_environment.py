@@ -6,6 +6,7 @@ import winreg
 import ctypes
 import webbrowser # 这个库用来打开浏览器
 from pathlib import Path
+from urllib.parse import unquote
 from backend.settings import HOME_DIR, BASE_RESOURCE_DIR
 
 
@@ -157,8 +158,11 @@ def validate_environment():
     # 这里假设之前的 get_entrypoint 逻辑
     entry = get_entrypoint()
     if not entry.startswith('http'):
-        # 转换回普通路径进行检查
-        p = Path(entry.replace('file:///', '').replace('%20', ' '))
+        # 先移除 URI scheme，然后使用 unquote 将所有百分号编码（包括中文和空格）解码为普通字符串
+        # 'file:///C:/...' -> 'C:/...'
+        path_str = unquote(entry.replace('file:///', '', 1))
+        # 将解码后的、操作系统可识别的路径字符串转换为 Path 对象
+        p = Path(path_str)
         if not p.exists():
             show_native_error(
                 "资源加载失败",

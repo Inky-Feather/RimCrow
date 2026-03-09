@@ -50,22 +50,20 @@ export const useOrderStore = defineStore('order', () => {
   // 保存Mod加载顺序
   const saveLoadOrder = async () => {
     const modStore = useModStore()
-    if (!modStore.isDirty) {
-      setTimeout(() => {
-        toast.info("Mod序列未修改无须保存",{timeout: 1000})
-      }, 100);
-      // return true
-    }
+    // if (!modStore.isDirty) {
+    //   setTimeout(() => {
+    //     toast.info("Mod序列未修改无须保存",{timeout: 1000})
+    //   }, 100);
+    //   // return true
+    // }
     if (!window.pywebview) return false
     appStore.isLoading = true
     try {
       // 使用默认路径
       const res = await window.pywebview.api.load_order_save(modStore.activeIds, modStore.isDirty)
-      if (checkResult(res, "保存Mod加载顺序")) {
+      if (checkResult(res, "保存Mod加载顺序", true)) {
         modStore.savedActiveIds = [...modStore.activeIds] || []
         modStore.updateInactiveIds()
-        // console.log("保存加载顺序成功:", res)
-        toast.success("Mod序列已保存")
         getBackups()
         modStore.updateModTime() // 更新Mod最后操作时间
         return true

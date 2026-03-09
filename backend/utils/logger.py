@@ -39,8 +39,9 @@ class WebviewHandler(logging.Handler):
     def emit(self, record):
         from backend.utils.event_bus import EventBus
         # 如果 EventBus 没有窗口引用，直接跳过，防止报错
-        # 这里的 _window 是在 EventBus 中定义的类变量
-        if not getattr(EventBus, '_window', None): return 
+        # 这里的 _window 是在 EventBus 中定义的类变量，只有在前端完全就绪时才推送日志
+        if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): 
+            return 
         try:
             # 格式化为字典对象直接发给前端，不需要再次 JSON 序列化
             log_entry = {

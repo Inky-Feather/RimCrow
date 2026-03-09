@@ -39,7 +39,7 @@
         <ClipboardList class="size-6" />
         <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-text-main/10 shadow-2xl backdrop-blur-lg opacity-0 
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
-          <button @click="loadOrder()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">导入加载序列</button>
+          <button @click="loadOrder('0')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">导入加载序列</button>
           <button @click="exportOrder()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">导出加载序列</button>
         </div>
       </div>

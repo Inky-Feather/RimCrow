@@ -101,7 +101,7 @@ class LoadOrderManager:
             'modify_time': modify_time
         }
 
-    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True):
+    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, use_raw_ids=False):
         """
         保存加载顺序。
         :param active_ids: Mod ID 列表
@@ -112,16 +112,26 @@ class LoadOrderManager:
         from backend.database.models import ModAsset
         # 一次性从数据库查询所有已安装 Mod 的 ID 映射
         # 这里使用 package_id (小写) 作为键
-        id_map = {
-            m.package_id: m.package_id_raw 
-            for m in ModAsset.select(ModAsset.package_id, ModAsset.package_id_raw)
-            if m.package_id_raw
-        }
+        id_map = {}
+        try:
+            # 使用 in_ 子句缩小查询范围
+            active_ids_lower = [pid.lower() for pid in active_ids]
+            query = ModAsset.select(ModAsset.package_id, ModAsset.package_id_raw).where(
+                ModAsset.package_id.in_(active_ids_lower) # type: ignore
+            )
+            for m in query:
+                if m.package_id_raw: id_map[m.package_id] = m.package_id_raw
+        except Exception as e:
+            logger.warning(f"保存时获取原始大小写包名失败(可能是数据库被锁): {e}")
+            # 就算查库失败，也不要阻断保存，直接使用前端传来的小写 ID 即可
+            pass
         # 2. 准备最终要写入 XML 的 ID 列表
         final_raw_ids = []
         for pid in active_ids:
             # 如果数据库里存了原始大小写，就用原始的；否则用现在的（兜底）
             raw_id = id_map.get(pid.lower(), pid)
+            # 如果 use_raw_ids 为 True，直接使用原始 ID
+            if not use_raw_ids: raw_id = pid
             final_raw_ids.append(raw_id)
         
         # 1. 确定最终写入路径

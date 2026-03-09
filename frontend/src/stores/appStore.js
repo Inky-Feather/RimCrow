@@ -168,7 +168,6 @@ export const useAppStore = defineStore('app', () => {
 
     },
 
-
     // --- 网络 (Network) - 深度嵌套 ---
     network: {
       proxy: {
@@ -209,6 +208,7 @@ export const useAppStore = defineStore('app', () => {
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
     check_language_support: true,        // 是否检查语言支持
+    use_raw_ids: false,               // 是否使用原始 Mod ID
 
     // --- 调试 (Debug) ---
     debug_mode: true,
@@ -667,17 +667,11 @@ export const useAppStore = defineStore('app', () => {
     const orderStore = useOrderStore()
     const res = await orderStore.saveLoadOrder()
     if (!res) return
-    if(profile_id){
-      if (!window.pywebview) return
-      // 直接启动游戏
-      const res = await window.pywebview.api.game_launch(profile_id)
-      if (checkResult(res, "直接启动游戏程序")) {
-        toast.success("直接启动游戏程序成功！")
-      }
-    }
-    else{
-      console.error("启动游戏异常:")
-      toast.error(`启动游戏出现异常！`)
+    if (!window.pywebview) return
+    // 直接启动游戏
+    const gameRes = await window.pywebview.api.game_launch(profile_id)
+    if (checkResult(gameRes, "启动游戏程序")) {
+      toast.success(gameRes.message)
     }
   }
   // 触发睡眠 API

@@ -447,8 +447,8 @@ set PYTHONHOME=
 echo [DEBUG] Attempting to start: "{install_root}\\{exe_name}" 
 echo [DEBUG] Working Directory: "{install_root}" 
 
-:: Launch a new program (Use the /i parameter to make start ignore the current cmd window environment) 
-start "" /i /d "{install_root}" "{exe_name}" 
+:: Launch a new program 
+start "" /d "{install_root}" "{exe_name}" 
 
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Failed to restart application! 
@@ -460,6 +460,9 @@ if %ERRORLEVEL% NEQ 0 (
 {pause_cmd}
 {exit_cmd}
 """
+            clean_env = os.environ.copy()
+            for key in['_MEIPASS', '_MEIPASS2', 'PYI_EXPLODE_PATH', 'PYTHONPATH', 'PYTHONHOME']:
+                clean_env.pop(key, None)
             # 写入批处理（注意编码）
             with open(bat_path, "w", encoding="utf-8") as f:
                 f.write(bat_content)
@@ -471,7 +474,8 @@ if %ERRORLEVEL% NEQ 0 (
                 ["cmd.exe", cmd_arg, bat_path],
                 cwd=install_root,
                 shell=not debug,
-                creationflags=subprocess.CREATE_NEW_CONSOLE
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                env=clean_env  # 传入清理后的干净环境变量
             )
             
             # 立即彻底结束 Python 进程

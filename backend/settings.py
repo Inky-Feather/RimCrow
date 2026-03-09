@@ -150,6 +150,7 @@ class AppConfig:
     current_profile_id: str = "default"   # 当前激活的环境ID
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
     prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
+    use_raw_ids: bool = False               # 是否使用原始 Mod ID
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数

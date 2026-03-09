@@ -1,11 +1,22 @@
 # backend/_version.py
-__version__ = "0.18.8"  # 主版本.次版本.补丁
+__version__ = "0.18.10"  # 主版本.次版本.补丁
 __db_version__ = "4"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.18.10",
+        "date": "2026-03-09",
+        "changes": [
+            {"type": "fix", "text": "紧急修复了无法启动游戏的Bug和批量设置标签等操作的Bug。"},
+            {"type": "fix", "text": "修正了保存格式问题，改为可选原格式保存。"},
+            {"type": "fix", "text": "修正了工具栏的导入无效问题。"},
+            {"type": "optimize", "text": "改进了页面路径编码支持中文路径。"},
+            {"type": "optimize", "text": "改进了后台通信逻辑防止无响应。"},
+        ]
+    },
     {
         "version": "0.18.8",
         "date": "2026-03-09",

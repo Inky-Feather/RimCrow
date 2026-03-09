@@ -103,6 +103,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
             "--collect-data", "litellm",
+            
             # 排除一些可能导致问题的模块
             "--exclude-module", "setuptools",  # 排除这个模块， 避免打包时出现问题
             # "--exclude-module", "_distutils_hack.override",
