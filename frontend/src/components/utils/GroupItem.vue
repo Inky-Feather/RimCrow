@@ -85,7 +85,14 @@
               placeholderClass="ghost" wrapClass="mb-5" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }" :delay="appStore.settings.ui.drag_delay"
               :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150" :size="itemHeight" handle=".drag-handle"
               @drop="updateChildren" @drag="startDrag"
-              v-selectable-list="{ data: groupData.mod_ids, clickClass: 'select-trigger', swipeClass: 'swipe-trigger'}">
+              v-selectable-list="{ 
+                data: groupData.mod_ids, 
+                selectedIds: modStore.selectedIds, 
+                onSelect: (ids, anchor) => modStore.selectMods(ids, anchor),
+                onClear: () => modStore.clearSelection(),
+                clickClass: 'select-trigger', 
+                swipeClass: 'swipe-trigger'
+              }">
               <template v-slot:item="{ record, index, dataKey }">
 
                 <div class="relative group">
@@ -102,6 +109,10 @@
                           opacity-0 group-hover:opacity-80 transition-opacity duration-200
                           flex items-center justify-center text-xs z-10 hover:scale-110">×
                   </button>
+                  <div v-if="modStore.activeIds.includes(dataKey)" v-tooltip="'已启用'" tabindex="0" class="absolute w-3 h-3 bg-accent-success text-text-main rounded-full 
+                          transition-opacity duration-200 flex items-center justify-center text-xs z-10 hover:scale-110"
+                          :class="[appStore.settings.ui.show_group_index?'top-0 left-6':'top-0 left-0']">
+                  </div>
                 </div>
 
               </template>

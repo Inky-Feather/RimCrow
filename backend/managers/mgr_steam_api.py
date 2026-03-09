@@ -286,10 +286,10 @@ if __name__ == "__main__":
     # children = SteamWebAPI.fetch_collection_children(collection_id)
     # print(f"合集 {collection_id} 包含 {len(children)} 个 Mod")
     #  # 测试用例：解析 Mod 详情
-    mod_id = '3671245310'
+    mod_id = '3009527756'
     
-    # details = SteamWebAPI.fetch_item_details([mod_id], True)
-    details = SteamWebAPI.get_or_fetch_details(mod_id)
+    details = SteamWebAPI.fetch_item_details([mod_id], True)
+    # details = SteamWebAPI.get_or_fetch_details(mod_id)
     print(f"Mod {mod_id} 详情: {details}")
     
     # screenshots = SteamWebAPI._fetch_screenshots_via_scraper(mod_id)

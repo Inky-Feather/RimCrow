@@ -254,7 +254,8 @@ class ModScanner:
                 if mods_to_upsert: 
                     ModDAO.batch_upsert_mods(mods_to_upsert)
             except Exception as e:
-                txn.rollback() # 万一出错，回滚所有改动
+                # txn.rollback() # 万一出错，回滚所有改动
+                logger.error(f"批量入库失败: {e}", exc_info=True)
                 raise e
             
             
