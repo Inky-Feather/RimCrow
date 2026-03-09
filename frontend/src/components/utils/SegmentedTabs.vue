@@ -25,7 +25,7 @@
             : 'text-text-main opacity-60 hover:opacity-100'
         ]"
       >
-        {{ item }}
+        {{ item.title }}
       </button>
     </div>
 
@@ -53,13 +53,13 @@ const emit = defineEmits(['update:modelValue', 'change'])
 
 // 计算当前选中项的索引，用于控制滑块位置
 const currentIndex = computed(() => {
-  const idx = props.options.indexOf(props.modelValue)
+  const idx = props.options.findIndex(opt => opt.id === props.modelValue)
   return idx === -1 ? 0 : idx
 })
 
 // 点击事件
 const selectItem = (item) => {
-  emit('update:modelValue', item)
-  emit('change', item)
+  emit('update:modelValue', item.id)
+  emit('change', item.id)
 }
 </script>

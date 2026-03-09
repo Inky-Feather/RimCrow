@@ -75,6 +75,15 @@ export const useAppStore = defineStore('app', () => {
   // Key: task_id, Value: { resolve, reject, timeout }
   const downloadCallbacks = new Map()
 
+  // 定义侧边栏标签配置 (ID 与 标题绑定)
+  const SIDEBAR_TABS = [
+    { id: 'temp', title: '临时' },
+    { id: 'group', title: '分组' },
+    { id: 'backup', title: '备份' }
+  ]
+  // 响应式状态：当前选中的标签 ID
+  const activeSidebarTab = ref('temp')
+
   // 定义默认布局配置
   const DEFAULT_DETAILS_LAYOUT = [
     { id: 'basic_info', visible: true }, // 包ID、作者、链接、路径
@@ -131,6 +140,7 @@ export const useAppStore = defineStore('app', () => {
     language: 'ZH-cn',
     window_width: 1400,
     window_height: 900,
+    completed_guides: [],
     open_url_on_system: false,
 
     // --- 界面（UI） ---
@@ -645,7 +655,12 @@ export const useAppStore = defineStore('app', () => {
   const getScroll = (listId) => {
     return scrollRegistry.value.get(listId) || 0;
   };
-  
+  // 设置侧边栏选中标签
+  const setSidebarTab = (tabId) => {
+    if (SIDEBAR_TABS.some(t => t.id === tabId)) {
+      activeSidebarTab.value = tabId
+    }
+  }
   // === 系统操作 ===
   // 启动游戏
   const launchGame = async (profile_id=null) => {
@@ -1231,14 +1246,15 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState, 
-    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, isGameRunning, upgradeContext,
+    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState,
+    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog,
+    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab,
+    
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod, checkUpdate, updateExternalDB,
     // AI处理
     getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, 

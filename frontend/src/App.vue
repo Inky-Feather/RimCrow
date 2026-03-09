@@ -41,17 +41,17 @@
                     leave-from-class="opacity-100"
                     leave-to-class="opacity-0">
                     <KeepAlive>
-                      <ModList v-if="activeTab === tabs[0]" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                      <GroupList v-else-if="activeTab === tabs[1]" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                      <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                      <ModList v-if="appStore.activeSidebarTab === 'temp'" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                      <GroupList v-else-if="appStore.activeSidebarTab === 'group'" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                      <BackupList v-else-if="appStore.activeSidebarTab === 'backup'" class="rounded-b-none col-start-1 row-start-1 w-full"/>
                     </KeepAlive>
                   </Transition>
                 </div>
                 
                 <!-- 标签页切换 -->
-                <div class="absolute left-5.5 top-0.5 p-0.5 h-8 flex text-sm font-bold">
+                <div class="absolute left-5.5 top-0.5 p-0.5 h-8 flex text-sm font-bold" data-tour="sidebar-tab">
                   <!-- <FocusTabs v-model="activeTab" :tabs="tabs" :blurAmount="3" borderColor="#059669" class="top-0 opacity-100"/> -->
-                  <SegmentedTabs v-model="activeTab" :options="tabs" />
+                  <SegmentedTabs v-model="appStore.activeSidebarTab" :options="appStore.SIDEBAR_TABS" />
                 </div>
 
                 <!-- 底部按钮组 -->
@@ -246,6 +246,9 @@
 
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
+
+    <!-- 引导中心浮动按钮 -->
+    <GuideCenter />
     
     <!-- 设置弹窗 -->
     <SettingsModal />
@@ -302,6 +305,7 @@ import AiReviewModal from './components/AiReviewModal.vue'
 import PromptManager from './components/PromptManager.vue'
 import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'
+import GuideCenter from './components/GuideCenter.vue'
 
 const updateModal = ref(null);
 
@@ -431,11 +435,8 @@ onMounted(() => {
       window.pywebview.api.monitor_frontend_ready()
     })
   }
-  appStore.initialize().then(() => {
-    // 确保数据初始化（列表渲染）完毕后，触发引导
-    // 这里的 startMainGuide 内部有防打扰逻辑（如果已经 done 过就不会再弹）
-    guideStore.startMainGuide()
-  })  // 初始化存储（加载数据）
+  // 确保数据初始化
+  appStore.initialize()
 
   // 监听后端传递过来的升级上下文
   watch(() => appStore.upgradeContext, (ctx) => {

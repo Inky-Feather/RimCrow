@@ -187,6 +187,7 @@ class AppConfig:
     language: str = "ZH-cn"     # 默认语言
     window_width: int = 1400
     window_height: int = 900
+    completed_guides: Dict[str, str] = field(default_factory=dict) # 存储已完成的引导, e.g. {"main_v1.0": "done"}
     ui: UIConfig = field(default_factory=UIConfig)
     
     # --- 功能设置 ---

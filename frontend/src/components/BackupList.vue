@@ -12,7 +12,7 @@
       </span>
     </div>
     <!-- 功能栏 -->
-    <div class="px-2 py-1 shadow-xl flex justify-end items-center">
+    <div class="px-2 py-1 shadow-xl flex justify-end items-center" data-tour="backup-toolbar">
       <!-- <div class="">
         <div class="gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
           <button class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer 
@@ -80,7 +80,7 @@
     </div>
 
     <!-- 列表内容区 -->
-    <div class="flex-1 overflow-y-auto p-2 space-y-4 scrollbar-thin">
+    <div class="flex-1 overflow-y-auto p-2 space-y-4 scrollbar-thin" data-tour="backup-list">
       
       <!-- 0. 临时导入 (import) -->
       <section v-if="parsedData.import.length > 0">

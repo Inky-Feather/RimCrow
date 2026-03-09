@@ -1,5 +1,6 @@
 // frontend/src/modules/guide/guideConfig.js
 
+import { useAppStore } from "../../stores/appStore";
 import { useModStore } from "../../stores/modStore";
 
 export const GUIDE_VERSION = "v1.0"; // 修改版本号可以强制老用户重新看一遍新版引导
@@ -21,12 +22,11 @@ export const mainGuideSteps = [
       side: "left"
     },
     // 【关键】：进入这一步时触发的动作
-    onHighlightStarted: (el) => {
+    onNextBefore: async () => {
       const modStore = useModStore()
       const tempId = modStore.inactiveIds[0] || modStore.activeIds[0]
       console.log('详情引导')
-      if (!tempId) return
-      modStore.selectMods([tempId],tempId)
+      if (tempId) modStore.selectMods([tempId],tempId)
     }
   },
   {
@@ -123,21 +123,100 @@ export const modListGuideSteps = [
   },
 ];
 
-// 二级页面：库存枢纽引导
-export const workspaceGuideSteps = [
+export const profileGuideSteps = [
   {
-    element: '[data-tour="workspace-search"]', // 假定你在搜索框加了这个
+    element: '[data-tour="profile-switcher"]',
     popover: {
-      title: '极速检索 🔍',
-      description: '支持搜索本地库和创意工坊数据库。',
+      title: '环境隔离',
+      description: '在这里你可以切换多个独立的“环境”，\n通过环境管理选项，你可以轻松创建、切换、删除环境。',
       side: "bottom"
     }
   },
   {
-    element: '[data-tour="workspace-sync-btn"]', // 假定你在同步按钮加了这个
+    element: '[data-tour="profile-list"]',
     popover: {
-      title: '云端同步 ☁️',
-      description: '点击这里，一键检查所有已订阅模组的更新。',
+      title: '环境列表',
+      description: '这里记录了每个环境的基本信息，包括环境名称、环境路径、环境描述等。\n你可以点击任意环境项来切换到该环境，也可以点击相应按钮编辑、删除、启动环境。',
+      side: "right"
+    },
+    onNextBefore: async () => {
+      const appStore = useAppStore()
+      appStore.uiState.showProfileDrawer = true
+    }
+  },
+  {
+    element: '[data-tour="profile-create"]',
+    popover: {
+      title: '创建环境',
+      description: '在这里你可以创建新的环境，\n每个环境都有独立的模组列表、存档、路径配置等。',
+      side: "right"
+    },
+  },
+];
+
+export const backupGuideSteps = [
+  {
+    element: '[data-tour="sidebar-tab"]',
+    popover: {
+      title: '备份（排序文件）管理',
+      description: '在这里你可以切换到备份标签页，管理所有的排序文件，包括导入导出、自动备份、恢复、删除等操作。',
+      side: "left"
+    },
+    onNextBefore: async () => {
+      const appStore = useAppStore()
+      // 切换到备份标签页
+      appStore.setSidebarTab('backup')
+    }
+  },
+  {
+    element: '[data-tour="backup-list"]',
+    popover: {
+      title: '备份列表',
+      description: '这里记录了所有的排序文件备份，可以点击任意备份项来查看该备份与现有排序文件的差异，也可以点击相应按钮加载、删除备份。',
+      side: "left"
+    }
+  },
+  {
+    element: '[data-tour="backup-toolbar"]',
+    popover: {
+      title: '备份操作区',
+      description: '这里提供了备份操作的按钮，包括导入导出排序文件、打开备份文件夹、刷新列表等操作，通过左侧帮助按钮可以查看自动备份的规则说明。',
+      side: "left"
+    },
+  },
+];
+
+// 二级页面：库存枢纽引导
+export const workspaceGuideSteps = [
+  {
+    element: '[data-tour="workspace-workshop-list"]', 
+    popover: {
+      title: '创意工坊库存列表',
+      description: '这里显示了所有已订阅的创意工坊模组，你可以在列表中查看模组的基本信息，点击列表项即可查看模组该模组的变动时间线。\n也可以右键菜单进行更多操作，如禁用、启用、删除等。',
+      side: "left"
+    }
+  },
+  {
+    element: '[data-tour="workspace-workshop-toolbar"]', 
+    popover: {
+      title: '库存操作区',
+      description: '在这里你可以进行库存的搜索、筛选、排序查看等操作，支持禁用、新增、缺失模组的检测与筛选。',
+      side: "bottom"
+    }
+  },
+  {
+    element: '[data-tour="workspace-self-list"]', 
+    popover: {
+      title: '管理器库存列表',
+      description: '这里显示了所有由管理器下载的模组，跟其它列表操作一致。\n要注意使用该库的模组需要在环境开关中启用，另外首次下载时需要注意SteamCMD的初始化是否成功。',
+      side: "left"
+    }
+  },
+  {
+    element: '[data-tour="workspace-tabs"]', 
+    popover: {
+      title: '其它页面',
+      description: '这里可以切换页面，包括创意工坊检索、合集订阅、Github订阅等，功能简单就不多赘述了。',
       side: "left"
     }
   }

@@ -81,8 +81,12 @@ import { useAppStore } from '../stores/appStore'
 import { shakeComponent } from '../utils/uiHelper'
 import CommonSwitch from './common/input/CommonSwitch.vue'
 import { Bug, CircleFadingPlus, Dna, Zap } from 'lucide-vue-next'
+import { useToast } from 'vue-toastification'
 
 const appStore = useAppStore()
+const toast = useToast()
+
+
 
 // 状态控制
 const showFullHistory = ref(false)
@@ -137,7 +141,7 @@ const closeModal = () => {
   appStore.uiState.showUpdateModal = false
   // 可选：触发一个推荐扫描的通知
   if (context.value.pending_actions?.includes('recommend_scan')) {
-    appStore.toast.info("建议执行一次全量扫描，以应用新版本的核心引擎特性！", { timeout: 5000 })
+    toast.info("建议执行一次全量扫描，以应用新版本的核心引擎特性！", { timeout: 5000 })
   }
 }
 

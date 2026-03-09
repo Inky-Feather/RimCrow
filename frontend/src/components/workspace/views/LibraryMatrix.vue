@@ -9,11 +9,11 @@
         <span class="text-sm font-bold text-accent-primary animate-pulse">正在扫描所有存储位置...</span>
       </div>
       <!-- 左：Steam工坊目录 (Workshop) -->
-      <MatrixColumn title="Steam 创意工坊" iconColor="text-accent-primary" storeType="workshop"
+      <MatrixColumn title="Steam 创意工坊" iconColor="text-accent-primary" storeType="workshop" data-tour="workspace-workshop-list"
         :mods="workspaceStore.librariesMods.workshop" @open-timeline="handleOpenTimeline"
         tooltip="由 Steam 客户端管理和自动更新的模组。" />
       <!-- 中：管理器目录 (SteamCMD) -->
-      <MatrixColumn title="管理器 (SteamCMD)" iconColor="text-accent-success" storeType="self"
+      <MatrixColumn title="管理器 (SteamCMD)" iconColor="text-accent-success" storeType="self" data-tour="workspace-self-list"
         :mods="workspaceStore.librariesMods.self" @open-timeline="handleOpenTimeline"
         tooltip="由 RimModManager 独立下载的模组库。" />
       <!-- 中：游戏本地目录 (Local) -->

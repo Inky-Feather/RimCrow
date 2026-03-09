@@ -587,6 +587,30 @@ class API:
             logger.error(f"Save all settings failed: {str(e)}", exc_info=True)
             return ApiResponse.error(f"保存所有设置失败：{str(e)}")
     
+    @log_api_call
+    def guide_mark_as_done(self, guide_key: str):
+        """
+        将指定的引导标记为已完成
+        """
+        try:
+            # 使用 settings 管理器来安全地修改配置
+            current_guides = settings.config.completed_guides
+            current_guides[guide_key] = "done"
+            settings.set('completed_guides', current_guides) # 这会自动触发保存
+            return ApiResponse.success()
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def guide_reset_all(self):
+        """
+        重置所有引导状态
+        """
+        try:
+            settings.set('completed_guides', {})
+            return ApiResponse.success()
+        except Exception as e:
+            return ApiResponse.error(str(e))
 
     # =========================================================================
     #  3. Mod 扫描与管理 (Scanning & Mods)
@@ -2338,6 +2362,11 @@ class API:
         return ApiResponse.success(message="后台更新检查已启动")
     
     @log_api_call
+    def workspace_get_mod_timeline(self, workshop_id: str, is_steamcmd: bool = False):
+        """获取 Mod 变动轨迹"""
+        return ApiResponse.success(self.steam_mgr.get_item_timeline(workshop_id, is_steamcmd))
+    
+    @log_api_call
     def nexus_search(self, query: str, page: int = 1):
         """离线库搜索 + 在线静默预热"""
         # 1. 从本地 SQLite 获取当前页的数据 (瞬间完成)
@@ -2367,11 +2396,6 @@ class API:
             return ApiResponse.success(details)
         return ApiResponse.error("未找到模组详情")
 
-    @log_api_call
-    def workspace_get_mod_timeline(self, workshop_id: str, is_steamcmd: bool = False):
-        """获取 Mod 变动轨迹"""
-        return ApiResponse.success(self.steam_mgr.get_item_timeline(workshop_id, is_steamcmd))
-    
     
     
     

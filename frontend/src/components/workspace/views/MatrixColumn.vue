@@ -3,7 +3,7 @@
   <div class="flex-1 flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl relative">
     
     <!-- 1. 看板表头 -->
-    <div class="px-4 py-3 bg-text-main/5 border-b border-text-main/10 flex flex-col gap-3">
+    <div class="px-4 py-3 bg-text-main/5 border-b border-text-main/10 flex flex-col gap-3" :data-tour="'workspace-'+storeType + '-toolbar'">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-bold text-text-main flex items-center gap-2 cursor-help" v-tooltip="tooltip">
           <div class="w-2.5 h-2.5 rounded-full shadow-lg" :class="iconColor.replace('text-', 'bg-')"></div>

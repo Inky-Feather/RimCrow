@@ -477,7 +477,8 @@ button:focus-visible {
   color: #000 !important;
 }
 /* 如果元素被高亮时，z-index没有被拉上来，可以用这个强制拉高 */
+
 .driver-active-element {
   z-index: 99999 !important;
-  position: relative; /* 很多时候加了 z-index 没用是因为没有 position */
+  /* position: relative;  */
 }

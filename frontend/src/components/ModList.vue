@@ -911,7 +911,6 @@ watch(() => appStore.isLoading, async (loading) => {
     await nextTick();
     restorePosition();
     const guideStore = useGuideStore();
-    guideStore.startModListGuide();
   }
 });
 const restorePosition = () => {
