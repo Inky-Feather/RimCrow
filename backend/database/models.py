@@ -1,10 +1,11 @@
 # 新数据库
 from datetime import datetime
 import json
+import os
 import time
 from typing import Optional, cast
 from playhouse.migrate import SqliteMigrator, migrate
-from peewee import Model, Field, SqliteDatabase, CharField, TextField, DateTimeField, ForeignKeyField, BooleanField, IntegerField, CompositeKey, BigIntegerField
+from peewee import DatabaseError, Model, Field, SqliteDatabase, CharField, TextField, DateTimeField, ForeignKeyField, BooleanField, IntegerField, CompositeKey, BigIntegerField
 from backend._version import __db_version__
 from backend.utils.logger import logger 
 from backend.utils.tools import current_ms
@@ -237,6 +238,31 @@ def init_db(db_path):
             db.create_tables(all_models, safe=True)
             
         return True
+    
+    except DatabaseError as e:
+        if "malformed" in str(e).lower():
+            logger.error(f"检测到数据库损坏: {e}。正在尝试自动修复...")
+            db.close()
+            
+            # --- 自愈策略：备份坏库并重建 ---
+            bak_path = db_path + ".malformed.bak"
+            try:
+                if os.path.exists(db_path):
+                    # 将坏掉的库重命名，不要直接删，给用户留一线生机
+                    shutil.move(db_path, bak_path)
+                    # 同时删除关联的临时文件
+                    if os.path.exists(db_path + "-wal"): os.remove(db_path + "-wal")
+                    if os.path.exists(db_path + "-shm"): os.remove(db_path + "-shm")
+                
+                # 递归调用自己，重新创建干净的库
+                return init_db(db_path)
+            except Exception as re_e:
+                logger.critical(f"严重错误：无法自动修复数据库损坏 {re_e}")
+                return False
+        else:
+            logger.error(f"数据库连接失败: {e}")
+            return False
+        
     except Exception as e:
         import traceback
         logger.error(f"初始化数据库时出错: {traceback.format_exc()}")

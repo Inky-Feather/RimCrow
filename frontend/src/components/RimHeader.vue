@@ -108,10 +108,8 @@ const loadOrder = async (path=null) => {
   const data = await orderStore.getBackupOrder(path)
   if (data) {
     // console.log(data)
-    rawData.value.import.push(data)
     appStore.uiState.showDiffDrawer = true
   }
-  refresh()
 }
 </script>
 
