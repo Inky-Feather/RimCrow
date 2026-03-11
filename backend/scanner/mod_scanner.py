@@ -373,12 +373,11 @@ class ModScanner:
         disabled_file = os.path.join(mod_path, 'About', 'About.xml.disabled')
         is_disabled = False 
         # 存在性快速检查 (0 IO)
-        # 如果没有 About.xml，但有 .disabled，说明这是被管理器禁用的重复项，直接跳过（视为不存在）
+        # 如果没有 About.xml，但有 .disabled，说明这是被管理器禁用的重复项
         if not os.path.exists(about_file):
             if os.path.exists(disabled_file):
                 about_file = disabled_file  
                 is_disabled = True
-                # return None  # 这是一个被禁用的影子 Mod，本次扫描忽略
             if not is_dlc_dir:
                 return None # 既不是 DLC 也没有 About.xml，无效
         

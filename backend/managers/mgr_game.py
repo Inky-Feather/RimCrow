@@ -98,10 +98,8 @@ class GameManager:
             if system_name == 'Windows':
                 # Windows 拼接方式：[exe_path, arg1, arg2]
                 cmd = [target_exe] + args
-                # 【修改点】添加 DETACHED_PROCESS 标志 (0x00000008) 彻底分离子进程
-                DETACHED_PROCESS = 0x00000008
                 # creationflags=subprocess.CREATE_NEW_CONSOLE 确保游戏进程独立于管理器
-                subprocess.Popen(cmd, cwd=game_install_path, creationflags=DETACHED_PROCESS | subprocess.CREATE_NEW_CONSOLE)
+                subprocess.Popen(cmd, cwd=game_install_path, creationflags=subprocess.CREATE_NEW_CONSOLE)
             elif system_name == 'Darwin': # macOS
                 # macOS 下如果是 .app 文件夹，需要使用 open 命令
                 if target_exe.endswith('.app'):

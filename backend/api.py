@@ -1005,19 +1005,18 @@ class API:
             profile = self.profile_mgr.get_profile(profile_id)
             logger.debug(f"launch_game: profile_id={profile_id}, prefer_steam={settings.config.prefer_steam_launch}, steam_path={settings.config.steam_path}, is_steam={profile.is_steam}")
             # 检查 Steam 配置是否完整
+            
+            # 1. 获取当前 Profile 的启动参数（仅包含游戏相关参数）
+            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
             if(settings.config.prefer_steam_launch and profile.is_steam):
-                # 1. 获取当前 Profile 的启动参数（仅包含游戏相关参数）
-                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
                 logger.debug(f"launch_game_steam: extra_args={extra_args}")
                 # 2. 调用 Steam 管理器启动游戏
                 self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
                 msg='通过 Steam 启动游戏'
             else:
-                # 1. 获取当前 Profile 的启动参数
-                launch_args = self.profile_mgr.get_launch_args_only(profile_id) 
-                logger.debug(f"launch_game: launch_args={launch_args}")
+                logger.debug(f"launch_game: launch_args={extra_args}")
                 # 2. 调用游戏管理器启动游戏
-                self.game_mgr.launch_game(game_install_path=profile.game_install_path, custom_args=launch_args)
+                self.game_mgr.launch_game(game_install_path=profile.game_install_path, custom_args=extra_args)
                 msg='直接启动游戏'
             
             # 3. 记录最后一次游玩时间到数据库
