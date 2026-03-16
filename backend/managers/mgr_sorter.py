@@ -20,25 +20,18 @@ class AtomicGroup:
 class OrderSorter:
     # 定义规则权重：权重越高越难被打破
     # 级差设置大一些，防止多条低级规则累积压倒高级规则
-    RULE_PRIORITIES = {
-        'native': 10000,
-        'community': 1000,
-        'user': 100,
-        'user_dynamic': 10,
-        'unknown': 1
-    }
+    # 新版已经采用动态权重，这里保留旧版的权重定义，供参考
+    # RULE_PRIORITIES = {
+    #     'native': 10000,
+    #     'community': 1000,
+    #     'user': 100,
+    #     'user_dynamic': 10,
+    #     'unknown': 1
+    # }
     def __init__(self, context: ProfileContext):
-        self.context = context
+        self.context = context  # 环境上下文
+        self.effective_rules_cache = {} # 缓存每个 Mod 的生效规则
         self.rule_mgr = RuleManager(context)
-        self.SPECIAL_WEIGHTS = {
-            'brrainz.harmony': 0,
-            'ludeon.rimworld': 50,
-            'ludeon.rimworld.royalty': 51,
-            'ludeon.rimworld.ideology': 52,
-            'ludeon.rimworld.biotech': 53,
-            'ludeon.rimworld.anomaly': 54,
-            'unlimitedhugs.hugslib': 110,
-        }
 
     def build_atomic_groups(self, active_ids: List[str]) -> List[AtomicGroup]:
         """
@@ -113,35 +106,6 @@ class OrderSorter:
 
         return atomic_groups
 
-    def calculate_mod_base_weight(self, mod_data: dict) -> int:
-        """
-        根据 Mod 数据计算单一 Mod 的基础权重
-        """
-        pkg_id = mod_data.get('package_id', '').lower().strip()
-        # 1. 检查特殊硬编码 ID
-        if pkg_id in self.SPECIAL_WEIGHTS:
-            return self.SPECIAL_WEIGHTS[pkg_id]
-        # 2. 根据作者判定 (官方作者)
-        authors = mod_data.get('author', [])
-        if 'Ludeon Studios' in authors:
-            return 60
-        # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
-        mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
-        
-        if mod_type == 'LanguagePack':
-            return 900  # 汉化包置底
-        if mod_type == 'Texture':
-            return 850  # 纹理包置后
-        if mod_type == 'Audio':
-            return 860  # 音频包置后
-        # 4. 根据 ID 关键字模糊判定
-        if '.lib' in pkg_id or 'library' in pkg_id:
-            return 150
-        if 'framework' in pkg_id:
-            return 160
-        # 5. 默认权重 (普通 Mod)
-        return 500
-
 
     # =========================================================================
     # 加权图构建与循环消解
@@ -172,7 +136,7 @@ class OrderSorter:
         for g in groups:
             gid = id(g)
             for mid in g.mod_ids:
-                effective_rules = self.rule_mgr.get_effective_mod_rules(mid, mod_map.get(mid, {}))
+                effective_rules = self.effective_rules_cache.get(mid, {})
                 # 将 effective_rules 展平为 (target_id, type, source_dict, is_force)
                 flat_rules = []
                 # 1. 解析 Dependencies (作为极强的 load_after 处理)
@@ -324,19 +288,39 @@ class OrderSorter:
         logger.info(f"Starting sort for {len(active_ids)} mods...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
+        current_assets_ids = list(mod_map.keys())
+        from backend.database.dao import GroupDAO
+        all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
+        # 建立反向映射: package_id -> [group_name1, group_name2]
+        mod_groups_map = defaultdict(list)
+        for g in all_groups:
+            for mid in g['mod_ids']:
+                mod_groups_map[mid.lower()].append(g['name'])
+        # 将分组名注入到 mod_map 中
+        for mid, m_data in mod_map.items():
+            m_data['groups'] = mod_groups_map.get(mid, [])
+        
         # --- 0. 依赖项自动修补 (受开关控制) ---
         active_set = set(id.lower() for id in active_ids)
         auto_activated_deps = []
         
+        self.effective_rules_cache = {} # 全局规则缓存字典
+        for mid, m_data in mod_map.items():
+            self.effective_rules_cache[mid] = self.rule_mgr.get_effective_mod_rules(mid, m_data)
+        
+        MAX_ITERATIONS = 15  # [新增] 设定最大迭代深度阈值
+        
         # 默认 False 保持保守行为
         if settings.config.auto_activate_dependencies or False:
             changed = True
+            iteration_count = 0  # 迭代计数器
             # 因为被自动激活的依赖可能还有它自己的依赖，所以需要循环挖掘直到没有新增
-            while changed:
+            while changed and iteration_count < MAX_ITERATIONS:
                 changed = False
+                iteration_count += 1
                 for mid in list(active_set):
                     m_data = mod_map.get(mid, {})
-                    rules = self.rule_mgr.get_effective_mod_rules(mid, m_data)
+                    rules = self.effective_rules_cache.get(mid, {})
                     
                     for dep in rules.get('dependencies', []):
                         target = dep['target_id']
@@ -359,6 +343,9 @@ class OrderSorter:
                                     auto_activated_deps.append(alt)
                                     changed = True
                                     break
+            # 触发阈值警告
+            if iteration_count >= MAX_ITERATIONS:
+                logger.warning(f"依赖自动补全达到最大迭代次数({MAX_ITERATIONS}次)，可能存在循环依赖配置，已强制终止延伸。")
         
         expanded_active_ids = list(active_set)
         # 1. 将扩展后的激活列表转化为原子组
@@ -397,29 +384,49 @@ class OrderSorter:
 
             # C. 计算权重
             for mid in g.mod_ids:
-                m_data = mod_map.get(mid, {})
-                # 计算默认基础权重 (类型/作者等)
-                w = self.calculate_mod_base_weight(m_data)
+                
                 # 获取该 Mod 生效的所有规则
-                effective_rules = self.rule_mgr.get_effective_mod_rules(mid, m_data)
-                # 【核心新增】应用绝对位置覆盖 (Top / Bottom)
+                effective_rules = self.effective_rules_cache.get(mid, {})
+                weight_info = effective_rules.get("weight_info", {})
+                # 获取该 Mod 已经由 RuleManager 算好的最终规则集
+                effective_rules = self.effective_rules_cache.get(mid, {})
+                weight_info = effective_rules.get("weight_info", {})
+                # [新增] 纯粹的算术应用，完全不关心业务逻辑
+                w = weight_info.get("base_weight", 500) + weight_info.get("weight_shift", 0)
+                # [新增] 处理决定性的绝对位置
+                abs_type = weight_info.get("absolute_type")
+                if abs_type == "top":
+                    w = 0
+                elif abs_type == "bottom":
+                    w = 10000 
+                weights.append(w)
+                
+                """
+                has_absolute_override = False
+                # 应用绝对位置覆盖 (Top / Bottom)
                 override = effective_rules.get("weight_override")
                 if override:
-                    if override["type"] == "top":
-                        w = 0 
-                    elif override["type"] == "bottom":
-                        w = 1000 # 极高数字，确保沉底
+                    if override["type"] == "top": w = 0
+                    elif override["type"] == "bottom": w = 10000 # 建议设大一点，1000不够大
+                    has_absolute_override = override['source']['type'] # 记录来源
                 
-                # 确保动态规则的全局开关在这里也能生效
-                if self.rule_mgr.settings.get("dynamic_rules_enabled", True):
-                    matched_dyn = self.rule_mgr.get_matching_dynamic_rules(m_data)
-                    for rule in matched_dyn:
-                        act = rule.get("action", {})
-                        if act.get('type') == 'weight_shift': w += act.get('value', 0)
-                        elif act.get('type') == 'weight_set': w = act.get('value', w)
-                        elif act.get('type') == 'top': w = 0
-                        elif act.get('type') == 'bottom': w = 1000
+                # 只有在没有强制绝对覆盖，或者动态规则优先级比绝对覆盖更高时，才应用动态权重
+                dyn_priority = self.rule_mgr.get_source_priority("dynamic")
+                override_priority = self.rule_mgr.get_source_priority(has_absolute_override) if has_absolute_override else 999
+
+                if dyn_priority <= override_priority or not has_absolute_override:
+                    if self.rule_mgr.settings.get("dynamic_rules_enabled", True):
+                        matched_dyn = self.rule_mgr.get_matching_dynamic_rules(m_data)
+                        for rule in matched_dyn:
+                            act = rule.get("action", {})
+                            if act.get('type') == 'weight_shift': w += act.get('value', 0)
+                            elif act.get('type') == 'weight_set': w = act.get('value', w)
+                            # 动态规则自带的 top/bottom 操作
+                            elif act.get('type') == 'top': w = 0
+                            elif act.get('type') == 'bottom': w = 10000
                 weights.append(w)
+                """
+                
             # 一个原子组如果有多个 Mod 联锁，取最小的权重作为整个组的启动权重
             group_base_weights[id(g)] = min(weights) if weights else 500
         # 3. 构建加权依赖图

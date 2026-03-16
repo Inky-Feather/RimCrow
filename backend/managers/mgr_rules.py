@@ -14,6 +14,16 @@ from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
 
+SPECIAL_WEIGHTS = {
+    'brrainz.harmony': 0,
+    'ludeon.rimworld': 50,
+    'ludeon.rimworld.royalty': 51,
+    'ludeon.rimworld.ideology': 52,
+    'ludeon.rimworld.biotech': 53,
+    'ludeon.rimworld.anomaly': 54,
+    'unlimitedhugs.hugslib': 110,
+}
+
 class RuleActionType:
     WEIGHT_SET = "weight_set"       # 强制设置权重 (0-1000)
     WEIGHT_SHIFT = "weight_shift"   # 权重偏移 (如 -50)
@@ -319,6 +329,30 @@ class RuleManager:
     # 2. 匹配与查询 (Engine)
     # =========================================================================
 
+    
+    def calculate_mod_base_weight(self, mod_data: dict) -> int:
+        """
+        根据 Mod 数据计算单一 Mod 的基础权重
+        """
+        pkg_id = mod_data.get('package_id', '').lower().strip()
+        # 1. 检查特殊硬编码 ID
+        if pkg_id in SPECIAL_WEIGHTS:
+            return SPECIAL_WEIGHTS[pkg_id]
+        # 2. 根据作者判定 (官方作者)
+        authors = mod_data.get('author', [])
+        if 'Ludeon Studios' in authors: return 60
+        # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
+        mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
+        if mod_type == 'LanguagePack': return 900  # 汉化包置底
+        if mod_type == 'Texture': return 850  # 纹理包置后
+        if mod_type == 'Audio': return 860  # 音频包置后
+        # 4. 根据 ID 关键字模糊判定
+        if '.lib' in pkg_id or 'library' in pkg_id: return 150
+        if 'framework' in pkg_id: return 160
+        # 5. 默认权重 (普通 Mod)
+        return 500
+
+    
     def _match_mod_condition(self, mod_data: dict, filter_item: dict) -> bool:
         """
         判断一个 Mod 是否满足某项过滤条件
@@ -393,6 +427,10 @@ class RuleManager:
             "load_before": {},
             "weight_override": None # 用于记录绝对位置覆盖（置顶/置底）
         }
+        
+        # 预先计算基础权重与偏移量
+        base_weight = self.calculate_mod_base_weight(mod_full_data)
+        weight_shift = 0
         
         # 辅助函数：处理置顶/置底优先级覆盖
         def _apply_weight_override(w_type: str, source_type: str, detail: Any = None):
@@ -499,12 +537,12 @@ class RuleManager:
                     _merge_rule("incompatible", t, "user", "用户冲突", detail=info)
                 # 解析 loadTop 和 loadBottom
                 # 格式例如: "loadBottom": {"value": True, "comment": "必须置底"}
-                isTop = comm.get("loadTop", {}).get("value") 
-                isBottom = comm.get("loadBottom", {}).get("value") 
+                isTop = user.get("loadTop", {}).get("value") 
+                isBottom = user.get("loadBottom", {}).get("value") 
                 if isTop is not None and (isTop is True or isTop.lower() == "true"):
-                    _apply_weight_override("top", "community", comm.get("loadTop", {}).get("comment"))
+                    _apply_weight_override("top", "user", user.get("loadTop", {}).get("comment"))
                 elif isBottom is not None and (isBottom is True or isBottom.lower() == "true"):
-                    _apply_weight_override("bottom", "community", comm.get("loadBottom", {}).get("comment"))
+                    _apply_weight_override("bottom", "user", user.get("loadBottom", {}).get("comment"))
 
         # 4. Dynamic Rules - Priority 1
         # 仅提取图约束 (load_after / load_before)，其余权重操作交由排序器处理
@@ -513,10 +551,20 @@ class RuleManager:
             for rule in matched:
                 act = rule.get("action", {})
                 rule_name = rule.get("name", "动态规则")
-                if act.get("type") == "load_after":
+                act_type = act.get("type")
+                if act_type == "load_after":
                     _merge_rule("load_after", act.get("value"), "dynamic", rule_name)
-                elif act.get("type") == "load_before":
+                elif act_type == "load_before":
                     _merge_rule("load_before", act.get("value"), "dynamic", rule_name)
+                # [新增] 集中处理动态规则的权重干预，并利用已有的 _apply_weight_override 参与优先级竞争
+                elif act_type == "weight_shift":
+                    weight_shift += act.get("value", 0)
+                elif act_type == "weight_set":
+                    base_weight = act.get("value", base_weight)
+                elif act_type == "top":
+                    _apply_weight_override("top", "dynamic", rule_name)
+                elif act_type == "bottom":
+                    _apply_weight_override("bottom", "dynamic", rule_name)
                     
         
         # 5. Workshop External Rules (工坊外置依赖规则)
@@ -540,7 +588,8 @@ class RuleManager:
             "dependencies": [],
             "load_after": [],
             "load_before": [],
-            "incompatible": []
+            "incompatible": [],
+            "weight_info": {}
         }
         for cat in ["dependencies", "load_after", "load_before", "incompatible"]:
             for tid, data in rules_map[cat].items():
@@ -548,11 +597,20 @@ class RuleManager:
                 final_result[cat].append(data)
         
         # 附加绝对位置规则 (如果有)
-        if rules_map["weight_override"]:
-            del rules_map["weight_override"]['priority_idx']
-            final_result["weight_override"] = rules_map["weight_override"]
-        else:
-            final_result["weight_override"] = []
+        # if rules_map["weight_override"]:
+        #     del rules_map["weight_override"]['priority_idx']
+        #     final_result["weight_override"] = rules_map["weight_override"]
+        # else:
+        #     final_result["weight_override"] = []
+        
+        # [修改] 封装统一的 weight_info 供 Sorter 无脑读取
+        abs_override = rules_map["weight_override"]
+        final_result["weight_info"] = {
+            "base_weight": base_weight,
+            "weight_shift": weight_shift,
+            "absolute_type": abs_override["type"] if abs_override else None,
+            "absolute_source": abs_override["source"]["type"] if abs_override else None
+        }
         
         return final_result
 
