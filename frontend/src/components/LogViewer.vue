@@ -43,14 +43,11 @@
           </div>
 
           <!-- ================= 2. 日志内容区 (Log Stream) ================= -->
-          <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm selection:bg-accent-primary/30 selection:text-text-main">
-            
+          <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm">
+            <!-- currentTab 等于 'app' 或 'game' -->
             <KeepAlive>
-              <component :is="currentTabComponent" />
+              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" />
             </KeepAlive>
-            
-            <!-- 底部锚点 -->
-            <div id="log-bottom-anchor"></div>
           </div>
 
           <!-- ================= 3. AI 智能辅助栏 (Footer) ================= -->
@@ -91,8 +88,7 @@
 import { ref, computed } from 'vue'
 import { Terminal, Gamepad2 } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
-import AppLogPanel from './utils/AppLogPanel.vue';
-import GameLogPanel from './utils/GameLogPanel.vue';
+import UnifiedLogPanel from './utils/UnifiedLogPanel.vue';
 
 
 const appStore = useAppStore()
@@ -103,9 +99,6 @@ const tabs = [
   { id: 'game', label: '游戏日志', icon: Gamepad2 }
 ]
 
-const currentTabComponent = computed(() => {
-  return currentTab.value === 'app' ? AppLogPanel : GameLogPanel
-})
 
 const stats = computed(() => {
   const source = currentTab.value === 'app' ? 'app' : 'game'

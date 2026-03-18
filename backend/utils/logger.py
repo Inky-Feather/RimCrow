@@ -1,14 +1,71 @@
 # backend/utils/logger.py
 import logging
 import json
+import math
 import os
 import sys
 import datetime
+import hashlib
+import traceback
 import colorlog  # 引入 colorlog
 from logging.handlers import TimedRotatingFileHandler
 from icecream import ic
 
 from backend.settings import DATA_DIR
+
+
+def generate_log_id(timestamp: str, level: str, message: str) -> str:
+    """生成基于内容的唯一哈希 ID，保证跨重启和双端的绝对去重"""
+    raw_str = f"{timestamp}_{level}_{message}"
+    return hashlib.md5(raw_str.encode('utf-8')).hexdigest()[:12]
+class BaseLogReader:
+    """日志读取基类，封装分页、缓存、去重合并逻辑"""
+    def __init__(self, max_blocks=50000):
+        self._cache = {}
+        self.max_blocks = max_blocks
+
+    def _add_or_merge_block(self, blocks, new_block, lookback_limit=20):
+        """通用去重合并逻辑：如果短时间内出现重复日志，则累加 count 并推至末尾"""
+        if not blocks:
+            blocks.append(new_block)
+            return
+
+        n = len(blocks)
+        start_idx = max(0, n - lookback_limit)
+        
+        nl, nm, nd = new_block['level'], new_block['message'], new_block['details']
+        
+        for i in range(n - 1, start_idx - 1, -1):
+            b = blocks[i]
+            if b['level'] == nl and b['message'] == nm and b['details'] == nd:
+                matched_block = blocks.pop(i)
+                matched_block['count'] = matched_block.get('count', 1) + new_block.get('count', 1)
+                if new_block.get('timestamp'): 
+                    matched_block['timestamp'] = new_block['timestamp']
+                blocks.append(matched_block)
+                return
+        
+        if 'count' not in new_block: new_block['count'] = 1
+        blocks.append(new_block)
+
+    def get_paged_data(self, blocks, page, page_size):
+        """通用的倒序分页算法"""
+        total_blocks = len(blocks)
+        total_pages = math.ceil(total_blocks / page_size) if total_blocks > 0 else 1
+        
+        if page > total_pages:
+            return {'status': 'success', 'blocks': [], 'has_more': False, 'total_pages': total_pages}
+
+        end_idx = total_blocks - (page - 1) * page_size
+        start_idx = max(0, total_blocks - page * page_size)
+        
+        return {
+            'status': 'success',
+            'blocks': blocks[start_idx:end_idx],
+            'has_more': page < total_pages,
+            'total_pages': total_pages,
+            'current_page': page
+        }
 
 # 定义日志格式
 class JSONFormatter(logging.Formatter):
@@ -17,19 +74,25 @@ class JSONFormatter(logging.Formatter):
     方便前端 LogViewer 解析和搜索，也方便后续 AI 读取上下文
     """
     def format(self, record):
-        log_record = {
-            "timestamp": datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-            "level": record.levelname,
-            "module": record.module,
-            "func": record.funcName,
-            "line": record.lineno,
-            "message": record.getMessage(),
-            "path": record.pathname  # 完整路径，方便点击跳转
-        }
-        # 如果有异常堆栈，也记录下来
-        if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
+        timestamp = datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        msg = record.getMessage()
+        exc = self.formatException(record.exc_info) if record.exc_info else ""
         
+        log_record = {
+            "id": generate_log_id(timestamp, record.levelname, msg),
+            "timestamp": timestamp,
+            "level": record.levelname,
+            "message": msg,
+            "details": exc,
+            "count": 1,
+            "context": {
+                "source": "app",
+                "module": record.module,
+                "func": record.funcName,
+                "line": record.lineno,
+                "path": record.pathname
+            }
+        }
         return json.dumps(log_record, ensure_ascii=False)
 
 class WebviewHandler(logging.Handler):
@@ -43,14 +106,29 @@ class WebviewHandler(logging.Handler):
         if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): 
             return 
         try:
-            # 格式化为字典对象直接发给前端，不需要再次 JSON 序列化
+            timestamp = datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            msg = record.getMessage()
+            # 模块正确格式化堆栈
+            exc = ""
+            if record.exc_info:
+                # 将 exc_info 元组转换为标准的堆栈字符串
+                exc = "".join(traceback.format_exception(*record.exc_info))
+            # 如果没有 exc_info 但有手动传入的 exc_text (某些库会这么干)
+            elif record.exc_text:
+                exc = record.exc_text
+            
             log_entry = {
-                "id":  f"{record.created}-{id(record)}", # 唯一ID
-                "timestamp": datetime.datetime.fromtimestamp(record.created).strftime('%H:%M:%S'),
+                "id": generate_log_id(timestamp, record.levelname, msg),
+                "timestamp": timestamp,
                 "level": record.levelname,
-                "module": record.module,
-                "message": record.getMessage(),
-                "details": record.exc_text if record.exc_text else ""
+                "message": msg,
+                "details": exc,
+                "count": 1,
+                "context": {
+                    "source": "app",
+                    "module": record.module,
+                    "func": record.funcName
+                }
             }
             # 通过 EventBus 发送给前端
             # 前端监听 'app-log' 事件即可
@@ -190,6 +268,80 @@ class LoggerManager:
     @property
     def logger(self) -> logging.Logger:
         return self._logger
+
+
+class AppLogReader(BaseLogReader):
+    def __init__(self):
+        # App 日志默认在前端只展示最近几千条，这里适当降低后端缓存上限，减少长期占用内存
+        super().__init__(max_blocks=20000)
+        self.log_dir = DATA_DIR / 'logs'
+        
+    def get_log_files(self):
+        result = []
+        if self.log_dir.exists():
+            for f in self.log_dir.glob('app.log*'):
+                stat = os.stat(f)
+                result.append({
+                    'name': f.name,
+                    'path': str(f),
+                    'size': stat.st_size,
+                    'mtime': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                })
+        # 按修改时间倒序
+        result.sort(key=lambda x: x['mtime'], reverse=True)
+        return result
+
+    def read_log_page(self, filename, page=1, page_size=1000):
+        filepath = os.path.join(self.log_dir, filename)
+        if not os.path.exists(filepath): return {'error': '文件不存在'}
+
+        stat = os.stat(filepath)
+
+        # 缓存机制：如果文件未修改，直接取缓存
+        if filepath not in self._cache or self._cache[filepath]['mtime'] != stat.st_mtime:
+            self._cache[filepath] = {
+                'mtime': stat.st_mtime,
+                'blocks': self._parse_file(filepath)
+            }
+            
+        return self.get_paged_data(self._cache[filepath]['blocks'], page, page_size)
+
+    def _parse_file(self, filepath):
+        blocks = []
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line: continue
+                    try:
+                        data = json.loads(line)
+                        # 归一化处理
+                        data['message'] = data.get('message', '').replace('\\n', '\n')
+                        
+                        data['details'] = (data.get('details') or data.get('exception', '')).replace('\\n', '\n')
+                        
+                        # 生成统一哈希ID
+                        data['id'] = generate_log_id(data.get('timestamp', ''), data.get('level', 'INFO'), data['message'])
+                            
+                        # 规范化上下文
+                        if 'module' in data and 'context' not in data:
+                            data['context'] = {
+                                'source': 'app',
+                                'module': data.pop('module'),
+                                'func': data.pop('func', ''),
+                                'line': data.pop('line', '')
+                            }
+                        
+                        self._add_or_merge_block(blocks, data)
+                    except Exception: continue
+		    
+        except Exception as e:
+            import traceback
+            print(f"Error reading app log {filepath}: {e}")
+        return blocks[-self.max_blocks:]
+
+# 暴露单例供 API 路由使用
+app_log_reader = AppLogReader()
 
 # 全局单例
 logger_manager = LoggerManager()

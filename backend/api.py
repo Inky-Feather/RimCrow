@@ -189,6 +189,7 @@ class API:
         self.profile_mgr = ProfileManager()
         self.active_context = None
         self.load_order_mgr = None
+        self.game_log_mgr = None
         self.scanner = None
         self.sorter = None
         # 3. 启动时激活上下文
@@ -214,6 +215,9 @@ class API:
     
     def _bootstrap_context(self, profile_id: str):
         """装载当前环境，并重建所有业务引擎"""
+        # 在重建前，先停止旧的监视器
+        if self.game_log_mgr: self.game_log_mgr.stop_realtime_monitor()
+        
         try:
             # 获取上下文
             self.active_context = self.profile_mgr.activate_profile(profile_id)
@@ -239,6 +243,8 @@ class API:
         self.load_order_mgr = LoadOrderManager(self.active_context)
         self.game_log_mgr = GameLogManager(self.active_context)
         self.sorter = OrderSorter(self.active_context)
+        # 启动新的实时监视器
+        if self.game_log_mgr: self.game_log_mgr.start_realtime_monitor()
 
     def _handle_app_version_upgrade(self):
         """实例初始化时运行的升级逻辑"""
@@ -283,6 +289,8 @@ class API:
         """关闭数据库清理资源"""
         # 停止后台扫描任务 (如果有)
         if hasattr(self, 'scanner') and self.scanner: self.scanner.stop_scan() 
+        # 停止游戏日志监视器
+        if self.game_log_mgr: self.game_log_mgr.stop_realtime_monitor()
         # 停止游戏监控
         if self.game_monitor: self.game_monitor.running = False
         # 暂停所有事件发送
@@ -1515,23 +1523,39 @@ class API:
     #  8. 日志管理 (Log Management)
     # =========================================================================
 
-    @log_api_call
-    def get_game_log_files(self):
-        """ 获取游戏日志文件列表 """
+    def get_log_files(self, log_type='game'):
+        """ 获取指定类型的日志文件列表 ('app' 或 'game') """
         try:
-            files = self.game_log_mgr.get_log_files() if self.game_log_mgr else []
+            if log_type == 'app':
+                from backend.utils.logger import app_log_reader
+                files = app_log_reader.get_log_files()
+            else:
+                if not self.game_log_mgr: 
+                    return ApiResponse.warning("游戏环境未就绪，无法获取游戏日志")
+                files = self.game_log_mgr.get_log_files()
+                
             return ApiResponse.success(files)
         except Exception as e:
+            logger.error(f"Get log files failed: {e}", exc_info=True)
             return ApiResponse.error(str(e))
 
-    @log_api_call
-    def read_game_log(self, filename: str):
-        """ 读取并解析指定的游戏日志 """
-        # 这是一个可能耗时的操作，@log_api_call 会帮记录耗时
-        result = self.game_log_mgr.read_and_parse_log(filename) if self.game_log_mgr else {'error': '游戏日志管理器未初始化'}
-        if 'error' in result:
-            return ApiResponse.error(result['error'])
-        return ApiResponse.success(result)
+    def read_log_page(self, log_type: str, filename: str, page: int = 1, page_size: int = 1000):
+        """ 分页读取日志 """
+        try:
+            if log_type == 'app':
+                from backend.utils.logger import app_log_reader
+                result = app_log_reader.read_log_page(filename, page, page_size)
+            else:
+                if not self.game_log_mgr: 
+                    return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
+                result = self.game_log_mgr.read_log_page(filename, page, page_size)
+                
+            if 'error' in result:
+                return ApiResponse.error(result['error'])
+            return ApiResponse.success(result)
+        except Exception as e:
+            logger.error(f"Read log page failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
     
     @log_api_call
     def open_log_folder(self):

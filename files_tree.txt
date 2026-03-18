@@ -93,6 +93,7 @@
 │   │   │   ├──  ConflictResolver.vue
 │   │   │   ├──  DebugPanel.vue
 │   │   │   ├──  GroupList.vue
+│   │   │   ├──  GuideCenter.vue
 │   │   │   ├──  ListDiffView.vue
 │   │   │   ├──  LogViewer.vue
 │   │   │   ├──  ModDetails.vue
@@ -113,6 +114,9 @@
 │   │   │   └──  vTooltip.js
 │   │   │   
 │   │   ├── ·[modules]
+│   │   │   ├── ·[guide]
+│   │   │   │   └──  guideConfig.js
+│   │   │   │   
 │   │   │   └── ·[search]
 │   │   │   
 │   │   │       ├──  QueryParser.js
@@ -125,6 +129,7 @@
 │   │   │   ├──  confirmStore.js
 │   │   │   ├──  contextMenuStore.js
 │   │   │   ├──  groupStore.js
+│   │   │   ├──  guideStore.js
 │   │   │   ├──  hoverStore.js
 │   │   │   ├──  modStore.js
 │   │   │   ├──  orderStore.js
