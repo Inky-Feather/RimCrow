@@ -35,7 +35,7 @@ class ModXMLParser:
         - save_breaking: 是否破坏存档 (True: 破坏, None: 未知, False: 不破坏)
     """
 
-    def parse(self, mod_path):
+    def parse(self, mod_path, about_path=None):
         """
         主解析入口。
         返回提取到的元数据字典，所有列表字段默认为空列表。
@@ -65,7 +65,7 @@ class ModXMLParser:
             "save_breaking": None,  # 是否破坏存档 (ModSync)，True: 破坏, None：未知, False: 不破坏
         }
 
-        about_path = os.path.join(mod_path, "About", "About.xml")
+        about_path = about_path or os.path.join(mod_path, "About", "About.xml")
         manifest_path = os.path.join(mod_path, "About", "Manifest.xml")
         modsync_path = os.path.join(mod_path, "About", "ModSync.xml")
 

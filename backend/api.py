@@ -702,12 +702,34 @@ class API:
                     elif action == 'delete':
                         # 执行物理删除
                         success, msg = ModDAO.delete_mod_physically(path)
+                    else:
+                        msg = f"不支持的操作类型: {action}"
                     results.append({
                         'path': path,
+                        'action': action,
                         'status': 'success' if success else 'error',
                         'msg': msg if not success else ''
                     })
-            return ApiResponse.success(results, "冲突处理完成")
+
+            success_count = sum(1 for item in results if item['status'] == 'success')
+            error_items = [item for item in results if item['status'] != 'success']
+            stats = {
+                'total': len(results),
+                'success_count': success_count,
+                'error_count': len(error_items),
+            }
+            payload = {
+                'results': results,
+                'stats': stats,
+                'failed_paths': [item['path'] for item in error_items]
+            }
+
+            if success_count == len(results):
+                return ApiResponse.success(payload, "冲突处理完成")
+            if success_count == 0:
+                first_error = error_items[0]['msg'] if error_items else "没有可执行的操作"
+                return ApiResponse.error(first_error, payload)
+            return ApiResponse.warning(f"部分操作失败：{len(error_items)} 项未处理成功，其余操作已应用。", payload)
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
@@ -2240,28 +2262,36 @@ class API:
         # 2. 获取 Steam 状态数据 (ACF/Log)
         ws_map = self.steam_mgr.workshop_merged_data()
         mg_map = self.steam_mgr.steamcmd_merged_data()
+        replacements_map = {
+            str(r['old_workshop_id']): r
+            for r in self.workshop_db_mgr.get_replacements()
+            if r.get('old_workshop_id')
+        }
         
         install_workshop_ids = set()
         # install_self_ids = set()
         
+        def inject_workspace_fields(mod: dict, steam_map: dict | None = None):
+            wid = str(mod.get('workshop_id') or '')
+            if steam_map and wid and wid in steam_map:
+                mod['steam_status'] = steam_map[wid]
+            mod['replacement'] = replacements_map.get(wid)
+            mod['is_missing'] = False
+            return wid
+
         # 3. 为已有的物理模组注入 Steam 状态
         for mod in matrix['workshop']:
-            wid = str(mod.get('workshop_id'))
-            if mod.get('path'): install_workshop_ids.add(wid)
-            # 将 Steam 状态（订阅时间、真实下载时间等）直接合并进 mod 字典
-            # 为了前端方便，把这些信息放在 'steam_info' 字段下，或者直接扁平化合并
-            if wid in ws_map: mod['steam_status'] = ws_map[wid]
-            mod['is_missing'] = False # 初始化标记
+            wid = inject_workspace_fields(mod, ws_map)
+            if mod.get('path') and wid:
+                install_workshop_ids.add(wid)
         
         # 为 self (管理器) 域注入数据
         for mod in matrix['self']:
-            wid = str(mod.get('workshop_id'))
+            inject_workspace_fields(mod, mg_map)
             # if mod.get('path'): install_self_ids.add(wid)
-            if wid in mg_map: mod['steam_status'] = mg_map[wid]
-            mod['is_missing'] = False
         
         for mod in matrix['local']:
-            mod['is_missing'] = False
+            inject_workspace_fields(mod)
         
         # 4. 核心逻辑：找出“已订阅但物理丢失”的模组 (Ghost Mods)
         # 找出 ACF 中标记已订阅，但物理文件没被扫描到的 ID
@@ -2289,7 +2319,8 @@ class API:
                 "store": store_type,
                 "source": "workshop",
                 "is_missing": True, 
-                "steam_status": steam_status
+                "steam_status": steam_status,
+                "replacement": replacements_map.get(wid)
             }
         for wid in ghost_ws_ids:
             matrix['workshop'].append(create_ghost(wid, 'workshop', ws_map.get(wid)))
@@ -2302,9 +2333,10 @@ class API:
         
         # 6. 后台触发在线比对，标记可更新状态
         # 获取所有涉及的 WID
-        all_wids = list(ws_map.keys()) + list(mg_map.keys())
-        import threading
-        threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
+        all_wids = list({str(wid) for wid in list(ws_map.keys()) + list(mg_map.keys()) if wid})
+        if all_wids:
+            import threading
+            threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
 
         return ApiResponse.success(res)
     

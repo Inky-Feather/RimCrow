@@ -1,356 +1,755 @@
 <template>
   <transition name="fade">
-    <div v-if="visible" class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm" >
-      <div class="w-3/4 max-h-9/10 flex flex-col bg-bg-deep border border-accent-danger/30 rounded-xl shadow-2xl overflow-hidden">
+    <div
+      v-if="visible"
+      class="fixed inset-0 z-100 flex items-center justify-center bg-black/70 px-3 py-4 backdrop-blur-md"
+    >
+      <div class="flex h-[min(88vh,780px)] w-[min(95vw,1360px)] flex-col overflow-hidden rounded-[22px] border border-accent-danger/18 bg-bg-deep shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+        <div class="shrink-0 border-b border-text-main/8 bg-[linear-gradient(135deg,rgba(15,23,42,0.94),rgba(2,6,23,0.92))] px-4 py-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-lg font-black tracking-wide text-text-main">处理重复模组</h2>
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                  硬冲突 {{ summary.hardCount }}
+                </span>
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                  共存 {{ summary.softCount }}
+                </span>
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                  待处理 {{ summary.pendingCount }}
+                </span>
+                <span class="rounded-full border border-accent-warn/22 bg-accent-warn/10 px-2 py-0.5 text-[11px] text-accent-warn">
+                  禁用 {{ summary.disableCount }}
+                </span>
+                <span class="rounded-full border border-accent-danger/22 bg-accent-danger/10 px-2 py-0.5 text-[11px] text-accent-danger">
+                  删除 {{ summary.deleteCount }}
+                </span>
+              </div>
+              <p class="mt-1 text-xs text-text-dim">
+                先选要保留的副本，再决定其余副本是禁用还是删除。
+              </p>
+            </div>
 
-        <!-- Header -->
-        <div class="px-6 py-4 bg-accent-danger/10 border-b border-accent-danger/20 flex items-center justify-between shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="p-2 rounded-full bg-accent-danger/20 text-accent-danger animate-pulse">
-              <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
-            </div>
-            <div>
-              <h2 class="text-lg font-bold text-text-main">发现模组冲突</h2>
-              <p class="text-sm text-text-dim">检测到 {{ localConflicts.length }} 组重复的包ID。请为每一组选择一个<span
-                  class="text-accent-success font-bold">保留版本</span>。</p>
+            <div class="flex items-center gap-2">
+              <CommonSwitch :model-value="appStore.settings.show_coexistence_message"
+                @update:modelValue="handleCoexistenceToggle" label="显示共存" mini
+                description="关闭后只显示同级硬冲突" class="w-38 "
+              />
+              <button class="rounded-full border border-text-main/12 bg-black/25 p-1.5 text-text-dim transition-colors hover:border-accent-danger/30 hover:text-accent-danger"
+                v-tooltip="'关闭冲突处理弹窗，稍后再处理这些重复副本'" @click="visible = false" >
+                <XCircle class="size-4" />
+              </button>
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <common-switch v-model="appStore.settings.show_coexistence_message" @click="appStore.saveSetting('show_coexistence_message', appStore.settings.show_coexistence_message)"
-              label="显示共存问题" mini description="关闭后，仅显示冲突的包ID，不显示版本共存问题"
-              class="w-45 text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-text-main transition-colors"
-            />
-            <button v-tooltip="'我管这的那的，下次再说！'" class="text-sm text-text-dim hover:text-accent-danger transition-colors" @click="visible = false">
-              <x-circle></x-circle>
-            </button>
-          </div>
-          
         </div>
 
-        <!-- 滚动列表区 -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-6">
-
-          <!-- 循环每一组冲突：key 改为 package_id -->
-          <div v-for="group in localConflicts" :key="group.package_id"
-            class="bg-text-main/5 rounded-xl border border-text-main/10 overflow-hidden">
-
-            <!-- 组标题 -->
-            <div class="flex-1 bg-black/20 px-4 py-2 border-b border-text-main/5 flex justify-between items-center">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="font-mono text-sm font-bold text-accent-highlight truncate">{{ group.package_id }}</span>
-                <!-- 增加类型标签提示 -->
-                <span v-if="group._type === 'hard'" v-tooltip="'!!在同一个目录下发现重复文件，这可能会引起冲突，需要处理!!'"
-                  class="px-1.5 py-0.5 rounded bg-accent-danger/20 cursor-help text-accent-danger text-[10px] font-black uppercase border border-accent-danger/30">同级冲突</span>
-                <span v-else v-tooltip="'不同目录下发现重复文件，这是正常现象，可选择处理，游戏会默认使用本地版本'"
-                  class="px-1.5 py-0.5 rounded bg-blue-500/20 cursor-help text-blue-400 text-[10px] font-black uppercase border border-blue-500/30">版本共存</span>
-              </div>
-              <div class="text-xs text-text-dim shrink-0">发现 {{ group.items.length }} 个副本</div>
-            </div>
-
-            <!-- 版本选项列表 -->
-            <div class="p-3 grid gap-2 grid-cols-1">
-              <!-- key 改为 mod.path，选中判断改为 selections[group.package_id] -->
-              <div v-for="mod in group.items" :key="mod.path" class="flex items-center">
-                
-                <div @click="selectVersion(group.package_id, mod.path)"
-                  class="relative flex-1 flex items-center p-3 rounded-lg border transition-all cursor-pointer group/item"
-                  :class="selections[group.package_id] === mod.path
-                    ? 'bg-accent-success/10 border-accent-success ring-1 ring-accent-success/50'
-                    : 'bg-black/20 border-text-main/5 opacity-70 hover:opacity-100 hover:border-text-main/20'">
-                  <!-- 选中标记 -->
-                  <div class="w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors"
-                    :class="selections[group.package_id] === mod.path ? 'border-accent-success bg-accent-success text-black' : 'border-text-main/30'">
-                    <svg v-if="selections[group.package_id] === mod.path" class="size-4" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" stroke-width="4">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
+        <div class="flex min-h-0 flex-1">
+          <div class="min-w-0 flex-1 overflow-y-auto px-4 py-4">
+            <div class="space-y-3">
+              <div v-for="group in localGroups" :key="group.key"
+                class="overflow-hidden rounded-[18px] border border-text-main/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.015))]"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-text-main/8 bg-black/18 px-3 py-2">
+                  <div class="min-w-0 flex items-center gap-2">
+                    <span class="truncate font-mono text-sm font-black text-accent-highlight">
+                          {{ group.package_id }}
+                    </span>
+                    <span
+                      class="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em]"
+                      :class="group._type === 'hard'
+                        ? 'border-accent-danger/28 bg-accent-danger/10 text-accent-danger'
+                        : 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'"
+                    >
+                      {{ group._type === 'hard' ? '硬冲突' : '共存' }}
+                    </span>
+                    <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] text-text-dim">
+                      {{ group.items.length }} 个副本
+                    </span>
                   </div>
-
-                  <!-- Mod 信息 -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                      <span class="font-bold text-sm text-text-main truncate">{{ mod.name }}</span>
-                      <span class="px-1.5 py-0.5 rounded bg-text-main/10 text-xs font-mono text-accent-primary cursor-help" v-tooltip="`版本：${mod.version || '?'}`">
-                        v{{ mod.version || '?' }}</span>
-                      <span class="px-1.5 py-0.5 rounded bg-text-main/10 text-xs font-mono text-accent-success cursor-help" v-tooltip="`支持游戏版本：${mod.supported_versions?.join(', ') || '?'}`">
-                        {{ mod.supported_versions?.at(-1) || '?' }}</span>
-                      <!-- 来源高亮 -->
-                      <span class="text-xs px-1 rounded"
-                        :class="mod.store === 'local' ? 'text-accent-success border border-accent-success/30' : (mod.store === 'workshop' ? 'text-accent-primary border border-accent-primary/10' : 'text-text-dim border border-text-dim/10')">
-                        {{ mod.store }}</span>
-                    </div>
-                    <div class="text-xs text-text-dim mt-1 truncate font-mono" v-tooltip="mod.path">{{ mod.path }}</div>
-                    <!-- Workshop 的快捷操作区 -->
-                    <div v-if="mod.store === 'workshop' || mod.workshop_id" class="flex items-center gap-2" @click.stop>
-                      <!-- 本地化按钮 -->
-                      <button v-if="mod.store === 'workshop'" 
-                              @click="handleLocalize(mod)"
-                              v-tooltip="'将此工坊物品备份为本地模组'" 
-                              class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-text-main/10 text-[10px] text-text-dim hover:text-accent-primary hover:border-accent-primary/30 hover:bg-accent-primary/10 transition-colors">
-                        <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        本地化
-                      </button>
-                      
-                      <!-- 取消订阅按钮 -->
-                      <button v-if="mod.workshop_id" 
-                              @click="handleUnsubscribe(mod)"
-                              v-tooltip="'在 Steam 中取消订阅此模组'" 
-                              class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-text-main/10 text-[10px] text-text-dim hover:text-accent-danger hover:border-accent-danger/30 hover:bg-accent-danger/10 transition-colors">
-                        <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-                        取消订阅
-                      </button>
-                    </div>
-
-                  </div>
-
-                  <!-- 未选中时的操作配置 (禁用/删除) -->
-                  <!-- 只有当此项未被选中时才显示 -->
-                  <div v-if="selections[group.package_id] !== mod.path" @click.stop
-                    class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-text-main/5">
-                    <span class="text-xs text-text-dim">处理方式:</span>
-                    <!-- radio 的 name 使用 mod.path 保证唯一性 -->
-                    <label class="flex items-center gap-1 cursor-pointer hover:text-text-main transition-colors">
-                      <input type="radio" :name="`act-${mod.path}`" value="disable" v-model="actionMap[mod.path]"
-                        class="accent-accent-primary w-3 h-3">
-                      <span class="text-xs">禁用</span>
-                    </label>
-                    <label class="flex items-center gap-1 cursor-pointer hover:text-accent-danger transition-colors">
-                      <input type="radio" :name="`act-${mod.path}`" value="delete" v-model="actionMap[mod.path]"
-                        class="accent-accent-danger w-3 h-3">
-                      <span class="text-xs">删除</span>
-                    </label>
-                  </div>
-
-                  <!-- 选中状态文字 -->
-                  <div v-else
-                    class="ml-4 px-3 py-1.5 rounded bg-accent-success/20 text-accent-success text-xs font-bold border border-accent-success/20">
-                    将保留并使用
-                  </div>
-
                 </div>
 
-                <button v-tooltip="'打开文件路径'" class="m-2 text-text-dim hover:text-accent-cool transition-colors"
-                  @click="appStore.openPath(mod.path)">
-                  <Folder class="size-7"></Folder>
-                </button>
-              
+                <div class="space-y-2 p-3">
+                  <div v-for="mod in group.items"
+                    :key="mod.path_hash || mod.path"
+                    class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-all"
+                    :class="isWinner(group, mod.path)
+                      ? 'border-accent-success/30 bg-accent-success/8'
+                      : 'border-text-main/8 bg-black/16 hover:border-text-main/16 hover:bg-black/22'"
+                    @click="selectVersion(group.key, mod.path)"
+                  >
+                    <div class="flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-black"
+                      :class="isWinner(group, mod.path)
+                        ? 'border-accent-success bg-accent-success text-black'
+                        : 'border-text-main/20 text-text-dim'"
+                    >
+                      <Check v-if="isWinner(group, mod.path)" class="size-3" />
+                      <X v-else class="size-3" />
+                    </div>
 
+                    <div class="min-w-0 flex-1" tabindex="0" v-tooltip="getModTooltip(mod)">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="truncate text-sm font-bold text-text-main">
+                          {{ mod.name || mod.package_id || '未知模组' }}
+                        </span>
+                        <span class="rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                          :class="storeBadgeClass(mod.store)"
+                        >
+                          {{ storeLabel(mod.store) }}
+                        </span>
+                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] font-mono text-text-dim">
+                          支持 {{ getHighestSupportedVersion(mod) || '?' }}
+                        </span>
+                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] font-mono text-text-dim">
+                          v{{ mod.version || '?' }}
+                        </span>
+                        <span
+                          v-if="isWinner(group, mod.path)"
+                          class="rounded-full border border-accent-success/25 bg-accent-success/10 px-2 py-0.5 text-[10px] font-black text-accent-success"
+                        >
+                          保留
+                        </span>
+                      </div>
+                      <div class="truncate font-mono text-[11px] text-text-dim" :title="mod.path">
+                        {{ mod.path || '-' }}
+                      </div>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-1.5" @click.stop>
+                      <button
+                        v-if="mod.workshop_id && ['workshop', 'self'].includes(normalizeStore(mod.store))"
+                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-text-dim transition-colors hover:text-accent-primary"
+                        v-tooltip="'将该副本复制为本地模组，后续不再受原来源更新影响'"
+                        @click="handleLocalize(mod)"
+                      >
+                        本地化
+                      </button>
+                      <button v-if="mod.workshop_id && normalizeStore(mod.store) === 'workshop'"
+                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-text-dim transition-colors hover:text-accent-danger"
+                        v-tooltip="'取消 Steam 工坊订阅，Steam 后续会移除这个副本'"
+                        @click="handleUnsubscribe(mod)"
+                      >
+                        退订
+                      </button>
+                      <button class="rounded-full border border-text-main/10 bg-black/22 p-1.5 text-text-dim transition-colors hover:border-accent-cool/30 hover:text-accent-cool"
+                        v-tooltip="'打开该副本所在目录'"
+                        @click="appStore.openPath(mod.path)"
+                      >
+                        <Folder class="size-3.5" />
+                      </button>
+
+                      <div v-if="!isWinner(group, mod.path)" class="flex items-center gap-0.5 rounded-full border border-text-main/10 bg-text-main/5 p-0.5">
+                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors"
+                          :class="actionMap[mod.path] === 'disable'
+                            ? 'bg-accent-warn text-black'
+                            : 'text-text-dim hover:text-accent-warn'"
+                          v-tooltip="'保留文件，只把该副本改为禁用状态'"
+                          @click.stop
+                        >
+                          <input class="sr-only" type="radio"
+                            :name="`action-${mod.path_hash || mod.path}`"
+                            :checked="actionMap[mod.path] === 'disable'"
+                            @change="setItemAction(group, mod.path, 'disable')"
+                          >
+                          禁用
+                        </label>
+                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors"
+                          :class="actionMap[mod.path] === 'delete'
+                            ? 'bg-accent-danger text-white'
+                            : 'text-text-dim hover:text-accent-danger'"
+                          v-tooltip="'将该副本移到回收站，不再保留文件'"
+                          @click.stop
+                        >
+                          <input class="sr-only" type="radio" :name="`action-${mod.path_hash || mod.path}`"
+                            :checked="actionMap[mod.path] === 'delete'" @change="setItemAction(group, mod.path, 'delete')"
+                          >
+                          删除
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
+          <aside class="w-[300px] shrink-0 overflow-y-auto border-l border-text-main/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.92))] px-4 py-4">
+            <div class="space-y-3">
+              <section class="rounded-[18px] border border-text-main/8 bg-black/20 p-3">
+                <div class="text-[11px] font-black uppercase tracking-[0.16em] text-text-dim">批量选择</div>
+                <p class="mt-1 text-[11px] leading-5 text-text-dim">
+                  选范围，选保留谁，再选其余副本怎么处理。
+                </p>
+
+                <div class="mt-3 space-y-2.5">
+                  <CommonSelect v-model="batchRule.scope" :options="SCOPE_OPTIONS" label="范围" mini />
+                  <CommonSelect v-model="batchRule.keepRule" :options="BATCH_KEEP_OPTIONS" label="保留" mini />
+                  <CommonSelect v-model="batchRule.loserAction" :options="ACTION_OPTIONS" label="其余" mini />
+                </div>
+
+                <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                  <button class="rounded-full border border-accent-primary/24 bg-accent-primary/10 px-3 py-1 font-bold text-accent-primary transition-colors hover:bg-accent-primary/16"
+                    v-tooltip="'按当前范围、保留规则和处理方式，一次性应用到所有目标冲突组'" @click="applyBatchRule"
+                  >
+                    应用选择条件
+                  </button>
+                  <button class="rounded-full border border-accent-success/24 bg-accent-success/10 px-3 py-1 font-bold text-accent-success transition-colors hover:bg-accent-success/16"
+                    v-tooltip="'恢复系统推荐方案：优先保留更可能实际生效的副本，其余副本改为禁用'" @click="restoreRecommended"
+                  >
+                    恢复默认
+                  </button>
+                  <button class="rounded-full border border-accent-warn/20 bg-accent-warn/10 px-3 py-1 font-bold text-accent-warn transition-colors hover:bg-accent-warn/16"
+                    v-tooltip="'把当前范围内所有未保留副本统一改为禁用'" @click="setLoserActionForScope('disable')"
+                  >
+                    当前范围全禁用
+                  </button>
+                  <button class="rounded-full border border-text-main/10 bg-text-main/5 px-3 py-1 font-bold text-text-dim transition-colors hover:text-accent-danger"
+                    v-tooltip="'把当前范围内所有未保留副本统一移到回收站'" @click="setLoserActionForScope('delete')"
+                  >
+                    当前范围全删除
+                  </button>
+                </div>
+              </section>
+
+              <section class="rounded-[18px] border border-text-main/8 bg-black/20 p-3 text-[11px] leading-5 text-text-dim">
+                <div class="flex flex-wrap gap-x-2 gap-y-1">
+                  <span>当前范围 {{ scopedGroups.length }} 组</span>
+                  <span>待处理 {{ countPendingForScope }}</span>
+                  <span class="text-accent-warn">禁用 {{ countDisableForScope }}</span>
+                  <span class="text-accent-danger">删除 {{ countDeleteForScope }}</span>
+                </div>
+                <div class="mt-2">
+                  推荐方案会优先保留实际更容易生效的副本：本地 &gt; 管理器 &gt; 工坊。
+                </div>
+                <div v-if="summary.workshopDeleteCount > 0" class="mt-2 text-accent-warn">
+                  删除工坊副本后，Steam 以后可能重新下载。
+                </div>
+              </section>
+
+              <section v-if="submitFeedback" class="rounded-[18px] border p-3 text-[11px]"
+                :class="submitFeedback.kind === 'error'
+                  ? 'border-accent-danger/24 bg-accent-danger/10 text-accent-danger'
+                  : 'border-accent-warn/24 bg-accent-warn/10 text-accent-warn'"
+              >
+                <div class="font-black">
+                  {{ submitFeedback.kind === 'error' ? '处理失败' : '处理提示' }}
+                </div>
+                <p class="mt-1 leading-5 text-text-main">{{ submitFeedback.message }}</p>
+                <div v-if="submitFeedback.details?.length" class="mt-2 space-y-1 text-text-dim">
+                  <div v-for="line in submitFeedback.details" :key="line" class="truncate font-mono">
+                    {{ line }}
+                  </div>
+                </div>
+              </section>
+            </div>
+          </aside>
         </div>
 
-        <!-- Footer -->
-        <div class="py-4 px-6 bg-black/20 border-t border-text-main/5 flex justify-between items-center shrink-0">
-          <div class="text-sm text-text-dim">
-            <span class="text-accent-warn">注意：</span> 选择删除将直接移除文件至回收站，操作不可逆。<br>禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。
+        <div class="flex shrink-0 items-center justify-between gap-3 border-t border-text-main/8 bg-black/22 px-4 py-3">
+          <div class="text-[11px] text-text-dim">
+            提交后会自动刷新并重新扫描，保证冲突状态立即同步。
           </div>
-          <div class="flex gap-3">
-            <div @click.stop class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-text-main/5">
-              <span class="text-xs text-text-dim">一键批量:</span>
-              <!-- radio 的 name 使用 mod.path 保证唯一性 -->
-              <label class="flex items-center gap-1 cursor-pointer hover:text-text-main transition-colors">
-                <input type="radio" name="allActionState" value="disable" v-model="allActionState"
-                  class="accent-accent-primary w-3 h-3">
-                <span class="text-xs">禁用</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer hover:text-accent-danger transition-colors">
-                <input type="radio" name="allActionState" value="delete" v-model="allActionState"
-                  class="accent-accent-danger w-3 h-3">
-                <span class="text-xs">删除</span>
-              </label>
-            </div>
-            <button @click="submit" :disabled="processing"
-              class="px-8 py-2.5 rounded-lg bg-accent-primary hover:bg-accent-primary/80 text-black text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-accent-primary/20">
-              <span v-if="processing" class="animate-spin">⟳</span>
-              {{ processing ? '处理中...' : '确认解决所有冲突' }}
+          <div class="flex shrink-0 items-center gap-2">
+            <button class="rounded-xl border border-text-main/10 bg-text-main/5 px-4 py-2 text-xs font-bold text-text-dim transition-colors hover:border-text-main/20 hover:text-text-main"
+              v-tooltip="'关闭弹窗，暂不处理这些冲突'" @click="visible = false"
+            >
+              稍后处理
+            </button>
+            <button class="rounded-xl bg-accent-primary px-4 py-2 text-xs font-black text-black transition-colors hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="processing" v-tooltip="'执行当前配置的禁用/删除操作，并在完成后自动重新扫描'" @click="submit"
+            >
+              {{ processing ? '处理中...' : '执行处理' }}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   </transition>
 </template>
 
 <script setup>
-import { ref, watch, reactive, computed } from 'vue'
-import { useModStore } from '../stores/modStore'
-import { useAppStore } from '../stores/appStore'
-import { useToast } from "vue-toastification"
+import { computed, reactive, ref, watch } from 'vue'
+import { useToast } from 'vue-toastification'
+import { Check, Folder, X, XCircle } from 'lucide-vue-next'
 import CommonSwitch from './common/input/CommonSwitch.vue'
-import { Folder, XCircle } from 'lucide-vue-next'
+import CommonSelect from './common/input/CommonSelect.vue'
+import { useAppStore } from '../stores/appStore'
+import { useModStore } from '../stores/modStore'
 import { useConfirmStore } from '../stores/confirmStore'
 
 const appStore = useAppStore()
 const modStore = useModStore()
-const confirmStore = useConfirmStore();
+const confirmStore = useConfirmStore()
 const toast = useToast()
 
 const visible = ref(false)
 const processing = ref(false)
-const localConflicts = ref([]) // 本地副本，避免直接操作 store 引用
+const localGroups = ref([])
+const submitFeedback = ref(null)
 
-// 状态管理：使用 package_id 做键，而非索引
-// selections: { groupIndex: selectedPath }  记录每组选了哪个
 const selections = reactive({})
-// actionMap: { path: 'disable' | 'delete' } 记录每个路径的具体操作
 const actionMap = reactive({})
 
+const batchRule = reactive({
+  scope: 'all',
+  keepRule: 'recommended',
+  loserAction: 'disable',
+})
+
+const SCOPE_OPTIONS = [
+  { value: 'all', label: '全部冲突', desc: '同时处理硬冲突和版本共存。' },
+  { value: 'hard', label: '只选硬冲突', desc: '只处理同级目录里的重复包 ID。' },
+  { value: 'soft', label: '只选共存', desc: '只处理不同目录间的同包 ID 共存。' },
+]
+
+const BATCH_KEEP_OPTIONS = [
+  { value: 'recommended', label: '默认推荐', desc: '优先保留更可能实际生效的副本。' },
+  { value: 'prefer_local', label: '保留本地副本', desc: '如果有本地副本，优先保留它。' },
+  { value: 'prefer_self', label: '保留管理器副本', desc: '如果有管理器副本，优先保留它。' },
+  { value: 'prefer_workshop', label: '保留工坊副本', desc: '如果有工坊副本，优先保留它。' },
+  { value: 'latest_modified', label: '保留最新修改的', desc: '优先保留最近改动过的副本。' },
+  { value: 'earliest_modified', label: '保留最早修改的', desc: '优先保留修改时间更早的副本。' },
+  { value: 'latest_created', label: '保留最新创建的', desc: '优先保留新建时间更晚的副本。' },
+  { value: 'earliest_created', label: '保留最早创建的', desc: '优先保留创建时间更早的副本。' },
+  { value: 'highest_supported_version', label: '保留支持版本更高的', desc: '优先保留支持 RimWorld 版本更高的副本。' },
+  { value: 'highest_mod_version', label: '保留模组版本更高的', desc: '优先保留模组自身版本号更高的副本。' },
+  { value: 'shortest_path', label: '保留路径更短的', desc: '优先保留路径更短的副本。' },
+  { value: 'longest_path', label: '保留路径更长的', desc: '优先保留路径更长的副本。' },
+]
+
+const ACTION_OPTIONS = [
+  { value: 'disable', label: '其余都禁用', desc: '其它副本改为禁用。' },
+  { value: 'delete', label: '其余都删除', desc: '其它副本移到回收站。' },
+]
+
+const STORE_PRIORITY = {
+  local: 300,
+  self: 200,
+  workshop: 100,
+}
+
+const normalizeStore = (store) => {
+  const value = String(store || '').toLowerCase()
+  if (['local', 'self', 'workshop', 'any'].includes(value)) return value
+  return 'unknown'
+}
+
+const storeLabel = (store) => {
+  const value = normalizeStore(store)
+  if (value === 'local') return '本地'
+  if (value === 'self') return '管理器'
+  if (value === 'workshop') return '工坊'
+  return store || '未知'
+}
+
+const storeBadgeClass = (store) => {
+  const value = normalizeStore(store)
+  if (value === 'local') return 'border-accent-success/25 bg-accent-success/10 text-accent-success'
+  if (value === 'self') return 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'
+  if (value === 'workshop') return 'border-accent-warn/28 bg-accent-warn/10 text-accent-warn'
+  return 'border-text-main/10 bg-text-main/5 text-text-dim'
+}
+
+const compareTextAsc = (left, right) => String(left || '').localeCompare(String(right || ''), undefined, {
+  numeric: true,
+  sensitivity: 'base',
+})
+
+const compareTextDesc = (left, right) => compareTextAsc(right, left)
+const compareNumberAsc = (left, right) => Number(left || 0) - Number(right || 0)
+const compareNumberDesc = (left, right) => Number(right || 0) - Number(left || 0)
+
+const normalizeTimestamp = (value) => {
+  if (!value) return 0
+  if (typeof value === 'number') {
+    if (value > 1e12) return value
+    if (value > 1e9) return value * 1000
+    return value
+  }
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const formatTime = (value) => {
+  const timestamp = normalizeTimestamp(value)
+  if (!timestamp) return '-'
+  return new Date(timestamp).toLocaleString('zh-CN', { hour12: false })
+}
+
+const getPathLength = (mod) => String(mod?.path || '').length
+
+const joinSupportedVersions = (mod) => {
+  const versions = Array.isArray(mod?.supported_versions) ? mod.supported_versions.filter(Boolean) : []
+  return versions.join(', ')
+}
+
+const getHighestSupportedVersion = (mod) => {
+  const versions = Array.isArray(mod?.supported_versions) ? [...mod.supported_versions].filter(Boolean) : []
+  if (!versions.length) return ''
+  return versions.sort(compareTextDesc)[0] || ''
+}
+
+const getStorePriority = (mod) => STORE_PRIORITY[normalizeStore(mod?.store)] || 0
+
+const compareStablePath = (left, right) => {
+  const pathCompare = compareTextAsc(left?.path, right?.path)
+  if (pathCompare !== 0) return pathCompare
+  return compareTextAsc(left?.name || left?.package_id, right?.name || right?.package_id)
+}
+
+const compareEffectivePriority = (left, right) => compareNumberDesc(getStorePriority(left), getStorePriority(right))
+const compareLatestModified = (left, right) => compareNumberDesc(normalizeTimestamp(left?.file_modify_time || left?.mtime), normalizeTimestamp(right?.file_modify_time || right?.mtime))
+const compareEarliestModified = (left, right) => compareNumberAsc(normalizeTimestamp(left?.file_modify_time || left?.mtime), normalizeTimestamp(right?.file_modify_time || right?.mtime))
+const compareLatestCreated = (left, right) => compareNumberDesc(normalizeTimestamp(left?.file_create_time || left?.ctime), normalizeTimestamp(right?.file_create_time || right?.ctime))
+const compareEarliestCreated = (left, right) => compareNumberAsc(normalizeTimestamp(left?.file_create_time || left?.ctime), normalizeTimestamp(right?.file_create_time || right?.ctime))
+const compareHighestSupportedVersion = (left, right) => compareTextDesc(getHighestSupportedVersion(left), getHighestSupportedVersion(right))
+const compareHighestModVersion = (left, right) => compareTextDesc(left?.version, right?.version)
+const compareShortestPath = (left, right) => compareNumberAsc(getPathLength(left), getPathLength(right))
+const compareLongestPath = (left, right) => compareNumberDesc(getPathLength(left), getPathLength(right))
+
+const RULE_COMPARATORS = {
+  recommended: [compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareLatestModified, compareShortestPath, compareStablePath],
+  effective_priority: [compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareLatestModified, compareShortestPath, compareStablePath],
+  latest_modified: [compareLatestModified, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareShortestPath, compareStablePath],
+  earliest_modified: [compareEarliestModified, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareShortestPath, compareStablePath],
+  latest_created: [compareLatestCreated, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareShortestPath, compareStablePath],
+  earliest_created: [compareEarliestCreated, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareShortestPath, compareStablePath],
+  highest_supported_version: [compareHighestSupportedVersion, compareEffectivePriority, compareHighestModVersion, compareLatestModified, compareShortestPath, compareStablePath],
+  highest_mod_version: [compareHighestModVersion, compareHighestSupportedVersion, compareEffectivePriority, compareLatestModified, compareShortestPath, compareStablePath],
+  shortest_path: [compareShortestPath, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareLatestModified, compareStablePath],
+  longest_path: [compareLongestPath, compareEffectivePriority, compareHighestSupportedVersion, compareHighestModVersion, compareLatestModified, compareStablePath],
+}
+
+const compareByRule = (left, right, keepRule = 'recommended') => {
+  const comparators = RULE_COMPARATORS[keepRule] || RULE_COMPARATORS.recommended
+  for (const comparator of comparators) {
+    const result = comparator(left, right)
+    if (result !== 0) return result
+  }
+  return 0
+}
+
+const pickWinner = (items, { preferredStore = 'any', keepRule = 'recommended' } = {}) => {
+  if (!Array.isArray(items) || items.length === 0) return null
+  const normalizedStore = normalizeStore(preferredStore)
+  let candidates = [...items]
+  if (normalizedStore !== 'any' && normalizedStore !== 'unknown') {
+    const preferredCandidates = candidates.filter((item) => normalizeStore(item.store) === normalizedStore)
+    if (preferredCandidates.length > 0) candidates = preferredCandidates
+  }
+  return [...candidates].sort((left, right) => compareByRule(left, right, keepRule))[0] || items[0]
+}
+
+const resolvePickConfig = (strategy = 'recommended') => {
+  if (strategy === 'prefer_local') return { preferredStore: 'local', keepRule: 'recommended' }
+  if (strategy === 'prefer_self') return { preferredStore: 'self', keepRule: 'recommended' }
+  if (strategy === 'prefer_workshop') return { preferredStore: 'workshop', keepRule: 'recommended' }
+  return { preferredStore: 'any', keepRule: strategy }
+}
+
+const buildGroupKey = (type, group) => {
+  const ids = [...(group?.items || [])]
+    .map((item) => item.path_hash || item.path || '')
+    .sort(compareTextAsc)
+  return `${type}:${group?.package_id || 'unknown'}:${ids.join('|')}`
+}
+
+const normalizeGroup = (rawGroup, type) => ({
+  ...rawGroup,
+  key: buildGroupKey(type, rawGroup),
+  _type: type,
+  items: [...(rawGroup?.items || [])].map((item) => ({ ...item })).sort((left, right) => compareByRule(left, right, 'recommended')),
+})
+
+const groupMatchesScope = (group, scope) => scope === 'all' || group?._type === scope
+
+const rebuildGroups = () => {
+  const groups = []
+
+  if (Array.isArray(modStore.conflictList)) {
+    modStore.conflictList.forEach((group) => {
+      const normalized = normalizeGroup(group, 'hard')
+      if (normalized.items.length > 1) groups.push(normalized)
+    })
+  }
+
+  if (appStore.settings.show_coexistence_message && Array.isArray(modStore.coexistenceList)) {
+    modStore.coexistenceList.forEach((group) => {
+      const normalized = normalizeGroup(group, 'soft')
+      if (normalized.items.length > 1) groups.push(normalized)
+    })
+  }
+
+  groups.sort((left, right) => {
+    if (left._type !== right._type) return left._type === 'hard' ? -1 : 1
+    return compareTextAsc(left.package_id, right.package_id)
+  })
+
+  groups.forEach((group) => {
+    const selectedPath = selections[group.key]
+    const hasSelection = group.items.some((item) => item.path === selectedPath)
+    if (!hasSelection) {
+      const winner = pickWinner(group.items, { keepRule: 'recommended' })
+      selections[group.key] = winner?.path || group.items[0]?.path
+    }
+    group.items.forEach((item) => {
+      if (!actionMap[item.path]) actionMap[item.path] = 'disable'
+    })
+  })
+
+  localGroups.value = groups
+  submitFeedback.value = null
+  visible.value = groups.length > 0
+}
+
 watch(
-  // 增加对设置项的监听，这样用户在设置中切换开关时，UI 能即时反应
   [
     () => modStore.conflictList,
     () => modStore.coexistenceList,
-    () => appStore.settings.show_coexistence_message
+    () => appStore.settings.show_coexistence_message,
   ],
-  ([conflictsVal, coexistencesVal, showCoexistence]) => {
-    // console.log('处理冲突', showCoexistence, coexistencesVal, conflictsVal)
-    // 1. 汇总最终需要显示的列表
-    const totalList = [];
-
-    // --- 处理硬冲突 (同目录重复) ---
-    // 逻辑：这类冲突会导致系统混乱，无论设置如何，通常都建议显示并让用户处理
-    if (conflictsVal?.length > 0) {
-      // 给每个组标记类型，方便在模板中显示不同的 UI 样式或标签
-      totalList.push(...conflictsVal.map(g => ({ ...g, _type: 'hard' })));
-      // console.log('conflictsVal', conflictsVal)
-    }
-
-    // --- 处理共存/软冲突 (跨目录重复) ---
-    // 逻辑：仅当用户开启了“显示共存提示”开关时，才加入处理列表
-    if (showCoexistence && coexistencesVal?.length > 0) {
-      totalList.push(...coexistencesVal.map(g => ({ ...g, _type: 'soft' })));
-      // console.log('coexistencesVal', coexistencesVal)
-    }
-
-    // 2. 更新 UI 绑定的冲突列表数据
-    // 注意：这里将过滤后的汇总列表赋值给 conflicts.value 供模板遍历
-    localConflicts.value = totalList;
-
-    // 3. 执行初始化逻辑
-    if (totalList.length > 0) {
-      // 清空旧的选择和映射（防止数据残留）
-      Object.keys(selections).forEach(key => delete selections[key]);
-      Object.keys(actionMap).forEach(key => delete actionMap[key]);
-      totalList.forEach((group) => {
-        const pid = group.package_id;
-
-        // 智能默认选择
-        const localVersion = group.items.find(m => m.store === 'workshop' || m.store === 'self');
-        const defaultWinner = localVersion || group.items[0];
-
-        selections[pid] = defaultWinner.path;
-
-        // 初始化该组内所有项的操作状态
-        group.items.forEach(mod => {
-          // 默认操作为 disable (禁用 About.xml)
-          // 这里的逻辑可以优化：如果是 winner，UI 上可以禁用操作选择
-          actionMap[mod.path] = 'disable';
-        });
-      });
-
-      // 显示冲突解决弹窗
-      visible.value = true;
-    } else {
-      // 如果没有需要处理的项，确保弹窗关闭
-      visible.value = false;
-    }
-  },
+  rebuildGroups,
   { deep: true, immediate: true }
-);
+)
 
-// 所有操作状态
-const allActionState = computed({
-    get() {
-      // 返回操作状态合集结果，只有所有项都为True 或者所有项都为False 才返回True 或False，否则返回null
-      const states = Object.values(actionMap)
-      if (states.every(state => state === 'disable')) {
-          return 'disable'
-      } else if (states.every(state => state === 'delete')) {
-          return 'delete'
-      } else {
-          return ''
-      }
-    },
-    set(val) {
-      if (val !== '') {
-          // 遍历所有路径，根据 val 统一设置状态
-          Object.keys(actionMap).forEach(key => {
-              actionMap[key] = val;
-          });
-      }
-    }
-})
+const scopedGroups = computed(() => localGroups.value.filter((group) => groupMatchesScope(group, batchRule.scope)))
 
-// 修改选择函数
-const selectVersion = (packageId, path) => {
-  selections[packageId] = path
+const summarizeGroups = (groups) => {
+  let pending = 0
+  let disable = 0
+  let deleteCount = 0
+  groups.forEach((group) => {
+    const keepPath = selections[group.key]
+    group.items.forEach((item) => {
+      if (item.path === keepPath) return
+      pending += 1
+      if ((actionMap[item.path] || 'disable') === 'delete') deleteCount += 1
+      else disable += 1
+    })
+  })
+  return { pending, disable, deleteCount }
 }
 
-const submit = async () => {
-  processing.value = true
-  // 构造操作列表
-  const operations = []
-  localConflicts.value.forEach((group) => {
-    const pid = group.package_id;    // 这一组的 package_id
-    const keepPath = selections[pid];
-    const keepPathHash = group.items.find(item => item.path === keepPath).path_hash
-    // 遍历该组所有项
-    group.items.forEach(mod => {
-      if (mod.path !== keepPath) {
-        // 只有非保留项才产生操作指令
-        operations.push({
-          action: actionMap[mod.path],
-          target_path: mod.path,
-          keep_id: pid,
-          keep_path_hash: keepPathHash,
-        })
+const summary = computed(() => {
+  const result = {
+    groupCount: localGroups.value.length,
+    hardCount: 0,
+    softCount: 0,
+    pendingCount: 0,
+    disableCount: 0,
+    deleteCount: 0,
+    workshopDeleteCount: 0,
+  }
+
+  localGroups.value.forEach((group) => {
+    if (group._type === 'hard') result.hardCount += 1
+    else result.softCount += 1
+
+    const keepPath = selections[group.key]
+    group.items.forEach((item) => {
+      if (item.path === keepPath) return
+      result.pendingCount += 1
+      const action = actionMap[item.path] || 'disable'
+      if (action === 'delete') {
+        result.deleteCount += 1
+        if (normalizeStore(item.store) === 'workshop') result.workshopDeleteCount += 1
+      } else {
+        result.disableCount += 1
       }
     })
   })
-  if (operations.length === 0) {
-    toast.info("未检测到需要执行的操作");
-    visible.value = false;
-    processing.value = false;
-    return;
+
+  return result
+})
+
+const scopedSummary = computed(() => summarizeGroups(scopedGroups.value))
+const countPendingForScope = computed(() => scopedSummary.value.pending)
+const countDisableForScope = computed(() => scopedSummary.value.disable)
+const countDeleteForScope = computed(() => scopedSummary.value.deleteCount)
+
+const isWinner = (group, path) => selections[group.key] === path
+
+const getModTooltip = (mod) => {
+  return [
+    `来源：${storeLabel(mod.store)}`,
+    `模组版本：${mod.version || '-'}`,
+    `最高支持版本：${getHighestSupportedVersion(mod) || '-'}`,
+    `支持版本列表：${joinSupportedVersions(mod) || '-'}`,
+    `创建时间：${formatTime(mod.file_create_time || mod.ctime)}`,
+    `修改时间：${formatTime(mod.file_modify_time || mod.mtime)}`,
+    `工坊 ID：${mod.workshop_id || '-'}`,
+    `路径：${mod.path || '-'}`,
+  ].join('\n')
+}
+
+const selectVersion = (groupKey, path) => {
+  selections[groupKey] = path
+  submitFeedback.value = null
+}
+
+const setItemAction = (group, path, action) => {
+  if (isWinner(group, path)) return
+  actionMap[path] = action
+  submitFeedback.value = null
+}
+
+const applyBatchRule = () => {
+  if (!scopedGroups.value.length) {
+    toast.info('当前作用范围内没有可处理的冲突组')
+    return
   }
+
+  scopedGroups.value.forEach((group) => {
+    const winner = pickWinner(group.items, resolvePickConfig(batchRule.keepRule))
+    if (!winner) return
+    selections[group.key] = winner.path
+    group.items.forEach((item) => {
+      if (item.path !== winner.path) actionMap[item.path] = batchRule.loserAction
+    })
+  })
+
+  submitFeedback.value = null
+  toast.success(`已按条件处理 ${scopedGroups.value.length} 组冲突`)
+}
+
+const restoreRecommended = () => {
+  if (!localGroups.value.length) return
+  localGroups.value.forEach((group) => {
+    const winner = pickWinner(group.items, { keepRule: 'recommended' })
+    if (!winner) return
+    selections[group.key] = winner.path
+    group.items.forEach((item) => {
+      if (item.path !== winner.path) actionMap[item.path] = 'disable'
+    })
+  })
+  submitFeedback.value = null
+  toast.success('已恢复推荐处理方案')
+}
+
+const setLoserActionForScope = (action) => {
+  if (!scopedGroups.value.length) {
+    toast.info('当前作用范围内没有可处理的冲突组')
+    return
+  }
+
+  scopedGroups.value.forEach((group) => {
+    const keepPath = selections[group.key]
+    group.items.forEach((item) => {
+      if (item.path !== keepPath) actionMap[item.path] = action
+    })
+  })
+  submitFeedback.value = null
+}
+
+const buildOperations = () => {
+  const operations = []
+  localGroups.value.forEach((group) => {
+    const winner = group.items.find((item) => item.path === selections[group.key]) || group.items[0]
+    if (!winner) return
+    group.items.forEach((item) => {
+      if (item.path === winner.path) return
+      operations.push({
+        action: actionMap[item.path] || 'disable',
+        target_path: item.path,
+        keep_id: group.package_id,
+        keep_path_hash: winner.path_hash,
+      })
+    })
+  })
+  return operations
+}
+
+const submit = async () => {
+  if (processing.value || !window.pywebview) return
+
+  const operations = buildOperations()
+  if (!operations.length) {
+    toast.info('当前没有需要处理的副本')
+    visible.value = false
+    return
+  }
+
+  const confirmMessage = [
+    `将处理 ${summary.value.groupCount} 组冲突中的 ${operations.length} 个未保留副本。`,
+    `禁用 ${summary.value.disableCount} 个，删除 ${summary.value.deleteCount} 个。`,
+    summary.value.workshopDeleteCount > 0
+      ? `其中 ${summary.value.workshopDeleteCount} 个工坊副本会被删除，Steam 后续可能重新下载。`
+      : null,
+    '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。',
+  ].filter(Boolean).join('\n')
+
+  const ok = await confirmStore.confirmAction(
+    '确认处理冲突',
+    confirmMessage,
+    {
+      type: summary.value.deleteCount > 0 ? 'error' : 'warning',
+      confirmText: '确认执行',
+      cancelText: '再检查一下',
+    }
+  )
+  if (!ok) return
+
+  processing.value = true
+  submitFeedback.value = null
+
   try {
     const res = await window.pywebview.api.scan_conflicts_resolve(operations)
-    if (appStore.checkResult(res, '处理冲突')) {
-      toast.success("冲突已解决，正在刷新列表...")
-      // 关键：先清理 Store 中的状态，防止弹窗逻辑因异步扫描再次触发
+    const resultStats = res?.data?.stats || {}
+
+    if (res?.status === 'success' || (res?.status === 'warning' && resultStats.success_count > 0)) {
       modStore.conflictList = []
       modStore.coexistenceList = []
       visible.value = false
-      // 强制重置扫描状态，确保重新开始
-      await appStore.refreshData() // 这会读取数据库，但数据库里现在还没有新Mod
-    } else {
-      toast.error("处理失败: " + res.message)
+
+      if (res.status === 'success') {
+        toast.success(`已处理 ${resultStats.success_count || operations.length} 项冲突副本，正在重新扫描...`)
+      } else {
+        toast.warning(`已处理 ${resultStats.success_count || 0} 项，${resultStats.error_count || 0} 项失败；剩余问题会在重新扫描后重新提示。`, {
+          timeout: 9000,
+        })
+      }
+
+      await appStore.refreshData()
+      await modStore.scanMods()
+      return
     }
-  } catch (e) {
-    toast.error("API 调用异常")
-    console.error(e)
+
+    const failedPaths = Array.isArray(res?.data?.failed_paths) ? res.data.failed_paths : []
+    submitFeedback.value = {
+      kind: 'error',
+      message: res?.message || '冲突处理失败',
+      details: failedPaths.slice(0, 3),
+    }
+    toast.error(`处理失败: ${res?.message || '未知错误'}`)
+  } catch (error) {
+    const message = error?.message || '冲突处理接口调用异常'
+    submitFeedback.value = { kind: 'error', message, details: [] }
+    toast.error(message)
   } finally {
     processing.value = false
   }
 }
 
+const handleCoexistenceToggle = async (value) => {
+  appStore.settings.show_coexistence_message = value
+  await appStore.saveSetting('show_coexistence_message', value)
+}
+
 const handleLocalize = async (mod) => {
-  if (!mod.workshop_id) return;
-  await modStore.localizeMods([mod.workshop_id])
+  if (!mod?.workshop_id) return
+  const store = normalizeStore(mod.store)
+  if (!['self', 'workshop'].includes(store)) return
+  await modStore.localizeMods([mod.workshop_id], store)
 }
 
 const handleUnsubscribe = async (mod) => {
-  if (!mod.workshop_id) return;
-  // 增加二次确认，防止误触
+  if (!mod?.workshop_id) return
   const ok = await confirmStore.confirmAction(
     '取消订阅',
-    `确定要从 Steam 取消订阅 [${mod.name || mod.workshop_id}] 吗？\n文件将在后台被 Steam 移除。`,
-    { type: 'warning' }
-  );
-  if (!ok) return;
+    `确定要取消订阅 [${mod.name || mod.workshop_id}] 吗？\nSteam 后续会移除对应工坊副本。`,
+    { type: 'warning', confirmText: '确认取消订阅' }
+  )
+  if (!ok) return
   await appStore.unsubscribeMod([mod.workshop_id])
 }
 </script>
@@ -358,7 +757,7 @@ const handleUnsubscribe = async (mod) => {
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.24s ease;
 }
 
 .fade-enter-from,

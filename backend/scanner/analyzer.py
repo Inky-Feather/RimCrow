@@ -1,8 +1,10 @@
 import os
 import re
-
+from dataclasses import dataclass
 # 引入通用常量
 from backend.utils.constants import LANGUAGE_MAP
+
+
 
 BASE_IGNORED_PATHS = [
     'Backups',
@@ -13,6 +15,16 @@ BASE_IGNORED_PATHS = [
     '.git',
     '.vscode',
 ]
+
+@dataclass(frozen=True)
+class ModAboutState:
+    about_xml: str
+    disabled_xml: str
+    resolved_path: str | None
+    is_disabled: bool
+    has_about: bool
+    has_disabled: bool
+    cleaned_conflict: bool = False
 
 class ModAnalyzer:
     def __init__(self):
@@ -214,3 +226,58 @@ class ModAnalyzer:
         del info['has_defs']
         
         return info
+    
+    @staticmethod
+    def resolve_mod_about_state(mod_path: str, cleanup_dual_files: bool = False) -> ModAboutState:
+        """
+        统一解析 Mod 的 About 文件状态。
+
+        规则：
+        - `About.xml` 存在时视为启用。
+        - 仅存在 `About.xml.disabled` 时视为禁用。
+        - 两者同时存在时，以 `About.xml` 为准；如允许修复，则自动删除残留的 `.disabled`。
+        """
+        about_xml = os.path.join(mod_path, 'About', 'About.xml')
+        disabled_xml = about_xml + '.disabled'
+
+        has_about = os.path.exists(about_xml)
+        has_disabled = os.path.exists(disabled_xml)
+        cleaned_conflict = False
+
+        if has_about and has_disabled and cleanup_dual_files:
+            os.remove(disabled_xml)
+            has_disabled = False
+            cleaned_conflict = True
+
+        if has_about:
+            return ModAboutState(
+                about_xml=about_xml,
+                disabled_xml=disabled_xml,
+                resolved_path=about_xml,
+                is_disabled=False,
+                has_about=True,
+                has_disabled=has_disabled,
+                cleaned_conflict=cleaned_conflict,
+            )
+
+        if has_disabled:
+            return ModAboutState(
+                about_xml=about_xml,
+                disabled_xml=disabled_xml,
+                resolved_path=disabled_xml,
+                is_disabled=True,
+                has_about=False,
+                has_disabled=True,
+                cleaned_conflict=cleaned_conflict,
+            )
+
+        return ModAboutState(
+            about_xml=about_xml,
+            disabled_xml=disabled_xml,
+            resolved_path=None,
+            is_disabled=False,
+            has_about=False,
+            has_disabled=False,
+            cleaned_conflict=cleaned_conflict,
+        )
+

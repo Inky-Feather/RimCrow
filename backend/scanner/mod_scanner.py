@@ -184,12 +184,20 @@ class ModScanner:
             if workshop_mods_root:
                 workshop_mods_root = os.path.normpath(workshop_mods_root).lower()
 
+            shadow_paths_map = {}
             for pid, entries in temp_registry.items():
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("Scan stopped during parsing stage.")
                     self._handle_interruption()
                     return # 直接结束任务
+
+                active_entries = [mod for mod in entries if not mod.get('disabled')]
+                disabled_paths = [mod['path'] for mod in entries if mod.get('disabled') and mod.get('path')]
+                for mod in entries:
+                    path_hash = mod.get('path_hash')
+                    if path_hash:
+                        shadow_paths_map[path_hash] = disabled_paths if not mod.get('disabled') else []
                 
                 # 情况 A: 只有一个实例 -> 直接入库
                 if len(entries) == 1:
@@ -203,9 +211,20 @@ class ModScanner:
                     continue
 
                 # 情况 B: 多个实例 -> 判定冲突类型
+                # 若只有一个启用实例，其余均为禁用副本，则不视为冲突，只做元数据同步。
+                if len(active_entries) <= 1:
+                    for mod in entries:
+                        if not mod.get('_skipped'):
+                            mods_to_upsert.append(mod)
+                        self._classify_for_deploy(
+                            mod, local_mods_root, self_mods_root, workshop_mods_root,
+                            local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy
+                        )
+                    continue
+
                 # 按父目录分组
                 by_parent = defaultdict(list)
-                for mod in entries:
+                for mod in active_entries:
                     parent_dir = os.path.dirname(mod['path']).lower()
                     by_parent[parent_dir].append(mod)
 
@@ -234,7 +253,7 @@ class ModScanner:
                 # 走到这里说明 len(entries) > 1 且没有硬冲突
                 final_coexistences.append({
                     'package_id': pid,
-                    'items': entries,            # 包含 Local 和 Workshop 的所有版本
+                    'items': active_entries,      # 禁用副本不参与冲突提示
                     'type': 'different_directory' # 标记类型：跨目录共存
                 })
 
@@ -253,6 +272,8 @@ class ModScanner:
             try:
                 if mods_to_upsert: 
                     ModDAO.batch_upsert_mods(mods_to_upsert)
+                if shadow_paths_map:
+                    ModDAO.batch_update_shadow_paths(shadow_paths_map)
             except Exception as e:
                 # txn.rollback() # 万一出错，回滚所有改动
                 logger.error(f"批量入库失败: {e}", exc_info=True)
@@ -348,7 +369,7 @@ class ModScanner:
         辅助函数：将 Mod 分类以便后续部署。
         """
         mod_path = mod_data.get('path')
-        if not mod_path: return
+        if not mod_path or mod_data.get('disabled'): return
         
         mod_path_norm = os.path.normpath(mod_path).lower()
         pid = mod_data['package_id'].lower()
@@ -368,21 +389,19 @@ class ModScanner:
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
         """
-        about_file = os.path.join(mod_path, 'About', 'About.xml')
-        disabled_file = os.path.join(mod_path, 'About', 'About.xml.disabled')
-        is_disabled = False 
-        # 存在性快速检查 (0 IO)
-        # 如果没有 About.xml，但有 .disabled，说明这是被管理器禁用的重复项
-        if not os.path.exists(about_file):
-            if os.path.exists(disabled_file):
-                about_file = disabled_file  
-                is_disabled = True
-            if not is_dlc_dir:
-                return None # 既不是 DLC 也没有 About.xml，无效
+        try:
+            about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=True)
+        except OSError as e:
+            logger.warning(f"Failed to clean duplicate About files for {mod_path}: {e}")
+            about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=False)
+        about_file = about_state.resolved_path
+        is_disabled = about_state.is_disabled
+        if not about_file and not is_dlc_dir:
+            return None # 既不是 DLC 也没有 About.xml，无效
         
         # 检查 mtime
         try:
-            stat = os.stat(about_file)
+            stat = os.stat(about_file) if about_file else os.stat(mod_path)
             mtime = int(stat.st_mtime * 1000)
             ctime = int(stat.st_ctime * 1000)
         except OSError:
@@ -395,10 +414,6 @@ class ModScanner:
         # 在开启开关或者强制更新的情况下，才需要计算大小
         need_size_check = settings.config.enable_file_size_scan or forced_update
 
-        # 如果快照存在且被禁用，直接跳过
-        if snapshot and is_disabled:
-            return self._build_skipped_result(snapshot, path_hash, mod_path, mtime, snapshot['size'], is_disabled)
-            
         disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
         
         # 增量检测逻辑 (Time AND Size)
@@ -420,7 +435,7 @@ class ModScanner:
         
         # 解析 XML (CPU 密集)
         # parser 内部如果处理异常会返回默认空结构，这里直接调
-        mod_data = self.xml_parser.parse(mod_path)
+        mod_data = self.xml_parser.parse(mod_path, about_path=about_file)
         pkg_id = mod_data.get('package_id','').lower()
         
         # DLC 兜底 ID
@@ -504,7 +519,7 @@ class ModScanner:
             'file_modify_time': mtime,
             'file_size': final_size,
             'source': mod_data.get('source', 'local'), # 来源
-            'disabled': False, # 如果它存在 About.xml，说明它是激活的。强制重置为 False
+            'disabled': is_disabled,
         })
         
         return mod_data
@@ -520,6 +535,8 @@ class ModScanner:
             'store': snapshot.get('store', 'local'),                 
             'supported_versions': snapshot.get('supported_versions', []), 
             'path': mod_path, 
+            'file_create_time': snapshot.get('ctime', 0),
+            'file_modify_time': mtime,
             'mtime': mtime,
             'file_size': current_size,
             'disabled': is_disabled

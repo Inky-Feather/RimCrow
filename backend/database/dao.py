@@ -8,6 +8,7 @@ import uuid
 from peewee import chunked, fn, JOIN
 from backend.database.models import SubscribedCollection, db, ModAsset, UserModData, GroupData, GroupMod
 from backend.managers.mgr_profile import ProfileContext
+from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import settings
 from backend.utils.logger import logger
 
@@ -111,6 +112,7 @@ class ModDAO:
         merged_map = {} # { package_id: mod_data }
         for mod in sorted_mods:
             pkg_id = mod['package_id'].lower()
+            had_existing = pkg_id in merged_map
             # 标记来源供 UI 显示图标
             # m_path = norm(mod['path'])
             # if (L_PATH and m_path.startswith(L_PATH)) or (D_PATH and m_path.startswith(D_PATH)):
@@ -124,7 +126,7 @@ class ModDAO:
             merged_map[pkg_id] = mod
             
             # 记录遮蔽信息 (覆盖策略：高优先级在后)
-            if pkg_id in merged_map:
+            if had_existing:
                 # 记录被遮蔽的记录
                 # 例如：如果 merged_map 里已经是 Local，现在的 mod 是 Workshop
                 # 可以在这里给被选中的那个 Mod 增加一个属性，告诉前端它遮蔽了谁
@@ -226,7 +228,7 @@ class ModDAO:
         Value: { mtime, size, package_id }
         """
         # 需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
-        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_modify_time, ModAsset.file_size, 
+        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_create_time, ModAsset.file_modify_time, ModAsset.file_size, 
                                 ModAsset.package_id, ModAsset.workshop_id, ModAsset.disabled, ModAsset.name, ModAsset.version, 
                                 ModAsset.store, ModAsset.supported_versions ).dicts()
         
@@ -234,6 +236,7 @@ class ModDAO:
         for row in query:
             # 只有 path_hash 才是物理文件的唯一身份证
             snapshots[row['path_hash']] = {
+                'ctime': row['file_create_time'] or 0,
                 'mtime': row['file_modify_time'] or 0,
                 'size': row['file_size'] or 0,
                 'package_id': row['package_id'].lower(), # 缓存 ID
@@ -301,6 +304,24 @@ class ModDAO:
         with db.atomic():
             # batch_size 自动处理分批
             ModAsset.bulk_update(model_instances, fields=list(update_fields), batch_size=100)
+
+    @staticmethod
+    def batch_update_shadow_paths(shadow_paths_map: Dict[str, List[str]]):
+        """
+        批量同步 shadow_paths。
+        扫描时会根据当前真实文件状态重建“禁用同包名副本”的路径列表，避免外部改动导致展示信息失真。
+        """
+        if not shadow_paths_map:
+            return
+
+        model_instances = [
+            ModAsset(path_hash=path_hash, shadow_paths=paths)
+            for path_hash, paths in shadow_paths_map.items()
+        ]
+
+        with db.atomic():
+            for batch in chunked(model_instances, 100):
+                ModAsset.bulk_update(list(batch), fields=[ModAsset.shadow_paths], batch_size=100)
     
     @staticmethod
     def update_user_data(package_id: str, data_dict: Dict[str, Any]):
@@ -488,24 +509,28 @@ class ModDAO:
         """
         物理禁用/启用 Mod：重命名 About.xml 并同步数据库状态
         """
-        about_xml = os.path.join(path, 'About', 'About.xml')
-        disabled_xml = about_xml + '.disabled'
+        try:
+            about_state = ModAnalyzer.resolve_mod_about_state(path, cleanup_dual_files=True)
+        except Exception as e:
+            return False, f"清理 About 文件残留失败: {e}"
 
-        src = about_xml if disable else disabled_xml
-        dst = disabled_xml if disable else about_xml
+        if not about_state.resolved_path:
+            return False, "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态"
 
-        # 1. 物理文件操作
-        if os.path.exists(src):
-            try:
-                if os.path.exists(dst): os.remove(dst) # 清理残留
-                os.rename(src, dst)
-            except Exception as e:
-                return False, f"文件操作失败: {e}"
-        else:
-            # 如果文件不存在，可能是已经被手动删改，但我们仍需同步数据库以防万一
-            pass
+        if about_state.is_disabled == disable:
+            ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
+            return True, "状态已同步"
 
-        # 2. 数据库状态更新
+        src = about_state.resolved_path
+        dst = about_state.disabled_xml if disable else about_state.about_xml
+
+        try:
+            if os.path.exists(dst):
+                os.remove(dst)
+            os.replace(src, dst)
+        except Exception as e:
+            return False, f"文件操作失败: {e}"
+
         ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
         return True, "成功"
 
