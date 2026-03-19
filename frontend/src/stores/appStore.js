@@ -388,7 +388,8 @@ export const useAppStore = defineStore('app', () => {
         const workspaceStore = useWorkspaceStore()
         workspaceStore.initData()
         const orderStore = useOrderStore()
-        orderStore.getBackups()
+        // 备份列表优先保持用户当前正在查看的环境视图；无选择时再回退到当前环境。
+        orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
       }
     } catch (e) {
       toast.error(`刷新数据失败: \n${e.message}`)
