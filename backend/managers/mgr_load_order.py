@@ -3,6 +3,7 @@ import shutil
 import glob
 import datetime
 from pathlib import Path
+from typing import Any
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 
@@ -24,6 +25,11 @@ from backend.settings import settings
 from lxml import html
 etree = html.etree
 
+# 统一的排序文件格式标识，供后端解析结果和前端展示共用。
+EXPORT_FORMAT_MODSCONFIG = "modsconfig"
+EXPORT_FORMAT_MODLIST = "modlist"
+IMPORT_FORMAT_SAVEGAME = "savegame"
+
 class LoadOrderManager:
     """
     负责管理 ModsConfig.xml (加载顺序)
@@ -42,8 +48,9 @@ class LoadOrderManager:
         # self.mods_config_file = ''
 
     def _ensure_dirs(self):
-        # 强制建立当前环境所需的目录，彻底解决 os.path.exists 导致的无法赋值 Bug
-        os.makedirs(self.context.game_config_path, exist_ok=True)
+        # 当前环境健康时才触碰游戏配置目录；只读查看其它环境备份时不应顺手重建失效路径。
+        if self.context.is_healthy:
+            os.makedirs(self.context.game_config_path, exist_ok=True)
         os.makedirs(self.context.backup_dir, exist_ok=True)
         self._init_backup_dirs()
 
@@ -63,10 +70,238 @@ class LoadOrderManager:
         # 每次初始化（应用启动）时执行一次轮换检查
         self._rotate_backups()
 
+    def _normalize_package_id(self, package_id: Any) -> str:
+        # 包名统一转小写，避免不同来源文件大小写不一致导致匹配失败。
+        return str(package_id or "").strip().lower()
+
+    def _normalize_workshop_id(self, workshop_id: Any) -> str | None:
+        # 0 和空值都视为“没有可用工坊ID”，前端不应把它当成可订阅项目。
+        value = str(workshop_id or "").strip()
+        if not value or value == "0":
+            return None
+        return value
+
+    def _read_list_values(self, root, *xpaths: str) -> list[str]:
+        # 多种格式节点路径不同，这里按候选 XPath 依次兼容读取。
+        for xpath in xpaths:
+            nodes = root.xpath(xpath)
+            if not nodes:
+                continue
+            parent = nodes[0]
+            return [str(li.text).strip() if li.text else "" for li in parent.findall("li")]
+        return []
+
+    def _read_single_text(self, root, *xpaths: str) -> str:
+        # 单值节点也按候选 XPath 兼容，主要用于 ModList 的 Name。
+        for xpath in xpaths:
+            nodes = root.xpath(xpath)
+            if not nodes:
+                continue
+            text = getattr(nodes[0], "text", None)
+            if text:
+                return str(text).strip()
+        return ""
+
+    def _build_mod_entries(self, mod_ids: list[str], mod_names: list[str] | None = None, mod_workshop_ids: list[str] | None = None):
+        # 把 modIds / modNames / workshopIds 三组平行数组整理成统一结构。
+        mod_names = mod_names or []
+        mod_workshop_ids = mod_workshop_ids or []
+        entries = []
+        for index, raw_package_id in enumerate(mod_ids):
+            package_id_raw = str(raw_package_id or "").strip()
+            if not package_id_raw:
+                continue
+            package_id = self._normalize_package_id(package_id_raw)
+            name = str(mod_names[index]).strip() if index < len(mod_names) and mod_names[index] else ""
+            workshop_id_raw = str(mod_workshop_ids[index]).strip() if index < len(mod_workshop_ids) and mod_workshop_ids[index] else ""
+            entries.append({
+                "index": index,
+                "package_id": package_id,
+                "package_id_raw": package_id_raw,
+                "name": name,
+                "workshop_id": self._normalize_workshop_id(workshop_id_raw),
+                "workshop_id_raw": workshop_id_raw,
+            })
+        return entries
+
+    def _enrich_mod_entries(self, entries: list[dict]):
+        # 读取到的文件信息可能不完整，这里负责补全名称、原始包名和工坊ID。
+        if not entries:
+            return entries
+
+        package_ids = [entry["package_id"] for entry in entries if entry.get("package_id")]
+        visible_map: dict[str, dict[str, Any]] = {}
+        raw_case_map: dict[str, str] = {}
+        meta_map: dict[str, dict[str, Any]] = {}
+
+        try:
+            from backend.database.dao import ModDAO
+            if self.context and self.context.is_healthy:
+                # 优先使用当前环境可见 Mod 数据，名称和工坊ID最贴近用户现场状态。
+                for mod in ModDAO.get_profile_mods(self.context):
+                    package_id = self._normalize_package_id(mod.get("package_id"))
+                    if not package_id or package_id in visible_map:
+                        continue
+                    visible_map[package_id] = {
+                        "package_id_raw": mod.get("package_id_raw") or mod.get("package_id") or package_id,
+                        "name": mod.get("alias_name") or mod.get("display_name") or mod.get("name") or package_id,
+                        "workshop_id": self._normalize_workshop_id(mod.get("workshop_id")),
+                    }
+        except Exception as e:
+            logger.warning(f"补全排序文件 Mod 可见元数据失败: {e}")
+
+        try:
+            from backend.database.models import ModAsset
+            # 单独回查原始包名大小写，导出时尽量保留用户更熟悉的写法。
+            query = ModAsset.select(ModAsset.package_id, ModAsset.package_id_raw).where(
+                ModAsset.package_id.in_(package_ids) # type: ignore
+            )
+            for asset in query:
+                if asset.package_id and asset.package_id_raw and asset.package_id not in raw_case_map:
+                    raw_case_map[asset.package_id] = asset.package_id_raw
+        except Exception as e:
+            logger.warning(f"补全排序文件原始包名失败: {e}")
+
+        try:
+            from backend.database.models_ext import WorkshopMeta
+            # 再用离线工坊元数据兜底，给未安装项也补回名称和工坊ID。
+            meta_query = (
+                WorkshopMeta
+                .select(WorkshopMeta.package_id, WorkshopMeta.workshop_id, WorkshopMeta.name, WorkshopMeta.title)
+                .where(WorkshopMeta.package_id.in_(package_ids))
+                .dicts()
+            )
+            for meta in meta_query:
+                package_id = self._normalize_package_id(meta.get("package_id"))
+                if not package_id or package_id in meta_map:
+                    continue
+                meta_map[package_id] = {
+                    "name": meta.get("name") or meta.get("title") or package_id,
+                    "workshop_id": self._normalize_workshop_id(meta.get("workshop_id")),
+                }
+        except Exception as e:
+            logger.warning(f"补全排序文件创意工坊元数据失败: {e}")
+
+        for entry in entries:
+            # 这里采用“文件原值 > 当前环境 > 扩展库 > 兜底包名”的顺序。
+            # 这样既能尊重导入文件的原始信息，又能在信息不完整时尽量补齐。
+            package_id = entry.get("package_id")
+            visible_meta = visible_map.get(package_id, {})
+            workshop_meta = meta_map.get(package_id, {})
+
+            entry["package_id_raw"] = (
+                entry.get("package_id_raw")
+                or raw_case_map.get(package_id)
+                or visible_meta.get("package_id_raw")
+                or package_id
+            )
+            entry["name"] = (
+                entry.get("name")
+                or visible_meta.get("name")
+                or workshop_meta.get("name")
+                or entry.get("package_id_raw")
+                or package_id
+            )
+            entry["workshop_id"] = (
+                entry.get("workshop_id")
+                or visible_meta.get("workshop_id")
+                or workshop_meta.get("workshop_id")
+            )
+            entry["workshop_id_raw"] = (
+                entry.get("workshop_id_raw")
+                or entry.get("workshop_id")
+                or "0"
+            )
+
+        return entries
+
+    def _parse_load_order_file(self, mods_config_file_path: str):
+        # 三种格式最终都归一成同一份结构，前端不再关心原始 XML 长什么样。
+        parser = etree.XMLParser(recover=True)
+        tree = etree.parse(mods_config_file_path, parser)
+        root = tree.getroot()
+        tag_name = str(getattr(root, "tag", "")).lower()
+
+        format_name = EXPORT_FORMAT_MODSCONFIG
+        list_name = Path(mods_config_file_path).stem
+        mod_ids: list[str] = []
+        mod_names: list[str] = []
+        mod_workshop_ids: list[str] = []
+
+        # 存档 .rws 的排序信息位于 savegame/meta。
+        if tag_name == "savegame" or root.xpath("//meta/modIds"):
+            format_name = IMPORT_FORMAT_SAVEGAME
+            mod_ids = self._read_list_values(root, "./meta/modIds", "//meta/modIds")
+            mod_names = self._read_list_values(root, "./meta/modNames", "//meta/modNames")
+            mod_workshop_ids = self._read_list_values(root, "./meta/modSteamIds", "//meta/modSteamIds")
+        # ModList.xml 会显式带出 Name、modNames 和 modSteamWorkshopIds。
+        elif tag_name == "modlist" or root.xpath("//modSteamWorkshopIds") or (root.xpath("//modIds") and root.xpath("//modNames")):
+            format_name = EXPORT_FORMAT_MODLIST
+            list_name = self._read_single_text(root, "./Name", "//Name") or list_name
+            mod_ids = self._read_list_values(root, "./modIds", "//modIds")
+            mod_names = self._read_list_values(root, "./modNames", "//modNames")
+            mod_workshop_ids = self._read_list_values(root, "./modSteamWorkshopIds", "//modSteamWorkshopIds")
+        # ModsConfig.xml 只有 activeMods，需要后续再从数据库补名称和工坊ID。
+        elif tag_name == "modsconfigdata" or root.xpath("//activeMods"):
+            format_name = EXPORT_FORMAT_MODSCONFIG
+            mod_ids = self._read_list_values(root, "./activeMods", "//activeMods")
+        else:
+            raise ValueError(f"无法识别的排序文件格式: {mods_config_file_path}")
+
+        mods = self._enrich_mod_entries(self._build_mod_entries(mod_ids, mod_names, mod_workshop_ids))
+        return {
+            "format": format_name,
+            "list_name": list_name,
+            "mods": mods,
+            "active_mods": [entry["package_id"] for entry in mods],
+        }
+
+    def _build_export_entries(self, active_ids, use_raw_ids: bool = False):
+        # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
+        normalized_ids = []
+        for package_id in active_ids or []:
+            normalized = self._normalize_package_id(package_id)
+            if normalized:
+                normalized_ids.append(normalized)
+
+        entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids))
+        if not use_raw_ids:
+            for entry in entries:
+                entry["package_id_raw"] = entry["package_id"]
+        return entries
+
+    def _default_export_name(self, export_format: str):
+        # 不同格式使用不同默认文件名前缀，方便用户区分来源。
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        if export_format == EXPORT_FORMAT_MODLIST:
+            return f"ModList_{timestamp}.xml"
+        return f"ModsConfig_{timestamp}.xml"
+
+    def _write_modlist_file(self, write_path: str, entries: list[dict], list_name: str):
+        # ModList.xml 需要显式写出名称和工坊ID，后续导入时才能直接一键订阅。
+        root = etree.Element("ModList")
+        name_node = etree.SubElement(root, "Name")
+        name_node.text = list_name or Path(write_path).stem or "ModList"
+
+        mod_ids_node = etree.SubElement(root, "modIds")
+        mod_names_node = etree.SubElement(root, "modNames")
+        workshop_ids_node = etree.SubElement(root, "modSteamWorkshopIds")
+
+        for entry in entries:
+            etree.SubElement(mod_ids_node, "li").text = entry.get("package_id_raw") or entry.get("package_id")
+            etree.SubElement(mod_names_node, "li").text = entry.get("name") or entry.get("package_id_raw") or entry.get("package_id")
+            etree.SubElement(workshop_ids_node, "li").text = entry.get("workshop_id") or "0"
+
+        tree = etree.ElementTree(root)
+        tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+
     def read_active_mods(self, mods_config_file_path=None):
         """
-        读取当前的 activeMods 列表
-        :return: [package_id, package_id, ...]
+        读取排序文件并返回统一结构。
+        返回值不仅包含 active_mods，还会包含：
+        - format：文件格式标识
+        - list_name：列表名称/文件标题
+        - mods：结构化模组条目，供前端显示名称和一键订阅
         """
         if not mods_config_file_path:
             mods_config_file_path = self.context.mods_config_file
@@ -74,73 +309,61 @@ class LoadOrderManager:
             logger.warning(f"ModsConfig.xml not found: {mods_config_file_path}")
             return {
                 'active_mods': [],
-                'modify_time': 0
+                'modify_time': 0,
+                'format': EXPORT_FORMAT_MODSCONFIG,
+                'list_name': Path(mods_config_file_path).stem if mods_config_file_path else '',
+                'mods': [],
+                'mod_names': [],
+                'mod_steam_workshop_ids': []
             }
         modify_time = int(os.path.getmtime(mods_config_file_path)*1000)
-        active_list = []
         try:
-            # 使用 recover=True 容错解析
-            parser = etree.XMLParser(recover=True)
-            tree = etree.parse(mods_config_file_path, parser)
-            root = tree.getroot()
-            # 结构一般是 <ModsConfigData><activeMods><li>id</li>...</activeMods></ModsConfigData>
-            active_node = root.xpath("//activeMods") or root.xpath("//modIds")
-            # active_node = root.find("./activeMods") or root.find("./modIds")
-            if active_node is None: logger.error("无法解析非标准 ModsConfig.xml 文件！")
-            active_node = active_node[0]
-            if active_node is not None:
-                for li in active_node.findall("li"):
-                    if li.text:
-                        # 统一转小写，因为 XML 中 ID 大小写可能不规范，但 ID 实际上不敏感
-                        active_list.append(li.text.strip().lower())
+            parsed = self._parse_load_order_file(mods_config_file_path)
         except Exception as e:
-            logger.error(f"读取 ModsConfig.xml 时出错: {e}")
-            
+            logger.error(f"读取排序文件时出错: {e}")
+            # 解析失败时返回空结果而不是抛异常，
+            # 由 API 层决定对前端提示“解析失败”。
+            parsed = {
+                "format": EXPORT_FORMAT_MODSCONFIG,
+                "list_name": Path(mods_config_file_path).stem,
+                "mods": [],
+                "active_mods": [],
+            }
+
         return {
-            'active_mods': active_list,
-            'modify_time': modify_time
+            'active_mods': parsed.get('active_mods', []),
+            'modify_time': modify_time,
+            'format': parsed.get('format', EXPORT_FORMAT_MODSCONFIG),
+            'list_name': parsed.get('list_name', Path(mods_config_file_path).stem),
+            'mods': parsed.get('mods', []),
+            'mod_names': [entry.get('name') or entry.get('package_id_raw') or entry.get('package_id') for entry in parsed.get('mods', [])],
+            'mod_steam_workshop_ids': [entry.get('workshop_id') or '0' for entry in parsed.get('mods', [])],
         }
 
-    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, use_raw_ids=False):
+    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, use_raw_ids=False, export_format: str = EXPORT_FORMAT_MODSCONFIG, list_name: str | None = None):
         """
         保存加载顺序。
         :param active_ids: Mod ID 列表
         :param target_path: 指定保存路径（绝对路径）。如果不传，默认覆盖游戏配置。
         :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
+        :param export_format: 导出格式，支持 ModsConfig.xml / ModList.xml
+        :param list_name: 导出 ModList.xml 时写入的 Name
         """
-        # 1. 建立 逻辑ID -> 原始ID 的映射表
-        from backend.database.models import ModAsset
-        # 一次性从数据库查询所有已安装 Mod 的 ID 映射
-        # 这里使用 package_id (小写) 作为键
-        id_map = {}
-        try:
-            # 使用 in_ 子句缩小查询范围
-            active_ids_lower = [pid.lower() for pid in active_ids]
-            query = ModAsset.select(ModAsset.package_id, ModAsset.package_id_raw).where(
-                ModAsset.package_id.in_(active_ids_lower) # type: ignore
-            )
-            for m in query:
-                if m.package_id_raw: id_map[m.package_id] = m.package_id_raw
-        except Exception as e:
-            logger.warning(f"保存时获取原始大小写包名失败(可能是数据库被锁): {e}")
-            # 就算查库失败，也不要阻断保存，直接使用前端传来的小写 ID 即可
-            pass
-        # 2. 准备最终要写入 XML 的 ID 列表
-        final_raw_ids = []
-        for pid in active_ids:
-            # 如果数据库里存了原始大小写，就用原始的；否则用现在的（兜底）
-            raw_id = id_map.get(pid.lower(), pid)
-            # 如果 use_raw_ids 为 True，直接使用原始 ID
-            if not use_raw_ids: raw_id = pid
-            final_raw_ids.append(raw_id)
+        export_format = str(export_format or EXPORT_FORMAT_MODSCONFIG).strip().lower()
+        if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST}:
+            raise ValueError(f"不支持的导出格式: {export_format}")
+
+        # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
+        entries = self._build_export_entries(active_ids, use_raw_ids=use_raw_ids)
+        final_raw_ids = [entry.get("package_id_raw") or entry.get("package_id") for entry in entries]
+        default_name = self._default_export_name(export_format)
         
         # 1. 确定最终写入路径
-        write_path = self.context.mods_config_file
+        write_path = self.context.mods_config_file if export_format == EXPORT_FORMAT_MODSCONFIG else ''
         if trigger_dialog:
             # 弹出对话框选择路径
             # 默认文件名带上时间戳或有意义的名字
-            default_name = f"ModsConfig_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
-            parent_dir = os.path.dirname(str(target_path))
+            parent_dir = os.path.dirname(str(target_path)) if target_path else self.other_dir
             selected = FileManager.save_file_dialog(
                 initial_dir=parent_dir or self.other_dir,
                 default_filename=default_name,
@@ -160,55 +383,63 @@ class LoadOrderManager:
                     logger.error(f"无法创建目录: {parent_dir}")
                     raise Exception(f"无法创建目录: {parent_dir}")
             write_path = target_path
+        elif export_format == EXPORT_FORMAT_MODLIST:
+            write_path = os.path.join(self.other_dir, default_name)
 
         if not write_path: raise Exception("未指定有效保存路径")
+        resolved_list_name = (list_name or Path(write_path).stem or default_name).strip()
 
         # 2. 只有在覆盖默认配置时并且 is_dirty 为 True 时，才需要自动备份旧文件
         # 如果是另存为，没必要备份目标文件（通常目标文件不存在）
-        if write_path == self.context.mods_config_file and is_dirty:
+        if export_format == EXPORT_FORMAT_MODSCONFIG and write_path == self.context.mods_config_file and is_dirty:
             self._create_backup()
 
         # 3. 准备 XML 结构 (逻辑保持不变)
         current_version = self.context.game_version
         try:
-            # 尝试保留原有的 knownExpansions 等信息
-            parser = etree.XMLParser(remove_blank_text=True)
-            if os.path.exists(self.context.mods_config_file):
-                tree = etree.parse(self.context.mods_config_file, parser)
-                root = tree.getroot()
+            if export_format == EXPORT_FORMAT_MODLIST:
+                # ModList.xml 是完全新建的导出文件，不需要继承现有 ModsConfig.xml 结构。
+                self._write_modlist_file(write_path, entries, resolved_list_name)
+                logger.info(f"成功导出 {len(entries)} 个模组到 ModList.xml: {write_path}")
             else:
-                # 如果文件不存在，创建基本骨架
-                root = etree.Element("ModsConfigData")
-                # 尝试从 settings 获取版本，或者默认 Unknow
-                ver = etree.SubElement(root, "version")
-                ver.text = current_version # 这是一个兜底，理想情况应该读 Version.txt
-                etree.SubElement(root, "activeMods")
-                etree.SubElement(root, "knownExpansions")
-                tree = etree.ElementTree(root)
+                # 尝试保留原有的 knownExpansions 等信息
+                parser = etree.XMLParser(remove_blank_text=True)
+                if os.path.exists(self.context.mods_config_file):
+                    tree = etree.parse(self.context.mods_config_file, parser)
+                    root = tree.getroot()
+                else:
+                    # 如果文件不存在，创建基本骨架
+                    root = etree.Element("ModsConfigData")
+                    # 尝试从 settings 获取版本，或者默认 Unknow
+                    ver = etree.SubElement(root, "version")
+                    ver.text = current_version # 这是一个兜底，理想情况应该读 Version.txt
+                    etree.SubElement(root, "activeMods")
+                    etree.SubElement(root, "knownExpansions")
+                    tree = etree.ElementTree(root)
 
-            # 更新 activeMods 节点，没有则创建
-            active_node = root.find("activeMods")
-            if active_node is None:
-                active_node = etree.SubElement(root, "activeMods")
-            
-            # 清空旧列表
-            active_node.clear()
-            
-            # 写入新列表
-            for mod_id in final_raw_ids:
-                li = etree.SubElement(active_node, "li")
-                li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
+                # 更新 activeMods 节点，没有则创建
+                active_node = root.find("activeMods")
+                if active_node is None:
+                    active_node = etree.SubElement(root, "activeMods")
+                
+                # 清空旧列表
+                active_node.clear()
+                
+                # ModsConfig.xml 仍保持游戏原生结构，只更新 activeMods 节点。
+                for mod_id in final_raw_ids:
+                    li = etree.SubElement(active_node, "li")
+                    li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
 
-            # 4. 格式化写入
-            tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
-            # 同步备份到 backup_root
-            tree.write(os.path.join(self.backup_root, f'Latest_ModsConfig.xml'), pretty_print=True, xml_declaration=True, encoding="utf-8")
-            logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
+                # 4. 格式化写入
+                tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+                # 同步备份到 backup_root
+                tree.write(os.path.join(self.backup_root, f'Latest_ModsConfig.xml'), pretty_print=True, xml_declaration=True, encoding="utf-8")
+                logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
             
         except Exception as e:
-            logger.error(f"保存 ModsConfig.xml 时出错：{e}")
-            raise Exception(f"保存 ModsConfig.xml 时出错：{e}")
+            logger.error(f"保存排序文件时出错：{e}")
+            raise Exception(f"保存排序文件时出错：{e}")
 
     def _create_backup(self):
         """创建当前时刻的备份"""
@@ -291,10 +522,16 @@ class LoadOrderManager:
         today_files = glob.glob(os.path.join(self.today_dir, "*.xml"))
         earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml"))
         other_files = glob.glob(os.path.join(self.other_dir, "*.xml"))
+        def build_items(files):
+            return [{
+                'path': f,
+                'modify_time': int(os.path.getmtime(f)*1000),
+                'source_profile_id': self.context.profile_id,
+            } for f in files]
         result = {
-            "today": [{'path': f,'modify_time': int(os.path.getmtime(f)*1000) } for f in today_files],
-            "earlier": [{'path': f,'modify_time': int(os.path.getmtime(f)*1000) } for f in earlier_files],
-            "other": [{'path': f,'modify_time': int(os.path.getmtime(f)*1000) } for f in other_files]
+            "today": build_items(today_files),
+            "earlier": build_items(earlier_files),
+            "other": build_items(other_files)
         }
         return result
 

@@ -371,7 +371,7 @@ class FileManager:
         return None
     
     @staticmethod
-    def save_file_dialog(initial_dir='', default_filename='ModsConfig.xml', file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def save_file_dialog(initial_dir='', default_filename='ModsConfig.xml', file_types=('XML Files (*.xml)', 'All Files (*.*)')):
         """
         打开系统原生的文件保存框
         """

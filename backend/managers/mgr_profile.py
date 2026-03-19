@@ -250,6 +250,25 @@ class ProfileManager:
             if profile:
                 settings.set('current_profile_id', profile.id)
         return profile
+
+    def build_profile_context(self, profile_id: str) -> ProfileContext:
+        """
+        为指定环境构造只读 Context。
+        这个过程不会修改当前激活环境，也不会写回 settings。
+        """
+        if not profile_id:
+            profile_id = 'default'
+        profile = self.get_profile(profile_id)
+        context = ProfileContext(
+            profile_id=profile.id,
+            game_version=profile.game_version,
+            game_install_path=profile.game_install_path,
+            user_data_path=profile.user_data_path,
+            use_workshop_mods=profile.use_workshop_mods,
+            use_self_mods=profile.use_self_mods
+        )
+        context.validate_health()
+        return context
     
     def get_all_profiles(self):
         """获取所有 Profile 对象"""
@@ -295,20 +314,9 @@ class ProfileManager:
         self.current_profile = profile
         self.update_version()
         settings.set('current_profile_id', profile.id)
-        
-        # 2. 实例化沙盒上下文
-        context = ProfileContext(
-            profile_id=profile.id,
-            game_version=profile.game_version,
-            game_install_path=profile.game_install_path,
-            user_data_path=profile.user_data_path,
-            use_workshop_mods=profile.use_workshop_mods,
-            use_self_mods=profile.use_self_mods
-        )
-        # 3. 校验健康度，强制建立物理目录
-        context.validate_health()
-        
-        return context
+
+        # 2. 实例化并校验沙盒上下文
+        return self.build_profile_context(profile.id)
         
     
     def get_launch_args(self, profile_id: str = ''):

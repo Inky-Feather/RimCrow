@@ -246,6 +246,23 @@ class API:
         # 启动新的实时监视器
         if self.game_log_mgr: self.game_log_mgr.start_realtime_monitor()
 
+    def _resolve_load_order_scope(self, profile_id: str | None = None):
+        """
+        解析读取排序/备份时应使用的上下文。
+        仅当读取当前激活环境时复用现有 manager；查看其它环境备份时只构造临时只读 manager。
+        """
+        target_profile_id = str(profile_id or "").strip()
+        if not target_profile_id:
+            target_profile_id = self.active_context.profile_id if self.active_context else settings.config.current_profile_id
+
+        if self.active_context and self.load_order_mgr and target_profile_id == self.active_context.profile_id:
+            profile = self.profile_mgr.get_current_profile()
+            return self.load_order_mgr, self.active_context, profile
+
+        context = self.profile_mgr.build_profile_context(target_profile_id)
+        profile = self.profile_mgr.get_profile(target_profile_id)
+        return LoadOrderManager(context), context, profile
+
     def _handle_app_version_upgrade(self):
         """实例初始化时运行的升级逻辑"""
         from backend.database.models import SystemInfo
@@ -951,32 +968,48 @@ class API:
         return ApiResponse.success({
             "file": self.active_context.mods_config_file if self.active_context else "",
             "active_ids": res.get('active_mods', []),
-            "modify_time": res.get('modify_time', 0)
+            "modify_time": res.get('modify_time', 0),
+            # 统一把格式和结构化模组明细一起返回，方便前端直接显示名称并处理订阅。
+            "format": res.get('format', 'modsconfig'),
+            "list_name": res.get('list_name', ''),
+            "mods": res.get('mods', []),
+            "mod_names": res.get('mod_names', []),
+            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', [])
         })
     
     @log_api_call
-    def load_order_file_open(self, mods_config_file_path: str|None = None):
+    def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
         """
         打开 ModsConfig.xml 文件
         """
+        load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+        source_profile_id = str(profile_id or "").strip()
         file = ''
         # 默认路径为 ModsConfig.xml 所在目录
         if not mods_config_file_path:
-            mods_config_file_path = self.active_context.mods_config_file if self.active_context else ""
+            mods_config_file_path = context.mods_config_file if context else ""
         # 检查路径是否合法，且是否为xml文件
         if os.path.isfile(mods_config_file_path) and (mods_config_file_path.endswith('.xml') or mods_config_file_path.endswith('.rws')):
             file = mods_config_file_path
         elif os.path.isdir(mods_config_file_path) :
             file = file_mgr.select_file_dialog(initial_dir=mods_config_file_path)
         else:
-            file = file_mgr.select_file_dialog(initial_dir=self.active_context.game_config_path if self.active_context else "")
+            file = file_mgr.select_file_dialog(initial_dir=context.game_config_path if context else "")
         if not file:
             return ApiResponse.warning("未选择文件")
-        res = self.load_order_mgr.read_active_mods(file) if self.load_order_mgr else {}
+        res = load_order_mgr.read_active_mods(file) if load_order_mgr else {}
         result = {
             "file": file,
             "active_ids": res.get('active_mods', []),
-            "modify_time": res.get('modify_time', 0)
+            "modify_time": res.get('modify_time', 0),
+            # 与 load_order_get 保持同一数据协议，避免前端区分“默认配置”和“外部导入文件”两条解析链。
+            "format": res.get('format', 'modsconfig'),
+            "list_name": res.get('list_name', ''),
+            "mods": res.get('mods', []),
+            "mod_names": res.get('mod_names', []),
+            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
+            "source_profile_id": source_profile_id,
+            "source_profile_name": profile.name if source_profile_id else '',
         }
         if not result["active_ids"]:
             return ApiResponse.error("解析文件出错!")
@@ -1000,26 +1033,46 @@ class API:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
     @log_api_call
-    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True):
+    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None):
         """
-        导出当前加载顺序到 ModsConfig.xml
+        导出当前加载顺序到指定格式
         :param active_ids: 激活的 Mod 列表
         :param target_path: 导出路径
         """
         try:
             if not target_path and not trigger_dialog: trigger_dialog = True
-            success = self.load_order_mgr.save_active_mods(active_ids, target_path, trigger_dialog) if self.load_order_mgr else False
+            use_raw_ids = settings.config.use_raw_ids
+            # 导出格式和列表名都透传给 LoadOrderManager，
+            # 由底层统一决定生成 ModsConfig.xml 还是 ModList.xml。
+            success = self.load_order_mgr.save_active_mods(
+                active_ids,
+                target_path,
+                trigger_dialog,
+                use_raw_ids=use_raw_ids,
+                export_format=export_format,
+                list_name=list_name
+            ) if self.load_order_mgr else False
             if success: return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
     @log_api_call
-    def backups_get_all(self):
+    def backups_get_all(self, profile_id: str | None = None):
         """获取所有备份文件路径"""
         try:
-            backups = self.load_order_mgr.get_all_backups() if self.load_order_mgr else []
-            return ApiResponse.success(backups)
+            load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+            backups = load_order_mgr.get_all_backups() if load_order_mgr else {"today": [], "earlier": [], "other": []}
+            return ApiResponse.success({
+                **backups,
+                "profile": {
+                    "id": context.profile_id,
+                    "name": profile.name,
+                    "backup_dir": context.backup_dir,
+                    "is_current": bool(self.active_context and context.profile_id == self.active_context.profile_id),
+                    "is_healthy": context.is_healthy,
+                }
+            })
         except Exception as e:
             return ApiResponse.error(f"获取备份文件时出错: {e}")
     
