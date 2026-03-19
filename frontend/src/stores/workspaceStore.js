@@ -10,13 +10,32 @@ import { SOURCE_TYPE_MAP } from '../utils/constants'
 export const useWorkspaceStore = defineStore('workspace', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
-const confirmStore = useConfirmStore()
+  const confirmStore = useConfirmStore()
+  const listenersReady = ref(false)
+
+  const normalizePackageId = (value) => String(value || '').trim().toLowerCase()
+  const normalizeWorkshopId = (value) => {
+    const wid = String(value || '').trim()
+    return wid && wid !== 'undefined' && wid !== 'null' && wid !== 'None' ? wid : ''
+  }
+  const storeSortOrder = {
+    workshop: 0,
+    self: 1,
+    local: 2
+  }
+  const sortMatrixTargets = (items = []) => {
+    return [...items].sort((a, b) => {
+      const storeDiff = (storeSortOrder[a.store] ?? 99) - (storeSortOrder[b.store] ?? 99)
+      if (storeDiff !== 0) return storeDiff
+      return String(a.name || a.package_id || '').localeCompare(String(b.name || b.package_id || ''))
+    })
+  }
   
   // 1. 已订阅的工坊 ID (仅统计创意工坊域)
   const subscribedWorkshopIds = computed(() => {
     return new Set(
       librariesMods.workshop
-        .filter(m => m.steam_status?.is_subscribed)
+        .filter(m => m.steam_status?.is_subscribed && normalizeWorkshopId(m.workshop_id))
         .map(m => String(m.workshop_id))
     )
   })
@@ -24,7 +43,7 @@ const confirmStore = useConfirmStore()
   const missingWorkshopIds = computed(() => {
     return new Set(
       librariesMods.workshop
-        .filter(m => m.is_missing)
+        .filter(m => m.is_missing && normalizeWorkshopId(m.workshop_id))
         .map(m => String(m.workshop_id))
     )
   })
@@ -37,12 +56,21 @@ const confirmStore = useConfirmStore()
       ...librariesMods.local
     ]
     return new Set(
-      all.filter(m => m.path && !m.is_missing).map(m => String(m.workshop_id))
+      all
+        .filter(m => m.path && !m.is_missing && normalizeWorkshopId(m.workshop_id))
+        .map(m => String(m.workshop_id))
     )
   })
   // 4. 提供一个快捷判断函数供 WorkshopBrowser 使用
   const getModStatus = (workshopId) => {
-    const wid = String(workshopId)
+    const wid = normalizeWorkshopId(workshopId)
+    if (!wid) {
+      return {
+        isSubscribed: false,
+        isInstalled: false,
+        isMissing: false
+      }
+    }
     return {
       isSubscribed: subscribedWorkshopIds.value.has(wid),
       isInstalled: installedAllIds.value.has(wid),
@@ -87,7 +115,7 @@ const confirmStore = useConfirmStore()
   // 3. 时间线抽屉状态
   const timeline = reactive({
     isOpen: false,
-    modId: null, // workshop_id
+    workshopId: null, // workshop_id / repo_url
     modName: '',
     logs: [],
     isLoading: false
@@ -112,6 +140,98 @@ const confirmStore = useConfirmStore()
   })
 
   const isFetching = ref(false)
+  const matrixFocusTarget = ref(null)
+
+  const allLibraryMods = computed(() => [
+    ...librariesMods.workshop,
+    ...librariesMods.self,
+    ...librariesMods.local
+  ])
+  const matrixModsByPathHash = computed(() => {
+    const map = new Map()
+    allLibraryMods.value.forEach(mod => {
+      if (mod?.path_hash) {
+        map.set(mod.path_hash, mod)
+      }
+    })
+    return map
+  })
+  const matrixModsByPackageId = computed(() => {
+    const map = new Map()
+    allLibraryMods.value.forEach(mod => {
+      const pkgId = normalizePackageId(mod?.package_id)
+      if (!pkgId) return
+      if (!map.has(pkgId)) map.set(pkgId, [])
+      map.get(pkgId).push(mod)
+    })
+    return map
+  })
+  const matrixSameMap = computed(() => {
+    const sameMap = new Map()
+    const pushRelation = (targetMap, source, target) => {
+      if (!source?.path_hash || !target?.path_hash || source.path_hash === target.path_hash) return
+
+      const existing = targetMap.get(source.path_hash) || []
+      if (!existing.some(item => item.path_hash === target.path_hash)) {
+        targetMap.set(source.path_hash, [...existing, target])
+      }
+    }
+
+    matrixModsByPackageId.value.forEach(group => {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const source = group[i]
+          const target = group[j]
+          if (source.store !== target.store) {
+            pushRelation(sameMap, source, target)
+            pushRelation(sameMap, target, source)
+          }
+        }
+      }
+    })
+
+    sameMap.forEach((targets, pathHash) => sameMap.set(pathHash, sortMatrixTargets(targets)))
+    return sameMap
+  })
+  const matrixConflictMap = computed(() => {
+    const conflictMap = new Map()
+    const pushRelation = (targetMap, source, target) => {
+      if (!source?.path_hash || !target?.path_hash || source.path_hash === target.path_hash) return
+
+      const existing = targetMap.get(source.path_hash) || []
+      if (!existing.some(item => item.path_hash === target.path_hash)) {
+        targetMap.set(source.path_hash, [...existing, target])
+      }
+    }
+
+    matrixModsByPackageId.value.forEach(group => {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const source = group[i]
+          const target = group[j]
+          if (source.store === target.store) {
+            pushRelation(conflictMap, source, target)
+            pushRelation(conflictMap, target, source)
+          }
+        }
+      }
+    })
+
+    conflictMap.forEach((targets, pathHash) => conflictMap.set(pathHash, sortMatrixTargets(targets)))
+    return conflictMap
+  })
+  const getMatrixSameItems = (pathHash) => matrixSameMap.value.get(pathHash) || []
+  const getMatrixConflictItems = (pathHash) => matrixConflictMap.value.get(pathHash) || []
+  const jumpToMatrixItem = (pathHash) => {
+    const target = matrixModsByPathHash.value.get(pathHash)
+    if (!target) return false
+    matrixFocusTarget.value = {
+      pathHash,
+      store: target.store,
+      stamp: Date.now()
+    }
+    return true
+  }
 
   // 响应式计算 Mod 状态
   const activeChildrenWithStatus = computed(() => {
@@ -148,6 +268,9 @@ const confirmStore = useConfirmStore()
   }
   // 监听后端推送
   const setupListeners = () => {
+    if (listenersReady.value) return
+    listenersReady.value = true
+
     // 【监听 A】: 三域列表的在线状态静默更新
     // payload 格式: { "12345": { title: "...", time_updated: 17000000, preview_url: "..." }, ... }
     window.addEventListener('workspace-online-update', (e) => {
@@ -324,14 +447,14 @@ const confirmStore = useConfirmStore()
   }
   // 打开并加载 Github 模组变更时间线
   const openTimelineGithub = async (path) => {
-    if (!window.pywebview) return
-    timeline.isOpen = true
+    if (!window.pywebview || !path) return
     console.log("打开Github时间线", path, github.subscribedRepos)
-    const repo = github.subscribedRepos.find(repo => path.includes(repo.local_folder))
+    const repo = github.subscribedRepos.find(repo => repo.local_folder && path.includes(repo.local_folder))
     if (!repo) {
       toast.warning('未找到该订阅')
       return
     }
+    timeline.isOpen = true
     timeline.workshopId = repo.repo_url
     timeline.modName = repo.repo_name
     timeline.isLoading = true
@@ -491,6 +614,7 @@ const confirmStore = useConfirmStore()
   return {
     librariesMods, isFetching, librariesSize, activeChildrenWithStatus,
     workshopSearch, timeline, subscribedWorkshopIds, installedAllIds, missingWorkshopIds, getModStatus, modTransfer,
+    matrixFocusTarget, getMatrixSameItems, getMatrixConflictItems, jumpToMatrixItem,
     fetchLibrariesMods, doWorkshopSearch, fetchWorkshopDetails, openTimeline, openTimelineGithub, setupListeners,
     github, fetchGithubRepos, fetchGithubTimeline, initData, openSteamWorkshopUrl, getWorkshopIdsByPackageIdsMap, goBackWorkshopDetail,
     collections, fetchSavedCollections, addCollection, removeCollection, selectCollection

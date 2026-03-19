@@ -355,19 +355,20 @@ export const useModStore = defineStore('mods', () => {
   }
   // 扫描完成事件处理
   const scanComplete = async (detail) => {
+    coexistenceList.value = Array.isArray(detail.coexistences) ? detail.coexistences : []
+    conflictList.value = Array.isArray(detail.conflicts) ? detail.conflicts : []
+
     let totalCount = 0
-    if (detail.coexistences && detail.coexistences.length > 0) {
-      coexistenceList.value = detail.coexistences
+    if (coexistenceList.value.length > 0) {
       if (appStore.settings.show_coexistence_message){
-        console.warn("发现共存:", detail.coexistences)
-        totalCount += detail.coexistences.length
+        console.warn("发现共存:", coexistenceList.value)
+        totalCount += coexistenceList.value.length
       }
     }
     // 处理扫描结果，检测冲突提示 (包含可共存Mod)
-    if ((detail.conflicts && detail.conflicts.length > 0)) {
-      console.warn("发现冲突:", detail.conflicts)
-      conflictList.value = detail.conflicts
-      totalCount += detail.conflicts.length
+    if (conflictList.value.length > 0) {
+      console.warn("发现冲突:", conflictList.value)
+      totalCount += conflictList.value.length
     }
     if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning

@@ -6,6 +6,8 @@ __pycache__/
 *.spec
 nuitka-*
 updates/
+*.md
+!README.md
 
 # App Data (忽略运行时生成的数据)
 data/

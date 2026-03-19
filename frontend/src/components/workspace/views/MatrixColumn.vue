@@ -1,8 +1,6 @@
 <!-- src/components/workspace/views/MatrixColumn.vue -->
 <template>
   <div class="flex-1 flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl relative">
-    
-    <!-- 1. 看板表头 -->
     <div class="px-4 py-3 bg-text-main/5 border-b border-text-main/10 flex flex-col gap-3" :data-tour="'workspace-'+storeType + '-toolbar'">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-bold text-text-main flex items-center gap-2 cursor-help" v-tooltip="tooltip">
@@ -19,80 +17,63 @@
         </div>
       </div>
 
-      <!-- 搜索与排序 -->
       <div class="flex flex-col items-center gap-2">
         <div class="relative w-full">
-          <input v-model="searchQuery" placeholder="在此域检索..." 
-            class="w-full bg-black/60 border border-text-main/10 rounded-lg pl-3 pr-2 py-1.5 text-xs text-text-main focus:border-accent-primary outline-none transition-colors" />
+          <input v-model="searchQuery" placeholder="在此域检索..."
+            class="w-full bg-black/60 border border-text-main/10 rounded-lg pl-3 pr-2 py-1.5 text-xs text-text-main focus:border-accent-primary outline-none transition-colors"
+          />
         </div>
         <div class="flex items-center w-full justify-end gap-2">
-          <CommonSelect v-model="filterState" mini 
-            :options="[
-              { label: '显示所有', value: 'default' }, 
-              { label: '仅显示已变动', value: 'change' }, 
-              { label: '仅显示可更新', value: 'update' }, 
-              { label: '仅显示新增', value: 'new' }, 
-              { label: '仅显示已禁用', value: 'disabled' }, 
-              { label: '仅显示已删除', value: 'deleted' }, 
-              { label: '仅显示缺失', value: 'missing' }, 
-            ]">
-          </CommonSelect>
+          <CommonSelect v-model="filterState" mini :options="MATRIX_FILTER_STATE_OPTIONS" />
 
-          <CommonSelect v-model="sortBy" mini 
+          <CommonSelect v-model="sortBy" mini
             :options="[
-              { label: '按变动时间', value: 'change' }, 
-              { label: '按修改时间', value: 'mtime' }, 
-              { label: '按创建时间', value: 'ctime' }, 
-              { label: '按文件体积', value: 'size' }, 
+              { label: '按变动时间', value: 'change' },
+              { label: '按修改时间', value: 'mtime' },
+              { label: '按创建时间', value: 'ctime' },
+              { label: '按文件体积', value: 'size' },
               { label: '按名称 A-Z', value: 'name' }
-            ]">
-          </CommonSelect>
-          <!-- 排序切换按钮 -->
+            ]"
+          />
+
           <Motion :class="`p-1 size-7 rounded-md bg-text-dim/10 border border-text-main/10 hover:text-text-main hover:bg-text-dim/20 text-xs font-bold flex items-center justify-center cursor-pointer `"
             :initial="{ rotateX: 0, opacity: 1 }"
-            :animate="{ rotateX: isSortDsc ? 0 : 180 /*切换时旋转180度*/}" 
-            :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-            @click="isSortDsc=!isSortDsc" v-tooltip="isSortDsc?'切换为升序排列':'切换为降序排列'"
+            :animate="{ rotateX: isSortDsc ? 0 : 180 }"
+            :transition="{ type: 'spring', stiffness: 300, damping: 20 }"
+            @click="isSortDsc=!isSortDsc"
+            v-tooltip="isSortDsc ? '切换为升序排列' : '切换为降序排列'"
           >
             <span v-if="isSortDsc" class="rotate-x-180">
-              <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+              <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
             </span>
             <span v-else>
-              <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
+              <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
             </span>
           </Motion>
         </div>
       </div>
     </div>
 
-    <!-- 2. 列表区 -->
-    <div class="flex-1 overflow-hidden relative p-1" >
-      <VirtualList 
-        v-if="displayMods.length > 0"
-        v-model="displayMods" dataKey="path_hash" 
-        class="h-full custom-scrollbar pb-10"
-        :keeps="40" :sortable="false" group="none" :disabled="true"
+    <div class="flex-1 overflow-hidden relative p-1">
+      <VirtualList v-if="displayMods.length > 0" ref="vListRef" v-model="displayMods"
+        dataKey="path_hash" class="h-full custom-scrollbar pb-10" :keeps="40"
+        :sortable="false" group="none" :disabled="true"
         v-selectable-list="{
-          data: displayMods.map(m => m.path_hash), // 提取当前排序好的 ID 列表 (注意确认你的唯一标识是 path_hash 还是 package_id)
+          data: displayMods.map(m => m.path_hash),
           selectedIds: localSelectedIds,
           onSelect: handleSelect,
-          onClear: () => { localSelectedIds = [] },
-          clickClass: 'matrix-select-trigger', // 确保 MatrixItem 内部有对应的 class
+          onClear: clearSelection,
+          clickClass: 'matrix-select-trigger',
           swipeClass: 'matrix-select-trigger',
           idAttribute: 'data-id'
-        }">
-        <template v-slot:item="{ record, index, dataKey }">
+        }"
+      >
+        <template v-slot:item="{ record, dataKey }">
           <div class="relative group">
-            
-            <MatrixItem class="timeline-trigger"
-              :mod="record"
-              :storeType="storeType"
-              :lastPlayedTime="lastPlayedTime"
-              :isSelected="localSelectedIds.includes(dataKey)" 
-              @contextmenu="handleContextMenu"
-              @click="$emit('open-timeline', record)"
+            <MatrixItem class="timeline-trigger" :mod="record" :storeType="storeType"
+              :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedIds.includes(dataKey)"
+              @contextmenu="handleContextMenu" @click="$emit('open-timeline', record)"
             />
-
           </div>
         </template>
       </VirtualList>
@@ -106,26 +87,30 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import VirtualList from 'vue-virtual-sortable'
-import { useAppStore } from '../../../stores/appStore'
-import { useContextMenuStore } from '../../../stores/contextMenuStore'
-import { formatFileSize } from '../../../utils/uiHelper'
-import { useModStore } from '../../../stores/modStore'
+import { Motion } from 'motion-v'
+import { Activity, ArrowRightLeft, Cable, Copy, CornerUpRight, DownloadCloud, Flag, FlagOff, FolderInput, Lock, LockOpen, Trash2, Upload } from 'lucide-vue-next'
+import CommonSelect from '../../common/input/CommonSelect.vue'
 import MatrixItem from '../components/MatrixItem.vue'
+import { useAppStore } from '../../../stores/appStore'
+import { useConfirmStore } from '../../../stores/confirmStore'
+import { useContextMenuStore } from '../../../stores/contextMenuStore'
+import { useModStore } from '../../../stores/modStore'
 import { useProfileStore } from '../../../stores/profileStore'
 import { useWorkspaceStore } from '../../../stores/workspaceStore'
-import CommonSelect from '../../common/input/CommonSelect.vue'
-import { Motion } from 'motion-v'
-import { Activity, Copy, DownloadCloud, ExternalLink, ArrowRightLeft, Flag, FlagOff, FolderDot, FolderInput, Lock, LockOpen, Trash2, Upload } from 'lucide-vue-next'
-import { IconSelf, IconSteam } from '../../../utils/constants'
-import { useConfirmStore } from '../../../stores/confirmStore'
+import { IconSteam, SOURCE_TYPE_MAP } from '../../../utils/constants'
+import { formatFileSize } from '../../../utils/uiHelper'
+import { getMatrixItemState, getMatrixReplacementTargets, matchesMatrixFilter, MATRIX_FILTER_STATE_OPTIONS } from '../utils/matrixItemState'
 
 const props = defineProps({
   title: String,
   iconColor: String,
   storeType: String,
-  mods: Array,
+  mods: {
+    type: Array,
+    default: () => []
+  },
   tooltip: String
 })
 
@@ -141,173 +126,228 @@ const searchQuery = ref('')
 const sortBy = ref('change')
 const isSortDsc = ref(true)
 const filterState = ref('default')
-
 const localSelectedIds = ref([])
+const vListRef = ref(null)
 
 const lastPlayedTime = computed(() => profileStore.currentProfile?.last_played_time || 0)
 
-// 生成快速查找 根据路径哈希查找mod
-const getModsData = (path_hashs, type=null) => {
-  const pathHashSet = new Set(path_hashs)
-  if (!type) return props.mods.filter(m => pathHashSet.has(m.path_hash)) || []
-  // 满足条件时，直接将 workshop_id 推入结果数组
-  else if (type === 'workshop_id') return props.mods.reduce((acc, m) => { if (pathHashSet.has(m.path_hash)) { acc.push(m.workshop_id); } return acc; }, []);
-  else if (type === 'path') return props.mods.reduce((acc, m) => { if (pathHashSet.has(m.path_hash)) { acc.push(m.path); } return acc; }, []);
+const clearSelection = () => {
+  localSelectedIds.value = []
 }
 
+const getModsData = (pathHashes, type = null) => {
+  const ids = new Set((Array.isArray(pathHashes) ? pathHashes : [pathHashes]).filter(Boolean))
+  const selectedMods = (props.mods || []).filter(mod => ids.has(mod.path_hash))
+  if (!type) return selectedMods
+  if (type === 'workshop_id') return selectedMods.map(mod => mod.workshop_id).filter(Boolean)
+  if (type === 'path') return selectedMods.map(mod => mod.path).filter(Boolean)
+  if (type === 'package_id') return selectedMods.map(mod => mod.package_id).filter(Boolean)
+  return []
+}
 
-// 过滤和排序逻辑
+const getShortPathLabel = (path, fallback = '缺失记录') => {
+  if (!path) return fallback
+  const parts = String(path).split(/[\\/]/).filter(Boolean)
+  return parts.slice(-2).join('\\') || path
+}
+
+const buildJumpMenuItem = (label, icon, targets) => {
+  if (!targets.length) return null
+  if (targets.length === 1) {
+    return {
+      label,
+      icon,
+      action: () => workspaceStore.jumpToMatrixItem(targets[0].path_hash)
+    }
+  }
+  return {
+    label: `${label} (${targets.length} 项)`,
+    icon,
+    children: targets.map(target => ({
+      label: `${SOURCE_TYPE_MAP[target.store] || target.store} · ${getShortPathLabel(target.path, target.name || target.package_id)}`,
+      icon: CornerUpRight,
+      action: () => workspaceStore.jumpToMatrixItem(target.path_hash)
+    }))
+  }
+}
+
+const focusMatrixItem = async (pathHash) => {
+  const existsInColumn = (props.mods || []).some(mod => mod.path_hash === pathHash)
+  if (!existsInColumn) return
+
+  if (!displayMods.value.some(mod => mod.path_hash === pathHash)) {
+    searchQuery.value = ''
+    filterState.value = 'default'
+  }
+
+  localSelectedIds.value = [pathHash]
+  await nextTick()
+  vListRef.value?.scrollToKey?.(pathHash)
+  requestAnimationFrame(() => {
+    vListRef.value?.scrollToKey?.(pathHash)
+  })
+}
+
+const modsWithState = computed(() => {
+  return (props.mods || []).map(mod => ({
+    mod,
+    state: getMatrixItemState(mod, lastPlayedTime.value, workspaceStore)
+  }))
+})
+
 const displayMods = computed(() => {
-  let list = [...props.mods]
-  // 关键词过滤
+  let list = [...modsWithState.value]
+
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    list = list.filter(m => 
-      (m.name || '').toLowerCase().includes(q) || 
-      (m.package_id || '').toLowerCase().includes(q)
+    list = list.filter(({ mod }) =>
+      (mod.name || '').toLowerCase().includes(q) ||
+      (mod.package_id || '').toLowerCase().includes(q)
     )
   }
-  // 状态过滤
+
   if (filterState.value !== 'default') {
-    list = list.filter(m => {
-      if (filterState.value === 'change') return isChange(m)
-      if (filterState.value === 'update') return m.has_update || m.steam_status?.needs_update
-      if (filterState.value === 'new') return isNew(m)
-      if (filterState.value === 'disabled') return m.disabled
-      if (filterState.value === 'deleted') return !m.path
-      if (filterState.value === 'missing') return m.is_missing
-      return false
-    })
+    list = list.filter(({ state }) => matchesMatrixFilter(state, filterState.value))
   }
 
   list.sort((a, b) => {
-    if (sortBy.value === 'name') return (a.name || '').localeCompare(b.name || '')
-    if (sortBy.value === 'size') return (b.file_size || 0) - (a.file_size || 0)
-    if (sortBy.value === 'mtime') return (b.file_modify_time || 0) - (a.file_modify_time || 0)
-    if (sortBy.value === 'ctime') return (b.file_create_time || 0) - (a.file_create_time || 0)
+    const left = a.mod
+    const right = b.mod
+    if (sortBy.value === 'name') return (left.name || '').localeCompare(right.name || '')
+    if (sortBy.value === 'size') return (right.file_size || 0) - (left.file_size || 0)
+    if (sortBy.value === 'mtime') return (right.file_modify_time || 0) - (left.file_modify_time || 0)
+    if (sortBy.value === 'ctime') return (right.file_create_time || 0) - (left.file_create_time || 0)
     if (sortBy.value === 'change') {
-      if (props.storeType === 'workshop') return (b.steam_status?.time_last_sync || 0) - (a.steam_status?.time_last_sync || 0)
-      else if(props.storeType === 'self') return (b.steam_status?.time_downloaded || 0) - (a.steam_status?.time_downloaded || 0)
-      else return (b.file_modify_time || 0) - (a.file_modify_time || 0)
+      if (props.storeType === 'workshop') return (right.steam_status?.time_last_sync || 0) - (left.steam_status?.time_last_sync || 0)
+      if (props.storeType === 'self') return (right.steam_status?.time_downloaded || 0) - (left.steam_status?.time_downloaded || 0)
+      return (right.file_modify_time || 0) - (left.file_modify_time || 0)
     }
-    
     return 0
   })
 
-  return isSortDsc.value ? list : list.reverse()
+  const sortedList = isSortDsc.value ? list : list.reverse()
+  return sortedList.map(({ mod }) => mod)
 })
 
+watch(
+  () => (props.mods || []).map(mod => mod.path_hash),
+  (pathHashes) => {
+    const validIds = new Set(pathHashes)
+    localSelectedIds.value = localSelectedIds.value.filter(pathHash => validIds.has(pathHash))
+  },
+  { immediate: true }
+)
 
-// === 角标逻辑 ===
-const isNew = (mod) => {
-  if (!mod || !mod.file_create_time) return false
-  const lastPlayed = lastPlayedTime.value || 0
-  // 如果文件的修改或创建时间大于上次游玩时间
-  return mod.file_create_time > lastPlayed
-}
-const isChange = (mod) => {
-  if (!mod ) return false
-  const lastPlayed = lastPlayedTime.value || 0
-  // 如果文件的修改或创建时间大于上次游玩时间
-  return mod.steam_status?.time_last_sync > lastPlayed || mod.file_modify_time > lastPlayed
-}
+watch(
+  () => workspaceStore.matrixFocusTarget,
+  async (target) => {
+    if (!target || target.store !== props.storeType) return
+    await focusMatrixItem(target.pathHash)
+  },
+  { deep: true }
+)
 
-// 辅助方法：给 MatrixItem 传完整的 mod 对象
-const getModData = (id) => {
-  return props.mods.find(m => m.package_id.toLowerCase() === id.toLowerCase()) || {}
-}
-
-const handleSelect = (path_hash, anchorId) => {
-  localSelectedIds.value = path_hash
+const handleSelect = (pathHashes) => {
+  localSelectedIds.value = Array.isArray(pathHashes) ? pathHashes : [pathHashes].filter(Boolean)
 }
 
-// 取消订阅模组
-const unsubscribeMod = async (path_hashs, delete_file = false) => {
-  // 只选择包含workshop_id的项目
-  const pathHashSet = new Set(path_hashs);
-  const paths = [];
-  const workshop_ids = [];
-  props.mods.forEach(m => {
-    if (pathHashSet.has(m.path_hash)) {
-      paths.push(m.path);
-      workshop_ids.push(m.workshop_id);
-    }
-  })
+const unsubscribeMod = async (pathHashes, deleteFile = false) => {
+  const paths = getModsData(pathHashes, 'path')
+  const workshopIds = getModsData(pathHashes, 'workshop_id')
+  if (!workshopIds.length) return
 
-  const check = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}（${workshop_ids.length} 项）吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
-  if(check) {
-    const res = await appStore.unsubscribeMod(workshop_ids)
-    if (res && delete_file) {
-      appStore.deletePaths(paths)
-    }
+  const check = await confirmStore.confirmAction(
+    '警告',
+    `确定要取消订阅选中项${deleteFile ? '并删除文件' : ''}（${workshopIds.length} 项）吗？${deleteFile ? '软件将主动删除Mod文件' : 'Steam 会自动删除已取消订阅的文件！'}`,
+    { type: 'error' }
+  )
+  if (!check) return
+
+  const res = await appStore.unsubscribeMod(workshopIds)
+  if (res && deleteFile && paths.length) {
+    appStore.deletePaths(paths)
   }
 }
-// 下载选中项
-const downloadMods = async (path_hashs) => {
-  const workshop_ids = getModsData(path_hashs, 'workshop_id')
-  const res = await appStore.downloadWorkshopItems(workshop_ids)
+
+const downloadMods = async (pathHashes) => {
+  const workshopIds = getModsData(pathHashes, 'workshop_id')
+  if (!workshopIds.length) return
+  await appStore.downloadWorkshopItems(workshopIds)
 }
 
-// === 右键菜单 ===
 const handleContextMenu = async (event, targetMod) => {
   event.preventDefault()
   if (!targetMod) return
-  
+
   if (!localSelectedIds.value.includes(targetMod.path_hash)) {
-    handleSelect([targetMod.path_hash], targetMod.path_hash)
+    handleSelect([targetMod.path_hash])
   }
-  
-  const selectedNumStr = localSelectedIds.value.length > 1 ? ` (${localSelectedIds.value.length} 项)` : ''
-  const isMissing = targetMod.is_missing;
 
-  // 动态构建菜单
-  const menuItems = [
+  const selectedMods = getModsData(localSelectedIds.value)
+  const selectedWorkshopIds = selectedMods.map(mod => mod.workshop_id).filter(Boolean)
+  const selectedPaths = selectedMods.map(mod => mod.path).filter(Boolean)
+  const selectedPackageIds = selectedMods.map(mod => mod.package_id).filter(Boolean)
+  const selectedNumStr = selectedMods.length > 1 ? ` (${selectedMods.length} 项)` : ''
+  const isMissing = !!targetMod.is_missing
+  const sameTargets = workspaceStore.getMatrixSameItems(targetMod.path_hash)
+  const replacementTargets = getMatrixReplacementTargets(targetMod, workspaceStore)
 
-  ]
+  const menuItems = []
 
   // 1. 常规信息操作
-  if(!isMissing) {
+  if (!isMissing) {
     menuItems.push({ label: '查看变动', icon: Activity, action: () => emit('open-timeline', targetMod) })
     menuItems.push({ label: '打开文件夹', icon: FolderInput, action: () => appStore.openPath(targetMod.path) })
   }
-  menuItems.push({ divider: true })
 
+  const sameJumpItem = buildJumpMenuItem('跳转到相同项', CornerUpRight, sameTargets)
+  if (sameJumpItem) menuItems.push(sameJumpItem)
+
+  const replacementJumpItem = buildJumpMenuItem('跳转到替代项', Cable, replacementTargets)
+  if (replacementJumpItem) menuItems.push(replacementJumpItem)
+
+  menuItems.push({ divider: true })
   // 2. 跨库物理转移 (Copy / Move)
-  if(!isMissing) {
-    menuItems.push({ 
-      label: '转移...' + selectedNumStr, icon: ArrowRightLeft, children: [
-        { label: '复制到 游戏本地库', disabled: targetMod.store == 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'copy') },
-        { label: '复制到 管理器库', disabled: targetMod.store == 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'copy') },
-        { label: '复制到 创意工坊库', disabled: targetMod.store == 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'copy') },
+  if (!isMissing) {
+    menuItems.push({
+      label: '转移...' + selectedNumStr,
+      icon: ArrowRightLeft,
+      children: [
+        { label: '复制到 游戏本地库', disabled: props.storeType === 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'copy') },
+        { label: '复制到 管理器库', disabled: props.storeType === 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'copy') },
+        { label: '复制到 创意工坊库', disabled: props.storeType === 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'copy') },
         { divider: true },
         // 移动操作 (如果是工坊则不可移动)
-        { label: '移动到 游戏本地库', disabled: targetMod.store == 'local' || targetMod.store == 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'move') },
-        { label: '移动到 管理器库', disabled: targetMod.store == 'self' || targetMod.store == 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'move') },
-        { label: '移动到 创意工坊库', disabled: targetMod.store == 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'move') },
+        { label: '移动到 游戏本地库', disabled: props.storeType === 'local' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'move') },
+        { label: '移动到 管理器库', disabled: props.storeType === 'self' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'move') },
+        { label: '移动到 创意工坊库', disabled: props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'move') },
       ]
     })
   }
   // 更新
-  if(targetMod.steam_status?.needs_update){
-    if(targetMod.store === 'workshop'){
-      menuItems.push({ label: '更新模组[再次订阅]' + selectedNumStr, disabled: !targetMod.workshop_id, icon: Upload, action: () => appStore.subscribeMod(getModsData(localSelectedIds.value, 'workshop_id')) })
-    }else{
-      menuItems.push({ label: '更新模组[再次下载]' + selectedNumStr, disabled: !targetMod.workshop_id, icon: Upload, action: () => downloadMods(localSelectedIds.value) })
+  if (targetMod.steam_status?.needs_update || targetMod.has_update) {
+    if (targetMod.store === 'workshop') {
+      menuItems.push({ label: '更新模组[再次订阅]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => appStore.subscribeMod(selectedWorkshopIds)
+      })
+    } else {
+      menuItems.push({ label: '更新模组[再次下载]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => downloadMods(localSelectedIds.value)
+      })
     }
   }
-
-  menuItems.push({ label: '下载到管理器' + selectedNumStr, disabled: !targetMod.workshop_id, icon: DownloadCloud, action: () => downloadMods(localSelectedIds.value) })
+  menuItems.push({ label: '下载到管理器' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: DownloadCloud, action: () => downloadMods(localSelectedIds.value) })
   // 3. Steam API 相关操作
-  menuItems.push({ label: 'Steam操作', icon: IconSteam, children: [
-    { label: '访问创意工坊', disabled: targetMod.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(targetMod.url) },
-    { label: '订阅模组' + selectedNumStr, disabled: (!targetMod.workshop_id || targetMod.steam_status?.is_subscribed), icon: Flag, action: () => appStore.subscribeMod(getModsData(localSelectedIds.value, 'workshop_id')) },
-    { label: '取消订阅' + selectedNumStr, disabled: targetMod.store !== 'workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) },
-  ]})
+  menuItems.push({ label: 'Steam操作', icon: IconSteam,
+    children: [
+      { label: '访问创意工坊', disabled: !targetMod.workshop_id, icon: IconSteam, action: () => appStore.openSteamWorkshopById(targetMod.workshop_id) },
+      { label: '订阅模组' + selectedNumStr, disabled: selectedWorkshopIds.length === 0 || (!!targetMod.steam_status?.is_subscribed && selectedWorkshopIds.length === 1), icon: Flag, action: () => appStore.subscribeMod(selectedWorkshopIds) },
+      { label: '取消订阅' + selectedNumStr, disabled: props.storeType !== 'workshop' || selectedWorkshopIds.length === 0, icon: FlagOff, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) },
+    ]
+  })
 
   // 4. 破坏性操作
   menuItems.push({ divider: true })
   if(!isMissing) {
-    menuItems.push({ label: targetMod.disabled ? '解禁' : '禁用' + selectedNumStr, icon: targetMod.disabled ? LockOpen : Lock, level: targetMod.disabled ? 'warn' : 'danger', action: () => modStore.disableMods(localSelectedIds.value, !targetMod.disabled) })
+    menuItems.push({ label: targetMod.disabled ? '解禁' : '禁用' + selectedNumStr, icon: targetMod.disabled ? LockOpen : Lock, level: 'warn', action: () => modStore.disableMods(localSelectedIds.value, !targetMod.disabled) })
     menuItems.push({ label: '删除文件' + selectedNumStr, icon: Trash2, level: 'danger', action: () => appStore.deletePaths(getModsData(localSelectedIds.value, 'path')) })
   } else {
     // 对于缺失项，提供一键清除幽灵记录的功能（取消订阅）
@@ -316,6 +356,4 @@ const handleContextMenu = async (event, targetMod) => {
 
   menuStore.open(event, menuItems)
 }
-
-
 </script>

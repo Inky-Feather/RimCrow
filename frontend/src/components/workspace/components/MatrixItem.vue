@@ -36,14 +36,14 @@
 
       <!-- 右侧时间与大小 -->
       <div class="shrink-0 flex flex-col items-end gap-1 pr-2">
-        <span v-if="mod.steam_status?.time_last_sync" class="text-[0.65rem] font-mono" :class="isChange ? 'text-accent-tip font-black' : 'text-text-dim'">
+        <span v-if="mod.steam_status?.time_last_sync" class="text-[0.65rem] font-mono" :class="matrixState.isChange ? 'text-accent-tip font-black' : 'text-text-dim'">
           更新：{{ formatTime(mod.steam_status?.time_last_sync) }}
         </span>
-        <span v-else class="text-[0.65rem] font-mono" :class="isNew ? 'text-accent-tip font-black' : 'text-text-dim'">
+        <span v-else class="text-[0.65rem] font-mono" :class="matrixState.isChange ? 'text-accent-tip font-black' : 'text-text-dim'">
           修改：{{ formatTime(mod.file_modify_time) }}
         </span>
-        <span class="text-[0.65rem] font-mono" :class="isNew ? 'text-accent-primary font-black' : 'text-text-dim'">
-          创建：{{ formatTime(mod.file_modify_time) }}
+        <span class="text-[0.65rem] font-mono" :class="matrixState.isNew ? 'text-accent-primary font-black' : 'text-text-dim'">
+          创建：{{ formatTime(mod.file_create_time) }}
         </span>
         <span class="text-[0.6rem] font-mono text-text-dim opacity-50 bg-black/40 px-1 rounded">
           {{ formatFileSize(mod.file_size) }}
@@ -52,22 +52,31 @@
 
       <!-- 状态角标 -->
       <div class="absolute top-0 left-1 z-100 scale-90 flex items-center justify-center gap-1">
-        <span v-if="isNew" title="新增" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-primary animate-pulse">
+        <span v-if="matrixState.isNew" title="新增" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-primary animate-pulse">
           NEW
         </span>
-        <span v-if="isChange && !isNew" title="变更" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-tip animate-pulse">
+        <span v-if="matrixState.isChange" title="变更" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-success animate-pulse">
           CHANGE
         </span>
-        <span v-if="mod.steam_status?.needs_update || mod.has_update" title="可更新" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-warn animate-pulse">
+        <span v-if="matrixState.isUpdate" title="可更新" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-warn animate-pulse">
           UPDATE
         </span>
-        <span v-if="mod.disabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isSame" :title="sameItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-special animate-pulse">
+          SAME
+        </span>
+        <span v-if="matrixState.isConflict" :title="conflictItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.55rem] font-black text-black bg-accent-danger animate-pulse">
+          CONFLICT
+        </span>
+        <span v-if="matrixState.isReplace" :title="replacementItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-tip animate-pulse">
+          REPLACE
+        </span>
+        <span v-if="matrixState.isDisabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-warning animate-pulse">
           DISABLED
         </span>
-        <span v-if="!mod.path" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isDeleted" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           DELETED
         </span>
-        <span v-if="mod.is_missing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isMissing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           MISSING
         </span>
       </div>
@@ -92,16 +101,19 @@
             </div>
           </div>
           
-          <div class="space-y-1.5 text-xs text-text-dim font-mono">
-            <div class="flex justify-between"><span class="opacity-60">创建时间:</span> <span>{{ formatTime(mod.file_create_time, true) }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">修改时间:</span> <span>{{ formatTime(mod.file_modify_time, true) }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">上传时间:</span> <span>{{ formatTime(mod.steam_status?.latest_version_time, true) || '无记录' }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">同步时间:</span> <span>{{ formatTime(mod.steam_status?.time_last_sync, true) || '无记录' }}</span></div>
+            <div class="space-y-1.5 text-xs text-text-dim font-mono">
+              <div class="flex justify-between"><span class="opacity-60">创建时间:</span> <span>{{ formatTime(mod.file_create_time, true) }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">修改时间:</span> <span>{{ formatTime(mod.file_modify_time, true) }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">上传时间:</span> <span>{{ formatTime(mod.steam_status?.latest_version_time, true) || '无记录' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">同步时间:</span> <span>{{ formatTime(mod.steam_status?.time_last_sync, true) || '无记录' }}</span></div>
             <div class="flex justify-between"><span class="opacity-60">下载时间:</span> <span>{{ formatTime(mod.steam_status?.time_downloaded, true) || '无记录' }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">订阅时间:</span> <span>{{ formatTime(mod.steam_status?.time_subscribed, true) || '无记录' }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">取订时间:</span> <span>{{ formatTime(mod.steam_status?.time_unsubscribed, true) || '无记录' }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">储存占用:</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
-          </div>
+              <div class="flex justify-between"><span class="opacity-60">订阅时间:</span> <span>{{ formatTime(mod.steam_status?.time_subscribed, true) || '无记录' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">取订时间:</span> <span>{{ formatTime(mod.steam_status?.time_unsubscribed, true) || '无记录' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">储存占用:</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">跨库同项:</span> <span>{{ sameTargets.length || '无' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">同库冲突:</span> <span>{{ conflictTargets.length || '无' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">替代项:</span> <span>{{ replacementTargets.length || '无' }}</span></div>
+            </div>
 
           <div v-if="mod.path" class="mt-2 p-2 bg-black/40 rounded-lg border border-text-main/5 text-[10px] text-text-dim break-all cursor-text select-text">
             {{ mod.path }}
@@ -120,10 +132,13 @@
 import { ref, computed } from 'vue'
 import { Folder, CloudDownload, Disc } from 'lucide-vue-next'
 import { formatFileSize } from '../../../utils/uiHelper'
-import FixedPopover from '../../common/FixedPopover.vue'
 import { useAppStore } from '../../../stores/appStore'
+import { useWorkspaceStore } from '../../../stores/workspaceStore'
+import { SOURCE_TYPE_MAP } from '../../../utils/constants'
+import { getMatrixItemState } from '../utils/matrixItemState'
 
 const appStore = useAppStore()
+const workspaceStore = useWorkspaceStore()
 
 const props = defineProps({
   mod: Object,
@@ -142,14 +157,7 @@ let hideTimer = null
 let showTimer = null
 
 // --- 状态计算 ---
-const isNew = computed(() => {
-  if (!props.lastPlayedTime) return false
-  return  props.mod.file_create_time > props.lastPlayedTime
-})
-const isChange = computed(() => {
-  if (!props.lastPlayedTime) return false
-  return (props.mod.steam_status?.time_last_sync || props.mod.file_modify_time) > props.lastPlayedTime
-})
+const matrixState = computed(() => getMatrixItemState(props.mod, props.lastPlayedTime, workspaceStore))
 
 const sourceIcon = computed(() => {
   if (props.storeType === 'workshop') return CloudDownload
@@ -162,6 +170,21 @@ const sourceColor = computed(() => {
   if (props.storeType === 'self') return 'text-accent-success'
   return 'text-accent-warn'
 })
+const sameTargets = computed(() => matrixState.value.sameTargets)
+const conflictTargets = computed(() => matrixState.value.conflictTargets)
+const replacementTargets = computed(() => matrixState.value.replacementTargets)
+const formatRelationTooltip = (title, items) => {
+  if (!items?.length) return null
+  return `${title}：\n${items.map(item => {
+    const storeLabel = SOURCE_TYPE_MAP[item.store] || item.store || '未知'
+    const nameLabel = item.name || item.package_id || '未命名模组'
+    const pathLabel = item.path || '缺失记录'
+    return `${storeLabel} · ${nameLabel}\n${pathLabel}`
+  }).join('\n')}`
+}
+const sameItemsTooltip = computed(() => formatRelationTooltip('其它库存在相同项', sameTargets.value))
+const conflictItemsTooltip = computed(() => formatRelationTooltip('当前库存在同包名冲突项', conflictTargets.value))
+const replacementItemsTooltip = computed(() => formatRelationTooltip('已检测到替代项', replacementTargets.value))
 
 const formatTime = (ts, full = false) => {
   if (!ts) return 'N/A'
@@ -201,7 +224,6 @@ const calculatePosition = () => {
   const rect = itemRef.value.getBoundingClientRect()
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const popoverWidth = 288 // 72rem = 288px
   const gap = 16
 
   // 判断中线，决定左右弹出

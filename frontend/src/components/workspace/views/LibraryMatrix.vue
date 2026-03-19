@@ -29,7 +29,7 @@
         | 总计大小：{{ formatFileSize(workspaceStore.librariesSize.total) }}
         | 状态: {{ workspaceStore.isFetching ? '扫描中...' : '就绪' }}
       </div>
-      <button @click="workspaceStore.fetchLibrariesMods" :disabled="workspaceStore.isFetching"
+      <button @click="workspaceStore.fetchLibrariesMods" :disabled="workspaceStore.isFetching" v-tooltip="'重新读取当前三域矩阵数据'"
         class="flex items-center gap-2 px-3 py-2 bg-text-main/5 hover:bg-text-main/10 rounded-lg text-xs font-bold transition-all"
         :class="{'opacity-50 cursor-not-allowed': workspaceStore.isFetching}">
         <RefreshCw class="size-3.5" :class="{'animate-spin': workspaceStore.isFetching}" />
@@ -63,8 +63,9 @@ const toast = useToast()
 const workspaceStore = useWorkspaceStore()
 
 const handleOpenTimeline = (mod) => {
+  if (!mod) return
   console.log('handleOpenTimeline',mod)
-  if (mod.path.includes('_GH_')) {
+  if (mod.path?.includes('_GH_')) {
     return workspaceStore.openTimelineGithub(mod.path)
   }
   if (mod.store === 'local') {
