@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col relative h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
-       :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
+      :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
     <div :data-tour="listId=='active'?'list-header':null" :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
       <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-1`">
@@ -135,9 +135,9 @@
       <div @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative" :data-tour="listId=='active'?'list-modItem':null">
         <!-- 列表为空时的提示 -->
         <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed border-text-dim/60 text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
-            可拖拽模组到此
-            <!-- 点阵背景 -->
-            <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+          可拖拽模组到此
+          <!-- 点阵背景 -->
+          <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
         </div>
         <!-- 列表 -->
           <!-- :size="isSimpleView ? 34 : 54" -->
@@ -159,15 +159,21 @@
             idAttribute: 'data-id'
           }">
           <template v-slot:item="{ record, index, dataKey }">
-            <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-              :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView"
-              :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
-              :show-icon="appStore.settings.ui.show_list_icon" 
-              :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
-              :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
-              :show-index="appStore.settings.ui.show_list_index"
-              :search-match="currentTargetId === dataKey">
-            </ModItem>
+            <div class=" relative">
+              <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
+                :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView"
+                :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
+                :show-icon="appStore.settings.ui.show_list_icon" 
+                :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
+                :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
+                :show-index="appStore.settings.ui.show_list_index"
+                :search-match="currentTargetId === dataKey">
+              </ModItem>
+              <div v-if="modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
+                class="absolute top-0 right-0 rounded-md bg-accent-primary text-text-main px-1 py-0.5 text-[0.6rem] text-center flex items-center justify-center">
+                NEW
+              </div>
+            </div>
           </template>
         </VirtualList>
 

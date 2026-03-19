@@ -5,9 +5,11 @@ import { useModStore } from './modStore'
 import { SearchEngine } from '../modules/search/SearchEngine'
 import { FIELD_TYPES } from '../modules/search/SearchTypes'
 import { MOD_SIGN_COLOR_MAP } from '../utils/constants'
+import { useAppStore } from './appStore'
 
 export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()
+  const appStore = useAppStore()
   const STORE_MAP = {'local': '本地', 'self': '管理器', 'workshop': '创意工坊'}
 
   // 1. 定义 Schema (“配置中心”)
@@ -30,6 +32,11 @@ export const useSearchStore = defineStore('search', () => {
     save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '是否坏档' },
     shadow_paths: { type: FIELD_TYPES.BOOLEAN, label: '存在禁用包名' },
     replacement: { type: FIELD_TYPES.BOOLEAN, label: '存在替代版本' },
+    last_active: { 
+      type: FIELD_TYPES.BOOLEAN, 
+      label: '最近启用', 
+      getter: (mod) => mod.last_active_time > appStore.settings.last_run_time
+    },
 
     // === 来源 (枚举) ===
     source: { 

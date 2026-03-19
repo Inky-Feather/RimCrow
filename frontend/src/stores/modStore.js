@@ -240,6 +240,10 @@ export const useModStore = defineStore('mods', () => {
     } else {
       inactiveIds.value.push(...ids)
     }
+    takeModListByIds(ids).forEach(mod => {
+      mod.last_moved_time = Date.now()
+      mod.last_active_time = Date.now()
+    })
   }
   // 清除选择
   const clearSelection = () => {

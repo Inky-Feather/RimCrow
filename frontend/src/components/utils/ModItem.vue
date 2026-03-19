@@ -261,7 +261,7 @@ const getCardStyle = (id) => {
 // 双击启用/停用 Mod
 const handleDoubleClick = () => {
   if (appStore.settings.ui.double_click_active_mod) {
-    modStore.changeModsActive([props.item_id], !isActive.value)
+    modStore.changeModsActive(modStore.selectedIds, !isActive.value)
   }
 }
 // 点击处理

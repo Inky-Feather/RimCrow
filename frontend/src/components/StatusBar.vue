@@ -73,7 +73,9 @@
     
     <!-- 右侧：版本 -->
     <div class="flex items-center gap-2 hover:text-text-main" >
-       <span>RimWorld {{profileStore.activeContext.game_version || '未知版本' }}</span>
+      <span>上次软件运行：{{ formatDate(appStore.settings.last_run_time) || '未运行' }}</span> |
+      <span>上次游戏运行：{{ formatDate(profileStore.currentProfile?.last_played_time) || '未运行' }}</span> |
+      <span>RimWorld {{profileStore.activeContext.game_version || '未知版本' }}</span>
     </div>
 
   </div>
@@ -86,6 +88,7 @@ import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification";
 import { Bot, Download, Radar } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
+import { formatDate } from '../utils/uiHelper';
 
 const toast = useToast();
 const modStore = useModStore()
