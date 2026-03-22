@@ -2062,6 +2062,77 @@ class API:
             # 增加异常堆栈打印，方便调试
             logger.error(f"智能诊断异常: {str(e)}", exc_info=True)
             return ApiResponse.error(f"智能诊断异常: {str(e)}")
+        
+    
+    # 供“一键排错”使用的真·全局扫描接口
+    @log_api_call
+    def ai_scan_global_errors(self, payload: dict):
+        """
+        绕过前端内存，直接从磁盘读取完整文件，提取所有错误并生成目录摘要
+        """
+        filename = payload.get("filename", "")
+        source_type = payload.get("log_source_type", "game")
+        
+        if not filename:
+            return ApiResponse.error("缺少文件名")
+
+        from backend.utils.logger import app_log_reader
+        reader = self.game_log_mgr if source_type == 'game' else app_log_reader
+        if not reader: return ApiResponse.error("日志读取器未初始化")
+        
+        import os
+        from backend.settings import DATA_DIR
+        if source_type == 'game':
+            filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
+        else:
+            filepath = os.path.join(DATA_DIR, 'logs', filename)
+            
+        if not os.path.exists(filepath):
+            return ApiResponse.error("找不到物理日志文件")
+
+        # 1. 粗暴但高效地读取整个文件
+        raw_logs = []
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                # 为了防止文件过大（如几个G），我们只取最后 50000 行
+                from collections import deque
+                lines = deque(f, maxlen=50000)
+                
+                # 简单解析，只要包含 ERROR/WARNING 关键字的行
+                import re
+                err_pattern = re.compile(r'error|exception|warning|fail', re.IGNORECASE)
+                for idx, line in enumerate(lines):
+                    if err_pattern.search(line):
+                        # 伪造一个简单的结构给 Condenser 处理
+                        raw_logs.append({
+                            "id": f"global_{idx}",
+                            "level": "ERROR",
+                            "message": line.strip()[:500],
+                            "raw_lines": [idx + 1] # 这里的行号只是个大概，AI 查的时候 expand_range 设大点即可
+                        })
+        except Exception as e:
+            return ApiResponse.error(f"读取文件失败: {e}")
+
+        if not raw_logs:
+            return ApiResponse.warning("太棒了！全局扫描未发现任何明显错误或警告。")
+
+        # 2. 调用浓缩器
+        from backend.managers.mgr_game_logs import LogCondenser
+        token_limit = settings.config.ai.max_tokens
+        condensed_data = LogCondenser.condense_for_ai(raw_logs, token_limit=token_limit)
+        
+        # 3. 计算 Token
+        import litellm
+        import json
+        text_to_estimate = json.dumps(condensed_data, ensure_ascii=False)
+        estimated_tokens = litellm.token_counter(model=settings.config.ai.model, text=text_to_estimate)
+
+        return ApiResponse.success({
+            "is_over_limit": estimated_tokens > token_limit,
+            "estimated_tokens": estimated_tokens,
+            "token_limit": token_limit,
+            "condensed_data": condensed_data
+        })
     
     @log_api_call
     def ai_get_prompts(self):

@@ -634,7 +634,7 @@ class AIManager:
                 "type": "function",
                 "function": {
                     "name": "get_mod_info",
-                    "description": "获取指定 package_id 的模组信息，包括：作者、当前启用状态、以及它原生(About.xml)声明的强依赖规则。不要用这个查社区规则。",
+                    "description": "获取指定 package_id 的模组信息，包括：作者、当前启用状态、以及它原生(About.xml)声明的强依赖规则。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -648,7 +648,7 @@ class AIManager:
                 "type": "function",
                 "function": {
                     "name": "get_load_order_context",
-                    "description": "获取指定模组在当前加载列表中的排序上下文，返回它前面和后面的各3个模组，用于侦测排序不当引发的问题。",
+                    "description": "获取指定模组在当前加载列表中的排序上下文，返回它前面和后面的各3个模组，用于侦测排序引发的问题。",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -658,32 +658,41 @@ class AIManager:
                     }
                 }
             },
-            { # 【新增工具】获取全局排序列表
+            { 
                 "type": "function",
                 "function": {
                     "name": "get_active_mod_list",
-                    "description": "获取当前玩家所有已启用模组的完整加载顺序列表（包含包名和模组名称）。用于排查全局性的框架排序错误。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {}, # 无需参数
-                    }
-                }
-            },
-            { # 【修改工具】基于行号的极速详情查询
-                "type": "function",
-                "function": {
-                    "name": "get_full_log_details",
-                    "description": "当在错误目录中发现可疑线索时，使用此工具传入对应的 lines 数组（如 [15, 16]），获取该报错的完整 500 行堆栈信息。",
+                    "description": "获取当前玩家所有已启用模组的加载顺序列表（包名）。用于排查全局性的框架排序错误。",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "lines": {
-                                "type": "array", 
-                                "items": {"type": "integer"},
-                                "description": "报错目录中提供的 lines 数组"
+                            "include_names": {
+                                "type": "boolean", 
+                                "description": "如果需要知道包名及对应的具体名称传 true。"
+                            }
+                        }
+                    }
+                }
+            },
+            { 
+                "type": "function",
+                "function": {
+                    # 【核心修改】替换原有鸡肋工具，改为物理上下文切片工具
+                    "name": "get_log_context",
+                    "description": "传入错误目录中的 target_line，从物理日志文件中切片读取该报错前后的真实上下文（包含错误前系统在做什么以及完整的堆栈信息）。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_line": {
+                                "type": "integer", 
+                                "description": "要查询的目标行号 (提取自错误目录的 target_line)"
+                            },
+                            "expand_range": {
+                                "type": "integer",
+                                "description": "向上下各扩展读取的行数。建议默认传 20 即可，如果是复杂的崩溃可传 50，最大限制为 100。"
                             }
                         },
-                        "required": ["lines"]
+                        "required": ["target_line"]
                     }
                 }
             }
@@ -733,35 +742,40 @@ class AIManager:
                 })
                 
             elif name == "get_active_mod_list":
-                # 【新增逻辑】获取全局激活列表
+                # 【优化】支持 include_names 控制体积
+                include_names = args.get("include_names", False)
                 from backend.managers.mgr_load_order import LoadOrderManager
                 lo_mgr = LoadOrderManager(active_context)
                 read_res = lo_mgr.read_active_mods()
                 mods_data = read_res.get('mods', [])
                 
-                # 组装为 {包名: 名称} 的有序字典
-                active_list_map = {}
-                for m in mods_data:
-                    active_list_map[m.get('package_id', '')] = m.get('name', '')
+                if include_names:
+                    active_list = {m.get('package_id', ''): m.get('name', '') for m in mods_data}
+                else:
+                    active_list = [m.get('package_id', '') for m in mods_data]
                     
                 return json.dumps({
-                    "total_active": len(active_list_map),
-                    "active_order": active_list_map
+                    "total_active": len(mods_data),
+                    "active_order": active_list
                 }, ensure_ascii=False)
 
-            elif name == "get_full_log_details":
-                # 【核心修改】抛弃容易失效的内存查询，直接读取磁盘！
-                lines = args.get("lines", [])
-                if not lines:
-                    return json.dumps({"error": "必须提供 lines 数组参数"})
+            elif name == "get_log_context":
+                # 【核心逻辑】全新的纯物理文件按行切片提取机制，完美支持 JSON & Player.log
+                target_line = args.get("target_line")
+                if not target_line:
+                    return json.dumps({"error": "必须提供 target_line 参数"})
+                    
+                # 限制读取范围防炸内存，默认20，最大100
+                expand_range = min(args.get("expand_range", 20), 100)
                     
                 source_type = payload.get("log_source_type", "game") if payload else "game"
-                # 【关键】：前端需要在 payload 里把当前文件名传过来
                 filename = payload.get("filename", "") 
                 
+                if not filename:
+                    return json.dumps({"error": "前端未提供当前日志文件名 filename。"})
                 
-                # 拼接完整的绝对路径
                 import os
+                import linecache
                 from backend.settings import DATA_DIR
                 if source_type == 'game':
                     filepath = os.path.join(active_context.user_data_path, filename) if active_context else ""
@@ -769,21 +783,47 @@ class AIManager:
                     filepath = os.path.join(DATA_DIR, 'logs', filename)
                 
                 if not os.path.exists(filepath):
-                    return json.dumps({"error": f"找不到对应的日志文件: {filename}"})
-                    
-                # 使用我们在 BaseLogReader 写的 O(1) 极速读取方法！
-                logs = reader.get_raw_logs_by_lines(filepath, lines)
+                    return json.dumps({"error": f"找不到对应的物理日志文件: {filename}"})
                 
-                if logs and len(logs) > 0:
-                    from backend.managers.mgr_game_logs import LogCondenser
-                    clean_stack = LogCondenser.clean_stack_trace(logs[0].get("details", ""), max_lines=500)
+                # 计算安全的读取范围
+                start_line = max(1, target_line - expand_range)
+                end_line = target_line + expand_range
+                
+                context_lines = []
+                for current_line in range(start_line, end_line + 1):
+                    # linecache 读取极其高效，因为底层加了内存缓冲
+                    line_str = linecache.getline(filepath, current_line)
+                    if not line_str: break # 读到文件末尾了
+                    
+                    line_str = line_str.rstrip()
+                    # 尝试简化 JSON（如果是 app.log 或 RMM 日志），让 AI 读起来更省 Token
+                    try:
+                        data = json.loads(line_str)
+                        level = data.get('level', 'INFO')
+                        msg = data.get('message', '').replace('\n', ' ')
+                        details = data.get('details', '')
+                        
+                        # 把又臭又长的 Details 交给凝缩器清理一遍垃圾堆栈
+                        from backend.managers.mgr_game_logs import LogCondenser
+                        clean_details = LogCondenser.clean_stack_trace(details, max_lines=20)
+                        
+                        # 组装纯文本给 AI，标明行号
+                        format_str = f"[{current_line}] {level}: {msg}"
+                        if clean_details:
+                            format_str += f"\n{clean_details}"
+                        context_lines.append(format_str)
+                    except json.JSONDecodeError:
+                        # 核心防爆点：如果是 Player.log 的纯文本，直接原样附加行号给 AI
+                        context_lines.append(f"[{current_line}] {line_str}")
+                
+                if context_lines:
                     return json.dumps({
-                        "lines_fetched": lines,
-                        "full_message": logs[0].get("message", ""),
-                        "stack_trace": clean_stack
+                        "query_target_line": target_line,
+                        "context_provided": f"Line {start_line} to {end_line}",
+                        "context_content": "\n".join(context_lines)
                     }, ensure_ascii=False)
                     
-                return json.dumps({"error": f"无法从文件提取该行号的详情: {lines}"})
+                return json.dumps({"error": f"无法提取行号上下文，文件可能已变更。"})
                 
         except Exception as e:
             logger.error(f"AI工具执行异常: {str(e)}", exc_info=True)
@@ -806,10 +846,11 @@ class AIManager:
         # 1. 系统提示词 (精准定调)
         system_prompt = """你是一个顶级的 RimWorld 模组冲突侦探与 C# 报错排查专家。
 请注意以下工作原则：
-1. 【先看目录，再查详情】：请先扫视错误目录，如果某个错误看起来像崩溃源头，务必优先调用 `get_full_log_details` 工具传入 `lines` 数组获取完整堆栈。
-2. 【全局视野】：排查时可调用 `get_active_mod_list` 查看全局加载顺序。
-3. 【关注隐性冲突】：挖掘“未显式声明的隐性冲突”。
-4. 【友好沟通与修复动作】：请直接使用正常的大白话(Markdown)进行解释，不要把整段回复包裹在 JSON 里！在回答的最末尾，如果你有修复建议，请专门附上一个 JSON 代码块，提供操作指令，格式如下：
+1. 【先看目录，再查详情】：系统会在首轮提供错误摘要。如果某个错误像是崩溃源头，务必优先调用 `get_log_context` 工具传入该错误的 `target_line` 获取真实物理上下文。
+2. 【全局视野】：必要时可调用 `get_active_mod_list` 查看全局加载顺序（如果只需要看框架冲突，设置 include_names 为 false 以节约时间）。
+3. 【关注隐性冲突】：不要只看报错表象，要结合上下文深挖“未显式声明的隐性冲突”。
+4. 【友好沟通与修复动作】：请直接使用 Markdown 大白话解释问题，**绝不要**把整段回复包裹在 JSON 字符串里！
+5. 在回答的最末尾，如果你有非常明确的操作建议，请附上一个 JSON 代码块，格式如下（不要输出其他多余字段）：
 ```json
 {
   "actions":[
@@ -910,7 +951,10 @@ class AIManager:
                         
                         # 通知前端：开始调用工具
                         EventBus.emit('ai-tool-call', {
-                            'session_id': session_id, 'tool_id': tc["id"], 'name': func_name
+                            'session_id': session_id, 
+                            'tool_id': tc["id"], 
+                            'name': func_name,
+                            'arguments': func_args  # 【新增】将工具参数发给前端
                         })
                         
                         # 执行工具
@@ -949,5 +993,7 @@ class AIManager:
                 return {"analysis": f"AI 思考时发生异常: {str(e)}", "actions": []}
 
         return {"analysis": "经过多次资料查阅，AI 无法得出确切结论。", "actions": []}
+    
+    
     
     

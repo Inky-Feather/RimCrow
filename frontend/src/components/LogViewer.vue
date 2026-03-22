@@ -119,6 +119,7 @@ import { useAppStore } from '../stores/appStore'
 import { useToast } from 'vue-toastification'
 import UnifiedLogPanel from './utils/UnifiedLogPanel.vue';
 import AiDiagnosticSidebar from './utils/AiDiagnosticSidebar.vue'
+import { checkResult } from '../utils/tools';
 
 
 const appStore = useAppStore()
@@ -135,6 +136,9 @@ const showAiSidebar = ref(false)   // 控制 AI 侧栏的开关
 const selectedLogs = ref([]) 
 const logPanelRef = ref(null)      // 引用当前的 UnifiedLogPanel 组件实例
 
+// 【修复 5】引入请求序号，防抖并防止旧请求覆盖新请求
+let currentTokenRequestId = 0
+
 // 【核心新增】前置 Token 计算状态
 const tokenInfo = ref({
   isLoading: false,
@@ -150,38 +154,31 @@ let debounceTimer = null
 const handleSelectedLogsUpdate = (logs) => {
   selectedLogs.value = logs
   if (logs.length === 0) {
+    // 【修复 5】取消选择时，彻底清空残留的 condensedData
     tokenInfo.value = { isLoading: false, estimated: 0, limit: 32000, isOverLimit: false, condensedData: null }
+    currentTokenRequestId++ // 阻断正在进行的预检
     return
   }
 
   tokenInfo.value.isLoading = true
   clearTimeout(debounceTimer)
   
-  // 500ms 防抖，用户停止框选后发起请求
   debounceTimer = setTimeout(async () => {
-    await fetchTokenEstimate(logs)
+    currentTokenRequestId++
+    const myRequestId = currentTokenRequestId
+    await fetchTokenEstimate(logs, myRequestId)
   }, 500)
 }
-
-const stats = computed(() => {
-  const source = currentTab.value === 'app' ? 'app' : 'game'
-  return {
-    errors: 0,
-    warnings: 0,
-    total: 0
-  }
-})
 // 调用后端的预检接口
-const fetchTokenEstimate = async (logs) => {
+const fetchTokenEstimate = async (logs, requestId) => {
   if (!window.pywebview) return
   
   const allRawLines = [...new Set(logs.flatMap(l => l.raw_lines || []))]
   if (allRawLines.length === 0) {
-    tokenInfo.value.isLoading = false
+    if (requestId === currentTokenRequestId) tokenInfo.value.isLoading = false
     return
   }
 
-  // 获取子组件中当前选中的文件名
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
   const currentFilename = panel?.selectedFile || ''
 
@@ -192,18 +189,24 @@ const fetchTokenEstimate = async (logs) => {
       log_source_type: currentTab.value
     })
     
-    if (res.status === 'success') {
-      tokenInfo.value = {
-        isLoading: false,
-        estimated: res.data.estimated_tokens,
-        limit: res.data.token_limit,
-        isOverLimit: res.data.is_over_limit,
-        condensedData: res.data.condensed_data
+    // 【修复 5】如果序号匹配，才更新状态
+    if (requestId === currentTokenRequestId) {
+      if (checkResult(res,'Token检测')) {
+        tokenInfo.value = {
+          isLoading: false,
+          estimated: res.data.estimated_tokens,
+          limit: res.data.token_limit,
+          isOverLimit: res.data.is_over_limit,
+          condensedData: res.data.condensed_data
+        }
+      } else {
+        tokenInfo.value.isLoading = false
+        toast.error(res.message)
       }
     }
   } catch (e) {
     console.error("Token 计算失败:", e)
-    tokenInfo.value.isLoading = false
+    if (requestId === currentTokenRequestId) tokenInfo.value.isLoading = false
   }
 }
 
@@ -240,31 +243,51 @@ const clearLogSelection = () => {
 // 【核心新增】全局一键排错
 const autoAnalyzeGlobalErrors = async () => {
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
-  if (!panel || !window.pywebview) return
-
-  const errorLogs = panel.getGlobalErrorLogs()
-  if (!errorLogs || errorLogs.length === 0) {
-    toast.info("当前日志文件中没有发现红字错误或警告。")
+  const currentFilename = panel?.selectedFile || ''
+  if (!currentFilename || !window.pywebview) {
+    toast.warning("未选中任何日志文件。")
     return
   }
 
-  toast.info("正在提取全局错误并交由 AI 分析...", { timeout: 2000 })
-  showAiSidebar.value = true // 展开侧边栏
+  // UI 反馈，清空旧状态
+  toast.info("正在绕过内存限制扫描全局物理日志，请稍候...", { timeout: 3000 })
+  clearLogSelection() 
+  tokenInfo.value.isLoading = true
+  showAiSidebar.value = true
+  
+  currentTokenRequestId++ // 阻断其他常规框选预检
+  const myRequestId = currentTokenRequestId
 
-  // 直接利用已有的接口能力
-  await fetchTokenEstimate(errorLogs)
+  try {
+    // 调用我们在 api.py 中新增的真·全局扫描接口
+    const res = await window.pywebview.api.ai_scan_global_errors({
+      filename: currentFilename,
+      log_source_type: currentTab.value
+    })
 
-  if (tokenInfo.value.condensedData) {
-    // 通过 EventBus 或者直接触发内部通信
-    // 为了简单，我们可以通过操作 DOM 模拟“在侧边栏点击发送”
-    // 或者更好的是：通过 ref 暴露给 Sidebar 去自动发送
-    // 这里我们只需将 errorLogs 塞给 selectedLogs 即可，剩下的交由用户在侧栏直接点击“发送”
-    // 这样不会显得太突兀，用户可以看到系统抓取了多少条错误
-    if (typeof panel.selectAll === 'function') {
-      // 假如有的话，但实际上直接赋值更快
+    if (myRequestId !== currentTokenRequestId) return
+
+    if (checkResult(res,"全局扫描")) {
+      tokenInfo.value = {
+        isLoading: false,
+        estimated: res.data.estimated_tokens,
+        limit: res.data.token_limit,
+        isOverLimit: res.data.is_over_limit,
+        condensedData: res.data.condensed_data
+      }
+      
+      // 模拟一个假日志供 UI 悬浮条显示，表示当前绑定了全局摘要
+      // 因为真实物理行可能多达几千行，我们不需要在左侧 UI 一一勾选
+      selectedLogs.value = [{ id: 'global_mock', raw_lines: [] }] 
+      
+      toast.success(res.data.condensed_data.summary)
+    } else {
+      tokenInfo.value.isLoading = false
+      toast.warning(res.message)
     }
-    selectedLogs.value = errorLogs
-    toast.success(`提取完毕！已为你抓取了 ${errorLogs.length} 条全局错误。`)
+  } catch (e) {
+    if (myRequestId === currentTokenRequestId) tokenInfo.value.isLoading = false
+    toast.error("全局扫描失败: " + e.message)
   }
 }
 </script>

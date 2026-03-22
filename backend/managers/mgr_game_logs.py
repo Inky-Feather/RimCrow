@@ -319,14 +319,14 @@ class LogCondenser:
         error_logs = [log for log in raw_logs if log.get("level", "").upper() in ("ERROR", "WARNING", "EXCEPTION")]
         if not error_logs:
             error_logs = raw_logs
+            
         # 2. 核心算法：按时间顺序提取 Unique 错误目录
         error_logs.sort(key=lambda x: x.get("timestamp", ""))
         
         toc_list = []
         seen_types = set()
         
-        # 粗略估算：混合中英文代码，1 Token 大约相当于 2.5 个字符
-        # 按照用户建议，使用上限的 80% 作为安全容量
+        # 粗略估算安全容量
         max_safe_chars = int(token_limit * 0.8 * 2.5) 
         current_chars = 0
 
@@ -338,22 +338,24 @@ class LogCondenser:
             if fingerprint not in seen_types:
                 seen_types.add(fingerprint)
                 
-                # 构建极简目录项（丢弃庞大的 details/stack_trace）
-                # 必须保留 id，供 AI 后续调用 Tool 取回
+                # 获取行号列表
+                raw_lines = log.get("raw_lines", [])
+                
+                # 构建极简目录项
                 item = {
                     "log_id": log.get("id"),
-                    "lines": log.get("raw_lines", []),
+                    "target_line": raw_lines[0] if raw_lines else 0,
+                    # AI 这个报错在所选日志中重复了多少次
+                    "repeat_count": len(raw_lines),
                     "time": log.get("timestamp", ""),
                     "type": ctx.get("inferredType", "Unknown"),
                     "suspect_mods": ctx.get("relatedModIds", []),
-                    # "message_preview": log.get("message", "")[:150] + "..." # 仅保留极少预览
                     "message_preview": log.get("message", "")
                 }
                 
                 item_str = json.dumps(item, ensure_ascii=False)
                 item_chars = len(item_str)
                 
-                # 如果加入这条记录会超出安全上限，则停止收集
                 if current_chars + item_chars > max_safe_chars:
                     break
                     
@@ -362,7 +364,7 @@ class LogCondenser:
 
         return {
             "summary": f"共扫描 {len(raw_logs)} 条日志，为你提取了 {len(toc_list)} 种不同的首发错误目录。",
-            "instruction": "请浏览以下错误目录。如果你需要查看某个错误的完整堆栈以确定原因，请使用 get_full_log_details 工具并传入对应的 lines 数组。",
+            "instruction": "请浏览以下错误目录。如果你需要查看某个错误的完整上下文，请使用 get_log_context 工具，传入对应的 target_line。",
             "error_table_of_contents": toc_list
         }
     
