@@ -335,7 +335,7 @@ class LogCondenser:
         # 如果清洗后依然很长，保留头部（异常抛出点）和尾部（最初的调用源头）
         if len(cleaned_lines) > max_lines:
             half = max_lines // 2
-            return "\n".join(cleaned_lines[:half]) + "\n\n...[大量调用堆栈已折叠]...\n\n" + "\n".join(cleaned_lines[-half:])
+            return "\n".join(cleaned_lines[:half]) + "\n\n...[其它调用堆栈已折叠]...\n\n" + "\n".join(cleaned_lines[-half:])
         return "\n".join(cleaned_lines)
 
     @classmethod
@@ -353,9 +353,17 @@ class LogCondenser:
         """用错误类型 + 消息摘要做聚合键，避免不同错误被硬合并。"""
         ctx = log.get("context", {}) or {}
         inferred_type = str(ctx.get("inferredType") or "").strip()
-        message = re.sub(r'\s+', ' ', str(log.get("message", "") or "").strip())
-        return f"{inferred_type}|{message[:180]}".lower()
-
+        message = str(log.get("message", "") or "").strip()
+        
+        # 【优化点】抹平内存地址、数字、特定实例后缀
+        message = re.sub(r'0x[0-9a-fA-F]+', '<HEX>', message)
+        message = re.sub(r'(Thing_|Pawn_|Bullet_)[\w\d]+', r'\1<ID>', message)
+        message = re.sub(r'\d+', '<NUM>', message)
+        message = re.sub(r'\s+', ' ', message)
+        
+        return f"{inferred_type}|{message}".lower()
+    
+    
     @classmethod
     def _extract_stack_preview(cls, details: str, preview_lines: int) -> str:
         """为目录项提取少量堆栈预览，便于 AI 先做快速判断。"""
@@ -367,24 +375,11 @@ class LogCondenser:
         return "\n".join(preview[:preview_lines])
 
     @classmethod
-    def condense_for_ai(
-        cls,
-        raw_logs: list,
-        token_limit: int = 8000,
-        char_budget_ratio: float = 0.65,
-        stack_preview_lines: int = 0
-    ) -> dict:
+    def condense_for_ai(cls, raw_logs: list, token_limit: int = 8000, char_budget_ratio: float = 0.65, stack_preview_lines: int = 0 ) -> dict:
         """
         动态漏斗提取核心要点（目录模式）
         """
-        if not raw_logs:
-            return {"error": "无有效日志输入"}
-
-        logger.debug(
-            f"[日志压缩] 开始 input_blocks={len(raw_logs)} token_limit={token_limit} "
-            f"char_budget_ratio={char_budget_ratio:.2f} stack_preview_lines={stack_preview_lines}"
-        )
-
+        if not raw_logs: return {"error": "无有效日志输入"}
         # 1. 过滤出真正的错误
         error_logs = [log for log in raw_logs if log.get("level", "").upper() in ("ERROR", "WARNING", "EXCEPTION")]
         if not error_logs:
@@ -408,11 +403,10 @@ class LogCondenser:
 
             if fingerprint not in grouped_items:
                 grouped_items[fingerprint] = {
-                    "log_id": log.get("id"),
-                    "target_line": target_line,
+                    "target_line": target_line,  # 绝对唯一，给AI调用的凭证
                     "repeat_count": repeat_count,
                     "merged_block_count": 1,
-                    "time": log.get("timestamp", ""),
+                    # "time": log.get("timestamp", ""),
                     "level": str(log.get("level", "") or "").upper(),
                     "type": ctx.get("inferredType", "Unknown"),
                     "suspect_mods": suspect_mods,
@@ -464,14 +458,15 @@ class LogCondenser:
         )
 
         logger.debug(
-            f"[日志压缩] 完成 input_blocks={len(raw_logs)} error_blocks={len(error_logs)} "
+            f"[日志压缩] input_blocks={len(raw_logs)} error_blocks={len(error_logs)} token_limit={token_limit} "
             f"grouped_items={len(grouped_list)} output_items={len(toc_list)} "
+            f"char_budget_ratio={char_budget_ratio:.2f} stack_preview_lines={stack_preview_lines}"
             f"total_repeat_count={total_repeat_count} used_chars={current_chars} max_chars={max_safe_chars}"
         )
 
         return {
             "summary": compression_notice,
-            "instruction": "请先查看以下错误摘要；如果需要展开某条错误，请调用 get_log_context 并传入对应的 target_line。",
+            "instruction": "请先查看以下错误摘要。每条摘要默认已附带少量 stack_preview；只有证据不足时，才调用 get_log_context，并优先用 target_lines 批量回查 1-3 个候选 target_line。",
             "compression_notice": compression_notice,
             "stats": {
                 "input_block_count": len(raw_logs),

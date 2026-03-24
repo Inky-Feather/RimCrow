@@ -25,20 +25,24 @@
 
               <!-- 右侧区域：统计看板 + AI 侧边栏开关 -->
               <div class="flex items-center gap-4 text-xs font-mono select-none">
-                <!-- 原有的统计信息 (为了美观可选择性保留或精简) -->
-                <button @click="autoAnalyzeGlobalErrors"
-                        class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border bg-accent-danger/10 border-accent-danger/30 text-accent-danger hover:bg-accent-danger hover:text-white shadow-[0_0_10px_rgba(239,68,68,0.1)]">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  <span class="font-bold">全局一键排错</span>
-                </button>
-                
-                <!-- 【新增】手动开关 AI 侧边栏按钮 -->
-                <button @click="showAiSidebar = !showAiSidebar"
-                        class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border"
-                        :class="showAiSidebar ? 'bg-accent-special/20 border-accent-special/50 text-accent-special shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black/20 border-text-main/10 text-text-dim hover:text-accent-special'">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                  <span class="font-bold">{{ showAiSidebar ? '隐藏 AI 助手' : '召唤 AI 助手' }}</span>
-                </button>
+                <!-- 游戏日志，或（软件日志 + Debug模式）才允许使用 AI -->
+                <template v-if="currentTab === 'game' || appStore.settings.debug_mode">
+                  <!-- 一键分析 -->
+                  <button @click="autoAnalyzeGlobalErrors"
+                          class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border bg-accent-danger/10 border-accent-danger/30 text-accent-danger hover:bg-accent-danger hover:text-white shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <span class="font-bold">一键分析</span>
+                  </button>
+                  
+                  <!-- 手动开关 AI 侧边栏按钮 -->
+                  <button @click="showAiSidebar = !showAiSidebar"
+                          class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border"
+                          :class="showAiSidebar ? 'bg-accent-special/20 border-accent-special/50 text-accent-special shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black/20 border-text-main/10 text-text-dim hover:text-accent-special'">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                    <span class="font-bold">{{ showAiSidebar ? '隐藏 AI 助手' : '打开 AI 助手' }}</span>
+                  </button>
+
+                </template>
               </div>
 
             </div>
@@ -47,18 +51,15 @@
           <!-- 2. 日志内容区 (Log Stream) -->
           <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm relative">
             <KeepAlive>
-              <UnifiedLogPanel 
-                :key="currentTab" 
-                :source-type="currentTab" 
-                ref="logPanelRef"
+              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" ref="logPanelRef"
                 @update:selected-logs="handleSelectedLogsUpdate"
               />
             </KeepAlive>
 
-            <!-- 【新增】悬浮操作条 (Floating Action Bar) -->
+            <!-- 悬浮操作条 (Floating Action Bar) -->
             <!-- 当用户在左侧勾选了日志，且 AI 侧边栏未打开时，在底部弹出提示 -->
             <transition name="fade-up">
-              <div v-if="selectedLogs.length > 0 && !showAiSidebar" 
+              <div v-if="selectedLogs.length > 0 && !showAiSidebar && (currentTab === 'game' || appStore.settings.debug_mode)" 
                   class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-bg-deep/95 border border-accent-primary/30 shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-xl rounded-full px-5 py-2.5 flex items-center gap-4 z-30">
                 
                 <div class="flex items-center gap-2 text-sm">
@@ -66,7 +67,7 @@
                   <span class="text-text-main">已选 <strong class="text-accent-primary">{{ selectedLogs.length }}</strong> 条</span>
                 </div>
                 
-                <!-- 【新增】即时 Token 状态显示 -->
+                <!-- 即时 Token 状态显示 -->
                 <div v-if="tokenInfo.isLoading" class="flex items-center gap-1 text-text-dim text-xs">
                   <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                   <span>估算中...</span>
@@ -78,7 +79,7 @@
                 <div class="w-px h-4 bg-text-main/20"></div>
                 
                 <button @click="showAiSidebar = true" :disabled="tokenInfo.isLoading"
-                        class="text-sm font-bold text-accent-special hover:text-white transition-colors flex items-center gap-1 disabled:opacity-50">
+                  class="text-sm font-bold text-accent-special hover:text-white transition-colors flex items-center gap-1 disabled:opacity-50">
                   AI 分析 
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </button>
@@ -208,7 +209,7 @@ const fetchTokenEstimate = async (logs, requestId) => {
       log_source_type: currentTab.value
     })
     
-    // 【修复 5】如果序号匹配，才更新状态
+    // 如果序号匹配，才更新状态
     if (requestId === currentTokenRequestId) {
       if (checkResult(res,'Token检测')) {
         tokenInfo.value = {
@@ -264,7 +265,7 @@ watch(currentTab, () => {
   resetAttachmentState()
 })
 
-// 【核心新增】全局一键排错
+// 一键分析
 const autoAnalyzeGlobalErrors = async () => {
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
   const currentFilename = panel?.selectedFile || ''
@@ -275,7 +276,7 @@ const autoAnalyzeGlobalErrors = async () => {
 
   // UI 反馈，清空旧状态
   toast.info("正在扫描全部日志，请稍候...", { timeout: 3000 })
-  // 【关键修复】先锁定状态，再清空 UI 选择！
+  // 先锁定状态，再清空 UI 选择！
   isGlobalScanning.value = true
   
   // 这会触发底层清空，但因为锁存在，上层的 handleSelectedLogsUpdate 忽略了空数据
@@ -296,7 +297,7 @@ const autoAnalyzeGlobalErrors = async () => {
   const myRequestId = currentTokenRequestId
 
   try {
-    // 调用我们在 api.py 中新增的真·全局扫描接口
+    // 调用全局扫描接口
     const res = await window.pywebview.api.ai_scan_global_errors({
       filename: currentFilename,
       log_source_type: currentTab.value
@@ -305,9 +306,9 @@ const autoAnalyzeGlobalErrors = async () => {
     if (myRequestId !== currentTokenRequestId) return
 
     if (checkResult(res,"全局扫描")) {
-      const condensedData = res.data.condensed_data || null
-      const stats = condensedData?.stats || {}
-      const tocCount = stats.output_item_count || condensedData?.error_table_of_contents?.length || 0
+      const diagnosisContext = res.data.diagnosis_context || null
+      const stats = diagnosisContext?.stats || {}
+      const tocCount = stats.output_item_count || diagnosisContext?.error_table_of_contents?.length || 0
       const repeatCount = stats.total_repeat_count || 0
 
       tokenInfo.value = {
@@ -315,7 +316,7 @@ const autoAnalyzeGlobalErrors = async () => {
         estimated: res.data.estimated_tokens,
         limit: res.data.token_limit,
         isOverLimit: res.data.is_over_limit,
-        condensedData
+        condensedData: diagnosisContext
       }
 
       // 维持全局附件状态，让侧栏和顶部 Token 统计立刻反映压缩结果。

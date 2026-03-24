@@ -140,7 +140,8 @@ class BaseLogReader:
         line_processor_cb: 回调函数，用于各子类处理特有逻辑（如游戏日志的正则匹配）
         """
         blocks = []
-        is_json = filepath.endswith('.json') or 'RMM_Realtime' in os.path.basename(filepath)
+        filename = os.path.basename(filepath)
+        is_json = filepath.endswith('.json') or 'RMM_Realtime' in filename or 'app.log' in filename
         
         # 防御性截断，全局扫描最多解析文件末尾的 80000 行
         MAX_GLOBAL_LINES = 80000 

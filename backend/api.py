@@ -9,6 +9,7 @@ import threading
 import time
 import functools
 import uuid
+import litellm
 import webview
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Any, Dict, List
@@ -35,7 +36,7 @@ from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PA
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.tools import current_ms, generate_path_hash
-from backend.utils.logger import logger
+from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
@@ -50,7 +51,7 @@ from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_files import FileManager, file_mgr, PathChecker
-from backend.managers.mgr_game_logs import GameLogManager
+from backend.managers.mgr_game_logs import GameLogManager, LogCondenser
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
@@ -425,22 +426,6 @@ class API:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
                 mod['replacement'] = None
-            # # 图片 URL 注入
-            # pkg_id = mod['package_id']
-            # # 优先使用物理路径（Source Path），即使它是被链接的 Workshop Mod
-            # # 前端展示的是源文件的缩略图
-            # preview_path = mod.get('preview_path')
-            # icon_path = mod.get('icon_path')
-            # # 1. 尝试获取已生成的缩略图路径 (物理路径)
-            # thumb_path = file_mgr.get_thumbnail_path(pkg_id)
-            # # 2. 决定列表图标 (优先用缩略图，没有则用原图)
-            # list_thumb_path = thumb_path if thumb_path else preview_path
-            # # 3. 转换为 HTTP URL
-            # mod['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
-            # # 4. 详情页大图 URL
-            # mod['preview_url'] = file_mgr.get_asset_url(preview_path) if preview_path else None
-            # # 5. 图标 URL
-            # mod['icon_url'] = file_mgr.get_asset_url(icon_path) if icon_path else None
             
         result.update({
             "all_mods": context_mods,  # 返回过滤后的列表
@@ -1602,7 +1587,6 @@ class API:
         """ 获取指定类型的日志文件列表 ('app' 或 'game') """
         try:
             if log_type == 'app':
-                from backend.utils.logger import app_log_reader
                 files = app_log_reader.get_log_files()
             else:
                 if not self.game_log_mgr: 
@@ -1618,7 +1602,6 @@ class API:
         """ 分页读取日志 """
         try:
             if log_type == 'app':
-                from backend.utils.logger import app_log_reader
                 result = app_log_reader.read_log_page(filename, page, page_size)
             else:
                 if not self.game_log_mgr: 
@@ -2003,16 +1986,8 @@ class API:
         raw_lines = payload.get("raw_lines", [])
         filename = payload.get("filename", "")
         source_type = payload.get("log_source_type", "game")
-
-        logger.debug(
-            f"[AI预检] 开始 source={source_type} filename={filename} "
-            f"raw_line_count={len(raw_lines)}"
-        )
-
         if not raw_lines or not filename:
             return ApiResponse.error("无效的分析请求：缺失日志行号或文件名。")
-
-        from backend.utils.logger import app_log_reader
         reader = self.game_log_mgr if source_type == 'game' else app_log_reader
         if not reader: return ApiResponse.error("日志读取器未初始化")
         
@@ -2020,27 +1995,20 @@ class API:
             filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
-
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
         if not full_logs:
             return ApiResponse.error("无法读取指定的日志内容，文件可能已被清理。")
-
-        
         token_limit = settings.config.ai.max_tokens
-
         from backend.managers.mgr_game_logs import LogCondenser
-        condensed_data = LogCondenser.condense_for_ai(full_logs, token_limit=token_limit)
-
+        condensed_data = LogCondenser.condense_for_ai( full_logs, token_limit=token_limit, stack_preview_lines=2 )
         import litellm
         text_to_estimate = json.dumps(condensed_data, ensure_ascii=False)
         estimated_tokens = litellm.token_counter(model=settings.config.ai.model, text=text_to_estimate)
-
         logger.debug(
-            f"[AI预检] 完成 source={source_type} filename={filename} "
+            f"[AI预检] source={source_type} filename={filename} raw_line_count={len(raw_lines)} "
             f"log_blocks={len(full_logs)} toc_items={len(condensed_data.get('error_table_of_contents', [])) if isinstance(condensed_data, dict) else 0} "
             f"estimated_tokens={estimated_tokens}"
         )
-
         # 【核心修改】无论是否超限，都返回统一数据结构给前端
         return ApiResponse.success({
             "is_over_limit": estimated_tokens > token_limit,
@@ -2053,14 +2021,16 @@ class API:
     @log_api_call
     def ai_diagnostic_chat(self, payload: dict):
         """
-        【修改】处理前端的智能诊断请求，现在直接接收浓缩后的数据
-        payload 结构: { "history": [], "condensed_data": {...}, "question": "..." }
+        处理前端的日志诊断请求，直接接收浓缩后的数据
+        payload 结构: { "history": [], "diagnosis_context": {...}, "question": "..." }
         """
         if not settings.config.ai.enabled:
             return ApiResponse.error("AI 功能未启用，请前往设置开启。")
+        source_type = payload.get("log_source_type", "game")
+        if source_type == 'app' and not settings.config.debug_mode:
+            return ApiResponse.error("软件日志分析仅在 Debug 模式下可用。")
             
         try:
-            from backend.utils.logger import app_log_reader
             source_type = payload.get("log_source_type", "game")
             session_id = payload.get("session_id", "")
             reader = self.game_log_mgr if source_type == 'game' else app_log_reader
@@ -2069,7 +2039,7 @@ class API:
             logger.debug(
                 f"[AI诊断API] 收到请求 session_id={session_id} source={source_type} "
                 f"filename={payload.get('filename', '')} history={len(payload.get('history', []))} "
-                f"has_context={bool(payload.get('diagnosis_context') or payload.get('condensed_data'))}"
+                f"has_context={bool(payload.get('diagnosis_context'))}"
             )
             
             # 直接使用传入的浓缩数据，不再自己计算
@@ -2086,7 +2056,7 @@ class API:
             return ApiResponse.error(f"智能诊断异常: {str(e)}")
         
     
-    # 供“一键排错”使用的真·全局扫描接口
+    # 供“一键排错”使用的全局扫描接口
     @log_api_call
     def ai_scan_global_errors(self, payload: dict):
         """
@@ -2094,60 +2064,40 @@ class API:
         """
         filename = payload.get("filename", "")
         source_type = payload.get("log_source_type", "game")
-
         logger.debug(f"[AI全局扫描] 开始 source={source_type} filename={filename}")
-        
         if not filename:
             return ApiResponse.error("缺少文件名")
-
-        from backend.utils.logger import app_log_reader
         reader = self.game_log_mgr if source_type == 'game' else app_log_reader
         if not reader: return ApiResponse.error("日志读取器未初始化")
-        
         import os
         from backend.settings import DATA_DIR
         if source_type == 'game':
             filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
-            
         if not os.path.exists(filepath):
             return ApiResponse.error("找不到日志文件")
-
         if not hasattr(reader, "get_all_blocks"):
             return ApiResponse.error("当前日志读取器不支持全局扫描")
-
         # 直接复用读取器已经合并好的结构化日志块，保证和普通多选分析一致。
         try:
             raw_logs = reader.get_all_blocks(filepath, full_scan=True)
         except Exception as e:
             logger.error(f"[AI全局扫描] 读取完整日志块失败 filename={filename}: {e}", exc_info=True)
             return ApiResponse.error(f"读取日志失败: {e}")
-
         if not raw_logs:
             return ApiResponse.warning("当前日志文件中没有可分析的内容。")
-
         # 全局扫描默认额外保留 2 行堆栈预览，并使用更保守的预算比例，
         # 这样前端能更快看到结果，也能让后续 AI 调用留出足够余量。
-        from backend.managers.mgr_game_logs import LogCondenser
         token_limit = settings.config.ai.max_tokens
-        condensed_data = LogCondenser.condense_for_ai(
-            raw_logs,
-            token_limit=token_limit,
-            char_budget_ratio=0.55,
-            stack_preview_lines=2
-        )
-        
+        diagnosis_context = LogCondenser.condense_for_ai( raw_logs, token_limit=token_limit, char_budget_ratio=0.65, stack_preview_lines=2)
         # 压缩完成后再计算实际 Token 占用，前端顶部记忆计数直接使用这个结果。
-        import litellm
-        import json
-        text_to_estimate = json.dumps(condensed_data, ensure_ascii=False)
+        text_to_estimate = json.dumps(diagnosis_context, ensure_ascii=False)
         estimated_tokens = litellm.token_counter(model=settings.config.ai.model, text=text_to_estimate)
-
-        stats = condensed_data.get('stats', {}) if isinstance(condensed_data, dict) else {}
+        stats = diagnosis_context.get('stats', {}) if isinstance(diagnosis_context, dict) else {}
         compression_notice = (
-            condensed_data.get('compression_notice')
-            if isinstance(condensed_data, dict)
+            diagnosis_context.get('compression_notice')
+            if isinstance(diagnosis_context, dict)
             else ""
         )
 
@@ -2162,7 +2112,7 @@ class API:
             "is_over_limit": estimated_tokens > token_limit,
             "estimated_tokens": estimated_tokens,
             "token_limit": token_limit,
-            "condensed_data": condensed_data,
+            "diagnosis_context": diagnosis_context,
             "compression_notice": compression_notice
         })
     

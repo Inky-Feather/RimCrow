@@ -105,7 +105,7 @@
                 :data-id="item.id">
               
               <!-- 多选框区 (click-trigger 支持单点/Shift多选) -->
-              <div class="shrink-0 flex items-start pt-1 pl-1 select-trigger swipe-trigger cursor-pointer">
+              <div v-if="sourceType === 'game' || appStore.settings.debug_mode" class="shrink-0 flex items-start pt-1 pl-1 swipe-trigger cursor-pointer">
                 <div class="w-4 h-4 rounded border flex items-center justify-center transition-colors pointer-events-none"
                     :class="selectedIds.includes(item.id) ? 'bg-accent-primary border-accent-primary text-bg-deep' : 'border-text-dim/40 group-hover/row:border-text-dim'">
                   <svg v-if="selectedIds.includes(item.id)" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -119,9 +119,8 @@
 
               <!-- 主体内容 -->
               <div class="flex-1 min-w-0 py-0.5 pr-2 select-text">
-                
-                <!-- 智能诊断标签区 -->
-                <div v-if="item.context" class="flex flex-wrap gap-1 mb-1 items-center">
+                <!-- 诊断标签区 -->
+                <div v-if="item.context && (sourceType === 'game' || appStore.settings.debug_mode)" class="flex flex-wrap gap-1 mb-1 items-center">
                   <!-- App 模块标签 -->
                   <span v-if="item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-[11px] font-bold border border-accent-cool/30">
                     {{ item.context.module }} <span v-if="item.context.func" class="opacity-60">:: {{ item.context.func }}</span>
@@ -132,12 +131,10 @@
                     v-tooltip="item.context.path">
                     {{ item.context.path }}
                   </span>
-                  
                   <!-- 游戏 错误类型 -->
                   <span v-if="item.context.inferredType" class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-[11px] font-bold border border-accent-danger/30">
                     {{ item.context.inferredType }}
                   </span>
-
                   <!-- 关联文件 -->
                   <span v-for="file in (item.context.relatedFiles || []).slice(0,3)"
                     :key="file"
@@ -149,7 +146,6 @@
                     class="px-1 py-0.5 rounded text-[11px] text-text-dim">
                     +{{ item.context.relatedFiles.length - 3 }} 更多文件…
                   </span>
-                  
                   <!-- 嫌疑 Mod 点击跳转 -->
                   <button v-for="modId in (item.context.relatedModIds || [])" :key="modId"
                     @click="openMod(modId)"
@@ -157,7 +153,6 @@
                     v-tooltip="'点击查看 Mod 详情'">[Mod: {{ modId }}]
                   </button>
                 </div>
-
                 <!-- 消息正文 (高亮搜索词) -->
                 <div class="whitespace-pre-wrap"
                   :class="[item._folded ? 'log-body-collapsed' : '', getMessageTextClass(item.level)]"
@@ -168,7 +163,6 @@
                   class="mt-0.5 text-[11px] text-accent-primary hover:text-accent-highlight">
                   展开完整日志
                 </button>
-
                 <!-- 展开详情 (堆栈) -->
                 <div v-if="item.details" class="mt-1">
                   <button @click="item._expanded = !item._expanded" 
@@ -647,7 +641,7 @@ watch(selectedIds, (newIds) => {
 const selectionConfig = computed(() => ({
   data: filteredLogIds.value,     // 当前列表数据的全集 IDs
   selectedIds: selectedIds.value, // 当前已选中的 IDs
-  clickClass: 'select-trigger',   // 触发点击选择的区域
+  clickClass: 'swipe-trigger',   // 触发点击选择的区域
   swipeClass: 'swipe-trigger',    // 触发滑动选择的区域
   idAttribute: 'data-id',         // DOM 绑定的 ID 属性
   onSelect: (newSelectedIds, anchorId) => {
