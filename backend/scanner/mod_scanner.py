@@ -28,7 +28,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
-from backend.settings import settings
+from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.logger import logger # 引入日志
 from backend.utils.event_bus import EventBus # 引入事件总线
 
@@ -170,20 +170,22 @@ class ModScanner:
             # 部署准备：Workshop Mod 和 Self Mod 候选列表 (路径)
             self_mods_paths_for_deploy = []
             workshop_paths_for_deploy = []
+            tool_mods_paths_for_deploy = []
 
             # 获取本地 Mods 根目录 (用于判定是否同级冲突)
             local_mods_root = self.context.local_mods_path
             if local_mods_root: 
                 local_mods_root = os.path.normpath(local_mods_root).lower()
-            
             self_mods_root = settings.config.self_mods_path
             if self_mods_root:
                 self_mods_root = os.path.normpath(self_mods_root).lower()
-            
             workshop_mods_root = settings.config.workshop_mods_path
             if workshop_mods_root:
                 workshop_mods_root = os.path.normpath(workshop_mods_root).lower()
-
+            tool_mods_root = str(TOOL_MODS_DIR)
+            if tool_mods_root:
+                tool_mods_root = os.path.normpath(tool_mods_root).lower()
+            
             shadow_paths_map = {}
             for pid, entries in temp_registry.items():
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
@@ -206,8 +208,8 @@ class ModScanner:
                         mods_to_upsert.append(mod)
                     
                     # 收集部署信息
-                    self._classify_for_deploy(mod, local_mods_root,self_mods_root, workshop_mods_root, 
-                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy)
+                    self._classify_for_deploy(mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
+                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy)
                     continue
 
                 # 情况 B: 多个实例 -> 判定冲突类型
@@ -216,9 +218,8 @@ class ModScanner:
                     for mod in entries:
                         if not mod.get('_skipped'):
                             mods_to_upsert.append(mod)
-                        self._classify_for_deploy(
-                            mod, local_mods_root, self_mods_root, workshop_mods_root,
-                            local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy
+                        self._classify_for_deploy( mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
+                            local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy
                         )
                     continue
 
@@ -264,8 +265,8 @@ class ModScanner:
                 for mod in entries:
                     # 优化：跳过未变动的 Mod，避免无意义的数据库重写
                     if not mod.get('_skipped'): mods_to_upsert.append(mod)
-                    self._classify_for_deploy(mod, local_mods_root,self_mods_root, workshop_mods_root, 
-                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy)
+                    self._classify_for_deploy(mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
+                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy)
 
             # --- 4. 批量入库 ---
             # 这是数据安全最关键的一步
@@ -284,26 +285,38 @@ class ModScanner:
             deploy_msg = "跳过链接部署"
             logger.debug(f"Skip deployment: use_workshop_mods={self.context.use_workshop_mods}, use_self_mods={self.context.use_self_mods}, current_profile_not_default={self.context.profile_id != 'default'}")
             final_links_to_create = []
+            final_package_ids = local_mod_ids_for_deploy
+            # 管理器模组优先部署
             if self.context.use_self_mods and local_mods_root and os.path.exists(local_mods_root):
-                # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Workshop Mod
-                for w_path, w_id in self_mods_paths_for_deploy:
-                    if w_id not in local_mod_ids_for_deploy:
-                        final_links_to_create.append(w_path)
+                # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Self Mod
+                for path, p_id in self_mods_paths_for_deploy:
+                    if p_id not in final_package_ids:
+                        final_links_to_create.append(path)
+                        final_package_ids.add(p_id)
+                    else:
+                        # 被本地遮蔽，忽略
+                        pass
+            # 其次部署 创意工坊模组
+            if self.context.use_workshop_mods and self.context.profile_id != 'default' \
+                and local_mods_root and os.path.exists(local_mods_root):
+                # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
+                for path, p_id in workshop_paths_for_deploy:
+                    if p_id not in final_package_ids:
+                        final_links_to_create.append(path)
+                        final_package_ids.add(p_id)
+                    else:
+                        # 被本地遮蔽，忽略
+                        pass
+            # 最后部署 系统工具模组
+            if settings.config.enable_tool_mods and local_mods_root and os.path.exists(local_mods_root):
+                for path, p_id in tool_mods_paths_for_deploy:
+                    if p_id not in final_package_ids:
+                        final_links_to_create.append(path)
+                        final_package_ids.add(p_id)
                     else:
                         # 被本地遮蔽，忽略
                         pass
             
-            if self.context.use_workshop_mods and self.context.profile_id != 'default' \
-                and local_mods_root and os.path.exists(local_mods_root):
-                # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
-                self_mods_ids_for_deploy = [w_id for w_path, w_id in self_mods_paths_for_deploy]
-                for w_path, w_id in workshop_paths_for_deploy:
-                    if w_id not in local_mod_ids_for_deploy and w_id not in self_mods_ids_for_deploy:
-                        final_links_to_create.append(w_path)
-                    else:
-                        # 被本地遮蔽，忽略
-                        pass
-                    
             # 调用 FileManager 执行部署
             # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
             success = FileManager.sync_links_fast(local_mods_root, final_links_to_create)
@@ -364,25 +377,26 @@ class ModScanner:
         
         EventBus.emit('scan-complete', result)
 
-    def _classify_for_deploy(self, mod_data, local_root, self_mods_root, workshop_root, local_ids_set, self_mods_paths_list, workshop_paths_list):
+    def _classify_for_deploy(self, mod_data, local_root, self_mods_root, workshop_root, tool_mods_root, local_ids_set, self_mods_paths_list, workshop_paths_list, tool_mods_paths_list):
         """
         辅助函数：将 Mod 分类以便后续部署。
         """
         mod_path = mod_data.get('path')
         if not mod_path or mod_data.get('disabled'): return
-        
         mod_path_norm = os.path.normpath(mod_path).lower()
         pid = mod_data['package_id'].lower()
-        
         # 判断 Local
         if local_root and mod_path_norm.startswith(local_root):
             local_ids_set.add(pid)
         # 判断 Self Mod
         elif self_mods_root and mod_path_norm.startswith(self_mods_root):
             self_mods_paths_list.append((mod_path, pid)) # 保留原大小写路径用于部署
-        # 判断 Workshop (如果是 DLC 也不需要部署)
+        # 判断 Workshop
         elif workshop_root and mod_path_norm.startswith(workshop_root):
             workshop_paths_list.append((mod_path, pid))
+        # 判断 Tool Mod
+        elif tool_mods_root and mod_path_norm.startswith(tool_mods_root):
+            tool_mods_paths_list.append((mod_path, pid))
         
     def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False):
         """
@@ -454,11 +468,9 @@ class ModScanner:
             dlc_parser.enrich_data(mod_data, mod_path)
             mod_data['supported_languages'] = list(dlc_parser.translations.keys())
             
-
         # 路径与来源分析
         workshop_id = self._resolve_workshop_id(mod_path)
         mod_data['workshop_id'] = workshop_id
-        
             
         # Source 补全逻辑
         if workshop_id:
@@ -480,9 +492,12 @@ class ModScanner:
         L_PATH = norm(self.context.local_mods_path)
         W_PATH = norm(settings.config.workshop_mods_path)
         S_PATH = norm(settings.config.self_mods_path)
+        T_PATH = norm(str(TOOL_MODS_DIR))
         # 补充 store
         m_path = norm(mod_path)
         if S_PATH and m_path.startswith(S_PATH) and (S_PATH != L_PATH):
+            mod_data['store'] = 'self'
+        elif T_PATH and m_path.startswith(T_PATH):
             mod_data['store'] = 'self'
         elif W_PATH and m_path.startswith(W_PATH):
             mod_data['store'] = 'workshop'

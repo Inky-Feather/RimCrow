@@ -64,7 +64,7 @@
         :sortable="false" group="none" :disabled="true"
         v-selectable-list="{
           data: displayMods.map(m => m.path_hash),
-          selectedIds: localSelectedIds,
+          selectedIds: localSelectedPathHashes,
           onSelect: handleSelect,
           onClear: clearSelection,
           clickClass: 'matrix-select-trigger',
@@ -75,7 +75,7 @@
         <template v-slot:item="{ record, dataKey }">
           <div class="relative group">
             <MatrixItem class="timeline-trigger" :mod="record" :storeType="storeType"
-              :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedIds.includes(dataKey)"
+              :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedPathHashes.includes(dataKey)"
               @contextmenu="handleContextMenu" @click="$emit('open-timeline', record)"
             />
           </div>
@@ -131,7 +131,7 @@ const searchQuery = ref('')
 const sortBy = ref('change')
 const isSortDsc = ref(true)
 const filterState = ref('default')
-const localSelectedIds = ref([])
+const localSelectedPathHashes = ref([])
 const vListRef = ref(null)
 
 const lastPlayedTime = computed(() => profileStore.currentProfile?.last_played_time || 0)
@@ -154,7 +154,7 @@ const use_self_mods = computed({
 
 
 const clearSelection = () => {
-  localSelectedIds.value = []
+  localSelectedPathHashes.value = []
 }
 
 const getModsData = (pathHashes, type = null) => {
@@ -196,7 +196,7 @@ const focusMatrixItem = async (pathHash) => {
     filterState.value = 'default'
   }
 
-  localSelectedIds.value = [pathHash]
+  localSelectedPathHashes.value = [pathHash]
   await nextTick()
   vListRef.value?.scrollToKey?.(pathHash)
   requestAnimationFrame(() => {
@@ -249,7 +249,7 @@ watch(
   () => (props.mods || []).map(mod => mod.path_hash),
   (pathHashes) => {
     const validIds = new Set(pathHashes)
-    localSelectedIds.value = localSelectedIds.value.filter(pathHash => validIds.has(pathHash))
+    localSelectedPathHashes.value = localSelectedPathHashes.value.filter(pathHash => validIds.has(pathHash))
   },
   { immediate: true }
 )
@@ -264,11 +264,10 @@ watch(
 )
 
 const handleSelect = (pathHashes) => {
-  localSelectedIds.value = Array.isArray(pathHashes) ? pathHashes : [pathHashes].filter(Boolean)
+  localSelectedPathHashes.value = Array.isArray(pathHashes) ? pathHashes : [pathHashes].filter(Boolean)
 }
 
 const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
-  const paths = getModsData(pathHashes, 'path')
   const workshopIds = getModsData(pathHashes, 'workshop_id')
   if (!workshopIds.length) return
 
@@ -280,8 +279,8 @@ const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
   if (!check) return
 
   const res = await appStore.unsubscribeWorkshopIds(workshopIds)
-  if (res && deleteFile && paths.length) {
-    appStore.deletePaths(paths)
+  if (res && deleteFile && pathHashes.length) {
+    modStore.deleteMods(pathHashes)
   }
 }
 
@@ -295,11 +294,11 @@ const handleContextMenu = async (event, targetMod) => {
   event.preventDefault()
   if (!targetMod) return
 
-  if (!localSelectedIds.value.includes(targetMod.path_hash)) {
+  if (!localSelectedPathHashes.value.includes(targetMod.path_hash)) {
     handleSelect([targetMod.path_hash])
   }
 
-  const selectedMods = getModsData(localSelectedIds.value)
+  const selectedMods = getModsData(localSelectedPathHashes.value)
   const selectedWorkshopIds = selectedMods.map(mod => mod.workshop_id).filter(Boolean)
   const selectedPaths = selectedMods.map(mod => mod.path).filter(Boolean)
   const selectedPackageIds = selectedMods.map(mod => mod.package_id).filter(Boolean)
@@ -329,14 +328,14 @@ const handleContextMenu = async (event, targetMod) => {
       label: '转移...' + selectedNumStr,
       icon: ArrowRightLeft,
       children: [
-        { label: '复制到 游戏本地库', disabled: props.storeType === 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'copy') },
-        { label: '复制到 管理器库', disabled: props.storeType === 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'copy') },
-        { label: '复制到 创意工坊库', disabled: props.storeType === 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'copy') },
+        { label: '复制到 游戏本地库', disabled: props.storeType === 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'copy') },
+        { label: '复制到 管理器库', disabled: props.storeType === 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'copy') },
+        { label: '复制到 创意工坊库', disabled: props.storeType === 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'copy') },
         { divider: true },
         // 移动操作 (如果是工坊则不可移动)
-        { label: '移动到 游戏本地库', disabled: props.storeType === 'local' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'local', 'move') },
-        { label: '移动到 管理器库', disabled: props.storeType === 'self' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'self', 'move') },
-        { label: '移动到 创意工坊库', disabled: props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedIds.value, 'workshop', 'move') },
+        { label: '移动到 游戏本地库', disabled: props.storeType === 'local' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'move') },
+        { label: '移动到 管理器库', disabled: props.storeType === 'self' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'move') },
+        { label: '移动到 创意工坊库', disabled: props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'move') },
       ]
     })
   }
@@ -346,28 +345,28 @@ const handleContextMenu = async (event, targetMod) => {
       menuItems.push({ label: '更新模组[再次订阅]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => appStore.subscribeWorkshopIds(selectedWorkshopIds)
       })
     } else {
-      menuItems.push({ label: '更新模组[再次下载]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => downloadMods(localSelectedIds.value)
+      menuItems.push({ label: '更新模组[再次下载]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => downloadMods(localSelectedPathHashes.value)
       })
     }
   }
-  menuItems.push({ label: '下载到管理器' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: DownloadCloud, action: () => downloadMods(localSelectedIds.value) })
+  menuItems.push({ label: '下载到管理器' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: DownloadCloud, action: () => downloadMods(localSelectedPathHashes.value) })
   // 3. Steam API 相关操作
   menuItems.push({ label: 'Steam操作', icon: IconSteam,
     children: [
       { label: '访问创意工坊', disabled: !targetMod.workshop_id, icon: IconSteam, action: () => appStore.openSteamWorkshopById(targetMod.workshop_id) },
       { label: '订阅模组' + selectedNumStr, disabled: selectedWorkshopIds.length === 0 || (!!targetMod.steam_status?.is_subscribed && selectedWorkshopIds.length === 1), icon: Flag, action: () => appStore.subscribeWorkshopIds(selectedWorkshopIds) },
-      { label: '取消订阅' + selectedNumStr, disabled: props.storeType !== 'workshop' || selectedWorkshopIds.length === 0, icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedIds.value, false) },
+      { label: '取消订阅' + selectedNumStr, disabled: props.storeType !== 'workshop' || selectedWorkshopIds.length === 0, icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedPathHashes.value, false) },
     ]
   })
 
   // 4. 破坏性操作
   menuItems.push({ divider: true })
   if(!isMissing) {
-    menuItems.push({ label: targetMod.disabled ? '解禁' : '禁用' + selectedNumStr, icon: targetMod.disabled ? LockOpen : Lock, level: 'warn', action: () => modStore.disableMods(localSelectedIds.value, !targetMod.disabled) })
-    menuItems.push({ label: '删除文件' + selectedNumStr, icon: Trash2, level: 'danger', action: () => appStore.deletePaths(getModsData(localSelectedIds.value, 'path')) })
+    menuItems.push({ label: targetMod.disabled ? '解禁' : '禁用' + selectedNumStr, icon: targetMod.disabled ? LockOpen : Lock, level: 'warn', action: () => modStore.disableMods(localSelectedPathHashes.value, !targetMod.disabled) })
+    menuItems.push({ label: '删除文件' + selectedNumStr, icon: Trash2, level: 'danger', action: () => modStore.deleteMods(localSelectedPathHashes.value) })
   } else {
     // 对于缺失项，提供一键清除幽灵记录的功能（取消订阅）
-    menuItems.push({ label: '清理此失效订阅' + selectedNumStr, icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedIds.value, false) })
+    menuItems.push({ label: '清理此失效订阅' + selectedNumStr, icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedPathHashes.value, false) })
   }
 
   menuStore.open(event, menuItems)

@@ -316,14 +316,10 @@ const handleClick = (e) => {
     return
   }
 }
-// 删除选中项文件
-const deleteMod = async () => {
-  appStore.deletePath(modData.value.path)
-}
-// 删除选中项文件
+// 删除选中项Mod
 const deleteModFiles = async () => {
-  const paths = modStore.selectedMods.map(m => m.path)
-  appStore.deletePaths(paths)
+  const path_hashes = modStore.selectedMods.map(m => m.path_hash)
+  modStore.deleteMods(path_hashes)
 }
 // 批量生成别名备注
 const generateAliasNotes = async () => {
@@ -335,13 +331,13 @@ const generateAliasNotes = async () => {
 // 取消订阅模组
 const unsubscribeWorkshopIds = async (delete_file = false) => {
   // 只选择包含workshop_id的项目
-  const paths = [];
+  const path_hashes = [];
   const workshop_ids = [];
   // 遍历数组，同时收集两个字段
   modStore.selectedMods.forEach(m => {
     // 只选择包含 workshop_id 的项目
     if (m.workshop_id) {
-      paths.push(m.path);
+      path_hashes.push(m.path_hash);
       workshop_ids.push(m.workshop_id);
     }
   });
@@ -349,7 +345,7 @@ const unsubscribeWorkshopIds = async (delete_file = false) => {
   if(check) {
     const res = await appStore.unsubscribeWorkshopIds(workshop_ids)
     if (res && delete_file) {
-      appStore.deletePaths(paths)
+      modStore.deleteMods(path_hashes)
     }
   }
 }
@@ -512,7 +508,7 @@ const handleContextMenu = async (event) => {
   const menuItems = [
   ...commnMenuItems,
   ...singleMenuItems,
-  ...selectedMenuItems,
+  ...(selectedIds.length > 2 ? selectedMenuItems : []),
   ...issueManagementItems, // 插入新的批量忽略逻辑
   ...fileMenuItems, // 插入文件处理菜单
 ];

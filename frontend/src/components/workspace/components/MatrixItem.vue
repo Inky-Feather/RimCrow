@@ -73,11 +73,11 @@
         <span v-if="matrixState.isDisabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-warning animate-pulse">
           DISABLED
         </span>
-        <span v-if="matrixState.isDeleted" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
-          DELETED
-        </span>
         <span v-if="matrixState.isMissing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           MISSING
+        </span>
+        <span v-if="matrixState.isDeleted" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+          DELETED
         </span>
       </div>
     </div>

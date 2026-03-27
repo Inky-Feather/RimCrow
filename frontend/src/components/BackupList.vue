@@ -315,7 +315,7 @@ const selectedBackupProfileId = computed({
 const backupProfileOptions = computed(() => {
   const profiles = profileStore.profiles || []
   return profiles.map(profile => ({
-    label: profile.id === currentProfileId.value ? `${profile.name} · 当前` : profile.name,
+    label: profile.id === currentProfileId.value ? `* ${profile.name}` : profile.name,
     value: profile.id,
     desc: profile.msg || profile.description || profile.user_data_path || profile.id,
   }))

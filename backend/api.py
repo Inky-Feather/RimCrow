@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
 # 1. 引入配置管理
 from backend.managers.mgr_steamcmd_core import SteamCMDController
-from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, HOME_DIR, settings, RULES_DIR
+from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.tools import current_ms, generate_path_hash
@@ -407,6 +407,13 @@ class API:
         active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {'active_mods': [], 'modify_time': 0}
         inactive_mods_order = self.active_context.inactive_mods_order if getattr(self.active_context, 'inactive_mods_order', []) else []
         
+        # 防呆：注入核心模组
+        current_active_ids = active_load_order.get('active_mods', [])
+        mod_map = {m['package_id'].lower(): m for m in context_mods}
+        if self.sorter:
+            active_ids, needs_added_ids = self.sorter.ensure_mods(current_active_ids, mod_map)
+            current_active_ids = self.sorter.smart_insert_mods(needs_added_ids, current_active_ids, mod_map)
+        
         replacements = self.workshop_db_mgr.get_replacements()
         replacements_map = {r['old_workshop_id']: r for r in replacements}
         
@@ -437,7 +444,7 @@ class API:
             "all_mods": context_mods,  # 返回过滤后的列表
             "groups": all_groups,
             "interlocks": interlock_map,
-            "active_load_order": active_load_order.get('active_mods', []),
+            "active_load_order": current_active_ids, # 发送完成补齐后的最终列表
             "inactive_load_order": inactive_mods_order,
             "active_load_modify_time": active_load_order.get('modify_time', 0),
         })
@@ -665,6 +672,9 @@ class API:
                     if os.path.exists(cfg.workshop_mods_path) and \
                         (self.active_context.use_workshop_mods or self.active_context.profile_id=='default'):
                         paths_to_scan.append(cfg.workshop_mods_path)
+                    # 5. Tool Mods (工具模组目录)
+                    if os.path.exists(str(TOOL_MODS_DIR)) and cfg.enable_tool_mods:
+                        paths_to_scan.append(str(TOOL_MODS_DIR))
                 else:
                     return ApiResponse.error("当前 环境 未激活，无法扫描 Mods")
             if not paths_to_scan:
@@ -699,6 +709,7 @@ class API:
                 for op in operations:
                     action = op.get('action')
                     path = op.get('target_path')
+                    path_hash = op.get('target_path_hash','')
                     keep_hash = op.get('keep_path_hash')
                     if not path: continue
                     success = False
@@ -711,7 +722,9 @@ class API:
                             ModDAO.add_shadow_path(keep_hash, path)
                     elif action == 'delete':
                         # 执行物理删除
-                        success, msg = ModDAO.delete_mod_physically(path)
+                        res = ModDAO.delete_mods_physically(path_hash)
+                        success = res['success_count']>0
+                        msg = res['errors'][0] if res['errors'] else "删除成功"
                     else:
                         msg = f"不支持的操作类型: {action}"
                     results.append({
@@ -742,6 +755,24 @@ class API:
             return ApiResponse.warning(f"部分操作失败：{len(error_items)} 项未处理成功，其余操作已应用。", payload)
         except Exception as e:
             return ApiResponse.error(f"处理出错: {str(e)}")
+    
+    @log_api_call
+    def mods_delete(self, path_hashes: List[str]|str):
+        """
+        批量物理删除 Mod (移入回收站) 并抹除数据库记录
+        :param paths: 绝对路径列表
+        """
+        try:
+            res = ModDAO.delete_mods_physically(path_hashes)
+            if res['success_count'] != len(path_hashes):
+                return ApiResponse.warning(f"部分Mod删除失败：{len(path_hashes)-res['success_count']} 项未成功删除", data=res)
+            if res['errors']:
+                msg = "\n".join(res['errors'])
+                return ApiResponse.error(msg, data=res)
+            if res['success_count'] > 0:
+                return ApiResponse.success(data=res)
+        except Exception as e:
+            return ApiResponse.error(f"删除失败: {str(e)}")
     
     @log_api_call
     def mods_disable(self, path_hashes: List[str], disabled: bool = True):
@@ -1388,6 +1419,24 @@ class API:
         except Exception as e:
             logger.error(f"Auto sort failed: {e}", exc_info=True)
             return ApiResponse.error(f"排序失败: {str(e)}")
+    
+    @log_api_call
+    def smart_insert_mod_in_actives(self, package_ids: List[str], current_active_ids: List[str]):
+        """
+        智能插入模组到激活列表中
+        前端点击“智能插入”时调用
+        """
+        if not package_ids or current_active_ids is None:
+            return ApiResponse.error("请输入模组 ID 或当前激活列表")
+        if not self.sorter:
+            return ApiResponse.error("规则引擎未初始化")
+        try:
+            context_mods = ModDAO.get_profile_mods(self.active_context)
+            mod_map = {m['package_id'].lower(): m for m in context_mods}
+            final_ids = self.sorter.smart_insert_mods(package_ids, current_active_ids, mod_map)
+            return ApiResponse.success(data=final_ids) if final_ids else ApiResponse.error("插入失败")
+        except Exception as e:
+            return ApiResponse.error(f"插入失败: {str(e)}")
     
     @log_api_call
     def rules_get_all(self):

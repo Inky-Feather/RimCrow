@@ -3,7 +3,7 @@ import json
 import re
 import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import uuid
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
@@ -13,6 +13,15 @@ from backend.utils.tools import current_ms
 from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
+
+BUILTIN_RULES = {
+    "rmm.companion": {
+        "loadTop": {"value": True, "comment": "管理器伴生工具，必须极早期加载"},
+        "loadAfter": {
+            "brrainz.harmony": {"name": ["Harmony"], "comment": "必须在 Harmony 之后加载"}
+        }
+    },
+}
 
 SPECIAL_WEIGHTS = {
     'brrainz.harmony': 0,
@@ -30,11 +39,12 @@ class RuleActionType:
     LOAD_AFTER = "load_after"       # 必须在某ID后
     LOAD_BEFORE = "load_before"     # 必须在某ID前
     TOP = "top"                     # 置顶 (权重设为0)
-    BOTTOM = "bottom"               # 置底 (权重设为1000)
+    BOTTOM = "bottom"               # 置底 (权重设为10000)
     
 class RuleManager:
     def __init__(self, context: ProfileContext):
         # 内存中的规则缓存
+        self.builtin_rules = BUILTIN_RULES # 挂载内置规则
         self.community_rules: Dict[str, Any] = {}
         self.community_rules_update_time: int = 0
         self.user_mod_rules: Dict[str, Any] = {}
@@ -396,6 +406,7 @@ class RuleManager:
     
     def get_source_priority(self, source_type: str) -> int:
         """获取来源的优先级索引 (越小越优先)"""
+        if source_type == "builtin":  return -1  # 内置规则 -1 永远比列表中的索引 (0, 1, 2...) 小，绝对优先！
         order = self.settings.get("rule_source_priority", ["user", "native", "community", "dynamic"])
         try:
             return order.index(source_type)
@@ -582,6 +593,23 @@ class RuleManager:
                     source_type="workshop",
                     source_name=source_name,
                 )
+        
+        # 6. Builtin Rules (内置规则)
+        builtin = self.builtin_rules.get(mid_l)
+        if builtin:
+            for t, info in builtin.get("loadAfter", {}).items():
+                _merge_rule("load_after", t, "builtin", "系统内置规则", detail=info)
+            for t, info in builtin.get("loadBefore", {}).items():
+                _merge_rule("load_before", t, "builtin", "系统内置规则", detail=info)
+            for t, info in builtin.get("incompatibleWith", {}).items():
+                _merge_rule("incompatible", t, "builtin", "系统内置规则", detail=info)
+            
+            isTop = builtin.get("loadTop", {}).get("value") 
+            isBottom = builtin.get("loadBottom", {}).get("value") 
+            if isTop:
+                _apply_weight_override("top", "builtin", builtin.get("loadTop", {}).get("comment"))
+            elif isBottom:
+                _apply_weight_override("bottom", "builtin", builtin.get("loadBottom", {}).get("comment"))
 
         # 5. 格式化输出
         final_result = {
@@ -603,12 +631,22 @@ class RuleManager:
         # else:
         #     final_result["weight_override"] = []
         
+        
         # [修改] 封装统一的 weight_info 供 Sorter 无脑读取
         abs_override = rules_map["weight_override"]
+        # 统一计算 final_weight
+        final_weight = base_weight + weight_shift
+        abs_type = abs_override["type"] if abs_override else None
+        if abs_type == "top":
+            final_weight = 0
+        elif abs_type == "bottom":
+            final_weight = 10000
+        
         final_result["weight_info"] = {
             "base_weight": base_weight,
             "weight_shift": weight_shift,
-            "absolute_type": abs_override["type"] if abs_override else None,
+            "final_weight": final_weight,
+            "absolute_type": abs_type,
             "absolute_source": abs_override["source"]["type"] if abs_override else None
         }
         

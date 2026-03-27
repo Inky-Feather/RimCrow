@@ -35,7 +35,7 @@ class OrderSorter:
         self.effective_rules_cache = {} # 缓存每个 Mod 的生效规则
         self.rule_mgr = RuleManager(context)
     
-    def _ensure_core_mods(self, active_ids: List[str], mod_map: Dict[str, dict]) -> List[str]:
+    def ensure_mods(self, active_ids: List[str], mod_map: Dict[str, dict]) -> Tuple[List[str], List[str]]:
         """
         防呆机制：强制保证官方核心组件在激活列表中，且参与排序。
         如果物理存在，则强制加入 active_ids。
@@ -47,19 +47,29 @@ class OrderSorter:
             # "ludeon.rimworld.biotech", 
             # "ludeon.rimworld.anomaly"
         ]
+        tool_mods = [
+            "rmm.companion"
+        ]
         active_set = set(active_ids)
-        auto_added_cores = []
+        need_added_ids = []
         
         for core_id in core_sequence:
             if core_id in mod_map and core_id not in active_set:
                 active_ids.append(core_id)
                 active_set.add(core_id)
-                auto_added_cores.append(core_id)
-                
-        if auto_added_cores:
-            logger.info(f"防呆拦截: 强制补全缺失的核心组件 -> {auto_added_cores}")
+                need_added_ids.append(core_id)
+        
+        if settings.config.enable_tool_mods:
+            for tool_id in tool_mods:
+                if tool_id in mod_map and tool_id not in active_set:
+                    active_ids.append(tool_id)
+                    active_set.add(tool_id)
+                    need_added_ids.append(tool_id)
+        
+        if need_added_ids:
+            logger.info(f"防呆拦截: 强制补全缺失的核心组件 -> {need_added_ids}")
             
-        return active_ids
+        return active_ids, need_added_ids
 
     def build_atomic_groups(self, active_ids: List[str], mod_map: Dict[str, dict]) -> Tuple[List[AtomicGroup], List[dict]]:
         """
@@ -313,7 +323,7 @@ class OrderSorter:
         all_mods_data = ModDAO.get_profile_mods(self.context)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         # 防呆：注入官方核心模组
-        active_ids = self._ensure_core_mods(active_ids, mod_map)
+        active_ids, need_added_ids = self.ensure_mods(active_ids, mod_map)
         current_assets_ids = list(mod_map.keys())
         from backend.database.dao import GroupDAO
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
@@ -407,23 +417,35 @@ class OrderSorter:
             group_sort_keys[id(g)] = (sort_name, sort_id)
 
             # C. 计算权重
+            is_top = False
+            is_bottom = False
             for mid in g.mod_ids:
                 # 获取该 Mod 生效的所有规则
-                effective_rules = self.effective_rules_cache.get(mid, {})
-                weight_info = effective_rules.get("weight_info", {})
-                # 获取该 Mod 已经由 RuleManager 算好的最终规则集
                 effective_rules = self.effective_rules_cache.get(mid, {})
                 weight_info = effective_rules.get("weight_info", {})
                 # 纯粹的算术应用，完全不关心业务逻辑
                 w = weight_info.get("base_weight", 500) + weight_info.get("weight_shift", 0)
                 # 处理决定性的绝对位置
                 abs_type = weight_info.get("absolute_type")
-                if abs_type == "top": w = 0
-                elif abs_type == "bottom": w = 10000 
+                if abs_type == "top": w = 0; is_top = True  # 标记组内有置顶成员
+                elif abs_type == "bottom": w = 10000; is_bottom = True  # 标记组内有置底成员
                 weights.append(w)
                 
-            # 一个原子组如果有多个 Mod 联锁，取最小的权重作为整个组的启动权重
-            group_base_weights[id(g)] = min(weights) if weights else 500
+            # # 一个原子组如果有多个 Mod 联锁，取最小的权重作为整个组的启动权重
+            # group_base_weights[id(g)] = min(weights) if weights else 500
+            # 修正：更精细地计算原子组的最终基础权重
+            if not weights:
+                group_base_weights[id(g)] = 500
+            elif is_top:
+                # 只要有一个成员要置顶，整个组就必须置顶
+                group_base_weights[id(g)] = 0
+            elif is_bottom:
+                # 在没有置顶成员的前提下，只要有一个成员要置底，整个组就置底
+                group_base_weights[id(g)] = 10000
+            else:
+                # 如果组内都是普通模组，取最小权重，满足最靠前的约束
+                group_base_weights[id(g)] = min(weights)
+            
         # 3. 构建加权依赖图
         adj, edge_details = self._build_weighted_graph(groups, mod_map, mod_to_group)
         # 4. 核心步骤：消解循环
@@ -431,17 +453,37 @@ class OrderSorter:
         # 将联锁断裂的警告合并进去
         cycle_warnings.extend(interlock_warnings)
 
-        # 5. 计算入度
+        # 5. 计算入度和出度
         in_degree = defaultdict(int)
         for u in adj:
             for v in adj[u]:
                 in_degree[v] += 1
-        # 确保所有节点都有入度记录
         for gid in group_ids:
             if gid not in in_degree:
                 in_degree[gid] = 0
 
-        # 6. 权重传播 (Inherited Weight Propagation)
+        # [新增] 5.5 预计算所有节点的“依赖尾巴大小”
+        # 这是一个全局的、结构性的指标
+        tail_size_cache = {}
+        def get_tail_size(start_node_id):
+            if start_node_id in tail_size_cache:
+                return tail_size_cache[start_node_id]
+            q = deque([start_node_id])
+            visited = {start_node_id}
+            count = 0
+            while q:
+                curr_id = q.popleft()
+                count += 1
+                for neighbor_id in adj.get(curr_id, []):
+                    if neighbor_id not in visited:
+                        visited.add(neighbor_id)
+                        q.append(neighbor_id)
+            tail_size_cache[start_node_id] = count
+            return count
+        # 为所有节点计算尾巴大小
+        all_tail_sizes = {gid: get_tail_size(gid) for gid in group_ids}
+        
+        # 6. 双向权重传播 (Bidirectional Weight Propagation)
         # 注意：这里的权重是为了让“基础权重小(应当排在前面)”的节点，能够拉低其依赖项的权重
         # 如果 A(500) -> B(900)，则 B 不应该跑到 A 前面去，保持拓扑序即可。
         # 如果 A(900) -> B(500)，根据拓扑序 A 必须在 B 前面，此时 A 的权重应被拉低到 500 甚至更低，以便在堆中优先弹出
@@ -451,16 +493,43 @@ class OrderSorter:
         # adj[u] = {v: w} 表示 u -> v，即 u 在前。
         # 如果 effective_weights[v] (后) < effective_weights[u] (前)
         # 通常是 Core(0) -> Mod(500)。
-        changed = True
-        while changed:
+        
+        # changed = True
+        # while changed:
+        #     changed = False
+        #     for u in list(adj.keys()):
+        #         for v in adj[u]:
+        #             # u -> v 意味着拓扑序中 u 必须在 v 之前加载
+        #             # 传染 A：Top 拉升 (向上看齐)
+        #             # 只有当后置 v 非常急切想要先出场 (< 500)，前置 u 才必须被拉上来
+        #             if effective_weights[v] <= 500 and effective_weights[u] > effective_weights[v]:
+        #                 effective_weights[u] = effective_weights[v]
+        #                 changed = True
+        #             # 传染 B：Bottom 下压 (向下看齐)
+        #             # 只有当前置 u 非常想赖到最后 (>= 500, 如置底是 10000)，后置 v 必须被压制到更后方
+        #             if effective_weights[u] > 500 and effective_weights[v] < effective_weights[u]:
+        #                 effective_weights[v] = effective_weights[u]
+        #                 changed = True
+            
+        # 对于非循环图，迭代次数等于节点数即可保证完全传播
+        for _ in range(len(groups) + 1):
             changed = False
-            for u in list(adj.keys()):
-                for v in adj[u]:
+            # 遍历所有边 (u -> v)
+            for u, neighbors in adj.items():
+                for v in neighbors:
+                    # 规则1: 前者(u)的“推后”意愿会影响后者(v)
                     if effective_weights[v] < effective_weights[u]:
+                        effective_weights[v] = effective_weights[u]
+                        changed = True
+                    
+                    # 规则2: 后者(v)的“提前”意愿会影响前者(u)
+                    if effective_weights[u] > effective_weights[v]:
                         effective_weights[u] = effective_weights[v]
                         changed = True
+            if not changed:
+                break
 
-        # 7. Kahn算法拓扑排序 (带优先级堆)
+        # 7. Kahn算法拓扑排序 (带优先级堆和新的极值对比局规则)
         queue = []
         for gid in group_ids:
             if in_degree[gid] == 0:
@@ -468,12 +537,19 @@ class OrderSorter:
                 # (有效权重, 排序名称, 唯一ID, 内存地址)
                 # Python 对元组比较是按顺序逐个比较的
                 s_name, s_id = group_sort_keys[gid]
-                heapq.heappush(queue, (effective_weights[gid], s_name, s_id, gid))
+                w = effective_weights[gid]         # 最终权重
+                base_w = group_base_weights[gid]   # 原始权重
+                # 3. 依赖尾巴大小极值对比指标 (越大越靠前)
+                tail_size = all_tail_sizes.get(gid, 1)
+                tail_breaker = -tail_size 
+                # 元组结构：(最终权重, 原始权重, 尾巴极值对比指标, 名称, ID, GID)
+                # 注意：只有在权重为0或10000时，这个对比指标才真正有意义。为了代码简洁，我们对所有节点都计算它。
+                heapq.heappush(queue, (w, base_w, tail_breaker, s_name, s_id, gid))
 
         sorted_groups = []
         while queue:
             # 弹出时解包
-            w, s_name, s_id, gid = heapq.heappop(queue)
+            w, base_w, tail_breaker, s_name, s_id, gid = heapq.heappop(queue)
             if gid not in groups_by_id: continue # 安全检查
             g = groups_by_id[gid]
             sorted_groups.append(g)
@@ -483,7 +559,10 @@ class OrderSorter:
                     if in_degree[neighbor] == 0:
                         n_s_name, n_s_id = group_sort_keys[neighbor]
                         n_w = effective_weights[neighbor]
-                        heapq.heappush(queue, (n_w, n_s_name, n_s_id, neighbor))
+                        n_base_w = group_base_weights[neighbor]
+                        n_tail_size = all_tail_sizes.get(neighbor, 1)
+                        n_tail_breaker = -n_tail_size
+                        heapq.heappush(queue, (n_w, n_base_w, n_tail_breaker, n_s_name, n_s_id, neighbor))
 
         # 8. 兜底检查（虽然已break_cycles，但为了绝对稳健）
         if len(sorted_groups) < len(groups):
@@ -515,6 +594,129 @@ class OrderSorter:
             "warnings": cycle_warnings # 包含冲突消解的日志
         }
     
-    
-    
+
+    def smart_insert_mods(self, target_ids: List[str], current_list: List[str], mod_map: Dict[str, dict]) -> List[str]:
+        """
+        批量无损插入算法：
+        在不打乱 current_list 现有顺序的前提下，为一批 target_ids 寻找最合适的插入点。
+        """
+        if not target_ids: return current_list
+        new_list = current_list.copy()
+        existing_in_list = set(new_list) # 假设 current_list 中的 ID 也已是小写
+        # 1. 自动扩展：提取所有 target_ids 包含的有效本地依赖项
+        expanded_targets = set(target_ids)
+        # [IMPROVEMENT] 使用 deque 替代 list 作为高效队列
+        # 初始化队列时，就排除掉已经存在于列表中的模组
+        queue = deque(expanded_targets - existing_in_list)
+        # 扩展待插入列表，把所有需要插入的模组（包括它们的依赖）都加入 expanded_targets
+        # 这个过程会处理循环依赖，因为 expanded_targets 是一个 set
+        processed_for_deps = set(existing_in_list) # 记录已经处理过依赖扩展的，防止重复计算
+        processed_for_deps.update(queue)
+        while queue:
+            curr = queue.popleft() # [IMPROVEMENT] O(1) 操作
+            target_data = mod_map.get(curr)
+            if not target_data: continue
+            rules = self.effective_rules_cache.get(curr)
+            if not rules:
+                rules = self.rule_mgr.get_effective_mod_rules(curr, target_data)
+                self.effective_rules_cache[curr] = rules
+            for dep in rules.get('dependencies', []):
+                dep_id = dep['target_id'] # 假设规则中的 ID 也是小写
+                # 如果依赖项本地存在，并且我们还没有处理过它
+                if dep_id in mod_map and dep_id not in processed_for_deps:
+                    expanded_targets.add(dep_id)
+                    queue.append(dep_id)
+                    processed_for_deps.add(dep_id)
+        # 2. 收集真正需要插入的模组的数据
+        # [FIX] 核心修复：只处理不在 original list 中的模组
+        ids_to_process = expanded_targets - existing_in_list
+        to_insert = []
+        for tid in ids_to_process:
+            target_data = mod_map.get(tid)
+            if not target_data: continue
+            rules = self.effective_rules_cache.get(tid)
+            if not rules:
+                rules = self.rule_mgr.get_effective_mod_rules(tid, target_data)
+                self.effective_rules_cache[tid] = rules
+            weight = rules.get("weight_info", {}).get("final_weight", 500)
+            to_insert.append({"id": tid, "weight": weight, "rules": rules})
+            # [FIX] 移除无效的 existing_in_list.add(tid)
+        if not to_insert: return new_list
+        # 3. 预排序
+        to_insert.sort(key=lambda x: x["weight"])
+        for item in to_insert:
+            tid_l = item["id"]
+            rules = item["rules"]
+            weight = item["weight"]
+            current_lower = [m.lower() for m in new_list]
+            min_idx = 0                  # 必须插在这个索引之后
+            max_idx = len(current_lower) # 必须插在这个索引之前
+            # A & B: 正向约束 (新模组对老模组的要求)
+            after_targets = [r['target_id'] for r in rules.get('load_after', [])] + \
+                            [r['target_id'] for r in rules.get('dependencies', [])]
+            for t in after_targets:
+                if t in current_lower:
+                    min_idx = max(min_idx, current_lower.index(t) + 1)
+                    
+            before_targets = [r['target_id'] for r in rules.get('load_before', [])]
+            for t in before_targets:
+                if t in current_lower: max_idx = min(max_idx, current_lower.index(t))
+            # [核心修复 1] C & D: 反向约束 (老模组对新模组的要求)
+            # 遍历当前列表，检查老模组是否依赖/前置于将要插入的模组
+            for i, comp_id in enumerate(current_lower):
+                comp_rules = self.effective_rules_cache.get(comp_id)
+                if not comp_rules:
+                    # 如果缓存没有，尝试获取 (理论上应该都有，这是兜底)
+                    comp_data = mod_map.get(comp_id, {})
+                    comp_rules = self.rule_mgr.get_effective_mod_rules(comp_id, comp_data)
+                    self.effective_rules_cache[comp_id] = comp_rules
+                # C. 老模组必须在“我”之后 (老模组依赖/LoadAfter我) -> “我”必须在老模组之前
+                comp_afters = [r['target_id'] for r in comp_rules.get('load_after', [])] + \
+                            [r['target_id'] for r in comp_rules.get('dependencies', [])]
+                if tid_l in comp_afters: max_idx = min(max_idx, i)
+                # D. 老模组必须在“我”之前 (老模组LoadBefore我) -> “我”必须在老模组之后
+                comp_befores = [r['target_id'] for r in comp_rules.get('load_before', [])]
+                if tid_l in comp_befores: min_idx = max(min_idx, i + 1)
+            # ==========================================
+            # E. 结合权重的精准落位 (附带平级决胜机制)
+            # ==========================================
+            insert_pos = min_idx
+            if min_idx > max_idx:
+                logger.warning(f"智能插入 {tid_l} 规则矛盾 (min:{min_idx} > max:{max_idx})，强制使用前置。")
+                insert_pos = min_idx
+            else:
+                inserted = False
+                if weight <= 0:
+                    insert_pos = min_idx # 绝对置顶
+                    inserted = True
+                elif weight >= 10000:
+                    insert_pos = max_idx # 绝对置底
+                    inserted = True
+                else:
+                    # 核心突破：在合法区间内，顺着找第一个比自己重，或平级但字母顺序靠后的 Mod
+                    for i in range(min_idx, max_idx):
+                        comp_id = current_lower[i]
+                        comp_rules = self.effective_rules_cache.get(comp_id, {})
+                        comp_w = comp_rules.get("weight_info", {}).get("final_weight", 500)
+                        
+                        if comp_w > weight:
+                            # 找到了比我重的（例如 500 遇到了 850材质包），插在它前面
+                            insert_pos = i
+                            inserted = True
+                            break
+                        elif comp_w == weight:
+                            # [核心修复 2] 权重相同（都是500），引入字母顺序作为决胜局 (Tie-breaker)
+                            # 这样新模组就能自然地按照字母顺序融入旧模组列表中，而不会一味沉底
+                            if comp_id > tid_l:
+                                insert_pos = i
+                                inserted = True
+                                break
+                                
+                if not inserted:
+                    insert_pos = max_idx # 区间内没东西，或者我是最轻的，插在区间末尾
+            new_list.insert(insert_pos, tid_l)
+            logger.info(f"智能插入: {tid_l} (Weight:{weight}) -> Index {insert_pos}")
+            
+        return new_list
+        
     

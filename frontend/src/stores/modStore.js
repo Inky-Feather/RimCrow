@@ -216,8 +216,7 @@ export const useModStore = defineStore('mods', () => {
           const cid = chainId.toLowerCase()
           if (baseInactiveSet.has(cid) && !processed.has(cid)) {
             // 找到原始大小写格式的 ID 并存入
-            const originalId = baseInactive.find(orig => orig.toLowerCase() === cid) || chainId
-            finalInactive.push(originalId)
+            finalInactive.push(chainId)
             processed.add(cid)
           }
         }
@@ -286,12 +285,13 @@ export const useModStore = defineStore('mods', () => {
     savedInactiveIds.value = [...data.inactive_load_order] || [] // 接收持久化停用顺序
     interlocksMap.value = data.interlocks || {}             // 接收联锁字典
     activeLoadModifyTime.value = data.active_load_modify_time  // 排序文件修改时间（更新时间）
-    
+    // 创建一个 Set 用于 O(1) 快速查找
+    const activeSet = new Set(activeIds.value);
     // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
     const tempMap = new Map()
     data.all_mods.forEach(mod => {
       // 初始化启用时间（如果 Mod 是 Active 但没有启用时间，则记录为排序文件更新时间，若仍有问题则记录为当前时间）
-      if (mod.package_id && activeIds.value.includes(mod.package_id.toLowerCase()) && !mod.last_active_time) {
+      if (mod.package_id && activeSet.has(mod.package_id.toLowerCase()) && !mod.last_active_time) {
         mod.last_active_time = data.active_load_modify_time || Date.now()
       }
       // 强制保证列表字段存在且格式正确
@@ -331,11 +331,12 @@ export const useModStore = defineStore('mods', () => {
     tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(i))
   }
   // 批量启用/停用Mod
-  const changeModsActive = (ids, active) => {
+  const changeModsActive = async (ids, active) => {
     if(typeof ids === 'string') ids = [ids]
     removeIdsOnAllList(ids)
     if(active) {
-      activeIds.value.push(...ids)
+      // activeIds.value.push(...ids)
+      await smartInsertMods(ids)
     } else {
       inactiveIds.value.push(...ids)
     }
@@ -343,6 +344,18 @@ export const useModStore = defineStore('mods', () => {
       mod.last_moved_time = Date.now()
       mod.last_active_time = Date.now()
     })
+  }
+  // 智能插入 Mod 到 Active 列表
+  const smartInsertMods = async (ids) => {
+    if (!ids || ids.length === 0) return
+    if (!window.pywebview) return
+    if(typeof ids === 'string') ids = [ids]
+    console.log(ids)
+    
+    const res = await window.pywebview.api.smart_insert_mod_in_actives(ids, activeIds.value)
+    if(checkResult(res, '智能插入 Mod 到 Active 列表') && res.data){
+      activeIds.value = [...res.data]
+    }
   }
   // 清除选择
   const clearSelection = () => {
@@ -544,6 +557,23 @@ export const useModStore = defineStore('mods', () => {
       scanMods()
     }
     appStore.isLoading = false;
+  }
+  // 批量删除Mod文件及数据记录
+  const deleteMods = async (path_hashes) => {
+    if(!window.pywebview) return
+    const confirmStore = useConfirmStore()
+    const confirm = await confirmStore.confirmAction(
+      '删除确认', `确定要删除这 ${path_hashes.length} 个Mod吗？\n这些Mod将被移至回收站。`,
+      { type: 'error' }
+    );
+    if(!confirm) return
+    const res = await window.pywebview.api.mods_delete(path_hashes)
+    scanMods()
+    if (checkResult(res, "批量删除Mod")) {
+      toast.success(`已删除 ${res.data.success_count} 个Mod`)
+      // 刷新Mod列表
+      return true
+    }
   }
 
   // --- Mod数据操作 ---
@@ -892,21 +922,78 @@ export const useModStore = defineStore('mods', () => {
     for (let i = 0; i < len; i++) {
         activeIndexMap.set(activeIds.value[i].toLowerCase(), i)
     }
-
+    // 快速判定任意两个 Mod 之间的合法顺序
+    // isMustBefore.get(A)?.has(B) 为 true，表示规则要求 A 必须在 B 之前
+    const isMustBefore = new Map() 
+    const addMustBeforeRule = (beforeId, afterId) => {
+        if (!isMustBefore.has(beforeId)) isMustBefore.set(beforeId, new Set())
+        isMustBefore.get(beforeId).add(afterId)
+    }
+    for (let i = 0; i < len; i++) {
+        const currentId = activeIds.value[i].toLowerCase()
+        const mod = takeModById(currentId)
+        if (!mod || mod.isMissing || !mod.rules) continue
+        const rules = mod.rules || {}
+        // 我必须在别人之后 -> 别人必须在我之前
+        const afterTargets = [...(rules.load_after || []), ...(rules.dependencies || [])]
+        afterTargets.forEach(r => {
+            const tid = r.target_id.toLowerCase()
+            addMustBeforeRule(tid, currentId) // tid 必须在 currentId 之前
+        })
+        // 我必须在别人之前 -> 我必须在别人之前
+        const beforeTargets = rules.load_before || []
+        beforeTargets.forEach(r => {
+            const tid = r.target_id.toLowerCase()
+            addMustBeforeRule(currentId, tid) // currentId 必须在 tid 之前
+        })
+    }
+    
     for (let i = 0; i < len; i++) {
       const currentId = activeIds.value[i].toLowerCase()
       const mod = takeModById(currentId)
-      if (!mod) continue
-      // X. 文件缺失
-      if (mod.isMissing) {
-        _add(mod.package_id, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, '本地文件缺失或无法解析', mod.package_id)
-        continue // 文件都没了，没必要查别的
-      }
+      if (!mod || mod.isMissing) continue // X. 文件缺失已在全局检查中处理，这里简单跳过
       if(!mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
 
       // const rules = mod.rules ，这是后端计算好的 { dependencies, load_after, incompatible ... }
       // 兼容性处理：如果后端还没刷新，rules可能为空
       const rules = mod.rules || { dependencies: [], load_after: [], load_before: [], incompatible: [] }
+
+      const wInfo = rules.weight_info || {}
+      // 直接使用后端统一提供的 final_weight，兜底为 500
+      const finalWeight = wInfo.final_weight !== undefined ? wInfo.final_weight : 500
+      const sourceName = wInfo.absolute_source || '未知规则'
+      
+      // 1. 置顶检查 (<= 0)
+      if (finalWeight <= 0 && i > 0) { // 只检查非首位元素
+        const prevId = activeIds.value[i - 1].toLowerCase()
+        const prevMod = takeModById(prevId)
+        const prevW = prevMod?.rules?.weight_info?.final_weight ?? 500
+        // 如果紧邻的前一个模组不是置顶的
+        if (prevW > 0) {
+          // 【关键豁免】：检查是否存在规则要求 prevId 必须在 currentId 之前
+          const isAllowedByRule = isMustBefore.get(prevId)?.has(currentId)
+          if (!isAllowedByRule) {
+            _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+              `^^排序警告^^：根据 ${sourceName} 要求置顶，但被排在了非前置依赖的常规模组 [[${displayModName(prevId)}]] 之后`, prevId)
+          }
+        }
+      }
+      // 2. 置底检查 (>= 10000)
+      if (finalWeight >= 10000 && i < len - 1) { // 只检查非末位元素
+        const nextId = activeIds.value[i + 1].toLowerCase()
+        const nextMod = takeModById(nextId)
+        const nextW = nextMod?.rules?.weight_info?.final_weight ?? 500
+        // 如果紧邻的后一个模组不是置底的
+        if (nextW < 10000) {
+          // 【关键豁免】：检查是否存在规则要求 currentId 必须在 nextId 之前
+          const isAllowedByRule = isMustBefore.get(currentId)?.has(nextId)
+          if (!isAllowedByRule) {
+            _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+              `^^排序警告^^：根据 ${sourceName} 要求置底，但前方拦截了非后置依赖的常规模组 [[${displayModName(nextId)}]]`, nextId)
+          }
+        }
+      }
+
       // 记录已经作为“硬依赖”处理过的目标
       const processedDependencies = new Set()
 
@@ -1012,29 +1099,29 @@ export const useModStore = defineStore('mods', () => {
 
       // E. 联锁检查 (Chain Check - Active)
       // 检查当前列表的前后是否符合 lock 要求
-      if (mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
-        const chain = interlocksMap.value[mod.interlock_id]
-        // 查找自己在这个联锁链条中的位置
-        const myChainIndex = chain.findIndex(id => id.toLowerCase() === currentId)
-        if (myChainIndex !== -1) {
-          // 检查前一个
-          if (myChainIndex > 0) {
-            const prevExpected = chain[myChainIndex - 1].toLowerCase()
-            if (i === 0 || activeIds.value[i - 1].toLowerCase() !== prevExpected) {
-              _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-                `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpected)
-            }
-          }
-          // 检查后一个
-          if (myChainIndex < chain.length - 1) {
-            const nextExpected = chain[myChainIndex + 1].toLowerCase()
-            if (i === len - 1 || activeIds.value[i + 1].toLowerCase() !== nextExpected) {
-              _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-                `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpected)
-            }
-          }
-        }
-      }
+      // if (mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
+      //   const chain = interlocksMap.value[mod.interlock_id]
+      //   // 查找自己在这个联锁链条中的位置
+      //   const myChainIndex = chain.findIndex(id => id.toLowerCase() === currentId)
+      //   if (myChainIndex !== -1) {
+      //     // 检查前一个
+      //     if (myChainIndex > 0) {
+      //       const prevExpected = chain[myChainIndex - 1].toLowerCase()
+      //       if (i === 0 || activeIds.value[i - 1].toLowerCase() !== prevExpected) {
+      //         _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+      //           `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpected)
+      //       }
+      //     }
+      //     // 检查后一个
+      //     if (myChainIndex < chain.length - 1) {
+      //       const nextExpected = chain[myChainIndex + 1].toLowerCase()
+      //       if (i === len - 1 || activeIds.value[i + 1].toLowerCase() !== nextExpected) {
+      //         _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+      //           `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpected)
+      //       }
+      //     }
+      //   }
+      // }
 
       // F. 语言支持检查 (Language Support) - 仅当开关开启时
       if (checkLangEnabled && targetLang) {
@@ -1088,6 +1175,9 @@ export const useModStore = defineStore('mods', () => {
       }
 
     }
+
+    
+
     // 辅助：检查整个列表的联锁
     const _checkListChain = (list) => {
       const len = list.length
@@ -1124,8 +1214,9 @@ export const useModStore = defineStore('mods', () => {
     // 3. 停用列表/临时列表 (Inactive/Temp Checks)
     // 范围：仅检查联锁完整性
     // -------------------------------------------------
-    _checkListChain(inactiveIds.value, _add)
-    _checkListChain(tempIds.value, _add)
+    _checkListChain(activeIds.value)
+    _checkListChain(inactiveIds.value)
+    _checkListChain(tempIds.value)
     return issuesMap
   })
 
@@ -1320,7 +1411,7 @@ export const useModStore = defineStore('mods', () => {
     // Actions
     setMods, reset, takeModById, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
     updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
-    scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods,
+    scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds, getMissingLocalDependencies, getMissingLanguagePacks, 

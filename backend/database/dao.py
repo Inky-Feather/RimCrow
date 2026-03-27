@@ -2,6 +2,7 @@ import datetime
 from functools import reduce
 import operator
 import os
+from pathlib import Path
 import re
 from typing import Any, Dict, List, cast
 import uuid
@@ -9,7 +10,7 @@ from peewee import chunked, fn, JOIN
 from backend.database.models import ModInterlock, SubscribedCollection, db, ModAsset, UserModData, GroupData, GroupMod
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
-from backend.settings import settings
+from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.logger import logger
 
 
@@ -37,9 +38,11 @@ class ModDAO:
         dlc_root = context.game_dlc_path
         use_workshop_mods = context.use_workshop_mods
         use_self_mods = context.use_self_mods
+        use_tool_mods = settings.config.enable_tool_mods
         
         workshop_root = settings.config.workshop_mods_path
         self_mods_root = settings.config.self_mods_path
+        tool_mods_root = str(TOOL_MODS_DIR)
         # 路径标准化 (用于 Python 端比对，统一转小写)
         # 标准化路径用于严格匹配 (增加结尾分隔符确保匹配精确)
         def norm(p): return os.path.normpath(p).lower() + os.sep if p else ""
@@ -47,6 +50,7 @@ class ModDAO:
         D_PATH = norm(dlc_root)
         W_PATH = norm(workshop_root)
         S_PATH = norm(self_mods_root)
+        T_PATH = norm(tool_mods_root)
         # 2. 构造查询条件 (只拉取当前环境涉及到的物理路径)
         conditions = []
         # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
@@ -56,11 +60,13 @@ class ModDAO:
         if use_workshop_mods and W_PATH: conditions.append(ModAsset.path.startswith(W_PATH)) # 宽泛匹配，防止盘符差异
         # 条件 B: 路径包含 Self Mods Path (仅当启用管理器Mod时)
         if use_self_mods and S_PATH: conditions.append(ModAsset.path.startswith(S_PATH))
+        if use_tool_mods and T_PATH: conditions.append(ModAsset.path.startswith(T_PATH))
         
-        if local_root: local_root = os.path.normpath(local_root).lower()
-        if dlc_root: dlc_root = os.path.normpath(dlc_root).lower()
-        if workshop_root: workshop_root = os.path.normpath(workshop_root).lower()
-        if self_mods_root: self_mods_root = os.path.normpath(self_mods_root).lower()
+        # if local_root: local_root = os.path.normpath(local_root).lower()
+        # if dlc_root: dlc_root = os.path.normpath(dlc_root).lower()
+        # if workshop_root: workshop_root = os.path.normpath(workshop_root).lower()
+        # if self_mods_root: self_mods_root = os.path.normpath(self_mods_root).lower()
+        # if tool_mods_root: tool_mods_root = os.path.normpath(tool_mods_root).lower()
             
         if not conditions: return [] # 没有任何有效路径配置
         # 使用 reduce 和 operator.or_ 替代 fn.OR
@@ -81,6 +87,7 @@ class ModDAO:
             if L_PATH and m_path.startswith(L_PATH): return 1
             if S_PATH and m_path.startswith(S_PATH): return 2
             if W_PATH and m_path.startswith(W_PATH): return 3
+            if T_PATH and m_path.startswith(T_PATH): return 4
             return 9
 
         # 关键：按优先级【从低到高】排序，这样循环时高优先级会覆盖前面的
@@ -621,43 +628,64 @@ class ModDAO:
             about_state = ModAnalyzer.resolve_mod_about_state(path, cleanup_dual_files=True)
         except Exception as e:
             return False, f"清理 About 文件残留失败: {e}"
-
         if not about_state.resolved_path:
             return False, "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态"
-
         if about_state.is_disabled == disable:
             ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
             return True, "状态已同步"
-
         src = about_state.resolved_path
         dst = about_state.disabled_xml if disable else about_state.about_xml
-
         try:
-            if os.path.exists(dst):
-                os.remove(dst)
+            if os.path.exists(dst): os.remove(dst)
             os.replace(src, dst)
         except Exception as e:
             return False, f"文件操作失败: {e}"
-
         ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
         return True, "成功"
 
     @staticmethod
-    def delete_mod_physically(path: str):
+    def delete_mods_physically(path_hashes: List[str]|str):
         """
-        物理删除 Mod (移入回收站) 并抹除数据库记录
+        根据路径哈希批量删除 Mod：先删数据库记录，再处理物理文件
+        :param path_hashes: 路径哈希列表 (ModAsset 的主键)
+        :return: {'success_count': int, 'errors': List[str]}
         """
+        if not path_hashes:
+            return {'success_count': 0, 'errors': []}
+        # 1. 预先查出所有待删除记录的物理路径
+        # 必须在删除记录前获取，否则后面找不到文件
+        assets = list(ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
+                    .where(ModAsset.path_hash << path_hashes).dicts()) # type: ignore
+        if not assets:
+            return {'success_count': 0, 'errors': ["未找到有效的模组记录"]}
+        # 整理数据
+        target_paths = [a['path'] for a in assets if a['path']]
+        valid_hashes = [a['path_hash'] for a in assets]
+        errors = []
+        success_count = 0
+        # 2. 执行数据库抹除 (原子事务)
+        try:
+            with db.atomic():
+                # 删除资产表记录
+                # 注意：由于 UserModData 是以 package_id 为主键，
+                # 如果用户想彻底清除该 Mod 的备注/标签，通常是在最后一个副本被删时处理。
+                ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute() # type: ignore
+        except Exception as e:
+            logger.error(f"Database deletion failed: {e}")
+            return {'success_count': 0, 'errors': [f"数据库记录清理失败: {str(e)}"]}
+        # 3. 执行物理文件删除 (移入回收站)
         from send2trash import send2trash
-        abs_path = os.path.abspath(path)
-        if os.path.exists(abs_path):
+        for path in target_paths:
             try:
-                send2trash(abs_path)
-                # 级联删除 UserModData/GroupMod 通常由外键处理
-                ModAsset.delete().where(ModAsset.path == path).execute()
-                return True, "成功"
+                abs_path = os.path.abspath(path)
+                if os.path.exists(abs_path):
+                    send2trash(abs_path)
+                # 无论文件在不在，既然数据库删了，计数就增加
+                success_count += 1
             except Exception as e:
-                return False, f"删除失败: {e}"
-        return False, "路径不存在"
+                # 文件删除失败仅记录错误，不回滚数据库（防止死循环）
+                errors.append(f"物理文件移除失败 ({os.path.basename(path)}): {str(e)}")
+        return { 'success_count': success_count, 'errors': errors  }
 
     @staticmethod
     def add_shadow_path(keep_path_hash: str, shadow_path: str):
@@ -735,7 +763,7 @@ class ModDAO:
             path = asset['path']
             if not path:
                 missing_mods.append(asset['path_hash'])
-            elif not os.path.exists(path):
+            elif not ((Path(path)/'About'/'About.xml').is_file() or (Path(path)/'About'/'About.xml.disabled').is_file()):
                 deleted_mods.append(asset['path_hash'])
         
         total_invalid_mods = missing_mods + deleted_mods

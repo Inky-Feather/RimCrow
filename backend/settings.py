@@ -31,6 +31,7 @@ CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径
 UPDATE_DIR = HOME_DIR / "updates"     # 更新目录
 TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
 MODS_DIR = HOME_DIR / "mods"                # 模组目录
+TOOL_MODS_DIR = HOME_DIR / "toolmods"    # 工具模组目录
 CACHE_DIR = HOME_DIR / "cache"                # 缓存目录
 BACKUP_DIR = HOME_DIR / "backups"                # 备份目录
 # 定义缓存目录
@@ -150,6 +151,7 @@ class AppConfig:
     current_profile_id: str = "default"   # 当前激活的环境ID
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
     prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
+    enable_tool_mods: bool = True           # 是否启用 ToolMods 目录下的伴生模组
     use_raw_ids: bool = False               # 是否使用原始 Mod ID
     
     # --- 高级设置 ---
@@ -226,6 +228,8 @@ class SettingsManager:
         log_dir = DATA_DIR / "logs"
         if not log_dir.exists():
             log_dir.mkdir(parents=True)
+        if not TOOL_MODS_DIR.exists():
+            TOOL_MODS_DIR.mkdir(parents=True)
             
     def _recursive_update(self, target_obj, source_dict: Dict[str, Any]):
         """
