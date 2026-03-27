@@ -103,6 +103,10 @@ class LoadOrderManager:
         return ""
 
     def _build_mod_entries(self, mod_ids: list[str], mod_names: list[str] | None = None, mod_workshop_ids: list[str] | None = None):
+        
+        """
+        构建排序文件 Mod 元数据，包括可见 Mod 数据和原始包名大小写。
+        """
         # 把 modIds / modNames / workshopIds 三组平行数组整理成统一结构。
         mod_names = mod_names or []
         mod_workshop_ids = mod_workshop_ids or []
@@ -125,15 +129,15 @@ class LoadOrderManager:
         return entries
 
     def _enrich_mod_entries(self, entries: list[dict]):
+        """
+        补全排序文件 Mod 元数据，包括可见 Mod 数据和原始包名大小写。
+        """
         # 读取到的文件信息可能不完整，这里负责补全名称、原始包名和工坊ID。
-        if not entries:
-            return entries
-
+        if not entries: return entries
         package_ids = [entry["package_id"] for entry in entries if entry.get("package_id")]
         visible_map: dict[str, dict[str, Any]] = {}
         raw_case_map: dict[str, str] = {}
         meta_map: dict[str, dict[str, Any]] = {}
-
         try:
             from backend.database.dao import ModDAO
             if self.context and self.context.is_healthy:
@@ -185,7 +189,7 @@ class LoadOrderManager:
         for entry in entries:
             # 这里采用“文件原值 > 当前环境 > 扩展库 > 兜底包名”的顺序。
             # 这样既能尊重导入文件的原始信息，又能在信息不完整时尽量补齐。
-            package_id = entry.get("package_id")
+            package_id = entry.get("package_id", "")
             visible_meta = visible_map.get(package_id, {})
             workshop_meta = meta_map.get(package_id, {})
 
@@ -216,6 +220,9 @@ class LoadOrderManager:
         return entries
 
     def _parse_load_order_file(self, mods_config_file_path: str):
+        """
+        解析排序文件，返回 Mod ID、名称和工坊ID 列表。
+        """
         # 三种格式最终都归一成同一份结构，前端不再关心原始 XML 长什么样。
         parser = etree.XMLParser(recover=True)
         tree = etree.parse(mods_config_file_path, parser)
@@ -352,12 +359,10 @@ class LoadOrderManager:
         export_format = str(export_format or EXPORT_FORMAT_MODSCONFIG).strip().lower()
         if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST}:
             raise ValueError(f"不支持的导出格式: {export_format}")
-
         # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
         entries = self._build_export_entries(active_ids, use_raw_ids=use_raw_ids)
         final_raw_ids = [entry.get("package_id_raw") or entry.get("package_id") for entry in entries]
         default_name = self._default_export_name(export_format)
-        
         # 1. 确定最终写入路径
         write_path = self.context.mods_config_file if export_format == EXPORT_FORMAT_MODSCONFIG else ''
         if trigger_dialog:
@@ -371,7 +376,6 @@ class LoadOrderManager:
             logger.info(f"用户选择保存路径: {selected}")
             if not selected: return 
             write_path = selected
-            
         elif target_path:
             # 指定了路径（用于恢复备份等内部逻辑）
             # 确保父目录存在
@@ -385,15 +389,12 @@ class LoadOrderManager:
             write_path = target_path
         elif export_format == EXPORT_FORMAT_MODLIST:
             write_path = os.path.join(self.other_dir, default_name)
-
         if not write_path: raise Exception("未指定有效保存路径")
         resolved_list_name = (list_name or Path(write_path).stem or default_name).strip()
-
         # 2. 只有在覆盖默认配置时并且 is_dirty 为 True 时，才需要自动备份旧文件
         # 如果是另存为，没必要备份目标文件（通常目标文件不存在）
         if export_format == EXPORT_FORMAT_MODSCONFIG and write_path == self.context.mods_config_file and is_dirty:
             self._create_backup()
-
         # 3. 准备 XML 结构 (逻辑保持不变)
         current_version = self.context.game_version
         try:
@@ -416,24 +417,20 @@ class LoadOrderManager:
                     etree.SubElement(root, "activeMods")
                     etree.SubElement(root, "knownExpansions")
                     tree = etree.ElementTree(root)
-
                 # 更新 activeMods 节点，没有则创建
                 active_node = root.find("activeMods")
                 if active_node is None:
                     active_node = etree.SubElement(root, "activeMods")
-                
                 # 清空旧列表
                 active_node.clear()
-                
                 # ModsConfig.xml 仍保持游戏原生结构，只更新 activeMods 节点。
                 for mod_id in final_raw_ids:
                     li = etree.SubElement(active_node, "li")
                     li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
-
                 # 4. 格式化写入
                 tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
                 # 同步备份到 backup_root
-                tree.write(os.path.join(self.backup_root, f'Latest_ModsConfig.xml'), pretty_print=True, xml_declaration=True, encoding="utf-8")
+                self._write_modlist_file(os.path.join(self.backup_root, f'Latest_ModList.xml'), entries, resolved_list_name)
                 logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
             
@@ -442,17 +439,37 @@ class LoadOrderManager:
             raise Exception(f"保存排序文件时出错：{e}")
 
     def _create_backup(self):
-        """创建当前时刻的备份"""
-        if not self.context.mods_config_file or not os.path.exists(self.context.mods_config_file):
-            logger.warning("No ModsConfig.xml to backup.")
-            return
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"ModsConfig_{timestamp}.xml"
-        dest = os.path.join(self.today_dir, filename)
+        """
+        [核心重构] 备份当前磁盘上的旧状态：
+        1. 读取磁盘上现有的 ModsConfig.xml。
+        2. 解析并利用数据库补全元数据（Name, WorkshopID）。
+        3. 以 ModList 格式存入备份目录。
+        """
+        # 只有当旧文件存在时才有备份价值
+        old_file_path = self.context.mods_config_file
+        if not old_file_path or not os.path.exists(old_file_path): return
         try:
-            shutil.copy2(self.context.mods_config_file, dest)
+            # 1. 读取并解析当前磁盘上的旧文件
+            # 利用现有的 read_active_mods 逻辑，它已经包含了从 DB 补全信息的能力
+            old_data = self.read_active_mods(old_file_path)
+            old_active_ids = old_data.get('active_mods', [])
+            if not old_active_ids: return
+            # 2. 生成备份文件名（使用旧文件的最后修改时间，这样备份更精准）
+            mtime = os.path.getmtime(old_file_path)
+            dt = datetime.datetime.fromtimestamp(mtime)
+            timestamp = dt.strftime("%Y%m%d_%H%M%S")
+            filename = f"ModList_{timestamp}.xml"
+            dest_path = os.path.join(self.today_dir, filename)
+            # 3. 如果已经存在同时间戳的备份，说明文件没变动，跳过
+            if os.path.exists(dest_path): return
+            # 4. 准备全量元数据条目 (利用 old_data 中已经补全好的 mods 列表)
+            entries = old_data.get('mods', [])
+            # 5. 写入 ModList 格式
+            list_name = f"BeforeSave_{timestamp}"
+            self._write_modlist_file(dest_path, entries, list_name)
+            logger.info(f"Successfully backed up previous state to ModList format: {filename}")
         except Exception as e:
-            logger.error(f"Backup failed: {e}")
+            logger.error(f"Failed to create pre-save backup: {e}")
 
     def _rotate_backups(self):
         """
@@ -462,12 +479,10 @@ class LoadOrderManager:
         - 清理超过 retention_days 的备份。
         """
         today_str = datetime.date.today().strftime("%Y%m%d")
-        
         # 1. 移动过期的 today -> earlier
         files = glob.glob(os.path.join(self.today_dir, "*.xml"))
         # 按日期分组文件的辅助字典 { "20231101": ["path1", "path2"] }
         files_by_date = {}
-
         for f in files:
             basename = os.path.basename(f)
             # 解析文件名中的日期 ModsConfig_YYYYMMDD_HHMMSS.xml
@@ -480,9 +495,7 @@ class LoadOrderManager:
                         if date_part not in files_by_date:
                             files_by_date[date_part] = []
                         files_by_date[date_part].append(f)
-            except:
-                continue
-        
+            except: continue
         # 处理非今天的旧文件
         for date_str, file_list in files_by_date.items():
             # 按文件名排序（包含时间，所以最后面的就是最晚的）
@@ -492,20 +505,16 @@ class LoadOrderManager:
             try:
                 shutil.move(last_file, os.path.join(self.earlier_dir, os.path.basename(last_file)))
             except: pass
-            
             # 删除其余
             for f in file_list[:-1]:
                 try: os.remove(f)
                 except: pass
-
         # 2. 清理 earlier 中超过保留天数的文件
         # 假设保留天数在 settings 中
         retention_days = settings.config.backup_retention_days
         earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml"))
-        
         cutoff_date = datetime.date.today() - datetime.timedelta(days=retention_days)
         cutoff_str = cutoff_date.strftime("%Y%m%d")
-
         for f in earlier_files:
             basename = os.path.basename(f)
             try:
@@ -514,9 +523,8 @@ class LoadOrderManager:
                     date_part = parts[1]
                     if date_part < cutoff_str:
                         os.remove(f) # 过期删除
-            except:
-                pass
-            
+            except: pass
+
     def get_all_backups(self):
         """获取所有备份文件路径"""
         today_files = glob.glob(os.path.join(self.today_dir, "*.xml"))
