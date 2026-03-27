@@ -267,7 +267,7 @@ const handleSelect = (pathHashes) => {
   localSelectedIds.value = Array.isArray(pathHashes) ? pathHashes : [pathHashes].filter(Boolean)
 }
 
-const unsubscribeMod = async (pathHashes, deleteFile = false) => {
+const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
   const paths = getModsData(pathHashes, 'path')
   const workshopIds = getModsData(pathHashes, 'workshop_id')
   if (!workshopIds.length) return
@@ -279,7 +279,7 @@ const unsubscribeMod = async (pathHashes, deleteFile = false) => {
   )
   if (!check) return
 
-  const res = await appStore.unsubscribeMod(workshopIds)
+  const res = await appStore.unsubscribeWorkshopIds(workshopIds)
   if (res && deleteFile && paths.length) {
     appStore.deletePaths(paths)
   }
@@ -343,7 +343,7 @@ const handleContextMenu = async (event, targetMod) => {
   // 更新
   if (targetMod.steam_status?.needs_update || targetMod.has_update) {
     if (targetMod.store === 'workshop') {
-      menuItems.push({ label: '更新模组[再次订阅]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => appStore.subscribeMod(selectedWorkshopIds)
+      menuItems.push({ label: '更新模组[再次订阅]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => appStore.subscribeWorkshopIds(selectedWorkshopIds)
       })
     } else {
       menuItems.push({ label: '更新模组[再次下载]' + selectedNumStr, disabled: selectedWorkshopIds.length === 0, icon: Upload, action: () => downloadMods(localSelectedIds.value)
@@ -355,8 +355,8 @@ const handleContextMenu = async (event, targetMod) => {
   menuItems.push({ label: 'Steam操作', icon: IconSteam,
     children: [
       { label: '访问创意工坊', disabled: !targetMod.workshop_id, icon: IconSteam, action: () => appStore.openSteamWorkshopById(targetMod.workshop_id) },
-      { label: '订阅模组' + selectedNumStr, disabled: selectedWorkshopIds.length === 0 || (!!targetMod.steam_status?.is_subscribed && selectedWorkshopIds.length === 1), icon: Flag, action: () => appStore.subscribeMod(selectedWorkshopIds) },
-      { label: '取消订阅' + selectedNumStr, disabled: props.storeType !== 'workshop' || selectedWorkshopIds.length === 0, icon: FlagOff, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) },
+      { label: '订阅模组' + selectedNumStr, disabled: selectedWorkshopIds.length === 0 || (!!targetMod.steam_status?.is_subscribed && selectedWorkshopIds.length === 1), icon: Flag, action: () => appStore.subscribeWorkshopIds(selectedWorkshopIds) },
+      { label: '取消订阅' + selectedNumStr, disabled: props.storeType !== 'workshop' || selectedWorkshopIds.length === 0, icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedIds.value, false) },
     ]
   })
 
@@ -367,7 +367,7 @@ const handleContextMenu = async (event, targetMod) => {
     menuItems.push({ label: '删除文件' + selectedNumStr, icon: Trash2, level: 'danger', action: () => appStore.deletePaths(getModsData(localSelectedIds.value, 'path')) })
   } else {
     // 对于缺失项，提供一键清除幽灵记录的功能（取消订阅）
-    menuItems.push({ label: '清理此失效订阅' + selectedNumStr, icon: Trash2, level: 'danger', action: () => unsubscribeMod(localSelectedIds.value, false) })
+    menuItems.push({ label: '清理此失效订阅' + selectedNumStr, icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(localSelectedIds.value, false) })
   }
 
   menuStore.open(event, menuItems)

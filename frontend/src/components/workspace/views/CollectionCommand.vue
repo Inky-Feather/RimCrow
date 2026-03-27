@@ -234,13 +234,13 @@ const confirmRemove = async (coll) => {
 const handleSubscribeAll = () => {
   const wids = wsStore.collections.activeChildren.map(m => String(m.workshop_id))
   if (!wids.length) return
-  appStore.subscribeMod(wids) // 调用 appStore 的统一方法
+  appStore.subscribeWorkshopIds(wids) // 调用 appStore 的统一方法
 }
 // 2. 取订全部
 const handleUnsubscribeAll = () => {
   const wids = wsStore.collections.activeChildren.map(m => String(m.workshop_id))
   if (!wids.length) return
-  appStore.unsubscribeMod(wids) // 调用 appStore 的统一方法
+  appStore.unsubscribeWorkshopIds(wids) // 调用 appStore 的统一方法
 }
 
 
@@ -256,8 +256,8 @@ const handleDownloadMissing = () => {
 }
 
 // 3. 单项操作
-const handleSubscribeSingle = (wid) => appStore.subscribeMod([String(wid)])
-const handleUnsubscribeSingle = (wid) => appStore.unsubscribeMod([String(wid)]) // 默认不删除文件
+const handleSubscribeSingle = (wid) => appStore.subscribeWorkshopIds([String(wid)])
+const handleUnsubscribeSingle = (wid) => appStore.unsubscribeWorkshopIds([String(wid)]) // 默认不删除文件
 const handleDownloadSingle = (wid) => appStore.downloadWorkshopItems([String(wid)])
 
 // --- 动作：应用加载顺序 ---

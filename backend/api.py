@@ -40,7 +40,7 @@ from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, UserModData, GithubModRecord, GithubTimeline, init_db, db
+from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, init_db, db
 from backend.database.dao import CollectionDAO, ModDAO, GroupDAO
 from backend.database.models_ext import WorkshopMeta
 from backend.database.dao_ext import ExtDAO
@@ -110,14 +110,17 @@ class ApiResponse:
 
     @classmethod
     def success(cls, data=None, message=""):
+        # logger.debug(f"API Success: {message}, data={cls.serialize_data(data)}")
         return asdict(cls(status="success", data=cls.serialize_data(data), message=message))
 
     @classmethod
     def error(cls, message, data=None):
+        logger.error(f"API Error: {message}", exc_info=True)
         return asdict(cls(status="error", message=message, data=cls.serialize_data(data)))
     
     @classmethod
     def warning(cls, message, data=None):
+        logger.warning(f"API Warning: {message}")
         return asdict(cls(status="warning", message=message, data=cls.serialize_data(data)))
     
     @classmethod
@@ -401,17 +404,19 @@ class API:
         current_assets_ids = [m['package_id'] for m in context_mods]
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
         # 4. 获取当前激活的加载顺序
-        if self.load_order_mgr:
-            active_load_order = self.load_order_mgr.read_active_mods()
-        else:
-            active_load_order = {'active_mods': [], 'modify_time': 0}
-            
+        active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {'active_mods': [], 'modify_time': 0}
+        inactive_mods_order = self.active_context.inactive_mods_order if getattr(self.active_context, 'inactive_mods_order', []) else []
+        
         replacements = self.workshop_db_mgr.get_replacements()
         replacements_map = {r['old_workshop_id']: r for r in replacements}
         
         dlc_parser = DLCParser(self.active_context.game_dlc_path)
         rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
         current_version = self.active_context.game_version[:3]
+        
+        # 新增：提取所有联锁组并做映射
+        interlocks = list(ModInterlock.select().dicts())
+        interlock_map = {i['id']: i['chain'] for i in interlocks}
         
         # 5. 数据加工：注入翻译和图片 URL
         for mod in context_mods:
@@ -426,11 +431,14 @@ class API:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
                 mod['replacement'] = None
-            
+        
+        
         result.update({
             "all_mods": context_mods,  # 返回过滤后的列表
             "groups": all_groups,
+            "interlocks": interlock_map,
             "active_load_order": active_load_order.get('active_mods', []),
+            "inactive_load_order": inactive_mods_order,
             "active_load_modify_time": active_load_order.get('modify_time', 0),
         })
         
@@ -845,6 +853,25 @@ class API:
             return ApiResponse.error(str(e))
     
     @log_api_call
+    def mods_interlock_heal(self, interlock_id: str):
+        """修复断裂的联锁组（剔除本地缺失项）"""
+        try:
+            result = ModDAO.heal_interlock(interlock_id)
+            return ApiResponse.success(data=result, message="联锁修复完成")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+            
+    @log_api_call
+    def mods_interlock_missing_get(self, interlock_id: str):
+        """获取联锁组中缺失的项，供前端引导订阅"""
+        try:
+            missing_mods = ModDAO.get_interlock_missing_mods(interlock_id)
+            return ApiResponse.success(data=missing_mods)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+    
+    
+    @log_api_call
     def mods_add_tags(self, mod_ids: List[str], tags: List[str]):
         """批量添加标签"""
         try:
@@ -999,6 +1026,19 @@ class API:
         if not result["active_ids"]:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)
+    
+    @log_api_call
+    def load_order_inactive_save(self, inactive_ids: List[str]):
+        """
+        保存用户自定义的停用列表顺序 (包含清空后的 Temp 列表)
+        """
+        if not self.active_context: return ApiResponse.error("环境配置上下文缺失")
+        try:
+            result = self.profile_mgr.update_profile( self.active_context.profile_id, {"inactive_mods_order": inactive_ids})
+            if result: return ApiResponse.success()
+            return ApiResponse.error("更新配置失败")
+        except Exception as e:
+            return ApiResponse.error(f"保存停用列表顺序时出错: {e}")
     
     @log_api_call
     def load_order_save(self, active_ids: List[str], is_dirty: bool=True):

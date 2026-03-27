@@ -50,7 +50,7 @@ const workspaceStore = useWorkspaceStore()
 const isSubscribed = computed(() => workspaceStore.subscribedWorkshopIds.has(String(props.mod.workshop_id)))
 const isInstalled = computed(() => workspaceStore.installedAllIds.has(String(props.mod.workshop_id)))
 
-const subscribe = () => appStore.subscribeMod([props.mod.workshop_id])
-const unsubscribe = () => appStore.unsubscribeMod([props.mod.workshop_id])
+const subscribe = () => appStore.subscribeWorkshopIds([props.mod.workshop_id])
+const unsubscribe = () => appStore.unsubscribeWorkshopIds([props.mod.workshop_id])
 const download = () => appStore.downloadWorkshopItems([props.mod.workshop_id])
 </script>

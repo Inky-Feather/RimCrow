@@ -750,7 +750,7 @@ const handleUnsubscribe = async (mod) => {
     { type: 'warning', confirmText: '确认取消订阅' }
   )
   if (!ok) return
-  await appStore.unsubscribeMod([mod.workshop_id])
+  await appStore.unsubscribeWorkshopIds([mod.workshop_id])
 }
 </script>
 

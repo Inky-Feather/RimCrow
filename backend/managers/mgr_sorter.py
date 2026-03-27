@@ -2,6 +2,7 @@ from typing import List, Dict, Optional, Set, Tuple, Any
 import heapq
 from collections import deque, defaultdict
 from backend.database.dao import ModDAO
+from backend.database.models import ModInterlock
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 from backend.settings import settings
@@ -17,6 +18,7 @@ class AtomicGroup:
 
     def __repr__(self):
         return f"<AtomicGroup chain={self.is_chain} ids={self.mod_ids}>"
+    
 class OrderSorter:
     # 定义规则权重：权重越高越难被打破
     # 级差设置大一些，防止多条低级规则累积压倒高级规则
@@ -32,79 +34,101 @@ class OrderSorter:
         self.context = context  # 环境上下文
         self.effective_rules_cache = {} # 缓存每个 Mod 的生效规则
         self.rule_mgr = RuleManager(context)
+    
+    def _ensure_core_mods(self, active_ids: List[str], mod_map: Dict[str, dict]) -> List[str]:
+        """
+        防呆机制：强制保证官方核心组件在激活列表中，且参与排序。
+        如果物理存在，则强制加入 active_ids。
+        """
+        core_sequence = [
+            "ludeon.rimworld", 
+            # "ludeon.rimworld.royalty", 
+            # "ludeon.rimworld.ideology", 
+            # "ludeon.rimworld.biotech", 
+            # "ludeon.rimworld.anomaly"
+        ]
+        active_set = set(active_ids)
+        auto_added_cores = []
+        
+        for core_id in core_sequence:
+            if core_id in mod_map and core_id not in active_set:
+                active_ids.append(core_id)
+                active_set.add(core_id)
+                auto_added_cores.append(core_id)
+                
+        if auto_added_cores:
+            logger.info(f"防呆拦截: 强制补全缺失的核心组件 -> {auto_added_cores}")
+            
+        return active_ids
 
-    def build_atomic_groups(self, active_ids: List[str]) -> List[AtomicGroup]:
+    def build_atomic_groups(self, active_ids: List[str], mod_map: Dict[str, dict]) -> Tuple[List[AtomicGroup], List[dict]]:
         """
         第一步：将激活列表转化为原子组列表
         """
         # 1. 获取所有 Mod 的联锁数据
         # 注意：为了性能，一次性查出所有涉及到的 Mod 数据
         # 即使有的 Mod 不在 active_ids 里，只要它被联锁引用了，也要查
-        all_mods_data = ModDAO.get_profile_mods(self.context)
-        mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         active_set = set(id.lower() for id in active_ids)
-        visited = set()
+        visited_in_chain = set()
         atomic_groups = []
-
-        # 辅助函数：深度优先搜索构建链条
-        def trace_chain(current_id: str, current_chain: List[str], auto_activated: List[str]):
-            """
-            递归构建一个 Mod 链条
-            Args:
-                current_id: 当前 Mod 的 ID
-                current_chain: 当前链条的 Mod ID 列表
-                auto_activated: 自动激活的 Mod ID 列表
-            """
-            if current_id in visited: return
-            visited.add(current_id)
-            # 如果当前 ID 不在激活列表中，记录为自动激活
-            if current_id not in active_set:
-                auto_activated.append(current_id)
-            current_chain.append(current_id)
-            mod_info = mod_map.get(current_id)
-            if not mod_info: return
-            # 寻找下一个
-            next_id = mod_info.get('lock_next_mod')
-            if next_id:
-                next_id = next_id.lower()
-                if next_id in mod_map and next_id not in visited:
-                    # 检查回指逻辑：确保 B 的 previous 是 A，或者是 None
-                    # 如果 B 的 previous 指向了别人，说明联锁数据矛盾
-                    trace_chain(next_id, current_chain, auto_activated)
+        warnings = []
         
-        # 2. 遍历所有激活项，从链条的“头”开始找起
-        for mid in [id.lower() for id in active_ids]:
-            if mid in visited:
-                continue
+        # 1. 提取所有激活 Mod 涉及的联锁组 ID
+        involved_interlock_ids = set()
+        for mid in active_set:
             mod_info = mod_map.get(mid)
-            if not mod_info:
-                # 幽灵 Mod，单独成组
-                atomic_groups.append(AtomicGroup([mid]))
-                visited.add(mid)
-                continue
-            # 寻找链条的头部
-            head_id = mid
-            temp_visited = {head_id}
-            while True:
-                m_info = mod_map.get(head_id)
-                prev_id = m_info.get('lock_previous_mod') if m_info else None
-                if prev_id:
-                    prev_id = prev_id.lower()
-                    if prev_id in mod_map and prev_id not in temp_visited:
-                        head_id = prev_id
-                        temp_visited.add(head_id)
-                    else: break
-                else: break
-            
-            # 从头部开始构建完整链条
-            chain = []
-            auto_list = []
-            trace_chain(head_id, chain, auto_list)
-            group = AtomicGroup(chain)
-            group.auto_activated = auto_list
-            atomic_groups.append(group)
+            if mod_info and mod_info.get('interlock_id'):
+                involved_interlock_ids.add(mod_info['interlock_id'])
+                
+        # 2. 从数据库批量拉取这些联锁序列
+        interlocks = {}
+        if involved_interlock_ids:
+            locks = ModInterlock.select().where(ModInterlock.id << list(involved_interlock_ids)) # type: ignore
+            interlocks = {lock.id: lock.chain for lock in locks}
 
-        return atomic_groups
+        # 3. 处理联锁组
+        for lock_id, chain in interlocks.items():
+            effective_chain = []
+            missing_in_local = []
+            missing_in_active = []
+            
+            for pid in chain:
+                pid = pid.lower()
+                visited_in_chain.add(pid)
+                
+                # 检查物理存在性
+                if pid not in mod_map:
+                    missing_in_local.append(pid)
+                    continue
+                    
+                # 检查激活状态 (联锁中的成员，即使未激活，如果是跟随激活的策略，强制补齐)
+                if pid not in active_set:
+                    missing_in_active.append(pid)
+                    
+                effective_chain.append(pid)
+            
+            # 生成警告：联锁由于缺失发生了降级
+            if missing_in_local:
+                warnings.append({
+                    "type": "interlock_broken_local",
+                    "level": "warn",
+                    "interlock_id": lock_id,
+                    "message": f"联锁组由于部分模组在本地缺失而降级。缺失项: {missing_in_local}"
+                })
+            
+            # 如果存活的链条 >= 1，包装成 AtomicGroup
+            if effective_chain:
+                group = AtomicGroup(effective_chain)
+                group.auto_activated = missing_in_active
+                atomic_groups.append(group)
+
+        # 4. 处理独立的单体 Mod (未参与联锁的)
+        for mid in active_set:
+            if mid not in visited_in_chain:
+                # 幽灵 Mod (本地无数据) 或普通单体 Mod
+                atomic_groups.append(AtomicGroup([mid]))
+
+        return atomic_groups, warnings
 
 
     # =========================================================================
@@ -288,6 +312,8 @@ class OrderSorter:
         logger.info(f"Starting sort for {len(active_ids)} mods...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
+        # 防呆：注入官方核心模组
+        active_ids = self._ensure_core_mods(active_ids, mod_map)
         current_assets_ids = list(mod_map.keys())
         from backend.database.dao import GroupDAO
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
@@ -308,7 +334,7 @@ class OrderSorter:
         for mid, m_data in mod_map.items():
             self.effective_rules_cache[mid] = self.rule_mgr.get_effective_mod_rules(mid, m_data)
         
-        MAX_ITERATIONS = 15  # [新增] 设定最大迭代深度阈值
+        MAX_ITERATIONS = 15  # 设定最大迭代深度阈值
         
         # 默认 False 保持保守行为
         if settings.config.auto_activate_dependencies or False:
@@ -349,7 +375,7 @@ class OrderSorter:
         
         expanded_active_ids = list(active_set)
         # 1. 将扩展后的激活列表转化为原子组
-        groups = self.build_atomic_groups(expanded_active_ids)
+        groups, interlock_warnings = self.build_atomic_groups(expanded_active_ids, mod_map)
         mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
         group_ids = [id(g) for g in groups]
         groups_by_id = {id(g): g for g in groups}
@@ -375,65 +401,35 @@ class OrderSorter:
             # 移除非字母字符并转小写，确保排序自然 (比如忽略 [1.4] 这种前缀)
             # 这里简单做 lower() strip() 即可，如果想更高级可以去掉 []
             sort_name = display_name.lower().strip()
-            
             # B. 确定唯一ID (PackageID) - 用于绝对稳定性
             sort_id = first_mod_id.lower()
-
             # 存储次要排序键
             group_sort_keys[id(g)] = (sort_name, sort_id)
 
             # C. 计算权重
             for mid in g.mod_ids:
-                
                 # 获取该 Mod 生效的所有规则
                 effective_rules = self.effective_rules_cache.get(mid, {})
                 weight_info = effective_rules.get("weight_info", {})
                 # 获取该 Mod 已经由 RuleManager 算好的最终规则集
                 effective_rules = self.effective_rules_cache.get(mid, {})
                 weight_info = effective_rules.get("weight_info", {})
-                # [新增] 纯粹的算术应用，完全不关心业务逻辑
+                # 纯粹的算术应用，完全不关心业务逻辑
                 w = weight_info.get("base_weight", 500) + weight_info.get("weight_shift", 0)
-                # [新增] 处理决定性的绝对位置
+                # 处理决定性的绝对位置
                 abs_type = weight_info.get("absolute_type")
-                if abs_type == "top":
-                    w = 0
-                elif abs_type == "bottom":
-                    w = 10000 
+                if abs_type == "top": w = 0
+                elif abs_type == "bottom": w = 10000 
                 weights.append(w)
-                
-                """
-                has_absolute_override = False
-                # 应用绝对位置覆盖 (Top / Bottom)
-                override = effective_rules.get("weight_override")
-                if override:
-                    if override["type"] == "top": w = 0
-                    elif override["type"] == "bottom": w = 10000 # 建议设大一点，1000不够大
-                    has_absolute_override = override['source']['type'] # 记录来源
-                
-                # 只有在没有强制绝对覆盖，或者动态规则优先级比绝对覆盖更高时，才应用动态权重
-                dyn_priority = self.rule_mgr.get_source_priority("dynamic")
-                override_priority = self.rule_mgr.get_source_priority(has_absolute_override) if has_absolute_override else 999
-
-                if dyn_priority <= override_priority or not has_absolute_override:
-                    if self.rule_mgr.settings.get("dynamic_rules_enabled", True):
-                        matched_dyn = self.rule_mgr.get_matching_dynamic_rules(m_data)
-                        for rule in matched_dyn:
-                            act = rule.get("action", {})
-                            if act.get('type') == 'weight_shift': w += act.get('value', 0)
-                            elif act.get('type') == 'weight_set': w = act.get('value', w)
-                            # 动态规则自带的 top/bottom 操作
-                            elif act.get('type') == 'top': w = 0
-                            elif act.get('type') == 'bottom': w = 10000
-                weights.append(w)
-                """
                 
             # 一个原子组如果有多个 Mod 联锁，取最小的权重作为整个组的启动权重
             group_base_weights[id(g)] = min(weights) if weights else 500
         # 3. 构建加权依赖图
         adj, edge_details = self._build_weighted_graph(groups, mod_map, mod_to_group)
-        
         # 4. 核心步骤：消解循环
         cycle_warnings = self._break_cycles(adj, edge_details, groups_by_id)
+        # 将联锁断裂的警告合并进去
+        cycle_warnings.extend(interlock_warnings)
 
         # 5. 计算入度
         in_degree = defaultdict(int)

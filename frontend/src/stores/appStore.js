@@ -925,11 +925,11 @@ export const useAppStore = defineStore('app', () => {
     if (!workshopIdsMap) return false
     const workshopIds = Object.values(workshopIdsMap)
     // 调用订阅函数
-    await subscribeMod(workshopIds)
+    await subscribeWorkshopIds(workshopIds)
     return true
   }
   // 订阅模组
-  const subscribeMod = async (workshop_ids) => {
+  const subscribeWorkshopIds = async (workshop_ids) => {
     if (!window.pywebview) return
     if (!workshop_ids || workshop_ids.length === 0) return
     const res = await window.pywebview.api.steam_subscribe(workshop_ids)
@@ -962,7 +962,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 取消订阅模组
-  const unsubscribeMod = async (workshop_ids) => {
+  const unsubscribeWorkshopIds = async (workshop_ids) => {
     if (!window.pywebview) return false
     if (!workshop_ids || workshop_ids.length === 0) return
     // const modStore = useModStore()
@@ -1255,7 +1255,7 @@ export const useAppStore = defineStore('app', () => {
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab,
     
-    checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod, checkUpdate, updateExternalDB,
+    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
     // AI处理
     getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, 
     fetchPrompts, savePrompt, deletePrompt, resetPrompts,

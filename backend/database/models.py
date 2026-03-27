@@ -1,11 +1,11 @@
 # 新数据库
-from datetime import datetime
 import json
 import os
-import time
+import shutil
+import sqlite3
 from typing import Optional, cast
 from playhouse.migrate import SqliteMigrator, migrate
-from peewee import DatabaseError, Model, Field, SqliteDatabase, CharField, TextField, DateTimeField, ForeignKeyField, BooleanField, IntegerField, CompositeKey, BigIntegerField
+from peewee import DatabaseError, Model, Field, SqliteDatabase, CharField, TextField, ForeignKeyField, BooleanField, IntegerField, CompositeKey, BigIntegerField
 from backend._version import __db_version__
 from backend.utils.logger import logger 
 from backend.utils.tools import current_ms
@@ -53,6 +53,7 @@ class GameProfile(BaseModel):
     use_self_mods = cast(bool, BooleanField(default=True))          # 是否加载管理器 Mod
     is_steam = cast(bool, BooleanField(default=False))              # 是否为 Steam 版本
     # 状态
+    inactive_mods_order = cast(list[str], UTF8JSONField(default=list))  # 非激活 Mod 的排序
     last_played_time = cast(int, BigIntegerField(default=0))        # 最后一次活动时间
     created_time = cast(int, BigIntegerField(default=current_ms))   # 创建时间
 
@@ -108,6 +109,13 @@ class ModAsset(BaseModel):
     disabled = cast(bool, BooleanField(default=False))                  # 是否禁用
     
 
+class ModInterlock(BaseModel):
+    """
+    存储固定的 Mod 联锁序列
+    """
+    id = cast(str, CharField(primary_key=True))                    # 联锁组 ID (UUID)
+    chain = cast(list[str], UTF8JSONField(default=list))           # 严格有序的 package_id 数组: ["core", "royalty", ...]
+
 class UserModData(BaseModel):
     """
     存储用户对 Mod 的自定义数据 (与 Mod 表 1对1，避免重新扫描时丢失)
@@ -118,10 +126,11 @@ class UserModData(BaseModel):
     tags = cast(list[str], UTF8JSONField(default=list))                # 用户打的标签 ['排队必备', '前置']
     sign_color = cast(Optional[str], CharField(null=True))                 # 标记颜色，用于在UI中分类突显
     user_mod_type = cast(Optional[str], CharField(null=True))              # Mod类型，如 'Assembly', 'XML', 'LanguagePack'
-    lock_previous_mod = cast(Optional[str], TextField(null=True))          # 联锁的前一个Mod包名，用于固定两个Mod的顺序
-    lock_next_mod = cast(Optional[str], TextField(null=True))              # 联锁的后一个Mod包名，用于固定两个Mod的顺序
+    # lock_previous_mod = cast(Optional[str], TextField(null=True))          # 联锁的前一个Mod包名，用于固定两个Mod的顺序
+    # lock_next_mod = cast(Optional[str], TextField(null=True))              # 联锁的后一个Mod包名，用于固定两个Mod的顺序
+    # 建立与 ModInterlock 的关联。当联锁组被删除时，外键置空
+    interlock_id = cast(Optional[str], ForeignKeyField(ModInterlock, null=True, backref='mods', on_delete='SET NULL'))
     ignored_issues = cast(list[str], UTF8JSONField(default=list))      # 存储忽略的问题 Key 列表 ["id:type:target", ...]
-    
     
 class GroupData(BaseModel):
     """
@@ -189,10 +198,12 @@ class SystemInfo(BaseModel):
     value = cast(str, CharField())
 
 # 定义所有模型列表
-all_models = [SystemInfo, GroupMod, GroupData, UserModData, ModAsset, GameProfile, GithubTimeline, GithubModRecord, SubscribedCollection]
+all_models = [SystemInfo, GroupMod, GroupData, ModInterlock, UserModData, ModAsset, GameProfile, GithubTimeline, GithubModRecord, SubscribedCollection]
 
 def init_db(db_path):
     """初始化数据库"""
+    db_exists = os.path.exists(db_path)
+    is_corrupted = False  # 新增标志位
     try:
         db.init(db_path, pragmas={
             'journal_mode': 'wal',  # 提高并发读写性能
@@ -200,13 +211,22 @@ def init_db(db_path):
             'synchronous': 'normal', # WAL 模式下的最佳实践，兼顾性能与安全
             'foreign_keys': 'on'
         }, timeout=30) # 增加 30 秒超时等待
-        db.connect()    # 连接数据库
-        
-        # 1. 确保基础表存在
-        db.create_tables(all_models, safe=True)
-        # 2. 【核心】自动同步字段变动 (解决 no such column 报错)
+        db.connect(reuse_if_open=True)    # 连接数据库
+        # 损坏检测
+        if db_exists:
+            try:
+                db.execute_sql('PRAGMA integrity_check(1);')
+            except Exception as e:
+                raise DatabaseError(f"Integrity check failed: {e}")
+            
+        # 【关键修复 1】在修改表结构前，临时关闭外键约束，防止 SQLite 在修改表结构时触发各种死锁限制
+        db.execute_sql('PRAGMA foreign_keys = OFF;')
+        # 【关键修复 2】调换顺序：先自动同步新字段，再创建表！
+        # 这样可以避免 create_tables 提前为尚未存在的列创建索引，导致后续报错。
         auto_upgrade_schema(db, all_models)
-        
+        db.create_tables(all_models, safe=True)
+        # 恢复外键约束
+        db.execute_sql('PRAGMA foreign_keys = ON;')
         # 检查数据库版本
         CURRENT_DB_VERSION = __db_version__ 
         # 获取当前数据库版本
@@ -232,42 +252,27 @@ def init_db(db_path):
             import shutil
             shutil.copy2(db_path, db_path + ".bak")
             # 执行迁移
+            # 迁移数据期间也临时关闭外键，防止迁移逻辑违背严格的外键约束
+            db.execute_sql('PRAGMA foreign_keys = OFF;')
             from backend.database.migrator import run_migrations
             run_migrations(old_v)
-            # 确保其他新加的表（如果迁移里没写的话）也能创建
-            db.create_tables(all_models, safe=True)
+            db.execute_sql('PRAGMA foreign_keys = ON;')
             
         return True
     
-    except DatabaseError as e:
-        if "malformed" in str(e).lower():
-            logger.error(f"检测到数据库损坏: {e}。正在尝试自动修复...")
-            db.close()
-            
-            # --- 自愈策略：备份坏库并重建 ---
-            bak_path = db_path + ".malformed.bak"
-            try:
-                if os.path.exists(db_path):
-                    # 将坏掉的库重命名，不要直接删，给用户留一线生机
-                    shutil.move(db_path, bak_path)
-                    # 同时删除关联的临时文件
-                    if os.path.exists(db_path + "-wal"): os.remove(db_path + "-wal")
-                    if os.path.exists(db_path + "-shm"): os.remove(db_path + "-shm")
-                
-                # 递归调用自己，重新创建干净的库
-                return init_db(db_path)
-            except Exception as re_e:
-                logger.critical(f"严重错误：无法自动修复数据库损坏 {re_e}")
-                return False
+    except (DatabaseError, Exception) as e:
+        # 如果是各种数据库结构损坏报错，打标记后跳出交给外部处理
+        if "malformed" in str(e).lower() or "corrupt" in str(e).lower() or "not a database" in str(e).lower():
+            logger.error(f"检测到数据库损坏: {e}。正在尝试自动修复...", exc_info=True)
+            is_corrupted = True # 标记为损坏，但不在这里直接调用修复
         else:
-            logger.error(f"数据库连接失败: {e}")
+            logger.error(f"数据库连接失败: {e}", exc_info=True)
             return False
-        
-    except Exception as e:
-        import traceback
-        logger.error(f"初始化数据库时出错: {traceback.format_exc()}")
-        return False
-    
+    # 【核心修复】将修复流程移至 except 块外部
+    # 当脱离 except 作用域后，Python 会销毁 exception 对象及其附带的局部变量（释放被占用的 Cursor 文件句柄）
+    if is_corrupted:
+        return _handle_db_corruption(db_path)
+
 def close_db():
     if db.is_closed(): 
         logger.info("数据库已关闭")
@@ -280,7 +285,7 @@ def close_db():
         db.close()
         logger.info("数据库已安全关闭并清理临时文件")
     except Exception as e:
-        logger.error(f"关闭数据库时发生异常: {e}")
+        logger.error(f"关闭数据库时发生异常: {e}", exc_info=True)
     
 def clear_db():
     """
@@ -324,8 +329,7 @@ def clear_db():
         
         return True
     except Exception as e:
-        import traceback
-        logger.error(f"清空数据库时出错: {traceback.format_exc()}")
+        logger.error(f"清空数据库时出错: {e}", exc_info=True)
         return False
     
 def auto_upgrade_schema(db, models):
@@ -336,6 +340,9 @@ def auto_upgrade_schema(db, models):
     
     for model in models:
         table_name = model._meta.table_name
+        if not db.table_exists(table_name):
+            # 如果表还不存在，跳过，由后面的 db.create_tables 统一创建
+            continue
         # 1. 获取数据库中现有的列名
         try:
             columns = [f.name for f in db.get_columns(table_name)]
@@ -345,21 +352,112 @@ def auto_upgrade_schema(db, models):
             
         # 2. 遍历模型定义的字段
         fields = model._meta.fields
-        operations = []
         
         for field_name, field_obj in fields.items():
             column_name = field_obj.column_name
             if column_name not in columns:
                 logger.info(f"检测到新字段: {table_name}.{column_name}, 正在自动添加...")
-                # 生成添加列的操作
-                operations.append(migrator.add_column(table_name, column_name, field_obj))
-        
-        # 3. 执行迁移操作
-        if operations:
-            try:
-                migrate(*operations)
-                logger.info(f"表 {table_name} 结构同步成功")
-            except Exception as e:
-                logger.error(f"表 {table_name} 结构同步失败: {e}")
+                try:
+                    # 使用原子事务隔离每个字段的添加，防止单个添加失败污染整个数据库连接
+                    with db.atomic():
+                        migrate(migrator.add_column(table_name, column_name, field_obj))
+                    logger.info(f"表 {table_name} 的 {column_name} 字段结构同步成功")
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        logger.info(f"字段或索引已存在，安全跳过: {e}")
+                    else:
+                        logger.error(f"表 {table_name} 同步字段 {column_name} 失败: {e}", exc_info=True)
     
 
+
+def _handle_db_corruption(db_path):
+    """
+    自愈核心：备份损坏库 -> 创建空库 -> 逐行挽救数据
+    """
+    if not db.is_closed():
+        try:
+            db.close()
+        except:
+            pass
+    # 【核心修复】释放 Windows 的游标内存驻留，强行切断文件占用 (WinError 32)
+    import gc
+    import time
+    gc.collect()
+    time.sleep(1.0)  # 稍微延长等待时间以确保系统解除文件锁定
+    timestamp = int(time.time())
+    corrupt_path = f"{db_path}.corrupt.{timestamp}.bak"
+    new_db_path = db_path
+    
+    try:
+        # 1. 备份坏库
+        shutil.move(db_path, corrupt_path)
+        # 清理关联文件
+        for ext in ['-wal', '-shm']:
+            if os.path.exists(db_path + ext): os.remove(db_path + ext)
+        
+        logger.info(f"已将坏库备份至: {corrupt_path}")
+
+        # 2. 重新初始化一个空库并创建表结构
+        init_db(new_db_path) 
+        
+        # 3. 尝试跨库泵送数据
+        logger.info("正在尝试挽救原始数据...")
+        rescue_count = rescue_database(corrupt_path, new_db_path)
+        
+        logger.info(f"✅ 挽救任务结束，成功找回 {rescue_count} 条记录。")
+        return True
+    except Exception as fatal_e:
+        logger.error(f"严重错误：数据挽救失败 {fatal_e}", exc_info=True)
+        return False
+
+def rescue_database(source_path, target_path):
+    """
+    使用原生 sqlite3 尝试逐表、逐行挽救数据
+    """
+    # 获取所有需要挽救的表名
+    table_names = [m._meta.table_name for m in all_models if m != SystemInfo]
+    # 按照依赖顺序排列，优先挽救父表（Profile, GroupData, UserModData, ModInterlock）
+    # 这里根据你的业务逻辑调整顺序
+    priority_tables = ['gameprofile', 'modinterlock', 'groupdata', 'usermoddata', 'modasset', 'groupmod']
+    
+    total_saved = 0
+    
+    # 使用原生 sqlite3 连接，因为坏库在 ORM 层可能直接崩溃
+    src_conn = sqlite3.connect(source_path)
+    dst_conn = sqlite3.connect(target_path)
+    src_cursor = src_conn.cursor()
+    dst_cursor = dst_conn.cursor()
+    
+    # 临时关闭目标库的外键约束以便导入
+    dst_cursor.execute('PRAGMA foreign_keys = OFF;')
+
+    for table in priority_tables:
+        try:
+            # 1. 获取列名
+            src_cursor.execute(f"PRAGMA table_info({table});")
+            cols = [info[1] for info in src_cursor.fetchall()]
+            if not cols: continue
+            # 2. 读取数据 (逐行处理，防止遇到损坏页导致全表丢失)
+            src_cursor.execute(f"SELECT * FROM {table};")
+            col_placeholders = ", ".join(["?"] * len(cols))
+            insert_sql = f"INSERT OR IGNORE INTO {table} ({', '.join(cols)}) VALUES ({col_placeholders});"
+            table_saved = 0
+            while True:
+                try:
+                    row = src_cursor.fetchone()
+                    if row is None: break
+                    dst_cursor.execute(insert_sql, row)
+                    table_saved += 1
+                except Exception:
+                    # 如果某一行读取失败（刚好在损坏页），跳过这一行
+                    continue
+            dst_conn.commit()
+            total_saved += table_saved
+            logger.info(f"  - 数据表 [{table}]: 挽救了 {table_saved} 条记录")
+        except Exception as e:
+            logger.warning(f"  - 数据表 [{table}] 损坏严重，无法挽救: {e}")
+            continue
+    dst_cursor.execute('PRAGMA foreign_keys = ON;')
+    src_conn.close()
+    dst_conn.close()
+    return total_saved

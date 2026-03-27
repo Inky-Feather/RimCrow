@@ -1,6 +1,9 @@
 # backend/database/migrator.py
+import json
+import uuid
+
 from playhouse.migrate import SqliteMigrator, migrate
-from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db, SystemInfo, SubscribedCollection
+from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, ModInterlock, UserModData, db, SystemInfo, SubscribedCollection
 from backend.utils.logger import logger 
 from backend.settings import settings
 
@@ -238,9 +241,7 @@ def _3to4():
             # 第二步：利用 Migrator 移除 NOT NULL 约束
             # 在 SQLite 中，这会触发：创建新表 -> 拷贝数据 -> 替换旧表
             logger.info("正在重构表结构以移除 save_breaking 的 NOT NULL 约束...")
-            migrate(
-                migrator.drop_not_null('modasset', 'save_breaking'),
-            )
+            migrate(migrator.drop_not_null('modasset', 'save_breaking'))
 
             # 第三步：将占位符 3 转换为真正的 NULL
             db.execute_sql("UPDATE modasset SET save_breaking = NULL WHERE save_breaking = 3;")
@@ -254,24 +255,103 @@ def _3to4():
 def _4to5():
     """从版本 4 升级到版本 5
     从旧表中移除字段 SubscribedCollection 的 need_download
+    重构联锁机制：将 UserModData 中的 lock_previous_mod 和 lock_next_mod 双向链表
+    提取并转换为全新的 ModInterlock 数组结构。
     """
+    from playhouse.migrate import SqliteMigrator, migrate
     migrator = SqliteMigrator(db)
+    
+    # 数据处理 (Data Processing)
     try:
-        # 1. 检查字段是否存在（防御性编程）
-        columns = [f.name for f in db.get_columns('subscribedcollection')]
+        # 获取最新的列名，确认应该往哪个列写
+        # Peewee 的 ForeignKeyField 迁移后的实际列名通常是 "字段名_id"
+        current_columns = [f.name for f in db.get_columns('usermoddata')]
+        target_col = 'interlock_id_id' if 'interlock_id_id' in current_columns else 'interlock_id'
+
+        # 防御性检查：确保旧字段还存在才提取数据
+        if not ('lock_previous_mod' in current_columns and 'lock_next_mod' in current_columns):
+            logger.info("旧版联锁字段已不存在，无需数据提取。")
+            return
         
-        if 'need_download' in columns:
-            # 2. 执行迁移操作
-            # Peewee 会自动处理 SQLite 的复杂转换逻辑（创建临时表等）
-            migrate(
-                migrator.drop_column('subscribedcollection', 'need_download')
-            )
-            logger.info("字段 need_download 已成功移除")
+        cursor = db.execute_sql("SELECT mod_id, lock_previous_mod, lock_next_mod FROM usermoddata WHERE lock_previous_mod IS NOT NULL OR lock_next_mod IS NOT NULL;")
+        rows = cursor.fetchall()
+        
+        if not rows:
+            logger.info("未发现旧版联锁数据，跳过转换。")
         else:
-            logger.info("字段 need_download 不存在，跳过移除操作")
+            mod_map = {}
+            for mod_id, prev_id, next_id in rows:
+                mod_map[mod_id.lower()] = {
+                    'prev': prev_id.lower() if prev_id else None,
+                    'next': next_id.lower() if next_id else None
+                }
+                
+            visited = set()
+            chains = []
+            for mod_id in list(mod_map.keys()):
+                if mod_id in visited: continue
+                
+                curr = mod_id
+                path_visited = set()
+                while mod_map.get(curr) and mod_map[curr]['prev']:
+                    prev_id = mod_map[curr]['prev']
+                    if prev_id in path_visited: break
+                    path_visited.add(prev_id)
+                    curr = prev_id
+                    
+                head = curr
+                chain = []
+                curr = head
+                path_visited = set()
+                while curr:
+                    if curr in path_visited: break
+                    path_visited.add(curr)
+                    chain.append(curr)
+                    visited.add(curr)
+                    curr = mod_map.get(curr, {}).get('next')
+                    
+                if len(chain) > 1:
+                    chains.append(chain)
+            
+            # 批量写入
+            with db.atomic():
+                for chain in chains:
+                    new_id = uuid.uuid4().hex
+                    # 使用原生 SQL 插入序列，确保 JSONField 正确序列化
+                    db.execute_sql("INSERT INTO modinterlock (id, chain) VALUES (?, ?);", (new_id, json.dumps(chain)))
+                    # 使用正确的列名执行更新
+                    placeholders = ', '.join(['?'] * len(chain))
+                    sql = f"UPDATE usermoddata SET {target_col} = ? WHERE mod_id IN ({placeholders});"
+                    db.execute_sql(sql, [new_id] + chain)
+                
+            logger.info(f"成功迁移 {len(chains)} 条联锁序列。")
             
     except Exception as e:
-        logger.error(f"迁移过程中出错: {e}")
+        logger.error(f"数据迁移阶段失败: {e}", exc_info=True)
+        raise e
+
+    # 清理旧字段
+    try:
+        with db.transaction():
+            # 移除 UserModData 中的 lock_previous_mod 和 lock_next_mod
+            columns = [f.name for f in db.get_columns('usermoddata')]
+            if 'lock_previous_mod' in columns:
+                migrate(migrator.drop_column('usermoddata', 'lock_previous_mod'))
+            if 'lock_next_mod' in columns:
+                migrate(migrator.drop_column('usermoddata', 'lock_next_mod'))
+            
+            # 移除 SubscribedCollection.need_download
+            columns = [f.name for f in db.get_columns('subscribedcollection')]
+            if 'need_download' in columns:
+                logger.info("正在移除 need_download...")
+                migrate(migrator.drop_column('subscribedcollection', 'need_download'))
+        
+        logger.info("已完成联锁机制数据结构升级")
+
+    except Exception as e:
+        logger.error(f"数据迁移阶段失败: {e}", exc_info=True)
+        raise e
+
 
 
 

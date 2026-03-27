@@ -138,20 +138,21 @@
     </div>
 
     <!-- 联锁标识 -->
-    <div v-if="modData.lock_previous_mod" class="absolute -top-3 right-8 opacity-70" :class="{'text-accent-warn': linkWarn[0]}">
-      <svg v-show="!linkWarn[0]" class="rotate-90 size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
-      <svg v-show="linkWarn[0]" class="rotate-90 size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
+    <div v-if="hasLockPrevious" class="absolute -top-2 right-8 opacity-50" :class="{'text-accent-warn': linkWarn[0]}">
+      <svg v-show="!linkWarn[0]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+      <svg v-show="linkWarn[0]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
     </div>
-    <div v-if="modData.lock_next_mod" class="absolute -bottom-3 right-11 opacity-70" :class="{'text-accent-warn': linkWarn[1]}">
-      <svg v-show="!linkWarn[1]" class="rotate-90 size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
-      <svg v-show="linkWarn[1]" class="rotate-90 size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
+    <div v-if="hasLockNext" class="absolute -bottom-2 right-11 opacity-50" :class="{'text-accent-warn': linkWarn[1]}">
+      <svg v-show="!linkWarn[1]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+      <svg v-show="linkWarn[1]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { computed, h, nextTick  } from 'vue'
-import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../utils/constants'
+import { computed, h, nextTick, watch  } from 'vue'
+import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP, IconSteam } from '../../utils/constants'
 import { useAppStore } from '../../stores/appStore'
 import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore'
@@ -159,7 +160,7 @@ import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -197,30 +198,6 @@ const isActive = computed(() => modStore.activeIds.includes(props.item_id))
 
 const modType = computed(() => modStore.displayModType(modData.value))
 
-const linkWarn = computed(() => {
-  if (!issues.value) return (false, false)
-  let lockPrev = false
-  let lockNext = false
-  for (const issue of issues.value) {
-    if (issue.type === ISSUE_TYPE.WARN_LINK_WRONG_ORDER || issue.type === ISSUE_TYPE.WARN_LINK_MOD_MISSING) {
-      if (issue.targetId === modData.value.lock_previous_mod) {
-        lockPrev = true
-      } else if (issue.targetId === modData.value.lock_next_mod) {
-        lockNext = true
-      }
-    }
-  }
-  return [lockPrev, lockNext]
-})
-
-// 构造提示文本
-const issueTooltip = computed(() => {
-    if (!issues.value) return null
-    // console.log('问题:', issues.value)
-    // 换行显示所有错误
-    return issues.value.map(i => i.message).join('\n')
-})
-
 // 可替换版本是否已经安装
 const replacementInstalled = computed(() => {
     if (!modData.value.replacement) return false
@@ -244,6 +221,65 @@ const getCardClass = computed(() => {
     if (issueState.value === 'warn') return `${select} border-accent-warn/40 border bg-accent-warn/10 hover:bg-accent-warn/20`
     return `${select} bg-bg-surface/20 border-text-main/10 hover:border-text-main/20 hover:bg-text-dim/20` // 原有的选中样式
 })
+
+// 构造提示文本
+const issueTooltip = computed(() => {
+    if (!issues.value) return null
+    // console.log('问题:', issues.value)
+    // 换行显示所有错误
+    return issues.value.map(i => i.message).join('\n')
+})
+
+const linkIssueDetails = computed(() => modStore.interlockDetailsMap[modData.value.interlock_id] || [])
+// 联锁标识
+const hasLockPrevious = computed(() => {
+  if (!modData.value.interlock_id) return false
+  const chain = modStore.interlocksMap[modData.value.interlock_id]
+  if (!chain) return false
+  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  return myIdx > 0 // 只要不是第一个，就应该有向上的链接头
+})
+const hasLockNext = computed(() => {
+  if (!modData.value.interlock_id) return false
+  const chain = modStore.interlocksMap[modData.value.interlock_id]
+  if (!chain) return false
+  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  return myIdx !== -1 && myIdx < chain.length - 1 // 只要不是最后一个，就应该有向下的链接头
+})
+const expectedPrevId = computed(() => {
+  if (!hasLockPrevious.value) return null
+  const chain = modStore.interlocksMap[modData.value.interlock_id]
+  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  return chain[myIdx - 1].toLowerCase()
+})
+const expectedNextId = computed(() => {
+  if (!hasLockNext.value) return null
+  const chain = modStore.interlocksMap[modData.value.interlock_id]
+  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  return chain[myIdx + 1].toLowerCase()
+})
+const linkWarn = computed(() => {
+  if (!issues.value) return [false, false]
+  let lockPrev = false
+  let lockNext = false
+  for (const issue of issues.value) {
+    if (issue.type === ISSUE_TYPE.WARN_LINK_WRONG_ORDER || issue.type === ISSUE_TYPE.WARN_LINK_MOD_MISSING) {
+      // 这里的 targetId 是在 modStore 里我们传入的“期待断裂点”的 ID
+      if (expectedPrevId.value && issue.targetId === expectedPrevId.value) {
+        lockPrev = true
+      } else if (expectedNextId.value && issue.targetId === expectedNextId.value) {
+        lockNext = true
+      }
+    }
+  }
+  return [lockPrev, lockNext]
+})
+// 监听：只有当警告触发，且缓存里没有时，才“点火”触发 Store 去后台静默请求
+watch(linkWarn, (newVal) => {
+  if ((newVal[0] || newVal[1]) && modData.value.interlock_id) {
+    modStore.loadInterlockDetails(modData.value.interlock_id)
+  }
+}, { immediate: true })
 
 const getCardStyle = (id) => {
   const base = { height: (props.simple ? appStore.scalePx(30) : appStore.scalePx(50))+'px' }
@@ -297,7 +333,7 @@ const generateAliasNotes = async () => {
   }
 }
 // 取消订阅模组
-const unsubscribeMod = async (delete_file = false) => {
+const unsubscribeWorkshopIds = async (delete_file = false) => {
   // 只选择包含workshop_id的项目
   const paths = [];
   const workshop_ids = [];
@@ -311,17 +347,13 @@ const unsubscribeMod = async (delete_file = false) => {
   });
   const check = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}（${workshop_ids.length} 项）吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
   if(check) {
-    const res = await appStore.unsubscribeMod(workshop_ids)
+    const res = await appStore.unsubscribeWorkshopIds(workshop_ids)
     if (res && delete_file) {
       appStore.deletePaths(paths)
     }
   }
 }
 
-// 1. 定义图标组件变量
-const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
-  [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
-)
 // 右键菜单
 const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
@@ -381,9 +413,9 @@ const handleContextMenu = async (event) => {
     { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
     { label: 'Steam操作', icon: IconSteam, disabled: !modData.value.workshop_id, children: [
       { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.workshop_id) },
-      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeMod([props.item_id]) },
-      { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
-      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeMod(true) },
+      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([props.item_id]) },
+      { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds() },
+      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
     ]},
   ]
   if (modStore.selectedMods.some(m => !!m.replacement)) {
@@ -393,7 +425,7 @@ const handleContextMenu = async (event) => {
       { label: '替代版本', icon: Cable, children:[
         { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.replacement.new_workshop_id) },
         { label: '跳转到替代模组',disabled: !replacementInstalled.value, icon: CornerUpRight, action: () => modStore.currentTargetId=modData.value.replacement.new_package_id },
-        { label: '订阅替代版本'+ _selectedCountStr, icon: Flag, action: () => appStore.subscribeMod(workshop_ids) },
+        { label: '订阅替代版本'+ _selectedCountStr, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
         { label: '下载替代版本'+ _selectedCountStr, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
       ]}
     )
@@ -407,7 +439,7 @@ const handleContextMenu = async (event) => {
     singleMenuItems.push(
       { label: '缺失处理', icon: CircleFadingPlus, children:[
         { label: '移除缺失项'+ _selectedCountStr, icon: Eraser, action: () => modStore.removeIdsOnAllList(package_ids) },
-        { label: '订阅缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Flag, action: () => appStore.subscribeMod(workshop_ids) },
+        { label: '订阅缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
         { label: '下载缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
       ]}
     )
@@ -417,10 +449,26 @@ const handleContextMenu = async (event) => {
   const selectedMenuItems = [
     { divider: true },
     { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
-    { label: '联锁选中项'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) },
   ]
-  if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
+  const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
+  if (!allInterlocked) {
+    selectedMenuItems.push({ label: '创建联锁'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) })
+  }
+  const anyInterlocked = modStore.selectedMods.some(m => !!m.interlock_id)
+  if (anyInterlocked) {
     selectedMenuItems.push({ label: '解除联锁'+ selectedCountStr, icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
+    const disabledIds = linkIssueDetails.value.filter(d => d.reason === 'disabled').map(d => d.package_id)
+    const missingPackageIds = linkIssueDetails.value.filter(d => d.reason === 'missing' && d.package_id).map(d => d.package_id)
+    if (missingPackageIds.length > 0) {
+      selectedMenuItems.push({
+        label: '缺失联锁项处理', icon: CircleFadingPlus, children:[
+          // { label: '解除禁用联锁项', icon: LockOpen, level: 'warn',action: async () => modStore.healInterlock(modData.value.interlock_id) },
+          { label: '剔除失效联锁项', icon: Eraser, level: 'warn',action: async () => modStore.healInterlock(modData.value.interlock_id) },
+          { label: '订阅失效联锁项', icon: Flag, action: async () => appStore.subscribePackageIds(missingPackageIds) },
+          { label: '下载失效联锁项', icon: Download, action: async () => appStore.downloadPackageIds(missingPackageIds) }
+        ]
+      })
+    }
   }
   // 1. 获取所有选中 Mod 的当前问题并集
   const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);

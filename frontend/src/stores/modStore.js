@@ -21,11 +21,14 @@ export const useModStore = defineStore('mods', () => {
   const tempIds = ref([])             // 临时Mod列表
   const activeIds = ref([])           // 已激活Mod列表
   
+  const interlocksMap = ref(new Map()) // 联锁字典: Map<String(interlock_id), Array<String(package_ids)>>
+  const savedInactiveIds = ref([])   // 从后端拉取的历史停用顺序
   const savedActiveIds = ref([])      // 原始已激活列表快照（用于判断 列表变化）
   const activeLoadModifyTime = ref(0) // 已激活列表最后修改时间戳
 
   const conflictList = ref([])        // 重复包名冲突列表
   const coexistenceList = ref([])     // 共存Mod列表
+
   
   // 选择状态
   const selectedIds = ref([])         // 已选中的 Mod ID
@@ -158,7 +161,7 @@ export const useModStore = defineStore('mods', () => {
   }
 
   // --- 列表数据处理 ---
-  // 刷新未激活Mod列表
+  // 刷新未激活Mod列表 (实现“新Mod置顶，旧Mod持久，联锁聚拢”)
   const updateInactiveIds = () => {
     // 清理临时列表 (Temp - Active) （Temp列表 是前端的临时列表，防止与刷新后的 Active列表 出现重复项）
     const activeSet = new Set(activeIds.value)
@@ -169,20 +172,63 @@ export const useModStore = defineStore('mods', () => {
   const takeInactiveIds = () => {
     const activeSet = new Set(activeIds.value.map(id => id.toLowerCase()))
     const tempSet = new Set(tempIds.value.map(id => id.toLowerCase()))
-    
-    const result = []
+    // 1. 获取所有没在 active 和 temp 里的 Mod
+    const newMods = [] // 收集"新" Mod（未在保存的 inactive 列表中出现过）
+    // 建立旧顺序的查找索引 O(1)
+    const savedIndexMap = new Map()
+    savedInactiveIds.value.forEach((id, idx) => savedIndexMap.set(id.toLowerCase(), idx))
     for (const mod of allModsMap.value.values()) {
       const pid = mod.package_id.toLowerCase()
       if (!activeSet.has(pid) && !tempSet.has(pid)) {
-        result.push(mod.package_id)
+        if (!savedIndexMap.has(pid)) {
+          newMods.push(mod)
+        }
       }
     }
-    // 默认按名称排序，保证基础列表不乱
-    return result.sort((a, b) => {
-      const mA = allModsMap.value.get(a.toLowerCase())
-      const mB = allModsMap.value.get(b.toLowerCase())
-      return (mA?.name || a).localeCompare(mB?.name || b)
+    // 2. 将 "新 Mod" 按照文件创建时间/修改时间降序排列 (最新的在最前面)
+    newMods.sort((a, b) => {
+      const timeA = Math.max(a.file_create_time || 0, a.file_modify_time || 0)
+      const timeB = Math.max(b.file_create_time || 0, b.file_modify_time || 0)
+      return timeB - timeA
     })
+    const newModIds = newMods.map(m => m.package_id)
+    // 3. 将 "旧 Mod" 按照 savedInactiveIds 中的原始顺序排列
+    const oldModIds = savedInactiveIds.value.filter(id => {
+      const pid = id.toLowerCase()
+      return !activeSet.has(pid) && !tempSet.has(pid) && allModsMap.value.has(pid)
+    })
+    // 4. 基础合并
+    const baseInactive = [...newModIds, ...oldModIds]
+    const finalInactive = []
+    const processed = new Set()
+    // 建立查找表提升性能
+    const baseInactiveSet = new Set(baseInactive.map(id => id.toLowerCase()))
+    for (const id of baseInactive) {
+      const pid = id.toLowerCase()
+      if (processed.has(pid)) continue
+
+      const mod = allModsMap.value.get(pid)
+      // 如果属于某个联锁序列
+      if (mod && mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
+        const chain = interlocksMap.value[mod.interlock_id]
+        // 遍历该链条，把所有属于 inactive 列表的兄弟姐妹都拉过来，按链条固有顺序排列
+        for (const chainId of chain) {
+          const cid = chainId.toLowerCase()
+          if (baseInactiveSet.has(cid) && !processed.has(cid)) {
+            // 找到原始大小写格式的 ID 并存入
+            const originalId = baseInactive.find(orig => orig.toLowerCase() === cid) || chainId
+            finalInactive.push(originalId)
+            processed.add(cid)
+          }
+        }
+      } else {
+        // 独立 Mod，直接推入
+        finalInactive.push(id)
+        processed.add(pid)
+      }
+    }
+
+    return finalInactive
   }
   // 批量查询未知 PackageID 并将其作为幽灵项存入 Map
   const fetchAndCacheGhostMods = async (ids = []) => {
@@ -237,6 +283,8 @@ export const useModStore = defineStore('mods', () => {
   const setMods = (data) => {
     activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
     savedActiveIds.value = [...data.active_load_order] || []  // 保存原始顺序，用于判定排序变动
+    savedInactiveIds.value = [...data.inactive_load_order] || [] // 接收持久化停用顺序
+    interlocksMap.value = data.interlocks || {}             // 接收联锁字典
     activeLoadModifyTime.value = data.active_load_modify_time  // 排序文件修改时间（更新时间）
     
     // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
@@ -262,7 +310,6 @@ export const useModStore = defineStore('mods', () => {
     // 重新计算 Inactive列表 (排除 Active 和 Temp)（本质上 Temp列表 与 Inactive列表 一样，但在前端分出差异方便整理）
     updateInactiveIds()
     dataVersion.value++    // 更新数据版本号（刷新标记）
-
     // 初始化获取完所有模组后，如果 activeIds 中存在未知项，批量缓存它们！
     fetchAndCacheGhostMods(activeIds.value)
   }
@@ -323,58 +370,28 @@ export const useModStore = defineStore('mods', () => {
       // 如果该ID已经被包含在之前的某个链条中处理过了，直接跳过
       if (processed.has(currentId)) continue;
       const mod = takeModById(currentId);
-      // - 情况 A: 独立 Mod (无联锁)
-      // 快速路径，无需图遍历
-      if (!mod || (!mod.lock_previous_mod && !mod.lock_next_mod)) {
-        finalChunks.push({ index: i, items: [inputIds[i]] }); // 保持原ID大小写
+      // 如果这个 Mod 有 interlock_id，直接从全局字典里拿整个数组
+      if (mod && mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
+        const chainItems = interlocksMap.value[mod.interlock_id];
+        let anchorIndex = -1;
+        // 遍历整个链条，找出第一个在用户点击/圈选范围内的项，作为锚点位置
+        for (const chainId of chainItems) {
+          const pid = chainId.toLowerCase();
+          processed.add(pid); // 把整条链上的 ID 都标记为已处理
+          if (anchorIndex === -1 && inputMap.has(pid)) {
+            anchorIndex = inputMap.get(pid);
+          }
+        }
+        // 加入块中
+        finalChunks.push({ 
+          index: anchorIndex !== -1 ? anchorIndex : i, 
+          items: chainItems 
+        });
+      } else {
+        // 普通 Mod，无联锁
+        finalChunks.push({ index: i, items: [inputIds[i]] }); 
         processed.add(currentId);
-        continue;
       }
-      // - 情况 B: 联锁 Mod
-      // 1. 向前回溯找到链头 (Head)
-      let curr = currentId;
-      const visited = new Set(); // 防死锁
-      while (true) {
-        const m = takeModById(curr);
-        if (!m?.lock_previous_mod) break;
-        const prev = m.lock_previous_mod.toLowerCase();
-        if (visited.has(prev)) break; // 环路检测
-        visited.add(prev);
-        curr = prev;
-      }
-      const head = curr;
-      // 2. 从链头向后构建完整链条，并寻找“锚点”
-      const chainItems = [];
-      let anchorIndex = -1; // 整个链条将要插入的位置
-      curr = head;
-      visited.clear();
-      while (true) {
-        // 加入链条
-        const originalInputId = inputIds[inputMap.get(curr)];
-        chainItems.push(originalInputId || curr); // 优先用输入列表里的原始格式
-        // 【核心逻辑】：寻找锚点
-        // 从头到尾遍历链条，使用遇到的第一个“在输入列表中存在”的成员的位置作为锚点。
-        if (anchorIndex === -1 && inputMap.has(curr)) {
-          anchorIndex = inputMap.get(curr);
-        }
-        // 标记为已处理，防止外层循环重复处理
-        if (inputMap.has(curr)) {
-          processed.add(curr);
-        }
-        // 继续向后
-        const m = takeModById(curr);
-        if (!m?.lock_next_mod) break;
-        const next = m.lock_next_mod.toLowerCase();
-        if (visited.has(next)) break; // 环路检测
-        visited.add(next);
-        curr = next;
-      }
-      // 3. 将整个链条加入结果块
-      // 理论上 anchorIndex 一定存在，因为 currentId 本身就在链条里且在输入里
-      finalChunks.push({ 
-        index: anchorIndex, 
-        items: chainItems 
-      });
     }
     // 4. 排序并展平
     // 根据锚点索引重新排序块
@@ -687,30 +704,26 @@ export const useModStore = defineStore('mods', () => {
       await groupStore.groupAddMods(groupId, selectedIds.value)
     }
   }
+  // 获取 Mod 联锁链
+  const getModInterlockChain = (modId) => {
+    const mod = takeModById(modId);
+    if (!mod || !mod.interlock_id) return null;
+    return interlocksMap.value.get(mod.interlock_id) || null;
+  }
   // 批量设置 Mod 联锁
   const linkMods = async (modIds) => {
     if (!window.pywebview) return
     try {
-      // 更新本地状态
-      modIds.forEach((id, index) => {
-        const mod = takeModById(id)
-        if (mod) {
-          mod.lock_previous_mod = modIds[index-1] || null
-          mod.lock_next_mod = modIds[index+1] || null
-        }
-      })
       // 发送请求给后端
       const res = await window.pywebview.api.mods_link(modIds)
-      if (!checkResult(res, "批量设置 Mod 联锁", true)) {
+      if (checkResult(res, "设置 Mod 联锁", true)) {
         await appStore.refreshData();
-        return false
+        dataVersion.value++ // 数据版本+1，确保问题判断刷新
+        return true
       }
-      dataVersion.value++ // 数据版本+1，确保问题判断刷新
-      return true
     } catch (e) {
-      console.error("批量设置 Mod 联锁异常:", e)
-      toast.error(`批量设置 Mod 联锁异常: \n${e.message}`)
-      await appStore.refreshData()
+      console.error("设置 Mod 联锁异常:", e)
+      toast.error(`设置 Mod 联锁异常: \n${e.message}`)
       return false
     }
   }
@@ -718,27 +731,40 @@ export const useModStore = defineStore('mods', () => {
   const unlinkMods = async (modIds) => {
     if (!window.pywebview) return
     try {
-      // 更新本地状态
-      modIds.forEach(id => {
-        const mod = takeModById(id)
-        if (mod) {
-          mod.lock_previous_mod = null
-          mod.lock_next_mod = null
-        }
-      })
       const res = await window.pywebview.api.mods_unlink(modIds)
-      if (!checkResult(res, "批量解除 Mod 联锁", true)) {
+      if (checkResult(res, "解除 Mod 联锁", true)) {
         await appStore.refreshData();
-        return false
+        dataVersion.value++ // 数据版本+1，确保问题判断刷新
+        return true
       } 
-      dataVersion.value++ // 数据版本+1，确保问题判断刷新
-      return true
     } catch (e) {
-      console.error("批量解除 Mod 联锁异常:", e)
-      toast.error(`批量解除 Mod 联锁异常: \n${e.message}`)
-      await appStore.refreshData()
       return false
     }
+  }
+  // 修复断裂联锁
+  const healInterlock = async (interlock_id) => {
+    if (!window.pywebview || !interlock_id) return
+    appStore.isLoading = true
+    try {
+      const res = await window.pywebview.api.mods_interlock_heal(interlock_id)
+      if (checkResult(res, "修复断裂联锁", true)) {
+        await appStore.refreshData(); // 全局刷新数据
+        return true
+      }
+    } finally {
+      appStore.isLoading = false
+    }
+  }
+  // 获取断裂联锁的缺失成员
+  const getInterlockMissingDetails = async (interlock_id) => {
+    if (!window.pywebview || !interlock_id) return []
+    try {
+      const res = await window.pywebview.api.mods_interlock_missing_get(interlock_id)
+      if (checkResult(res, "获取联锁缺失项")) return res.data
+    } catch (e) {
+      console.error("获取联锁缺失项失败:", e)
+    }
+    return []
   }
   // 批量更新Mod用户数据
   const batchUpdateModsUserData = async (updatesList) => {
@@ -752,7 +778,6 @@ export const useModStore = defineStore('mods', () => {
           Object.assign(mod, u)
         }
       })
-      
       // 2. 发送请求给后端
       const res = await window.pywebview.api.mods_user_data_update(updatesList)
       if (!checkResult(res, "批量更新Mod数据", true)) {
@@ -771,7 +796,28 @@ export const useModStore = defineStore('mods', () => {
     }
   }
 
+  const interlockDetailsMap = ref({}) // { "interlock_id": [ {package_id, workshop_id, reason} ] }
+  const loadingInterlocks = new Set() // 记录当前正在请求中的 ID，防止并发风暴
+  const loadInterlockDetails = async (interlockId) => {
+    if (!interlockId || !window.pywebview) return
+    // 1. 如果已经缓存过，直接返回
+    if (interlockDetailsMap.value[interlockId]) return
+    // 2. 如果当前正在请求中，直接屏蔽
+    if (loadingInterlocks.has(interlockId)) return
 
+    loadingInterlocks.add(interlockId)
+    try {
+      const res = await window.pywebview.api.mods_interlock_missing_get(interlockId)
+      if (res.status === 'success') {
+        interlockDetailsMap.value[interlockId] = res.data
+        dataVersion.value++ // 驱动视图层重绘
+      }
+    } catch (e) {
+      console.error("加载联锁详情失败:", e)
+    } finally {
+      loadingInterlocks.delete(interlockId) // 请求结束，释放锁
+    }
+  }
   // --- 实时问题分析 ---
   // 排序问题检测器
   const modIssues = computed(() => {
@@ -966,7 +1012,29 @@ export const useModStore = defineStore('mods', () => {
 
       // E. 联锁检查 (Chain Check - Active)
       // 检查当前列表的前后是否符合 lock 要求
-      _checkChainLink(mod, i, activeIds.value, _add)
+      if (mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
+        const chain = interlocksMap.value[mod.interlock_id]
+        // 查找自己在这个联锁链条中的位置
+        const myChainIndex = chain.findIndex(id => id.toLowerCase() === currentId)
+        if (myChainIndex !== -1) {
+          // 检查前一个
+          if (myChainIndex > 0) {
+            const prevExpected = chain[myChainIndex - 1].toLowerCase()
+            if (i === 0 || activeIds.value[i - 1].toLowerCase() !== prevExpected) {
+              _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpected)
+            }
+          }
+          // 检查后一个
+          if (myChainIndex < chain.length - 1) {
+            const nextExpected = chain[myChainIndex + 1].toLowerCase()
+            if (i === len - 1 || activeIds.value[i + 1].toLowerCase() !== nextExpected) {
+              _add(currentId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpected)
+            }
+          }
+        }
+      }
 
       // F. 语言支持检查 (Language Support) - 仅当开关开启时
       if (checkLangEnabled && targetLang) {
@@ -1020,7 +1088,38 @@ export const useModStore = defineStore('mods', () => {
       }
 
     }
-
+    // 辅助：检查整个列表的联锁
+    const _checkListChain = (list) => {
+      const len = list.length
+      for (let i = 0; i < len; i++) {
+        const id = list[i].toLowerCase()
+        const mod = allModsMap.value.get(id)
+        if (mod && mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
+          const chain = interlocksMap.value[mod.interlock_id]
+          const myIdx = chain.findIndex(cid => cid.toLowerCase() === id)
+          if (myIdx !== -1) {
+            // A. 检查向上断裂 (期待的前一个元素不在我紧挨着的上方)
+            if (myIdx > 0) {
+              const prevExpected = chain[myIdx - 1].toLowerCase()
+              if (i === 0 || list[i-1].toLowerCase() !== prevExpected) {
+                // targetId 传入 prevExpected，方便组件识别这是 "前驱断裂"
+                _add(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpected)
+              }
+            }
+            // B. 检查向下断裂 (期待的后一个元素不在我紧挨着的下方)
+            if (myIdx < chain.length - 1) {
+              const nextExpected = chain[myIdx + 1].toLowerCase()
+              if (i === len - 1 || list[i+1].toLowerCase() !== nextExpected) {
+                // targetId 传入 nextExpected，方便组件识别这是 "后继断裂"
+                _add(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpected)
+              }
+            }
+          }
+        }
+      }
+    }
     // -------------------------------------------------
     // 3. 停用列表/临时列表 (Inactive/Temp Checks)
     // 范围：仅检查联锁完整性
@@ -1029,43 +1128,8 @@ export const useModStore = defineStore('mods', () => {
     _checkListChain(tempIds.value, _add)
     return issuesMap
   })
-  // 辅助：检查整个列表的联锁
-  const _checkListChain = (list, addFunc) => {
-    const len = list.length
-    for (let i = 0; i < len; i++) {
-      const id = list[i].toLowerCase()
-      const mod = allModsMap.value.get(id)
-      if (mod) {
-        _checkChainLink(mod, i, list, addFunc)
-      }
-    }
-  }
-  // 辅助：检查单个 Mod 的前后联锁
-  const _checkChainLink = (mod, index, list, addFunc) => {
-    const id = mod.package_id.toLowerCase()
-    
-    // 检查前一个
-    if (mod.lock_previous_mod) {
-      const prevId = mod.lock_previous_mod.toLowerCase()
-      // 如果我是列表第一个，或者前一个不是 lock_previous_mod
-      if (index === 0 || list[index - 1].toLowerCase() !== prevId) {
-        const prevName = displayModName(prevId)
-        addFunc(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁断裂^^：必须紧跟在 [[${prevName}]] 之后`, prevId)
-      }
-    }
 
-    // 检查后一个
-    if (mod.lock_next_mod) {
-      const nextId = mod.lock_next_mod.toLowerCase()
-      // 如果我是列表最后一个，或者后一个不是 lock_next_mod
-      if (index === list.length - 1 || list[index + 1].toLowerCase() !== nextId) {
-        const nextName = displayModName(nextId)
-        addFunc(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-          `^^联锁断裂^^：必须紧接 [[${nextName}]] 之前`, nextId)
-      }
-    }
-  }
+
   // 获取问题项目目标ID
   const getIssusTargetIds = (targetIds, issueType) => {
     const toActivate = new Set()
@@ -1246,7 +1310,7 @@ export const useModStore = defineStore('mods', () => {
 
   return {
     // State
-    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, 
+    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, interlocksMap, savedInactiveIds, interlockDetailsMap, 
     savedActiveIds, activeLoadModifyTime, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, 
 
@@ -1255,9 +1319,9 @@ export const useModStore = defineStore('mods', () => {
 
     // Actions
     setMods, reset, takeModById, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
-    updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive,
+    updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods,
-    updateModUserData, updateModTime, linkMods, unlinkMods, batchUpdateModsUserData,
+    updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds, getMissingLocalDependencies, getMissingLanguagePacks, 
   }
