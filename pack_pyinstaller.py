@@ -93,7 +93,11 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         )
 
         # 2. 构建命令
-        cmd = [
+        # 这些模块在源码运行时可以被 Python 正常动态发现，
+        # 但在 PyInstaller 单文件模式下，命名空间插件和动态加载模块经常会漏收。
+        # 这里显式补齐 tiktoken / tiktoken_ext，避免打包后出现：
+        # Unknown encoding cl100k_base / Plugins found: []
+        pyinstaller_args = [
             "uv", "run", "pyinstaller", # 使用uv运行pyinstaller
             "-F",  # 打包成单个文件
             # "-D",  # 打包成目录
@@ -102,7 +106,13 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "--contents-directory", "lib",
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
+            "--collect-binaries", "tiktoken",
             "--collect-data", "litellm",
+            "--collect-data", "tiktoken",
+            "--collect-submodules", "tiktoken",
+            "--collect-submodules", "tiktoken_ext",
+            "--hidden-import", "tiktoken_ext",
+            "--hidden-import", "tiktoken_ext.openai_public",
             
             # 排除一些可能导致问题的模块
             "--exclude-module", "setuptools",  # 排除这个模块， 避免打包时出现问题
@@ -114,6 +124,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "-n", name,  # 指定名称
             main_file  # 主程序文件
         ]
+        cmd = pyinstaller_args
 
         if icon_path and os.path.exists(icon_path):
             cmd.extend(["-i", icon_path])
