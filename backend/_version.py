@@ -1,11 +1,27 @@
 # backend/_version.py
-__version__ = "0.18.23"  # 主版本.次版本.补丁
+__version__ = "0.18.25"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.18.25",
+        "date": "2026-03-31",
+        "changes": [
+            { "type": "feature", "text": "全面支持 RimPy、RimSort、RMM 等多种主流加载序列格式的解析与 RML 格式导出，确保包名与工坊 ID 等元数据 完整保留。" },
+            { "type": "feature", "text": "升级引导系统至 2.0 版本，新增专项教程涵盖工作流、AI 配置、日志分析及规则中心等核心模块。" },
+            { "type": "feature", "text": "实现全新的热更新机制，支持在程序运行期间完成更新并自动清理冗余文件，降低安全软件误报风险。" },
+            { "type": "feature", "text": "优化环境切换流程，引入数据自动刷新环节，确保模组扫描前状态实时同步。" },
+            { "type": "feature", "text": "改进分组命名逻辑，提升管理灵活性。" },
+            { "type": "fix", "text": "修正自定义启动参数被错误截断的问题，确保参数处理的准确性。" },
+            { "type": "fix", "text": "修复环境克隆时的配置路径识别及停用模组顺序丢失问题。" },
+            { "type": "fix", "text": "解决外部存档解析过程中的数据同步失效问题。" },
+            { "type": "fix", "text": "修复分组搜索索引计算异常、拖拽操作导致的状态残留及引导中心显示逻辑错误。" },
+            { "type": "fix", "text": "修正冲突项删除异常，优化删除接口的输入兼容性。" }
+        ]
+    },
     {
         "version": "0.18.23",
         "date": "2026-03-29",
