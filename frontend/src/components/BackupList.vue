@@ -62,7 +62,7 @@
       </div> -->
       <CommonSelect v-model="selectedBackupProfileId" mini  placeholder="选择环境" description="切换其它环境备份"
         :options="backupProfileOptions" @change="handleBackupProfileChange" />
-      <button @click="loadOrder('0')" v-tooltip="'导入Mod加载序列（支持 存档.rws / 序列.xml）'" 
+      <button @click="loadOrder('0')" v-tooltip="'导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'" 
         class="rounded-lg hover:bg-text-main/5 size-7 text-text-dim cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 transition-all duration-300">
         <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
       </button>
@@ -93,7 +93,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            @click="exportModList()" v-tooltip="'导出为 ModList.xml（含包名和工坊ID）'" >
+            @click="exportRml()" v-tooltip="'导出为 RML 游戏原生格式（含包名和工坊ID）'" >
             <span class="relative only:-mx-6">
               <svg class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="m648-140 112-112v92h40v-160H640v40h92L620-168l28 28Zm-448 20q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Z"/></svg>
             </span>
@@ -359,11 +359,13 @@ const dataCount = computed(() => {
 })
 
 // 辅助：从文件名解析时间
-// 格式: ModsConfig_YYYYMMDD_HHMMSS.xml / ModList_YYYYMMDD_HHMMSS.xml
+// 格式: ModsConfig_YYYYMMDD_HHMMSS.xml / ModList_YYYYMMDD_HHMMSS.xml / RML_YYYYMMDD_HHMMSS.rml
 const parseFileTime = (filename) => {
-    const match = filename.match(/(?:ModsConfig|ModList)_(\d{8})_(\d{6})\.xml/i)
+    const match = filename.match(/(?:ModsConfig|ModList)_(\d{8})_(\d{6})\.xml|RML_(\d{8})_(\d{6})\.rml/i)
     if (match) {
-        return parse(`${match[1]}${match[2]}`, 'yyyyMMddHHmmss', new Date())
+        const datePart = match[1] || match[3]
+        const timePart = match[2] || match[4]
+        return parse(`${datePart}${timePart}`, 'yyyyMMddHHmmss', new Date())
     }
     return null
 }
@@ -374,8 +376,8 @@ const backupRulesTooltip = computed(() => {
 ^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。
 ^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。
 ^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。
-__自动备份文件格式：ModsConfig_YYYYMMDD_HHMMSS.xml__
-__手动导出支持：ModsConfig.xml / ModList.xml__`
+__自动列表备份格式：RML_YYYYMMDD_HHMMSS.rml__
+__手动导出支持：ModsConfig.xml / ModList.rml__`
 })
 
 // 核心：处理数据并生成显示文本
@@ -392,7 +394,13 @@ const parsedData = computed(() => {
       const formatLabelMap = {
         modsconfig: 'ModsConfig',
         modlist: 'ModList',
-        savegame: 'Save'
+        rml: 'RML',
+        savegame: 'Save',
+        rimpy_xml: 'RimPy',
+        rimsort_json: 'RimSort',
+        plain_text: 'Text',
+        workshop_ids: 'Workshop',
+        rmm_json: 'RMM JSON',
       }
       const formatLabel = formatLabelMap[file.format] || ''
 
@@ -415,12 +423,12 @@ const parsedData = computed(() => {
           else if (diffDays === 2) distanceNow = '前天'
           else distanceNow = `${diffDays} 天前`
         } else if (!displayTitle) {
-          // Other: 直接显示文件名去后缀
-          displayTitle = name.replace(/\.(xml|rws)$/i, '')
+          // Other: 直接显示文件名去后缀。这里把常见导入扩展名一起处理掉。
+          displayTitle = name.replace(/\.(xml|rws|json|txt|list|rml)$/i, '')
         }
       } else {
         // 如果是 other 或无法解析时间，直接显示文件名去后缀
-        displayTitle = displayTitle || name.replace(/\.(xml|rws)$/i, '')
+        displayTitle = displayTitle || name.replace(/\.(xml|rws|json|txt|list|rml)$/i, '')
       }
 
       return {
@@ -435,6 +443,9 @@ const parsedData = computed(() => {
         formatLabel,
         list_name: file.list_name,
         source_profile_id: file.source_profile_id || '',
+        warnings: file.warnings || [],
+        errors: file.errors || [],
+        workshop_ids: file.workshop_ids || [],
       }
     }).sort((a, b) => {
       // 按时间倒序
@@ -536,6 +547,10 @@ const exportModList = async (path) => {
   // ModList.xml 会额外写出名称和工坊ID，适合分享和后续订阅缺失项。
   await exportOrder(path, 'modlist')
 }
+const exportRml = async (path) => {
+  // RML 更接近 RimWorld 自己导出的列表格式，也被自动备份流程复用。
+  await exportOrder(path, 'rml')
+}
 // 从导入列表加载
 const loadOrder = async (path) => {
   // 调用后端加载接口
@@ -544,6 +559,9 @@ const loadOrder = async (path) => {
     // console.log(data)
     // 临时导入列表按路径去重，避免同一个外部文件重复堆叠。
     rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]
+    if ((data.errors || []).length > 0) {
+      console.warn('导入文件包含解析错误:', data.errors)
+    }
     appStore.uiState.showDiffDrawer = true
   }
   refresh(selectedBackupProfileId.value)

@@ -348,10 +348,23 @@ class FileManager:
         return None
 
     @staticmethod
-    def select_file_dialog(initial_dir='', file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def select_file_dialog(
+        initial_dir='',
+        file_types=(
+            'Load Order Files (*.xml;*.rws;*.rml;*.json;*.txt;*.list)',
+            'XML Files (*.xml;*.rws;*.rml)',
+            'JSON Files (*.json)',
+            'Text Files (*.txt;*.list)',
+            'All Files (*.*)',
+        ),
+    ):
         """
         打开系统原生的文件选择框
-        file_types 示例: ('XML Files (*.xml;*.rws)', 'All Files (*.*)')
+        file_types 示例:
+        (
+            'Load Order Files (*.xml;*.rws;*.rml;*.json;*.txt;*.list)',
+            'All Files (*.*)'
+        )
         """
         # 如果是文件路径则取目录，不是则设为空字符串
         path = os.path.dirname(initial_dir) if os.path.isfile(initial_dir) else initial_dir
@@ -371,7 +384,11 @@ class FileManager:
         return None
     
     @staticmethod
-    def save_file_dialog(initial_dir='', default_filename='ModsConfig.xml', file_types=('XML Files (*.xml)', 'All Files (*.*)')):
+    def save_file_dialog(
+        initial_dir='',
+        default_filename='ModsConfig.xml',
+        file_types=('XML Files (*.xml)', 'RML Files (*.rml)', 'All Files (*.*)'),
+    ):
         """
         打开系统原生的文件保存框
         """

@@ -40,7 +40,7 @@
         <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-text-main/10 shadow-2xl backdrop-blur-lg opacity-0 
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
           <button @click="loadOrder('0')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'导入Mod加载序列（支持 存档.rws / 序列.xml）'" >
+            v-tooltip="'导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'" >
             导入加载序列
           </button>
           <button @click="exportOrder()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
@@ -50,6 +50,10 @@
           <button @click="exportOrder(null,'modlist')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
             v-tooltip="'导出为 ModList.xml（含包名和工坊ID）'" >
             导出分享列表
+          </button>
+          <button @click="exportOrder(null,'rml')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
+            v-tooltip="'导出为 RML（游戏原生导出格式）'" >
+            导出原生分享
           </button>
         </div>
       </div>
@@ -122,12 +126,7 @@ const exportOrder = async (path, format='modsconfig') => {
   refresh()
 }
 const refresh = async () => {
-  loading.value = true
-  try {
-    await orderStore.getBackups(orderStore.backupProfileId)
-  } finally {
-    loading.value = false
-  }
+  await orderStore.getBackups(orderStore.backupProfileId)
 }
 </script>
 

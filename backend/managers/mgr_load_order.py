@@ -4,6 +4,14 @@ import glob
 import datetime
 from pathlib import Path
 from typing import Any
+from backend.load_order import (
+    FORMAT_MODLIST,
+    FORMAT_MODSCONFIG,
+    FORMAT_RML,
+    FORMAT_SAVEGAME,
+    ParsedLoadOrderData,
+    parse_load_order_file,
+)
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 
@@ -25,10 +33,19 @@ from backend.settings import settings
 from lxml import html
 etree = html.etree
 
-# 统一的排序文件格式标识，供后端解析结果和前端展示共用。
-EXPORT_FORMAT_MODSCONFIG = "modsconfig"
-EXPORT_FORMAT_MODLIST = "modlist"
-IMPORT_FORMAT_SAVEGAME = "savegame"
+EXPORT_FORMAT_MODSCONFIG = FORMAT_MODSCONFIG
+EXPORT_FORMAT_MODLIST = FORMAT_MODLIST
+EXPORT_FORMAT_RML = FORMAT_RML
+IMPORT_FORMAT_SAVEGAME = FORMAT_SAVEGAME
+
+# load order 导入支持的文件类型，供 API 层弹原生文件选择框时复用。
+LOAD_ORDER_OPEN_FILE_TYPES = (
+    'Load Order Files (*.xml;*.rws;*.rml;*.json;*.txt;*.list)',
+    'XML Files (*.xml;*.rws;*.rml)',
+    'JSON Files (*.json)',
+    'Text Files (*.txt;*.list)',
+    'All Files (*.*)',
+)
 
 class LoadOrderManager:
     """
@@ -80,27 +97,6 @@ class LoadOrderManager:
         if not value or value == "0":
             return None
         return value
-
-    def _read_list_values(self, root, *xpaths: str) -> list[str]:
-        # 多种格式节点路径不同，这里按候选 XPath 依次兼容读取。
-        for xpath in xpaths:
-            nodes = root.xpath(xpath)
-            if not nodes:
-                continue
-            parent = nodes[0]
-            return [str(li.text).strip() if li.text else "" for li in parent.findall("li")]
-        return []
-
-    def _read_single_text(self, root, *xpaths: str) -> str:
-        # 单值节点也按候选 XPath 兼容，主要用于 ModList 的 Name。
-        for xpath in xpaths:
-            nodes = root.xpath(xpath)
-            if not nodes:
-                continue
-            text = getattr(nodes[0], "text", None)
-            if text:
-                return str(text).strip()
-        return ""
 
     def _build_mod_entries(self, mod_ids: list[str], mod_names: list[str] | None = None, mod_workshop_ids: list[str] | None = None):
         
@@ -219,48 +215,25 @@ class LoadOrderManager:
 
         return entries
 
-    def _parse_load_order_file(self, mods_config_file_path: str):
+    def _build_entries_from_parsed(self, parsed: ParsedLoadOrderData):
         """
-        解析排序文件，返回 Mod ID、名称和工坊ID 列表。
+        把纯解析结果转成当前项目内部使用的结构化 mod 条目。
+
+        `backend.load_order` 不依赖数据库，也不关心当前 profile；
+        这里才是“结合本项目上下文补全信息”的地方。
         """
-        # 三种格式最终都归一成同一份结构，前端不再关心原始 XML 长什么样。
-        parser = etree.XMLParser(recover=True)
-        tree = etree.parse(mods_config_file_path, parser)
-        root = tree.getroot()
-        tag_name = str(getattr(root, "tag", "")).lower()
-
-        format_name = EXPORT_FORMAT_MODSCONFIG
-        list_name = Path(mods_config_file_path).stem
-        mod_ids: list[str] = []
-        mod_names: list[str] = []
-        mod_workshop_ids: list[str] = []
-
-        # 存档 .rws 的排序信息位于 savegame/meta。
-        if tag_name == "savegame" or root.xpath("//meta/modIds"):
-            format_name = IMPORT_FORMAT_SAVEGAME
-            mod_ids = self._read_list_values(root, "./meta/modIds", "//meta/modIds")
-            mod_names = self._read_list_values(root, "./meta/modNames", "//meta/modNames")
-            mod_workshop_ids = self._read_list_values(root, "./meta/modSteamIds", "//meta/modSteamIds")
-        # ModList.xml 会显式带出 Name、modNames 和 modSteamWorkshopIds。
-        elif tag_name == "modlist" or root.xpath("//modSteamWorkshopIds") or (root.xpath("//modIds") and root.xpath("//modNames")):
-            format_name = EXPORT_FORMAT_MODLIST
-            list_name = self._read_single_text(root, "./Name", "//Name") or list_name
-            mod_ids = self._read_list_values(root, "./modIds", "//modIds")
-            mod_names = self._read_list_values(root, "./modNames", "//modNames")
-            mod_workshop_ids = self._read_list_values(root, "./modSteamWorkshopIds", "//modSteamWorkshopIds")
-        # ModsConfig.xml 只有 activeMods，需要后续再从数据库补名称和工坊ID。
-        elif tag_name == "modsconfigdata" or root.xpath("//activeMods"):
-            format_name = EXPORT_FORMAT_MODSCONFIG
-            mod_ids = self._read_list_values(root, "./activeMods", "//activeMods")
-        else:
-            raise ValueError(f"无法识别的排序文件格式: {mods_config_file_path}")
-
-        mods = self._enrich_mod_entries(self._build_mod_entries(mod_ids, mod_names, mod_workshop_ids))
+        mods = self._enrich_mod_entries(
+            self._build_mod_entries(parsed.package_ids, parsed.mod_names, parsed.workshop_ids)
+        )
         return {
-            "format": format_name,
-            "list_name": list_name,
+            "format": parsed.format,
+            "list_name": parsed.list_name,
             "mods": mods,
             "active_mods": [entry["package_id"] for entry in mods],
+            "mod_names": [entry.get("name") or entry.get("package_id_raw") or entry.get("package_id") for entry in mods],
+            "mod_steam_workshop_ids": [entry.get("workshop_id") or "0" for entry in mods],
+            "warnings": list(parsed.warnings),
+            "errors": list(parsed.errors),
         }
 
     def _build_export_entries(self, active_ids, use_raw_ids: bool = False):
@@ -280,9 +253,17 @@ class LoadOrderManager:
     def _default_export_name(self, export_format: str):
         # 不同格式使用不同默认文件名前缀，方便用户区分来源。
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        if export_format == EXPORT_FORMAT_RML:
+            return f"ModList_{timestamp}.rml"
         if export_format == EXPORT_FORMAT_MODLIST:
             return f"ModList_{timestamp}.xml"
         return f"ModsConfig_{timestamp}.xml"
+
+    def _get_save_file_types(self, export_format: str):
+        # 保存对话框根据目标格式切换默认过滤器，避免用户手动改后缀。
+        if export_format == EXPORT_FORMAT_RML:
+            return ('RML Files (*.rml)', 'All Files (*.*)')
+        return ('XML Files (*.xml)', 'All Files (*.*)')
 
     def _write_modlist_file(self, write_path: str, entries: list[dict], list_name: str):
         # ModList.xml 需要显式写出名称和工坊ID，后续导入时才能直接一键订阅。
@@ -298,6 +279,45 @@ class LoadOrderManager:
             etree.SubElement(mod_ids_node, "li").text = entry.get("package_id_raw") or entry.get("package_id")
             etree.SubElement(mod_names_node, "li").text = entry.get("name") or entry.get("package_id_raw") or entry.get("package_id")
             etree.SubElement(workshop_ids_node, "li").text = entry.get("workshop_id") or "0"
+
+        tree = etree.ElementTree(root)
+        tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+
+    def _write_rml_file(self, write_path: str, entries: list[dict]):
+        """
+        写出 RimWorld 原生 `.rml` 列表。
+
+        之所以把自动备份切到 RML，是因为它保留了：
+        - package_id
+        - workshop_id
+        - 模组名称
+        - gameVersion
+        并且更贴近游戏自己的列表格式。
+        """
+
+        root = etree.Element("savedModList")
+        meta_node = etree.SubElement(root, "meta")
+        game_version_node = etree.SubElement(meta_node, "gameVersion")
+        game_version_node.text = self.context.game_version or ""
+
+        mod_ids_node = etree.SubElement(meta_node, "modIds")
+        mod_steam_ids_node = etree.SubElement(meta_node, "modSteamIds")
+        mod_names_node = etree.SubElement(meta_node, "modNames")
+
+        mod_list_node = etree.SubElement(root, "modList")
+        ids_node = etree.SubElement(mod_list_node, "ids")
+        names_node = etree.SubElement(mod_list_node, "names")
+
+        for entry in entries:
+            package_id = entry.get("package_id_raw") or entry.get("package_id") or ""
+            display_name = entry.get("name") or package_id
+            workshop_id = entry.get("workshop_id") or "0"
+
+            etree.SubElement(mod_ids_node, "li").text = package_id
+            etree.SubElement(mod_steam_ids_node, "li").text = workshop_id
+            etree.SubElement(mod_names_node, "li").text = display_name
+            etree.SubElement(ids_node, "li").text = package_id
+            etree.SubElement(names_node, "li").text = display_name
 
         tree = etree.ElementTree(root)
         tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
@@ -321,30 +341,41 @@ class LoadOrderManager:
                 'list_name': Path(mods_config_file_path).stem if mods_config_file_path else '',
                 'mods': [],
                 'mod_names': [],
-                'mod_steam_workshop_ids': []
+                'mod_steam_workshop_ids': [],
+                'workshop_ids': [],
+                'warnings': [],
+                'errors': [],
             }
         modify_time = int(os.path.getmtime(mods_config_file_path)*1000)
         try:
-            parsed = self._parse_load_order_file(mods_config_file_path)
+            parsed = parse_load_order_file(mods_config_file_path)
+            parsed_result = self._build_entries_from_parsed(parsed)
         except Exception as e:
             logger.error(f"读取排序文件时出错: {e}")
             # 解析失败时返回空结果而不是抛异常，
             # 由 API 层决定对前端提示“解析失败”。
-            parsed = {
+            parsed_result = {
                 "format": EXPORT_FORMAT_MODSCONFIG,
                 "list_name": Path(mods_config_file_path).stem,
                 "mods": [],
                 "active_mods": [],
+                "mod_names": [],
+                "mod_steam_workshop_ids": [],
+                "warnings": [],
+                "errors": [str(e)],
             }
 
         return {
-            'active_mods': parsed.get('active_mods', []),
+            'active_mods': parsed_result.get('active_mods', []),
             'modify_time': modify_time,
-            'format': parsed.get('format', EXPORT_FORMAT_MODSCONFIG),
-            'list_name': parsed.get('list_name', Path(mods_config_file_path).stem),
-            'mods': parsed.get('mods', []),
-            'mod_names': [entry.get('name') or entry.get('package_id_raw') or entry.get('package_id') for entry in parsed.get('mods', [])],
-            'mod_steam_workshop_ids': [entry.get('workshop_id') or '0' for entry in parsed.get('mods', [])],
+            'format': parsed_result.get('format', EXPORT_FORMAT_MODSCONFIG),
+            'list_name': parsed_result.get('list_name', Path(mods_config_file_path).stem),
+            'mods': parsed_result.get('mods', []),
+            'mod_names': parsed_result.get('mod_names', []),
+            'mod_steam_workshop_ids': parsed_result.get('mod_steam_workshop_ids', []),
+            'workshop_ids': parsed.workshop_ids if 'parsed' in locals() else [],
+            'warnings': parsed_result.get('warnings', []),
+            'errors': parsed_result.get('errors', []),
         }
 
     def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, use_raw_ids=False, export_format: str = EXPORT_FORMAT_MODSCONFIG, list_name: str | None = None):
@@ -353,11 +384,11 @@ class LoadOrderManager:
         :param active_ids: Mod ID 列表
         :param target_path: 指定保存路径（绝对路径）。如果不传，默认覆盖游戏配置。
         :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
-        :param export_format: 导出格式，支持 ModsConfig.xml / ModList.xml
+        :param export_format: 导出格式，支持 ModsConfig.xml / ModList.xml / RML
         :param list_name: 导出 ModList.xml 时写入的 Name
         """
         export_format = str(export_format or EXPORT_FORMAT_MODSCONFIG).strip().lower()
-        if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST}:
+        if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST, EXPORT_FORMAT_RML}:
             raise ValueError(f"不支持的导出格式: {export_format}")
         # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
         entries = self._build_export_entries(active_ids, use_raw_ids=use_raw_ids)
@@ -372,6 +403,7 @@ class LoadOrderManager:
             selected = FileManager.save_file_dialog(
                 initial_dir=parent_dir or self.other_dir,
                 default_filename=default_name,
+                file_types=self._get_save_file_types(export_format),
             )
             logger.info(f"用户选择保存路径: {selected}")
             if not selected: return 
@@ -387,7 +419,7 @@ class LoadOrderManager:
                     logger.error(f"无法创建目录: {parent_dir}")
                     raise Exception(f"无法创建目录: {parent_dir}")
             write_path = target_path
-        elif export_format == EXPORT_FORMAT_MODLIST:
+        elif export_format in {EXPORT_FORMAT_MODLIST, EXPORT_FORMAT_RML}:
             write_path = os.path.join(self.other_dir, default_name)
         if not write_path: raise Exception("未指定有效保存路径")
         resolved_list_name = (list_name or Path(write_path).stem or default_name).strip()
@@ -402,6 +434,10 @@ class LoadOrderManager:
                 # ModList.xml 是完全新建的导出文件，不需要继承现有 ModsConfig.xml 结构。
                 self._write_modlist_file(write_path, entries, resolved_list_name)
                 logger.info(f"成功导出 {len(entries)} 个模组到 ModList.xml: {write_path}")
+            elif export_format == EXPORT_FORMAT_RML:
+                # RML 更接近 RimWorld 自己的列表格式，也适合作为长期可读的备份格式。
+                self._write_rml_file(write_path, entries)
+                logger.info(f"成功导出 {len(entries)} 个模组到 RML: {write_path}")
             else:
                 # 尝试保留原有的 knownExpansions 等信息
                 parser = etree.XMLParser(remove_blank_text=True)
@@ -429,8 +465,8 @@ class LoadOrderManager:
                     li.text = mod_id # 注意：写入时可能需要恢复原始大小写，但RimWorld通常不敏感
                 # 4. 格式化写入
                 tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
-                # 同步备份到 backup_root
-                self._write_modlist_file(os.path.join(self.backup_root, f'Latest_ModList.xml'), entries, resolved_list_name)
+                # 同步一份最近备份，改用 RML 格式，方便后续完整恢复和识别。
+                self._write_rml_file(os.path.join(self.backup_root, "Latest_ModList.rml"), entries)
                 logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
             
@@ -443,7 +479,7 @@ class LoadOrderManager:
         [核心重构] 备份当前磁盘上的旧状态：
         1. 读取磁盘上现有的 ModsConfig.xml。
         2. 解析并利用数据库补全元数据（Name, WorkshopID）。
-        3. 以 ModList 格式存入备份目录。
+        3. 以 RML 格式存入备份目录。
         """
         # 只有当旧文件存在时才有备份价值
         old_file_path = self.context.mods_config_file
@@ -458,16 +494,15 @@ class LoadOrderManager:
             mtime = os.path.getmtime(old_file_path)
             dt = datetime.datetime.fromtimestamp(mtime)
             timestamp = dt.strftime("%Y%m%d_%H%M%S")
-            filename = f"ModList_{timestamp}.xml"
+            filename = f"ModList_{timestamp}.rml"
             dest_path = os.path.join(self.today_dir, filename)
             # 3. 如果已经存在同时间戳的备份，说明文件没变动，跳过
             if os.path.exists(dest_path): return
             # 4. 准备全量元数据条目 (利用 old_data 中已经补全好的 mods 列表)
             entries = old_data.get('mods', [])
-            # 5. 写入 ModList 格式
-            list_name = f"BeforeSave_{timestamp}"
-            self._write_modlist_file(dest_path, entries, list_name)
-            logger.info(f"Successfully backed up previous state to ModList format: {filename}")
+            # 5. 写入 RML 格式
+            self._write_rml_file(dest_path, entries)
+            logger.info(f"Successfully backed up previous state to RML format: {filename}")
         except Exception as e:
             logger.error(f"Failed to create pre-save backup: {e}")
 
@@ -480,7 +515,7 @@ class LoadOrderManager:
         """
         today_str = datetime.date.today().strftime("%Y%m%d")
         # 1. 移动过期的 today -> earlier
-        files = glob.glob(os.path.join(self.today_dir, "*.xml"))
+        files = glob.glob(os.path.join(self.today_dir, "*.xml")) + glob.glob(os.path.join(self.today_dir, "*.rml"))
         # 按日期分组文件的辅助字典 { "20231101": ["path1", "path2"] }
         files_by_date = {}
         for f in files:
@@ -512,7 +547,7 @@ class LoadOrderManager:
         # 2. 清理 earlier 中超过保留天数的文件
         # 假设保留天数在 settings 中
         retention_days = settings.config.backup_retention_days
-        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml"))
+        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml")) + glob.glob(os.path.join(self.earlier_dir, "*.rml"))
         cutoff_date = datetime.date.today() - datetime.timedelta(days=retention_days)
         cutoff_str = cutoff_date.strftime("%Y%m%d")
         for f in earlier_files:
@@ -527,10 +562,10 @@ class LoadOrderManager:
 
     def get_all_backups(self):
         """获取所有备份文件路径"""
-        today_files = glob.glob(os.path.join(self.today_dir, "*.xml"))
-        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml"))
-        other_files = glob.glob(os.path.join(self.other_dir, "*.xml"))
-        last_backup_file = Path(self.backup_root) / "Latest_ModList.xml"
+        today_files = glob.glob(os.path.join(self.today_dir, "*.xml")) + glob.glob(os.path.join(self.today_dir, "*.rml"))
+        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml")) + glob.glob(os.path.join(self.earlier_dir, "*.rml"))
+        other_files = glob.glob(os.path.join(self.other_dir, "*.xml")) + glob.glob(os.path.join(self.other_dir, "*.rml"))
+        last_backup_file = Path(self.backup_root) / "Latest_ModList.rml"
         if not last_backup_file.is_file():
             last_backup_file = ''
         

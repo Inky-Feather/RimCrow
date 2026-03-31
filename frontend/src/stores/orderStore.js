@@ -21,6 +21,9 @@ export const useOrderStore = defineStore('order', () => {
   const currentBackupFormat = ref('') // 当前备份文件格式
   const currentBackupName = ref('')   // 当前备份/导入列表名称
   const currentBackupSourceProfileId = ref('') // 当前对比文件来源于哪个环境；空串表示外部导入
+  const currentBackupWorkshopIds = ref([]) // 文件中直接给出的 workshop id 列表
+  const currentBackupWarnings = ref([]) // 解析时的非致命提示
+  const currentBackupErrors = ref([])   // 解析时的错误信息
 
   const backupNameMap = computed(() => {
     // 记录“包名 -> 导入文件中的显示名称”，供差异视图在本地缺失时兜底显示。
@@ -38,12 +41,15 @@ export const useOrderStore = defineStore('order', () => {
     })
   })
   const missingBackupWorkshopIds = computed(() => {
-    // 优先使用文件里自带的 workshop_id，避免再走一次包名反查。
-    return [...new Set(
+    // 优先使用结构化 mod 明细中的 workshop_id。
+    const idsFromMods = [...new Set(
       missingBackupMods.value
         .map(mod => String(mod.workshop_id || '').trim())
         .filter(Boolean)
     )]
+
+    // 对于“只有工坊 ID、没有 package_id”的导入文件，也要保留这些显式 ID。
+    return [...new Set([...currentBackupWorkshopIds.value, ...idsFromMods])]
   })
   const missingBackupPackageIds = computed(() => {
     // 没有 workshop_id 的缺失项保留 package_id，后面再向后端静默反查。
@@ -70,6 +76,9 @@ export const useOrderStore = defineStore('order', () => {
     currentBackupFormat.value = order.format || ''
     currentBackupName.value = order.list_name || ''
     currentBackupSourceProfileId.value = order.source_profile_id || ''
+    currentBackupWorkshopIds.value = order.workshop_ids || []
+    currentBackupWarnings.value = order.warnings || []
+    currentBackupErrors.value = order.errors || []
   }
   const clearBackupOrder = () => {
     setBackupOrder({}, '')
@@ -104,14 +113,25 @@ export const useOrderStore = defineStore('order', () => {
       // 除了 active_ids 之外，还要把格式、列表名和结构化明细一起缓存下来，
       // 后面 diff 抽屉显示标题、名称和一键订阅都依赖这些字段。
       setBackupOrder(order, mods_config_file_path)
-      // 加载外部存档文件时解析未知项
-      modStore.fetchAndCacheGhostMods(order.activeIds)
+      // 这里统一使用 active_ids；旧字段 activeIds 容易在重构时漏掉。
+      if ((order.active_ids || []).length > 0) {
+        modStore.fetchAndCacheGhostMods(order.active_ids)
+      }
+
+      // 解析器已经把“可读但不致命”的问题放在 warnings 里，这里直接提示用户。
+      if ((order.warnings || []).length > 0) {
+        toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
+      }
+
       return {
         path: currentBackupFile.value,
         modify_time: backupLoadModifyTime.value,
         format: currentBackupFormat.value,
         list_name: currentBackupName.value,
         source_profile_id: currentBackupSourceProfileId.value,
+        workshop_ids: [...currentBackupWorkshopIds.value],
+        warnings: [...currentBackupWarnings.value],
+        errors: [...currentBackupErrors.value],
       }
       // toast.success("备份Mod序列已加载")
     }
@@ -261,7 +281,7 @@ export const useOrderStore = defineStore('order', () => {
 
 
   return {
-    backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId,
+    backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, missingBackupMods, missingBackupWorkshopIds, missingBackupPackageIds, missingBackupSubscribableCount,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
     getFileOrder, subscribeMissingBackupMods, setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups,
