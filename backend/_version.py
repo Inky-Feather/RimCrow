@@ -1,11 +1,20 @@
 # backend/_version.py
-__version__ = "0.18.25"  # 主版本.次版本.补丁
+__version__ = "0.18.26"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.18.26",
+        "date": "2026-03-31",
+        "changes": [
+        { "type": "fix", "text": "修正辅助工具模组版本兼容性，支持物理路径存在性与游戏版本兼容性校验，并增加相关快捷开关。" },
+        { "type": "optimize", "text": "优化了部分前端响应结果。" },
+        { "type": "optimize", "text": "精简冗余依赖组件，缩减程序整体打包体积。" }
+        ]
+    },
     {
         "version": "0.18.25",
         "date": "2026-03-31",

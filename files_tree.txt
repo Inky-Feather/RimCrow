@@ -1,6 +1,13 @@
 ·[RimModManager]
 ├── ·[.history]
 ├── ·[backend]
+│   ├── ·[ai]
+│   │   ├──  __init__.py
+│   │   ├──  llm_gateway.py
+│   │   ├──  prompts.py
+│   │   ├──  service.py
+│   │   └──  tools.py
+│   │   
 │   ├── ·[database]
 │   │   ├──  __init__.py
 │   │   ├──  dao.py
@@ -17,10 +24,6 @@
 │   │   
 │   ├── ·[managers]
 │   │   ├──  __init__.py
-│   │   ├──  mgr_ai.py
-│   │   ├──  mgr_ai_llm_gateway.py
-│   │   ├──  mgr_ai_prompts.py
-│   │   ├──  mgr_ai_tools.py
 │   │   ├──  mgr_download.py
 │   │   ├──  mgr_files.py
 │   │   ├──  mgr_game.py
