@@ -55,7 +55,7 @@ from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
-from backend.managers.mgr_ai import AIManager
+from backend.ai.service import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 # from backend.managers.mgr_workshop_db_old import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo

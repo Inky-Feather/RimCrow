@@ -1,4 +1,4 @@
-# backend/managers/mgr_ai_llm_gateway.py
+# backend/ai/llm_gateway.py
 """
 统一封装 LiteLLM / OpenAI SDK 的 AI 网关。
 

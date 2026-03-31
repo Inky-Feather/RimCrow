@@ -16,8 +16,8 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-from backend.managers.mgr_ai_tools import AIToolExecutor
-from backend.managers.mgr_ai_prompts import PromptManager
+from backend.ai.tools import AIToolExecutor
+from backend.ai.prompts import PromptManager
 
 # 禁用远程模型成本映射
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
@@ -28,7 +28,7 @@ from backend.settings import DATA_DIR, AIConfig, settings
 from backend.utils.logger import logger
 from backend.utils.constants import get_lang_by_code
 from backend.utils.event_bus import EventBus
-from backend.managers.mgr_ai_llm_gateway import LiteLLMGateway
+from backend.ai.llm_gateway import LiteLLMGateway
 
 
 DIAGNOSTIC_MAX_LOOPS = 10
