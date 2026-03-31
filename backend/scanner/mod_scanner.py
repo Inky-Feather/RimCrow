@@ -460,6 +460,7 @@ class ModScanner:
             else: 
                 mod_data['package_id_raw'] = f'Ludeon.RimWorld.{folder.capitalize()}'
             mod_data['package_id'] = mod_data['package_id_raw'].lower()
+            pkg_id = mod_data['package_id']
 
         if not pkg_id: return None
         

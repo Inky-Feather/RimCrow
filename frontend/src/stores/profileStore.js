@@ -88,7 +88,9 @@ export const useProfileStore = defineStore('profile', () => {
         const modStore = useModStore()
         modStore.reset()
         groupStore.reset()
-        // 2. 重新从后端拉取新环境的上下文数据 (Mods, Groups, Settings)
+        // 2. 先立即拉取一次新环境上下文，确保停用列表等持久化状态即时恢复
+        await appStore.refreshData()
+        // 3. 再后台触发一次扫描，补齐该环境的 DLC / Local / Workshop 实际磁盘状态
         await modStore.scanMods()
         toast.success(`已切换至环境: ${currentProfile.value?.name || profileId}`)
       }

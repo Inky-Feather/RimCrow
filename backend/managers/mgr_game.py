@@ -93,7 +93,7 @@ class GameManager:
             raise Exception(f"在安装目录下找不到可执行文件")
         system_name = platform.system()
         # 确保 custom_args 是列表
-        args = custom_args[1:] if custom_args else []
+        args = custom_args if custom_args else []
         try:
             if system_name == 'Windows':
                 # Windows 拼接方式：[exe_path, arg1, arg2]

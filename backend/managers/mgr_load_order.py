@@ -61,8 +61,6 @@ class LoadOrderManager:
         # 从全局配置获取路径
         self.context = context
         self._ensure_dirs()
-        # self.config_dir = settings.config.game_config_path
-        # self.mods_config_file = ''
 
     def _ensure_dirs(self):
         # 当前环境健康时才触碰游戏配置目录；只读查看其它环境备份时不应顺手重建失效路径。

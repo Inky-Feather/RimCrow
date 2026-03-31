@@ -683,7 +683,7 @@ class API:
             # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
             # 1. 扫描所有路径入库
             # 2. 识别 Local vs Workshop 冲突
-            # 3. 读取 settings.config.local_mods_path 和 workshop_mods_path
+            # 3. 读取 local_mods_path 和 workshop_mods_path
             # 4. 执行 FileManager.clear_links 部署软链接
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
             result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
