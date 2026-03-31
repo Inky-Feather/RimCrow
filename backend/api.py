@@ -9,7 +9,6 @@ import threading
 import time
 import functools
 import uuid
-import litellm
 import webview
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Any, Dict, List
@@ -2175,9 +2174,9 @@ class API:
         token_limit = settings.config.ai.max_tokens
         from backend.managers.mgr_game_logs import LogCondenser
         condensed_data = LogCondenser.condense_for_ai( full_logs, token_limit=token_limit, stack_preview_lines=2 )
-        import litellm
+        from litellm import token_counter
         text_to_estimate = json.dumps(condensed_data, ensure_ascii=False)
-        estimated_tokens = litellm.token_counter(model=settings.config.ai.model, text=text_to_estimate)
+        estimated_tokens = token_counter(model=settings.config.ai.model, text=text_to_estimate)
         logger.debug(
             f"[AI预检] source={source_type} filename={filename} raw_line_count={len(raw_lines)} "
             f"log_blocks={len(full_logs)} toc_items={len(condensed_data.get('error_table_of_contents', [])) if isinstance(condensed_data, dict) else 0} "
@@ -2269,7 +2268,8 @@ class API:
         diagnosis_context = LogCondenser.condense_for_ai( raw_logs, token_limit=token_limit, char_budget_ratio=0.65, stack_preview_lines=2)
         # 压缩完成后再计算实际 Token 占用，前端顶部记忆计数直接使用这个结果。
         text_to_estimate = json.dumps(diagnosis_context, ensure_ascii=False)
-        estimated_tokens = litellm.token_counter(model=settings.config.ai.model, text=text_to_estimate)
+        from litellm import token_counter
+        estimated_tokens = token_counter(model=settings.config.ai.model, text=text_to_estimate)
         stats = diagnosis_context.get('stats', {}) if isinstance(diagnosis_context, dict) else {}
         compression_notice = (
             diagnosis_context.get('compression_notice')

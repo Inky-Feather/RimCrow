@@ -607,6 +607,9 @@ const loadAiProviders = async () => {
 }
 // 拉取模型列表 (兼容旧的，组装为 CommonSelect 接受的结构)
 const fetchAiModels = async () => {
+  if (!formData.value.ai.provider || !formData.value.ai.enabled || !formData.value.ai.base_url || !formData.value.ai.api_key) {
+    return
+  }
   const models = await appStore.getAiModels(formData.value.ai)
   if (models) {
     currentAiModels.value = models.map(m => ({ value: m, label: m }))

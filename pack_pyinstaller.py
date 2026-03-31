@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import subprocess
 import tempfile
 from typing import List
@@ -11,6 +12,34 @@ try:
 except ImportError:
     HAS_PATHSPEC = False
     print("提示: 未安装 'pathspec' 库，.gitignore 过滤功能将不可用。")
+
+
+def create_pyinstaller_hook_dir():
+    """
+    生成临时 PyInstaller hook 目录。
+
+    对 litellm 保留必需数据文件，但排除桌面端未使用的 proxy 静态资源，
+    例如 proxy/_experimental 和 proxy/swagger。
+    """
+    hook_dir = tempfile.mkdtemp(prefix="pyi_hooks_")
+    hook_path = os.path.join(hook_dir, "hook-litellm.py")
+    hook_content = """from PyInstaller.utils.hooks import collect_data_files
+
+datas = collect_data_files(
+    "litellm",
+    excludes=[
+        "proxy/_experimental",
+        "proxy/_experimental/*",
+        "proxy/_experimental/**",
+        "proxy/swagger",
+        "proxy/swagger/*",
+        "proxy/swagger/**",
+    ],
+)
+"""
+    with open(hook_path, "w", encoding="utf-8") as f:
+        f.write(hook_content)
+    return hook_dir
 
 def create_version_file(version="1.0.0.0", company_name="", file_description="", internal_name="", legal_copyright="", product_name=""):
     """
@@ -77,6 +106,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         name (str): 程序名称
     """
     version_file_path = None
+    hook_dir_path = None
     try:
         if not os.path.exists(main_file):
             raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
@@ -91,6 +121,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             legal_copyright=f"Copyright (C) {company}",
             product_name=name
         )
+        hook_dir_path = create_pyinstaller_hook_dir()
 
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
@@ -104,10 +135,10 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
             "--contents-directory", "lib",
+            "--additional-hooks-dir", hook_dir_path,
             "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
             "--collect-binaries", "steamworks",
             "--collect-binaries", "tiktoken",
-            "--collect-data", "litellm",
             "--collect-data", "tiktoken",
             "--collect-submodules", "tiktoken",
             "--collect-submodules", "tiktoken_ext",
@@ -156,6 +187,11 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         if version_file_path and os.path.exists(version_file_path):
             try:
                 os.remove(version_file_path)
+            except:
+                pass
+        if hook_dir_path and os.path.exists(hook_dir_path):
+            try:
+                shutil.rmtree(hook_dir_path)
             except:
                 pass
 
