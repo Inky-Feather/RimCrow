@@ -304,6 +304,30 @@ class RuleManager:
             warnings.append(f"{origin} 缺少 rule_id，已自动补全。")
             changed = True
 
+        try:
+            clean_priority = int(clean_rule.get("priority", 100))
+        except (TypeError, ValueError):
+            clean_priority = 100
+        if clean_rule.get("priority") != clean_priority:
+            clean_rule["priority"] = clean_priority
+            changed = True
+
+        logic = str(clean_rule.get("logic", "AND") or "AND").upper()
+        if logic not in {"AND", "OR"}:
+            logic = "AND"
+            changed = True
+        clean_rule["logic"] = logic
+
+        filters = clean_rule.get("filters")
+        if isinstance(filters, list):
+            for idx, filter_item in enumerate(filters, start=1):
+                if not isinstance(filter_item, dict):
+                    continue
+                field = str(filter_item.get("field") or "").strip()
+                if field == "user_mod_type":
+                    filter_item["field"] = "mod_type"
+                    changed = True
+
         action = clean_rule.get("action")
         if not isinstance(action, dict):
             return clean_rule, warnings, changed
@@ -338,6 +362,51 @@ class RuleManager:
             warnings.extend(rule_warnings)
             changed = changed or rule_changed
         return sanitized_rules, warnings, changed
+
+    def _resolve_condition_field(self, mod_data: dict, field: str):
+        """解析筛选字段，支持别名与点分路径。"""
+        field_aliases = {
+            "mod_type": ["user_mod_type", "mod_type"],
+            "user_mod_type": ["user_mod_type", "mod_type"],
+            # 名称只匹配原始 name；别名则允许“别名 / 显示名 / 原名”三者任一命中。
+            "name": ["name"],
+            "alias_name": ["alias_name", "display_name", "name"],
+        }
+
+        def _resolve_path(data, path: str):
+            current = data
+            for part in path.split('.'):
+                if isinstance(current, dict):
+                    current = current.get(part)
+                else:
+                    return None
+            return current
+
+        candidate_fields = field_aliases.get(field, [field])
+        # alias_name 的语义是“用户眼里看到的名字”，因此要把多个候选字段聚合后一起参与匹配。
+        multi_value_fields = {"alias_name"}
+        collected_values = []
+        for candidate in candidate_fields:
+            value = _resolve_path(mod_data, candidate)
+            if value is not None:
+                if field in multi_value_fields:
+                    if isinstance(value, list):
+                        collected_values.extend(value)
+                    else:
+                        collected_values.append(value)
+                else:
+                    return value
+        if field in multi_value_fields and collected_values:
+            unique_values = []
+            seen = set()
+            for item in collected_values:
+                key = str(item).strip().lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                unique_values.append(item)
+            return unique_values or None
+        return None
     
     # =========================================================================
     # 1. 规则 CRUD (核心逻辑)
@@ -468,7 +537,7 @@ class RuleManager:
         op = filter_item.get("operator")
         target = str(filter_item.get("value", "")).lower()
         # 获取实际值，支持点分语法 (例如 metadata.author)
-        actual = mod_data.get(field)
+        actual = self._resolve_condition_field(mod_data, str(field or "").strip())
         if actual is None: return False
         # 统一转为字符串列表进行匹配
         if isinstance(actual, list):
@@ -478,6 +547,7 @@ class RuleManager:
 
         try:
             if op == "equals": return any(target == s for s in actual_strs)
+            if op == "not_equals": return all(target != s for s in actual_strs)
             if op == "contains": return any(target in s for s in actual_strs)
             if op == "not_contains": return not any(target in s for s in actual_strs)
             if op == "starts_with": return any(s.startswith(target) for s in actual_strs)
@@ -490,7 +560,16 @@ class RuleManager:
     def get_matching_dynamic_rules(self, mod_data: dict) -> List[dict]:
         """获取适用于该 Mod 的所有动态规则"""
         matched = []
-        for rule in self.user_dynamic_rules:
+        # 动态规则的 priority 是用户显式编辑的执行顺序：
+        # 数值越小越先尝试，这样前端展示顺序和后端真实生效顺序一致。
+        ordered_rules = sorted(
+            self.user_dynamic_rules,
+            key=lambda r: (
+                int(r.get("priority", 100)) if str(r.get("priority", "100")).lstrip("-").isdigit() else 100,
+                str(r.get("rule_id", "")),
+            )
+        )
+        for rule in ordered_rules:
             if not rule.get("enabled", True): continue
             logic = rule.get("logic", "AND")
             filters = rule.get("filters", [])

@@ -8,10 +8,11 @@ import { createToastInterface } from 'vue-toastification'
 const DYNAMIC_RULE_PROPS = {
   'package_id': '包名',
   'name': '名称',
+  'alias_name': '别名',
   'author': '作者',
   'tags': '标签',
   'groups': '分组', 
-  'user_mod_type': '类型'
+  'mod_type': '类型'
 }
 // 动态规则动作映射
 const DYNAMIC_RULE_ACTIONS = {

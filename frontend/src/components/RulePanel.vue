@@ -359,10 +359,10 @@
                       
                       <CommonSelect class="min-w-20" v-model="filter.field" :options="Object.entries(ruleStore.DYNAMIC_RULE_PROPS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                       
-                      <CommonSelect class="min-w-30" v-model="filter.operator" :options="Object.entries(ruleStore.DYNAMIC_RULE_OPERATORS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
+                      <CommonSelect class="min-w-30" v-model="filter.operator" :options="getOperatorOptions(filter.field)"></CommonSelect>
                       
-                      <div v-if="filter.field === 'package_id'" class="flex-1">
-                        <CommonSelect v-model="filter.value" :options="modIdList" editable ></CommonSelect>
+                      <div v-if="shouldUseSelectableConditionValue(filter)" class="flex-1">
+                        <CommonSelect v-model="filter.value" :options="getConditionValueOptions(filter.field)" editable ></CommonSelect>
                       </div>
                       <CommonInput v-else v-model="filter.value" placeholder="值..." class="flex-1" />
                       
@@ -428,10 +428,11 @@ import { useAppStore } from '../stores/appStore'
 import { useModStore } from '../stores/modStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useConfirmStore } from '../stores/confirmStore'
+import { useGroupStore } from '../stores/groupStore'
 import CommonInput from './common/input/CommonInput.vue'
 import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
-import { IconSteam } from '../utils/constants'
+import { IconSteam, MOD_TYPE_MAP } from '../utils/constants'
 
 
 
@@ -441,6 +442,7 @@ const appStore = useAppStore()
 const modStore = useModStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
+const groupStore = useGroupStore()
 
 
 // --- 状态管理 ---
@@ -468,7 +470,122 @@ const allRules = computed(() => ({
   excluded_workshop_mods_set: new Set(ruleStore.settings?.excluded_workshop_mods || []),
 }))
 
-const modIdList = computed(() => Array.from(modStore.allModsMap.values(), mod => ({label: modStore.displayModName(mod)+' ('+mod.package_id+')', value: mod.package_id})))
+const modIdList = computed(() =>
+  Array.from(modStore.allModsMap.values(), mod => ({
+    label: `${modStore.displayModName(mod)} (${mod.package_id})`,
+    value: mod.package_id,
+  }))
+)
+
+const nameOptionList = computed(() => {
+  const options = new Map()
+  for (const mod of modStore.allModsMap.values()) {
+    const rawName = String(mod.name || '').trim()
+    if (!rawName) continue
+    if (!options.has(rawName)) {
+      options.set(rawName, {
+        label: `${rawName} (${mod.package_id})`,
+        value: rawName,
+      })
+    }
+  }
+  return Array.from(options.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+})
+
+const aliasOptionList = computed(() => {
+  const options = new Map()
+  for (const mod of modStore.allModsMap.values()) {
+    const displayName = String(modStore.displayModName(mod) || '').trim()
+    if (!displayName) continue
+    if (!options.has(displayName)) {
+      options.set(displayName, {
+        label: `${displayName} (${mod.package_id})`,
+        value: displayName,
+      })
+    }
+  }
+  return Array.from(options.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+})
+
+const authorOptionList = computed(() => {
+  const authors = new Set()
+  for (const mod of modStore.allModsMap.values()) {
+    for (const author of mod.author || []) {
+      const cleanAuthor = String(author || '').trim()
+      if (cleanAuthor) authors.add(cleanAuthor)
+    }
+  }
+  return Array.from(authors).sort((a, b) => a.localeCompare(b, 'zh-CN')).map(value => ({ label: value, value }))
+})
+
+const tagOptionList = computed(() =>
+  [...(modStore.allModTags || [])]
+    .map(tag => String(tag || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    .map(value => ({ label: value, value }))
+)
+
+const groupOptionList = computed(() =>
+  (groupStore.groupList || [])
+    .map(group => String(group.name || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    .map(value => ({ label: value, value }))
+)
+
+const modTypeOptionList = computed(() => {
+  const modTypes = new Set()
+  for (const mod of modStore.allModsMap.values()) {
+    const modType = String(mod.user_mod_type || mod.mod_type || 'Unknown').trim()
+    if (modType) modTypes.add(modType)
+  }
+  return Array.from(modTypes)
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    .map(value => ({ label: MOD_TYPE_MAP[value] || value, value }))
+})
+
+const conditionValueOptions = computed(() => ({
+  package_id: modIdList.value,
+  name: nameOptionList.value,
+  alias_name: aliasOptionList.value,
+  author: authorOptionList.value,
+  tags: tagOptionList.value,
+  groups: groupOptionList.value,
+  mod_type: modTypeOptionList.value,
+}))
+
+const getConditionValueOptions = (field) => conditionValueOptions.value[field] || []
+
+// 仅在“等于”条件下启用可输入选择框。
+// 其它运算符仍然保留自由输入，避免把“包含/正则/前缀”之类的场景做死。
+const shouldUseSelectableConditionValue = (filter) =>
+  filter?.operator === 'equals' && getConditionValueOptions(filter?.field).length > 0
+
+const getOperatorOptions = (field) => {
+  const allowedKeys = FIELD_OPERATOR_KEYS[field] || ALL_OPERATOR_KEYS
+  return allowedKeys.map(key => ({
+    label: ruleStore.DYNAMIC_RULE_OPERATORS[key],
+    value: key,
+  }))
+}
+
+const normalizeFilterOperator = (filter) => {
+  if (!filter) return
+  // 当用户切换字段时，若当前运算符不再适用，就自动回退到该字段允许的第一个运算符。
+  const allowedKeys = FIELD_OPERATOR_KEYS[filter.field] || ALL_OPERATOR_KEYS
+  if (!allowedKeys.includes(filter.operator)) {
+    filter.operator = allowedKeys[0]
+  }
+}
+
+watch(
+  () => editingRule.value?.filters?.map(filter => filter?.field).join('|'),
+  () => {
+    if (!editingRule.value?.filters) return
+    editingRule.value.filters.forEach(normalizeFilterOperator)
+  }
+)
 
 const isModExcluded = (modId) => {
   if (currentTab.value === 'user') return allRules.value.excluded_user_mods_set.has(modId)
@@ -584,6 +701,18 @@ const DYNAMIC_WEIGHT_MIN = 1
 const DYNAMIC_WEIGHT_MAX = 9999
 const DYNAMIC_SHIFT_MIN = -9999
 const DYNAMIC_SHIFT_MAX = 9999
+// 不同字段允许的运算符不同：
+// 例如类型只适合做“等于/不等于”，分组和标签更适合“等于/包含”。
+const ALL_OPERATOR_KEYS = ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with', 'regex']
+const FIELD_OPERATOR_KEYS = {
+  package_id: ALL_OPERATOR_KEYS,
+  name: ALL_OPERATOR_KEYS,
+  alias_name: ALL_OPERATOR_KEYS,
+  author: ALL_OPERATOR_KEYS,
+  tags: ['equals', 'not_equals', 'contains', 'not_contains'],
+  groups: ['equals', 'not_equals', 'contains', 'not_contains'],
+  mod_type: ['equals', 'not_equals'],
+}
 
 const clampInt = (value, min, max, fallback = min) => {
   const parsed = Number.parseInt(value, 10)
@@ -641,14 +770,18 @@ const createDynamicRule = () => {
     filters: [{ field: 'package_id', operator: 'contains', value: '' }],
     action: { type: 'weight_shift', value: -10 }
   }
+  editingRule.value.filters.forEach(normalizeFilterOperator)
 }
 // 编辑动态规则
 const editDynamicRule = (rule) => {
   editingRule.value = JSON.parse(JSON.stringify(rule)) // Deep clone
+  editingRule.value.filters?.forEach(normalizeFilterOperator)
 }
 // 添加检查条件
 const addFilter = () => {
-  editingRule.value.filters.push({ field: 'package_id', operator: 'contains', value: '' })
+  const filter = { field: 'package_id', operator: 'contains', value: '' }
+  normalizeFilterOperator(filter)
+  editingRule.value.filters.push(filter)
 }
 // 保存动态规则
 const saveDynamicRule = async () => {

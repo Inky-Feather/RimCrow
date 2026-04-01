@@ -154,6 +154,117 @@ class TestRuleManagerDynamicWeights(unittest.TestCase):
         self.assertEqual(manager.user_dynamic_rules[0]["action"]["value"], 1)
         self.assertTrue(result["warnings"])
 
+    def test_match_mod_condition_uses_mod_type_fallback(self):
+        manager = self._make_manager([])
+
+        matched = manager._match_mod_condition(
+            {"package_id": "mod.test", "user_mod_type": None, "mod_type": "LanguagePack"},
+            {"field": "mod_type", "operator": "equals", "value": "LanguagePack"},
+        )
+
+        self.assertTrue(matched)
+
+    def test_match_mod_condition_supports_not_equals_for_list_fields(self):
+        manager = self._make_manager([])
+
+        matched = manager._match_mod_condition(
+            {"author": ["Alice", "Bob"]},
+            {"field": "author", "operator": "not_equals", "value": "Carol"},
+        )
+        not_matched = manager._match_mod_condition(
+            {"author": ["Alice", "Bob"]},
+            {"field": "author", "operator": "not_equals", "value": "Bob"},
+        )
+
+        self.assertTrue(matched)
+        self.assertFalse(not_matched)
+
+    def test_get_matching_dynamic_rules_respects_priority_order(self):
+        manager = self._make_manager([])
+        manager.get_matching_dynamic_rules = RuleManager.get_matching_dynamic_rules.__get__(manager, RuleManager)
+        manager.user_dynamic_rules = [
+            {
+                "rule_id": "late_rule",
+                "name": "Late Rule",
+                "priority": 200,
+                "enabled": True,
+                "logic": "AND",
+                "filters": [{"field": "package_id", "operator": "contains", "value": "mod."}],
+            },
+            {
+                "rule_id": "early_rule",
+                "name": "Early Rule",
+                "priority": 10,
+                "enabled": True,
+                "logic": "AND",
+                "filters": [{"field": "package_id", "operator": "contains", "value": "mod."}],
+            },
+        ]
+
+        matched = manager.get_matching_dynamic_rules({"package_id": "mod.test"})
+
+        self.assertEqual([rule["rule_id"] for rule in matched], ["early_rule", "late_rule"])
+
+    def test_upsert_dynamic_rule_normalizes_legacy_user_mod_type_field(self):
+        manager = self._make_manager([])
+
+        success = manager.upsert_dynamic_rule(
+            {
+                "rule_id": "dyn_rule_type_alias",
+                "name": "Legacy Type Alias",
+                "filters": [{"field": "user_mod_type", "operator": "equals", "value": "XML"}],
+                "action": {"type": RuleActionType.WEIGHT_SET, "value": 100},
+            }
+        )
+
+        self.assertTrue(success)
+        self.assertEqual(manager.user_dynamic_rules[0]["filters"][0]["field"], "mod_type")
+
+    def test_match_mod_condition_name_only_checks_raw_name(self):
+        manager = self._make_manager([])
+
+        matched_raw = manager._match_mod_condition(
+            {"name": "Harmony", "alias_name": "和谐前置"},
+            {"field": "name", "operator": "equals", "value": "Harmony"},
+        )
+        not_matched_alias = manager._match_mod_condition(
+            {"name": "Harmony", "alias_name": "和谐前置"},
+            {"field": "name", "operator": "equals", "value": "和谐前置"},
+        )
+
+        self.assertTrue(matched_raw)
+        self.assertFalse(not_matched_alias)
+
+    def test_match_mod_condition_alias_name_checks_alias_and_raw_name(self):
+        manager = self._make_manager([])
+
+        matched_alias = manager._match_mod_condition(
+            {"name": "Harmony", "alias_name": "和谐前置"},
+            {"field": "alias_name", "operator": "equals", "value": "和谐前置"},
+        )
+        matched_raw = manager._match_mod_condition(
+            {"name": "Harmony", "alias_name": "和谐前置"},
+            {"field": "alias_name", "operator": "equals", "value": "Harmony"},
+        )
+
+        self.assertTrue(matched_alias)
+        self.assertTrue(matched_raw)
+
+    def test_match_mod_condition_list_field_matches_any_item(self):
+        manager = self._make_manager([])
+
+        matched_author = manager._match_mod_condition(
+            {"author": ["Alice", "Bob"]},
+            {"field": "author", "operator": "equals", "value": "Bob"},
+        )
+        matched_group = manager._match_mod_condition(
+            {"groups": ["前置库", "UI"]},
+            {"field": "groups", "operator": "contains", "value": "ui"},
+        )
+
+        self.assertTrue(matched_author)
+        self.assertTrue(matched_group)
+
 
 if __name__ == "__main__":
     unittest.main()

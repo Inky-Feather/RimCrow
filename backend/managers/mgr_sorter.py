@@ -533,7 +533,7 @@ class OrderSorter:
                 warnings.append({
                     "type": "edge_anchor_conflict",
                     "level": "warn",
-                    "message": f"模组组 [{group_name}] 同时带有置顶与置底倾向，已回退为普通排序，仅保留依赖约束。"
+                    "message": f"[{group_name}] 同时被要求置顶和置底，这两个要求互相冲突。系统这次不会强行把它放到最前或最后，只会先保证依赖顺序正确。"
                 })
                 continue
 
@@ -545,7 +545,7 @@ class OrderSorter:
                     warnings.append({
                         "type": "edge_anchor_overlap",
                         "level": "warn",
-                        "message": f"置顶模组组 [{group_name}] 同时落入置底牵引范围，已优先保留其置顶语义。"
+                        "message": f"[{group_name}] 被要求置顶，但它关联的一串模组里又碰到了置底要求。系统这次先保留它的置顶，其它受影响模组改为按依赖关系尽量排好。"
                     })
                 continue
 
@@ -557,7 +557,7 @@ class OrderSorter:
                     warnings.append({
                         "type": "edge_anchor_overlap",
                         "level": "warn",
-                        "message": f"置底模组组 [{group_name}] 同时落入置顶牵引范围，已优先保留其置底语义。"
+                        "message": f"[{group_name}] 被要求置底，但它关联的一串模组里又碰到了置顶要求。系统这次先保留它的置底，其它受影响模组改为按依赖关系尽量排好。"
                     })
                 continue
 
@@ -572,7 +572,7 @@ class OrderSorter:
                 warnings.append({
                     "type": "edge_closure_conflict",
                     "level": "warn",
-                    "message": f"模组组 [{group_name}] 同时处于置顶与置底牵引闭包中，已回退为普通排序，仅保留依赖约束。"
+                    "message": f"[{group_name}] 同时被置顶链和置底链夹住了，两边要求打架。系统不会把它强行推到最前或最后，而是先保证依赖顺序正确，再放到尽量合适的位置。"
                 })
 
         return (
@@ -583,6 +583,119 @@ class OrderSorter:
             promoted_bottom_ids,
             warnings,
         )
+
+    def _is_language_pack_group(self, group: AtomicGroup, mod_map: Dict[str, dict]) -> bool:
+        """判断一个原子组是否整体属于语言包。"""
+        if not group.mod_ids:
+            return False
+        for mid in group.mod_ids:
+            mod_data = mod_map.get(mid, {})
+            mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type') or '').strip()
+            if mod_type != 'LanguagePack':
+                return False
+        return True
+
+    def _get_group_target_predecessors(self, group: AtomicGroup, mod_to_group: Dict[str, AtomicGroup]) -> set[int]:
+        """提取语言包组声明的直接前置/依赖目标。"""
+        target_gids = set()
+        for mid in group.mod_ids:
+            rules = self.effective_rules_cache.get(mid, {})
+            # 对语言包来说，dependencies 与 load_after 都表示“它应该跟在这些目标之后”。
+            for relation in [*(rules.get('dependencies', []) or []), *(rules.get('load_after', []) or [])]:
+                target_id = str(relation.get('target_id') or '').strip().lower()
+                if not target_id or target_id not in mod_to_group:
+                    continue
+                target_group = mod_to_group[target_id]
+                target_gid = id(target_group)
+                if target_gid != id(group):
+                    target_gids.add(target_gid)
+        return target_gids
+
+    def _tighten_language_pack_groups(
+        self,
+        sorted_groups: List[AtomicGroup],
+        adj: Dict[int, Dict[int, int]],
+        mod_map: Dict[str, dict],
+        mod_to_group: Dict[str, AtomicGroup],
+        group_anchor_flags: Dict[int, Dict[str, bool]],
+    ) -> Tuple[List[AtomicGroup], List[dict]]:
+        """
+        可选后处理：让语言包尽量贴在其最后一个前置/依赖模组后方。
+        只在不破坏现有拓扑约束时移动。
+        """
+        if not getattr(settings.config, "language_packs_follow_targets", False):
+            return sorted_groups, []
+
+        order = list(sorted_groups)
+        warnings = []
+        reverse_adj = defaultdict(set)
+        for u, neighbors in adj.items():
+            for v in neighbors:
+                reverse_adj[v].add(u)
+
+        candidate_groups = [g for g in order if self._is_language_pack_group(g, mod_map)]
+        for group in candidate_groups:
+            gid = id(group)
+            group_name = group.mod_ids[0]
+            anchor_flags = group_anchor_flags.get(gid, {})
+            if anchor_flags.get("top") or anchor_flags.get("bottom"):
+                continue
+
+            predecessor_targets = self._get_group_target_predecessors(group, mod_to_group)
+            if not predecessor_targets:
+                continue
+
+            positions = {id(g): idx for idx, g in enumerate(order)}
+            current_pos = positions.get(gid)
+            if current_pos is None:
+                continue
+
+            predecessor_positions = [positions[pred_gid] for pred_gid in predecessor_targets if pred_gid in positions]
+            if not predecessor_positions:
+                continue
+            # 目标位置定义为“最后一个前置/依赖目标的后一格”。
+            latest_predecessor_pos = max(predecessor_positions)
+            desired_pos = latest_predecessor_pos + 1
+            if desired_pos >= current_pos:
+                continue
+
+            direct_successors = [positions[succ_gid] for succ_gid in adj.get(gid, {}) if succ_gid in positions]
+            earliest_successor_pos = min(direct_successors) if direct_successors else len(order)
+            if desired_pos >= earliest_successor_pos:
+                blocker_gid = min((succ_gid for succ_gid in adj.get(gid, {}) if succ_gid in positions), key=lambda x: positions[x], default=None)
+                blocker_name = group.mod_ids[0]
+                if blocker_gid is not None:
+                    blocker_group = next((g for g in order if id(g) == blocker_gid), None)
+                    blocker_name = blocker_group.mod_ids[0] if blocker_group else blocker_name
+                warnings.append({
+                    "type": "language_pack_follow_blocked",
+                    "level": "warn",
+                    "message": f"语言包 [{group_name}] 想贴到最后一个前置后面，但再往前会压过它后面必须依赖的模组 [{blocker_name}]。系统已保留当前顺序以避免破坏规则。"
+                })
+                continue
+
+            # 额外稳妥：不能越过任何直接前驱，也不能压到任何直接后继之后。
+            # 这一步是“贴边”成立的关键：它允许我们在不破坏拓扑合法性的前提下，做一次局部上提。
+            direct_predecessor_positions = [positions[pred_gid] for pred_gid in reverse_adj.get(gid, set()) if pred_gid in positions]
+            if direct_predecessor_positions and desired_pos <= max(direct_predecessor_positions):
+                desired_pos = max(direct_predecessor_positions) + 1
+            if desired_pos >= earliest_successor_pos or desired_pos >= current_pos:
+                blocker_gid = max((pred_gid for pred_gid in reverse_adj.get(gid, set()) if pred_gid in positions), key=lambda x: positions[x], default=None)
+                blocker_name = group.mod_ids[0]
+                if blocker_gid is not None:
+                    blocker_group = next((g for g in order if id(g) == blocker_gid), None)
+                    blocker_name = blocker_group.mod_ids[0] if blocker_group else blocker_name
+                warnings.append({
+                    "type": "language_pack_follow_blocked",
+                    "level": "warn",
+                    "message": f"语言包 [{group_name}] 想贴到最后一个前置后面，但中间还有必须排在它前面的模组 [{blocker_name}]。系统已保留当前顺序以避免破坏规则。"
+                })
+                continue
+
+            moved_group = order.pop(current_pos)
+            order.insert(desired_pos, moved_group)
+
+        return order, warnings
 
     def sort(self, active_ids: List[str], strategy: str | None = None):
         """
@@ -784,18 +897,20 @@ class OrderSorter:
 
         def push_queue_item(gid: int):
             sort_name, sort_id = group_sort_keys[gid]
+            category = 1
+            edge_metric = 0
             if strategy == "classic_sort_logic":
-                heapq.heappush(queue, (effective_weights[gid], sort_name, sort_id, gid))
+                heapq.heappush(queue, (effective_weights[gid], category, edge_metric, sort_name, sort_id, gid))
                 return
 
             if gid in promoted_top_ids:
-                top_head_breaker = propagated_top_head_sizes.get(gid, all_head_sizes.get(gid, 1))
-                heapq.heappush(queue, (effective_weights[gid], top_head_breaker, sort_name, sort_id, gid))
+                category = 0
+                edge_metric = int(propagated_top_head_sizes.get(gid, all_head_sizes.get(gid, 1)))
             elif gid in promoted_bottom_ids:
-                bottom_tail_breaker = -propagated_bottom_tail_sizes.get(gid, all_tail_sizes.get(gid, 1))
-                heapq.heappush(queue, (effective_weights[gid], bottom_tail_breaker, sort_name, sort_id, gid))
-            else:
-                heapq.heappush(queue, (effective_weights[gid], sort_name, sort_id, gid))
+                category = 2
+                edge_metric = -int(propagated_bottom_tail_sizes.get(gid, all_tail_sizes.get(gid, 1)))
+
+            heapq.heappush(queue, (effective_weights[gid], category, edge_metric, sort_name, sort_id, gid))
 
         for gid in group_ids:
             if work_in_degree[gid] == 0:
@@ -811,6 +926,18 @@ class OrderSorter:
                     work_in_degree[neighbor] -= 1
                     if work_in_degree[neighbor] == 0:
                         push_queue_item(neighbor)
+
+        # 语言包“贴边”不能只靠主排序权重完成。
+        # 原因是 Kahn 拓扑排序一旦把某些无关节点提前出队，就不会再回头把语言包插回它们前面；
+        # 因此这里在主排序之后做一次严格受约束的局部调整。
+        sorted_groups, language_pack_warnings = self._tighten_language_pack_groups(
+            sorted_groups,
+            adj,
+            mod_map,
+            mod_to_group,
+            group_anchor_flags,
+        )
+        cycle_warnings.extend(language_pack_warnings)
 
         # 10. 兜底检查（虽然已break_cycles，但为了绝对稳健）
         if len(sorted_groups) < len(groups):

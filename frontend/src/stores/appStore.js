@@ -211,6 +211,7 @@ export const useAppStore = defineStore('app', () => {
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
     check_language_support: true,        // 是否检查语言支持
+    language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
     use_raw_ids: false,               // 是否使用原始 Mod ID
 
     // --- 调试 (Debug) ---

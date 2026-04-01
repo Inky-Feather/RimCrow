@@ -192,6 +192,8 @@
                     <CommonSwitch class="col-span-1" label="自动激活依赖项" v-model="formData.auto_activate_dependencies" description="开启后，自动排序时将会自动激活停用的依赖项。" />
                     <CommonSwitch class="col-span-1" label="检查语言支持" v-model="formData.check_language_support" description="开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。" />
                     <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
+                    <CommonSwitch class="col-span-1" label="语言包贴紧前置" v-model="formData.language_packs_follow_targets" description="开启后，自动排序会尽量让语言包紧跟在它最后一个前置/依赖模组后方；如果找不到目标或会破坏其它顺序，就保持原来的默认位置。" />
+                    <CommonSwitch class="col-span-1" label="使用辅助工具模组" v-model="formData.enable_tool_mods" description="开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。" />
                     <CommonSelect class="col-span-1" label="自动排序策略" v-model="formData.auto_sort_strategy" showBottom
                       description="旧版更保守、更接近传统手工整理结果，但对带有置顶/置底倾向的模组及其关联链的处理效果较差；新版会更积极地把带有置顶/置底倾向的模组及其关联链推向列表两端。"
                       :options="[{label:'经典自动排序（旧版）', value:'classic_sort_logic'},{label:'两端强化排序（新版）', value:'edge_enhanced_sort_logic'}]" />
@@ -203,7 +205,6 @@
                       :options="[{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
                     <CommonNumber class="col-span-1" label="自动备份保留天数" description="管理自动备份的最长保留时间，手动备份不受影响。" v-model="formData.backup_retention_days" :step="1" :min="0" :max="365" />
                     <CommonSwitch class="col-span-1" label="使用原始 Mod ID" v-model="formData.use_raw_ids" description="开启后，将使用 Mod 的原始 ID 写入排序文件，而不是标准化的小写。" />
-                    <CommonSwitch class="col-span-1" label="使用辅助工具模组" v-model="formData.enable_tool_mods" description="开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。" />
                     
                   </div>
                 </div>

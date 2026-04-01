@@ -167,6 +167,7 @@ class AppConfig:
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
+    language_packs_follow_targets: bool = False # 是否让语言包贴紧其最后一个前置/依赖目标
     
     # --- 社区设置 ---
     community_workshop_db_url: str = "https://github.com/RimSort/Steam-Workshop-Database/blob/main/steamDB.json"
