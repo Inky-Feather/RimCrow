@@ -228,6 +228,70 @@ export const useOrderStore = defineStore('order', () => {
     } 
     return false
   }
+  const copyTextToClipboard = async (text) => {
+    const value = String(text || '')
+    if (!value) return false
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value)
+        return true
+      }
+    } catch (error) {
+      console.warn('Clipboard API copy failed:', error)
+    }
+
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.setAttribute('readonly', 'readonly')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const copied = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return copied
+    } catch (error) {
+      console.warn('Fallback copy failed:', error)
+      return false
+    }
+  }
+  const exportLoadOrderShareCode = async (list_name = null) => {
+    if (!window.pywebview) return ''
+    if (!modStore.activeIds || modStore.activeIds.length === 0) {
+      toast.warning('当前没有可分享的启用序列')
+      return ''
+    }
+    try {
+      const res = await window.pywebview.api.load_order_share_export(modStore.activeIds, list_name)
+      if (!checkResult(res, '生成分享码')) return ''
+
+      const shareCode = res.data?.share_code || ''
+      if (!shareCode) {
+        toast.error('后端没有返回有效的分享码')
+        return ''
+      }
+
+      const copied = await copyTextToClipboard(shareCode)
+      await confirmStore.open({
+        title: copied ? '分享码已复制' : '分享码已生成',
+        message: copied
+          ? `已生成 ${res.data?.count || modStore.activeIds.length} 个模组的分享码，并已复制到剪贴板。`
+          : '自动复制失败，请手动复制下面的分享码。',
+        mode: 'prompt',
+        type: copied ? 'success' : 'warning',
+        inputValue: shareCode,
+        placeholder: 'RMM1-...',
+        confirmText: '关闭',
+        cancelText: '取消',
+      })
+      return shareCode
+    } catch (e) {
+      console.error('生成分享码异常:', e)
+      toast.error(`生成分享码异常: \n${e.message}`)
+    }
+    return ''
+  }
   // 从文件获取加载顺序
   const getFileOrder = async (mods_config_file_path=null, source_profile_id='') => {
     if (!window.pywebview) return
@@ -239,6 +303,43 @@ export const useOrderStore = defineStore('order', () => {
       console.log("打开加载顺序:", res)
       return res.data
     }
+  }
+  const importShareCode = async (shareCode, source_profile_id='') => {
+    const normalizedCode = String(shareCode || '').trim()
+    if (!normalizedCode) {
+      toast.warning('分享码不能为空')
+      return null
+    }
+    if (!window.pywebview) return null
+
+    const res = await window.pywebview.api.load_order_share_import(normalizedCode, source_profile_id || null)
+    if (checkResult(res, '导入分享码')) {
+      const order = res.data || {}
+      setBackupOrder(order, order.file || order.share_code_ref || '')
+      if ((order.warnings || []).length > 0) {
+        toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
+      }
+      return order
+    }
+    return null
+  }
+  const promptImportShareCode = async (source_profile_id='') => {
+    const shareCode = await confirmStore.open({
+      title: '导入分享码',
+      message: '请粘贴 RMM1 开头的分享码，解析后会进入差异对比视图。',
+      mode: 'prompt',
+      type: 'info',
+      placeholder: 'RMM1-...',
+      confirmText: '导入',
+      cancelText: '取消',
+    })
+    if (!shareCode) return null
+
+    const order = await importShareCode(shareCode, source_profile_id)
+    if (order) {
+      toast.success('分享码已导入')
+    }
+    return order
   }
   const getImportCheckItem = (rowKeyOrPackageId) => {
     const key = String(rowKeyOrPackageId || '').trim().toLowerCase()
@@ -396,7 +497,7 @@ export const useOrderStore = defineStore('order', () => {
     backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
-    getFileOrder, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
+    exportLoadOrderShareCode, getFileOrder, importShareCode, promptImportShareCode, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
     setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups,
   }

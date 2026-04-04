@@ -1,6 +1,6 @@
 <template>
   <transition name="panel-fade">
-    <div v-show="appStore.uiState.showLogDrawer" 
+    <div v-if="appStore.uiState.showLogDrawer" 
       class="fixed inset-0 z-100 flex items-center justify-center bg-bg-deep/60 backdrop-blur-md"
       @click.self="appStore.uiState.showLogDrawer = false">
       

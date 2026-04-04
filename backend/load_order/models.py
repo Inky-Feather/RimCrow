@@ -11,6 +11,7 @@ FORMAT_RIMPY_XML = "rimpy_xml"
 FORMAT_PLAIN_TEXT = "plain_text"
 FORMAT_WORKSHOP_IDS = "workshop_ids"
 FORMAT_RMM_JSON = "rmm_json"
+FORMAT_SHARE_CODE = "share_code"
 
 
 @dataclass(slots=True)

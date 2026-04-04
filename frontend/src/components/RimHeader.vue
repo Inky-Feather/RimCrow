@@ -55,6 +55,14 @@
             v-tooltip="'导出为 RML（游戏原生导出格式）'" >
             导出原生分享
           </button>
+          <button @click="importShareCode()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
+            v-tooltip="'粘贴 RMM1 分享码并导入到对比视图'" >
+            导入分享码
+          </button>
+          <button @click="exportShareCode()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
+            v-tooltip="'生成 RMM1 分享码并复制到剪贴板'" >
+            复制分享码
+          </button>
         </div>
       </div>
       
@@ -118,6 +126,15 @@ const loadOrder = async (path=null) => {
     // console.log(data)
     appStore.uiState.showDiffDrawer = true
   }
+}
+const importShareCode = async () => {
+  const data = await orderStore.promptImportShareCode()
+  if (data) {
+    appStore.uiState.showDiffDrawer = true
+  }
+}
+const exportShareCode = async () => {
+  await orderStore.exportLoadOrderShareCode(profileStore.currentProfile?.name || profileStore.activeContext?.name || 'Shared Load Order')
 }
 // 导出当前加载顺序
 const exportOrder = async (path, format='modsconfig') => {

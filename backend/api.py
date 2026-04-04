@@ -186,6 +186,10 @@ class API:
             "pending_actions": [],    # 记录需要前端配合的操作 (如 'show_news', 'force_scan')
             "messages": []            # 具体的提示文本
         }
+        self._native_drop_bound = False
+        self._native_drop_selector = '#backup-drop-zone'
+        self._native_drop_element = None
+        self._native_drop_handler = None
         # 2. 实例化各个管理器
         self.workshop_db_mgr = WorkshopDBManager()
         self.game_mgr = GameManager()
@@ -335,10 +339,109 @@ class API:
     
     def _on_app_loaded(self):
         """主窗口加载完毕回调"""
+        self._bind_native_drag_drop()
         # 确保只启动一次
         if not self.game_monitor.running:
             logger.info("UI已就绪，启动游戏监视器...")
             self.game_monitor.start()
+
+    def _normalize_native_drop_selector(self, selector: str | None = None) -> str:
+        """把前端传入的 id / selector 统一成 pywebview 可直接查询的 CSS 选择器。"""
+        normalized = str(selector or self._native_drop_selector or '').strip() or '#backup-drop-zone'
+        if normalized.startswith(('#', '.', '[')):
+            return normalized
+        return f'#{normalized}'
+
+    def _bind_native_drag_drop(self, selector: str | None = None):
+        """
+        把原生 drop 事件只绑定到备份面板本体，减少整页级别监听带来的额外事件噪音。
+        """
+        if not self._window:
+            return False
+
+        normalized_selector = self._normalize_native_drop_selector(selector)
+
+        try:
+            from webview.dom import DOMEventHandler
+
+            element = self._window.dom.get_element(normalized_selector)
+            if not element:
+                logger.debug(f"pywebview 原生 drop 区域暂未挂载: {normalized_selector}")
+                return False
+
+            if (
+                self._native_drop_bound and
+                normalized_selector == self._native_drop_selector and
+                self._native_drop_element == element
+            ):
+                return True
+
+            if self._native_drop_element and self._native_drop_handler:
+                try:
+                    self._native_drop_element.events.drop -= self._native_drop_handler
+                except Exception:
+                    # 旧节点已被 Vue 重建时，这里直接忽略即可。
+                    pass
+
+            handler = DOMEventHandler(self._on_native_drop_event, True, True)
+            element.events.drop += handler
+            self._native_drop_element = element
+            self._native_drop_handler = handler
+            self._native_drop_selector = normalized_selector
+            self._native_drop_bound = True
+            logger.info(f"已绑定 pywebview 原生 drop 事件: {normalized_selector}")
+            return True
+        except Exception as e:
+            logger.warning(f"绑定 pywebview 原生 drop 事件失败: {e}")
+            return False
+
+    def _dispatch_native_drop_paths(self, full_paths: List[str]):
+        """
+        直接把文件路径送回前端的全局处理器，避免再经过事件总线序列化一层。
+        """
+        if not self._window or not full_paths:
+            return
+
+        try:
+            payload = json.dumps(full_paths, ensure_ascii=False)
+            self._window.evaluate_js(
+                "window.setTimeout(function () {"
+                f"  if (window.__rmm_handleNativeBackupDrop) window.__rmm_handleNativeBackupDrop({payload});"
+                "}, 0);"
+            )
+        except Exception as e:
+            logger.warning(f"回调前端原生拖放结果失败: {e}")
+
+    def _on_native_drop_event(self, event):
+        """
+        只做一件事：取出 pywebview 注入的完整本地路径，并立即异步交回前端。
+        """
+        try:
+            data_transfer = event.get('dataTransfer') or event.get('domTransfer') or {}
+            files = data_transfer.get('files', [])
+            full_paths = []
+            for file_info in files:
+                full_path = str(file_info.get('pywebviewFullPath') or '').strip()
+                if full_path:
+                    full_paths.append(full_path)
+            if not full_paths:
+                return
+            threading.Thread(target=self._dispatch_native_drop_paths, args=(full_paths,), daemon=True).start()
+        except Exception as e:
+            logger.warning(f"处理原生拖放事件失败: {e}")
+
+    @log_api_call
+    def bind_backup_drop_zone(self, selector: str = 'backup-drop-zone'):
+        """
+        由前端在 BackupList 挂载后显式调用，确保 pywebview 绑定到真实存在的拖放区域。
+        """
+        if not self._window:
+            return ApiResponse.error("主窗口尚未就绪")
+
+        normalized_selector = self._normalize_native_drop_selector(selector)
+        if self._bind_native_drag_drop(normalized_selector):
+            return ApiResponse.success({"selector": normalized_selector})
+        return ApiResponse.warning("拖放区域尚未挂载，稍后会重试", {"selector": normalized_selector})
     
     @log_api_call
     def monitor_force_wake(self):
@@ -1139,6 +1242,58 @@ class API:
             return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
+
+    @log_api_call
+    def load_order_share_export(self, active_ids: List[str], list_name: str | None = None):
+        """
+        把当前加载顺序导出为分享码。
+        """
+        if not self.load_order_mgr:
+            return ApiResponse.error("加载顺序管理器未初始化")
+        try:
+            use_raw_ids = settings.config.use_raw_ids
+            share_code = self.load_order_mgr.export_share_code(
+                active_ids,
+                list_name=list_name,
+                use_raw_ids=use_raw_ids,
+            )
+            return ApiResponse.success({
+                "share_code": share_code,
+                "format": "share_code",
+                "count": len(active_ids or []),
+            })
+        except Exception as e:
+            return ApiResponse.error(f"生成分享码时出错: {e}")
+
+    @log_api_call
+    def load_order_share_import(self, share_code: str, profile_id: str | None = None):
+        """
+        解析分享码并返回与文件导入相同的数据结构。
+        """
+        try:
+            load_order_mgr, _, _ = self._resolve_load_order_scope(profile_id)
+            if not load_order_mgr:
+                return ApiResponse.error("加载顺序管理器未初始化")
+            res = load_order_mgr.read_share_code(share_code)
+            return ApiResponse.success({
+                "file": res.get("share_code_ref", "share://RMM1"),
+                "active_ids": res.get('active_mods', []),
+                "modify_time": res.get('modify_time', 0),
+                "format": res.get('format', 'share_code'),
+                "list_name": res.get('list_name', ''),
+                "mods": res.get('mods', []),
+                "mod_names": res.get('mod_names', []),
+                "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
+                "workshop_ids": res.get('workshop_ids', []),
+                "warnings": res.get('warnings', []),
+                "errors": res.get('errors', []),
+                "import_check": res.get('import_check', {"summary": {}, "items": []}),
+                "share_code": res.get("share_code", ""),
+                "share_code_ref": res.get("share_code_ref", ""),
+                "source_profile_id": str(profile_id or "").strip(),
+            })
+        except Exception as e:
+            return ApiResponse.error(f"解析分享码时出错: {e}")
 
     @log_api_call
     def backups_get_all(self, profile_id: str | None = None):

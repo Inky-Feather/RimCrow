@@ -27,8 +27,8 @@
       <!-- 标题 - 根据编辑状态显示输入框或文本 -->
       <span v-tooltip="groupData.name" :class="`flex-1 flex min-w-0 text-sm px-1 mx-1 text-text-main font-bold tracking-wider items-center gap-2`">
         <input class="flex-1 px-0 py-0.5 min-w-0 rounded bg-bg-deep/70 border border-text-main/10 text-text-main focus:border-accent-primary focus:outline-none" 
-          v-show="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="saveGroupName" ref="nameInputRef"/>
-        <span v-show="!isEditingName" class="min-w-0 truncate">{{ groupData.name }}</span>
+          v-if="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="saveGroupName" ref="nameInputRef"/>
+        <span v-if="!isEditingName" class="min-w-0 truncate">{{ groupData.name }}</span>
       </span>
 
       <span :class="`text-xs bg-black/30 px-2 py-0.5 rounded text-[rgba(var(--rgb-components),1)]`">
@@ -39,11 +39,11 @@
       <span class="flex items-center">
         <!-- 编辑/保存按钮 -->
         <button @mousedown.prevent @click.stop="toggleEditName" v-tooltip="`编辑分组名称`" :class="`rounded-lg p-1 hover:bg-text-dim/30 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
-          <svg v-show="!isEditingName" class="hover:text-accent-secondary size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg v-if="!isEditingName" class="hover:text-accent-secondary size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M7 42H43" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M11 26.7199V34H18.3172L39 13.3081L31.6951 6L11 26.7199Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
           </svg>
-          <svg v-show="isEditingName" class="hover:text-accent-success size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg v-if="isEditingName" class="hover:text-accent-success size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M24 44C29.5228 44 34.5228 41.7614 38.1421 38.1421C41.7614 34.5228 44 29.5228 44 24C44 18.4772 41.7614 13.4772 38.1421 9.85786C34.5228 6.23858 29.5228 4 24 4C18.4772 4 13.4772 6.23858 9.85786 9.85786C6.23858 13.4772 4 18.4772 4 24C4 29.5228 6.23858 34.5228 9.85786 38.1421C13.4772 41.7614 18.4772 44 24 44Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
             <path d="M16 24L22 30L34 18" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
@@ -71,11 +71,11 @@
       leave-to-class="grid-rows-[0fr]"
     >
       <!-- 内容区 -->
-      <div v-show="expanded" >
+      <div v-if="expanded" >
         <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
         <div class="min-h-0 overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
           <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-text-main/5 border-x-text-main/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
-            <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
+            <div v-if="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
               可拖拽模组到此
               <!-- 点阵背景 -->
               <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>

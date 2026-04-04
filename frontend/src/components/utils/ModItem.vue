@@ -127,11 +127,12 @@
       <!-- 分组颜色条 -->
       <div class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
         <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
+          <!-- 悬浮显示分组信息 -->
           <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
             :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-text-main`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
-            :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`"
-            v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}">
-          </div><!-- 悬浮显示分组信息 -->
+            :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`">
+            <!-- v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}"> -->
+          </div>
         </div>
       </div>
 
@@ -161,7 +162,7 @@ import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
 import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen } from 'lucide-vue-next';
-import GroupItem from './GroupItem.vue'
+
 
 const props = defineProps({
   item_id: { type: String, required: true },

@@ -1,6 +1,6 @@
 
 try:
-    import pip_system_certs
+    import pip_system_certs # type: ignore
     # 该模块一旦被导入，就会自动为 ssl, requests, httpx, urllib3 打补丁
 except ImportError:
     pass
