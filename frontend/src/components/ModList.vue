@@ -125,8 +125,8 @@
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" :data-tour="listId=='active'?'list-dependency':null" class="w-[55px] h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
-        <DependencyGraph v-if="allowSort || filterByLine" 
-          :listIds="lineData" :isFilter="filterByLine.length>0"
+        <DependencyGraph v-if="showDependencyGraph" 
+              :listIds="lineData" :isFilter="filterByLine.length>0"
           :itemHeight="itemHeight" 
           :scrollElement="vListRef"
           @lineClick="handleLineClick"
@@ -149,7 +149,7 @@
           @drop="updateChildren" @drag="startDrag"
           @click="focusContainer"
           v-selectable-list="{ 
-            data: displayList, 
+            data: visibleList, 
             selectedIds: modStore.selectedIds, 
             onSelect: (ids, anchor) => modStore.selectMods(ids, anchor),
             onClear: () => modStore.clearSelection(),
@@ -161,16 +161,23 @@
           }">
           <template v-slot:item="{ record, index, dataKey }">
             <div class=" relative">
-              <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
+              <ModItem :item_id="dataKey" :index="getRealIndex(dataKey)" :key="dataKey" :list-color="listColor" 
                 :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView"
                 :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
                 :show-icon="appStore.settings.ui.show_list_icon" 
                 :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
                 :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
                 :show-index="appStore.settings.ui.show_list_index"
-                :search-match="currentTargetId === dataKey">
+                :search-match="currentTargetId === dataKey"
+                :section-feature-enabled="sectionFeatureEnabled"
+                :section-header="isSectionHeaderId(dataKey)"
+                :section-collapsed="isSectionCollapsed(dataKey)"
+                :section-child-count="getSectionChildCount(dataKey)"
+                @toggle-section="toggleSection"
+                @expand-selected-sections="expandSections"
+                @collapse-selected-sections="collapseSections">
               </ModItem>
-              <div v-if="modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
+              <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
                 class="absolute top-0 right-0 rounded-md bg-accent-primary text-text-main px-1 py-0.5 text-[0.6rem] text-center flex items-center justify-center">
                 NEW
               </div>
@@ -247,6 +254,7 @@ import { Download, Flag, GitPullRequestCreate, Megaphone, MegaphoneOff, MessageS
 import { useContextMenuStore } from '../stores/contextMenuStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useGuideStore } from '../stores/guideStore';
+import { useProfileStore } from '../stores/profileStore';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -262,6 +270,7 @@ const appStore = useAppStore()
 const modStore = useModStore()
 const searchStore = useSearchStore()
 const menuStore = useContextMenuStore()
+const profileStore = useProfileStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 const listKey = ref(0)
@@ -289,17 +298,61 @@ const isFilterByIssue = ref(false)  // 是否筛选问题项
 const filterIssueType = ref('')   // 筛选问题项类型
 
 const isSortChange = ref(false) // 是否排序切换
+const collapsedSectionIds = ref<string[]>([])
 
 // 获取 Engine 实例 (computed 确保响应式)
 const engine = computed(() => searchStore.engine)
+const normalizeId = (value: string) => String(value ?? '').trim().toLowerCase()
+const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
+// 标题分组功能只允许在 active 列表开启，避免影响其它列表原本的拖拽/显示语义。
+const sectionFeatureEnabled = computed(() => props.listId === 'active' && !!appStore.settings.ui.enable_active_section_collapse)
+const isSectionHeaderName = (value: string) => {
+  const name = String(value ?? '').trim()
+  return name.length >= 2 && name.startsWith('=') && name.endsWith('=')
+}
+const isSectionHeaderModId = (id: string) => {
+  const mod = modStore.takeModById(id)
+  return isSectionHeaderName(mod?.alias_name) || isSectionHeaderName(mod?.name)
+}
+const isSectionHeaderId = (id: string) => sectionFeatureEnabled.value && isSectionHeaderModId(id)
+const sectionHeaderIds = computed(() => {
+  if (!sectionFeatureEnabled.value) return []
+  return props.modelValue.filter(id => isSectionHeaderModId(id))
+})
+// 序号始终以真实列表顺序为准，而不是以当前可见列表顺序为准。
+const realIndexMap = computed(() => {
+  const map = new Map<string, number>()
+  props.modelValue.forEach((id, index) => {
+    map.set(normalizeId(id), index)
+  })
+  return map
+})
+const getRealIndex = (id: string) => realIndexMap.value.get(normalizeId(id)) ?? 0
 
 // --- 2. 显示列表计算 (Filter -> Sort) ---
 // 仅当允许拖拽排序时 (默认模式且无筛选) 为 True
 // 注意：如果 filtered，禁止排序，因为无法映射回原数组的正确位置
 const isFiltered = computed(() => filterQuery.value.length > 0 || isFilterByIssue.value || filterByLine.value?.length > 0)
-const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
+const canUseSectionCollapse = computed(() => sectionFeatureEnabled.value && allowSort.value)
+// collapsedSectionIds 是“当前组件内正在使用的折叠状态源”；
+// activeCollapsedSectionIds / collapsedSectionIdSet 则负责把它清洗成当前列表仍然有效的标题集合。
+const activeCollapsedSectionIds = computed(() => {
+  const validIds = new Set(sectionHeaderIds.value.map(id => normalizeId(id)))
+  return collapsedSectionIds.value.filter(id => validIds.has(id))
+})
+const collapsedSectionIdSet = computed(() => new Set(activeCollapsedSectionIds.value))
+const hasSectionHeaders = computed(() => sectionHeaderIds.value.length > 0)
 const allMods = computed(() => modStore.allModsMap ? Array.from(modStore.allModsMap.values()) : [])
 const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4 )
+// 只有在完成一次“历史状态恢复 / 默认折叠应用”之后，才允许把状态重新写回本地存储，
+// 这样可以避免初次挂载时用空数组覆盖已有状态。
+const sectionStateReady = ref(false)
+// 折叠状态按“环境 + 列表”隔离保存，避免不同 Profile 之间串状态。
+const sectionStateStorageKey = computed(() => {
+  if (!sectionFeatureEnabled.value) return ''
+  const profileId = profileStore.currentProfileId || appStore.settings.current_profile_id || 'default'
+  return `rmm:collapsed-sections:${profileId}:${props.listId}`
+})
 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
@@ -428,7 +481,6 @@ const filterTooltip = computed(() => {
   text += `\n\n__[[(点击清除所有筛选)]]__`
   return text
 })
-
 // 处理点击依赖图线路（筛选依赖组）
 const handleLineClick = (lines) => {
   // 重复点击清空
@@ -440,9 +492,10 @@ const handleLineClick = (lines) => {
 }
 // 依赖线路数据
 const lineData = computed(() => {
-  return displayList.value
-  return filterByLine.value.length === 0 ? props.modelValue : filterByLine.value
+  return visibleList.value
 })
+// 左侧依赖线只跟随当前“可见列表”，这样折叠后视觉和交互才能保持同步。
+const showDependencyGraph = computed(() => allowSort.value || filterByLine.value.length > 0)
 
 // ===== 显示数据计算 =====
 // 显示列表：筛选 -> 排序
@@ -500,13 +553,264 @@ const displayList = computed(() => {
   
   return list
 })
+const sectionChildCountMap = computed(() => {
+  const map = new Map<string, number>()
+  let currentSectionId = ''
+  props.modelValue.forEach(id => {
+    if (isSectionHeaderId(id)) {
+      currentSectionId = normalizeId(id)
+      if (!map.has(currentSectionId)) map.set(currentSectionId, 0)
+      return
+    }
+    if (!currentSectionId) return
+    map.set(currentSectionId, (map.get(currentSectionId) || 0) + 1)
+  })
+  return map
+})
+const getSectionChildCount = (id: string) => sectionChildCountMap.value.get(normalizeId(id)) || 0
+const isSectionCollapsed = (id: string) => collapsedSectionIdSet.value.has(normalizeId(id))
+// 所有外部传入的标题 ID（菜单、多选、持久化恢复）都会先经过这一层标准化，
+// 只保留“当前列表里真实存在的标题项”，避免旧数据或跨列表 ID 混入。
+const normalizeSectionIds = (ids: string[]) => {
+  const validIds = new Set(sectionHeaderIds.value.map(id => normalizeId(id)))
+  return [...new Set(ids.map(id => normalizeId(id)).filter(id => validIds.has(id)))]
+}
+// 读取本地持久化的折叠状态；失败时返回 null，交给上层走默认折叠分支。
+const getPersistedSectionIds = () => {
+  if (!sectionStateStorageKey.value) return null
+  try {
+    const raw = window.localStorage?.getItem(sectionStateStorageKey.value)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+// 把“当前有效折叠状态”写入本地。这里不抛错，避免本地存储异常影响主流程。
+const persistSectionIds = (ids = activeCollapsedSectionIds.value) => {
+  if (!sectionStateStorageKey.value) return
+  try {
+    window.localStorage?.setItem(sectionStateStorageKey.value, JSON.stringify(ids))
+  } catch {
+  }
+}
+// 单个标题项的直接折叠/展开入口，供标题按钮和双击操作复用。
+const toggleSection = (id: string) => {
+  if (!canUseSectionCollapse.value || getSectionChildCount(id) === 0) return
+  const key = normalizeId(id)
+  if (collapsedSectionIdSet.value.has(key)) {
+    collapsedSectionIds.value = collapsedSectionIds.value.filter(sectionId => sectionId !== key)
+    return
+  }
+  collapsedSectionIds.value = [...activeCollapsedSectionIds.value, key]
+}
+// 批量展开入口，主要给右键菜单使用。
+const expandSections = (ids: string[]) => {
+  const targetIds = normalizeSectionIds(ids)
+  if (!targetIds.length) return
+  collapsedSectionIds.value = collapsedSectionIds.value.filter(id => !targetIds.includes(id))
+}
+// 批量折叠入口，主要给右键菜单和默认折叠逻辑使用。
+const collapseSections = (ids: string[]) => {
+  if (!canUseSectionCollapse.value) return
+  const targetIds = normalizeSectionIds(ids)
+    .filter(id => getSectionChildCount(id) > 0)
+  if (!targetIds.length) return
+  collapsedSectionIds.value = [...new Set([...activeCollapsedSectionIds.value, ...targetIds])]
+}
+// 统一的“折叠状态初始化”入口：
+// 1. 若功能关闭或当前列表没有标题项，则清空；
+// 2. 若存在历史保存状态，则优先恢复历史状态；
+// 3. 若没有历史状态，再根据“默认折叠”决定初始状态。
+const hydrateSectionState = () => {
+  if (!sectionFeatureEnabled.value) {
+    collapsedSectionIds.value = []
+    sectionStateReady.value = false
+    return
+  }
+  if (sectionHeaderIds.value.length === 0) {
+    collapsedSectionIds.value = []
+    sectionStateReady.value = false
+    return
+  }
+  const persistedIds = getPersistedSectionIds()
+  if (persistedIds) {
+    collapsedSectionIds.value = normalizeSectionIds(persistedIds)
+      .filter(id => getSectionChildCount(id) > 0)
+  } else if (appStore.settings.ui.default_collapse_active_sections) {
+    collapsedSectionIds.value = normalizeSectionIds(sectionHeaderIds.value)
+      .filter(id => getSectionChildCount(id) > 0)
+  } else {
+    collapsedSectionIds.value = []
+  }
+  sectionStateReady.value = true
+  persistSectionIds()
+}
+// 真正渲染、框选、键盘导航、依赖线同步都基于 visibleList，而不是完整 displayList。
+const visibleList = computed(() => {
+  if (!canUseSectionCollapse.value || !hasSectionHeaders.value) return displayList.value
+  let hideFollowingMods = false
+  return displayList.value.filter(id => {
+    if (isSectionHeaderId(id)) {
+      hideFollowingMods = isSectionCollapsed(id)
+      return true
+    }
+    return !hideFollowingMods
+  })
+})
+const findOwningSectionId = (targetId: string) => {
+  let currentSectionId = ''
+  for (const id of displayList.value) {
+    if (isSectionHeaderId(id)) currentSectionId = id
+    if (normalizeId(id) === normalizeId(targetId)) {
+      return currentSectionId || ''
+    }
+  }
+  return ''
+}
+// 搜索定位命中折叠组内成员时，先自动展开所属标题组，再滚动过去。
+const revealCollapsedSectionFor = async (targetId: string) => {
+  if (!canUseSectionCollapse.value || visibleList.value.includes(targetId)) return
+  const sectionId = findOwningSectionId(targetId)
+  if (!sectionId) return
+  const key = normalizeId(sectionId)
+  if (!collapsedSectionIdSet.value.has(key)) return
+  collapsedSectionIds.value = collapsedSectionIds.value.filter(sectionKey => sectionKey !== key)
+  await nextTick()
+}
+const sameId = (a: string, b: string) => normalizeId(a) === normalizeId(b)
+// 折叠状态下拖动标题时，需要把标题到下一标题之间的所有成员一起打包移动。
+const getSectionMemberIds = (headerId: string, sourceList = props.modelValue) => {
+  const result: string[] = []
+  let inSection = false
+  for (const id of sourceList) {
+    if (sameId(id, headerId)) {
+      inSection = true
+      result.push(id)
+      continue
+    }
+    if (inSection && isSectionHeaderId(id)) break
+    if (inSection) result.push(id)
+  }
+  return result
+}
+// 插入位置按“可见列表位置”换算回“真实列表位置”，并兼容插入到折叠组末尾的需求。
+const getSectionRangeForId = (list: string[], targetId: string) => {
+  let currentHeaderId = ''
+  let headerIndex = -1
+  let itemIndex = -1
+  for (let index = 0; index < list.length; index++) {
+    const id = list[index]
+    if (isSectionHeaderId(id)) {
+      currentHeaderId = id
+      headerIndex = index
+    }
+    if (sameId(id, targetId)) {
+      itemIndex = index
+      break
+    }
+  }
+  if (itemIndex === -1) return null
+  let endIndex = list.length - 1
+  for (let index = itemIndex + 1; index < list.length; index++) {
+    if (isSectionHeaderId(list[index])) {
+      endIndex = index - 1
+      break
+    }
+  }
+  return {
+    headerId: currentHeaderId,
+    headerIndex,
+    itemIndex,
+    endIndex
+  }
+}
+// newIndex 来自“可见列表”，而最终写回的是“真实列表”。
+// 这里负责把拖拽库给的可见位置，翻译成真实数组中的插入点。
+const resolveInsertionIndex = (baseList: string[], dirtyIds: string[], movingIds: string[], newIndex: number, preferSectionEnd = false) => {
+  const movingVisibleSet = new Set(
+    movingIds
+      .filter(id => visibleList.value.some(visibleId => sameId(visibleId, id)))
+      .map(id => normalizeId(id))
+  )
+  const baseVisibleIds = dirtyIds.filter(id => !movingVisibleSet.has(normalizeId(id)))
+  let insertVisibleIndex = 0
+  for (let index = 0; index < newIndex; index++) {
+    if (!movingVisibleSet.has(normalizeId(dirtyIds[index]))) {
+      insertVisibleIndex++
+    }
+  }
+  const prevVisibleId = baseVisibleIds[insertVisibleIndex - 1]
+  const nextVisibleId = baseVisibleIds[insertVisibleIndex]
+
+  if (prevVisibleId) {
+    const prevRange = getSectionRangeForId(baseList, prevVisibleId)
+    if (!prevRange) return baseList.length
+    const insertToSectionEnd =
+      (preferSectionEnd && !!prevRange.headerId) ||
+      (isSectionHeaderId(prevVisibleId) && isSectionCollapsed(prevVisibleId))
+    return insertToSectionEnd ? prevRange.endIndex + 1 : prevRange.itemIndex + 1
+  }
+  if (nextVisibleId) {
+    const nextIndex = baseList.findIndex(id => sameId(id, nextVisibleId))
+    return nextIndex === -1 ? 0 : nextIndex
+  }
+  return baseList.length
+}
+// 标题结构变化后，及时清理已经失效的折叠状态。
+watch(sectionHeaderIds, (ids) => {
+  const validIds = new Set(ids.map(id => normalizeId(id)))
+  collapsedSectionIds.value = collapsedSectionIds.value.filter(id => validIds.has(id))
+}, { immediate: true })
+// 功能关闭时直接清空运行态和恢复标记，避免后续 watch 继续写回旧状态。
+watch(sectionFeatureEnabled, (enabled) => {
+  if (!enabled) {
+    collapsedSectionIds.value = []
+    sectionStateReady.value = false
+  }
+}, { immediate: true })
+// 当环境切换、列表切换、标题集合变化时，重新按“历史状态优先”的规则恢复一次折叠状态。
+watch(
+  [sectionStateStorageKey, sectionHeaderIds],
+  () => {
+    hydrateSectionState()
+  },
+  { immediate: true }
+)
+// 只有在初始化完成后，才把新的折叠状态回写到本地。
+watch(activeCollapsedSectionIds, (ids) => {
+  if (!sectionFeatureEnabled.value || !sectionStateReady.value) return
+  persistSectionIds(ids)
+})
+// 默认折叠只负责“没有历史状态时”的初始值，不主动覆盖用户已经保存的展开/折叠结果。
+watch(() => appStore.settings.ui.default_collapse_active_sections, (enabled) => {
+  if (!sectionFeatureEnabled.value || sectionHeaderIds.value.length === 0) return
+  const persistedIds = getPersistedSectionIds()
+  if (persistedIds) return
+  collapsedSectionIds.value = enabled
+    ? normalizeSectionIds(sectionHeaderIds.value).filter(id => getSectionChildCount(id) > 0)
+    : []
+  sectionStateReady.value = true
+  persistSectionIds()
+})
 // VueVirtualSortable 需要对象数组 {id: ...}
-// 这里做一个中间层，处理 displayList 和 modelValue 之间的映射
+// 这里做一个中间层，处理 visibleList 和 modelValue 之间的映射。
+// 折叠标题会额外挂上 mod_ids，让拖拽库把它视为“整组代理项”。
 const internalListProxy = computed({
     get() {
-      return displayList.value.map(id => ({ id }))
+      return visibleList.value.map(id => {
+        if (isSectionHeaderId(id) && isSectionCollapsed(id)) {
+          return {
+            id,
+            mod_ids: getSectionMemberIds(id, props.modelValue)
+          }
+        }
+        return { id }
+      })
     },
     set(val) {
+      // 排序结果最终由 drop 事件统一回写；这里保留空实现，只满足 v-model 接口要求。
     }
 })
 
@@ -548,9 +852,10 @@ watch(currentTargetId, async (newVal, oldVal) => {
     // // 等待 Vue 重新计算 displayList
     // await nextTick()
   }
+  await revealCollapsedSectionFor(newVal)
 
   // 3. 执行定位
-  const index = displayList.value.indexOf(newVal)
+  const index = visibleList.value.indexOf(newVal)
   if (index !== -1) {
     // 稍微延迟一下确保虚拟列表渲染就绪
     setTimeout(() => {
@@ -581,7 +886,7 @@ const executeSearch = (next = true) => {
    // 1. 全局搜索
   const matchedObjects = engine.value.search(searchQuery.value, searchLogic.value)
   const matchedSet = new Set(matchedObjects.map(m => m.package_id))
-  // 2. 过滤结果：只定位 *当前可见列表(displayList)* 中的项
+  // 2. 过滤结果：定位当前筛选/排序后的结果，隐藏分组会在跳转前自动展开
   const results = displayList.value.filter(id => matchedSet.has(id))
   if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
     searchResults.value = results
@@ -619,40 +924,49 @@ const updateChildren = async (e) => {
   // console.log("更新子项排序:", e)
   const oldIds = [...props.modelValue] // 原始数据（即 source of truth）
   // 这里的 newIds (脏数据) 仅用于计算相对位置，不参与数据重组
-  const dirtyIds = internalListProxy.value.map(item => item.id) 
+  const dirtyIds = Array.isArray(e.list) && e.list.length
+    ? e.list.map(item => item.id)
+    : internalListProxy.value.map(item => item.id)
+  // dirtyIds 表示拖拽库视角下“当前可见顺序”的快照，
+  // 它可能已经包含占位项或折叠代理项，所以只能用来换算位置，不能直接作为最终结果写回。
   // 1. 获取当前所有需要移动的 ID (处理分组或多选)
-  let movingIds = []
+  let movingIds: string[] = []
+  let preferSectionEnd = false
   if (e.item?.mod_ids?.length) {
-    // 拖动的是分组 -> 移动分组内的所有 Mod
+    // 折叠标题会直接把整组 mod_ids 带进来，这里按整组移动即可。
     movingIds = [...e.item.mod_ids]
     // 顺便更新一下 Store 的选中状态，保持一致性
-    modStore.selectMods([...movingIds], e.item?.key || null)
+    modStore.selectMods([...movingIds], e.item?.id || e.key || null)
   } else {
+    const draggedId = String(e.item?.id || e.key || dirtyIds[e.newIndex] || '').trim()
+    if (draggedId && isSectionHeaderId(draggedId) && isSectionCollapsed(draggedId)) {
+      // 某些情况下事件对象里没有完整的 mod_ids，这里再兜底按标题范围重建整组。
+      movingIds = getSectionMemberIds(draggedId, oldIds)
+      preferSectionEnd = true
+      modStore.selectMods([...movingIds], draggedId)
+    } else if (draggedId && isSectionHeaderId(draggedId)) {
+      // 标题展开时只移动标题本身，不连带后续成员。
+      movingIds = [draggedId]
+      modStore.selectMods([draggedId], draggedId)
+    }
     // 拖动的是列表项 -> 移动当前选中项
-    movingIds = [...modStore.selectedIds]
-    const draggedId = dirtyIds[e.newIndex] // 注意：这里用脏数据的索引获取当前拖拽的元素ID
-    // 如果拖拽的项不在选中列表中（比如未选中时直接拖），则把它加入
-    if (!movingIds.includes(draggedId) && draggedId) {
-      movingIds.push(draggedId)
+    if (movingIds.length === 0) {
+      movingIds = [...modStore.selectedIds]
+      const fallbackDraggedId = String(e.item?.id || e.key || dirtyIds[e.newIndex] || '').trim()
+      // 如果拖拽的项不在选中列表中（比如未选中时直接拖），则把它加入
+      if (!movingIds.includes(fallbackDraggedId) && fallbackDraggedId) {
+        movingIds.push(fallbackDraggedId)
+      }
     }
   }
-  // 2. 核心算法：计算“纯净插入点”
-  // 需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
-  // 在剔除移动项后的 baseList 中找到正确的插入位置
-  let validItemsAbove = 0
-  for (let i = 0; i < e.newIndex; i++) {
-    const idAtLoc = dirtyIds[i]
-    if (!movingIds.includes(idAtLoc)) {
-      validItemsAbove++
-    }
-  }
-  // 如果是向下拖拽，Sortable 的 newIndex 包含了拖拽项本身的位置
+  const movingIdSet = new Set(movingIds.map(id => normalizeId(id)))
   // 3. 构建新列表
   // 3.1 生成 BaseList：从原始列表中剔除所有移动项
-  const baseList = oldIds.filter(id => !movingIds.includes(id))
-  let correctedIndex = validItemsAbove
+  const baseList = oldIds.filter(id => !movingIdSet.has(normalizeId(id)))
+  let correctedIndex = resolveInsertionIndex(baseList, dirtyIds, movingIds, e.newIndex, preferSectionEnd)
+  // 联锁修正逻辑仍然保留在真实列表层面，确保标题分组拖拽不会破坏现有联锁语义。
   // 只有当插入点不在头部也不在尾部时才需要检查
-  if (correctedIndex > 0 && correctedIndex < baseList.length) {
+  if (!preferSectionEnd && correctedIndex > 0 && correctedIndex < baseList.length) {
     const prevId = baseList[correctedIndex - 1]
     // 检查前一个元素是否有向后的联锁
     let curr = prevId
@@ -682,11 +996,10 @@ const updateChildren = async (e) => {
       }
     }
   }
-  validItemsAbove = correctedIndex
 
   // 3.2 插入：在计算出的纯净位置插入移动项
   const finalList = [...baseList]
-  finalList.splice(validItemsAbove, 0, ...movingIds)
+  finalList.splice(correctedIndex, 0, ...movingIds)
 
   // 4. 检查是否有变化
   if (JSON.stringify(finalList) !== JSON.stringify(oldIds)) {
@@ -831,7 +1144,7 @@ const focusContainer = (e) => {
  * @param {number} direction -1 为向上，1 为向下
  */
 const handleKeyNav = (direction) => {
-  const list = displayList.value // 当前经过筛选/排序后的 ID 数组
+  const list = visibleList.value // 当前可见的 ID 数组
   if (!list.length) return
   // 确定当前选中的索引
   const currentId = modStore.lastSelectedMod?.package_id

@@ -4,16 +4,23 @@
     @contextmenu="handleContextMenu" @dblclick="handleDoubleClick" @click.left="handleClick">
     <!-- 序号（通过位数计算动态调整字体大小） -->
     <!-- :style="{ fontSize: 18-(index+1).toString().length*3 + 'px' }" -->
-    <div v-if="showIndex" class="swipe-trigger w-6 h-6 p-3 flex items-center justify-center rounded"
-      :class="[ props.isSelected ? `text-text-main bg-accent-${listColor}/50` : `text-accent-${listColor}/50 bg-accent-${listColor}/10 hover:text-text-main hover:bg-accent-${listColor}/50`, `digits-${(index+1).toString().length}`, isInSearch ? ' ring-2 ring-accent-highlight' : '']"
-      :style="{ width: appStore.scalePx(25) + 'px', height: appStore.scalePx(25) + 'px'}">
-      {{ index+1 }}
-    </div>
+    <button v-if="showIndex" type="button"
+      class="swipe-trigger w-6 h-6 flex items-center justify-center rounded transition-all"
+      :class="[ props.isSelected ? `text-text-main bg-accent-${listColor}/50` : `text-accent-${listColor}/50 bg-accent-${listColor}/10 hover:text-text-main hover:bg-accent-${listColor}/50`, !sectionHeader ? `digits-${(index+1).toString().length}` : '', isInSearch ? ' ring-2 ring-accent-highlight' : '', sectionHeader && !sectionCollapsed ? 'rotate-180' : '']"
+      :style="{ width: appStore.scalePx(25) + 'px', height: appStore.scalePx(25) + 'px'}"
+      :title="sectionHeader ? (sectionCollapsed ? '展开分组' : '折叠分组') : null"
+      @click.stop="sectionHeader ? emit('toggle-section', item_id) : null">
+      <!-- 标题项复用普通序号列，只把数字替换为折叠图标，避免额外引入新布局。 -->
+      <svg v-if="sectionHeader" class="size-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+      </svg>
+      <template v-else>{{ index+1 }}</template>
+    </button>
     
     <!-- 内容区域 -->
       <!-- :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', getCardClass, simple ? 'h-[30px]' : 'h-[50px]']"  -->
     <div class="select-trigger drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg border hover:opacity-90 backdrop-blur-sm group shadow-sm text-text-main/80"
-      :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', getCardClass]" 
+      :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', cardClass]" 
       :style="getCardStyle(item_id)"
       v-preview="modData">
       <div v-if="showIcon">
@@ -83,27 +90,43 @@
 
       <!-- 文字信息 -->
       <div class="flex-1 min-w-0">
-        <!-- 别名 -->
-        <div v-if="modData.alias_name && !simple" class="text-[0.7rem] text-text-dim truncate font-mono ">
-          {{ modData.name }}
-        </div>
-        <!-- 主名称 -->
-        <div class="text-sm font-medium truncate">
-          {{ modData.alias_name ? modData.alias_name : (modData.name ? modData.name : item_id) }}
-        </div>
-        <!-- 标签 -->
-        <div class="overflow-hidden" style="box-shadow: inset 8px 0 10px -8px rgba(0, 0, 0, 0.3), inset -8px 0 10px -8px rgba(0, 0, 0, 0.3);">
-          <div v-if="modData?.tags && modData.tags.length && !simple" class="flex gap-0.5 w-full overflow-y-hidden overflow-x-scroll custom-scrollbar mt-0.5 outline-none ">
-              <span v-for="tag in modData.tags" :key="tag" class="min-w-fit font-mono px-0.5 py-0 my-0 rounded-md bg-accent-primary/10 text-accent-primary text-[0.7rem] font-bold border border-accent-primary/10 drop-shadow-xl/25">
-                {{ tag }}
-              </span>
+        <template v-if="sectionHeader">
+          <div class="text-sm font-medium truncate">
+            {{ displayName }}
           </div>
-        </div>
-        
+          <div v-if="!simple" class="text-[0.68rem] text-text-dim truncate font-mono">
+            {{ sectionCollapsed ? '拖动标题将整组移动，插入时默认落在组尾' : '当前为展开状态，拖动标题仅移动该标题项' }}
+          </div>
+        </template>
+        <template v-else>
+          <!-- 别名 -->
+          <div v-if="modData.alias_name && !simple" class="text-[0.7rem] text-text-dim truncate font-mono ">
+            {{ modData.name }}
+          </div>
+          <!-- 主名称 -->
+          <div class="text-sm font-medium truncate">
+            {{ displayName }}
+          </div>
+          <!-- 标签 -->
+          <div class="overflow-hidden" style="box-shadow: inset 8px 0 10px -8px rgba(0, 0, 0, 0.3), inset -8px 0 10px -8px rgba(0, 0, 0, 0.3);">
+            <div v-if="modData?.tags && modData.tags.length && !simple" class="flex gap-0.5 w-full overflow-y-hidden overflow-x-scroll custom-scrollbar mt-0.5 outline-none ">
+                <span v-for="tag in modData.tags" :key="tag" class="min-w-fit font-mono px-0.5 py-0 my-0 rounded-md bg-accent-primary/10 text-accent-primary text-[0.7rem] font-bold border border-accent-primary/10 drop-shadow-xl/25">
+                  {{ tag }}
+                </span>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- 标题项把“组内数量”放到最右侧，保持左侧图标区与普通项一致。 -->
+      <div v-if="sectionHeader" class="shrink-0 flex items-center gap-2">
+        <span :class="`rounded bg-black/30 px-2 py-0.5 text-xs text-accent-${listColor}`">
+          {{ sectionChildCount }}
+        </span>
       </div>
 
       <!-- 可替换版本提示 -->
-      <div v-if="modData?.replacement" :class="[`rounded-4xl cursor-help text-sm font-bold
+      <div v-if="!sectionHeader && modData?.replacement" :class="[`rounded-4xl cursor-help text-sm font-bold
         hover:scale-110  text-shadow-2xs text-shadow-black hover:shadow-bg-deep/50 transition-all`, replacementInstalled?'text-text-dim':'text-accent-tip']"
         v-tooltip="replacementTooltip">
         <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -112,7 +135,7 @@
       </div>
       
       <!-- 问题警告 -->
-      <div v-if="issueState" :class="[`rounded-4xl cursor-help text-sm font-bold
+      <div v-if="!sectionHeader && issueState" :class="[`rounded-4xl cursor-help text-sm font-bold
         hover:scale-110  text-shadow-2xs text-shadow-black hover:shadow-bg-deep/50 transition-all`,
         issueState === 'error' ? 'text-accent-danger' : issueState === 'warn'? 'text-accent-warn': issueState === 'info'? 'text-text-dim':'text-accent-primary']"
         v-tooltip="issueTooltip">
@@ -125,7 +148,7 @@
       </div>
 
       <!-- 分组颜色条 -->
-      <div class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
+      <div v-if="!sectionHeader" class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
         <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
           <!-- 悬浮显示分组信息 -->
           <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
@@ -139,11 +162,11 @@
     </div>
 
     <!-- 联锁标识 -->
-    <div v-if="hasLockPrevious" class="absolute -top-2 right-8 opacity-50" :class="{'text-accent-warn': linkWarn[0]}">
+    <div v-if="!sectionHeader && hasLockPrevious" class="absolute -top-2 right-8 opacity-50" :class="{'text-accent-warn': linkWarn[0]}">
       <svg v-show="!linkWarn[0]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
       <svg v-show="linkWarn[0]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
     </div>
-    <div v-if="hasLockNext" class="absolute -bottom-2 right-11 opacity-50" :class="{'text-accent-warn': linkWarn[1]}">
+    <div v-if="!sectionHeader && hasLockNext" class="absolute -bottom-2 right-11 opacity-50" :class="{'text-accent-warn': linkWarn[1]}">
       <svg v-show="!linkWarn[1]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
       <svg v-show="linkWarn[1]" class="rotate-90 size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h0a5 5 0 0 1 0 10h-0m-8 0H7A5 5 0 0 1 7 7h0"/><line x1="14" y1="19" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="10" y1="19" x2="8" y2="21" stroke="currentColor" stroke-width="2"/><line x1="14" y1="5" x2="16" y2="3" stroke="currentColor" stroke-width="2"/><line x1="10" y1="5" x2="8" y2="3" stroke="currentColor" stroke-width="2"/></svg>
     </div>
@@ -176,10 +199,16 @@ const props = defineProps({
   isSelected: { type: Boolean, default: false },
   isDragging: { type: Boolean, default: false }, // 用于外部控制样式
   isInSearch: { type: Boolean, default: false }, // 是否在搜索结果中
-  searchMatch: { type: Boolean, default: false } // 是否是当前搜索焦点
+  searchMatch: { type: Boolean, default: false }, // 是否是当前搜索焦点
+  // 仅用于在右键菜单中判断“当前选中项里是否包含标题分组”，不参与普通模组逻辑。
+  sectionFeatureEnabled: { type: Boolean, default: false },
+  sectionHeader: { type: Boolean, default: false },
+  sectionCollapsed: { type: Boolean, default: false },
+  sectionChildCount: { type: Number, default: 0 }
 })
 
-defineEmits(['contextmenu'])
+// 标题项需要把折叠动作回传给父列表，真正的折叠状态由父组件统一维护。
+const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections'])
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -193,6 +222,21 @@ const confirmStore = useConfirmStore()
 const modData = computed(() => modStore.takeModById(props.item_id))
 const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
 // const modIcon = computed(() => modStore.getIconUrl(props.id))
+const displayName = computed(() => modData.value.alias_name ? modData.value.alias_name : (modData.value.name ? modData.value.name : props.item_id))
+// ModItem 自己也需要识别“哪些选中项属于标题分组”，这样右键菜单才能按批量分组操作显示。
+const isSectionHeaderName = (value) => {
+  const name = String(value ?? '').trim()
+  return name.length >= 2 && name.startsWith('=') && name.endsWith('=')
+}
+const isSectionHeaderId = (id) => {
+  if (!props.sectionFeatureEnabled) return false
+  const mod = modStore.takeModById(id)
+  return isSectionHeaderName(mod?.alias_name) || isSectionHeaderName(mod?.name)
+}
+const selectedSectionHeaderIds = computed(() => {
+  if (!props.sectionFeatureEnabled) return []
+  return [...new Set(modStore.selectedIds.filter(id => isSectionHeaderId(id)))]
+})
 
 // 是否启用
 const isActive = computed(() => modStore.activeIds.includes(props.item_id))
@@ -222,6 +266,12 @@ const getCardClass = computed(() => {
     if (issueState.value === 'warn') return `${select} border-accent-warn/40 border bg-accent-warn/10 hover:bg-accent-warn/20`
     return `${select} bg-bg-surface/20 border-text-main/10 hover:border-text-main/20 hover:bg-text-dim/20` // 原有的选中样式
 })
+const sectionHeaderClass = computed(() => {
+  const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
+  return `${select} bg-accent-${props.listColor}/12 border-accent-${props.listColor}/35 hover:bg-accent-${props.listColor}/20`
+})
+// 标题项只替换局部内容，整体卡片仍复用普通项卡片样式体系。
+const cardClass = computed(() => props.sectionHeader ? sectionHeaderClass.value : getCardClass.value)
 
 // 构造提示文本
 const issueTooltip = computed(() => {
@@ -284,6 +334,8 @@ watch(linkWarn, (newVal) => {
 
 const getCardStyle = (id) => {
   const base = { height: (props.simple ? appStore.scalePx(30) : appStore.scalePx(50))+'px' }
+  // 标题项保持固定高度，不参与普通模组的签名色着色逻辑。
+  if (props.sectionHeader) return base
   const color = modStore.takeModById(id).sign_color
   // console.log(color)
   if (!color) return base
@@ -297,6 +349,11 @@ const getCardStyle = (id) => {
 
 // 双击启用/停用 Mod
 const handleDoubleClick = () => {
+  if (props.sectionHeader) {
+    // 标题项双击改为折叠/展开，避免误触发普通模组的启用/停用语义。
+    emit('toggle-section', props.item_id)
+    return
+  }
   if (appStore.settings.ui.double_click_active_mod) {
     modStore.changeModsActive(modStore.selectedIds, !isActive.value)
   }
@@ -447,6 +504,13 @@ const handleContextMenu = async (event) => {
     { divider: true },
     { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
   ]
+  // 只要选中项中包含标题分组，就允许直接批量展开/折叠。
+  // 这里不要求“全部都是分组项”，因为用户常见操作是多选混合项后统一处理分组。
+  const sectionMenuItems = selectedSectionHeaderIds.value.length > 0 ? [
+    { divider: true },
+    { label: '展开选中分组', action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
+    { label: '折叠选中分组', action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
+  ] : []
   const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
   if (!allInterlocked) {
     selectedMenuItems.push({ label: '创建联锁'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) })
@@ -509,7 +573,8 @@ const handleContextMenu = async (event) => {
   const menuItems = [
   ...commnMenuItems,
   ...singleMenuItems,
-  ...(selectedIds.length > 2 ? selectedMenuItems : []),
+  ...(selectedIds.length > 1 ? selectedMenuItems : []),
+  ...sectionMenuItems,
   ...issueManagementItems, // 插入新的批量忽略逻辑
   ...fileMenuItems, // 插入文件处理菜单
 ];

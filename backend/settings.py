@@ -113,6 +113,8 @@ class UIConfig:
     ])
 
     show_dependency_graph: bool = True  # 是否显示依赖关系图
+    enable_active_section_collapse: bool = False  # 是否启用启用列表标题分组折叠（仅 active 列表使用）
+    default_collapse_active_sections: bool = False  # 在没有历史折叠状态时，是否让标题分组首次默认折叠
     show_list_index: bool = True  # 是否显示列表索引列
     show_list_icon: bool = True  # 是否显示 Mod 图标
     show_list_mod_icon: bool = True  # 是否显示 Mod 图标
