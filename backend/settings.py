@@ -155,6 +155,7 @@ class AppConfig:
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
     prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     enable_tool_mods: bool = False           # 是否启用 ToolMods 目录下的伴生模组
+    link_deployment_mode_full: bool = False # 链接部署模式: true=完全重建, false=增量部署
     use_raw_ids: bool = False               # 是否使用原始 Mod ID
     
     # --- 高级设置 ---

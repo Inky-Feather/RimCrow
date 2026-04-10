@@ -319,7 +319,11 @@ class ModScanner:
             
             # 调用 FileManager 执行部署
             # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
-            success = FileManager.sync_links_fast(local_mods_root, final_links_to_create)
+            # 增量模式只处理变化项；全量模式则删除全部旧链接后重建。
+            if settings.config.link_deployment_mode_full:
+                success = FileManager.sync_links_full(local_mods_root, final_links_to_create)
+            else:
+                success = FileManager.sync_links(local_mods_root, final_links_to_create)
             if final_links_to_create:
                 deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
 

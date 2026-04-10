@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
+from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.mod_scanner import ModScanner
 
 
@@ -65,6 +66,102 @@ class TestProfileManager(unittest.TestCase):
             str(current_user_data / "Config"),
             str(target_user_data),
         )
+
+
+class TestModAnalyzer(unittest.TestCase):
+    def setUp(self):
+        self.analyzer = ModAnalyzer()
+        self.temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.temp_root, ignore_errors=True)
+
+    def _build_info(self, **file_stats):
+        stats = {
+            "code_dll": 0,
+            "game_xml": 0,
+            "patch_xml": 0,
+            "lang_xml": 0,
+            "image": 0,
+            "audio": 0,
+        }
+        stats.update(file_stats)
+        return {
+            "mod_type": "Unknown",
+            "supported_languages": set(),
+            "file_stats": stats,
+            "has_assemblies": False,
+            "has_defs": stats["game_xml"] > 0,
+            "has_tip": False,
+        }
+
+    def _write_file(self, relative_path, content="<root />"):
+        path = self.temp_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def test_finalize_keeps_tip_based_language_pack(self):
+        info = self._build_info(game_xml=1, lang_xml=3)
+        info["has_tip"] = True
+
+        result = self.analyzer._finalize(info)
+
+        self.assertEqual(result["mod_type"], "LanguagePack")
+
+    def test_finalize_mixed_requires_game_xml_image_and_audio(self):
+        mixed_info = self._build_info(game_xml=2, image=6, audio=3)
+        resource_only_info = self._build_info(image=6, audio=3)
+
+        mixed_result = self.analyzer._finalize(mixed_info)
+        resource_only_result = self.analyzer._finalize(resource_only_info)
+
+        self.assertEqual(mixed_result["mod_type"], "Mixed")
+        self.assertEqual(resource_only_result["mod_type"], "Unknown")
+
+    def test_analyze_prefers_loadfolders_max_version_and_broadest_path(self):
+        self._write_file("mod/Defs/base.xml")
+        self._write_file("mod/Cont/Common/Patches/common.xml")
+        self._write_file("mod/Cont/1.5/Patches/legacy.xml")
+        self._write_file("mod/Cont/1.6/NotDLC/Patches/not_dlc.xml")
+        self._write_file("mod/Cont/1.6/DLC/Patches/dlc.xml")
+        self._write_file("mod/Cont/1.6/NotDLC/Languages/English/Keyed/lang.xml")
+        self._write_file("mod/Cont/1.6/DLC/Languages/ChineseSimplified/Keyed/lang.xml")
+        self._write_file(
+            "mod/LoadFolders.xml",
+            """<?xml version="1.0" encoding="utf-8"?>
+<loadFolders>
+    <v1.5>
+        <li>/</li>
+        <li>Cont</li>
+        <li IfModActive="Example.Old">Cont/1.5</li>
+    </v1.5>
+    <v1.6>
+        <li>/</li>
+        <li>Cont</li>
+        <li IfModNotActive="Ludeon.RimWorld.Odyssey">Cont/1.6/NotDLC</li>
+        <li IfModActive="Ludeon.RimWorld.Odyssey">Cont/1.6/DLC</li>
+    </v1.6>
+</loadFolders>
+""",
+        )
+
+        result = self.analyzer.analyze(str(self.temp_root / "mod"))
+
+        self.assertEqual(result["file_stats"]["game_xml"], 1)
+        self.assertEqual(result["file_stats"]["patch_xml"], 2)
+        self.assertEqual(result["file_stats"]["lang_xml"], 1)
+        self.assertIn("en", result["supported_languages"])
+        self.assertNotIn("zh-cn", result["supported_languages"])
+
+    def test_analyze_falls_back_to_real_directory_versions_when_loadfolders_invalid(self):
+        self._write_file("broken/Defs/base.xml")
+        self._write_file("broken/1.5/Patches/legacy.xml")
+        self._write_file("broken/1.6/Patches/current.xml")
+        self._write_file("broken/LoadFolders.xml", "<loadFolders>")
+
+        result = self.analyzer.analyze(str(self.temp_root / "broken"))
+
+        self.assertEqual(result["file_stats"]["game_xml"], 1)
+        self.assertEqual(result["file_stats"]["patch_xml"], 1)
 
 
 class TestModScanner(unittest.TestCase):

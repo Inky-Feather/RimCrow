@@ -1,8 +1,12 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
   <div class="relative" :class="{'flex items-center' : mini}" ref="target">
-    <!-- Label -->
-    <span v-if="label" class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1" :class="[mini?'':'mb-1']"  @click="toggleMenu" >
+    <!-- Label：点击时联动聚焦 -->
+    <span v-if="label" 
+      class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
+      :class="[mini ? '' : 'mb-1']"  
+      @click="handleLabelClick" 
+    >
       {{ label }}
       <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
     </span>
@@ -14,7 +18,7 @@
           mini ? 'py-1 px-2 text-xs' : 'w-full h-9 px-3',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
         ]"
-        @click="toggleMenu"
+        @click="openMenu"
         @input="handleInput"
         @keydown="handleKeydown"
         @blur="handleBlur"
@@ -35,6 +39,14 @@
     <FixedPopover :triggerRef="inputRef" :isOpen="isOpen">
       <div @mousedown.prevent class="p-1 bg-bg-surface backdrop-blur-xl border border-text-main/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
         <!-- 有选项时 -->
+        <!-- 体验优化：当有自定义输入且未完全匹配时，提示用户可以作为新值 -->
+        <button v-if="showCustomHint" type="button" @click="commitInputValue"
+          class="w-full flex items-center px-2 py-1.5 rounded-lg text-xs text-left bg-text-main/5 border border-dashed border-text-main/20 text-accent-primary mb-1 hover:bg-accent-primary/10 transition-colors"
+          :class="{'ring-1 ring-accent-primary/50': highlightedIndex === -1}"
+        >
+          <span class="mr-1.5 opacity-70">↵</span>
+          使用 "<span class="font-bold">{{ internalSearch }}</span>"
+        </button>
         <template v-if="filteredOptions.length > 0">
           <button v-for="(opt, index) in filteredOptions" :key="opt.value" :ref="(el) => setOptionRef(el, index)" type="button" @click="selectOption(opt)"
             class="w-full flex items-center px-2 py-1 rounded-lg text-xs text-left transition-all duration-150"
@@ -42,7 +54,7 @@
               // 1. 选中状态
               isActive(opt.value) ? 'bg-accent-primary/20 text-accent-primary font-medium' : 'text-gray-300 hover:bg-text-main/10 hover:text-text-main',
               // 2. 键盘导航高亮
-              { 'bg-text-main/5 ring-1 ring-text-main/10': index === highlightedIndex },
+              { 'bg-text-main/10 ring-1 ring-text-main/20': index === highlightedIndex },
               // 3. 搜索匹配视觉区分：不匹配的项降低透明度
               isMatch(opt) ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-80 hover:grayscale-0'
             ]"
@@ -52,13 +64,12 @@
               :class="isActive(opt.value) ? 'bg-accent-primary shadow-[0_0_8px_currentColor] scale-100' : 'scale-0'">
             </div>
             <!-- 如果有额外描述可以放在tooltip中 -->
-            <label class="truncate flex-1" v-tooltip="opt.desc || opt.label">{{ opt.label }}</label>
+            <label class="truncate flex-1 cursor-pointer" v-tooltip="opt.desc || opt.label">{{ opt.label }}</label>
           </button>
         </template>
 
-        <!-- 无匹配项 -->
-        <div v-else class="py-3 text-center text-xs text-text-dim italic">
-          {{ editable && displayLabel ? '按回车使用当前输入值' : '暂无选项' }}
+        <div v-else-if="!showCustomHint" class="py-3 text-center text-xs text-text-dim italic">
+          暂无选项
         </div>
       </div>
     </FixedPopover>
@@ -66,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
+import { ref, computed, nextTick, onBeforeUpdate, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import FixedPopover from '../FixedPopover.vue'
 
@@ -93,29 +104,23 @@ const internalSearch = ref('') // 编辑模式下的搜索词
 
 // --- 核心计算属性 ---
 
-const inputValue = computed(() => {
-  if (isOpen.value && props.editable) {
-    return internalSearch.value
-  }
-  return displayLabel.value
-})
 // 显示在输入框中的文字
 const displayLabel = computed(() => {
   // 尝试从选项中找到对应 Label
-  const found = props.options.find(o => o.value === props.modelValue)
-  if (found) return found.label
-
   // 如果找不到且允许编辑，直接显示 modelValue
   // 如果不允许编辑，且有值但不在列表中，显示 modelValue (容错)
-  return props.modelValue || ''
+  const found = props.options.find(o => o.value === props.modelValue)
+  return found ? found.label : (props.modelValue || '')
 })
-
+const inputValue = computed(() => {
+  return (isOpen.value && props.editable) ? internalSearch.value : displayLabel.value
+})
 // 过滤后的选项列表，将匹配项“置顶”
 const filteredOptions = computed(() => {
   // 如果没开启编辑，或者没有输入内容，直接返回原列表
   if (!props.editable || !internalSearch.value) return props.options
   // 安全处理：确保是字符串
-  const query = (internalSearch.value || '').toString().toLowerCase().trim()
+  const query = String(internalSearch.value).toLowerCase().trim()
   if (!query) return props.options
   
   // 1. 拆分数组
@@ -150,24 +155,27 @@ const filteredOptions = computed(() => {
   return [...matches, ...others]
 })
 
+// 检查是否显示"作为自定义值"的提示
+const showCustomHint = computed(() => {
+  if (!props.editable || !internalSearch.value) return false
+  const query = String(internalSearch.value).trim()
+  if (!query) return false
+  // 如果已完全匹配列表中的某一项，则不显示自定义提示
+  return !props.options.some(o => String(o.label) === query || String(o.value) === query)
+})
 // --- 方法 ---
 // 用于在模板中判断当前项是否匹配搜索词（用于控制高亮/置灰样式）
 const isMatch = (opt) => {
   if (!props.editable || !internalSearch.value) return true
-  const query = (internalSearch.value || '').toString().toLowerCase().trim()
+  const query = String(internalSearch.value).toLowerCase().trim()
   if (!query) return true
-  return String(opt.label).toLowerCase().includes(query) || 
-        String(opt.value).toLowerCase().includes(query)
+  return String(opt.label).toLowerCase().includes(query) || String(opt.value).toLowerCase().includes(query)
 }
 
 
 // 1. 切换开关
-const toggleMenu = () => {
-  if (isOpen.value) {
-    closeMenu()
-  } else {
-    openMenu()
-  }
+const handleLabelClick = () => {
+  openMenu()
 }
 
 const openMenu = () => {
@@ -205,39 +213,46 @@ const selectOption = (opt) => {
 }
 
 // 3. 输入处理 (Editable)
+const commitInputValue = () => {
+  if (!props.editable || internalSearch.value === null) return
+  
+  const val = String(internalSearch.value).trim()
+  if (!val) {
+    // 如果清空了输入，视业务需求决定是清空值还是保留。此处恢复为原值。
+    internalSearch.value = displayLabel.value
+    return
+  }
+
+  // 找是否有精确匹配的
+  const exactMatch = props.options.find(
+    o => String(o.label) === val || String(o.value) === val
+  )
+
+  if (exactMatch) {
+    selectOption(exactMatch)
+  } else {
+    // 提交全新自定义值，【必须】更新 modelValue
+    emit('update:modelValue', val)
+    emit('change', { value: val, label: val, isCustom: true })
+    closeMenu()
+  }
+}
 const handleInput = (e) => {
   if (!props.editable) return
-  const val = e.target.value
-  internalSearch.value = val
+  internalSearch.value = e.target.value
   if (!isOpen.value) isOpen.value = true
   
-  // 输入时，永远将键盘导航索引重置为 0
-  // 因为列表已经重排序了，第 0 项就是最匹配的那一项
-  highlightedIndex.value = 0 
-  
-  // emit('update:modelValue', val)
-  // emit('change', { value: val, label: val, isCustom: true })
+  // Bug 修复：用户打字时，不强制高亮第0项，而是将焦点设为 -1 (自由输入状态)
+  highlightedIndex.value = -1 
 }
 
-// 4. 失去焦点处理
-// 使用 setTimeout 是为了让 click 事件先于 blur 执行
 const handleBlur = () => {
-  setTimeout(() => {
-    if (!isOpen.value) return; // 如果已经通过 selectOption 关闭了，就不再处理
-    // 只有在弹窗仍然打开，并且是编辑模式时，才强制提交用户手打的值
-    if (isOpen.value && props.editable && internalSearch.value !== null) {
-      // 如果能在当前过滤列表找到精确匹配，那就直接选它
-      const exactMatch = filteredOptions.value.find(o => o.label === internalSearch.value || o.value === internalSearch.value)
-      if (exactMatch) {
-        emit('update:modelValue', exactMatch.value)
-        emit('change', exactMatch)
-      } else {
-        // 否则作为一个全新的自定义值抛出
-        emit('change', { value: internalSearch.value, label: internalSearch.value, isCustom: true })
-      }
-    }
+  // 因为 options 加了 @mousedown.prevent，点击列表不会触发 blur。
+  // 这里的 blur 只有在真正离开输入框（点击外部 / Tab）时触发。
+  if (isOpen.value) {
+    commitInputValue()
     closeMenu()
-  }, 200)
+  }
 }
 
 // 5. 键盘导航
@@ -260,17 +275,21 @@ const handleKeydown = (e) => {
       break
     case 'ArrowUp':
       e.preventDefault()
-      if (highlightedIndex.value > 0) {
+      // 如果按向上键超出了界限，回到输入框状态 (-1)
+      if (highlightedIndex.value > -1) {
         highlightedIndex.value--
-        scrollToOption(highlightedIndex.value)
+        if (highlightedIndex.value >= 0) scrollToOption(highlightedIndex.value)
       }
       break
     case 'Enter':
       e.preventDefault()
       if (highlightedIndex.value >= 0 && filteredOptions.value[highlightedIndex.value]) {
+        // 用户明确用上下键选中了某一项
         selectOption(filteredOptions.value[highlightedIndex.value])
-      } else if (props.editable && internalSearch.value) {
-        // 如果没有高亮选项，但按了回车，且是编辑模式，确认当前输入值
+      } else if (props.editable) {
+        // 否则当作自定义输入提交
+        commitInputValue()
+      } else {
         closeMenu()
       }
       break
@@ -305,7 +324,12 @@ const setOptionRef = (el, index) => {
   }
 }
 // 点击外部关闭
-onClickOutside(target, () => closeMenu())
+onClickOutside(target, () => {
+  if (isOpen.value) {
+    commitInputValue()
+    closeMenu()
+  }
+})
 // 每次更新前清空，防止内存泄漏和死循环
 onBeforeUpdate(() => {
   optionRefs.value = []

@@ -125,6 +125,7 @@ export const useAppStore = defineStore('app', () => {
     self_mods_path: '',
     move_old_self_mods: false,
     enable_tool_mods: true,  // 是否启用工具 Mod
+    link_deployment_mode_full: false,  // 链接部署模式: true=完全重建, false=增量部署
 
     user_rules_path: '',
     community_rules_url: '',
