@@ -15,6 +15,7 @@ from urllib.parse import urlparse, unquote
 
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
+from backend.managers.mgr_network import build_retry_session
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -152,7 +153,7 @@ class DownloadManager:
             # 注意：这会发起一次同步请求，如果对响应速度要求极高，可以跳过此步
             # 使用 HEAD 请求只读取 Header，不下载内容，速度极快
             # allow_redirects=True 必须开启，因为很多下载是 302 跳转
-            with requests.head(url, timeout=3, allow_redirects=True) as r:
+            with build_retry_session().head(url, timeout=(5, 20), allow_redirects=True) as r:
                 # 检查 Content-Disposition
                 cd = r.headers.get('Content-Disposition')
                 if cd:
@@ -216,7 +217,7 @@ class DownloadManager:
         
         try:
             # 1. 准备 Session (应用代理)
-            session = requests.Session()
+            session = build_retry_session()
             # 这里的代理配置复用了 requests 对环境变量的支持
             # mgr_network.py 已经设置了 os.environ['HTTP_PROXY']
             # 但为了保险，也可以显式读取 settings
@@ -232,8 +233,9 @@ class DownloadManager:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            with session.get(task.url, stream=True, timeout=20, headers=headers) as response:
+            with session.get(task.url, stream=True, timeout=(15, 120), headers=headers) as response:
                 response.raise_for_status()
+                logger.debug( f"Download response: final_url={response.url} content_length={response.headers.get('content-length')}")
                 # 获取文件大小
                 total_length = response.headers.get('content-length')
                 task.total_size = int(total_length) if total_length else 0

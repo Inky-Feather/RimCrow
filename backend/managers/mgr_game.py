@@ -39,7 +39,7 @@ class GameManager:
             paths['game_install_path'] = ''
             # 检测 可执行文件是否存在(多平台)
             if self.detect_executable(install_loc):
-                 paths['game_install_path'] = install_loc
+                paths['game_install_path'] = install_loc
             
             # 推导 Local Mods
             local_mods = os.path.join(install_loc, "Mods")
@@ -132,7 +132,7 @@ class GameManager:
     # --- 内部辅助方法 ---
 
     def _detect_userdata_path(self):
-        """检测 Config 文件夹位置 (%APPDATA%/LocalLow/Ludeon Studios/...)"""
+        """检测 Config 文件夹位置 (%USERPROFILE%\Appdata\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios)"""
         if platform.system() == 'Windows':
             user_profile = os.getenv('USERPROFILE')
             # 这里的 APPDATA 环境变量通常指向 Roaming，但 RimWorld 在 LocalLow

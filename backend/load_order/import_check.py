@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from .models import ParsedLoadOrderData
 from backend.utils.versioning import score_version_support
 
@@ -58,17 +59,6 @@ class ImportCheckReport:
     items: list[ImportCheckItem] = field(default_factory=list)
 
 
-def _normalize_package_id(package_id: Any) -> str:
-    return str(package_id or "").strip().lower()
-
-
-def _normalize_workshop_id(workshop_id: Any) -> str:
-    value = str(workshop_id or "").strip()
-    if not value or value == "0":
-        return ""
-    return value
-
-
 def _build_workshop_url(workshop_id: str) -> str:
     if not workshop_id:
         return ""
@@ -76,7 +66,7 @@ def _build_workshop_url(workshop_id: str) -> str:
 
 
 def _fallback_package_label(package_id: str) -> str:
-    normalized = _normalize_package_id(package_id)
+    normalized = normalize_package_id(package_id)
     return f"<{normalized}>" if normalized else "<未知包名>"
 
 
@@ -89,8 +79,8 @@ def _replacement_rule_matches(rule: dict[str, Any] | None, game_version: str) ->
 
 def _build_installed_candidate(mod: dict[str, Any]) -> ImportCheckInstalledCandidate:
     return ImportCheckInstalledCandidate(
-        package_id=_normalize_package_id(mod.get("package_id")),
-        workshop_id=_normalize_workshop_id(mod.get("workshop_id")),
+        package_id=normalize_package_id(mod.get("package_id")),
+        workshop_id=normalize_workshop_id(mod.get("workshop_id")),
         name=str(
             mod.get("alias_name")
             or mod.get("display_name")
@@ -176,10 +166,10 @@ def build_import_check_report(
     installed_by_package_id: dict[str, list[dict[str, Any]]] = {}
     installed_by_workshop_id: dict[str, list[dict[str, Any]]] = {}
     for mod in installed_mods or []:
-        package_id = _normalize_package_id(mod.get("package_id"))
+        package_id = normalize_package_id(mod.get("package_id"))
         if package_id:
             installed_by_package_id.setdefault(package_id, []).append(mod)
-        workshop_id = _normalize_workshop_id(mod.get("workshop_id"))
+        workshop_id = normalize_workshop_id(mod.get("workshop_id"))
         if workshop_id:
             installed_by_workshop_id.setdefault(workshop_id, []).append(mod)
 
@@ -187,13 +177,13 @@ def build_import_check_report(
 
     # 1. 先处理带 package_id 的导入项。这类条目能参与“缺失 / 替代 / 其它版本”判定。
     for index, package_id in enumerate(parsed.package_ids):
-        normalized_package_id = _normalize_package_id(package_id)
+        normalized_package_id = normalize_package_id(package_id)
         if not normalized_package_id:
             continue
 
         import_name = str(parsed.mod_names[index]).strip() if index < len(parsed.mod_names) else ""
         raw_import_workshop_id = str(parsed.workshop_ids[index]).strip() if index < len(parsed.workshop_ids) else ""
-        import_workshop_id = _normalize_workshop_id(raw_import_workshop_id)
+        import_workshop_id = normalize_workshop_id(raw_import_workshop_id)
         import_workshop_id_valid = bool(import_workshop_id)
 
         package_matched_candidates_raw = installed_by_package_id.get(normalized_package_id, [])
@@ -217,7 +207,7 @@ def build_import_check_report(
             resolved_workshop_id = import_workshop_id
             resolved_from = "import"
         else:
-            detail_workshop_id = _normalize_workshop_id(detail.get("workshop_id"))
+            detail_workshop_id = normalize_workshop_id(detail.get("workshop_id"))
             if detail_workshop_id:
                 resolved_workshop_id = detail_workshop_id
                 if detail.get("is_replacement_derived"):
@@ -229,7 +219,7 @@ def build_import_check_report(
                 else:
                     resolved_from = "external_db"
             elif installed_candidates:
-                installed_workshop_id = _normalize_workshop_id(installed_candidates[0].workshop_id)
+                installed_workshop_id = normalize_workshop_id(installed_candidates[0].workshop_id)
                 if installed_workshop_id:
                     resolved_workshop_id = installed_workshop_id
                     resolved_from = "installed"
@@ -258,7 +248,7 @@ def build_import_check_report(
                     replacement_match = False
                     if replacement_rule and _replacement_rule_matches(replacement_rule, game_version):
                         replacement_info = {
-                            "new_workshop_id": _normalize_workshop_id(replacement_rule.get("new_workshop_id")),
+                        "new_workshop_id": normalize_workshop_id(replacement_rule.get("new_workshop_id")),
                             "new_name": replacement_rule.get("new_name"),
                         }
                         if replacement_info["new_workshop_id"] in installed_workshop_ids:
@@ -345,7 +335,7 @@ def build_import_check_report(
     # 2. 再处理“只有 workshop_id、没有 package_id”的导入项。
     loose_workshop_ids = parsed.workshop_ids[len(parsed.package_ids):]
     for workshop_id in loose_workshop_ids:
-        normalized_workshop_id = _normalize_workshop_id(workshop_id)
+        normalized_workshop_id = normalize_workshop_id(workshop_id)
         if not normalized_workshop_id:
             continue
 
@@ -365,7 +355,7 @@ def build_import_check_report(
             status = "missing"
             warning = "仅提供了 Workshop ID，当前环境未发现对应安装项"
             if replacement_rule and _replacement_rule_matches(replacement_rule, game_version):
-                new_workshop_id = _normalize_workshop_id(replacement_rule.get("new_workshop_id"))
+                new_workshop_id = normalize_workshop_id(replacement_rule.get("new_workshop_id"))
                 if new_workshop_id and new_workshop_id in installed_by_workshop_id:
                     replacement_candidates = [_build_installed_candidate(mod) for mod in installed_by_workshop_id[new_workshop_id]]
                     installed_candidates = replacement_candidates
@@ -388,7 +378,7 @@ def build_import_check_report(
                     status = "replacement"
                     warning = "该工坊项目已有替代版本"
 
-        package_id = _normalize_package_id(detail.get("package_id"))
+        package_id = normalize_package_id(detail.get("package_id"))
         display_name = (
             (_fallback_package_label(package_id) if package_id else "")
             or str(detail.get("name") or "").strip()

@@ -3,8 +3,13 @@ import os
 import socket
 import atexit
 import platform
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from backend.settings import settings
 from backend.utils.logger import logger
+
+DEFAULT_USER_AGENT = "RimModManager"
 
 class NetworkManager:
     def __init__(self):
@@ -160,6 +165,33 @@ class NetworkManager:
             # 拼接开头和结尾部分
             return content[:start_idx] + content[end_idx:]
         return content
+
+
+def build_retry_session(*, total: int = 3, connect: int = 3, read: int = 3, redirect: int = 5, 
+    backoff_factor: float = 1.0, status_forcelist: tuple[int, ...] = (429, 500, 502, 503, 504), 
+    allowed_methods: tuple[str, ...] = ("GET", "HEAD"), pool_connections: int = 8, pool_maxsize: int = 8) -> requests.Session:
+    
+    session = requests.Session()
+    retry = Retry(
+        total=total,
+        connect=connect,
+        read=read,
+        redirect=redirect,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=frozenset(allowed_methods),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=pool_connections, pool_maxsize=pool_maxsize)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def merge_headers(headers: dict[str, str] | None = None, *, user_agent: str = DEFAULT_USER_AGENT) -> dict[str, str]:
+    merged = {"User-Agent": user_agent}
+    if headers: merged.update(headers)
+    return merged
 
 
 # 实例化单例

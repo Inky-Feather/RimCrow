@@ -2,27 +2,19 @@ import base64
 import json
 import zlib
 
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from .models import FORMAT_SHARE_CODE, ParsedLoadOrderData
 
 
 SHARE_CODE_PREFIX = "RMM1"
 
 
-def _normalize_package_id(package_id: str) -> str:
-    return str(package_id or "").strip().lower()
-
-
-def _normalize_workshop_id(workshop_id: str) -> str:
-    value = str(workshop_id or "").strip()
-    return "" if value == "0" else value
-
-
 def _encode_mod_entry(package_id: str, workshop_id: str = "", name: str = ""):
-    normalized_package_id = _normalize_package_id(package_id)
+    normalized_package_id = normalize_package_id(package_id)
     if not normalized_package_id:
         return None
 
-    normalized_workshop_id = _normalize_workshop_id(workshop_id)
+    normalized_workshop_id = normalize_workshop_id(workshop_id)
     clean_name = str(name or "").strip()
 
     # 最短情况只写包名；有额外元数据时再逐步展开为数组。
@@ -35,13 +27,13 @@ def _encode_mod_entry(package_id: str, workshop_id: str = "", name: str = ""):
 
 def _decode_mod_entry(item) -> tuple[str, str, str]:
     if isinstance(item, str):
-        return _normalize_package_id(item), "", ""
+        return normalize_package_id(item), "", ""
 
     if not isinstance(item, list) or not item:
         raise ValueError("分享码里的模组条目格式无效")
 
-    package_id = _normalize_package_id(item[0] if len(item) > 0 else "")
-    workshop_id = _normalize_workshop_id(item[1] if len(item) > 1 else "")
+    package_id = normalize_package_id(item[0] if len(item) > 0 else "")
+    workshop_id = normalize_workshop_id(item[1] if len(item) > 1 else "")
     name = str(item[2] if len(item) > 2 else "").strip()
     return package_id, workshop_id, name
 

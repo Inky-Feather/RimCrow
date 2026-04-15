@@ -38,6 +38,7 @@ if __name__ == "__main__":
 
 from backend.managers.mgr_files import FileManager
 from backend.settings import settings
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from lxml import html
 etree = html.etree
 
@@ -94,16 +95,10 @@ class LoadOrderManager:
         # 每次初始化（应用启动）时执行一次轮换检查
         self._rotate_backups()
 
-    def _normalize_package_id(self, package_id: Any) -> str:
-        # 包名统一转小写，避免不同来源文件大小写不一致导致匹配失败。
-        return str(package_id or "").strip().lower()
-
     def _normalize_workshop_id(self, workshop_id: Any) -> str | None:
         # 0 和空值都视为“没有可用工坊ID”，前端不应把它当成可订阅项目。
-        value = str(workshop_id or "").strip()
-        if not value or value == "0":
-            return None
-        return value
+        value = normalize_workshop_id(workshop_id)
+        return value or None
 
     def _build_mod_entries(self, mod_ids: list[str], mod_names: list[str] | None = None, mod_workshop_ids: list[str] | None = None):
         
@@ -118,7 +113,7 @@ class LoadOrderManager:
             package_id_raw = str(raw_package_id or "").strip()
             if not package_id_raw:
                 continue
-            package_id = self._normalize_package_id(package_id_raw)
+            package_id = normalize_package_id(package_id_raw)
             name = str(mod_names[index]).strip() if index < len(mod_names) and mod_names[index] else ""
             workshop_id_raw = str(mod_workshop_ids[index]).strip() if index < len(mod_workshop_ids) and mod_workshop_ids[index] else ""
             entries.append({
@@ -217,7 +212,7 @@ class LoadOrderManager:
             if self.context and self.context.is_healthy:
                 # 优先使用当前环境可见 Mod 数据，名称和工坊ID最贴近用户现场状态。
                 for mod in ModDAO.get_profile_mods(self.context):
-                    package_id = self._normalize_package_id(mod.get("package_id"))
+                    package_id = normalize_package_id(mod.get("package_id"))
                     if not package_id or package_id in visible_map:
                         continue
                     visible_map[package_id] = {
@@ -250,7 +245,7 @@ class LoadOrderManager:
                 .dicts()
             )
             for meta in meta_query:
-                package_id = self._normalize_package_id(meta.get("package_id"))
+                package_id = normalize_package_id(meta.get("package_id"))
                 if not package_id or package_id in meta_map:
                     continue
                 meta_map[package_id] = {
@@ -340,7 +335,7 @@ class LoadOrderManager:
         # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
         normalized_ids = []
         for package_id in active_ids or []:
-            normalized = self._normalize_package_id(package_id)
+            normalized = normalize_package_id(package_id)
             if normalized:
                 normalized_ids.append(normalized)
 

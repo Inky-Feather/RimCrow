@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from .detector import detect_load_order_format
 from .models import (
     FORMAT_MODLIST,
@@ -22,14 +23,6 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
-def _normalize_package_id(package_id: str) -> str:
-    return str(package_id or "").strip().lower()
-
-
-def _normalize_workshop_id(workshop_id: str) -> str:
-    return str(workshop_id or "").strip()
-
-
 def _append_mod_entry(
     package_ids: list[str],
     mod_names: list[str],
@@ -45,7 +38,7 @@ def _append_mod_entry(
     已经在使用的“package_ids + mod_names + workshop_ids”拼装逻辑。
     """
 
-    normalized_package_id = _normalize_package_id(package_id)
+    normalized_package_id = normalize_package_id(package_id)
     if not normalized_package_id:
         return
     if normalized_package_id in package_ids:
@@ -53,7 +46,7 @@ def _append_mod_entry(
 
     package_ids.append(normalized_package_id)
     mod_names.append(str(name or "").strip())
-    workshop_ids.append(_normalize_workshop_id(workshop_id))
+    workshop_ids.append(normalize_workshop_id(workshop_id, zero_is_empty=False))
 
 
 def _extract_workshop_id(value: str) -> str:
@@ -98,7 +91,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
     seen_package_ids: set[str] = set()
 
     for index, package_id in enumerate(parsed.package_ids):
-        normalized_package_id = _normalize_package_id(package_id)
+        normalized_package_id = normalize_package_id(package_id)
         if not normalized_package_id or normalized_package_id in seen_package_ids:
             continue
         seen_package_ids.add(normalized_package_id)
@@ -109,7 +102,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
     dedup_loose_workshop_ids: list[str] = []
     seen_workshop_ids: set[str] = set()
     for workshop_id in parsed.workshop_ids[len(parsed.package_ids):]:
-        normalized_workshop_id = _normalize_workshop_id(workshop_id)
+        normalized_workshop_id = normalize_workshop_id(workshop_id, zero_is_empty=False)
         if not normalized_workshop_id or normalized_workshop_id in seen_workshop_ids:
             continue
         seen_workshop_ids.add(normalized_workshop_id)
@@ -124,7 +117,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
 def _parse_modsconfig_xml(path: Path) -> ParsedLoadOrderData:
     root = ET.fromstring(_read_text(path))
     package_ids = _parse_list_node(root, "./activeMods", ".//activeMods")
-    package_ids = [_normalize_package_id(item) for item in package_ids if _normalize_package_id(item)]
+    package_ids = [normalize_package_id(item) for item in package_ids if normalize_package_id(item)]
     return ParsedLoadOrderData(
         format=FORMAT_MODSCONFIG,
         list_name=path.stem,
@@ -137,7 +130,7 @@ def _parse_modlist_xml(path: Path) -> ParsedLoadOrderData:
     return ParsedLoadOrderData(
         format=FORMAT_MODLIST,
         list_name=_parse_text_node(root, "./Name", ".//Name") or path.stem,
-        package_ids=[_normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if _normalize_package_id(item)],
+        package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if normalize_package_id(item)],
         mod_names=_parse_list_node(root, "./modNames", ".//modNames"),
         workshop_ids=_parse_list_node(root, "./modSteamWorkshopIds", ".//modSteamWorkshopIds"),
     )
@@ -171,7 +164,7 @@ def _parse_rml_file(path: Path) -> ParsedLoadOrderData:
     package_ids_source = display_package_ids or meta_package_ids
     merged_names: list[str] = []
     for index, package_id in enumerate(package_ids_source):
-        if not _normalize_package_id(package_id):
+        if not normalize_package_id(package_id):
             continue
         display_name = display_names[index] if index < len(display_names) else ""
         meta_name = meta_names[index] if index < len(meta_names) else ""
@@ -180,7 +173,7 @@ def _parse_rml_file(path: Path) -> ParsedLoadOrderData:
     return ParsedLoadOrderData(
         format=FORMAT_RML,
         list_name=path.stem,
-        package_ids=[_normalize_package_id(item) for item in package_ids_source if _normalize_package_id(item)],
+        package_ids=[normalize_package_id(item) for item in package_ids_source if normalize_package_id(item)],
         mod_names=merged_names,
         workshop_ids=meta_workshop_ids,
     )
@@ -191,7 +184,7 @@ def _parse_savegame_xml(path: Path) -> ParsedLoadOrderData:
     return ParsedLoadOrderData(
         format=FORMAT_SAVEGAME,
         list_name=path.stem,
-        package_ids=[_normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if _normalize_package_id(item)],
+        package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if normalize_package_id(item)],
         mod_names=_parse_list_node(root, "./meta/modNames", ".//meta/modNames"),
         workshop_ids=_parse_list_node(root, "./meta/modSteamIds", ".//meta/modSteamIds"),
     )
@@ -242,7 +235,7 @@ def _parse_rimpy_xml(path: Path) -> ParsedLoadOrderData:
     active_mods = root.find(".//activeMods")
     if active_mods is not None:
         for li in active_mods.findall("li"):
-            package_id = _normalize_package_id(str(li.text or ""))
+            package_id = normalize_package_id(str(li.text or ""))
             if package_id and package_id not in package_ids:
                 package_ids.append(package_id)
                 mod_names.append("")
@@ -360,7 +353,7 @@ def _parse_rmm_json(path: Path) -> ParsedLoadOrderData:
 
         if "workshop_ids" in data:
             for workshop_id in data["workshop_ids"]:
-                workshop_id_value = _normalize_workshop_id(str(workshop_id))
+                workshop_id_value = normalize_workshop_id(str(workshop_id), zero_is_empty=False)
                 if workshop_id_value and workshop_id_value not in loose_workshop_ids and workshop_id_value not in workshop_ids:
                     loose_workshop_ids.append(workshop_id_value)
 

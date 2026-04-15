@@ -34,6 +34,7 @@ from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
 from backend.managers.mgr_steamcmd_core import SteamCMDController
+from backend.utils.tools import extract_zip
 
 # RimWorld App ID
 RIMWORLD_APP_ID = "294100"
@@ -270,10 +271,8 @@ class SteamManager:
         """下载完成后的解压/配置回调"""
         if task_type == "steamcmd":
             try:
-                import zipfile
                 if file_path.endswith('.zip'):
-                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                        zip_ref.extractall(self.steamcmd_dir)
+                    extract_zip(file_path, self.steamcmd_dir)
                     os.remove(file_path)
                     self.steamcmd_ready = True
                     logger.info("SteamCMD installed.")
