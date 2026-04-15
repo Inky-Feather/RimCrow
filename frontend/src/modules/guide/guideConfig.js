@@ -329,7 +329,7 @@ export const backupGuideSteps = [
     element: '[data-tour="backup-list"]',
     popover: {
       title: "备份列表",
-      description: "这里同时包含临时导入、自动备份和手动备份。恢复前建议先对比，避免覆盖当前未保存变更。",
+      description: "这里同时包含临时导入、自动备份和手动备份。恢复前建议先对比，避免覆盖当前未保存变更。另外列表支持从外界直接拖入排序文件进行加载。",
       side: "left",
     },
   },
@@ -337,7 +337,7 @@ export const backupGuideSteps = [
     element: '[data-tour="backup-toolbar"]',
     popover: {
       title: "备份操作区",
-      description: "你可以在这里导入外部序列、导出两种格式、打开备份目录和刷新列表。",
+      description: "你可以在这里导入/导出外部排序文件、打开备份目录和刷新列表。可以切换不同环境的备份进行操作。",
       side: "left",
     },
   },

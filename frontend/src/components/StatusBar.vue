@@ -38,6 +38,9 @@
           <template v-else-if="taskType === 'download'">
             <Download class="h-4 w-4 text-blue-400 animate-bounce" />
           </template>
+          <template v-else-if="taskType === 'texture'">
+            <Image class="h-4 w-4 text-amber-400 animate-pulse" />
+          </template>
           <template v-else-if="taskType === 'ai'">
             <Bot class="h-4 w-4 text-accent-special animate-pulse" />
           </template>
@@ -48,6 +51,7 @@
               :class="{
                 'bg-accent-primary': taskType === 'scan',
                 'bg-blue-500': taskType === 'download',
+                'bg-amber-500': taskType === 'texture',
                 'bg-accent-special': taskType === 'ai'
               }"
               :style="{ width: taskPercent + '%' }">
@@ -56,7 +60,7 @@
           
           <!-- 文字信息 -->
           <div class="flex items-center gap-2 text-[0.7rem] font-mono">
-            <span :class="taskType === 'scan' ? 'text-accent-primary' : 'text-blue-400'" class="font-bold">
+            <span :class="taskType === 'scan' ? 'text-accent-primary' : taskType === 'download' ? 'text-blue-400' : taskType === 'texture' ? 'text-amber-400' : 'text-accent-special'" class="font-bold">
               {{ taskPercent }}%
             </span>
             <span class="truncate max-w-100 text-text-dim" :title="taskMessage">
@@ -82,25 +86,26 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
-import { useToast } from "vue-toastification";
-import { Bot, Download, Radar } from 'lucide-vue-next';
-import { useProfileStore } from '../stores/profileStore';
-import { formatDate } from '../utils/uiHelper';
+import { useTextureStore } from '../stores/textureStore'
+import { Bot, Download, Image, Radar } from 'lucide-vue-next'
+import { useProfileStore } from '../stores/profileStore'
+import { formatDate } from '../utils/uiHelper'
 
-const toast = useToast();
 const modStore = useModStore()
 const appStore = useAppStore()
+const textureStore = useTextureStore()
 const profileStore = useProfileStore()
 
 // 统一任务计算属性
-// 优先级: 扫描 > 下载
+// 优先级: 扫描 > 下载 > 贴图
 const taskType = computed(() => {
   if (appStore.aiState.isLoading) return 'ai'
   if (appStore.scanProgress.scanning) return 'scan'
   if (appStore.activeDownloadTask) return 'download'
+  if (appStore.activeTextureOptTask) return 'texture'
   return null
 })
 
@@ -108,11 +113,16 @@ const activeTask = computed(() => {
   if (taskType.value === 'ai') return appStore.aiState
   if (taskType.value === 'scan') return appStore.scanProgress
   if (taskType.value === 'download') return appStore.activeDownloadTask
+  if (taskType.value === 'texture') return appStore.activeTextureOptTask
   return null
 })
 
 const taskPercent = computed(() => {
   if (!activeTask.value) return 0
+  if (taskType.value === 'texture') {
+    const value = Number(activeTask.value.progress ?? activeTask.value.percent ?? textureStore.progressState.percent ?? 0)
+    return Math.max(0, Math.min(100, value))
+  }
   return activeTask.value.percent || 0
 })
 
@@ -126,9 +136,11 @@ const taskMessage = computed(() => {
   if (taskType.value === 'download') {
     return activeTask.value.filename || 'Downloading...'
   }
+  if (taskType.value === 'texture') {
+    return textureStore.progressState.message || activeTask.value.message || '处理中...'
+  }
   return ''
 })
-
 </script>
 
 <style scoped>

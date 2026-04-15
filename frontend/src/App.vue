@@ -190,6 +190,9 @@
     <!-- 工坊更新管理中心 -->
     <WorkspaceOverlay />
 
+    <!-- 贴图优化功能面板 -->
+    <TextureOptModal />
+
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
 
@@ -252,6 +255,7 @@ import PromptManager from './components/PromptManager.vue'
 import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'
 import GuideCenter from './components/GuideCenter.vue'
+import TextureOptModal from './components/TextureOptModal.vue'
 
 const updateModal = ref(null);
 

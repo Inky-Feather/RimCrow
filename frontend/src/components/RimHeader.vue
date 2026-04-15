@@ -27,6 +27,12 @@
         库存枢纽
       </button>
 
+      <!-- 贴图优化入口 -->
+      <button data-tour="texture-opt-entry" @click="appStore.toggleUiState('showTextureOptModal')" v-tooltip="`贴图优化`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+        <Images class="size-6" />
+      </button>
+
       <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showAiReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !appStore.aiBatchResults.length}"
         class="p-2 rounded-full relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent cursor-pointer">
         <BotMessageSquare class="size-6" />
@@ -107,7 +113,7 @@
 import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification";
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
-import { BotMessageSquare, ClipboardList, CloudCog } from 'lucide-vue-next';
+import { BotMessageSquare, ClipboardList, CloudCog, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
 import { useOrderStore } from '../stores/orderStore';
 

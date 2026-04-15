@@ -1,13 +1,14 @@
 import unittest
 
-from backend.utils.workshop_selection import normalize_workshop_id, select_best_workshop_detail_for_package
+from backend.database.dao_ext import select_best_workshop_detail_for_package
+from backend.utils.tools import normalize_workshop_id
 
 
 class TestWorkshopSelection(unittest.TestCase):
     def test_normalize_workshop_id_rejects_non_numeric_and_zero(self):
-        self.assertEqual(normalize_workshop_id("0"), "")
-        self.assertEqual(normalize_workshop_id("abc123"), "")
-        self.assertEqual(normalize_workshop_id("1234567"), "1234567")
+        self.assertEqual(normalize_workshop_id("0", digits_only=True, min_length=7, max_length=20), "")
+        self.assertEqual(normalize_workshop_id("abc123", digits_only=True, min_length=7, max_length=20), "")
+        self.assertEqual(normalize_workshop_id("1234567", digits_only=True, min_length=7, max_length=20), "1234567")
 
     def test_select_best_meta_prefers_matching_major_version_then_latest_update(self):
         metas = [

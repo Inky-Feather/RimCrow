@@ -32,7 +32,8 @@ export const useAppStore = defineStore('app', () => {
     showProfileDrawer: false,    // 是否显示环境抽屉
     showAiReviewModal: false,    // 是否显示 AI 弹窗
     showPromptManager: false,    // 是否显示提示词管理器
-    showWorkspace: false,    // 是否显示工坊更新管理中心
+    showWorkspace: false,        // 是否显示工坊更新管理中心
+    showTextureOptModal: false,  // 是否显示贴图优化弹窗
   })
   // 存储各个列表的滚动偏移量
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
@@ -202,6 +203,19 @@ export const useAppStore = defineStore('app', () => {
       max_tokens: 5000,
       max_concurrency: 3,     // 最大并发请求数（避免被API封锁）
     },
+
+    // --- 贴图优化 ---
+    texture_opt: {
+      texture_tools_path: "",                  // todds 工具路径，留空则使用默认
+      generate_mipmaps: false,      // 是否生成 Mipmap
+      scale_factor: 1.0,           // 缩放倍率 (1.0 为不缩放)
+      max_size: 0,                   // 最大分辨率限制 (0为不限制)
+      skip_small_textures: true,    // 是否跳过小贴图
+      min_dimension: 64,             // 小贴图判定阈值
+      clean_orphaned_dds: false,    // 自动清理失效的受管 DDS
+      clean_generated_only: true,   // 清理模式: true=仅本程序生成, false=删除所有有源图对应 DDS
+      overwrite_existing: false,    // 强制覆盖外部生成的 DDS
+    },
     
     // --- 高级 (Advanced) ---
     backup_retention_days: 30,
@@ -242,6 +256,18 @@ export const useAppStore = defineStore('app', () => {
     const tasks = Array.from(downloadTasks.value.values())
     return tasks.find(t => t.status === 'running') || 
            tasks.find(t => t.status === 'pending') || 
+           null
+  })
+  const activeTextureOptTask = computed(() => {
+    const tasks = Array.from(taskPool.values()).filter(task =>
+      task && (task.type === 'texture-opt' || task.type === 'texture-opt-analyze')
+    )
+    return tasks.find(t => t.status === 'running') ||
+           tasks.find(t => t.status === 'pending') ||
+           tasks.find(t => t.status === 'cancelling') ||
+           tasks.find(t => t.status === 'success') ||
+           tasks.find(t => t.status === 'failed') ||
+           tasks.find(t => t.status === 'cancelled') ||
            null
   })
 
@@ -555,6 +581,14 @@ export const useAppStore = defineStore('app', () => {
       const task = e.detail;
       taskPool.set(task.id, task);
       
+      // 分发给贴图优化仓库
+      if (task.type === 'texture-opt' || task.type === 'texture-opt-analyze') {
+        import('./textureStore').then(({ useTextureStore }) => {
+          const textureStore = useTextureStore()
+          textureStore.handleProgressEvent(task)
+        })
+      }
+
       // 如果任务完成或失败，延迟 3 秒从 UI 移除
       if (['success', 'failed', 'cancelled'].includes(task.status)) {
         setTimeout(() => taskPool.delete(task.id), 3000);
@@ -648,6 +682,17 @@ export const useAppStore = defineStore('app', () => {
     if (checkResult(res, '数据库深度清理')) {
       toast.success('无效数据清理完成，正在刷新列表...')
       await refreshData()
+    }
+  }
+  const cancelTextureTask = async (taskId) => {
+    if (!window.pywebview || !taskId) return false
+    try {
+      const res = await window.pywebview.api.texture_cancel_task(taskId)
+      return checkResult(res, '取消贴图任务', false)
+    } catch (e) {
+      console.error('取消贴图任务异常:', e)
+      toast.error(`取消贴图任务异常: \n${e.message}`)
+      return false
     }
   }
   // 变更 UI 状态
@@ -1260,14 +1305,14 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, updateState,
+    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, activeTextureOptTask, updateState,
     aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab,
+    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab, cancelTextureTask,
     
     checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
     // AI处理

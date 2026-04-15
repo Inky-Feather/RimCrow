@@ -235,6 +235,7 @@
                 </h3>
                 <div class="space-y-6">
                   <CommonPathInput label="SteamCMD 路径" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" />
+                  <CommonPathInput label="贴图工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, false)" :description="'贴图优化使用的 todds 工具目录。可直接选择包含 todds.exe 的文件夹。'" />
                   <div class="flex items-end gap-1.5" description="用于管理器下载模组的外置工具，路径中不能包含中文。">
                     <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
                     <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
@@ -586,19 +587,43 @@ const handleGameBrowse = async () => {
     checkPath('game_install_path', current['game_install_path'])
   }
 }
+
+const getNestedField = (target, pathKey) => {
+  return String(pathKey || '').split('.').filter(Boolean)
+    .reduce((current, key) => current?.[key], target)
+}
+
+const setNestedField = (target, pathKey, value) => {
+  const segments = String(pathKey || '').split('.').filter(Boolean)
+  if (!segments.length) return
+  let current = target
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index]
+    if (!current[key] || typeof current[key] !== 'object') {
+      current[key] = {}
+    }
+    current = current[key]
+  }
+  current[segments[segments.length - 1]] = value
+}
+
 // 手动选择其他路径
-const handleBrowse = async (pathKey, fileTypes) => {
+const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
   console.log('路径选择',pathKey, fileTypes)
+  const currentValue = getNestedField(formData.value, pathKey) || ''
   let res
   if (fileTypes) {
-    res = await appStore.getFilePath(pathKey, fileTypes)
+    res = await appStore.getFilePath(currentValue, fileTypes)
   } else {
-    res = await appStore.getFolderPath(pathKey)
+    res = await appStore.getFolderPath(currentValue)
   }
   if (res) {
-    formData.value[pathKey] = res
+    setNestedField(formData.value, pathKey, res)
     // 自动检查路径是否有效
-    await checkPath(pathKey, res)
+    const finalCheckTarget = checkTarget === undefined ? pathKey : checkTarget
+    if (typeof finalCheckTarget === 'string' && finalCheckTarget) {
+      await checkPath(finalCheckTarget, res)
+    }
   }
 }
 
