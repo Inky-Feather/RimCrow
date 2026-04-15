@@ -34,6 +34,7 @@ from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
+from backend.utils.tools import normalize_package_id
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
@@ -63,6 +64,7 @@ from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
+from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from playhouse.shortcuts import model_to_dict
 
 
@@ -203,13 +205,14 @@ class API:
         self._bootstrap_context(settings.config.current_profile_id)
         self.game_monitor = GameMonitor(self)
         self.download_mgr = DownloadManager()
-        self.github_mgr = GithubManager(self.download_mgr)
+        self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
         self.steamcmd_controller = SteamCMDController(self.steam_mgr.steamcmd_exe)
         self.ai_mgr = AIManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
+        self.texture_mgr = TextureOptimizationManager()
         
         # 每次启动 API 时，强制检查并修复 SteamCMD 的软链接！
         if settings.config.self_mods_path and settings.config.steamcmd_mods_path:
@@ -378,15 +381,16 @@ class API:
 
             if self._native_drop_element and self._native_drop_handler:
                 try:
-                    self._native_drop_element.events.drop -= self._native_drop_handler
+                    self._native_drop_element.off('drop', self._native_drop_handler)
                 except Exception:
                     # 旧节点已被 Vue 重建时，这里直接忽略即可。
                     pass
 
-            handler = DOMEventHandler(self._on_native_drop_event, True, True)
-            element.events.drop += handler
+            callback = self._on_native_drop_event
+            handler = DOMEventHandler(callback, True, True)
+            element.on('drop', handler)
             self._native_drop_element = element
-            self._native_drop_handler = handler
+            self._native_drop_handler = callback
             self._native_drop_selector = normalized_selector
             self._native_drop_bound = True
             logger.info(f"已绑定 pywebview 原生 drop 事件: {normalized_selector}")
@@ -2948,7 +2952,6 @@ class API:
         return ApiResponse.error("未找到模组详情")
 
     
-    
     # ==========================================
     # 收藏合集相关接口
     # ==========================================
@@ -3232,7 +3235,7 @@ class API:
     @log_api_call
     def github_trigger_download(self, url: str, install_type: str, version: str):
         """触发下载与安装流程"""
-        task_id = self.github_mgr.trigger_download(url, install_type, version)
+        task_id = self.github_mgr.trigger_download(self.download_mgr, url, install_type, version)
         return ApiResponse.success({"task_id": task_id}, message="GitHub 部署任务已启动")
 
     @log_api_call
@@ -3260,7 +3263,119 @@ class API:
         return ApiResponse.success(message="已移除订阅记录")
     
     
+    # =========================================================================
+    #  15. 贴图优化管理 (Texture Optimization)
+    # =========================================================================
     
+    def _resolve_mod_paths(self, package_ids: List[str]) -> List[str]:
+        """内部辅助方法：将前端传来的 package_id 列表转换为当前环境下绝对物理路径列表"""
+        target_ids = {normalize_package_id(pid) for pid in package_ids if pid}
+        if not target_ids:
+            return []
+        
+        # 使用当前 Profile 上下文，确保获取的是正在使用的正确 Mod 路径 (解决软冲突路径)
+        context_mods = ModDAO.get_profile_mods(self.active_context)
+        paths =[]
+        for m in context_mods:
+            pid = normalize_package_id(m.get('package_id', ''))
+            if pid in target_ids and m.get('path'):
+                paths.append(m['path'])
+        return paths
+
+    @log_api_call
+    def texture_get_env_status(self, options: dict|None = None):
+        """获取贴图优化工具状态"""
+        try:
+            status = self.texture_mgr.get_backend_status(options)
+            return ApiResponse.success(status)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def texture_prepare_download(self, options: dict|None = None):
+        """触发自动下载 todds"""
+        try:
+            res = self.texture_mgr.prepare_tool_download(self.download_mgr, options)
+            if res.get("already_ready"):
+                return ApiResponse.success(res, message="工具已经就绪")
+            return ApiResponse.success(res, message="已启动工具下载任务")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def texture_analyze_mods(self, package_ids: List[str], options: dict|None = None, force_refresh: bool = False):
+        """
+        开始分析选中模组的贴图（多线程异步预热）
+        """
+        if not package_ids:
+            return ApiResponse.error("未指定要分析的模组")
+        
+        paths = self._resolve_mod_paths(package_ids)
+        if not paths:
+            return ApiResponse.error("未能找到指定模组的有效物理路径")
+
+        try:
+            # 1. 直接先生成一个任务 ID 返回给前端，防止 pywebview Python主线程卡死
+            task_id = uuid.uuid4().hex
+            cancel_event = self.texture_mgr.register_analysis_task(task_id)
+            
+            def background_analyze():
+                db.connect(reuse_if_open=True)
+                try:
+                    self.texture_mgr.analyze_mods(
+                        paths,
+                        options,
+                        task_id=task_id,
+                        cancel_event=cancel_event,
+                        use_cache=not bool(force_refresh),
+                    )
+                except TextureOptCancelled:
+                    logger.info("后台贴图分析任务已取消")
+                except Exception as e:
+                    logger.error(f"后台贴图分析任务执行失败: {e}", exc_info=True)
+                finally:
+                    self.texture_mgr.finish_analysis_task(task_id)
+                    if not db.is_closed():
+                        db.close()
+
+            # 2. 扔到守护后台线程去默默跑
+            threading.Thread(target=background_analyze, daemon=True).start()
+
+            return ApiResponse.success({"task_id": task_id}, message="贴图分析任务已在后台启动")
+        except Exception as e:
+            logger.error("贴图分析启动失败", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def texture_start_task(self, package_ids: List[str], action: str = "optimize", options: dict|None = None):
+        """
+        开始贴图优化或清理已生成 DDS
+        :param action: "optimize" / "clean_generated"
+        """
+        # if not package_ids:
+        #     return ApiResponse.error("未指定要处理的模组")
+            
+        paths = self._resolve_mod_paths(package_ids)
+        if not paths:
+            return ApiResponse.error("未能找到指定模组的有效物理路径")
+
+        try:
+            res = self.texture_mgr.start_task(paths, action=action, options=options)
+            msg = "清理已生成 DDS" if action == "clean_generated" else "贴图优化"
+            return ApiResponse.success(res, message=f"{msg}任务已加入队列")
+        except Exception as e:
+            logger.error("贴图优化任务启动失败", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def texture_cancel_task(self, task_id: str):
+        """取消正在执行的贴图任务"""
+        try:
+            res = self.texture_mgr.cancel_task(task_id)
+            return ApiResponse.success(res, message="正在尝试中止任务...")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
     
 if __name__ == "__main__":
     # valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
@@ -3276,7 +3391,7 @@ if __name__ == "__main__":
     
     # res = api.lifecycle_fetch_collection("3670074636")
     # print(res)
-    
+    # res= api.texture_start_task([])
     res = api.get_mod_workshop_detail("3671245310", force_refresh=True)
     print(res)
     

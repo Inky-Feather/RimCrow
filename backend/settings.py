@@ -123,6 +123,20 @@ class UIConfig:
     show_group_index: bool = True  # 是否显示分组索引列
     show_group_icon: bool = True  # 是否显示分组图标
     
+# 贴图优化配置类
+@dataclass
+class TextureOptConfig:
+    texture_tools_path: str = str(TOOLS_DIR / "texture_tools")  # todds 工具目录，留空则使用默认位置
+    generate_mipmaps: bool = False           # 是否生成 Mipmap
+    scale_factor: float = 1.0               # 缩放倍率 (1.0 为不缩放)
+    max_size: int = 0                       # 最大分辨率限制 (0 为不限制)
+    skip_small_textures: bool = True        # 是否跳过小贴图
+    min_dimension: int = 64                 # 小贴图判定阈值
+    clean_orphaned_dds: bool = False         # 自动清理失效受管 DDS
+    clean_generated_only: bool = True       # 清理模式: 只清理自己生成的 DDS，不清理其它 DDS
+    overwrite_existing: bool = False        # 是否全覆盖重生成
+    encode_batch_timeout_seconds: int = 480 # todds 批处理超时
+
 
 @dataclass
 class AppConfig:
@@ -202,6 +216,7 @@ class AppConfig:
     # --- 功能设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)
     ai: AIConfig = field(default_factory=AIConfig)
+    texture_opt: TextureOptConfig = field(default_factory=TextureOptConfig)
     
 
 class SettingsManager:
