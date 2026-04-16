@@ -265,7 +265,6 @@ const props = defineProps({
   listColor: { type: String, default: 'primary' } // danger/highlight/special/cool/primary/success/tip/warn/secondary/warning
 })
 
-const emit = defineEmits(['update:modelValue'])
 const appStore = useAppStore()
 const modStore = useModStore()
 const searchStore = useSearchStore()
@@ -1003,25 +1002,24 @@ const updateChildren = async (e) => {
 
   // 4. 检查是否有变化
   if (JSON.stringify(finalList) !== JSON.stringify(oldIds)) {
-    // 同步 Store（移除旧位置的引用等，虽然这里逻辑上已经是新的了）
-    modStore.removeIdsOnAllList(movingIds)
-    // 发出更新
-    emit('update:modelValue', finalList)
-    // 更新移动时间
-    modStore.takeModListByIds(movingIds).forEach(mod => {
-      mod.last_moved_time = Date.now()
-      if(e.event.target !== e.event.from) {
-        mod.last_active_time = Date.now()
-      }
+    const isCrossListMove = e.event.target !== e.event.from
+    await modStore.runListHistoryTransaction({
+      type: isCrossListMove ? 'move-between-lists' : 'reorder-list',
+      label: isCrossListMove ? `移动 ${movingIds.length} 项到 ${props.title}` : `调整 ${props.title} 列表顺序`,
+      trackedModIds: movingIds
+    }, async () => {
+      // 同步 Store（移除旧位置的引用等，虽然这里逻辑上已经是新的了）
+      modStore.removeIdsOnAllList(movingIds)
+      modStore.setListIds(props.listId, finalList)
+      // 更新移动时间
+      modStore.takeModListByIds(movingIds).forEach(mod => {
+        mod.last_moved_time = Date.now()
+        if (isCrossListMove) {
+          mod.last_active_time = Date.now()
+        }
+      })
     })
-    // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
     await nextTick()
-    // 但直接通过key更新会导致列表重新渲染，导致滚动位置丢失，使用原版滚动定位不准
-    // const offset = vListRef.value?.getOffset()
-    // listKey.value++ // 触发列表重新渲染
-    // nextTick(() => {
-    //   vListRef.value?.scrollToOffset(offset)
-    // })
   }
   // 通过翻转排序两次，实现软重绘
   isSortAsc.value=!isSortAsc.value
@@ -1032,17 +1030,19 @@ const updateChildren = async (e) => {
 // 添加缺失的依赖项
 const addInactiveMods = async (missingIds) => {
   if (missingIds.length === 0) return
-  // console.log('添加缺失的依赖项:', uniqueInactiveDependencies)
-  const oldIds = [...props.modelValue]
-  modStore.removeIdsOnAllList(missingIds)
-  oldIds.push(...missingIds)
-  emit('update:modelValue', oldIds)
-  // 更新移动时间
-  modStore.takeModListByIds(missingIds).forEach(mod => {
-    mod.last_moved_time = Date.now()
-    mod.last_active_time = Date.now()
+  const nextIds = [...props.modelValue, ...missingIds]
+  await modStore.runListHistoryTransaction({
+    type: 'batch-add-list-items',
+    label: `向 ${props.title} 添加 ${missingIds.length} 项`,
+    trackedModIds: missingIds
+  }, async () => {
+    modStore.removeIdsOnAllList(missingIds)
+    modStore.setListIds(props.listId, nextIds)
+    modStore.takeModListByIds(missingIds).forEach(mod => {
+      mod.last_moved_time = Date.now()
+      mod.last_active_time = Date.now()
+    })
   })
-  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
   await nextTick()
   // 通过翻转排序两次，实现软重绘
   isSortAsc.value=!isSortAsc.value
@@ -1053,9 +1053,13 @@ const addInactiveMods = async (missingIds) => {
 const removeInvalidMod = async () => {
   const invalidMods = invalidModsToRemove.value
   if (invalidMods.length === 0) return
-  // console.log('移除无效的Mod:', invalidMods)
-  modStore.removeIdsOnAllList(invalidMods)
-  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+  await modStore.runListHistoryTransaction({
+    type: 'batch-remove-list-items',
+    label: `移除 ${invalidMods.length} 个无效 Mod`,
+    trackedModIds: invalidMods
+  }, async () => {
+    modStore.removeIdsOnAllList(invalidMods)
+  })
   await nextTick()
   // 通过翻转排序两次，实现软重绘
   isSortAsc.value=!isSortAsc.value

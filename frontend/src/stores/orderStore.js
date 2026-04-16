@@ -111,12 +111,17 @@ export const useOrderStore = defineStore('order', () => {
       if (!shouldContinue) return false
       // 后端现在统一返回 modify_time。
       // active_load_modify_time 保留兼容旧数据结构，优先兼容旧接口，缺失时回退到新字段。
-      modStore.activeIds = order.active_ids || []
-      modStore.savedActiveIds = [...order.active_ids] || []
-      modStore.activeLoadModifyTime = order.active_load_modify_time || order.modify_time || 0
-      modStore.updateInactiveIds()
-      // 加载外部存档文件时解析未知项
-      modStore.fetchAndCacheGhostMods(modStore.activeIds)
+      await modStore.runListHistoryTransaction({
+        type: 'load-order',
+        label: '加载文件序列'
+      }, async () => {
+        modStore.setListIds('active', order.active_ids || [])
+        modStore.savedActiveIds = [...(order.active_ids || [])]
+        modStore.activeLoadModifyTime = order.active_load_modify_time || order.modify_time || 0
+        modStore.updateInactiveIds()
+        // 加载外部存档文件时解析未知项
+        modStore.fetchAndCacheGhostMods(modStore.activeIds)
+      })
       toast.success("Mod序列已加载")
       return true
     }
@@ -154,10 +159,15 @@ export const useOrderStore = defineStore('order', () => {
     const shouldContinue = await confirmImportStripping(currentImportCheck.value, backupIds.value)
     if (!shouldContinue) return false
     if (!backupIds.value) return false
-    modStore.activeIds = backupIds.value
-    modStore.updateInactiveIds()
-    // 加载外部存档文件时解析未知项
-    modStore.fetchAndCacheGhostMods(modStore.activeIds)
+    await modStore.runListHistoryTransaction({
+      type: 'apply-backup',
+      label: '应用文件序列'
+    }, async () => {
+      modStore.setListIds('active', backupIds.value)
+      modStore.updateInactiveIds()
+      // 加载外部存档文件时解析未知项
+      modStore.fetchAndCacheGhostMods(modStore.activeIds)
+    })
     toast.success("已应用Mod序列")
     return true
   }

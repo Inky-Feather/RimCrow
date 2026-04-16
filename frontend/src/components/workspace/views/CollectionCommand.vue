@@ -302,8 +302,13 @@ const applyAsLoadOrder = async () => {
     toast.info(`已跳过 ${duplicateCount} 个重复包名项，避免生成重复加载节点。`)
   }
 
-  modStore.activeIds = nextActiveIds
-  modStore.updateInactiveIds()
+  await modStore.runListHistoryTransaction({
+    type: 'apply-collection-order',
+    label: '按合集顺序覆盖启用列表'
+  }, async () => {
+    modStore.setListIds('active', nextActiveIds)
+    modStore.updateInactiveIds()
+  })
   toast.success("已按合集顺序覆盖当前启用列表。\n官方 Core/DLC 会按当前启用状态保留，请返回主界面点击【保存】生效。")
 }
 </script>

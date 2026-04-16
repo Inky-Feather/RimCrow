@@ -370,6 +370,27 @@ const stopResize = () => {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
+const isEditableHistoryTarget = (target) => {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return !!target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')
+}
+const handleListHistoryKeydown = (event) => {
+  if (isEditableHistoryTarget(event.target)) return
+  const key = String(event.key || '').toLowerCase()
+  const isModifierPressed = event.ctrlKey || event.metaKey
+  const isUndo = isModifierPressed && !event.shiftKey && key === 'z'
+  const isRedo = isModifierPressed && (key === 'y' || (event.shiftKey && key === 'z'))
+  if (!isUndo && !isRedo) return
+
+  if (isUndo && modStore.canUndoListHistory) {
+    event.preventDefault()
+    modStore.undoListHistory()
+  } else if (isRedo && modStore.canRedoListHistory) {
+    event.preventDefault()
+    modStore.redoListHistory()
+  }
+}
 // 处理更新弹窗
 function handleUpdate(changelog) {
   // updateModal.value.show(changelog); // 注意要加 .value
@@ -379,6 +400,7 @@ function handleUpdate(changelog) {
 let resizeObserver = null
 onMounted(() => {
   console.log("应用已启动，正在初始化存储……")
+  window.addEventListener('keydown', handleListHistoryKeydown)
   // 确保 API 存在
   if (window.pywebview) {
     window.pywebview.api.monitor_frontend_ready()
@@ -425,6 +447,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleListHistoryKeydown)
   orderStore.saveInactiveOrder();  // 退出前先保存停用列表顺序
   if (resizeObserver) resizeObserver.disconnect()
   stopResize()

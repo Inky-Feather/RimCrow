@@ -15,6 +15,14 @@
         已启用: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
       </div>
 
+      <div v-tooltip="historyStateTooltip">
+        历史状态:
+        <template v-if="modStore.listHistoryTotal > 0">
+          <span class="text-text-main font-bold">{{ modStore.listHistoryPosition }}</span>/<span class="text-text-main/70">{{ modStore.listHistoryTotal }}</span>
+        </template>
+        <span v-else class="text-text-main/60">无</span>
+      </div>
+
       <div v-show="modStore.selectedIds.length > 0">
         已选择: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
       </div>
@@ -191,6 +199,8 @@ const taskExtra = (task) => {
   if (speed) parts.push(speed)
   return parts.join(' ')
 }
+
+const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n仅统计用户主动触发的列表变更，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
 </script>
 
 <style scoped>

@@ -35,6 +35,12 @@ export const useModStore = defineStore('mods', () => {
   const lastSelectedMod = ref(null)   // 最后选中的 Mod 对象
   const currentTargetId = ref('')     // 当前目标 ID (查找定位用)
 
+  // 列表历史（仅当前会话内存态）
+  const LIST_HISTORY_LIMIT = 100
+  const listHistoryUndoStack = ref([])
+  const listHistoryRedoStack = ref([])
+  const isApplyingListHistory = ref(false)
+
   // === Getters ===
   // 检查列表变化
   const isDirty = computed(() => {
@@ -110,9 +116,137 @@ export const useModStore = defineStore('mods', () => {
   const allModPackageIds = computed(() => {
     return new Set(Array.from(allModsMap.value.values()).map(mod => mod.package_id))
   })
+  const listHistoryTotal = computed(() => listHistoryUndoStack.value.length + listHistoryRedoStack.value.length)
+  const listHistoryPosition = computed(() => listHistoryUndoStack.value.length)
+  const canUndoListHistory = computed(() => listHistoryUndoStack.value.length > 0)
+  const canRedoListHistory = computed(() => listHistoryRedoStack.value.length > 0)
 
 
   // === Actions ===
+  const normalizeHistoryModIds = (ids = []) => {
+    const source = Array.isArray(ids) ? ids : [ids]
+    return [...new Set(
+      source
+        .map(id => String(id || '').trim().toLowerCase())
+        .filter(Boolean)
+    )]
+  }
+  const createModTimeSnapshot = (ids = []) => {
+    const snapshot = {}
+    normalizeHistoryModIds(ids).forEach(id => {
+      const mod = allModsMap.value.get(id)
+      if (!mod) return
+      snapshot[id] = {
+        last_active_time: mod.last_active_time || 0,
+        last_moved_time: mod.last_moved_time || 0
+      }
+    })
+    return snapshot
+  }
+  const createListHistorySnapshot = (trackedModIds = []) => ({
+    activeIds: [...activeIds.value],
+    inactiveIds: [...inactiveIds.value],
+    tempIds: [...tempIds.value],
+    savedActiveIds: [...savedActiveIds.value],
+    activeLoadModifyTime: activeLoadModifyTime.value || 0,
+    modTimes: createModTimeSnapshot(trackedModIds)
+  })
+  const restoreModTimeSnapshot = (modTimes = {}) => {
+    Object.entries(modTimes || {}).forEach(([id, times]) => {
+      const mod = allModsMap.value.get(String(id).toLowerCase())
+      if (!mod) return
+      mod.last_active_time = times?.last_active_time || 0
+      mod.last_moved_time = times?.last_moved_time || 0
+    })
+  }
+  const setListIds = (listId, ids = []) => {
+    const nextIds = Array.isArray(ids) ? [...ids] : []
+    if (listId === 'active') activeIds.value = nextIds
+    else if (listId === 'inactive') inactiveIds.value = nextIds
+    else if (listId === 'temp') tempIds.value = nextIds
+  }
+  const clearListHistory = () => {
+    listHistoryUndoStack.value = []
+    listHistoryRedoStack.value = []
+  }
+  const isSameArray = (left = [], right = []) => {
+    if (left.length !== right.length) return false
+    return left.every((item, index) => item === right[index])
+  }
+  const didListHistorySnapshotChange = (before, after) => {
+    if (!before || !after) return false
+    if (!isSameArray(before.activeIds, after.activeIds)) return true
+    if (!isSameArray(before.inactiveIds, after.inactiveIds)) return true
+    if (!isSameArray(before.tempIds, after.tempIds)) return true
+    if (!isSameArray(before.savedActiveIds, after.savedActiveIds)) return true
+    return (before.activeLoadModifyTime || 0) !== (after.activeLoadModifyTime || 0)
+  }
+  const pushListHistoryEntry = (entry) => {
+    listHistoryUndoStack.value.push(entry)
+    if (listHistoryUndoStack.value.length > LIST_HISTORY_LIMIT) {
+      listHistoryUndoStack.value.shift()
+    }
+    listHistoryRedoStack.value = []
+  }
+  const recordListHistory = ({ before, trackedModIds = [], type = 'list-edit', label = '' } = {}) => {
+    if (isApplyingListHistory.value || !before) return false
+    const after = createListHistorySnapshot(trackedModIds)
+    if (!didListHistorySnapshotChange(before, after)) return false
+    pushListHistoryEntry({
+      type,
+      label,
+      at: Date.now(),
+      before,
+      after
+    })
+    return true
+  }
+  const runListHistoryTransaction = async (meta = {}, handler) => {
+    if (typeof handler !== 'function') return false
+    if (isApplyingListHistory.value) {
+      return await handler()
+    }
+    const trackedModIds = normalizeHistoryModIds(meta.trackedModIds || [])
+    const before = createListHistorySnapshot(trackedModIds)
+    const result = await handler()
+    recordListHistory({ ...meta, before, trackedModIds })
+    return result
+  }
+  const restoreListHistorySnapshot = (snapshot) => {
+    if (!snapshot) return false
+    activeIds.value = [...(snapshot.activeIds || [])]
+    inactiveIds.value = [...(snapshot.inactiveIds || [])]
+    tempIds.value = [...(snapshot.tempIds || [])]
+    savedActiveIds.value = [...(snapshot.savedActiveIds || [])]
+    activeLoadModifyTime.value = snapshot.activeLoadModifyTime || 0
+    restoreModTimeSnapshot(snapshot.modTimes)
+    dataVersion.value++
+    return true
+  }
+  const undoListHistory = () => {
+    const entry = listHistoryUndoStack.value.pop()
+    if (!entry) return false
+    isApplyingListHistory.value = true
+    try {
+      restoreListHistorySnapshot(entry.before)
+      listHistoryRedoStack.value.push(entry)
+      return true
+    } finally {
+      isApplyingListHistory.value = false
+    }
+  }
+  const redoListHistory = () => {
+    const entry = listHistoryRedoStack.value.pop()
+    if (!entry) return false
+    isApplyingListHistory.value = true
+    try {
+      restoreListHistorySnapshot(entry.after)
+      listHistoryUndoStack.value.push(entry)
+      return true
+    } finally {
+      isApplyingListHistory.value = false
+    }
+  }
   // 获取 Mod 对象
   const takeModById = (id, defaultName = '未知模组') => {
     if (!id) return null
@@ -288,6 +422,7 @@ export const useModStore = defineStore('mods', () => {
   }
   // 设置 Mod 数据
   const setMods = (data) => {
+    clearListHistory()
     activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
     savedActiveIds.value = [...data.active_load_order] || []  // 保存原始顺序，用于判定排序变动
     savedInactiveIds.value = [...data.inactive_load_order] || [] // 接收持久化停用顺序
@@ -323,6 +458,7 @@ export const useModStore = defineStore('mods', () => {
   }
   // 重置 Mod 数据
   const reset = () => {
+    clearListHistory()
     allModsMap.value.clear()
     activeIds.value = []
     inactiveIds.value = []
@@ -341,16 +477,23 @@ export const useModStore = defineStore('mods', () => {
   // 批量启用/停用Mod
   const changeModsActive = async (ids, active) => {
     if(typeof ids === 'string') ids = [ids]
-    removeIdsOnAllList(ids)
-    if(active) {
-      // activeIds.value.push(...ids)
-      await smartInsertMods(ids)
-    } else {
-      inactiveIds.value.push(...ids)
-    }
-    takeModListByIds(ids).forEach(mod => {
-      mod.last_moved_time = Date.now()
-      mod.last_active_time = Date.now()
+    const nextIds = Array.isArray(ids) ? [...ids] : []
+    if (nextIds.length === 0) return false
+    return await runListHistoryTransaction({
+      type: active ? 'change-active-enable' : 'change-active-disable',
+      label: active ? `启用 ${nextIds.length} 个 Mod` : `停用 ${nextIds.length} 个 Mod`,
+      trackedModIds: nextIds
+    }, async () => {
+      removeIdsOnAllList(nextIds)
+      if(active) {
+        await smartInsertMods(nextIds)
+      } else {
+        inactiveIds.value.push(...nextIds)
+      }
+      takeModListByIds(nextIds).forEach(mod => {
+        mod.last_moved_time = Date.now()
+        mod.last_active_time = Date.now()
+      })
     })
   }
   // 智能插入 Mod 到 Active 列表
@@ -489,8 +632,13 @@ export const useModStore = defineStore('mods', () => {
     try {
       const res = await window.pywebview.api.auto_sort_mods(mod_ids)
       if (checkResult(res, "自动排序Mod")) {
-        activeIds.value = res.data.sorted_ids || []
-        updateInactiveIds()
+        await runListHistoryTransaction({
+          type: 'auto-sort',
+          label: `自动排序 ${mod_ids.length} 个 Mod`
+        }, async () => {
+          activeIds.value = res.data.sorted_ids || []
+          updateInactiveIds()
+        })
         toast.success("自动排序完成")
         // 处理警告信息
         if(res.data.warnings?.length > 0) {
@@ -1412,16 +1560,20 @@ export const useModStore = defineStore('mods', () => {
     allModsMap, dataVersion, inactiveIds, tempIds, activeIds, interlocksMap, savedInactiveIds, interlockDetailsMap, 
     savedActiveIds, activeLoadModifyTime, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, 
+    listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
     // Getters
     isDirty, selectedMods, selectedStats, allModTags, modIssues, allModWorkshopIds, allModPackageIds,
+    listHistoryTotal, listHistoryPosition,
+    canUndoListHistory, canRedoListHistory,
 
     // Actions
     setMods, reset, takeModById, hasRealModById, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
-    updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
+    updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds, getMissingLocalDependencies, getMissingLanguagePacks, 
+    clearListHistory, runListHistoryTransaction, recordListHistory, undoListHistory, redoListHistory,
   }
 })
