@@ -536,7 +536,7 @@ class AIManager:
                 logger.error(f"Chunk {chunk_id} failed after retries: {e}")
                 return {"chunk_id": chunk_id, "status": "error", "error": str(e), "data": None}
 
-    async def execute_batch_task_async(self, task_key: str, items: List[Dict], variables: Dict[str, Any]):
+    async def execute_batch_task_async(self, task_key: str, items: List[Dict], variables: Dict[str, Any], task_event_id: str):
         """
         异步批量调度中心。
 
@@ -635,18 +635,27 @@ class AIManager:
                     
                     if valid_data:
                         all_results.extend(valid_data)
-                        EventBus.emit('ai-batch-chunk-ready', valid_data)
+                        EventBus.emit('ai-batch-chunk-ready', {'task_event_id': task_event_id, 'items': valid_data})
                 
                 # 实时更新进度
                 percent = int((len(successful_ids) / total_initial_items) * 100)
                 # 预留 5% 给最终结算
                 percent = min(95, percent) 
                 
-                EventBus.emit('ai-batch-progress', {
-                    'scanning': True, 
-                    'percent': percent,
-                    'message': f"正在推理... [第{attempt+1}轮] 成功: {len(successful_ids)}/{total_initial_items}"
-                })
+                EventBus.emit_progress(
+                    task_event_id,
+                    "ai-batch",
+                    status="running",
+                    progress=percent,
+                    message=f"正在推理... [第{attempt+1}轮] 成功: {len(successful_ids)}/{total_initial_items}",
+                    metrics={
+                        "attempt": attempt + 1,
+                        "current": len(successful_ids),
+                        "total": total_initial_items,
+                        "task_key": task_key,
+                        "title": "AI 批量处理",
+                    },
+                )
 
             # 计算下一轮的待处理项 (过滤掉已经成功的)
             pending_items = [item for item in pending_items if item.get('package_id') not in successful_ids]
@@ -674,16 +683,25 @@ class AIManager:
                 all_results.append(failed_obj)
             
             # 将这些空数据发给前端
-            EventBus.emit('ai-batch-chunk-ready', failed_results)
+            EventBus.emit('ai-batch-chunk-ready', {'task_event_id': task_event_id, 'items': failed_results})
 
         # ------------------------------------------
         # 任务结束，发送 100% 信号
         # ------------------------------------------
-        EventBus.emit('ai-batch-progress', {
-            'scanning': True, 
-            'percent': 100,
-            'message': f"推理结束！成功: {len(successful_ids)}, 失败: {failed_count}"
-        })
+        EventBus.emit_progress(
+            task_event_id,
+            "ai-batch",
+            status="success",
+            progress=100,
+            message=f"推理结束！成功: {len(successful_ids)}, 失败: {failed_count}",
+            metrics={
+                "current": len(successful_ids),
+                "total": total_initial_items,
+                "failed_count": failed_count,
+                "task_key": task_key,
+                "title": "AI 批量处理",
+            },
+        )
         
         # 返回指定的结构化数据
         return {

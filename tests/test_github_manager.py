@@ -52,6 +52,22 @@ class TestGithubManager(unittest.TestCase):
         self.assertIsNotNone(asset)
         self.assertEqual(asset["name"], "todds_Windows_0.5.0.zip")
 
+    def test_select_release_asset_falls_back_to_single_zip_when_prefix_does_not_match(self):
+        asset = self.manager._select_release_asset(
+            [
+                {"name": "modbundle-1.2.3.zip", "browser_download_url": "https://example.invalid/modbundle.zip"},
+                {"name": "notes.txt", "browser_download_url": "https://example.invalid/notes.txt"},
+            ],
+            GithubArtifactRequest(
+                kind=GITHUB_ARTIFACT_RELEASE_ASSET,
+                asset_name_prefix="repo",
+                asset_name_suffix=".zip",
+            ),
+        )
+
+        self.assertIsNotNone(asset)
+        self.assertEqual(asset["name"], "modbundle-1.2.3.zip")
+
     def test_resolve_source_archive_uses_default_branch_when_missing_ref(self):
         request = GithubInstallRequest(
             owner="user",
@@ -180,7 +196,61 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(resolved.filename, "todds_Windows_0.4.1.zip")
         self.assertIn("/releases/download/0.4.1/", resolved.download_url)
 
-    def test_install_repo_mod_builds_tag_source_request_for_release_mode(self):
+    def test_parse_release_assets_from_html_extracts_download_links(self):
+        html_text = """
+        <section>
+          <a href="/emipa606/XVIMECHFRAME/releases/download/1.6.3/XVIMECHFRAME_1.6.3.zip" class="Truncate">
+            <span class="Truncate-text text-bold">XVIMECHFRAME_1.6.3.zip</span>
+          </a>
+        </section>
+        """
+
+        assets = self.manager._parse_release_assets_from_html(html_text)
+
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0]["name"], "XVIMECHFRAME_1.6.3.zip")
+        self.assertEqual(
+            assets[0]["browser_download_url"],
+            "https://github.com/emipa606/XVIMECHFRAME/releases/download/1.6.3/XVIMECHFRAME_1.6.3.zip",
+        )
+
+    def test_resolve_release_asset_uses_web_assets_when_api_is_rate_limited(self):
+        request = GithubInstallRequest(
+            repo_url="https://github.com/emipa606/XVIMECHFRAME",
+            owner="emipa606",
+            repo="XVIMECHFRAME",
+            artifact=GithubArtifactRequest(
+                kind=GITHUB_ARTIFACT_RELEASE_ASSET,
+                release_tag="1.6.3",
+                asset_name_prefix="XVIMECHFRAME",
+                asset_name_suffix=".zip",
+                fallback_download_url="https://github.com/emipa606/XVIMECHFRAME/archive/refs/tags/1.6.3.zip",
+                fallback_filename="XVIMECHFRAME_1.6.3.zip",
+                fallback_version="1.6.3",
+            ),
+        )
+
+        with patch.object(self.manager, "fetch_release", side_effect=GithubRateLimitError("rate limited")), \
+             patch.object(
+                 self.manager,
+                 "fetch_release_assets_web",
+                 return_value={
+                     "tag_name": "1.6.3",
+                     "assets": [
+                         {
+                             "name": "XVIMECHFRAME_1.6.3.zip",
+                             "browser_download_url": "https://github.com/emipa606/XVIMECHFRAME/releases/download/1.6.3/XVIMECHFRAME_1.6.3.zip",
+                         }
+                     ],
+                 },
+             ):
+            resolved = self.manager._resolve_release_asset(request)
+
+        self.assertEqual(resolved.version, "1.6.3")
+        self.assertEqual(resolved.filename, "XVIMECHFRAME_1.6.3.zip")
+        self.assertIn("/releases/download/1.6.3/", resolved.download_url)
+
+    def test_install_repo_mod_builds_release_asset_request_for_release_mode(self):
         captured: dict[str, GithubInstallRequest] = {}
         download_mgr = object()
         original_self_mods_path = settings.config.self_mods_path
@@ -198,9 +268,12 @@ class TestGithubManager(unittest.TestCase):
 
         request = captured["request"]
         self.assertEqual(task_id, "task-1")
-        self.assertEqual(request.artifact.kind, GITHUB_ARTIFACT_SOURCE_ARCHIVE)
-        self.assertEqual(request.artifact.source_ref_type, GITHUB_SOURCE_TAG)
-        self.assertEqual(request.artifact.source_ref, "v1.2.3")
+        self.assertEqual(request.artifact.kind, GITHUB_ARTIFACT_RELEASE_ASSET)
+        self.assertEqual(request.artifact.release_tag, "v1.2.3")
+        self.assertEqual(request.artifact.asset_name_prefix, "repo")
+        self.assertEqual(request.artifact.asset_name_suffix, ".zip")
+        self.assertIn("/archive/refs/tags/v1.2.3.zip", request.artifact.fallback_download_url)
+        self.assertEqual(request.artifact.fallback_filename, "repo_v1.2.3.zip")
         self.assertEqual(request.install.final_name, "_GH_repo")
 
     def test_fetch_repo_info_raises_when_no_fallback_source_available(self):

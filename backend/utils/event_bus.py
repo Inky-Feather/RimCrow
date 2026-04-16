@@ -61,7 +61,7 @@ class EventBus:
             import json
             try:
                 # 构造 JS 代码触发 CustomEvent
-                # 前端监听: window.addEventListener('scan-progress', (e) => console.log(e.detail))
+                # 前端监听: window.addEventListener('global-progress', (e) => console.log(e.detail))
                 js_payload = json.dumps(data)
                 # 使用 setTimeout 0 异步执行，减少对 Python 线程的阻塞
                 js_code = f"""
@@ -105,6 +105,23 @@ class EventBus:
             'message': message,
             'type': type
         })
+
+    @staticmethod
+    def _normalize_progress_status(status: str) -> str:
+        value = str(status or "running").strip().lower()
+        mapping = {
+            "completed": "success",
+            "complete": "success",
+            "done": "success",
+            "error": "failed",
+            "errored": "failed",
+            "verifying": "running",
+            "paused": "pending",
+        }
+        normalized = mapping.get(value, value)
+        if normalized not in {"pending", "running", "success", "failed", "cancelled"}:
+            return "running"
+        return normalized
     
     @classmethod
     def emit_progress(cls, task_id, task_type, status="running", progress=0, message="", metrics=None):
@@ -117,14 +134,16 @@ class EventBus:
         :param message: 当前处理的具体信息 (如文件名)
         :param metrics: 额外指标数据 (如 {'speed': '2MB/s', 'eta': '10s', 'count': '10/100'})
         """
+        now = current_ms()
         payload = {
             "id": task_id,
-            "type": task_type,
-            "status": status,
-            "progress": progress,
+            "type": str(task_type or "").strip().lower(),
+            "status": cls._normalize_progress_status(status),
+            "progress": max(0, min(100, int(progress or 0))),
             "message": message,
-            "metrics": metrics or {},
-            "timestamp": current_ms()
+            "metrics": dict(metrics or {}),
+            "timestamp": now
         }
+        payload["metrics"].setdefault("task_created_at", now)
         cls.emit('global-progress', payload)
         

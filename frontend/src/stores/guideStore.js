@@ -96,7 +96,7 @@ export const allGuides = [
     steps: aiReviewGuideSteps,
     beforeStart: () => {
       const appStore = useAppStore();
-      const hasResults = Array.isArray(appStore.aiBatchResults) && appStore.aiBatchResults.length > 0;
+      const hasResults = appStore.aiBatchResultCount > 0;
       if (!hasResults) return false;
       appStore.uiState.showAiReviewModal = false;
       return true;

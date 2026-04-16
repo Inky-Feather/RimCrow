@@ -329,7 +329,14 @@ class UpdateManager:
 
         # 如果已经是 Ready 状态，直接通知
         if info.local_status == "ready" and info.local_file_path:
-            EventBus.emit("update-status", {"status": "ready", "path": info.local_file_path})
+            EventBus.emit_progress(
+                f"update-ready-{info.version}",
+                "update",
+                status="success",
+                progress=100,
+                message=f"更新包已就绪 v{info.version}",
+                metrics={"path": info.local_file_path, "version": info.version, "ready_to_install": True, "title": "软件更新"},
+            )
             return {"status": "ready", "task_id": None}
 
         # 开始下载
@@ -344,7 +351,10 @@ class UpdateManager:
             filename=filename,
             expected_hash=info.file_hash, # 如果源提供了 Hash，这里会自动校验
             on_complete=self._on_download_complete,
-            on_error=self._on_download_error
+            on_error=self._on_download_error,
+            task_type="update",
+            title="软件更新",
+            metadata={"version": info.version, "source_name": info.source_name, "ready_to_install": False},
         )
         
         # 标记当前 info 状态
@@ -373,18 +383,30 @@ class UpdateManager:
         self._clean_old_cache()
 
         # 4. 通知前端：准备就绪
-        EventBus.emit("update-status", {
-            "status": "ready", 
-            "version": info.version if info else "unknown",
-            "path": task.dest_path
-        })
+        EventBus.emit_progress(
+            task.task_id,
+            "update",
+            status="success",
+            progress=100,
+            message=f"更新包已就绪 v{info.version if info else 'unknown'}",
+            metrics={
+                "path": task.dest_path,
+                "version": info.version if info else "unknown",
+                "ready_to_install": True,
+                "title": "软件更新",
+            },
+        )
 
     def _on_download_error(self, task: DownloadTask):
         logger.error(f"Update download error: {task.error_msg}")
-        EventBus.emit("update-status", {
-            "status": "error",
-            "msg": task.error_msg
-        })
+        EventBus.emit_progress(
+            task.task_id,
+            "update",
+            status="failed",
+            progress=0,
+            message=f"更新失败: {task.error_msg}",
+            metrics={"error": task.error_msg, "title": "软件更新"},
+        )
         if self.current_update_info:
             self.current_update_info.local_status = "remote"
 

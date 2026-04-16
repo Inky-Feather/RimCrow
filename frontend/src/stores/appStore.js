@@ -11,9 +11,11 @@ import { useConfirmStore } from './confirmStore'
 import { useProfileStore } from './profileStore'
 import { cleanRichText } from '../utils/unityTextParser'
 import { useWorkspaceStore } from './workspaceStore'
+import { useTaskStore } from './taskStore'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
+  const taskStore = useTaskStore()
   
   // === State ===
   const appVersion = ref('')     // 应用版本号
@@ -39,42 +41,21 @@ export const useAppStore = defineStore('app', () => {
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
   const scrollRegistry = ref(new Map());
 
-  // 扫描进度
-  const scanProgress = reactive({
-    scanning: false, // 是否正在扫描中
-    percent: 0,      // 进度百分比 (0-100)
-    message: '',     // 当前正在扫描的文件名或阶段
-    total: 0,        // 总文件数
-    current: 0       // 当前处理数
-  })
   // 更新相关状态
   const updateState = reactive({
     hasUpdate: false,
     info: null,    // 存储后端返回的 UpdateInfo
     isChecking: false,
-    // 下载过程状态
-    downloadStatus: 'idle', // idle | downloading | verifying | ready | error
-    progress: 0,
-    speed: '0 B/s',
-    errorMsg: ''
   })
   // AI相关状态
   const aiState = reactive({
     isLoading: false,
     chatHistory: [],
-    percent: 0,
-    message: ''
   })
-  const aiBatchResults = ref([]) // 存储实时返回的 AI 数据
+  const aiBatchSessions = ref(new Map())
+  const currentAiBatchTaskId = ref('')
 
   const upgradeContext = ref({}); // 升级上下文
-
-  const taskPool = reactive(new Map());
-  // 下载任务
-  const downloadTasks = ref(new Map()) // 使用 Map 存储 {id: taskObject}
-  // 存储任务回调的 Map
-  // Key: task_id, Value: { resolve, reject, timeout }
-  const downloadCallbacks = new Map()
 
   // 定义侧边栏标签配置 (ID 与 标题绑定)
   const SIDEBAR_TABS = [
@@ -243,33 +224,36 @@ export const useAppStore = defineStore('app', () => {
 
 
   // === Getters ===
-  // 当前是否有正在进行的下载
-  const isDownloading = computed(() => {
-    for (const task of downloadTasks.value.values()) {
-      if (task.status === 'running' || task.status === 'pending') return true
+  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update']))
+  const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
+
+  const ensureAiBatchSession = (taskId) => {
+    if (!taskId) return null
+    const sessions = aiBatchSessions.value
+    if (!sessions.has(taskId)) {
+      sessions.set(taskId, { items: [], createdAt: Date.now() })
     }
-    return false
+    return sessions.get(taskId)
+  }
+
+  const aiBatchResults = computed({
+    get: () => {
+      const session = ensureAiBatchSession(currentAiBatchTaskId.value)
+      return session?.items || []
+    },
+    set: (items) => {
+      const session = ensureAiBatchSession(currentAiBatchTaskId.value)
+      if (session) session.items = Array.isArray(items) ? items : []
+    }
   })
-  // 获取最活跃的一个任务，用于状态栏显示
-  const activeDownloadTask = computed(() => {
-    // 优先返回 Running 的，没有则返回 Pending，再没有返回 Error/Completed
-    const tasks = Array.from(downloadTasks.value.values())
-    return tasks.find(t => t.status === 'running') || 
-           tasks.find(t => t.status === 'pending') || 
-           null
-  })
-  const activeTextureOptTask = computed(() => {
-    const tasks = Array.from(taskPool.values()).filter(task =>
-      task && (task.type === 'texture-opt' || task.type === 'texture-opt-analyze')
-    )
-    return tasks.find(t => t.status === 'running') ||
-           tasks.find(t => t.status === 'pending') ||
-           tasks.find(t => t.status === 'cancelling') ||
-           tasks.find(t => t.status === 'success') ||
-           tasks.find(t => t.status === 'failed') ||
-           tasks.find(t => t.status === 'cancelled') ||
-           null
-  })
+
+  const aiBatchResultCount = computed(() => aiBatchResults.value.length)
+  const currentAiBatchTask = computed(() => (
+    currentAiBatchTaskId.value
+      ? taskStore.getTask(currentAiBatchTaskId.value)
+      : taskStore.getLatestTaskByType('ai-batch')
+  ))
+  const updateInstallPrompted = new Set()
 
   // 监听字体大小变化，实时更新根字号
   watch(() => settings.value.ui.font_size, (newSize) => {
@@ -435,103 +419,28 @@ export const useAppStore = defineStore('app', () => {
     // 防止重复添加监听器
     if (window._modManagerEventsInitialized) return
     window._modManagerEventsInitialized = true
-    
-    // 监听：扫描开始
-    window.addEventListener('scan-start', () => {
-      scanProgress.scanning = true
-      scanProgress.percent = 0
-      scanProgress.message = '准备开始扫描...'
-    })
-    // 监听：扫描进度
-    window.addEventListener('scan-progress', (e) => {
-      // Python 发送的数据在 e.detail 中
-      Object.assign(scanProgress, e.detail)
-    })
+
     // 监听：扫描完成
     window.addEventListener('scan-complete', async (e) => {
-      scanProgress.scanning = false
-      scanProgress.message = '扫描完成'
       // 扫描完成后的逻辑主要涉及 Mod 数据更新
       const modStore = useModStore()
       await modStore.scanComplete(e.detail)
     })
 
-    // 监听：下载进度
-    window.addEventListener('download-progress', (e) => {
-      const d = e.detail
-      downloadTasks.value.set(d.id, d)
-      import('./textureStore').then(({ useTextureStore }) => {
-        const textureStore = useTextureStore()
-        textureStore.handleDownloadEvent(d)
-      })
-      // --- 核心：检查是否有正在等待该任务的 Promise ---
-      const callback = downloadCallbacks.get(d.id)
-      
-      if (d.status === 'completed' && d.percent === 100) {
-        toast.success(`下载完成: ${d.filename}`)
-        console.log(`下载完成:`, d)
-        if (callback) {
-          clearTimeout(callback.timer)
-          callback.resolve(d.file_path) // 返回文件路径
-          downloadCallbacks.delete(d.id)
-        }
-      }
-      if (d.status === 'error') {
-        const errorMsg = `下载失败: ${d.filename}\n${d.error || ''}`
-        toast.error(errorMsg)
-        
-        if (callback) {
-          clearTimeout(callback.timer)
-          callback.reject(new Error(errorMsg))
-          downloadCallbacks.delete(d.id)
-        }
-      }
-    })
-    // 监听后端 EventBus 发出的 'update-status' 事件
-    window.addEventListener('update-status', (event) => {
-        const data = event.detail // { status, percent, speed, msg, path ... }
-        console.log('[Frontend] Update Status:', data)
-        
-        // 同步状态到 UI
-        updateState.downloadStatus = data.status
-        
-        if (data.status === 'downloading') {
-            updateState.progress = data.percent || 0
-            updateState.speed = data.speed || '0 B/s'
-        } 
-        else if (data.status === 'verifying') {
-            updateState.speed = '正在校验文件完整性...'
-            updateState.progress = 99
-        }
-        else if (data.status === 'ready') {
-            updateState.progress = 100
-            updateState.speed = '下载完成'
-            // 更新 info 里的状态，让按钮变色
-            if (updateState.info) updateState.info.local_status = 'ready'
-            
-            // 可选：下载完成后自动弹窗提示安装
-            _showInstallPrompt(data) 
-        }
-        else if (data.status === 'error') {
-            updateState.errorMsg = data.msg
-            toast.error(`更新出错: ${data.msg}`)
-        }
-    })
-    // 监听：AI 批量处理进度
-    window.addEventListener('ai-batch-progress', (e) => {
-      Object.assign(aiState, e.detail)
-      aiState.isLoading = true 
-    })
-
     // 每完成一个 Chunk，将数据推入数组，供弹窗实时渲染
     window.addEventListener('ai-batch-chunk-ready', (e) => {
-      if (Array.isArray(e.detail)) {
-        aiBatchResults.value.push(...e.detail)
+      const taskId = e.detail?.task_event_id
+      const items = Array.isArray(e.detail?.items) ? e.detail.items : []
+      if (taskId && items.length > 0) {
+        currentAiBatchTaskId.value = taskId
+        const session = ensureAiBatchSession(taskId)
+        session.items.push(...items)
       }
     })
     // 监听：AI 批量处理完成
     window.addEventListener('ai-batch-complete', (e) => {
-      aiState.isLoading = false 
+      const taskId = e.detail?.task_event_id || ''
+      if (taskId) currentAiBatchTaskId.value = taskId
       if (e.detail.status === 'success') {
         const payload = e.detail.data // 获取后端的字典结果
         const successCount = payload.success_count || 0
@@ -546,17 +455,8 @@ export const useAppStore = defineStore('app', () => {
         toast.error(`AI 任务异常: ${e.detail.message}`)
       }
     })
-    // 监听：本地化进度
-    window.addEventListener('localize-progress', (e) => {
-        // 复用 scanProgress 的状态，或者建立独立的 localizeProgress
-        Object.assign(scanProgress, {
-            scanning: true, // 借用这个状态让进度条显示
-            ...e.detail
-        });
-    });
     // 监听：本地化完成
     window.addEventListener('localize-complete', (e) => {
-        scanProgress.scanning = false;
         const { success_count, error_count, errors } = e.detail;
         console.log(`本地化完成。成功: ${success_count}, 失败: ${error_count}`, errors)
         if (error_count > 0) {
@@ -572,9 +472,6 @@ export const useAppStore = defineStore('app', () => {
       console.log('检测到游戏启动，停止所有界面活动...');
       // 1. 设置全局加载状态，屏蔽用户操作
       isLoading.value = true;
-      // 2. 停止所有正在轮询的定时器（如果有的话）
-      if (scanProgress.scanning) scanProgress.scanning = false;
-      // 3. 可以在这里做最后的自动保存
     });
     // 监听游戏状态变化
     window.addEventListener('game-status-changed', (e) => {
@@ -582,20 +479,35 @@ export const useAppStore = defineStore('app', () => {
     })
     // 通用进度更新
     window.addEventListener('global-progress', (e) => {
-      const task = e.detail;
-      taskPool.set(task.id, task);
-      
-      // 分发给贴图优化仓库
+      const task = taskStore.upsertTask(e.detail)
+      if (!task) return
+
       if (task.type === 'texture-opt' || task.type === 'texture-opt-analyze') {
         import('./textureStore').then(({ useTextureStore }) => {
           const textureStore = useTextureStore()
           textureStore.handleProgressEvent(task)
         })
       }
-
-      // 如果任务完成或失败，延迟 3 秒从 UI 移除
-      if (['success', 'failed', 'cancelled'].includes(task.status)) {
-        setTimeout(() => taskPool.delete(task.id), 3000);
+      if (task.type === 'download' && task.status === 'success') {
+        const filename = task.metrics?.filename || task.message
+        if (filename) toast.success(`下载完成: ${filename}`)
+        import('./textureStore').then(({ useTextureStore }) => {
+          const textureStore = useTextureStore()
+          textureStore.handleDownloadEvent(task)
+        })
+      }
+      if (task.type === 'download' && task.status === 'failed') {
+        toast.error(`下载失败: ${task.metrics?.filename || task.message}\n${task.metrics?.error || ''}`)
+      }
+      if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
+        if (updateState.info) updateState.info.local_status = 'ready'
+        if (!updateInstallPrompted.has(task.id)) {
+          updateInstallPrompted.add(task.id)
+          _showInstallPrompt(task.metrics)
+        }
+      }
+      if (task.type === 'update' && task.status === 'failed') {
+        toast.error(`更新出错: ${task.metrics?.error || task.message}`)
       }
     });
     // 监听：后端弹窗
@@ -869,18 +781,9 @@ export const useAppStore = defineStore('app', () => {
    * @param {number} timeout - 超时时间(ms)，默认 10 分钟
    */
   const waitForDownload = (taskId, timeout = 600000) => {
-    return new Promise((resolve, reject) => {
-      // 设置超时处理
-      const timer = setTimeout(() => {
-        if (downloadCallbacks.has(taskId)) {
-          downloadCallbacks.delete(taskId)
-          reject(new Error('下载超时'))
-        }
-      }, timeout)
-
-      // 注册回调
-      downloadCallbacks.set(taskId, { resolve, reject, timer })
-    })
+    return taskStore.waitForTaskCompletion(taskId, timeout).then(task => (
+      task?.metrics?.file_path || task?.metrics?.path || ''
+    ))
   }
 
   // 后端弹窗
@@ -1160,14 +1063,6 @@ export const useAppStore = defineStore('app', () => {
   // 发起批量AI任务
   const startAiBatchTask = async (task_key, modsList) => {
     if (!window.pywebview) return
-    aiBatchResults.value = [] // 清空旧数据
-    
-    // 【修改点 1】：不立刻弹窗，而是明确开启 isLoading 状态唤醒底部状态栏
-    // uiState.showAiReviewModal = true 
-    aiState.isLoading = true
-    aiState.percent = 0
-    aiState.message = '正在分配神经元计算资源...'
-    
     toast.info("AI 批量任务已在后台启动，请留意底部状态栏。")
     
     // 提取必要字段减小发给大模型的体积
@@ -1177,7 +1072,23 @@ export const useAppStore = defineStore('app', () => {
       description: cleanRichText(m.description,1000)
     }))
     
-    await window.pywebview.api.ai_execute_batch_task(task_key, items, {})
+    const res = await window.pywebview.api.ai_execute_batch_task(task_key, items, {})
+    if (checkResult(res, `启动 AI 批量任务 ${task_key}`)) {
+      const taskId = res.data?.task_event_id || ''
+      if (taskId) {
+        currentAiBatchTaskId.value = taskId
+        aiBatchSessions.value.set(taskId, { items: [], createdAt: Date.now() })
+        taskStore.createPlaceholderTask({
+          id: taskId,
+          type: 'ai-batch',
+          status: 'pending',
+          progress: 0,
+          message: '任务已加入后台队列',
+          metrics: { task_key, total: items.length, title: 'AI 批量处理' },
+        })
+      }
+      return res.data
+    }
   }
   // --- 提示词管理 ---
   const fetchPrompts = async () => {
@@ -1206,8 +1117,6 @@ export const useAppStore = defineStore('app', () => {
   // 检查更新
   const checkUpdate = async (manual = true) => {
     updateState.isChecking = true
-    updateState.downloadStatus = 'idle' // 重置状态
-    updateState.progress = 0
     try {
       const res = await window.pywebview.api.update_check(manual)
       if (checkResult(res, "检查更新")) {
@@ -1270,7 +1179,7 @@ export const useAppStore = defineStore('app', () => {
     const info = updateState.info
     if (!info) return
     // 如果是 Ready 状态，弹出最后确认框 (因为会重启)
-    if (info.local_status === 'ready' || updateState.downloadStatus === 'ready') {
+    if (info.local_status === 'ready') {
       const confirmStore = useConfirmStore()
       const ok = await confirmStore.confirmAction(
         "准备重启",
@@ -1285,7 +1194,6 @@ export const useAppStore = defineStore('app', () => {
     if (checkResult(res,'开始下载更新包')) {
       // 如果后端开始下载，这里不需要做什么，因为 EventListener 会接管进度条
       if (res.data && res.data.status === 'downloading') {
-        updateState.downloadStatus = 'downloading'
         toast.info("开始下载更新包...")
       }
     } else {
@@ -1308,9 +1216,19 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  const setCurrentAiBatchTask = (taskId = '') => {
+    currentAiBatchTaskId.value = taskId
+    ensureAiBatchSession(taskId)
+  }
+
+  const clearCurrentAiBatchResults = () => {
+    const session = ensureAiBatchSession(currentAiBatchTaskId.value)
+    if (session) session.items = []
+  }
+
   return {
-    appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, activeTextureOptTask, updateState,
-    aiState, aiBatchResults, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, upgradeContext,
+    appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
+    aiState, aiBatchResults, aiBatchResultCount, currentAiBatchTask, currentAiBatchTaskId, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
@@ -1320,7 +1238,7 @@ export const useAppStore = defineStore('app', () => {
     
     checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
     // AI处理
-    getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, 
+    getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, setCurrentAiBatchTask, clearCurrentAiBatchResults,
     fetchPrompts, savePrompt, deletePrompt, resetPrompts,
   }
 })

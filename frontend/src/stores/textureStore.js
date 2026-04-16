@@ -1,12 +1,14 @@
 // src/stores/textureStore.js
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useAppStore } from './appStore'
 import { createToastInterface } from 'vue-toastification'
+import { useTaskStore } from './taskStore'
 
 export const useTextureStore = defineStore('texture', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
+  const taskStore = useTaskStore()
   let toolStatusRefreshTimer = null
 
   const createEmptyTextureStat = () => ({
@@ -136,23 +138,50 @@ export const useTextureStore = defineStore('texture', () => {
   const currentOptimizationTaskId = ref('')
   const lastTargetPackageIds = ref([])
   const lastOptimizationAction = ref('')
-  const timerState = ref({
-    startedAt: 0,
-    finishedAt: 0,
-    totalElapsedMs: 0,
-    status: '',
-    taskId: '',
-  })
   
   // 核心数据源
   const modsData = ref([])        // 分析后返回的所有 Mod 数据
   const globalSummary = ref(normalizeTextureStat({}, { includeModCount: true }))
 
-  // 进度状态
-  const progressState = ref({
-    percent: 0,
-    message: '就绪',
-    details: {}
+  const currentTask = computed(() => {
+    const taskId = currentOptimizationTaskId.value || currentAnalysisTaskId.value || currentTaskId.value
+    return (
+      (taskId ? taskStore.getTask(taskId) : null)
+      || taskStore.getLatestTaskByType(['texture-opt', 'texture-opt-analyze'])
+      || null
+    )
+  })
+
+  const progressState = computed(() => {
+    const task = currentTask.value
+    if (!task) {
+      return {
+        percent: 0,
+        message: '就绪',
+        details: {
+          local_started_at: 0,
+          local_finished_at: 0,
+          local_total_elapsed_ms: 0,
+          local_status: '',
+        }
+      }
+    }
+    const startedAt = Number(task.metrics?.task_created_at || task.joinedAt || 0)
+    const finishedAt = ['success', 'failed', 'cancelled'].includes(task.status) ? Number(task.updatedAt || 0) : 0
+    const totalElapsedMs = finishedAt
+      ? Number(task.metrics?.elapsed_ms || Math.max(0, finishedAt - startedAt))
+      : Math.max(0, Date.now() - startedAt)
+    return {
+      percent: Number(task.progress || 0),
+      message: task.message || '处理中...',
+      details: {
+        ...(task.metrics || {}),
+        local_started_at: startedAt,
+        local_finished_at: finishedAt,
+        local_total_elapsed_ms: totalElapsedMs,
+        local_status: task.status,
+      }
+    }
   })
 
   // 视图控制
@@ -166,57 +195,9 @@ export const useTextureStore = defineStore('texture', () => {
   })
 
   // === 动作 Actions ===
-  const resetProgress = (message = '就绪') => {
-    progressState.value = {
-      percent: 0,
-      message,
-      details: {}
-    }
-  }
-
-  const beginTimer = (taskId = '') => {
-    timerState.value = {
-      startedAt: Date.now(),
-      finishedAt: 0,
-      totalElapsedMs: 0,
-      status: 'running',
-      taskId,
-    }
-  }
-
-  const stopTimer = (status = 'success') => {
-    if (!timerState.value.startedAt) return
-    const finishedAt = Date.now()
-    timerState.value = {
-      ...timerState.value,
-      finishedAt,
-      totalElapsedMs: Math.max(0, finishedAt - timerState.value.startedAt),
-      status,
-    }
-  }
-
-  const buildLocalTimingDetails = (details = {}, status = '') => {
-    const localStatus = status || timerState.value.status || ''
-    const localTotalElapsedMs = timerState.value.finishedAt
-      ? timerState.value.totalElapsedMs
-      : timerState.value.startedAt
-        ? Math.max(0, Date.now() - timerState.value.startedAt)
-        : 0
-    return {
-      ...details,
-      local_started_at: timerState.value.startedAt || 0,
-      local_finished_at: timerState.value.finishedAt || 0,
-      local_total_elapsed_ms: localTotalElapsedMs,
-      local_status: localStatus,
-    }
-  }
-
   const bindTaskId = (payload, kind) => {
     const taskId = payload?.task_id || payload?.id || ''
     currentTaskId.value = taskId
-    if (!timerState.value.startedAt || timerState.value.taskId !== taskId) {
-      beginTimer(taskId)
-    }
     if (kind === 'analyze') {
       currentAnalysisTaskId.value = taskId
     } else if (kind === 'optimize') {
@@ -227,17 +208,30 @@ export const useTextureStore = defineStore('texture', () => {
 
   const applyReturnedTaskState = (payload) => {
     if (!payload) return
-    progressState.value.percent = Number(payload.progress || 0)
-    progressState.value.message = payload.message || progressState.value.message
-    progressState.value.details = buildLocalTimingDetails(payload.metrics || {}, payload.status || '')
+    taskStore.upsertTask({
+      id: payload.task_id || payload.id,
+      type: payload.type || (payload.action === 'analyze' ? 'texture-opt-analyze' : 'texture-opt'),
+      status: payload.status || 'pending',
+      progress: payload.progress || 0,
+      message: payload.message || '',
+      metrics: payload.metrics || {},
+      timestamp: payload.updated_at || Date.now(),
+    })
   }
 
   const markTaskCancelling = () => {
-    progressState.value = {
-      ...progressState.value,
+    const task = currentTask.value
+    if (!task) return
+    taskStore.upsertTask({
+      ...task,
+      status: 'running',
       message: '正在尝试中止任务...',
-      details: buildLocalTimingDetails(progressState.value.details || {}, 'cancelling'),
-    }
+      metrics: {
+        ...(task.metrics || {}),
+        phase: 'cancelling',
+      },
+      timestamp: Date.now(),
+    })
   }
 
   const applySnapshotPayload = (payload = {}) => {
@@ -267,18 +261,12 @@ export const useTextureStore = defineStore('texture', () => {
     if (type === 'texture-opt-analyze' && isAnalyzing.value && !currentAnalysisTaskId.value) {
       currentAnalysisTaskId.value = id
       currentTaskId.value = id
-      if (!timerState.value.startedAt || timerState.value.taskId !== id) {
-        beginTimer(id)
-      }
       return true
     }
 
     if (type === 'texture-opt' && isOptimizing.value && !currentOptimizationTaskId.value) {
       currentOptimizationTaskId.value = id
       currentTaskId.value = id
-      if (!timerState.value.startedAt || timerState.value.taskId !== id) {
-        beginTimer(id)
-      }
       return true
     }
 
@@ -286,8 +274,8 @@ export const useTextureStore = defineStore('texture', () => {
   }
 
   const isToddsDownloadPayload = (payload = {}) => {
-    const filename = String(payload.filename || '').toLowerCase()
-    const filePath = String(payload.file_path || '').toLowerCase()
+    const filename = String(payload.metrics?.filename || '').toLowerCase()
+    const filePath = String(payload.metrics?.file_path || '').toLowerCase()
     return filename.startsWith('todds_') || filePath.includes('todds')
   }
 
@@ -346,8 +334,6 @@ export const useTextureStore = defineStore('texture', () => {
     lastTargetPackageIds.value = [...packageIds]
     currentOptimizationTaskId.value = ''
     modsData.value =[] // 清空旧数据
-    beginTimer('')
-    resetProgress('正在准备扫描任务...')
     try {
       const res = await window.pywebview.api.texture_analyze_mods(packageIds, appStore.settings.texture_opt, true)
       if (appStore.checkResult(res, "启动贴图分析", false)) {
@@ -369,12 +355,6 @@ export const useTextureStore = defineStore('texture', () => {
     lastTargetPackageIds.value = [...packageIds]
     lastOptimizationAction.value = action
     currentAnalysisTaskId.value = ''
-    beginTimer('')
-    resetProgress(
-      action === 'clean_generated'
-        ? '正在准备清理任务...'
-        : '正在准备生成任务...'
-    )
     try {
       const res = await window.pywebview.api.texture_start_task(packageIds, action, appStore.settings.texture_opt)
       if (appStore.checkResult(res, "启动优化任务", false)) {
@@ -404,7 +384,7 @@ export const useTextureStore = defineStore('texture', () => {
   }
 
   const handleDownloadEvent = (payload) => {
-    if (!payload || payload.status !== 'completed') return
+    if (!payload || payload.status !== 'success') return
     if (!isToddsDownloadPayload(payload)) return
     scheduleToolStatusRefresh(0)
   }
@@ -417,15 +397,6 @@ export const useTextureStore = defineStore('texture', () => {
     // 如果不是当前任务，忽略
     if (!isKnownTask) return
 
-    if (['success', 'failed', 'cancelled'].includes(status)) {
-      stopTimer(status)
-    } else if (!timerState.value.startedAt) {
-      beginTimer(id)
-    }
-
-    progressState.value.percent = progress
-    progressState.value.message = message
-    progressState.value.details = buildLocalTimingDetails(metrics, status)
     applySnapshotPayload(metrics)
 
     // 处理分析进度（动态竞赛图的核心）
@@ -490,7 +461,7 @@ export const useTextureStore = defineStore('texture', () => {
 
   return {
     isAnalyzing, isOptimizing, currentTaskId, currentAnalysisTaskId, currentOptimizationTaskId,
-    modsData, globalSummary, progressState, viewMode, toolStatus, timerState,
+    modsData, globalSummary, progressState, viewMode, toolStatus,
     checkToolStatus, downloadTool, startAnalysis, startOptimization, cancelCurrentTask, handleProgressEvent, handleDownloadEvent
   }
 })

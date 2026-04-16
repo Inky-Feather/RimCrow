@@ -15,7 +15,7 @@ from urllib.parse import urlparse, unquote
 
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
-from backend.managers.mgr_network import build_retry_session
+from backend.managers.mgr_network import build_retry_session, merge_headers
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -44,6 +44,9 @@ class DownloadTask:
     # 回调函数 (接收 Task 对象)
     on_complete: Optional[Callable[['DownloadTask'], Any]] = None
     on_error: Optional[Callable[['DownloadTask'], Any]] = None
+    task_type: str = "download"
+    title: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
     # 内部控制
     _cancel_event: threading.Event = field(default_factory=threading.Event)
     _future: Optional[Future] = None  # 存储线程池的 Future 对象
@@ -80,8 +83,18 @@ class DownloadManager:
             return new_url
         return url
 
-    def add_task(self, url: str, dest_dir: str, filename: Optional[str] = None, expected_hash: Optional[str] = None, hash_algorithm: str = "md5", 
-                 on_complete: Optional[Callable[[DownloadTask], Any]] = None, on_error: Optional[Callable[[DownloadTask], Any]] = None ) -> str:
+    @staticmethod
+    def _default_title(task_type: str, filename: str) -> str:
+        mapping = {
+            "download": "下载任务",
+            "update": "软件更新",
+            "steamcmd-init": "SteamCMD 初始化",
+        }
+        return mapping.get(str(task_type or "").strip().lower(), filename or "任务")
+
+    def add_task(self, url: str, dest_dir: str, filename: Optional[str] = None, expected_hash: Optional[str] = None, hash_algorithm: str = "md5",
+                 on_complete: Optional[Callable[[DownloadTask], Any]] = None, on_error: Optional[Callable[[DownloadTask], Any]] = None,
+                 task_type: str = "download", title: str = "", metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         添加下载任务
         :param url: 下载地址
@@ -105,14 +118,17 @@ class DownloadManager:
         final_path = os.path.join(dest_dir, filename)
 
         # 创建任务对象
+        resolved_title = title or self._default_title(task_type, filename)
         task = DownloadTask( url=real_url, dest_path=final_path, filename=filename,
             expected_hash=expected_hash, hash_algorithm=hash_algorithm,
-            on_complete=on_complete, on_error=on_error
+            on_complete=on_complete, on_error=on_error,
+            task_type=task_type, title=resolved_title, metadata=dict(metadata or {})
         )
         with self._lock:
             self.tasks[task.task_id] = task
         
         logger.info(f"Task added: {filename} (ID: {task.task_id}) [HashCheck: {bool(expected_hash)}]")
+        self._emit_progress(task)
         
         # 提交到线程池并保存 future
         task._future = self.executor.submit(self._download_worker, task)
@@ -169,6 +185,113 @@ class DownloadManager:
         # 移除 Windows 下非法的路径字符 \ / : * ? " < > |
         return re.sub(r'[\\/:*?"<>|]', '_', filename).strip()
 
+    @staticmethod
+    def _parse_size_header(value: Any) -> int:
+        text = str(value or '').strip()
+        if not text.isdigit():
+            return 0
+        try:
+            return int(text)
+        except ValueError:
+            return 0
+
+    @classmethod
+    def _extract_total_size_from_headers(cls, headers, *, trust_content_length: bool = True) -> int:
+        content_range = str(headers.get('content-range') or '').strip()
+        if content_range:
+            match = re.search(r'/(\d+)$', content_range)
+            if match:
+                try:
+                    return int(match.group(1))
+                except ValueError:
+                    pass
+
+        # 某些对象存储/CDN 会同时返回“传输层长度”和“原始对象长度”。
+        # 当前端展示文件大小时，我们优先要“原始对象长度”。
+        preferred_headers = (
+            'x-goog-stored-content-length',
+            'x-linked-size',
+            'x-original-content-length',
+            'x-ms-blob-content-length',
+            'x-amz-meta-content-length',
+        )
+        for header_name in preferred_headers:
+            size = cls._parse_size_header(headers.get(header_name))
+            if size > 0:
+                return size
+
+        if trust_content_length:
+            size = cls._parse_size_header(headers.get('content-length'))
+            if size > 0:
+                return size
+        return 0
+
+    @staticmethod
+    def _uses_encoded_transfer(headers) -> bool:
+        content_encoding = str(headers.get('content-encoding') or '').strip().lower()
+        return bool(content_encoding and content_encoding != 'identity')
+
+    def _probe_total_size(self, session, probe_urls: list[str], base_headers: dict[str, str]) -> int:
+        """
+        对没有 Content-Length 的下载源做一次轻量预探测。
+
+        典型场景：
+        - GitHub codeload 源码包：正常流式 GET 可能返回 chunked，没有 content-length
+        - 某些 CDN / 重定向链：HEAD 不给长度，但 Range GET 能拿到 content-range
+        """
+        normalized_urls: list[str] = []
+        for candidate in probe_urls:
+            value = str(candidate or '').strip()
+            if value and value not in normalized_urls:
+                normalized_urls.append(value)
+
+        head_headers = {
+            **base_headers,
+            'Accept-Encoding': 'identity',
+        }
+        range_headers = {
+            **head_headers,
+            'Range': 'bytes=0-0',
+        }
+
+        for url in normalized_urls:
+            try:
+                with session.head(url, timeout=(15, 60), allow_redirects=True, headers=head_headers) as probe:
+                    probe.raise_for_status()
+                    total = self._extract_total_size_from_headers(
+                        probe.headers,
+                        trust_content_length=not self._uses_encoded_transfer(probe.headers),
+                    )
+                    if total > 0:
+                        logger.debug(
+                            "Download size probe success via HEAD: url=%s final_url=%s total=%s",
+                            url,
+                            probe.url,
+                            total,
+                        )
+                        return total
+            except Exception as e:
+                logger.debug(f"Download size HEAD probe failed [{url}]: {e}")
+
+            try:
+                with session.get(url, stream=True, timeout=(15, 60), headers=range_headers) as probe:
+                    probe.raise_for_status()
+                    total = self._extract_total_size_from_headers(
+                        probe.headers,
+                        trust_content_length=not self._uses_encoded_transfer(probe.headers),
+                    )
+                    if total > 0:
+                        logger.debug(
+                            "Download size probe success via Range: url=%s final_url=%s total=%s",
+                            url,
+                            probe.url,
+                            total,
+                        )
+                        return total
+            except Exception as e:
+                logger.debug(f"Download size range probe failed [{url}]: {e}")
+        return 0
+
     def cancel_task(self, task_id: str):
         with self._lock:
             task = self.tasks.get(task_id)
@@ -218,15 +341,33 @@ class DownloadManager:
             # 2. 发起请求 (Stream模式)
             # with session.get(task.url, stream=True, proxies=proxies, timeout=15) as response:
             # 模拟浏览器 Header，防止某些 CDN 拦截
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+            headers = merge_headers({'Accept-Encoding': 'identity'})
             with session.get(task.url, stream=True, timeout=(15, 120), headers=headers) as response:
                 response.raise_for_status()
-                logger.debug( f"Download response: final_url={response.url} content_length={response.headers.get('content-length')}")
+                uses_encoded_transfer = self._uses_encoded_transfer(response.headers)
+                logger.debug(
+                    "Download response: final_url=%s content_length=%s content_range=%s transfer_encoding=%s content_encoding=%s stored_length=%s",
+                    response.url,
+                    response.headers.get('content-length'),
+                    response.headers.get('content-range'),
+                    response.headers.get('transfer-encoding'),
+                    response.headers.get('content-encoding'),
+                    response.headers.get('x-goog-stored-content-length'),
+                )
                 # 获取文件大小
-                total_length = response.headers.get('content-length')
-                task.total_size = int(total_length) if total_length else 0
+                task.total_size = self._extract_total_size_from_headers(
+                    response.headers,
+                    trust_content_length=not uses_encoded_transfer,
+                )
+                if task.total_size <= 0:
+                    task.total_size = self._probe_total_size(session, [response.url, task.url], headers)
+                if uses_encoded_transfer and task.total_size <= 0:
+                    logger.warning(
+                        "Download total size unavailable because response is encoded: url=%s final_url=%s content_encoding=%s",
+                        task.url,
+                        response.url,
+                        response.headers.get('content-encoding'),
+                    )
                 
                 # 增大 chunk_size 减少循环次数，降低 CPU 占用
                 chunk_size = 64 * 1024 # 64KB
@@ -240,6 +381,18 @@ class DownloadManager:
                         if chunk:
                             f.write(chunk)
                             task.downloaded_size += len(chunk)
+                            if task.total_size > 0:
+                                overflow = task.downloaded_size - task.total_size
+                                overflow_tolerance = max(chunk_size, int(task.total_size * 0.02))
+                                if overflow > overflow_tolerance:
+                                    logger.warning(
+                                        "Download byte count exceeded reported total, clearing total size: url=%s filename=%s current=%s total=%s",
+                                        task.url,
+                                        task.filename,
+                                        task.downloaded_size,
+                                        task.total_size,
+                                    )
+                                    task.total_size = 0
                             
                             # 计算速度与回调 (限制频率: 每 0.1s 更新一次)
                             curr_time = time.time()
@@ -254,8 +407,21 @@ class DownloadManager:
             
             # 【关键】循环结束后，强制发送一次“下载完成，正在处理”的状态
             # 确保前端收到 downloaded_size == total_size
-            if task.total_size > 0:
-                task.downloaded_size = task.total_size # 修正可能的字节偏差
+            if task.total_size <= 0:
+                task.total_size = task.downloaded_size
+            elif task.downloaded_size < task.total_size:
+                remaining = task.total_size - task.downloaded_size
+                if remaining <= chunk_size:
+                    task.downloaded_size = task.total_size
+            elif task.downloaded_size > task.total_size:
+                logger.warning(
+                    "Download finished with actual size larger than reported total, correcting total: url=%s filename=%s current=%s total=%s",
+                    task.url,
+                    task.filename,
+                    task.downloaded_size,
+                    task.total_size,
+                )
+                task.total_size = task.downloaded_size
             # --- 校验阶段 ---
             if task.expected_hash:
                 task.status = TaskStatus.VERIFYING
@@ -324,18 +490,37 @@ class DownloadManager:
 
     def _emit_progress(self, task: DownloadTask):
         """发送事件到前端"""
-        payload = {
-            "id": task.task_id,
+        progress = self._calc_percent(task)
+        status_map = {
+            TaskStatus.PENDING: "pending",
+            TaskStatus.RUNNING: "running",
+            TaskStatus.PAUSED: "pending",
+            TaskStatus.VERIFYING: "running",
+            TaskStatus.COMPLETED: "success",
+            TaskStatus.ERROR: "failed",
+            TaskStatus.CANCELLED: "cancelled",
+        }
+        metrics = {
             "filename": task.filename,
             "file_path": task.dest_path,
-            "status": task.status.value,
             "total": task.total_size,
             "current": task.downloaded_size,
-            "percent": self._calc_percent(task), # 计算百分比
             "speed": task.speed,
-            "error": task.error_msg
+            "error": task.error_msg,
+            "title": task.title or task.filename,
+            "source_url": task.url,
+            **dict(task.metadata or {}),
         }
-        EventBus.emit("download-progress", payload)
+        if task.status == TaskStatus.VERIFYING:
+            metrics["phase"] = "verifying"
+        EventBus.emit_progress(
+            task.task_id,
+            task.task_type,
+            status=status_map.get(task.status, "running"),
+            progress=progress,
+            message=task.filename or task.title or "下载中...",
+            metrics=metrics,
+        )
 
     def _calc_percent(self, task) -> int:
         # 如果是完成状态，强制返回 100

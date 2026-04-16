@@ -755,7 +755,7 @@ class API:
         """
         触发后台模组扫描。
         扫描完成后，Scanner 会自动根据当前 Profile 配置执行链接部署。
-        立即返回状态，前端通过监听 'scan-progress' 和 'scan-complete' 事件获取更新。
+        立即返回状态，前端通过统一任务流和 `scan-complete` 事件获取更新。
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
         :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
         """
@@ -2069,13 +2069,32 @@ class API:
         is_initialized = (Path(settings.config.steamcmd_path) / "public").exists()
         if os.path.exists(self.steamcmd_controller.steamcmd_exe) and not is_initialized:
             controller = SteamCMDController(self.steamcmd_controller.steamcmd_exe)
+            steamcmd_task_id = str(uuid.uuid4())
+            EventBus.emit_progress(
+                steamcmd_task_id,
+                "steamcmd-init",
+                status="pending",
+                progress=0,
+                message="准备初始化 SteamCMD...",
+                metrics={"title": "SteamCMD 初始化"},
+            )
             def on_progress(percent, msg):
                 # 将进度推给前端
                 from backend.utils.event_bus import EventBus
-                EventBus.emit('steamcmd-init-progress', {'percent': percent, 'msg': msg})
+                EventBus.emit_progress(
+                    steamcmd_task_id,
+                    "steamcmd-init",
+                    status="running",
+                    progress=percent,
+                    message=msg,
+                    metrics={"title": "SteamCMD 初始化"},
+                )
             success, msg = controller.initialize_steamcmd(on_progress)
             if not success:
                 logger.error(f"SteamCMD 初始化彻底失败: {msg}", exc_info=True)
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": "SteamCMD 初始化"})
+            else:
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
 
     @log_api_call
     def steam_subscribe(self, workshop_ids: str):
@@ -2291,7 +2310,7 @@ class API:
             try:
                 # 运行写好的批量调度引擎
                 results = loop.run_until_complete(
-                    self.ai_mgr.execute_batch_task_async(task_key, items, variables)
+                    self.ai_mgr.execute_batch_task_async(task_key, items, variables, task_event_id)
                 )
                 # 任务彻底完成后，发送 complete 事件
                 EventBus.emit(f'ai-batch-complete', {
@@ -2304,6 +2323,14 @@ class API:
                 #     self._save_ai_results_to_db(results)
             except Exception as e:
                 logger.error(f"Background AI task failed: {e}", exc_info=True)
+                EventBus.emit_progress(
+                    task_event_id,
+                    "ai-batch",
+                    status="failed",
+                    progress=0,
+                    message=f"AI 任务异常: {e}",
+                    metrics={"task_key": task_key, "total": len(items), "title": "AI 批量处理"},
+                )
                 EventBus.emit(f'ai-batch-complete', {
                     'task_event_id': task_event_id,
                     'status': 'error', 
@@ -2313,6 +2340,14 @@ class API:
                 loop.close()
 
         # 3. 启动守护线程（不阻塞当前 pywebview 的请求）
+        EventBus.emit_progress(
+            task_event_id,
+            "ai-batch",
+            status="pending",
+            progress=0,
+            message="任务已加入后台队列",
+            metrics={"task_key": task_key, "total": len(items), "title": "AI 批量处理"},
+        )
         threading.Thread(target=background_worker, daemon=True).start()
 
         # 4. 立即返回响应给前端，让前端开始监听

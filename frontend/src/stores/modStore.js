@@ -433,7 +433,7 @@ export const useModStore = defineStore('mods', () => {
   // --- 扫描处理 ---
   // 扫描 Mod 文件
   const scanMods = async (path_list=null, forced_update=false) => {
-    if (appStore.scanProgress.scanning || !window.pywebview) return
+    if (appStore.isScanRunning || !window.pywebview) return
     try {
       // 调用 API，会立即返回 { status: 'started' }
       const res = await window.pywebview.api.scan_mods(path_list, forced_update)

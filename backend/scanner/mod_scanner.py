@@ -3,6 +3,7 @@ from collections import defaultdict
 import os
 import re
 import time
+import uuid
 import concurrent.futures
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
@@ -60,11 +61,20 @@ class ModScanner:
         
         self._is_scanning = True
         self._stop_requested = False  # 启动前重置标志
+        task_id = uuid.uuid4().hex
+        EventBus.emit_progress(
+            task_id,
+            "scan",
+            status="pending",
+            progress=0,
+            message="准备扫描任务...",
+            metrics={"title": "模组扫描", "forced_update": forced_update},
+        )
         # 提交到线程池
-        self.executor.submit(self._scan_paths_task, search_paths, forced_update)
-        return {'status': 'started'}
+        self.executor.submit(self._scan_paths_task, task_id, search_paths, forced_update)
+        return {'status': 'started', 'task_id': task_id}
 
-    def _scan_paths_task(self, search_paths, forced_update=False):
+    def _scan_paths_task(self, task_id, search_paths, forced_update=False):
         """
         后台执行的扫描主逻辑
         """
@@ -85,17 +95,24 @@ class ModScanner:
                 txn.rollback() # 万一出错，回滚所有改动
                 raise e
         try:
-            EventBus.emit('scan-start')
             # --- 0. 预检查与准备 ---
             valid_paths = [p for p in search_paths if p and os.path.exists(p)]
             if not valid_paths:
-                self._finish_scan({'error': '没有有效路径'})
+                EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message="没有有效路径", metrics={"title": "模组扫描"})
+                self._finish_scan({'error': '没有有效路径', 'task_id': task_id}, task_id)
                 return
             # 初始化 DLC Parser
             dlc_parser = DLCParser(self.context.game_dlc_path)
             existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
-            EventBus.emit('scan-progress', {'stage': 'indexing', 'message': '正在索引文件...'})
+            EventBus.emit_progress(
+                task_id,
+                "scan",
+                status="running",
+                progress=0,
+                message='正在索引文件...',
+                metrics={'stage': 'indexing', 'current': 0, 'total': 0, 'title': '模组扫描'},
+            )
             mod_folders = [] # [(folder_path, is_dlc), ...]
             for base_path in valid_paths:
                 try:
@@ -122,18 +139,24 @@ class ModScanner:
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("Scan stopped during parsing stage.")
-                    self._handle_interruption()
+                    self._handle_interruption(task_id)
                     return # 直接结束任务，不进入写库阶段
                 # 进度报告
                 if (idx + 1) % report_interval == 0:
                     percent = int(((idx + 1) / total_count) * 100)
-                    EventBus.emit('scan-progress', {
-                        'stage': 'scanning',
-                        'current': (idx + 1),
-                        'total': total_count,
-                        'percent': percent,
-                        'message': f"分析中: {os.path.basename(mod_path)}"
-                    })
+                    EventBus.emit_progress(
+                        task_id,
+                        "scan",
+                        status="running",
+                        progress=percent,
+                        message=f"分析中: {os.path.basename(mod_path)}",
+                        metrics={
+                            'stage': 'scanning',
+                            'current': (idx + 1),
+                            'total': total_count,
+                            'title': '模组扫描',
+                        },
+                    )
                 # 处理单个 Mod
                 mod_data = self._process_single_mod(
                     mod_path, is_dlc, existing_snapshots, 
@@ -156,10 +179,17 @@ class ModScanner:
             # 【关键检查点】：解析完成后检查中断标志
             if self._stop_requested:
                 logger.info("Scan stopped during parsing stage.")
-                self._handle_interruption()
+                self._handle_interruption(task_id)
                 return # 直接结束任务，不进入写库阶段
             # --- 3. 冲突仲裁与入库决策 ---
-            EventBus.emit('scan-progress', {'stage': 'analyzing', 'message': '正在处理冲突与部署...'})
+            EventBus.emit_progress(
+                task_id,
+                "scan",
+                status="running",
+                progress=99 if total_count else 90,
+                message='正在处理冲突与部署...',
+                metrics={'stage': 'analyzing', 'current': total_count, 'total': total_count, 'title': '模组扫描'},
+            )
             
             mods_to_upsert = []
             final_conflicts = [] # 发送给前端的硬冲突列表
@@ -191,7 +221,7 @@ class ModScanner:
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("Scan stopped during parsing stage.")
-                    self._handle_interruption()
+                    self._handle_interruption(task_id)
                     return # 直接结束任务
 
                 active_entries = [mod for mod in entries if not mod.get('disabled')]
@@ -330,27 +360,34 @@ class ModScanner:
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
             
-            # 强制发送 100% 进度
-            EventBus.emit('scan-progress', {
-                'stage': 'finished',
-                'current': total_count,
-                'total': total_count,
-                'percent': 100,
-                'message': '扫描完成'
-            })
-            
-            # 给前端一点点时间处理 100% 的状态，再发送 complete
-            time.sleep(0.2) 
+            EventBus.emit_progress(
+                task_id,
+                "scan",
+                status="success",
+                progress=100,
+                message='扫描完成',
+                metrics={
+                    'stage': 'finished',
+                    'current': total_count,
+                    'total': total_count,
+                    'stats': stats,
+                    'conflict_count': len(final_conflicts),
+                    'coexistence_count': len(final_coexistences),
+                    'deploy_message': deploy_msg,
+                    'title': '模组扫描',
+                },
+            )
             
             result = {
                 'status': 'success',
+                'task_id': task_id,
                 'total': stats['added'] + stats['updated'] + stats['skipped'],
                 'stats': stats,
                 'conflicts': final_conflicts,
                 'coexistences': final_coexistences,
                 'deploy_message': deploy_msg
             }
-            self._finish_scan(result)
+            self._finish_scan(result, task_id)
 
             duration = time.time() - start_time
             logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {deploy_msg}")
@@ -358,27 +395,31 @@ class ModScanner:
             import traceback
             traceback.print_exc()
             logger.error("Scan task failed", exc_info=True)
-            self._finish_scan({'status': 'error', 'message': str(e)})
+            EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=f"扫描失败: {e}", metrics={'title': '模组扫描'})
+            self._finish_scan({'status': 'error', 'message': str(e), 'task_id': task_id}, task_id)
         finally:
             self._is_scanning = False
             self._stop_requested = False # 清理状态
             # 释放线程绑定的数据库连接
             if not db.is_closed(): db.close()
 
-    def _handle_interruption(self):
+    def _handle_interruption(self, task_id: str):
         """处理中断后的清理和通知"""
         self._is_scanning = False
+        EventBus.emit_progress(task_id, "scan", status="cancelled", progress=0, message="扫描已由用户中止", metrics={'title': '模组扫描'})
         EventBus.emit('scan-complete', {
+            'task_id': task_id,
             'status': 'cancelled',
             'message': '扫描已由用户中止，未对数据库进行任何修改。'
         })
         logger.info("Scan cancelled safely.")
 
-    def _finish_scan(self, result):
+    def _finish_scan(self, result, task_id: str | None = None):
         """扫描结束，通知前端并发送最终统计"""
         # 获取最新全量数据，或者让前端自己再调一次 get_all_mods
         # 建议直接通知前端 "scan-complete"，让前端决定是否刷新列表
-        
+        if task_id and isinstance(result, dict):
+            result.setdefault('task_id', task_id)
         EventBus.emit('scan-complete', result)
 
     def _classify_for_deploy(self, mod_data, local_root, self_mods_root, workshop_root, tool_mods_root, local_ids_set, self_mods_paths_list, workshop_paths_list, tool_mods_paths_list):

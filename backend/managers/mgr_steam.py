@@ -9,6 +9,7 @@ import threading
 import time
 import shutil
 import importlib.util
+import uuid
 from dateutil import parser
 from typing import cast
 from json_repair import repair_json
@@ -255,15 +256,34 @@ class SteamManager:
         
         if os.path.exists(self.steamcmd_exe) and not is_initialized:
             controller = SteamCMDController(self.steamcmd_exe)
+            steamcmd_task_id = str(uuid.uuid4())
+            EventBus.emit_progress(
+                steamcmd_task_id,
+                "steamcmd-init",
+                status="pending",
+                progress=0,
+                message="准备初始化 SteamCMD...",
+                metrics={"title": "SteamCMD 初始化"},
+            )
             
             def on_progress(percent, msg):
                 # 将进度推给前端
                 from backend.utils.event_bus import EventBus
-                EventBus.emit('steamcmd-init-progress', {'percent': percent, 'msg': msg})
+                EventBus.emit_progress(
+                    steamcmd_task_id,
+                    "steamcmd-init",
+                    status="running",
+                    progress=percent,
+                    message=msg,
+                    metrics={"title": "SteamCMD 初始化"},
+                )
                 
             success, msg = controller.initialize_steamcmd(on_progress)
             if not success:
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": "SteamCMD 初始化"})
                 logger.error(f"SteamCMD 初始化彻底失败: {msg}")
+            else:
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
             
         return tasks
     
@@ -699,18 +719,22 @@ class SteamManager:
     
     def _emit_progress_event(self, tid, msg, percent, status, file_path='', title='', error=None):
         """对接 EventBus 格式"""
-        payload = {
-            "id": tid,
-            "filename": msg,
-            "file_path": file_path, # Steam 模组路径由前端根据 ID 自行推断或暂不填
-            "status": status.value,
-            "total": 100,
-            "current": percent,
-            "percent": percent,
-            "speed": title,
-            "error": error
-        }
-        EventBus.emit("download-progress", payload)
+        EventBus.emit_progress(
+            tid,
+            "download",
+            status="success" if status == TaskStatus.COMPLETED else "failed" if status == TaskStatus.ERROR else "running",
+            progress=percent,
+            message=msg,
+            metrics={
+                "file_path": file_path,
+                "current": percent,
+                "total": 100,
+                "speed": title,
+                "error": error,
+                "provider": "steamcmd",
+                "title": title or "Steam 下载",
+            },
+        )
 
 
     # =========================================================

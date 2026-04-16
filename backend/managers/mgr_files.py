@@ -8,6 +8,7 @@ import threading
 import subprocess
 import platform
 import time
+import uuid
 from typing import Any, Dict
 from urllib.parse import quote
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -422,6 +423,7 @@ class FileManager:
         :param folder_name_type: 文件夹命名类型，可选 'alias_name', 'name', 'package_id', 'workshop_id'
         """
         tasks = []
+        task_id = uuid.uuid4().hex
         EventBus.resume()   # 恢复事件总线
         for mod_data in query:
             # 核心退回逻辑：alias_name > name > package_id > workshop_id
@@ -440,33 +442,50 @@ class FileManager:
                 'label': display_name # 用于进度显示
             })
         if not tasks: return False
+        EventBus.emit_progress(
+            task_id,
+            "localize",
+            status="pending",
+            progress=0,
+            message="准备本地化任务...",
+            metrics={"total": len(tasks), "current": 0, "title": "本地化模组"},
+        )
             
         # 2. 定义进度回调函数，通过 EventBus 发送到前端
         def on_progress(current, total, label):
             percent = int((current / total) * 100)
-            EventBus.emit('localize-progress', {
-                'current': current,
-                'total': total,
-                'percent': percent,
-                'message': f"正在本地化 ({current}/{total}): {label}"
-            })
+            EventBus.emit_progress(
+                task_id,
+                "localize",
+                status="running",
+                progress=percent,
+                message=f"正在本地化 ({current}/{total}): {label}",
+                metrics={"current": current, "total": total, "label": label, "title": "本地化模组"},
+            )
         # 3. 在后台线程执行，避免阻塞 UI（如果是大批量复制）
         def run_task():
             success, errors, total = FileManager.copy_folders_with_progress(tasks, on_progress)
-            # 执行完成后触发扫描以更新数据库和软链接
-            # 强制发送 100% 进度
-            EventBus.emit('scan-progress', {
-                'stage': 'finished',
-                'current': total,
-                'total': total,
-                'percent': 100,
-                'message': '本地化完成'
-            })
-            
-            # 给前端一点点时间处理 100% 的状态，再发送 complete
-            time.sleep(0.2) 
+            success_count = len(success)
+            error_count = len(errors)
+            final_status = "failed" if success_count == 0 and error_count > 0 else "success"
+            EventBus.emit_progress(
+                task_id,
+                "localize",
+                status=final_status,
+                progress=100 if total else 0,
+                message="本地化完成" if final_status == "success" else "本地化失败",
+                metrics={
+                    "current": total,
+                    "total": total,
+                    "success_count": success_count,
+                    "error_count": error_count,
+                    "errors": errors,
+                    "title": "本地化模组",
+                },
+            )
             # 发送完成事件
             EventBus.emit('localize-complete', {
+                'task_id': task_id,
                 'success_count': len(success),
                 'error_count': len(errors),
                 'errors': errors

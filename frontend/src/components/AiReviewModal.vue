@@ -13,8 +13,8 @@
         <div data-tour="ai-review-summary" class="px-6 py-4 bg-black/40 border-b border-text-main/10 flex items-center justify-between shrink-0 relative z-10">
           <div class="flex items-center gap-4">
             <div class="relative p-2.5 rounded-xl bg-accent-special/20 text-accent-special border border-accent-special/30 shadow-[0_0_15px_rgba(var(--color-accent-special),0.2)]">
-              <Cpu class="size-6" :class="{'animate-pulse': appStore.aiState.isLoading}" />
-              <div v-if="appStore.aiState.isLoading" class="absolute inset-0 border-2 border-accent-special/50 rounded-xl animate-ping opacity-50"></div>
+              <Cpu class="size-6" :class="{'animate-pulse': isAiBatchRunning}" />
+              <div v-if="isAiBatchRunning" class="absolute inset-0 border-2 border-accent-special/50 rounded-xl animate-ping opacity-50"></div>
             </div>
             <div>
               <h2 class="text-xl font-black text-text-main tracking-wide">AI 处理结果检阅</h2>
@@ -40,7 +40,7 @@
         <div data-tour="ai-review-list" class="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar relative z-10">
           
           <!-- 正在加载动画 (首批数据未到达时显示) -->
-          <div v-if="appStore.aiState.isLoading && appStore.aiBatchResults.length === 0" class="flex flex-col items-center justify-center h-full opacity-60">
+          <div v-if="isAiBatchRunning && appStore.aiBatchResults.length === 0" class="flex flex-col items-center justify-center h-full opacity-60">
             <div class="text-accent-special animate-bounce mb-4"><Cpu class="size-12 opacity-50" /></div>
             <div class="text-sm text-text-dim tracking-widest uppercase font-mono">Connecting to Neural Network...</div>
           </div>
@@ -133,16 +133,16 @@
           <div class="flex flex-col">
             <div class="flex items-center gap-2">
               <span class="relative flex h-2 w-2">
-                <span v-if="appStore.aiState.isLoading" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-special opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2" :class="appStore.aiState.isLoading ? 'bg-accent-special' : 'bg-green-500'"></span>
+                <span v-if="isAiBatchRunning" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-special opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2" :class="isAiBatchRunning ? 'bg-accent-special' : 'bg-green-500'"></span>
               </span>
-              <span class="text-sm font-bold" :class="appStore.aiState.isLoading ? 'text-accent-special' : 'text-text-dim'">
-                  {{ appStore.aiState.isLoading ? '后台批量处理中...' : '全队列处理完毕' }}
+              <span class="text-sm font-bold" :class="isAiBatchRunning ? 'text-accent-special' : 'text-text-dim'">
+                  {{ isAiBatchRunning ? '后台批量处理中...' : '全队列处理完毕' }}
               </span>
             </div>
             <!-- 进度提示 (利用之前已有的进度状态) -->
-            <div v-if="appStore.aiState.isLoading" class="text-xs text-text-dim mt-1 ml-4 font-mono">
-              {{ appStore.aiState.message }} ({{ appStore.aiState.percent }}%)
+            <div v-if="isAiBatchRunning" class="text-xs text-text-dim mt-1 ml-4 font-mono">
+              {{ aiBatchProgressLabel }}
             </div>
           </div>
           
@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Cpu, X, Wand2, Trash2, FolderInput } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useModStore } from '../stores/modStore'
@@ -173,6 +173,12 @@ import { useToast } from 'vue-toastification'
 const appStore = useAppStore()
 const modStore = useModStore()
 const toast = useToast()
+const isAiBatchRunning = computed(() => ['pending', 'running'].includes(String(appStore.currentAiBatchTask?.status || '')))
+const aiBatchProgressLabel = computed(() => {
+  const task = appStore.currentAiBatchTask
+  if (!task) return ''
+  return `${task.message || '处理中...'} (${Number(task.progress || 0)}%)`
+})
 
 // 跟踪正在单项重新生成的 ID
 const regeneratingIds = ref(new Set())
@@ -224,7 +230,7 @@ const saveAll = async () => {
   
   if (success) {
     // toast 在 modStore 里已经发过了
-    appStore.aiBatchResults = []
+    appStore.clearCurrentAiBatchResults()
     appStore.uiState.showAiReviewModal = false
   }
 }

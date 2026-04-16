@@ -33,12 +33,14 @@ import { useModStore } from '../stores/modStore'
 import { useGroupStore } from '../stores/groupStore'
 import { useHoverStore } from '../stores/hoverStore'
 import { useRuleStore } from '../stores/ruleStore'
+import { useTaskStore } from '../stores/taskStore'
 
 const appStore = useAppStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
 const hoverStore = useHoverStore()
 const ruleStore = useRuleStore()
+const taskStore = useTaskStore()
 
 const isOpen = ref(false)
 
@@ -85,7 +87,7 @@ const sanitizedState = computed(() => {
     } : null,
 
     // 5. 进度
-    PROGRESS: appStore.scanProgress,
+    PROGRESS: taskStore.tasks,
 
     // 6. 规则
     RULES: {

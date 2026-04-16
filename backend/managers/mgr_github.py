@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+import html
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -303,6 +304,43 @@ class GithubManager:
             self._store_cached_payload(cache_key, None, ttl_seconds=120)
             return None
 
+    def fetch_release_assets_web(self, owner: str, repo: str, *, tag: str = "", timeout: tuple[int, int] = (5, 20), missing_ok: bool = False) -> dict[str, Any] | None:
+        """通过 GitHub 网页的 expanded_assets 片段读取 Release 资产列表。
+
+        这条链路不依赖 REST API 配额，适合在 release API 被限流时继续拿真实附件 URL。
+        """
+        resolved_tag = str(tag or "").strip()
+        if not resolved_tag:
+            latest_release = self.fetch_release_web(owner, repo, timeout=timeout, missing_ok=missing_ok)
+            resolved_tag = str((latest_release or {}).get("tag_name") or "").strip()
+        if not resolved_tag:
+            return None
+
+        cache_key = ("release_assets_web", owner.lower(), repo.lower(), resolved_tag)
+        cached = self._get_cached_payload(cache_key)
+        if cached is not self._cache_miss:
+            return cached
+
+        with build_retry_session() as session:
+            response = session.get(
+                f"{GITHUB_WEB_BASE}/{owner}/{repo}/releases/expanded_assets/{resolved_tag}",
+                headers=self._build_github_headers({"Accept": "text/html,application/xhtml+xml"}),
+                timeout=timeout,
+            )
+            if missing_ok and response.status_code == 404:
+                self._store_cached_payload(cache_key, None, ttl_seconds=120)
+                return None
+            response.raise_for_status()
+            assets = self._parse_release_assets_from_html(response.text)
+            payload = {
+                "tag_name": resolved_tag,
+                "name": resolved_tag,
+                "assets": assets,
+                "html_url": f"{GITHUB_WEB_BASE}/{owner}/{repo}/releases/tag/{resolved_tag}",
+            }
+            self._store_cached_payload(cache_key, payload, ttl_seconds=120)
+            return payload
+
     def fetch_commit_web(self, owner: str, repo: str, *, ref: str, timeout: tuple[int, int] = (5, 20), missing_ok: bool = False) -> dict[str, Any] | None:
         """通过 GitHub commits Atom feed 获取最新提交时间。
 
@@ -444,15 +482,18 @@ class GithubManager:
             # Source 模式默认跟随仓库默认分支，而不是硬编码 main/master。
             source_ref = self._resolve_default_branch(owner, repo, repo_url=repo_url)
 
+        artifact_request = self._build_repo_artifact_request(
+            owner,
+            repo,
+            repo_url=repo_url,
+            is_release_mode=is_release_mode,
+            target_version=source_ref,
+        )
         request = GithubInstallRequest(
             repo_url=repo_url,
             owner=owner,
             repo=repo,
-            artifact=GithubArtifactRequest(
-                kind=GITHUB_ARTIFACT_SOURCE_ARCHIVE,
-                source_ref=source_ref,
-                source_ref_type=GITHUB_SOURCE_TAG if is_release_mode else GITHUB_SOURCE_BRANCH,
-            ),
+            artifact=artifact_request,
             install=GithubInstallPlan(
                 action=GITHUB_INSTALL_EXTRACT_THEN_MOVE,
                 download_dir=str(HOME_DIR / "Downloads"),
@@ -470,6 +511,32 @@ class GithubManager:
             post_install=lambda result: self._update_mod_record(repo_url, result.version, f"_GH_{repo}"),
         )
         return self.install_from_github(download_mgr, request)
+
+    def _build_repo_artifact_request(self, owner: str, repo: str, *, repo_url: str, is_release_mode: bool, target_version: str) -> GithubArtifactRequest:
+        normalized_version = str(target_version or "").strip()
+        if not is_release_mode:
+            return GithubArtifactRequest(
+                kind=GITHUB_ARTIFACT_SOURCE_ARCHIVE,
+                source_ref=normalized_version,
+                source_ref_type=GITHUB_SOURCE_BRANCH,
+            )
+
+        fallback_download_url = ""
+        fallback_filename = ""
+        if normalized_version:
+            fallback_download_url = f"https://github.com/{owner}/{repo}/archive/refs/tags/{normalized_version}.zip"
+            fallback_filename = f"{repo}_{normalized_version}.zip"
+
+        return GithubArtifactRequest(
+            kind=GITHUB_ARTIFACT_RELEASE_ASSET,
+            release_tag=normalized_version,
+            asset_name_prefix=repo,
+            asset_name_suffix=".zip",
+            fallback_download_url=fallback_download_url,
+            fallback_filename=fallback_filename,
+            fallback_version=normalized_version,
+            fallback_asset_name=fallback_filename,
+        )
 
     def trigger_download(self, download_mgr: DownloadManager, repo_url: str, install_type: str = "source", target_version: str = ""):
         """兼容旧调用名，内部统一走安装计划路径"""
@@ -554,28 +621,39 @@ class GithubManager:
                 request.repo,
                 tag=request.artifact.release_tag,
             )
-            if not release:
-                raise ValueError("未找到对应的 GitHub Release")
-
-            asset = self._select_release_asset(release.get("assets", []), request.artifact)
-            if not asset:
-                raise ValueError("未找到符合条件的 GitHub Release 资产")
-
-            return GithubResolvedArtifact(
-                repo_url=request.repo_url,
-                owner=request.owner,
-                repo=request.repo,
-                kind=GITHUB_ARTIFACT_RELEASE_ASSET,
-                version=str(release.get("tag_name") or request.artifact.release_tag or "latest"),
-                download_url=str(asset.get("browser_download_url") or ""),
-                filename=str(asset.get("name") or ""),
-                asset_name=str(asset.get("name") or ""),
-            )
+            resolved = self._build_release_asset_from_payload(request, release)
+            if resolved:
+                return resolved
         except Exception as exc:
+            try:
+                web_release = self.fetch_release_assets_web(
+                    request.owner,
+                    request.repo,
+                    tag=request.artifact.release_tag,
+                )
+                resolved = self._build_release_asset_from_payload(request, web_release)
+                if resolved:
+                    logger.warning(
+                        "GitHub release resolved via web assets fallback: repo=%s/%s tag=%s error=%s",
+                        request.owner,
+                        request.repo,
+                        request.artifact.release_tag or "latest",
+                        exc,
+                    )
+                    return resolved
+            except Exception as web_exc:
+                logger.warning(
+                    "GitHub release web assets fallback failed: repo=%s/%s tag=%s error=%s",
+                    request.owner,
+                    request.repo,
+                    request.artifact.release_tag or "latest",
+                    web_exc,
+                )
             fallback = self._build_release_fallback(request, exc)
             if fallback:
                 return fallback
             raise
+        raise ValueError("未找到符合条件的 GitHub Release 资产")
 
     def _resolve_source_archive(self, request: GithubInstallRequest) -> GithubResolvedArtifact:
         """解析源码包下载链接。
@@ -622,20 +700,89 @@ class GithubManager:
         """
         pattern = str(request.asset_name_pattern or "").strip()
         regex = re.compile(pattern) if pattern else None
+        request_asset_name = str(request.asset_name or "")
+        request_prefix = str(request.asset_name_prefix or "")
+        request_suffix = str(request.asset_name_suffix or "")
+        request_asset_name_lower = request_asset_name.lower()
+        request_prefix_lower = request_prefix.lower()
+        request_suffix_lower = request_suffix.lower()
+
         for asset in assets:
             name = str(asset.get("name") or "")
-            if request.asset_name and name != request.asset_name:
+            name_lower = name.lower()
+            if request_asset_name and name_lower != request_asset_name_lower:
                 continue
-            if request.asset_name_prefix and not name.startswith(request.asset_name_prefix):
+            if request_prefix and not name_lower.startswith(request_prefix_lower):
                 continue
-            if request.asset_name_suffix and not name.endswith(request.asset_name_suffix):
+            if request_suffix and not name_lower.endswith(request_suffix_lower):
                 continue
             if regex and not regex.search(name):
                 continue
             if not str(asset.get("browser_download_url") or "").strip():
                 continue
             return asset
+
+        # 兼容通用 release 模式：如果没给精确规则，但 Release 下只有一个 zip 资产，就直接用它。
+        if not request_asset_name and request_suffix_lower == ".zip":
+            zip_assets = [
+                asset for asset in assets
+                if str(asset.get("name") or "").lower().endswith(".zip")
+                and str(asset.get("browser_download_url") or "").strip()
+            ]
+            if len(zip_assets) == 1:
+                return zip_assets[0]
         return None
+
+    def _build_release_asset_from_payload(self, request: GithubInstallRequest, release: dict[str, Any] | None) -> GithubResolvedArtifact | None:
+        if not release:
+            return None
+
+        asset = self._select_release_asset(release.get("assets", []), request.artifact)
+        if not asset:
+            return None
+
+        return GithubResolvedArtifact(
+            repo_url=request.repo_url,
+            owner=request.owner,
+            repo=request.repo,
+            kind=GITHUB_ARTIFACT_RELEASE_ASSET,
+            version=str(release.get("tag_name") or request.artifact.release_tag or "latest"),
+            download_url=str(asset.get("browser_download_url") or ""),
+            filename=str(asset.get("name") or ""),
+            asset_name=str(asset.get("name") or ""),
+        )
+
+    @staticmethod
+    def _parse_release_assets_from_html(html_text: str) -> list[dict[str, Any]]:
+        assets: list[dict[str, Any]] = []
+        seen_urls: set[str] = set()
+        pattern = re.compile(
+            r'<a[^>]+href="(?P<href>/[^"]+/releases/download/[^"]+)"[^>]*>'
+            r'(?P<body>.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        name_pattern = re.compile(
+            r'<span[^>]*class="[^"]*Truncate-text text-bold[^"]*"[^>]*>(?P<name>.*?)</span>',
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        for match in pattern.finditer(html_text or ""):
+            href = str(match.group("href") or "").strip()
+            if not href:
+                continue
+            download_url = href if href.startswith("http") else f"{GITHUB_WEB_BASE}{href}"
+            if download_url in seen_urls:
+                continue
+            name_match = name_pattern.search(match.group("body") or "")
+            name = html.unescape(re.sub(r"<[^>]+>", "", name_match.group("name") if name_match else "")).strip()
+            if not name:
+                continue
+            seen_urls.add(download_url)
+            assets.append({
+                "name": name,
+                "browser_download_url": download_url,
+            })
+        return assets
 
     def _handle_install(self, task: DownloadTask, request: GithubInstallRequest, resolved: GithubResolvedArtifact) -> None:
         """下载成功后的安装总入口。
