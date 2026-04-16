@@ -1,300 +1,470 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from functools import reduce
 import operator
 import os
 from pathlib import Path
-import re
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, Iterable, List, Sequence, cast
 import uuid
-from peewee import chunked, fn, JOIN
-from backend.database.models import ModInterlock, SubscribedCollection, db, ModAsset, UserModData, GroupData, GroupMod
+
+from peewee import JOIN, chunked, fn
+
+from backend.database.models import (
+    GroupData,
+    GroupMod,
+    ModAsset,
+    ModInterlock,
+    SubscribedCollection,
+    UserModData,
+    db,
+)
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.logger import logger
+from backend.utils.tools import (
+    current_ms,
+    is_hex_color,
+    normalize_hex_color,
+    normalize_package_id,
+    normalize_package_ids,
+)
 
 
-# 定义不需要更新的字段名 (黑名单)
-exclude_names = {'path_hash'}
+_MOD_ASSET_UPSERT_EXCLUDED_FIELDS = {"path_hash"}
+
+
+def _normalize_path_hashes(path_hashes: Sequence[str] | str) -> list[str]:
+    """统一处理单个或批量 path_hash 输入。"""
+    if isinstance(path_hashes, str):
+        value = path_hashes.strip()
+        return [value] if value else []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for path_hash in path_hashes:
+        value = str(path_hash or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
+
+
+def _sanitize_model_payload(payload: dict[str, Any], valid_field_names: set[str]) -> dict[str, Any]:
+    """过滤掉模型上不存在的字段，避免批量写入时混入 UI 临时字段。"""
+    return {key: value for key, value in payload.items() if key in valid_field_names}
+
+
+def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
+    """
+    确保 UserModData 中存在这些 mod_id 的占位记录。
+
+    GroupMod 和 interlock 都通过 UserModData 作为“用户层主键”做外键关联，
+    因此只要后续逻辑要写入这些关系，就必须先把父记录准备好。
+    """
+    stubs = [{"mod_id": mod_id} for mod_id in normalize_package_ids(list(mod_ids))]
+    if not stubs:
+        return
+    UserModData.insert_many(stubs).on_conflict_ignore().execute()
+
+
+def _mod_dir_exists(path: str) -> bool:
+    """
+    判断一个模组目录是否仍然像“一个有效 Mod”。
+
+    这里不用简单的 os.path.exists(path)，而是检查 About.xml / About.xml.disabled，
+    因为项目里“存在目录但已失去 Mod 结构”的情况也应视为失效。
+    """
+    if not path:
+        return False
+    mod_path = Path(path)
+    return ((mod_path / "About" / "About.xml").is_file() or (mod_path / "About" / "About.xml.disabled").is_file())
+
+
+@dataclass(frozen=True)
+class _ProfilePathScope:
+    """
+    将 Profile 相关的物理路径和启用开关收束成一个只读对象。
+
+    `ModDAO.get_profile_mods()` 和三域分类都依赖同一套路径判断规则。
+    以前这些规则分散在方法内部，后续一旦有人修改优先级或路径标准化逻辑，
+    很容易只改到一半，导致“列表可见性”和“工作区分类”不一致。
+    """
+
+    local_root: str = ""
+    dlc_root: str = ""
+    workshop_root: str = ""
+    self_root: str = ""
+    tool_root: str = ""
+    use_workshop_mods: bool = False
+    use_self_mods: bool = False
+    use_tool_mods: bool = False
+
+    @staticmethod
+    def _normalize_root(path: str | None) -> str:
+        if not path:
+            return ""
+        return os.path.normpath(path).lower() + os.sep
+
+    @classmethod
+    def from_context(cls, context: ProfileContext | None) -> "_ProfilePathScope":
+        if not context:
+            return cls()
+        return cls(
+            local_root=cls._normalize_root(context.local_mods_path),
+            dlc_root=cls._normalize_root(context.game_dlc_path),
+            workshop_root=cls._normalize_root(settings.config.workshop_mods_path),
+            self_root=cls._normalize_root(settings.config.self_mods_path),
+            tool_root=cls._normalize_root(str(TOOL_MODS_DIR)),
+            use_workshop_mods=bool(context.use_workshop_mods),
+            use_self_mods=bool(context.use_self_mods),
+            use_tool_mods=bool(settings.config.enable_tool_mods),
+        )
+
+    def build_visibility_conditions(self) -> list[Any]:
+        """
+        生成当前 Profile 下“哪些路径应被视为可见资产”的查询条件。
+
+        注意这里只负责“路径进入候选池”，后续真正的“谁最终可见”还要走遮蔽仲裁。
+        """
+        conditions: list[Any] = []
+        if self.local_root:
+            conditions.append(ModAsset.path.startswith(self.local_root))
+        if self.dlc_root:
+            conditions.append(ModAsset.path.startswith(self.dlc_root))
+        if self.use_workshop_mods and self.workshop_root:
+            conditions.append(ModAsset.path.startswith(self.workshop_root))
+        if self.use_self_mods and self.self_root:
+            conditions.append(ModAsset.path.startswith(self.self_root))
+        if self.use_tool_mods and self.tool_root:
+            conditions.append(ModAsset.path.startswith(self.tool_root))
+        return conditions
+
+    def _normalize_asset_path(self, path: str | None) -> str:
+        return self._normalize_root(path)
+
+    def priority_for_path(self, path: str | None) -> int:
+        """
+        返回路径在可见性仲裁中的优先级。
+
+        数字越小代表优先级越高：
+        DLC > Local > Self > Workshop > Tool > Unknown
+        """
+        normalized_path = self._normalize_asset_path(path)
+        if self.dlc_root and normalized_path.startswith(self.dlc_root):
+            return 0
+        if self.local_root and normalized_path.startswith(self.local_root):
+            return 1
+        if self.self_root and normalized_path.startswith(self.self_root):
+            return 2
+        if self.workshop_root and normalized_path.startswith(self.workshop_root):
+            return 3
+        if self.tool_root and normalized_path.startswith(self.tool_root):
+            return 4
+        return 9
+
+    def classify_asset(self, asset: dict[str, Any]) -> str:
+        """
+        将资产归入工作区三域视图。
+
+        这里优先信任数据库里的 `store`，仅在 `store` 不能覆盖时再回退到路径判断。
+        """
+        store = str(asset.get("store") or "").strip().lower()
+        path = str(asset.get("path") or "")
+        normalized_path = self._normalize_asset_path(path)
+
+        if store == "workshop":
+            return "workshop"
+        if store == "self":
+            return "self"
+        if not path:
+            return "missing"
+        if (
+            (self.local_root and normalized_path.startswith(self.local_root))
+            or (self.dlc_root and normalized_path.startswith(self.dlc_root))
+        ):
+            return "local"
+        return "unknown"
+
+
+def _load_group_names_by_mod_id() -> dict[str, list[str]]:
+    """
+    预加载 package_id -> [group_name] 映射。
+
+    这一步属于“展示增强信息”，与 Mod 主查询无关，但前端很多视图都依赖它。
+    为了避免在每个 Mod 上做 N 次查询，这里统一一次取全后内存分发。
+    """
+    group_map: dict[str, list[str]] = {}
+    try:
+        query = (
+            GroupMod.select(GroupMod.mod_id, GroupData.name)
+            .join(GroupData, on=(GroupMod.group_id == GroupData.group_id))
+            .dicts()
+        )
+        for row in query:
+            mod_id = normalize_package_id(row.get("mod_id"))
+            if not mod_id:
+                continue
+            group_map.setdefault(mod_id, []).append(row["name"])
+    except Exception as exc:
+        logger.error(f"Failed to load group map: {exc}")
+    return group_map
+
+
+def _build_group_structures(allowed_ids: set[str] | None = None) -> list[dict[str, Any]]:
+    """
+    统一组装分组数据结构。
+
+    `get_all_groups_structured()` 和 `get_groups_structured_by_mod_ids()` 的唯一区别，
+    只是是否需要按当前可见 Mod 集合过滤成员，因此用一个内部函数收口。
+    """
+    groups = list(GroupData.select().order_by(GroupData.sort_index).dicts())
+    group_mods = list(GroupMod.select().order_by(GroupMod.sort_index).dicts())
+
+    group_map = {group["group_id"]: [] for group in groups}
+    for group_mod in group_mods:
+        group_id = group_mod["group_id"]
+        mod_id = normalize_package_id(group_mod.get("mod_id"))
+        if allowed_ids is not None and mod_id not in allowed_ids:
+            continue
+        if group_id in group_map and mod_id:
+            group_map[group_id].append(mod_id)
+
+    for group in groups:
+        group["mod_ids"] = group_map.get(group["group_id"], [])
+    return groups
+
 
 class ModDAO:
     """
-    Mod 操作的数据访问对象。
-    封装所有数据库交互。
+    模组数据库主入口。
+
+    这个类现在只保留“读取可见模组 / 批量写入资产与用户数据 / 用户侧轻量编辑”。
+    任何会触碰磁盘、扫描目录、删除物理文件、修复联锁的行为，都会交给
+    `ModMaintenanceDAO` 或 `ModInterlockDAO` 处理。
     """
 
     @staticmethod
-    def get_profile_mods(context: ProfileContext|None):
+    def get_profile_mods(context: ProfileContext | None):
         """
-        根据当前环境获取模组列表。
-        实现了 Context Filtering (环境过滤) 和 Shadowing Strategy (遮蔽策略)。
-        :param profile_id: 环境ID，为空则读取全局配置的当前环境
-        :return: List[Dict] 处理后的模组列表
-        """
-        # 1. 解析环境上下文 (Context Resolution)
-        if not context: return [] # 空上下文直接返回空列表
-        # 获取环境配置
-        local_root = context.local_mods_path
-        dlc_root = context.game_dlc_path
-        use_workshop_mods = context.use_workshop_mods
-        use_self_mods = context.use_self_mods
-        use_tool_mods = settings.config.enable_tool_mods
-        
-        workshop_root = settings.config.workshop_mods_path
-        self_mods_root = settings.config.self_mods_path
-        tool_mods_root = str(TOOL_MODS_DIR)
-        # 路径标准化 (用于 Python 端比对，统一转小写)
-        # 标准化路径用于严格匹配 (增加结尾分隔符确保匹配精确)
-        def norm(p): return os.path.normpath(p).lower() + os.sep if p else ""
-        L_PATH = norm(local_root)
-        D_PATH = norm(dlc_root)
-        W_PATH = norm(workshop_root)
-        S_PATH = norm(self_mods_root)
-        T_PATH = norm(tool_mods_root)
-        # 2. 构造查询条件 (只拉取当前环境涉及到的物理路径)
-        conditions = []
-        # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
-        if L_PATH: conditions.append(ModAsset.path.startswith(L_PATH))
-        if D_PATH: conditions.append(ModAsset.path.startswith(D_PATH))
-        # 条件 C: 路径包含 Workshop Root (仅当启用工坊时)
-        if use_workshop_mods and W_PATH: conditions.append(ModAsset.path.startswith(W_PATH)) # 宽泛匹配，防止盘符差异
-        # 条件 B: 路径包含 Self Mods Path (仅当启用管理器Mod时)
-        if use_self_mods and S_PATH: conditions.append(ModAsset.path.startswith(S_PATH))
-        if use_tool_mods and T_PATH: conditions.append(ModAsset.path.startswith(T_PATH))
-        
-        # if local_root: local_root = os.path.normpath(local_root).lower()
-        # if dlc_root: dlc_root = os.path.normpath(dlc_root).lower()
-        # if workshop_root: workshop_root = os.path.normpath(workshop_root).lower()
-        # if self_mods_root: self_mods_root = os.path.normpath(self_mods_root).lower()
-        # if tool_mods_root: tool_mods_root = os.path.normpath(tool_mods_root).lower()
-            
-        if not conditions: return [] # 没有任何有效路径配置
-        # 使用 reduce 和 operator.or_ 替代 fn.OR
-        # 这会生成标准的 (condition1 OR condition2 OR ...) 结构
-        combined_cond = reduce(operator.or_, conditions)
-        # 追加过滤条件，不读取已被禁用的 Mod。
-        active_cond = (ModAsset.disabled == False) | (ModAsset.disabled.is_null()) # type: ignore
-        # 执行查询：(Path A OR Path B) AND (Joined UserData)
-        query = (ModAsset.select(ModAsset, UserModData)
-                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                .where(combined_cond & active_cond) # 组合 OR 条件
-                .dicts())
-        # 3. 核心仲裁逻辑：实现 Local > Self > Workshop
-        # 先对查询结果按优先级排序，这样后处理时高优先级的自然会覆盖低优先级的
-        def get_priority(mod):
-            m_path = norm(mod['path'])
-            if D_PATH and m_path.startswith(D_PATH): return 0 # 最高优先级
-            if L_PATH and m_path.startswith(L_PATH): return 1
-            if S_PATH and m_path.startswith(S_PATH): return 2
-            if W_PATH and m_path.startswith(W_PATH): return 3
-            if T_PATH and m_path.startswith(T_PATH): return 4
-            return 9
+        根据当前 Profile 获取“最终可见”的模组列表。
 
-        # 关键：按优先级【从低到高】排序，这样循环时高优先级会覆盖前面的
-        sorted_mods = sorted(list(query), key=get_priority, reverse=True)
-        # 预加载分组映射 (Preload Group Mapping)，建立 { package_id: ["分组A", "分组B"] } 的映射
-        group_map = {}
-        try:
-            # 联查 GroupMod 和 GroupData，只取必要的字段
-            # SELECT gm.mod_id, g.name FROM groupmod gm JOIN groupdata g ON gm.group_id = g.group_id
-            g_query = (GroupMod.select(GroupMod.mod_id, GroupData.name)
-                    .join(GroupData, on=(GroupMod.group_id == GroupData.group_id)).dicts())
-            for row in g_query:
-                mid = row['mod_id'].lower()
-                gname = row['name']
-                if mid not in group_map:
-                    group_map[mid] = []
-                group_map[mid].append(gname)
-        except Exception as e:
-            logger.error(f"Failed to load group map: {e}")
-        
-        # 3. 内存处理 (Python Logic)
-        # 实现 "Local Trumps Workshop" (本地优先于工坊)
-        merged_map = {} # { package_id: mod_data }
-        for mod in sorted_mods:
-            pkg_id = mod['package_id'].lower()
-            had_existing = pkg_id in merged_map
-            mod['groups'] = group_map.get(pkg_id, [])   # 注入分组信息
-            merged_map[pkg_id] = mod
-            # 记录遮蔽信息 (覆盖策略：高优先级在后)
-            if had_existing:
-                # 记录被遮蔽的记录
-                # 例如：如果 merged_map 里已经是 Local，现在的 mod 是 Workshop
-                # 可以在这里给被选中的那个 Mod 增加一个属性，告诉前端它遮蔽了谁
-                merged_map[pkg_id]['_has_shadow_version'] = True
-                
-        return list(merged_map.values())
+        这里不是简单的数据库查询，而是三步业务编排：
+        1. 先按 Profile 路径把候选资产筛出来
+        2. 再按 DLC > Local > Self > Workshop > Tool 的优先级做遮蔽仲裁
+        3. 最后补充 groups 等前端展示字段
+
+        这个返回值是项目里“当前环境实际可见模组”的事实来源，
+        AI、排序、导入检查、主界面都依赖它。
+        """
+        if not context:
+            return []
+
+        scope = _ProfilePathScope.from_context(context)
+        conditions = scope.build_visibility_conditions()
+        if not conditions:
+            return []
+
+        combined_condition = reduce(operator.or_, conditions)
+        active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
+        query = (
+            ModAsset.select(ModAsset, UserModData)
+            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+            .where(combined_condition & active_condition)
+            .dicts()
+        )
+
+        group_map = _load_group_names_by_mod_id()
+        visible_by_package: dict[str, dict[str, Any]] = {}
+        sorted_assets = sorted(list(query), key=lambda asset: scope.priority_for_path(asset.get("path")), reverse=True)
+
+        for asset in sorted_assets:
+            package_id = normalize_package_id(asset.get("package_id"))
+            if not package_id:
+                continue
+
+            had_shadowed_versions = package_id in visible_by_package
+            asset["groups"] = group_map.get(package_id, [])
+            visible_by_package[package_id] = asset
+            if had_shadowed_versions:
+                visible_by_package[package_id]["_has_shadow_version"] = True
+
+        return list(visible_by_package.values())
 
     @staticmethod
     def get_visible_profile_mod(context: ProfileContext | None, package_id: str):
         """
-        高效地从数据库中获取当前环境中单个可见的 Mod。
-        '可见' 意味着它属于当前 profile 的扫描路径之一，并且没有被更高优先级的同名 Mod 遮蔽。
+        获取当前 Profile 中一个包名对应的最终可见模组。
+
+        这里仍然复用 `get_profile_mods()` 的结果，而不是重新拼一套单项 SQL，
+        原因是“可见性”本质上依赖完整的遮蔽仲裁。单条 SQL 可以更快，
+        但更容易和主列表的规则发生漂移。
         """
-        pid = str(package_id or '').strip().lower()
-        if not context or not pid: return None
-        # 1. 直接用 get_profile_mods 获取已过滤和遮蔽的 Mod 列表
-        # 这个方法已经包含了所有复杂的环境过滤逻辑，是获取“可见性”的唯一真实来源。
-        visible_mods = ModDAO.get_profile_mods(context)
-        # 2. 在内存中快速查找
-        # 对于几千个 Mod，这比构造一个极其复杂的 SQL 查询更简单、更可维护，且性能足够好。
-        for mod in visible_mods:
-            if str(mod.get('package_id') or '').strip().lower() == pid:
+        normalized_package_id = normalize_package_id(package_id)
+        if not context or not normalized_package_id:
+            return None
+
+        for mod in ModDAO.get_profile_mods(context):
+            if normalize_package_id(mod.get("package_id")) == normalized_package_id:
                 return mod
-        
         return None
 
     @staticmethod
-    def get_triple_domain_assets(context: ProfileContext|None):
+    def get_triple_domain_assets(context: ProfileContext | None):
         """
-        全量获取三域 Mod 资产，不进行 Profile 遮蔽过滤。
-        返回格式: { 'workshop': [], 'manager': [], 'local': [] }
-        """
-        # 1. 直接查询 ModAsset 全表，并关联 UserModData
-        all_assets = (ModAsset.select(ModAsset, UserModData)
-                      .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                      .dicts())
-        result = {'workshop': [], 'self': [], 'local': [], 'missing': [], 'unknown': []}
-        
-        # # 1. 解析环境上下文 (Context Resolution)
-        
-        local_root = context.local_mods_path if context else ''
-        dlc_root = context.game_dlc_path if context else ''
-        
-        # # 获取管理器和工坊的基准路径 (用于判断来源)
-        # manager_root = os.path.normpath(settings.config.self_mods_path).lower()
-        # workshop_root = os.path.normpath(settings.config.workshop_mods_path).lower()
-        local_root = local_root.lower()
-        dlc_root = dlc_root.lower()
+        获取工作区三域资产视图，但不做 Profile 遮蔽。
 
+        这个接口服务于“工作区全景矩阵”之类的 UI，它关心的是：
+        - 资产存在于哪个物理域
+        - 当前数据库里有哪些条目
+        而不是“最终列表里谁可见”。
+        """
+        scope = _ProfilePathScope.from_context(context)
+        all_assets = (
+            ModAsset.select(ModAsset, UserModData)
+            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+            .dicts()
+        )
+
+        result = {"workshop": [], "self": [], "local": [], "missing": [], "unknown": []}
         for asset in all_assets:
-            path = os.path.normpath(asset['path']).lower()            
-            store = asset['store']
-            if store == 'workshop':
-                result['workshop'].append(asset)
-            elif store == 'self':
-                result['self'].append(asset)
-            elif local_root and local_root in path or dlc_root and dlc_root in path:
-                result['local'].append(asset)
-            elif not asset['path']:
-                result['missing'].append(asset)
-            else:
-                result['unknown'].append(asset)
-                # logger.warning(f"未知存储域: {store}")
-            
+            result[scope.classify_asset(asset)].append(asset)
         return result
-        
+
     @staticmethod
     def get_all_mods_with_user_data(ignore_missing: bool = False):
         """
-        获取所有模组及其用户数据。
-        如果 ignore_missing 为 True，则排除缺失的 Mod。
-        返回字典列表，方便前端直接使用。
+        获取所有 Mod 与其用户数据。
+
+        这个方法当前在仓库里没有直接调用，第一轮保留仅为了兼容外部可能存在的调用。
+        `ignore_missing=True` 时会排除 path 为空或缺失的记录。
         """
-        query = (ModAsset.select(ModAsset, UserModData)
-                .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-                .where(cast(Any, ModAsset.path).is_null(False) | (not ignore_missing))
-                .dicts())
-        return list(query)
-    
+        query = (
+            ModAsset.select(ModAsset, UserModData)
+            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+        )
+        if ignore_missing:
+            query = query.where((ModAsset.path.is_null(False)) & (ModAsset.path != ""))  # type: ignore
+        return list(query.dicts())
+
     @staticmethod
     def get_all_user_data():
-        """
-        获取所有用户数据。
-        返回字典列表，方便前端直接使用。
-        """
-        query = UserModData.select().dicts()
-        return list(query)
+        """获取全部用户自定义数据。"""
+        return list(UserModData.select().dicts())
 
     @staticmethod
     def get_mod_snapshots():
         """
-        获取所有 Mod 的物理快照。
-        Key: path_hash (物理路径哈希)
-        Value: { mtime, size, package_id }
+        返回扫描器需要的轻量快照。
+
+        扫描器并不需要整个 ModAsset，只需要和增量扫描判定相关的字段。
+        因此这里直接返回 path_hash -> snapshot 的字典，减少上层二次转换。
         """
-        # 需要 package_id，以便在跳过 XML 解析时依然能告诉扫描器这个 Mod 是谁
-        query = ModAsset.select( ModAsset.path_hash, ModAsset.file_create_time, ModAsset.file_modify_time, ModAsset.file_size, 
-                                ModAsset.package_id, ModAsset.workshop_id, ModAsset.disabled, ModAsset.name, ModAsset.version, 
-                                ModAsset.store, ModAsset.supported_versions ).dicts()
-        
-        snapshots = {}
+        query = (
+            ModAsset.select(
+                ModAsset.path_hash,
+                ModAsset.file_create_time,
+                ModAsset.file_modify_time,
+                ModAsset.file_size,
+                ModAsset.package_id,
+                ModAsset.workshop_id,
+                ModAsset.disabled,
+                ModAsset.name,
+                ModAsset.version,
+                ModAsset.store,
+                ModAsset.supported_versions,
+            )
+            .dicts()
+        )
+
+        snapshots: dict[str, dict[str, Any]] = {}
         for row in query:
-            # 只有 path_hash 才是物理文件的唯一身份证
-            snapshots[row['path_hash']] = {
-                'ctime': row['file_create_time'] or 0,
-                'mtime': row['file_modify_time'] or 0,
-                'size': row['file_size'] or 0,
-                'package_id': row['package_id'].lower(), # 缓存 ID
-                'workshop_id': row['workshop_id'],
-                'disabled': row['disabled'],
-                'name': row.get('name', ''),
-                'version': row.get('version', ''),
-                'store': row.get('store', 'local'),
-                'supported_versions': row.get('supported_versions', [])
+            snapshots[row["path_hash"]] = {
+                "ctime": row["file_create_time"] or 0,
+                "mtime": row["file_modify_time"] or 0,
+                "size": row["file_size"] or 0,
+                "package_id": normalize_package_id(row.get("package_id")),
+                "workshop_id": row.get("workshop_id"),
+                "disabled": row.get("disabled"),
+                "name": row.get("name", ""),
+                "version": row.get("version", ""),
+                "store": row.get("store", "local"),
+                "supported_versions": row.get("supported_versions", []),
             }
         return snapshots
 
     @staticmethod
     def batch_upsert_mods(mods_data_list: List[Dict[str, Any]]):
         """
-        批量插入或更新 Mod 数据 (核心扫描逻辑)。
-        使用原子事务处理。
+        批量插入或更新扫描得到的 ModAsset。
+
+        扫描结果是“资产快照”，天然适合做 upsert。这里会先过滤掉模型上不存在的键，
+        再按 path_hash 冲突进行保留式更新，避免 UI 临时字段污染数据库写入。
         """
-        if not mods_data_list: return
-        # 1. 获取所有合法的数据库字段名
-        # Mod._meta.fields 是一个字典 {field_name: FieldObject}
-        valid_field_names = set(ModAsset._meta.fields.keys()) # type: ignore
-        
-        # 2. 准备 upsert 时需要保留（更新）的字段列表
-        # 这里排除掉主键和其他不想被覆盖的字段
+        if not mods_data_list:
+            return
+
+        valid_field_names = set(ModAsset._meta.fields.keys())  # type: ignore
         preserve_fields = [
-            # _meta 属性是由 Peewee 的 元类（Metaclass）在运行时动态注入到 Mod 类中的，编辑器报错可以忽略
-            field for field in ModAsset._meta.sorted_fields  # type: ignore
-            if field.name not in exclude_names
+            field
+            for field in ModAsset._meta.sorted_fields  # type: ignore
+            if field.name not in _MOD_ASSET_UPSERT_EXCLUDED_FIELDS
         ]
-        
+
         with db.atomic():
-            # 使用 chunked 分批处理，防止 SQL 语句过长
             for batch in chunked(mods_data_list, 100):
-                # insert_many(...).on_conflict_replace() 是最快的方法
-                # 注意：这会重置没有在 batch 里提供的字段为默认值，
-                # 但由于 Mod 表主要是扫描生成的，全量覆盖是可以接受的。
-                # 如果要保留某些非扫描字段，需要先读取再合并，或者由 UserModData 承担。
-                
-                # 遍历 batch 中的每个字典，只保留 valid_field_names 中存在的键
-                clean_batch = []
-                for mod_data in batch:
-                    clean_data = {
-                        k: v for k, v in mod_data.items() 
-                        if k in valid_field_names
-                    }
-                    clean_batch.append(clean_data)
-                
+                clean_batch = [_sanitize_model_payload(mod_data, valid_field_names) for mod_data in batch]
+                if not clean_batch:
+                    continue
                 ModAsset.insert_many(clean_batch).on_conflict(
                     conflict_target=[ModAsset.path_hash],
-                    preserve=preserve_fields # <--- 这里使用自动生成的列表
+                    preserve=preserve_fields,
                 ).execute()
 
     @staticmethod
     def batch_update_mods(mods_data_list: List[Dict[str, Any]]):
         """
-        批量更新 Mod 的特定字段 (仅用于已存在的 Mod)。
+        批量更新已存在的 ModAsset 字段。
+
+        这里按“字段集合”分批，是为了避免不同 payload 的字段不一致时，
+        把某些实例上未提供的字段也一起写回数据库。
         """
-        if not mods_data_list: return
-        # 获取要更新的字段名
-        # 注意：bulk_update 需要模型对象列表，或者字典列表 + 字段列表
-        update_fields = set(mods_data_list[0].keys()) - {'path_hash'}
-        # 将字典转换为模型实例 (Peewee bulk_update 需要实例)
-        model_instances = [ModAsset(**data) for data in mods_data_list]
+        if not mods_data_list:
+            return
+
+        field_map = ModAsset._meta.fields  # type: ignore
+        batches_by_signature: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+
+        for payload in mods_data_list:
+            path_hash = str(payload.get("path_hash") or "").strip()
+            if not path_hash:
+                continue
+            signature = tuple(
+                sorted(
+                    key
+                    for key in payload.keys()
+                    if key != "path_hash" and key in field_map
+                )
+            )
+            if not signature:
+                continue
+            batches_by_signature.setdefault(signature, []).append({"path_hash": path_hash, **payload})
+
         with db.atomic():
-            # batch_size 自动处理分批
-            ModAsset.bulk_update(model_instances, fields=list(update_fields), batch_size=100)
+            for signature, batch in batches_by_signature.items():
+                update_fields = [field_map[field_name] for field_name in signature]
+                model_instances = [ModAsset(**payload) for payload in batch]
+                ModAsset.bulk_update(model_instances, fields=update_fields, batch_size=100)
 
     @staticmethod
     def batch_update_shadow_paths(shadow_paths_map: Dict[str, List[str]]):
         """
-        批量同步 shadow_paths。
-        扫描时会根据当前真实文件状态重建“禁用同包名副本”的路径列表，避免外部改动导致展示信息失真。
+        批量回写 shadow_paths。
+
+        扫描器会重新计算每个“最终保留条目”背后有哪些被禁用副本，
+        这里仅负责把结果落库，不参与任何业务推断。
         """
         if not shadow_paths_map:
             return
@@ -307,736 +477,584 @@ class ModDAO:
         with db.atomic():
             for batch in chunked(model_instances, 100):
                 ModAsset.bulk_update(list(batch), fields=[ModAsset.shadow_paths], batch_size=100)
-    
+
     @staticmethod
     def update_user_data(package_id: str, data_dict: Dict[str, Any]):
         """
-        更新用户自定义数据 (Tags, Notes 等)。
+        更新单个 Mod 的用户数据。
+
+        单条更新最终也收口到 `batch_upsert_user_data()`，这样字段过滤、
+        默认值处理和冲突策略都只有一套实现。
         """
-        with db.atomic():
-            user_data, created = UserModData.get_or_create(mod_id=package_id)
-            # 动态设置属性
-            updated = False
-            for key, value in data_dict.items():
-                if hasattr(user_data, key):
-                    setattr(user_data, key, value)
-                    updated = True
-            
-            if updated:
-                user_data.save()
+        normalized_package_id = normalize_package_id(package_id)
+        if not normalized_package_id or not data_dict:
+            return True
+
+        payload = {"mod_id": normalized_package_id, **data_dict}
+        ModDAO.batch_upsert_user_data([payload])
         return True
 
     @staticmethod
     def batch_upsert_user_data(user_data_list: List[Dict[str, Any]]):
         """
-        批量插入或更新用户自定义数据 (Tags, Notes 等)。
-        使用原子事务处理。
+        批量插入或更新 UserModData。
+
+        设计目标是“按输入字段做部分更新”：
+        - 传了哪些字段，就更新哪些字段
+        - 没传的字段，不在这次写入里被覆盖
         """
-        if not user_data_list: return
-        # 1. 动态获取字段信息
-        # 排除主键 mod_id (作为冲突检测目标) 和其他不应通过此接口更新的字段
-        exclude_fields = {'mod_id'}
-        # 获取所有有效字段名
-        valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
-        # 确定冲突时需要更新的字段 (On Conflict Update)
-        # 获取 user_data_list 中出现过的所有键，取交集，确保只更新传入的字段
-        input_keys = set().union(*(d.keys() for d in user_data_list))
+        if not user_data_list:
+            return
+
+        valid_field_names = set(UserModData._meta.fields.keys())  # type: ignore
+        input_keys = set().union(*(data.keys() for data in user_data_list))
         update_fields = [
-            field for field in UserModData._meta.sorted_fields  # type: ignore
-            if field.name in input_keys and field.name not in exclude_fields
+            field
+            for field in UserModData._meta.sorted_fields  # type: ignore
+            if field.name in input_keys and field.name != "mod_id"
         ]
+
         with db.atomic():
             for batch in chunked(user_data_list, 100):
-                # 数据清洗：移除数据库模型中不存在的字段，防止报错
-                # clean_batch = []
-                # for user_data in batch:
-                #     clean_data = {
-                #         k: v for k, v in user_data.items() 
-                #         if k in valid_field_names
-                #     }
-                #     clean_batch.append(clean_data)
-                # if not clean_batch: continue
-                clean_batch = [
-                    {k: v for k, v in d.items() if k in UserModData._meta.fields} # type: ignore
-                    for d in batch
-                ]
-                # 执行 Upsert
-                # 如果记录不存在 -> Insert
-                # 如果记录存在 (mod_id冲突) -> Update preserve 列表中的字段
+                clean_batch = []
+                for user_data in batch:
+                    clean_data = _sanitize_model_payload(user_data, valid_field_names)
+                    clean_data["mod_id"] = normalize_package_id(clean_data.get("mod_id"))
+                    if clean_data["mod_id"]:
+                        clean_batch.append(clean_data)
+                if not clean_batch:
+                    continue
+
                 UserModData.insert_many(clean_batch).on_conflict(
-                    conflict_target=[UserModData.mod_id], 
-                    preserve=update_fields 
+                    conflict_target=[UserModData.mod_id],
+                    preserve=update_fields,
                 ).execute()
-    
-    @staticmethod
-    def link_mods(mod_ids: List[str]):
-        """
-        创建绝对联锁序列。
-        如果传入的 Mod 之前属于其他联锁组，将其从旧组中抽离。
-        """
-        if not mod_ids or len(mod_ids) < 2:
-            return {'status': 'error', 'msg': '联锁至少需要 2 个模组'}
-            
-        mod_ids = [mid.lower() for mid in mod_ids]
-        
-        with db.atomic():
-            # 1. 查找这些 Mod 当前所属的旧联锁组
-            existing_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << mod_ids) # type: ignore
-            old_interlock_ids = set(m.interlock_id for m in existing_mods if getattr(m, 'interlock_id', None))
-            
-            # 2. 将这些 Mod 从旧联锁组的 chain 中剔除
-            if old_interlock_ids:
-                old_interlocks = ModInterlock.select().where(ModInterlock.id << list(old_interlock_ids)) # type: ignore
-                for old_lock in old_interlocks:
-                    new_chain = [pid for pid in old_lock.chain if pid not in mod_ids]
-                    if len(new_chain) < 2:
-                        # 剔除后不足 2 个，旧联锁组失去意义，直接删除 (外键会级联 SET NULL)
-                        old_lock.delete_instance()
-                    else:
-                        old_lock.chain = new_chain
-                        old_lock.save()
 
-            # 3. 创建新的联锁组
-            new_id = uuid.uuid4().hex
-            ModInterlock.create(id=new_id, chain=mod_ids)
-                
-            # # 4. 批量更新这些 Mod 的 UserModData (若不存在则创建)
-            # user_data_batch = [{'mod_id': pid, 'interlock_id': new_id} for pid in mod_ids]
-            # # 而是直接使用 insert_many，因为我们已经在事务中了
-            # clean_batch = [
-            #     {k: v for k, v in d.items() if k in UserModData._meta.fields} # type: ignore
-            #     for d in user_data_batch
-            # ]
-            # UserModData.insert_many(clean_batch).on_conflict(
-            #     conflict_target=[UserModData.mod_id],
-            #     preserve=[UserModData.interlock_id]
-            # ).execute()
-            
-            # A. 确保所有涉及的 Mod 在 UserModData 中都有占位记录 (如果已存在则忽略)
-            stubs = [{'mod_id': pid} for pid in mod_ids]
-            UserModData.insert_many(stubs).on_conflict_ignore().execute()
-            
-            # B. 使用 UPDATE 语句批量修改外键 (最安全的做法)
-            # 这里的 interlock_id 是模型定义的属性名，传入 new_id(字符串) Peewee 会自动处理
-            UserModData.update(interlock_id=new_id).where(UserModData.mod_id << mod_ids).execute() # type: ignore
-            
-        return {'interlock_id': new_id, 'chain': mod_ids}
-        
-    @staticmethod
-    def unlink_mods(mod_ids: List[str]):
-        """
-        解除指定 Mods 的联锁状态。
-        """
-        if not mod_ids: return
-        mod_ids = [mid.lower() for mid in mod_ids]
-        
-        with db.atomic():
-            # 1. 获取涉及的联锁组
-            target_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << mod_ids) # type: ignore
-            affected_interlock_ids = set(m.interlock_id for m in target_mods if getattr(m, 'interlock_id', None))
-            
-            # 2. 更新联锁组的 chain (剔除解锁的 Mod)
-            if affected_interlock_ids:
-                locks = ModInterlock.select().where(ModInterlock.id << list(affected_interlock_ids)) # type: ignore
-                for lock in locks:
-                    new_chain = [pid for pid in lock.chain if pid not in mod_ids]
-                    if len(new_chain) < 2:
-                        lock.delete_instance()
-                    else:
-                        lock.chain = new_chain
-                        lock.save()
-            
-            # 3. 将指定的 Mod 的 interlock_id 置空
-            UserModData.update(interlock_id=None).where(UserModData.mod_id << mod_ids).execute() # type: ignore
-            
-        return True
-    
-    @staticmethod
-    def heal_interlock(interlock_id: str):
-        """
-        联锁断裂修复：移除序列中物理文件缺失或被标记为不存在的项，保留存活项。
-        """
-        lock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
-        if not lock: return
-        
-        with db.atomic():
-            # 检查本地存在的有效 Mod
-            existing_assets = ModAsset.select(ModAsset.package_id).where(
-                (ModAsset.package_id << lock.chain) & 
-                (ModAsset.path.is_null(False)) &  # type: ignore
-                (ModAsset.path != '')
-            )
-            valid_ids = set(a.package_id.lower() for a in existing_assets)
-            
-            # 过滤出存活的序列
-            healed_chain = [pid for pid in lock.chain if pid in valid_ids]
-            
-            if len(healed_chain) < 2:
-                # 如果存活的不足 2 个，直接解散
-                lock.delete_instance()
-                return []
-            else:
-                lock.chain = healed_chain
-                lock.save()
-                return healed_chain
-
-    @staticmethod
-    def get_interlock_missing_mods(interlock_id: str, context: ProfileContext = None): # type: ignore
-        """
-        获取某个联锁组中缺失的 Mod，并细化原因。
-        原因分类：
-        - missing: 物理文件彻底丢失
-        - disabled: 存在物理文件，但被禁用了
-        - shadowed: 存在物理文件，但在当前环境上下文中不可见（被遮蔽或不在该 Profile 扫描路径内）
-        """
-        lock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
-        if not lock: return []
-        
-        # 1. 查询所有涉及该联锁的 Mod (全局查，不带条件)
-        all_assets = ModAsset.select(ModAsset.package_id, ModAsset.path, ModAsset.disabled, ModAsset.workshop_id).where(
-            ModAsset.package_id << lock.chain
-        ).dicts()
-        
-        asset_map = {a['package_id'].lower(): a for a in all_assets}
-        
-        # 2. 如果提供了 context，查询当前环境下【可见且有效】的 Mod ID 集合
-        # 这是真实在列表里能看到的数据
-        visible_ids = set()
-        if context:
-            visible_mods = ModDAO.get_profile_mods(context)
-            visible_ids = set(m['package_id'].lower() for m in visible_mods)
-
-        missing_details = []
-        
-        for pid in lock.chain:
-            pid = pid.lower()
-            # 如果在可见列表中，说明没问题
-            if pid in visible_ids: continue
-            
-            # 如果没在可见列表中，分析原因
-            asset = asset_map.get(pid)
-            detail = {
-                "package_id": pid,
-                "workshop_id": asset.get('workshop_id') if asset else None,
-                "reason": "missing"
-            }
-            
-            if asset:
-                if not asset.get('path'):
-                    detail["reason"] = "missing" # 记录存在但物理路径为空
-                elif asset.get('disabled'):
-                    detail["reason"] = "disabled" # 物理存在但被禁用
-                elif context and pid not in visible_ids:
-                    detail["reason"] = "shadowed" # 物理存在、未禁用，但被当前 Profile 环境遮蔽
-            
-            missing_details.append(detail)
-            
-        return missing_details
-    
-    
     @staticmethod
     def set_user_mods_type(mod_ids: List[str], new_type: str):
-        """
-        批量设置用户自定义 Mod 类型
-        """
-        data = [{'mod_id': mid, 'user_mod_type': new_type} for mid in mod_ids]
-        ModDAO.batch_upsert_user_data(data)
-        
+        """批量设置用户自定义 Mod 类型。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if not normalized_ids:
+            return
+        ModDAO.batch_upsert_user_data([{"mod_id": mod_id, "user_mod_type": new_type} for mod_id in normalized_ids])
+
     @staticmethod
     def set_mods_color(mod_ids: List[str], color_hex: str):
-        """
-        批量设置 Mod 颜色。
-        """
-        if not mod_ids: return
-        # 验证颜色格式
-        if color_hex and not re.match(r'^#[0-9a-fA-F]{6}$', color_hex):
+        """批量设置 UI 标记颜色。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if not normalized_ids:
+            return
+        if color_hex and not is_hex_color(color_hex):
             raise ValueError("Invalid color format. Use #RRGGBB.")
-        # 构造数据调用 batch_upsert
-        data = [{'mod_id': mid, 'sign_color': color_hex} for mid in mod_ids]
-        ModDAO.batch_upsert_user_data(data)
-        
+        ModDAO.batch_upsert_user_data([{"mod_id": mod_id, "sign_color": color_hex} for mod_id in normalized_ids])
+
     @staticmethod
     def add_tags_to_mods(mod_ids: List[str], new_tags: List[str]):
         """
-        向指定 Mod 追加标签（自动去重）。
+        批量追加标签并自动去重。
+
+        这里刻意使用 `dict.fromkeys()`，而不是 set，
+        这样既能去重，也能保留用户更容易理解的标签顺序。
         """
-        if not mod_ids or not new_tags: return
-        
-        with db.atomic():
-            # 1. 查出已有的记录
-            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
-            existing_map = {r.mod_id: r for r in existing_records} # Peewee 中外键ID属性常带_id后缀
-            batch_data = []
-            for mid in mod_ids:
-                record = existing_map.get(mid)
-                current_tags = record.tags if record and record.tags else []
-                # 集合运算：合并并去重
-                # 注意：JSONField 读取出来通常是 List
-                updated_tags = list(set(current_tags + new_tags))
-                batch_data.append({
-                    'mod_id': mid,
-                    'tags': updated_tags
-                })
-                
-            # 2. 写入
-            ModDAO.batch_upsert_user_data(batch_data)
-    
-    @staticmethod
-    def remove_tags_from_mods(mod_ids: List[str], remove_tags: List[str]):
-        """
-        从指定 Mod 中批量移除标签。
-        :param mod_ids: list[str] Mod ID 列表
-        :param remove_tags: list[str] 要移除的标签列表
-        """
-        if not mod_ids or not remove_tags: return
-        
-        # 转换为集合提高查找效率
-        remove_set = set(remove_tags)
+        normalized_ids = normalize_package_ids(mod_ids)
+        cleaned_tags = [str(tag).strip() for tag in new_tags if str(tag).strip()]
+        if not normalized_ids or not cleaned_tags:
+            return
 
         with db.atomic():
-            # 1. 查出已有的记录（只查涉及的 Mod）
-            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(mod_ids))
-            existing_map = {r.mod_id: r for r in existing_records}
+            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(normalized_ids))
+            existing_map = {normalize_package_id(record.mod_id): record for record in existing_records}
             batch_data = []
-            for mid in mod_ids:
-                record = existing_map.get(mid)
-                # 如果数据库里没记录，或者记录里没标签，直接跳过（不用更新）
-                if not record or not record.tags: continue
-                current_tags = record.tags # 这是一个 list
-                # 过滤逻辑：保留不在 remove_set 中的标签
-                # 使用列表推导式保持原有顺序（虽然 Tag 顺序通常不重要，但保持更好）
-                new_tags = [t for t in current_tags if t not in remove_set]
-                
-                # 只有当标签数量确实发生变化时才加入更新队列（性能优化）
-                if len(new_tags) != len(current_tags):
-                    batch_data.append({
-                        'mod_id': mid,
-                        'tags': new_tags
-                    })
-            
-            # 2. 只有在有数据变动时才执行数据库写入
+
+            for mod_id in normalized_ids:
+                record = existing_map.get(mod_id)
+                current_tags = list(record.tags) if record and record.tags else []
+                updated_tags = list(dict.fromkeys(current_tags + cleaned_tags))
+                batch_data.append({"mod_id": mod_id, "tags": updated_tags})
+
             if batch_data:
                 ModDAO.batch_upsert_user_data(batch_data)
-    
+
+    @staticmethod
+    def remove_tags_from_mods(mod_ids: List[str], remove_tags: List[str]):
+        """从指定 Mod 中批量移除标签。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        remove_set = {str(tag).strip() for tag in remove_tags if str(tag).strip()}
+        if not normalized_ids or not remove_set:
+            return
+
+        with db.atomic():
+            existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(normalized_ids))
+            existing_map = {normalize_package_id(record.mod_id): record for record in existing_records}
+            batch_data = []
+
+            for mod_id in normalized_ids:
+                record = existing_map.get(mod_id)
+                if not record or not record.tags:
+                    continue
+                current_tags = list(record.tags)
+                new_tags = [tag for tag in current_tags if tag not in remove_set]
+                if len(new_tags) != len(current_tags):
+                    batch_data.append({"mod_id": mod_id, "tags": new_tags})
+
+            if batch_data:
+                ModDAO.batch_upsert_user_data(batch_data)
+
+
+class ModInterlockDAO:
+    """
+    Mod 联锁相关逻辑。
+
+    联锁不是简单的 CRUD，它体现的是“多个 Mod 必须维持固定顺序”的业务规则，
+    因此单独拆出来，避免继续混在 `ModDAO` 的普通读写里。
+    """
+
+    @staticmethod
+    def link_mods(mod_ids: List[str]):
+        """创建新的联锁序列，并把涉及的 Mod 从旧联锁中安全摘出。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if len(normalized_ids) < 2:
+            return {"status": "error", "msg": "联锁至少需要 2 个模组"}
+
+        with db.atomic():
+            existing_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << normalized_ids)  # type: ignore
+            old_interlock_ids = {mod.interlock_id for mod in existing_mods if getattr(mod, "interlock_id", None)}
+
+            if old_interlock_ids:
+                old_interlocks = ModInterlock.select().where(ModInterlock.id << list(old_interlock_ids))  # type: ignore
+                for interlock in old_interlocks:
+                    new_chain = [mod_id for mod_id in interlock.chain if mod_id not in normalized_ids]
+                    if len(new_chain) < 2:
+                        interlock.delete_instance()
+                    else:
+                        interlock.chain = new_chain
+                        interlock.save()
+
+            new_id = uuid.uuid4().hex
+            ModInterlock.create(id=new_id, chain=normalized_ids)
+            _ensure_user_data_rows(normalized_ids)
+            UserModData.update(interlock_id=new_id).where(UserModData.mod_id << normalized_ids).execute()  # type: ignore
+
+        return {"interlock_id": new_id, "chain": normalized_ids}
+
+    @staticmethod
+    def unlink_mods(mod_ids: List[str]):
+        """把指定 Mod 从其所属联锁中剥离。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if not normalized_ids:
+            return True
+
+        with db.atomic():
+            target_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << normalized_ids)  # type: ignore
+            affected_interlock_ids = {mod.interlock_id for mod in target_mods if getattr(mod, "interlock_id", None)}
+
+            if affected_interlock_ids:
+                interlocks = ModInterlock.select().where(ModInterlock.id << list(affected_interlock_ids))  # type: ignore
+                for interlock in interlocks:
+                    new_chain = [mod_id for mod_id in interlock.chain if mod_id not in normalized_ids]
+                    if len(new_chain) < 2:
+                        interlock.delete_instance()
+                    else:
+                        interlock.chain = new_chain
+                        interlock.save()
+
+            UserModData.update(interlock_id=None).where(UserModData.mod_id << normalized_ids).execute()  # type: ignore
+
+        return True
+
+    @staticmethod
+    def heal_interlock(interlock_id: str):
+        """
+        修复一个已经断裂的联锁。
+
+        这里的“修复”不是尝试补回缺失 Mod，而是保守地剔除已经失效的成员，
+        让剩余仍然存在的 Mod 继续保持顺序。
+        """
+        interlock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
+        if not interlock:
+            return None
+
+        with db.atomic():
+            existing_assets = ModAsset.select(ModAsset.package_id).where(
+                (ModAsset.package_id << interlock.chain)
+                & (ModAsset.path.is_null(False))  # type: ignore
+                & (ModAsset.path != "")
+            )
+            valid_ids = {normalize_package_id(asset.package_id) for asset in existing_assets}
+            healed_chain = [mod_id for mod_id in interlock.chain if normalize_package_id(mod_id) in valid_ids]
+
+            if len(healed_chain) < 2:
+                interlock.delete_instance()
+                return []
+
+            interlock.chain = healed_chain
+            interlock.save()
+            return healed_chain
+
+    @staticmethod
+    def get_interlock_missing_mods(interlock_id: str, context: ProfileContext = None):  # type: ignore
+        """
+        分析联锁中哪些成员在当前环境下不可用，以及为什么不可用。
+
+        reason 分类：
+        - missing: 数据库里没有有效路径，或物理结构已失效
+        - disabled: 物理目录存在，但 About 被禁用
+        - shadowed: 物理存在，但当前 Profile 中不可见
+        """
+        interlock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
+        if not interlock:
+            return []
+
+        all_assets = (
+            ModAsset.select(ModAsset.package_id, ModAsset.path, ModAsset.disabled, ModAsset.workshop_id)
+            .where(ModAsset.package_id << interlock.chain)
+            .dicts()
+        )
+        asset_map = {normalize_package_id(asset.get("package_id")): asset for asset in all_assets}
+
+        visible_ids: set[str] = set()
+        if context:
+            visible_ids = {normalize_package_id(mod.get("package_id")) for mod in ModDAO.get_profile_mods(context)}
+
+        missing_details = []
+        for mod_id in interlock.chain:
+            normalized_id = normalize_package_id(mod_id)
+            if normalized_id in visible_ids:
+                continue
+
+            asset = asset_map.get(normalized_id)
+            detail = {
+                "package_id": normalized_id,
+                "workshop_id": asset.get("workshop_id") if asset else None,
+                "reason": "missing",
+            }
+
+            if asset:
+                if not asset.get("path") or not _mod_dir_exists(asset["path"]):
+                    detail["reason"] = "missing"
+                elif asset.get("disabled"):
+                    detail["reason"] = "disabled"
+                elif context and normalized_id not in visible_ids:
+                    detail["reason"] = "shadowed"
+
+            missing_details.append(detail)
+
+        return missing_details
+
+
+class ModMaintenanceDAO:
+    """
+    会触碰磁盘或执行全库维护任务的操作。
+
+    这类逻辑以前放在 `ModDAO` 里最容易让人误判：
+    看名字像是普通 DAO，实际却会改文件、移动回收站、扫描目录。
+    单独拆出来后，调用方一眼就能看出这是“带副作用的维护操作”。
+    """
+
     @staticmethod
     def set_mod_disabled_status(path: str, disable: bool = True):
-        """
-        物理禁用/启用 Mod：重命名 About.xml 并同步数据库状态
-        """
+        """通过改名 About.xml / About.xml.disabled 切换物理禁用状态。"""
         try:
             about_state = ModAnalyzer.resolve_mod_about_state(path, cleanup_dual_files=True)
-        except Exception as e:
-            return False, f"清理 About 文件残留失败: {e}"
+        except Exception as exc:
+            return False, f"清理 About 文件残留失败: {exc}"
+
         if not about_state.resolved_path:
             return False, "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态"
+
         if about_state.is_disabled == disable:
             ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
             return True, "状态已同步"
-        src = about_state.resolved_path
-        dst = about_state.disabled_xml if disable else about_state.about_xml
+
+        source_path = about_state.resolved_path
+        target_path = about_state.disabled_xml if disable else about_state.about_xml
         try:
-            if os.path.exists(dst): os.remove(dst)
-            os.replace(src, dst)
-        except Exception as e:
-            return False, f"文件操作失败: {e}"
+            if os.path.exists(target_path):
+                os.remove(target_path)
+            os.replace(source_path, target_path)
+        except Exception as exc:
+            return False, f"文件操作失败: {exc}"
+
         ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
         return True, "成功"
 
     @staticmethod
-    def delete_mods_physically(path_hashes: List[str]|str):
+    def delete_mods_physically(path_hashes: List[str] | str):
         """
-        根据路径哈希批量删除 Mod：先删数据库记录，再处理物理文件
-        :param path_hashes: 路径哈希列表 (ModAsset 的主键)
-        :return: {'success_count': int, 'errors': List[str]}
-        """
-        if isinstance(path_hashes, str):
-            normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
-        else:
-            normalized_hashes = []
-            for path_hash in path_hashes:
-                value = str(path_hash or '').strip()
-                if value:
-                    normalized_hashes.append(value)
-            normalized_hashes = list(dict.fromkeys(normalized_hashes))
+        根据 path_hash 删除 Mod。
 
+        这里先删数据库，再尝试移入回收站，保持“界面不再引用已删除条目”的数据库事实优先。
+        如果物理删除失败，只记录错误，不回滚数据库，避免在损坏路径上反复死循环。
+        """
+        normalized_hashes = _normalize_path_hashes(path_hashes)
         if not normalized_hashes:
-            return {'success_count': 0, 'errors': []}
-        # 1. 预先查出所有待删除记录的物理路径
-        # 必须在删除记录前获取，否则后面找不到文件
-        assets = list(ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
-                    .where(ModAsset.path_hash.in_(normalized_hashes)).dicts()) # type: ignore
+            return {"success_count": 0, "errors": []}
+
+        assets = list(
+            ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
+            .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
+            .dicts()
+        )
         if not assets:
-            return {'success_count': 0, 'errors': ["未找到有效的模组记录"]}
-        # 整理数据
-        target_paths = [a['path'] for a in assets if a['path']]
-        valid_hashes = [a['path_hash'] for a in assets]
-        errors = []
+            return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
+
+        target_paths = [asset["path"] for asset in assets if asset.get("path")]
+        valid_hashes = [asset["path_hash"] for asset in assets]
+        errors: list[str] = []
         success_count = 0
-        # 2. 执行数据库抹除 (原子事务)
+
         try:
             with db.atomic():
-                # 删除资产表记录
-                # 注意：由于 UserModData 是以 package_id 为主键，
-                # 如果用户想彻底清除该 Mod 的备注/标签，通常是在最后一个副本被删时处理。
-                ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute() # type: ignore
-        except Exception as e:
-            logger.error(f"Database deletion failed: {e}")
-            return {'success_count': 0, 'errors': [f"数据库记录清理失败: {str(e)}"]}
-        # 3. 执行物理文件删除 (移入回收站)
+                ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute()  # type: ignore
+        except Exception as exc:
+            logger.error(f"Database deletion failed: {exc}")
+            return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
+
         from send2trash import send2trash
+
         for path in target_paths:
             try:
-                abs_path = os.path.abspath(path)
-                if os.path.exists(abs_path):
-                    send2trash(abs_path)
-                # 无论文件在不在，既然数据库删了，计数就增加
+                absolute_path = os.path.abspath(path)
+                if os.path.exists(absolute_path):
+                    send2trash(absolute_path)
                 success_count += 1
-            except Exception as e:
-                # 文件删除失败仅记录错误，不回滚数据库（防止死循环）
-                errors.append(f"物理文件移除失败 ({os.path.basename(path)}): {str(e)}")
-        return { 'success_count': success_count, 'errors': errors  }
+            except Exception as exc:
+                errors.append(f"物理文件移除失败 ({os.path.basename(path)}): {exc}")
+
+        return {"success_count": success_count, "errors": errors}
 
     @staticmethod
     def add_shadow_path(keep_path_hash: str, shadow_path: str):
-        """
-        为“保留的 Mod”记录“被遮蔽的 Mod”路径
-        """
+        """为最终保留的 Mod 记录被遮蔽副本路径。"""
         mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
-        if mod:
-            current_paths = mod.shadow_paths or []
-            if shadow_path not in current_paths:
-                current_paths.append(shadow_path)
-                mod.shadow_paths = current_paths
-                mod.save()
-                return True
-        return False
-    
+        if not mod:
+            return False
+
+        current_paths = list(mod.shadow_paths or [])
+        if shadow_path in current_paths:
+            return True
+
+        current_paths.append(shadow_path)
+        mod.shadow_paths = current_paths
+        mod.save()
+        return True
+
     @staticmethod
     def clean_invalid_shadow_paths():
         """
-        清理所有 Mod 中失效的 shadow_paths。
-        遍历检查物理路径是否存在，不存在则移除。
-        返回: 清理了多少个失效路径
+        清理所有已经失效的 shadow_paths。
+
+        这里不强行检查 About.xml.disabled，只要目录还在就保留，
+        因为 shadow 只是一个“曾被遮蔽副本”的展示辅助信息，不应过度严格。
         """
         cleaned_count = 0
-        
-        # 1. 筛选出可能有 shadow_paths 的记录
-        # 注意：SQLite 中 JSON 存为 TEXT，可以简单查不为空的
-        # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
         mods_with_shadows = ModAsset.select().where(cast(Any, ModAsset.shadow_paths).is_null(False))
-        
+
         with db.atomic():
             for mod in mods_with_shadows:
                 current_paths = mod.shadow_paths
                 if not current_paths or not isinstance(current_paths, list):
                     continue
-                
-                # 2. 过滤有效路径
-                # 判断标准：路径存在，且里面有 About/About.xml.disabled (更严谨)
-                # 或者简单点：只要文件夹还在就行 (宽容)
-                # 这里建议：只要文件夹存在即可，防止用户误删了 .disabled 文件但文件夹还在的情况
-                valid_paths = [
-                    p for p in current_paths 
-                    if p and os.path.exists(p)
-                ]
-                
-                # 3. 如果有变化，更新数据库
-                if len(valid_paths) != len(current_paths):
-                    removed_num = len(current_paths) - len(valid_paths)
-                    cleaned_count += removed_num
-                    
-                    mod.shadow_paths = valid_paths
-                    mod.save()
-                    logger.info(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
+
+                valid_paths = [path for path in current_paths if path and os.path.exists(path)]
+                if len(valid_paths) == len(current_paths):
+                    continue
+
+                cleaned_count += len(current_paths) - len(valid_paths)
+                mod.shadow_paths = valid_paths
+                mod.save()
+                logger.info(f"Cleaned invalid shadow paths for {mod.package_id}")
 
         return cleaned_count
-    
+
     @staticmethod
     def find_missing_mods(delete: bool = False):
         """
-        查找并处理数据库中路径无效的 Mod。
-        :param delete: 
-            True  -> 直接删除记录 (会级联删除 UserModData/GroupMod)
-            False -> 仅将 path 设为 None (保留用户备注等数据，标记为缺失)
-        返回: 无效 Mod 的 package_id 列表 (包含缺失和删除的)
-        {'missing_mods': [], 'deleted_mods': []}
-        """
-        missing_mods = []   # 之前缺失文件的 Mod
-        deleted_mods = []   # 上次删除的 Mod
-        
-        # 1. 遍历检查文件是否存在 (这一步比较耗时，但必须做)
-        # 只查询有 path 的记录，已经为 None 的不用查了
-        query = ModAsset.select(ModAsset.path_hash, ModAsset.path).dicts()
-        
-        for asset in query:
-            path = asset['path']
-            if not path:
-                missing_mods.append(asset['path_hash'])
-            elif not ((Path(path)/'About'/'About.xml').is_file() or (Path(path)/'About'/'About.xml.disabled').is_file()):
-                deleted_mods.append(asset['path_hash'])
-        
-        total_invalid_mods = missing_mods + deleted_mods
-        # # 从 GroupMod 中删除这些 Mod 的关联
-        # GroupMod.delete().where(GroupMod.mod_id.in_(total_invalid_mods)).execute()
-        
-        if not total_invalid_mods:
-            return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
+        查找数据库中已经失效的 Mod。
 
-        # 2. 数据库操作 (原子事务)
+        - missing_mods: path 本来就为空，说明以前已经标记过缺失
+        - deleted_mods: path 仍存在，但物理 Mod 结构已经不完整或目录消失
+        """
+        missing_mods: list[str] = []
+        deleted_mods: list[str] = []
+
+        query = ModAsset.select(ModAsset.path_hash, ModAsset.path).dicts()
+        for asset in query:
+            path = asset["path"]
+            if not path:
+                missing_mods.append(asset["path_hash"])
+            elif not _mod_dir_exists(path):
+                deleted_mods.append(asset["path_hash"])
+
+        total_invalid_mods = missing_mods + deleted_mods
+        if not total_invalid_mods:
+            return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
+
         with db.atomic():
             if delete:
-                # 如果要删除，直接删，不需要先 update
-                # chunked 并不是必须的，除非一次性删几万条，这里直接 in_ 即可
                 ModAsset.delete().where(cast(Any, ModAsset.path_hash).in_(total_invalid_mods)).execute()
             else:
-                # 如果不删除，只是标记为丢失 (path = '')
-                ModAsset.update(path='').where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
-        
-        return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
-    
+                ModAsset.update(path="").where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
+
+        return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
+
     @staticmethod
     def clean_orphaned_data():
         """
-        清理孤立的 UserModData 和 GroupMod。
-        即：删除那些没有任何 ModAsset 关联的配置数据（彻底丢失的 Mod）。
+        清理没有任何 ModAsset 对应的用户数据与分组关系。
+
+        这一步是数据库维护任务，不影响正常界面读取，
+        但长期不做会留下越来越多的脏数据。
         """
-        # 清理 UserModData
-        # 删除 mod_id 不在 existing_ids 中的记录
         with db.atomic():
             deleted_user_data = UserModData.delete().where(cast(Any, UserModData.mod_id).not_in(ModAsset.package_id)).execute()
-            # 清理 GroupMod (分组关联)
-            # 这一步通常由数据库外键级联处理，但为了保险手动清理
             deleted_group_mod = GroupMod.delete().where(cast(Any, GroupMod.mod_id).not_in(ModAsset.package_id)).execute()
         return {
-            'deleted_user_configs': deleted_user_data,
-            'deleted_group_relations': deleted_group_mod
+            "deleted_user_configs": deleted_user_data,
+            "deleted_group_relations": deleted_group_mod,
         }
-    
-    
+
+
 class GroupDAO:
-    """
-    管理分组逻辑。
-    包含：创建、删除、重命名、拖拽排序、成员管理。
-    """
+    """管理分组结构、成员关系与排序。"""
 
     @staticmethod
     def get_all_groups_structured():
-        """
-        【关键方法】获取完整的分组数据结构，供前端渲染。
-        返回格式:
-        [
-            {
-                "group_id": "uuid...",
-                "name": "核心模组",
-                "color": "#ff0000",
-                "is_expanded": True,
-                "mod_ids": ["ludeon.rimworld", "ludeon.rimworld.royalty"] // 按 sort_index 排好序的 ID
-            },
-            ...
-        ]
-        """
-        # 1. 获取所有分组，按分组自身的 sort_index 排序
-        groups = list(GroupData.select().order_by(GroupData.sort_index).dicts())
-        
-        # 2. 获取所有关联关系，按 sort_index 排序
-        # 使用 prefetch 或者简单的查全表再内存分配。
-        # 这里数据量不大（通常几百个关系），查全表内存分配是最快的，比 N 次 SQL 查询快得多。
-        group_mods = list(GroupMod.select().order_by(GroupMod.sort_index).dicts())
+        """返回完整分组结构，保留所有成员。"""
+        return _build_group_structures()
 
-        # 3. 在内存中组装 (Python 处理比 SQL Join 更灵活，方便输出前端需要的 JSON 结构)
-        # 建立 group_id -> mod_ids list 的映射
-        group_map = {g['group_id']: [] for g in groups}
-        
-        for gm in group_mods:
-            g_id = gm['group_id'] # Peewee dicts() 返回的外键是 ID 值
-            p_id = gm['mod_id']   # 同上
-            
-            if g_id in group_map:
-                group_map[g_id].append(p_id)
-
-        # 4. 将 mod_ids 填回 groups 列表
-        for g in groups:
-            g['mod_ids'] = group_map.get(g['group_id'], [])
-            
-        return groups
-    
     @staticmethod
     def get_groups_structured_by_mod_ids(allowed_ids: List[str]):
-        """
-        获取结构化分组数据，并根据给定的 ID 集合过滤内容。
-        :param allowed_ids: 当前环境下可见的模组 package_id 集合 (Set 提高查找效率)
-        """
-        # 1. 获取所有分组
-        groups = list(GroupData.select().order_by(GroupData.sort_index).dicts())
-        # 2. 获取所有分组关联
-        group_mods = list(GroupMod.select().order_by(GroupMod.sort_index).dicts())
-        # 3. 过滤逻辑
-        # 建立当前环境的 Set 提高查询速度
-        available_set = set(allowed_ids)
-        group_map = {g['group_id']: [] for g in groups}
-        for gm in group_mods:
-            g_id = gm['group_id']
-            p_id = gm['mod_id'] # 这里存的是 package_id
-            # 【关键点】只有当该 Mod 在当前环境下“物理存在”时，才分发给前端展示
-            if p_id in available_set:
-                group_map[g_id].append(p_id)
-
-        # 4. 组装
-        for g in groups:
-            g['mod_ids'] = group_map.get(g['group_id'], [])
-            
-        return groups
+        """返回只包含当前可见 Mod 的分组结构。"""
+        return _build_group_structures(set(normalize_package_ids(allowed_ids)))
 
     @staticmethod
-    def create_group(name: str, color: str = '#ffffff'):
-        """创建新分组"""
-        # 验证颜色格式
-        if not color or not re.match(r'^#[0-9a-fA-F]{6}$', color):
-            color = '#ffffff'
+    def create_group(name: str, color: str = "#ffffff"):
+        """创建新分组，默认追加到当前列表末尾。"""
         new_id = uuid.uuid4().hex
-        # 获取当前最大的 sort_index，以便排在最后
         max_idx = GroupData.select(fn.MAX(GroupData.sort_index)).scalar() or 0
         return GroupData.create(
             group_id=new_id,
             name=name,
-            color=color,
+            color=normalize_hex_color(color),
             sort_index=max_idx + 1,
-            is_expanded=True
+            is_expanded=True,
         )
 
     @staticmethod
     def delete_group(group_id: str):
-        """删除分组 (级联删除 GroupMod 会由数据库外键约束或Peewee处理)"""
+        """删除分组。GroupMod 会由级联约束一起删除。"""
         return GroupData.delete().where(GroupData.group_id == group_id).execute()
 
     @staticmethod
     def update_group_info(group_id: str, **kwargs):
-        """
-        更新分组属性 (重命名、改色、折叠状态)。
-        kwargs: {'name': 'NewName', 'color': '...', 'is_expanded': False}
-        """
+        """更新分组名称、颜色或折叠状态。"""
+        if "color" in kwargs:
+            kwargs["color"] = normalize_hex_color(kwargs["color"])
         return GroupData.update(**kwargs).where(GroupData.group_id == group_id).execute()
 
     @staticmethod
     def add_mods_to_group(group_id: str, mod_ids: List[str]):
-        """
-        向分组添加 Mod (支持批量)。
-        自动处理重复添加的情况（如果是联合主键，需要 try-except 或 ignore）。
-        """
-        if not mod_ids: return
+        """向分组批量添加 Mod，并自动忽略重复关系。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if not normalized_ids:
+            return
+
         with db.atomic():
-            # 先确保 UserModData 存在，否则外键约束会报错
-            stubs = [{'mod_id': mid} for mid in mod_ids]
-            UserModData.insert_many(stubs).on_conflict_ignore().execute()   # 批量插入忽略重复
-        # 获取该组当前最大的 sort_index
-        max_idx = GroupMod.select(fn.MAX(GroupMod.sort_index)).where(GroupMod.group_id == group_id).scalar() or 0
-        data_source = []
-        for i, pid in enumerate(mod_ids):
-            data_source.append({
-                'group_id': group_id,
-                'mod_id': pid,
-                'sort_index': max_idx + 1 + i
-            })
-        with db.atomic():
-            # 使用 insert_many().on_conflict_ignore() 防止重复添加报错
+            _ensure_user_data_rows(normalized_ids)
+            max_idx = GroupMod.select(fn.MAX(GroupMod.sort_index)).where(GroupMod.group_id == group_id).scalar() or 0
+            data_source = [
+                {
+                    "group_id": group_id,
+                    "mod_id": mod_id,
+                    "sort_index": max_idx + 1 + index,
+                }
+                for index, mod_id in enumerate(normalized_ids)
+            ]
             GroupMod.insert_many(data_source).on_conflict_ignore().execute()
 
     @staticmethod
     def remove_mods_from_group(group_id: str, mod_ids: List[str]):
-        """从分组移除 Mod"""
-        query = GroupMod.delete().where(
-            (GroupMod.group_id == group_id) & 
-            (cast(Any, GroupMod.mod_id).in_(mod_ids))
-        )
-        return query.execute()
+        """从分组移除一批 Mod。"""
+        normalized_ids = normalize_package_ids(mod_ids)
+        if not normalized_ids:
+            return 0
+        return GroupMod.delete().where(
+            (GroupMod.group_id == group_id)
+            & (cast(Any, GroupMod.mod_id).in_(normalized_ids))
+        ).execute()
 
     @staticmethod
     def update_all_expansion_state(is_expanded: bool):
-        """
-        一次性展开或折叠所有分组
-        耗时: 几毫秒
-        """
+        """一次性展开或折叠全部分组。"""
         GroupData.update(is_expanded=is_expanded).execute()
 
     @staticmethod
     def reorder_groups(group_id_list: List[str]):
-        """
-        重新排序分组本身。
-        前端拖拽分组位置后，发送新的 group_id 顺序列表。
-        """
+        """按前端传回的新顺序重排分组本身。"""
         with db.atomic():
-            for idx, gid in enumerate(group_id_list):
-                GroupData.update(sort_index=idx).where(GroupData.group_id == gid).execute()
+            for index, group_id in enumerate(group_id_list):
+                GroupData.update(sort_index=index).where(GroupData.group_id == group_id).execute()
 
     @staticmethod
     def reorder_mods_in_group(group_id: str, mod_id_list: List[str]):
         """
-        重新排序分组内的 Mod。
-        优化策略：直接删除该组旧关系，批量插入新关系。
-        这样只有 2 次 SQL IO，而不是 N 次。
+        重排分组内成员顺序。
+
+        这里直接“删旧关系 + 批量插入新顺序”，因为这比逐条 update 更简单，
+        而且分组内成员数量通常远小于全表规模。
         """
-        if not mod_id_list:
-            # 如果列表为空，说明清空了分组
+        normalized_ids = normalize_package_ids(mod_id_list)
+        if not normalized_ids:
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()
             return
-        # 确保 UserModData 中存在这些 ID，否则外键约束会报错
-        # 使用 insert_many + on_conflict_ignore 批量创建不存在的记录
-        user_data_stubs = [{'mod_id': mid.lower()} for mid in mod_id_list]
+
         with db.atomic():
-            # 先确保父表 (UserModData) 有这些 ID
-            UserModData.insert_many(user_data_stubs).on_conflict_ignore().execute()
-        
-            data_source = []
-            for idx, pid in enumerate(mod_id_list):
-                data_source.append({
-                    'group_id': group_id,
-                    'mod_id': pid,
-                    'sort_index': idx
-                })
-                
-            # 1. 删除该组所有旧关联
+            _ensure_user_data_rows(normalized_ids)
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()
-            
-            # 2. 批量插入新顺序
-            # chunked 并非必须，除非 mod_id_list 超过 999 (SQLite 限制)
+            data_source = [
+                {"group_id": group_id, "mod_id": mod_id, "sort_index": index}
+                for index, mod_id in enumerate(normalized_ids)
+            ]
             for batch in chunked(data_source, 500):
                 GroupMod.insert_many(batch).execute()
-    
-    
+
+
 class CollectionDAO:
+    """管理本地缓存的 Workshop 合集快照。"""
+
     @staticmethod
     def get_all():
-        """获取所有收录的合集，按创建时间降序"""
-        return list(SubscribedCollection.select().order_by(SubscribedCollection.created_time.desc()).dicts()) # type: ignore
+        """获取所有缓存合集，按创建时间倒序。"""
+        return list(SubscribedCollection.select().order_by(SubscribedCollection.created_time.desc()).dicts())  # type: ignore
 
     @staticmethod
     def get_collection_by_id(coll_id: str):
-        """获取单个合集的完整缓存"""
+        """获取单个合集缓存。"""
         return SubscribedCollection.get_or_none(SubscribedCollection.id == str(coll_id))
 
     @staticmethod
     def upsert_collection(coll_id: str, meta: dict, children: list, total: int):
-        """持久化合集及其子项的所有元数据"""
-        from backend.utils.tools import current_ms
+        """
+        持久化合集快照。
+
+        created_time 保留首次创建时间，last_sync_time 则反映最近一次成功同步。
+        这样前端既能知道“这条记录是什么时候收藏的”，也能知道“缓存新鲜度”。
+        """
         existing = SubscribedCollection.get_or_none(SubscribedCollection.id == str(coll_id))
         return SubscribedCollection.insert(
             id=str(coll_id),
-            title=meta.get('title'),
-            description=meta.get('description'),
-            preview_url=meta.get('preview_url'),
-            children=children, # 传入完整的子项快照
+            title=meta.get("title"),
+            description=meta.get("description"),
+            preview_url=meta.get("preview_url"),
+            children=children,
             total=total,
-            time_updated=meta.get('time_updated', 0),
+            time_updated=meta.get("time_updated", 0),
             created_time=existing.created_time if existing else current_ms(),
-            last_sync_time=current_ms() # 记录同步时间
+            last_sync_time=current_ms(),
         ).on_conflict_replace().execute()
 
     @staticmethod
     def delete(coll_id: str):
-        """删除合集记录"""
+        """删除合集缓存。"""
         return SubscribedCollection.delete().where(SubscribedCollection.id == str(coll_id)).execute()
-    
-    
-    
-    
-    

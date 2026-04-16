@@ -1,6 +1,6 @@
 import unittest
 
-from backend.database.dao_ext import select_best_workshop_detail_for_package
+from backend.database.workshop_selection import select_best_workshop_detail_for_package
 from backend.utils.tools import normalize_workshop_id
 
 

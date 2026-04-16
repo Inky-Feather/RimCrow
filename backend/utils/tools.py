@@ -4,6 +4,18 @@ import time
 import zipfile
 from typing import Any
 
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    """对字符串列表做保序去重。"""
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
 def generate_path_hash(path: str) -> str:
     """
     根据路径生成唯一的哈希值。
@@ -46,17 +58,63 @@ def extract_zip(zip_path: str, target_dir: str) -> None:
     with zipfile.ZipFile(zip_path, "r") as archive:
         archive.extractall(target_dir)
 
+
 def normalize_package_id(package_id: Any) -> str:
     return str(package_id or "").strip().lower()
 
 
-def normalize_workshop_id( workshop_id: Any, *, digits_only: bool = False, min_length: int = 1, max_length: int | None = None, zero_is_empty: bool = True ) -> str:
+def normalize_package_ids(package_ids: list[Any]) -> list[str]:
+    """
+    批量规范化 package_id，并在保持输入顺序的前提下去重。
+
+    这个函数适合“批量接口入口清洗”这类弱领域场景：
+    它不依赖数据库模型，也不关心调用方是 DAO、导入检查还是 API。
+    """
+    normalized = [normalize_package_id(package_id) for package_id in package_ids]
+    return _dedupe_preserve_order([package_id for package_id in normalized if package_id])
+
+
+def is_hex_color(color: Any) -> bool:
+    """判断字符串是否是 `#RRGGBB` 形式的颜色值。"""
+    text = str(color or "").strip()
+    if len(text) != 7 or not text.startswith("#"):
+        return False
+    return all(char in "0123456789abcdefABCDEF" for char in text[1:])
+
+
+def normalize_hex_color(color: Any, default: str = "#ffffff") -> str:
+    """
+    规范化颜色值；不合法时回退到默认值。
+
+    这里不抛异常，适合“尽量纠正输入”的场景；
+    如果调用方需要严格校验，可以先调用 `is_hex_color()`。
+    """
+    text = str(color or "").strip()
+    if is_hex_color(text):
+        return text
+    return default
+
+
+def normalize_workshop_id(
+    workshop_id: Any,
+    *,
+    digits_only: bool = False,
+    min_length: int = 1,
+    max_length: int | None = None,
+    zero_is_empty: bool = True,
+) -> str:
     value = str(workshop_id or "").strip()
-    if not value: return ""
-    if digits_only and not value.isdigit(): return ""
+    if not value:
+        return ""
+    if digits_only and not value.isdigit():
+        return ""
     if zero_is_empty:
-        if value == "0": return ""
-        if value.isdigit() and int(value) == 0: return ""
-    if len(value) < min_length: return ""
-    if max_length is not None and len(value) > max_length: return ""
+        if value == "0":
+            return ""
+        if value.isdigit() and int(value) == 0:
+            return ""
+    if len(value) < min_length:
+        return ""
+    if max_length is not None and len(value) > max_length:
+        return ""
     return value

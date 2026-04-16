@@ -23,7 +23,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
         
 
-from backend.database.dao import ModDAO
+from backend.database.dao import ModDAO, ModMaintenanceDAO
 from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
@@ -76,11 +76,11 @@ class ModScanner:
             try:
                 # --- 5. 清理失效数据 ---
                 # 扫描缺失的 Mod (物理文件没了)
-                deletion_result = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
+                deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data)
                 stats['removed'] = len(deletion_result['deleted_mods'])
                 logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
                 # 清理失效的 Shadow Paths
-                ModDAO.clean_invalid_shadow_paths()
+                ModMaintenanceDAO.clean_invalid_shadow_paths()
             except Exception as e:
                 txn.rollback() # 万一出错，回滚所有改动
                 raise e

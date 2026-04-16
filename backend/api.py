@@ -41,7 +41,7 @@ from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
 from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, init_db, db
-from backend.database.dao import CollectionDAO, ModDAO, GroupDAO
+from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.models_ext import WorkshopMeta
 from backend.database.dao_ext import ExtDAO
 
@@ -634,9 +634,9 @@ class API:
         """手动触发：清理无效的 UserModData、GroupMod 和 ModAsset"""
         try:
             # 1. 清理文件已不存在的 ModAsset
-            missing = ModDAO.find_missing_mods(delete=True)
+            missing = ModMaintenanceDAO.find_missing_mods(delete=True)
             # 2. 清理孤立的用户数据和分组关联
-            ModDAO.clean_orphaned_data()
+            ModMaintenanceDAO.clean_orphaned_data()
             return ApiResponse.success(message="数据库清理完成")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -828,15 +828,15 @@ class API:
                 try:
                     if action == 'disable':
                         # 1. 执行物理与数据库禁用
-                        success, msg = ModDAO.set_mod_disabled_status(path, disable=True)
+                        success, msg = ModMaintenanceDAO.set_mod_disabled_status(path, disable=True)
                         # 2. 如果提供了保留项的 Hash，记录阴影路径
                         if success and keep_hash:
-                            ModDAO.add_shadow_path(keep_hash, path)
+                            ModMaintenanceDAO.add_shadow_path(keep_hash, path)
                     elif action == 'delete':
                         if not path_hash:
                             msg = "缺少 target_path_hash，无法删除该副本"
                         else:
-                            res = ModDAO.delete_mods_physically([path_hash])
+                            res = ModMaintenanceDAO.delete_mods_physically([path_hash])
                             success = res['success_count'] > 0
                             if not success:
                                 msg = res['errors'][0] if res['errors'] else "未找到可删除的模组记录"
@@ -885,7 +885,7 @@ class API:
                 normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
             else:
                 normalized_hashes = [str(item or '').strip() for item in path_hashes if str(item or '').strip()]
-            res = ModDAO.delete_mods_physically(normalized_hashes)
+            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes)
             if res['success_count'] != len(normalized_hashes):
                 return ApiResponse.warning(f"部分Mod删除失败：{len(normalized_hashes)-res['success_count']} 项未成功删除", data=res)
             if res['errors']:
@@ -909,7 +909,7 @@ class API:
                 mod = ModAsset.get_or_none(ModAsset.path_hash == path_hash)
                 if not mod: continue
                 # 2. 执行禁用/启用操作
-                ModDAO.set_mod_disabled_status(mod.path, disabled)
+                ModMaintenanceDAO.set_mod_disabled_status(mod.path, disabled)
             return ApiResponse.success(message=f"Mod {'已禁用' if disabled else '已启用'}")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -991,7 +991,7 @@ class API:
     def mods_link(self, mod_ids: List[str]):
         """批量设置 Mod 联锁"""
         try:
-            result = ModDAO.link_mods(mod_ids)
+            result = ModInterlockDAO.link_mods(mod_ids)
             return ApiResponse.success(data=result)
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -1000,7 +1000,7 @@ class API:
     def mods_unlink(self, mod_ids: List[str]):
         """批量解除 Mod 联锁"""
         try:
-            result = ModDAO.unlink_mods(mod_ids)
+            result = ModInterlockDAO.unlink_mods(mod_ids)
             return ApiResponse.success(data=result)
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -1009,7 +1009,7 @@ class API:
     def mods_interlock_heal(self, interlock_id: str):
         """修复断裂的联锁组（剔除本地缺失项）"""
         try:
-            result = ModDAO.heal_interlock(interlock_id)
+            result = ModInterlockDAO.heal_interlock(interlock_id)
             return ApiResponse.success(data=result, message="联锁修复完成")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -1018,7 +1018,7 @@ class API:
     def mods_interlock_missing_get(self, interlock_id: str):
         """获取联锁组中缺失的项，供前端引导订阅"""
         try:
-            missing_mods = ModDAO.get_interlock_missing_mods(interlock_id)
+            missing_mods = ModInterlockDAO.get_interlock_missing_mods(interlock_id)
             return ApiResponse.success(data=missing_mods)
         except Exception as e:
             return ApiResponse.error(str(e))

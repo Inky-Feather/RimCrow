@@ -576,7 +576,8 @@ class TextureOptimizationManager:
 
         stat_by_path = {item["mod_path"]: item for item in mod_stats}
         for mod_snapshot in mod_snapshots:
-            mod_snapshot["stat"] = dict(stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"]))
+            next_stat = stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"])
+            mod_snapshot["stat"] = dict(next_stat) if isinstance(next_stat, dict) else {}
 
         snapshot = {
             "id": uuid.uuid4().hex,
@@ -977,7 +978,8 @@ class TextureOptimizationManager:
         mod_stats.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
         stat_by_path = {item["mod_path"]: item for item in mod_stats}
         for mod_snapshot in snapshot.get("mods", []):
-            mod_snapshot["stat"] = dict(stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"]))
+            next_stat = stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"])
+            mod_snapshot["stat"] = dict(next_stat) if isinstance(next_stat, dict) else {}
         snapshot["summary"] = dict(summary)
 
     @staticmethod
@@ -1582,7 +1584,8 @@ class TextureOptimizationManager:
                     if precise_alpha:
                         alpha = image.getchannel("A")
                         extrema = alpha.getextrema()
-                        has_alpha = extrema is not None and extrema[0] < 255
+                        first_extrema = extrema[0] if isinstance(extrema, tuple) and extrema else None
+                        has_alpha = isinstance(first_extrema, (int, float)) and first_extrema < 255
                     else:
                         has_alpha = True
                 elif image.mode == "P":
@@ -1749,7 +1752,7 @@ class TextureOptimizationManager:
     @staticmethod
     def _build_options(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         texture_opt = getattr(settings.config, "texture_opt", {})
-        if is_dataclass(texture_opt): base = asdict(texture_opt)
+        if is_dataclass(texture_opt) and not isinstance(texture_opt, type): base = asdict(texture_opt)
         elif isinstance(texture_opt, dict): base = dict(texture_opt)
         else: base = {}
 
