@@ -1947,6 +1947,38 @@ class API:
         return ApiResponse.success(message="尝试取消任务")
 
     @log_api_call
+    def cancel_progress_task(self, task_id: str, task_type: str):
+        """统一取消入口，供前端全局任务栏按任务类型路由控制。"""
+        normalized_task_id = str(task_id or "").strip()
+        normalized_type = str(task_type or "").strip().lower()
+
+        if normalized_type in {"download", "update", "localize", "steamcmd-init"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            self.download_mgr.cancel_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消下载任务")
+
+        if normalized_type == "scan":
+            if not self.scanner:
+                return ApiResponse.error("扫描器未初始化")
+            ok = self.scanner.stop_scan(normalized_task_id or None)
+            return ApiResponse.success(message="已请求取消扫描任务") if ok else ApiResponse.error("当前没有可取消的扫描任务")
+
+        if normalized_type in {"texture-opt", "texture-opt-analyze"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            try:
+                res = self.texture_mgr.cancel_task(normalized_task_id)
+                return ApiResponse.success(res, message="已请求取消贴图任务")
+            except Exception as e:
+                return ApiResponse.error(str(e))
+
+        if normalized_type == "ai-batch":
+            return ApiResponse.warning("AI 批量任务暂不支持取消")
+
+        return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
+
+    @log_api_call
     def get_active_downloads(self):
         """获取所有任务状态 (用于 UI 恢复)"""
         return ApiResponse.success(self.download_mgr.get_tasks_info())

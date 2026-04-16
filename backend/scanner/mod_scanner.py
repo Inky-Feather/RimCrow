@@ -44,12 +44,18 @@ class ModScanner:
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self._is_scanning = False
         self._stop_requested = False  # 中断请求标志
+        self._current_task_id: str | None = None
 
-    def stop_scan(self):
+    def stop_scan(self, task_id: str | None = None) -> bool:
         """外部调用：请求中断扫描"""
-        if self._is_scanning:
-            self._stop_requested = True
-            logger.warning("Scan interruption requested by user.")
+        if not self._is_scanning:
+            return False
+        if task_id and self._current_task_id and task_id != self._current_task_id:
+            logger.warning("Ignored scan interruption for stale task: requested=%s active=%s", task_id, self._current_task_id)
+            return False
+        self._stop_requested = True
+        logger.warning("Scan interruption requested by user. task_id=%s", self._current_task_id)
+        return True
             
     def scan_paths_async(self, search_paths, forced_update=False):
         """
@@ -62,6 +68,7 @@ class ModScanner:
         self._is_scanning = True
         self._stop_requested = False  # 启动前重置标志
         task_id = uuid.uuid4().hex
+        self._current_task_id = task_id
         EventBus.emit_progress(
             task_id,
             "scan",
@@ -400,6 +407,7 @@ class ModScanner:
         finally:
             self._is_scanning = False
             self._stop_requested = False # 清理状态
+            self._current_task_id = None
             # 释放线程绑定的数据库连接
             if not db.is_closed(): db.close()
 

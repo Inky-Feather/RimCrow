@@ -33,12 +33,12 @@
 
             <div class="flex items-center gap-2">
               <CommonSwitch :model-value="appStore.settings.show_coexistence_message"
-                @update:modelValue="handleCoexistenceToggle" label="显示共存" mini
-                description="关闭后只显示同级硬冲突" class="w-38 "
+                @update:modelValue="handleCoexistenceToggle" label="显示共存提示" mini
+                description="关闭后只显示同级硬冲突"
               />
-              <button class="rounded-full border border-text-main/12 bg-black/25 p-1.5 text-text-dim transition-colors hover:border-accent-danger/30 hover:text-accent-danger"
+              <button class="rounded-full flex items-center justify-center border border-text-main/12 bg-black/25 p-1.5 text-text-dim transition-colors hover:border-accent-danger/30 hover:text-accent-danger"
                 v-tooltip="'关闭冲突处理弹窗，稍后再处理这些重复副本'" @click="visible = false" >
-                <XCircle class="size-4" />
+                <X class="size-4" />
               </button>
             </div>
           </div>
@@ -55,11 +55,11 @@
                     <span class="truncate font-mono text-sm font-black text-accent-highlight">
                           {{ group.package_id }}
                     </span>
-                    <span
-                      class="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em]"
+                    <span tabindex="0" class="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] cursor-help"
                       :class="group._type === 'hard'
                         ? 'border-accent-danger/28 bg-accent-danger/10 text-accent-danger'
                         : 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'"
+                      v-tooltip="group._type === 'hard' ? '!!在同一个目录下发现重复文件，这可能会引起冲突，需要处理!!' : '不同目录下发现重复文件，这是正常现象，可选择处理，游戏会默认使用本地版本'"
                     >
                       {{ group._type === 'hard' ? '硬冲突' : '共存' }}
                     </span>
@@ -70,8 +70,7 @@
                 </div>
 
                 <div class="space-y-2 p-3">
-                  <div v-for="mod in group.items"
-                    :key="getItemKey(mod)"
+                  <div v-for="mod in group.items" :key="getItemKey(mod)"
                     class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-all"
                     :class="isWinner(group, mod)
                       ? 'border-accent-success/30 bg-accent-success/8'
@@ -122,7 +121,7 @@
                         v-tooltip="'将该副本复制为本地模组，后续不再受原来源更新影响'"
                         @click="handleLocalize(mod)"
                       >
-                        本地化
+                        本地化共存
                       </button>
                       <button v-if="mod.workshop_id && normalizeStore(mod.store) === 'workshop'"
                         class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-text-dim transition-colors hover:text-accent-danger"
@@ -224,6 +223,11 @@
                 <div v-if="summary.workshopDeleteCount > 0" class="mt-2 text-accent-warn">
                   删除工坊副本后，Steam 以后可能重新下载。
                 </div>
+                <br>
+                <div>
+                  <p class="text-accent-tip">对于共存模组（位于不同目录），游戏本身会优先加载本地目录版本。</p><br>
+                  <p class="text-accent-warn">对于冲突模组（位于同一目录），游戏本身会选择一个加载，因各种因素下加载的版本可能不是最正确的，建议手动选择保留正确项，其余禁用或删除，确保加载正确。</p>
+                </div>
               </section>
 
               <section v-if="submitFeedback" class="rounded-[18px] border p-3 text-[11px]"
@@ -247,7 +251,11 @@
 
         <div class="flex shrink-0 items-center justify-between gap-3 border-t border-text-main/8 bg-black/22 px-4 py-3" data-tour="conflict-submit">
           <div class="text-[11px] text-text-dim">
-            提交后会自动刷新并重新扫描，保证冲突状态立即同步。
+            选择删除将直接移除文件至回收站，操作不可逆。禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。
+            <div class="text-accent-warn">注意：直接删除创意工坊模组后，Steam 可能会重新下载。
+              <span class="text-accent-warning">禁用模组后可以在 库存枢纽 中对应列表筛选“已禁用”查看或解禁。</span>
+            </div>
+            
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button class="rounded-xl border border-text-main/10 bg-text-main/5 px-4 py-2 text-xs font-bold text-text-dim transition-colors hover:border-text-main/20 hover:text-text-main"

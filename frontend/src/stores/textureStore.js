@@ -371,11 +371,11 @@ export const useTextureStore = defineStore('texture', () => {
 
   const cancelCurrentTask = async () => {
     if (!window.pywebview) return
-    const taskId = currentOptimizationTaskId.value || currentAnalysisTaskId.value || currentTaskId.value
-    if (!taskId) return
+    const task = currentTask.value
+    if (!task) return
     try {
-      const res = await window.pywebview.api.texture_cancel_task(taskId)
-      if (appStore.checkResult(res, "取消贴图任务", false)) {
+      const ok = await appStore.cancelTaskByProgress(task)
+      if (ok) {
         markTaskCancelling()
       }
     } catch (e) {

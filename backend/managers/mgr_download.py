@@ -292,14 +292,31 @@ class DownloadManager:
                 logger.debug(f"Download size range probe failed [{url}]: {e}")
         return 0
 
+    @staticmethod
+    def _set_task_phase(task: DownloadTask, phase: str | None):
+        task.metadata = dict(task.metadata or {})
+        if phase:
+            task.metadata['phase'] = phase
+        else:
+            task.metadata.pop('phase', None)
+
     def cancel_task(self, task_id: str):
         with self._lock:
             task = self.tasks.get(task_id)
             if task and task.status in [TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.VERIFYING]:
                 task._cancel_event.set()
-                task.status = TaskStatus.CANCELLED
+                future = task._future
+                if task.status == TaskStatus.PENDING and future and future.cancel():
+                    self._set_task_phase(task, None)
+                    task.status = TaskStatus.CANCELLED
+                    task.speed = "Cancelled"
+                    self._emit_progress(task)
+                    logger.info(f"Pending task cancelled before start: {task_id}")
+                    return
+
+                self._set_task_phase(task, "cancelling")
                 self._emit_progress(task)
-                logger.info(f"Task cancelled: {task_id}")
+                logger.info(f"Task cancellation requested: {task_id}")
 
     def get_tasks_info(self):
         """获取所有任务的简要信息 (供前端轮询或初始化)"""
@@ -317,6 +334,13 @@ class DownloadManager:
 
     def _download_worker(self, task: DownloadTask):
         """实际下载执行逻辑"""
+        if task._cancel_event.is_set():
+            self._set_task_phase(task, None)
+            task.status = TaskStatus.CANCELLED
+            task.speed = "Cancelled"
+            self._emit_progress(task)
+            return
+
         task.status = TaskStatus.RUNNING
         # 初始状态发送
         self._emit_progress(task)
@@ -438,6 +462,7 @@ class DownloadManager:
             shutil.move(temp_path, task.dest_path)
             
             # 最后发送 COMPLETED，确保 100%
+            self._set_task_phase(task, None)
             task.status = TaskStatus.COMPLETED
             task.speed = "Done"
             self._emit_progress(task)
@@ -451,10 +476,13 @@ class DownloadManager:
                     logger.error(f"Callback error in task {task.task_id}: {cb_e}")
         except InterruptedError:
             # 取消时不视为错误
+            self._set_task_phase(task, None)
             task.status = TaskStatus.CANCELLED
+            task.speed = "Cancelled"
             self._cleanup(temp_path)
             self._emit_progress(task)
         except Exception as e:
+            self._set_task_phase(task, None)
             task.status = TaskStatus.ERROR
             task.error_msg = str(e)
             self._cleanup(temp_path)

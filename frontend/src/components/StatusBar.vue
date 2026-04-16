@@ -23,7 +23,7 @@
     <Teleport to="body">
       <transition name="slide-up">
         <div v-if="activeTask" class="fixed bottom-0 left-1/2 z-9999 -translate-x-1/2 group/status">
-          <div class="flex items-center gap-3 bg-bg-surface px-4 pt-1 pb-0.5 rounded-t-lg border-t shadow-[0_-4px_10px_rgba(0,0,0,0.3)] min-w-90 max-w-190 justify-center"
+          <div class="flex items-center gap-2 bg-bg-surface px-2 pt-1 pb-0.5 rounded-t-lg border-t shadow-[0_-4px_10px_rgba(0,0,0,0.3)] min-w-90 max-w-190 justify-center"
             :class="taskAccentBorder(activeTask)">
             <component :is="taskIcon(activeTask)" class="h-4 w-4 shrink-0" :class="taskAccentText(activeTask, true)" />
 
@@ -34,19 +34,29 @@
               </div>
             </div>
 
-            <div class="min-w-0 flex items-center gap-2 text-[0.7rem] font-mono">
+            <div class="min-w-0 flex items-center gap-1 text-[0.7rem] font-mono">
               <span class="font-bold shrink-0" :class="taskAccentText(activeTask)">{{ taskPercent(activeTask) }}%</span>
               <span class="shrink-0 text-text-main/75">{{ taskTitle(activeTask) }}</span>
               <span class="truncate max-w-90 text-text-dim" :title="taskMessage(activeTask)">{{ taskMessage(activeTask) }}</span>
-              <span v-if="taskExtra(activeTask)" class="shrink-0 text-text-main/50 scale-90">{{ taskExtra(activeTask) }}</span>
+              <span v-if="taskExtra(activeTask)" class="shrink-0 text-text-main/50 text-[0.62rem]">{{ taskExtra(activeTask) }}</span>
             </div>
 
             <div v-if="taskStore.tasks.length > 1" class="shrink-0 rounded-full px-1.5 py-0.5 bg-text-main/8 text-xs text-text-main/70 font-bold">
               +{{ taskStore.tasks.length - 1 }}
             </div>
+
+            <button v-if="appStore.supportsTaskCancellation(activeTask)"
+              class="shrink-0 rounded-md p-1 transition-colors disabled:cursor-wait"
+              :class="appStore.canCancelTask(activeTask) ? 'text-text-main/55 hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
+              :disabled="!appStore.canCancelTask(activeTask)"
+              :title="appStore.isTaskCancelPending(activeTask?.id) ? '正在尝试取消任务' : '取消任务'"
+              @click.stop="cancelTask(activeTask)"
+            >
+              <component :is="appStore.isTaskCancelPending(activeTask?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(activeTask?.id) }" />
+            </button>
           </div>
 
-          <div class="absolute bottom-full left-1/2 mb-2 w-120 max-w-[90vw] -translate-x-1/2 rounded-2xl border border-text-main/10 bg-bg-surface/95 backdrop-blur-md shadow-2xl p-3 opacity-0 invisible translate-y-2 transition-all duration-200 group-hover/status:opacity-100 group-hover/status:visible group-hover/status:translate-y-0">
+          <div class="absolute bottom-full left-1/2 mb-2 w-120 max-w-[90vw] -translate-x-1/2 rounded-2xl border border-text-main/10 bg-bg-surface/95 backdrop-blur-md shadow-2xl p-3 opacity-0 invisible transition-all duration-200 group-hover/status:opacity-100 group-hover/status:visible group-hover/status:translate-y-0">
             <div class="mb-2 flex items-center justify-between">
               <div class="text-[0.7rem] font-bold tracking-wider text-text-main/80">任务队列</div>
               <div class="text-[0.65rem] text-text-main/50">{{ taskStore.tasks.length }} 个任务</div>
@@ -57,19 +67,35 @@
                 <div class="flex items-center gap-2">
                   <component :is="taskIcon(task)" class="h-4 w-4 shrink-0" :class="taskAccentText(task, true)" />
                   <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center justify-between gap-1">
                       <span class="truncate font-bold text-text-main">{{ taskTitle(task) }}</span>
-                      <span class="shrink-0 text-[0.65rem] font-mono" :class="taskAccentText(task)">{{ taskPercent(task) }}%</span>
+                      
+                      <div class="flex shrink-0 items-center gap-2">
+                        <button v-if="appStore.supportsTaskCancellation(task)"
+                          class="rounded-md p-1 transition-colors disabled:cursor-wait"
+                          :class="appStore.canCancelTask(task) ? 'text-text-main/45 hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
+                          :disabled="!appStore.canCancelTask(task)"
+                          :title="appStore.isTaskCancelPending(task?.id) ? '正在尝试取消任务' : '取消任务'"
+                          @click.stop="cancelTask(task)"
+                        >
+                          <component :is="appStore.isTaskCancelPending(task?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(task?.id) }" />
+                        </button>
+                      </div>
                     </div>
-                    <div class="mt-1 flex items-center gap-2 text-[0.65rem] text-text-dim">
+                    <div class="mt-1 flex items-center justify-between gap-1 text-[0.65rem] text-text-dim">
                       <span class="truncate" :title="taskMessage(task)">{{ taskMessage(task) }}</span>
                       <span v-if="taskExtra(task)" class="shrink-0 text-text-main/45">{{ taskExtra(task) }}</span>
                     </div>
                   </div>
                 </div>
-                <div class="mt-2 h-1.5 rounded-full bg-text-main/10 overflow-hidden">
-                  <div class="h-full rounded-full transition-all duration-300" :class="taskAccentBar(task)" :style="{ width: `${taskPercent(task)}%` }"></div>
+
+                <div class="mt-2 h-1.5 flex items-center gap-1 overflow-hidden w-full">
+                  <div class="flex-1 w-full h-full rounded-full bg-text-main/10">
+                    <div class="h-full rounded-full transition-all duration-300" :class="taskAccentBar(task)" :style="{ width: `${taskPercent(task)}%` }"></div>
+                  </div>
+                  <span class="text-[0.65rem] font-mono w-5 text-center flex items-center justify-center" :class="taskAccentText(task)">{{ taskPercent(task) }}%</span>
                 </div>
+
               </div>
             </div>
           </div>
@@ -87,7 +113,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Bot, Download, Image, Radar } from 'lucide-vue-next'
+import { Bot, Download, Image, LoaderCircle, Radar, X } from 'lucide-vue-next'
 import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../stores/profileStore'
@@ -119,6 +145,10 @@ const taskAccentText = (task, animated = false) => `${resolveTaskMeta(task).text
 const taskAccentBar = (task) => resolveTaskMeta(task).bar
 const taskAccentBorder = (task) => resolveTaskMeta(task).border
 const taskPercent = (task) => Math.max(0, Math.min(100, Number(task?.progress || 0)))
+
+const cancelTask = async (task) => {
+  await appStore.cancelTaskByProgress(task)
+}
 
 const taskTitle = (task) => {
   const type = String(task?.type || '')
@@ -152,6 +182,7 @@ const taskSizeProgress = (task) => {
 
 const taskExtra = (task) => {
   const phase = String(task?.metrics?.phase || '')
+  if (appStore.isTaskCancelPending(task?.id) || phase === 'cancelling') return '正在取消'
   if (phase === 'verifying') return '校验中'
   const parts = []
   const sizeProgress = taskSizeProgress(task)

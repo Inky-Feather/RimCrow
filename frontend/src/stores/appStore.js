@@ -54,6 +54,9 @@ export const useAppStore = defineStore('app', () => {
   })
   const aiBatchSessions = ref(new Map())
   const currentAiBatchTaskId = ref('')
+  const cancelPendingTaskIds = ref(new Set())
+  const cancelPendingTimers = new Map()
+  const CANCELLATION_PENDING_TIMEOUT_MS = 15000
 
   const upgradeContext = ref({}); // 升级上下文
 
@@ -254,6 +257,43 @@ export const useAppStore = defineStore('app', () => {
       : taskStore.getLatestTaskByType('ai-batch')
   ))
   const updateInstallPrompted = new Set()
+  const cancellableTaskTypes = new Set(['scan', 'download', 'update', 'localize', 'steamcmd-init', 'texture-opt', 'texture-opt-analyze'])
+
+  const isTaskCancelPending = (taskId = '') => cancelPendingTaskIds.value.has(String(taskId || ''))
+
+  const clearTaskCancelPending = (taskId = '') => {
+    const normalizedTaskId = String(taskId || '')
+    if (!normalizedTaskId) return
+    const timer = cancelPendingTimers.get(normalizedTaskId)
+    if (timer) {
+      clearTimeout(timer)
+      cancelPendingTimers.delete(normalizedTaskId)
+    }
+    if (!cancelPendingTaskIds.value.has(normalizedTaskId)) return
+    const next = new Set(cancelPendingTaskIds.value)
+    next.delete(normalizedTaskId)
+    cancelPendingTaskIds.value = next
+  }
+
+  const markTaskCancelPending = (taskId = '') => {
+    const normalizedTaskId = String(taskId || '')
+    if (!normalizedTaskId) return
+    const next = new Set(cancelPendingTaskIds.value)
+    next.add(normalizedTaskId)
+    cancelPendingTaskIds.value = next
+    const existingTimer = cancelPendingTimers.get(normalizedTaskId)
+    if (existingTimer) clearTimeout(existingTimer)
+    const timer = window.setTimeout(() => clearTaskCancelPending(normalizedTaskId), CANCELLATION_PENDING_TIMEOUT_MS)
+    cancelPendingTimers.set(normalizedTaskId, timer)
+  }
+
+  const supportsTaskCancellation = (task) => {
+    const type = String(task?.type || '')
+    const status = String(task?.status || '')
+    return ['pending', 'running'].includes(status) && cancellableTaskTypes.has(type)
+  }
+
+  const canCancelTask = (task) => supportsTaskCancellation(task) && !isTaskCancelPending(task?.id)
 
   // 监听字体大小变化，实时更新根字号
   watch(() => settings.value.ui.font_size, (newSize) => {
@@ -481,6 +521,9 @@ export const useAppStore = defineStore('app', () => {
     window.addEventListener('global-progress', (e) => {
       const task = taskStore.upsertTask(e.detail)
       if (!task) return
+      if (['success', 'failed', 'cancelled'].includes(task.status)) {
+        clearTaskCancelPending(task.id)
+      }
 
       if (task.type === 'texture-opt' || task.type === 'texture-opt-analyze') {
         import('./textureStore').then(({ useTextureStore }) => {
@@ -600,16 +643,35 @@ export const useAppStore = defineStore('app', () => {
       await refreshData()
     }
   }
-  const cancelTextureTask = async (taskId) => {
-    if (!window.pywebview || !taskId) return false
+  const cancelTaskByProgress = async (task) => {
+    if (!window.pywebview || !task?.id) return false
+    if (!supportsTaskCancellation(task)) return false
+    if (isTaskCancelPending(task.id)) return true
+    markTaskCancelPending(task.id)
     try {
-      const res = await window.pywebview.api.texture_cancel_task(taskId)
-      return checkResult(res, '取消贴图任务', false)
+      const displayName = task?.metrics?.title || task?.message || '任务'
+      const res = await window.pywebview.api.cancel_progress_task(task.id, task.type)
+      if (checkResult(res, `取消${displayName}`, false)) {
+        return true
+      }
+      clearTaskCancelPending(task.id)
+      return false
     } catch (e) {
-      console.error('取消贴图任务异常:', e)
-      toast.error(`取消贴图任务异常: \n${e.message}`)
+      clearTaskCancelPending(task.id)
+      console.error('取消任务异常:', e)
+      toast.error(`取消任务异常: \n${e.message}`)
       return false
     }
+  }
+
+  const cancelTextureTask = async (taskId, taskType = 'texture-opt') => {
+    return cancelTaskByProgress({
+      id: taskId,
+      type: taskType,
+      status: 'running',
+      message: '贴图任务',
+      metrics: { title: '贴图任务' },
+    })
   }
   // 变更 UI 状态
   const toggleUiState = (key) => {
@@ -1234,7 +1296,7 @@ export const useAppStore = defineStore('app', () => {
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab, cancelTextureTask,
+    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
     checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
     // AI处理
