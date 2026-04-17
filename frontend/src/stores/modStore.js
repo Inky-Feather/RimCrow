@@ -34,6 +34,7 @@ export const useModStore = defineStore('mods', () => {
   const selectedIds = ref([])         // 已选中的 Mod ID
   const lastSelectedMod = ref(null)   // 最后选中的 Mod 对象
   const currentTargetId = ref('')     // 当前目标 ID (查找定位用)
+  const isDraggingMod = ref(false)    // 是否正在拖动模组项
 
   // 列表历史（仅当前会话内存态）
   const LIST_HISTORY_LIMIT = 100
@@ -1559,7 +1560,7 @@ export const useModStore = defineStore('mods', () => {
     // State
     allModsMap, dataVersion, inactiveIds, tempIds, activeIds, interlocksMap, savedInactiveIds, interlockDetailsMap, 
     savedActiveIds, activeLoadModifyTime, conflictList, coexistenceList,
-    selectedIds, lastSelectedMod, currentTargetId, 
+    selectedIds, lastSelectedMod, currentTargetId, isDraggingMod,
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
     // Getters

@@ -8,7 +8,7 @@
         {{ title }}
       </span>
       <span :class="`text-xs bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
-        {{ groupList.length }}
+        {{ safeGroupList.length }}
       </span>
     </div>
     <!-- 搜索栏 -->
@@ -54,21 +54,22 @@
       <div class="h-full px-1 relative" @click.self="modStore.clearSelection()">
 
 
-        <div v-if="groupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-gray-600 text-xs select-none pointer-events-none">
+        <div v-if="safeGroupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-gray-600 text-xs select-none pointer-events-none">
             可点击 “ + ” 按钮新建分组
         </div>
 
-        <VirtualList v-model="groupList" :key="listKey" dataKey="group_id" :keeps="50" class="h-full p-1" 
+        <VirtualList v-model="internalGroupListProxy" :key="listKey" dataKey="group_id" :keeps="50" class="h-full p-1" 
           placeholderClass="ghost" wrapClass="space-y-2 min-h-full " ref="vListRef" :delay="appStore.settings.ui.drag_delay"
-	        :appendToBody="true" :fallbackOnBody="true" :scrollSpeed="{ x: 0, y: 10 }" handle=".drag-handle" :sortable="!appStore.isLoading" :disabled="appStore.isLoading"
+	        :appendToBody="true" :fallbackOnBody="true" :scrollSpeed="{ x: 0, y: 10 }" handle=".drag-handle" :sortable="!appStore.isLoading && !modStore.isDraggingMod" :disabled="appStore.isLoading || modStore.isDraggingMod"
           :group="{ name: 'groups', pull:'clone', put: false, revertDrag: true }" :animation="150"
           @drop="groupReorder" @drag="startDrag">
           <template v-slot:item="{ record, index, dataKey }">
-            <GroupItem :id="dataKey" :key="dataKey" :index="index" :groupData="record" :list-color="listColor"
+            <GroupItem v-if="isValidGroupSlot(record, dataKey)" :id="dataKey" :key="dataKey" :index="index" :groupData="record" :list-color="listColor"
               :expanded="expandedIds.has(record.group_id)" :isHighlight="currentSearchGroupId === dataKey"
               @toggle="toggle" @delete-group="deleteGroup"
               @remove-item="removeMod" @update-group="updateGroup" @update-children="updateChildren">
             </GroupItem>
+            <div v-else :key="`invalid-${index}`" class="hidden h-0 overflow-hidden" aria-hidden="true"></div>
           </template>
         </VirtualList>
 
@@ -142,18 +143,33 @@ const getNextSearchIndex = (currentIndex: number, resultCount: number, forward: 
 }
 
 
+const isValidGroupRecord = (item: any) => {
+  return !!item && typeof item.group_id === 'string' && item.group_id.trim().length > 0
+}
+const isValidGroupSlot = (record: any, dataKey: unknown) => {
+  return isValidGroupRecord(record) && typeof dataKey === 'string' && dataKey === record.group_id
+}
+const safeGroupList = computed(() => props.modelValue.filter(item => isValidGroupRecord(item)))
 // 用 Set 存储所有被展开的 ID
-const expandedIds = computed(() => new Set(groupList.value.filter(item => item.is_expanded).map(item => item.group_id)))
+const expandedIds = computed(() => new Set(safeGroupList.value.filter(item => item.is_expanded).map(item => item.group_id)))
 
 // 分组列表
 const groupList = computed({
     get() {
-        return props.modelValue
+        return safeGroupList.value
     },
     set(val: any[]) {
         // 正常模式：直接更新
         // emit('update:modelValue', val)
     }
+})
+const internalGroupListProxy = computed({
+  get() {
+    return safeGroupList.value.map(group => ({ ...group }))
+  },
+  set(_val: any[]) {
+    // 真实排序由 drop 事件统一回写，避免拖拽库直接污染 source of truth。
+  }
 })
 
 // 分组帮助提示
@@ -179,7 +195,7 @@ const executeSearch = (forward: boolean) => {
   // 搜索文本改变时更新结果
   if (searchText.value !== oldSearchText.value) {
     // console.log(groupList.value)
-    searchResults.value = groupList.value.filter(item => item.name.includes(searchText.value))
+    searchResults.value = safeGroupList.value.filter(item => item.name.includes(searchText.value))
     currentSearchIndex.value = -1
   }
   // 搜索无结果时直接退出，避免出现 NaN 索引
@@ -194,7 +210,7 @@ const executeSearch = (forward: boolean) => {
   if (currentSearchIndex.value === -1) return
   // 更新当前搜索的分组 ID
   currentSearchGroupId.value = searchResults.value[currentSearchIndex.value].group_id
-  const index = groupList.value.findIndex(item => item.group_id === currentSearchGroupId.value)
+  const index = safeGroupList.value.findIndex(item => item.group_id === currentSearchGroupId.value)
   if (index !== -1) {
     // 稍微延迟一下确保虚拟列表渲染就绪
     setTimeout(() => {
@@ -269,14 +285,17 @@ const cancelActiveDrag = async () => {
   await nextTick()
   listKey.value += 1
 }
-const startDrag = () => {
+const startDrag = (e) => {
+  if (!isValidGroupRecord(e?.item)) {
+    return
+  }
   // 标记当前正在拖动分组
   isDragging.value = true
   groupStore.isDraggingGroup = true
 }
 // 分组排序
 const groupReorder = (e) => {
-  if (suppressNextDrop.value || appStore.isLoading) {
+  if (suppressNextDrop.value || appStore.isLoading || modStore.isDraggingMod) {
     suppressNextDrop.value = false
     finishDragSession()
     return
@@ -290,13 +309,22 @@ const groupReorder = (e) => {
   const isCrossListDrop = e?.event?.from !== e?.event?.to
   if (isCrossListDrop || e.newIndex === -1) {
     console.log("分组排序错误")
+    listKey.value += 1
     return
   }
-  const nextGroupIds = Array.isArray(e.list)
-    ? e.list.map(item => item.group_id).filter(Boolean)
-    : groupList.value.map(group => group.group_id).filter(Boolean)
+  const rawList = Array.isArray(e.list) ? e.list : safeGroupList.value
+  if (Array.isArray(e.list) && rawList.some(item => !isValidGroupRecord(item))) {
+    console.log("分组排序错误")
+    listKey.value += 1
+    return
+  }
+  const nextGroupIds = rawList
+    .map(item => item.group_id)
+    .filter(Boolean)
   if (nextGroupIds.length > 0) {
     groupStore.groupReorder(nextGroupIds);
+  } else {
+    listKey.value += 1
   }
 }
 // 移除模组
