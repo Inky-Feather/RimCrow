@@ -46,6 +46,10 @@ class ModScanner:
         self._stop_requested = False  # 中断请求标志
         self._current_task_id: str | None = None
 
+    @property
+    def is_scanning(self) -> bool:
+        return self._is_scanning
+
     def stop_scan(self, task_id: str | None = None) -> bool:
         """外部调用：请求中断扫描"""
         if not self._is_scanning:
@@ -56,7 +60,16 @@ class ModScanner:
         self._stop_requested = True
         logger.warning("Scan interruption requested by user. task_id=%s", self._current_task_id)
         return True
-            
+
+    def wait_until_idle(self, timeout: float = 10.0, poll_interval: float = 0.1) -> bool:
+        """等待扫描任务彻底结束并释放线程内连接。"""
+        deadline = time.time() + max(0.0, timeout)
+        while time.time() < deadline:
+            if not self._is_scanning:
+                return True
+            time.sleep(max(0.01, poll_interval))
+        return not self._is_scanning
+
     def scan_paths_async(self, search_paths, forced_update=False):
         """
         异步扫描入口。立即返回，任务在后台运行。

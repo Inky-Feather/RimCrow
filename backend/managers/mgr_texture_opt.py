@@ -320,6 +320,28 @@ class TextureOptimizationManager:
         self._manifest_root = Path(CACHE_DIR) / "texture_opt" / "manifests"
         self._manifest_root.mkdir(parents=True, exist_ok=True)
 
+    def get_active_analysis_task_ids(self) -> list[str]:
+        with self._lock:
+            return list(self._analysis_tasks.keys())
+
+    def cancel_all_analysis_tasks(self) -> list[str]:
+        task_ids = self.get_active_analysis_task_ids()
+        for task_id in task_ids:
+            event = self._analysis_tasks.get(task_id)
+            if event:
+                event.set()
+        return task_ids
+
+    def wait_for_analysis_idle(self, timeout: float = 10.0, poll_interval: float = 0.1) -> bool:
+        deadline = time.time() + max(0.0, timeout)
+        while time.time() < deadline:
+            with self._lock:
+                if not self._analysis_tasks:
+                    return True
+            time.sleep(max(0.01, poll_interval))
+        with self._lock:
+            return not self._analysis_tasks
+
     def start_task(self, mod_paths: list[str], action: str = "optimize", options: dict[str, Any] | None = None) -> dict[str, Any]:
         mod_paths = self._normalize_mod_paths(mod_paths)
         if not mod_paths:

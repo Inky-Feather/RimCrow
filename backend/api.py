@@ -43,10 +43,18 @@ from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, init_db, db
+from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.models_ext import WorkshopMeta
 from backend.database.dao_ext import ExtDAO
+from backend.database.runtime import close_db, clear_db, init_db
+from backend.database.repair import (
+    _cleanup_database_sidecars,
+    _cleanup_repair_artifacts,
+    _remove_file_with_retry,
+    prepare_database_for_startup,
+    prepare_manual_database_repair,
+)
 
 # 3. 引入业务逻辑管理器
 from backend.scanner.parser_dlc import DLCParser
@@ -69,6 +77,7 @@ from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.browser_runtime import build_sub_browser_target_url
+from backend.utils.restart import launch_new_application
 from playhouse.shortcuts import model_to_dict
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
@@ -178,13 +187,6 @@ class API:
 
     def __init__(self, runtime_mode: str = "desktop"):
         logger.info("API Layer Initializing...")
-        # 1. 初始化数据库
-        # 数据库文件放在当前工作目录的data目录下
-        db_path = str(DATA_DIR / 'mod_manager.db')
-        self.is_first_db_init = not os.path.exists(db_path) # 标记是否首次初始化数据库
-        init_db(db_path)
-        # 当 pywebview 试图序列化 API 给 JS 用时，会试图深入序列化，
-        # 公开属性会导致陷入无限递归（Window -> API -> Window -> ...），最终导致堆栈溢出崩溃
         self._window = None  # 私有属性
         self._runtime_mode = str(runtime_mode or "desktop").strip().lower() or "desktop"
         self._upgrade_context = {
@@ -195,12 +197,24 @@ class API:
             "pending_actions": [],    # 记录需要前端配合的操作 (如 'show_news', 'force_scan')
             "messages": []            # 具体的提示文本
         }
+        # 1. 初始化数据库
+        # 数据库文件放在当前工作目录的 data 目录下。
+        # 启动前先跑一遍数据库预处理：应用待切换修复库、尝试被动热修复、必要时降级为空库继续启动。
+        db_path = str(DATA_DIR / 'mod_manager.db')
+        startup_repair_result = prepare_database_for_startup(db_path)
+        self.is_first_db_init = bool(startup_repair_result.get('created_clean_database')) or (not os.path.exists(db_path))
+        init_ok = init_db(db_path)
+        if not init_ok:
+            self._upgrade_context["messages"].append("数据库加载失败，部分功能可能暂时不可用。")
+        self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
+        self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
         self._native_drop_bound = False
         self._native_drop_selector = '#backup-drop-zone'
         self._native_drop_element = None
         self._native_drop_handler = None
         self._browser_base_url = ""
         self._browser_import_files: set[str] = set()
+        self._db_maintenance_lock = threading.Lock()
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
@@ -289,9 +303,15 @@ class API:
         """实例初始化时运行的升级逻辑"""
         from backend.database.models import SystemInfo
         last_ver_record = SystemInfo.get_or_none(SystemInfo.key == 'app_version')
-        last_version = last_ver_record.value if last_ver_record else "0.17.9"
         current_version = __version__
-        if last_version == current_version: return
+        if not last_ver_record:
+            # 新库、重置库或修复后缺失元数据的库，不应被误判成跨版本升级。
+            SystemInfo.insert(key='app_version', value=current_version).on_conflict_replace().execute()
+            return
+
+        last_version = str(last_ver_record.value or '').strip() or current_version
+        if last_version == current_version:
+            return
 
         # 标记版本已变动
         self._upgrade_context["version_changed"] = True
@@ -341,7 +361,6 @@ class API:
         if self.game_monitor: self.game_monitor.running = False
         # 暂停所有事件发送
         EventBus.pause()
-        from backend.database.models import close_db
         logger.info("Closing database connection...")
         close_db()
         # 强制杀死正在运行的 SteamCMD 进程
@@ -644,57 +663,154 @@ class API:
             "messages": []
         }
     
+    def _prepare_database_maintenance(self, timeout: float = 12.0):
+        """
+        在重置/修复数据库前，先停止会持有 SQLite 连接的后台任务。
+        """
+        deadline = time.time() + max(1.0, timeout)
+
+        if self.scanner and self.scanner.is_scanning:
+            logger.warning("数据库维护前检测到扫描任务仍在运行，准备中止并等待释放连接")
+            self.scanner.stop_scan()
+
+        if self.texture_mgr:
+            active_analysis_tasks = self.texture_mgr.cancel_all_analysis_tasks()
+            if active_analysis_tasks:
+                logger.warning("数据库维护前取消贴图分析任务: %s", active_analysis_tasks)
+
+        remaining = max(0.1, deadline - time.time())
+        if self.scanner and not self.scanner.wait_until_idle(timeout=remaining):
+            return False, "当前有扫描任务正在运行，请稍后再试。"
+
+        remaining = max(0.1, deadline - time.time())
+        if self.texture_mgr and not self.texture_mgr.wait_for_analysis_idle(timeout=remaining):
+            return False, "当前有贴图任务正在运行，请稍后再试。"
+
+        return True, ""
+
+    def _close_database_for_maintenance(self):
+        """
+        在数据库维护前主动关闭连接并释放文件句柄。
+        原因：Windows 下 SQLite 文件切换、删除、重命名对句柄占用非常敏感。
+        """
+        try:
+            close_db()
+        except Exception:
+            logger.warning("数据库维护前关闭连接失败", exc_info=True)
+        gc.collect()
+        time.sleep(0.5)
+
+    def _restart_application(self, delay_seconds: float = 1.0):
+        """
+        延迟重启当前应用实例，确保 API 响应先返回给前端。
+        """
+        def worker():
+            time.sleep(max(0.1, delay_seconds))
+            try:
+                self.cleanup()
+            except Exception:
+                logger.warning("重启前清理资源失败", exc_info=True)
+
+            try:
+                launch_new_application()
+                logger.info("数据库修复完成，已拉起新实例，当前进程准备退出。")
+            except Exception:
+                logger.error("重启应用失败", exc_info=True)
+                return
+
+            os._exit(0)
+
+        threading.Thread(target=worker, daemon=True, name="RestartAfterDbRepair").start()
+
     @log_api_call
     def reset_database(self):
         """
         重置数据库：强制关闭连接，删除文件，重建。
         """
-        import time
-        from backend.database.models import db, init_db, clear_db
+        from backend.database.models import SystemInfo
         
+        if not self._db_maintenance_lock.acquire(blocking=False):
+            return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
-            # 1. 强制关闭连接
-            if not db.is_closed():
-                db.commit() # 主动提交一次事务，彻底释放 WAL 临时文件
-                db.close()
-            gc.collect() # 强制回收资源，确保文件句柄释放
-            time.sleep(0.5) # 给操作系统一点缓冲时间
-            # 关键：对于 SqliteExtDatabase，有时候即使 close 了，
-            # 内部连接池可能还持有引用。如果是 Peewee，通常 close 足够。
-            # 但为了保险，可以设为 None 或者再次 init。
-            
-            # 2. 定义文件路径
-            db_dir = str(DATA_DIR)
-            db_path = str(DATA_DIR / 'mod_manager.db')
-            wal_path = db_path + '-wal'
-            shm_path = db_path + '-shm'
+            ready, reason = self._prepare_database_maintenance()
+            if not ready:
+                return ApiResponse.warning(reason)
+            self._close_database_for_maintenance()
 
-            # 3. 尝试删除 (带重试机制，防止系统延迟释放)
-            for _ in range(3):
-                try:
-                    if os.path.exists(db_path): os.remove(db_path)
-                    if os.path.exists(wal_path): os.remove(wal_path)
-                    if os.path.exists(shm_path): os.remove(shm_path)
-                    break # 删除成功，跳出循环
-                except PermissionError:
-                    # 如果还是占用，等待 1s 重试
-                    time.sleep(1)
-            
-            # 再次检查是否删除成功，若存在则尝试清空数据库
+            # 清理修复残留，避免重置后下次启动又应用旧的修复候选库。
+            db_path = str(DATA_DIR / 'mod_manager.db')
+            _cleanup_repair_artifacts(db_path, keep_failed_source=False)
+
+            # 先尽量物理删除整库；删除失败时再回退到 clear_db，避免因为偶发占用直接整次失败。
+            _remove_file_with_retry(db_path, retries=5, delay=0.4)
+            _cleanup_database_sidecars(db_path)
+
             if os.path.exists(db_path):
                 result = clear_db()
                 if not result:
-                    return ApiResponse.error("清空数据库失败")
+                    return ApiResponse.error("重置失败，请关闭相关操作后重试。")
 
             self.is_first_db_init = True
-            # 4. 重新初始化
-            init_db(db_path)
+            init_ok = init_db(db_path)
+            if not init_ok:
+                return ApiResponse.error("重置失败，数据库无法重新创建。")
+            # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
+            SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
             
-            return ApiResponse.success({"message": "数据库已重置"})
+            return ApiResponse.success({"message": "数据库已重置。"})
         except Exception as e:
             import traceback
             traceback.print_exc()
             return ApiResponse.error(str(e))
+        finally:
+            self._db_maintenance_lock.release()
+
+    @log_api_call
+    def repair_database(self):
+        """
+        主动触发数据库修复：离线生成并校验候选库，成功后仅提示前端可重启切换。
+        """
+        if not self._db_maintenance_lock.acquire(blocking=False):
+            return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
+        try:
+            ready, reason = self._prepare_database_maintenance()
+            if not ready:
+                return ApiResponse.warning(reason)
+            db_path = str(DATA_DIR / 'mod_manager.db')
+            result = prepare_manual_database_repair(db_path)
+            if not result:
+                return ApiResponse.error("修复失败，请稍后重试。")
+            if result.get("initialized"):
+                self.is_first_db_init = True
+                return ApiResponse.success({
+                    "message": "未找到本地数据库，已为你重新创建。",
+                    "restart_required": False,
+                    "initialized": True,
+                })
+            if not result.get("restart_required"):
+                return ApiResponse.error("修复失败，请稍后重试。")
+            return ApiResponse.success({
+                "message": "修复已完成，重启软件后生效。",
+                "restart_required": True,
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return ApiResponse.error(str(e))
+        finally:
+            self._db_maintenance_lock.release()
+
+    @log_api_call
+    def restart_application(self):
+        """
+        主动重启应用。
+        用途：手动修复准备完成后，由前端在用户确认后触发重启，不再在后端静默自动重启。
+        """
+        ready, reason = self._prepare_database_maintenance(timeout=15.0)
+        if not ready:
+            return ApiResponse.warning(reason)
+        self._restart_application()
+        return ApiResponse.success({"restarting": True}, message="软件即将重启。")
     
     @log_api_call
     def perform_database_cleanup(self):
@@ -2241,7 +2357,7 @@ class API:
                 EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
 
     @log_api_call
-    def steam_subscribe(self, workshop_ids: str):
+    def steam_subscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端订阅"""
         # 前置拦截
         if not self.steam_mgr.is_steam_running():
@@ -2256,7 +2372,7 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def steam_unsubscribe(self, workshop_ids: str):
+    def steam_unsubscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端取消订阅"""
         # 前置拦截
         if not self.steam_mgr.is_steam_running():
@@ -2271,7 +2387,7 @@ class API:
             return ApiResponse.error(str(e))
     
     @log_api_call
-    def steam_cancle_task(self, task_id):
+    def steam_cancle_task(self, task_id: str):
         """取消 Steam 客户端任务"""
         success = self.steam_mgr.abort_monitor_task(task_id)
         if success:

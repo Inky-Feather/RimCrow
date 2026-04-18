@@ -398,6 +398,9 @@ export const useAppStore = defineStore('app', () => {
             toast.info(`升级完成: ${upgradeContext.value.actions_taken.join(', ')}`);
           }
       }
+      if (upgradeContext.value.messages?.length > 0) {
+        toast.info(upgradeContext.value.messages.join('\n'), { timeout: 5000 })
+      }
       const profileStore = useProfileStore()
       // 同步当前 Profile ID 到 profileStore
       if (settings.value.current_profile_id) {
@@ -686,6 +689,41 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  // 主动修复数据库
+  const repairDatabase = async () => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      const res = await window.pywebview.api.repair_database()
+      if (!checkResult(res, "修复数据库")) {
+        return res
+      }
+      if (res.data?.initialized) {
+        // 数据库文件不存在时，后端会直接初始化新库，这里同步把前端状态也重建一次。
+        const modStore = useModStore()
+        modStore.reset()
+        const groupStore = useGroupStore()
+        groupStore.groupList = []
+        await initialize()
+      }
+      return res
+    } finally {
+      isLoading.value = false
+    }
+  }
+  // 主动重启应用
+  const restartApplication = async () => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      // 修复结果切换发生在重启后的启动阶段，这里只负责让当前实例安全退出并拉起新实例。
+      const res = await window.pywebview.api.restart_application()
+      checkResult(res, "重启应用")
+      return res
+    } finally {
+      isLoading.value = false
+    }
+  }
   // 数据库孤立数据清理
   const performDatabaseCleanup = async () => {
     const res = await window.pywebview.api.perform_database_cleanup()
@@ -745,9 +783,11 @@ export const useAppStore = defineStore('app', () => {
   // === 系统操作 ===
   // 启动游戏
   const launchGame = async (profile_id=null) => {
-    const orderStore = useOrderStore()
-    const res = await orderStore.saveLoadOrder()
-    if (!res) return
+    if (!profile_id) {
+      const orderStore = useOrderStore()
+      const res = await orderStore.saveLoadOrder()
+      if (!res) return
+    }
     if (!window.pywebview) return
     // 直接启动游戏
     const gameRes = await window.pywebview.api.game_launch(profile_id)
@@ -1356,7 +1396,7 @@ export const useAppStore = defineStore('app', () => {
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
     checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
     // AI处理

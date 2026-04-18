@@ -417,10 +417,23 @@
                   </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
                     <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
-                    <p class="text-xs text-accent-danger/60 leading-relaxed">重置操作将清空所有本地数据库缓存、分组信息和自定义备注。该操作不可撤销，请确保已备份您的 Mod 列表。</p>
-                    <button @click="handleReset" class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all">
-                      立即重置本地数据库
-                    </button>
+                    <p class="text-xs text-accent-danger/60 leading-relaxed">修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <button
+                        @click="handleRepair"
+                        :disabled="appStore.isLoading"
+                        class="w-full py-2 bg-accent-warn/10 hover:bg-accent-warn text-accent-warn hover:text-text-main border border-accent-warn/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        强制修复本地数据库
+                      </button>
+                      <button
+                        @click="handleReset"
+                        :disabled="appStore.isLoading"
+                        class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        立即重置本地数据库
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -674,8 +687,51 @@ const updateExternalDB = async (dbType) => {
 
 // ====== 数据处理 ======
 const handleReset = async () => {
-  const ok = await confirmStore.confirmAction('确认重置', '这将抹除所有本地缓存数据，确定继续？', { type: 'error' })
+  const ok = await confirmStore.confirmAction('确认重置', '重置后，分组、备注等本地数据将被清空，且无法撤销。确定继续吗？', { type: 'error' })
   if (ok) appStore.resetDatabase()
+}
+
+const handleRepair = async () => {
+  const ok = await confirmStore.confirmAction(
+    '确认修复',
+    '这会尝试修复当前数据库。修复成功后需要重启软件才能生效。\n确定继续吗？',
+    { type: 'warning', confirmText: '开始修复' }
+  )
+  if (!ok) return
+
+  const res = await appStore.repairDatabase()
+  if (!res || res.status !== 'success') {
+    // 主动修复失败时不自动切换任何数据库，直接提示用户转向更保守的重置方案。
+    const shouldReset = await confirmStore.confirmAction(
+      '修复失败',
+      '数据库修复失败，当前数据可能无法正常使用。建议立即重置数据库。',
+      { type: 'error', confirmText: '立即重置', cancelText: '稍后处理' }
+    )
+    if (shouldReset) {
+      await appStore.resetDatabase()
+    }
+    return
+  }
+
+  if (res.data?.initialized) {
+    appStore.closeSettingsPanel()
+    toast.success('未找到本地数据库，已重新创建。')
+    return
+  }
+
+  const restartNow = await confirmStore.confirmAction(
+    '修复完成',
+    '数据库修复已完成。现在重启软件即可生效；如果暂不重启，当前仍会继续使用旧状态。',
+    { type: 'success', confirmText: '立即重启', cancelText: '稍后重启' }
+  )
+
+  if (!restartNow) {
+    toast.info('修复已完成，重启软件后生效。', { timeout: 4000 })
+    return
+  }
+
+  appStore.closeSettingsPanel()
+  await appStore.restartApplication()
 }
 
 const save = async () => {
