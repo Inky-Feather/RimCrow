@@ -12,6 +12,7 @@ import { useProfileStore } from './profileStore'
 import { cleanRichText } from '../utils/unityTextParser'
 import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
+import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
@@ -873,6 +874,10 @@ export const useAppStore = defineStore('app', () => {
   // 打开Url
   const openUrl = (url) => {
     if(!url) { toast.warning("网址为空！"); return}
+    if (isBrowserRuntime()) {
+      openManagedSubBrowserUrl(url, 'RimModManager')
+      return
+    }
     if(settings.value.open_url_on_system){
       window.open(url, '_blank')
     }else{

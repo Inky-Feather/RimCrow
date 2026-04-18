@@ -9,6 +9,7 @@ import threading
 import time
 import functools
 import uuid
+import webbrowser
 import webview
 import tempfile
 from pathlib import Path
@@ -67,6 +68,7 @@ from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
+from backend.browser_runtime import build_sub_browser_target_url
 from playhouse.shortcuts import model_to_dict
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
@@ -2062,10 +2064,43 @@ class API:
     @log_api_call
     def open_sub_browser(self, url='', title = 'RimModManager'):
         """打开或更新 浏览器子窗口"""
+        if self.is_browser_runtime() or not self._window:
+            target_url = build_sub_browser_target_url(self._browser_base_url, url, title) if self.is_browser_runtime() else str(url or "")
+            if target_url:
+                webbrowser.open(target_url)
+            return ApiResponse.success({"url": target_url or str(url or "")})
         if not self.browser_window: 
             self.browser_window = SubBrowserManager(self)
         self.browser_window.open(url, title)
         return ApiResponse.success()
+
+    @log_api_call
+    def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
+        normalized_action = str(action or "").strip().lower()
+        normalized_workshop_id = str(workshop_id or "").strip()
+        normalized_target_url = str(target_url or "").strip()
+
+        if normalized_action == "open_in_steam":
+            if normalized_workshop_id:
+                return self.steam_open_workshop_page(normalized_workshop_id)
+            return ApiResponse.error("无法识别当前页面的 Workshop ID")
+
+        if not normalized_workshop_id:
+            return ApiResponse.error("无法识别当前页面的 Workshop ID")
+
+        if normalized_action == "subscribe":
+            return self.steam_subscribe([normalized_workshop_id])
+        if normalized_action == "unsubscribe":
+            return self.steam_unsubscribe([normalized_workshop_id])
+        if normalized_action == "download":
+            return self.steamcmd_download([normalized_workshop_id])
+        if normalized_action == "open_original":
+            if normalized_target_url:
+                webbrowser.open(normalized_target_url)
+                return ApiResponse.success(message="已在系统浏览器打开原网页")
+            return ApiResponse.error("未提供目标网页地址")
+
+        return ApiResponse.error(f"未知操作: {normalized_action}")
 
 
     # ==========================================
@@ -2251,6 +2286,20 @@ class API:
         if success:
             return ApiResponse.success(message="正在唤起 Steam 客户端，请等待其完全加载...")
         return ApiResponse.error("无法定位 Steam 路径，请手动打开！")
+
+    @log_api_call
+    def steam_open_workshop_page(self, workshop_id: str):
+        """在 Steam 客户端中打开指定工坊页面"""
+        normalized_id = str(workshop_id or "").strip()
+        if not normalized_id:
+            return ApiResponse.error("未提供有效的 Workshop ID")
+        steam_url = f"steam://url/CommunityFilePage/{normalized_id}"
+        try:
+            if webbrowser.open(steam_url):
+                return ApiResponse.success(message="已尝试在 Steam 客户端打开当前页面")
+        except Exception as e:
+            logger.warning(f"Open workshop in Steam failed: {e}")
+        return ApiResponse.error("无法在 Steam 客户端中打开当前页面")
     
     @log_api_call
     def steam_check_status(self, workshop_id: str):
