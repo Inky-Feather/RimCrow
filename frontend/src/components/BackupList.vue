@@ -225,6 +225,7 @@ import { parse, formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { Copy, HelpCircle, ClipboardPlus } from 'lucide-vue-next'
 import CommonSelect from './common/input/CommonSelect.vue'
+import { isBrowserRuntime as detectBrowserRuntime } from '../runtime/runtimeBridge'
 
 // --- 子组件：BackupItem ---
 const BackupItem = {
@@ -323,11 +324,12 @@ const loading = ref(false)
 const showDropOverlay = ref(false)
 const dragDepth = ref(0)
 const activeDroppedFile = ref('')
-const lastDroppedFile = ref({ path: '', time: 0 })
+const lastDroppedFile = ref({ key: '', time: 0 })
 let nativeDropBindAttempts = 0
 let nativeDropBindTimer = null
 const selectedPath = computed(() => orderStore.currentBackupFile)
 const currentProfileId = computed(() => profileStore.currentProfileId || appStore.settings.current_profile_id || 'default')
+const isBrowserRuntime = computed(() => detectBrowserRuntime())
 const selectedBackupProfileId = computed({
   get: () => orderStore.backupProfileId || currentProfileId.value,
   set: (value) => orderStore.setBackupProfile(value),
@@ -514,14 +516,23 @@ const extractDroppedFilePath = (event) => {
   return ''
 }
 
-const shouldSkipDuplicateDrop = (filePath) => {
-  const normalizedPath = String(filePath || '').trim()
-  if (!normalizedPath) return true
-  if (activeDroppedFile.value === normalizedPath) return true
+const buildBrowserDropKey = (file) => {
+  if (!file) return ''
+  return [
+    String(file.name || '').trim(),
+    Number(file.size || 0),
+    Number(file.lastModified || 0),
+  ].join(':')
+}
+
+const shouldSkipDuplicateDrop = (dropKey) => {
+  const normalizedKey = String(dropKey || '').trim()
+  if (!normalizedKey) return true
+  if (activeDroppedFile.value === normalizedKey) return true
 
   const now = Date.now()
   const isRecentlyProcessed =
-    lastDroppedFile.value.path === normalizedPath &&
+    lastDroppedFile.value.key === normalizedKey &&
     now - lastDroppedFile.value.time < 2500
 
   return isRecentlyProcessed
@@ -550,6 +561,36 @@ const importDroppedFile = async (filePath, source = 'dom') => {
   }
 }
 
+const importDroppedBrowserFile = async (file) => {
+  const dropKey = buildBrowserDropKey(file)
+  if (!dropKey || shouldSkipDuplicateDrop(dropKey)) return false
+
+  if (activeDroppedFile.value && activeDroppedFile.value !== dropKey) {
+    toast.info('上一个拖入文件仍在处理中，请稍候')
+    return false
+  }
+
+  activeDroppedFile.value = dropKey
+  lastDroppedFile.value = {
+    key: dropKey,
+    time: Date.now(),
+  }
+
+  try {
+    const data = await orderStore.importPayloadFile(file, selectedBackupProfileId.value)
+    if (!data) return false
+    rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]
+    if ((data.errors || []).length > 0) {
+      console.warn('导入文件包含解析错误:', data.errors)
+    }
+    appStore.uiState.showDiffDrawer = true
+    await refresh(selectedBackupProfileId.value)
+    return true
+  } finally {
+    activeDroppedFile.value = ''
+  }
+}
+
 const handleNativeBackupDrop = async (paths = []) => {
   resetDropState()
   const normalizedPaths = Array.isArray(paths)
@@ -569,6 +610,7 @@ const handleNativeBackupDrop = async (paths = []) => {
 }
 
 const bindNativeDropZone = async () => {
+  if (isBrowserRuntime.value) return
   if (!window.pywebview?.api?.bind_backup_drop_zone) return
 
   try {
@@ -645,6 +687,9 @@ const handleDrop = async (event) => {
 
   const filePath = extractDroppedFilePath(event)
   if (!filePath) {
+    if (isBrowserRuntime.value) {
+      await importDroppedBrowserFile(files[0])
+    }
     return
   }
 
@@ -739,9 +784,11 @@ watch(currentProfileId, async (newProfileId) => {
 onMounted(() => {
   window.__rmm_handleNativeBackupDrop = handleNativeBackupDrop
   nativeDropBindAttempts = 0
-  nativeDropBindTimer = window.setTimeout(() => {
-    bindNativeDropZone()
-  }, 0)
+  if (!isBrowserRuntime.value) {
+    nativeDropBindTimer = window.setTimeout(() => {
+      bindNativeDropZone()
+    }, 0)
+  }
 })
 
 onUnmounted(() => {

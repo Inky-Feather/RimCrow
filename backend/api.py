@@ -10,6 +10,7 @@ import time
 import functools
 import uuid
 import webview
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Any, Dict, List
@@ -197,6 +198,7 @@ class API:
         self._native_drop_element = None
         self._native_drop_handler = None
         self._browser_base_url = ""
+        self._browser_import_files: set[str] = set()
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
@@ -322,6 +324,13 @@ class API:
     
     def cleanup(self):
         """关闭数据库清理资源"""
+        for temp_path in list(self._browser_import_files):
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except Exception:
+                logger.debug(f"Failed to clean browser temp import file: {temp_path}", exc_info=True)
+            finally:
+                self._browser_import_files.discard(temp_path)
         # 停止后台扫描任务 (如果有)
         if hasattr(self, 'scanner') and self.scanner: self.scanner.stop_scan() 
         # 停止游戏日志监视器
@@ -353,6 +362,47 @@ class API:
 
     def set_browser_base_url(self, base_url: str):
         self._browser_base_url = str(base_url or "").rstrip("/")
+
+    def _build_load_order_result(
+        self,
+        file_path: str,
+        res: dict | None = None,
+        source_profile_id: str = "",
+        source_profile_name: str = "",
+        list_name_override: str = "",
+    ):
+        payload = dict(res or {})
+        list_name = str(list_name_override or payload.get('list_name') or '').strip()
+        return {
+            "file": file_path,
+            "active_ids": payload.get('active_mods', []),
+            "modify_time": payload.get('modify_time', 0),
+            "format": payload.get('format', 'modsconfig'),
+            "list_name": list_name,
+            "mods": payload.get('mods', []),
+            "mod_names": payload.get('mod_names', []),
+            "mod_steam_workshop_ids": payload.get('mod_steam_workshop_ids', []),
+            "workshop_ids": payload.get('workshop_ids', []),
+            "warnings": payload.get('warnings', []),
+            "errors": payload.get('errors', []),
+            "import_check": payload.get('import_check', {"summary": {}, "items": []}),
+            "source_profile_id": source_profile_id,
+            "source_profile_name": source_profile_name if source_profile_id else '',
+        }
+
+    def _write_browser_import_temp_file(self, filename: str, content: str) -> str:
+        suffix = Path(str(filename or "").strip() or "import.txt").suffix or ".txt"
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=suffix,
+            prefix="rmm-import-",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(str(content or ""))
+            temp_path = temp_file.name
+        self._browser_import_files.add(temp_path)
+        return temp_path
 
     def _on_app_loaded(self):
         """主窗口加载完毕回调"""
@@ -453,10 +503,12 @@ class API:
         """
         由前端在 BackupList 挂载后显式调用，确保 pywebview 绑定到真实存在的拖放区域。
         """
+        normalized_selector = self._normalize_native_drop_selector(selector)
+        if self.is_browser_runtime():
+            return ApiResponse.success({"selector": normalized_selector, "native": False})
         if not self._window:
             return ApiResponse.error("主窗口尚未就绪")
 
-        normalized_selector = self._normalize_native_drop_selector(selector)
         if self._bind_native_drag_drop(normalized_selector):
             return ApiResponse.success({"selector": normalized_selector})
         return ApiResponse.warning("拖放区域尚未挂载，稍后会重试", {"selector": normalized_selector})
@@ -1188,24 +1240,35 @@ class API:
         if not file:
             return ApiResponse.warning("未选择文件")
         res = load_order_mgr.read_active_mods(file) if load_order_mgr else {}
-        result = {
-            "file": file,
-            "active_ids": res.get('active_mods', []),
-            "modify_time": res.get('modify_time', 0),
-            # 与 load_order_get 保持同一数据协议，避免前端区分“默认配置”和“外部导入文件”两条解析链。
-            "format": res.get('format', 'modsconfig'),
-            "list_name": res.get('list_name', ''),
-            "mods": res.get('mods', []),
-            "mod_names": res.get('mod_names', []),
-            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
-            "workshop_ids": res.get('workshop_ids', []),
-            "warnings": res.get('warnings', []),
-            "errors": res.get('errors', []),
-            "import_check": res.get('import_check', {"summary": {}, "items": []}),
-            "source_profile_id": source_profile_id,
-            "source_profile_name": profile.name if source_profile_id else '',
-        }
+        result = self._build_load_order_result(
+            file,
+            res,
+            source_profile_id=source_profile_id,
+            source_profile_name=profile.name if profile else "",
+        )
         # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
+        if not result["active_ids"] and not result["workshop_ids"]:
+            return ApiResponse.error("解析文件出错!")
+        return ApiResponse.success(result)
+
+    @log_api_call
+    def load_order_file_import_payload(self, filename: str, content: str, profile_id: str | None = None):
+        """
+        浏览器模式下导入拖放的文件内容。
+        标准浏览器不会暴露本地绝对路径，因此这里先落临时文件，再复用现有解析流程。
+        """
+        normalized_name = str(filename or "").strip() or "import.txt"
+        source_profile_id = str(profile_id or "").strip()
+        load_order_mgr, _context, profile = self._resolve_load_order_scope(profile_id)
+        temp_path = self._write_browser_import_temp_file(normalized_name, content)
+        res = load_order_mgr.read_active_mods(temp_path) if load_order_mgr else {}
+        result = self._build_load_order_result(
+            temp_path,
+            res,
+            source_profile_id=source_profile_id,
+            source_profile_name=profile.name if profile else "",
+            list_name_override=Path(normalized_name).stem,
+        )
         if not result["active_ids"] and not result["workshop_ids"]:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)

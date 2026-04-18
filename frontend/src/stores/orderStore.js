@@ -314,6 +314,25 @@ export const useOrderStore = defineStore('order', () => {
       return res.data
     }
   }
+  const importPayloadFile = async (file, source_profile_id='') => {
+    if (!window.pywebview || !file) return null
+    const normalizedName = String(file.name || 'import.txt').trim() || 'import.txt'
+    const content = await file.text()
+    const res = await window.pywebview.api.load_order_file_import_payload(
+      normalizedName,
+      content,
+      source_profile_id || null
+    )
+    if (checkResult(res, '导入加载顺序')) {
+      const order = res.data || {}
+      setBackupOrder(order, order.file || normalizedName)
+      if ((order.warnings || []).length > 0) {
+        toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
+      }
+      return order
+    }
+    return null
+  }
   const importShareCode = async (shareCode, source_profile_id='') => {
     const normalizedCode = String(shareCode || '').trim()
     if (!normalizedCode) {
@@ -507,7 +526,7 @@ export const useOrderStore = defineStore('order', () => {
     backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
-    exportLoadOrderShareCode, getFileOrder, importShareCode, promptImportShareCode, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
+    exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
     setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups,
   }
