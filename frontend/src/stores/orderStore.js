@@ -5,6 +5,7 @@ import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
 import { useConfirmStore } from './confirmStore'
 import { useSupplementStore } from './supplementStore'
+import { normalizeInstallSource } from '../utils/modIdentity'
 
 export const useOrderStore = defineStore('order', () => {
   const toast = createToastInterface()
@@ -97,6 +98,7 @@ export const useOrderStore = defineStore('order', () => {
   const clearBackupOrder = () => {
     setBackupOrder({}, '')
   }
+  // 设置当前查看环境的备份目录
   const setBackupProfile = (profileId = '', meta = null) => {
     backupProfileId.value = profileId || ''
     if (meta && Object.prototype.hasOwnProperty.call(meta, 'backup_dir')) {
@@ -210,6 +212,7 @@ export const useOrderStore = defineStore('order', () => {
         label: '加载文件序列'
       }, async () => {
         modStore.setListIds('active', order.active_ids || [])
+        modStore.mergeInstallSourceHintsFromMods?.(order.mods || [], 'import')
         if (!mods_config_file_path) {
           modStore.setActiveLoadBaseline(
             order.active_ids || [],
@@ -263,6 +266,7 @@ export const useOrderStore = defineStore('order', () => {
       label: '应用文件序列'
     }, async () => {
       modStore.setListIds('active', backupIds.value)
+      modStore.mergeInstallSourceHintsFromMods?.(backupMods.value || [], 'import')
       modStore.updateInactiveIds()
       // 加载外部存档文件时解析未知项
       await modStore.fetchAndCacheGhostMods(modStore.activeIds)
@@ -535,37 +539,39 @@ export const useOrderStore = defineStore('order', () => {
       return true
     })
   }
-  const collectImportCheckWorkshopIds = (items = []) => {
-    return [...new Set(
-      items
-        .map(item => String(item.target_workshop_id || '').trim())
-        .filter(Boolean)
-    )]
-  }
+  const getImportCheckTargetSource = (item = null) => (
+    normalizeInstallSource(item?.target_source || null, item?.package_id || '')
+  )
+  const collectImportCheckSources = (items = []) => (
+    items
+      .map(item => getImportCheckTargetSource(item))
+      .filter(Boolean)
+  )
   const openImportCheckWorkshop = (rowKeyOrPackageId) => {
     const item = getImportCheckItem(rowKeyOrPackageId)
-    if (item?.target_workshop_id) {
-      appStore.openSteamWorkshopById(item.target_workshop_id)
+    const source = getImportCheckTargetSource(item)
+    if (source) {
+      appStore.openInstallSource(source)
     }
   }
   const subscribeImportCheckItems = async (statuses = [], rowKeys = []) => {
     const items = takeImportCheckItems(statuses, rowKeys).filter(item => !item.installed_via_replacement)
-    const workshopIds = collectImportCheckWorkshopIds(items)
-    if (workshopIds.length === 0) {
+    const sources = collectImportCheckSources(items)
+    const hasWorkshopSource = sources.some(source => source.kind === 'workshop')
+    if (!hasWorkshopSource) {
       toast.info("当前筛选结果中没有可订阅的工坊项目")
       return false
     }
-    return await appStore.subscribeWorkshopIds(workshopIds)
+    return await appStore.subscribeInstallSources(sources)
   }
   const downloadImportCheckItems = async (statuses = [], rowKeys = []) => {
     const items = takeImportCheckItems(statuses, rowKeys).filter(item => !item.installed_via_replacement)
-    const workshopIds = collectImportCheckWorkshopIds(items)
-    if (workshopIds.length === 0) {
-      toast.info("当前筛选结果中没有可下载的工坊项目")
+    const sources = collectImportCheckSources(items)
+    if (sources.length === 0) {
+      toast.info("当前筛选结果中没有可下载的目标来源")
       return false
     }
-    await appStore.downloadWorkshopItems(workshopIds)
-    return true
+    return await appStore.downloadInstallSources(sources)
   }
   const _rebuildImportCheckSummary = (items = []) => {
     return items.reduce((summary, item) => {
@@ -614,10 +620,6 @@ export const useOrderStore = defineStore('order', () => {
     toast.success(`已移除 ${items.length} 个导入项`)
     return true
   }
-  // 兼容旧调用入口：缺失项一键订阅现在复用新的 import_check 分类结果。
-  const subscribeMissingBackupMods = async () => {
-    return await subscribeImportCheckItems(['missing'])
-  }
   // 打开备份目录
   const openBackupPath = async () => {
     appStore.openPath(backupProfileDir.value || [appStore.settings.home_path,"backups"].join("/"))
@@ -651,7 +653,7 @@ export const useOrderStore = defineStore('order', () => {
     backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
-    exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
+    exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, getImportCheckItem, takeImportCheckItems, getImportCheckTargetSource, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
     setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
   }

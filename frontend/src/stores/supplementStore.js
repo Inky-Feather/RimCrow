@@ -5,6 +5,8 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
+import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../utils/modIdentity'
+import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../utils/versioning'
 
 const TOOL_MOD_IDS = ['rmm.companion']
 const LANGUAGE_PACK_EXCLUDED_OWNER_IDS = new Set([
@@ -64,32 +66,14 @@ const SEVERITY_META = {
   },
 }
 
-const VERSION_META = {
-  supported: {
-    tone: 'success',
-    label: '支持当前版本',
-  },
-  unknown: {
-    tone: 'muted',
-    label: '版本未注明',
-  },
-  unsupported: {
-    tone: 'danger',
-    label: '可能不支持当前版本',
-  },
-}
-
-const normalizeId = (value = '') => String(value || '').trim().toLowerCase()
-const dedupeIds = (values = []) => [...new Set((values || []).map(normalizeId).filter(Boolean))]
 const dedupeValues = (values = []) => [...new Set((values || []).filter(Boolean))]
-const normalizeVersion = (value = '') => String(value || '').trim().slice(0, 3).toLowerCase()
-const isCoreId = (packageId = '') => normalizeId(packageId) === 'ludeon.rimworld'
+const isCoreId = (packageId = '') => normalizePackageId(packageId) === 'ludeon.rimworld'
 const isOfficialDlcId = (packageId = '') => {
-  const normalized = normalizeId(packageId)
+  const normalized = normalizePackageId(packageId)
   return normalized.startsWith('ludeon.rimworld.') && normalized !== 'ludeon.rimworld'
 }
 const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
-const isToolModId = (packageId = '') => TOOL_MOD_IDS.includes(normalizeId(packageId))
+const isToolModId = (packageId = '') => TOOL_MOD_IDS.includes(normalizePackageId(packageId))
 
 const clearReactiveObject = (target) => {
   Object.keys(target).forEach(key => {
@@ -97,10 +81,7 @@ const clearReactiveObject = (target) => {
   })
 }
 
-const uniquePush = (list, value) => {
-  if (!value || list.includes(value)) return
-  list.push(value)
-}
+const uniquePush = pushUnique
 
 const mergeText = (...values) => [...new Set(
   values
@@ -110,9 +91,7 @@ const mergeText = (...values) => [...new Set(
 )].join('；')
 
 const listOwnerNames = (owners = [], modStore) => (
-  owners
-    .map(ownerId => modStore.displayModName(ownerId))
-    .filter(Boolean)
+  mapUniqueDisplayNames(owners, ownerId => modStore.displayModName(ownerId))
 )
 
 const compareCategory = (left = '', right = '') => (
@@ -183,12 +162,9 @@ export const useSupplementStore = defineStore('supplement', () => {
   // 统一计算版本兼容状态，供替代模组排序和界面标签复用。
   const getVersionInfo = (packageId = '') => {
     const mod = modStore.takeModById(packageId)
-    if (!mod || mod.isMissing) return VERSION_META.unknown
-    const versions = dedupeIds((mod.supported_versions || []).map(value => normalizeVersion(value)))
-    if (!currentGameVersion.value || versions.length === 0) return VERSION_META.unknown
-    return versions.includes(currentGameVersion.value)
-      ? VERSION_META.supported
-      : VERSION_META.unsupported
+    if (!mod || mod.isMissing) return getVersionInfoByVersions(currentGameVersion.value)
+    const versions = dedupeNormalizedPackageIds((mod.supported_versions || []).map(value => normalizeVersion(value)))
+    return getVersionInfoByVersions(currentGameVersion.value, versions)
   }
 
   // 预构建“被翻译模组 -> 可用语言包”的查找表，减少递归过程中重复扫描全量模组。
@@ -199,8 +175,8 @@ export const useSupplementStore = defineStore('supplement', () => {
       if (!mod || mod.isMissing || !mod.path || !isLanguagePackMod(mod)) continue
       if (!modSupportsLanguage(mod, currentLanguage.value)) continue
       const relatedTargets = new Set()
-      ;(mod.rules?.dependencies || []).forEach(rule => relatedTargets.add(normalizeId(rule?.target_id)))
-      ;(mod.rules?.load_after || []).forEach(rule => relatedTargets.add(normalizeId(rule?.target_id)))
+      ;(mod.rules?.dependencies || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
+      ;(mod.rules?.load_after || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
       relatedTargets.forEach(targetId => {
         if (!targetId) return
         if (!targetMap.has(targetId)) targetMap.set(targetId, [])
@@ -212,7 +188,7 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // ctx 是一次补缺计算共享的只读上下文，递归构图时都复用这一份派生数据。
   const createContext = (activeIds = modStore.activeIds) => {
-    const normalizedActiveIds = dedupeIds(activeIds)
+    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
     return {
       activeIds: normalizedActiveIds,
       activeSet: new Set(normalizedActiveIds),
@@ -229,7 +205,7 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // 这些通用前置不参与语言包补缺，避免把提示范围扩大到用户不关心的基础包。
   const shouldSkipLanguageSupplementOwner = (ownerId = '') => {
-    const normalizedOwnerId = normalizeId(ownerId)
+    const normalizedOwnerId = normalizePackageId(ownerId)
     return isCoreId(normalizedOwnerId)
       || isOfficialDlcId(normalizedOwnerId)
       || isToolModId(normalizedOwnerId)
@@ -242,14 +218,14 @@ export const useSupplementStore = defineStore('supplement', () => {
     if (!missingMod?.isMissing || !workshopId) return []
     return Array.from(modStore.allModsMap.values())
       .filter(candidate => {
-        const candidateId = normalizeId(candidate?.package_id)
+        const candidateId = normalizePackageId(candidate?.package_id)
         return !!candidateId
           && !candidate?.isMissing
           && !!candidate?.path
           && !activeSet.has(candidateId)
           && !trailSet.has(candidateId)
           && String(candidate?.workshop_id || '').trim() === workshopId
-          && candidateId !== normalizeId(missingMod?.package_id)
+          && candidateId !== normalizePackageId(missingMod?.package_id)
       })
       .sort((left, right) => {
         const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
@@ -268,10 +244,10 @@ export const useSupplementStore = defineStore('supplement', () => {
       const owner = modStore.takeModById(ownerId)
       if (!owner || isLanguagePackMod(owner)) return
       ;(owner.rules?.dependencies || []).forEach(rule => {
-        const targetId = normalizeId(rule?.target_id)
+        const targetId = normalizePackageId(rule?.target_id)
         if (!targetId) return
-        const alternativeIds = dedupeIds(rule?.alternatives || [])
-        const optionIds = dedupeIds([targetId, ...alternativeIds]).filter(optionId => !trailSet.has(optionId))
+        const alternativeIds = dedupeNormalizedPackageIds(rule?.alternatives || [])
+        const optionIds = dedupeNormalizedPackageIds([targetId, ...alternativeIds]).filter(optionId => !trailSet.has(optionId))
         if (optionIds.length === 0) return
         if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
 
@@ -338,9 +314,9 @@ export const useSupplementStore = defineStore('supplement', () => {
       const supportedLanguages = owner.supported_languages || []
       if (supportedLanguages.length === 0) return
       if (supportedLanguages.includes(currentLanguage.value)) return
-      const candidates = (ctx.languagePackTargetMap.get(normalizeId(ownerId)) || [])
+      const candidates = (ctx.languagePackTargetMap.get(normalizePackageId(ownerId)) || [])
         .filter(candidate => {
-          const candidateId = normalizeId(candidate?.package_id)
+          const candidateId = normalizePackageId(candidate?.package_id)
           return !!candidateId
             && !candidate?.isMissing
             && !!candidate?.path
@@ -350,7 +326,7 @@ export const useSupplementStore = defineStore('supplement', () => {
       if (candidates.length === 0) return
 
       candidates.forEach(candidate => {
-        const candidateId = normalizeId(candidate.package_id)
+        const candidateId = normalizePackageId(candidate.package_id)
         const key = `language:${candidateId}`
         if (!entryMap.has(key)) {
           entryMap.set(key, {
@@ -392,20 +368,20 @@ export const useSupplementStore = defineStore('supplement', () => {
         const preferredCandidate = candidates.find(candidate => getVersionInfo(candidate.package_id).tone === 'success') || candidates[0]
         return {
           entryType: 'choice',
-          key: `replacement:${normalizeId(missingMod.package_id)}`,
+          key: `replacement:${normalizePackageId(missingMod.package_id)}`,
           category: 'replacement',
           severity: 'optional',
           title: modStore.displayModName(missingMod.package_id),
           reason: '原模组缺失，可切换到已安装替代版本',
           detail: '替代模组与原模组二选一，默认优先选择当前版本兼容项。',
-          owners: [normalizeId(missingMod.package_id)],
+          owners: [normalizePackageId(missingMod.package_id)],
           allowSkip: true,
-          defaultOptionPackageId: normalizeId(preferredCandidate.package_id),
+          defaultOptionPackageId: normalizePackageId(preferredCandidate.package_id),
           options: candidates.map(candidate => ({
-            packageId: normalizeId(candidate.package_id),
+            packageId: normalizePackageId(candidate.package_id),
             title: modStore.displayModName(candidate),
             detail: '应用后会移除当前缺失项并启用该替代版本',
-            removeIds: [normalizeId(missingMod.package_id)],
+            removeIds: [normalizePackageId(missingMod.package_id)],
             relationLabel: '替代',
           })),
         }
@@ -466,13 +442,13 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // choice option 需要跨不同来源合并，这里先统一成标准结构。
   const createChoiceOption = (rowId, option = {}) => {
-    const packageId = normalizeId(option.packageId)
+    const packageId = normalizePackageId(option.packageId)
     return {
       id: `${rowId}:${packageId}`,
       packageId,
       title: option.title || modStore.displayModName(packageId),
       detail: option.detail || '',
-      removeIds: dedupeIds(option.removeIds || []),
+      removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
       relationLabel: option.relationLabel || '',
       relationLabels: option.relationLabel ? [option.relationLabel] : [],
       versionInfo: getVersionInfo(packageId),
@@ -491,7 +467,7 @@ export const useSupplementStore = defineStore('supplement', () => {
       }
       currentOption.title = currentOption.title || nextOption.title
       currentOption.detail = mergeText(currentOption.detail, nextOption.detail)
-      currentOption.removeIds = dedupeIds([...currentOption.removeIds, ...nextOption.removeIds])
+      currentOption.removeIds = dedupeNormalizedPackageIds([...currentOption.removeIds, ...nextOption.removeIds])
       currentOption.relationLabel = currentOption.relationLabel || nextOption.relationLabel
       currentOption.relationLabels = dedupeValues([...currentOption.relationLabels, ...nextOption.relationLabels])
       currentOption.versionInfo = currentOption.versionInfo?.tone === 'success' ? currentOption.versionInfo : nextOption.versionInfo
@@ -516,8 +492,8 @@ export const useSupplementStore = defineStore('supplement', () => {
     title: node.title || modStore.displayModName(node.packageId),
     reason: node.reason || '',
     detail: node.detail || '',
-    owners: dedupeIds(node.owners || []),
-    removeIds: dedupeIds(node.removeIds || []),
+    owners: dedupeNormalizedPackageIds(node.owners || []),
+    removeIds: dedupeNormalizedPackageIds(node.removeIds || []),
     relationLabel: node.relationLabel || '',
     relationLabels: node.relationLabel ? [node.relationLabel] : [],
     versionInfo: node.versionInfo || getVersionInfo(node.packageId),
@@ -531,7 +507,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     title: node.title || '',
     reason: node.reason || '',
     detail: node.detail || '',
-    owners: dedupeIds(node.owners || []),
+    owners: dedupeNormalizedPackageIds(node.owners || []),
     allowSkip: node.allowSkip !== false,
     options: mergeChoiceOptions([], node.options || [], node.rowId),
     defaultOptionId: node.defaultOptionId || '',
@@ -550,7 +526,7 @@ export const useSupplementStore = defineStore('supplement', () => {
       currentRow.title = currentRow.title || node.title || ''
       currentRow.reason = mergeText(currentRow.reason, node.reason)
       currentRow.detail = mergeText(currentRow.detail, node.detail)
-      currentRow.owners = dedupeIds([...currentRow.owners, ...(node.owners || [])])
+      currentRow.owners = dedupeNormalizedPackageIds([...currentRow.owners, ...(node.owners || [])])
       currentRow.allowSkip = currentRow.allowSkip && node.allowSkip !== false
       currentRow.options = mergeChoiceOptions(currentRow.options, node.options || [], node.rowId)
       const preferredOption = currentRow.options.find(option => option.id === node.defaultOptionId) || currentRow.options[0]
@@ -568,8 +544,8 @@ export const useSupplementStore = defineStore('supplement', () => {
     currentRow.title = currentRow.title || node.title || modStore.displayModName(node.packageId)
     currentRow.reason = mergeText(currentRow.reason, node.reason)
     currentRow.detail = mergeText(currentRow.detail, node.detail)
-    currentRow.owners = dedupeIds([...currentRow.owners, ...(node.owners || [])])
-    currentRow.removeIds = dedupeIds([...currentRow.removeIds, ...(node.removeIds || [])])
+    currentRow.owners = dedupeNormalizedPackageIds([...currentRow.owners, ...(node.owners || [])])
+    currentRow.removeIds = dedupeNormalizedPackageIds([...currentRow.removeIds, ...(node.removeIds || [])])
     currentRow.relationLabels = dedupeValues([...currentRow.relationLabels, ...(node.relationLabel ? [node.relationLabel] : [])])
     currentRow.relationLabel = currentRow.relationLabels[0] || ''
     currentRow.versionInfo = currentRow.versionInfo?.tone === 'success' ? currentRow.versionInfo : node.versionInfo
@@ -662,7 +638,7 @@ export const useSupplementStore = defineStore('supplement', () => {
       if (entry.entryType === 'choice') {
         const rowId = entry.key
         const options = (entry.options || []).map(option => {
-          const packageId = normalizeId(option.packageId)
+          const packageId = normalizePackageId(option.packageId)
           const nextTrailSet = new Set([...Array.from(trailSet), packageId])
           const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
           const childEntries = [
@@ -678,7 +654,7 @@ export const useSupplementStore = defineStore('supplement', () => {
             packageId,
             title: option.title || modStore.displayModName(packageId),
             detail: option.detail || '',
-            removeIds: dedupeIds(option.removeIds || []),
+            removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
             relationLabel: option.relationLabel || '',
             relationLabels: option.relationLabel ? [option.relationLabel] : [],
             versionInfo: getVersionInfo(packageId),
@@ -686,7 +662,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           }
         })
 
-        const preferredPackageId = normalizeId(entry.defaultOptionPackageId)
+        const preferredPackageId = normalizePackageId(entry.defaultOptionPackageId)
         const preferredOption = options.find(option => option.packageId === preferredPackageId) || options[0]
         const node = {
           id: nextNodeId('choice'),
@@ -697,7 +673,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           title: entry.title || '',
           reason: entry.reason || '',
           detail: entry.detail || '',
-          owners: dedupeIds(entry.owners || []),
+          owners: dedupeNormalizedPackageIds(entry.owners || []),
           allowSkip: entry.allowSkip !== false,
           options,
           defaultOptionId: preferredOption?.id || '',
@@ -707,7 +683,7 @@ export const useSupplementStore = defineStore('supplement', () => {
         return node.id
       }
 
-      const packageId = normalizeId(entry.packageId)
+      const packageId = normalizePackageId(entry.packageId)
       if (!packageId) return null
       const rowId = `toggle:${packageId}`
       const nextTrailSet = new Set([...Array.from(trailSet), packageId])
@@ -730,8 +706,8 @@ export const useSupplementStore = defineStore('supplement', () => {
         title: entry.title || modStore.displayModName(packageId),
         reason: entry.reason || '',
         detail: entry.detail || '',
-        owners: dedupeIds(entry.owners || []),
-        removeIds: dedupeIds(entry.removeIds || []),
+        owners: dedupeNormalizedPackageIds(entry.owners || []),
+        removeIds: dedupeNormalizedPackageIds(entry.removeIds || []),
         relationLabel: entry.relationLabel || '',
         versionInfo: getVersionInfo(packageId),
         childNodeIds,
@@ -925,7 +901,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   } = {}) => {
     resetDialogState()
     defaultSelectionMode.value = 'all'
-    const resolvedActiveIds = dedupeIds(activeIds)
+    const resolvedActiveIds = dedupeNormalizedPackageIds(activeIds)
     const resolvedPrepared = prepared || await prepareDialogPlan(resolvedActiveIds)
     graphState.value = resolvedPrepared.graph
     applyResolvedPlan(resolvedPrepared.plan, { title, message, confirmText, cancelText })
@@ -983,8 +959,8 @@ export const useSupplementStore = defineStore('supplement', () => {
   // 真正应用时只改前端工作序列并写入历史栈，绝不直接写盘。
   // removeIds 主要服务于替代模组这类“启用新项同时移除旧项”的场景。
   const applySelectionPayload = async (payload = { addIds: [], removeIds: [] }, { silent = false } = {}) => {
-    const idsToEnable = dedupeIds(payload.addIds || [])
-    const idsToRemove = dedupeIds(payload.removeIds || []).filter(removeId => !idsToEnable.includes(removeId))
+    const idsToEnable = dedupeNormalizedPackageIds(payload.addIds || [])
+    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || []).filter(removeId => !idsToEnable.includes(removeId))
     if (idsToEnable.length === 0 && idsToRemove.length === 0) return false
 
     const success = await modStore.runListHistoryTransaction({

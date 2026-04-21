@@ -218,6 +218,9 @@
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
 
+    <!-- 缺失项下载管理 -->
+    <MissingInstallDialog />
+
     <!-- 引导中心浮动按钮 -->
     <GuideCenter />
     
@@ -282,6 +285,7 @@ import UpdateModal from './components/UpdateModal.vue'
 import GuideCenter from './components/GuideCenter.vue'
 import TextureOptModal from './components/TextureOptModal.vue'
 import SupplementSelectionDialog from './components/SupplementSelectionDialog.vue'
+import MissingInstallDialog from './components/MissingInstallDialog.vue'
 
 const updateModal = ref(null);
 

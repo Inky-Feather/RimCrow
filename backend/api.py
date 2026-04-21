@@ -294,11 +294,11 @@ class API:
 
         if self.active_context and self.load_order_mgr and target_profile_id == self.active_context.profile_id:
             profile = self.profile_mgr.get_current_profile()
-            return self.load_order_mgr, self.active_context, profile
+            return self.active_context, profile
 
         context = self.profile_mgr.build_profile_context(target_profile_id)
         profile = self.profile_mgr.get_profile(target_profile_id)
-        return LoadOrderManager(context), context, profile
+        return context, profile
 
     def _handle_app_version_upgrade(self):
         """实例初始化时运行的升级逻辑"""
@@ -404,6 +404,7 @@ class API:
             "mods": payload.get('mods', []),
             "mod_names": payload.get('mod_names', []),
             "mod_steam_workshop_ids": payload.get('mod_steam_workshop_ids', []),
+            "source_urls": payload.get('source_urls', []),
             "workshop_ids": payload.get('workshop_ids', []),
             "warnings": payload.get('warnings', []),
             "errors": payload.get('errors', []),
@@ -1355,7 +1356,7 @@ class API:
         打开任意支持的排序文件
         """
         from backend.managers.mgr_load_order import LOAD_ORDER_OPEN_FILE_TYPES
-        load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+        context, profile = self._resolve_load_order_scope(profile_id)
         source_profile_id = str(profile_id or "").strip()
         file = ''
         # 默认路径为 ModsConfig.xml 所在目录
@@ -1377,7 +1378,7 @@ class API:
             )
         if not file:
             return ApiResponse.warning("未选择文件")
-        res = load_order_mgr.read_active_mods(file) if load_order_mgr else {}
+        res = self.load_order_mgr.read_active_mods(file) if self.load_order_mgr else {}
         result = self._build_load_order_result(
             file,
             res,
@@ -1397,9 +1398,9 @@ class API:
         """
         normalized_name, raw_bytes = self._decode_browser_import_payload(payload)
         source_profile_id = str(profile_id or "").strip()
-        load_order_mgr, _context, profile = self._resolve_load_order_scope(profile_id)
+        _context, profile = self._resolve_load_order_scope(profile_id)
         temp_path = self._write_browser_import_temp_file(normalized_name, raw_bytes)
-        res = load_order_mgr.read_active_mods(temp_path) if load_order_mgr else {}
+        res = self.load_order_mgr.read_active_mods(temp_path) if self.load_order_mgr else {}
         result = self._build_load_order_result(
             temp_path,
             res,
@@ -1530,10 +1531,9 @@ class API:
         解析分享码并返回与文件导入相同的数据结构。
         """
         try:
-            load_order_mgr, _, _ = self._resolve_load_order_scope(profile_id)
-            if not load_order_mgr:
+            if not self.load_order_mgr:
                 return ApiResponse.error("加载顺序管理器未初始化")
-            res = load_order_mgr.read_share_code(share_code)
+            res = self.load_order_mgr.read_share_code(share_code)
             return ApiResponse.success({
                 "file": res.get("share_code_ref", "share://RMM1"),
                 "active_ids": res.get('active_mods', []),
@@ -1558,7 +1558,8 @@ class API:
     def backups_get_all(self, profile_id: str | None = None):
         """获取所有备份文件路径"""
         try:
-            load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+            context, profile = self._resolve_load_order_scope(profile_id)
+            load_order_mgr = LoadOrderManager(context)
             backups = load_order_mgr.get_all_backups() if load_order_mgr else {"today": [], "earlier": [], "other": []}
             return ApiResponse.success({
                 **backups,
@@ -3136,9 +3137,9 @@ class API:
         if not details:
             return ApiResponse.error("未找到对应的 WorkshopID")
         return ApiResponse.success({
-            package_id: detail["workshop_id"]
+            package_id: (((detail or {}).get("display") or {}).get("selected") or {}).get("workshop_id")
             for package_id, detail in details.items()
-            if detail.get("workshop_id")
+            if (((detail or {}).get("display") or {}).get("selected") or {}).get("workshop_id")
         })
     
     @log_api_call
@@ -3152,6 +3153,19 @@ class API:
             return ApiResponse.success(res)
         except Exception as e:
             logger.error(f"get_workshop_details_by_package_ids failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def get_install_sources_by_package_ids(self, package_ids: list):
+        """
+        批量获取 package_id 的原版安装来源与替代安装来源。
+        """
+        try:
+            current_game_version = self.active_context.game_version if self.active_context else ""
+            res = ExtDAO.get_install_sources_by_package_ids(package_ids, current_game_version=current_game_version)
+            return ApiResponse.success(res)
+        except Exception as e:
+            logger.error(f"get_install_sources_by_package_ids failed: {e}", exc_info=True)
             return ApiResponse.error(str(e))
     
     @log_api_call

@@ -183,30 +183,11 @@
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2"
           :data-tour="listId=='active'?'list-quick-actions':null">
-          <!-- 一键订阅缺失的模组 -->
-          <div v-if="missingModIds.length > 0" @click.stop="appStore.subscribePackageIds(missingModIds)" 
-            v-tooltip="`[[一键订阅共计 ${missingModIds.length} 个缺失的模组]]\n^^注意：部分创意工坊已经下架或者离线数据库无法查找到的模组将自动忽略！^^`"
-            class="px-1 py-1 group relative bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all" >
-            <Flag />
-
-            <button @click.stop="appStore.downloadPackageIds(missingModIds)" 
-              v-tooltip="`##一键下载共计 ${missingModIds.length} 个缺失的模组##\n^^注意：部分创意工坊已经下架或者离线数据库无法查找到的模组将自动忽略！^^`"
-              class="px-1 py-1 right-1/2 translate-x-1/2 absolute bottom-full mb-2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all duration-200" >
-              <Download />
-            </button>
-          </div>
-          <!-- 一键订阅缺失的依赖项 -->
-          <div v-if="missingDependencies.length > 0" @click.stop="appStore.subscribePackageIds(missingDependencies)" 
-            v-tooltip="`[[一键订阅共计 ${missingDependencies.length} 个缺失的依赖项]]\n^^注意：部分创意工坊已经下架或者离线数据库无法查找到的模组将自动忽略！^^`"
-            class="px-1 py-1 group relative bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all" >
-            <Flag />
-
-            <button @click.stop="appStore.downloadPackageIds(missingDependencies)" 
-              v-tooltip="`##一键下载共计 ${missingDependencies.length} 个缺失的依赖项##\n^^注意：部分创意工坊已经下架或者离线数据库无法查找到的模组将自动忽略！^^`"
-              class="px-1 py-1 right-1/2 translate-x-1/2 absolute bottom-full mb-2 opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all duration-200" >
-              <Download />
-            </button>
-          </div>
+          <button v-if="props.listId === 'active' && (missingInstallSummary.missingTotal > 0 || missingInstallSummary.optionalInstallTotal > 0)" @click="openMissingInstallDialog()"
+            v-tooltip="missingInstallTooltip"
+            class="px-1 py-1 rounded-md bg-accent-danger/80 text-text-main/50 hover:bg-accent-danger hover:text-text-main transition-all" >
+            <Download />
+          </button>
           <button v-if="props.listId === 'active' && supplementSummary.count > 0" @click="openSupplementDialog()"
             v-tooltip="supplementTooltip"
             class="px-1 py-1 rounded-md transition-all"
@@ -245,12 +226,13 @@ import { ISSUE_TITLE_MAP, ISSUE_TYPE } from '../utils/constants';
 import ModItem from './utils/ModItem.vue';
 import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
-import { Download, Flag, Megaphone, MegaphoneOff, SearchAlert, Trash2 } from 'lucide-vue-next';
+import { Download, Megaphone, MegaphoneOff, SearchAlert, Trash2 } from 'lucide-vue-next';
 import { useContextMenuStore } from '../stores/contextMenuStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { useGuideStore } from '../stores/guideStore';
 import { useProfileStore } from '../stores/profileStore';
 import { useSupplementStore } from '../stores/supplementStore';
+import { useMissingInstallStore } from '../stores/missingInstallStore';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -267,6 +249,7 @@ const searchStore = useSearchStore()
 const menuStore = useContextMenuStore()
 const profileStore = useProfileStore()
 const supplementStore = useSupplementStore()
+const missingInstallStore = useMissingInstallStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 const listKey = ref(0)
@@ -400,16 +383,59 @@ const searchHelpText = computed(() => {
   return generateHtmlHelp(engine.value);
 })
 
-// 提取缺失模组列表
-const missingModIds = computed(() => {
-  const missingModIdsByPath = modStore.getIssusTargetIds(props.modelValue, ISSUE_TYPE.ERROR_MISSING_FILE)
-  const missingModIdsByOrder = props.modelValue.filter(package_id => !modStore.hasRealModById(package_id))
-  return [...missingModIdsByPath, ...missingModIdsByOrder]  
+const missingInstallSummary = ref({
+  missingTotal: 0,
+  installableTotal: 0,
+  unknownTotal: 0,
+  optionalInstallTotal: 0,
+  actionableTotal: 0,
+  alreadyInstalledReplacementTotal: 0,
 })
-// 提取完全缺失的依赖项列表
-const missingDependencies = computed(() => {
-  if (!issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_DEPENDENCY]?.length) return []
-  return modStore.getIssusTargetIds(props.modelValue, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY)
+let missingInstallSummarySeq = 0
+const refreshMissingInstallSummary = async () => {
+  const seq = ++missingInstallSummarySeq
+  if (props.listId !== 'active') {
+    missingInstallSummary.value = {
+      missingTotal: 0,
+      installableTotal: 0,
+      unknownTotal: 0,
+      optionalInstallTotal: 0,
+      actionableTotal: 0,
+      alreadyInstalledReplacementTotal: 0,
+    }
+    return
+  }
+  const summary = await missingInstallStore.getSummaryForActiveList(props.modelValue)
+  if (seq !== missingInstallSummarySeq) return
+  missingInstallSummary.value = summary
+}
+watch(
+  () => [props.listId, props.modelValue.join('|'), profileStore.activeContext?.game_version || ''],
+  () => { refreshMissingInstallSummary() },
+  { immediate: true }
+)
+const missingInstallTooltip = computed(() => {
+  if ((missingInstallSummary.value.missingTotal || 0) + (missingInstallSummary.value.optionalInstallTotal || 0) === 0) {
+    return '当前没有可管理的下载/订阅候选'
+  }
+  const lines = [
+    `[[缺失 ${missingInstallSummary.value.missingTotal} 项]]`,
+  ]
+  if (missingInstallSummary.value.installableTotal > 0) {
+    lines.push(`• 可安装: ${missingInstallSummary.value.installableTotal}`)
+  }
+  if (missingInstallSummary.value.unknownTotal > 0) {
+    lines.push(`• 未知来源: ${missingInstallSummary.value.unknownTotal}`)
+  }
+  if (missingInstallSummary.value.optionalInstallTotal > 0) {
+    lines.push(`• 可选安装: ${missingInstallSummary.value.optionalInstallTotal}`)
+  }
+  if (missingInstallSummary.value.alreadyInstalledReplacementTotal > 0) {
+    lines.push(`• 已装替代: ${missingInstallSummary.value.alreadyInstalledReplacementTotal}`)
+  }
+  lines.push('')
+  lines.push('__[[(点击打开统一下载/订阅窗口)]]__')
+  return lines.join('\n')
 })
 const supplementSummary = computed(() => {
   if (props.listId !== 'active') return { groups: [], count: 0, requiredCount: 0, optionalCount: 0, urgency: 'none' }
@@ -435,6 +461,9 @@ const supplementTooltip = computed(() => {
 const invalidModsToRemove = computed(() => {
   return issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_FILE] || []
 })
+const openMissingInstallDialog = async () => {
+  await missingInstallStore.openForActiveList(props.modelValue)
+}
 // 构造问题详情 Tooltip
 const issueTooltip = computed(() => {
   const summary = issuesSummary.value // Store 返回的对象

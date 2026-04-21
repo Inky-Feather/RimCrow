@@ -51,6 +51,8 @@ class ModReplacement(ExtBaseModel):
     """映射 replacements.json"""
     old_workshop_id = CharField(index=True, null=True)
     old_package_id = CharField(index=True, collation='NOCASE', null=True)
+    old_name = CharField(null=True)
+    old_author = CharField(null=True)
     new_workshop_id = CharField(null=True)
     new_package_id = CharField(null=True)
     new_name = CharField(null=True)

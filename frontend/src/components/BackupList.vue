@@ -762,7 +762,7 @@ const importShareCode = async () => {
 // 从导入列表加载
 const loadOrder = async (path) => {
   // 调用后端加载接口
-  const data = await orderStore.getBackupOrder(path)
+  const data = await orderStore.getBackupOrder(path, selectedBackupProfileId.value)
   if (data) {
     // 临时导入列表按路径去重，避免同一个外部文件重复堆叠。
     rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]

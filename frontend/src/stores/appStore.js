@@ -13,6 +13,7 @@ import { cleanRichText } from '../utils/unityTextParser'
 import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
+import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIdentity'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
@@ -1040,25 +1041,73 @@ export const useAppStore = defineStore('app', () => {
       window.open(steamUrl, '_blank')
     }
   }
+  const openInstallSource = (source) => {
+    const normalizedSource = normalizeInstallSource(source, source?.packageId || source?.package_id)
+    if (!normalizedSource) return false
+    if (normalizedSource.kind === 'workshop') {
+      openSteamWorkshopById(normalizedSource.workshopId)
+      return true
+    }
+    openUrl(normalizedSource.url)
+    return true
+  }
+  const subscribeInstallSources = async (sources = []) => {
+    const normalizedSources = normalizeInstallSources(sources)
+    const workshopIds = [...new Set(
+      normalizedSources
+        .filter(source => source.kind === 'workshop')
+        .map(source => source.workshopId)
+        .filter(Boolean)
+    )]
+    const skippedUrlCount = normalizedSources.filter(source => source.kind === 'url').length
+    if (workshopIds.length === 0) {
+      if (skippedUrlCount > 0) {
+        toast.info('URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。')
+      }
+      return false
+    }
+    const success = await subscribeWorkshopIds(workshopIds)
+    if (success && skippedUrlCount > 0) {
+      toast.info(`已跳过 ${skippedUrlCount} 个 URL 来源订阅项`)
+    }
+    return success
+  }
+  const downloadInstallSources = async (sources = []) => {
+    const normalizedSources = normalizeInstallSources(sources)
+    const workshopIds = [...new Set(
+      normalizedSources
+        .filter(source => source.kind === 'workshop')
+        .map(source => source.workshopId)
+        .filter(Boolean)
+    )]
+    const urlSources = normalizedSources.filter(source => source.kind === 'url' && source.url)
+    if (workshopIds.length === 0 && urlSources.length === 0) return false
+    if (workshopIds.length > 0) {
+      await downloadWorkshopItems(workshopIds)
+    }
+    if (urlSources.length > 0) {
+      urlSources.forEach(source => openUrl(source.url))
+      toast.info(`已打开 ${urlSources.length} 个外部来源，后续可接入专门下载流程。`)
+    }
+    return true
+  }
+  const resolveWorkshopIdsFromPackageIds = async (packageIds) => {
+    if (!packageIds) return []
+    const workshopStore = useWorkspaceStore()
+    return await workshopStore.resolvePackageIdsToWorkshopIds(packageIds)
+  }
   // 根据包名下载Mod
   const downloadPackageIds = async (packageIds) => {
-    if (!packageIds) return false
-    const workshopStore = useWorkspaceStore()
-    const workshopIdsMap = await workshopStore.getWorkshopIdsByPackageIdsMap(packageIds)
-    if (!workshopIdsMap) return false
-    // {zetrith.prepatcher: '2934420800'}
-    const workshopIds = Object.values(workshopIdsMap)
+    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
+    if (workshopIds.length === 0) return false
     // 调用下载函数
     await downloadWorkshopItems(workshopIds)
     return true
   }
   // 根据包名订阅Mod
   const subscribePackageIds = async (packageIds) => {
-    if (!packageIds) return false
-    const workshopStore = useWorkspaceStore()
-    const workshopIdsMap = await workshopStore.getWorkshopIdsByPackageIdsMap(packageIds)
-    if (!workshopIdsMap) return false
-    const workshopIds = Object.values(workshopIdsMap)
+    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
+    if (workshopIds.length === 0) return false
     // 调用订阅函数
     await subscribeWorkshopIds(workshopIds)
     return true
@@ -1411,7 +1460,7 @@ export const useAppStore = defineStore('app', () => {
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
-    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
+    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
     // AI处理
     getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, setCurrentAiBatchTask, clearCurrentAiBatchResults,
     fetchPrompts, savePrompt, deletePrompt, resetPrompts,

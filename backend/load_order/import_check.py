@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from backend.database.workshop_selection import build_install_source
 from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from .models import ParsedLoadOrderData
 from backend.utils.versioning import score_version_support
@@ -42,8 +43,13 @@ class ImportCheckItem:
     status: str
     import_workshop_id: str = ""
     import_workshop_id_valid: bool = False
+    import_source_url: str = ""
     resolved_workshop_id: str = ""
     resolved_from: str = "none"
+    original_source: dict[str, Any] | None = None
+    replacement_source: dict[str, Any] | None = None
+    target_source: dict[str, Any] | None = None
+    target_strategy: str = "none"
     target_workshop_id: str = ""
     target_workshop_url: str = ""
     warning: str = ""
@@ -108,11 +114,45 @@ def _build_summary(items: list[ImportCheckItem]) -> dict[str, int]:
     return summary
 
 
+def _normalize_package_detail_lookup(detail: dict[str, Any] | None) -> dict[str, Any]:
+    detail = detail or {}
+    if "direct" in detail or "replacement" in detail or "display" in detail:
+        return detail
+
+    normalized_direct = detail if detail.get("workshop_id") or detail.get("name") or detail.get("package_id") else {}
+    return {
+        "direct": {
+            "selected": normalized_direct,
+        },
+        "replacement": {
+            "selected": {},
+        },
+        "display": {
+            "selected": normalized_direct,
+            "selected_from": "direct" if normalized_direct else "none",
+        },
+    }
+
+
+def _describe_source(source: dict[str, Any] | None) -> str:
+    if not source:
+        return ""
+    if source.get("kind") == "workshop":
+        workshop_id = normalize_workshop_id(source.get("workshop_id"))
+        return f"Workshop {workshop_id}" if workshop_id else ""
+    return str(source.get("url") or "").strip()
+
+
 def _build_reason_text(
     status: str,
     import_workshop_id: str,
+    import_source_url: str,
     resolved_workshop_id: str,
     resolved_from: str,
+    original_source: dict[str, Any] | None,
+    replacement_source: dict[str, Any] | None,
+    target_source: dict[str, Any] | None,
+    target_strategy: str,
     warning: str,
     installed_via_replacement: bool = False,
 ) -> str:
@@ -134,13 +174,146 @@ def _build_reason_text(
 
     if import_workshop_id:
         lines.append(f"导入项 Workshop ID：{import_workshop_id}")
+    if import_source_url:
+        lines.append(f"导入项来源 URL：{import_source_url}")
     if resolved_workshop_id and resolved_workshop_id != import_workshop_id:
         lines.append(f"补全/替代后的目标 Workshop ID：{resolved_workshop_id}")
     if resolved_from and resolved_from != "none":
         lines.append(f"信息来源：{resolved_from}")
+    original_desc = _describe_source(original_source)
+    replacement_desc = _describe_source(replacement_source)
+    target_desc = _describe_source(target_source)
+    if original_desc:
+        lines.append(f"原版候选：{original_desc}")
+    if replacement_desc and replacement_desc != original_desc:
+        lines.append(f"替代候选：{replacement_desc}")
+    if target_desc:
+        if target_strategy == "replacement_fallback":
+            lines.append(f"一键操作目标：{target_desc}（原版来源不可用，已回退到替代项）")
+        else:
+            lines.append(f"一键操作目标：{target_desc}")
     if warning:
         lines.append(f"备注：{warning}")
     return "\n".join(lines)
+
+
+def _resolve_package_sources(
+    normalized_package_id: str,
+    import_name: str,
+    import_workshop_id: str,
+    import_workshop_id_valid: bool,
+    import_source_url: str,
+    package_lookup: dict[str, Any],
+    replacement_rule: dict[str, Any] | None,
+    installed_candidates: list[ImportCheckInstalledCandidate],
+    game_version: str,
+) -> dict[str, Any]:
+    direct_detail = ((package_lookup.get("direct") or {}).get("selected")) or {}
+    replacement_detail = ((package_lookup.get("replacement") or {}).get("selected")) or {}
+
+    resolved_workshop_id = ""
+    resolved_from = "none"
+    replacement_info = None
+    original_source = None
+    replacement_source = None
+    target_source = None
+    target_strategy = "none"
+
+    direct_workshop_id = normalize_workshop_id(direct_detail.get("workshop_id"))
+    replacement_workshop_id = normalize_workshop_id(replacement_detail.get("workshop_id"))
+
+    if import_workshop_id_valid or import_source_url:
+        original_source = build_install_source(
+            {
+                "package_id": normalized_package_id,
+                "workshop_id": import_workshop_id,
+                "url": import_source_url,
+                "name": import_name or normalized_package_id,
+            },
+            fallback_package_id=normalized_package_id,
+            source_origin="import",
+        )
+    elif direct_workshop_id:
+        original_source = build_install_source(
+            {
+                "package_id": normalized_package_id,
+                "workshop_id": direct_workshop_id,
+                "name": direct_detail.get("name") or import_name or normalized_package_id,
+                "game_versions": direct_detail.get("game_versions") or [],
+            },
+            fallback_package_id=normalized_package_id,
+            source_origin="external_db",
+        )
+
+    if replacement_workshop_id:
+        replacement_source = build_install_source(
+            {
+                "package_id": replacement_detail.get("package_id") or normalized_package_id,
+                "workshop_id": replacement_workshop_id,
+                "name": replacement_detail.get("name") or import_name or normalized_package_id,
+                "game_versions": replacement_detail.get("game_versions") or [],
+            },
+            fallback_package_id=normalized_package_id,
+            source_origin="replacement",
+            is_replacement=True,
+        )
+
+    original_source_workshop_id = normalize_workshop_id((original_source or {}).get("workshop_id"))
+
+    if import_workshop_id_valid:
+        resolved_workshop_id = import_workshop_id
+        resolved_from = "import"
+    elif import_source_url and original_source_workshop_id:
+        resolved_workshop_id = original_source_workshop_id
+        resolved_from = "import"
+    else:
+        if direct_workshop_id:
+            resolved_workshop_id = direct_workshop_id
+            resolved_from = "external_db"
+        elif replacement_workshop_id:
+            resolved_workshop_id = replacement_workshop_id
+            resolved_from = "replacement"
+            replacement_info = {
+                "new_workshop_id": replacement_workshop_id,
+                "new_name": replacement_detail.get("name") or import_name or normalized_package_id,
+            }
+        elif installed_candidates:
+            installed_workshop_id = normalize_workshop_id(installed_candidates[0].workshop_id)
+            if installed_workshop_id:
+                resolved_workshop_id = installed_workshop_id
+                resolved_from = "installed"
+
+    if not replacement_source and replacement_rule and _replacement_rule_matches(replacement_rule, game_version):
+        replacement_source = build_install_source(
+            {
+                "package_id": replacement_rule.get("new_package_id") or normalized_package_id,
+                "workshop_id": replacement_rule.get("new_workshop_id"),
+                "name": replacement_rule.get("new_name") or import_name or normalized_package_id,
+                "new_versions": replacement_rule.get("new_versions") or [],
+            },
+            fallback_package_id=normalized_package_id,
+            source_origin="replacement",
+            is_replacement=True,
+        )
+
+    if original_source:
+        target_source = original_source
+        target_strategy = "original_preferred" if not import_workshop_id_valid and not import_source_url else "import_exact"
+    elif replacement_source:
+        target_source = replacement_source
+        target_strategy = "replacement_fallback"
+
+    return {
+        "direct_detail": direct_detail,
+        "replacement_detail": replacement_detail,
+        "resolved_workshop_id": resolved_workshop_id,
+        "resolved_from": resolved_from,
+        "replacement_info": replacement_info,
+        "original_source": original_source,
+        "replacement_source": replacement_source,
+        "target_source": target_source,
+        "target_strategy": target_strategy,
+    }
 
 
 def build_import_check_report(
@@ -185,6 +358,7 @@ def build_import_check_report(
         raw_import_workshop_id = str(parsed.workshop_ids[index]).strip() if index < len(parsed.workshop_ids) else ""
         import_workshop_id = normalize_workshop_id(raw_import_workshop_id)
         import_workshop_id_valid = bool(import_workshop_id)
+        import_source_url = str(parsed.source_urls[index]).strip() if index < len(parsed.source_urls) else ""
 
         package_matched_candidates_raw = installed_by_package_id.get(normalized_package_id, [])
         installed_candidates_raw = list(package_matched_candidates_raw)
@@ -195,34 +369,30 @@ def build_import_check_report(
         installed_candidates = [_build_installed_candidate(mod) for mod in installed_candidates_raw]
         installed_workshop_ids = {candidate.workshop_id for candidate in installed_candidates if candidate.workshop_id}
 
-        detail = details_by_package_id.get(normalized_package_id) or {}
+        package_lookup = _normalize_package_detail_lookup(details_by_package_id.get(normalized_package_id))
         replacement_rule = replacements_by_old_workshop_id.get(import_workshop_id) if import_workshop_id else None
 
-        resolved_workshop_id = ""
-        resolved_from = "none"
-        replacement_info = None
         installed_via_replacement = False
-
-        if import_workshop_id_valid:
-            resolved_workshop_id = import_workshop_id
-            resolved_from = "import"
-        else:
-            detail_workshop_id = normalize_workshop_id(detail.get("workshop_id"))
-            if detail_workshop_id:
-                resolved_workshop_id = detail_workshop_id
-                if detail.get("is_replacement_derived"):
-                    resolved_from = "replacement"
-                    replacement_info = {
-                        "new_workshop_id": detail_workshop_id,
-                        "new_name": detail.get("name") or import_name or normalized_package_id,
-                    }
-                else:
-                    resolved_from = "external_db"
-            elif installed_candidates:
-                installed_workshop_id = normalize_workshop_id(installed_candidates[0].workshop_id)
-                if installed_workshop_id:
-                    resolved_workshop_id = installed_workshop_id
-                    resolved_from = "installed"
+        resolved = _resolve_package_sources(
+            normalized_package_id=normalized_package_id,
+            import_name=import_name,
+            import_workshop_id=import_workshop_id,
+            import_workshop_id_valid=import_workshop_id_valid,
+            import_source_url=import_source_url,
+            package_lookup=package_lookup,
+            replacement_rule=replacement_rule,
+            installed_candidates=installed_candidates,
+            game_version=game_version,
+        )
+        direct_detail = resolved["direct_detail"]
+        replacement_detail = resolved["replacement_detail"]
+        resolved_workshop_id = resolved["resolved_workshop_id"]
+        resolved_from = resolved["resolved_from"]
+        replacement_info = resolved["replacement_info"]
+        original_source = resolved["original_source"]
+        replacement_source = resolved["replacement_source"]
+        target_source = resolved["target_source"]
+        target_strategy = resolved["target_strategy"]
 
         if not installed_candidates_raw and resolved_workshop_id:
             # 核心补强：只要我们后续补全出了有效 workshop id，
@@ -248,19 +418,21 @@ def build_import_check_report(
                     replacement_match = False
                     if replacement_rule and _replacement_rule_matches(replacement_rule, game_version):
                         replacement_info = {
-                        "new_workshop_id": normalize_workshop_id(replacement_rule.get("new_workshop_id")),
+                            "new_workshop_id": normalize_workshop_id(replacement_rule.get("new_workshop_id")),
                             "new_name": replacement_rule.get("new_name"),
                         }
                         if replacement_info["new_workshop_id"] in installed_workshop_ids:
                             replacement_match = True
                             resolved_workshop_id = replacement_info["new_workshop_id"]
                             resolved_from = "replacement"
-                    elif detail.get("is_replacement_derived") and resolved_workshop_id in installed_workshop_ids:
+                    elif normalize_workshop_id(replacement_detail.get("workshop_id")) in installed_workshop_ids:
                         replacement_match = True
                         replacement_info = {
-                            "new_workshop_id": resolved_workshop_id,
-                            "new_name": detail.get("name") or import_name or normalized_package_id,
+                            "new_workshop_id": normalize_workshop_id(replacement_detail.get("workshop_id")),
+                            "new_name": replacement_detail.get("name") or import_name or normalized_package_id,
                         }
+                        resolved_workshop_id = replacement_info["new_workshop_id"]
+                        resolved_from = "replacement"
 
                     if replacement_match:
                         status = "replacement"
@@ -287,23 +459,27 @@ def build_import_check_report(
                 else:
                     status = "exact_match"
                     warning = "已通过补全后的 Workshop ID 对应到了安装项"
-            elif resolved_workshop_id:
+            elif target_source:
                 status = "missing"
             else:
                 status = "unknown"
                 warning = "无法查找到对应 Workshop ID，无法进行订阅或下载"
 
+        if status == "missing" and "ludeon.rimworld" in normalized_package_id:
+            status = "unknown"
+            warning = "官方核心包不参与缺失下载判定"
+
         # 对“纯包名导入”优先保留技术标识的可读性，用尖括号提示这是包名而不是展示名。
         display_name = (
             import_name
             or _fallback_package_label(normalized_package_id)
-            or str(detail.get("name") or "").strip()
+            or str(direct_detail.get("name") or replacement_detail.get("name") or "").strip()
             or (installed_candidates[0].name if installed_candidates else "")
             or (resolved_workshop_id and f"Workshop {resolved_workshop_id}")
             or "未知导入项"
         )
 
-        target_workshop_id = resolved_workshop_id
+        target_workshop_id = normalize_workshop_id((target_source or {}).get("workshop_id"))
         items.append(
             ImportCheckItem(
                 row_key=normalized_package_id,
@@ -313,16 +489,26 @@ def build_import_check_report(
                 status=status,
                 import_workshop_id=import_workshop_id,
                 import_workshop_id_valid=import_workshop_id_valid,
+                import_source_url=import_source_url,
                 resolved_workshop_id=resolved_workshop_id,
                 resolved_from=resolved_from,
+                original_source=original_source,
+                replacement_source=replacement_source,
+                target_source=target_source,
+                target_strategy=target_strategy,
                 target_workshop_id=target_workshop_id,
-                target_workshop_url=_build_workshop_url(target_workshop_id),
+                target_workshop_url=str((target_source or {}).get("url") or _build_workshop_url(target_workshop_id)),
                 warning=warning,
                 reason_text=_build_reason_text(
                     status,
                     import_workshop_id,
+                    import_source_url,
                     resolved_workshop_id,
                     resolved_from,
+                    original_source,
+                    replacement_source,
+                    target_source,
+                    target_strategy,
                     warning,
                     installed_via_replacement,
                 ),
@@ -346,6 +532,18 @@ def build_import_check_report(
         resolved_workshop_id = normalized_workshop_id
         resolved_from = "import"
         replacement_info = None
+        original_source = build_install_source(
+            {
+                "package_id": detail.get("package_id") or "",
+                "workshop_id": normalized_workshop_id,
+                "name": detail.get("name") or normalized_workshop_id,
+            },
+            fallback_package_id=normalize_package_id(detail.get("package_id")),
+            source_origin="import",
+        )
+        replacement_source = None
+        target_source = original_source
+        target_strategy = "import_exact"
 
         installed_via_replacement = False
         if installed_candidates:
@@ -369,6 +567,17 @@ def build_import_check_report(
                     }
                     warning = "当前环境安装的是替代版本"
                 elif new_workshop_id:
+                    replacement_source = build_install_source(
+                        {
+                            "package_id": replacement_rule.get("new_package_id") or normalize_package_id(detail.get("package_id")),
+                            "workshop_id": new_workshop_id,
+                            "name": replacement_rule.get("new_name") or detail.get("name") or normalized_workshop_id,
+                            "new_versions": replacement_rule.get("new_versions") or [],
+                        },
+                        fallback_package_id=normalize_package_id(detail.get("package_id")),
+                        source_origin="replacement",
+                        is_replacement=True,
+                    )
                     resolved_workshop_id = new_workshop_id
                     resolved_from = "replacement"
                     replacement_info = {
@@ -377,6 +586,10 @@ def build_import_check_report(
                     }
                     status = "replacement"
                     warning = "该工坊项目已有替代版本"
+
+        if status == "replacement" and replacement_source and not installed_via_replacement:
+            target_source = replacement_source
+            target_strategy = "replacement_suggestion"
 
         package_id = normalize_package_id(detail.get("package_id"))
         display_name = (
@@ -395,16 +608,26 @@ def build_import_check_report(
                 status=status,
                 import_workshop_id=normalized_workshop_id,
                 import_workshop_id_valid=True,
+                import_source_url="",
                 resolved_workshop_id=resolved_workshop_id,
                 resolved_from=resolved_from,
-                target_workshop_id=resolved_workshop_id,
-                target_workshop_url=_build_workshop_url(resolved_workshop_id),
+                original_source=original_source,
+                replacement_source=replacement_source,
+                target_source=target_source,
+                target_strategy=target_strategy,
+                target_workshop_id=normalize_workshop_id((target_source or {}).get("workshop_id")),
+                target_workshop_url=str((target_source or {}).get("url") or _build_workshop_url(normalize_workshop_id((target_source or {}).get("workshop_id")))),
                 warning=warning,
                 reason_text=_build_reason_text(
                     status,
                     normalized_workshop_id,
+                    "",
                     resolved_workshop_id,
                     resolved_from,
+                    original_source,
+                    replacement_source,
+                    target_source,
+                    target_strategy,
                     warning,
                     installed_via_replacement,
                 ),

@@ -6,12 +6,36 @@ import { useGroupStore } from './groupStore'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../utils/constants'
 import { useConfirmStore } from './confirmStore'
 import { useProfileStore } from './profileStore'
+import {
+  dedupeInstallSources,
+  normalizeInstallSource,
+  normalizePackageId,
+  normalizeWorkshopId,
+} from '../utils/modIdentity'
 
 export const useModStore = defineStore('mods', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
   const checkResult = appStore.checkResult
+
+  const arePlainValuesEqual = (left, right) => {
+    if (left === right) return true
+    if (Array.isArray(left) || Array.isArray(right)) {
+      if (!Array.isArray(left) || !Array.isArray(right)) return false
+      if (left.length !== right.length) return false
+      return left.every((value, index) => arePlainValuesEqual(value, right[index]))
+    }
+    if (!left || !right || typeof left !== 'object' || typeof right !== 'object') {
+      return false
+    }
+    const leftKeys = Object.keys(left)
+    const rightKeys = Object.keys(right)
+    if (leftKeys.length !== rightKeys.length) return false
+    return leftKeys.every(key => (
+      Object.prototype.hasOwnProperty.call(right, key) && arePlainValuesEqual(left[key], right[key])
+    ))
+  }
   
   // === State ===
   const allModsMap = ref(new Map())   // 核心数据，使用 Map 加速查找
@@ -26,6 +50,8 @@ export const useModStore = defineStore('mods', () => {
   const savedActiveIds = ref([])      // 原始已激活列表快照（用于判断 列表变化）
   const activeLoadModifyTime = ref(0) // 已激活列表最后修改时间戳
   const activeLoadVersionToken = ref({})
+  const installSourceHints = ref(new Map())
+  const pendingGhostFetches = new Map()
 
   const conflictList = ref([])        // 重复包名冲突列表
   const coexistenceList = ref([])     // 共存Mod列表
@@ -110,13 +136,13 @@ export const useModStore = defineStore('mods', () => {
   const allModTags = computed(() => {
     return [...new Set(Array.from(allModsMap.value.values()).flatMap(mod => mod.tags || []))]
   })
-  // 获取所有模组的所有创意工坊ID（去重）
-  const allModWorkshopIds = computed(() => {
-    return new Set(Array.from(allModsMap.value.values()).filter(mod => mod.store === 'workshop').map(mod => mod.workshop_id))
-  })
-  // 获取所有模组的所有包名ID（去重）
-  const allModPackageIds = computed(() => {
-    return new Set(Array.from(allModsMap.value.values()).map(mod => mod.package_id))
+  const installedWorkshopIds = computed(() => {
+    return new Set(
+      Array.from(allModsMap.value.values())
+        .filter(mod => !mod?.isMissing && !!mod?.path)
+        .map(mod => normalizeWorkshopId(mod?.workshop_id))
+        .filter(Boolean)
+    )
   })
   const listHistoryTotal = computed(() => listHistoryUndoStack.value.length + listHistoryRedoStack.value.length)
   const listHistoryPosition = computed(() => listHistoryUndoStack.value.length)
@@ -262,15 +288,21 @@ export const useModStore = defineStore('mods', () => {
   const takeModById = (id, defaultName = '未知模组') => {
     if (!id) return null
     const lowerId = id.toLowerCase()
-    if (allModsMap.value.has(lowerId)) return allModsMap.value.get(lowerId)
+    if (allModsMap.value.has(lowerId)) {
+      const mod = allModsMap.value.get(lowerId)
+      applyInstallSourceHintToMod(mod, lowerId)
+      return mod
+    }
     // 构造缺失模组的“幽灵对象”
-    return {
+    const ghostMod = {
       package_id: id,
       name: `⚠ ${defaultName} (${id})`,
       path: null,
       description: '该模组在本地未找到，可能未下载，或已被手动删除。',
       isMissing: true,
     }
+    applyInstallSourceHintToMod(ghostMod, lowerId)
+    return ghostMod
   }
   const hasRealModById = (id) => {
     if (!id) return false
@@ -279,6 +311,113 @@ export const useModStore = defineStore('mods', () => {
     const mod = allModsMap.value.get(lowerId)
     // ghost 项虽然会被塞进 allModsMap，但它们不应该被当成“真实已安装模组”。
     return !!mod && !mod.isMissing && !!mod.path
+  }
+  const hasInstalledWorkshopId = (workshopId = '') => {
+    const normalizedWorkshopId = normalizeWorkshopId(workshopId)
+    if (!normalizedWorkshopId) return false
+    return installedWorkshopIds.value.has(normalizedWorkshopId)
+  }
+  const getInstallSourceHints = (packageId = '') => {
+    const normalizedPackageId = normalizePackageId(packageId)
+    if (!normalizedPackageId) return []
+    return installSourceHints.value.get(normalizedPackageId) || []
+  }
+  const getPreferredInstallSourceHint = (packageId = '') => getInstallSourceHints(packageId)[0] || null
+  const applyInstallSourceHintToMod = (mod = null, packageId = '') => {
+    const normalizedPackageId = normalizePackageId(packageId || mod?.package_id)
+    const sourceHint = getPreferredInstallSourceHint(normalizedPackageId)
+    if (!mod || !sourceHint) return
+    if (sourceHint.kind === 'workshop' && !normalizeWorkshopId(mod.workshop_id)) {
+      mod.workshop_id = sourceHint.workshopId
+    }
+    if (!String(mod.url || '').trim() && sourceHint.url) {
+      mod.url = sourceHint.url
+    }
+  }
+  const mergeInstallSourceHintsFromMods = (mods = [], sourceOrigin = 'import') => {
+    const nextMap = new Map(installSourceHints.value)
+    let changed = false
+    ;(mods || []).forEach(mod => {
+      const normalizedPackageId = normalizePackageId(mod?.package_id)
+      if (!normalizedPackageId) return
+      const hasWorkshopIdRaw = Object.prototype.hasOwnProperty.call(mod || {}, 'workshop_id_raw')
+      const hasSourceUrlRaw = Object.prototype.hasOwnProperty.call(mod || {}, 'source_url_raw')
+      const rawWorkshopValue = hasWorkshopIdRaw ? String(mod?.workshop_id_raw || '').trim() : ''
+      const rawSourceUrl = hasSourceUrlRaw ? String(mod?.source_url_raw || mod?.sourceUrlRaw || '').trim() : ''
+      const preferRawOnly = sourceOrigin === 'import' && (hasWorkshopIdRaw || hasSourceUrlRaw)
+      const sourceWorkshopId = (() => {
+        const rawValue = preferRawOnly ? rawWorkshopValue : (hasWorkshopIdRaw ? mod?.workshop_id_raw : mod?.workshop_id)
+        const normalizedValue = String(rawValue || '').trim()
+        return normalizedValue === '0' ? '' : normalizedValue
+      })()
+      const sourceUrl = preferRawOnly
+        ? rawSourceUrl
+        : (
+          hasSourceUrlRaw
+            ? (mod?.source_url_raw || mod?.sourceUrlRaw || '')
+            : (mod?.source_url || mod?.sourceUrl || mod?.url)
+        )
+      const normalizedSource = normalizeInstallSource(
+        {
+          packageId: normalizedPackageId,
+          workshopId: sourceWorkshopId,
+          url: sourceUrl,
+          title: mod?.name || mod?.display_name || mod?.alias_name || normalizedPackageId,
+          supportedVersions: mod?.supported_versions || mod?.supportedVersions || [],
+          sourceOrigin,
+        },
+        normalizedPackageId
+      )
+      const currentSources = nextMap.get(normalizedPackageId) || []
+      const baseSources = sourceOrigin === 'import'
+        ? currentSources.filter(source => String(source?.sourceOrigin || source?.source_origin || '') !== 'import')
+        : currentSources
+      if (!normalizedSource) {
+        if (!arePlainValuesEqual(currentSources, baseSources)) {
+          if (baseSources.length > 0) nextMap.set(normalizedPackageId, baseSources)
+          else nextMap.delete(normalizedPackageId)
+          changed = true
+        }
+        return
+      }
+      const mergedSources = dedupeInstallSources([...baseSources, normalizedSource])
+      if (!arePlainValuesEqual(currentSources, mergedSources)) {
+        nextMap.set(normalizedPackageId, mergedSources)
+        changed = true
+      }
+    })
+    if (changed) {
+      installSourceHints.value = nextMap
+      dataVersion.value++
+    }
+    return changed
+  }
+  const clearInstallSourceHints = () => {
+    installSourceHints.value = new Map()
+    dataVersion.value++
+  }
+  const clearInstallSourceHintsByOrigin = (sourceOrigin = 'import') => {
+    const normalizedOrigin = String(sourceOrigin || '').trim()
+    if (!normalizedOrigin) return false
+    const nextMap = new Map()
+    let changed = false
+    installSourceHints.value.forEach((sources, packageId) => {
+      const keptSources = (sources || []).filter(source => {
+        const origin = String(source?.sourceOrigin || source?.source_origin || '').trim()
+        return origin !== normalizedOrigin
+      })
+      if (keptSources.length !== (sources || []).length) {
+        changed = true
+      }
+      if (keptSources.length > 0) {
+        nextMap.set(packageId, keptSources)
+      }
+    })
+    if (changed) {
+      installSourceHints.value = nextMap
+      dataVersion.value++
+    }
+    return changed
   }
   // 获取 Mod 对象列表
   const takeModListByIds = (ids) => {
@@ -385,56 +524,92 @@ export const useModStore = defineStore('mods', () => {
   // 批量查询未知 PackageID 并将其作为幽灵项存入 Map
   const fetchAndCacheGhostMods = async (ids = []) => {
     if (!ids || ids.length === 0 || !window.pywebview) return
-    
+
+    const normalizedIds = [...new Set(
+      ids
+        .map(id => String(id || '').trim().toLowerCase())
+        .filter(Boolean)
+    )]
+
     // 筛选出本地缺失(完全未知或本身就是 isMissing )的 ID
-    const unknownIds = ids.map(id => id.toLowerCase()).filter(id => {
+    const unknownIds = normalizedIds.filter(id => {
       const existing = allModsMap.value.get(id)
       return !existing || existing.isMissing
     })
     if (unknownIds.length === 0) return
-    try {
-      const res = await window.pywebview.api.get_workshop_details_by_package_ids(unknownIds)
-      if (res?.status === 'success' && res.data) {
-        let changed = false
-        const metaMap = res.data
-        unknownIds.forEach(id => {
-          const meta = metaMap[id]
-          // 1. 尝试获取现有对象引用，如果没有则创建一个基础对象
-          let ghostMod = allModsMap.value.get(id) || { package_id: id }
-          if (meta) {
-            // 2. 【核心改进】：全量合并 meta 信息 (包含 author, workshop_id, preview_url, is_replacement_derived 等)
-            Object.assign(ghostMod, meta)
-            // 3. 强制修正/补充显示名称
-            ghostMod.name = `⚠ ${meta.name || id} (${id})`
-            ghostMod.display_name = meta.name
-            
-            changed = true
-          } else if (!allModsMap.value.has(id)) {
-            // 数据库也没查到，设置为最简未知幽灵
-            ghostMod.name = `⚠ 未知模组 (${id})`
-            changed = true
-          }
-          // 4. 【最后设防】：无论 meta 里有什么，强制确保这四个幽灵项核心属性不变
-          ghostMod.path = null
-          ghostMod.isMissing = true
-          ghostMod.description = '该模组在本地未找到，可能未下载，或已被手动删除。'
-          // 确保 package_id 始终是请求时的那个，防止 meta 里的 package_id 大小写不一致
-          ghostMod.package_id = id 
-          // 存入/更新 Map
-          allModsMap.value.set(id, ghostMod)
-        })
-        if (changed) {
-          dataVersion.value++ // 触发响应式计算
-        }
+
+    const pendingTasks = []
+    const idsToFetch = []
+    unknownIds.forEach(id => {
+      const pendingTask = pendingGhostFetches.get(id)
+      if (pendingTask) pendingTasks.push(pendingTask)
+      else idsToFetch.push(id)
+    })
+
+    const buildGhostMod = (id, currentMod = null, meta = null) => {
+      const baseMod = currentMod ? { ...currentMod } : { package_id: id }
+      if (meta) {
+        Object.assign(baseMod, meta)
+        baseMod.name = `⚠ ${meta.name || id} (${id})`
+        baseMod.display_name = meta.name
+      } else if (!currentMod) {
+        baseMod.name = `⚠ 未知模组 (${id})`
       }
-    } catch (e) {
-      console.error("加载幽灵模组缓存信息失败:", e)
+      baseMod.path = null
+      baseMod.isMissing = true
+      baseMod.description = '该模组在本地未找到，可能未下载，或已被手动删除。'
+      baseMod.package_id = id
+      applyInstallSourceHintToMod(baseMod, id)
+      return baseMod
+    }
+
+    let batchTask = null
+    if (idsToFetch.length > 0) {
+      batchTask = (async () => {
+        try {
+          const res = await window.pywebview.api.get_workshop_details_by_package_ids(idsToFetch)
+          if (res?.status === 'success' && res.data) {
+            let changed = false
+            const metaMap = Object.fromEntries(
+              Object.entries(res.data || {}).map(([packageId, payload]) => [
+                packageId,
+                payload?.display?.selected || payload || null,
+              ])
+            )
+            idsToFetch.forEach(id => {
+              const currentGhost = allModsMap.value.get(id) || null
+              const nextGhost = buildGhostMod(id, currentGhost, metaMap[id] || null)
+              if (arePlainValuesEqual(currentGhost, nextGhost)) return
+              allModsMap.value.set(id, nextGhost)
+              changed = true
+            })
+            if (changed) {
+              dataVersion.value++
+            }
+          }
+        } catch (e) {
+          console.error("加载幽灵模组缓存信息失败:", e)
+        } finally {
+          idsToFetch.forEach(id => {
+            if (pendingGhostFetches.get(id) === batchTask) {
+              pendingGhostFetches.delete(id)
+            }
+          })
+        }
+      })()
+      idsToFetch.forEach(id => pendingGhostFetches.set(id, batchTask))
+      pendingTasks.push(batchTask)
+    }
+
+    if (pendingTasks.length > 0) {
+      await Promise.allSettled(pendingTasks)
     }
   }
   // 设置 Mod 数据
   const setMods = (data, options = {}) => {
     const { resetHistory = false } = options || {}
     if (resetHistory) clearListHistory()
+    clearInstallSourceHintsByOrigin('import')
     activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
     setActiveLoadBaseline(
       data.active_load_order || [],
@@ -462,6 +637,7 @@ export const useModStore = defineStore('mods', () => {
       if (!Array.isArray(mod.incompatible_mods)) mod.incompatible_mods = []
       if (!Array.isArray(mod.tags)) mod.tags = []
       if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
+      applyInstallSourceHintToMod(mod, mod.package_id)
       tempMap.set(mod.package_id.toLowerCase(), mod)
     })
     allModsMap.value = tempMap
@@ -481,6 +657,7 @@ export const useModStore = defineStore('mods', () => {
     savedActiveIds.value = []
     activeLoadModifyTime.value = 0
     activeLoadVersionToken.value = {}
+    clearInstallSourceHints()
     dataVersion.value++
   }
   // 从所有列表中移除指定 IDs
@@ -1555,12 +1732,13 @@ export const useModStore = defineStore('mods', () => {
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
     // Getters
-    isDirty, selectedMods, selectedStats, allModTags, modIssues, allModWorkshopIds, allModPackageIds,
+    isDirty, selectedMods, selectedStats, allModTags, modIssues,
     listHistoryTotal, listHistoryPosition,
     canUndoListHistory, canRedoListHistory,
 
     // Actions
-    setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, hasRealModById, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
