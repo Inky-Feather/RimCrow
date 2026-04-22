@@ -1,9 +1,8 @@
-# backend/managers/mgr_texture_opt.py
 from __future__ import annotations
 
-import copy
-import json
+import concurrent.futures
 import os
+import platform
 import shutil
 import struct
 import subprocess
@@ -11,37 +10,34 @@ import tempfile
 import threading
 import time
 import uuid
-import platform
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
-from backend.settings import CACHE_DIR, TOOLS_DIR, settings
+from backend.settings import TOOLS_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
-from backend.utils.tools import current_ms, generate_path_hash
+from backend.utils.tools import current_ms
 
 TEXTURE_TASK_TYPE = "texture-opt"
 TEXTURE_ANALYSIS_TASK_TYPE = "texture-opt-analyze"
-TEXTURE_MANIFEST_VERSION = 2  # 升级清单版本
-TEXTURE_SCAN_SCHEMA_VERSION = 2
 TEXTURE_TASK_RETENTION_SECONDS = 120
 TODDS_WINDOWS_ASSET_PREFIX = "todds_Windows_"
 TODDS_FALLBACK_VERSION = "0.4.1"
 TODDS_FALLBACK_FILENAME = f"todds_Windows_{TODDS_FALLBACK_VERSION}.zip"
 SOURCE_IMAGE_EXTENSIONS = (".png",)
-
-# =========================================================
-#  RimWorld 贴图开发规范字典 (核心排雷)
-# =========================================================
-SPECIAL_SUFFIXES = {
-    # 遮罩图必须保留极高的通道精度，绝对不能用 BC1/BC3 压缩，否则游戏内染色会产生严重马赛克。
-    "_m": {"action": "skip", "reason": "遮罩图(Mask)需保持原画质，跳过压缩"},
-    "_mask": {"action": "skip", "reason": "遮罩图(Mask)需保持原画质，跳过压缩"},
+SCALE_STEP_SEQUENCE = (20, 25, 40, 50, 60, 75, 80)
+SCALE_STEP_RATIONALS = {
+    20: (1, 5),
+    25: (1, 4),
+    40: (2, 5),
+    50: (1, 2),
+    60: (3, 5),
+    75: (3, 4),
+    80: (4, 5),
 }
-
 
 class TextureOptError(RuntimeError):
     pass
@@ -94,7 +90,13 @@ class TextureTask:
 
 class _ToolProcessRunner:
     @staticmethod
-    def run_command( command: list[str], cancel_event: threading.Event, timeout_seconds: float | None = None, *, tool_name: str = "todds" ) -> None:
+    def run_command(
+        command: list[str],
+        cancel_event: threading.Event,
+        timeout_seconds: float | None = None,
+        *,
+        tool_name: str = "todds",
+    ) -> None:
         creationflags = 0
         startupinfo = None
         if platform.system() == "Windows":
@@ -117,7 +119,6 @@ class _ToolProcessRunner:
                     creationflags=creationflags,
                     startupinfo=startupinfo,
                 )
-
                 while True:
                     if cancel_event.is_set():
                         _ToolProcessRunner.terminate_process(process)
@@ -137,30 +138,18 @@ class _ToolProcessRunner:
         if not process:
             raise TextureOptError(f"{tool_name} 进程未能启动")
 
-        elapsed = round(time.monotonic() - started_at, 3)
         detail = _ToolProcessRunner.read_process_log(log_path)
-
         if was_cancelled:
             _ToolProcessRunner.cleanup_log_file(log_path)
             raise TextureOptCancelled("贴图优化任务已取消")
-
         if timeout_detail:
             preserved_log = _ToolProcessRunner.preserve_process_log(log_path, tool_name)
             raise TextureOptError(
                 f"{tool_name} 执行超时（{int(timeout_seconds or 0)}秒）: {detail or '无输出'}"
                 + (f" [日志: {preserved_log}]" if preserved_log else "")
             )
-
         if process.returncode != 0:
             preserved_log = _ToolProcessRunner.preserve_process_log(log_path, tool_name)
-            logger.error(
-                "TextureOpt %s failed: code=%s elapsed=%ss detail=%s log=%s",
-                tool_name,
-                process.returncode,
-                elapsed,
-                detail or "未知错误",
-                preserved_log or "",
-            )
             raise TextureOptError(
                 f"{tool_name} 执行失败: {detail or '未知错误'}"
                 + (f" [日志: {preserved_log}]" if preserved_log else "")
@@ -189,9 +178,7 @@ class _ToolProcessRunner:
                 data = handle.read()
         except OSError:
             return ""
-        if not data:
-            return ""
-        return data.decode("utf-8", errors="replace").strip()
+        return data.decode("utf-8", errors="replace").strip() if data else ""
 
     @staticmethod
     def cleanup_log_file(log_path: Path | None) -> None:
@@ -227,7 +214,6 @@ class ToddsEncoder:
     def resolve_executable(self) -> Path:
         if platform.system() != "Windows":
             raise TextureOptError("todds 后端当前仅支持 Windows 自动集成。")
-
         texture_tools_path = resolve_texture_tools_path(self.options)
         candidates = [
             str(self.options.get("todds_path") or "").strip(),
@@ -240,54 +226,51 @@ class ToddsEncoder:
                 return Path(candidate)
         raise TextureOptError("未找到 todds.exe。请在贴图优化中心下载 todds。")
 
-    def encode_mod(
+    def encode_batch(
         self,
         cancel_event: threading.Event,
         *,
-        overwrite_existing: bool | None = None,
         source_paths: list[str],
+        overwrite_existing: bool,
+        scale_percent: int | None,
     ) -> None:
-        overwrite_flag = bool(self.options.get("overwrite_existing", False)) if overwrite_existing is None else bool(overwrite_existing)
-        scale_factor = float(self.options.get("scale_factor", 1.0) or 1.0)
-        max_size = int(self.options.get("max_size", 0) or 0)
-        needs_resize = (scale_factor > 0 and abs(scale_factor - 1.0) > 1e-6) or max_size > 0
+        normalized_sources = [str(Path(path)) for path in source_paths if path]
+        if not normalized_sources:
+            return
 
         command = [
             str(self.resolve_executable()),
-            "-f", self.OPAQUE_FORMAT,
-            "-af", self.ALPHA_FORMAT,
-            "-o" if overwrite_flag else "-on",
+            "-f",
+            self.OPAQUE_FORMAT,
+            "-af",
+            self.ALPHA_FORMAT,
+            "-o" if overwrite_existing else "-on",
             "-vf",
+            "-r",
+            "Textures",
+            "-t",
+            "-p",
         ]
-        if not needs_resize:
-            command.append("-fs")
         if not bool(self.options.get("generate_mipmaps", True)):
             command.append("-nm")
-        if scale_factor > 0 and abs(scale_factor - 1.0) > 1e-6:
-            command.extend(["-sc", str(int(round(scale_factor * 100)))])
-        if max_size > 0:
-            command.extend(["-ms", str(max_size)])
+        if scale_percent is None:
+            command.append("-fs")
+        else:
+            command.extend(["-sc", str(int(scale_percent))])
+
         timeout_seconds = max(300, int(self.options.get("encode_batch_timeout_seconds", 480) or 480))
-        normalized_sources = [str(Path(path)) for path in source_paths if path]
-        if not normalized_sources:
-            raise TextureOptError("没有可交给 todds 的 PNG 源图")
         file_list = None
         try:
-            with tempfile.NamedTemporaryFile(
-                "w",
-                encoding="utf-8",
-                newline="\n",
-                delete=False,
-                suffix=".txt",
-            ) as handle:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", delete=False, suffix=".txt") as handle:
                 file_list = Path(handle.name)
                 for source_path in normalized_sources:
                     handle.write(f"{source_path}\n")
             command.append(str(file_list))
-            self._run_todds_command(
+            _ToolProcessRunner.run_command(
                 command,
                 cancel_event,
                 timeout_seconds=timeout_seconds,
+                tool_name="todds",
             )
         finally:
             if file_list and file_list.exists():
@@ -296,29 +279,13 @@ class ToddsEncoder:
                 except OSError:
                     pass
 
-    @staticmethod
-    def _run_todds_command(command: list[str], cancel_event: threading.Event, timeout_seconds: float | None = None) -> None:
-        _ToolProcessRunner.run_command(
-            command,
-            cancel_event,
-            timeout_seconds=timeout_seconds,
-            tool_name="todds",
-        )
-
-
-# =========================================================
-#  贴图优化主管理器
-# =========================================================
 
 class TextureOptimizationManager:
     def __init__(self):
         self._tasks: dict[str, TextureTask] = {}
         self._analysis_tasks: dict[str, threading.Event] = {}
         self._analysis_started_at: dict[str, int] = {}
-        self._scan_cache: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
-        self._manifest_root = Path(CACHE_DIR) / "texture_opt" / "manifests"
-        self._manifest_root.mkdir(parents=True, exist_ok=True)
 
     def get_active_analysis_task_ids(self) -> list[str]:
         with self._lock:
@@ -342,21 +309,29 @@ class TextureOptimizationManager:
         with self._lock:
             return not self._analysis_tasks
 
+    def register_analysis_task(self, task_id: str) -> threading.Event:
+        cancel_event = threading.Event()
+        with self._lock:
+            self._analysis_tasks[task_id] = cancel_event
+            self._analysis_started_at[task_id] = current_ms()
+        return cancel_event
+
+    def finish_analysis_task(self, task_id: str) -> None:
+        with self._lock:
+            self._analysis_tasks.pop(task_id, None)
+            self._analysis_started_at.pop(task_id, None)
+
     def start_task(self, mod_paths: list[str], action: str = "optimize", options: dict[str, Any] | None = None) -> dict[str, Any]:
         mod_paths = self._normalize_mod_paths(mod_paths)
         if not mod_paths:
             raise TextureOptError("没有可处理的 Mod 路径")
 
-        merged_options = self._build_options(options)
         task_id = uuid.uuid4().hex
-        task = TextureTask(id=task_id, action=action, mod_paths=mod_paths, options=merged_options)
-        
+        task = TextureTask(id=task_id, action=action, mod_paths=mod_paths, options=self._build_options(options))
         with self._lock:
             self._tasks[task_id] = task
 
-        worker = threading.Thread(
-            target=self._run_task, args=(task,), daemon=True, name=f"TextureOpt-{task_id[:8]}"
-        )
+        worker = threading.Thread(target=self._run_task, args=(task,), daemon=True, name=f"TextureOpt-{task_id[:8]}")
         worker.start()
         self._emit_progress(task, status="pending", progress=0, message="准备任务...")
         return task.to_payload()
@@ -378,15 +353,12 @@ class TextureOptimizationManager:
                 "action": "analyze",
                 "status": "cancelling",
             }
-
         raise TextureOptError("未找到对应的贴图优化任务")
 
     def get_backend_status(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
         merged_options = self._build_options(options)
-        
         try:
-            encoder = ToddsEncoder(merged_options)
-            executable = encoder.resolve_executable()
+            executable = ToddsEncoder(merged_options).resolve_executable()
             return {
                 "available": True,
                 "resolved_path": str(executable),
@@ -402,7 +374,7 @@ class TextureOptimizationManager:
     def prepare_tool_download(self, download_mgr, options: dict[str, Any] | None = None) -> dict[str, Any]:
         if platform.system() != "Windows":
             raise TextureOptError("当前自动下载工具链仅支持 Windows 平台。")
-            
+
         merged_options = self._build_options(options)
         status = self.get_backend_status(merged_options)
         if status["available"]:
@@ -419,8 +391,7 @@ class TextureOptimizationManager:
 
         texture_tools_path = resolve_texture_tools_path(merged_options)
         texture_tools_path.mkdir(parents=True, exist_ok=True)
-        github = GithubManager()
-        github.install_from_github(
+        GithubManager().install_from_github(
             download_mgr,
             GithubInstallRequest(
                 owner="todds-encoder",
@@ -448,634 +419,6 @@ class TextureOptimizationManager:
         )
         return {"already_ready": False}
 
-    def _build_scan_cache_key(self, mod_paths: list[str], options: dict[str, Any]) -> str:
-        payload = json.dumps(
-            {
-                "schema_version": TEXTURE_SCAN_SCHEMA_VERSION,
-                "mod_paths": list(mod_paths),
-                "signature": self._build_signature(options),
-                "skip_small_textures": bool(options.get("skip_small_textures", True)),
-                "min_dimension": int(options.get("min_dimension", 64)),
-                "overwrite_existing": bool(options.get("overwrite_existing", False)),
-            },
-            sort_keys=True,
-            ensure_ascii=False,
-        )
-        return generate_path_hash(payload)
-
-    def _get_cached_scan_snapshot(self, mod_paths: list[str], options: dict[str, Any]) -> dict[str, Any] | None:
-        cache_key = self._build_scan_cache_key(mod_paths, options)
-        with self._lock:
-            snapshot = self._scan_cache.get(cache_key)
-        if not snapshot:
-            return None
-        if not self._is_valid_scan_snapshot(snapshot):
-            with self._lock:
-                self._scan_cache.pop(cache_key, None)
-            return None
-        return snapshot
-
-    def _store_scan_snapshot(self, snapshot: dict[str, Any]) -> None:
-        cache_key = str(snapshot.get("cache_key") or "")
-        if not cache_key:
-            return
-        with self._lock:
-            self._scan_cache[cache_key] = snapshot
-
-    def _invalidate_scan_cache(
-        self,
-        mod_paths: list[str],
-        *,
-        keep_cache_key: str | None = None,
-    ) -> int:
-        target_paths = {os.path.abspath(path).lower() for path in mod_paths if path}
-        if not target_paths:
-            return 0
-
-        removed = 0
-        with self._lock:
-            stale_keys: list[str] = []
-            for cache_key, snapshot in self._scan_cache.items():
-                if keep_cache_key and cache_key == keep_cache_key:
-                    continue
-                snapshot_paths = {
-                    os.path.abspath(str(path)).lower()
-                    for path in snapshot.get("mod_paths", [])
-                    if path
-                }
-                if snapshot_paths & target_paths:
-                    stale_keys.append(cache_key)
-            for cache_key in stale_keys:
-                self._scan_cache.pop(cache_key, None)
-            removed = len(stale_keys)
-        return removed
-
-    def _replace_scan_snapshot(self, snapshot: dict[str, Any]) -> None:
-        cache_key = str(snapshot.get("cache_key") or "")
-        mod_paths = [str(path) for path in snapshot.get("mod_paths", [])]
-        self._invalidate_scan_cache(mod_paths, keep_cache_key=cache_key)
-        self._store_scan_snapshot(snapshot)
-
-    def _get_or_build_scan_snapshot(
-        self,
-        mod_paths: list[str],
-        options: dict[str, Any],
-        *,
-        analysis_task_id: str | None = None,
-        task: TextureTask | None = None,
-        cancel_event: threading.Event | None = None,
-        use_cache: bool = True,
-    ) -> dict[str, Any]:
-        if use_cache:
-            cached = self._get_cached_scan_snapshot(mod_paths, options)
-            if cached: return cached
-
-        snapshot = self._scan_mods_snapshot(
-            mod_paths,
-            options,
-            analysis_task_id=analysis_task_id,
-            task=task,
-            cancel_event=cancel_event,
-        )
-        self._store_scan_snapshot(snapshot)
-        return snapshot
-
-    def _scan_mods_snapshot(
-        self,
-        mod_paths: list[str],
-        options: dict[str, Any],
-        *,
-        analysis_task_id: str | None = None,
-        task: TextureTask | None = None,
-        cancel_event: threading.Event | None = None,
-    ) -> dict[str, Any]:
-        signature = self._build_signature(options)
-        summary = self._create_empty_stat(include_mod_count=True, mod_count=len(mod_paths))
-        mod_snapshots: list[dict[str, Any]] = []
-        total_mods = max(1, len(mod_paths))
-        last_emit_time = 0.0
-
-        for index, mod_path in enumerate(mod_paths, start=1):
-            if cancel_event and cancel_event.is_set():
-                raise TextureOptCancelled("贴图扫描任务已取消")
-
-            mod_snapshot = self._scan_single_mod_snapshot(mod_path, options)
-            mod_snapshots.append(mod_snapshot)
-            self._merge_stat(summary, mod_snapshot["stat"])
-
-            now = time.monotonic()
-            if now - last_emit_time >= 0.1 or index == total_mods:
-                if analysis_task_id:
-                    self._emit_analysis_progress(
-                        analysis_task_id,
-                        status="running",
-                        progress=min(99, int((index / total_mods) * 100)),
-                        message=f"已扫描 {mod_snapshot['stat']['mod_name']}",
-                        processed_mods=index,
-                        total_mods=total_mods,
-                        summary=summary,
-                        current_entry=mod_snapshot["stat"],
-                    )
-                elif task:
-                    self._emit_progress(
-                        task,
-                        status="running",
-                        progress=min(5, max(1, int((index / total_mods) * 5))),
-                        message=f"扫描模组 {index}/{total_mods}",
-                        metrics={
-                            "planned_mods": index,
-                            "total_mods": total_mods,
-                            "planned_jobs": sum(int(mod["plan"]["actionable_count"]) for mod in mod_snapshots),
-                            "summary": copy.deepcopy(summary),
-                            "current_entry": copy.deepcopy(mod_snapshot["stat"]),
-                        },
-                    )
-                last_emit_time = now
-
-        mod_stats = [dict(mod["stat"]) for mod in mod_snapshots]
-        self._finalize_stat_shares(summary, mod_stats)
-        mod_stats.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
-
-        stat_by_path = {item["mod_path"]: item for item in mod_stats}
-        for mod_snapshot in mod_snapshots:
-            next_stat = stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"])
-            mod_snapshot["stat"] = dict(next_stat) if isinstance(next_stat, dict) else {}
-
-        snapshot = {
-            "id": uuid.uuid4().hex,
-            "schema_version": TEXTURE_SCAN_SCHEMA_VERSION,
-            "cache_key": self._build_scan_cache_key(mod_paths, options),
-            "signature": signature,
-            "generated_at": current_ms(),
-            "mod_paths": list(mod_paths),
-            "summary": dict(summary),
-            "mods": mod_snapshots,
-        }
-        return snapshot
-
-    def _scan_single_mod_snapshot(self, mod_path: str, options: dict[str, Any]) -> dict[str, Any]:
-        manifest = self._load_manifest(mod_path)
-        files_manifest = dict(manifest.get("files") or {})
-        manifest_preset_signature = str(manifest.get("preset_signature") or "")
-        mod_name = Path(mod_path).name
-        entries: list[dict[str, Any]] = []
-        output_stats = self._collect_output_stats(mod_path)
-        associated_outputs: set[str] = set()
-        managed_output_rel_paths = {
-            str((entry or {}).get("output_rel_path") or "").strip()
-            for entry in files_manifest.values()
-            if str((entry or {}).get("output_rel_path") or "").strip()
-        }
-        current_signature = self._build_signature(options)
-
-        for source_path in self._iter_texture_source_images(mod_path):
-            source = Path(source_path)
-            rel_path = self._to_rel_path(source_path, mod_path)
-            output_rel = self._to_rel_path(self._build_output_path(source), mod_path)
-            entry = self._build_scan_entry(
-                mod_path,
-                source_path,
-                output_stats,
-                options,
-                current_signature=current_signature,
-                manifest_entry=files_manifest.get(rel_path) or {},
-                manifest_preset_signature=manifest_preset_signature,
-                is_managed_output=output_rel in managed_output_rel_paths,
-            )
-            entries.append(entry)
-            output_rel = str(entry.get("output_rel_path") or "")
-            if output_rel and bool(entry.get("output_exists")):
-                associated_outputs.add(output_rel)
-
-        managed_orphan_output_count = 0
-        managed_orphan_output_bytes = 0
-        external_orphan_output_count = 0
-        external_orphan_output_bytes = 0
-        for output_rel, output_info in output_stats.items():
-            if output_rel in associated_outputs:
-                continue
-            output_size = int(output_info.get("size", 0))
-            if output_rel in managed_output_rel_paths:
-                managed_orphan_output_count += 1
-                managed_orphan_output_bytes += output_size
-            else:
-                external_orphan_output_count += 1
-                external_orphan_output_bytes += output_size
-
-        stat = self._recompute_mod_stat_from_entries(
-            mod_path,
-            mod_name,
-            entries,
-            managed_orphan_output_count=managed_orphan_output_count,
-            managed_orphan_output_bytes=managed_orphan_output_bytes,
-            external_orphan_output_count=external_orphan_output_count,
-            external_orphan_output_bytes=external_orphan_output_bytes,
-        )
-        plan = self._build_mod_plan(entries)
-        return {
-            "mod_path": mod_path,
-            "mod_name": mod_name,
-            "manifest": manifest,
-            "entries": entries,
-            "managed_orphan_output_count": managed_orphan_output_count,
-            "managed_orphan_output_bytes": managed_orphan_output_bytes,
-            "external_orphan_output_count": external_orphan_output_count,
-            "external_orphan_output_bytes": external_orphan_output_bytes,
-            "current_keys": list(plan["current_keys"]),
-            "plan": plan,
-            "stat": stat,
-        }
-
-    def _build_scan_entry(
-        self,
-        mod_path: str,
-        source_path: str,
-        output_stats: dict[str, dict[str, Any]],
-        options: dict[str, Any],
-        *,
-        current_signature: str = "",
-        manifest_entry: dict[str, Any] | None = None,
-        manifest_preset_signature: str = "",
-        is_managed_output: bool = False,
-    ) -> dict[str, Any]:
-        source = Path(source_path)
-        rel_path = self._to_rel_path(source_path, mod_path)
-        output_path = self._build_output_path(source)
-        output_rel = self._to_rel_path(output_path, mod_path)
-        output_info = output_stats.get(output_rel) or {}
-        output_exists = bool(output_info)
-        output_origin_kind = "managed" if output_exists and is_managed_output else "external" if output_exists else "none"
-        recorded_signature = str(
-            (manifest_entry or {}).get("preset_signature")
-            or manifest_preset_signature
-            or ""
-        )
-        base_entry = {
-            "mod_path": mod_path,
-            "mod_name": Path(mod_path).name,
-            "source_path": source_path,
-            "rel_path": rel_path,
-            "source_readable": False,
-            "current_key_included": False,
-            "source_size": 0,
-            "source_mtime_ns": 0,
-            "width": 0,
-            "height": 0,
-            "has_alpha": False,
-            "small_skipped": False,
-            "skip_reason": "",
-            "blocked": False,
-            "engine_unsupported": False,
-            "engine_unsupported_reason": "",
-            "current_output": False,
-            "stale_output": False,
-            "missing_output": False,
-            "needs_action": False,
-            "needs_generate": False,
-            "needs_regenerate": False,
-            "action_status": "none",
-            "processable": False,
-            "output_path": output_path,
-            "output_rel_path": output_rel,
-            "output_exists": output_exists,
-            "output_size": int(output_info.get("size", 0)),
-            "output_origin_kind": output_origin_kind,
-            "current_preset_signature": current_signature,
-            "recorded_preset_signature": recorded_signature,
-            "signature_status": "missing" if not output_exists else "unknown",
-            "source_vram": 0,
-            "dds_vram": 0,
-        }
-
-        try:
-            image_info = self._inspect_source_image(source, precise_alpha=False)
-            source_stat = source.stat()
-        except Exception as exc:
-            try:
-                source_stat = source.stat()
-            except OSError:
-                return base_entry
-            return {
-                **base_entry,
-                "source_size": int(source_stat.st_size),
-                "source_mtime_ns": int(source_stat.st_mtime_ns),
-                "current_key_included": True,
-                "engine_unsupported": True,
-                "engine_unsupported_reason": f"PNG 文件无法解析: {exc}",
-            }
-
-        w, h = image_info["width"], image_info["height"]
-        source_vram = w * h * 4
-        suffix_rule = self._check_special_suffix(source.stem)
-        small_skipped = self._should_skip_texture(image_info, options)
-
-        has_alpha = bool(image_info["has_alpha"])
-        tw, th = self._calculate_target_dimensions(w, h, options)
-        vram_multiplier = 1.0 if has_alpha else 0.5
-        dds_vram = int(tw * th * vram_multiplier)
-        if options.get("generate_mipmaps", True):
-            dds_vram = int(dds_vram * 1.333)
-
-        blocked = False
-        engine_unsupported = False
-        engine_unsupported_reason = ""
-        overwrite_existing = bool(options.get("overwrite_existing", False))
-        skip_reason = ""
-        current_key_included = not small_skipped
-        current_output = False
-        stale_output = False
-        missing_output = False
-        action_status = "none"
-        signature_status = "missing" if not output_exists else "unknown"
-
-        if suffix_rule and suffix_rule["action"] == "skip":
-            skip_reason = suffix_rule["reason"]
-
-        if not small_skipped and not skip_reason:
-            engine_unsupported_reason = self._get_todds_unsupported_reason(source, image_info)
-            engine_unsupported = bool(engine_unsupported_reason)
-        if not small_skipped and not skip_reason and not engine_unsupported:
-            output_mtime_ns = int(output_info.get("mtime_ns", 0) or 0)
-            if not output_exists:
-                missing_output = True
-                signature_status = "missing"
-            else:
-                if output_origin_kind != "managed":
-                    signature_status = "unknown"
-                elif recorded_signature:
-                    signature_status = "matched" if recorded_signature == current_signature else "mismatched"
-                else:
-                    signature_status = "missing"
-
-                if overwrite_existing:
-                    stale_output = True
-                elif output_origin_kind == "managed" and signature_status == "mismatched":
-                    stale_output = True
-                elif output_mtime_ns >= int(source_stat.st_mtime_ns):
-                    current_output = True
-                else:
-                    stale_output = True
-
-        needs_action = (not small_skipped) and (not blocked) and (not skip_reason) and (not engine_unsupported) and (missing_output or stale_output)
-        needs_generate = needs_action and missing_output
-        needs_regenerate = needs_action and stale_output
-        if needs_generate:
-            action_status = "generate"
-        elif needs_regenerate:
-            action_status = "regenerate"
-        elif small_skipped:
-            action_status = "skip_small"
-        elif skip_reason:
-            action_status = "skip_mask"
-        elif engine_unsupported:
-            action_status = "unsupported"
-        elif blocked:
-            action_status = "blocked"
-
-        return {
-            **base_entry,
-            "source_readable": True,
-            "current_key_included": current_key_included,
-            "source_size": int(source_stat.st_size),
-            "source_mtime_ns": int(source_stat.st_mtime_ns),
-            "width": w,
-            "height": h,
-            "has_alpha": has_alpha,
-            "small_skipped": small_skipped,
-            "skip_reason": skip_reason,
-            "blocked": blocked,
-            "engine_unsupported": engine_unsupported,
-            "engine_unsupported_reason": engine_unsupported_reason,
-            "current_output": current_output,
-            "stale_output": stale_output,
-            "missing_output": missing_output,
-            "needs_action": needs_action,
-            "needs_generate": needs_generate,
-            "needs_regenerate": needs_regenerate,
-            "action_status": action_status,
-            "processable": (not small_skipped) and (not engine_unsupported),
-            "output_path": output_path,
-            "output_rel_path": output_rel,
-            "output_exists": output_exists,
-            "output_size": int(output_info.get("size", 0)),
-            "output_origin_kind": output_origin_kind,
-            "current_preset_signature": current_signature,
-            "recorded_preset_signature": recorded_signature,
-            "signature_status": signature_status,
-            "source_vram": source_vram,
-            "dds_vram": source_vram if small_skipped or skip_reason else dds_vram,
-        }
-
-    def _collect_output_stats(self, mod_path: str) -> dict[str, dict[str, Any]]:
-        stats: dict[str, dict[str, Any]] = {}
-        for output_path in self._iter_texture_output_paths(mod_path):
-            try:
-                output_stat = output_path.stat()
-            except OSError:
-                continue
-            stats[self._to_rel_path(str(output_path), mod_path)] = {
-                "path": str(output_path),
-                "size": int(output_stat.st_size),
-                "mtime_ns": int(output_stat.st_mtime_ns),
-            }
-        return stats
-
-    def _recompute_mod_stat_from_entries(
-        self,
-        mod_path: str,
-        mod_name: str,
-        entries: list[dict[str, Any]],
-        *,
-        managed_orphan_output_count: int,
-        managed_orphan_output_bytes: int,
-        external_orphan_output_count: int,
-        external_orphan_output_bytes: int,
-    ) -> dict[str, Any]:
-        stat = self._create_empty_stat(mod_path=mod_path, mod_name=mod_name)
-        stat["output_total_count"] += int(managed_orphan_output_count) + int(external_orphan_output_count)
-        stat["output_total_bytes"] += int(managed_orphan_output_bytes) + int(external_orphan_output_bytes)
-        stat["managed_output_count"] += int(managed_orphan_output_count)
-        stat["managed_output_bytes"] += int(managed_orphan_output_bytes)
-        stat["external_output_count"] += int(external_orphan_output_count)
-        stat["external_output_bytes"] += int(external_orphan_output_bytes)
-        stat["orphan_output_count"] += int(managed_orphan_output_count) + int(external_orphan_output_count)
-        stat["orphan_output_bytes"] += int(managed_orphan_output_bytes) + int(external_orphan_output_bytes)
-        stat["managed_orphan_output_count"] += int(managed_orphan_output_count)
-        stat["managed_orphan_output_bytes"] += int(managed_orphan_output_bytes)
-        stat["external_orphan_output_count"] += int(external_orphan_output_count)
-        stat["external_orphan_output_bytes"] += int(external_orphan_output_bytes)
-        stat["engine_unsupported_preview"] = []
-        for entry in entries:
-            if not bool(entry.get("source_readable")):
-                stat["unreadable_source_count"] += 1
-                continue
-
-            source_size = int(entry.get("source_size", 0))
-            source_vram = int(entry.get("source_vram", 0))
-            dds_vram = int(entry.get("dds_vram", 0))
-            stat["source_total_count"] += 1
-            stat["source_total_bytes"] += source_size
-            stat["source_vram_bytes_est"] += source_vram
-            stat["output_vram_bytes_est"] += dds_vram
-
-            if bool(entry.get("output_exists")):
-                output_size = int(entry.get("output_size", 0))
-                stat["output_total_count"] += 1
-                stat["output_total_bytes"] += output_size
-                if str(entry.get("output_origin_kind") or "") == "managed":
-                    stat["managed_output_count"] += 1
-                    stat["managed_output_bytes"] += output_size
-                else:
-                    stat["external_output_count"] += 1
-                    stat["external_output_bytes"] += output_size
-
-            if bool(entry.get("small_skipped")):
-                stat["skip_small_count"] += 1
-                continue
-
-            if bool(entry.get("engine_unsupported")):
-                stat["unsupported_source_count"] += 1
-                if len(stat["engine_unsupported_preview"]) < 8:
-                    preview_item = {
-                        "rel_path": str(entry.get("rel_path") or ""),
-                        "reason": str(entry.get("engine_unsupported_reason") or ""),
-                    }
-                    stat["engine_unsupported_preview"].append(preview_item)
-                continue
-
-            if str(entry.get("skip_reason") or ""):
-                stat["skip_mask_count"] += 1
-                continue
-            if bool(entry.get("blocked")):
-                stat["blocked_source_count"] += 1
-                continue
-            if bool(entry.get("current_output")):
-                output_size = int(entry.get("output_size", 0))
-                stat["current_output_count"] += 1
-                stat["current_output_bytes"] += output_size
-                continue
-            if bool(entry.get("stale_output")):
-                stat["stale_output_count"] += 1
-                stat["stale_output_bytes"] += int(entry.get("output_size", 0))
-                stat["regenerate_required_count"] += 1
-                stat["action_required_count"] += 1
-                continue
-            if bool(entry.get("missing_output")):
-                stat["missing_output_count"] += 1
-                stat["generate_required_count"] += 1
-                stat["action_required_count"] += 1
-
-        stat["combined_total_bytes"] = int(stat["source_total_bytes"]) + int(stat["output_total_bytes"])
-        stat["vram_saving_bytes_est"] = int(stat["source_vram_bytes_est"]) - int(stat["output_vram_bytes_est"])
-        return stat
-
-    def _recompute_snapshot_summary(self, snapshot: dict[str, Any]) -> None:
-        summary = self._create_empty_stat(include_mod_count=True, mod_count=len(snapshot.get("mods", [])))
-        summary_preview: list[dict[str, str]] = []
-        for mod_snapshot in snapshot.get("mods", []):
-            mod_snapshot["stat"] = self._recompute_mod_stat_from_entries(
-                mod_snapshot["mod_path"],
-                mod_snapshot["mod_name"],
-                mod_snapshot["entries"],
-                managed_orphan_output_count=int(mod_snapshot.get("managed_orphan_output_count", 0)),
-                managed_orphan_output_bytes=int(mod_snapshot.get("managed_orphan_output_bytes", 0)),
-                external_orphan_output_count=int(mod_snapshot.get("external_orphan_output_count", 0)),
-                external_orphan_output_bytes=int(mod_snapshot.get("external_orphan_output_bytes", 0)),
-            )
-            mod_snapshot["plan"] = self._build_mod_plan(mod_snapshot["entries"])
-            mod_snapshot["current_keys"] = list(mod_snapshot["plan"]["current_keys"])
-            self._merge_stat(summary, mod_snapshot["stat"])
-            for item in mod_snapshot["stat"].get("engine_unsupported_preview", []):
-                if len(summary_preview) >= 12:
-                    break
-                summary_preview.append({
-                    "mod_name": str(mod_snapshot["mod_name"]),
-                    "rel_path": str(item.get("rel_path") or ""),
-                    "reason": str(item.get("reason") or ""),
-                })
-
-        mod_stats = [dict(mod["stat"]) for mod in snapshot.get("mods", [])]
-        self._finalize_stat_shares(summary, mod_stats)
-        summary["engine_unsupported_preview"] = summary_preview
-        mod_stats.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
-        stat_by_path = {item["mod_path"]: item for item in mod_stats}
-        for mod_snapshot in snapshot.get("mods", []):
-            next_stat = stat_by_path.get(mod_snapshot["mod_path"], mod_snapshot["stat"])
-            mod_snapshot["stat"] = dict(next_stat) if isinstance(next_stat, dict) else {}
-        snapshot["summary"] = dict(summary)
-
-    @staticmethod
-    def _build_mod_plan(entries: list[dict[str, Any]]) -> dict[str, Any]:
-        current_keys: list[str] = []
-        skipped_rel_paths: list[str] = []
-        encode_source_paths: list[str] = []
-        plan = {
-            "source_count": len(entries),
-            "pending_count": 0,
-            "up_to_date_count": 0,
-            "skipped_small_count": 0,
-            "skipped_mask_count": 0,
-            "unsupported_count": 0,
-            "actionable_count": 0,
-            "blocked_count": 0,
-            "current_keys": [],
-            "skipped_rel_paths": [],
-            "encode_source_paths": [],
-        }
-        for entry in entries:
-            rel_path = str(entry.get("rel_path") or "")
-            if bool(entry.get("current_key_included")) and rel_path:
-                current_keys.append(rel_path)
-            if bool(entry.get("small_skipped")):
-                plan["skipped_small_count"] += 1
-                if rel_path:
-                    skipped_rel_paths.append(rel_path)
-                continue
-            if str(entry.get("skip_reason") or ""):
-                plan["skipped_mask_count"] += 1
-                if rel_path:
-                    skipped_rel_paths.append(rel_path)
-                continue
-            if bool(entry.get("engine_unsupported")):
-                plan["unsupported_count"] += 1
-                continue
-            if bool(entry.get("blocked")):
-                plan["blocked_count"] += 1
-                continue
-            if bool(entry.get("current_output")):
-                plan["up_to_date_count"] += 1
-                continue
-            if bool(entry.get("needs_action")):
-                plan["actionable_count"] += 1
-            if bool(entry.get("needs_generate")) or bool(entry.get("needs_regenerate")):
-                plan["pending_count"] += 1
-                source_path = str(entry.get("source_path") or "")
-                if source_path:
-                    encode_source_paths.append(source_path)
-        plan["current_keys"] = current_keys
-        plan["skipped_rel_paths"] = skipped_rel_paths
-        plan["encode_source_paths"] = encode_source_paths
-        return plan
-
-    def _refresh_snapshot_summary_if_due(
-        self,
-        snapshot: dict[str, Any],
-        last_refresh_at: float,
-        *,
-        force: bool = False,
-        min_interval_seconds: float = 0.35,
-    ) -> tuple[float, bool]:
-        now = time.monotonic()
-        if force or (now - last_refresh_at) >= min_interval_seconds:
-            self._recompute_snapshot_summary(snapshot)
-            return now, True
-        return last_refresh_at, False
-
-    def _get_sorted_mod_stats(self, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-        rows = [dict(mod["stat"]) for mod in snapshot.get("mods", [])]
-        rows.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
-        return rows
-
     def analyze_mods(
         self,
         mod_paths: list[str],
@@ -1084,95 +427,39 @@ class TextureOptimizationManager:
         cancel_event: threading.Event | None = None,
         use_cache: bool = True,
     ) -> dict[str, Any]:
+        del use_cache
         mod_paths = self._normalize_mod_paths(mod_paths)
-        if not mod_paths: raise TextureOptError("没有可分析的 Mod 路径")
+        if not mod_paths:
+            raise TextureOptError("没有可分析的 Mod 路径")
 
         analysis_task_id = task_id or uuid.uuid4().hex
         merged_options = self._build_options(options)
         tool_status = self.get_backend_status(merged_options)
-
+        summary, mods = self._scan_mods(mod_paths, merged_options, cancel_event, analysis_task_id=analysis_task_id)
+        elapsed_ms = max(0, current_ms() - int(self._analysis_started_at.get(analysis_task_id, current_ms())))
         self._emit_analysis_progress(
-            analysis_task_id, status="running", progress=0,
-            message="正在智能分析贴图与测算显存...", processed_mods=0, total_mods=len(mod_paths), summary=self._create_empty_stat(include_mod_count=True, mod_count=len(mod_paths))
+            analysis_task_id,
+            status="success",
+            progress=100,
+            message=f"统计完成，用时 {self._format_elapsed_ms(elapsed_ms)}",
+            processed_mods=len(mod_paths),
+            total_mods=len(mod_paths),
+            summary=summary,
+            final_mods=mods,
         )
-
-        try:
-            snapshot = self._get_or_build_scan_snapshot(
-                mod_paths,
-                merged_options,
-                analysis_task_id=analysis_task_id,
-                cancel_event=cancel_event,
-                use_cache=use_cache,
-            )
-            summary = copy.deepcopy(snapshot["summary"])
-            mod_stats = self._get_sorted_mod_stats(snapshot)
-            elapsed_ms = max(0, current_ms() - int(self._analysis_started_at.get(analysis_task_id, current_ms())))
-            self._emit_analysis_progress(
-                analysis_task_id, status="success", progress=100,
-                message=f"统计完成，用时 {self._format_elapsed_ms(elapsed_ms)}", processed_mods=len(mod_paths),
-                total_mods=len(mod_paths), summary=summary, final_mods=mod_stats
-            )
-
-        except TextureOptCancelled as exc:
-            self._emit_analysis_progress(
-                analysis_task_id, status="cancelled", progress=0, message=str(exc),
-                processed_mods=0, total_mods=len(mod_paths), summary=self._create_empty_stat(include_mod_count=True, mod_count=len(mod_paths))
-            )
-            raise
-        except Exception as exc:
-            self._emit_analysis_progress(
-                analysis_task_id, status="failed", progress=0, message=f"分析失败: {exc}",
-                processed_mods=0, total_mods=len(mod_paths), summary=self._create_empty_stat(include_mod_count=True, mod_count=len(mod_paths))
-            )
-            raise
-
         return {
             "task_id": analysis_task_id,
             "tool_status": tool_status,
             "summary": summary,
-            "mods": mod_stats,
+            "mods": mods,
             "options": merged_options,
             "generated_at": current_ms(),
         }
 
-    def _emit_analysis_progress(
-        self, task_id: str, *, status: str, progress: int, message: str, 
-        processed_mods: int, total_mods: int, summary: dict[str, Any], 
-        current_entry: dict[str, Any] | None = None,
-        final_mods: list[dict[str, Any]] | None = None
-    ) -> None:
-        started_at = int(self._analysis_started_at.get(task_id, current_ms()))
-        updated_at = current_ms()
-        metrics = {
-            "processed_mods": processed_mods, "total_mods": total_mods,
-            "summary": {key: value for key, value in summary.items()},
-            "task_created_at": started_at,
-            "task_updated_at": updated_at,
-            "task_status": status,
-        }
-        if status in {"success", "failed", "cancelled"}:
-            metrics["elapsed_ms"] = max(0, updated_at - started_at)
-        if current_entry:
-            # 【核心修复】传输字典全貌，而不是只传 mod_name
-            metrics["current_entry"] = current_entry
-        if final_mods is not None:
-            # 传输最终排序好的列表
-            metrics["final_mods"] = final_mods
-
-        EventBus.emit_progress(task_id, TEXTURE_ANALYSIS_TASK_TYPE, status=status, progress=progress, message=message, metrics=metrics)
-
-    # =========================================================
-    #  核心处理逻辑
-    # =========================================================
-
     def _run_task(self, task: TextureTask) -> None:
         try:
             self._set_task_state(task, status="running", message="正在执行贴图队列...")
-            if task.action == "clean_generated":
-                summary = self._clean_generated(task)
-            else:
-                summary = self._optimize(task)
-
+            summary = self._clean_outputs(task) if task.action == "clean_generated" else self._optimize(task)
             success_message = str(summary.pop("message", "贴图优化任务完成"))
             final_summary = summary.pop("final_summary", None)
             final_mods = summary.pop("final_mods", None)
@@ -1201,21 +488,12 @@ class TextureOptimizationManager:
             self._set_task_state(task, status="failed", message="贴图优化失败", error=str(exc))
 
     def _optimize(self, task: TextureTask) -> dict[str, Any]:
-        return self._optimize_todds_fast(task, ToddsEncoder(task.options))
+        options = self._build_options(task.options)
+        task.options = options
+        encoder = ToddsEncoder(options)
+        final_mods_by_path: dict[str, dict[str, Any]] = {}
+        final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
-    def _optimize_todds_fast(self, task: TextureTask, encoder: ToddsEncoder) -> dict[str, Any]:
-        signature = self._build_signature(task.options)
-        total_mods = max(1, len(task.mod_paths))
-        optimized = 0
-        orphan_deleted = 0
-        skipped = 0
-        failed = 0
-        final_summary = self._create_empty_stat(include_mod_count=True, mod_count=len(task.mod_paths))
-        mod_snapshots: list[dict[str, Any]] = []
-        cached_snapshot = self._get_cached_scan_snapshot(task.mod_paths, task.options)
-
-        initial_summary = copy.deepcopy(cached_snapshot["summary"]) if cached_snapshot else copy.deepcopy(final_summary)
-        initial_rows = self._get_sorted_mod_stats(cached_snapshot) if cached_snapshot else []
         self._emit_progress(
             task,
             status="running",
@@ -1227,30 +505,29 @@ class TextureOptimizationManager:
                 "optimized": 0,
                 "skipped": 0,
                 "failed": 0,
-                "summary": initial_summary,
-                "final_mods": initial_rows,
+                "summary": final_summary,
+                "final_mods": final_mods,
                 "refresh_after_analyze": False,
             },
         )
+
+        optimized = 0
+        skipped = 0
+        failed = 0
+        total_mods = max(1, len(task.mod_paths))
 
         for index, mod_path in enumerate(task.mod_paths, start=1):
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("DDS 生成任务已取消")
 
-            mod_name = Path(mod_path).name
-            manifest = self._load_manifest(mod_path)
-            signature_mismatch = str(manifest.get("preset_signature") or "") != signature
-            force_overwrite = bool(task.options.get("overwrite_existing", False)) or signature_mismatch
-            plan_options = dict(task.options)
-            plan_options["overwrite_existing"] = force_overwrite
-            plan_snapshot = self._scan_single_mod_snapshot(mod_path, plan_options)
-            plan = self._build_mod_plan(plan_snapshot["entries"])
-            skipped += (
-                int(plan["up_to_date_count"])
-                + int(plan.get("skipped_small_count", 0))
-                + int(plan.get("skipped_mask_count", 0))
-                + int(plan.get("unsupported_count", 0))
-            )
+            scan_result = self._scan_single_mod(mod_path, options)
+            entries = scan_result["entries"]
+            mod_name = scan_result["mod_name"]
+            actionable_entries = [entry for entry in entries if bool(entry.get("needs_action"))]
+            skipped += sum(1 for entry in entries if not bool(entry.get("needs_action")))
+            final_mods_by_path[mod_path] = dict(scan_result["stat"])
+            final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
+
             self._emit_progress(
                 task,
                 status="running",
@@ -1262,64 +539,37 @@ class TextureOptimizationManager:
                     "optimized": optimized,
                     "skipped": skipped,
                     "failed": failed,
-                    "current_mod_sources": int(plan["source_count"]),
-                    "current_mod_pending": int(plan["pending_count"]),
+                    "current_mod_sources": len(entries),
+                    "current_mod_pending": len(actionable_entries),
+                    "summary": final_summary,
+                    "current_entry": dict(scan_result["stat"]),
+                    "final_mods": final_mods,
                     "refresh_after_analyze": False,
                 },
             )
 
-            files_manifest = dict(manifest.get("files") or {})
-            skipped_rel_paths = [str(rel_path) for rel_path in plan.get("skipped_rel_paths", [])]
-            for rel_path in skipped_rel_paths:
-                entry = files_manifest.get(rel_path) or {}
-                if entry:
-                    orphan_deleted += self._retire_managed_outputs(
-                        mod_path,
-                        entry,
-                        keep_path=None,
+            batches = self._build_encode_batches(entries)
+            for batch in batches:
+                if task._cancel_event.is_set():
+                    raise TextureOptCancelled("DDS 生成任务已取消")
+                try:
+                    encoder.encode_batch(
+                        task._cancel_event,
+                        source_paths=batch["source_paths"],
+                        overwrite_existing=bool(batch["overwrite_existing"]),
+                        scale_percent=batch["scale_percent"],
                     )
-                    files_manifest.pop(rel_path, None)
-            if task.options.get("clean_orphaned_dds", True):
-                orphan_deleted += self._cleanup_orphaned_outputs(mod_path, files_manifest, set(plan["current_keys"]))
+                except TextureOptCancelled:
+                    raise
+                except Exception:
+                    failed += len(batch["entries"])
+                    raise
 
-            encode_source_paths = [str(path) for path in plan.get("encode_source_paths", [])]
-            planned_rel_paths = {self._to_rel_path(path, mod_path) for path in encode_source_paths}
-            if int(plan["source_count"]) > 0 and int(plan["pending_count"]) > 0 and encode_source_paths:
-                encoder.encode_mod(
-                    task._cancel_event,
-                    overwrite_existing=force_overwrite,
-                    source_paths=encode_source_paths,
-                )
-
-            mod_snapshot = self._scan_single_mod_snapshot(mod_path, task.options)
-            manifest["version"] = TEXTURE_MANIFEST_VERSION
-            manifest["preset_signature"] = signature
-            manifest["updated_at"] = current_ms()
-            manifest["files"] = self._build_manifest_files_from_entries(mod_snapshot.get("entries", []), task.options)
-            self._write_manifest(mod_path, manifest)
-            mod_snapshot["manifest"] = manifest
-            mod_snapshots.append(mod_snapshot)
-
-            completed_rel_paths = {
-                str(entry.get("rel_path") or "")
-                for entry in mod_snapshot.get("entries", [])
-                if str(entry.get("rel_path") or "") in planned_rel_paths and bool(entry.get("current_output"))
-            }
-            optimized += len(completed_rel_paths)
-            failed += max(0, len(planned_rel_paths) - len(completed_rel_paths))
-            snapshot = {
-                "id": task.id,
-                "schema_version": TEXTURE_SCAN_SCHEMA_VERSION,
-                "cache_key": self._build_scan_cache_key(task.mod_paths, task.options),
-                "signature": signature,
-                "generated_at": current_ms(),
-                "mod_paths": list(task.mod_paths),
-                "summary": {},
-                "mods": mod_snapshots,
-            }
-            self._recompute_snapshot_summary(snapshot)
-            final_summary = dict(snapshot["summary"])
-            final_rows = self._get_sorted_mod_stats(snapshot)
+            optimized += len(actionable_entries)
+            refreshed_result = self._scan_single_mod(mod_path, options)
+            refreshed_stat = dict(refreshed_result["stat"])
+            final_mods_by_path[mod_path] = refreshed_stat
+            final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
             self._emit_progress(
                 task,
@@ -1333,54 +583,50 @@ class TextureOptimizationManager:
                     "skipped": skipped,
                     "failed": failed,
                     "summary": final_summary,
-                    "current_entry": dict(mod_snapshot["stat"]),
-                    "final_mods": final_rows,
+                    "current_entry": refreshed_stat,
+                    "final_mods": final_mods,
                     "refresh_after_analyze": False,
                 },
             )
 
-        snapshot = {
-            "id": task.id,
-            "schema_version": TEXTURE_SCAN_SCHEMA_VERSION,
-            "cache_key": self._build_scan_cache_key(task.mod_paths, task.options),
-            "signature": signature,
-            "generated_at": current_ms(),
-            "mod_paths": list(task.mod_paths),
-            "summary": final_summary,
-            "mods": mod_snapshots,
-        }
-        self._replace_scan_snapshot(snapshot)
+        scale_summary_text = self._format_scale_counts(final_summary)
         return {
             "optimized": optimized,
             "skipped": skipped,
             "failed": failed,
-            "preexisting_dds": 0,
-            "orphan_deleted": orphan_deleted,
+            "preexisting_dds": int(final_summary.get("current_output_count", 0)),
+            "orphan_deleted": 0,
             "total_jobs": len(task.mod_paths),
             "final_summary": final_summary,
-            "final_mods": self._get_sorted_mod_stats(snapshot),
+            "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": "DDS 生成完成",
+            "message": f"DDS 生成完成{f'，{scale_summary_text}' if scale_summary_text else ''}",
         }
 
-    def _clean_generated(self, task: TextureTask) -> dict[str, Any]:
+    def _compose_progress_snapshot(
+        self,
+        ordered_mod_paths: list[str],
+        stats_by_path: dict[str, dict[str, Any]],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        rows = [dict(stats_by_path[path]) for path in ordered_mod_paths if path in stats_by_path]
+        summary = self._create_empty_stat(include_mod_count=True, mod_count=len(ordered_mod_paths))
+        for row in rows:
+            self._merge_stat(summary, row)
+        self._finalize_stat_shares(summary, rows)
+        rows.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
+        return summary, rows
+
+    def _clean_outputs(self, task: TextureTask) -> dict[str, Any]:
         deleted = 0
         checked = 0
         delete_failed = 0
         total_mods = max(1, len(task.mod_paths))
-        clean_only = task.options.get("clean_generated_only") or False
-        changed_mod_paths: list[str] = []
+
         for index, mod_path in enumerate(task.mod_paths, start=1):
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
-            manifest = self._load_manifest(mod_path)
-            files_manifest = dict(manifest.get("files") or {})
-            mod_deleted = 0
-            output_paths = (
-                self._collect_managed_output_paths(mod_path, files_manifest)
-                if clean_only
-                else list(self._iter_texture_output_paths_with_source(mod_path))
-            )
+
+            output_paths = list(self._iter_texture_output_paths_with_source(mod_path))
             total_outputs = max(1, len(output_paths))
             self._emit_progress(
                 task,
@@ -1395,6 +641,7 @@ class TextureOptimizationManager:
                     "processed_mods": index - 1,
                 },
             )
+
             for output_index, output_path in enumerate(output_paths, start=1):
                 if task._cancel_event.is_set():
                     raise TextureOptCancelled("清理 DDS 任务已取消")
@@ -1402,11 +649,9 @@ class TextureOptimizationManager:
                 try:
                     output_path.unlink()
                     deleted += 1
-                    mod_deleted += 1
                 except OSError as exc:
                     delete_failed += 1
-                    logger.warning("Texture clean delete failed: mode=%s path=%s error=%s", clean_only, output_path, exc)
-                    continue
+                    logger.warning("Texture clean delete failed: path=%s error=%s", output_path, exc)
                 if output_index % 50 == 0 or output_index == total_outputs:
                     self._emit_progress(
                         task,
@@ -1425,14 +670,6 @@ class TextureOptimizationManager:
                         },
                     )
 
-            pruned_count = self._prune_deleted_manifest_entries(mod_path, files_manifest)
-            if mod_deleted > 0 or pruned_count > 0:
-                changed_mod_paths.append(mod_path)
-                manifest["files"] = files_manifest
-                manifest["updated_at"] = current_ms()
-                self._write_manifest(mod_path, manifest)
-        if changed_mod_paths:
-            self._invalidate_scan_cache(changed_mod_paths)
         return {
             "optimized": 0,
             "skipped": 0,
@@ -1442,146 +679,330 @@ class TextureOptimizationManager:
             "checked_outputs": checked,
             "delete_failed": delete_failed,
             "total_jobs": 0,
-            "refresh_after_analyze": bool(changed_mod_paths),
+            "refresh_after_analyze": True,
             "message": "DDS 清理完成",
         }
 
-    # =========================================================
-    #  工具与辅助函数
-    # =========================================================
+    def _scan_mods(
+        self,
+        mod_paths: list[str],
+        options: dict[str, Any],
+        cancel_event: threading.Event | None,
+        *,
+        analysis_task_id: str | None = None,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        summary = self._create_empty_stat(include_mod_count=True, mod_count=len(mod_paths))
+        mod_rows: list[dict[str, Any] | None] = [None] * len(mod_paths)
+        total_mods = max(1, len(mod_paths))
+        workers = self._resolve_scan_workers(total_mods, options)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers, thread_name_prefix="TextureScan") as executor:
+            future_map = {
+                executor.submit(self._scan_single_mod, mod_path, options): index
+                for index, mod_path in enumerate(mod_paths)
+            }
+            completed = 0
+            for future in concurrent.futures.as_completed(future_map):
+                if cancel_event and cancel_event.is_set():
+                    raise TextureOptCancelled("贴图扫描任务已取消")
+                index = future_map[future]
+                result = future.result()
+                mod_rows[index] = result["stat"]
+                self._merge_stat(summary, result["stat"])
+                completed += 1
+                if analysis_task_id:
+                    self._emit_analysis_progress(
+                        analysis_task_id,
+                        status="running",
+                        progress=min(99, int((completed / total_mods) * 100)),
+                        message=f"已扫描 {result['mod_name']}",
+                        processed_mods=completed,
+                        total_mods=total_mods,
+                        summary=summary,
+                        current_entry=result["stat"],
+                    )
+
+        rows = [row for row in mod_rows if isinstance(row, dict)]
+        self._finalize_stat_shares(summary, rows)
+        rows.sort(key=lambda item: (-int(item["combined_total_bytes"]), item["mod_name"].lower()))
+        return summary, rows
+
+    def _scan_single_mod(self, mod_path: str, options: dict[str, Any]) -> dict[str, Any]:
+        entries: list[dict[str, Any]] = []
+        output_stats = self._collect_output_stats(mod_path)
+        process_mode = str(options.get("process_mode", "scaled_only_overwrite"))
+        preferred_scale = self._get_scale_factor_percent(options)
+        scale_buckets = self._iter_scale_step_candidates(options)
+        min_output_size = self._get_scale_target_size(options)
+        mod_name = Path(mod_path).name
+
+        for source_path in self._iter_texture_source_images(mod_path):
+            source = Path(source_path)
+            rel_path = self._to_rel_path(str(source), mod_path)
+            output_path = source.with_suffix(".dds")
+            output_rel = self._to_rel_path(str(output_path), mod_path)
+            output_info = output_stats.get(output_rel) or {}
+
+            entry = {
+                "mod_path": mod_path,
+                "mod_name": mod_name,
+                "rel_path": rel_path,
+                "source_path": str(source),
+                "output_path": str(output_path),
+                "output_rel_path": output_rel,
+                "output_exists": bool(output_info),
+                "output_size": int(output_info.get("size", 0)),
+                "source_readable": False,
+                "width": 0,
+                "height": 0,
+                "has_alpha": False,
+                "source_size": 0,
+                "source_vram": 0,
+                "dds_vram": 0,
+                "small_skipped": False,
+                "engine_unsupported": False,
+                "engine_unsupported_reason": "",
+                "processable": False,
+                "current_output": False,
+                "needs_generate": False,
+                "needs_regenerate": False,
+                "needs_action": False,
+                "plan_kind": "keep_original",
+                "plan_label": "原尺寸",
+                "scale_percent": None,
+            }
+
+            try:
+                image_info = self._inspect_source_image(source, precise_alpha=False)
+                source_stat = source.stat()
+            except Exception as exc:
+                try:
+                    source_stat = source.stat()
+                    entry["source_size"] = int(source_stat.st_size)
+                except OSError:
+                    pass
+                entry["engine_unsupported"] = True
+                entry["engine_unsupported_reason"] = f"PNG 文件无法解析: {exc}"
+                entries.append(entry)
+                continue
+
+            width = int(image_info.get("width", 0) or 0)
+            height = int(image_info.get("height", 0) or 0)
+            has_alpha = bool(image_info.get("has_alpha"))
+            source_size = int(source_stat.st_size)
+            source_vram = width * height * 4
+            oversize_or_small = self._is_outside_recommended_source_range(width, height, options)
+            scale_percent = None if oversize_or_small else self._pick_scale_step_percent(width, height, scale_buckets, min_output_size)
+            can_scale = scale_percent is not None
+
+            if can_scale:
+                dds_vram = self._estimate_dds_vram(width, height, has_alpha, scale_percent, generate_mipmaps=bool(options.get("generate_mipmaps", True)))
+                plan_kind = "scaled" if scale_percent == preferred_scale else "fallback"
+                plan_label = f"{scale_percent}%"
+            else:
+                dds_vram = self._estimate_dds_vram(width, height, has_alpha, None, generate_mipmaps=bool(options.get("generate_mipmaps", True)))
+                plan_kind = "keep_original"
+                plan_label = "原尺寸"
+
+            entry.update(
+                {
+                    "source_readable": True,
+                    "width": width,
+                    "height": height,
+                    "has_alpha": has_alpha,
+                    "source_size": source_size,
+                    "source_vram": source_vram,
+                    "dds_vram": dds_vram,
+                    "small_skipped": oversize_or_small,
+                    "engine_unsupported": bool(self._get_todds_unsupported_reason(source, image_info)),
+                    "engine_unsupported_reason": self._get_todds_unsupported_reason(source, image_info),
+                    "processable": not bool(self._get_todds_unsupported_reason(source, image_info)),
+                    "plan_kind": plan_kind,
+                    "plan_label": plan_label,
+                    "scale_percent": scale_percent,
+                }
+            )
+
+            if entry["engine_unsupported"]:
+                entries.append(entry)
+                continue
+
+            entry["current_output"] = bool(entry["output_exists"])
+            needs_action = self._entry_needs_action(entry, process_mode)
+            entry["needs_action"] = needs_action
+            entry["needs_generate"] = needs_action and not entry["output_exists"]
+            entry["needs_regenerate"] = needs_action and entry["output_exists"]
+            entries.append(entry)
+
+        stat = self._build_mod_stat(mod_path, mod_name, entries, output_stats)
+        return {"mod_path": mod_path, "mod_name": mod_name, "entries": entries, "stat": stat}
+
     @staticmethod
-    def _check_special_suffix(stem: str) -> dict | None:
-        """检查文件名是否符合特殊的 RimWorld 后缀规范"""
-        stem_lower = stem.lower()
-        for sfx, rule in SPECIAL_SUFFIXES.items():
-            if stem_lower.endswith(sfx):
-                return rule
+    def _entry_needs_action(entry: dict[str, Any], process_mode: str) -> bool:
+        output_exists = bool(entry.get("output_exists"))
+        scale_percent = entry.get("scale_percent")
+        if process_mode == "all_skip_existing":
+            return not output_exists
+        if process_mode == "scaled_only_overwrite":
+            return scale_percent is not None
+        return True
+
+    def _build_encode_batches(self, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[tuple[bool, int | None], dict[str, Any]] = {}
+        for entry in entries:
+            if not bool(entry.get("needs_action")):
+                continue
+            batch_key = (bool(entry.get("output_exists")), entry.get("scale_percent"))
+            batch = grouped.setdefault(
+                batch_key,
+                {
+                    "overwrite_existing": bool(entry.get("output_exists")),
+                    "scale_percent": entry.get("scale_percent"),
+                    "entries": [],
+                    "source_paths": [],
+                },
+            )
+            batch["entries"].append(entry)
+            batch["source_paths"].append(str(entry.get("source_path") or ""))
+
+        batches = list(grouped.values())
+        batches.sort(
+            key=lambda item: (
+                item.get("scale_percent") is None,
+                int(item.get("scale_percent") or 999),
+                not bool(item.get("overwrite_existing")),
+            )
+        )
+        return batches
+
+    @staticmethod
+    def _build_mod_stat(
+        mod_path: str,
+        mod_name: str,
+        entries: list[dict[str, Any]],
+        output_stats: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        stat = TextureOptimizationManager._create_empty_stat(mod_path=mod_path, mod_name=mod_name)
+        stat["output_total_count"] = len(output_stats)
+        stat["output_total_bytes"] = sum(int(item.get("size", 0)) for item in output_stats.values())
+        stat["managed_output_count"] = stat["output_total_count"]
+        stat["managed_output_bytes"] = stat["output_total_bytes"]
+        scale_buckets: dict[tuple[str, str], int] = {}
+
+        for entry in entries:
+            if not bool(entry.get("source_readable")):
+                stat["unreadable_source_count"] += 1
+                continue
+
+            stat["source_total_count"] += 1
+            stat["source_total_bytes"] += int(entry.get("source_size", 0))
+            stat["source_vram_bytes_est"] += int(entry.get("source_vram", 0))
+            stat["output_vram_bytes_est"] += int(entry.get("dds_vram", 0))
+
+            if bool(entry.get("small_skipped")):
+                stat["skip_small_count"] += 1
+            if bool(entry.get("engine_unsupported")):
+                stat["unsupported_source_count"] += 1
+                if len(stat["engine_unsupported_preview"]) < 8:
+                    stat["engine_unsupported_preview"].append(
+                        {
+                            "rel_path": str(entry.get("rel_path") or ""),
+                            "reason": str(entry.get("engine_unsupported_reason") or ""),
+                        }
+                    )
+                continue
+
+            plan_kind = str(entry.get("plan_kind") or "keep_original")
+            if plan_kind == "fallback":
+                stat["fallback_scaled_count"] += 1
+            elif plan_kind == "keep_original":
+                stat["keep_original_count"] += 1
+            else:
+                stat["scaled_count"] += 1
+
+            TextureOptimizationManager._append_scale_bucket(
+                scale_buckets,
+                kind=plan_kind,
+                label=str(entry.get("plan_label") or "原尺寸"),
+            )
+
+            if bool(entry.get("output_exists")):
+                stat["current_output_count"] += 1
+                stat["current_output_bytes"] += int(entry.get("output_size", 0))
+            if bool(entry.get("needs_generate")):
+                stat["generate_required_count"] += 1
+                stat["action_required_count"] += 1
+            if bool(entry.get("needs_regenerate")):
+                stat["regenerate_required_count"] += 1
+                stat["action_required_count"] += 1
+                stat["stale_output_count"] += 1
+                stat["stale_output_bytes"] += int(entry.get("output_size", 0))
+            if not bool(entry.get("output_exists")) and not bool(entry.get("needs_generate")) and not bool(entry.get("needs_regenerate")):
+                stat["missing_output_count"] += 1
+
+        stat["scale_breakdown"] = TextureOptimizationManager._finalize_scale_breakdown(scale_buckets)
+        stat["combined_total_bytes"] = int(stat["source_total_bytes"]) + int(stat["output_total_bytes"])
+        stat["vram_saving_bytes_est"] = int(stat["source_vram_bytes_est"]) - int(stat["output_vram_bytes_est"])
+        return stat
+
+    @staticmethod
+    def _get_scale_factor_percent(options: dict[str, Any]) -> int | None:
+        scale_factor = float(options.get("scale_factor", 1.0) or 1.0)
+        if scale_factor <= 0 or abs(scale_factor - 1.0) <= 1e-6:
+            return None
+        scale_percent = int(round(scale_factor * 100))
+        return scale_percent if scale_percent in SCALE_STEP_SEQUENCE else None
+
+    @staticmethod
+    def _get_scale_target_size(options: dict[str, Any]) -> int:
+        configured_max_size = int(options.get("max_size", 0) or 0)
+        return configured_max_size if configured_max_size > 0 else 128
+
+    @staticmethod
+    def _iter_scale_step_candidates(options: dict[str, Any]) -> tuple[int, ...]:
+        preferred = TextureOptimizationManager._get_scale_factor_percent(options)
+        if preferred not in SCALE_STEP_SEQUENCE:
+            return tuple()
+        start_index = SCALE_STEP_SEQUENCE.index(preferred)
+        return SCALE_STEP_SEQUENCE[start_index:]
+
+    @staticmethod
+    def _pick_scale_step_percent(w: int, h: int, scale_candidates: tuple[int, ...], min_output_size: int) -> int | None:
+        for scale_percent in scale_candidates:
+            numerator, denominator = SCALE_STEP_RATIONALS[scale_percent]
+            required_divisor = (4 * denominator) // TextureOptimizationManager._gcd(numerator, 4 * denominator)
+            if (w % required_divisor) != 0 or (h % required_divisor) != 0:
+                continue
+            if (min(w, h) * numerator) < (min_output_size * denominator):
+                continue
+            return scale_percent
         return None
 
     @staticmethod
-    def _calculate_target_dimensions(w: int, h: int, options: dict) -> tuple[int, int]:
-        """计算目标缩放尺寸，确保是 4 的倍数 (BCn 格式规范)"""
-        scale_factor = float(options.get("scale_factor", 1.0))
-        max_size = int(options.get("max_size", 0))
-        
-        tw, th = w, h
-        if scale_factor > 0 and abs(scale_factor - 1.0) > 1e-6:
-            tw, th = int(tw * scale_factor), int(th * scale_factor)
-            
-        if max_size > 0:
-            if tw > max_size or th > max_size:
-                ratio = max_size / max(tw, th)
-                tw, th = int(tw * ratio), int(th * ratio)
-                
-        def _align_to_4(val: int) -> int:
-            return max(4, (val // 4) * 4)
-            
-        return _align_to_4(tw), _align_to_4(th)
+    def _gcd(a: int, b: int) -> int:
+        while b:
+            a, b = b, a % b
+        return a
 
-    def _build_manifest_files_from_entries(
-        self,
-        entries: list[dict[str, Any]],
-        options: dict[str, Any],
-    ) -> dict[str, Any]:
-        files_manifest: dict[str, Any] = {}
-        signature = self._build_signature(options)
-        for entry in entries:
-            if not bool(entry.get("source_readable")) or not bool(entry.get("output_exists")):
-                continue
-            rel_path = str(entry.get("rel_path") or "")
-            output_rel_path = str(entry.get("output_rel_path") or "")
-            if not rel_path or not output_rel_path:
-                continue
-            files_manifest[rel_path] = {
-                "output_rel_path": output_rel_path,
-                "source_size": int(entry.get("source_size", 0)),
-                "source_mtime_ns": int(entry.get("source_mtime_ns", 0)),
-                "output_size": int(entry.get("output_size", 0)),
-                "preset_signature": signature,
-            }
-        return files_manifest
-
-    def _cleanup_orphaned_outputs(self, mod_path: str, files_manifest: dict[str, Any], current_keys: set[str]) -> int:
-        deleted = 0
-        stale_keys = [key for key in files_manifest.keys() if key not in current_keys]
-        for rel_path in stale_keys:
-            entry = files_manifest.get(rel_path) or {}
-            output_rel = str(entry.get("output_rel_path") or "")
-            if output_rel:
-                output_path = Path(mod_path) / output_rel
-                if output_path.exists():
-                    output_path.unlink()
-                    deleted += 1
-            files_manifest.pop(rel_path, None)
-        return deleted
-
-    def _collect_managed_output_paths(self, mod_path: str, files_manifest: dict[str, Any]) -> list[Path]:
-        outputs: list[Path] = []
-        seen: set[Path] = set()
-        for entry in files_manifest.values():
-            output_rel = str((entry or {}).get("output_rel_path") or "").strip()
-            if not output_rel:
-                continue
-            output_path = (Path(mod_path) / output_rel).resolve()
-            if output_path in seen or not output_path.exists():
-                continue
-            seen.add(output_path)
-            outputs.append(output_path)
-        return outputs
-
-    def _iter_texture_output_paths_with_source(self, mod_path: str):
-        for output_path in self._iter_texture_output_paths(mod_path):
-            source_path = self._resolve_output_source(output_path)
-            if source_path.exists():
-                yield output_path
-
-    def _prune_deleted_manifest_entries(self, mod_path: str, files_manifest: dict[str, Any]) -> int:
-        stale_keys: list[str] = []
-        for rel_path, entry in files_manifest.items():
-            output_rel = str((entry or {}).get("output_rel_path") or "").strip()
-            if not output_rel:
-                stale_keys.append(rel_path)
-                continue
-            if not (Path(mod_path) / output_rel).exists():
-                stale_keys.append(rel_path)
-        for rel_path in stale_keys:
-            files_manifest.pop(rel_path, None)
-        return len(stale_keys)
-
-    def _retire_managed_outputs(self, mod_path: str, entry: dict[str, Any], keep_path: str | None) -> int:
-        deleted = 0
-        candidates: set[Path] = set()
-        output_rel = str(entry.get("output_rel_path") or "").strip()
-        if output_rel:
-            candidates.add(Path(mod_path) / output_rel)
-
-        keep_resolved = Path(keep_path).resolve() if keep_path else None
-        for candidate in candidates:
-            try:
-                if keep_resolved and candidate.resolve() == keep_resolved:
-                    continue
-            except OSError:
-                pass
-            if not candidate.exists():
-                continue
-            try:
-                candidate.unlink()
-                deleted += 1
-            except OSError:
-                continue
-        return deleted
-
-    def register_analysis_task(self, task_id: str) -> threading.Event:
-        cancel_event = threading.Event()
-        with self._lock:
-            self._analysis_tasks[task_id] = cancel_event
-            self._analysis_started_at[task_id] = current_ms()
-        return cancel_event
-
-    def finish_analysis_task(self, task_id: str) -> None:
-        with self._lock:
-            self._analysis_tasks.pop(task_id, None)
-            self._analysis_started_at.pop(task_id, None)
+    @staticmethod
+    def _estimate_dds_vram(
+        width: int,
+        height: int,
+        has_alpha: bool,
+        scale_percent: int | None,
+        *,
+        generate_mipmaps: bool,
+    ) -> int:
+        target_width = int(width)
+        target_height = int(height)
+        if scale_percent is not None:
+            target_width = int(target_width * int(scale_percent) / 100)
+            target_height = int(target_height * int(scale_percent) / 100)
+        multiplier = 1.0 if has_alpha else 0.5
+        dds_vram = int(max(1, target_width) * max(1, target_height) * multiplier)
+        if generate_mipmaps:
+            dds_vram = int(dds_vram * 1.333)
+        return dds_vram
 
     @staticmethod
     def _iter_texture_root_dirs(mod_path: str):
@@ -1596,7 +1017,10 @@ class TextureOptimizationManager:
 
     @staticmethod
     def _inspect_source_image(path: Path, *, precise_alpha: bool = True) -> dict[str, Any]:
-        """读取图片尺寸，并按需要精确或快速判断透明通道。"""
+        if not precise_alpha and path.suffix.lower() == ".png":
+            fast_info = TextureOptimizationManager._inspect_png_header(path)
+            if fast_info is not None:
+                return fast_info
         try:
             with Image.open(path) as image:
                 width, height = image.size
@@ -1632,7 +1056,6 @@ class TextureOptimizationManager:
                 signature = handle.read(8)
                 if signature != b"\x89PNG\r\n\x1a\n":
                     return None
-
                 has_trns = False
                 width = 0
                 height = 0
@@ -1651,24 +1074,21 @@ class TextureOptimizationManager:
                     crc = handle.read(4)
                     if len(crc) < 4:
                         return None
-
                     if chunk_type == b"IHDR":
                         if len(chunk_data) < 13:
                             return None
                         width = struct.unpack(">I", chunk_data[0:4])[0]
                         height = struct.unpack(">I", chunk_data[4:8])[0]
                         color_type = chunk_data[9]
-
                     if chunk_type == b"tRNS":
                         has_trns = True
                     if chunk_type == b"IDAT":
                         if not width or not height or color_type is None:
                             return None
-                        has_alpha = color_type in {4, 6} or has_trns
                         return {
                             "width": width,
                             "height": height,
-                            "has_alpha": has_alpha,
+                            "has_alpha": color_type in {4, 6} or has_trns,
                             "image_format": "PNG",
                         }
                     if chunk_type == b"IEND":
@@ -1677,10 +1097,16 @@ class TextureOptimizationManager:
             return None
 
     @staticmethod
-    def _should_skip_texture(image_info: dict[str, Any], options: dict[str, Any]) -> bool:
-        if not options.get("skip_small_textures", True): return False
-        min_dimension = max(1, int(options.get("min_dimension", 64))) # 默认 64x64 以下忽略
-        return image_info["width"] < min_dimension or image_info["height"] < min_dimension
+    def _is_outside_recommended_source_range(width: int, height: int, options: dict[str, Any]) -> bool:
+        if not options.get("skip_small_textures", True):
+            return False
+        min_dimension = max(1, int(options.get("min_dimension", 128)))
+        max_source_dimension = max(0, int(options.get("max_source_dimension", 2048)))
+        if width < min_dimension or height < min_dimension:
+            return True
+        if max_source_dimension > 0 and max(width, height) > max_source_dimension:
+            return True
+        return False
 
     @staticmethod
     def _get_todds_unsupported_reason(source: Path, image_info: dict[str, Any] | None) -> str:
@@ -1704,43 +1130,32 @@ class TextureOptimizationManager:
         for texture_root in TextureOptimizationManager._iter_texture_root_dirs(mod_path):
             for current_root, _dirs, files in os.walk(texture_root):
                 for name in files:
+                    lower_name = name.lower()
                     path = Path(current_root) / name
-                    name_lower = name.lower()
-                    if path.suffix.lower() == ".dds" or name_lower.endswith(".dds.zstd"):
+                    if lower_name.endswith(".dds") or lower_name.endswith(".dds.zstd"):
                         yield path
 
     @staticmethod
-    def _to_rel_path(path: str, root: str) -> str:
-        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
-
-    def _load_manifest(self, mod_path: str) -> dict[str, Any]:
-        path = self._manifest_path(mod_path)
-        if not path.exists(): return {"version": TEXTURE_MANIFEST_VERSION, "files": {}}
-        try: return json.loads(path.read_text(encoding="utf-8"))
-        except Exception: return {"version": TEXTURE_MANIFEST_VERSION, "files": {}}
-
-    def _write_manifest(self, mod_path: str, data: dict[str, Any]) -> None:
-        path = self._manifest_path(mod_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def _manifest_path(self, mod_path: str) -> Path:
-        return self._manifest_root / f"{generate_path_hash(mod_path)}.json"
+    def _iter_texture_output_paths_with_source(mod_path: str):
+        for output_path in TextureOptimizationManager._iter_texture_output_paths(mod_path):
+            source_path = TextureOptimizationManager._resolve_output_source(output_path)
+            if source_path.exists():
+                yield output_path
 
     @staticmethod
-    def _build_signature(options: dict[str, Any]) -> str:
-        relevant = {
-            "generate_mipmaps": bool(options.get("generate_mipmaps", True)),
-            "scale_factor": float(options.get("scale_factor", 1.0)),
-            "max_size": int(options.get("max_size", 0)),
-            "skip_small_textures": bool(options.get("skip_small_textures", True)),
-            "min_dimension": int(options.get("min_dimension", 64)),
-        }
-        return json.dumps(relevant, sort_keys=True, ensure_ascii=False)
-
-    @staticmethod
-    def _build_output_path(source: Path) -> str:
-        return str(source.with_suffix(".dds"))
+    def _collect_output_stats(mod_path: str) -> dict[str, dict[str, Any]]:
+        stats: dict[str, dict[str, Any]] = {}
+        for output_path in TextureOptimizationManager._iter_texture_output_paths(mod_path):
+            try:
+                output_stat = output_path.stat()
+            except OSError:
+                continue
+            stats[TextureOptimizationManager._to_rel_path(str(output_path), mod_path)] = {
+                "path": str(output_path),
+                "size": int(output_stat.st_size),
+                "mtime_ns": int(output_stat.st_mtime_ns),
+            }
+        return stats
 
     @staticmethod
     def _resolve_output_source(path: Path) -> Path:
@@ -1751,7 +1166,6 @@ class TextureOptimizationManager:
             stem = path.stem
         else:
             return path
-
         for ext in SOURCE_IMAGE_EXTENSIONS:
             candidate = path.with_name(stem + ext)
             if candidate.exists():
@@ -1759,51 +1173,70 @@ class TextureOptimizationManager:
         return path.with_name(stem + SOURCE_IMAGE_EXTENSIONS[0])
 
     @staticmethod
+    def _to_rel_path(path: str, root: str) -> str:
+        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
+
+    @staticmethod
     def _normalize_mod_paths(mod_paths: list[str]) -> list[str]:
-        normalized =[]
-        seen = set()
+        normalized: list[str] = []
+        seen: set[str] = set()
         for path in mod_paths:
-            if not path: continue
+            if not path:
+                continue
             abs_path = os.path.abspath(path)
             lower = abs_path.lower()
-            if lower in seen or not os.path.isdir(abs_path): continue
+            if lower in seen or not os.path.isdir(abs_path):
+                continue
             seen.add(lower)
             normalized.append(abs_path)
         return normalized
 
     @staticmethod
+    def _resolve_scan_workers(total_mods: int, options: dict[str, Any]) -> int:
+        configured_workers = int(options.get("scan_workers", 0) or 0)
+        if configured_workers > 0:
+            return max(1, min(total_mods, configured_workers))
+        cpu_count = os.cpu_count() or 4
+        return max(1, min(total_mods, min(8, cpu_count)))
+
+    @staticmethod
     def _build_options(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         texture_opt = getattr(settings.config, "texture_opt", {})
-        if is_dataclass(texture_opt) and not isinstance(texture_opt, type): base = asdict(texture_opt)
-        elif isinstance(texture_opt, dict): base = dict(texture_opt)
-        else: base = {}
+        if is_dataclass(texture_opt) and not isinstance(texture_opt, type):
+            base = asdict(texture_opt)
+        elif isinstance(texture_opt, dict):
+            base = dict(texture_opt)
+        else:
+            base = {}
 
         merged = dict(base)
         merged.update(overrides or {})
-
-        # 默认参数兜底
         merged.setdefault("texture_tools_path", "")
+        merged.setdefault("process_mode", "scaled_only_overwrite")
         merged.setdefault("generate_mipmaps", True)
-        merged.setdefault("scale_factor", 1.0)
-        merged.setdefault("max_size", 0)
+        merged.setdefault("scale_factor", 0.5)
+        merged.setdefault("max_size", 128)
         merged.setdefault("skip_small_textures", True)
-        merged.setdefault("min_dimension", 64)
-        merged.setdefault("clean_orphaned_dds", True)
-        merged.setdefault("overwrite_existing", False)
+        merged.setdefault("min_dimension", 128)
+        merged.setdefault("max_source_dimension", 2048)
         merged.setdefault("encode_batch_timeout_seconds", 480)
-        merged.setdefault("clean_generated_only", True)
 
-        clean_generated_only = merged.get("clean_generated_only", True)
-        if isinstance(clean_generated_only, str):
-            merged["clean_generated_only"] = clean_generated_only.strip().lower() in {"1", "true", "yes", "on"}
-        else:
-            merged["clean_generated_only"] = bool(clean_generated_only)
+        process_mode = str(merged.get("process_mode", "scaled_only_overwrite") or "scaled_only_overwrite").strip()
+        if process_mode not in {"all_overwrite", "scaled_only_overwrite", "all_skip_existing"}:
+            process_mode = "scaled_only_overwrite"
+        merged["process_mode"] = process_mode
+        merged["scale_factor"] = float(merged.get("scale_factor", 0.5) or 0.5)
+        merged["max_size"] = int(merged.get("max_size", 128) or 128)
+        merged["min_dimension"] = int(merged.get("min_dimension", 128) or 128)
+        merged["max_source_dimension"] = int(merged.get("max_source_dimension", 2048) or 2048)
+        merged["skip_small_textures"] = bool(merged.get("skip_small_textures", True))
         merged["texture_tools_path"] = str(resolve_texture_tools_path(merged))
         return merged
 
     @staticmethod
     def _calc_progress(current: int, total: int) -> int:
-        if total <= 0: return 0
+        if total <= 0:
+            return 0
         if current <= 0:
             return 0
         if current >= total:
@@ -1820,44 +1253,120 @@ class TextureOptimizationManager:
             "checked_outputs": summary.get("checked_outputs", 0),
             "delete_failed": summary.get("delete_failed", 0),
             "total_jobs": summary.get("total_jobs", 0),
+            "scaled_count": summary.get("scaled_count", 0),
+            "fallback_scaled_count": summary.get("fallback_scaled_count", 0),
+            "keep_original_count": summary.get("keep_original_count", 0),
         }
+
+    @staticmethod
+    def _format_scale_counts(summary: dict[str, Any]) -> str:
+        parts: list[str] = []
+        scaled_count = int(summary.get("scaled_count", 0) or 0)
+        fallback_scaled_count = int(summary.get("fallback_scaled_count", 0) or 0)
+        keep_original_count = int(summary.get("keep_original_count", 0) or 0)
+        if scaled_count > 0:
+            parts.append(f"按当前档位缩放 {scaled_count} 张")
+        if fallback_scaled_count > 0:
+            parts.append(f"自动回退 {fallback_scaled_count} 张")
+        if keep_original_count > 0:
+            parts.append(f"保持原尺寸 {keep_original_count} 张")
+        return "，".join(parts)
 
     @staticmethod
     def _create_empty_stat(*, mod_path: str = "", mod_name: str = "", include_mod_count: bool = False, mod_count: int = 0) -> dict[str, Any]:
         stat = {
-            "mod_path": mod_path, "mod_name": mod_name,
-            "source_total_count": 0, "source_total_bytes": 0,
-            "output_total_count": 0, "output_total_bytes": 0,
-            "managed_output_count": 0, "managed_output_bytes": 0,
-            "external_output_count": 0, "external_output_bytes": 0,
-            "current_output_count": 0, "current_output_bytes": 0,
-            "stale_output_count": 0, "stale_output_bytes": 0,
+            "mod_path": mod_path,
+            "mod_name": mod_name,
+            "source_total_count": 0,
+            "source_total_bytes": 0,
+            "output_total_count": 0,
+            "output_total_bytes": 0,
+            "managed_output_count": 0,
+            "managed_output_bytes": 0,
+            "external_output_count": 0,
+            "external_output_bytes": 0,
+            "current_output_count": 0,
+            "current_output_bytes": 0,
+            "stale_output_count": 0,
+            "stale_output_bytes": 0,
             "missing_output_count": 0,
-            "generate_required_count": 0, "regenerate_required_count": 0, "action_required_count": 0,
-            "skip_small_count": 0, "skip_mask_count": 0,
-            "unsupported_source_count": 0, "unreadable_source_count": 0, "blocked_source_count": 0,
-            "orphan_output_count": 0, "orphan_output_bytes": 0,
-            "managed_orphan_output_count": 0, "managed_orphan_output_bytes": 0,
-            "external_orphan_output_count": 0, "external_orphan_output_bytes": 0,
+            "generate_required_count": 0,
+            "regenerate_required_count": 0,
+            "action_required_count": 0,
+            "skip_small_count": 0,
+            "skip_mask_count": 0,
+            "unsupported_source_count": 0,
+            "unreadable_source_count": 0,
+            "blocked_source_count": 0,
+            "orphan_output_count": 0,
+            "orphan_output_bytes": 0,
+            "managed_orphan_output_count": 0,
+            "managed_orphan_output_bytes": 0,
+            "external_orphan_output_count": 0,
+            "external_orphan_output_bytes": 0,
+            "scaled_count": 0,
+            "fallback_scaled_count": 0,
+            "keep_original_count": 0,
             "combined_total_bytes": 0,
+            "scale_breakdown": [],
             "engine_unsupported_preview": [],
-            "source_vram_bytes_est": 0, "output_vram_bytes_est": 0, "vram_saving_bytes_est": 0,
-            "source_bytes_share_pct": 0.0, "output_bytes_share_pct": 0.0, "combined_bytes_share_pct": 0.0,
+            "source_vram_bytes_est": 0,
+            "output_vram_bytes_est": 0,
+            "vram_saving_bytes_est": 0,
+            "source_bytes_share_pct": 0.0,
+            "output_bytes_share_pct": 0.0,
+            "combined_bytes_share_pct": 0.0,
         }
-        if include_mod_count: 
+        if include_mod_count:
             stat["mod_count"] = mod_count
         return stat
 
     @staticmethod
+    def _append_scale_bucket(scale_buckets: dict[tuple[str, str], int], *, kind: str, label: str) -> None:
+        key = (str(kind or "keep_original"), str(label or "原尺寸"))
+        scale_buckets[key] = int(scale_buckets.get(key, 0)) + 1
+
+    @staticmethod
+    def _finalize_scale_breakdown(scale_buckets: dict[tuple[str, str], int]) -> list[dict[str, Any]]:
+        order = {"scaled": 0, "fallback": 1, "keep_original": 2}
+        items = [
+            {"kind": kind, "label": label, "count": int(count)}
+            for (kind, label), count in scale_buckets.items()
+            if int(count) > 0
+        ]
+        items.sort(key=lambda item: (order.get(str(item["kind"]), 99), -int(item["count"]), str(item["label"])))
+        return items
+
+    @staticmethod
     def _merge_stat(target: dict[str, Any], source: dict[str, Any]) -> None:
+        target_scale_buckets = {
+            (str(item.get("kind") or "keep_original"), str(item.get("label") or "原尺寸")): int(item.get("count", 0))
+            for item in target.get("scale_breakdown", [])
+            if isinstance(item, dict)
+        }
+        for item in source.get("scale_breakdown", []):
+            if not isinstance(item, dict):
+                continue
+            current_key = (str(item.get("kind") or "keep_original"), str(item.get("label") or "原尺寸"))
+            target_scale_buckets[current_key] = int(target_scale_buckets.get(current_key, 0)) + int(item.get("count", 0))
+
         for key, value in source.items():
-            if key in {"mod_path", "mod_name"}: continue
+            if key in {"mod_path", "mod_name", "scale_breakdown", "engine_unsupported_preview"}:
+                continue
             if key == "mod_count":
                 continue
             if isinstance(value, (int, float)):
                 target[key] = int(target.get(key, 0)) + int(value)
+        target["scale_breakdown"] = TextureOptimizationManager._finalize_scale_breakdown(target_scale_buckets)
         target["combined_total_bytes"] = int(target.get("source_total_bytes", 0)) + int(target.get("output_total_bytes", 0))
         target["vram_saving_bytes_est"] = int(target.get("source_vram_bytes_est", 0)) - int(target.get("output_vram_bytes_est", 0))
+
+        preview = list(target.get("engine_unsupported_preview", []))
+        for item in source.get("engine_unsupported_preview", []):
+            if len(preview) >= 12:
+                break
+            preview.append(item)
+        target["engine_unsupported_preview"] = preview
 
     @staticmethod
     def _finalize_stat_shares(summary: dict[str, Any], mod_stats: list[dict[str, Any]]) -> None:
@@ -1871,10 +1380,21 @@ class TextureOptimizationManager:
             item["output_bytes_share_pct"] = round((int(item.get("output_total_bytes", 0)) / total_output) * 100, 2)
             item["combined_bytes_share_pct"] = round((int(item.get("combined_total_bytes", 0)) / total_combined) * 100, 2)
 
-    def _set_task_state(self, task: TextureTask, *, status: str | None = None, progress: int | None = None, message: str | None = None, metrics: dict[str, Any] | None = None, summary: dict[str, Any] | None = None, error: str | None = None) -> None:
+    def _set_task_state(
+        self,
+        task: TextureTask,
+        *,
+        status: str | None = None,
+        progress: int | None = None,
+        message: str | None = None,
+        metrics: dict[str, Any] | None = None,
+        summary: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
         if summary is not None:
             task.summary = summary
-        if error is not None: task.error = error
+        if error is not None:
+            task.error = error
         final_status = status or task.status
         self._emit_progress(
             task,
@@ -1889,13 +1409,48 @@ class TextureOptimizationManager:
 
     def _emit_progress(self, task: TextureTask, status: str, progress: int, message: str, metrics: dict[str, Any] | None = None) -> None:
         updated_at = current_ms()
-        task.status = status; task.progress = progress; task.message = message; task.metrics = metrics or {}; task.updated_at = updated_at
+        task.status = status
+        task.progress = progress
+        task.message = message
+        task.metrics = metrics or {}
+        task.updated_at = updated_at
         task_created_at = int(getattr(task, "created_at", updated_at))
         task.metrics.setdefault("task_created_at", task_created_at)
         task.metrics["task_updated_at"] = updated_at
         task.metrics.setdefault("task_action", str(getattr(task, "action", "")))
         task.metrics["task_status"] = status
         EventBus.emit_progress(task.id, TEXTURE_TASK_TYPE, status=status, progress=progress, message=message, metrics=task.metrics)
+
+    def _emit_analysis_progress(
+        self,
+        task_id: str,
+        *,
+        status: str,
+        progress: int,
+        message: str,
+        processed_mods: int,
+        total_mods: int,
+        summary: dict[str, Any],
+        current_entry: dict[str, Any] | None = None,
+        final_mods: list[dict[str, Any]] | None = None,
+    ) -> None:
+        started_at = int(self._analysis_started_at.get(task_id, current_ms()))
+        updated_at = current_ms()
+        metrics = {
+            "processed_mods": processed_mods,
+            "total_mods": total_mods,
+            "summary": {key: value for key, value in summary.items()},
+            "task_created_at": started_at,
+            "task_updated_at": updated_at,
+            "task_status": status,
+        }
+        if status in {"success", "failed", "cancelled"}:
+            metrics["elapsed_ms"] = max(0, updated_at - started_at)
+        if current_entry:
+            metrics["current_entry"] = current_entry
+        if final_mods is not None:
+            metrics["final_mods"] = final_mods
+        EventBus.emit_progress(task_id, TEXTURE_ANALYSIS_TASK_TYPE, status=status, progress=progress, message=message, metrics=metrics)
 
     def _schedule_task_cleanup(self, task_id: str, delay_seconds: float = TEXTURE_TASK_RETENTION_SECONDS) -> None:
         def _cleanup() -> None:
@@ -1905,43 +1460,6 @@ class TextureOptimizationManager:
         timer = threading.Timer(delay_seconds, _cleanup)
         timer.daemon = True
         timer.start()
-
-    @staticmethod
-    def _is_valid_stat_payload(payload: Any) -> bool:
-        if not isinstance(payload, dict):
-            return False
-        required_keys = {
-            "source_total_count",
-            "source_total_bytes",
-            "output_total_count",
-            "output_total_bytes",
-            "managed_output_count",
-            "current_output_count",
-            "generate_required_count",
-            "regenerate_required_count",
-            "action_required_count",
-            "combined_total_bytes",
-            "source_vram_bytes_est",
-            "output_vram_bytes_est",
-        }
-        return required_keys.issubset(payload.keys())
-
-    def _is_valid_scan_snapshot(self, snapshot: Any) -> bool:
-        if not isinstance(snapshot, dict):
-            return False
-        if int(snapshot.get("schema_version", 0) or 0) != TEXTURE_SCAN_SCHEMA_VERSION:
-            return False
-        if not self._is_valid_stat_payload(snapshot.get("summary")):
-            return False
-        mods = snapshot.get("mods")
-        if not isinstance(mods, list):
-            return False
-        for mod_snapshot in mods:
-            if not isinstance(mod_snapshot, dict):
-                return False
-            if not self._is_valid_stat_payload(mod_snapshot.get("stat")):
-                return False
-        return True
 
     @staticmethod
     def _format_elapsed_ms(elapsed_ms: int) -> str:

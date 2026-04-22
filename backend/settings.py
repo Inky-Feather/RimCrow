@@ -127,16 +127,15 @@ class UIConfig:
 # 贴图优化配置类
 @dataclass
 class TextureOptConfig:
-    texture_tools_path: str = str(TOOLS_DIR / "texture_tools")  # todds 工具目录，留空则使用默认位置
-    generate_mipmaps: bool = False           # 是否生成 Mipmap
-    scale_factor: float = 1.0               # 缩放倍率 (1.0 为不缩放)
-    max_size: int = 0                       # 最大分辨率限制 (0 为不限制)
-    skip_small_textures: bool = True        # 是否跳过小贴图
-    min_dimension: int = 64                 # 小贴图判定阈值
-    clean_orphaned_dds: bool = False         # 自动清理失效受管 DDS
-    clean_generated_only: bool = True       # 清理模式: 只清理自己生成的 DDS，不清理其它 DDS
-    overwrite_existing: bool = False        # 是否全覆盖重生成
-    encode_batch_timeout_seconds: int = 480 # todds 批处理超时
+    texture_tools_path: str = str(TOOLS_DIR / "texture_tools")  # 贴图工具目录
+    process_mode: str = "scaled_only_overwrite"
+    generate_mipmaps: bool = True            # 是否生成 Mipmap
+    scale_factor: float = 1.0                # 缩放倍率，小于1时会缩小贴图
+    max_size: int = 128                      # 最低清晰度
+    skip_small_textures: bool = True         # 超出建议范围时不参与缩放
+    min_dimension: int = 128                 # 最短边低于该值时不参与缩放
+    max_source_dimension: int = 2048         # 最长边高于该值时不参与缩放
+    encode_batch_timeout_seconds: int = 480  # todds 批处理超时
 
 
 @dataclass

@@ -196,15 +196,14 @@ export const useAppStore = defineStore('app', () => {
 
     // --- 贴图优化 ---
     texture_opt: {
-      texture_tools_path: "",                  // todds 工具路径，留空则使用默认
-      generate_mipmaps: false,      // 是否生成 Mipmap
-      scale_factor: 1.0,           // 缩放倍率 (1.0 为不缩放)
-      max_size: 0,                   // 最大分辨率限制 (0为不限制)
-      skip_small_textures: true,    // 是否跳过小贴图
-      min_dimension: 64,             // 小贴图判定阈值
-      clean_orphaned_dds: false,    // 自动清理失效的受管 DDS
-      clean_generated_only: true,   // 清理模式: true=仅本程序生成, false=删除所有有源图对应 DDS
-      overwrite_existing: false,    // 强制覆盖外部生成的 DDS
+      texture_tools_path: "",       // 贴图工具目录
+      process_mode: 'scaled_only_overwrite',
+      generate_mipmaps: true,       // 是否生成远近层级
+      scale_factor: 0.5,            // 压缩强度
+      max_size: 128,                // 最低清晰度
+      skip_small_textures: true,    // 超出建议范围时不参与缩放
+      min_dimension: 128,           // 最短边低于该值时不参与缩放
+      max_source_dimension: 2048,   // 最长边高于该值时不参与缩放
     },
     
     // --- 高级 (Advanced) ---
