@@ -501,13 +501,14 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=1,
-            message="开始生成 DDS",
+            message="扫描贴图并生成计划",
             metrics={
                 "done": 0,
                 "total": len(task.mod_paths),
                 "optimized": 0,
                 "skipped": 0,
                 "failed": 0,
+                "phase": "scan",
                 "summary": final_summary,
                 "final_mods": final_mods,
                 "refresh_after_analyze": False,
@@ -517,79 +518,97 @@ class TextureOptimizationManager:
         optimized = 0
         skipped = 0
         failed = 0
-        total_mods = max(1, len(task.mod_paths))
+        scan_results = self._scan_mods_for_optimize(task, options)
+        all_entries: list[dict[str, Any]] = []
+        for result in scan_results:
+            mod_path = str(result["mod_path"])
+            entries = list(result["entries"])
+            all_entries.extend(entries)
+            skipped += self._count_skipped_entries(entries, options)
+            final_mods_by_path[mod_path] = dict(result["stat"])
 
-        for index, mod_path in enumerate(task.mod_paths, start=1):
+        final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
+        batches = self._build_encode_batches(all_entries)
+        total_sources = len(all_entries)
+        total_pending = sum(len(batch["entries"]) for batch in batches)
+        phase_plan_total = total_pending
+
+        self._emit_progress(
+            task,
+            status="running",
+            progress=25,
+            message="开始生成 DDS",
+            metrics={
+                "done": 0,
+                "total": total_pending,
+                "optimized": optimized,
+                "skipped": skipped,
+                "failed": failed,
+                "phase": "encode",
+                "phase_label": "生成阶段",
+                "phase_percent": 0,
+                "phase_done": 0,
+                "phase_total": phase_plan_total,
+                "phase_unit": "张",
+                "planned_mods": len(scan_results),
+                "planned_sources": total_sources,
+                "planned_pending": total_pending,
+                "summary": final_summary,
+                "final_mods": final_mods,
+                "refresh_after_analyze": False,
+            },
+        )
+
+        for batch_index, batch in enumerate(batches, start=1):
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("DDS 生成任务已取消")
+            try:
+                encoder.encode_batch(
+                    task._cancel_event,
+                    source_paths=batch["source_paths"],
+                    overwrite_existing=bool(batch["overwrite_existing"]),
+                    scale_percent=batch["scale_percent"],
+                )
+            except TextureOptCancelled:
+                raise
+            except Exception:
+                failed += len(batch["entries"])
+                raise
 
-            scan_result = self._scan_single_mod(mod_path, options)
-            entries = scan_result["entries"]
-            mod_name = scan_result["mod_name"]
-            actionable_entries = [entry for entry in entries if bool(entry.get("needs_action"))]
-            skipped += self._count_skipped_entries(entries, options)
-            final_mods_by_path[mod_path] = dict(scan_result["stat"])
+            optimized += len(batch["entries"])
+            self._apply_batch_results(batch["entries"])
+            encode_progress = 25 + int((optimized / max(1, total_pending)) * 65)
+            scale_percent = batch.get("scale_percent")
+            scale_label = f"{int(scale_percent)}%" if scale_percent is not None else "原尺寸"
             final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
-
             self._emit_progress(
                 task,
                 status="running",
-                progress=max(1, self._calc_progress(index - 1, total_mods)),
-                message=f"生成 DDS: {mod_name}",
+                progress=min(90, max(25, encode_progress)),
+                message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
                 metrics={
-                    "done": index - 1,
-                    "total": len(task.mod_paths),
+                    "done": optimized,
+                    "total": total_pending,
                     "optimized": optimized,
                     "skipped": skipped,
                     "failed": failed,
-                    "current_mod_sources": len(entries),
-                    "current_mod_pending": len(actionable_entries),
+                    "phase": "encode",
+                    "phase_label": "生成阶段",
+                    "phase_percent": int((optimized / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                    "phase_done": optimized,
+                    "phase_total": phase_plan_total,
+                    "phase_unit": "张",
+                    "current_batch_index": batch_index,
+                    "current_batch_total": len(batches),
+                    "current_batch_size": len(batch["entries"]),
+                    "current_batch_scale": scale_percent,
                     "summary": final_summary,
-                    "current_entry": dict(scan_result["stat"]),
                     "final_mods": final_mods,
                     "refresh_after_analyze": False,
                 },
             )
 
-            batches = self._build_encode_batches(entries)
-            for batch in batches:
-                if task._cancel_event.is_set():
-                    raise TextureOptCancelled("DDS 生成任务已取消")
-                try:
-                    encoder.encode_batch(
-                        task._cancel_event,
-                        source_paths=batch["source_paths"],
-                        overwrite_existing=bool(batch["overwrite_existing"]),
-                        scale_percent=batch["scale_percent"],
-                    )
-                except TextureOptCancelled:
-                    raise
-                except Exception:
-                    failed += len(batch["entries"])
-                    raise
-
-            optimized += len(actionable_entries)
-            refreshed_stat = self._refresh_mod_stat_after_generate(scan_result, options)
-            final_mods_by_path[mod_path] = refreshed_stat
-            final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
-
-            self._emit_progress(
-                task,
-                status="running",
-                progress=self._calc_progress(index, total_mods),
-                message=f"生成 DDS: {mod_name}",
-                metrics={
-                    "done": index,
-                    "total": len(task.mod_paths),
-                    "optimized": optimized,
-                    "skipped": skipped,
-                    "failed": failed,
-                    "summary": final_summary,
-                    "current_entry": refreshed_stat,
-                    "final_mods": final_mods,
-                    "refresh_after_analyze": False,
-                },
-            )
+        final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
         scale_summary_text = self._format_scale_counts(final_summary)
         return {
@@ -604,6 +623,74 @@ class TextureOptimizationManager:
             "refresh_after_analyze": False,
             "message": f"DDS 生成完成{f'，{scale_summary_text}' if scale_summary_text else ''}",
         }
+
+    def _apply_batch_results(self, entries: list[dict[str, Any]]) -> None:
+        for entry in entries:
+            entry["output_exists"] = True
+            output_path = Path(str(entry.get("output_path") or ""))
+            try:
+                output_size = int(output_path.stat().st_size)
+            except OSError:
+                output_size = int(entry.get("output_size", 0) or 0)
+            entry["output_size"] = output_size
+            entry["needs_action"] = False
+
+    def _scan_mods_for_optimize(self, task: TextureTask, options: dict[str, Any]) -> list[dict[str, Any]]:
+        total_mods = max(1, len(task.mod_paths))
+        workers = self._resolve_scan_workers(total_mods, options)
+        scan_results: list[dict[str, Any] | None] = [None] * len(task.mod_paths)
+        partial_by_path: dict[str, dict[str, Any]] = {}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers, thread_name_prefix="TexturePlan") as executor:
+            future_map = {
+                executor.submit(
+                    self._scan_single_mod,
+                    mod_path,
+                    options,
+                    cancel_event=task._cancel_event,
+                    short_circuit_existing=True,
+                ): index
+                for index, mod_path in enumerate(task.mod_paths)
+            }
+            completed = 0
+            for future in concurrent.futures.as_completed(future_map):
+                if task._cancel_event.is_set():
+                    raise TextureOptCancelled("DDS 生成任务已取消")
+                index = future_map[future]
+                result = future.result()
+                scan_results[index] = result
+                partial_by_path[str(result["mod_path"])] = dict(result["stat"])
+                completed += 1
+                partial_summary, partial_mods = self._compose_progress_snapshot(task.mod_paths, partial_by_path)
+                self._emit_progress(
+                    task,
+                    status="running",
+                    progress=min(24, max(1, int((completed / total_mods) * 24))),
+                    message=f"扫描贴图: {result['mod_name']}",
+                    metrics={
+                        "done": completed,
+                        "total": len(task.mod_paths),
+                        "optimized": 0,
+                        "skipped": 0,
+                        "failed": 0,
+                        "phase": "scan",
+                        "phase_label": "统计规划阶段",
+                        "phase_percent": int((completed / total_mods) * 100),
+                        "phase_done": completed,
+                        "phase_total": total_mods,
+                        "phase_unit": "模组",
+                        "processed_mods": completed,
+                        "total_mods": len(task.mod_paths),
+                        "current_mod_sources": len(result["entries"]),
+                        "current_mod_pending": int(result["stat"].get("generate_required_count", 0)),
+                        "summary": partial_summary,
+                        "current_entry": dict(result["stat"]),
+                        "final_mods": partial_mods,
+                        "refresh_after_analyze": False,
+                    },
+                )
+
+        return [result for result in scan_results if isinstance(result, dict)]
 
     def _compose_progress_snapshot(
         self,
@@ -740,10 +827,16 @@ class TextureOptimizationManager:
         options: dict[str, Any],
         *,
         cancel_event: threading.Event | None = None,
+        short_circuit_existing: bool = False,
     ) -> dict[str, Any]:
         if cancel_event and cancel_event.is_set():
             raise TextureOptCancelled("贴图扫描任务已取消")
-        base_index = self._get_or_build_mod_base_index(mod_path, cancel_event=cancel_event)
+        base_index = self._get_or_build_mod_base_index(
+            mod_path,
+            options,
+            cancel_event=cancel_event,
+            short_circuit_existing=short_circuit_existing,
+        )
         if cancel_event and cancel_event.is_set():
             raise TextureOptCancelled("贴图扫描任务已取消")
         return self._project_mod_index(base_index, options)
@@ -751,11 +844,15 @@ class TextureOptimizationManager:
     def _get_or_build_mod_base_index(
         self,
         mod_path: str,
+        options: dict[str, Any],
         *,
         cancel_event: threading.Event | None = None,
+        short_circuit_existing: bool = False,
     ) -> dict[str, Any]:
         mod_name = Path(mod_path).name
         base_entries: list[dict[str, Any]] = []
+        process_mode = str(options.get("process_mode", "scaled_only_overwrite"))
+        output_stats = self._collect_output_stats(mod_path) if short_circuit_existing and process_mode == "all_skip_existing" else {}
 
         # 扫描阶段只生成配置无关的基础条目，后续配置切换只做重投影。
         for texture_root in self._iter_texture_root_dirs(mod_path):
@@ -796,7 +893,18 @@ class TextureOptimizationManager:
                         "supported_scale_percents": (),
                         "engine_unsupported": False,
                         "engine_unsupported_reason": "",
+                        "skip_capability_probe": False,
                     }
+
+                    if short_circuit_existing and process_mode == "all_skip_existing":
+                        output_info = output_stats.get(output_rel_path) or {}
+                        if output_info:
+                            entry["output_exists"] = True
+                            entry["output_size"] = int(output_info.get("size", 0))
+                            entry["source_readable"] = True
+                            entry["skip_capability_probe"] = True
+                            base_entries.append(entry)
+                            continue
 
                     try:
                         capability = self._get_source_capability(source)
@@ -856,6 +964,12 @@ class TextureOptimizationManager:
                 entries.append(entry)
                 continue
 
+            if bool(entry.get("skip_capability_probe")):
+                if not bool(entry.get("engine_unsupported")):
+                    entry["needs_action"] = self._entry_needs_action(entry, process_mode)
+                entries.append(entry)
+                continue
+
             width = int(entry.get("width", 0) or 0)
             height = int(entry.get("height", 0) or 0)
             has_alpha = bool(entry.get("has_alpha"))
@@ -899,24 +1013,6 @@ class TextureOptimizationManager:
 
         stat = self._build_mod_stat(mod_path, mod_name, entries, output_stats)
         return {"mod_path": mod_path, "mod_name": mod_name, "entries": entries, "stat": stat}
-
-    def _refresh_mod_stat_after_generate(self, scan_result: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
-        # 生成完成后只重读 DDS 输出状态，避免再次扫描和解析全部 PNG。
-        mod_path = str(scan_result.get("mod_path") or "")
-        mod_name = str(scan_result.get("mod_name") or Path(mod_path).name)
-        refreshed_entries = [dict(entry) for entry in scan_result.get("entries", [])]
-        output_stats = self._collect_output_stats(mod_path)
-        process_mode = str(options.get("process_mode", "scaled_only_overwrite"))
-
-        for entry in refreshed_entries:
-            output_rel = str(entry.get("output_rel_path") or "")
-            output_info = output_stats.get(output_rel) or {}
-            output_exists = bool(output_info)
-            entry["output_exists"] = output_exists
-            entry["output_size"] = int(output_info.get("size", 0))
-            entry["needs_action"] = self._entry_needs_action(entry, process_mode)
-
-        return self._build_mod_stat(mod_path, mod_name, refreshed_entries, output_stats)
 
     @staticmethod
     def _entry_needs_action(entry: dict[str, Any], process_mode: str) -> bool:

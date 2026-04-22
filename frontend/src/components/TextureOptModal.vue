@@ -355,12 +355,17 @@ const unsupportedSummaryTooltip = computed(() => {
 
 const processedCount = computed(() => {
   const details = progressState.value.details || {}
-  return Number(details.done || details.processed_mods || 0)
+  return Number((details.phase_done ?? details.done ?? details.processed_mods) || 0)
 })
 
 const totalCount = computed(() => {
   const details = progressState.value.details || {}
-  return Number(details.total || details.total_mods || 0)
+  return Number((details.phase_total ?? details.total ?? details.total_mods) || 0)
+})
+
+const progressPhaseLabel = computed(() => {
+  const details = progressState.value.details || {}
+  return String(details.phase_label || '')
 })
 
 const processModeLabel = computed(() => {
@@ -372,13 +377,18 @@ const processModeLabel = computed(() => {
 const progressCountLabel = computed(() => {
   if (!totalCount.value) return ''
   const details = progressState.value.details || {}
-  const unit = details.total_mods != null || details.processed_mods != null ? '模组' : '项'
-  return `${processedCount.value}/${totalCount.value} ${unit}`
+  const unit = String(details.phase_unit || (details.total_mods != null || details.processed_mods != null ? '模组' : '项'))
+  const phase = progressPhaseLabel.value ? `${progressPhaseLabel.value} ` : ''
+  return `${phase}${processedCount.value}/${totalCount.value} ${unit}`
 })
 
 const progressFullMessage = computed(() => String(progressState.value.message || '处理中...'))
 const showProgressBlock = computed(() => isBusy.value || showFinishedProgress.value)
-const progressDisplayPercent = computed(() => (showFinishedProgress.value ? 100 : Number(progressState.value.percent || 0)))
+const progressDisplayPercent = computed(() => {
+  if (showFinishedProgress.value) return 100
+  const details = progressState.value.details || {}
+  return Number((details.phase_percent ?? progressState.value.percent) || 0)
+})
 const progressStatusIcon = computed(() => (showFinishedProgress.value ? CheckCircle2 : Loader2))
 const progressStatusIconClass = computed(() => (showFinishedProgress.value ? 'text-accent-success' : 'text-accent-primary animate-spin'))
 const progressBarClass = computed(() => (showFinishedProgress.value ? 'bg-accent-success' : 'bg-accent-primary'))
