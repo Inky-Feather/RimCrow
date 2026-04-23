@@ -16,11 +16,11 @@ from PIL import Image
 import requests
 import urllib.parse
 import webview # 引入 webview 库
-from send2trash import send2trash
 from backend.managers.mgr_game import GameManager
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
+from backend.utils.delete_ops import delete_path as delete_fs_path
 
 
 class LocalAssetHandler(SimpleHTTPRequestHandler):
@@ -279,22 +279,17 @@ class FileManager:
             raise Exception(f"打开路径时出错: {e}")
 
     @staticmethod
-    def delete_path(path):
-        """删除文件/文件夹"""
+    def delete_path(path, force: bool = False):
+        """删除文件/文件夹。默认移入回收站，force=True 时彻底删除。"""
         try:
-            # 转换为绝对路径，避免相对路径问题
-            abs_path = os.path.abspath(path)
-            if os.path.isfile(abs_path) or os.path.isdir(abs_path):
-                send2trash(abs_path)
-                return True
-            return False
+            return delete_fs_path(path, force=force)
         except Exception as e:
             raise Exception(f"删除路径时出错: {e}")
     
     @staticmethod
-    def delete_paths(paths: list):
+    def delete_paths(paths: list, force: bool = False):
         """
-        批量删除文件/文件夹到回收站
+        批量删除文件/文件夹。
         :param paths: 路径列表
         :return: (success_count, error_list)
         """
@@ -304,18 +299,10 @@ class FileManager:
         for path in paths:
             if not path: continue
             try:
-                # 1. 转换为绝对路径
-                abs_path = os.path.abspath(path)
-                # 2. 检查是否存在
-                if os.path.exists(abs_path):
-                    # 3. 移至回收站 (比直接删除更安全)
-                    send2trash(abs_path)
+                deleted = delete_fs_path(path, force=force)
+                # 路径不存在时维持历史行为，视为已处理
+                if deleted or not os.path.exists(os.path.abspath(path)):
                     success_count += 1
-                else:
-                    # 如果路径本来就不存在，可以视为删除成功的一种
-                    # 或者记录为跳过，这里直接累加成功，减少用户困惑
-                    success_count += 1
-                    
             except Exception as e:
                 logger.error(f"批量删除出错: {path} -> {e}")
                 error_list.append(f"删除失败 ({os.path.basename(path)}): {str(e)}")

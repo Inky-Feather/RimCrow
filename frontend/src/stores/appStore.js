@@ -890,14 +890,17 @@ export const useAppStore = defineStore('app', () => {
   const deletePath = async (path, reScan=true) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
-    const confirm = await confirmStore.confirmAction(
-      '删除确认', `确定要删除 ${path} 吗？\n文件/文件夹将被移至回收站。`,
-      { type: 'error' }
+    const decision = await confirmStore.confirmDeleteAction(
+      '删除确认', `确定要删除 ${path} 吗？`,
+      {
+        trashOptionText: '移入回收站',
+        forceOptionText: '强制删除',
+      }
     );
-    if(!confirm) return
-    const res = await window.pywebview.api.path_delete(path)
+    if(!decision?.confirmed) return
+    const res = await window.pywebview.api.path_delete(path, !!decision.force)
     if (checkResult(res, "删除文件/文件夹")) {
-      toast.success(`已删除: \n${path}`)
+      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
       if(reScan){
         // 刷新Mod列表
         const modStore = useModStore()
@@ -910,14 +913,17 @@ export const useAppStore = defineStore('app', () => {
   const deletePaths = async (paths) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
-    const confirm = await confirmStore.confirmAction(
-      '删除确认', `确定要删除这 ${paths.length} 个文件/文件夹吗？\n这些文件/文件夹将被移至回收站。`,
-      { type: 'error' }
+    const decision = await confirmStore.confirmDeleteAction(
+      '删除确认', `确定要删除这 ${paths.length} 个文件/文件夹吗？`,
+      {
+        trashOptionText: '移入回收站',
+        forceOptionText: '强制删除',
+      }
     );
-    if(!confirm) return
-    const res = await window.pywebview.api.paths_delete(paths)
+    if(!decision?.confirmed) return
+    const res = await window.pywebview.api.paths_delete(paths, !!decision.force)
     if (checkResult(res, "批量删除文件/文件夹")) {
-      toast.success(`已删除 ${paths.length} 个文件/文件夹`)
+      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${paths.length} 个文件/文件夹`)
       // 刷新Mod列表
       const modStore = useModStore()
       modStore.scanMods()

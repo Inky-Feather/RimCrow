@@ -303,12 +303,19 @@ const checkPath = async (type, path) => {
 }
 
 const handleDelete = async (p) => {
-  const ok = await confirmStore.confirmAction('危险操作', `确定要删除环境 "${p.name}" 吗？此操作将永久抹除其隔离区的存档数据。`, { type: 'error' })
-  if (ok) {
+  const decision = await confirmStore.confirmDeleteAction(
+    '危险操作',
+    `确定要删除环境 "${p.name}" 吗？\n环境记录会被移除；其隔离区数据默认移入回收站，也可选择强制彻底删除。`,
+    {
+      trashOptionText: '移入回收站',
+      forceOptionText: '强制删除隔离区数据',
+    }
+  )
+  if (decision?.confirmed) {
     if (p.id === appStore.settings.current_profile_id) {
       profileStore.switchProfile('default')
     }
-    await profileStore.deleteProfile(p.id)
+    await profileStore.deleteProfile(p.id, !!decision.force)
   }
 }
 

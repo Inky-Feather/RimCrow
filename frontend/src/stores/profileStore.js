@@ -112,8 +112,8 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   // 删除环境
-  const deleteProfile = async (profileId) => {
-    const res = await window.pywebview.api.profile_delete(profileId)
+  const deleteProfile = async (profileId, force = false) => {
+    const res = await window.pywebview.api.profile_delete(profileId, !!force)
     if (appStore.checkResult(res, '删除环境')) {
       await fetchProfiles()
       // 如果删的是当前的，后端会自动切回 default，前端需要同步

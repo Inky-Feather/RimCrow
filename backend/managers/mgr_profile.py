@@ -8,12 +8,12 @@ from typing import Any, Dict
 from datetime import datetime
 from dataclasses import asdict, dataclass, field
 from playhouse.shortcuts import model_to_dict
-from send2trash import send2trash
 from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game import GameManager
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
 from backend.utils.logger import logger 
+from backend.utils.delete_ops import delete_path as delete_fs_path
 
 
 # @dataclass
@@ -215,8 +215,8 @@ class ProfileManager:
         self.current_profile.game_version = GameManager.get_game_version(self.current_profile.game_install_path)
         self.current_profile.save()
 
-    def delete_profile(self, profile_id):
-        """删除环境 (及隔离区数据)"""
+    def delete_profile(self, profile_id, force: bool = False):
+        """删除环境 (及隔离区数据)。默认移入回收站，force=True 时彻底删除。"""
         if profile_id == 'default':
             raise Exception("无法删除默认环境")
             
@@ -226,8 +226,7 @@ class ProfileManager:
         default_profile = self.get_profile('default')
         if profile.user_data_path and os.path.exists(profile.user_data_path) and (Path(profile.user_data_path) != Path(default_profile.user_data_path)):
             try:
-                # shutil.rmtree(profile.user_data_path)
-                send2trash(profile.user_data_path)
+                delete_fs_path(profile.user_data_path, force=force)
             except Exception as e:
                 logger.warning(f"Failed to clean up profile data: {e}")
         # 2. 删库

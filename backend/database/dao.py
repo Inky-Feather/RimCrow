@@ -24,6 +24,7 @@ from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_code, normalize_language_codes
+from backend.utils.delete_ops import delete_path as delete_fs_path
 from backend.utils.logger import logger
 from backend.utils.tools import (
     current_ms,
@@ -940,11 +941,11 @@ class ModMaintenanceDAO:
         return True, "成功"
 
     @staticmethod
-    def delete_mods_physically(path_hashes: List[str] | str):
+    def delete_mods_physically(path_hashes: List[str] | str, force: bool = False):
         """
         根据 path_hash 删除 Mod。
 
-        这里先删数据库，再尝试移入回收站，保持“界面不再引用已删除条目”的数据库事实优先。
+        这里先删数据库，再尝试删除物理文件，保持“界面不再引用已删除条目”的数据库事实优先。
         如果物理删除失败，只记录错误，不回滚数据库，避免在损坏路径上反复死循环。
         """
         normalized_hashes = _normalize_path_hashes(path_hashes)
@@ -971,16 +972,13 @@ class ModMaintenanceDAO:
             logger.error(f"Database deletion failed: {exc}")
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
-        from send2trash import send2trash
-
         for path in target_paths:
             try:
-                absolute_path = os.path.abspath(path)
-                if os.path.exists(absolute_path):
-                    send2trash(absolute_path)
+                delete_fs_path(path, force=force)
                 success_count += 1
             except Exception as exc:
-                errors.append(f"物理文件移除失败 ({os.path.basename(path)}): {exc}")
+                delete_mode = "彻底删除" if force else "移入回收站"
+                errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
 
         return {"success_count": success_count, "errors": errors}
 

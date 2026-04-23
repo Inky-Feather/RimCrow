@@ -78,6 +78,40 @@
               <!-- 输入框角落装饰 -->
               <div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-text-main/20 rounded-br-lg pointer-events-none group-focus-within:border-text-main/50 transition-colors"></div>
             </div>
+
+            <div v-else-if="confirmStore.state.showDeleteOptions" class="space-y-2">
+              <label class="flex items-start gap-3 rounded-xl border border-text-main/10 bg-black/25 px-3 py-2 cursor-pointer transition-colors hover:border-text-main/20">
+                <input
+                  v-model="confirmStore.state.forceDelete"
+                  class="mt-0.5 accent-accent-danger"
+                  type="radio"
+                  :value="false"
+                  name="delete-mode"
+                >
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-text-main">{{ confirmStore.state.trashOptionText }}</div>
+                  <div class="text-xs text-text-dim/80 leading-relaxed">更安全，文件会进入系统回收站，可在系统中恢复。</div>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-3 rounded-xl border border-accent-danger/25 bg-accent-danger/8 px-3 py-2 cursor-pointer transition-colors hover:border-accent-danger/40">
+                <input
+                  v-model="confirmStore.state.forceDelete"
+                  class="mt-0.5 accent-accent-danger"
+                  type="radio"
+                  :value="true"
+                  name="delete-mode"
+                >
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-accent-danger">{{ confirmStore.state.forceOptionText }}</div>
+                  <div class="text-xs text-text-dim/80 leading-relaxed">直接彻底删除，不进入回收站，通常无法恢复。</div>
+                </div>
+              </label>
+
+              <p v-if="confirmStore.state.deleteOptionsHint" class="px-1 text-[11px] leading-relaxed text-text-dim/70">
+                {{ confirmStore.state.deleteOptionsHint }}
+              </p>
+            </div>
           </div>
 
           <!-- D. 底部操作栏 (玻璃分割线) -->

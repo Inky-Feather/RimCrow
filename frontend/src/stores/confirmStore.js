@@ -18,6 +18,11 @@ export const useConfirmStore = defineStore('confirm', () => {
     cancelText: '取消',
     targetRect: null,  // 目标元素的位置信息 (用于迷弹窗)
     validation: null,  // 输入验证函数 (val) => boolean
+    showDeleteOptions: false,
+    forceDelete: false,
+    trashOptionText: '移入回收站',
+    forceOptionText: '强制删除',
+    deleteOptionsHint: '',
   })
 
   // Promise 控制器
@@ -37,6 +42,11 @@ export const useConfirmStore = defineStore('confirm', () => {
     state.title = ''
     state.targetRect = null
     state.validation = null
+    state.showDeleteOptions = false
+    state.forceDelete = false
+    state.trashOptionText = '移入回收站'
+    state.forceOptionText = '强制删除'
+    state.deleteOptionsHint = ''
     
     // 2. 合并配置
     Object.assign(state, {
@@ -73,6 +83,8 @@ export const useConfirmStore = defineStore('confirm', () => {
         return
       }
       resolvePromise && resolvePromise(state.inputValue)
+    } else if (state.showDeleteOptions) {
+      resolvePromise && resolvePromise({ confirmed: true, force: !!state.forceDelete })
     } else {
       resolvePromise && resolvePromise(true)
     }
@@ -83,7 +95,9 @@ export const useConfirmStore = defineStore('confirm', () => {
   const cancel = () => {
     // Confirm/Prompt 模式下，取消通常意味着 Promise resolve(false) 或 reject
     // 这里约定：Confirm 返回 false，Prompt 返回 null
-    if (state.mode === 'confirm') resolvePromise && resolvePromise(false)
+    if (state.mode === 'confirm' && state.showDeleteOptions) {
+      resolvePromise && resolvePromise({ confirmed: false, force: !!state.forceDelete })
+    } else if (state.mode === 'confirm') resolvePromise && resolvePromise(false)
     else resolvePromise && resolvePromise(null)
     
     isVisible.value = false
@@ -93,6 +107,20 @@ export const useConfirmStore = defineStore('confirm', () => {
   const alert = (title, message, options) => open({ title, message, mode: 'alert', ...options })
   
   const confirmAction = (title, message, options) => open({ title, message, mode: 'confirm', type: 'warning', ...options })
+
+  const confirmDeleteAction = (title, message, options) => open({
+    title,
+    message,
+    mode: 'confirm',
+    type: 'error',
+    confirmText: '确认删除',
+    cancelText: '取消',
+    showDeleteOptions: true,
+    trashOptionText: '移入回收站',
+    forceOptionText: '强制删除',
+    deleteOptionsHint: '默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。',
+    ...options,
+  })
   
   const prompt = (title, placeholder, options) => open({ title, placeholder, mode: 'prompt', ...options })
   
@@ -102,6 +130,6 @@ export const useConfirmStore = defineStore('confirm', () => {
   return { 
     isVisible, state, 
     open, confirm, cancel,
-    alert, confirmAction, prompt, popover
+    alert, confirmAction, confirmDeleteAction, prompt, popover
   }
 })

@@ -930,15 +930,18 @@ export const useModStore = defineStore('mods', () => {
   const deleteMods = async (path_hashes) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
-    const confirm = await confirmStore.confirmAction(
-      '删除确认', `确定要删除这 ${path_hashes.length} 个Mod吗？\n这些Mod将被移至回收站。`,
-      { type: 'error' }
+    const decision = await confirmStore.confirmDeleteAction(
+      '删除确认', `确定要删除这 ${path_hashes.length} 个Mod吗？`,
+      {
+        trashOptionText: '移入回收站',
+        forceOptionText: '强制删除',
+      }
     );
-    if(!confirm) return
-    const res = await window.pywebview.api.mods_delete(path_hashes)
+    if(!decision?.confirmed) return
+    const res = await window.pywebview.api.mods_delete(path_hashes, !!decision.force)
     scanMods()
     if (checkResult(res, "批量删除Mod")) {
-      toast.success(`已删除 ${res.data.success_count} 个Mod`)
+      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${res.data.success_count} 个Mod`)
       // 刷新Mod列表
       return true
     }

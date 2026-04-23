@@ -250,6 +250,36 @@ class API:
         self._handle_app_version_upgrade()
         logger.info("API Layer Ready.")
         
+    @staticmethod
+    def _normalize_str_items(items: List[str] | str) -> list[str]:
+        if isinstance(items, str):
+            value = items.strip()
+            return [value] if value else []
+        return [str(item or '').strip() for item in items if str(item or '').strip()]
+
+    @staticmethod
+    def _build_delete_response(target_name: str, total: int, result: dict, success_message: str = ""):
+        success_count = int(result.get('success_count', 0) or 0)
+        errors = [str(item) for item in (result.get('errors') or []) if str(item).strip()]
+
+        if total <= 0:
+            return ApiResponse.warning(f"未提供需要删除的{target_name}", data=result)
+        if success_count <= 0 and errors:
+            return ApiResponse.error("\n".join(errors), data=result)
+        if success_count != total:
+            return ApiResponse.warning(f"部分{target_name}删除失败：{total-success_count} 项未成功删除", data=result)
+        return ApiResponse.success(data=result, message=success_message)
+
+    def _delete_paths(self, paths: List[str] | str, force: bool = False) -> dict:
+        normalized_paths = self._normalize_str_items(paths)
+        success_count, error_list = file_mgr.delete_paths(normalized_paths, force=force)
+        return {
+            'success_count': success_count,
+            'errors': error_list,
+            'force': bool(force),
+            'paths': normalized_paths,
+        }
+    
     
     def _bootstrap_context(self, profile_id: str):
         """装载当前环境，并重建所有业务引擎"""
@@ -1025,7 +1055,7 @@ class API:
         return ApiResponse.success({ "details": result },"后台扫描已启动")
     
     @log_api_call
-    def scan_conflicts_resolve(self, operations: List[Dict]):
+    def scan_conflicts_resolve(self, operations: List[Dict], force: bool = False):
         """
         处理扫描发现的冲突。
         operations: List[Dict]
@@ -1057,7 +1087,8 @@ class API:
                         if not path_hash:
                             msg = "缺少 target_path_hash，无法删除该副本"
                         else:
-                            res = ModMaintenanceDAO.delete_mods_physically([path_hash])
+                            op_force = bool(op.get('force_delete', force))
+                            res = ModMaintenanceDAO.delete_mods_physically([path_hash], force=op_force)
                             success = res['success_count'] > 0
                             if not success:
                                 msg = res['errors'][0] if res['errors'] else "未找到可删除的模组记录"
@@ -1096,24 +1127,16 @@ class API:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
     @log_api_call
-    def mods_delete(self, path_hashes: List[str]|str):
+    def mods_delete(self, path_hashes: List[str]|str, force: bool = False):
         """
-        批量物理删除 Mod (移入回收站) 并抹除数据库记录
+        批量物理删除 Mod 并抹除数据库记录
         :param paths: 绝对路径列表
         """
         try:
-            if isinstance(path_hashes, str):
-                normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
-            else:
-                normalized_hashes = [str(item or '').strip() for item in path_hashes if str(item or '').strip()]
-            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes)
-            if res['success_count'] != len(normalized_hashes):
-                return ApiResponse.warning(f"部分Mod删除失败：{len(normalized_hashes)-res['success_count']} 项未成功删除", data=res)
-            if res['errors']:
-                msg = "\n".join(res['errors'])
-                return ApiResponse.error(msg, data=res)
-            if res['success_count'] > 0:
-                return ApiResponse.success(data=res)
+            normalized_hashes = self._normalize_str_items(path_hashes)
+            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes, force=force)
+            res['force'] = bool(force)
+            return self._build_delete_response("Mod", len(normalized_hashes), res)
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
     
@@ -1687,23 +1710,22 @@ class API:
             return ApiResponse.error(f"打开路径时出错: {e}")
     
     @log_api_call
-    def path_delete(self, path: str):
+    def path_delete(self, path: str, force: bool = False):
         """删除文件/文件夹"""
         try:
-            success = file_mgr.delete_path(path)
-            if success: return ApiResponse.success()
-            return ApiResponse.warning("路径不存在或无法删除")
+            res = self._delete_paths(path, force=force)
+            if res['paths'] and res['success_count'] <= 0 and not res['errors']:
+                return ApiResponse.warning("路径不存在或无法删除", data=res)
+            return self._build_delete_response("路径", 1 if res['paths'] else 0, res)
         except Exception as e:
             return ApiResponse.error(f"删除路径时出错: {e}")
     
     @log_api_call
-    def paths_delete(self, paths: List[str]):
+    def paths_delete(self, paths: List[str], force: bool = False):
         """批量删除文件/文件夹"""
         try:
-            success_count, error_list = file_mgr.delete_paths(paths)
-            if success_count == len(paths):
-                return ApiResponse.success()
-            return ApiResponse.warning(f"成功删除 {success_count} 个路径，{len(error_list)} 个路径删除失败")
+            res = self._delete_paths(paths, force=force)
+            return self._build_delete_response("路径", len(res['paths']), res)
         except Exception as e:
             return ApiResponse.error(f"批量删除路径时出错: {e}")
     
@@ -2922,9 +2944,9 @@ class API:
             return ApiResponse.error(str(e))
         
     @log_api_call
-    def profile_delete(self, pid):
+    def profile_delete(self, pid, force: bool = False):
         try:
-            self.profile_mgr.delete_profile(pid)
+            self.profile_mgr.delete_profile(pid, force=force)
             return ApiResponse.success(message="环境已删除")
         except Exception as e:
             return ApiResponse.error(str(e))
