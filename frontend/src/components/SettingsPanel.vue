@@ -110,6 +110,43 @@
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
                     />
                   </div>
+                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
+                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">导入/导出 起始目录配置</h3>
+                    <CommonSelect
+                      class="col-span-1"
+                      label="导入起始目录"
+                      v-model="formData.load_order_import_dir_mode"
+                      :description="'控制“导入加载序列”文件选择器的初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
+                      :options="LOAD_ORDER_DIR_MODE_OPTIONS"
+                    />
+                    <CommonSelect
+                      class="col-span-1"
+                      label="导出起始目录"
+                      v-model="formData.load_order_export_dir_mode"
+                      :description="'控制“导出加载序列”文件选择器的初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
+                      :options="LOAD_ORDER_DIR_MODE_OPTIONS"
+                    />
+                    <CommonPathInput
+                      v-if="formData.load_order_import_dir_mode === 'custom'"
+                      class="col-span-2"
+                      label="自定义导入起始目录"
+                      v-model="formData.load_order_import_custom_path"
+                      :check="formData.check_info?.load_order_import_custom_path"
+                      :description="'仅在导入目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。'"
+                      @browse="handleBrowse('load_order_import_custom_path')"
+                      @blur="checkPath('load_order_import_custom_path', formData.load_order_import_custom_path)"
+                    />
+                    <CommonPathInput
+                      v-if="formData.load_order_export_dir_mode === 'custom'"
+                      class="col-span-2"
+                      label="自定义导出起始目录"
+                      v-model="formData.load_order_export_custom_path"
+                      :check="formData.check_info?.load_order_export_custom_path"
+                      :description="'仅在导出目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。'"
+                      @browse="handleBrowse('load_order_export_custom_path')"
+                      @blur="checkPath('load_order_export_custom_path', formData.load_order_export_custom_path)"
+                    />
+                  </div>
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
                 </div>
               </section>
@@ -498,6 +535,12 @@ const tabs = [
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
+]
+
+const LOAD_ORDER_DIR_MODE_OPTIONS = [
+  { label: '默认', value: 'default' },
+  { label: '记忆', value: 'remember' },
+  { label: '自定义', value: 'custom' },
 ]
 
 

@@ -348,7 +348,7 @@ const viewedProfile = computed(() =>
 const isViewingCurrentProfile = computed(() => selectedBackupProfileId.value === currentProfileId.value)
 
 // 原始数据
-const rawData = ref({ today: [], earlier: [], other: [], import: [] })
+const rawData = ref({ today: [], earlier: [], other: [], last_backup: [] })
 
 // 监听备份列表变化，更新原始数据
 watch(() => orderStore.backups, (newVal) => {
@@ -361,7 +361,7 @@ const dataCount = computed(() => {
         earlier: rawData.value.earlier.length,
         other: rawData.value.other.length,
         auto: rawData.value.today.length + rawData.value.earlier.length,
-        total: rawData.value.today.length + rawData.value.earlier.length + rawData.value.other.length
+        total: rawData.value.today.length + rawData.value.earlier.length + rawData.value.other.length + (orderStore.tempImports?.length || 0)
     }
 })
 
@@ -466,7 +466,7 @@ const parsedData = computed(() => {
     today: process(rawData.value.today || [], 'today'),
     earlier: process(rawData.value.earlier || [], 'earlier'),
     other: process(rawData.value.other || [], 'other'),
-    import: process(rawData.value.import || [], 'import'),
+    import: process(orderStore.tempImports || [], 'import'),
     last_backup: process(rawData.value.last_backup || [], 'last_backup'),
   }
 })
@@ -579,7 +579,6 @@ const importDroppedBrowserFile = async (file) => {
   try {
     const data = await orderStore.importPayloadFile(file, selectedBackupProfileId.value)
     if (!data) return false
-    rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]
     if ((data.errors || []).length > 0) {
       console.warn('导入文件包含解析错误:', data.errors)
     }
@@ -732,7 +731,7 @@ const handleDelete = async (e, item) => {
 // 从导入列表移除
 const handleRemove = async (item) => {
   // 调用后端删除接口
-  rawData.value.import = rawData.value.import.filter(i => i.path !== item.path)
+  orderStore.removeTempImport(item)
   if (orderStore.currentBackupFile == item.path) {
     orderStore.clearBackupOrder()
     appStore.uiState.showDiffDrawer = false
@@ -755,7 +754,6 @@ const exportShareCode = async () => {
 const importShareCode = async () => {
   const data = await orderStore.promptImportShareCode(selectedBackupProfileId.value)
   if (data) {
-    rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]
     appStore.uiState.showDiffDrawer = true
   }
 }
@@ -764,8 +762,6 @@ const loadOrder = async (path) => {
   // 调用后端加载接口
   const data = await orderStore.getBackupOrder(path, selectedBackupProfileId.value)
   if (data) {
-    // 临时导入列表按路径去重，避免同一个外部文件重复堆叠。
-    rawData.value.import = [data, ...rawData.value.import.filter(i => i.path !== data.path)]
     if ((data.errors || []).length > 0) {
       console.warn('导入文件包含解析错误:', data.errors)
     }

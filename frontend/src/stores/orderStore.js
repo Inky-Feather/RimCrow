@@ -19,6 +19,7 @@ export const useOrderStore = defineStore('order', () => {
   const backups = ref(null)           // 备份文件列表
   const backupProfileId = ref('')     // 当前查看的备份所属环境
   const backupProfileDir = ref('')    // 当前查看环境的备份目录
+  const tempImports = ref([])         // 所有导入入口统一登记到这里，供备份面板展示“临时导入”
   const backupIds = ref([])           // 当前备份的排序列表
   const backupMods = ref([])          // 当前备份/导入文件的模组明细
   const currentBackupFile = ref('')   // 当前备份文件
@@ -104,6 +105,45 @@ export const useOrderStore = defineStore('order', () => {
     if (meta && Object.prototype.hasOwnProperty.call(meta, 'backup_dir')) {
       backupProfileDir.value = meta.backup_dir || ''
     }
+  }
+  const buildTempImportKey = (order = {}) => {
+    const fileKey = String(order.path || order.file || '').trim()
+    if (fileKey) return fileKey
+    const fallbackParts = [
+      String(order.format || ''),
+      String(order.list_name || ''),
+      String(order.source_profile_id || ''),
+      Array.isArray(order.active_ids) ? order.active_ids.join(',') : '',
+      Array.isArray(order.workshop_ids) ? order.workshop_ids.join(',') : '',
+    ]
+    return fallbackParts.join('|')
+  }
+  const registerTempImport = (order = {}) => {
+    const normalizedOrder = order ? { ...order } : {}
+    const tempKey = buildTempImportKey(normalizedOrder)
+    if (!tempKey) return null
+    const entry = {
+      ...normalizedOrder,
+      path: String(normalizedOrder.path || normalizedOrder.file || tempKey),
+      file: String(normalizedOrder.file || normalizedOrder.path || tempKey),
+    }
+    tempImports.value = [
+      entry,
+      ...tempImports.value.filter(item => buildTempImportKey(item) !== tempKey),
+    ]
+    return entry
+  }
+  const removeTempImport = (pathOrOrder = '') => {
+    const tempKey = typeof pathOrOrder === 'object'
+      ? buildTempImportKey(pathOrOrder)
+      : buildTempImportKey({ path: pathOrOrder })
+    if (!tempKey) return false
+    const prevLength = tempImports.value.length
+    tempImports.value = tempImports.value.filter(item => buildTempImportKey(item) !== tempKey)
+    return tempImports.value.length !== prevLength
+  }
+  const clearTempImports = () => {
+    tempImports.value = []
   }
   const buildEditingMods = (ids = []) => (
     (ids || []).map(id => {
@@ -241,6 +281,7 @@ export const useOrderStore = defineStore('order', () => {
       if ((order.warnings || []).length > 0) {
         toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
       }
+      registerTempImport(order)
 
       return {
         path: currentBackupFile.value,
@@ -345,15 +386,24 @@ export const useOrderStore = defineStore('order', () => {
     if (!window.pywebview) return false
     try {
       let resolvedPath = target_path
+      let rememberDialogDir = false
       if (!resolvedPath && trigger_dialog) {
         const pickRes = await window.pywebview.api.load_order_export_pick_path(export_format)
         if (pickRes?.status === 'warning') return false
         if (!checkResult(pickRes, "选择导出路径")) return false
         resolvedPath = pickRes.data?.path || ''
+        rememberDialogDir = !!resolvedPath
         trigger_dialog = false
       }
       // 导出格式和列表名都直接传给后端，让后端决定写出 ModsConfig.xml 还是 ModList.xml。
-      const res = await window.pywebview.api.load_order_export(modStore.activeIds, resolvedPath, trigger_dialog, export_format, list_name)
+      const res = await window.pywebview.api.load_order_export(
+        modStore.activeIds,
+        resolvedPath,
+        trigger_dialog,
+        export_format,
+        list_name,
+        rememberDialogDir
+      )
       if (checkResult(res, "导出Mod加载顺序")) {
         // console.log("导出加载顺序成功:", res)
         toast.success("Mod序列已导出")
@@ -460,7 +510,7 @@ export const useOrderStore = defineStore('order', () => {
       if ((order.warnings || []).length > 0) {
         toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
       }
-      return order
+      return registerTempImport(order)
     }
     return null
   }
@@ -479,7 +529,7 @@ export const useOrderStore = defineStore('order', () => {
       if ((order.warnings || []).length > 0) {
         toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
       }
-      return order
+      return registerTempImport(order)
     }
     return null
   }
@@ -650,11 +700,11 @@ export const useOrderStore = defineStore('order', () => {
     }
   }
   return {
-    backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
+    backups, backupProfileId, backupProfileDir, tempImports, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
     exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, getImportCheckItem, takeImportCheckItems, getImportCheckTargetSource, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
-    setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
+    setBackupOrder, clearBackupOrder, setBackupProfile, registerTempImport, removeTempImport, clearTempImports, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
   }
 })

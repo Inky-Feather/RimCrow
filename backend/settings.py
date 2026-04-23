@@ -162,6 +162,12 @@ class AppConfig:
     self_mods_path: str = str(MODS_DIR)  # 本程序默认模组路径
     # use_self_mods: bool = True          # 是否使用本程序模组
     move_old_self_mods: bool = False    # 修改路径后是否移动原有模组
+    load_order_import_dir_mode: str = "default"    # 导入文件选择器初始目录策略: default / remember / custom
+    load_order_import_custom_path: str = ""        # 导入文件选择器自定义目录（全局）
+    load_order_import_last_path: str = ""          # 导入文件选择器上次成功目录（全局）
+    load_order_export_dir_mode: str = "default"    # 导出文件选择器初始目录策略: default / remember / custom
+    load_order_export_custom_path: str = ""        # 导出文件选择器自定义目录（全局）
+    load_order_export_last_path: str = ""          # 导出文件选择器上次成功目录（全局）
     
     # --- 游戏设置 ---
     # game_version: str = ""               # RimWorld 版本
@@ -300,6 +306,15 @@ class SettingsManager:
 
     def _normalize_config(self):
         self.config.language = normalize_language_code(self.config.language, default="zh-cn") or "zh-cn"
+        valid_modes = {"default", "remember", "custom"}
+        if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
+            self.config.load_order_import_dir_mode = "default"
+        else:
+            self.config.load_order_import_dir_mode = str(self.config.load_order_import_dir_mode).strip().lower()
+        if str(self.config.load_order_export_dir_mode or "").strip().lower() not in valid_modes:
+            self.config.load_order_export_dir_mode = "default"
+        else:
+            self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
     
     def _sync_derived_paths(self):
         """

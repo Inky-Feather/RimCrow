@@ -111,14 +111,12 @@
 
 <script setup>
 import { useAppStore } from '../stores/appStore'
-import { useToast } from "vue-toastification";
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
 import { BotMessageSquare, ClipboardList, CloudCog, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
 import { useOrderStore } from '../stores/orderStore';
 
 
-const toast = useToast();
 const appStore = useAppStore()
 const orderStore = useOrderStore()
 const profileStore = useProfileStore()

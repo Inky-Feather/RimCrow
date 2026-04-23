@@ -481,6 +481,98 @@ class API:
             },
         }
 
+    @staticmethod
+    def _normalize_existing_dir(path_value: str | None) -> str:
+        """
+        统一把候选目录规整成文件选择器可用的初始目录。
+        - 文件路径取其父目录
+        - 不存在的路径返回空串，让上层继续走回退链
+        """
+        value = str(path_value or "").strip()
+        if not value:
+            return ""
+        candidate = Path(value)
+        # 保存对话框返回的目标文件在成功写入前通常还不存在，这里根据后缀推断父目录。
+        if candidate.is_file() or candidate.suffix:
+            candidate = candidate.parent
+        return str(candidate) if candidate.exists() and candidate.is_dir() else ""
+
+    @staticmethod
+    def _ensure_directory(path_value: str | None) -> str:
+        """
+        确保目录存在并返回规范化后的目录字符串。
+        若创建失败则返回空串，由上层继续走兜底逻辑。
+        """
+        value = str(path_value or "").strip()
+        if not value:
+            return ""
+        try:
+            candidate = Path(value)
+            candidate.mkdir(parents=True, exist_ok=True)
+            return str(candidate) if candidate.exists() and candidate.is_dir() else ""
+        except Exception:
+            logger.warning(f"无法创建目录: {value}", exc_info=True)
+            return ""
+
+    def _get_default_import_dir(self, context: ProfileContext | None) -> str:
+        """
+        默认导入目录固定指向当前环境用户数据下的 ModLists。
+        该目录是用户显式要求的导入入口，目录缺失时自动创建。
+        """
+        if not context:
+            return ""
+        base_dir = str(Path(context.user_data_path) / "ModLists")
+        return self._ensure_directory(base_dir)
+
+    def _get_default_export_dir(self) -> str:
+        """
+        默认导出目录保持现有行为，继续使用当前环境备份区下的 other 目录。
+        """
+        if self.load_order_mgr and getattr(self.load_order_mgr, "other_dir", ""):
+            return self._ensure_directory(self.load_order_mgr.other_dir)
+        if self.active_context:
+            return self._ensure_directory(str(Path(self.active_context.backup_dir) / "other"))
+        return ""
+
+    def _resolve_dialog_initial_dir(
+        self,
+        default_dir: str,
+        mode: str,
+        custom_dir: str,
+        last_dir: str,
+    ) -> str:
+        """
+        解析文件选择器初始目录。
+        回退链：
+        1. 模式对应目录（custom / remember / default）
+        2. 默认目录
+        3. 上次记忆目录
+        4. 空串（交给系统对话框决定）
+        """
+        normalized_default = self._normalize_existing_dir(default_dir)
+        normalized_last = self._normalize_existing_dir(last_dir)
+        normalized_custom = self._normalize_existing_dir(custom_dir)
+        normalized_mode = str(mode or "default").strip().lower() or "default"
+
+        if normalized_mode == "custom":
+            return normalized_custom or normalized_default or normalized_last or ""
+        if normalized_mode == "remember":
+            return normalized_last or normalized_default or ""
+        return normalized_default or normalized_last or ""
+
+    def _remember_load_order_dialog_dir(self, kind: str, path_value: str | None):
+        """
+        仅在通过文件选择器且操作成功后调用，更新对应的全局“上次目录”。
+        """
+        normalized_dir = self._normalize_existing_dir(path_value)
+        if not normalized_dir:
+            return
+        if kind == "import":
+            settings.set("load_order_import_last_path", normalized_dir)
+            return
+        if kind == "export":
+            settings.set("load_order_export_last_path", normalized_dir)
+
     def _on_app_loaded(self):
         """主窗口加载完毕回调"""
         self._bind_native_drag_drop()
@@ -1400,21 +1492,34 @@ class API:
         context, profile = self._resolve_load_order_scope(profile_id)
         source_profile_id = str(profile_id or "").strip()
         file = ''
+        from_dialog = False
         # 默认路径为 ModsConfig.xml 所在目录
         if not mods_config_file_path:
-            mods_config_file_path = context.mods_config_file if context else ""
+            mods_config_file_path = self._resolve_dialog_initial_dir(
+                self._get_default_import_dir(context),
+                settings.config.load_order_import_dir_mode,
+                settings.config.load_order_import_custom_path,
+                settings.config.load_order_import_last_path,
+            )
         # 解析逻辑已经支持 xml / json / txt / rws 等多种格式。
         # 这里不再按扩展名硬编码拦截，只要是实际存在的文件就允许继续解析。
         if os.path.isfile(mods_config_file_path):
             file = mods_config_file_path
         elif os.path.isdir(mods_config_file_path) :
+            from_dialog = True
             file = file_mgr.select_file_dialog(
                 initial_dir=mods_config_file_path,
                 file_types=LOAD_ORDER_OPEN_FILE_TYPES,
             )
         else:
+            from_dialog = True
             file = file_mgr.select_file_dialog(
-                initial_dir=context.game_config_path if context else "",
+                initial_dir=self._resolve_dialog_initial_dir(
+                    self._get_default_import_dir(context),
+                    settings.config.load_order_import_dir_mode,
+                    settings.config.load_order_import_custom_path,
+                    settings.config.load_order_import_last_path,
+                ),
                 file_types=LOAD_ORDER_OPEN_FILE_TYPES,
             )
         if not file:
@@ -1429,6 +1534,8 @@ class API:
         # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
         if not result["active_ids"] and not result["workshop_ids"]:
             return ApiResponse.error("解析文件出错!")
+        if from_dialog:
+            self._remember_load_order_dialog_dir("import", file)
         return ApiResponse.success(result)
 
     @log_api_call
@@ -1505,7 +1612,7 @@ class API:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
     @log_api_call
-    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None):
+    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None, remember_dialog_dir: bool = False):
         """
         导出当前加载顺序到指定格式
         :param active_ids: 激活的 Mod 列表
@@ -1522,7 +1629,10 @@ class API:
                 export_format=export_format,
                 list_name=list_name
             ) if self.load_order_mgr else False
-            if success: return ApiResponse.success()
+            if success:
+                if remember_dialog_dir:
+                    self._remember_load_order_dialog_dir("export", target_path)
+                return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
@@ -1535,8 +1645,14 @@ class API:
             export_format = str(export_format or 'modsconfig').strip().lower() or 'modsconfig'
             default_name = self.load_order_mgr._default_export_name(export_format)
             file_types = self.load_order_mgr._get_save_file_types(export_format)
+            initial_dir = self._resolve_dialog_initial_dir(
+                self._get_default_export_dir(),
+                settings.config.load_order_export_dir_mode,
+                settings.config.load_order_export_custom_path,
+                settings.config.load_order_export_last_path,
+            )
             selected = FileManager.save_file_dialog(
-                initial_dir=self.load_order_mgr.other_dir,
+                initial_dir=initial_dir,
                 default_filename=default_name,
                 file_types=file_types,
             )
