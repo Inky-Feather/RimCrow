@@ -420,6 +420,43 @@ class RuleManager:
         self.save_user_rules()
         return True
 
+    def set_language_pack_owner_override(
+        self,
+        package_id: str,
+        owner_ids: list[str],
+        replace: bool = False,
+    ):
+        """设置语言包归属手动覆盖。"""
+        pid = package_id.lower().strip()
+        if pid not in self.user_mod_rules:
+            self.user_mod_rules[pid] = {}
+
+        rule = self.user_mod_rules[pid]
+        normalized_owner_ids = []
+        seen = set()
+        for owner_id in owner_ids or []:
+            normalized_id = str(owner_id or "").strip().lower()
+            if not normalized_id or normalized_id in seen:
+                continue
+            seen.add(normalized_id)
+            normalized_owner_ids.append(normalized_id)
+
+        replace_enabled = bool(replace and normalized_owner_ids)
+
+        if normalized_owner_ids:
+            rule["languagePackOwners"] = {
+                "owners": normalized_owner_ids,
+                "replace": replace_enabled,
+            }
+        else:
+            rule.pop("languagePackOwners", None)
+
+        if not rule:
+            del self.user_mod_rules[pid]
+
+        self.save_user_rules()
+        return True
+
     def set_user_mod_absolute_position(self, package_id: str, position: str, comment: str = ""):
         """
         设置某个 Mod 的绝对位置属性 (top / bottom / none)

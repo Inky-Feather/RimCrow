@@ -241,6 +241,63 @@ export const useRuleStore = defineStore('rules', () => {
     return { pos: 'none', source: null }
   }
 
+  const getLanguagePackOwnerOverride = (modId) => {
+    const pid = modId?.toLowerCase()
+    if (!pid) return { ownerIds: [], replace: false }
+    const rule = userModRules.value[pid] || {}
+    const rawConfig = rule.languagePackOwners
+    const rawOwnerIds = typeof rawConfig === 'object' && rawConfig !== null && !Array.isArray(rawConfig)
+      ? (rawConfig.owners ?? [])
+      : []
+    const rawReplace = typeof rawConfig === 'object' && rawConfig !== null && !Array.isArray(rawConfig)
+      ? !!rawConfig.replace
+      : false
+    const ownerIds = [...new Set(
+      (Array.isArray(rawOwnerIds) ? rawOwnerIds : [rawOwnerIds])
+        .map(id => String(id || '').trim().toLowerCase())
+        .filter(Boolean)
+    )]
+    const replace = ownerIds.length > 0 && !!rawReplace
+    return { ownerIds, replace }
+  }
+
+  const setLanguagePackOwnerOverride = async (modId, ownerIds = [], replace = false) => {
+    if (!window.pywebview || !modId) return false
+    const pid = String(modId || '').trim().toLowerCase()
+    if (!pid) return false
+
+    const normalizedOwnerIds = [...new Set(
+      (Array.isArray(ownerIds) ? ownerIds : [ownerIds])
+        .map(id => String(id || '').trim().toLowerCase())
+        .filter(Boolean)
+    )]
+    const normalizedReplace = normalizedOwnerIds.length > 0 && !!replace
+
+    const previousRule = JSON.parse(JSON.stringify(userModRules.value[pid] || {}))
+    const nextRule = JSON.parse(JSON.stringify(previousRule))
+    if (normalizedOwnerIds.length > 0) {
+      nextRule.languagePackOwners = {
+        owners: normalizedOwnerIds,
+        replace: normalizedReplace,
+      }
+    } else {
+      delete nextRule.languagePackOwners
+    }
+
+    if (Object.keys(nextRule).length > 0) userModRules.value[pid] = nextRule
+    else delete userModRules.value[pid]
+
+    const res = await window.pywebview.api.rule_set_language_pack_owner_override(pid, normalizedOwnerIds, normalizedReplace)
+    if (!appStore.checkResult(res, '设置语言包所属覆盖')) {
+      if (Object.keys(previousRule).length > 0) userModRules.value[pid] = previousRule
+      else delete userModRules.value[pid]
+      fetchRules()
+      return false
+    }
+    modStore.scanMods()
+    return true
+  }
+
   // 设置绝对位置
   const setAbsolutePosition = async (modId, position, comment = '') => {
     if (!window.pywebview) return
@@ -387,6 +444,7 @@ export const useRuleStore = defineStore('rules', () => {
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     getAbsolutePosition, setAbsolutePosition,
+    getLanguagePackOwnerOverride, setLanguagePackOwnerOverride,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
     saveDynamicRules, changeRuleSourcePriority,
     setGlobalEnable, toggleModRule,

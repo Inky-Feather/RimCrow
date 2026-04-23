@@ -36,6 +36,19 @@ export const useModStore = defineStore('mods', () => {
       Object.prototype.hasOwnProperty.call(right, key) && arePlainValuesEqual(left[key], right[key])
     ))
   }
+
+  const getLanguagePackOwnerIds = (mod) => {
+    const resolvedOwners = mod?.language_pack_owner_result?.owners || []
+    return [...new Set(
+      resolvedOwners
+        .map(owner => normalizePackageId(owner?.package_id))
+        .filter(Boolean)
+    )]
+  }
+  const canUseLanguagePackForIssueDetection = (mod) => {
+    const confidence = String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase()
+    return confidence === 'high' || confidence === 'medium'
+  }
   
   // === State ===
   const allModsMap = ref(new Map())   // 核心数据，使用 Map 加速查找
@@ -1244,21 +1257,25 @@ export const useModStore = defineStore('mods', () => {
     }
 
     // 1.5 预处理语言包映射 (Language Packs Mapping)
-    // 如果用户开启了语言检测，提前找出所有语言包并映射到它们的目标 Mod
+    // 优先复用后端统一计算的 language_pack_owner_result，避免前端再次发散判断。
     const checkLangEnabled = appStore.settings.check_language_support
     const targetLang = appStore.settings.language // 当前软件语言，后端统一输出规范语言码
-    const langPackMap = new Map() // 数据结构: { targetModId: [ LangPackMod1, LangPackMod2 ] }
+    const langPackMap = new Map() // 严格命中：语言包明确声明支持当前语言
+    const langPackFallbackMap = new Map() // 兜底命中：归属可信，但语言作者可能漏标 supported_languages
     if (checkLangEnabled && targetLang) {
       for (const mod of allModsMap.value.values()) {
         const isLangPack = (mod.user_mod_type || mod.mod_type) === 'LanguagePack'
-        // 匹配语言 (忽略大小写)
+        if (!isLangPack) continue
+        if (!canUseLanguagePackForIssueDetection(mod)) continue
+
+        const targetIds = getLanguagePackOwnerIds(mod)
+        targetIds.forEach(tId => {
+          if (!langPackFallbackMap.has(tId)) langPackFallbackMap.set(tId, [])
+          langPackFallbackMap.get(tId).push(mod)
+        })
+
         const supportsLang = !!targetLang && (mod.supported_languages || []).includes(targetLang)
-        if (isLangPack && supportsLang) {
-          // 获取该语言包所指向的目标 Mod (通常在依赖或 load_after 中)
-          const rules = mod.rules || { dependencies: [], load_after: [] }
-          const targetIds = new Set()
-          rules.dependencies?.forEach(d => targetIds.add(d.target_id.toLowerCase()))
-          rules.load_after?.forEach(r => targetIds.add(r.target_id.toLowerCase()))
+        if (supportsLang) {
           targetIds.forEach(tId => {
             if (!langPackMap.has(tId)) langPackMap.set(tId, [])
             langPackMap.get(tId).push(mod)
@@ -1490,15 +1507,25 @@ export const useModStore = defineStore('mods', () => {
           // 如果自身不支持，且自身不是语言包本体
           if (!modSupportsLang && !isSelfLangPack) {
             const availablePacks = langPackMap.get(currentId) || []
+            const fallbackPacks = langPackFallbackMap.get(currentId) || []
             // 检查是否有被激活的适配语言包
             const activePack = availablePacks.find(p => activeIndexMap.has(p.package_id.toLowerCase()))
-            if (!activePack) {
+            const activeFallbackPack = fallbackPacks.find(p => activeIndexMap.has(p.package_id.toLowerCase()))
+            if (activePack || activeFallbackPack) {
+              // pass: 严格语言包或可信兜底语言包已经启用，不再误报缺语言
+            }
+            else if (!activePack) {
               // 没有被激活的语言包！检查本地是否有未激活的
               if (availablePacks.length > 0) {
                 const localPack = availablePacks[0] // 取第一个本地找到的语言包
                 const packName = displayModName(localPack.package_id)
                 _add(currentId, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
                   `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在语言包 [[${packName}]]`, localPack.package_id.toLowerCase())
+              } else if (fallbackPacks.length > 0) {
+                const fallbackPack = fallbackPacks[0]
+                const packName = displayModName(fallbackPack.package_id)
+                _add(currentId, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
+                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在可能相关的语言包 [[${packName}]]（该语言包未声明支持当前语言）`, fallbackPack.package_id.toLowerCase())
               } else {
                 // 本地彻底没有相关语言包
                 _add(currentId, ISSUE_TYPE.WARN_MISSING_LANGUAGE, ISSUE_LEVEL.WARN,
@@ -1507,10 +1534,7 @@ export const useModStore = defineStore('mods', () => {
             }
           } // 自身是语言包，检查是否存在前置或依赖，且目标Mod是否启用
           else if(isSelfLangPack) {
-            // 检查是否存在依赖或前置，如果都不存在，提示语言包指向对象未知，用户可手动指定前置对象
-            const modDependencies = mod.rules.dependencies?.map(d => d.target_id.toLowerCase()) || []
-            const modLoadAfter = mod.rules.load_after?.map(d => d.target_id.toLowerCase()) || []
-            const allRelatedModIds = [...modDependencies, ...modLoadAfter]
+            const allRelatedModIds = getLanguagePackOwnerIds(mod)
             if(allRelatedModIds.length === 0) {
               _add(currentId, ISSUE_TYPE.WARN_UNKNOWN_TARGET, ISSUE_LEVEL.WARN,
                 `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_UNKNOWN_TARGET]}^^：语言包指向对象未知，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)

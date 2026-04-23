@@ -77,6 +77,7 @@ from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
+from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from playhouse.shortcuts import model_to_dict
@@ -641,7 +642,7 @@ class API:
         interlocks = list(ModInterlock.select().dicts())
         interlock_map = {i['id']: i['chain'] for i in interlocks}
         
-        # 5. 数据加工：注入翻译和图片 URL
+        # 5. 数据加工：先注入翻译和生效规则，再统一计算语言包归属
         for mod in context_mods:
             # 翻译注入, 传入当前语言，Parser 内部会查找缓存
             if dlc_parser: dlc_parser.translate_record(mod, settings.config.language)
@@ -650,6 +651,22 @@ class API:
                 mod['rules'] = rule_mgr.get_effective_mod_rules(mod['package_id'], mod)
             else:
                 mod['rules'] = {}
+        language_pack_owner_map = resolve_language_pack_ownership_for_mods(
+            context_mods,
+            user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
+        )
+        for mod in context_mods:
+            mod['language_pack_owner_result'] = language_pack_owner_map.get(
+                str(mod.get('package_id') or '').strip().lower(),
+                {
+                    "owners": [],
+                    "analyzed_owners": [],
+                    "relation_type": "unknown",
+                    "summary_confidence": "unknown",
+                    "analyzed_relation_type": "unknown",
+                    "analyzed_summary_confidence": "unknown",
+                }
+            )
             if mod['workshop_id'] and  mod['workshop_id'] in replacements_map:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
@@ -1942,6 +1959,17 @@ class API:
             return ApiResponse.success() if success else ApiResponse.error("删除失败")
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
+
+    @log_api_call
+    def rule_set_language_pack_owner_override(self, package_id: str, owner_ids: list[str], replace: bool = False):
+        """设置语言包归属手动覆盖。"""
+        if not self.sorter or not self.sorter.rule_mgr:
+            return ApiResponse.error("规则引擎未初始化")
+        try:
+            success = self.sorter.rule_mgr.set_language_pack_owner_override(package_id, owner_ids, replace)
+            return ApiResponse.success() if success else ApiResponse.error("保存失败")
+        except Exception as e:
+            return ApiResponse.error(f"保存失败: {str(e)}")
     
     @log_api_call
     def rule_get_settings(self):
