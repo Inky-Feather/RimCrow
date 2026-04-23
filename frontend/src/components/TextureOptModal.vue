@@ -211,22 +211,24 @@
 
             <div class="shrink-0 border-t border-text-main/5 bg-black/20 p-4">
               <div data-tour="texture-opt-actions" class="space-y-2">
-                <button data-tour="texture-opt-analyze" @click="handleAnalyze" :disabled="isBusy"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 py-2.5 font-bold text-accent-secondary transition-all disabled:cursor-not-allowed disabled:opacity-50">
-                  <ScanSearch class="w-4 h-4" /> 扫描统计
-                </button>
+                <div class="flex gap-2">
+                  <button data-tour="texture-opt-analyze" @click="handleAnalyze" :disabled="isBusy"
+                    class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 py-2.5 font-bold text-accent-secondary transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+                    <ScanSearch class="w-4 h-4" /> 扫描统计
+                  </button>
+                  <button data-tour="texture-opt-clean" @click="handleCleanGenerated" :disabled="!toolStatus.available || isBusy"
+                    class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-warning/30 bg-accent-warning/10 py-2.5 font-bold text-accent-warning transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+                    <BrushCleaning class="w-4 h-4" /> 清理已生成 DDS
+                  </button>
+                </div>
 
                 <button v-if="!isBusy" data-tour="texture-opt-generate" @click="handleOptimize" :disabled="!toolStatus.available"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary py-3 font-black text-black shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
+                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary py-3 font-black text-black shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
                   <Rocket class="w-5 h-5" /> {{ processModeLabel }}
                 </button>
 
-                <button v-if="!isBusy" data-tour="texture-opt-clean" @click="handleCleanGenerated" :disabled="!toolStatus.available"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-warning/30 bg-accent-warning/10 py-2.5 font-bold text-accent-warning transition-all disabled:cursor-not-allowed disabled:opacity-50">
-                  <BrushCleaning class="w-4 h-4" /> 清理已生成 DDS
-                </button>
 
-                <button v-else @click="handleCancel" class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-danger py-3 font-black text-white shadow-[0_0_15px_rgba(244,63,94,0.3)] transition-all active:scale-95">
+                <button v-else @click="handleCancel" class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-danger py-3 font-black text-white shadow-[0_0_15px_rgba(244,63,94,0.3)] transition-all hover:scale-102 active:scale-95 cursor-pointer">
                   <Ban class="w-5 h-5" /> 停止当前任务
                 </button>
               </div>

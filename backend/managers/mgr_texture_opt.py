@@ -3,6 +3,7 @@ from __future__ import annotations
 import concurrent.futures
 import os
 import platform
+import re
 import shutil
 import struct
 import subprocess
@@ -12,7 +13,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from PIL import Image
 
@@ -38,6 +39,7 @@ SCALE_STEP_RATIONALS = {
     75: (3, 4),
     80: (4, 5),
 }
+TODDS_PROGRESS_PATTERN = re.compile(r"Progress:\s*(\d+)\s*/\s*(\d+)", re.IGNORECASE)
 
 class TextureOptError(RuntimeError):
     pass
@@ -96,6 +98,7 @@ class _ToolProcessRunner:
         timeout_seconds: float | None = None,
         *,
         tool_name: str = "todds",
+        output_callback: Callable[[str], None] | None = None,
     ) -> None:
         creationflags = 0
         startupinfo = None
@@ -110,15 +113,36 @@ class _ToolProcessRunner:
         was_cancelled = False
         timeout_detail = ""
         try:
-            with tempfile.NamedTemporaryFile("w+b", delete=False, suffix=".log") as log_file:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", delete=False, suffix=".log") as log_file:
                 log_path = Path(log_file.name)
                 process = subprocess.Popen(
                     command,
-                    stdout=log_file,
+                    stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
                     creationflags=creationflags,
                     startupinfo=startupinfo,
                 )
+                reader_error: Exception | None = None
+
+                def consume_output() -> None:
+                    nonlocal reader_error
+                    if not process or not process.stdout:
+                        return
+                    try:
+                        for line in process.stdout:
+                            log_file.write(line)
+                            log_file.flush()
+                            if output_callback:
+                                output_callback(line.rstrip("\r\n"))
+                    except Exception as exc:
+                        reader_error = exc
+
+                reader = threading.Thread(target=consume_output, daemon=True, name=f"{tool_name}-output")
+                reader.start()
                 while True:
                     if cancel_event.is_set():
                         _ToolProcessRunner.terminate_process(process)
@@ -130,7 +154,11 @@ class _ToolProcessRunner:
                         _ToolProcessRunner.terminate_process(process)
                         timeout_detail = "__timeout__"
                         break
+                    if reader_error is not None:
+                        _ToolProcessRunner.terminate_process(process)
+                        raise TextureOptError(f"{tool_name} 输出读取失败: {reader_error}")
                     time.sleep(0.1)
+                reader.join(timeout=2)
         finally:
             if process and process.poll() is None:
                 _ToolProcessRunner.terminate_process(process)
@@ -233,6 +261,7 @@ class ToddsEncoder:
         source_paths: list[str],
         overwrite_existing: bool,
         scale_percent: int | None,
+        output_callback: Callable[[str], None] | None = None,
     ) -> None:
         normalized_sources = [str(Path(path)) for path in source_paths if path]
         if not normalized_sources:
@@ -266,11 +295,16 @@ class ToddsEncoder:
                 for source_path in normalized_sources:
                     handle.write(f"{source_path}\n")
             command.append(str(file_list))
+            run_kwargs = {
+                "timeout_seconds": timeout_seconds,
+                "tool_name": "todds",
+            }
+            if output_callback is not None:
+                run_kwargs["output_callback"] = output_callback
             _ToolProcessRunner.run_command(
                 command,
                 cancel_event,
-                timeout_seconds=timeout_seconds,
-                tool_name="todds",
+                **run_kwargs,
             )
         finally:
             if file_list and file_list.exists():
@@ -562,12 +596,65 @@ class TextureOptimizationManager:
         for batch_index, batch in enumerate(batches, start=1):
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("DDS 生成任务已取消")
+            batch_size = len(batch["entries"])
+            batch_completed_base = optimized
+            last_batch_progress = 0
+            batch_total_hint = batch_size
+            scale_percent = batch.get("scale_percent")
+            scale_label = f"{int(scale_percent)}%" if scale_percent is not None else "原尺寸"
+            last_live_emit_at = 0.0
+
+            def handle_todds_output(line: str) -> None:
+                nonlocal last_batch_progress, batch_total_hint, last_live_emit_at
+                match = TODDS_PROGRESS_PATTERN.search(str(line or ""))
+                if not match:
+                    return
+                current = max(0, int(match.group(1)))
+                total = max(1, int(match.group(2)))
+                batch_total_hint = total
+                current = min(current, batch_size)
+                if current <= last_batch_progress:
+                    return
+                now = time.monotonic()
+                if current < batch_size and (now - last_live_emit_at) < 0.2:
+                    return
+                last_batch_progress = current
+                last_live_emit_at = now
+                cumulative_done = batch_completed_base + current
+                encode_progress_live = 25 + int((cumulative_done / max(1, total_pending)) * 65)
+                self._emit_progress(
+                    task,
+                    status="running",
+                    progress=min(90, max(25, encode_progress_live)),
+                    message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                    metrics={
+                        "done": cumulative_done,
+                        "total": total_pending,
+                        "optimized": cumulative_done,
+                        "skipped": skipped,
+                        "failed": failed,
+                        "phase": "encode",
+                        "phase_label": "生成阶段",
+                        "phase_percent": int((cumulative_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                        "phase_done": cumulative_done,
+                        "phase_total": phase_plan_total,
+                        "phase_unit": "张",
+                        "current_batch_index": batch_index,
+                        "current_batch_total": len(batches),
+                        "current_batch_size": batch_size,
+                        "current_batch_scale": scale_percent,
+                        "current_batch_done": current,
+                        "current_batch_progress_total": max(batch_total_hint, batch_size),
+                        "refresh_after_analyze": False,
+                    },
+                )
             try:
                 encoder.encode_batch(
                     task._cancel_event,
                     source_paths=batch["source_paths"],
                     overwrite_existing=bool(batch["overwrite_existing"]),
                     scale_percent=batch["scale_percent"],
+                    output_callback=handle_todds_output,
                 )
             except TextureOptCancelled:
                 raise
@@ -575,11 +662,9 @@ class TextureOptimizationManager:
                 failed += len(batch["entries"])
                 raise
 
-            optimized += len(batch["entries"])
+            optimized += batch_size
             self._apply_batch_results(batch["entries"])
             encode_progress = 25 + int((optimized / max(1, total_pending)) * 65)
-            scale_percent = batch.get("scale_percent")
-            scale_label = f"{int(scale_percent)}%" if scale_percent is not None else "原尺寸"
             final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
             self._emit_progress(
                 task,
@@ -600,8 +685,10 @@ class TextureOptimizationManager:
                     "phase_unit": "张",
                     "current_batch_index": batch_index,
                     "current_batch_total": len(batches),
-                    "current_batch_size": len(batch["entries"]),
+                    "current_batch_size": batch_size,
                     "current_batch_scale": scale_percent,
+                    "current_batch_done": batch_size,
+                    "current_batch_progress_total": max(batch_total_hint, batch_size),
                     "summary": final_summary,
                     "final_mods": final_mods,
                     "refresh_after_analyze": False,

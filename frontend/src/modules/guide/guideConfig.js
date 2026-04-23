@@ -700,7 +700,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-actions"]',
     popover: {
       title: "主要操作",
-      description: "一般流程是先扫描统计，再按需要生成或清理。生成完成后系统会自动重新扫描刷新统计；清理用于回收旧 DDS 或把整库恢复到源图状态。",
+      description: "这里有生成、扫描、清理等主要操作按钮。设置好优化参数后，直接生成即可，扫描可以分析现有贴图数量体积占用等信息。",
       side: "left",
     },
   },

@@ -386,7 +386,13 @@ export const useTextureStore = defineStore('texture', () => {
     // 如果不是当前任务，忽略
     if (!isKnownTask) return
 
-    applySnapshotPayload(metrics)
+    const hasSnapshotPayload =
+      (metrics.summary && typeof metrics.summary === 'object')
+      || Array.isArray(metrics.final_mods)
+      || Array.isArray(metrics.mods)
+    if (hasSnapshotPayload) {
+      applySnapshotPayload(metrics)
+    }
 
     if (metrics.current_entry) {
       upsertCurrentEntry(metrics.current_entry)
