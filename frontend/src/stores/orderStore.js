@@ -269,33 +269,45 @@ export const useOrderStore = defineStore('order', () => {
     }
     return false
   }
-  // 获取备份加载顺序
-  const getBackupOrder = async (mods_config_file_path=null, source_profile_id='') => {
+  const buildCurrentBackupMeta = () => ({
+    path: currentBackupFile.value,
+    file: currentBackupFile.value,
+    active_ids: [...backupIds.value],
+    mods: [...backupMods.value],
+    modify_time: backupLoadModifyTime.value,
+    format: currentBackupFormat.value,
+    list_name: currentBackupName.value,
+    source_profile_id: currentBackupSourceProfileId.value,
+    workshop_ids: [...currentBackupWorkshopIds.value],
+    warnings: [...currentBackupWarnings.value],
+    errors: [...currentBackupErrors.value],
+    import_check: currentImportCheck.value,
+  })
+  const activateTempImportEntry = (entry = null) => {
+    if (!entry) return null
+    // 临时导入项需要成为当前对比对象，确保选中态和 diff 抽屉都明确落在“临时导入”分组。
+    setBackupOrder(entry, entry.file || entry.path || '')
+    return entry
+  }
+  // 切换当前对比项。这里只负责读取并切换，不负责登记“临时导入”。
+  const selectBackupOrder = async (mods_config_file_path=null, source_profile_id='') => {
     const order = await getFileOrder(mods_config_file_path, source_profile_id)
     if (order) {
-      // 除了 active_ids 之外，还要把格式、列表名和结构化明细一起缓存下来，
-      // 后面 diff 抽屉显示标题、名称和一键订阅都依赖这些字段。
       setBackupOrder(order, mods_config_file_path)
-
-      // 解析器已经把“可读但不致命”的问题放在 warnings 里，这里直接提示用户。
-      if ((order.warnings || []).length > 0) {
-        toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
-      }
-      registerTempImport(order)
-
-      return {
-        path: currentBackupFile.value,
-        modify_time: backupLoadModifyTime.value,
-        format: currentBackupFormat.value,
-        list_name: currentBackupName.value,
-        source_profile_id: currentBackupSourceProfileId.value,
-        workshop_ids: [...currentBackupWorkshopIds.value],
-        warnings: [...currentBackupWarnings.value],
-        errors: [...currentBackupErrors.value],
-        import_check: currentImportCheck.value,
-      }
-      // toast.success("备份Mod序列已加载")
+      return buildCurrentBackupMeta()
     }
+    return null
+  }
+  // 外部导入：导入数据，登记为“临时导入”，并切换到该临时导入项。
+  const importExternalOrder = async (mods_config_file_path=null, source_profile_id='') => {
+    const order = await selectBackupOrder(mods_config_file_path, source_profile_id)
+    if (!order) return null
+
+    if ((order.warnings || []).length > 0) {
+      toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
+    }
+    const entry = registerTempImport(buildCurrentBackupMeta())
+    return activateTempImportEntry(entry)
   }
   // 应用备份列表
   const applyBackup = async () => {
@@ -510,7 +522,8 @@ export const useOrderStore = defineStore('order', () => {
       if ((order.warnings || []).length > 0) {
         toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
       }
-      return registerTempImport(order)
+      const entry = registerTempImport(buildCurrentBackupMeta())
+      return activateTempImportEntry(entry)
     }
     return null
   }
@@ -529,7 +542,8 @@ export const useOrderStore = defineStore('order', () => {
       if ((order.warnings || []).length > 0) {
         toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
       }
-      return registerTempImport(order)
+      const entry = registerTempImport(buildCurrentBackupMeta())
+      return activateTempImportEntry(entry)
     }
     return null
   }
@@ -702,7 +716,7 @@ export const useOrderStore = defineStore('order', () => {
   return {
     backups, backupProfileId, backupProfileDir, tempImports, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
-    getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
+    getLoadOrder, selectBackupOrder, importExternalOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
     exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, getImportCheckItem, takeImportCheckItems, getImportCheckTargetSource, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
     setBackupOrder, clearBackupOrder, setBackupProfile, registerTempImport, removeTempImport, clearTempImports, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,

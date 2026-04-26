@@ -124,10 +124,9 @@ const profileStore = useProfileStore()
 
 // 从导入列表加载
 const loadOrder = async (path=null) => {
-  // 调用后端加载接口
-  const data = await orderStore.getBackupOrder(path)
+  // 顶部入口属于外部导入，导入后需要登记为临时项并切换过去。
+  const data = await orderStore.importExternalOrder(path)
   if (data) {
-    // console.log(data)
     appStore.uiState.showDiffDrawer = true
   }
 }

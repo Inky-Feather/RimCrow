@@ -697,7 +697,7 @@ const handleDrop = async (event) => {
 // 选择备份项
 const selectItem = async (item) => {
   // selectedPath.value = item.path
-  await orderStore.getBackupOrder(item.path, item.source_profile_id || '')
+  await orderStore.selectBackupOrder(item.path, item.source_profile_id || '')
   appStore.uiState.showDiffDrawer = true
 }
 // 从备份列表加载
@@ -760,7 +760,7 @@ const importShareCode = async () => {
 // 从导入列表加载
 const loadOrder = async (path) => {
   // 调用后端加载接口
-  const data = await orderStore.getBackupOrder(path, selectedBackupProfileId.value)
+  const data = await orderStore.importExternalOrder(path, selectedBackupProfileId.value)
   if (data) {
     if ((data.errors || []).length > 0) {
       console.warn('导入文件包含解析错误:', data.errors)
