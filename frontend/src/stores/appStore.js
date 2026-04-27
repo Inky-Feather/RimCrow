@@ -1053,7 +1053,12 @@ export const useAppStore = defineStore('app', () => {
   // === 系统操作 ===
   // 启动游戏
   const launchGame = async (profile_id=null) => {
-    if (!profile_id) {
+    const profileStore = useProfileStore()
+    const normalizedTargetProfileId = String(profile_id || '').trim()
+    const currentProfileId = String(profileStore.currentProfileId || '').trim()
+    // 当前环境启动前必须先把界面里的最新工作序列落盘；
+    // 只有“启动别的环境”时，才允许跳过这一步。
+    if (!normalizedTargetProfileId || normalizedTargetProfileId === currentProfileId) {
       const orderStore = useOrderStore()
       const res = await orderStore.saveLoadOrder()
       if (!res) return

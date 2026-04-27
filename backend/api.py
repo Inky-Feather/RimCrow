@@ -943,6 +943,9 @@ class API:
                 return ApiResponse.error("重置失败，数据库无法重新创建。")
             # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
             SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
+            # 重置会清空所有环境记录，当前进程必须立即回退到 default 并重建上下文，
+            # 否则内存里仍可能挂着已被删除的旧 profile manager / context。
+            self._bootstrap_context('default')
             
             return ApiResponse.success({"message": "数据库已重置。"})
         except Exception as e:
@@ -1811,7 +1814,12 @@ class API:
                             requires_fallback_confirm=True,
                             steam_status=steam_status,
                         )
-                    self._start_profile_game(profile_id, profile.game_install_path, extra_args)
+                    self._launch_profile_with_runtime_links(
+                        profile_id,
+                        profile.game_install_path,
+                        extra_args,
+                        include_workshop=False,
+                    )
                     msg='通过 Steam 挂载方式启动游戏'
             else:
                 if steam_running:
@@ -2027,7 +2035,12 @@ class API:
                     )
                     return ApiResponse.success(message="已继续直接启动游戏")
 
-            self._start_profile_game(profile_id, profile.game_install_path, extra_args)
+            self._launch_profile_with_runtime_links(
+                profile_id,
+                profile.game_install_path,
+                extra_args,
+                include_workshop=True,
+            )
             return ApiResponse.success(message="已继续直接启动游戏")
         except Exception as e:
             logger.error(f"Resolve launch warning failed: {e}", exc_info=True)

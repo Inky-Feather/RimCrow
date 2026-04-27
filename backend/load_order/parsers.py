@@ -58,6 +58,39 @@ def _append_mod_entry(
     source_urls.append(str(source_url or "").strip())
 
 
+def _align_parallel_entry_lists(
+    package_ids: list[str],
+    mod_names: list[str] | None = None,
+    workshop_ids: list[str] | None = None,
+    source_urls: list[str] | None = None,
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """
+    过滤非法 package_id 时，同时把并行数组按同一索引收敛。
+
+    旧实现只过滤了 package_ids，导致后续名称 / workshop id 仍停留在原始索引上，
+    一旦源文件里夹杂空行或非法包名，后续条目就会整体错位。
+    """
+
+    aligned_package_ids: list[str] = []
+    aligned_mod_names: list[str] = []
+    aligned_workshop_ids: list[str] = []
+    aligned_source_urls: list[str] = []
+
+    for index, raw_package_id in enumerate(package_ids or []):
+        normalized_package_id = normalize_package_id(raw_package_id)
+        if not normalized_package_id:
+            continue
+        aligned_package_ids.append(normalized_package_id)
+        aligned_mod_names.append(str((mod_names or [])[index]).strip() if mod_names and index < len(mod_names) else "")
+        aligned_workshop_ids.append(
+            normalize_workshop_id((workshop_ids or [])[index], zero_is_empty=False)
+            if workshop_ids and index < len(workshop_ids) else ""
+        )
+        aligned_source_urls.append(str((source_urls or [])[index]).strip() if source_urls and index < len(source_urls) else "")
+
+    return aligned_package_ids, aligned_mod_names, aligned_workshop_ids, aligned_source_urls
+
+
 def _extract_workshop_id(value: str) -> str:
     line = str(value or "").strip()
     if line.isdigit() and len(line) >= 7:
@@ -156,13 +189,22 @@ def _parse_modsconfig_xml(path: Path) -> ParsedLoadOrderData:
 
 def _parse_modlist_xml(path: Path) -> ParsedLoadOrderData:
     root = ET.fromstring(_read_text(path))
+    raw_package_ids = _parse_list_node(root, "./modIds", ".//modIds")
+    raw_mod_names = _parse_list_node(root, "./modNames", ".//modNames")
+    raw_workshop_ids = _parse_list_node(root, "./modSteamWorkshopIds", ".//modSteamWorkshopIds")
+    package_ids, mod_names, workshop_ids, source_urls = _align_parallel_entry_lists(
+        raw_package_ids,
+        raw_mod_names,
+        raw_workshop_ids,
+        [""] * len(raw_package_ids),
+    )
     return ParsedLoadOrderData(
         format=FORMAT_MODLIST,
         list_name=_parse_text_node(root, "./Name", ".//Name") or path.stem,
-        package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if normalize_package_id(item)],
-        mod_names=_parse_list_node(root, "./modNames", ".//modNames"),
-        workshop_ids=_parse_list_node(root, "./modSteamWorkshopIds", ".//modSteamWorkshopIds"),
-        source_urls=[""] * len([normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if normalize_package_id(item)]),
+        package_ids=package_ids,
+        mod_names=mod_names,
+        workshop_ids=workshop_ids,
+        source_urls=source_urls,
     )
 
 
@@ -192,33 +234,53 @@ def _parse_rml_file(path: Path) -> ParsedLoadOrderData:
     # 前者更像原始名称，后者更像最终展示名称（可能本地化）。
     # 这里优先使用 modList/names，缺失时再回退到 meta/modNames。
     package_ids_source = display_package_ids or meta_package_ids
+    package_ids: list[str] = []
     merged_names: list[str] = []
-    for index, package_id in enumerate(package_ids_source):
-        if not normalize_package_id(package_id):
+    workshop_ids: list[str] = []
+    source_urls: list[str] = []
+
+    for index, raw_package_id in enumerate(package_ids_source):
+        normalized_package_id = normalize_package_id(raw_package_id)
+        if not normalized_package_id:
             continue
         display_name = display_names[index] if index < len(display_names) else ""
         meta_name = meta_names[index] if index < len(meta_names) else ""
-        merged_names.append(display_name or meta_name)
+        package_ids.append(normalized_package_id)
+        merged_names.append(str(display_name or meta_name).strip())
+        workshop_ids.append(
+            normalize_workshop_id(meta_workshop_ids[index], zero_is_empty=False)
+            if index < len(meta_workshop_ids) else ""
+        )
+        source_urls.append("")
 
     return ParsedLoadOrderData(
         format=FORMAT_RML,
         list_name=path.stem,
-        package_ids=[normalize_package_id(item) for item in package_ids_source if normalize_package_id(item)],
+        package_ids=package_ids,
         mod_names=merged_names,
-        workshop_ids=meta_workshop_ids,
-        source_urls=[""] * len([normalize_package_id(item) for item in package_ids_source if normalize_package_id(item)]),
+        workshop_ids=workshop_ids,
+        source_urls=source_urls,
     )
 
 
 def _parse_savegame_xml(path: Path) -> ParsedLoadOrderData:
     root = ET.fromstring(_read_text(path))
+    raw_package_ids = _parse_list_node(root, "./meta/modIds", ".//meta/modIds")
+    raw_mod_names = _parse_list_node(root, "./meta/modNames", ".//meta/modNames")
+    raw_workshop_ids = _parse_list_node(root, "./meta/modSteamIds", ".//meta/modSteamIds")
+    package_ids, mod_names, workshop_ids, source_urls = _align_parallel_entry_lists(
+        raw_package_ids,
+        raw_mod_names,
+        raw_workshop_ids,
+        [""] * len(raw_package_ids),
+    )
     return ParsedLoadOrderData(
         format=FORMAT_SAVEGAME,
         list_name=path.stem,
-        package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if normalize_package_id(item)],
-        mod_names=_parse_list_node(root, "./meta/modNames", ".//meta/modNames"),
-        workshop_ids=_parse_list_node(root, "./meta/modSteamIds", ".//meta/modSteamIds"),
-        source_urls=[""] * len([normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if normalize_package_id(item)]),
+        package_ids=package_ids,
+        mod_names=mod_names,
+        workshop_ids=workshop_ids,
+        source_urls=source_urls,
     )
 
 

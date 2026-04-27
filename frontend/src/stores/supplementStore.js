@@ -5,7 +5,7 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
-import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../utils/modIdentity'
+import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, normalizeWorkshopId, pushUnique } from '../utils/modIdentity'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../utils/versioning'
 
 const TOOL_MOD_IDS = ['rmm.companion']
@@ -219,11 +219,62 @@ export const useSupplementStore = defineStore('supplement', () => {
     return suffix ? `${joined}${suffix}` : joined
   }
 
-  // 替代项限定在同一 workshop_id 且已安装的模组中查找，并优先兼容当前版本。
+  const sortReplacementCandidates = (candidates = []) => (
+    [...candidates].sort((left, right) => {
+      const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
+      const rightVersion = getVersionInfo(right.package_id).tone === 'success' ? 0 : 1
+      if (leftVersion !== rightVersion) return leftVersion - rightVersion
+      return modStore.displayModName(left).localeCompare(modStore.displayModName(right))
+    })
+  )
+
+  const collectAuthoritativeReplacementCandidates = (missingMod, activeSet, trailSet = new Set()) => {
+    const missingPackageId = normalizePackageId(missingMod?.package_id)
+    if (!missingPackageId) return []
+
+    const candidateIds = []
+    const replacementPackageId = normalizePackageId(missingMod?.replacement?.new_package_id)
+    const replacementWorkshopId = normalizeWorkshopId(missingMod?.replacement?.new_workshop_id)
+
+    if (replacementPackageId) {
+      uniquePush(candidateIds, replacementPackageId)
+    }
+
+    if (replacementWorkshopId) {
+      Array.from(modStore.allModsMap.values()).forEach(candidate => {
+        const candidateId = normalizePackageId(candidate?.package_id)
+        if (!candidateId) return
+        if (normalizeWorkshopId(candidate?.workshop_id) !== replacementWorkshopId) return
+        uniquePush(candidateIds, candidateId)
+      })
+    }
+
+    return sortReplacementCandidates(
+      candidateIds
+        .map(candidateId => modStore.takeModById(candidateId))
+        .filter(candidate => {
+          const candidateId = normalizePackageId(candidate?.package_id)
+          return !!candidateId
+            && candidateId !== missingPackageId
+            && !candidate?.isMissing
+            && !!candidate?.path
+            && !activeSet.has(candidateId)
+            && !trailSet.has(candidateId)
+        })
+    )
+  }
+
+  // 替代项优先使用权威 replacement 规则匹配；只有缺少规则信息时才回退旧 heuristic。
   const findReplacementCandidates = (missingMod, activeSet, trailSet = new Set()) => {
+    if (!missingMod?.isMissing) return []
+
+    const authoritativeCandidates = collectAuthoritativeReplacementCandidates(missingMod, activeSet, trailSet)
+    if (authoritativeCandidates.length > 0) return authoritativeCandidates
+
     const workshopId = String(missingMod?.workshop_id || '').trim()
-    if (!missingMod?.isMissing || !workshopId) return []
-    return Array.from(modStore.allModsMap.values())
+    if (!workshopId) return []
+
+    return sortReplacementCandidates(Array.from(modStore.allModsMap.values())
       .filter(candidate => {
         const candidateId = normalizePackageId(candidate?.package_id)
         return !!candidateId
@@ -234,12 +285,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           && String(candidate?.workshop_id || '').trim() === workshopId
           && candidateId !== normalizePackageId(missingMod?.package_id)
       })
-      .sort((left, right) => {
-        const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
-        const rightVersion = getVersionInfo(right.package_id).tone === 'success' ? 0 : 1
-        if (leftVersion !== rightVersion) return leftVersion - rightVersion
-        return modStore.displayModName(left).localeCompare(modStore.displayModName(right))
-      })
+    )
   }
 
   // 这里只收集“候选条目”，不直接决定是否显示或启用。
@@ -259,40 +305,59 @@ export const useSupplementStore = defineStore('supplement', () => {
         if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
 
         const installedOptionIds = optionIds.filter(optionId => modStore.hasRealModById(optionId))
-        if (installedOptionIds.length === 0) return
-
         const category = isCoreId(targetId)
           ? 'core'
           : isOfficialDlcId(targetId)
             ? 'official_dlc'
             : 'dependency'
 
-        const key = `dependency:${targetId}:${installedOptionIds.join('|')}`
+        const key = `dependency:${targetId}:${installedOptionIds.join('|') || 'missing'}`
         if (!entryMap.has(key)) {
-          const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
-          const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
-          entryMap.set(key, {
-            entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
-            key,
-            category,
-            severity: CATEGORY_META[category]?.severity || 'required',
-            title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
-            reason: '',
-            detail: '',
-            owners: [],
-            packageId: onlyOptionId,
-            removeIds: [],
-            relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
-            allowSkip: true,
-            defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
-            options: installedOptionIds.map(optionId => ({
-              packageId: optionId,
-              title: modStore.displayModName(optionId),
-              detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+          if (installedOptionIds.length === 0) {
+            entryMap.set(key, {
+              entryType: 'choice',
+              key,
+              category,
+              severity: CATEGORY_META[category]?.severity || 'required',
+              title: modStore.displayModName(targetId),
+              reason: '',
+              detail: '',
+              owners: [],
+              packageId: '',
               removeIds: [],
-              relationLabel: optionId === targetId ? '依赖' : '备选依赖',
-            })),
-          })
+              relationLabel: '缺失依赖',
+              allowSkip: true,
+              defaultOptionPackageId: '',
+              options: [],
+              hasAlternatives: alternativeIds.length > 0,
+            })
+          } else {
+            const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
+            const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
+            entryMap.set(key, {
+              entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
+              key,
+              category,
+              severity: CATEGORY_META[category]?.severity || 'required',
+              title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
+              reason: '',
+              detail: '',
+              owners: [],
+              packageId: onlyOptionId,
+              removeIds: [],
+              relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
+              allowSkip: true,
+              defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
+              options: installedOptionIds.map(optionId => ({
+                packageId: optionId,
+                title: modStore.displayModName(optionId),
+                detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+                removeIds: [],
+                relationLabel: optionId === targetId ? '依赖' : '备选依赖',
+              })),
+              hasAlternatives: alternativeIds.length > 0,
+            })
+          }
         }
         uniquePush(entryMap.get(key).owners, ownerId)
       })
@@ -301,6 +366,16 @@ export const useSupplementStore = defineStore('supplement', () => {
     return Array.from(entryMap.values()).map(entry => {
       const ownerCount = entry.owners.length
       const ownerDetail = buildOwnersDetail(entry.owners, ownerCount > 0 ? ' 的依赖' : '依赖')
+      if ((entry.options || []).length === 0) {
+        return {
+          ...entry,
+          reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖，但本地未安装可补齐项` : '当前序列缺少依赖项，且本地没有可直接启用的候选',
+          detail: mergeText(
+            ownerDetail,
+            entry.hasAlternatives ? '当前环境未安装原始依赖及任何备选模组' : '当前环境未安装该依赖'
+          ),
+        }
+      }
       return {
         ...entry,
         reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖` : '当前序列缺少依赖项',

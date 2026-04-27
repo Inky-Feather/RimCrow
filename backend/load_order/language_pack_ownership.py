@@ -361,7 +361,11 @@ def resolve_language_pack_ownership_for_mod(
             candidate["score"] += 220 if override_replace else 120
     if override_owner_ids and override_replace:
         candidates = [candidate for candidate in candidates if candidate["package_id"] in override_owner_ids]
-    effective_candidates = [candidate for candidate in candidates if not candidate["is_hard_noise"]] or candidates
+    # 用户手动覆盖属于最终裁决，不能在最后一步又被 hard-noise 过滤吞掉。
+    effective_candidates = [
+        candidate for candidate in candidates
+        if not candidate["is_hard_noise"] or candidate["package_id"] in override_owner_ids
+    ] or candidates
 
     owners, relation_type, confidence = _resolve_candidate_set(effective_candidates)
     if owners:

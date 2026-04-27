@@ -70,6 +70,34 @@ class TestLoadOrderParsers(unittest.TestCase):
         self.assertEqual(parsed.mod_names, ["Harmony", "Core"])
         self.assertEqual(parsed.workshop_ids, ["2009463077", "0"])
 
+    def test_parse_modlist_xml_keeps_parallel_fields_aligned_when_package_id_is_blank(self):
+        path = self._write(
+            "MyBrokenList.xml",
+            """<?xml version="1.0" encoding="utf-8"?>
+<ModList>
+  <Name>Broken List</Name>
+  <modIds>
+    <li>valid.one</li>
+    <li></li>
+    <li>valid.two</li>
+  </modIds>
+  <modNames>
+    <li>One</li>
+    <li>Blank</li>
+    <li>Two</li>
+  </modNames>
+  <modSteamWorkshopIds>
+    <li>1111111</li>
+    <li>2222222</li>
+    <li>3333333</li>
+  </modSteamWorkshopIds>
+</ModList>""",
+        )
+        parsed = parse_load_order_file(path)
+        self.assertEqual(parsed.package_ids, ["valid.one", "valid.two"])
+        self.assertEqual(parsed.mod_names, ["One", "Two"])
+        self.assertEqual(parsed.workshop_ids, ["1111111", "3333333"])
+
     def test_parse_savegame_xml(self):
         path = self._write(
             "save.rws",
@@ -93,6 +121,34 @@ class TestLoadOrderParsers(unittest.TestCase):
         parsed = parse_load_order_file(path)
         self.assertEqual(parsed.format, FORMAT_SAVEGAME)
         self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
+
+    def test_parse_savegame_xml_keeps_parallel_fields_aligned_when_package_id_is_blank(self):
+        path = self._write(
+            "broken_save.rws",
+            """<savegame>
+  <meta>
+    <modIds>
+      <li>valid.one</li>
+      <li></li>
+      <li>valid.two</li>
+    </modIds>
+    <modNames>
+      <li>One</li>
+      <li>Blank</li>
+      <li>Two</li>
+    </modNames>
+    <modSteamIds>
+      <li>1111111</li>
+      <li>2222222</li>
+      <li>3333333</li>
+    </modSteamIds>
+  </meta>
+</savegame>""",
+        )
+        parsed = parse_load_order_file(path)
+        self.assertEqual(parsed.package_ids, ["valid.one", "valid.two"])
+        self.assertEqual(parsed.mod_names, ["One", "Two"])
+        self.assertEqual(parsed.workshop_ids, ["1111111", "3333333"])
 
     def test_parse_rml_file(self):
         path = self._write(
@@ -131,6 +187,47 @@ class TestLoadOrderParsers(unittest.TestCase):
         self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
         self.assertEqual(parsed.mod_names, ["Harmony CN", "Core CN"])
         self.assertEqual(parsed.workshop_ids, ["2009463077", "0"])
+
+    def test_parse_rml_file_keeps_parallel_fields_aligned_when_package_id_is_blank(self):
+        path = self._write(
+            "broken_sample.rml",
+            """<?xml version="1.0" encoding="utf-8"?>
+<savedModList>
+  <meta>
+    <modIds>
+      <li>valid.one</li>
+      <li></li>
+      <li>valid.two</li>
+    </modIds>
+    <modSteamIds>
+      <li>1111111</li>
+      <li>2222222</li>
+      <li>3333333</li>
+    </modSteamIds>
+    <modNames>
+      <li>One Meta</li>
+      <li>Blank Meta</li>
+      <li>Two Meta</li>
+    </modNames>
+  </meta>
+  <modList>
+    <ids>
+      <li>valid.one</li>
+      <li></li>
+      <li>valid.two</li>
+    </ids>
+    <names>
+      <li>One Display</li>
+      <li>Blank Display</li>
+      <li>Two Display</li>
+    </names>
+  </modList>
+</savedModList>""",
+        )
+        parsed = parse_load_order_file(path)
+        self.assertEqual(parsed.package_ids, ["valid.one", "valid.two"])
+        self.assertEqual(parsed.mod_names, ["One Display", "Two Display"])
+        self.assertEqual(parsed.workshop_ids, ["1111111", "3333333"])
 
     def test_parse_rimsort_json(self):
         path = self._write(
