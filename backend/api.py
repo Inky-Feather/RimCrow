@@ -244,7 +244,6 @@ class API:
         self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
-        self.steamcmd_controller = SteamCMDController(self.steam_mgr.steamcmd_exe)
         self.ai_mgr = AIManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
@@ -415,11 +414,11 @@ class API:
         if self.game_monitor: self.game_monitor.running = False
         # 暂停所有事件发送
         EventBus.pause()
+        if self.steam_mgr:
+            self.steam_mgr.cleanup_runtime()
         logger.info("Closing database connection...")
         close_db()
-        # 强制杀死正在运行的 SteamCMD 进程
-        if hasattr(self, 'steamcmd_controller') and self.steamcmd_controller:
-            self.steamcmd_controller.kill_all()
+        # SteamCMD 的生命周期已统一收敛到 SteamManager 内部，避免旧控制器残留双重管理。
         
     
     def set_window(self, window: webview.Window):
@@ -2380,7 +2379,7 @@ class API:
             logger.error(f"Localize workshop mods failed: {e}", exc_info=True)
             return ApiResponse.error(f"本地化任务失败: {str(e)}")
         
-        return ApiResponse.success(message="本地化任务已在后台启动")
+        return ApiResponse.success({"task_id": res}, message="本地化任务已在后台启动")
     
     @log_api_call
     def workspace_transfer_mods(self, path_hashes: list, target_store: str, mode: str = 'copy'):
@@ -2820,27 +2819,40 @@ class API:
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
     @log_api_call
-    def download_cancel(self, task_id: str):
-        self.download_mgr.cancel_task(task_id)
-        return ApiResponse.success(message="尝试取消任务")
-
-    @log_api_call
     def cancel_progress_task(self, task_id: str, task_type: str):
         """统一取消入口，供前端全局任务栏按任务类型路由控制。"""
         normalized_task_id = str(task_id or "").strip()
         normalized_type = str(task_type or "").strip().lower()
 
-        if normalized_type in {"download", "update", "localize", "steamcmd-init"}:
+        if normalized_type in {"download", "update"}:
             if not normalized_task_id:
                 return ApiResponse.error("缺少任务 ID")
             self.download_mgr.cancel_task(normalized_task_id)
             return ApiResponse.success(message="已请求取消下载任务")
+
+        if normalized_type == "localize":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = file_mgr.cancel_localize_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消本地化任务") if ok else ApiResponse.error("当前没有可取消的本地化任务")
 
         if normalized_type == "scan":
             if not self.scanner:
                 return ApiResponse.error("扫描器未初始化")
             ok = self.scanner.stop_scan(normalized_task_id or None)
             return ApiResponse.success(message="已请求取消扫描任务") if ok else ApiResponse.error("当前没有可取消的扫描任务")
+
+        if normalized_type in {"steamcmd-download", "steamcmd-init"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.steam_mgr.cancel_steamcmd_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 SteamCMD 任务") if ok else ApiResponse.error("当前没有可取消的 SteamCMD 任务")
+
+        if normalized_type in {"steam-subscribe", "steam-unsubscribe"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.steam_mgr.abort_monitor_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 Steam 任务") if ok else ApiResponse.error("当前没有可取消的 Steam 任务")
 
         if normalized_type in {"texture-opt", "texture-opt-analyze"}:
             if not normalized_task_id:
@@ -2852,7 +2864,10 @@ class API:
                 return ApiResponse.error(str(e))
 
         if normalized_type == "ai-batch":
-            return ApiResponse.warning("AI 批量任务暂不支持取消")
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.ai_mgr.cancel_batch_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 AI 批量任务") if ok else ApiResponse.error("当前没有可取消的 AI 批量任务")
 
         return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
 
@@ -2987,7 +3002,7 @@ class API:
         })
 
     def _monitor_setup_tasks(self, tasks):
-        """(内部) 监控工具下载任务，完成后执行安装逻辑"""
+        """(内部) 监控工具下载任务，完成后只负责执行解压/部署。"""
         import time
         from backend.managers.mgr_download import TaskStatus
         
@@ -3009,36 +3024,6 @@ class API:
                 elif task.status == TaskStatus.ERROR:
                     logger.error(f"Setup task failed: {task_id}", exc_info=True)
                     pending.remove(item)
-        # 初始化
-        is_initialized = (Path(settings.config.steamcmd_path) / "public").exists()
-        if os.path.exists(self.steamcmd_controller.steamcmd_exe) and not is_initialized:
-            controller = SteamCMDController(self.steamcmd_controller.steamcmd_exe)
-            steamcmd_task_id = str(uuid.uuid4())
-            EventBus.emit_progress(
-                steamcmd_task_id,
-                "steamcmd-init",
-                status="pending",
-                progress=0,
-                message="准备初始化 SteamCMD...",
-                metrics={"title": "SteamCMD 初始化"},
-            )
-            def on_progress(percent, msg):
-                # 将进度推给前端
-                from backend.utils.event_bus import EventBus
-                EventBus.emit_progress(
-                    steamcmd_task_id,
-                    "steamcmd-init",
-                    status="running",
-                    progress=percent,
-                    message=msg,
-                    metrics={"title": "SteamCMD 初始化"},
-                )
-            success, msg = controller.initialize_steamcmd(on_progress)
-            if not success:
-                logger.error(f"SteamCMD 初始化彻底失败: {msg}", exc_info=True)
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": "SteamCMD 初始化"})
-            else:
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
 
     @log_api_call
     def steam_subscribe(self, workshop_ids: str|list[str]):
@@ -3069,15 +3054,6 @@ class API:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:
             return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def steam_cancle_task(self, task_id: str):
-        """取消 Steam 客户端任务"""
-        success = self.steam_mgr.abort_monitor_task(task_id)
-        if success:
-            return ApiResponse.success(message="已取消任务")
-        else:
-            return ApiResponse.error("操作失败：SteamAPI 未就绪")
     
     @log_api_call
     def steam_launch_client(self):
@@ -3123,7 +3099,7 @@ class API:
                 return ApiResponse.error("SteamCMD 未安装，正在尝试自动修复，请稍后...")
             
             # 启动后台下载
-            self.steam_mgr.download_workshop_items(workshop_ids)
+            self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
             return ApiResponse.success(message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -3273,7 +3249,7 @@ class API:
                 # 任务彻底完成后，发送 complete 事件
                 EventBus.emit(f'ai-batch-complete', {
                     'task_event_id': task_event_id,
-                    'status': 'success', 
+                    'status': 'cancelled' if results.get('cancelled') else 'success', 
                     'data': results
                 })
                 # 可选：可以直接在这里调用 ModDAO 批量入库

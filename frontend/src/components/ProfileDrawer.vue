@@ -66,13 +66,7 @@
                     </div>
                     <!-- 操作组 -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        v-if="p.id !== 'default'"
-                        @click.stop="handleCreateShortcut(p)"
-                        v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'"
-                        class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15"
-                        :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-40'"
-                      ><Link2 class="size-3.5" /></button>
+                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15" :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
                       <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="'删除环境'" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
                       <button @click.stop="handleEdit(p)" v-tooltip="'编辑环境'" class="p-1.5 rounded-lg hover:bg-text-main/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
                       <button @click.stop="handlePlay(p)" v-tooltip="'运行环境'" class="p-1.5 rounded-lg text-text-dim  transition-all hover:text-accent-success hover:bg-accent-success/20"
@@ -191,7 +185,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import { Database, Plus, Trash2, Settings2, Link2, X, Play, AlertTriangle } from 'lucide-vue-next'
+import { Database, Plus, Trash2, Settings2, Link2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
 import { createToastInterface } from 'vue-toastification'
 import { useProfileStore } from '../stores/profileStore'
 import { useAppStore } from '../stores/appStore'

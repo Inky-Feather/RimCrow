@@ -151,6 +151,9 @@ class FileManager:
     """
     # 定义内部常量，统一管理链接目录名
     LINK_PREFIX = "_Link_" # 使用统一前缀识别由管理器创建的链接
+    # 本地化复制属于后台线程任务，这里集中维护取消令牌，供 API 全局任务栏复用。
+    _localize_lock = threading.Lock()
+    _localize_cancel_events: Dict[str, threading.Event] = {}
     
     def __init__(self):
         # 1. 确保存储目录存在
@@ -941,6 +944,9 @@ $result | ConvertTo-Json -Compress
                 'label': display_name # 用于进度显示
             })
         if not tasks: return False
+        cancel_event = threading.Event()
+        with FileManager._localize_lock:
+            FileManager._localize_cancel_events[task_id] = cancel_event
         EventBus.emit_progress(
             task_id,
             "localize",
@@ -963,16 +969,45 @@ $result | ConvertTo-Json -Compress
             )
         # 3. 在后台线程执行，避免阻塞 UI（如果是大批量复制）
         def run_task():
-            success, errors, total = FileManager.copy_folders_with_progress(tasks, on_progress)
+            success = []
+            errors = []
+            total = len(tasks)
+            final_status = "success"
+            final_message = "本地化完成"
+            try:
+                success, errors, total = FileManager.copy_folders_with_progress(
+                    tasks,
+                    on_progress,
+                    cancel_event=cancel_event,
+                )
+                success_count = len(success)
+                error_count = len(errors)
+                if cancel_event.is_set():
+                    final_status = "cancelled"
+                    final_message = "本地化已取消"
+                elif success_count == 0 and error_count > 0:
+                    final_status = "failed"
+                    final_message = "本地化失败"
+            except InterruptedError:
+                final_status = "cancelled"
+                final_message = "本地化已取消"
+            except Exception as e:
+                logger.error(f"Localize task failed: {e}", exc_info=True)
+                errors.append(str(e))
+                final_status = "failed"
+                final_message = "本地化失败"
+            finally:
+                with FileManager._localize_lock:
+                    FileManager._localize_cancel_events.pop(task_id, None)
+
             success_count = len(success)
             error_count = len(errors)
-            final_status = "failed" if success_count == 0 and error_count > 0 else "success"
             EventBus.emit_progress(
                 task_id,
                 "localize",
                 status=final_status,
                 progress=100 if total else 0,
-                message="本地化完成" if final_status == "success" else "本地化失败",
+                message=final_message,
                 metrics={
                     "current": total,
                     "total": total,
@@ -982,18 +1017,32 @@ $result | ConvertTo-Json -Compress
                     "title": "本地化模组",
                 },
             )
-            # 发送完成事件
+            # 这里无论成功、失败还是取消都发完成事件，让前端决定是否刷新视图。
             EventBus.emit('localize-complete', {
                 'task_id': task_id,
-                'success_count': len(success),
-                'error_count': len(errors),
-                'errors': errors
+                'success_count': success_count,
+                'error_count': error_count,
+                'errors': errors,
+                'status': final_status,
             })
         threading.Thread(target=run_task, daemon=True).start()
+        return task_id
+
+    @staticmethod
+    def cancel_localize_task(task_id: str) -> bool:
+        """请求取消本地化复制任务。"""
+        normalized_task_id = str(task_id or '').strip()
+        if not normalized_task_id:
+            return False
+        with FileManager._localize_lock:
+            cancel_event = FileManager._localize_cancel_events.get(normalized_task_id)
+        if not cancel_event:
+            return False
+        cancel_event.set()
         return True
     
     @staticmethod
-    def copy_folders_with_progress(tasks, progress_callback=None):
+    def copy_folders_with_progress(tasks, progress_callback=None, cancel_event: threading.Event | None = None):
         """
         带进度回调的批量复制
         :param tasks: [{'src': '...', 'dst': '...', 'label': '...'}]
@@ -1004,6 +1053,8 @@ $result | ConvertTo-Json -Compress
         error_list = []
 
         for i, task in enumerate(tasks):
+            if cancel_event and cancel_event.is_set():
+                raise InterruptedError("Localize task cancelled by user")
             src = task['src']
             dst = task['dst']
             label = task.get('label', os.path.basename(src))
@@ -1019,9 +1070,22 @@ $result | ConvertTo-Json -Compress
                 while os.path.exists(final_dst):
                     final_dst = f"{dst}_{counter}"
                     counter += 1
-                
-                shutil.copytree(src, final_dst)
+
+                def copy_with_cancel(source_file, dest_file, *, follow_symlinks=True):
+                    # 复制过程只能做到“文件粒度”的中断，至少保证不会继续复制后续文件。
+                    if cancel_event and cancel_event.is_set():
+                        raise InterruptedError("Localize task cancelled by user")
+                    return shutil.copy2(source_file, dest_file, follow_symlinks=follow_symlinks)
+
+                shutil.copytree(src, final_dst, copy_function=copy_with_cancel)
                 success_list.append(final_dst)
+            except InterruptedError:
+                try:
+                    if os.path.exists(final_dst):
+                        delete_fs_path(final_dst)
+                except Exception as cleanup_error:
+                    logger.debug(f"Cleanup cancelled localize folder failed: {final_dst} - {cleanup_error}")
+                raise
             except Exception as e:
                 logger.error(f"Copy failed: {src} -> {dst}: {e}")
                 error_list.append(f"模组 {label} 复制失败: {str(e)}")

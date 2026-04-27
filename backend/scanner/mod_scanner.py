@@ -29,6 +29,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
+from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_codes
 from backend.utils.logger import logger # 引入日志
@@ -117,6 +118,10 @@ class ModScanner:
                 raise e
         try:
             # --- 0. 预检查与准备 ---
+            # SteamCMD 下载目录与管理器自管目录当前共用同一份物理数据。
+            # 扫描前先把 ACF 中“目录已不存在”的陈旧安装记录清掉，
+            # 避免后续任何 SteamCMD 下载又被旧记录拖入 Missing game files 校验失败。
+            SteamManager().reconcile_steamcmd_acf()
             valid_paths = [p for p in search_paths if p and os.path.exists(p)]
             if not valid_paths:
                 EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message="没有有效路径", metrics={"title": "模组扫描"})

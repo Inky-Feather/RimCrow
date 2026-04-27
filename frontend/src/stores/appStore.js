@@ -230,7 +230,7 @@ export const useAppStore = defineStore('app', () => {
 
 
   // === Getters ===
-  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update']))
+  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
 
   const ensureAiBatchSession = (taskId) => {
@@ -260,7 +260,20 @@ export const useAppStore = defineStore('app', () => {
       : taskStore.getLatestTaskByType('ai-batch')
   ))
   const updateInstallPrompted = new Set()
-  const cancellableTaskTypes = new Set(['scan', 'download', 'update', 'localize', 'steamcmd-init', 'texture-opt', 'texture-opt-analyze'])
+  // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
+  const cancellableTaskTypes = new Set([
+    'scan',
+    'download',
+    'update',
+    'localize',
+    'steamcmd-download',
+    'steamcmd-init',
+    'steam-subscribe',
+    'steam-unsubscribe',
+    'texture-opt',
+    'texture-opt-analyze',
+    'ai-batch',
+  ])
 
   const isTaskCancelPending = (taskId = '') => cancelPendingTaskIds.value.has(String(taskId || ''))
 
@@ -531,6 +544,10 @@ export const useAppStore = defineStore('app', () => {
     window.addEventListener('ai-batch-complete', (e) => {
       const taskId = e.detail?.task_event_id || ''
       if (taskId) currentAiBatchTaskId.value = taskId
+      if (e.detail.status === 'cancelled') {
+        toast.info('AI 批量任务已取消')
+        return
+      }
       if (e.detail.status === 'success') {
         const payload = e.detail.data // 获取后端的字典结果
         const successCount = payload.success_count || 0
@@ -547,8 +564,12 @@ export const useAppStore = defineStore('app', () => {
     })
     // 监听：本地化完成
     window.addEventListener('localize-complete', (e) => {
-        const { success_count, error_count, errors } = e.detail;
+        const { success_count, error_count, errors, status } = e.detail;
         console.log(`本地化完成。成功: ${success_count}, 失败: ${error_count}`, errors)
+        if (status === 'cancelled') {
+            toast.info('本地化任务已取消');
+            return
+        }
         if (error_count > 0) {
             toast.warning(`本地化完成。成功: ${success_count}, 失败: ${error_count}`);
         } else {
@@ -607,6 +628,9 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'download' && task.status === 'failed') {
         toast.error(`下载失败: ${task.metrics?.filename || task.message}\n${task.metrics?.error || ''}`)
+      }
+      if (task.type === 'steamcmd-download' && task.status === 'failed') {
+        toast.error(`SteamCMD 下载失败: ${task.metrics?.error || task.message}`)
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
         if (updateState.info) updateState.info.local_status = 'ready'

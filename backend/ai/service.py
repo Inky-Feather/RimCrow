@@ -63,6 +63,8 @@ class AIManager:
         self.llm = LiteLLMGateway()
         self._cancelled_sessions: set[str] = set()
         self._cancel_lock = threading.Lock()
+        # AI 批量任务与诊断任务共享同一套“取消令牌”模型，保证前端全局任务栏可以统一打断。
+        self._cancelled_batch_tasks: set[str] = set()
         
         # Prompt 的加载、保存、重置等生命周期全部交给专门的 PromptManager。
         self.prompt_manager = PromptManager(str(DATA_DIR / "prompts.json"))
@@ -598,71 +600,101 @@ class AIManager:
         
         logger.info(f"AI Batch Task Started. Total: {total_initial_items}")
 
-        for attempt in range(max_logic_retries):
-            if not pending_items: 
-                break 
-            
-            # 对剩余项重新进行智能分块
-            chunks = build_smart_chunks(pending_items)
-            logger.info(f"AI Task [Round {attempt+1}]: {len(pending_items)} pending items -> {len(chunks)} chunks.")
-            
-            semaphore = asyncio.Semaphore(max_concurrency)
-            # 这里必须把 chunk 自身也传给 zip，因为需要知道发出去的是谁
-            chunk_tasks = []
-            
-            for idx, chunk in enumerate(chunks):
-                # 任务 ID 加上轮次前缀方便调试
-                t_id = f"r{attempt}_c{idx}"
-                coro = self._process_chunk(t_id, chunk, prompt_config, variables, llm_kwargs, semaphore)
-                chunk_tasks.append((asyncio.create_task(coro), chunk))
-            
-            # 等待本轮所有 Chunk 完成
-            for future, original_chunk in chunk_tasks:
-                result = await future
+        try:
+            for attempt in range(max_logic_retries):
+                self._raise_if_batch_cancelled(task_event_id)
+                if not pending_items: 
+                    break 
                 
-                # 计算该 Chunk 期望返回的所有 ID
-                expected_ids = {i.get('package_id') for i in original_chunk}
+                # 对剩余项重新进行智能分块
+                chunks = build_smart_chunks(pending_items)
+                logger.info(f"AI Task [Round {attempt+1}]: {len(pending_items)} pending items -> {len(chunks)} chunks.")
                 
-                if result['status'] == 'success' and isinstance(result['data'], list):
-                    # 过滤有效数据：必须是字典，且 ID 必须属于本次请求的范围
-                    valid_data = []
-                    for d in result['data']:
-                        if isinstance(d, dict):
-                            pid = d.get('package_id')
-                            if pid in expected_ids:
-                                valid_data.append(d)
-                                successful_ids.add(pid)
+                semaphore = asyncio.Semaphore(max_concurrency)
+                # 这里必须把 chunk 自身也传给 zip，因为需要知道发出去的是谁
+                chunk_tasks = []
+                
+                for idx, chunk in enumerate(chunks):
+                    self._raise_if_batch_cancelled(task_event_id)
+                    # 任务 ID 加上轮次前缀方便调试
+                    t_id = f"r{attempt}_c{idx}"
+                    coro = self._process_chunk(t_id, chunk, prompt_config, variables, llm_kwargs, semaphore)
+                    chunk_tasks.append((asyncio.create_task(coro), chunk))
+                
+                # 等待本轮所有 Chunk 完成
+                for future, original_chunk in chunk_tasks:
+                    try:
+                        result = await future
+                    except asyncio.CancelledError:
+                        raise AIBatchRequestCancelled(f"AI batch cancelled: {task_event_id}")
+                    self._raise_if_batch_cancelled(task_event_id)
                     
-                    if valid_data:
-                        all_results.extend(valid_data)
-                        EventBus.emit('ai-batch-chunk-ready', {'task_event_id': task_event_id, 'items': valid_data})
-                
-                # 实时更新进度
-                percent = int((len(successful_ids) / total_initial_items) * 100)
-                # 预留 5% 给最终结算
-                percent = min(95, percent) 
-                
-                EventBus.emit_progress(
-                    task_event_id,
-                    "ai-batch",
-                    status="running",
-                    progress=percent,
-                    message=f"正在推理... [第{attempt+1}轮] 成功: {len(successful_ids)}/{total_initial_items}",
-                    metrics={
-                        "attempt": attempt + 1,
-                        "current": len(successful_ids),
-                        "total": total_initial_items,
-                        "task_key": task_key,
-                        "title": "AI 批量处理",
-                    },
-                )
+                    # 计算该 Chunk 期望返回的所有 ID
+                    expected_ids = {i.get('package_id') for i in original_chunk}
+                    
+                    if result['status'] == 'success' and isinstance(result['data'], list):
+                        # 过滤有效数据：必须是字典，且 ID 必须属于本次请求的范围
+                        valid_data = []
+                        for d in result['data']:
+                            if isinstance(d, dict):
+                                pid = d.get('package_id')
+                                if pid in expected_ids:
+                                    valid_data.append(d)
+                                    successful_ids.add(pid)
+                        
+                        if valid_data:
+                            all_results.extend(valid_data)
+                            EventBus.emit('ai-batch-chunk-ready', {'task_event_id': task_event_id, 'items': valid_data})
+                    
+                    # 实时更新进度
+                    percent = int((len(successful_ids) / total_initial_items) * 100)
+                    # 预留 5% 给最终结算
+                    percent = min(95, percent) 
+                    
+                    EventBus.emit_progress(
+                        task_event_id,
+                        "ai-batch",
+                        status="running",
+                        progress=percent,
+                        message=f"正在推理... [第{attempt+1}轮] 成功: {len(successful_ids)}/{total_initial_items}",
+                        metrics={
+                            "attempt": attempt + 1,
+                            "current": len(successful_ids),
+                            "total": total_initial_items,
+                            "task_key": task_key,
+                            "title": "AI 批量处理",
+                        },
+                    )
 
-            # 计算下一轮的待处理项 (过滤掉已经成功的)
-            pending_items = [item for item in pending_items if item.get('package_id') not in successful_ids]
-            
-            # 如果还有剩下的，稍作休息
-            if pending_items: 
-                await asyncio.sleep(1)
+                # 计算下一轮的待处理项 (过滤掉已经成功的)
+                pending_items = [item for item in pending_items if item.get('package_id') not in successful_ids]
+                
+                # 如果还有剩下的，稍作休息
+                if pending_items:
+                    self._raise_if_batch_cancelled(task_event_id)
+                    await asyncio.sleep(1)
+        except AIBatchRequestCancelled:
+            EventBus.emit_progress(
+                task_event_id,
+                "ai-batch",
+                status="cancelled",
+                progress=0,
+                message="AI 批量任务已取消",
+                metrics={
+                    "current": len(successful_ids),
+                    "total": total_initial_items,
+                    "task_key": task_key,
+                    "title": "AI 批量处理",
+                },
+            )
+            return {
+                "cancelled": True,
+                "success_count": len(successful_ids),
+                "failed_count": len(pending_items),
+                "results": all_results,
+            }
+        finally:
+            self._clear_cancelled_batch_task(task_event_id)
 
         # ------------------------------------------
         # 终极处理：失败兜底 (Fallback)
@@ -709,6 +741,32 @@ class AIManager:
             "failed_count": failed_count,
             "results": all_results
         }
+
+    def cancel_batch_task(self, task_event_id: str) -> bool:
+        """标记某个 AI 批量任务为已取消，等待异步循环在安全点退出。"""
+        normalized_task_id = str(task_event_id or "").strip()
+        if not normalized_task_id:
+            return False
+        with self._cancel_lock:
+            self._cancelled_batch_tasks.add(normalized_task_id)
+        logger.info(f"[AI批量] 收到取消请求 task_id={normalized_task_id}")
+        return True
+
+    def _clear_cancelled_batch_task(self, task_event_id: str) -> None:
+        if not task_event_id:
+            return
+        with self._cancel_lock:
+            self._cancelled_batch_tasks.discard(task_event_id)
+
+    def _is_batch_cancelled(self, task_event_id: str) -> bool:
+        if not task_event_id:
+            return False
+        with self._cancel_lock:
+            return task_event_id in self._cancelled_batch_tasks
+
+    def _raise_if_batch_cancelled(self, task_event_id: str) -> None:
+        if self._is_batch_cancelled(task_event_id):
+            raise AIBatchRequestCancelled(f"AI batch cancelled: {task_event_id}")
 
     # =========================================================================
     # 通用测试入口
@@ -1113,5 +1171,10 @@ class AIManager:
     
 class AIRequestCancelled(Exception):
     """用户主动取消的诊断请求"""
+    pass
+
+
+class AIBatchRequestCancelled(Exception):
+    """用户主动取消的 AI 批量请求"""
     pass
     
