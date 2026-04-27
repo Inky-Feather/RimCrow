@@ -203,7 +203,7 @@
                 <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/12 p-3">
                   <h3 class="text-xs font-black uppercase tracking-widest text-text-main">清理说明</h3>
                   <div class="rounded-lg border border-text-main/10 bg-black/20 px-3 py-2 text-xs text-text-dim">
-                    清理功能会删除当前选中范围内，与 PNG 源图同名的 DDS 结果文件。
+                    清理功能会删除当前选中范围内，存在同名 PNG 源图的 DDS 文件，即所有已生成的 DDS 文件，不清理独立DDS文件。
                   </div>
                 </section>
               </div>
@@ -266,7 +266,7 @@ const now = useNow({ interval: 1000 })
 const targetScope = ref('active')
 const searchQuery = ref('')
 const sortMetric = ref('impact')
-const textureOptHelpText = '把图片提前转换成更适合游戏读取的格式。通常能减少显存压力、加快加载，但会多占一些磁盘空间，而且第一次生成需要等一会儿。'
+const textureOptHelpText = '把 PNG贴图提前转换成更适合游戏读取的 DDS 格式。通常能减少显存压力、加快加载，以及大型模组环境下更少的卡顿和爆显存风险；但会占据更多磁盘空间，生成需要一定时间。'+'\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助'
 const textureListMinItemSize = computed(() => Math.max(88, Math.round(Number(appStore.settings.ui.font_size || 14) * 7.2)))
 
 const sortOptions = [

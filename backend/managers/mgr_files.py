@@ -1,9 +1,6 @@
-import base64
 import hashlib
-import json
 import os
 from pathlib import Path
-import configparser
 import re
 import shutil
 import tempfile
@@ -23,6 +20,14 @@ from backend.managers.mgr_game import GameManager
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
+from backend.utils.shortcuts import (
+    create_shortcut,
+    format_shortcut_arguments,
+    get_desktop_directory,
+    get_platform_shortcut_kind,
+    get_shortcut_suffix,
+    remove_shortcut_variants,
+)
 from backend.utils.delete_ops import delete_path as delete_fs_path
 
 
@@ -475,235 +480,27 @@ class FileManager:
         )
 
     # =========================================================
-    #  3.1 Windows 快捷方式
+    #  3.1 快捷方式
     # =========================================================
 
     @staticmethod
-    def _run_windows_powershell(script: str) -> str:
-        """
-        统一执行 PowerShell 脚本。
-        这里使用 EncodedCommand，避免路径中带空格、中文或引号时转义错乱。
-        """
-        if platform.system() != 'Windows':
-            raise OSError("快捷方式功能仅支持 Windows")
-
-        encoded_command = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-        result = subprocess.run(
-            [
-                'powershell',
-                '-NoProfile',
-                '-NonInteractive',
-                '-ExecutionPolicy',
-                'Bypass',
-                '-EncodedCommand',
-                encoded_command,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
+    def _resolve_profile_shortcut_context(
+        profile: Any,
+        *,
+        for_url: bool,
+        destination_dir: str | None = None,
+    ) -> tuple[str, str]:
+        """统一解析环境快捷方式的目标目录和文件后缀。"""
+        profile_name = FileManager.sanitize_filename(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile'))
+        shortcut_kind = get_platform_shortcut_kind(for_url=for_url)
+        shortcut_dir = destination_dir or get_desktop_directory()
+        if not shortcut_dir:
+            raise FileNotFoundError("无法解析桌面目录")
+        shortcut_path = os.path.join(
+            shortcut_dir,
+            f"RimWorld [{profile_name}]{get_shortcut_suffix(shortcut_kind)}",
         )
-        if result.returncode != 0:
-            error_text = (result.stderr or result.stdout or '').strip()
-            raise RuntimeError(error_text or 'PowerShell 执行失败')
-        return (result.stdout or '').strip()
-
-    @staticmethod
-    def _normalize_shortcut_path(shortcut_path: str) -> str:
-        path = os.path.abspath(str(shortcut_path or '').strip())
-        if not path:
-            raise ValueError("快捷方式路径不能为空")
-        if not path.lower().endswith('.lnk'):
-            path = f"{path}.lnk"
-        return path
-
-    @staticmethod
-    def _normalize_url_shortcut_path(shortcut_path: str) -> str:
-        path = os.path.abspath(str(shortcut_path or '').strip())
-        if not path:
-            raise ValueError("快捷方式路径不能为空")
-        if not path.lower().endswith('.url'):
-            path = f"{path}.url"
-        return path
-
-    @staticmethod
-    def _normalize_shortcut_compare_value(key: str, value: Any) -> str:
-        text = str(value or '').strip()
-        if key in {'shortcut_path', 'target_path', 'working_directory'}:
-            return os.path.normcase(os.path.normpath(text)) if text else ''
-        return text
-
-    @staticmethod
-    def get_windows_special_folder(folder_name: str) -> str:
-        """读取 Windows 特殊目录，避免桌面被重定向时路径计算错误。"""
-        if platform.system() != 'Windows':
-            raise OSError("特殊目录读取仅支持 Windows")
-
-        payload = json.dumps({"folder_name": str(folder_name or '').strip()})
-        script = f"""
-$ErrorActionPreference = 'Stop'
-$payload = @'
-{payload}
-'@ | ConvertFrom-Json
-$path = [Environment]::GetFolderPath([Environment+SpecialFolder]::$($payload.folder_name))
-if ([string]::IsNullOrWhiteSpace($path)) {{
-    throw "无法获取特殊目录: $($payload.folder_name)"
-}}
-$path
-"""
-        return FileManager._run_windows_powershell(script)
-
-    @staticmethod
-    def read_windows_shortcut(shortcut_path: str) -> Dict[str, Any] | None:
-        """读取现有快捷方式的关键字段，用于启动时校验和自动修复。"""
-        if platform.system() != 'Windows':
-            return None
-
-        normalized_path = FileManager._normalize_shortcut_path(shortcut_path)
-        payload = json.dumps({"shortcut_path": normalized_path}, ensure_ascii=False)
-        script = f"""
-$ErrorActionPreference = 'Stop'
-$payload = @'
-{payload}
-'@ | ConvertFrom-Json
-$shortcutPath = [System.IO.Path]::GetFullPath([string]$payload.shortcut_path)
-if (-not (Test-Path -LiteralPath $shortcutPath)) {{
-    [Console]::Out.WriteLine('{{"exists":false}}')
-    return
-}}
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$result = @{{
-    exists = $true
-    shortcut_path = $shortcutPath
-    target_path = [string]$shortcut.TargetPath
-    arguments = [string]$shortcut.Arguments
-    working_directory = [string]$shortcut.WorkingDirectory
-    icon_location = [string]$shortcut.IconLocation
-    description = [string]$shortcut.Description
-}}
-$result | ConvertTo-Json -Compress
-"""
-        output = FileManager._run_windows_powershell(script)
-        if not output:
-            return None
-        parsed = json.loads(output)
-        if not parsed.get('exists'):
-            return None
-        return parsed
-
-    @staticmethod
-    def create_windows_shortcut(
-        shortcut_path: str,
-        target_path: str,
-        arguments: str = '',
-        working_directory: str = '',
-        icon_location: str = '',
-        description: str = '',
-    ) -> Dict[str, Any]:
-        """创建或覆盖 Windows `.lnk` 快捷方式。"""
-        if platform.system() != 'Windows':
-            raise OSError("快捷方式创建仅支持 Windows")
-
-        normalized_shortcut = FileManager._normalize_shortcut_path(shortcut_path)
-        normalized_target = os.path.abspath(str(target_path or '').strip())
-        normalized_workdir = os.path.abspath(str(working_directory or '').strip()) if str(working_directory or '').strip() else ''
-        normalized_icon = str(icon_location or '').strip()
-        payload = json.dumps(
-            {
-                "shortcut_path": normalized_shortcut,
-                "target_path": normalized_target,
-                "arguments": str(arguments or ''),
-                "working_directory": normalized_workdir,
-                "icon_location": normalized_icon,
-                "description": str(description or ''),
-            },
-            ensure_ascii=False,
-        )
-        script = f"""
-$ErrorActionPreference = 'Stop'
-$payload = @'
-{payload}
-'@ | ConvertFrom-Json
-$shortcutPath = [System.IO.Path]::GetFullPath([string]$payload.shortcut_path)
-$targetPath = [System.IO.Path]::GetFullPath([string]$payload.target_path)
-if (-not (Test-Path -LiteralPath $targetPath)) {{
-    throw "快捷方式目标不存在: $targetPath"
-}}
-$parentDir = Split-Path -Parent $shortcutPath
-if ($parentDir) {{
-    New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-}}
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $targetPath
-$shortcut.Arguments = [string]$payload.arguments
-if (-not [string]::IsNullOrWhiteSpace([string]$payload.working_directory)) {{
-    $shortcut.WorkingDirectory = [string]$payload.working_directory
-}}
-if (-not [string]::IsNullOrWhiteSpace([string]$payload.icon_location)) {{
-    $shortcut.IconLocation = [string]$payload.icon_location
-}}
-if (-not [string]::IsNullOrWhiteSpace([string]$payload.description)) {{
-    $shortcut.Description = [string]$payload.description
-}}
-$shortcut.Save()
-$result = @{{
-    shortcut_path = $shortcutPath
-    target_path = [string]$shortcut.TargetPath
-    arguments = [string]$shortcut.Arguments
-    working_directory = [string]$shortcut.WorkingDirectory
-    icon_location = [string]$shortcut.IconLocation
-    description = [string]$shortcut.Description
-}}
-$result | ConvertTo-Json -Compress
-"""
-        output = FileManager._run_windows_powershell(script)
-        return json.loads(output) if output else {
-            "shortcut_path": normalized_shortcut,
-            "target_path": normalized_target,
-            "arguments": str(arguments or ''),
-            "working_directory": normalized_workdir,
-            "icon_location": normalized_icon,
-            "description": str(description or ''),
-        }
-
-    @staticmethod
-    def ensure_windows_shortcut(spec: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        校验快捷方式是否符合预期；不一致则重建。
-        这是“启动时自动修复”的核心，不能只判断文件是否存在。
-        """
-        normalized_spec = {
-            "shortcut_path": FileManager._normalize_shortcut_path(spec.get("shortcut_path", "")),
-            "target_path": os.path.abspath(str(spec.get("target_path", "")).strip()),
-            "arguments": str(spec.get("arguments", "") or ""),
-            "working_directory": os.path.abspath(str(spec.get("working_directory", "")).strip()) if str(spec.get("working_directory", "")).strip() else "",
-            "icon_location": str(spec.get("icon_location", "") or ""),
-            "description": str(spec.get("description", "") or ""),
-        }
-        current_spec = FileManager.read_windows_shortcut(normalized_spec["shortcut_path"])
-        changed = False
-        reason = 'missing'
-
-        if current_spec:
-            reason = 'matched'
-            for key, expected_value in normalized_spec.items():
-                current_value = current_spec.get(key, '')
-                if FileManager._normalize_shortcut_compare_value(key, current_value) != FileManager._normalize_shortcut_compare_value(key, expected_value):
-                    reason = f'mismatch:{key}'
-                    changed = True
-                    break
-        else:
-            changed = True
-
-        if changed:
-            current_spec = FileManager.create_windows_shortcut(**normalized_spec)
-
-        return {
-            "changed": changed,
-            "reason": reason,
-            "shortcut": current_spec or normalized_spec,
-        }
+        return shortcut_kind, shortcut_path
 
     @staticmethod
     def build_browser_mode_shortcut_spec(app_exe_path: str) -> Dict[str, str]:
@@ -724,13 +521,26 @@ $result | ConvertTo-Json -Compress
             "working_directory": str(Path(target_path).parent),
             "icon_location": target_path,
             "description": f"{exe_stem} Browser mode",
+            "shortcut_kind": "lnk",
         }
 
     @staticmethod
     def ensure_browser_mode_shortcut(app_exe_path: str) -> Dict[str, Any]:
-        """校验并自动修复 Browser mode 快捷方式。"""
+        """仅在缺失时创建 Browser mode 快捷方式，避免启动阶段做重校验。"""
         spec = FileManager.build_browser_mode_shortcut_spec(app_exe_path)
-        return FileManager.ensure_windows_shortcut(spec)
+        shortcut_path = str(spec.get("shortcut_path") or '').strip()
+        if shortcut_path and os.path.exists(shortcut_path):
+            return {
+                "changed": False,
+                "reason": "exists",
+                "shortcut": spec,
+            }
+
+        return {
+            "changed": True,
+            "reason": "missing",
+            "shortcut": create_shortcut(spec),
+        }
 
     @staticmethod
     def build_profile_shortcut_spec(
@@ -745,10 +555,6 @@ $result | ConvertTo-Json -Compress
         根据环境启动逻辑构造桌面快捷方式定义。
         这里复用后端现有的启动参数，而不是前端重复拼命令，避免两边逻辑漂移。
         """
-        if platform.system() != 'Windows':
-            raise OSError("环境快捷方式仅支持 Windows")
-
-        profile_name = FileManager.sanitize_filename(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile'))
         game_install_path = os.path.abspath(str(getattr(profile, 'game_install_path', '') or '').strip())
         if not game_install_path or not os.path.isdir(game_install_path):
             raise FileNotFoundError(f"游戏安装目录无效: {game_install_path}")
@@ -757,20 +563,18 @@ $result | ConvertTo-Json -Compress
         if not game_exe:
             raise FileNotFoundError(f"在安装目录下找不到游戏可执行文件: {game_install_path}")
 
+        shortcut_kind, shortcut_path = FileManager._resolve_profile_shortcut_context(
+            profile,
+            for_url=False,
+            destination_dir=destination_dir,
+        )
         launch_args = [str(arg or '').strip() for arg in (extra_args or []) if str(arg or '').strip()]
-        shortcut_dir = destination_dir or FileManager.get_windows_special_folder('Desktop')
-        if not shortcut_dir:
-            raise FileNotFoundError("无法解析桌面目录")
-
-        # 这里仅负责“官方稳定路径”那种 Steam 快捷方式：
-        # 目标仍然是 Steam.exe，参数是 -applaunch 294100 + 环境启动参数。
-        # 是否使用这条分支由上层根据当前环境策略决定，这里只做纯命令拼装。
         use_steam_launch = bool(prefer_steam_launch)
         target_path = os.path.abspath(game_exe)
         working_directory = game_install_path
         icon_location = target_path
         description = f"RimWorld 环境快捷方式：{getattr(profile, 'name', getattr(profile, 'id', ''))}"
-        arguments = subprocess.list2cmdline(launch_args) if launch_args else ''
+        arguments = format_shortcut_arguments(launch_args)
 
         if use_steam_launch:
             resolved_steam_exe = os.path.abspath(str(steam_exe_path or '').strip()) if str(steam_exe_path or '').strip() else ''
@@ -779,11 +583,10 @@ $result | ConvertTo-Json -Compress
             target_path = resolved_steam_exe
             working_directory = str(Path(resolved_steam_exe).parent)
             # Steam 启动参数必须保持与当前环境运行逻辑一致。
-            arguments = subprocess.list2cmdline(["-applaunch", str(steam_app_id), *launch_args])
+            arguments = format_shortcut_arguments(["-applaunch", str(steam_app_id), *launch_args])
             # 使用游戏图标更直观，点击目标仍然是 Steam.exe。
             icon_location = os.path.abspath(game_exe)
 
-        shortcut_path = os.path.join(shortcut_dir, f"RimWorld [{profile_name}].lnk")
         return {
             "shortcut_path": shortcut_path,
             "target_path": target_path,
@@ -791,6 +594,7 @@ $result | ConvertTo-Json -Compress
             "working_directory": working_directory,
             "icon_location": icon_location,
             "description": description,
+            "shortcut_kind": shortcut_kind,
         }
 
     @staticmethod
@@ -809,7 +613,7 @@ $result | ConvertTo-Json -Compress
             steam_exe_path=steam_exe_path,
             steam_app_id=steam_app_id,
         )
-        return FileManager.create_windows_shortcut(**spec)
+        return create_shortcut(spec)
 
     @staticmethod
     def build_profile_url_shortcut_spec(
@@ -819,59 +623,19 @@ $result | ConvertTo-Json -Compress
         icon_location: str = '',
     ) -> Dict[str, str]:
         """
-        生成 Steam 协议 `.url` 快捷方式定义。
-        该格式适合 `steam://rungameid/...` 这类协议启动，不必再额外包一层 bat 或 cmd。
+        生成 Steam 协议快捷方式定义。
+        统一交给平台适配层决定具体是 `.url`、`.desktop` 还是 `.command`。
         """
-        if platform.system() != 'Windows':
-            raise OSError("环境快捷方式仅支持 Windows")
-
-        profile_name = FileManager.sanitize_filename(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile'))
-        shortcut_dir = destination_dir or FileManager.get_windows_special_folder('Desktop')
-        if not shortcut_dir:
-            raise FileNotFoundError("无法解析桌面目录")
-
+        shortcut_kind, shortcut_path = FileManager._resolve_profile_shortcut_context(
+            profile,
+            for_url=True,
+            destination_dir=destination_dir,
+        )
         return {
-            "shortcut_path": os.path.join(shortcut_dir, f"RimWorld [{profile_name}].url"),
+            "shortcut_path": shortcut_path,
             "url": str(launch_url or '').strip(),
             "icon_location": str(icon_location or '').strip(),
-        }
-
-    @staticmethod
-    def create_windows_url_shortcut(
-        shortcut_path: str,
-        url: str,
-        icon_location: str = '',
-    ) -> Dict[str, Any]:
-        """
-        创建或覆盖 Windows `.url` InternetShortcut。
-        这里直接写标准 ini 格式，稳定且无需依赖 COM。
-        """
-        if platform.system() != 'Windows':
-            raise OSError("快捷方式创建仅支持 Windows")
-
-        normalized_shortcut = FileManager._normalize_url_shortcut_path(shortcut_path)
-        normalized_url = str(url or '').strip()
-        if not normalized_url:
-            raise ValueError("快捷方式 URL 不能为空")
-
-        shortcut_dir = os.path.dirname(normalized_shortcut)
-        if shortcut_dir:
-            os.makedirs(shortcut_dir, exist_ok=True)
-
-        config = configparser.ConfigParser()
-        config.optionxform = str
-        config["InternetShortcut"] = {"URL": normalized_url}
-        if str(icon_location or '').strip():
-            config["InternetShortcut"]["IconFile"] = str(icon_location).strip()
-            config["InternetShortcut"]["IconIndex"] = "0"
-
-        with open(normalized_shortcut, 'w', encoding='utf-8') as f:
-            config.write(f, space_around_delimiters=False)
-
-        return {
-            "shortcut_path": normalized_shortcut,
-            "url": normalized_url,
-            "icon_location": str(icon_location or '').strip(),
+            "shortcut_kind": shortcut_kind,
         }
 
     @staticmethod
@@ -880,31 +644,18 @@ $result | ConvertTo-Json -Compress
         launch_url: str,
         icon_location: str = '',
     ) -> Dict[str, Any]:
-        """为指定环境创建基于 Steam 协议的 `.url` 桌面快捷方式。"""
+        """为指定环境创建基于启动 URL 的桌面快捷方式。"""
         spec = FileManager.build_profile_url_shortcut_spec(
             profile=profile,
             launch_url=launch_url,
             icon_location=icon_location,
         )
-        return FileManager.create_windows_url_shortcut(**spec)
+        return create_shortcut(spec)
 
     @staticmethod
     def remove_existing_shortcut_variants(shortcut_path: str):
-        """
-        删除同名但不同后缀的旧快捷方式，避免 `.lnk` / `.url` 并存让用户误点旧入口。
-        """
-        base_path = Path(os.path.abspath(str(shortcut_path or '').strip()))
-        if not base_path.name:
-            return
-
-        for suffix in ('.lnk', '.url'):
-            candidate = base_path.with_suffix(suffix)
-            if candidate == base_path:
-                continue
-            try:
-                candidate.unlink(missing_ok=True)
-            except Exception as e:
-                logger.debug(f"清理旧快捷方式失败: {candidate} - {e}")
+        """删除同名不同后缀的旧快捷方式，避免用户继续点到旧入口。"""
+        remove_shortcut_variants(shortcut_path)
 
     @staticmethod
     def sync_managed_links(local_mods_path: str, deploy_paths: list[str]):

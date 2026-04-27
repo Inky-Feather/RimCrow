@@ -332,14 +332,14 @@ class API:
         if self.game_log_mgr: self.game_log_mgr.start_realtime_monitor()
 
     def _ensure_browser_mode_shortcut(self):
-        """仅在打包桌面模式下校验 Browser mode 快捷方式。"""
+        """仅在打包桌面模式下确保 Browser mode 快捷方式存在。"""
         try:
             import sys
             if not getattr(sys, 'frozen', False):
                 return
 
             result = FileManager.ensure_browser_mode_shortcut(sys.executable)
-            action = "已修复" if result.get('changed') else "已校验"
+            action = "已创建" if result.get('changed') else "已存在"
             shortcut_path = result.get('shortcut', {}).get('shortcut_path', '')
             logger.info(f"Browser mode 快捷方式{action}: {shortcut_path}")
         except Exception as e:
@@ -2108,7 +2108,7 @@ class API:
                             "arguments": shortcut.get("arguments", ""),
                             "launch_mode": launch_mode,
                             "steam_path_valid": steam_path_valid,
-                            "shortcut_kind": "lnk",
+                            "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
                         },
                         message=f"已在桌面创建环境快捷方式（{launch_mode}）",
                     )
@@ -2139,7 +2139,7 @@ class API:
                     "arguments": shortcut.get("arguments", ""),
                     "launch_mode": launch_mode,
                     "steam_path_valid": steam_path_valid,
-                    "shortcut_kind": "lnk",
+                    "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
                 },
                 message=f"已在桌面创建环境快捷方式（{launch_mode}）",
             )
@@ -2235,7 +2235,7 @@ class API:
                     "profile_id": profile_id,
                     "shortcut_path": shortcut.get("shortcut_path"),
                     "url": launch_url,
-                    "shortcut_kind": "url",
+                    "shortcut_kind": shortcut.get("shortcut_kind", "url"),
                 },
                 message="已创建 Steam 桌面快捷方式",
             )
