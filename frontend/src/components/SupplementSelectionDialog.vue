@@ -217,6 +217,13 @@
               {{ supplementStore.state.cancelText }}
             </button>
             <button
+              v-if="supplementStore.state.continueText"
+              class="rounded-lg bg-accent-danger px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(239,68,68,0.28)] transition-all hover:brightness-105 active:scale-95"
+              @click="supplementStore.continueCurrentAction()"
+            >
+              {{ supplementStore.state.continueText }}
+            </button>
+            <button
               class="rounded-lg bg-accent-tip px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(234,179,8,0.28)] transition-all hover:brightness-105 active:scale-95"
               @click="supplementStore.confirm()"
             >

@@ -38,9 +38,6 @@
               <span v-if="missingInstallStore.state.summary.optionalInstallTotal > 0" class="rounded-full border border-accent-tip/25 bg-accent-tip/12 px-3 py-1 font-bold text-accent-tip">
                 可选安装 {{ missingInstallStore.state.summary.optionalInstallTotal }}
               </span>
-              <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-text-main/10 bg-text-main/6 px-3 py-1 font-bold text-text-dim">
-                未知 {{ missingInstallStore.state.summary.unknownTotal }}
-              </span>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
               <button
@@ -118,7 +115,6 @@
                           {{ sourceLabel(missingInstallStore.getSelectedSource(row)) }}
                         </span>
                       </div>
-
                       <div v-if="row.choiceOptions?.length > 1" class="mt-2 space-y-2">
                         <div
                           v-for="choice in row.choiceOptions"
@@ -173,9 +169,9 @@
                     </div>
 
                     <button
-                      v-if="row.choiceOptions?.length <= 1"
+                      v-if="row.choiceOptions?.length === 1 && missingInstallStore.getSelectedSource(row)"
                       class="shrink-0 rounded-xl border border-accent-primary/35 bg-accent-primary/10 px-3 py-1.5 text-[0.6875rem] font-black text-accent-primary transition-all hover:bg-accent-primary/18 hover:text-[#7dd3fc]"
-                      @click="missingInstallStore.openSource(row)"
+                      @click="missingInstallStore.openSource(missingInstallStore.getSelectedSource(row))"
                     >
                       访问来源
                     </button>
@@ -193,13 +189,15 @@
               取消
             </button>
             <button
-              class="rounded-lg bg-accent-primary px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(6,182,212,0.28)] transition-all hover:brightness-105 active:scale-95"
+              class="rounded-lg bg-accent-primary px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(6,182,212,0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
+              :disabled="missingInstallStore.selectedCount === 0"
               @click="missingInstallStore.subscribeSelected()"
             >
               订阅选中项
             </button>
             <button
-              class="rounded-lg bg-accent-tip px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(234,179,8,0.28)] transition-all hover:brightness-105 active:scale-95"
+              class="rounded-lg bg-accent-tip px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(234,179,8,0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
+              :disabled="missingInstallStore.selectedCount === 0"
               @click="missingInstallStore.downloadSelected()"
             >
               下载选中项

@@ -175,6 +175,8 @@ import { useWorkspaceStore } from '../../../stores/workspaceStore'
 import { useAppStore } from '../../../stores/appStore'
 import { useModStore } from '../../../stores/modStore'
 import { useConfirmStore } from '../../../stores/confirmStore'
+import { normalizePackageId } from '../../../utils/modIdentity'
+import { isOfficialPackageId } from '../../../utils/packageScope'
 import { formatDate } from '../../../utils/uiHelper'
 import { cleanRichText } from '../../../utils/unityTextParser'
 
@@ -186,10 +188,6 @@ const confirmStore = useConfirmStore()
 
 // 本地 UI 状态
 const newCollectionInput = ref('')
-const OFFICIAL_PREFIX = 'ludeon.rimworld'
-
-const normalizePackageId = (value) => String(value || '').trim().toLowerCase()
-const isOfficialPackageId = (value) => normalizePackageId(value).startsWith(OFFICIAL_PREFIX)
 
 // 计算当前合集的缺失数量
 const missingCount = computed(() => wsStore.activeChildrenWithStatus.filter(c => !c.is_installed).length)

@@ -14,6 +14,7 @@ import {
   getVersionInfo,
   normalizeVersion,
 } from '../utils/versioning'
+import { DEFAULT_TOOL_PACKAGE_IDS, isBuiltinManagedPackageId } from '../utils/packageScope'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
@@ -38,7 +39,6 @@ const GROUP_META = {
   },
 }
 
-const TOOL_PACKAGE_IDS = new Set(['rmm.companion'])
 const EMPTY_SUMMARY = {
   missingTotal: 0,
   installableTotal: 0,
@@ -84,11 +84,8 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   const totalCount = computed(() => visibleRows.value.length)
   const currentGameVersion = computed(() => normalizeVersion(profileStore.activeContext?.game_version))
 
-  const isCoreId = (packageId = '') => normalizePackageId(packageId) === 'ludeon.rimworld'
-  const isOfficialDlcId = (packageId = '') => normalizePackageId(packageId).startsWith('ludeon.rimworld.')
-  const isToolModId = (packageId = '') => TOOL_PACKAGE_IDS.has(normalizePackageId(packageId))
   const isExcludedPackageId = (packageId = '') => (
-    isCoreId(packageId) || isOfficialDlcId(packageId) || isToolModId(packageId)
+    isBuiltinManagedPackageId(packageId, DEFAULT_TOOL_PACKAGE_IDS)
   )
 
   const getVersionTooltip = (versionInfo = null) => {

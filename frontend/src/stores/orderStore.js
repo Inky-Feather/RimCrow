@@ -350,7 +350,7 @@ export const useOrderStore = defineStore('order', () => {
     return false
   }
   // 保存Mod加载顺序
-  const saveLoadOrder = async () => {
+  const saveLoadOrder = async ({ actionLabel = '保存' } = {}) => {
     const modStore = useModStore()
     // if (!modStore.isDirty) {
     //   setTimeout(() => {
@@ -361,7 +361,7 @@ export const useOrderStore = defineStore('order', () => {
     if (!window.pywebview) return false
     const canContinue = await supplementStore.ensureRequiredBeforeSave({
       activeIds: modStore.activeIds,
-      actionLabel: '保存',
+      actionLabel,
     })
     if (!canContinue) return false
     appStore.isLoading = true

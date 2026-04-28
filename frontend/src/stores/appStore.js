@@ -1102,7 +1102,7 @@ export const useAppStore = defineStore('app', () => {
     // 只有“启动别的环境”时，才允许跳过这一步。
     if (!normalizedTargetProfileId || normalizedTargetProfileId === currentProfileId) {
       const orderStore = useOrderStore()
-      const res = await orderStore.saveLoadOrder()
+      const res = await orderStore.saveLoadOrder({ actionLabel: '运行' })
       if (!res) return
     }
     if (!window.pywebview) return
