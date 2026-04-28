@@ -41,15 +41,16 @@ export const getInstallSourceKey = (source = {}) => {
 }
 
 export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
-  const packageId = normalizePackageId(raw.packageId || raw.package_id || fallbackPackageId)
-  const normalizedUrl = normalizeUrl(raw.url || raw.sourceUrl || raw.source_url)
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const packageId = normalizePackageId(source.packageId || source.package_id || fallbackPackageId)
+  const normalizedUrl = normalizeUrl(source.url || source.sourceUrl || source.source_url)
   const workshopId = normalizeWorkshopId(
-    raw.workshopId
-    || raw.workshop_id
+    source.workshopId
+    || source.workshop_id
     || extractWorkshopId(normalizedUrl)
   )
-  const supportedVersions = Array.isArray(raw.supportedVersions || raw.supported_versions)
-    ? [...new Set((raw.supportedVersions || raw.supported_versions).map(value => String(value || '').trim()).filter(Boolean))]
+  const supportedVersions = Array.isArray(source.supportedVersions || source.supported_versions)
+    ? [...new Set((source.supportedVersions || source.supported_versions).map(value => String(value || '').trim()).filter(Boolean))]
     : []
 
   if (workshopId) {
@@ -58,10 +59,10 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
       packageId,
       workshopId,
       url: buildWorkshopUrl(workshopId),
-      title: String(raw.title || raw.name || packageId || workshopId).trim(),
+      title: String(source.title || source.name || packageId || workshopId).trim(),
       supportedVersions,
-      sourceOrigin: String(raw.sourceOrigin || raw.source_origin || '').trim() || 'unknown',
-      isReplacement: !!raw.isReplacement,
+      sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+      isReplacement: !!source.isReplacement,
       urlSubtype: 'workshop',
     }
   }
@@ -71,10 +72,10 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
     kind: 'url',
     packageId,
     url: normalizedUrl,
-    title: String(raw.title || raw.name || packageId || normalizedUrl).trim(),
+    title: String(source.title || source.name || packageId || normalizedUrl).trim(),
     supportedVersions,
-    sourceOrigin: String(raw.sourceOrigin || raw.source_origin || '').trim() || 'unknown',
-    isReplacement: !!raw.isReplacement,
+    sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+    isReplacement: !!source.isReplacement,
     urlSubtype: detectUrlSubtype(normalizedUrl),
   }
 }

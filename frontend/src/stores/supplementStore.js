@@ -347,7 +347,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     })
   }
 
-  // 根候选只负责当前工作序列直接可见的缺口，链式补缺在后续构图阶段递归展开。
+  // 根候选只负责当前启用列表里直接可见的缺口，链式补充在后续构图阶段递归展开。
   const collectRootEntries = (ctx) => {
     const entries = []
 
@@ -923,7 +923,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     rebuildVisiblePlan()
   }
 
-  // 真正应用时只改前端工作序列并写入历史栈，绝不直接写盘。
+  // 真正应用时只更新当前启用列表并写入历史栈，不会直接触发保存。
   // removeIds 主要服务于替代模组这类“启用新项同时移除旧项”的场景。
   const applySelectionPayload = async (payload = { addIds: [], removeIds: [] }, { silent = false } = {}) => {
     const idsToEnable = dedupeNormalizedPackageIds(payload.addIds || [])
@@ -959,18 +959,18 @@ export const useSupplementStore = defineStore('supplement', () => {
   const openForActiveList = async ({
     activeIds = modStore.activeIds,
     title = '启用建议',
-    message = '以下内容只会在你确认后加入当前前端工作序列，不会自动写入磁盘。',
+    message = '下面这些模组会在你确认后加入当前启用列表，但不会自动保存。',
   } = {}) => {
     const prepared = await prepareDialogPlan(activeIds)
     if (prepared.plan.summary.count === 0) {
-      toast.info('当前序列没有可补充项', { timeout: 1800 })
+      toast.info('当前没有需要启用的建议', { timeout: 1800 })
       return false
     }
     const payload = await openPreparedPlan({
       activeIds,
       title,
       message,
-      confirmText: '启用到当前序列',
+      confirmText: '加入当前列表',
       cancelText: '取消',
       prepared,
     })
@@ -989,7 +989,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     const result = await openPreparedPlan({
       activeIds,
       title: `${actionLabel}前发现必需启用项`,
-      message: `以下已安装但未启用的必需项会影响当前${actionLabel}。你可以先启用需要的模组后继续，也可以忽略这些项直接继续，或取消当前${actionLabel}。`,
+      message: `下面这些已安装但未启用的模组会影响这次${actionLabel}。你可以先启用它们再继续，也可以先忽略，或者取消这次${actionLabel}。`,
       confirmText: `启用选中项后继续${actionLabel}`,
       cancelText: `取消${actionLabel}`,
       continueText: `忽略这些项并继续${actionLabel}`,
@@ -1004,7 +1004,7 @@ export const useSupplementStore = defineStore('supplement', () => {
 
     const nextSummary = buildSummary(modStore.activeIds).summary
     if (nextSummary.requiredCount === 0) return true
-    toast.warning(`已取消${actionLabel}，仍有 ${nextSummary.requiredCount} 项必需启用建议未处理。`, { timeout: 2600 })
+    toast.warning(`已取消${actionLabel}，还有 ${nextSummary.requiredCount} 项建议没有处理。`, { timeout: 2600 })
     return false
   }
 
@@ -1018,7 +1018,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     const result = await openPreparedPlan({
       activeIds,
       title: '自动排序前发现必需启用项',
-      message: '这些已安装但未启用的必需项会影响本次自动排序。你可以先启用需要的模组后继续排序，也可以忽略这些项直接继续排序，或取消当前排序。',
+      message: '下面这些已安装但未启用的模组会影响这次自动排序。你可以先启用它们再继续，也可以先忽略，或者取消这次排序。',
       confirmText: '启用选中项后继续排序',
       cancelText: '取消排序',
       continueText: '忽略这些项并继续排序',
@@ -1031,7 +1031,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     const nextSummary = buildSummary(modStore.activeIds).summary
     if (nextSummary.requiredCount === 0) return true
 
-    toast.warning(`自动排序已取消，仍有 ${nextSummary.requiredCount} 项必需启用建议未处理。`, { timeout: 2600 })
+    toast.warning(`自动排序已取消，还有 ${nextSummary.requiredCount} 项建议没有处理。`, { timeout: 2600 })
     return false
   }
 

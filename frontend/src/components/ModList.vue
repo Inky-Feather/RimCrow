@@ -417,7 +417,7 @@ watch(
 )
 const missingInstallTooltip = computed(() => {
   if ((missingInstallSummary.value.installableTotal || 0) + (missingInstallSummary.value.optionalInstallTotal || 0) === 0) {
-    return '当前没有可管理的下载/订阅候选'
+    return '当前没有可处理的安装项'
   }
   const lines = []
   if (missingInstallSummary.value.installableTotal > 0) {
@@ -435,7 +435,7 @@ const missingInstallTooltip = computed(() => {
     lines.push(`• 已装替代: ${missingInstallSummary.value.alreadyInstalledReplacementTotal}`)
   }
   lines.push('')
-  lines.push('__[[(点击打开统一下载/订阅窗口)]]__')
+  lines.push('__[[(点击打开安装处理窗口)]]__')
   return lines.join('\n')
 })
 const missingInstallButtonClass = computed(() => {
@@ -457,7 +457,7 @@ const supplementButtonClass = computed(() => {
   return 'bg-accent-warn/80 text-text-main/60 hover:bg-accent-warn hover:text-text-main'
 })
 const supplementTooltip = computed(() => {
-  if (supplementSummary.value.count === 0) return '当前没有可补充项'
+  if (supplementSummary.value.count === 0) return '当前没有需要启用的建议'
   const groupLines = supplementSummary.value.groups
     .map(group => `• ${group.title}: ${group.count} 项`)
     .join('\n')

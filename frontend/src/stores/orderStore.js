@@ -4,6 +4,7 @@ import { createToastInterface } from 'vue-toastification'
 import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
 import { useConfirmStore } from './confirmStore'
+import { useMissingInstallStore } from './missingInstallStore'
 import { useSupplementStore } from './supplementStore'
 import { normalizeInstallSource } from '../utils/modIdentity'
 
@@ -359,6 +360,12 @@ export const useOrderStore = defineStore('order', () => {
     //   // return true
     // }
     if (!window.pywebview) return false
+    const missingInstallStore = useMissingInstallStore()
+    const canResolveMissing = await missingInstallStore.ensureResolvedBeforeAction({
+      activeIds: modStore.activeIds,
+      actionLabel,
+    })
+    if (!canResolveMissing) return false
     const canContinue = await supplementStore.ensureRequiredBeforeSave({
       activeIds: modStore.activeIds,
       actionLabel,

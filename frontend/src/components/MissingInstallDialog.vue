@@ -18,7 +18,7 @@
             </div>
             <button
               class="rounded-lg border border-text-main/10 bg-text-main/5 px-3 py-1.5 text-xs font-bold text-text-dim transition-all hover:bg-text-main/10 hover:text-text-main"
-              @click="missingInstallStore.close()"
+              @click="missingInstallStore.close(false)"
             >
               关闭
             </button>
@@ -37,6 +37,9 @@
               </span>
               <span v-if="missingInstallStore.state.summary.optionalInstallTotal > 0" class="rounded-full border border-accent-tip/25 bg-accent-tip/12 px-3 py-1 font-bold text-accent-tip">
                 可选安装 {{ missingInstallStore.state.summary.optionalInstallTotal }}
+              </span>
+              <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-text-main/10 bg-text-main/6 px-3 py-1 font-bold text-text-dim">
+                未知来源 {{ missingInstallStore.state.summary.unknownTotal }}
               </span>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
@@ -57,6 +60,15 @@
 
           <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4">
             <div class="space-y-3.5">
+              <section
+                v-if="missingInstallStore.state.groups.length === 0"
+                class="rounded-2xl border border-text-main/6 bg-text-main/[0.03] px-4 py-4"
+              >
+                <h4 class="text-sm font-black tracking-wide text-text-main">当前没有可直接处理的安装项</h4>
+                <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim/82">
+                  这些项目暂时只能先排查，当前还不能直接下载或订阅。你可以先返回处理，或在可用时清理列表中的未知项。
+                </p>
+              </section>
               <section
                 v-for="group in missingInstallStore.state.groups"
                 :key="group.key"
@@ -184,11 +196,19 @@
           <div class="relative z-10 flex items-center justify-end gap-2.5 border-t border-text-main/6 bg-black/14 px-5 py-3.5">
             <button
               class="rounded-lg border border-text-main/10 bg-text-main/5 px-4 py-2 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-text-main/10 hover:text-text-main"
-              @click="missingInstallStore.close()"
+              @click="missingInstallStore.close(false)"
             >
-              取消
+              {{ missingInstallStore.state.cancelText }}
             </button>
             <button
+              v-if="missingInstallStore.state.cleanupText"
+              class="rounded-lg bg-accent-danger px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(239,68,68,0.28)] transition-all hover:brightness-105 active:scale-95"
+              @click="missingInstallStore.cleanupUnknownAndContinue()"
+            >
+              {{ missingInstallStore.state.cleanupText }}
+            </button>
+            <button
+              v-if="missingInstallStore.state.summary.actionableTotal > 0"
               class="rounded-lg bg-accent-primary px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(6,182,212,0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
               :disabled="missingInstallStore.selectedCount === 0"
               @click="missingInstallStore.subscribeSelected()"
@@ -196,6 +216,7 @@
               订阅选中项
             </button>
             <button
+              v-if="missingInstallStore.state.summary.actionableTotal > 0"
               class="rounded-lg bg-accent-tip px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(234,179,8,0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
               :disabled="missingInstallStore.selectedCount === 0"
               @click="missingInstallStore.downloadSelected()"

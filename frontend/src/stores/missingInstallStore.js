@@ -14,8 +14,10 @@ import {
   getVersionInfo,
   normalizeVersion,
 } from '../utils/versioning'
+import { ISSUE_TYPE } from '../utils/constants'
 import { DEFAULT_TOOL_PACKAGE_IDS, isBuiltinManagedPackageId } from '../utils/packageScope'
 import { useAppStore } from './appStore'
+import { useConfirmStore } from './confirmStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
 import { useWorkspaceStore } from './workspaceStore'
@@ -23,19 +25,19 @@ import { useWorkspaceStore } from './workspaceStore'
 const GROUP_META = {
   missing_with_installed_replacement: {
     title: '已装替代的缺失项',
-    description: '原版当前缺失，但已存在支持当前版本的替代项安装。可按需补装原版。',
+    description: '原模组未安装，但已经有可用的替代模组。需要的话也可以补装原模组。',
   },
   missing_with_replacement_choice: {
     title: '缺失/替代候选',
-    description: '当前原版缺失，且可安装原版或替代版候选。',
+    description: '原模组未安装，可以选择安装原模组或替代模组。',
   },
   optional_install: {
     title: '可选安装',
-    description: '当前原版已安装，但还有未安装的可替代版本可选安装。',
+    description: '当前模组已经可用，另外还有可选的替代模组可以安装。',
   },
   missing_install: {
     title: '缺失安装',
-    description: '当前原版缺失，但可直接安装原版来源。',
+    description: '原模组未安装，但可以直接安装。',
   },
 }
 
@@ -56,6 +58,7 @@ const buildChoiceId = (source = {}, fallbackType = 'original') => {
 export const useMissingInstallStore = defineStore('missingInstall', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
+  const confirmStore = useConfirmStore()
   const modStore = useModStore()
   const profileStore = useProfileStore()
   const workspaceStore = useWorkspaceStore()
@@ -69,14 +72,18 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       rows: [],
       groups: [],
       summary: { ...EMPTY_SUMMARY },
+      unknownActiveIds: [],
     },
   })
   const state = reactive({
     title: '缺失项安装管理',
-    message: '仅处理未安装来源，不会自动启用模组，也不会自动写盘。',
+    message: '处理当前列表中未安装的项目。',
+    cancelText: '取消',
+    cleanupText: '',
     groups: [],
     summary: { ...EMPTY_SUMMARY },
   })
+  let resolvePromise = null
 
   const visibleRows = computed(() => state.groups.flatMap(group => group.rows || []))
   const selectedRows = computed(() => visibleRows.value.filter(row => !!selections[row.id]))
@@ -86,6 +93,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const isExcludedPackageId = (packageId = '') => (
     isBuiltinManagedPackageId(packageId, DEFAULT_TOOL_PACKAGE_IDS)
+  )
+
+  const isIssueIgnored = (mod, issueType = '') => (
+    !!issueType && Array.isArray(mod?.ignored_issues) && mod.ignored_issues.includes(issueType)
   )
 
   const getVersionTooltip = (versionInfo = null) => {
@@ -139,7 +150,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const collectRuntimeSource = (packageId, mod = {}) => {
     // 这里只接受“真实已安装模组”的运行态来源。
-    // 缺失幽灵项的 workshop/url 来自外部补全，不代表原版真实来源，不能混进 original source。
+    // 缺失占位项带出的 workshop/url 只是补全线索，不能当成原模组的真实安装来源。
     if (!mod || mod?.isMissing || !mod?.path || mod?.is_replacement_derived) return null
     return normalizeInstallSource({
       packageId,
@@ -209,6 +220,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     normalizedActiveIds.forEach(ownerId => {
       if (!modStore.hasRealModById(ownerId)) return
       const owner = modStore.takeModById(ownerId)
+      if (isIssueIgnored(owner, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY)) return
       ;(owner?.rules?.dependencies || []).forEach(rule => {
         const baseTargetId = normalizePackageId(rule?.target_id)
         if (!baseTargetId || isExcludedPackageId(baseTargetId)) return
@@ -288,6 +300,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     })
 
     const rows = []
+    const unknownActiveIds = []
     const summary = {
       ...EMPTY_SUMMARY,
       missingTotal: missingSubjectMap.size,
@@ -344,6 +357,9 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
         })
       } else if (!hasInstalledSupportedReplacement) {
         summary.unknownTotal += 1
+        if (subject.fromActiveList) {
+          unknownActiveIds.push(packageId)
+        }
       } else {
         summary.alreadyInstalledReplacementTotal += 1
       }
@@ -378,6 +394,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       rows,
       groups: buildGroups(rows),
       summary,
+      unknownActiveIds: dedupeNormalizedPackageIds(unknownActiveIds),
     }
     cachedAnalysis.value = { signature, payload }
     return payload
@@ -390,27 +407,43 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const resetState = () => {
     isVisible.value = false
+    state.title = '缺失项安装管理'
+    state.message = '处理当前列表中未安装的项目。'
+    state.cancelText = '取消'
+    state.cleanupText = ''
     state.groups = []
     state.summary = { ...EMPTY_SUMMARY }
     Object.keys(selections).forEach(key => delete selections[key])
     Object.keys(choiceSelections).forEach(key => delete choiceSelections[key])
   }
 
-  const openForActiveList = async (activeIds = modStore.activeIds) => {
-    resetState()
-    const analysis = await buildAnalysis(activeIds)
-    state.groups = analysis.groups
-    state.summary = { ...analysis.summary }
+  const finalizeDialog = (result = null) => {
+    isVisible.value = false
+    resolvePromise?.(result)
+    resolvePromise = null
+  }
 
-    visibleRows.value.forEach(row => {
+  const applyRowDefaults = (rows = visibleRows.value) => {
+    ;(rows || []).forEach(row => {
       selections[row.id] = row.defaultSelected !== false
       choiceSelections[row.id] = row.defaultChoiceId || row.choiceOptions?.[0]?.id || ''
     })
+  }
+
+  const openForActiveList = async (activeIds = modStore.activeIds) => {
+    resetState()
+    const analysis = await buildAnalysis(activeIds)
+    state.message = analysis.summary.unknownTotal > 0
+      ? '处理当前列表中未安装的项目。另有部分项目暂时找不到可用来源。'
+      : '处理当前列表中未安装的项目。'
+    state.groups = analysis.groups
+    state.summary = { ...analysis.summary }
+    applyRowDefaults()
 
     if (analysis.summary.actionableTotal === 0) {
       const message = analysis.summary.unknownTotal > 0
-        ? `当前没有可处理的安装来源，另有 ${analysis.summary.unknownTotal} 项缺失无法定位来源。`
-        : '当前没有可处理的安装来源。'
+        ? `当前没有可直接处理的安装项，另有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源。`
+        : '当前没有可直接处理的安装项。'
       toast.info(message)
       return false
     }
@@ -419,8 +452,30 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     return true
   }
 
-  const close = () => {
-    isVisible.value = false
+  const openPrecheckDialog = async ({
+    analysis,
+    title,
+    message,
+    cancelText,
+    cleanupText = '',
+  }) => {
+    resetState()
+    state.title = title
+    state.message = message
+    state.cancelText = cancelText
+    state.cleanupText = cleanupText
+    state.groups = analysis.groups
+    state.summary = { ...(analysis.summary || EMPTY_SUMMARY) }
+    applyRowDefaults()
+
+    isVisible.value = true
+    return new Promise(resolve => {
+      resolvePromise = resolve
+    })
+  }
+
+  const close = (result = false) => {
+    finalizeDialog(result)
   }
 
   const toggleRow = (rowId, checked) => {
@@ -466,23 +521,112 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   const subscribeSelected = async () => {
     const sources = getSelectedSources()
     if (sources.length === 0) {
-      toast.info('当前没有选中的可订阅项目')
+      toast.info('当前没有选中的可订阅项')
       return false
     }
     const success = await appStore.subscribeInstallSources(sources)
-    if (success) close()
+    if (success) finalizeDialog(false)
     return success
   }
 
   const downloadSelected = async () => {
     const sources = getSelectedSources()
     if (sources.length === 0) {
-      toast.info('当前没有选中的可下载项目')
+      toast.info('当前没有选中的可下载项')
       return false
     }
     const success = await appStore.downloadInstallSources(sources)
-    if (success) close()
+    if (success) finalizeDialog(false)
     return success
+  }
+
+  const cleanupUnknownActiveItems = async (unknownActiveIds = []) => {
+    const removableIds = dedupeNormalizedPackageIds(
+      (unknownActiveIds || []).filter(id => !modStore.hasRealModById(id))
+    )
+    if (removableIds.length === 0) return 0
+    await modStore.runListHistoryTransaction({
+      type: 'batch-remove-list-items',
+      label: `清理 ${removableIds.length} 个未知项`,
+      trackedModIds: removableIds,
+    }, async () => {
+      modStore.removeIdsOnAllList(removableIds)
+    })
+    return removableIds.length
+  }
+
+  const cleanupUnknownAndContinue = async () => {
+    const analysis = await buildAnalysis(modStore.activeIds)
+    const removedCount = await cleanupUnknownActiveItems(analysis.unknownActiveIds || [])
+    if (removedCount === 0) {
+      toast.info('当前没有可清理的未知项')
+      finalizeDialog(false)
+      return false
+    }
+    const nextAnalysis = await buildAnalysis(modStore.activeIds)
+    if ((nextAnalysis.summary.missingTotal || 0) === 0) {
+      finalizeDialog(true)
+      return true
+    }
+    toast.warning('已清理列表中的未知项，但还有未安装的问题需要处理，所以这次没有继续。', { timeout: 2800 })
+    finalizeDialog(false)
+    return false
+  }
+
+  const ensureResolvedBeforeAction = async ({
+    activeIds = modStore.activeIds,
+    actionLabel = '保存',
+  } = {}) => {
+    const analysis = await buildAnalysis(activeIds)
+    if ((analysis.summary.missingTotal || 0) === 0) return true
+
+    const hasActionable = (analysis.summary.actionableTotal || 0) > 0
+    const hasUnknown = (analysis.summary.unknownTotal || 0) > 0
+    const dependencyOnlyUnknownCount = Math.max(
+      0,
+      (analysis.summary.unknownTotal || 0) - (analysis.unknownActiveIds || []).length
+    )
+
+    if (hasActionable) {
+      const unknownText = hasUnknown ? `，另有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源` : ''
+      await openPrecheckDialog({
+        analysis,
+        title: `${actionLabel}前发现未安装项`,
+        message: `当前列表里有 ${analysis.summary.missingTotal} 项还没安装，其中 ${analysis.summary.actionableTotal} 项现在就能处理${unknownText}。\n你可以先去处理这些项目。处理完成后，请再重新${actionLabel}一次。`,
+        cancelText: `取消${actionLabel}`,
+      })
+      return false
+    }
+
+    const cleanupText = (analysis.unknownActiveIds || []).length > 0
+      ? `清理未知项并继续${actionLabel}`
+      : ''
+    const dependencyHint = dependencyOnlyUnknownCount > 0
+      ? `\n其中有 ${dependencyOnlyUnknownCount} 项是缺少依赖，清理未知项后，你可能还是需要再处理一次。`
+      : ''
+    const result = await openPrecheckDialog({
+      analysis,
+      title: `${actionLabel}前发现未知项`,
+      message: `当前列表里有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源。${dependencyHint}`,
+      cancelText: `取消${actionLabel}`,
+      cleanupText,
+    })
+    return !!result
+  }
+
+  const notifyAfterScan = async (activeIds = modStore.activeIds) => {
+    const analysis = await buildAnalysis(activeIds)
+    if ((analysis.summary.missingTotal || 0) === 0) return false
+    if ((analysis.summary.actionableTotal || 0) > 0) {
+      await openForActiveList(activeIds)
+      return true
+    }
+    await confirmStore.alert(
+      '扫描后发现未知项',
+      `当前列表里有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源。你可以检查一下这些项是否已经取消订阅、被删除，或本来就没有可用来源。`,
+      { type: 'warning', confirmText: '知道了' }
+    )
+    return true
   }
 
   const openSource = (target) => {
@@ -504,6 +648,8 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     getSelectedChoice,
     getSelectedSource,
     openForActiveList,
+    ensureResolvedBeforeAction,
+    notifyAfterScan,
     close,
     toggleRow,
     setChoice,
@@ -511,6 +657,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     clearSelection,
     subscribeSelected,
     downloadSelected,
+    cleanupUnknownAndContinue,
     openSource,
   }
 })

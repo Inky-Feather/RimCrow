@@ -842,6 +842,9 @@ export const useModStore = defineStore('mods', () => {
     // 扫描结束后，主动拉取一次最新数据刷新界面
     console.log("扫描统计:", detail)
     await appStore.refreshData()
+    const { useMissingInstallStore } = await import('./missingInstallStore')
+    const missingInstallStore = useMissingInstallStore()
+    await missingInstallStore.notifyAfterScan(activeIds.value)
     // 状态注入
     if (coexistenceList.value.length > 0){
       // 处理可共存Mod，标记为 is_coexistence = true
@@ -856,8 +859,15 @@ export const useModStore = defineStore('mods', () => {
     // 处理空输入，默认使用当前活动项
     if (!mod_ids || mod_ids.length === 0) mod_ids = activeIds.value 
     try {
+      const { useMissingInstallStore } = await import('./missingInstallStore')
       const { useSupplementStore } = await import('./supplementStore')
+      const missingInstallStore = useMissingInstallStore()
       const supplementStore = useSupplementStore()
+      const canResolveMissing = await missingInstallStore.ensureResolvedBeforeAction({
+        activeIds: activeIds.value,
+        actionLabel: '排序',
+      })
+      if (!canResolveMissing) return
       const canContinue = await supplementStore.ensureRequiredBeforeAutosort({ activeIds: activeIds.value })
       if (!canContinue) return
       mod_ids = activeIds.value
