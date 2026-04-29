@@ -5,7 +5,9 @@ import { useAppStore } from './appStore'
 import { useGroupStore } from './groupStore'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../utils/constants'
 import { useConfirmStore } from './confirmStore'
+import { useMissingInstallStore } from './missingInstallStore'
 import { useProfileStore } from './profileStore'
+import { useSupplementStore } from './supplementStore'
 import {
   dedupeInstallSources,
   normalizeInstallSource,
@@ -901,8 +903,6 @@ export const useModStore = defineStore('mods', () => {
     // 处理空输入，默认使用当前活动项
     if (!mod_ids || mod_ids.length === 0) mod_ids = activeIds.value 
     try {
-      const { useMissingInstallStore } = await import('./missingInstallStore')
-      const { useSupplementStore } = await import('./supplementStore')
       const missingInstallStore = useMissingInstallStore()
       const supplementStore = useSupplementStore()
       const canResolveMissing = await missingInstallStore.ensureResolvedBeforeAction({

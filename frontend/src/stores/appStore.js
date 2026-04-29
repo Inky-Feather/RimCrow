@@ -10,6 +10,7 @@ import { useRuleStore } from './ruleStore'
 import { useConfirmStore } from './confirmStore'
 import { useProfileStore } from './profileStore'
 import { cleanRichText } from '../utils/unityTextParser'
+import { useTextureStore } from './textureStore'
 import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
@@ -871,18 +872,14 @@ export const useAppStore = defineStore('app', () => {
       }
 
       if (task.type === 'texture-opt' || task.type === 'texture-opt-analyze') {
-        import('./textureStore').then(({ useTextureStore }) => {
-          const textureStore = useTextureStore()
-          textureStore.handleProgressEvent(task)
-        })
+        const textureStore = useTextureStore()
+        textureStore.handleProgressEvent(task)
       }
       if (task.type === 'download' && task.status === 'success') {
         const filename = task.metrics?.filename || task.message
         if (filename) toast.success(`下载完成: ${filename}`)
-        import('./textureStore').then(({ useTextureStore }) => {
-          const textureStore = useTextureStore()
-          textureStore.handleDownloadEvent(task)
-        })
+        const textureStore = useTextureStore()
+        textureStore.handleDownloadEvent(task)
       }
       if (task.type === 'download' && task.status === 'failed') {
         toast.error(`下载失败: ${task.metrics?.filename || task.message}\n${task.metrics?.error || ''}`)
