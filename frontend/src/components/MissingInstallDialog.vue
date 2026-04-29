@@ -26,23 +26,20 @@
 
           <div class="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-text-main/6 bg-black/12 px-5 py-2.5">
             <div class="flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-text-dim">
-              <span class="rounded-full border border-accent-primary/25 bg-accent-primary/12 px-3 py-1 font-bold text-accent-primary">
+              <span v-if="hasActionableRows" class="rounded-full border border-accent-primary/25 bg-accent-primary/12 px-3 py-1 font-bold text-accent-primary">
                 {{ missingInstallStore.selectedCount }} / {{ missingInstallStore.totalCount }} 已选
               </span>
-              <span v-if="missingInstallStore.state.summary.missingTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
-                缺失 {{ missingInstallStore.state.summary.missingTotal }}
-              </span>
-              <span v-if="missingInstallStore.state.summary.installableTotal > 0" class="rounded-full border border-accent-primary/25 bg-accent-primary/12 px-3 py-1 font-bold text-accent-primary">
-                可安装 {{ missingInstallStore.state.summary.installableTotal }}
+              <span v-if="missingInstallStore.state.summary.requiredInstallTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
+                直接可装 {{ missingInstallStore.state.summary.requiredInstallTotal }}
               </span>
               <span v-if="missingInstallStore.state.summary.optionalInstallTotal > 0" class="rounded-full border border-accent-tip/25 bg-accent-tip/12 px-3 py-1 font-bold text-accent-tip">
                 可选安装 {{ missingInstallStore.state.summary.optionalInstallTotal }}
               </span>
-              <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-text-main/10 bg-text-main/6 px-3 py-1 font-bold text-text-dim">
+              <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
                 未知来源 {{ missingInstallStore.state.summary.unknownTotal }}
               </span>
             </div>
-            <div class="flex flex-wrap items-center gap-1.5">
+            <div v-if="hasActionableRows" class="flex flex-wrap items-center gap-1.5">
               <button
                 class="rounded-lg border border-text-main/10 bg-text-main/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-text-main/10 hover:text-text-main"
                 @click="missingInstallStore.selectAll()"
@@ -61,13 +58,57 @@
           <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4">
             <div class="space-y-3.5">
               <section
-                v-if="missingInstallStore.state.groups.length === 0"
+                v-if="isUnknownOnlyMode"
                 class="rounded-2xl border border-text-main/6 bg-text-main/[0.03] px-4 py-4"
               >
-                <h4 class="text-sm font-black tracking-wide text-text-main">当前没有可直接处理的安装项</h4>
-                <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim/82">
-                  这些项目暂时只能先排查，当前还不能直接下载或订阅。你可以先返回处理，或在可用时清理列表中的未知项。
-                </p>
+                <h4 class="text-sm font-black tracking-wide text-text-main">当前只有未知来源项目</h4>
+                <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim/82">这些项目暂时找不到可用来源。</p>
+              </section>
+              <section
+                v-if="hasUnknownItems"
+                class="rounded-2xl border border-accent-danger/18 bg-accent-danger/[0.04]"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-2 border-b border-accent-danger/12 px-4 py-3">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <h4 class="text-sm font-black tracking-wide text-text-main">未知来源</h4>
+                      <span class="rounded-full border border-accent-danger/20 bg-accent-danger/12 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger">
+                        {{ missingInstallStore.state.unknownItems.length }} 项
+                      </span>
+                    </div>
+                    <p class="mt-1 text-[0.625rem] leading-4 text-text-dim/74">这些项目暂时找不到可用来源。</p>
+                  </div>
+                </div>
+
+                <div class="space-y-2 px-3 py-3">
+                  <article
+                    v-for="item in missingInstallStore.state.unknownItems"
+                    :key="item.id"
+                    class="flex items-start gap-2 rounded-xl border border-accent-danger/12 bg-black/8 px-3 py-2"
+                  >
+                    <div class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-accent-danger/22 bg-accent-danger/10 text-[0.625rem] font-black text-accent-danger">
+                      !
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="truncate text-[0.8125rem] font-black text-text-main">{{ item.title }}</span>
+                        <span
+                          v-for="reasonLabel in item.reasonLabels || []"
+                          :key="reasonLabel"
+                          class="rounded-full border border-text-main/10 bg-text-main/6 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim"
+                        >
+                          {{ reasonLabel }}
+                        </span>
+                        <span
+                          v-if="item.canCleanup"
+                          class="rounded-full border border-accent-danger/20 bg-accent-danger/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger"
+                        >
+                          可清理
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
               </section>
               <section
                 v-for="group in missingInstallStore.state.groups"
@@ -203,7 +244,7 @@
             <button
               v-if="missingInstallStore.state.cleanupText"
               class="rounded-lg bg-accent-danger px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(239,68,68,0.28)] transition-all hover:brightness-105 active:scale-95"
-              @click="missingInstallStore.cleanupUnknownAndContinue()"
+              @click="missingInstallStore.cleanupUnknownItems()"
             >
               {{ missingInstallStore.state.cleanupText }}
             </button>
@@ -231,9 +272,13 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useMissingInstallStore } from '../stores/missingInstallStore'
 
 const missingInstallStore = useMissingInstallStore()
+const hasActionableRows = computed(() => missingInstallStore.state.summary.actionableTotal > 0)
+const hasUnknownItems = computed(() => missingInstallStore.state.summary.unknownTotal > 0)
+const isUnknownOnlyMode = computed(() => !hasActionableRows.value && hasUnknownItems.value)
 
 const versionBadgeClass = (versionInfo = {}) => {
   if (versionInfo?.tone === 'success') {

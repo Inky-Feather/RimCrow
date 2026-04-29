@@ -959,7 +959,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   const openForActiveList = async ({
     activeIds = modStore.activeIds,
     title = '启用建议',
-    message = '下面这些模组会在你确认后加入当前启用列表，但不会自动保存。',
+    message = '选择要启用的模组。',
   } = {}) => {
     const prepared = await prepareDialogPlan(activeIds)
     if (prepared.plan.summary.count === 0) {
@@ -989,7 +989,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     const result = await openPreparedPlan({
       activeIds,
       title: `${actionLabel}前发现必需启用项`,
-      message: `下面这些已安装但未启用的模组会影响这次${actionLabel}。你可以先启用它们再继续，也可以先忽略，或者取消这次${actionLabel}。`,
+      message: `下面这些已安装但未启用的模组会影响这次${actionLabel}。`,
       confirmText: `启用选中项后继续${actionLabel}`,
       cancelText: `取消${actionLabel}`,
       continueText: `忽略这些项并继续${actionLabel}`,
@@ -1018,7 +1018,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     const result = await openPreparedPlan({
       activeIds,
       title: '自动排序前发现必需启用项',
-      message: '下面这些已安装但未启用的模组会影响这次自动排序。你可以先启用它们再继续，也可以先忽略，或者取消这次排序。',
+      message: '下面这些已安装但未启用的模组会影响这次自动排序。',
       confirmText: '启用选中项后继续排序',
       cancelText: '取消排序',
       continueText: '忽略这些项并继续排序',

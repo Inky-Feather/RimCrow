@@ -42,7 +42,6 @@
               >
                 {{ supplementStore.state.summary.optionalCount }} 项可选
               </span>
-              <span>确认后只会更新当前前端工作序列，不会自动写盘。</span>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
               <button

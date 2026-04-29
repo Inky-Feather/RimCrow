@@ -65,6 +65,7 @@ export const useModStore = defineStore('mods', () => {
   const activeLoadVersionToken = ref({})
   const installSourceHints = ref(new Map())
   const pendingGhostFetches = new Map()
+  const dismissedUnavailableIds = new Set()
 
   const conflictList = ref([])        // 重复包名冲突列表
   const coexistenceList = ref([])     // 共存Mod列表
@@ -203,7 +204,8 @@ export const useModStore = defineStore('mods', () => {
     })
   }
   const setListIds = (listId, ids = []) => {
-    const nextIds = Array.isArray(ids) ? [...ids] : []
+    const nextIds = normalizeHistoryModIds(ids)
+    nextIds.forEach(id => dismissedUnavailableIds.delete(id))
     if (listId === 'active') activeIds.value = nextIds
     else if (listId === 'inactive') inactiveIds.value = nextIds
     else if (listId === 'temp') tempIds.value = nextIds
@@ -591,6 +593,10 @@ export const useModStore = defineStore('mods', () => {
             )
             idsToFetch.forEach(id => {
               const currentGhost = allModsMap.value.get(id) || null
+              if (
+                dismissedUnavailableIds.has(id)
+                && (!currentGhost || currentGhost.isMissing || !currentGhost.path)
+              ) return
               const nextGhost = buildGhostMod(id, currentGhost, metaMap[id] || null)
               if (arePlainValuesEqual(currentGhost, nextGhost)) return
               allModsMap.value.set(id, nextGhost)
@@ -623,6 +629,7 @@ export const useModStore = defineStore('mods', () => {
     const { resetHistory = false } = options || {}
     if (resetHistory) clearListHistory()
     clearInstallSourceHintsByOrigin('import')
+    dismissedUnavailableIds.clear()
     activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
     setActiveLoadBaseline(
       data.active_load_order || [],
@@ -671,15 +678,53 @@ export const useModStore = defineStore('mods', () => {
     activeLoadModifyTime.value = 0
     activeLoadVersionToken.value = {}
     clearInstallSourceHints()
+    dismissedUnavailableIds.clear()
     dataVersion.value++
   }
   // 从所有列表中移除指定 IDs
   const removeIdsOnAllList = (ids) => {
-    if(typeof ids === 'string') ids = [ids]
-    const lowerIdsSet = new Set(ids.map(id => id.toLowerCase()))
-    activeIds.value = activeIds.value.filter(i => !lowerIdsSet.has(i))
-    inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(i))
-    tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(i))
+    const normalizedIds = normalizeHistoryModIds(ids)
+    const lowerIdsSet = new Set(normalizedIds)
+    activeIds.value = activeIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
+    inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
+    tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
+  }
+  const removeUnavailableIdsCompletely = (ids) => {
+    const normalizedIds = normalizeHistoryModIds(ids)
+    if (normalizedIds.length === 0) return 0
+
+    removeIdsOnAllList(normalizedIds)
+
+    let changed = false
+    normalizedIds.forEach(id => {
+      dismissedUnavailableIds.add(id)
+      const mod = allModsMap.value.get(id)
+      if (mod && (mod.isMissing || !mod.path)) {
+        allModsMap.value.delete(id)
+        changed = true
+      }
+    })
+
+    const selectedBefore = selectedIds.value.length
+    selectedIds.value = selectedIds.value.filter(id => !normalizedIds.includes(String(id || '').toLowerCase()))
+    if (selectedIds.value.length !== selectedBefore) {
+      changed = true
+    }
+    if (normalizedIds.includes(String(currentTargetId.value || '').toLowerCase())) {
+      currentTargetId.value = ''
+      changed = true
+    }
+    if (normalizedIds.includes(String(lastSelectedMod.value?.package_id || '').toLowerCase())) {
+      lastSelectedMod.value = selectedIds.value.length > 0
+        ? takeModById(selectedIds.value[selectedIds.value.length - 1])
+        : null
+      changed = true
+    }
+
+    if (changed) {
+      dataVersion.value++
+    }
+    return normalizedIds.length
   }
   // 批量启用/停用Mod
   const changeModsActive = async (ids, active) => {
@@ -1792,7 +1837,7 @@ export const useModStore = defineStore('mods', () => {
     // Actions
     setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
-    updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
+    updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
