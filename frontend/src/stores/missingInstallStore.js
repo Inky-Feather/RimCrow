@@ -22,36 +22,45 @@ import { useProfileStore } from './profileStore'
 import { useWorkspaceStore } from './workspaceStore'
 
 const GROUP_META = {
-  missing_with_installed_replacement: {
-    title: '已有可用替代',
-    description: '当前已有可用替代模组；需要的话也可以补装原模组。',
+  missing_install: {
+    title: '可直接安装',
+    description: '这些模组还没安装，现在可以直接处理。',
+    severity: 'danger',
   },
   missing_with_replacement_choice: {
-    title: '原版与替代可选',
-    description: '可以选择安装原模组，或改用替代模组。',
+    title: '原版或替代',
+    description: '可安装原模组，也可改装替代模组。',
+    severity: 'danger',
+  },
+  version_replacement_warn: {
+    title: '版本替代',
+    description: '当前模组可能不适配，可改装更合适的替代模组。',
+    severity: 'warn',
+  },
+  missing_with_installed_replacement: {
+    title: '已装替代',
+    description: '当前已有可用替代。点击订阅或下载时会自动切换为已装替代。',
+    severity: 'info',
   },
   optional_install: {
-    title: '可选替代',
-    description: '当前模组已经可用；如有需要，也可以安装替代模组。',
-  },
-  missing_install: {
-    title: '直接可安装',
-    description: '这些项目当前未安装，但现在可以直接处理。',
+    title: '可选补装',
+    description: '当前模组已可用，如有需要也可补装其它版本。',
+    severity: 'info',
   },
 }
 
 const EMPTY_SUMMARY = {
-  requiredInstallTotal: 0,
+  dangerTotal: 0,
+  warnTotal: 0,
+  infoTotal: 0,
   unknownTotal: 0,
-  optionalInstallTotal: 0,
   actionableTotal: 0,
+  visibleEntryTotal: 0,
 }
 
-const OPTIONAL_GROUP_KEYS = new Set([
-  'optional_install',
-  'missing_with_installed_replacement',
-  'missing_with_replacement_choice',
-])
+const GROUP_SEVERITY = Object.fromEntries(
+  Object.entries(GROUP_META).map(([key, meta]) => [key, meta.severity || 'info'])
+)
 
 const buildChoiceId = (source = {}, fallbackType = 'original') => {
   const key = getInstallSourceKey(source)
@@ -80,10 +89,14 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   })
   const state = reactive({
     title: '缺失项安装管理',
-    message: '处理当前列表中未安装的项目。',
+    message: '处理未安装模组。',
     cancelText: '取消',
     cleanupText: '',
     cleanupShouldContinue: false,
+    continueText: '',
+    continueResult: false,
+    disableRelatedText: '',
+    disableRelatedOwnerIds: [],
     groups: [],
     unknownItems: [],
     summary: { ...EMPTY_SUMMARY },
@@ -205,6 +218,37 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     }
   }
 
+  const collectVersionReplacementWarnings = (activeIds = [], installSourceMap = {}) => {
+    const rows = []
+    dedupeNormalizedPackageIds(activeIds).forEach(packageId => {
+      if (!packageId || !modStore.hasRealModById(packageId)) return
+      const mod = modStore.takeModById(packageId)
+      const versionInfo = getVersionInfo(currentGameVersion.value, mod?.supported_versions || [])
+      if (versionInfo.tone !== 'danger') return
+      const { replacementSources } = resolveSourcesForPackage(packageId, installSourceMap)
+      const installableReplacementSources = replacementSources.filter(source => !isInstalledBySource(source))
+      if (installableReplacementSources.length === 0) return
+      const choiceOptions = buildReplacementChoiceOptions({
+        packageId,
+        mod,
+        installableReplacementSources,
+        includeCurrent: true,
+      })
+      if (choiceOptions.length === 0) return
+      rows.push({
+        id: `warn-version:${packageId}`,
+        groupKey: 'version_replacement_warn',
+        packageId,
+        title: modStore.displayModName(packageId),
+        reasonLabels: ['版本不符'],
+        choiceOptions,
+        defaultChoiceId: choiceOptions.find(choice => choice?.type === 'current')?.id || choiceOptions[0]?.id || '',
+        defaultSelected: false,
+      })
+    })
+    return rows
+  }
+
   const createRowChoice = (source = {}, type = 'original') => {
     const normalizedSource = normalizeInstallSource(source, source?.packageId || source?.package_id)
     if (!normalizedSource) return null
@@ -215,8 +259,96 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       title: normalizedSource.title,
       packageId: normalizedSource.packageId,
       versionInfo: getVersionInfo(currentGameVersion.value, normalizedSource.supportedVersions),
-      label: type === 'replacement' ? '替代版' : '原版',
+      label: type === 'replacement' ? '替代版' : type === 'installed' ? '已安装' : type === 'current' ? '当前' : '原版',
     }
+  }
+
+  const createInstalledChoice = ({ packageId = '', mod = null, label = '当前', type = 'current' } = {}) => {
+    const normalizedPackageId = normalizePackageId(packageId)
+    if (!normalizedPackageId || !mod) return null
+    const source = collectRuntimeSource(normalizedPackageId, mod)
+      || normalizeInstallSource({
+        packageId: normalizedPackageId,
+        title: modStore.displayModName(normalizedPackageId),
+        supportedVersions: mod?.supported_versions || [],
+        sourceOrigin: 'runtime',
+      }, normalizedPackageId)
+    if (!source) return null
+    return {
+      id: buildChoiceId(source, type),
+      type,
+      source,
+      title: modStore.displayModName(normalizedPackageId),
+      packageId: normalizedPackageId,
+      versionInfo: getVersionInfo(currentGameVersion.value, mod?.supported_versions || []),
+      label,
+    }
+  }
+
+  const buildReplacementChoiceOptions = ({
+    packageId = '',
+    mod = null,
+    installableOriginalSources = [],
+    installableReplacementSources = [],
+    installedReplacementSources = [],
+    includeCurrent = false,
+    includeInstalledReplacements = false,
+  } = {}) => {
+    const currentChoice = includeCurrent && mod
+      ? createInstalledChoice({
+        packageId,
+        mod,
+        label: '当前',
+        type: 'current',
+      })
+      : null
+
+    const originalChoices = (installableOriginalSources || [])
+      .map(source => createRowChoice(source, 'original'))
+      .filter(Boolean)
+
+    const replacementChoices = (installableReplacementSources || [])
+      .map(source => createRowChoice(source, 'replacement'))
+      .filter(Boolean)
+
+    const installedReplacementChoices = includeInstalledReplacements
+      ? (installedReplacementSources || [])
+        .map(source => {
+          const replacementPackageId = normalizePackageId(source?.packageId || source?.package_id)
+          return createInstalledChoice({
+            packageId: replacementPackageId,
+            mod: modStore.takeModById(replacementPackageId),
+            label: '已安装',
+            type: 'installed',
+          })
+        })
+        .filter(Boolean)
+      : []
+
+    return [
+      ...(currentChoice ? [currentChoice] : []),
+      ...installedReplacementChoices,
+      ...sortChoiceOptions([...originalChoices, ...replacementChoices]),
+    ]
+  }
+
+  const isInstallableChoice = (choice = null) => {
+    const source = choice?.source
+    return !!source && !isInstalledBySource(source)
+  }
+
+  const sortChoiceOptions = (choices = []) => {
+    const choiceMap = new Map()
+    ;(choices || []).filter(Boolean).forEach(choice => {
+      if (!choice?.id || choiceMap.has(choice.id)) return
+      choiceMap.set(choice.id, choice)
+    })
+    return sortSources(
+      Array.from(choiceMap.values()).map(choice => choice.source),
+      { preferReplacement: true }
+    )
+      .map(source => Array.from(choiceMap.values()).find(choice => getInstallSourceKey(choice.source) === getInstallSourceKey(source)))
+      .filter(Boolean)
   }
 
   const buildMissingDependencyOwnerMap = (activeIds = []) => {
@@ -257,6 +389,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
           key,
           title: meta.title,
           description: meta.description,
+          severity: meta.severity || 'info',
           rows: groupRows,
         }
       })
@@ -265,15 +398,26 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const buildScopedSummary = (baseSummary = EMPTY_SUMMARY, rows = []) => {
     const scopedRows = rows || []
-    const requiredInstallTotal = scopedRows.filter(row => row.groupKey === 'missing_install').length
-    const optionalInstallTotal = scopedRows.filter(row => OPTIONAL_GROUP_KEYS.has(row.groupKey)).length
+    const dangerTotal = scopedRows.filter(row => GROUP_SEVERITY[row.groupKey] === 'danger').length
+    const warnTotal = scopedRows.filter(row => GROUP_SEVERITY[row.groupKey] === 'warn').length
+    const infoTotal = scopedRows.filter(row => GROUP_SEVERITY[row.groupKey] === 'info').length
     return {
       ...baseSummary,
-      requiredInstallTotal,
-      optionalInstallTotal,
+      dangerTotal,
+      warnTotal,
+      infoTotal,
       actionableTotal: scopedRows.length,
+      visibleEntryTotal: dangerTotal + warnTotal,
     }
   }
+
+  const collectUnknownDependencyOwnerIds = (unknownItems = []) => (
+    dedupeNormalizedPackageIds(
+      (unknownItems || [])
+        .filter(item => !item?.canCleanup)
+        .flatMap(item => item?.ownerIds?.length ? item.ownerIds : (item?.ownerId ? [item.ownerId] : []))
+    )
+  )
 
   const buildAnalysis = async (activeIds = []) => {
     const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
@@ -320,6 +464,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     const unknownActiveIds = []
     const summary = { ...EMPTY_SUMMARY }
     const unknownItems = []
+    const unknownOwnerMap = new Map()
 
     for (const subject of missingSubjectMap.values()) {
       const { packageId } = subject
@@ -329,34 +474,28 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       const installableReplacementSources = replacementSources.filter(source => !isInstalledBySource(source))
       const hasInstalledSupportedReplacement = installedReplacementSources.some(source => supportsCurrentGameVersion(source))
 
-      const choiceOptions = []
-      const bestOriginal = installableOriginalSources[0] || null
-      const bestReplacement = installableReplacementSources[0] || null
-      if (bestOriginal && bestReplacement) {
-        choiceOptions.push(createRowChoice(bestOriginal, 'original'))
-        choiceOptions.push(createRowChoice(bestReplacement, 'replacement'))
-      } else if (bestOriginal) {
-        choiceOptions.push(createRowChoice(bestOriginal, 'original'))
-      } else if (bestReplacement) {
-        choiceOptions.push(createRowChoice(bestReplacement, 'replacement'))
-      }
+      const choiceOptions = buildReplacementChoiceOptions({
+        packageId,
+        mod,
+        installableOriginalSources,
+        installableReplacementSources,
+        installedReplacementSources,
+        includeInstalledReplacements: hasInstalledSupportedReplacement,
+      })
 
       if (choiceOptions.length > 0) {
         const reasonLabels = []
         if (subject.fromActiveList) reasonLabels.push('缺失项')
-        if (subject.fromDependency) reasonLabels.push('缺失依赖')
+        if (subject.fromDependency) reasonLabels.push('依赖缺失')
         if (hasInstalledSupportedReplacement) {
           reasonLabels.push('已装替代')
         }
-        const sortedChoices = sortSources(choiceOptions.map(choice => choice.source), { preferReplacement: true })
-          .map(source => choiceOptions.find(choice => getInstallSourceKey(choice.source) === getInstallSourceKey(source)))
-          .filter(Boolean)
-        const defaultChoice = sortedChoices[0] || choiceOptions[0]
+        const defaultChoice = choiceOptions.find(choice => !isInstallableChoice(choice)) || choiceOptions[0]
         let groupKey = 'missing_install'
         if (hasInstalledSupportedReplacement) {
           groupKey = 'missing_with_installed_replacement'
         } else if (installableReplacementSources.length > 0) {
-          groupKey = 'missing_with_replacement_choice'
+          groupKey = subject.fromDependency ? 'missing_with_replacement_choice' : 'missing_install'
         }
         rows.push({
           id: `missing:${packageId}`,
@@ -366,48 +505,87 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
           reasonLabels,
           choiceOptions,
           defaultChoiceId: defaultChoice?.id || '',
-          defaultSelected: !(hasInstalledSupportedReplacement && choiceOptions.length === 1 && defaultChoice?.type === 'original'),
+          defaultSelected: isInstallableChoice(defaultChoice),
         })
       } else if (!hasInstalledSupportedReplacement) {
         summary.unknownTotal += 1
         if (subject.fromActiveList) {
           unknownActiveIds.push(packageId)
         }
-        const reasonLabels = []
-        if (subject.fromActiveList) reasonLabels.push('缺失项')
-        if (subject.fromDependency) reasonLabels.push('缺失依赖')
-        unknownItems.push({
-          id: `unknown:${packageId}`,
-          packageId,
-          title: modStore.displayModName(packageId),
-          reasonLabels,
-          canCleanup: subject.fromActiveList,
-        })
+        if (subject.fromActiveList) {
+          const reasonLabels = ['缺失项']
+          unknownItems.push({
+            id: `unknown:${packageId}`,
+            packageId,
+            title: modStore.displayModName(packageId),
+            reasonLabels,
+            canCleanup: true,
+            detailLines: [],
+          })
+        }
+        if (subject.fromDependency) {
+          ;(subject.dependencyOwners || []).forEach(ownerId => {
+            const normalizedOwnerId = normalizePackageId(ownerId)
+            if (!normalizedOwnerId) return
+            if (!unknownOwnerMap.has(normalizedOwnerId)) {
+              unknownOwnerMap.set(normalizedOwnerId, {
+                id: `unknown-owner:${normalizedOwnerId}`,
+                ownerId: normalizedOwnerId,
+                ownerIds: [normalizedOwnerId],
+                title: modStore.displayModName(normalizedOwnerId),
+                reasonLabels: ['依赖未知'],
+                canCleanup: false,
+                unknownDependencyIds: [],
+              })
+            }
+            const ownerEntry = unknownOwnerMap.get(normalizedOwnerId)
+            if (!ownerEntry.unknownDependencyIds.includes(packageId)) {
+              ownerEntry.unknownDependencyIds.push(packageId)
+            }
+          })
+        }
       }
     }
+
+    unknownOwnerMap.forEach(ownerEntry => {
+      const detailLines = ownerEntry.unknownDependencyIds.map(depId => modStore.displayModName(depId))
+      unknownItems.push({
+        ...ownerEntry,
+        unknownDependencyCount: ownerEntry.unknownDependencyIds.length,
+        detailLines,
+      })
+    })
 
     normalizedActiveIds
       .filter(packageId => !isExcludedPackageId(packageId))
       .forEach(packageId => {
         if (!modStore.hasRealModById(packageId)) return
+        const mod = modStore.takeModById(packageId)
+        const versionInfo = getVersionInfo(currentGameVersion.value, mod?.supported_versions || [])
+        if (versionInfo.tone === 'danger') return
         const { replacementSources } = resolveSourcesForPackage(packageId, installSourceMap)
         const installableReplacementSources = replacementSources.filter(source => !isInstalledBySource(source))
         if (installableReplacementSources.length === 0) return
-        const choiceOptions = installableReplacementSources
-          .map(source => createRowChoice(source, 'replacement'))
-          .filter(Boolean)
-        if (choiceOptions.length === 0) return
+        const choiceOptions = buildReplacementChoiceOptions({
+          packageId,
+          mod,
+          installableReplacementSources,
+          includeCurrent: true,
+        })
+        if (choiceOptions.length <= 1) return
         rows.push({
           id: `optional:${packageId}`,
           groupKey: 'optional_install',
           packageId,
           title: modStore.displayModName(packageId),
-          reasonLabels: ['可选替代'],
+          reasonLabels: ['可选补装'],
           choiceOptions,
-          defaultChoiceId: choiceOptions[0]?.id || '',
+          defaultChoiceId: choiceOptions.find(choice => choice?.type === 'current')?.id || choiceOptions[0]?.id || '',
           defaultSelected: false,
         })
       })
+
+    rows.push(...collectVersionReplacementWarnings(normalizedActiveIds, installSourceMap))
 
     Object.assign(summary, buildScopedSummary(summary, rows))
     const payload = {
@@ -429,10 +607,14 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   const resetState = () => {
     isVisible.value = false
     state.title = '缺失项安装管理'
-    state.message = '处理当前列表中未安装的项目。'
+    state.message = '处理未安装模组。'
     state.cancelText = '取消'
     state.cleanupText = ''
     state.cleanupShouldContinue = false
+    state.continueText = ''
+    state.continueResult = false
+    state.disableRelatedText = ''
+    state.disableRelatedOwnerIds = []
     state.groups = []
     state.unknownItems = []
     state.summary = { ...EMPTY_SUMMARY }
@@ -463,15 +645,18 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     resetState()
     const analysis = await buildAnalysis(activeIds)
     state.message = analysis.summary.unknownTotal > 0
-      ? '处理未安装项目，或清理暂时找不到来源的项目。'
-      : '处理当前列表中未安装的项目。'
+      ? '处理未安装模组，或清理无效项。'
+      : '处理未安装模组。'
     state.cleanupText = (analysis.unknownActiveIds || []).length > 0 ? '清理未知项' : ''
     state.cleanupShouldContinue = false
+    const disableRelatedOwnerIds = collectUnknownDependencyOwnerIds(analysis.unknownItems || [])
+    state.disableRelatedText = disableRelatedOwnerIds.length > 0 ? '停用相关模组' : ''
+    state.disableRelatedOwnerIds = disableRelatedOwnerIds
     applyAnalysisToState(analysis)
     applyRowDefaults()
 
     if (analysis.summary.actionableTotal === 0 && analysis.summary.unknownTotal === 0) {
-      const message = '当前没有可处理的安装项。'
+      const message = '当前没有可处理的未安装项。'
       toast.info(message)
       return false
     }
@@ -487,6 +672,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     cancelText,
     cleanupText = '',
     cleanupShouldContinue = false,
+    continueText = '',
+    continueResult = false,
+    disableRelatedText = '',
+    disableRelatedOwnerIds = [],
   }) => {
     resetState()
     state.title = title
@@ -494,6 +683,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     state.cancelText = cancelText
     state.cleanupText = cleanupText
     state.cleanupShouldContinue = cleanupShouldContinue
+    state.continueText = continueText
+    state.continueResult = continueResult
+    state.disableRelatedText = disableRelatedText
+    state.disableRelatedOwnerIds = dedupeNormalizedPackageIds(disableRelatedOwnerIds)
     applyAnalysisToState(analysis)
     applyRowDefaults()
 
@@ -507,14 +700,42 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     finalizeDialog(result)
   }
 
+  const continueCurrentAction = () => {
+    finalizeDialog(!!state.continueResult)
+  }
+
   const toggleRow = (rowId, checked) => {
-    selections[rowId] = !!checked
+    const row = visibleRows.value.find(item => item.id === rowId)
+    if (!row) return
+    if (!checked) {
+      selections[rowId] = false
+      return
+    }
+    const selectedChoice = getSelectedChoice(row)
+    if (selectedChoice?.type === 'installed') {
+      selections[rowId] = true
+      return
+    }
+    if (isInstallableChoice(selectedChoice)) {
+      selections[rowId] = true
+      return
+    }
+    const installableChoice = (row.choiceOptions || []).find(choice => isInstallableChoice(choice))
+    if (installableChoice?.id) {
+      choiceSelections[rowId] = installableChoice.id
+      selections[rowId] = true
+      return
+    }
+    selections[rowId] = false
   }
   const isSelected = (rowId) => !!selections[rowId]
 
   const setChoice = (rowId, choiceId) => {
     if (!rowId || !choiceId) return
     choiceSelections[rowId] = choiceId
+    const row = visibleRows.value.find(item => item.id === rowId)
+    const choice = row?.choiceOptions?.find(option => option.id === choiceId) || null
+    selections[rowId] = choice?.type === 'installed' || isInstallableChoice(choice)
   }
 
   const getSelectedChoice = (row) => {
@@ -532,12 +753,26 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   const getSelectedSources = () => (
     selectedRows.value
       .map(row => getSelectedSource(row))
-      .filter(Boolean)
+      .filter(source => source && !isInstalledBySource(source))
+  )
+
+  const getSelectedInstalledReplacementRows = () => (
+    selectedRows.value.filter(row => {
+      if (row?.groupKey !== 'missing_with_installed_replacement') return false
+      const choice = getSelectedChoice(row)
+      return choice?.type === 'installed'
+    })
   )
 
   const selectAll = () => {
     visibleRows.value.forEach(row => {
-      selections[row.id] = true
+      const installableChoice = (row.choiceOptions || []).find(choice => isInstallableChoice(choice)) || null
+      if (installableChoice?.id) {
+        choiceSelections[row.id] = installableChoice.id
+        selections[row.id] = true
+        return
+      }
+      selections[row.id] = false
     })
   }
 
@@ -547,27 +782,72 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     })
   }
 
-  const subscribeSelected = async () => {
-    const sources = getSelectedSources()
-    if (sources.length === 0) {
-      toast.info('当前没有选中的可订阅项')
-      return false
-    }
-    const success = await appStore.subscribeInstallSources(sources)
-    if (success) finalizeDialog(false)
-    return success
+  const applyInstalledReplacementSelections = async () => {
+    const replacementRows = getSelectedInstalledReplacementRows()
+    if (replacementRows.length === 0) return false
+
+    const originalIds = dedupeNormalizedPackageIds(replacementRows.map(row => row?.packageId))
+    const replacementIds = dedupeNormalizedPackageIds(
+      replacementRows.map(row => getSelectedChoice(row)?.packageId)
+    ).filter(id => modStore.hasRealModById(id))
+
+    if (originalIds.length === 0 || replacementIds.length === 0) return false
+
+    return await modStore.runListHistoryTransaction({
+      type: 'switch-installed-replacements',
+      label: `切换 ${replacementIds.length} 个已装替代`,
+      trackedModIds: [...originalIds, ...replacementIds],
+    }, async () => {
+      modStore.removeUnavailableIdsCompletely(originalIds)
+      modStore.removeIdsOnAllList(replacementIds)
+      await modStore.smartInsertMods(replacementIds)
+      modStore.takeModListByIds(replacementIds).forEach(mod => {
+        mod.last_moved_time = Date.now()
+        mod.last_active_time = Date.now()
+      })
+      modStore.updateInactiveIds()
+    })
   }
 
-  const downloadSelected = async () => {
+  const executeSelectedAction = async (executor, emptyMessage) => {
     const sources = getSelectedSources()
-    if (sources.length === 0) {
-      toast.info('当前没有选中的可下载项')
+    const hasReplacementSwitches = getSelectedInstalledReplacementRows().length > 0
+
+    if (sources.length === 0 && !hasReplacementSwitches) {
+      toast.info(emptyMessage)
       return false
     }
-    const success = await appStore.downloadInstallSources(sources)
-    if (success) finalizeDialog(false)
-    return success
+
+    let switched = false
+    if (hasReplacementSwitches) {
+      switched = await applyInstalledReplacementSelections()
+      if (!switched && sources.length === 0) return false
+    }
+
+    let success = true
+    if (sources.length > 0) {
+      success = await executor(sources)
+    }
+
+    if (switched || success) {
+      finalizeDialog(false)
+    }
+    return switched || success
   }
+
+  const subscribeSelected = async () => (
+    await executeSelectedAction(
+      async (sources) => await appStore.subscribeInstallSources(sources),
+      '当前没有选中的可订阅项'
+    )
+  )
+
+  const downloadSelected = async () => (
+    await executeSelectedAction(
+      async (sources) => await appStore.downloadInstallSources(sources),
+      '当前没有选中的可下载项'
+    )
+  )
 
   const cleanupUnknownActiveItems = async (unknownActiveIds = []) => {
     const removableIds = dedupeNormalizedPackageIds(
@@ -592,7 +872,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       return false
     }
     const nextAnalysis = await buildAnalysis(modStore.activeIds)
-    if (state.cleanupShouldContinue && nextAnalysis.summary.requiredInstallTotal === 0 && nextAnalysis.summary.unknownTotal === 0) {
+    if (state.cleanupShouldContinue && nextAnalysis.summary.dangerTotal === 0 && nextAnalysis.summary.unknownTotal === 0) {
       finalizeDialog(true)
       return true
     }
@@ -612,45 +892,81 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     return false
   }
 
+  const disableRelatedOwners = async () => {
+    const ownerIds = dedupeNormalizedPackageIds(state.disableRelatedOwnerIds || [])
+      .filter(id => modStore.hasRealModById(id))
+    if (ownerIds.length === 0) {
+      toast.info('当前没有可停用的相关模组')
+      return false
+    }
+    const success = await modStore.changeModsActive(ownerIds, false)
+    if (!success) return false
+    if (state.cleanupShouldContinue) {
+      finalizeDialog(true)
+      return true
+    }
+    finalizeDialog(false)
+    return true
+  }
+
   const ensureResolvedBeforeAction = async ({
     activeIds = modStore.activeIds,
     actionLabel = '保存',
   } = {}) => {
+    if (appStore.settings.enable_action_prechecks === false) return true
     const analysis = await buildAnalysis(activeIds)
-    if (analysis.summary.requiredInstallTotal === 0 && analysis.summary.unknownTotal === 0) return true
+    if (analysis.summary.dangerTotal === 0 && analysis.summary.unknownTotal === 0) return true
 
-    const hasRequired = analysis.summary.requiredInstallTotal > 0
+    const hasRequired = analysis.summary.dangerTotal > 0
     const hasUnknown = (analysis.summary.unknownTotal || 0) > 0
+    const unknownActiveCount = (analysis.unknownActiveIds || []).length
     const dependencyOnlyUnknownCount = Math.max(
       0,
       (analysis.summary.unknownTotal || 0) - (analysis.unknownActiveIds || []).length
     )
 
+    const disableRelatedOwnerIds = collectUnknownDependencyOwnerIds(analysis.unknownItems || [])
+
     if (hasRequired) {
       const unknownText = hasUnknown ? `，另有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源` : ''
-      await openPrecheckDialog({
+      const result = await openPrecheckDialog({
         analysis,
         title: `${actionLabel}前发现未安装项`,
-        message: `当前列表里有 ${analysis.summary.requiredInstallTotal} 项还没安装${unknownText}。请先处理后再${actionLabel}。`,
+        message: `发现 ${analysis.summary.dangerTotal} 项未安装${unknownText}。`,
         cancelText: `取消${actionLabel}`,
         cleanupText: (analysis.unknownActiveIds || []).length > 0 ? '清理未知项' : '',
+        disableRelatedText: disableRelatedOwnerIds.length > 0
+          ? `停用相关模组并继续${actionLabel}`
+          : '',
+        disableRelatedOwnerIds,
+        continueText: `不处理继续${actionLabel}`,
+        continueResult: true,
       })
-      return false
+      return !!result
     }
 
-    const cleanupText = (analysis.unknownActiveIds || []).length > 0
+    const cleanupText = unknownActiveCount > 0
       ? `清理未知项并继续${actionLabel}`
       : ''
-    const dependencyHint = dependencyOnlyUnknownCount > 0
-      ? `\n其中有 ${dependencyOnlyUnknownCount} 项是缺少依赖，清理未知项后，你可能还是需要再处理一次。`
+    const disableRelatedText = disableRelatedOwnerIds.length > 0
+      ? `停用相关模组并继续${actionLabel}`
       : ''
+    const hasOnlyUnknownDependencyTargets = unknownActiveCount === 0 && dependencyOnlyUnknownCount > 0
     const result = await openPrecheckDialog({
       analysis,
-      title: `${actionLabel}前发现未知项`,
-      message: `当前列表里有 ${analysis.summary.unknownTotal} 项暂时找不到可用来源。${dependencyHint}`,
+      title: hasOnlyUnknownDependencyTargets
+        ? `${actionLabel}前发现未知依赖目标`
+        : `${actionLabel}前发现未知项`,
+      message: hasOnlyUnknownDependencyTargets
+        ? `发现 ${dependencyOnlyUnknownCount} 项未知依赖目标。`
+        : `发现 ${analysis.summary.unknownTotal} 项暂时找不到可用来源。`,
       cancelText: `取消${actionLabel}`,
       cleanupText,
       cleanupShouldContinue: true,
+      continueText: `不处理继续${actionLabel}`,
+      continueResult: true,
+      disableRelatedText,
+      disableRelatedOwnerIds,
     })
     return !!result
   }
@@ -683,6 +999,8 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     subscribeSelected,
     downloadSelected,
     cleanupUnknownItems,
+    continueCurrentAction,
+    disableRelatedOwners,
     openSource,
   }
 })

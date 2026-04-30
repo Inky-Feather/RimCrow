@@ -15,43 +15,59 @@ const CATEGORY_ORDER = [
   'tool_mod',
   'dependency',
   'language_pack',
+  'version_replacement',
+  'optional_replacement',
 ]
 
 const CATEGORY_META = {
   core: {
     title: 'Core',
-    description: '游戏核心模组。缺失时建议优先补齐。',
-    severity: 'required',
+    description: '游戏核心模组未启用。',
+    severity: 'danger',
   },
   official_dlc: {
     title: '官方 DLC',
     description: '当前序列引用了未启用的官方扩展。',
-    severity: 'required',
+    severity: 'danger',
   },
   tool_mod: {
-    title: '辅助工具',
+    title: '工具模组',
     description: '当前设置允许的工具模组未启用。',
-    severity: 'required',
+    severity: 'danger',
   },
   dependency: {
     title: '依赖项',
-    description: '这些模组是当前序列或补充候选的前置依赖。',
-    severity: 'required',
+    description: '这些模组是当前启用模组的依赖。',
+    severity: 'danger',
   },
   language_pack: {
     title: '语言包',
-    description: '当前语言存在可用但未启用的语言包。',
-    severity: 'optional',
+    description: '存在可用但未启用的当前语言语言包。',
+    severity: 'warn',
+  },
+  version_replacement: {
+    title: '替代建议',
+    description: '当前版本可优先启用更合适的替代模组。',
+    severity: 'warn',
+  },
+  optional_replacement: {
+    title: '可选启用',
+    description: '当前模组已可用，如有需要也可启用其它已安装替代项。',
+    severity: 'info',
   },
 }
 
 const SEVERITY_META = {
-  required: {
+  danger: {
     tone: 'danger',
-    label: '必需',
+    label: '必要',
   },
-  optional: {
+  warn: {
     tone: 'warn',
+    label: '建议',
+  },
+  info: {
+    tone: 'muted',
     label: '可选',
   },
 }
@@ -73,6 +89,15 @@ const mergeText = (...values) => [...new Set(
     .map(value => value.trim())
     .filter(Boolean)
 )].join('；')
+
+const buildReplacementOptionDetail = (ownerName = '', replacementName = '') => {
+  const left = String(ownerName || '').trim()
+  const right = String(replacementName || '').trim()
+  if (left && right) return `启用后替换 ${left}`
+  if (left) return `启用后替换当前模组`
+  if (right) return `启用后切换到 ${right}`
+  return '启用后替换当前模组'
+}
 
 const getResolvedLanguagePackOwnerIds = (mod) => (
   [...new Set(
@@ -106,13 +131,14 @@ const pickPreferredCategory = (left = '', right = '') => {
   return compareCategory(left, right) <= 0 ? left : right
 }
 
-const pickPreferredSeverity = (left = 'optional', right = 'optional') => (
-  left === 'required' || right === 'required' ? 'required' : 'optional'
+const SEVERITY_ORDER = ['danger', 'warn', 'info']
+const pickPreferredSeverity = (left = 'info', right = 'info') => (
+  SEVERITY_ORDER.indexOf(left) <= SEVERITY_ORDER.indexOf(right) ? left : right
 )
 
 const normalizeSelectionMode = (value = 'all') => {
   const normalized = String(value || '').trim().toLowerCase()
-  return ['all', 'required', 'none', 'custom'].includes(normalized) ? normalized : 'all'
+  return ['all', 'danger', 'none', 'custom'].includes(normalized) ? normalized : 'all'
 }
 
 const sortRows = (rows = []) => (
@@ -139,8 +165,10 @@ export const useSupplementStore = defineStore('supplement', () => {
     groups: [],
     summary: {
       count: 0,
-      requiredCount: 0,
-      optionalCount: 0,
+      dangerCount: 0,
+      warnCount: 0,
+      infoCount: 0,
+      visibleCount: 0,
       urgency: 'none',
     },
   })
@@ -203,6 +231,78 @@ export const useSupplementStore = defineStore('supplement', () => {
     return suffix ? `${joined}${suffix}` : joined
   }
 
+  const collectInstalledReplacementEntries = (ownerIds = [], ctx) => {
+    const entryMap = new Map()
+
+    ownerIds.forEach(ownerId => {
+      const owner = modStore.takeModById(ownerId)
+      if (!owner || isIssueIgnored(owner, ISSUE_TYPE.WARN_VERSION_MISMATCH)) return
+
+      const replacementId = normalizePackageId(owner?.replacement?.new_package_id)
+      if (!replacementId) return
+      if (!modStore.hasRealModById(replacementId) || ctx.activeSet.has(replacementId)) return
+
+      const replacementVersionInfo = getVersionInfo(replacementId)
+      if (replacementVersionInfo.tone !== 'success') return
+
+      const ownerVersionInfo = getVersionInfo(ownerId)
+      const category = ownerVersionInfo.tone === 'danger' ? 'version_replacement' : 'optional_replacement'
+      const key = `replacement:${ownerId}`
+      const ownerName = modStore.displayModName(ownerId)
+      const replacementName = modStore.displayModName(replacementId)
+
+      if (!entryMap.has(key)) {
+        entryMap.set(key, {
+          entryType: 'choice',
+          key,
+          category,
+          severity: CATEGORY_META[category]?.severity || 'info',
+          title: ownerName,
+          reason: '',
+          detail: '',
+          owners: [ownerId],
+          allowSkip: true,
+          defaultSelected: false,
+          defaultOptionPackageId: replacementId,
+          options: [{
+            packageId: replacementId,
+            title: replacementName,
+            detail: buildReplacementOptionDetail(ownerName, replacementName),
+            removeIds: [ownerId],
+            relationLabel: '替代版',
+          }],
+        })
+        return
+      }
+
+      const currentEntry = entryMap.get(key)
+      currentEntry.options = [
+        ...(currentEntry.options || []),
+        {
+          packageId: replacementId,
+          title: replacementName,
+          detail: buildReplacementOptionDetail(ownerName, replacementName),
+          removeIds: [ownerId],
+          relationLabel: '替代版',
+        },
+      ]
+    })
+
+    return Array.from(entryMap.values()).map(entry => {
+      const hasVersionMismatchOwner = entry.category === 'version_replacement'
+      const replacementNames = mapUniqueDisplayNames(entry.options || [], option => option?.title || '')
+      return {
+        ...entry,
+        reason: hasVersionMismatchOwner
+          ? '当前版本可切换到已安装替代模组'
+          : '当前模组可切换到已安装替代模组',
+        detail: hasVersionMismatchOwner
+          ? mergeText(`可切换到：${replacementNames.join('、')}`, '当前版本可能不适配')
+          : `可切换到：${replacementNames.join('、')}`,
+      }
+    })
+  }
+
   // 这里只收集“候选条目”，不直接决定是否显示或启用。
   // satisfiedSet 表示当前路径已满足的包，trailSet 用于阻断递归回环。
   const collectDependencyEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
@@ -236,7 +336,7 @@ export const useSupplementStore = defineStore('supplement', () => {
             entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
             key,
             category,
-            severity: CATEGORY_META[category]?.severity || 'required',
+            severity: CATEGORY_META[category]?.severity || 'danger',
             title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
             reason: '',
             detail: '',
@@ -321,7 +421,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           entryType: 'toggle',
           key,
           category: 'language_pack',
-          severity: isFallback ? 'optional' : 'optional',
+          severity: 'warn',
           title: modStore.displayModName(candidate),
           reason: '',
           detail: '',
@@ -341,7 +441,7 @@ export const useSupplementStore = defineStore('supplement', () => {
         ...entry,
         reason: ownerCount > 1 ? `可为 ${ownerCount} 个模组提供当前语言支持` : '可补充当前语言包',
         detail: entry.isLanguageFallback
-          ? mergeText(buildOwnersDetail(entry.owners, ' 的可能相关语言包'), '该语言包未声明支持当前语言')
+          ? mergeText(buildOwnersDetail(entry.owners, ' 的可能相关语言包'), '该语言包未标注当前语言')
           : buildOwnersDetail(entry.owners, ' 的语言包'),
       }
     })
@@ -356,7 +456,7 @@ export const useSupplementStore = defineStore('supplement', () => {
         entryType: 'toggle',
         key: 'core:ludeon.rimworld',
         category: 'core',
-        severity: 'required',
+        severity: 'danger',
         title: modStore.displayModName('ludeon.rimworld'),
         reason: '当前启用序列缺少 Core',
         detail: '保存或启动游戏前建议补齐。',
@@ -374,7 +474,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           entryType: 'toggle',
           key: `tool:${toolId}`,
           category: 'tool_mod',
-          severity: 'required',
+          severity: 'danger',
           title: modStore.displayModName(toolId),
           reason: '当前设置启用了工具模组支持',
           detail: '工具模组已安装但未启用。',
@@ -388,6 +488,7 @@ export const useSupplementStore = defineStore('supplement', () => {
 
     entries.push(...collectDependencyEntries(ctx.activeIds, ctx, ctx.activeSet, new Set()))
     entries.push(...collectLanguageEntries(ctx.activeIds, ctx, ctx.activeSet, new Set()))
+    entries.push(...collectInstalledReplacementEntries(ctx.activeIds, ctx))
 
     return entries
   }
@@ -432,23 +533,26 @@ export const useSupplementStore = defineStore('supplement', () => {
     return Array.from(optionMap.values()).sort((left, right) => String(left.title || '').localeCompare(String(right.title || '')))
   }
 
-  const createEmptySummary = () => ({
-    count: 0,
-    requiredCount: 0,
-    optionalCount: 0,
-    urgency: 'none',
-  })
+const createEmptySummary = () => ({
+  count: 0,
+  dangerCount: 0,
+  warnCount: 0,
+  infoCount: 0,
+  visibleCount: 0,
+  urgency: 'none',
+})
 
   // 图节点不是最终 UI 行；这里把节点转成可合并的平面行结构。
   const createToggleRow = (node) => ({
     id: node.rowId,
     kind: 'toggle',
     category: node.category,
-    severity: node.severity || 'optional',
+    severity: node.severity || 'info',
     packageId: node.packageId,
     title: node.title || modStore.displayModName(node.packageId),
     reason: node.reason || '',
     detail: node.detail || '',
+    defaultSelected: node.defaultSelected,
     owners: dedupeNormalizedPackageIds(node.owners || []),
     removeIds: dedupeNormalizedPackageIds(node.removeIds || []),
     relationLabel: node.relationLabel || '',
@@ -460,12 +564,13 @@ export const useSupplementStore = defineStore('supplement', () => {
     id: node.rowId,
     kind: 'choice',
     category: node.category,
-    severity: node.severity || 'optional',
+    severity: node.severity || 'info',
     title: node.title || '',
     reason: node.reason || '',
     detail: node.detail || '',
     owners: dedupeNormalizedPackageIds(node.owners || []),
     allowSkip: node.allowSkip !== false,
+    defaultSelected: node.defaultSelected,
     options: mergeChoiceOptions([], node.options || [], node.rowId),
     defaultOptionId: node.defaultOptionId || '',
   })
@@ -539,23 +644,27 @@ export const useSupplementStore = defineStore('supplement', () => {
           key: category,
           title: CATEGORY_META[category]?.title || category,
           description: CATEGORY_META[category]?.description || '',
-          severity: CATEGORY_META[category]?.severity || 'optional',
+          severity: CATEGORY_META[category]?.severity || 'info',
           rows: sortRows(groupRows),
         }
       })
       .filter(Boolean)
 
     const count = rows.length
-    const requiredCount = rows.filter(row => row.severity === 'required').length
-    const optionalCount = count - requiredCount
+    const dangerCount = rows.filter(row => row.severity === 'danger').length
+    const warnCount = rows.filter(row => row.severity === 'warn').length
+    const infoCount = rows.filter(row => row.severity === 'info').length
+    const visibleCount = dangerCount + warnCount
 
     return {
       groups,
       summary: {
         count,
-        requiredCount,
-        optionalCount,
-        urgency: requiredCount > 0 ? 'danger' : count > 0 ? 'warn' : 'none',
+        dangerCount,
+        warnCount,
+        infoCount,
+        visibleCount,
+        urgency: dangerCount > 0 ? 'danger' : warnCount > 0 ? 'warn' : 'none',
       },
     }
   }
@@ -563,14 +672,16 @@ export const useSupplementStore = defineStore('supplement', () => {
   const getDefaultToggleSelection = (row, mode = defaultSelectionMode.value) => {
     const normalizedMode = normalizeSelectionMode(mode)
     if (normalizedMode === 'none') return false
-    if (normalizedMode === 'required') return row?.severity === 'required'
+    if (normalizedMode === 'danger') return row?.severity === 'danger'
+    if (typeof row?.defaultSelected === 'boolean') return row.defaultSelected
     return true
   }
 
   const getDefaultChoiceSelection = (row, mode = defaultSelectionMode.value) => {
     const normalizedMode = normalizeSelectionMode(mode)
     if (normalizedMode === 'none') return ''
-    if (normalizedMode === 'required' && row?.severity !== 'required') return ''
+    if (normalizedMode === 'danger' && row?.severity !== 'danger') return ''
+    if (normalizedMode === 'custom' && row?.defaultSelected === false) return ''
     return row?.defaultOptionId || ''
   }
 
@@ -626,12 +737,13 @@ export const useSupplementStore = defineStore('supplement', () => {
           rowId,
           kind: 'choice',
           category: entry.category,
-          severity: entry.severity || 'optional',
+          severity: entry.severity || 'info',
           title: entry.title || '',
           reason: entry.reason || '',
           detail: entry.detail || '',
           owners: dedupeNormalizedPackageIds(entry.owners || []),
           allowSkip: entry.allowSkip !== false,
+          defaultSelected: entry.defaultSelected,
           options,
           defaultOptionId: preferredOption?.id || '',
         }
@@ -658,11 +770,12 @@ export const useSupplementStore = defineStore('supplement', () => {
         rowId,
         kind: 'toggle',
         category: entry.category,
-        severity: entry.severity || 'optional',
+        severity: entry.severity || 'info',
         packageId,
         title: entry.title || modStore.displayModName(packageId),
         reason: entry.reason || '',
         detail: entry.detail || '',
+        defaultSelected: entry.defaultSelected,
         owners: dedupeNormalizedPackageIds(entry.owners || []),
         removeIds: dedupeNormalizedPackageIds(entry.removeIds || []),
         relationLabel: entry.relationLabel || '',
@@ -819,7 +932,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     state.groups = []
     state.summary = createEmptySummary()
     graphState.value = null
-    defaultSelectionMode.value = 'all'
+    defaultSelectionMode.value = 'custom'
     clearReactiveObject(toggleSelections)
     clearReactiveObject(choiceSelections)
     clearSelectionOverrides()
@@ -842,7 +955,7 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   const collectSelectionPayload = () => resolveSelectionClosure(graphState.value).payload
 
-  // 补齐窗口只处理“已安装但未启用”的候选，不再混入缺失/替代分析。
+  // 这里只处理“已安装但未启用”的候选。
   const prepareDialogPlan = async (activeIds = modStore.activeIds) => {
     const graph = buildSupplementGraph(activeIds)
     const plan = resolveProjectedPlan(graph)
@@ -852,7 +965,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   // prepared 允许外部复用同一份预计算结果，减少重复构图与闭包求解。
   const openPreparedPlan = async ({
     activeIds = modStore.activeIds,
-    title = '启用建议',
+    title = '补齐启用项',
     message = '',
     confirmText = '启用选中项',
     cancelText = '取消',
@@ -860,7 +973,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     prepared = null,
   } = {}) => {
     resetDialogState()
-    defaultSelectionMode.value = 'all'
+    defaultSelectionMode.value = 'custom'
     const resolvedActiveIds = dedupeNormalizedPackageIds(activeIds)
     const resolvedPrepared = prepared || await prepareDialogPlan(resolvedActiveIds)
     graphState.value = resolvedPrepared.graph
@@ -899,7 +1012,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   }
 
   const selectRequiredOnly = () => {
-    defaultSelectionMode.value = 'required'
+    defaultSelectionMode.value = 'danger'
     clearSelectionOverrides()
     rebuildVisiblePlan()
   }
@@ -958,12 +1071,12 @@ export const useSupplementStore = defineStore('supplement', () => {
   // 常规入口：用户主动打开补缺弹窗。
   const openForActiveList = async ({
     activeIds = modStore.activeIds,
-    title = '启用建议',
+    title = '补齐启用项',
     message = '选择要启用的模组。',
   } = {}) => {
     const prepared = await prepareDialogPlan(activeIds)
     if (prepared.plan.summary.count === 0) {
-      toast.info('当前没有需要启用的建议', { timeout: 1800 })
+      toast.info('当前没有可补齐的未启用模组', { timeout: 1800 })
       return false
     }
     const payload = await openPreparedPlan({
@@ -983,16 +1096,17 @@ export const useSupplementStore = defineStore('supplement', () => {
     activeIds = modStore.activeIds,
     actionLabel = '保存',
   } = {}) => {
+    if (appStore.settings.enable_action_prechecks === false) return true
     const prepared = await prepareDialogPlan(activeIds)
-    if (prepared.plan.summary.requiredCount === 0) return true
+    if (prepared.plan.summary.dangerCount === 0) return true
 
     const result = await openPreparedPlan({
       activeIds,
-      title: `${actionLabel}前发现必需启用项`,
-      message: `下面这些已安装但未启用的模组会影响这次${actionLabel}。`,
+      title: `${actionLabel}前发现未启用项`,
+      message: `有些已安装模组建议先启用再${actionLabel}。`,
       confirmText: `启用选中项后继续${actionLabel}`,
       cancelText: `取消${actionLabel}`,
-      continueText: `忽略这些项并继续${actionLabel}`,
+      continueText: `不处理继续${actionLabel}`,
       prepared,
     })
     if (!result) return false
@@ -1003,8 +1117,8 @@ export const useSupplementStore = defineStore('supplement', () => {
     }
 
     const nextSummary = buildSummary(modStore.activeIds).summary
-    if (nextSummary.requiredCount === 0) return true
-    toast.warning(`已取消${actionLabel}，还有 ${nextSummary.requiredCount} 项建议没有处理。`, { timeout: 2600 })
+    if (nextSummary.dangerCount === 0) return true
+    toast.warning(`已取消${actionLabel}，还有 ${nextSummary.dangerCount} 项未处理。`, { timeout: 2600 })
     return false
   }
 
@@ -1012,16 +1126,17 @@ export const useSupplementStore = defineStore('supplement', () => {
   const ensureRequiredBeforeAutosort = async ({
     activeIds = modStore.activeIds,
   } = {}) => {
+    if (appStore.settings.enable_action_prechecks === false) return true
     const prepared = await prepareDialogPlan(activeIds)
-    if (prepared.plan.summary.requiredCount === 0) return true
+    if (prepared.plan.summary.dangerCount === 0) return true
 
     const result = await openPreparedPlan({
       activeIds,
-      title: '自动排序前发现必需启用项',
-      message: '下面这些已安装但未启用的模组会影响这次自动排序。',
+      title: '排序前发现未启用项',
+      message: '有些已安装模组建议先启用再排序。',
       confirmText: '启用选中项后继续排序',
       cancelText: '取消排序',
-      continueText: '忽略这些项并继续排序',
+      continueText: '不处理继续排序',
       prepared,
     })
     if (!result) return false
@@ -1029,9 +1144,9 @@ export const useSupplementStore = defineStore('supplement', () => {
 
     await applySelectionPayload(result.payload, { silent: true })
     const nextSummary = buildSummary(modStore.activeIds).summary
-    if (nextSummary.requiredCount === 0) return true
+    if (nextSummary.dangerCount === 0) return true
 
-    toast.warning(`自动排序已取消，还有 ${nextSummary.requiredCount} 项建议没有处理。`, { timeout: 2600 })
+    toast.warning(`自动排序已取消，还有 ${nextSummary.dangerCount} 项未处理。`, { timeout: 2600 })
     return false
   }
 

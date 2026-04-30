@@ -182,7 +182,7 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     enable_auto_scan: bool = True             # 启动时自动扫描
-    enable_file_size_scan: bool = True         # 扫描时是否检查文件大小
+    enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
     auto_sort_strategy: str = "edge_enhanced_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
@@ -190,6 +190,7 @@ class AppConfig:
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
+    enable_action_prechecks: bool = True       # 是否启用操作前检查功能
     language_packs_follow_targets: bool = False # 是否让语言包贴紧其最后一个前置/依赖目标
     
     # --- 社区设置 ---

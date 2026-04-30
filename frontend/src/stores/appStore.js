@@ -216,6 +216,7 @@ export const useAppStore = defineStore('app', () => {
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
+    enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
 

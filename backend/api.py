@@ -227,6 +227,9 @@ class API:
         self._browser_base_url = ""
         self._browser_import_files: set[str] = set()
         self._db_maintenance_lock = threading.Lock()
+        self._db_background_task_lock = threading.Lock()
+        self._db_background_tasks: dict[str, threading.Event] = {}
+        self._db_maintenance_requested = threading.Event()
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
@@ -859,12 +862,66 @@ class API:
             "pending_actions": [],
             "messages": []
         }
+
+    def _start_tracked_main_db_task(self, task_name: str, target, *args) -> bool:
+        """
+        启动一个会触碰主库的后台线程，并在结束时主动关闭该线程的 SQLite 连接。
+        """
+        if self._db_maintenance_requested.is_set():
+            logger.info("数据库维护中，跳过后台主库任务: %s", task_name)
+            return False
+
+        task_key = f"{task_name}:{uuid.uuid4().hex[:8]}"
+        done_event = threading.Event()
+        with self._db_background_task_lock:
+            self._db_background_tasks[task_key] = done_event
+
+        def runner():
+            try:
+                target(*args)
+            finally:
+                try:
+                    if not db.is_closed():
+                        db.close()
+                except Exception:
+                    logger.debug("后台主库任务关闭线程连接失败: %s", task_key, exc_info=True)
+                done_event.set()
+                with self._db_background_task_lock:
+                    self._db_background_tasks.pop(task_key, None)
+
+        threading.Thread(
+            target=runner,
+            daemon=True,
+            name=f"DbTask-{task_name[:20]}",
+        ).start()
+        return True
+
+    def _wait_for_tracked_main_db_tasks_idle(self, timeout: float = 10.0, poll_interval: float = 0.1) -> bool:
+        """等待所有已登记的主库后台线程结束。"""
+        deadline = time.time() + max(0.1, timeout)
+        while time.time() < deadline:
+            with self._db_background_task_lock:
+                pending = list(self._db_background_tasks.keys())
+            if not pending:
+                return True
+            time.sleep(min(poll_interval, max(0.01, deadline - time.time())))
+
+        with self._db_background_task_lock:
+            pending = list(self._db_background_tasks.keys())
+        if pending:
+            logger.warning("数据库维护前仍有后台主库任务未结束: %s", pending)
+        return not pending
+
+    def _finish_database_maintenance(self):
+        """结束数据库维护窗口，允许后台数据库任务重新启动。"""
+        self._db_maintenance_requested.clear()
     
     def _prepare_database_maintenance(self, timeout: float = 12.0):
         """
         在重置/修复数据库前，先停止会持有 SQLite 连接的后台任务。
         """
         deadline = time.time() + max(1.0, timeout)
+        self._db_maintenance_requested.set()
 
         if self.scanner and self.scanner.is_scanning:
             logger.warning("数据库维护前检测到扫描任务仍在运行，准备中止并等待释放连接")
@@ -882,6 +939,10 @@ class API:
         remaining = max(0.1, deadline - time.time())
         if self.texture_mgr and not self.texture_mgr.wait_for_analysis_idle(timeout=remaining):
             return False, "当前有贴图任务正在运行，请稍后再试。"
+
+        remaining = max(0.1, deadline - time.time())
+        if not self._wait_for_tracked_main_db_tasks_idle(timeout=remaining):
+            return False, "当前仍有后台数据库刷新任务在运行，请稍后再试。"
 
         return True, ""
 
@@ -939,13 +1000,21 @@ class API:
             _cleanup_repair_artifacts(db_path, keep_failed_source=False)
 
             # 先尽量物理删除整库；删除失败时再回退到 clear_db，避免因为偶发占用直接整次失败。
-            _remove_file_with_retry(db_path, retries=5, delay=0.4)
-            _cleanup_database_sidecars(db_path)
+            delete_error = None
+            try:
+                _remove_file_with_retry(db_path, retries=5, delay=0.4)
+                _cleanup_database_sidecars(db_path)
+            except Exception as e:
+                delete_error = e
+                logger.warning("主库物理删除失败，准备回退到逻辑清库: %s", e, exc_info=True)
 
             if os.path.exists(db_path):
                 result = clear_db()
                 if not result:
                     return ApiResponse.error("重置失败，请关闭相关操作后重试。")
+                self._close_database_for_maintenance()
+            elif delete_error:
+                logger.warning("主库已删除，但删除阶段存在告警: %s", delete_error)
 
             self.is_first_db_init = True
             init_ok = init_db(db_path)
@@ -963,6 +1032,7 @@ class API:
             traceback.print_exc()
             return ApiResponse.error(str(e))
         finally:
+            self._finish_database_maintenance()
             self._db_maintenance_lock.release()
 
     @log_api_call
@@ -998,6 +1068,7 @@ class API:
             traceback.print_exc()
             return ApiResponse.error(str(e))
         finally:
+            self._finish_database_maintenance()
             self._db_maintenance_lock.release()
 
     @log_api_call
@@ -1008,6 +1079,7 @@ class API:
         """
         ready, reason = self._prepare_database_maintenance(timeout=15.0)
         if not ready:
+            self._finish_database_maintenance()
             return ApiResponse.warning(reason)
         self._restart_application()
         return ApiResponse.success({"restarting": True}, message="软件即将重启。")
@@ -4159,7 +4231,7 @@ class API:
             }
         # 如果没有缓存，或者缓存已过期，启动后台刷新
         if not is_fresh:
-            threading.Thread(target=self._bg_refresh_collection, args=(coll_id,), daemon=True).start()
+            self._start_tracked_main_db_task("collection-refresh", self._bg_refresh_collection, coll_id)
 
         return ApiResponse.success(initial_data)
 
@@ -4362,8 +4434,13 @@ class API:
             self._github_subs_refresh_running = True
             self._github_subs_refresh_started_at = now
 
-        threading.Thread(target=self._bg_refresh_github_subs, args=(records,), daemon=True).start()
-        return True
+        started = self._start_tracked_main_db_task("github-subs-refresh", self._bg_refresh_github_subs, records)
+        if started:
+            return True
+
+        with self._github_subs_refresh_lock:
+            self._github_subs_refresh_running = False
+        return False
 
     def _bg_refresh_github_subs(self, records: list):
         """
@@ -4503,7 +4580,6 @@ class API:
             cancel_event = self.texture_mgr.register_analysis_task(task_id)
             
             def background_analyze():
-                db.connect(reuse_if_open=True)
                 try:
                     self.texture_mgr.analyze_mods(
                         paths,
@@ -4526,8 +4602,6 @@ class API:
                     logger.error(f"后台贴图分析任务执行失败: {e}", exc_info=True)
                 finally:
                     self.texture_mgr.finish_analysis_task(task_id)
-                    if not db.is_closed():
-                        db.close()
 
             # 2. 扔到守护后台线程去默默跑
             threading.Thread(target=background_analyze, daemon=True).start()

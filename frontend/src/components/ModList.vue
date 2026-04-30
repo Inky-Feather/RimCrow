@@ -183,13 +183,13 @@
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2"
           :data-tour="listId=='active'?'list-quick-actions':null">
-          <button v-if="props.listId === 'active' && (missingInstallSummary.requiredInstallTotal > 0 || missingInstallSummary.optionalInstallTotal > 0 || missingInstallSummary.unknownTotal > 0)" @click="openMissingInstallDialog()"
+<button v-if="props.listId === 'active' && (missingInstallSummary.dangerTotal > 0 || missingInstallSummary.warnTotal > 0 || missingInstallSummary.unknownTotal > 0)" @click="openMissingInstallDialog()"
             v-tooltip="missingInstallTooltip"
             class="px-1 py-1 rounded-md transition-all"
             :class="missingInstallButtonClass" >
             <Download />
           </button>
-          <button v-if="props.listId === 'active' && supplementSummary.count > 0" @click="openSupplementDialog()"
+          <button v-if="props.listId === 'active' && supplementSummary.visibleCount > 0" @click="openSupplementDialog()"
             v-tooltip="supplementTooltip"
             class="px-1 py-1 rounded-md transition-all"
             :class="supplementButtonClass" >
@@ -385,20 +385,24 @@ const searchHelpText = computed(() => {
 })
 
 const missingInstallSummary = ref({
-  requiredInstallTotal: 0,
+  dangerTotal: 0,
+  warnTotal: 0,
+  infoTotal: 0,
   unknownTotal: 0,
-  optionalInstallTotal: 0,
   actionableTotal: 0,
+  visibleEntryTotal: 0,
 })
 let missingInstallSummarySeq = 0
 const refreshMissingInstallSummary = async () => {
   const seq = ++missingInstallSummarySeq
   if (props.listId !== 'active') {
     missingInstallSummary.value = {
-      requiredInstallTotal: 0,
+      dangerTotal: 0,
+      warnTotal: 0,
+      infoTotal: 0,
       unknownTotal: 0,
-      optionalInstallTotal: 0,
       actionableTotal: 0,
+      visibleEntryTotal: 0,
     }
     return
   }
@@ -412,22 +416,22 @@ watch(
   { immediate: true }
 )
 const missingInstallTooltip = computed(() => {
-  if ((missingInstallSummary.value.requiredInstallTotal || 0) + (missingInstallSummary.value.optionalInstallTotal || 0) + (missingInstallSummary.value.unknownTotal || 0) === 0) {
+  if ((missingInstallSummary.value.dangerTotal || 0) + (missingInstallSummary.value.warnTotal || 0) + (missingInstallSummary.value.unknownTotal || 0) === 0) {
     return '当前没有可处理的安装项'
   }
   const lines = []
-  if (missingInstallSummary.value.requiredInstallTotal > 0) {
-    lines.push(`[[直接可装 ${missingInstallSummary.value.requiredInstallTotal} 项]]`)
+  if (missingInstallSummary.value.dangerTotal > 0) {
+    lines.push(`!!需处理 ${missingInstallSummary.value.dangerTotal} 项!!`)
   } else if (missingInstallSummary.value.unknownTotal > 0) {
     lines.push(`!!未知来源 ${missingInstallSummary.value.unknownTotal} 项!!`)
-  } else if (missingInstallSummary.value.optionalInstallTotal > 0) {
-    lines.push(`^^仅可选安装 ${missingInstallSummary.value.optionalInstallTotal} 项^^`)
+  } else if (missingInstallSummary.value.warnTotal > 0) {
+    lines.push(`^^建议处理 ${missingInstallSummary.value.warnTotal} 项^^`)
   }
-  if (missingInstallSummary.value.requiredInstallTotal > 0) {
-    lines.push(`• 直接可装: ${missingInstallSummary.value.requiredInstallTotal}`)
+  if (missingInstallSummary.value.dangerTotal > 0) {
+    lines.push(`• 必要处理: ${missingInstallSummary.value.dangerTotal}`)
   }
-  if (missingInstallSummary.value.optionalInstallTotal > 0) {
-    lines.push(`• 可选安装: ${missingInstallSummary.value.optionalInstallTotal}`)
+  if (missingInstallSummary.value.warnTotal > 0) {
+    lines.push(`• 警告项: ${missingInstallSummary.value.warnTotal}`)
   }
   if (missingInstallSummary.value.unknownTotal > 0) {
     lines.push(`• 未知来源: ${missingInstallSummary.value.unknownTotal}`)
@@ -437,36 +441,57 @@ const missingInstallTooltip = computed(() => {
   return lines.join('\n')
 })
 const missingInstallButtonClass = computed(() => {
-  if (missingInstallSummary.value.requiredInstallTotal > 0 || missingInstallSummary.value.unknownTotal > 0) {
+  if (missingInstallSummary.value.dangerTotal > 0 || missingInstallSummary.value.unknownTotal > 0) {
     return 'bg-accent-danger/80 text-text-main/60 hover:bg-accent-danger hover:text-text-main'
   }
-  const hasOnlyOptionalInstall = missingInstallSummary.value.optionalInstallTotal > 0
-    && missingInstallSummary.value.requiredInstallTotal === 0
+  const hasWarnOnly = missingInstallSummary.value.warnTotal > 0
+    && missingInstallSummary.value.dangerTotal === 0
     && missingInstallSummary.value.unknownTotal === 0
-  if (hasOnlyOptionalInstall) {
+  if (hasWarnOnly) {
     return 'bg-accent-warn/80 text-text-main/60 hover:bg-accent-warn hover:text-text-main'
   }
   return 'bg-accent-primary/80 text-text-main/60 hover:bg-accent-primary hover:text-text-main'
 })
 const supplementSummary = computed(() => {
-  if (props.listId !== 'active') return { groups: [], count: 0, requiredCount: 0, optionalCount: 0, urgency: 'none' }
+  if (props.listId !== 'active') {
+    return { groups: [], count: 0, dangerCount: 0, warnCount: 0, infoCount: 0, visibleCount: 0, urgency: 'none' }
+  }
   return supplementStore.getSuggestionSummary(props.modelValue)
 })
 const supplementButtonClass = computed(() => {
   if (supplementSummary.value.urgency === 'danger') {
     return 'bg-accent-danger/80 text-text-main/60 hover:bg-accent-danger hover:text-text-main'
   }
+  if (supplementSummary.value.urgency === 'warn') {
+    return 'bg-accent-warn/80 text-text-main/60 hover:bg-accent-warn hover:text-text-main'
+  }
   return 'bg-accent-warn/80 text-text-main/60 hover:bg-accent-warn hover:text-text-main'
 })
 const supplementTooltip = computed(() => {
-  if (supplementSummary.value.count === 0) return '当前没有需要启用的建议'
+  if (supplementSummary.value.visibleCount === 0) return '当前没有可补齐的未启用模组'
   const groupLines = supplementSummary.value.groups
+    .filter(group => group.severity !== 'info')
     .map(group => `• ${group.title}: ${group.count} 项`)
     .join('\n')
-  const urgencyLine = supplementSummary.value.requiredCount > 0
-    ? `!!必需项 ${supplementSummary.value.requiredCount} 个!!`
-    : `^^可选项 ${supplementSummary.value.optionalCount} 个^^`
-  return `${urgencyLine}\n发现 ${supplementSummary.value.count} 个启用建议\n${groupLines}\n\n__[[(点击打开启用建议窗口)]]__`
+  const lines = []
+  if (supplementSummary.value.dangerCount > 0) {
+    lines.push(`!!需处理 ${supplementSummary.value.dangerCount} 项!!`)
+  } else if (supplementSummary.value.warnCount > 0) {
+    lines.push(`^^建议处理 ${supplementSummary.value.warnCount} 项^^`)
+  }
+  lines.push(`发现 ${supplementSummary.value.visibleCount} 项可补齐内容`)
+  if (supplementSummary.value.dangerCount > 0) {
+    lines.push(`• 必要项: ${supplementSummary.value.dangerCount}`)
+  }
+  if (supplementSummary.value.warnCount > 0) {
+    lines.push(`• 建议项: ${supplementSummary.value.warnCount}`)
+  }
+  if (groupLines) {
+    lines.push(groupLines)
+  }
+  lines.push('')
+  lines.push('__[[(点击打开补齐窗口)]]__')
+  return lines.join('\n')
 })
 // 提取需要被移除的无效 Mod 列表（这个其实是一一对应的，为了模板整洁也包装一下）
 const invalidModsToRemove = computed(() => {

@@ -1467,8 +1467,9 @@ export const useModStore = defineStore('mods', () => {
             // 缺失或未启用
             const baseMod = allModsMap.value.get(baseTargetId)
             const baseName = baseMod ? displayModName(baseMod) : baseTargetId
+            const hasInstalledBaseMod = hasRealModById(baseTargetId)
             
-            if (!baseMod) {
+            if (!hasInstalledBaseMod) {
               // 主包不在本地，找找备选包在不在本地！
               const localAlt = alts.find(alt => hasRealModById(alt))
               if (localAlt) {

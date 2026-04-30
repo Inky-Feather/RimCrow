@@ -227,7 +227,16 @@
               <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)" 
                 :key="dep.package_id" 
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-highlight hover:bg-accent-highlight/10">
-                <span v-preview="modStore.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
+                <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span v-preview="modStore.takeModById(dep.package_id)" class="min-w-0 flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
+                  <span
+                    v-if="relationVersionInactive(dep)"
+                    v-tooltip="relationVersionTooltip(dep)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-text-dim/18 text-text-dim text-[0.65rem] border border-text-dim/18"
+                  >
+                    未生效
+                  </span>
+                </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(dep.package_id)?.path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
@@ -257,7 +266,16 @@
               <!-- 不兼容项列表 -->
               <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc.package_id" 
                   class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
-                <span v-preview="modStore.takeModById(inc.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc.package_id) }}</span>
+                <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span v-preview="modStore.takeModById(inc.package_id)" class="min-w-0 flex-1 text-gray-300 truncate">{{ displayNameById(inc.package_id) }}</span>
+                  <span
+                    v-if="relationVersionInactive(inc)"
+                    v-tooltip="relationVersionTooltip(inc)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-text-dim/18 text-text-dim text-[0.65rem] border border-text-dim/18"
+                  >
+                    未生效
+                  </span>
+                </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(inc.package_id)?.path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
@@ -283,7 +301,16 @@
               <!-- 前置加载项列表 -->
               <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft" 
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
-                <span v-preview="modStore.takeModById(aft.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft.package_id) }}</span>
+                <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span v-preview="modStore.takeModById(aft.package_id)" class="min-w-0 flex-1 text-gray-300 truncate">{{ displayNameById(aft.package_id) }}</span>
+                  <span
+                    v-if="relationVersionInactive(aft)"
+                    v-tooltip="relationVersionTooltip(aft)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-text-dim/18 text-text-dim text-[0.65rem] border border-text-dim/18"
+                  >
+                    未生效
+                  </span>
+                </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(aft.package_id)?.path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
@@ -309,7 +336,16 @@
               <!-- 后置加载项列表 -->
               <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef" 
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
-                <span v-preview="modStore.takeModById(bef.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef.package_id) }}</span>
+                <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span v-preview="modStore.takeModById(bef.package_id)" class="min-w-0 flex-1 text-gray-300 truncate">{{ displayNameById(bef.package_id) }}</span>
+                  <span
+                    v-if="relationVersionInactive(bef)"
+                    v-tooltip="relationVersionTooltip(bef)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-text-dim/18 text-text-dim text-[0.65rem] border border-text-dim/18"
+                  >
+                    未生效
+                  </span>
+                </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(bef.package_id)?.path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
@@ -709,6 +745,33 @@ const displayNameByMod = (mod) => {
 }
 const displayNameById = (id) => {
   return modStore.displayModName(id);
+}
+
+const getCurrentGameShortVersion = () => (
+  String(profileStore.activeContext?.game_version || '').match(/^\d+\.\d+/)?.[0] || ''
+)
+
+const normalizeRelationVersions = (relation) => (
+  Array.isArray(relation?.version_requirement)
+    ? relation.version_requirement.map(version => String(version || '').trim()).filter(Boolean)
+    : []
+)
+
+const relationVersionInactive = (relation) => {
+  const versions = normalizeRelationVersions(relation)
+  if (versions.length === 0 || versions.includes('all')) return false
+  const currentVersion = getCurrentGameShortVersion()
+  if (!currentVersion) return false
+  return !versions.includes(currentVersion)
+}
+
+const relationVersionTooltip = (relation) => {
+  const versions = normalizeRelationVersions(relation)
+  if (versions.length === 0 || versions.includes('all')) return '该关系当前生效'
+  const currentVersion = getCurrentGameShortVersion()
+  const versionText = versions.join(', ')
+  if (!currentVersion) return `仅在 ${versionText} 生效`
+  return `当前版本 ${currentVersion} 不生效\n仅在 ${versionText} 生效`
 }
 
 // 检查版本是否兼容

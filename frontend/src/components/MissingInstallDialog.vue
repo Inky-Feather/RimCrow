@@ -29,14 +29,17 @@
               <span v-if="hasActionableRows" class="rounded-full border border-accent-primary/25 bg-accent-primary/12 px-3 py-1 font-bold text-accent-primary">
                 {{ missingInstallStore.selectedCount }} / {{ missingInstallStore.totalCount }} 已选
               </span>
-              <span v-if="missingInstallStore.state.summary.requiredInstallTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
-                直接可装 {{ missingInstallStore.state.summary.requiredInstallTotal }}
+              <span v-if="missingInstallStore.state.summary.dangerTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
+                必要 {{ missingInstallStore.state.summary.dangerTotal }}
               </span>
-              <span v-if="missingInstallStore.state.summary.optionalInstallTotal > 0" class="rounded-full border border-accent-tip/25 bg-accent-tip/12 px-3 py-1 font-bold text-accent-tip">
-                可选安装 {{ missingInstallStore.state.summary.optionalInstallTotal }}
+              <span v-if="missingInstallStore.state.summary.warnTotal > 0" class="rounded-full border border-accent-warn/25 bg-accent-warn/12 px-3 py-1 font-bold text-accent-warn">
+                建议 {{ missingInstallStore.state.summary.warnTotal }}
+              </span>
+              <span v-if="missingInstallStore.state.summary.infoTotal > 0" class="rounded-full border border-text-main/10 bg-text-main/6 px-3 py-1 font-bold text-text-dim">
+                可选 {{ missingInstallStore.state.summary.infoTotal }}
               </span>
               <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
-                未知来源 {{ missingInstallStore.state.summary.unknownTotal }}
+                未知 {{ missingInstallStore.state.summary.unknownTotal }}
               </span>
             </div>
             <div v-if="hasActionableRows" class="flex flex-wrap items-center gap-1.5">
@@ -61,8 +64,8 @@
                 v-if="isUnknownOnlyMode"
                 class="rounded-2xl border border-text-main/6 bg-text-main/[0.03] px-4 py-4"
               >
-                <h4 class="text-sm font-black tracking-wide text-text-main">当前只有未知来源项目</h4>
-                <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim/82">这些项目暂时找不到可用来源。</p>
+                <h4 class="text-sm font-black tracking-wide text-text-main">只有未知项</h4>
+                <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim/82">这些项目暂时无法直接处理。</p>
               </section>
               <section
                 v-if="hasUnknownItems"
@@ -71,12 +74,12 @@
                 <div class="flex flex-wrap items-start justify-between gap-2 border-b border-accent-danger/12 px-4 py-3">
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-1.5">
-                      <h4 class="text-sm font-black tracking-wide text-text-main">未知来源</h4>
+                      <h4 class="text-sm font-black tracking-wide text-text-main">未知项</h4>
                       <span class="rounded-full border border-accent-danger/20 bg-accent-danger/12 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger">
                         {{ missingInstallStore.state.unknownItems.length }} 项
                       </span>
                     </div>
-                    <p class="mt-1 text-[0.625rem] leading-4 text-text-dim/74">这些项目暂时找不到可用来源。</p>
+                    <p class="mt-1 text-[0.625rem] leading-4 text-text-dim/74">这些项目暂时找不到可用来源或依赖目标。</p>
                   </div>
                 </div>
 
@@ -105,7 +108,19 @@
                         >
                           可清理
                         </span>
+                        <span
+                          v-if="item.unknownDependencyCount > 0"
+                          class="rounded-full border border-accent-danger/20 bg-accent-danger/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger"
+                        >
+                          未知依赖 {{ item.unknownDependencyCount }}
+                        </span>
                       </div>
+                      <p
+                        v-if="item.detailLines?.length"
+                        class="mt-1 text-[0.625rem] leading-4 text-text-dim/72"
+                      >
+                        {{ item.canCleanup ? '无效项' : '未知依赖' }}：{{ item.detailLines.join('、') }}
+                      </p>
                     </div>
                   </article>
                 </div>
@@ -121,6 +136,12 @@
                       <h4 class="text-sm font-black tracking-wide text-text-main">{{ group.title }}</h4>
                       <span class="rounded-full border border-text-main/10 bg-text-main/6 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
                         {{ group.rows.length }} 项
+                      </span>
+                      <span
+                        v-if="group.key === 'missing_with_installed_replacement'"
+                        class="rounded-full border border-accent-primary/20 bg-accent-primary/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-primary"
+                      >
+                        点击订阅或下载时会自动切换
                       </span>
                     </div>
                     <p v-if="group.description" class="mt-1 text-[0.625rem] leading-4 text-text-dim/74">{{ group.description }}</p>
@@ -169,6 +190,12 @@
                         </span>
                       </div>
                       <div v-if="row.choiceOptions?.length > 1" class="mt-2 space-y-2">
+                        <p
+                          v-if="row.groupKey === 'missing_with_installed_replacement'"
+                          class="text-[0.625rem] leading-4 text-accent-primary/88"
+                        >
+                          选中已安装替代后，点击订阅或下载时会自动替换当前缺失项。
+                        </p>
                         <div
                           v-for="choice in row.choiceOptions"
                           :key="`${row.id}:${choice.id}`"
@@ -249,6 +276,20 @@
               {{ missingInstallStore.state.cleanupText }}
             </button>
             <button
+              v-if="missingInstallStore.state.disableRelatedText"
+              class="rounded-lg bg-accent-warn px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(245,158,11,0.28)] transition-all hover:brightness-105 active:scale-95"
+              @click="missingInstallStore.disableRelatedOwners()"
+            >
+              {{ missingInstallStore.state.disableRelatedText }}
+            </button>
+            <button
+              v-if="missingInstallStore.state.continueText"
+              class="rounded-lg bg-accent-danger px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(239,68,68,0.28)] transition-all hover:brightness-105 active:scale-95"
+              @click="missingInstallStore.continueCurrentAction()"
+            >
+              {{ missingInstallStore.state.continueText }}
+            </button>
+            <button
               v-if="missingInstallStore.state.summary.actionableTotal > 0"
               class="rounded-lg bg-accent-primary px-5 py-2 text-[0.6875rem] font-black text-black shadow-[0_0.625rem_1.875rem_rgba(6,182,212,0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
               :disabled="missingInstallStore.selectedCount === 0"
@@ -291,7 +332,7 @@ const versionBadgeClass = (versionInfo = {}) => {
 }
 
 const sourceLabel = (source = null) => {
-  if (!source) return '未知来源'
+  if (!source) return '未知'
   if (source.kind === 'workshop') {
     return source.workshopId || 'Workshop'
   }

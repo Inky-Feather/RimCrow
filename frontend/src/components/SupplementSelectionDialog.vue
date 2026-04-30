@@ -31,16 +31,22 @@
                 {{ supplementStore.selectedCount }} / {{ supplementStore.totalCount }} 已选
               </span>
               <span
-                v-if="supplementStore.state.summary.requiredCount > 0"
+                v-if="supplementStore.state.summary.dangerCount > 0"
                 class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger"
               >
-                {{ supplementStore.state.summary.requiredCount }} 项必需
+                {{ supplementStore.state.summary.dangerCount }} 项必要
               </span>
               <span
-                v-if="supplementStore.state.summary.optionalCount > 0"
+                v-if="supplementStore.state.summary.warnCount > 0"
                 class="rounded-full border border-accent-warn/25 bg-accent-warn/12 px-3 py-1 font-bold text-accent-warn"
               >
-                {{ supplementStore.state.summary.optionalCount }} 项可选
+                {{ supplementStore.state.summary.warnCount }} 项建议
+              </span>
+              <span
+                v-if="supplementStore.state.summary.infoCount > 0"
+                class="rounded-full border border-text-main/10 bg-text-main/6 px-3 py-1 font-bold text-text-dim"
+              >
+                {{ supplementStore.state.summary.infoCount }} 项可选
               </span>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
@@ -48,13 +54,13 @@
                 class="rounded-lg border border-text-main/10 bg-text-main/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-text-main/10 hover:text-text-main"
                 @click="supplementStore.selectAll()"
               >
-                全选建议
+                全选
               </button>
               <button
                 class="rounded-lg border border-accent-danger/18 bg-accent-danger/10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-accent-danger transition-all hover:bg-accent-danger/16"
                 @click="supplementStore.selectRequiredOnly()"
               >
-                仅选必需
+                仅选必要
               </button>
               <button
                 class="rounded-lg border border-text-main/10 bg-text-main/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-text-main/10 hover:text-text-main"
@@ -78,11 +84,9 @@
                       <h4 class="text-sm font-black tracking-wide text-text-main">{{ group.title }}</h4>
                       <span
                         class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black uppercase tracking-wider"
-                        :class="group.severity === 'required'
-                          ? 'border-accent-danger/25 bg-accent-danger/12 text-accent-danger'
-                          : 'border-accent-warn/25 bg-accent-warn/12 text-accent-warn'"
+                        :class="severityClass(group.severity)"
                       >
-                        {{ group.severity === 'required' ? '必需' : '可选' }}
+                        {{ severityLabel(group.severity) }}
                       </span>
                       <span class="rounded-full border border-text-main/10 bg-text-main/6 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
                         {{ group.rows.length }} 项
@@ -126,8 +130,8 @@
                             @change="supplementStore.chooseRootOption(row.id, '')"
                           >
                           <div class="min-w-0 flex-1">
-                            <div class="text-[0.75rem] font-bold text-text-main">保持当前序列</div>
-                            <p class="mt-0.5 text-[0.625rem] leading-4 text-text-dim/70">不补充此候选项。</p>
+                            <div class="text-[0.75rem] font-bold text-text-main">暂不启用</div>
+                            <p class="mt-0.5 text-[0.625rem] leading-4 text-text-dim/70">保持当前状态。</p>
                           </div>
                         </label>
 
@@ -240,15 +244,19 @@ import { useSupplementStore } from '../stores/supplementStore'
 
 const supplementStore = useSupplementStore()
 
-const severityLabel = (severity = 'optional') => (
-  supplementStore.severityMeta[severity]?.label || '建议'
+const severityLabel = (severity = 'info') => (
+  supplementStore.severityMeta[severity]?.label || '可选'
 )
 
-const severityClass = (severity = 'optional') => (
-  severity === 'required'
-    ? 'border-accent-danger/30 bg-accent-danger/12 text-accent-danger'
-    : 'border-accent-warn/25 bg-accent-warn/12 text-accent-warn'
-)
+const severityClass = (severity = 'info') => {
+  if (severity === 'danger') {
+    return 'border-accent-danger/30 bg-accent-danger/12 text-accent-danger'
+  }
+  if (severity === 'warn') {
+    return 'border-accent-warn/25 bg-accent-warn/12 text-accent-warn'
+  }
+  return 'border-text-main/10 bg-text-main/6 text-text-dim'
+}
 
 const versionClass = (tone = 'muted') => {
   if (tone === 'success') return 'border-accent-success/25 bg-accent-success/12 text-accent-success'
@@ -257,9 +265,11 @@ const versionClass = (tone = 'muted') => {
 }
 
 const rowContainerClass = (row) => (
-  row?.severity === 'required'
+  row?.severity === 'danger'
     ? 'border-accent-danger/18'
-    : 'border-accent-warn/18'
+    : row?.severity === 'warn'
+      ? 'border-accent-warn/18'
+      : 'border-text-main/8'
 )
 </script>
 

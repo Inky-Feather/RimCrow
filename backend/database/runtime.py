@@ -145,10 +145,15 @@ def close_db():
     try:
         db.execute_sql('PRAGMA wal_checkpoint(TRUNCATE);')
         db.execute_sql('PRAGMA journal_mode=DELETE;')
-        db.close()
-        logger.info("数据库已安全关闭并清理临时文件")
     except Exception as e:
-        logger.error(f"关闭数据库时发生异常: {e}", exc_info=True)
+        logger.warning(f"关闭数据库前执行 checkpoint/journal_mode 失败，将继续强制断开连接: {e}", exc_info=True)
+    finally:
+        try:
+            if not db.is_closed():
+                db.close()
+            logger.info("数据库已安全关闭并清理临时文件")
+        except Exception as close_error:
+            logger.error(f"强制关闭数据库连接失败: {close_error}", exc_info=True)
 
 
 def clear_db():
