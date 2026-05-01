@@ -1,11 +1,21 @@
 # backend/_version.py
-__version__ = "0.19.22"  # 主版本.次版本.补丁
+__version__ = "0.19.23"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.19.23",
+        "date": "2026-04-30",
+        "changes": [
+            { "type": "feature", "text": "新增静默模式日志查看功能" },
+            { "type": "feature", "text": "扩展系统设置项，支持配置自动进入静默模式及设定默认显示页面" },
+            { "type": "optimize", "text": "完善数据库关闭与物理删除保障机制，增加强制断开连接及逻辑清库回退方案" },
+            { "type": "optimize", "text": "重构关键操作的前置检查体系，引入风险等级分级提示并优化模组状态标识" }
+        ]
+    },
     {
         "version": "0.19.22",
         "date": "2026-04-29",
