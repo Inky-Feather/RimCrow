@@ -56,7 +56,7 @@ export const useSearchStore = defineStore('search', () => {
       type: FIELD_TYPES.STRING, 
       suggest: true, 
       label: '标记颜色',
-      label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || '无',
+      label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || color || '无',
       color_getter: (color) => color || '#ffffff',
     },
     store: { 

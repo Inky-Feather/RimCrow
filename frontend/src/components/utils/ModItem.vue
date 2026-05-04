@@ -381,7 +381,12 @@ const handleClick = (e) => {
 // 删除选中项Mod
 const deleteModFiles = async () => {
   const path_hashes = modStore.selectedMods.map(m => m.path_hash)
-  modStore.deleteMods(path_hashes)
+  const selectedIds = modStore.selectedIds
+  const res = await modStore.deleteMods(path_hashes, false)
+  if(res) {
+    modStore.selectMods([])
+    modStore.removeIdsOnAllList(selectedIds)
+  }
 }
 // 批量生成别名备注
 const generateAliasNotes = async () => {
@@ -395,6 +400,7 @@ const unsubscribeWorkshopIds = async (delete_file = false) => {
   // 只选择包含workshop_id的项目
   const path_hashes = [];
   const workshop_ids = [];
+  const selectedIds = modStore.selectedIds
   // 遍历数组，同时收集两个字段
   modStore.selectedMods.forEach(m => {
     // 只选择包含 workshop_id 的项目
@@ -407,7 +413,11 @@ const unsubscribeWorkshopIds = async (delete_file = false) => {
   if(check) {
     const res = await appStore.unsubscribeWorkshopIds(workshop_ids)
     if (res && delete_file) {
-      modStore.deleteMods(path_hashes)
+      const deleteRes = await modStore.deleteMods(path_hashes, false)
+      if(deleteRes) {
+        modStore.selectMods([])
+        modStore.removeIdsOnAllList(selectedIds)
+      }
     }
   }
 }

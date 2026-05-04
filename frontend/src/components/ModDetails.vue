@@ -1052,7 +1052,7 @@ const translateModInfo = async () => {
 :deep(.vc-color-wrap.round) {
   width: 1rem !important;
   height: 1rem !important;
-  border: none !important;
+  border: 2px solid #ffffff !important;
   margin: 0 !important;
   padding: 0 !important;
   transition: all 0.15s ease;

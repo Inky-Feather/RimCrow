@@ -18,7 +18,7 @@ import {
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
-
+  // 检查两个值是否相等
   const arePlainValuesEqual = (left, right) => {
     if (left === right) return true
     if (Array.isArray(left) || Array.isArray(right)) {
@@ -36,7 +36,7 @@ export const useModStore = defineStore('mods', () => {
       Object.prototype.hasOwnProperty.call(right, key) && arePlainValuesEqual(left[key], right[key])
     ))
   }
-
+  // 获取语言包所有者ID
   const getLanguagePackOwnerIds = (mod) => {
     const resolvedOwners = mod?.language_pack_owner_result?.owners || []
     return [...new Set(
@@ -173,6 +173,7 @@ export const useModStore = defineStore('mods', () => {
         .filter(Boolean)
     )]
   }
+  // 创建模组时间快照
   const createModTimeSnapshot = (ids = []) => {
     const snapshot = {}
     normalizeHistoryModIds(ids).forEach(id => {
@@ -185,6 +186,7 @@ export const useModStore = defineStore('mods', () => {
     })
     return snapshot
   }
+  // 创建列表历史记录快照
   const createListHistorySnapshot = (trackedModIds = []) => ({
     activeIds: [...activeIds.value],
     inactiveIds: [...inactiveIds.value],
@@ -194,6 +196,7 @@ export const useModStore = defineStore('mods', () => {
     activeLoadVersionToken: { ...(activeLoadVersionToken.value || {}) },
     modTimes: createModTimeSnapshot(trackedModIds)
   })
+  // 捕获列表历史记录快照
   const captureListHistorySnapshot = (trackedModIds = []) => createListHistorySnapshot(trackedModIds)
   const restoreModTimeSnapshot = (modTimes = {}) => {
     Object.entries(modTimes || {}).forEach(([id, times]) => {
@@ -218,6 +221,7 @@ export const useModStore = defineStore('mods', () => {
     if (left.length !== right.length) return false
     return left.every((item, index) => item === right[index])
   }
+  // 检查列表历史记录快照是否发生变化
   const didListHistorySnapshotChange = (before, after) => {
     if (!before || !after) return false
     if (!isSameArray(before.activeIds, after.activeIds)) return true
@@ -227,6 +231,7 @@ export const useModStore = defineStore('mods', () => {
     if (JSON.stringify(before.activeLoadVersionToken || {}) !== JSON.stringify(after.activeLoadVersionToken || {})) return true
     return (before.activeLoadModifyTime || 0) !== (after.activeLoadModifyTime || 0)
   }
+  // 推送列表历史记录条目
   const pushListHistoryEntry = (entry) => {
     listHistoryUndoStack.value.push(entry)
     if (listHistoryUndoStack.value.length > LIST_HISTORY_LIMIT) {
@@ -234,6 +239,7 @@ export const useModStore = defineStore('mods', () => {
     }
     listHistoryRedoStack.value = []
   }
+  // 记录列表历史记录
   const recordListHistory = ({ before, trackedModIds = [], type = 'list-edit', label = '' } = {}) => {
     if (isApplyingListHistory.value || !before) return false
     const after = createListHistorySnapshot(trackedModIds)
@@ -247,6 +253,7 @@ export const useModStore = defineStore('mods', () => {
     })
     return true
   }
+  // 运行列表历史记录事务
   const runListHistoryTransaction = async (meta = {}, handler) => {
     if (typeof handler !== 'function') return false
     if (isApplyingListHistory.value) {
@@ -258,6 +265,7 @@ export const useModStore = defineStore('mods', () => {
     recordListHistory({ ...meta, before, trackedModIds })
     return result
   }
+  // 恢复列表历史记录
   const restoreListHistorySnapshot = (snapshot) => {
     if (!snapshot) return false
     activeIds.value = [...(snapshot.activeIds || [])]
@@ -270,11 +278,13 @@ export const useModStore = defineStore('mods', () => {
     dataVersion.value++
     return true
   }
+  // 设置活动加载基线
   const setActiveLoadBaseline = (ids = [], modifyTime = 0, versionToken = {}) => {
     savedActiveIds.value = [...(ids || [])]
     activeLoadModifyTime.value = modifyTime || 0
     activeLoadVersionToken.value = { ...(versionToken || {}) }
   }
+  // 撤销列表历史记录
   const undoListHistory = () => {
     const entry = listHistoryUndoStack.value.pop()
     if (!entry) return false
@@ -287,6 +297,7 @@ export const useModStore = defineStore('mods', () => {
       isApplyingListHistory.value = false
     }
   }
+  // 重做列表历史记录
   const redoListHistory = () => {
     const entry = listHistoryRedoStack.value.pop()
     if (!entry) return false
@@ -327,16 +338,19 @@ export const useModStore = defineStore('mods', () => {
     // ghost 项虽然会被塞进 allModsMap，但它们不应该被当成“真实已安装模组”。
     return !!mod && !mod.isMissing && !!mod.path
   }
+  // 检查是否已安装指定 workshop ID
   const hasInstalledWorkshopId = (workshopId = '') => {
     const normalizedWorkshopId = normalizeWorkshopId(workshopId)
     if (!normalizedWorkshopId) return false
     return installedWorkshopIds.value.has(normalizedWorkshopId)
   }
+  // 获取安装源提示
   const getInstallSourceHints = (packageId = '') => {
     const normalizedPackageId = normalizePackageId(packageId)
     if (!normalizedPackageId) return []
     return installSourceHints.value.get(normalizedPackageId) || []
   }
+  // 获取首选安装源提示
   const getPreferredInstallSourceHint = (packageId = '') => getInstallSourceHints(packageId)[0] || null
   const applyInstallSourceHintToMod = (mod = null, packageId = '') => {
     const normalizedPackageId = normalizePackageId(packageId || mod?.package_id)
@@ -349,6 +363,7 @@ export const useModStore = defineStore('mods', () => {
       mod.url = sourceHint.url
     }
   }
+  // 合并安装源提示
   const mergeInstallSourceHintsFromMods = (mods = [], sourceOrigin = 'import') => {
     const nextMap = new Map(installSourceHints.value)
     let changed = false
@@ -407,10 +422,12 @@ export const useModStore = defineStore('mods', () => {
     }
     return changed
   }
+  // 清除所有安装源提示
   const clearInstallSourceHints = () => {
     installSourceHints.value = new Map()
     dataVersion.value++
   }
+  // 清除指定来源的安装源提示
   const clearInstallSourceHintsByOrigin = (sourceOrigin = 'import') => {
     const normalizedOrigin = String(sourceOrigin || '').trim()
     if (!normalizedOrigin) return false
@@ -977,6 +994,7 @@ export const useModStore = defineStore('mods', () => {
       appStore.isLoading = false;
     }
   }
+  // 批量禁用选中项Mod
   const disableMods = async (path_hashs, disabled = true) => {
     if (!path_hashs || path_hashs.length === 0) return;
     if(disabled) {
@@ -996,7 +1014,7 @@ export const useModStore = defineStore('mods', () => {
     appStore.isLoading = false;
   }
   // 批量删除Mod文件及数据记录
-  const deleteMods = async (path_hashes) => {
+  const deleteMods = async (path_hashes, scanMods = true) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
     const decision = await confirmStore.confirmDeleteAction(
@@ -1008,7 +1026,7 @@ export const useModStore = defineStore('mods', () => {
     );
     if(!decision?.confirmed) return
     const res = await window.pywebview.api.mods_delete(path_hashes, !!decision.force)
-    scanMods()
+    if(scanMods) await scanMods()
     if (checkResult(res, "批量删除Mod")) {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${res.data.success_count} 个Mod`)
       // 刷新Mod列表
