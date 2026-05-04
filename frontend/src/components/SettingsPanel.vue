@@ -256,7 +256,6 @@
               <!-- 外部依赖 -->
               <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">外部依赖
-                  
                   <button @click="resetToDefaultExternalPaths" v-tooltip="'将外部依赖相关路径重置为默认值'" class="px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
                     重置为默认路径
                   </button>
@@ -270,9 +269,9 @@
                       </button>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
-                      <CommonPathInput class="col-span-2" label="SteamCMD 目录" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" :description="'管理器下载和更新工坊模组使用的 SteamCMD 目录。'" />
-                      <CommonPathInput class="col-span-2" label="ripgrep 目录" v-model="formData.ripgrep_path" @browse="handleBrowse('ripgrep_path')" @blur="checkPath('ripgrep_path', formData.ripgrep_path)" :check="formData.check_info?.ripgrep_path" :description="'文件内容搜索优先使用的 ripgrep 工具目录，应选择包含 rg.exe 的文件夹。'" />
-                      <CommonPathInput class="col-span-2" label="贴图工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, 'texture_tools_path')" @blur="checkPath('texture_tools_path', formData.texture_opt.texture_tools_path)" :check="formData.check_info?.texture_tools_path" :description="'贴图优化使用的 todds 工具目录，应选择包含 todds.exe 的文件夹。'" />
+                      <CommonPathInput class="col-span-2" label="模组下载工具目录" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" :description="'管理器下载和更新工坊模组使用的 SteamCMD 目录，应选择包含 steamcmd.exe 的文件夹。'" />
+                      <CommonPathInput class="col-span-2" label="文本搜索工具目录" v-model="formData.ripgrep_path" @browse="handleBrowse('ripgrep_path')" @blur="checkPath('ripgrep_path', formData.ripgrep_path)" :check="formData.check_info?.ripgrep_path" :description="'文件内容搜索优先使用的 ripgrep 工具目录，应选择包含 rg.exe 的文件夹。'" />
+                      <CommonPathInput class="col-span-2" label="贴图优化工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, 'texture_tools_path')" @blur="checkPath('texture_tools_path', formData.texture_opt.texture_tools_path)" :check="formData.check_info?.texture_tools_path" :description="'贴图优化使用的 todds 工具目录，应选择包含 todds.exe 的文件夹。'" />
                       <CommonSwitch class="col-span-1" label="自动检查外部工具" v-model="formData.enable_auto_tool_check" description="按设定间隔检查 SteamCMD、todds 等外部工具是否缺失或未就绪。" />
                       <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.tool_check_interval_days" :step="1" :min="1" :max="365" />
                     </div>
@@ -496,14 +495,12 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button
-                          @click="handleImportDataBundle"
+                        <button @click="handleImportDataBundle"
                           class="px-3 py-1.5 rounded-lg bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-xs font-bold transition-all"
                         >
                           直接导入
                         </button>
-                        <button
-                          @click="openDataBundleModal"
+                        <button @click="openDataBundleModal"
                           class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-black text-xs font-black shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all"
                         >
                           导出软件数据
@@ -515,16 +512,12 @@
                     <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
                     <p class="text-xs text-accent-danger/60 leading-relaxed">修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。</p>
                     <div class="grid grid-cols-2 gap-3">
-                      <button
-                        @click="handleRepair"
-                        :disabled="appStore.isLoading"
+                      <button @click="handleRepair" :disabled="appStore.isLoading"
                         class="w-full py-2 bg-accent-warn/10 hover:bg-accent-warn text-accent-warn hover:text-text-main border border-accent-warn/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         强制修复本地数据库
                       </button>
-                      <button
-                        @click="handleReset"
-                        :disabled="appStore.isLoading"
+                      <button @click="handleReset" :disabled="appStore.isLoading"
                         class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         立即重置本地数据库
@@ -553,8 +546,7 @@
 
   <Teleport to="body">
     <transition name="panel-fade">
-      <div
-        v-if="showDataBundleModal && appStore.uiState.showSettingsPanel"
+      <div v-if="showDataBundleModal && appStore.uiState.showSettingsPanel"
         class="fixed inset-0 z-[120] flex items-center justify-center bg-bg-deep/70 backdrop-blur-md"
         @click.self="closeDataBundleModal"
       >
@@ -569,10 +561,8 @@
                 勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。
               </p>
             </div>
-            <button
-              @click="closeDataBundleModal"
-              class="shrink-0 flex items-center justify-center size-9 rounded-full bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-text-dim hover:text-text-main transition-all"
-              aria-label="关闭导出面板"
+            <button class="shrink-0 flex items-center justify-center size-9 rounded-full bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-text-dim hover:text-text-main transition-all"
+              aria-label="关闭导出面板" @click="closeDataBundleModal"
             >
               <X class="size-4" />
             </button>
@@ -580,38 +570,24 @@
 
           <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
             <div class="grid grid-cols-3 gap-3">
-              <label
-                v-for="module in bundleModuleDefs"
-                :key="module.key"
-                class="rounded-xl border px-3 py-2.5 transition-all"
+              <label v-for="module in bundleModuleDefs" :key="module.key" class="rounded-xl border px-3 py-2.5 transition-all"
                 :class="dataBundleModuleSelection[module.key] ? 'border-accent-primary/40 bg-accent-primary/10' : 'border-text-main/10 bg-black/20 hover:border-text-main/20'"
               >
                 <div class="flex items-center gap-2">
-                  <input
-                    :checked="!!dataBundleModuleSelection[module.key]"
-                    type="checkbox"
-                    class="accent-accent-primary"
+                  <input :checked="!!dataBundleModuleSelection[module.key]" type="checkbox" class="accent-accent-primary"
                     @change="toggleDataBundleModule(module.key, $event.target.checked)"
                   >
                   <span class="text-sm font-bold text-text-main">{{ module.label }}</span>
-                  <button
-                    v-if="buildBundleModuleTooltip(module)"
-                    type="button"
+                  <button v-if="buildBundleModuleTooltip(module)" type="button" v-tooltip="buildBundleModuleTooltip(module)" @click.prevent
                     class="ml-auto size-5 rounded-full border border-text-main/10 text-[11px] font-bold text-text-dim hover:text-text-main hover:border-text-main/20 transition-all"
-                    v-tooltip="buildBundleModuleTooltip(module)"
-                    @click.prevent
-                  >
-                    ?
+                  >?
                   </button>
                 </div>
               </label>
             </div>
 
             <div v-if="isBundleProfileModuleSelected" class="mt-4 rounded-2xl bg-black/18">
-              <button
-                @click="showBundleProfilePicker = !showBundleProfilePicker"
-                class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
-              >
+              <button @click="showBundleProfilePicker = !showBundleProfilePicker" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" >
                 <div>
                   <div class="text-sm font-bold text-text-main">环境数据</div>
                   <div class="text-xs text-text-dim/75 mt-1">选择要打包的环境。</div>
@@ -623,20 +599,11 @@
 
               <div v-if="showBundleProfilePicker" class="px-4 pb-4">
                 <div class="grid grid-cols-2 gap-3">
-                  <label
-                    v-for="profile in bundleProfileDefs"
-                    :key="profile.id"
-                    class="rounded-xl border p-3 transition-all"
+                  <label v-for="profile in bundleProfileDefs" :key="profile.id" class="rounded-xl border p-3 transition-all"
                     :class="profile.has_user_data ? 'border-text-main/10 bg-black/15 hover:border-text-main/20' : 'border-accent-danger/20 bg-accent-danger/8 opacity-60'"
                   >
                     <div class="flex items-start gap-3">
-                      <input
-                        v-model="dataBundleProfileSelection"
-                        :disabled="!profile.has_user_data"
-                        :value="profile.id"
-                        type="checkbox"
-                        class="mt-0.5 accent-accent-primary"
-                      >
+                      <input v-model="dataBundleProfileSelection" :disabled="!profile.has_user_data" :value="profile.id" type="checkbox" class="mt-0.5 accent-accent-primary"  >
                       <div class="min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                           <span class="text-sm font-bold text-text-main">{{ profile.name }}</span>
@@ -660,8 +627,7 @@
               <span class="text-accent-tip font-bold">路径绑定、敏感信息、当前激活环境 ID</span> 不会导出。
               <span class="text-accent-warn font-bold">默认环境</span> 导入时会先询问覆盖还是另存。
             </p>
-            <button
-              @click="handleExportDataBundle"
+            <button @click="handleExportDataBundle"
               class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-black text-sm font-black shadow-[0_0_18px_rgba(6,182,212,0.24)] transition-all"
             >
               导出当前选择

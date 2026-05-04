@@ -300,16 +300,13 @@ class AIManager:
         try:
             parsed = json.loads(tool_result)
             if isinstance(parsed, dict):
-                if name == "get_log_context" and not parsed.get("error"):
-                    result_count = len(parsed.get("results", []) or [])
-                    if result_count > 1:
-                        return f"已批量返回 {result_count} 条候选日志上下文"
-                    block_span = parsed.get("provided_context") or parsed.get("context_provided", "目标日志内容")
-                    return f"已返回 {block_span} 的日志内容"
                 if parsed.get("error"):
                     return f"执行失败：{parsed['error']}"
                 if name == "get_log_context":
-                    return f"已返回 {parsed.get('provided_context', '指定范围')} 的日志内容"
+                    line_no = parsed.get("representative_line")
+                    if line_no:
+                        return f"已返回代表行 #{line_no} 的日志上下文"
+                    return "已返回目标日志的上下文"
                 if name == "get_active_mod_list":
                     return f"已返回 {parsed.get('total_active', 0)} 个激活模组"
                 if name == "search_mods":
@@ -319,7 +316,7 @@ class AIManager:
                     return f"已返回模组元数据：{data.get('name') or parsed.get('package_id') or '未知模组'}"
                 if name == "get_mod_rules":
                     return "已返回模组规则信息"
-                if name == "get_mod_user_context":
+                if name == "get_mod_user_data":
                     return "已返回模组的用户备注/标签/分组信息"
                 if name == "get_group_mods":
                     return f"已返回 {len(parsed.get('matched_groups', []) or [])} 个匹配分组"
@@ -809,41 +806,24 @@ class AIManager:
 
 
     # =========================================================================
-    #  Prompt 管理委托层
-    #  这里保留旧方法名，避免 API 层和历史调用链继续改动
+    # Prompt 管理委托层
     # =========================================================================
-    
-    def _get_default_prompts(self):
-        """兼容旧调用：返回默认 Prompt。"""
-        return self.prompt_manager.get_defaults()
-    
-    def _ensure_default_prompts(self):
-        """兼容旧调用：确保默认 Prompt 文件存在。"""
-        self.prompt_manager.ensure_default_prompts()
 
-    def _save_prompts_to_disk(self, data):
-        """兼容旧调用：把 Prompt 数据写回磁盘。"""
-        self.prompt_manager.save_all(data)
-    
-    def reload_prompts(self):
-        """兼容旧调用：重新从磁盘加载 Prompt。"""
-        return self.prompt_manager.reload()
-    
     def save_prompt(self, prompt_id: str, prompt_data: dict):
-        """兼容旧调用：新增或更新单个 Prompt。"""
+        """新增或更新单个 Prompt。"""
         return self.prompt_manager.save_prompt(prompt_id, prompt_data)
 
     def delete_prompt(self, prompt_id: str):
-        """兼容旧调用：删除单个 Prompt。"""
+        """删除单个 Prompt。"""
         return self.prompt_manager.delete_prompt(prompt_id)
 
     def reset_system_prompts(self):
-        """兼容旧调用：重置系统 Prompt。"""
+        """重置系统 Prompt。"""
         return self.prompt_manager.reset_system_prompts()
 
     @property
     def prompts(self) -> dict:
-        """对外暴露当前 Prompt 字典，兼容 API 层直接读取。"""
+        """对外暴露当前 Prompt 字典。"""
         return self.prompt_manager.prompts
 
     # =========================================================================

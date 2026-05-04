@@ -39,8 +39,6 @@ class RipgrepStatus:
             "current_version": self.current_version,
             "message": self.message,
         }
-
-
 def resolve_ripgrep_root(raw_path: str | None = None) -> Path:
     configured = str(raw_path or "").strip()
     if configured:
@@ -53,6 +51,15 @@ def resolve_ripgrep_root(raw_path: str | None = None) -> Path:
 
 
 def resolve_ripgrep_executable(raw_path: str | None = None, *, include_fallback: bool = True) -> Path | None:
+    executable, _ = resolve_ripgrep_executable_with_version(raw_path, include_fallback=include_fallback)
+    return executable
+
+
+def resolve_ripgrep_executable_with_version(
+    raw_path: str | None = None,
+    *,
+    include_fallback: bool = True,
+) -> tuple[Path | None, str]:
     candidates: list[Path] = []
     seen: set[str] = set()
 
@@ -111,9 +118,9 @@ def resolve_ripgrep_executable(raw_path: str | None = None, *, include_fallback:
             resolved_files.append(nested_path.resolve())
 
     if not resolved_files:
-        return None
+        return None, ""
 
-    runnable_candidates: list[tuple[tuple[int, ...], int, Path]] = []
+    runnable_candidates: list[tuple[tuple[int, ...], int, Path, str]] = []
     for path in resolved_files:
         version = probe_ripgrep_version(path)
         if not version:
@@ -122,16 +129,27 @@ def resolve_ripgrep_executable(raw_path: str | None = None, *, include_fallback:
             _version_key(version),
             int(path.stat().st_mtime_ns) if path.exists() else 0,
             path,
+            version,
         ))
 
     if runnable_candidates:
-        return max(runnable_candidates, key=lambda item: (item[0], item[1], -len(str(item[2]))))[2]
-    return None
+        _, _, executable, version = max(
+            runnable_candidates,
+            key=lambda item: (item[0], item[1], -len(str(item[2]))),
+        )
+        return executable, version
+    return None, ""
 
 
 def probe_ripgrep_version(executable: str | Path | None) -> str:
     if not executable:
         return ""
+    creationflags = 0
+    startupinfo = None
+    if platform.system() == "Windows" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     try:
         result = subprocess.run(
             [str(executable), "--version"],
@@ -141,6 +159,8 @@ def probe_ripgrep_version(executable: str | Path | None) -> str:
             errors="replace",
             timeout=5,
             check=False,
+            creationflags=creationflags,
+            startupinfo=startupinfo,
         )
     except Exception:
         return ""
@@ -158,7 +178,7 @@ def _version_key(version: str) -> tuple[int, ...]:
 
 
 def get_ripgrep_status(raw_path: str | None = None, *, strict: bool = False) -> RipgrepStatus:
-    executable = resolve_ripgrep_executable(raw_path, include_fallback=not strict)
+    executable, version = resolve_ripgrep_executable_with_version(raw_path, include_fallback=not strict)
     if not executable:
         return RipgrepStatus(
             available=False,
@@ -167,7 +187,6 @@ def get_ripgrep_status(raw_path: str | None = None, *, strict: bool = False) -> 
             message="未找到 ripgrep，可在外部工具检查中下载安装。",
         )
 
-    version = probe_ripgrep_version(executable)
     return RipgrepStatus(
         available=True,
         resolved_path=str(executable),
