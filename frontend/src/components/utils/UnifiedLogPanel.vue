@@ -208,6 +208,7 @@ import { useToast } from 'vue-toastification'
 import { useAppStore } from '../../stores/appStore'
 import { formatFileSize } from '../../utils/format'
 import { Copy } from 'lucide-vue-next'
+import { checkResult } from '../../utils/common'
 
 const props = defineProps({
   sourceType: { type: String, default: 'app' } // 'app' or 'game'
@@ -438,7 +439,7 @@ async function fetchFiles() {
   if (!window.pywebview) return;
   try {
     const res = await window.pywebview.api.get_log_files(String(props.sourceType));
-    if (appStore.checkResult(res, '获取日志文件', false)) {
+    if (checkResult(res, '获取日志文件', false)) {
       files.value = res.data || [];
     }
   } catch (e) {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { toast, checkResult } from '../utils/common'
 import { useAppStore } from './appStore'
 import { useGroupStore } from './groupStore'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../utils/constants'
@@ -16,10 +16,8 @@ import {
 } from '../utils/modIdentity'
 
 export const useModStore = defineStore('mods', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
-  const checkResult = appStore.checkResult
 
   const arePlainValuesEqual = (left, right) => {
     if (left === right) return true
@@ -838,7 +836,7 @@ export const useModStore = defineStore('mods', () => {
         console.error("启动扫描失败:", res)
         toast.error(`扫描启动失败: \n${res.message}`)
         return
-      } 
+      }
     } catch (e) {
       console.error("扫描请求异常:", e)
       toast.error(`扫描请求异常: \n${e.message}`)
@@ -973,7 +971,7 @@ export const useModStore = defineStore('mods', () => {
     if (confirm) {
       appStore.isLoading = true;
       const res = await window.pywebview.api.localize_workshop_mods(workshopIds, store);
-      if (appStore.checkResult(res, '模组本地化')) {
+      if (checkResult(res, '模组本地化')) {
         // 成功后会在完成时刷新数据
       }
       appStore.isLoading = false;
@@ -991,7 +989,7 @@ export const useModStore = defineStore('mods', () => {
     }
     appStore.isLoading = true;
     const res = await window.pywebview.api.mods_disable(path_hashs, disabled);
-    if (appStore.checkResult(res, '禁用选中的模组')) {
+    if (checkResult(res, '禁用选中的模组')) {
       // 成功后会在完成时刷新数据
       scanMods()
     }

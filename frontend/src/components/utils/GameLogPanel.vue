@@ -132,6 +132,7 @@ import { useToast } from 'vue-toastification'
 import { parseUnityRichText } from '../../utils/text'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useAppStore } from '../../stores/appStore'
+import { checkResult } from '../../utils/common'
 
 const appStroe = useAppStore()
 const menuStore = useContextMenuStore()
@@ -149,7 +150,7 @@ const filteredLogs = computed(() => {
 const init = async () => {
   if (!window.pywebview) return
   const res = await window.pywebview.api.get_game_log_files()
-  if (appStroe.checkResult(res, '获取游戏日志文件列表')) {
+  if (checkResult(res, '获取游戏日志文件列表')) {
     files.value = res.data
     if (files.value.length > 0) {
       selectedFile.value = files.value[0].name

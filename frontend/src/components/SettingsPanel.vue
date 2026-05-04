@@ -676,7 +676,7 @@
 <script setup>
 import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle, X } from 'lucide-vue-next'
-import { createToastInterface } from 'vue-toastification'
+import { deepClone, toast } from '../utils/common'
 import { flashComponent, shakeComponent } from '../utils/domEffects'
 import { VueDraggable } from 'vue-draggable-plus'
 import { color } from 'motion-v'
@@ -696,7 +696,6 @@ import { useConfirmStore } from '../stores/confirmStore'
 import { useProfileStore } from '../stores/profileStore'
 import { useGuideStore } from '../stores/guideStore'
 
-const toast = createToastInterface()
 const appStore = useAppStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
@@ -839,7 +838,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)，将全局 Settings 和 当前 Context 捏合成一个对象给表单用
       // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
       try {
-        formData.value = {
+      formData.value = {
           ...structuredClone(appStore.settings),
           ...structuredClone(profileStore.activeContext) // 覆盖/合并上下文路径
         }
@@ -849,7 +848,8 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
           ...JSON.parse(JSON.stringify(profileStore.activeContext))
         }
       }
-      if (profileStore.activeContext && profileStore.activeContext.is_healthy === false) {
+      // 如果当前上下文不健康，自动检测路径
+      if (!profileStore.activeContext || profileStore.activeContext.is_healthy === false) {
         await autoDetect()
       }
       // 检测所有路径是否有效

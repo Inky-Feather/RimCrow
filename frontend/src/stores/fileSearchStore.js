@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { createToastInterface } from 'vue-toastification'
+import { checkResult, toast } from '../utils/common'
 
 import { useAppStore } from './appStore'
 import { useTaskStore } from './taskStore'
@@ -30,7 +30,6 @@ export const FILE_SEARCH_EXCLUDE_OPTIONS = [
 ]
 
 export const useFileSearchStore = defineStore('fileSearch', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const taskStore = useTaskStore()
 
@@ -146,7 +145,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       }
 
       const res = await window.pywebview.api.search_files_start(payload)
-      if (!appStore.checkResult(res, '启动文件搜索')) {
+      if (!checkResult(res, '启动文件搜索')) {
         searchState.status = 'failed'
         searchState.message = res?.message || '启动失败'
         return false

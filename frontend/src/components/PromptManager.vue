@@ -151,6 +151,7 @@ import { TerminalSquare, Plus, Lock, User, TextCursorInput, Info, Bot, Braces, X
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { useToast } from 'vue-toastification'
+import { deepClone } from '../utils/common'
 
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
@@ -183,7 +184,7 @@ const selectPrompt = (id) => {
   currentId.value = id
   formId.value = id
   isNew.value = false
-  currentForm.value = JSON.parse(JSON.stringify(prompts.value[id])) // 深度拷贝
+  currentForm.value = deepClone(prompts.value[id])
 }
 
 // 创建新模板

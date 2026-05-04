@@ -280,7 +280,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css' // 引入酷炫的暗黑代码高亮主题
 import { Copy, LoaderCircle, Square } from 'lucide-vue-next'
-import { checkResult } from '../../utils/feedback'
+import { checkResult } from '../../utils/common'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }, // 控制侧边栏显隐

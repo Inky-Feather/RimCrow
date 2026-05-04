@@ -216,7 +216,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { toast } from '../utils/common'
 import { useOrderStore } from '../stores/orderStore'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
@@ -319,7 +319,6 @@ const appStore = useAppStore()
 const orderStore = useOrderStore()
 const confirmStore = useConfirmStore()
 const profileStore = useProfileStore()
-const toast = createToastInterface()
 const loading = ref(false)
 const showDropOverlay = ref(false)
 const dragDepth = ref(0)

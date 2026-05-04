@@ -2,8 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed } from 'vue'
 import { useAppStore } from './appStore'
-import { checkResult } from '../utils/feedback'
-import { createToastInterface } from 'vue-toastification'
+import { checkResult, toast } from '../utils/common'
 import { useConfirmStore } from './confirmStore'
 import { SOURCE_TYPE_MAP } from '../utils/constants'
 import {
@@ -14,7 +13,6 @@ import {
 } from '../utils/modIdentity'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
   const listenersReady = ref(false)
@@ -759,7 +757,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if(check) {
       appStore.isLoading = true
       const res = await window.pywebview.api.workspace_transfer_mods(path_hashs, target_store, mode)
-      if(appStore.checkResult(res, "库间转移")) {
+      if(checkResult(res, "库间转移")) {
         await appStore.requestModScan()
       }
       appStore.isLoading = false

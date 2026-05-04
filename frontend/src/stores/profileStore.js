@@ -5,12 +5,11 @@ import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
 import { useConfirmStore } from './confirmStore'
-import { createToastInterface } from 'vue-toastification'
+import { toast, checkResult } from '../utils/common'
 import { useOrderStore } from './orderStore'
 
 
 export const useProfileStore = defineStore('profile', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   
   // === State ===
@@ -69,7 +68,7 @@ export const useProfileStore = defineStore('profile', () => {
   const fetchProfiles = async () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.profiles_get()
-    if (appStore.checkResult(res, '获取环境列表')) {
+    if (checkResult(res, '获取环境列表')) {
       profiles.value = res.data
     }
   }
@@ -79,7 +78,7 @@ export const useProfileStore = defineStore('profile', () => {
     isLoading.value = true
     try {
       const res = await window.pywebview.api.profile_create(data, copyCurrentData)
-      if (appStore.checkResult(res, `创建环境 "${data.name}"`,true)) {
+      if (checkResult(res, `创建环境 "${data.name}"`,true)) {
         await fetchProfiles()
         return true
       }
@@ -98,7 +97,7 @@ export const useProfileStore = defineStore('profile', () => {
       const orderStore = useOrderStore()
       await orderStore.saveInactiveOrder();  // 先保存停用列表顺序
       const res = await window.pywebview.api.profile_activate(profileId)
-      if (appStore.checkResult(res, '切换环境')) {
+      if (checkResult(res, '切换环境')) {
         currentProfileId.value = profileId
         // 【关键逻辑】环境切换后，重置并刷新所有数据
         const groupStore = useGroupStore()
@@ -121,7 +120,7 @@ export const useProfileStore = defineStore('profile', () => {
   // 更新环境信息
   const updateProfile = async (profileId, updates) => {
     const res = await window.pywebview.api.profile_update(profileId, updates)
-    if (appStore.checkResult(res, `更新环境 "${profileId}"`, true)) {
+    if (checkResult(res, `更新环境 "${profileId}"`, true)) {
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
         switchProfile(profileId)
@@ -132,7 +131,7 @@ export const useProfileStore = defineStore('profile', () => {
   // 删除环境
   const deleteProfile = async (profileId, force = false) => {
     const res = await window.pywebview.api.profile_delete(profileId, !!force)
-    if (appStore.checkResult(res, '删除环境')) {
+    if (checkResult(res, '删除环境')) {
       await fetchProfiles()
       // 如果删的是当前的，后端会自动切回 default，前端需要同步
       if (profileId === currentProfileId.value) {
@@ -150,7 +149,7 @@ export const useProfileStore = defineStore('profile', () => {
     }
 
     const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
-    if (appStore.checkResult(res, '创建环境桌面快捷方式', true)) {
+    if (checkResult(res, '创建环境桌面快捷方式', true)) {
       return res.data
     }
     return null
@@ -214,13 +213,13 @@ export const useProfileStore = defineStore('profile', () => {
 
       setActiveStep(1)
       const registerRes = await window.pywebview.api.profile_register_steam_shortcut(profile.id)
-      if (!appStore.checkResult(registerRes, '写入 Steam 快捷方式配置')) return null
+      if (!checkResult(registerRes, '写入 Steam 快捷方式配置')) return null
       const logProbe = registerRes?.data?.log_probe || null
       completeStep(1)
 
       setActiveStep(2)
       const steamLaunchRes = await window.pywebview.api.steam_launch_client()
-      if (!appStore.checkResult(steamLaunchRes, '启动 Steam 客户端')) return null
+      if (!checkResult(steamLaunchRes, '启动 Steam 客户端')) return null
       completeStep(2)
 
       setActiveStep(3)
@@ -230,13 +229,13 @@ export const useProfileStore = defineStore('profile', () => {
       if (finalizeRes?.status === 'success') {
         completeStep(3)
         confirmStore.closeSilently()
-        appStore.checkResult(finalizeRes, '创建环境桌面快捷方式', true)
+        checkResult(finalizeRes, '创建环境桌面快捷方式', true)
         return finalizeRes.data
       }
 
       confirmStore.closeSilently()
       if (finalizeRes) {
-        appStore.checkResult(finalizeRes, '创建环境桌面快捷方式')
+        checkResult(finalizeRes, '创建环境桌面快捷方式')
       }
       return null
     } finally {
@@ -247,7 +246,7 @@ export const useProfileStore = defineStore('profile', () => {
   // 扫描孤立配置
   const scanOrphans = async () => {
     const res = await window.pywebview.api.profiles_scan_orphaned()
-    if (appStore.checkResult(res, '扫描待恢复环境')) {
+    if (checkResult(res, '扫描待恢复环境')) {
       orphanedProfiles.value = res.data
     }
   }
@@ -255,7 +254,7 @@ export const useProfileStore = defineStore('profile', () => {
   // 导入孤立配置
   const importOrphan = async (profileData) => {
     const res = await window.pywebview.api.profile_import_orphaned(profileData)
-    if (appStore.checkResult(res, '导入环境')) {
+    if (checkResult(res, '导入环境')) {
       toast.success('环境配置已恢复')
       await fetchProfiles()
       await scanOrphans()

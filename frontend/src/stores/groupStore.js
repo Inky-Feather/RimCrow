@@ -1,12 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { checkResult, toast } from '../utils/common'
 import { useAppStore } from './appStore'
 
 export const useGroupStore = defineStore('groups', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
-  const checkResult = appStore.checkResult
   const normalizeGroup = (group = {}) => ({
     ...group,
     mod_ids: Array.isArray(group?.mod_ids) ? [...group.mod_ids] : []

@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { createToastInterface } from 'vue-toastification'
+import { toast } from '../utils/common'
 import {
   dedupeInstallSources,
   dedupeNormalizedPackageIds,
@@ -68,7 +68,6 @@ const buildChoiceId = (source = {}, fallbackType = 'original') => {
 }
 
 export const useMissingInstallStore = defineStore('missingInstall', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const modStore = useModStore()
   const profileStore = useProfileStore()

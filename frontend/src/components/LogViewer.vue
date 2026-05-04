@@ -113,7 +113,7 @@ import { useAppStore } from '../stores/appStore'
 import { useToast } from 'vue-toastification'
 import UnifiedLogPanel from './utils/UnifiedLogPanel.vue';
 import AiDiagnosticSidebar from './utils/AiDiagnosticSidebar.vue'
-import { checkResult } from '../utils/feedback';
+import { checkResult } from '../utils/common';
 import CommonSwitch from './common/input/CommonSwitch.vue';
 
 

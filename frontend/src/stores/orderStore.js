@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { toast, checkResult } from '../utils/common'
 import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
 import { useConfirmStore } from './confirmStore'
@@ -9,12 +9,10 @@ import { useSupplementStore } from './supplementStore'
 import { normalizeInstallSource } from '../utils/modIdentity'
 
 export const useOrderStore = defineStore('order', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const modStore = useModStore()
   const confirmStore = useConfirmStore()
   const supplementStore = useSupplementStore()
-  const checkResult = appStore.checkResult
   
   // === State ===
   const backups = ref(null)           // 备份文件列表

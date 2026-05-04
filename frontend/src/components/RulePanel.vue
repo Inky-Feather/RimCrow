@@ -433,6 +433,7 @@ import CommonInput from './common/input/CommonInput.vue'
 import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import { IconSteam, MOD_TYPE_MAP } from '../utils/constants'
+import { deepClone } from '../utils/common'
 
 
 
@@ -774,7 +775,7 @@ const createDynamicRule = () => {
 }
 // 编辑动态规则
 const editDynamicRule = (rule) => {
-  editingRule.value = JSON.parse(JSON.stringify(rule)) // Deep clone
+  editingRule.value = deepClone(rule)
   editingRule.value.filters?.forEach(normalizeFilterOperator)
 }
 // 添加检查条件

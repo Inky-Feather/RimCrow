@@ -186,7 +186,7 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { Database, Plus, Trash2, Settings2, Link2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
-import { createToastInterface } from 'vue-toastification'
+import { toast } from '../utils/common'
 import { useProfileStore } from '../stores/profileStore'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
@@ -197,7 +197,6 @@ import CommonTagInput from './common/input/CommonTagInput.vue'
 import { RUN_COMMAND_TAGS } from '../utils/constants'
 import { formatDate } from '../utils/format'
 
-const toast = createToastInterface()
 const profileStore = useProfileStore()
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()

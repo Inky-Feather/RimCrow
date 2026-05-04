@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { toast } from '../utils/common'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
@@ -150,7 +150,6 @@ const sortRows = (rows = []) => (
 )
 
 export const useSupplementStore = defineStore('supplement', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const modStore = useModStore()
   const profileStore = useProfileStore()

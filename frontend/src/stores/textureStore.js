@@ -2,11 +2,10 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAppStore } from './appStore'
-import { createToastInterface } from 'vue-toastification'
+import { toast, checkResult } from '../utils/common'
 import { useTaskStore } from './taskStore'
 
 export const useTextureStore = defineStore('texture', () => {
-  const toast = createToastInterface()
   const appStore = useAppStore()
   const taskStore = useTaskStore()
   let toolStatusRefreshTimer = null
@@ -286,7 +285,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_env_status(appStore.settings.texture_opt)
-      if (appStore.checkResult(res, "检查贴图工具", false)) {
+      if (checkResult(res, "检查贴图工具", false)) {
         toolStatus.value = res.data
       }
     } catch (e) {
@@ -325,7 +324,7 @@ export const useTextureStore = defineStore('texture', () => {
     modsData.value = []
     try {
       const res = await window.pywebview.api.texture_analyze_mods(packageIds, appStore.settings.texture_opt)
-      if (appStore.checkResult(res, "启动贴图分析", false)) {
+      if (checkResult(res, "启动贴图分析", false)) {
         bindTaskId(res.data, 'analyze')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)
@@ -346,7 +345,7 @@ export const useTextureStore = defineStore('texture', () => {
     currentAnalysisTaskId.value = ''
     try {
       const res = await window.pywebview.api.texture_start_task(packageIds, action, appStore.settings.texture_opt)
-      if (appStore.checkResult(res, "启动优化任务", false)) {
+      if (checkResult(res, "启动优化任务", false)) {
         bindTaskId(res.data, 'optimize')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)

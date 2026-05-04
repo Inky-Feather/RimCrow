@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
-import { createToastInterface } from 'vue-toastification'
+import { deepClone, toast, checkResult } from '../utils/common'
 
 // 动态规则支持属性映射
 const DYNAMIC_RULE_PROPS = {
@@ -40,7 +40,6 @@ export const useRuleStore = defineStore('rules', () => {
   const modStore = useModStore()
   const appStore = useAppStore()
 
-  const toast = createToastInterface()
 
   // --- State ---
   const communityModRules = ref({}) // { pkg_id: { loadAfter: ... } }
@@ -74,7 +73,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.rules_get_all()
-      if (appStore.checkResult(res, '获取规则')) {
+      if (checkResult(res, '获取规则')) {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time
         userModRules.value = res.data.user_mod_rules
@@ -154,7 +153,7 @@ export const useRuleStore = defineStore('rules', () => {
     const other = otherModId.toLowerCase()
     // 获取或初始化当前规则对象
     // 注意：需要深拷贝，不能直接改 ref
-    const rule = JSON.parse(JSON.stringify(userModRules.value[pid] || {}))
+    const rule = deepClone(userModRules.value[pid] || {})
     // 初始化子对象
     if (!rule[type]) rule[type] = {}
     // 如果已存在，跳过
@@ -169,7 +168,7 @@ export const useRuleStore = defineStore('rules', () => {
 
     // 发送后端
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!appStore.checkResult(res, '添加用户规则')) {
+    if (!checkResult(res, '添加用户规则')) {
       toast.error(res.message)
       fetchRules() // 回滚
     } else {
@@ -181,7 +180,7 @@ export const useRuleStore = defineStore('rules', () => {
     const pid = targetModId.toLowerCase()
     const other = otherModId.toLowerCase()
     if (!userModRules.value[pid]?.[type]?.[other] === undefined) return
-    const rule = JSON.parse(JSON.stringify(userModRules.value[pid]))
+    const rule = deepClone(userModRules.value[pid])
     delete rule[type][other]
     // 乐观更新
     delete userModRules.value[pid][type][other]
@@ -196,7 +195,7 @@ export const useRuleStore = defineStore('rules', () => {
         return
     }
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!appStore.checkResult(res, '移除用户规则')) fetchRules()
+    if (!checkResult(res, '移除用户规则')) fetchRules()
     modStore.scanMods()
   }
   // 修改单项规则说明
@@ -205,19 +204,19 @@ export const useRuleStore = defineStore('rules', () => {
     const pid = targetModId.toLowerCase()
     const other = otherModId.toLowerCase()
     if (!userModRules.value[pid]?.[type]?.[other] === undefined) return
-    const rule = JSON.parse(JSON.stringify(userModRules.value[pid]))
+    const rule = deepClone(userModRules.value[pid])
     rule[type][other].comment = comment
     // 乐观更新
     userModRules.value[pid][type][other] = rule[type][other]
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!appStore.checkResult(res, '更新用户规则说明')) fetchRules()
+    if (!checkResult(res, '更新用户规则说明')) fetchRules()
     modStore.scanMods()
   }
   // 删除用户单项规则
   const deleteUserModRule = async (id) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_user_mod(id)
-    if (appStore.checkResult(res, '删除用户规则', true)) {
+    if (checkResult(res, '删除用户规则', true)) {
       fetchRules()
       modStore.scanMods()
     }
@@ -273,8 +272,8 @@ export const useRuleStore = defineStore('rules', () => {
     )]
     const normalizedReplace = normalizedOwnerIds.length > 0 && !!replace
 
-    const previousRule = JSON.parse(JSON.stringify(userModRules.value[pid] || {}))
-    const nextRule = JSON.parse(JSON.stringify(previousRule))
+    const previousRule = deepClone(userModRules.value[pid] || {})
+    const nextRule = deepClone(previousRule)
     if (normalizedOwnerIds.length > 0) {
       nextRule.languagePackOwners = {
         owners: normalizedOwnerIds,
@@ -288,7 +287,7 @@ export const useRuleStore = defineStore('rules', () => {
     else delete userModRules.value[pid]
 
     const res = await window.pywebview.api.rule_set_language_pack_owner_override(pid, normalizedOwnerIds, normalizedReplace)
-    if (!appStore.checkResult(res, '设置语言包所属覆盖')) {
+    if (!checkResult(res, '设置语言包所属覆盖')) {
       if (Object.keys(previousRule).length > 0) userModRules.value[pid] = previousRule
       else delete userModRules.value[pid]
       fetchRules()
@@ -302,7 +301,7 @@ export const useRuleStore = defineStore('rules', () => {
   const setAbsolutePosition = async (modId, position, comment = '') => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_set_user_mod_absolute_position(modId, position, comment)
-    if (appStore.checkResult(res, '设置绝对排序位置')) {
+    if (checkResult(res, '设置绝对排序位置')) {
       fetchRules() // 刷新本地数据
       modStore.scanMods() // 触发重新计算
     }
@@ -312,7 +311,7 @@ export const useRuleStore = defineStore('rules', () => {
   const changeRuleSourcePriority = async (rules_sources) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.change_rule_source_priority(rules_sources)
-    if (appStore.checkResult(res, '改变规则优先级', true)) {
+    if (checkResult(res, '改变规则优先级', true)) {
       fetchRules()
       modStore.scanMods()
       return true
@@ -332,7 +331,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     settings.value[type[key]] = enabled
     const res = await window.pywebview.api.rule_global_enable(type[key], enabled)
-    if (!appStore.checkResult(res, '全局规则开关')) fetchRules()
+    if (!checkResult(res, '全局规则开关')) fetchRules()
     if (key === 'workshop_dependencies') {
       fetchRules()
     }
@@ -363,7 +362,7 @@ export const useRuleStore = defineStore('rules', () => {
       settings.value.excluded_workshop_mods = Array.from(excludedSet);
     }
     const res = await window.pywebview.api.rule_toggle_mod(rule_type, pid, excludedSet.has(pid))
-    if (!appStore.checkResult(res, '用户规则开关')) fetchRules()
+    if (!checkResult(res, '用户规则开关')) fetchRules()
   }
 
   // --- 动态规则操作 ---
@@ -373,7 +372,7 @@ export const useRuleStore = defineStore('rules', () => {
     // 乐观更新 UI
     rule.enabled = !rule.enabled
     const res = await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, rule.enabled)
-    if(!appStore.checkResult(res, '切换规则')) {
+    if(!checkResult(res, '切换规则')) {
       fetchRules()
     }
   }
@@ -381,7 +380,7 @@ export const useRuleStore = defineStore('rules', () => {
   const saveDynamicRules = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_update_dynamic(rule)
-    if (appStore.checkResult(res, '保存规则',true)) {
+    if (checkResult(res, '保存规则',true)) {
       fetchRules()
       return true
     }
@@ -390,7 +389,7 @@ export const useRuleStore = defineStore('rules', () => {
   const deleteDynamicRule = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_dynamic(rule.rule_id)
-    if(appStore.checkResult(res, '删除规则', true)) {
+    if(checkResult(res, '删除规则', true)) {
       fetchRules()
     }
   }
@@ -418,14 +417,14 @@ export const useRuleStore = defineStore('rules', () => {
   const handleExport = async () => {
     const ids = userDynamicRules.value.map(r => r.rule_id)
     const res = await window.pywebview.api.rule_export_bundle(ids)
-    if(!appStore.checkResult(res, '导出规则', true)) {
+    if(!checkResult(res, '导出规则', true)) {
       return
     }
   }
   // 导入规则
   const handleImport = async () => {
     const res = await window.pywebview.api.rule_import_bundle()
-    if(appStore.checkResult(res, '导入规则', true)) {
+    if(checkResult(res, '导入规则', true)) {
       if (res.data?.warnings?.length) {
         toast.warning(res.data.warnings.join('\n'), { timeout: 8000 })
       }

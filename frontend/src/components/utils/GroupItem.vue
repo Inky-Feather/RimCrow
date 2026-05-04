@@ -133,7 +133,7 @@ import { ColorPicker } from "vue3-colorpicker";
 import { useModStore } from '../../stores/modStore';
 import { useGroupStore } from '../../stores/groupStore';
 import { useAppStore } from '../../stores/appStore';
-import { createToastInterface } from 'vue-toastification';
+import { toast } from '../../utils/common';
 import { hexToRgbComponents } from '../../utils/color'
 
 const props = defineProps({
@@ -146,7 +146,6 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
-const toast = createToastInterface()
 const modStore = useModStore()
 const appStore = useAppStore()
 const groupStore = useGroupStore()

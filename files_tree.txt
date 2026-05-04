@@ -79,6 +79,14 @@
 │   │   ├──  parser_dlc.py
 │   │   └──  parser_xml.py
 │   │   
+│   ├── ·[text_search]
+│   │   ├──  __init__.py
+│   │   ├──  backends.py
+│   │   ├──  effective_files.py
+│   │   ├──  manager.py
+│   │   ├──  models.py
+│   │   └──  tooling.py
+│   │   
 │   ├── ·[utils]
 │   │   ├──  __init__.py
 │   │   ├──  constants.py
@@ -87,6 +95,7 @@
 │   │   ├──  logger.py
 │   │   ├──  restart.py
 │   │   ├──  shortcuts.py
+│   │   ├──  text_decode.py
 │   │   ├──  tools.py
 │   │   └──  versioning.py
 │   │   
@@ -121,6 +130,7 @@
 │   │   │   │   ├──  AiDiagnosticSidebar.vue
 │   │   │   │   ├──  AppLogPanel.vue
 │   │   │   │   ├──  DependencyGraph.vue
+│   │   │   │   ├──  FileSearchPreviewEditor.vue
 │   │   │   │   ├──  FocusTabs.vue
 │   │   │   │   ├──  GameLogPanel.vue
 │   │   │   │   ├──  GroupItem.vue
@@ -143,6 +153,7 @@
 │   │   │   ├──  BackupList.vue
 │   │   │   ├──  ConflictResolver.vue
 │   │   │   ├──  DebugPanel.vue
+│   │   │   ├──  FileSearchWorkbench.vue
 │   │   │   ├──  GroupList.vue
 │   │   │   ├──  GuideCenter.vue
 │   │   │   ├──  ListDiffView.vue
@@ -186,6 +197,7 @@
 │   │   │   ├──  appStore.js
 │   │   │   ├──  confirmStore.js
 │   │   │   ├──  contextMenuStore.js
+│   │   │   ├──  fileSearchStore.js
 │   │   │   ├──  groupStore.js
 │   │   │   ├──  guideStore.js
 │   │   │   ├──  hoverStore.js
@@ -201,13 +213,14 @@
 │   │   │   └──  workspaceStore.js
 │   │   │   
 │   │   ├── ·[utils]
-│   │   │   ├──  colorDeal.js
+│   │   │   ├──  color.js
+│   │   │   ├──  common.js
 │   │   │   ├──  constants.js
+│   │   │   ├──  domEffects.js
+│   │   │   ├──  format.js
 │   │   │   ├──  modIdentity.js
 │   │   │   ├──  packageScope.js
-│   │   │   ├──  tools.js
-│   │   │   ├──  uiHelper.js
-│   │   │   ├──  unityTextParser.js
+│   │   │   ├──  text.js
 │   │   │   └──  versioning.js
 │   │   │   
 │   │   ├──  App.vue
@@ -231,6 +244,7 @@
 │   ├──  __init__.py
 │   ├──  analyze_language_packs.py
 │   ├──  test_download_manager.py
+│   ├──  test_file_search.py
 │   ├──  test_github_manager.py
 │   ├──  test_import_check.py
 │   ├──  test_language_pack_ownership.py
@@ -246,12 +260,6 @@
 │   
 ├── ·[toolmods]
 ├── ·[tools]
-│   ├── ·[steam_agent]
-│   ├── ·[steamcmd]
-│   └── ·[texture_tools]
-│   
-│       └──  todds.exe
-│       
 ├──  .gitignore
 ├──  .python-version
 ├──  files_tree.txt

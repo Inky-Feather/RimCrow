@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
-import { createToastInterface } from 'vue-toastification'
+import { checkResult, deepClone, toast } from '../utils/common'
 import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
 import { useOrderStore } from './orderStore'
@@ -15,10 +15,8 @@ import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
 import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIdentity'
-import { checkResult as sharedCheckResult } from '../utils/feedback'
 
 export const useAppStore = defineStore('app', () => {
-  const toast = createToastInterface()
   const taskStore = useTaskStore()
   
   // === State ===
@@ -152,10 +150,10 @@ export const useAppStore = defineStore('app', () => {
       show_ai_assistant: true,  // 是否显示 AI 助手入口
       show_ai_assistant_fab: true,  // 是否显示 AI 助手悬浮球
       double_click_active_mod: true,  // 是否双击启用/停用 Mod
-      main_layout: JSON.parse(JSON.stringify(DEFAULT_MAIN_LAYOUT)),  // 主界面布局配置
+      main_layout: deepClone(DEFAULT_MAIN_LAYOUT),  // 主界面布局配置
 
       show_icons_cloud: true,  // 是否显示动态图标云
-      mod_details_layout: JSON.parse(JSON.stringify(DEFAULT_DETAILS_LAYOUT)),   // Mod 详情面板布局配置
+      mod_details_layout: deepClone(DEFAULT_DETAILS_LAYOUT),   // Mod 详情面板布局配置
 
       show_dependency_graph: true,  // 是否显示依赖关系图
       enable_active_section_collapse: false,  // 是否启用启用列表标题分组折叠（仅 active 列表生效）
@@ -359,10 +357,6 @@ export const useAppStore = defineStore('app', () => {
       else window.addEventListener('pywebviewready', () => resolve(), { once: true })
     })
   }
-  // 统一复用 utils/feedback.js 中的通用实现，避免 appStore 再维护一份重复逻辑。
-  const checkResult = (res, workname, showSuccess = false) => (
-    sharedCheckResult(res, workname, showSuccess, { debugMode: settings.value.debug_mode })
-  )
 
   const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
     if (!enabled) return false
@@ -429,9 +423,7 @@ export const useAppStore = defineStore('app', () => {
         }
         const orderStore = useOrderStore()
         const resumeSnapshot = orderStore.captureRuntimeRefreshSnapshot()
-        await refreshData(false, {
-          historyLabel: '游戏退出后刷新磁盘状态',
-        })
+        await refreshData(false, '游戏退出后刷新磁盘状态')
         await orderStore.presentRuntimeRefreshDiff(resumeSnapshot)
       } catch (e) {
         console.error("恢复挂起界面失败:", e)
@@ -667,7 +659,12 @@ export const useAppStore = defineStore('app', () => {
       setupEventListeners()
 
       // 获取初始数据 (这里包含 settings, version 等)
-      await refreshData(true)
+      const refreshed = await refreshData(true)
+      if (!refreshed) {
+        // toast.error('初始化失败，无法获取初始数据。')
+        isLoading.value = false
+        return
+      }
       let scanForce = false
       // 只有当版本真的发生过变动，且有待处理任务时才触发
       if (upgradeContext.value.version_changed) {
@@ -711,8 +708,13 @@ export const useAppStore = defineStore('app', () => {
         const modStore = useModStore()
         modStore.scanMods(null, scanForce)
       }
-      // 非软件更新类检查改为“仅提示不自动执行”，并分别遵循各自的时间间隔。
-      await runScheduledMaintenanceChecks()
+      // 非软件更新类检查略微延后，避免和首屏提示撞在一起。
+      window.setTimeout(() => {
+        if (uiState.showSettingsPanel) return
+        runScheduledMaintenanceChecks().catch((e) => {
+          console.error('启动后的维护检查失败:', e)
+        })
+      }, 3000)
       
     } catch (e) {
       console.error("初始化失败:", e)
@@ -722,68 +724,65 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 刷新数据 (初始化核心)
-  const refreshData = async (isInit = false, options = {}) => {
-    if (!window.pywebview) return
+  const refreshData = async (isInit = false, historyLabel = '刷新磁盘状态') => {
+    if (!window.pywebview) return false
     isLoading.value = true
     try {
       // 调用后端获取全量数据
       const res = await window.pywebview.api.get_initial_data()
-      if (checkResult(res, '刷新数据')) {
-        // 覆盖更新 Settings，以后端属性为主 (仅初始化时，避免覆盖用户未保存的修改)
-        if (isInit && res.data.settings) {
-          settings.value = res.data.settings
-          settings.value.asset_port = res.data.asset_port || 0
-          upgradeContext.value = res.data.upgrade_context;
-        }else{
-          Object.assign(settings.value, res.data.settings)
-        }
-        // console.log('allmods', res.data.is_first_db_init , res.data.context_healthy , !res.data.all_mods||res.data.all_mods?.length==0)
-        if (res.data.is_first_db_init && res.data.context_healthy && (!res.data.all_mods||res.data.all_mods?.length==0)) {
-          toast.warning("数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。",{position: "top-center",timeout: 10000})
-        }
-        // 更新软件信息
-        appVersion.value = res.data.app_version || 'Unknown'  // 版本
-        buildMode.value = res.data.build_mode || ''           // 构建模式
-        const profileStore = useProfileStore()
-        profileStore.fetchProfiles()
-        if (res.data.active_context) {
-          profileStore.activeContext = res.data.active_context
-          // 触发健康哨兵拦截 (阻止初始化继续)
-          // 检查路径 (主要路径无效则打开设置)
-          if (!profileStore.activeContext.is_healthy) {
-            toast.warning("未配置游戏路径，请先配置游戏路径。",{position: "top-center",timeout: 5000})
-            uiState.showSettingsPanel = true
-            // profileStore.checkHealthSentinel()
-            return // 提早退出，不加载 Mod 列表
-          }
-        }
-        // 更新 Groups (防止分组内的 Mod 被删了但分组里还有 ID)
-        const groupStore = useGroupStore()
-        groupStore.setGroups(res.data.groups || [])
-        // 更新 Active列表 (防止外部修改 Active列表 导致的状态不一致)
-        const modStore = useModStore()
-        const previousSnapshot = !isInit
-          ? modStore.captureListHistorySnapshot()
-          : null
-        modStore.setMods(res.data, { resetHistory: !!isInit })
-        if (previousSnapshot) {
-          modStore.recordListHistory({
-            before: previousSnapshot,
-            type: options.historyType || 'refresh-data',
-            label: options.historyLabel || '刷新磁盘状态',
-          })
-        }
-        // 刷新动态规则
-        const ruleStore = useRuleStore()
-        ruleStore.fetchRules()
-        const workspaceStore = useWorkspaceStore()
-        workspaceStore.initData()
-        const orderStore = useOrderStore()
-        // 备份列表优先保持用户当前正在查看的环境视图；无选择时再回退到当前环境。
-        orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+      if (!checkResult(res, '刷新数据')) return false
+
+      if (isInit && res.data.settings) {
+        settings.value = res.data.settings
+        settings.value.asset_port = res.data.asset_port || 0
+        upgradeContext.value = res.data.upgrade_context
+      } else {
+        Object.assign(settings.value, res.data.settings)
       }
+      if (res.data.is_first_db_init && res.data.context_healthy && (!res.data.all_mods || res.data.all_mods?.length === 0)) {
+        toast.warning("数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。",{position: "top-center",timeout: 10000})
+      }
+      // 更新软件信息
+      appVersion.value = res.data.app_version || 'Unknown'  // 版本
+      buildMode.value = res.data.build_mode || ''           // 构建模式
+      const profileStore = useProfileStore()
+      profileStore.fetchProfiles()
+      if (res.data.active_context) {
+        profileStore.activeContext = res.data.active_context
+        // 触发健康哨兵拦截 (阻止初始化继续)
+        // 检查路径 (主要路径无效则打开设置)
+        if (!profileStore.activeContext.is_healthy) {
+          toast.warning("未配置游戏路径，请先配置游戏路径。",{position: "top-center",timeout: 5000})
+          uiState.showSettingsPanel = true
+          return false // 提早退出，不加载 Mod 列表
+        }
+      }
+      // 更新 Groups (防止分组内的 Mod 被删了但分组里还有 ID)
+      const groupStore = useGroupStore()
+      groupStore.setGroups(res.data.groups || [])
+      // 更新 Active列表 (防止外部修改 Active列表 导致的状态不一致)
+      const modStore = useModStore()
+      const previousSnapshot = isInit ? null : modStore.captureListHistorySnapshot()
+      modStore.setMods(res.data, { resetHistory: !!isInit })
+      if (previousSnapshot) {
+        modStore.recordListHistory({
+          before: previousSnapshot,
+          type: 'refresh-data',
+          label: historyLabel,
+        })
+      }
+      // 刷新动态规则
+      const ruleStore = useRuleStore()
+      ruleStore.fetchRules()
+      const workspaceStore = useWorkspaceStore()
+      workspaceStore.initData()
+      const orderStore = useOrderStore()
+      // 备份列表优先保持用户当前正在查看的环境视图；无选择时再回退到当前环境。
+      orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+      return true
     } catch (e) {
       toast.error(`刷新数据失败: \n${e.message}`)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -1139,10 +1138,10 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 自动检测路径
-  const autoDetectPaths = async (updateStore=true) => {
+  const autoDetectPaths = async (updateStore = false) => {
     if(!window.pywebview) return
     const res = await window.pywebview.api.auto_detect_paths(false)
-    if (checkResult(res, "自动检测路径",true) && res.data.paths) {
+    if (checkResult(res, "自动检测路径", true) && res.data.paths) {
        // 更新本地 setting store
       if(updateStore) {
         Object.assign(settings.value, res.data.paths)

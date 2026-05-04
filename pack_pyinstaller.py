@@ -108,8 +108,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
     version_file_path = None
     hook_dir_path = None
     try:
-        if not os.path.exists(main_file):
-            raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
+        if not os.path.exists(main_file): raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
         
         # 1. 生成版本信息文件
         print("正在生成版本信息...")
@@ -156,21 +155,16 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             main_file  # 主程序文件
         ]
         cmd = pyinstaller_args
-
         if icon_path and os.path.exists(icon_path):
             cmd.extend(["-i", icon_path])
-        
         if splash_path and os.path.exists(splash_path):
             cmd.extend(["--splash", splash_path])
-        
         if version_file_path:
             cmd.extend(["--version-file", version_file_path])
-
-        print(f"执行命令: {' '.join(cmd)}")
         
+        print(f"执行命令: {' '.join(cmd)}")
         # 3. 执行打包
         result = subprocess.run(cmd, text=True, encoding='utf-8') # 显式指定编码防止乱码
-        
         if result.returncode == 0:
             print("\n" + "="*30)
             print("★ 打包成功！")
@@ -185,22 +179,23 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
     finally:
         # 清理临时版本文件
         if version_file_path and os.path.exists(version_file_path):
-            try:
-                os.remove(version_file_path)
-            except:
-                pass
+            try: os.remove(version_file_path)
+            except: pass
         if hook_dir_path and os.path.exists(hook_dir_path):
-            try:
-                shutil.rmtree(hook_dir_path)
-            except:
-                pass
+            try: shutil.rmtree(hook_dir_path)
+            except: pass
+
+def buildFrontend(start_path: str = 'frontend'):
+    """
+    构建前端项目
+    """
+    subprocess.run(["npm", "run", "build"], cwd=start_path, check=True, text=True, encoding='utf-8', shell=True)
 
 # --- 优化后的目录树生成 ---
 
 def get_gitignore_spec(root_path: str):
     """读取并解析 .gitignore 文件"""
-    if not HAS_PATHSPEC:
-        return None
+    if not HAS_PATHSPEC: return None
     
     gitignore_path = os.path.join(root_path, '.gitignore')
     if os.path.exists(gitignore_path):
@@ -208,12 +203,7 @@ def get_gitignore_spec(root_path: str):
             return pathspec.PathSpec.from_lines('gitwildmatch', f)
     return None
 
-def filestree(
-    start_path: str = '.', 
-    exclude_dirs: List[str] = [], 
-    max_depth: int = -1,
-    use_gitignore: bool = True
-) -> str:
+def filestree( start_path: str = '.', exclude_dirs: List[str] = [], max_depth: int = -1, use_gitignore: bool = True ) -> str:
     """
     生成目录树结构字符串（重构版：递归逻辑更清晰，支持 .gitignore）
     
@@ -223,67 +213,45 @@ def filestree(
         max_depth: 最大深度，-1 表示无限
         use_gitignore: 是否读取 .gitignore 进行过滤
     """
-    if exclude_dirs is None:
-        exclude_dirs = []
-    
+    if exclude_dirs is None: exclude_dirs = []
     output_lines = []
-    
     # 准备 gitignore spec
     spec = get_gitignore_spec(start_path) if use_gitignore else None
-    
     # 获取根目录名
     root_name = os.path.basename(os.path.abspath(start_path))
     output_lines.append(f"·[{root_name}]")
-
     def _tree_body(current_path: str, prefix: str = "", depth: int = 0):
-        if max_depth != -1 and depth >= max_depth:
-            return
-
-        try:
-            # 获取当前目录下的所有项目
-            entries = os.listdir(current_path)
-        except PermissionError:
-            return
+        if max_depth != -1 and depth >= max_depth: return
+        # 获取当前目录下的所有项目
+        try: entries = os.listdir(current_path)
+        except PermissionError: return
 
         # 过滤和排序
         # 1. 基础过滤
         items = []
         for entry in entries:
             # 排除特定目录名
-            if entry in exclude_dirs:
-                continue
-            
+            if entry in exclude_dirs: continue
             full_path = os.path.join(current_path, entry)
             rel_path = os.path.relpath(full_path, start_path)
-            
             # 2. .gitignore 过滤
             # 注意：pathspec 需要 unix 风格的路径分隔符
-            if spec and spec.match_file(rel_path.replace(os.sep, '/')):
-                continue
-                
+            if spec and spec.match_file(rel_path.replace(os.sep, '/')): continue
             items.append(entry)
 
         # 3. 排序：文件夹在前，然后按字母顺序
-        items.sort(key=lambda x: (
-            not os.path.isdir(os.path.join(current_path, x)), 
-            x.lower()
-        ))
-
+        items.sort(key=lambda x: (not os.path.isdir(os.path.join(current_path, x)), x.lower()))
         count = len(items)
         for index, entry in enumerate(items):
             full_path = os.path.join(current_path, entry)
             is_last = (index == count - 1)
             is_dir = os.path.isdir(full_path)
-
             # 构建连接符
             connector = "└── " if is_last else "├── "
-            
             # 构建显示名称
             display_name = f"·[{entry}]" if is_dir else f" {entry}"
-            
             output_lines.append(f"{prefix}{connector}{display_name}")
             if is_last: output_lines.append(f"{prefix}")
-            
             if is_dir:
                 # 递归下一级
                 # 如果当前是最后一个，子级的前缀是空格；否则是竖线
@@ -304,6 +272,9 @@ if __name__ == "__main__":
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
+    # 0. 构建前端项目
+    buildFrontend(start_path='frontend')
+    
     # 1. 执行打包
     print(f'=== 开始打包 {APP_NAME} v{APP_VERSION} ===')
     packApplication(main_file=APP_MAIN, icon_path=ICON_PATH, name=APP_NAME, splash_path=SPLASH_PATH, version=APP_VERSION, company=APP_COMPANY)
