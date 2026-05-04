@@ -308,18 +308,18 @@ class DataBundleManager:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path, "r") as bundle:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
-                included_modules = [
-                    item.get("key")
+                included_modules: list[str] = [
+                    str(item.get("key"))
                     for item in manifest.get("modules", [])
-                    if isinstance(item, dict) and item.get("key")
+                    if isinstance(item, dict) and str(item.get("key") or "").strip()
                 ]
-                active_modules = included_modules if not selected_modules else [
+                active_modules: list[str] = included_modules if not selected_modules else [
                     module_key for module_key in included_modules if module_key in selected_modules
                 ]
                 if not active_modules:
                     raise ValueError("导入包中没有可处理的数据模块")
 
-                module_payloads = {
+                module_payloads: dict[str, Any] = {
                     module_key: self._read_json_from_zip(bundle, f"modules/{module_key}.json", {})
                     for module_key in active_modules
                     if module_key != "profiles"

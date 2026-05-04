@@ -83,6 +83,7 @@ from backend.load_order.language_pack_ownership import resolve_language_pack_own
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import run_app_upgrade_migrations
+from backend.text_search.manager import FileSearchManager
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
 
@@ -258,6 +259,7 @@ class API:
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
+        self.file_search_mgr = FileSearchManager(self)
         self.maintenance_mgr = MaintenanceManager(
             self.steam_mgr,
             self.texture_mgr,
@@ -1956,7 +1958,7 @@ class API:
             msg=''
             profile = self.profile_mgr.get_profile(profile_id)
             extra_args = self.profile_mgr.get_launch_args_only(profile_id)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
             steam_path_valid = bool(
                 settings.config.steam_path
                 and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
@@ -2264,7 +2266,7 @@ class API:
                 msg = f"{check_install.get('msg', '')}\n{check_data.get('msg', '')}".strip()
                 return ApiResponse.error(msg or "环境路径无效，无法创建快捷方式")
 
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
             default_profile = self.profile_mgr.get_profile('default')
             same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
             steam_path_valid = bool(
@@ -2340,7 +2342,7 @@ class API:
                 return ApiResponse.error("未指定 Profile ID")
 
             profile = self.profile_mgr.get_profile(profile_id)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
             if not prefer_steam_launch:
                 return ApiResponse.error("当前环境未启用 Steam 启动，无需注册 Steam 快捷方式")
 
@@ -2490,6 +2492,25 @@ class API:
         except Exception as e:
             logger.error(f"打开路径时出错: {e}", exc_info=True)
             return ApiResponse.error(f"打开路径时出错: {e}")
+
+    @log_api_call
+    def path_open_file(self, path: str):
+        try:
+            file_mgr.open_file(path)
+            logger.info(f"打开文件: {path}")
+            return ApiResponse.success()
+        except Exception as e:
+            logger.error(f"打开文件时出错: {e}", exc_info=True)
+            return ApiResponse.error(f"打开文件时出错: {e}")
+
+    @log_api_call
+    def path_read_text_file(self, path: str, max_bytes: int = 2 * 1024 * 1024):
+        try:
+            data = file_mgr.read_text_file(path, max_bytes=max_bytes)
+            return ApiResponse.success(data)
+        except Exception as e:
+            logger.error(f"读取文本文件时出错: {e}", exc_info=True)
+            return ApiResponse.error(f"读取文本文件时出错: {e}")
     
     @log_api_call
     def path_delete(self, path: str, force: bool = False):
@@ -2561,6 +2582,17 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
+
+    @log_api_call
+    def search_files_start(self, payload: dict):
+        if not self.file_search_mgr:
+            return ApiResponse.error("文件搜索管理器未初始化")
+        try:
+            task_id = self.file_search_mgr.start_search(payload)
+            return ApiResponse.success({"task_id": task_id}, message="搜索任务已启动")
+        except Exception as e:
+            logger.error(f"启动文件搜索失败: {e}", exc_info=True)
+            return ApiResponse.error(f"启动文件搜索失败: {e}")
     
     @log_api_call
     def localize_workshop_mods(self, mod_ids: List[str], store: str = 'workshop'):
@@ -3018,6 +3050,12 @@ class API:
                 return ApiResponse.success(res, message="已请求取消贴图任务")
             except Exception as e:
                 return ApiResponse.error(str(e))
+
+        if normalized_type == "file-search":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.file_search_mgr.cancel_task(normalized_task_id) if self.file_search_mgr else False
+            return ApiResponse.success(message="已请求取消文件搜索任务") if ok else ApiResponse.error("当前没有可取消的文件搜索任务")
 
         if normalized_type == "ai-batch":
             if not normalized_task_id:
@@ -4573,6 +4611,19 @@ class API:
             if res.get("already_ready"):
                 return ApiResponse.success(res, message="工具已经就绪")
             return ApiResponse.success(res, message="已启动工具下载任务")
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ripgrep_prepare_download(self):
+        """触发自动下载 ripgrep。"""
+        try:
+            from backend.text_search.tooling import prepare_ripgrep_download
+
+            res = prepare_ripgrep_download(self.download_mgr, getattr(settings.config, "ripgrep_path", ""))
+            if res.get("already_ready"):
+                return ApiResponse.success(res, message="工具已经就绪")
+            return ApiResponse.success(res, message="已启动 ripgrep 下载任务")
         except Exception as e:
             return ApiResponse.error(str(e))
 

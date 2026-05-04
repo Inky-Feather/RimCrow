@@ -19,6 +19,7 @@ from backend.managers.mgr_game import GameManager
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
+from backend.utils.text_decode import decode_text_bytes
 from backend.utils.tools import delete_fs_path
 from backend.utils.shortcuts import (
     create_shortcut,
@@ -158,6 +159,25 @@ class FileManager:
     # 本地化复制属于后台线程任务，这里集中维护取消令牌，供 API 全局任务栏复用。
     _localize_lock = threading.Lock()
     _localize_cancel_events: Dict[str, threading.Event] = {}
+    @staticmethod
+    def _open_with_system(target_path: str, action_label: str):
+        """
+        统一走系统默认的打开行为。
+
+        “打开文件”和“打开所在目录”语义不同，但底层平台分发逻辑完全一致，
+        这里集中封装，避免后续平台兼容修补时两边漂移。
+        """
+        system_name = platform.system()
+        try:
+            if system_name == 'Windows':
+                os.startfile(target_path)
+            elif system_name == 'Darwin':
+                subprocess.call(['open', target_path])
+            else:
+                subprocess.call(['xdg-open', target_path])
+            return None
+        except Exception as e:
+            raise Exception(f"{action_label}时出错: {e}")
     
     def __init__(self):
         # 1. 确保存储目录存在
@@ -274,17 +294,62 @@ class FileManager:
         if os.path.isfile(path):
             path = os.path.dirname(path)
 
-        system_name = platform.system()
-        try:
-            if system_name == 'Windows':
-                os.startfile(path)
-            elif system_name == 'Darwin':
-                subprocess.call(['open', path])
-            else:
-                subprocess.call(['xdg-open', path])
-            return None
-        except Exception as e:
-            raise Exception(f"打开路径时出错: {e}")
+        return FileManager._open_with_system(path, "打开路径")
+
+    @staticmethod
+    def open_file(path):
+        """
+        使用系统默认程序直接打开文件。
+
+        这里单独保留一个入口，而不是复用 open_in_explorer，
+        是为了让“打开文件”和“打开所在目录”在前后端语义上彻底分离。
+        """
+        if not path or not os.path.isfile(path):
+            raise FileNotFoundError(f"文件不存在：{path}")
+
+        return FileManager._open_with_system(path, "打开文件")
+
+    @staticmethod
+    def read_text_file(path: str, max_bytes: int = 2 * 1024 * 1024) -> dict[str, Any]:
+        """
+        只读文本文件内容，供前端文件阅读器使用。
+
+        限制最大读取体积，避免把超大文件一次性推给前端。
+        """
+        if not path or not os.path.isfile(path):
+            raise FileNotFoundError(f"文件不存在：{path}")
+
+        file_path = Path(path).resolve()
+        file_size = file_path.stat().st_size
+        normalized_max_bytes = max(0, int(max_bytes or 0)) if max_bytes else None
+        read_size = min(normalized_max_bytes, file_size) if normalized_max_bytes is not None else file_size
+        if read_size <= 0:
+            return {
+                "path": str(file_path),
+                "encoding": "utf-8",
+                "truncated": False,
+                "file_size": file_size,
+                "content": "",
+            }
+
+        # 只多读 1 个字节用于判断是否截断，避免大文件被整块载入内存。
+        probe_size = read_size + 1 if normalized_max_bytes is not None and read_size < file_size else read_size
+        with file_path.open("rb") as handle:
+            raw = handle.read(probe_size)
+
+        truncated = len(raw) > read_size
+        if truncated:
+            raw = raw[:read_size]
+
+        content, used_encoding = decode_text_bytes(raw)
+
+        return {
+            "path": str(file_path),
+            "encoding": used_encoding,
+            "truncated": truncated,
+            "file_size": file_size,
+            "content": content,
+        }
 
     @staticmethod
     def delete_path(path, force: bool = False):
@@ -543,7 +608,7 @@ class FileManager:
     def build_profile_shortcut_spec(
         profile: Any,
         extra_args: list[str] | None = None,
-        prefer_steam_launch: bool = False,
+        prefer_steam_launch: bool = True,
         steam_exe_path: str | None = None,
         destination_dir: str | None = None,
         steam_app_id: str = "294100",
@@ -598,7 +663,7 @@ class FileManager:
     def create_profile_desktop_shortcut(
         profile: Any,
         extra_args: list[str] | None = None,
-        prefer_steam_launch: bool = False,
+        prefer_steam_launch: bool = True,
         steam_exe_path: str | None = None,
         steam_app_id: str = "294100",
     ) -> Dict[str, Any]:
@@ -1393,6 +1458,36 @@ class PathChecker:
         if exe_path.exists():
             return cls._format_res(True, data=path_str, msg=f"贴图工具：{exe_path}")
         return cls._format_res(False, msg="目录下未找到 todds.exe，可在外部工具检查中下载安装", msg_type="warn")
+
+    @classmethod
+    def check_ripgrep_path(cls, path_str: str) -> Dict:
+        """
+        检查 ripgrep 工具路径是否有效。
+
+        兼容“直接指向 rg.exe”与“指向包含 rg.exe 的目录”两种输入，
+        但前端仍建议用户选择目录，以便后续自动更新时保持一致。
+        """
+        if not path_str:
+            return cls._format_res(False, msg="未指定 ripgrep 目录")
+        path = Path(path_str)
+        if not path.exists():
+            return cls._format_res(False, msg="ripgrep 路径不存在")
+        if not path.is_file() and not path.is_dir():
+            return cls._format_res(False, msg="ripgrep 路径必须是目录")
+
+        from backend.text_search.tooling import get_ripgrep_status, resolve_ripgrep_root
+
+        status = get_ripgrep_status(path_str, strict=True)
+        if status.available:
+            return cls._format_res(
+                True,
+                data=str(resolve_ripgrep_root(path_str)),
+                msg=f"ripgrep：{status.resolved_path}",
+            )
+
+        if path.is_file():
+            return cls._format_res(False, msg="请选择 rg.exe 或其所在目录", msg_type="warn")
+        return cls._format_res(False, msg="目录下未找到 rg.exe，可在外部工具检查中下载安装", msg_type="warn")
         
     @classmethod
     def paths_check(cls, paths_data: Dict[str, str]) -> Dict:
@@ -1416,13 +1511,15 @@ class PathChecker:
                 results["steam_path"] = cls.check_steam_path(paths_data["steam_path"])
             if "steamcmd_path" in paths_data:
                 results["steamcmd_path"] = cls.check_steamcmd_path(paths_data["steamcmd_path"])
+            if "ripgrep_path" in paths_data:
+                results["ripgrep_path"] = cls.check_ripgrep_path(paths_data["ripgrep_path"])
             if "texture_tools_path" in paths_data:
                 results["texture_tools_path"] = cls.check_texture_tools_path(paths_data["texture_tools_path"])
             if "user_data_path" in paths_data:
                 results["user_data_path"] = cls.check_user_data_path(paths_data["user_data_path"])
             # 5. 其他路径
             for key, path in paths_data.items():
-                if key in ["game_install_path", "game_config_path", "workshop_mods_path", "steam_path", "steamcmd_path", "texture_tools_path", "user_data_path"]: continue
+                if key in ["game_install_path", "game_config_path", "workshop_mods_path", "steam_path", "steamcmd_path", "ripgrep_path", "texture_tools_path", "user_data_path"]: continue
                 results[key] = cls.check_normal_path(path)
 
             return results

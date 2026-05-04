@@ -159,6 +159,8 @@ class AppConfig:
     steam_path: str = ""          # Steam 安装路径
     home_path: str = str(HOME_DIR) # 本程序路径
     
+    ripgrep_path: str = str(TOOLS_DIR / "ripgrep")
+    
     # steamcmd 下载路径
     steamcmd_path: str = str(TOOLS_DIR / "steamcmd")
     steamcmd_mods_path: str = str(TOOLS_DIR / "steamcmd" / "steamapps" / "workshop" / "content" / "294100")
@@ -393,6 +395,7 @@ class SettingsManager:
         self.config.workshop_mods_path = str(self.config.workshop_mods_path or "").strip()
         self.config.steamcmd_path = str(self.config.steamcmd_path or "").strip() or str(TOOLS_DIR / "steamcmd")
         self.config.self_mods_path = str(self.config.self_mods_path or "").strip() or str(MODS_DIR)
+        self.config.ripgrep_path = str(self.config.ripgrep_path or "").strip() or str(TOOLS_DIR / "ripgrep")
         self.config.language = normalize_language_code(self.config.language, default="zh-cn") or "zh-cn"
         valid_modes = {"default", "remember", "custom"}
         if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
@@ -420,6 +423,7 @@ class SettingsManager:
             # 目录型外部工具统一在这里给出默认位置。
             # SteamCMD 的工坊内容目录仍由 `_sync_derived_paths()` 负责衍生，不在这里直接暴露。
             "steamcmd_path": str(TOOLS_DIR / "steamcmd"),
+            "ripgrep_path": str(TOOLS_DIR / "ripgrep"),
             "texture_opt": {
                 "texture_tools_path": str(TOOLS_DIR / "texture_tools"),
             },
