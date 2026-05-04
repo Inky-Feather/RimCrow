@@ -206,6 +206,8 @@
 
     <!-- AI 生成数据弹窗 -->
     <AiReviewModal />
+    <!-- 文件搜索工作台 -->
+    <FileSearchWorkbench />
     <!-- 提示词管理器 -->
     <PromptManager />
 
@@ -279,6 +281,7 @@ import SegmentedTabs from './components/utils/SegmentedTabs.vue'
 import ProfileDrawer from './components/ProfileDrawer.vue'
 import Test from './components/temp/test.vue'
 import AiReviewModal from './components/AiReviewModal.vue'
+import FileSearchWorkbench from './components/FileSearchWorkbench.vue'
 import PromptManager from './components/PromptManager.vue'
 import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'

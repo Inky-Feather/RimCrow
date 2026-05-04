@@ -120,7 +120,7 @@ import CommonSwitch from './common/input/CommonSwitch.vue';
 const appStore = useAppStore()
 const toast = useToast()
 // --- 状态数据 ---
-const currentTab = ref('app') // 'app' | 'game'
+const currentTab = ref('game') // 'app' | 'game'
 const tabs = [
   { id: 'game', label: '游戏日志', icon: Gamepad2 },
   { id: 'app', label: '系统日志', icon: Terminal }

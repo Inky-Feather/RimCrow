@@ -25,7 +25,7 @@ export const useAppStore = defineStore('app', () => {
   const appVersion = ref('')     // 应用版本号
   const buildMode = ref('')      // 构建模式
   const isLoading = ref(false)   // 加载状态
-  const isGameRunning = ref(false) // 新增：全局游戏运行状态
+  const isGameRunning = ref(false) // 全局游戏运行状态
   const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
   
   // UI 状态
@@ -41,6 +41,7 @@ export const useAppStore = defineStore('app', () => {
     showPromptManager: false,    // 是否显示提示词管理器
     showWorkspace: false,        // 是否显示工坊更新管理中心
     showTextureOptModal: false,  // 是否显示贴图优化弹窗
+    showFileSearchWorkbench: false, // 是否显示文件内容搜索工作台
   })
   // 存储各个列表的滚动偏移量
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
@@ -114,6 +115,7 @@ export const useAppStore = defineStore('app', () => {
     steamcmd_mods_path: '',
     workshop_mods_path: '',
     self_mods_path: '',
+    ripgrep_path: '',
     move_old_self_mods: false,
     enable_tool_mods: false,  // 是否启用工具 Mod
     link_deployment_mode_full: false,  // 链接部署模式: true=完全重建, false=增量部署
@@ -287,6 +289,7 @@ export const useAppStore = defineStore('app', () => {
     'texture-opt',
     'texture-opt-analyze',
     'ai-batch',
+    'file-search',
   ])
 
   const isTaskCancelPending = (taskId = '') => cancelPendingTaskIds.value.has(String(taskId || ''))
@@ -447,6 +450,7 @@ export const useAppStore = defineStore('app', () => {
     let started = false
     const hasSteamCmdIssue = issues.some(item => item?.tool_id === 'steamcmd')
     const hasToddsIssue = issues.some(item => item?.tool_id === 'todds')
+    const hasRipgrepIssue = issues.some(item => item?.tool_id === 'ripgrep')
 
     if (hasSteamCmdIssue) {
       const res = await window.pywebview.api.steam_tools_install()
@@ -464,6 +468,16 @@ export const useAppStore = defineStore('app', () => {
         started = true
         if (!res.data?.already_ready) {
           toast.info('todds 下载任务已启动，请留意底部状态栏。')
+        }
+      }
+    }
+
+    if (hasRipgrepIssue) {
+      const res = await window.pywebview.api.ripgrep_prepare_download()
+      if (checkResult(res, '处理 ripgrep 环境')) {
+        started = true
+        if (!res.data?.already_ready) {
+          toast.info('ripgrep 下载任务已启动，请留意底部状态栏。')
         }
       }
     }
@@ -1170,6 +1184,21 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.path_open(path)
     checkResult(res, "打开路径")
   }
+  const openFile = async (path) => {
+    if (!window.pywebview) return
+    if (!path) return
+    const res = await window.pywebview.api.path_open_file(path)
+    checkResult(res, '打开文件')
+  }
+  const readTextFile = async (path, maxBytes = 2 * 1024 * 1024) => {
+    if (!window.pywebview) return null
+    if (!path) return null
+    const res = await window.pywebview.api.path_read_text_file(path, maxBytes)
+    if (checkResult(res, '读取文本文件', false)) {
+      return res.data
+    }
+    return null
+  }
   // 获取文件路径
   const getFilePath = async (home_path, file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')) => {
     if(!window.pywebview) return
@@ -1872,7 +1901,7 @@ export const useAppStore = defineStore('app', () => {
     requestModScan,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
-  checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
+  checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
