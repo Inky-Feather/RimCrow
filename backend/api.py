@@ -46,7 +46,6 @@ from backend.managers.mgr_network import network_mgr
 # 2. 引入数据库层
 from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
-from backend.database.models_ext import WorkshopMeta
 from backend.database.dao_ext import ExtDAO
 from backend.database.runtime import close_db, clear_db, init_db
 from backend.database.repair import (
@@ -3987,11 +3986,12 @@ class API:
             self_wid = ExtDAO.get_workshop_id_by_package(pid)
             if self_wid:
                 # 调用 ext_db 的模型查询该 Mod 的全量云端依赖
-                meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == self_wid)
+                meta = ExtDAO.get_manifest_by_workshop_id(self_wid)
                 if meta and meta.dependencies_mods:
+                    dep_manifest_map = ExtDAO.get_manifests_by_workshop_ids(list(meta.dependencies_mods.keys()))
                     for dep_wid, dep_name in meta.dependencies_mods.items():
                         # 反查依赖项的包名看本地有没有装
-                        dep_meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == dep_wid)
+                        dep_meta = dep_manifest_map.get(str(dep_wid))
                         dep_pid = dep_meta.package_id if dep_meta else None
                         if dep_pid and dep_pid not in installed_pids:
                             missing_dependencies[dep_wid] = dep_name
@@ -4027,10 +4027,11 @@ class API:
             cache_screenshots.append(cache_url)
         
         # 需要先查出这个工坊 ID 对应的 PackageID, 才能查询替代建议
-        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == str(workshop_id))
+        meta = ExtDAO.get_merged_meta_by_workshop_id(str(workshop_id))
         replacement = None
         game_version = self.active_context.game_version if self.active_context else ''
-        if meta: replacement = self.workshop_db_mgr.check_replacement(meta.package_id, game_version)
+        if meta and meta.get("package_id"):
+            replacement = self.workshop_db_mgr.check_replacement(str(meta.get("package_id")), game_version)
         # 3. 组合最终对象
         return ApiResponse.success({
             "workshop_id": workshop_id,
@@ -4134,9 +4135,7 @@ class API:
         all_ghost_ids = list(ghost_ws_ids)
         ghost_meta_map = {}
         if all_ghost_ids:
-            from backend.database.models_ext import WorkshopMeta
-            metas = WorkshopMeta.select(WorkshopMeta.workshop_id, WorkshopMeta.name, WorkshopMeta.preview_url).where(WorkshopMeta.workshop_id.in_(all_ghost_ids)).dicts()
-            ghost_meta_map = {str(m['workshop_id']): m for m in metas}
+            ghost_meta_map = ExtDAO.get_workshop_details_by_workshop_ids(all_ghost_ids)
 
         # 构造幽灵模组对象并塞回对应列表
         def create_ghost(wid, store_type, steam_status):
@@ -4328,15 +4327,9 @@ class API:
             return {}
 
         resolved_map: dict[str, str] = {}
-        meta_records = (
-            WorkshopMeta
-            .select(WorkshopMeta.workshop_id, WorkshopMeta.package_id)
-            .where(WorkshopMeta.workshop_id.in_(normalized_wids))
-            .dicts()
-        )
-        for meta in meta_records:
-            wid = str(meta.get('workshop_id') or '').strip()
-            pid = meta.get('package_id')
+        manifest_map = ExtDAO.get_manifests_by_workshop_ids(normalized_wids)
+        for wid, manifest in manifest_map.items():
+            pid = manifest.package_id
             if wid and pid:
                 resolved_map[wid] = pid
 

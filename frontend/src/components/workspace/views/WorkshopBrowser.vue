@@ -91,8 +91,7 @@
       
       <template v-if="selectedMod && !workspaceStore.workshopSearch.isDetailLoading">
         <!-- 顶部导航面包屑/后退栏 -->
-        <div v-if="workspaceStore.workshopSearch.historyStack.length > 0" 
-             class="absolute top-4 left-4 z-20 flex items-center">
+        <div v-if="workspaceStore.workshopSearch.historyStack.length > 0" class="absolute top-4 left-4 z-20 flex items-center">
           <button @click="workspaceStore.goBackWorkshopDetail" 
                   class="flex items-center gap-1 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-lg text-xs font-bold text-text-main hover:text-accent-primary border border-text-main/20 hover:border-accent-primary/50 transition-all shadow-lg">
             <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -230,8 +229,9 @@
             </div>
           </div>
 
-          <div class="prose prose-invert prose-sm md:prose-base max-w-none prose-img:rounded-xl prose-a:text-accent-primary">
+          <div class="prose prose-invert prose-sm md:prose-base max-w-none prose-img:rounded-xl prose-a:text-accent-primary select-text">
             <div v-if="parsedDescription" v-html="parsedDescription"></div>
+            <!-- <div v-if="workspaceStore.workshopSearch.detailData?.description">{{ workspaceStore.workshopSearch.detailData?.description }}</div> -->
             <div v-else class="text-text-dim italic">该模组没有提供详细描述。</div>
           </div>
 

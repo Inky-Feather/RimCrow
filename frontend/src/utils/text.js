@@ -40,6 +40,32 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
 
   // 1. 先统一换行格式，后面的正则处理都按 `\n` 进行。
   let htmlText = unityText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n')
+  const tableCellClass = 'p-2 border border-text-main/10'
+  const tableHeaderClass = `${tableCellClass} text-left align-top font-semibold`
+
+  htmlText = htmlText.replace(/\[table([^\]]*)\]\s*/gi, (_, rawAttrs = '') => {
+    const noborder = /\bnoborder\s*=\s*["']?1["']?/i.test(rawAttrs)
+    const equalcells = /\bequalcells\s*=\s*["']?1["']?/i.test(rawAttrs)
+    const tableClasses = ['w-full', 'my-2']
+    const tableStyles = []
+
+    if (equalcells) {
+      tableClasses.push('table-fixed')
+    } else {
+      tableClasses.push('border-collapse')
+    }
+
+    if (noborder) {
+      tableStyles.push('border-collapse: separate', 'border-spacing: 0')
+    }
+
+    const styleAttr = tableStyles.length ? ` style="${tableStyles.join('; ')}"` : ''
+    const flags = [noborder ? 'noborder' : '', equalcells ? 'equalcells' : '']
+      .filter(Boolean)
+      .join(' ')
+
+    return `<table class="${tableClasses.join(' ')}" data-unity-table="${flags}"${styleAttr}>`
+  })
 
   // 2. 基础标签映射，优先处理结构性最强的一批标签。
   const simpleTags = [
@@ -50,11 +76,12 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
     { regex: /\[i\]/gi, replace: '<em>' },
     { regex: /\[\/i\]/gi, replace: '</em>' },
     // 表格相关 (添加了 tailwind 边框类)
-    { regex: /\[table\]\s*/gi, replace: '<table class="w-full border-collapse my-2">' },
     { regex: /\[\/table\]\s*/gi, replace: '</table>' },
     { regex: /\[tr\]\s*/gi, replace: '<tr class="border-b border-text-main/10">' },
     { regex: /\[\/tr\]\s*/gi, replace: '</tr>' },
-    { regex: /\[td\]\s*/gi, replace: '<td class="p-2 border border-text-main/10">' },
+    { regex: /\[th\]\s*/gi, replace: `<th class="${tableHeaderClass}">` },
+    { regex: /\[\/th\]\s*/gi, replace: '</th>' },
+    { regex: /\[td\]\s*/gi, replace: `<td class="${tableCellClass}">` },
     { regex: /\[\/td\]\s*/gi, replace: '</td>' },
     // [*]替换为</li><li>，解决无闭合问题
     { regex: /\[list\]\s*/gi, replace: '<ul class="list-disc pl-5 my-2" style="white-space: normal"><li>' },
@@ -78,6 +105,20 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
   for (const tag of simpleTags) {
     htmlText = htmlText.replace(tag.regex, tag.replace)
   }
+
+  htmlText = htmlText.replace(/<table([^>]*)data-unity-table="([^"]*)"([^>]*)>([\s\S]*?)<\/table>/gi, (match, beforeAttrs, flagText, afterAttrs, content) => {
+    const flags = new Set(String(flagText).split(/\s+/).filter(Boolean))
+    let nextContent = content
+
+    if (flags.has('noborder')) {
+      nextContent = nextContent
+        .replace(/<tr class="border-b border-text-main\/10">/gi, '<tr>')
+        .replace(new RegExp(`<th class="${tableHeaderClass.replace(/\//g, '\\/')}"`, 'g'), '<th class="p-2 text-left align-top font-semibold"')
+        .replace(new RegExp(`<td class="${tableCellClass.replace(/\//g, '\\/')}"`, 'g'), '<td class="p-2"')
+    }
+
+    return `<table${beforeAttrs}${afterAttrs}>${nextContent}</table>`
+  })
 
   // 3. 标题标签单独处理，避免和普通标签规则混在一起难维护。
   for (let i = 1; i <= 6; i++) {
@@ -130,14 +171,20 @@ export const parseUnityRichText = (unityText, removeImg = true) => {
   })
 
   // 7. 图片标签按调用方决定保留还是清理。
+  const renderImageTag = (src = '') => {
+    const normalizedSrc = String(src).trim().replace(/^["']|["']$/g, '')
+    if (!normalizedSrc) return ''
+    if (removeImg) return ''
+
+    return `<img src="${encodeURI(normalizedSrc)}" alt="unity-img" class="max-w-full rounded-lg border border-text-main/10" loading="lazy" style="object-fit: contain; margin: 0 auto; margin-top: 5px; margin-bottom: 5px;" />`
+  }
+
   if (removeImg) {
     htmlText = htmlText.replace(/\[img\](.*?)\[\/img\]\n*/gi, '')
   } else {
-    htmlText = htmlText.replace(
-      /\[img\](.*?)\[\/img\]\n*/gi, 
-      (_, src) => `<img src="${encodeURI(src)}" alt="unity-img" class="max-w-full rounded-lg border border-text-main/10" loading="lazy" style="object-fit: contain; margin: 0 auto; margin-top: 5px; margin-bottom: 5px;" />`
-    )
+    htmlText = htmlText.replace(/\[img\](.*?)\[\/img\]\n*/gi, (_, src) => renderImageTag(src))
   }
+  htmlText = htmlText.replace(/\[img=([^\]\n\r]+)\]\s*/gi, (_, src) => renderImageTag(src))
 
   // 8. 自动识别纯文本里的裸链接，但要先保护已生成的 HTML。
   const placeholders = []

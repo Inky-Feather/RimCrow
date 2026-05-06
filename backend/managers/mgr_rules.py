@@ -249,11 +249,11 @@ class RuleManager:
         """
         精准构建工坊依赖缓存：仅针对本地已安装/存在的 Mod 构建规则。
         """
-        from backend.database.models_ext import ext_db, WorkshopMeta
+        from backend.database.models_ext import WorkshopManifest, ext_db
         from backend.database.models import ModAsset
         if ext_db.database is None: return
         try:
-            if not WorkshopMeta.table_exists(): return
+            if not WorkshopManifest.table_exists(): return
             # 1. 【核心过滤】从主数据库获取所有已安装/存在的 package_id (去重且转小写)
             # 只有这些 Mod 才需要我们去查询它们的依赖关系
             installed_pids = [
@@ -266,10 +266,10 @@ class RuleManager:
                 return
             # 2. 从外置库中查询这些 Package ID 对应的元数据 (获取它们的原始依赖列表)
             # WHERE package_id IN (...)
-            active_metas = list(WorkshopMeta.select(
-                WorkshopMeta.package_id, 
-                WorkshopMeta.dependencies_mods
-            ).where(WorkshopMeta.package_id << installed_pids).dicts())
+            active_metas = list(WorkshopManifest.select(
+                WorkshopManifest.package_id,
+                WorkshopManifest.dependencies_mods
+            ).where(WorkshopManifest.package_id << installed_pids).dicts())
             if not active_metas:
                 self.workshop_rules_cache = {}
                 return
@@ -287,8 +287,8 @@ class RuleManager:
             # 这样避免了全量加载 wid_to_pid 映射
             wid_to_pid_map = {
                 str(m.workshop_id): m
-                for m in WorkshopMeta.select(WorkshopMeta.workshop_id, WorkshopMeta.name, WorkshopMeta.package_id)
-                                    .where(WorkshopMeta.workshop_id << list(all_target_wids))
+                for m in WorkshopManifest.select(WorkshopManifest.workshop_id, WorkshopManifest.name, WorkshopManifest.package_id)
+                                    .where(WorkshopManifest.workshop_id << list(all_target_wids))
                 if m.package_id
             }
             # 5. 组装最终缓存
