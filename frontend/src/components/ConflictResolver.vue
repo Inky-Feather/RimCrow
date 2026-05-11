@@ -4,25 +4,25 @@
       v-if="visible"
       class="fixed inset-0 z-100 flex items-center justify-center bg-black/70 px-3 py-4 backdrop-blur-md"
     >
-      <div class="flex h-[min(88vh,780px)] w-[min(95vw,1360px)] flex-col overflow-hidden rounded-[22px] border border-accent-danger/18 bg-bg-deep shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+      <div class="flex h-[min(88vh,780px)] w-[min(95vw,1360px)] flex-col overflow-hidden rounded-3xl border border-accent-danger/18 bg-bg-deep shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
         <div class="shrink-0 border-b border-text-main/8 bg-[linear-gradient(135deg,rgba(15,23,42,0.94),rgba(2,6,23,0.92))] px-4 py-3" data-tour="conflict-summary">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h2 class="text-lg font-black tracking-wide text-text-main">处理重复模组</h2>
-                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-xs text-text-dim">
                   硬冲突 {{ summary.hardCount }}
                 </span>
-                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-xs text-text-dim">
                   共存 {{ summary.softCount }}
                 </span>
-                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[11px] text-text-dim">
+                <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-xs text-text-dim">
                   待处理 {{ summary.pendingCount }}
                 </span>
-                <span class="rounded-full border border-accent-warn/22 bg-accent-warn/10 px-2 py-0.5 text-[11px] text-accent-warn">
+                <span class="rounded-full border border-accent-warn/22 bg-accent-warn/10 px-2 py-0.5 text-xs text-accent-warn">
                   禁用 {{ summary.disableCount }}
                 </span>
-                <span class="rounded-full border border-accent-danger/22 bg-accent-danger/10 px-2 py-0.5 text-[11px] text-accent-danger">
+                <span class="rounded-full border border-accent-danger/22 bg-accent-danger/10 px-2 py-0.5 text-xs text-accent-danger">
                   删除 {{ summary.deleteCount }}
                 </span>
               </div>
@@ -48,14 +48,14 @@
           <div class="min-w-0 flex-1 overflow-y-auto px-4 py-4" data-tour="conflict-list">
             <div class="space-y-3">
               <div v-for="group in localGroups" :key="group.key"
-                class="overflow-hidden rounded-[18px] border border-text-main/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.015))]"
+                class="overflow-hidden rounded-2xl border border-text-main/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.015))]"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-text-main/8 bg-black/18 px-3 py-2">
                   <div class="min-w-0 flex items-center gap-2">
                     <span class="truncate font-mono text-sm font-black text-accent-highlight">
                           {{ group.package_id }}
                     </span>
-                    <span tabindex="0" class="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] cursor-help"
+                    <span tabindex="0" class="rounded-full border px-2 py-0.5 text-[0.7rem] font-black uppercase tracking-[0.14em] cursor-help"
                       :class="group._type === 'hard'
                         ? 'border-accent-danger/28 bg-accent-danger/10 text-accent-danger'
                         : 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'"
@@ -63,7 +63,7 @@
                     >
                       {{ group._type === 'hard' ? '硬冲突' : '共存' }}
                     </span>
-                    <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] text-text-dim">
+                    <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[0.7rem] text-text-dim">
                       {{ group.items.length }} 个副本
                     </span>
                   </div>
@@ -77,7 +77,7 @@
                       : 'border-text-main/8 bg-black/16 hover:border-text-main/16 hover:bg-black/22'"
                     @click="selectVersion(group.key, getItemKey(mod))"
                   >
-                    <div class="flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-black"
+                    <div class="flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.7rem] font-black"
                       :class="isWinner(group, mod)
                         ? 'border-accent-success bg-accent-success text-black'
                         : 'border-text-main/20 text-text-dim'"
@@ -91,25 +91,25 @@
                         <span class="truncate text-sm font-bold text-text-main">
                           {{ mod.name || mod.package_id || '未知模组' }}
                         </span>
-                        <span class="rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                        <span class="rounded-full border px-2 py-0.5 text-[0.7rem] font-bold"
                           :class="storeBadgeClass(mod.store)"
                         >
                           {{ storeLabel(mod.store) }}
                         </span>
-                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] font-mono text-text-dim">
+                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[0.7rem] font-mono text-text-dim">
                           支持 {{ getHighestSupportedVersion(mod) || '?' }}
                         </span>
-                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[10px] font-mono text-text-dim">
+                        <span class="rounded-full border border-text-main/10 bg-text-main/5 px-2 py-0.5 text-[0.7rem] font-mono text-text-dim">
                           v{{ mod.version || '?' }}
                         </span>
                         <span
                           v-if="isWinner(group, mod)"
-                          class="rounded-full border border-accent-success/25 bg-accent-success/10 px-2 py-0.5 text-[10px] font-black text-accent-success"
+                          class="rounded-full border border-accent-success/25 bg-accent-success/10 px-2 py-0.5 text-[0.7rem] font-black text-accent-success"
                         >
                           保留
                         </span>
                       </div>
-                      <div class="truncate font-mono text-[11px] text-text-dim" :title="mod.path">
+                      <div class="truncate font-mono text-xs text-text-dim" :title="mod.path">
                         {{ mod.path || '-' }}
                       </div>
                     </div>
@@ -117,14 +117,14 @@
                     <div class="flex shrink-0 items-center gap-1.5" @click.stop>
                       <button
                         v-if="mod.workshop_id && ['workshop', 'self'].includes(normalizeStore(mod.store))"
-                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-text-dim transition-colors hover:text-accent-primary"
+                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[0.7rem] font-bold text-text-dim transition-colors hover:text-accent-primary"
                         v-tooltip="'将该副本复制为本地模组，后续不再受原来源更新影响'"
                         @click="handleLocalize(mod)"
                       >
                         本地化共存
                       </button>
                       <button v-if="mod.workshop_id && normalizeStore(mod.store) === 'workshop'"
-                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[10px] font-bold text-text-dim transition-colors hover:text-accent-danger"
+                        class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[0.7rem] font-bold text-text-dim transition-colors hover:text-accent-danger"
                         v-tooltip="'取消 Steam 工坊订阅，Steam 后续会移除这个副本'"
                         @click="handleUnsubscribe(mod)"
                       >
@@ -138,7 +138,7 @@
                       </button>
 
                       <div v-if="!isWinner(group, mod)" class="flex items-center gap-0.5 rounded-full border border-text-main/10 bg-text-main/5 p-0.5">
-                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors"
+                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'disable'
                             ? 'bg-accent-warn text-black'
                             : 'text-text-dim hover:text-accent-warn'"
@@ -152,7 +152,7 @@
                           >
                           禁用
                         </label>
-                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors"
+                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'delete'
                             ? 'bg-accent-danger text-white'
                             : 'text-text-dim hover:text-accent-danger'"
@@ -172,11 +172,11 @@
             </div>
           </div>
 
-          <aside class="w-[300px] shrink-0 overflow-y-auto border-l border-text-main/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.92))] px-4 py-4">
+          <aside class="w-75 shrink-0 overflow-y-auto border-l border-text-main/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.92))] px-4 py-4">
             <div class="space-y-3">
-              <section class="rounded-[18px] border border-text-main/8 bg-black/20 p-3" data-tour="conflict-batch">
-                <div class="text-[11px] font-black uppercase tracking-[0.16em] text-text-dim">批量选择</div>
-                <p class="mt-1 text-[11px] leading-5 text-text-dim">
+              <section class="rounded-2xl border border-text-main/8 bg-black/20 p-3" data-tour="conflict-batch">
+                <div class="text-xs font-black uppercase tracking-[0.16em] text-text-dim">批量选择</div>
+                <p class="mt-1 text-xs leading-5 text-text-dim">
                   选范围，选保留谁，再选其余副本怎么处理。
                 </p>
 
@@ -186,7 +186,7 @@
                   <CommonSelect v-model="batchRule.loserAction" :options="ACTION_OPTIONS" label="其余" mini />
                 </div>
 
-                <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                <div class="mt-3 flex flex-wrap gap-1.5 text-xs">
                   <button class="rounded-full border border-accent-primary/24 bg-accent-primary/10 px-3 py-1 font-bold text-accent-primary transition-colors hover:bg-accent-primary/16"
                     v-tooltip="'按当前范围、保留规则和处理方式，一次性应用到所有目标冲突组'" @click="applyBatchRule"
                   >
@@ -210,7 +210,7 @@
                 </div>
               </section>
 
-              <section class="rounded-[18px] border border-text-main/8 bg-black/20 p-3 text-[11px] leading-5 text-text-dim">
+              <section class="rounded-2xl border border-text-main/8 bg-black/20 p-3 text-xs leading-5 text-text-dim">
                 <div class="flex flex-wrap gap-x-2 gap-y-1">
                   <span>当前范围 {{ scopedGroups.length }} 组</span>
                   <span>待处理 {{ countPendingForScope }}</span>
@@ -230,7 +230,7 @@
                 </div>
               </section>
 
-              <section v-if="submitFeedback" class="rounded-[18px] border p-3 text-[11px]"
+              <section v-if="submitFeedback" class="rounded-2xl border p-3 text-xs"
                 :class="submitFeedback.kind === 'error'
                   ? 'border-accent-danger/24 bg-accent-danger/10 text-accent-danger'
                   : 'border-accent-warn/24 bg-accent-warn/10 text-accent-warn'"
@@ -250,7 +250,7 @@
         </div>
 
         <div class="flex shrink-0 items-center justify-between gap-3 border-t border-text-main/8 bg-black/22 px-4 py-3" data-tour="conflict-submit">
-          <div class="text-[11px] text-text-dim">
+          <div class="text-xs text-text-dim">
             选择删除将直接移除文件至回收站，操作不可逆。禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。
             <div class="text-accent-warn">注意：直接删除创意工坊模组后，Steam 可能会重新下载。
               <span class="text-accent-warning">禁用模组后可以在 库存枢纽 中对应列表筛选“已禁用”查看或解禁。</span>

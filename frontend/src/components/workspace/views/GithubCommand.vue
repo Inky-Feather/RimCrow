@@ -133,7 +133,7 @@
               
               <div class="flex items-center gap-2">
                 <span class="text-xs font-mono text-text-dim/80">{{ formatDate(log.time) }}</span>
-                <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase" :class="getLogBgColor(log.type)">
+                <span class="px-1.5 py-0.5 rounded text-[0.7rem] font-black uppercase" :class="getLogBgColor(log.type)">
                   {{ log.title }}
                 </span>
               </div>

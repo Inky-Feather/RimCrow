@@ -10,13 +10,13 @@
             <Globe class="size-4" /> {{ workspaceStore.workshopSearch.sourceMode === 'online' ? '在线工坊搜索' : '缓存工坊浏览' }}
           </h3>
           <div class="flex items-center gap-3">
-            <label class="flex items-center gap-2 text-[10px] font-bold text-text-dim cursor-pointer select-none">
+            <label class="flex items-center gap-2 text-[0.7rem] font-bold text-text-dim cursor-pointer select-none">
               <input :checked="workspaceStore.workshopSearch.sourceMode === 'online'"
                 type="checkbox" class="accent-cyan-400" @change="toggleOnlineSearch"
               />
               在线搜索
             </label>
-            <span class="text-[10px] text-text-dim font-mono">共 {{ workspaceStore.workshopSearch.total }} 项</span>
+            <span class="text-[0.7rem] text-text-dim font-mono">共 {{ workspaceStore.workshopSearch.total }} 项</span>
           </div>
         </div>
         
@@ -65,10 +65,10 @@
                   {{ item.title || item.name || '未知模组' }}
                 </div>
                 <div class="flex justify-between items-center mt-1 gap-2">
-                  <div class="text-[10px] text-text-dim truncate font-mono opacity-80 max-w-[70%]" :title="item.package_id || item.short_description || item.author_steam_id || ''">
+                  <div class="text-[0.7rem] text-text-dim truncate font-mono opacity-80 max-w-[70%]" :title="item.package_id || item.short_description || item.author_steam_id || ''">
                     {{ item.package_id || item.short_description || item.author_steam_id || 'N/A' }}
                   </div>
-                  <div class="flex items-center gap-1 text-[10px] shrink-0">
+                  <div class="flex items-center gap-1 text-[0.7rem] shrink-0">
                     <span v-if="item.subscriptions" class="font-bold px-1 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
                       {{ formatCount(item.subscriptions) }}
                     </span>
@@ -166,7 +166,7 @@
                 <div v-if="selectedMod?.game_versions?.length" class="flex flex-wrap gap-1.5 items-center">
                   <div class="flex items-center gap-1 text-text-dim mr-1">
                     <Layers class="size-3" />
-                    <span class="text-[10px] font-bold uppercase tracking-tighter">适用版本:</span>
+                    <span class="text-[0.7rem] font-bold uppercase tracking-tighter">适用版本:</span>
                   </div>
                   <span v-for="version in selectedMod.game_versions" :key="version"
                     class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary text-[0.55rem] font-black border border-accent-primary/20">
@@ -176,14 +176,14 @@
                 <div v-else-if="selectedMod?.tags?.length" class="flex flex-wrap gap-1.5 items-center">
                   <div class="flex items-center gap-1 text-text-dim mr-1">
                     <Layers class="size-3" />
-                    <span class="text-[10px] font-bold uppercase tracking-tighter">在线标签:</span>
+                    <span class="text-[0.7rem] font-bold uppercase tracking-tighter">在线标签:</span>
                   </div>
                   <span v-for="tag in selectedMod.tags.slice(0, 8)" :key="tag"
                     class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary text-[0.55rem] font-black border border-accent-primary/20">
                     {{ tag }}
                   </span>
                 </div>
-                <div v-else class="text-[10px] text-text-dim/50 italic font-mono flex items-center gap-1">
+                <div v-else class="text-[0.7rem] text-text-dim/50 italic font-mono flex items-center gap-1">
                   <Layers class="size-3" /> 未标注适用版本
                 </div>
               </div>

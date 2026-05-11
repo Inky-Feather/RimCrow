@@ -31,7 +31,7 @@
           <div class="absolute top-0 inset-x-0 h-px bg-linear-to-r from-transparent via-current to-transparent opacity-80 shadow-[0_0_15px_currentColor]" :class="theme.text"></div>
           
           <!-- B. 内部环境光晕 (氛围感) -->
-          <div class="absolute -top-20 -right-20 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" 
+          <div class="absolute -top-20 -right-20 w-48 h-48 rounded-full blur-3xl opacity-15 pointer-events-none" 
                :class="theme.bg"></div>
 
           <!-- C. 内容区域 -->
@@ -108,7 +108,7 @@
                 </div>
               </label>
 
-              <p v-if="confirmStore.state.deleteOptionsHint" class="px-1 text-[11px] leading-relaxed text-text-dim/70">
+              <p v-if="confirmStore.state.deleteOptionsHint" class="px-1 text-xs leading-relaxed text-text-dim/70">
                 {{ confirmStore.state.deleteOptionsHint }}
               </p>
             </div>
