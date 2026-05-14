@@ -120,10 +120,27 @@ export const allGuides = [
     beforeStart: () => {
       const appStore = useAppStore();
       const ai = appStore.settings.ai || {};
+      const provider = String(ai.provider || 'openai_compatible').trim().toLowerCase();
+      const baseUrl = String(ai.base_url || '').trim();
+      const apiKey = String(ai.api_key || '').trim();
+      const normalizedProvider = provider === 'openai' || provider === 'custom_openai'
+        ? 'openai_compatible'
+        : provider;
+      let baseHost = '';
+      try {
+        baseHost = new URL(baseUrl || 'https://api.openai.com/v1').hostname || '';
+      } catch {
+        baseHost = '';
+      }
+      const usesDefaultOpenAI = normalizedProvider === 'openai_compatible' && (
+        !baseUrl || /(^|\.)openai\.com$/i.test(baseHost)
+      );
+      const requiresApiKey = ['anthropic', 'gemini'].includes(normalizedProvider) || usesDefaultOpenAI;
       const hasMinimalAiConfig = !!(
         ai.enabled &&
         String(ai.model || '').trim() &&
-        (String(ai.api_key || '').trim() || String(ai.base_url || '').trim())
+        normalizedProvider &&
+        (!requiresApiKey || apiKey)
       );
       if (!hasMinimalAiConfig) {
         return {

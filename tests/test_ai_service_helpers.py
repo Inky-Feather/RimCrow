@@ -11,6 +11,30 @@ from pydantic import TypeAdapter
 
 from backend.ai.ai_contracts import AssistantDefinition, ModAliasGenerationItem
 
+_STUBBED_MODULE_NAMES = [
+    "backend.ai.prompts",
+    "backend.ai.llm_gateway",
+    "backend.ai.ai_gateway",
+    "backend.database.dao",
+    "json_repair",
+    "backend.settings",
+    "backend.utils.logger",
+    "backend.utils.constants",
+    "backend.utils.event_bus",
+    "backend.ai.assistant_runtime",
+    "backend.ai.ai_service",
+]
+_ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _STUBBED_MODULE_NAMES}
+
+
+def _restore_stubbed_modules():
+    for name, module in _ORIGINAL_MODULES.items():
+        if module is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = module
+
+
 fake_prompts_module = types.ModuleType("backend.ai.prompts")
 
 
@@ -38,6 +62,9 @@ sys.modules["backend.ai.prompts"] = fake_prompts_module
 fake_llm_gateway_module = types.ModuleType("backend.ai.llm_gateway")
 fake_llm_gateway_module.LiteLLMGateway = type("LiteLLMGateway", (), {})
 sys.modules["backend.ai.llm_gateway"] = fake_llm_gateway_module
+fake_ai_gateway_module = types.ModuleType("backend.ai.ai_gateway")
+fake_ai_gateway_module.LiteLLMGateway = type("LiteLLMGateway", (), {})
+sys.modules["backend.ai.ai_gateway"] = fake_ai_gateway_module
 
 fake_dao_module = types.ModuleType("backend.database.dao")
 fake_dao_module.ModDAO = type("ModDAO", (), {})
@@ -55,6 +82,19 @@ fake_settings_module.settings = SimpleNamespace(
     config=SimpleNamespace(
         language="zh",
         ai=SimpleNamespace(model="test-model"),
+        network=SimpleNamespace(
+            hosts={},
+            write_to_system_hosts=False,
+            proxy=SimpleNamespace(
+                enabled=False,
+                host="",
+                port="",
+                username="",
+                password="",
+                type="http",
+                bypass_list=[],
+            ),
+        ),
     )
 )
 sys.modules["backend.settings"] = fake_settings_module
@@ -105,6 +145,7 @@ fake_assistant_runtime_module.safe_format_template = _safe_format_template
 sys.modules["backend.ai.assistant_runtime"] = fake_assistant_runtime_module
 
 AIManager = importlib.import_module("backend.ai.ai_service").AIManager
+_restore_stubbed_modules()
 
 
 class TestAIServiceHelpers(unittest.TestCase):
@@ -180,6 +221,59 @@ class TestAIServiceHelpers(unittest.TestCase):
         self.assertIn("最终输出协议", prompt_config["system"])
         self.assertIn("JSON 数组", prompt_config["system"])
         self.assertTrue(prompt_config["system"].startswith("你是一个任务助手。"))
+
+    def test_mod_alias_chunk_budget_does_not_treat_output_tokens_as_context_window(self):
+        manager = object.__new__(AIManager)
+        manager.llm = SimpleNamespace(
+            estimate_messages_tokens=lambda messages, model_name: 800,
+            _message_text=lambda content: str(content or ""),
+        )
+
+        chunk_budget, max_item_tokens = manager._resolve_mod_alias_chunk_token_budget(
+            cfg=SimpleNamespace(max_output_tokens=5000),
+            model_name="test-model",
+            prompt_config={"system": "SYSTEM", "user_template": "{mod_alias_input_json}"},
+            runtime_variables={},
+        )
+
+        self.assertEqual(chunk_budget, 8944)
+        self.assertEqual(max_item_tokens, 8744)
+
+    def test_test_chat_reads_reasoning_field_and_inline_think(self):
+        manager = object.__new__(AIManager)
+        manager.llm = SimpleNamespace(
+            completion=lambda messages, llm_kwargs: SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="<think>local trace</think>ok",
+                            reasoning="vllm trace",
+                        )
+                    )
+                ]
+            )
+        )
+
+        result = manager.test_chat("hi", {})
+
+        self.assertEqual(result["text"], "ok")
+        self.assertEqual(result["reasoning_content"], "vllm trace\nlocal trace")
+        self.assertEqual(result["raw_message"]["reasoning"], "vllm trace")
+
+    def test_test_chat_reports_empty_choices_response_clearly(self):
+        manager = object.__new__(AIManager)
+        manager.llm = SimpleNamespace(
+            completion=lambda messages, llm_kwargs: SimpleNamespace(
+                choices=None,
+                error={"message": "bad provider prefix"},
+            )
+        )
+
+        with self.assertRaises(Exception) as ctx:
+            manager.test_chat("hi", {})
+
+        self.assertIn("非 OpenAI Chat Completions 兼容格式或空 choices", str(ctx.exception))
+        self.assertIn("bad provider prefix", str(ctx.exception))
 
     def test_assistant_definition_keeps_selectable_tool_scope(self):
         definition = AssistantDefinition.model_validate({

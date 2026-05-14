@@ -13,11 +13,11 @@ import inspect
 import os
 import re
 import time
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from http import HTTPStatus
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import requests
 
@@ -31,7 +31,10 @@ from litellm.utils import token_counter
 from openai import OpenAI, AsyncOpenAI
 
 from backend.ai.def_model_capabilities import (
+    DASHSCOPE_PRESERVE_THINKING_MODEL_RE,
+    DEEPSEEK_THINKING_CONTROL_MODEL_RE,
     GPT5_MODEL_RE,
+    OPENAI_REASONING_MODEL_RE,
     MODEL_CAPABILITY_POLICIES,
     ModelCapabilityPolicy,
     normalize_reasoning_effort as _normalize_reasoning_effort,
@@ -49,6 +52,84 @@ DEFAULT_BASE_URLS = {
 }
 
 OFFICIAL_OPENAI_HOSTS = {"api.openai.com"}
+OPENAI_COMPATIBLE_VERSION_SEGMENT_RE = re.compile(r"^v\d+(?:beta\d*)?$", re.IGNORECASE)
+
+
+def normalize_ai_provider(provider: str) -> str:
+    """统一规整 AI provider 名称，保留旧配置别名兼容。"""
+    p = (provider or "").strip().lower()
+    if p in ("openai", "custom_openai"):
+        return "openai_compatible"
+    return p or "openai_compatible"
+
+
+def resolve_ai_provider_base_url(provider: str, base_url: str = "") -> str:
+    """解析协议默认 Base URL；空值表示使用该协议的内置默认地址。"""
+    normalized_provider = normalize_ai_provider(provider)
+    resolved_base_url = str(base_url or DEFAULT_BASE_URLS.get(normalized_provider, "")).strip().rstrip("/")
+    if normalized_provider == "openai_compatible":
+        return normalize_openai_compatible_base_url(resolved_base_url)
+    return resolved_base_url
+
+
+def normalize_openai_compatible_base_url(base_url: str) -> str:
+    """把 OpenAI-compatible Base URL 规整到 SDK 期望的版本根路径。
+
+    OpenAI SDK 会把 `/chat/completions` 拼到 `base_url` 后面，所以 LM Studio
+    这类服务应使用 `http://127.0.0.1:1234/v1`，而不是裸根地址。
+    """
+    normalized = str(base_url or "").strip().rstrip("/")
+    if not normalized:
+        return ""
+    try:
+        parsed = urlparse(normalized)
+        path_segments = [segment for segment in (parsed.path or "").split("/") if segment]
+        if path_segments and OPENAI_COMPATIBLE_VERSION_SEGMENT_RE.match(path_segments[-1]):
+            return normalized
+        next_path = f"{(parsed.path or '').rstrip('/')}/v1" if parsed.path else "/v1"
+        return urlunparse(parsed._replace(path=next_path, params="", query="", fragment="")).rstrip("/")
+    except Exception:
+        return f"{normalized}/v1" if not normalized.lower().endswith("/v1") else normalized
+
+
+def is_official_openai_base_url(base_url: str) -> bool:
+    """判断 Base URL 是否指向 OpenAI 官方域名。"""
+    try:
+        host = (urlparse(str(base_url or "")).hostname or "").lower()
+    except Exception:
+        host = ""
+    return host in OFFICIAL_OPENAI_HOSTS or host.endswith(".openai.com")
+
+
+def ai_provider_requires_api_key(provider: str, base_url: str = "") -> bool:
+    """判断当前协议/地址是否必须提供 API Key。"""
+    normalized_provider = normalize_ai_provider(provider)
+    if normalized_provider in {"anthropic", "gemini"}:
+        return True
+    if normalized_provider == "openai_compatible":
+        return is_official_openai_base_url(resolve_ai_provider_base_url(normalized_provider, base_url))
+    return False
+
+
+def validate_ai_connection_config(config: Any) -> tuple[bool, str]:
+    """校验 AI 连接配置是否具备发起请求的最低条件。"""
+    if isinstance(config, dict):
+        getter = config.get
+    else:
+        getter = lambda key, default=None: getattr(config, key, default)
+
+    provider = normalize_ai_provider(str(getter("provider", "")))
+    base_url = resolve_ai_provider_base_url(provider, str(getter("base_url", "") or ""))
+    model = str(getter("model", "") or "").strip()
+    api_key = str(getter("api_key", "") or "").strip()
+
+    if not provider or not base_url or not model:
+        return False, "AI 配置不完整，请检查配置"
+
+    if ai_provider_requires_api_key(provider, base_url) and not api_key:
+        return False, "当前协议要求填写 API Key。"
+
+    return True, ""
 
 class LiteLLMGateway:
     """AI 网关。
@@ -81,10 +162,7 @@ class LiteLLMGateway:
         - openai -> openai_compatible
         - custom_openai -> openai_compatible
         """
-        p = (provider or "").strip().lower()
-        if p in ("openai", "custom_openai"):
-            return "openai_compatible"
-        return p or "openai_compatible"
+        return normalize_ai_provider(provider)
 
     def _prepare_proxy_env(self):
         """按当前设置同步 AI 请求所需的代理环境变量。"""
@@ -110,12 +188,62 @@ class LiteLLMGateway:
 
     def _is_official_openai_base(self, base_url: str) -> bool:
         """判断当前 Base URL 是否指向 OpenAI 官方域名。"""
-        host = self._host(base_url)
-        return host in OFFICIAL_OPENAI_HOSTS or host.endswith(".openai.com")
+        return is_official_openai_base_url(base_url)
 
     def _is_gpt5_family(self, model: str) -> bool:
         """判断模型名是否属于 GPT-5 系列。"""
         return bool(GPT5_MODEL_RE.match((model or "").strip()))
+
+    def _is_openai_reasoning_family(self, model: str) -> bool:
+        """判断模型名是否属于 OpenAI reasoning 系列。"""
+        return bool(OPENAI_REASONING_MODEL_RE.match((model or "").strip()))
+
+    def _normalize_openai_compatible_model_names(self, model: str) -> tuple[str, str]:
+        """返回 OpenAI-compatible 的实际模型名和 LiteLLM 路由模型名。
+
+        LiteLLM 会把 `google/...`、`anthropic/...` 等前缀识别成原生协议。
+        OpenAI-compatible 场景必须显式走 `openai/...` 路由；但真正发给
+        OpenAI SDK / 本地兼容服务的 model 仍应保留用户配置的原始 ID。
+        """
+        normalized_model = str(model or "").strip()
+        if not normalized_model:
+            return "", ""
+        if normalized_model.startswith("openai/"):
+            wire_model = normalized_model[len("openai/"):].strip()
+        else:
+            wire_model = normalized_model
+        routed_model = f"openai/{wire_model}" if wire_model else ""
+        return wire_model, routed_model
+
+    def _supports_deepseek_thinking_controls(self, model: str) -> bool:
+        """DeepSeek V4/V3.2 thinking mode 才接受显式 thinking 控制。"""
+        return bool(DEEPSEEK_THINKING_CONTROL_MODEL_RE.match((model or "").strip()))
+
+    def _supports_dashscope_preserve_thinking(self, model: str) -> bool:
+        """DashScope 目前只对部分 Qwen 3.6 模型开放 preserve_thinking。"""
+        return bool(DASHSCOPE_PRESERVE_THINKING_MODEL_RE.match((model or "").strip()))
+
+    def _openai_compatible_vendor(self, meta_or_base_url: dict | str) -> str:
+        """按 base_url 粗略识别 OpenAI-compatible 后端家族。"""
+        base_url = meta_or_base_url.get("base_url", "") if isinstance(meta_or_base_url, dict) else meta_or_base_url
+        host = self._host(str(base_url or ""))
+        if not host:
+            return "unknown"
+        if host in OFFICIAL_OPENAI_HOSTS or host.endswith(".openai.com"):
+            return "openai"
+        if host in {"127.0.0.1", "localhost", "0.0.0.0"} or host.endswith(".local"):
+            return "local"
+        if "deepseek.com" in host:
+            return "deepseek"
+        if "dashscope" in host or "aliyuncs.com" in host:
+            return "dashscope"
+        if "moonshot" in host or "kimi.com" in host:
+            return "moonshot"
+        if host == "api.z.ai" or host.endswith(".z.ai") or "bigmodel.cn" in host or "zhipu" in host:
+            return "zai"
+        if "volcengine" in host or "volces.com" in host:
+            return "volcengine"
+        return "unknown"
 
     def _resolve_model_capability_policy(self, model: str) -> ModelCapabilityPolicy | None:
         """按模型名解析最先命中的兼容策略。
@@ -135,7 +263,7 @@ class LiteLLMGateway:
         supports_reasoning = bool(provider == "openai_compatible" and policy and policy.supports_reasoning)
         supports_reasoning_effort = bool(
             policy and policy.supports_reasoning and (
-                policy.name == "openai-gpt5"
+                policy.name == "openai-reasoning"
                 or policy.name == "deepseek-thinking"
             )
         )
@@ -143,11 +271,12 @@ class LiteLLMGateway:
             reasoning_options = [
                 {"value": "off", "label": "关闭"},
                 {"value": "auto", "label": "自动"},
-                {"value": "low", "label": "低"},
-                {"value": "medium", "label": "中"},
                 {"value": "high", "label": "高"},
                 {"value": "xhigh", "label": "极高"},
             ]
+            if policy and policy.name != "deepseek-thinking":
+                reasoning_options.insert(2, {"value": "low", "label": "低"})
+                reasoning_options.insert(3, {"value": "medium", "label": "中"})
             reasoning_mode_kind = "leveled"
         elif supports_reasoning:
             reasoning_options = [
@@ -176,7 +305,7 @@ class LiteLLMGateway:
         """
         provider = self._normalize_provider(config_dict.get("provider", ""))
         model = str(config_dict.get("model", "") or "").strip()
-        base_url = str(config_dict.get("base_url", "") or "").strip()
+        base_url = resolve_ai_provider_base_url(provider, str(config_dict.get("base_url", "") or ""))
         policy = self._resolve_model_capability_policy(model)
         reasoning_meta = self._build_reasoning_mode_meta(provider, policy)
 
@@ -299,6 +428,23 @@ class LiteLLMGateway:
         for note in notes:
             logger.warning(f"[LLM参数兼容修正] {note}")
 
+    def _redact_request_kwargs_for_log(self, request_kwargs: dict) -> dict:
+        """脱敏请求参数，避免 Debug 日志泄露 API Key。"""
+        redacted = dict(request_kwargs or {})
+        for key in list(redacted.keys()):
+            lowered = str(key).lower()
+            is_sensitive = (
+                lowered in {"api_key", "authorization", "password", "secret"}
+                or lowered.endswith("_api_key")
+                or lowered.endswith("_token")
+                or lowered.endswith("_password")
+                or lowered.endswith("_secret")
+            )
+            if is_sensitive:
+                value = str(redacted.get(key) or "")
+                redacted[key] = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
+        return redacted
+
     # =========================================================================
     # 厂商与模型探测
     # =========================================================================
@@ -317,7 +463,7 @@ class LiteLLMGateway:
     def get_models(self, config_dict: dict) -> List[str]:
         """根据临时配置拉取模型列表，并对结果做短期缓存。"""
         provider = self._normalize_provider(config_dict.get("provider", ""))
-        base_url = (config_dict.get("base_url") or DEFAULT_BASE_URLS.get(provider, "")).rstrip("/")
+        base_url = resolve_ai_provider_base_url(provider, config_dict.get("base_url", ""))
         api_key = config_dict.get("api_key", "")
 
         if not provider or not base_url: return []
@@ -344,9 +490,12 @@ class LiteLLMGateway:
         try:
             # 1) Ollama 原生
             if provider == "ollama":
-                resp = requests.get(f"{base_url}/api/tags", proxies=proxies, timeout=10)
-                if resp.status_code == 200:
-                    return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
+                try:
+                    resp = requests.get(f"{base_url}/api/tags", proxies=proxies, timeout=5)
+                    if resp.status_code == 200:
+                        return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
+                except requests.exceptions.RequestException as exc:
+                    logger.warning(f"[AI模型列表] Ollama 未连接或不可用 base_url={base_url}: {exc}")
                 return []
 
             # 2) Gemini 原生
@@ -432,21 +581,24 @@ class LiteLLMGateway:
 
         if override_config:
             current_dict = asdict(cfg)
+            valid_config_keys = {field.name for field in fields(AIConfig)}
             # override_config 只覆盖“本次调用”的临时参数。
             # reasoning 相关字段已经不属于全局 AIConfig，避免在这里重新塞回 dataclass。
             filtered_override = {
                 key: value
                 for key, value in dict(override_config or {}).items()
-                if key not in {"enable_reasoning", "reasoning_effort", "reasoning_mode"}
+                if key in valid_config_keys and key not in {"enable_reasoning", "reasoning_effort", "reasoning_mode"}
             }
             current_dict.update(filtered_override)
             cfg = AIConfig(**current_dict)
 
         provider = self._normalize_provider(getattr(cfg, "provider", "openai_compatible"))
-        base_url = (getattr(cfg, "base_url", "") or DEFAULT_BASE_URLS.get(provider, "")).rstrip("/")
+        base_url = resolve_ai_provider_base_url(provider, getattr(cfg, "base_url", ""))
         endpoint_mode = (getattr(cfg, "endpoint_mode", "auto") or "auto").strip().lower()
         model_name = getattr(cfg, "model", "")
-        capability_policy = self._resolve_model_capability_policy(model_name)
+        openai_wire_model, openai_routed_model = self._normalize_openai_compatible_model_names(model_name)
+        capability_model_name = openai_wire_model if provider == "openai_compatible" else model_name
+        capability_policy = self._resolve_model_capability_policy(capability_model_name)
         requested_reasoning_mode = _normalize_reasoning_mode(override_data.get("reasoning_mode", ""))
         if "reasoning_mode" not in override_data and ("enable_reasoning" in override_data or "reasoning_effort" in override_data):
             if not bool(override_data.get("enable_reasoning", False)):
@@ -458,9 +610,9 @@ class LiteLLMGateway:
 
         kwargs = {
             "api_key": getattr(cfg, "api_key", "") or "dummy_key",
-            "model": model_name,
+            "model": openai_routed_model if provider == "openai_compatible" else model_name,
             "_rmm_provider": provider,
-            "_rmm_raw_model": model_name,
+            "_rmm_raw_model": openai_wire_model if provider == "openai_compatible" else model_name,
             "_rmm_base_url": base_url,
             "_rmm_endpoint_mode": endpoint_mode,
             "_rmm_reasoning_mode": requested_reasoning_mode,
@@ -474,8 +626,14 @@ class LiteLLMGateway:
         if getattr(cfg, "temperature", None) is not None:
             kwargs["temperature"] = cfg.temperature
 
-        if getattr(cfg, "max_tokens", None):
-            kwargs["max_tokens"] = cfg.max_tokens
+        resolve_output_tokens = getattr(cfg, "resolved_max_output_tokens", None)
+        max_output_tokens = (
+            resolve_output_tokens()
+            if callable(resolve_output_tokens)
+            else int(getattr(cfg, "max_output_tokens", 0) or 4096)
+        )
+        if max_output_tokens:
+            kwargs["max_output_tokens"] = max_output_tokens
 
         # 深度思考只接受“本次调用显式覆盖”。
         # 不再从全局 AI 设置里自动继承 enable_reasoning，避免它重新变成全局开关。
@@ -515,7 +673,7 @@ class LiteLLMGateway:
         elif provider == "gemini":
             kwargs["model"] = f"gemini/{cfg.model}"
         elif provider == "ollama":
-            kwargs["model"] = f"ollama/{cfg.model}"
+            kwargs["model"] = f"ollama_chat/{cfg.model}"
         else:
             raise ValueError(f"Unsupported AI provider: {provider}")
 
@@ -546,12 +704,35 @@ class LiteLLMGateway:
             "reasoning_mode": _normalize_reasoning_mode(kwargs.pop("_rmm_reasoning_mode", "off")),
             "reasoning_effort": _normalize_reasoning_effort(kwargs.pop("_rmm_reasoning_effort", "medium")),
         }
+        if meta["provider"] == "openai_compatible":
+            raw_model, routed_model = self._normalize_openai_compatible_model_names(
+                meta["raw_model"] or kwargs.get("model", "")
+            )
+            meta["raw_model"] = raw_model
+            if routed_model:
+                kwargs["model"] = routed_model
         # 后续 chat/responses 参数构造仍需要知道本次是否开启深度思考，
         # 因此在 meta 里留一份规范化后的逻辑开关，避免被上一步 pop 掉后丢失。
         kwargs["_rmm_enable_reasoning"] = meta["enable_reasoning"]
         kwargs["_rmm_reasoning_mode"] = meta["reasoning_mode"]
         kwargs["_rmm_reasoning_effort"] = meta["reasoning_effort"]
         return kwargs, meta
+
+    def _drop_internal_request_fields(self, request_kwargs: dict) -> dict:
+        """删除只供本兼容层消费的内部字段，避免传给 LiteLLM。"""
+        kwargs = dict(request_kwargs)
+        for key in list(kwargs.keys()):
+            if key.startswith("_rmm_"):
+                kwargs.pop(key, None)
+        return kwargs
+
+    def _normalize_litellm_request_fields(self, request_kwargs: dict) -> dict:
+        """把后端统一字段映射为 LiteLLM 兼容字段。"""
+        kwargs = self._drop_internal_request_fields(request_kwargs)
+        max_output_tokens = kwargs.pop("max_output_tokens", None)
+        if max_output_tokens:
+            kwargs["max_tokens"] = max_output_tokens
+        return kwargs
 
     def _sanitize_openai_compatible_params(self, request_kwargs: dict, meta: dict) -> tuple[dict, list[str]]:
         """清洗 OpenAI-compatible 调用参数，并返回兼容修正说明。"""
@@ -565,13 +746,13 @@ class LiteLLMGateway:
         if kwargs.get("temperature", None) is None:
             kwargs.pop("temperature", None)
 
-        # GPT-5 兼容优先：不强塞 temperature
-        if self._is_gpt5_family(meta["raw_model"]):
+        # OpenAI reasoning 模型对 temperature 支持更严格；官方端点不强塞采样参数。
+        if self._is_official_openai_base(meta.get("base_url", "")) and self._is_openai_reasoning_family(meta["raw_model"]):
             temp = kwargs.get("temperature")
-            if temp not in (None, 1, 1.0):
+            if temp is not None:
                 kwargs.pop("temperature", None)
                 notes.append(
-                    f"检测到 {meta['raw_model']} 属于 GPT-5 家族，"
+                    f"检测到 {meta['raw_model']} 属于 OpenAI reasoning 家族，"
                     f"已自动移除 temperature={temp} 以避免兼容问题。"
                 )
 
@@ -852,21 +1033,54 @@ class LiteLLMGateway:
                 return True
         return False
 
-    def _normalize_chat_messages_for_provider(self, messages: list[dict], meta: dict) -> list[dict]:
+    def _messages_have_reasoning_content(self, messages: list[dict]) -> bool:
+        """判断历史消息里是否包含可回灌的 reasoning_content。"""
+        return any(bool(m.get("reasoning_content")) for m in messages or [])
+
+    def _dashscope_should_preserve_thinking(self, meta: dict, request_kwargs: dict | None = None) -> bool:
+        """判断 DashScope/Qwen 本轮是否应启用 preserve_thinking。"""
+        extra_body = dict((request_kwargs or {}).get("extra_body") or {})
+        if "preserve_thinking" in extra_body:
+            return bool(extra_body.get("preserve_thinking"))
+        return self._supports_dashscope_preserve_thinking(meta.get("raw_model", ""))
+
+    def _should_preserve_reasoning_content(self, meta: dict, request_kwargs: dict | None = None) -> bool:
+        """判断当前 provider 是否明确支持历史 reasoning_content 回灌。"""
+        capability_policy = self._resolve_model_capability_policy(meta.get("raw_model", ""))
+        if not capability_policy or not capability_policy.supports_reasoning:
+            return False
+        if not bool((request_kwargs or {}).get("_rmm_enable_reasoning", False)):
+            return False
+
+        vendor = self._openai_compatible_vendor(meta)
+        if capability_policy.name == "deepseek-thinking":
+            return vendor == "deepseek" and self._supports_deepseek_thinking_controls(meta.get("raw_model", ""))
+        if capability_policy.name == "qwen-thinking":
+            return vendor == "dashscope" and self._dashscope_should_preserve_thinking(meta, request_kwargs)
+        if capability_policy.name == "kimi-thinking":
+            return vendor == "moonshot"
+        if capability_policy.name == "glm-thinking":
+            return vendor == "zai"
+        return False
+
+    def _normalize_chat_messages_for_provider(
+        self,
+        messages: list[dict],
+        meta: dict,
+        request_kwargs: dict | None = None,
+    ) -> list[dict]:
         """对 OpenAI-compatible chat 消息做最小兼容整理。
 
         目前主要处理 reasoning/thinking 模型的历史回灌：
         - 普通模型：忽略未知字段，不做额外处理
-        - 已知需要 replay 的模型：保留 `reasoning_content`
+        - 已知且当前端点明确支持 replay 的模型：保留 `reasoning_content`
 
         这样做的原因：
         - OpenAI 官方模型通常不依赖这个字段
-        - 但 DeepSeek 等 thinking 模型在多轮工具调用里会强校验它是否被带回
+        - 但部分 thinking 模型在多轮工具调用里会强校验它是否被带回
         - 因此不能全局硬塞，也不能一刀切删除
         """
-        raw_model = meta.get("raw_model", "")
-        capability_policy = self._resolve_model_capability_policy(raw_model)
-        keep_reasoning = bool(capability_policy and capability_policy.requires_reasoning_replay)
+        keep_reasoning = self._should_preserve_reasoning_content(meta, request_kwargs)
         normalized_messages: list[dict] = []
 
         for msg in messages or []:
@@ -893,12 +1107,7 @@ class LiteLLMGateway:
 
             input_messages.append({
                 "role": role,
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": self._message_text(m.get("content", "")),
-                    }
-                ],
+                "content": self._message_text(m.get("content", "")),
             })
 
         return instructions, input_messages
@@ -921,37 +1130,60 @@ class LiteLLMGateway:
     ) -> dict:
         """统一构造 chat.completions.create(...) 参数。"""
         capability_policy = self._resolve_model_capability_policy(meta["raw_model"])
+        normalized_messages = self._normalize_chat_messages_for_provider(messages, meta, request_kwargs)
         create_kwargs = {
             "model": meta["raw_model"],
-            "messages": self._normalize_chat_messages_for_provider(messages, meta),
+            "messages": normalized_messages,
             "stream": stream,
         }
 
         if "temperature" in request_kwargs:
             create_kwargs["temperature"] = request_kwargs["temperature"]
 
-        if request_kwargs.get("max_tokens"):
-            create_kwargs["max_tokens"] = request_kwargs["max_tokens"]
+        if request_kwargs.get("max_output_tokens"):
+            if self._is_official_openai_base(meta.get("base_url", "")) and self._is_openai_reasoning_family(meta["raw_model"]):
+                create_kwargs["max_completion_tokens"] = request_kwargs["max_output_tokens"]
+            else:
+                create_kwargs["max_tokens"] = request_kwargs["max_output_tokens"]
 
         # OpenAI-compatible 没有统一的 thinking 开关字段。
         # 这里统一把“逻辑开关 + 强度”翻译成各模型真正接受的参数。
-        enable_reasoning = bool(request_kwargs.pop("_rmm_enable_reasoning", False))
-        reasoning_mode = _normalize_reasoning_mode(request_kwargs.pop("_rmm_reasoning_mode", "off"))
-        reasoning_effort = _normalize_reasoning_effort(request_kwargs.pop("_rmm_reasoning_effort", "medium"))
+        enable_reasoning = bool(request_kwargs.get("_rmm_enable_reasoning", False))
+        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rmm_reasoning_mode", "off"))
+        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rmm_reasoning_effort", "medium"))
         extra_body = dict(request_kwargs.get("extra_body") or {})
+        vendor = self._openai_compatible_vendor(meta)
 
         if capability_policy and capability_policy.supports_reasoning:
-            if "thinking" in (capability_policy.reasoning_extra_body or {}):
-                # DeepSeek / Kimi / GLM / 豆包这类兼容层默认 thinking=enabled。
-                # 如果用户关闭深度思考，必须显式传 disabled，否则服务端仍可能返回 reasoning_content。
-                extra_body["thinking"] = {"type": "enabled" if enable_reasoning else "disabled"}
-                if enable_reasoning:
-                    if re.search(r"deepseek", meta["raw_model"], re.IGNORECASE) and reasoning_mode in {"low", "medium", "high", "xhigh"}:
-                        deepseek_effort = "max" if reasoning_effort == "xhigh" else "high"
-                        create_kwargs["reasoning_effort"] = deepseek_effort
+            if capability_policy.name == "openai-reasoning":
+                if enable_reasoning and reasoning_mode != "auto":
+                    gpt_effort = "high" if reasoning_effort == "xhigh" else reasoning_effort
+                    create_kwargs["reasoning_effort"] = gpt_effort
+            elif capability_policy.name == "deepseek-thinking":
+                if vendor == "deepseek" and self._supports_deepseek_thinking_controls(meta["raw_model"]):
+                    extra_body["thinking"] = {"type": "enabled" if enable_reasoning else "disabled"}
+                    if enable_reasoning and reasoning_mode != "auto":
+                        create_kwargs["reasoning_effort"] = "max" if reasoning_effort == "xhigh" else "high"
+            elif "thinking" in (capability_policy.reasoning_extra_body or {}):
+                if vendor in {"dashscope", "moonshot", "zai", "volcengine"}:
+                    thinking_body = {"type": "enabled" if enable_reasoning else "disabled"}
+                    if enable_reasoning and self._messages_have_reasoning_content(normalized_messages):
+                        if capability_policy.name == "kimi-thinking" and vendor == "moonshot":
+                            thinking_body["keep"] = "all"
+                        elif capability_policy.name == "glm-thinking" and vendor == "zai":
+                            thinking_body["clear_thinking"] = False
+                    extra_body["thinking"] = thinking_body
             elif "enable_thinking" in (capability_policy.reasoning_extra_body or {}):
-                # Qwen / QwQ 一类兼容层通常也走 extra_body。
-                extra_body["enable_thinking"] = enable_reasoning
+                # DashScope/Qwen 使用根级 enable_thinking；本地兼容服务不应按模型名误收该字段。
+                if vendor == "dashscope":
+                    extra_body["enable_thinking"] = enable_reasoning
+                    if (
+                        enable_reasoning
+                        and self._messages_have_reasoning_content(normalized_messages)
+                        and self._dashscope_should_preserve_thinking(meta, request_kwargs)
+                        and "preserve_thinking" not in extra_body
+                    ):
+                        extra_body["preserve_thinking"] = True
             elif "reasoning" in (capability_policy.reasoning_extra_body or {}):
                 if enable_reasoning:
                     gpt_effort = "medium" if reasoning_mode == "auto" else ("high" if reasoning_effort == "xhigh" else reasoning_effort)
@@ -994,22 +1226,28 @@ class LiteLLMGateway:
         if instructions:
             create_kwargs["instructions"] = instructions
 
-        if request_kwargs.get("max_tokens"):
-            create_kwargs["max_output_tokens"] = request_kwargs["max_tokens"]
+        if request_kwargs.get("max_output_tokens"):
+            create_kwargs["max_output_tokens"] = request_kwargs["max_output_tokens"]
 
-        # GPT-5 在 responses 接口下对 temperature 更敏感，默认不透传。
-        if "temperature" in request_kwargs and not self._is_gpt5_family(meta["raw_model"]):
+        # OpenAI reasoning 模型在 responses 接口下对 temperature 更敏感，默认不透传。
+        if (
+            "temperature" in request_kwargs
+            and not (
+                self._is_official_openai_base(meta.get("base_url", ""))
+                and self._is_openai_reasoning_family(meta["raw_model"])
+            )
+        ):
             create_kwargs["temperature"] = request_kwargs["temperature"]
 
-        enable_reasoning = bool(request_kwargs.pop("_rmm_enable_reasoning", False))
-        reasoning_mode = _normalize_reasoning_mode(request_kwargs.pop("_rmm_reasoning_mode", "off"))
-        reasoning_effort = _normalize_reasoning_effort(request_kwargs.pop("_rmm_reasoning_effort", "medium"))
+        enable_reasoning = bool(request_kwargs.get("_rmm_enable_reasoning", False))
+        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rmm_reasoning_mode", "off"))
+        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rmm_reasoning_effort", "medium"))
 
         # Responses 模式下目前主要服务 GPT-5。
         # 这里仍按统一逻辑开关处理，避免前端覆盖在 responses 路径失效。
         if capability_policy and capability_policy.supports_reasoning and "reasoning" in (capability_policy.reasoning_extra_body or {}):
-            if enable_reasoning:
-                gpt_effort = "medium" if reasoning_mode == "auto" else ("high" if reasoning_effort == "xhigh" else reasoning_effort)
+            if enable_reasoning and reasoning_mode != "auto":
+                gpt_effort = "high" if reasoning_effort == "xhigh" else reasoning_effort
                 create_kwargs["reasoning"] = {"effort": gpt_effort}
 
         return create_kwargs
@@ -1173,11 +1411,15 @@ class LiteLLMGateway:
         request_kwargs, meta = self._strip_private_meta(combined_kwargs)
         request_kwargs.pop("messages", None)
 
-        logger.debug(f"AI调用，协议: {meta['provider']}，模型: {meta['raw_model']}，参数: {request_kwargs}, 消息: {messages}")
+        logger.debug(
+            f"AI调用，协议: {meta['provider']}，模型: {meta['raw_model']}，"
+            f"参数: {self._redact_request_kwargs_for_log(request_kwargs)}, 消息: {messages}"
+        )
         
         if meta["provider"] == "openai_compatible":
             return self._openai_compatible_completion(messages, request_kwargs, meta)
 
+        request_kwargs = self._normalize_litellm_request_fields(request_kwargs)
         return litellm_completion(messages=messages, **request_kwargs)
 
     async def acompletion(self, *, messages: list[dict], llm_kwargs: dict, **extra: Any):
@@ -1188,11 +1430,15 @@ class LiteLLMGateway:
         request_kwargs, meta = self._strip_private_meta(combined_kwargs)
         request_kwargs.pop("messages", None)
         
-        logger.debug(f"AI调用，协议: {meta['provider']}，模型: {meta['raw_model']}，参数: {request_kwargs}, 消息: {messages}")
+        logger.debug(
+            f"AI调用，协议: {meta['provider']}，模型: {meta['raw_model']}，"
+            f"参数: {self._redact_request_kwargs_for_log(request_kwargs)}, 消息: {messages}"
+        )
         
         if meta["provider"] == "openai_compatible":
             return await self._openai_compatible_acompletion(messages, request_kwargs, meta)
 
+        request_kwargs = self._normalize_litellm_request_fields(request_kwargs)
         return await litellm_acompletion(messages=messages, **request_kwargs)
 
     # =========================================================================

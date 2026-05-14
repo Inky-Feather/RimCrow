@@ -190,7 +190,9 @@ export const useAppStore = defineStore('app', () => {
       api_key: '',
       model: 'gpt-3.5-turbo',
       temperature: 0.7,
-      max_tokens: 5000,
+      max_output_tokens: 0,
+      max_input_tokens: 0,
+      context_window_tokens: 0,
       max_concurrency: 3,     // 最大并发请求数（避免被API封锁）
     },
     steam_web_api_key: '',

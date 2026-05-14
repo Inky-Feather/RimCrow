@@ -3372,8 +3372,15 @@ class API:
         # 如果是字典，先转成对象，方便统一调用 asdict
         if isinstance(ai_cfg, dict):
             ai_cfg = AIConfig(**ai_cfg)
+        config_payload = asdict(ai_cfg)
+        config_payload["resolved_token_budget"] = {
+            "profile": ai_cfg.model_token_budget(),
+            "context_window_tokens": ai_cfg.resolved_context_window_tokens(),
+            "max_input_tokens": ai_cfg.resolved_max_input_tokens(),
+            "max_output_tokens": ai_cfg.resolved_max_output_tokens(),
+        }
         return ApiResponse.success({
-            "config": asdict(ai_cfg),
+            "config": config_payload,
             "prompts": self.ai_mgr.prompts,
             "assistants": self.ai_mgr.assistants,
             "tasks": self.ai_mgr.tasks,
@@ -3395,7 +3402,9 @@ class API:
                 "api_key",
                 "model",
                 "temperature",
-                "max_tokens",
+                "max_output_tokens",
+                "max_input_tokens",
+                "context_window_tokens",
                 "max_concurrency",
             }
             for k, v in (config_data or {}).items():
@@ -3431,16 +3440,10 @@ class API:
         if not ai_cfg.enabled:
             return ApiResponse.error("AI 功能未启用，请前往设置开启。")
 
-        provider = (ai_cfg.provider or "").strip()
-        base_url = (ai_cfg.base_url or "").strip()
-        model = (ai_cfg.model or "").strip()
-        api_key = (ai_cfg.api_key or "").strip()
-
-        if not provider or not base_url or not model:
-            return ApiResponse.error("AI 配置不完整，请检查配置")
-
-        if provider in ("anthropic", "gemini") and not api_key:
-            return ApiResponse.error("当前协议要求填写 API Key。")
+        from backend.ai.ai_gateway import validate_ai_connection_config
+        ok, message = validate_ai_connection_config(ai_cfg)
+        if not ok:
+            return ApiResponse.error(message)
 
         return ApiResponse.success()
 
@@ -3712,7 +3715,7 @@ class API:
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
         if not full_logs:
             return ApiResponse.error("无法读取指定的日志内容，文件可能已被清理。")
-        token_limit = settings.config.ai.max_tokens
+        token_limit = settings.config.ai.resolved_max_input_tokens()
         from backend.managers.mgr_game_logs import LogCondenser
         condensed_data = LogCondenser.condense_for_ai( full_logs, token_limit=token_limit, stack_preview_lines=2 )
         from litellm import token_counter
@@ -3822,7 +3825,7 @@ class API:
             return ApiResponse.warning("当前日志文件中没有可分析的内容。")
         # 全局扫描默认额外保留 2 行堆栈预览，并使用更保守的预算比例，
         # 这样前端能更快看到结果，也能让后续 AI 调用留出足够余量。
-        token_limit = settings.config.ai.max_tokens
+        token_limit = settings.config.ai.resolved_max_input_tokens()
         diagnosis_context = LogCondenser.condense_for_ai( raw_logs, token_limit=token_limit, char_budget_ratio=0.65, stack_preview_lines=2)
         # 压缩完成后再计算实际 Token 占用，前端顶部记忆计数直接使用这个结果。
         text_to_estimate = json.dumps(diagnosis_context, ensure_ascii=False)

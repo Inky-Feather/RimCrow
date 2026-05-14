@@ -66,6 +66,14 @@ DUPLICATE_TOOL_CALL_ERROR = (
 )
 DEFAULT_LOG_ASSISTANT_QUESTION = "请深度分析我提交的日志数据，并给出修复建议。"
 DEFAULT_LOG_GLOBAL_SCAN_QUESTION = "请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。"
+TOOL_UNSUPPORTED_FALLBACK_NOTICE = (
+    "系统提示：当前模型或接口不支持原生工具调用。本轮已禁用外部工具，"
+    "请不要再尝试调用工具，只基于当前已经提供的上下文给出最终分析。"
+)
+TOOL_UNSUPPORTED_USER_WARNING = {
+    "code": "tools_unsupported",
+    "message": "该模型不支持工具调用，无法获取更详细的信息。",
+}
 
 def get_prompt_config(prompt_store: dict[str, Any], prompt_id: str) -> dict[str, Any]:
     """读取并复制指定 prompt 配置。"""
@@ -1256,6 +1264,25 @@ class AssistantRuntime:
     def _normalize_reasoning_content(self, reasoning_content: Any) -> str:
         return self._message_text(reasoning_content)
 
+    def _extract_reasoning_content(self, obj: Any) -> str:
+        """兼容 reasoning_content 与 vLLM 新版 reasoning 字段。"""
+        reasoning_content = getattr(obj, "reasoning_content", None)
+        if reasoning_content is None or reasoning_content == "":
+            reasoning_content = getattr(obj, "reasoning", "")
+        return self._normalize_reasoning_content(reasoning_content)
+
+    def _split_inline_reasoning_from_content(self, content: str, existing_reasoning: str = "") -> tuple[str, str]:
+        """兼容本地模型把思考过程直接包在 <think>...</think> 中输出。"""
+        normalized_content = str(content or "")
+        match = re.match(r"^\s*<think>\s*([\s\S]*?)\s*</think>\s*", normalized_content, flags=re.IGNORECASE)
+        if not match:
+            return normalized_content, str(existing_reasoning or "")
+
+        inline_reasoning = match.group(1).strip()
+        remaining_content = normalized_content[match.end():]
+        reasoning_parts = [part for part in (str(existing_reasoning or "").strip(), inline_reasoning) if part]
+        return remaining_content, "\n".join(reasoning_parts)
+
     def _estimate_text_tokens(self, text: str, model_name: str) -> int:
         return estimate_text_tokens(self.llm, text, model_name)
 
@@ -1329,6 +1356,52 @@ class AssistantRuntime:
             })
         return formatted_tool_calls
 
+    def _is_tool_unsupported_error(self, exc: Exception) -> bool:
+        """识别模型/接口明确拒绝原生工具调用的错误。"""
+        text = str(exc or "").lower()
+        signals = (
+            "does not support tools",
+            "tools are not supported",
+            "tool calling is not supported",
+            "tool calls are not supported",
+            "unsupported tools",
+            "unsupported tool",
+        )
+        return any(signal in text for signal in signals)
+
+    def _messages_with_tool_fallback_notice(self, messages: list[dict]) -> list[dict]:
+        """为不支持原生工具调用的降级请求补充约束说明。
+
+        不把 system 提示追加到末尾：部分 Ollama 模型的 chat template 要求末尾
+        是真实用户/助手内容，末尾 system 会触发 "no input provided"。
+        """
+        fallback_messages = []
+        notice_inserted = False
+        for message in (messages or []):
+            next_message = dict(message)
+            if not notice_inserted and str(next_message.get("role") or "").lower() == "system":
+                content = self._message_text(next_message.get("content", "")).strip()
+                next_message["content"] = (
+                    f"{TOOL_UNSUPPORTED_FALLBACK_NOTICE}\n\n{content}"
+                    if content
+                    else TOOL_UNSUPPORTED_FALLBACK_NOTICE
+                )
+                notice_inserted = True
+            fallback_messages.append(next_message)
+        if not notice_inserted:
+            fallback_messages.insert(0, {"role": "system", "content": TOOL_UNSUPPORTED_FALLBACK_NOTICE})
+        return fallback_messages
+
+    def _attach_completion_warning(self, result: dict[str, Any], warning: dict[str, str]) -> dict[str, Any]:
+        """给 completion 结果追加用户可见的结构化警告。"""
+        next_result = dict(result or {})
+        warnings = [dict(item) for item in (next_result.get("warnings") or []) if isinstance(item, dict)]
+        warning_code = str(warning.get("code") or "")
+        if not any(str(item.get("code") or "") == warning_code for item in warnings):
+            warnings.append(dict(warning))
+        next_result["warnings"] = warnings
+        return next_result
+
     def _run_completion_with_fallback(
         self,
         *,
@@ -1343,6 +1416,41 @@ class AssistantRuntime:
         except AssistantRequestCancelled:
             raise
         except Exception as exc:
+            if tools is not None and self._is_tool_unsupported_error(exc):
+                logger.warning(
+                    f"[AI会话] 当前模型不支持原生工具调用，自动禁用工具后重试 session_id={session_id} "
+                    f"error={type(exc).__name__}: {exc}"
+                )
+                fallback_messages = self._messages_with_tool_fallback_notice(messages)
+                try:
+                    return self._attach_completion_warning(
+                        self._stream_completion(
+                            messages=fallback_messages,
+                            llm_kwargs=llm_kwargs,
+                            session_id=session_id,
+                            tools=None,
+                            tool_choice=None,
+                        ),
+                        TOOL_UNSUPPORTED_USER_WARNING,
+                    )
+                except AssistantRequestCancelled:
+                    raise
+                except Exception as fallback_exc:
+                    if not self._is_retryable_stream_error(fallback_exc):
+                        raise
+                    logger.warning(
+                        f"[AI会话] 工具降级后的流式输出中断，自动回退为非流式补救 "
+                        f"session_id={session_id} error={type(fallback_exc).__name__}: {fallback_exc}"
+                    )
+                    return self._attach_completion_warning(
+                        self._complete_without_stream(
+                            messages=fallback_messages,
+                            llm_kwargs=llm_kwargs,
+                            tools=None,
+                            tool_choice=None,
+                        ),
+                        TOOL_UNSUPPORTED_USER_WARNING,
+                    )
             if not self._is_retryable_stream_error(exc):
                 raise
             logger.warning(
@@ -1360,26 +1468,30 @@ class AssistantRuntime:
         response = self.llm.completion(messages=messages, llm_kwargs=request_kwargs)
         message = response.choices[0].message  # type: ignore
         tool_calls = getattr(message, "tool_calls", None) or []
+        content_text, reasoning_content = self._split_inline_reasoning_from_content(
+            self._message_text(getattr(message, "content", "")),
+            self._extract_reasoning_content(message),
+        )
 
         if tool_calls:
-            reasoning_content = self._normalize_reasoning_content(getattr(message, "reasoning_content", ""))
             assistant_message = {
                 "is_tool_call": True,
                 "tool_calls": self._format_tool_calls(tool_calls),
                 "final_text": "",
+                "warnings": [],
             }
             if reasoning_content:
                 assistant_message["final_think"] = reasoning_content
             return assistant_message
 
-        dsml_tool_calls = self._parse_dsml_tool_calls(self._message_text(getattr(message, "content", "")))
+        dsml_tool_calls = self._parse_dsml_tool_calls(content_text)
         if dsml_tool_calls:
-            reasoning_content = self._normalize_reasoning_content(getattr(message, "reasoning_content", ""))
             logger.warning(f"[AI会话] 检测到 DSML 伪工具调用文本，已回收为 tool_calls count={len(dsml_tool_calls)}")
             assistant_message = {
                 "is_tool_call": True,
                 "tool_calls": dsml_tool_calls,
                 "final_text": "",
+                "warnings": [],
             }
             if reasoning_content:
                 assistant_message["final_think"] = reasoning_content
@@ -1388,8 +1500,9 @@ class AssistantRuntime:
         return {
             "is_tool_call": False,
             "tool_calls": [],
-            "final_think": self._normalize_reasoning_content(getattr(message, "reasoning_content", "")),
-            "final_text": self._message_text(getattr(message, "content", "")),
+            "final_think": reasoning_content,
+            "final_text": content_text,
+            "warnings": [],
         }
 
     def _stream_completion(self, messages, llm_kwargs, session_id, tools=None, tool_choice=None):
@@ -1427,11 +1540,10 @@ class AssistantRuntime:
                     if getattr(tc.function, "arguments", None):
                         tool_calls_dict[idx]["arguments"] += tc.function.arguments or ""
 
-            if getattr(delta, "reasoning_content", None):
-                think_chunk = self._message_text(delta.reasoning_content)
-                if think_chunk:
-                    final_think += think_chunk
-                    EventBus.emit("ai-chat-stream", {"session_id": session_id, "type": "reasoning", "chunk": think_chunk})
+            think_chunk = self._extract_reasoning_content(delta)
+            if think_chunk:
+                final_think += think_chunk
+                EventBus.emit("ai-chat-stream", {"session_id": session_id, "type": "reasoning", "chunk": think_chunk})
 
             if getattr(delta, "content", None):
                 content_chunk = self._message_text(delta.content)
@@ -1445,6 +1557,8 @@ class AssistantRuntime:
 
         self._raise_if_cancelled(session_id, response)
         formatted_tool_calls = []
+        final_text, final_think = self._split_inline_reasoning_from_content(final_text, final_think)
+
         if is_tool_call:
             for _, tc in sorted(tool_calls_dict.items()):
                 formatted_tool_calls.append({
@@ -1461,6 +1575,7 @@ class AssistantRuntime:
                     "tool_calls": dsml_tool_calls,
                     "final_think": final_think,
                     "final_text": "",
+                    "warnings": [],
                 }
 
         return {
@@ -1468,6 +1583,7 @@ class AssistantRuntime:
             "tool_calls": formatted_tool_calls,
             "final_think": final_think,
             "final_text": final_text,
+            "warnings": [],
         }
 
     def _extract_streaming_analysis_preview(self, text: str) -> str:
@@ -1627,6 +1743,7 @@ class AssistantRuntime:
                     stream_result.get("final_think", ""),
                     assistant=assistant,
                 )
+                final_response["warnings"] = list(stream_result.get("warnings") or [])
                 final_response["reasoning_content"] = reasoning_text
                 token_usage["estimated_total_tokens"] = (
                     token_usage["estimated_prompt_tokens"] + token_usage["estimated_completion_tokens"]
@@ -2097,6 +2214,7 @@ class AssistantRuntime:
                 stream_result.get("final_think", ""),
                 assistant=assistant,
             )
+            final_response["warnings"] = list(stream_result.get("warnings") or [])
             final_response["reasoning_content"] = reasoning_text
             if not final_response.get("analysis"):
                 final_response["analysis"] = "AI 已完成查证，但没有生成有效总结文本。建议查看上方工具步骤详情，优先核对关键上下文。"

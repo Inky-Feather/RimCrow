@@ -1,7 +1,15 @@
 import unittest
+import json
 import sys
 import types
 from types import SimpleNamespace
+
+try:
+    import json_repair  # noqa: F401
+except ModuleNotFoundError:
+    json_repair_stub = types.ModuleType("json_repair")
+    json_repair_stub.repair_json = lambda text, return_objects=False: json.loads(text)
+    sys.modules["json_repair"] = json_repair_stub
 
 tools_stub = types.ModuleType("backend.ai.ai_tools")
 
@@ -20,7 +28,11 @@ class AIToolExecutorStub:
     def __init__(self, *args, **kwargs):
         pass
 
-    def get_tool_schemas(self, tool_names=None): return []
+    def get_tool_schemas(self, tool_names=None):
+        return [
+            {"type": "function", "function": {"name": name, "description": name, "parameters": {}}}
+            for name in (tool_names or [])
+        ]
 
     def build_tool_call_display(self, func_name, func_args):
         return {
@@ -196,6 +208,58 @@ class StreamingJsonLlmStub(LlmStub):
         return generator()
 
 
+class ReasoningFieldLlmStub(LlmStub):
+    def completion(self, messages=None, llm_kwargs=None, stream=False, tools=None, tool_choice=None):
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"analysis":"hello"}', reasoning="vllm trace"),
+                )
+            ]
+        )
+
+
+class InlineThinkLlmStub(LlmStub):
+    def completion(self, messages=None, llm_kwargs=None, stream=False, tools=None, tool_choice=None):
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='<think>local trace</think>{"analysis":"hello"}'),
+                )
+            ]
+        )
+
+
+class ToolUnsupportedThenStreamingLlmStub(LlmStub):
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def completion(self, messages=None, llm_kwargs=None, stream=False, tools=None, tool_choice=None):
+        self.completion_calls += 1
+        self.calls.append({
+            "stream": stream,
+            "tools": tools,
+            "tool_choice": tool_choice,
+            "messages": list(messages or []),
+        })
+        if tools is not None:
+            raise Exception('Ollama_chatException - {"error":"model does not support tools"}')
+        if messages and str(messages[-1].get("role") or "") == "system":
+            raise Exception('Ollama_chatException - {"error":"Failed to create new sequence: no input provided"}')
+
+        def generator():
+            yield SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content='{"analysis":"fallback"}', reasoning_content=None, tool_calls=None),
+                    )
+                ]
+            )
+
+        return generator()
+
+
 class TestAssistantRuntime(unittest.TestCase):
     def test_run_session_records_single_trace(self):
         runtime = AssistantRuntime(AIDefinitionManagerStub(), LlmStub())
@@ -258,6 +322,28 @@ class TestAssistantRuntime(unittest.TestCase):
         second_contents = [str(item.get("content", "")) for item in second_messages]
         self.assertTrue(any("first" in content for content in second_contents))
         self.assertTrue(any("hello" in content for content in second_contents))
+
+    def test_complete_without_stream_reads_reasoning_field(self):
+        runtime = AssistantRuntime(AIDefinitionManagerStub(), ReasoningFieldLlmStub())
+
+        result = runtime._complete_without_stream(
+            messages=[{"role": "user", "content": "hi"}],
+            llm_kwargs={"model": "test-model"},
+        )
+
+        self.assertEqual(result["final_text"], '{"analysis":"hello"}')
+        self.assertEqual(result["final_think"], "vllm trace")
+
+    def test_complete_without_stream_extracts_inline_think_block(self):
+        runtime = AssistantRuntime(AIDefinitionManagerStub(), InlineThinkLlmStub())
+
+        result = runtime._complete_without_stream(
+            messages=[{"role": "user", "content": "hi"}],
+            llm_kwargs={"model": "test-model"},
+        )
+
+        self.assertEqual(result["final_text"], '{"analysis":"hello"}')
+        self.assertEqual(result["final_think"], "local trace")
 
     def test_runtime_accepts_canonical_assistant_context_request(self):
         runtime = AssistantRuntime(AIDefinitionManagerStub(), LlmStub())
@@ -516,6 +602,50 @@ class TestAssistantRuntime(unittest.TestCase):
 
         self.assertEqual(streamed_text, '第一行\n第二行，包含"引号"')
         self.assertIn('"actions"', result["final_text"])
+
+    def test_run_completion_disables_tools_when_provider_rejects_tool_calling(self):
+        llm = ToolUnsupportedThenStreamingLlmStub()
+        runtime = AssistantRuntime(AIDefinitionManagerStub(), llm)
+        tools = [{"type": "function", "function": {"name": "lookup", "description": "lookup", "parameters": {}}}]
+
+        result = runtime._run_completion_with_fallback(
+            messages=[{"role": "user", "content": "hi"}],
+            llm_kwargs={"model": "ollama_chat/gpt-oss-20b:latest"},
+            session_id="session-tool-fallback",
+            tools=tools,
+            tool_choice="auto",
+        )
+
+        self.assertEqual(result["final_text"], '{"analysis":"fallback"}')
+        self.assertEqual(llm.completion_calls, 2)
+        self.assertIsNotNone(llm.calls[0]["tools"])
+        self.assertIsNone(llm.calls[1]["tools"])
+        self.assertIsNone(llm.calls[1]["tool_choice"])
+        self.assertEqual(llm.calls[1]["messages"][-1]["role"], "user")
+        self.assertIn("不支持原生工具调用", llm.calls[1]["messages"][0]["content"])
+        self.assertEqual(result["warnings"][0]["code"], "tools_unsupported")
+        self.assertIn("不支持工具调用", result["warnings"][0]["message"])
+
+    def test_run_session_returns_warning_when_provider_rejects_tool_calling(self):
+        llm = ToolUnsupportedThenStreamingLlmStub()
+        runtime = AssistantRuntime(AIDefinitionManagerStub(), llm)
+        runtime.definition_manager.assistants["assistant.demo"]["tool_scope_selectable"] = ["lookup"]
+
+        result = runtime.run_session(
+            {
+                "session_id": "session-tool-warning",
+                "assistant_id": "assistant.demo",
+                "question": "hi",
+                "enabled_tools": ["lookup"],
+                "attachments": [],
+            },
+            active_context=None,
+            reader=None,
+        )
+
+        self.assertEqual(result["analysis"], "fallback")
+        self.assertEqual(result["warnings"][0]["code"], "tools_unsupported")
+        self.assertIn("不支持工具调用", result["warnings"][0]["message"])
 
     def test_runtime_emits_initial_request_usage_event(self):
         runtime = AssistantRuntime(AIDefinitionManagerStub(), LlmStub())

@@ -46,6 +46,35 @@ const UNSUPPORTED_REASONING_CAPABILITIES = {
   default_session_reasoning_mode: 'off',
 }
 
+const DEFAULT_AI_BASE_URLS = {
+  openai_compatible: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  ollama: 'http://127.0.0.1:11434',
+}
+
+const resolveAiProviderBaseUrl = (provider = '', baseUrl = '') => {
+  const normalizedProvider = normalizeText(provider, 'openai_compatible').toLowerCase()
+  const explicitBaseUrl = normalizeText(baseUrl).replace(/\/+$/, '')
+  return explicitBaseUrl || DEFAULT_AI_BASE_URLS[normalizedProvider] || ''
+}
+
+const normalizeAssistantWarnings = (warnings = []) => {
+  if (!Array.isArray(warnings)) return []
+  return warnings
+    .map((warning) => {
+      if (warning && typeof warning === 'object') {
+        return {
+          ...warning,
+          code: normalizeText(warning.code),
+          message: normalizeText(warning.message || warning.detail),
+        }
+      }
+      return { code: '', message: normalizeText(warning) }
+    })
+    .filter(warning => warning.message)
+}
+
 // 会话消息需要尽量保持结构稳定：
 // 这样流式补写、trace 回放和重新打开窗口时都能走同一套渲染路径。
 const normalizeSessionMessage = (message = {}, fallbackTimestamp = Date.now()) => {
@@ -73,6 +102,7 @@ const normalizeSessionMessage = (message = {}, fallbackTimestamp = Date.now()) =
     attachments: Array.isArray(message?.attachments) ? [...message.attachments] : [],
     tools: Array.isArray(message?.tools) ? [...message.tools] : [],
     actions: Array.isArray(message?.actions) ? [...message.actions] : [],
+    warnings: isAssistant ? normalizeAssistantWarnings(message?.warnings) : [],
     reasoning: isAssistant ? String(message?.reasoning ?? '') : '',
     tokenUsage: message?.tokenUsage || null,
     messageUsage: message?.messageUsage || null,
@@ -106,9 +136,6 @@ const normalizeSessionMessage = (message = {}, fallbackTimestamp = Date.now()) =
   title = '',
   sourceType = '',
   filename = '',
-    sessionModel = '',
-    sessionTemperature = null,
-    enabledTools = [],
   } = {}) => ({
     // 会话是多轮助手的一级实体，负责记住消息流、附件屏蔽态和会话级覆写；
     // ownerKey 只负责把业务入口绑定到“当前活跃会话”。
@@ -128,14 +155,30 @@ const normalizeSessionMessage = (message = {}, fallbackTimestamp = Date.now()) =
   isThinking: false,
   activeRequestId: null,
   consumedAutoStartNonce: null,
-  // 会话默认给出“自动”而不是直接跟随全局开关，
-  // 是为了让同一用户可以在某个对话里临时试用推理模型，而不影响其他入口。
-  reasoningMode: 'auto',
-  // 留空表示继续跟随全局设置；一旦手动改过，就把影响范围锁在当前会话。
-  sessionModel: normalizeText(sessionModel),
-  sessionTemperature: sessionTemperature == null ? null : normalizeNumber(sessionTemperature, 0.7),
-  enabledTools: Array.isArray(enabledTools) ? [...enabledTools] : [],
   sessionUsageSummary: null,
+})
+
+const createAssistantRuntimePrefs = ({
+  model = '',
+  modelTouched = false,
+  temperature = null,
+  temperatureTouched = false,
+  reasoningMode = 'auto',
+  reasoningModeTouched = false,
+  enabledTools = [],
+  enabledToolsTouched = false,
+} = {}) => ({
+  // 这些是“助手组件实例”的临时请求偏好，不属于某一条会话历史。
+  // 新建/清空会话时应继续沿用，避免用户反复设置同一入口的模型和工具。
+  model: normalizeText(model),
+  modelTouched: !!modelTouched,
+  temperature: temperature == null ? null : normalizeNumber(temperature, 0.7),
+  temperatureTouched: !!temperatureTouched,
+  reasoningMode: normalizeText(reasoningMode, 'auto').toLowerCase() || 'auto',
+  reasoningModeTouched: !!reasoningModeTouched,
+  enabledTools: Array.isArray(enabledTools) ? [...enabledTools] : [],
+  enabledToolsTouched: !!enabledToolsTouched,
+  updatedAt: Date.now(),
 })
 
   const createEmptyTraceModalState = () => ({
@@ -162,6 +205,7 @@ export const useAiStore = defineStore('ai', () => {
   const sessionsById = reactive({})
   const sessionOrder = ref([])
   const currentSessionByOwner = reactive({})
+  const assistantRuntimePrefsByOwner = reactive({})
   const globalAttachmentEntries = reactive({})
   const pendingConsumedAttachmentKeysByRequest = reactive({})
 
@@ -186,7 +230,7 @@ export const useAiStore = defineStore('ai', () => {
 
   const buildAiModelCacheKey = (tempConfig = {}) => JSON.stringify({
     provider: normalizeText(tempConfig?.provider),
-    base_url: normalizeText(tempConfig?.base_url),
+    base_url: resolveAiProviderBaseUrl(tempConfig?.provider, tempConfig?.base_url),
     api_key: normalizeText(tempConfig?.api_key),
   })
 
@@ -719,6 +763,55 @@ export const useAiStore = defineStore('ai', () => {
 
   const getCurrentSessionIdForOwner = (ownerKey = '') => normalizeText(currentSessionByOwner[normalizeText(ownerKey)])
 
+  const getAssistantRuntimePrefs = (ownerKey = '', defaults = {}) => {
+    /** 读取某个助手组件实例的临时请求偏好；不存在时用 defaults 初始化。 */
+    const normalizedOwnerKey = normalizeText(ownerKey)
+    if (!normalizedOwnerKey) {
+      return createAssistantRuntimePrefs(defaults)
+    }
+    if (!assistantRuntimePrefsByOwner[normalizedOwnerKey]) {
+      assistantRuntimePrefsByOwner[normalizedOwnerKey] = createAssistantRuntimePrefs(defaults)
+    }
+    return assistantRuntimePrefsByOwner[normalizedOwnerKey]
+  }
+
+  const updateAssistantRuntimePrefs = (ownerKey = '', patch = {}) => {
+    /** 更新某个助手组件实例的临时请求偏好。 */
+    const normalizedOwnerKey = normalizeText(ownerKey)
+    if (!normalizedOwnerKey) return null
+    const prefs = getAssistantRuntimePrefs(normalizedOwnerKey)
+    const hasEnabledToolsTouched = Object.prototype.hasOwnProperty.call(patch || {}, 'enabledToolsTouched')
+    const hasModelTouched = Object.prototype.hasOwnProperty.call(patch || {}, 'modelTouched')
+    const hasTemperatureTouched = Object.prototype.hasOwnProperty.call(patch || {}, 'temperatureTouched')
+    const hasReasoningModeTouched = Object.prototype.hasOwnProperty.call(patch || {}, 'reasoningModeTouched')
+    Object.entries(patch || {}).forEach(([key, value]) => {
+      if (value === undefined) return
+      if (key === 'enabledTools') {
+        prefs.enabledTools = Array.isArray(value) ? [...value] : []
+        prefs.enabledToolsTouched = hasEnabledToolsTouched ? !!patch.enabledToolsTouched : true
+      } else if (key === 'enabledToolsTouched') {
+        prefs.enabledToolsTouched = !!value
+      } else if (key === 'temperature') {
+        prefs.temperature = value == null ? null : normalizeNumber(value, 0.7)
+        prefs.temperatureTouched = hasTemperatureTouched ? !!patch.temperatureTouched : true
+      } else if (key === 'temperatureTouched') {
+        prefs.temperatureTouched = !!value
+      } else if (key === 'model') {
+        prefs.model = normalizeText(value)
+        prefs.modelTouched = hasModelTouched ? !!patch.modelTouched : true
+      } else if (key === 'modelTouched') {
+        prefs.modelTouched = !!value
+      } else if (key === 'reasoningMode') {
+        prefs.reasoningMode = normalizeText(value, 'off').toLowerCase() || 'off'
+        prefs.reasoningModeTouched = hasReasoningModeTouched ? !!patch.reasoningModeTouched : true
+      } else if (key === 'reasoningModeTouched') {
+        prefs.reasoningModeTouched = !!value
+      }
+    })
+    prefs.updatedAt = Date.now()
+    return prefs
+  }
+
   const getOrCreateBoundSession = (ownerKey, meta = {}) => {
     /**
      * 读取或创建某个业务入口绑定的当前会话。
@@ -740,9 +833,6 @@ export const useAiStore = defineStore('ai', () => {
         title: meta.title,
         sourceType: meta.sourceType,
         filename: meta.filename,
-      }
-      if (!Array.isArray(existingSession.enabledTools) || existingSession.enabledTools.length === 0) {
-        patch.enabledTools = Array.isArray(meta.enabledTools) ? [...meta.enabledTools] : []
       }
       updateSessionMeta(existingSession.id, patch)
       return existingSession
@@ -840,6 +930,7 @@ export const useAiStore = defineStore('ai', () => {
       assistantMessage.content = String(result?.analysis || '')
       assistantMessage.reasoning = String(result?.reasoning_content || assistantMessage.reasoning || '')
       assistantMessage.actions = Array.isArray(result?.actions) ? [...result.actions] : []
+      assistantMessage.warnings = normalizeAssistantWarnings(result?.warnings)
       assistantMessage.messageUsage = result?.message_usage || null
       assistantMessage.tokenUsage = result?.token_usage || null
       assistantMessage.promptInputBreakdown = result?.prompt_input_breakdown || null
@@ -1059,7 +1150,7 @@ export const useAiStore = defineStore('ai', () => {
     getCachedAiModels(tempConfig).map(model => ({ value: model, label: model }))
   )
 
-  const getAiModels = async (tempConfig, { forceRefresh = false } = {}) => {
+  const getAiModels = async (tempConfig, { forceRefresh = false, warnOnEmpty = false, silent = false } = {}) => {
     if (!window.pywebview) return []
     if (!tempConfig || !tempConfig.provider) {
       return []
@@ -1074,9 +1165,14 @@ export const useAiStore = defineStore('ai', () => {
     isLoading.value = true
     try {
       const res = await window.pywebview.api.ai_get_models(tempConfig)
-      if (checkResult(res, '获取AI模型')) {
+      if (checkResult(res, '获取AI模型', false, { silent })) {
         const models = Array.isArray(res.data) ? res.data.map(item => normalizeText(item)).filter(Boolean) : []
         modelListCache[cacheKey] = [...new Set(models)].sort((a, b) => a.localeCompare(b))
+        if (warnOnEmpty && modelListCache[cacheKey].length === 0) {
+          const provider = normalizeText(tempConfig?.provider, 'unknown')
+          const baseUrl = resolveAiProviderBaseUrl(tempConfig?.provider, tempConfig?.base_url)
+          toast.warning(`未获取到 AI 模型列表，请确认 ${provider} 服务已启动且 Base URL 可访问：${baseUrl}`, { timeout: 8000 })
+        }
         return getCachedAiModels(tempConfig)
       }
     } finally {
@@ -1258,6 +1354,7 @@ export const useAiStore = defineStore('ai', () => {
       content: '',
       reasoning: '',
       actions: [],
+      warnings: [],
       tokenUsage: null,
       messageUsage: null,
     })
@@ -1753,6 +1850,8 @@ export const useAiStore = defineStore('ai', () => {
     updateSessionMeta,
     getCurrentSessionIdForOwner,
     setCurrentSessionForOwner,
+    getAssistantRuntimePrefs,
+    updateAssistantRuntimePrefs,
     getOrCreateBoundSession,
     resetBoundSession,
     appendMessage,

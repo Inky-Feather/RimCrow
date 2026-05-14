@@ -132,6 +132,14 @@
 
             <template v-if="msg.role === 'assistant'">
               <!-- 助手扩展内容：思考流、正文渲染与可执行动作 -->
+              <div v-if="getAssistantWarnings(msg).length > 0" class="mb-3 flex flex-col gap-1.5">
+                <div v-for="warning in getAssistantWarnings(msg)" :key="warning.code || warning.message"
+                  class="flex items-start gap-2 rounded-lg border border-accent-warn/30 bg-accent-warn/10 px-3 py-2 text-xs leading-relaxed text-accent-warn">
+                  <svg class="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                  <span>{{ warning.message }}</span>
+                </div>
+              </div>
+
               <details v-if="msg.reasoning" class="group/think mb-3 text-wrap break-all" :open="isThinking && msg === chatHistory[chatHistory.length - 1]">
                 <summary class="flex items-center gap-2">
                   <template v-if="isThinking && msg === chatHistory[chatHistory.length - 1]">
@@ -246,7 +254,7 @@
 
         <div class="mt-2 flex items-center gap-1 w-full px-1 text-xs text-text-dim">
           <CommonNumber v-model="sessionTemperature" mini :step="0.1" :min="0" :max="2" label="随机性" :description="sessionTemperatureTooltip" />
-          <CommonSelect mini v-model="sessionModel" :options="availableModelOptions" label="模型" :description="sessionModelTooltip" placeholder="跟随全局模型" />
+          <CommonSelect :key="`assistant-model-${globalConnectionSignature}`" mini v-model="sessionModel" :options="availableModelOptions" label="模型" :description="sessionModelTooltip" placeholder="跟随全局模型" />
           <CommonSelect mini v-model="reasoningMode" :options="reasoningOptions" label="思考模式" :description="reasoningModeTooltip" />
         </div>
       </div>
@@ -393,7 +401,6 @@ const syncBoundSession = () => aiStore.getOrCreateBoundSession(props.ownerKey, {
   title: props.title,
   sourceType: String(props.sessionMeta?.sourceType || ''),
   filename: String(props.sessionMeta?.filename || ''),
-  enabledTools: [...defaultEnabledToolIds.value],
 })
 
 watch(
@@ -410,10 +417,29 @@ const currentSession = () => aiStore.getSession(currentSessionId.value) || null
 const chatHistory = computed(() => currentSession()?.messages || [])
 const composerAttachments = computed(() => aiStore.getSessionComposerAttachments(currentSessionId.value, props.assistantId))
 const globalAiConfig = computed(() => (
-  aiStore.runtimeAiConfig?.config
-  || appStore.settings?.ai
+  appStore.settings?.ai
+  || aiStore.runtimeAiConfig?.config
   || {}
 ))
+const globalAiConfigSignature = computed(() => [
+  String(globalAiConfig.value?.provider || '').trim(),
+  String(globalAiConfig.value?.base_url || '').trim(),
+  String(globalAiConfig.value?.api_key || '').trim(),
+  String(globalAiConfig.value?.model || '').trim(),
+  String(globalAiConfig.value?.temperature ?? '').trim(),
+].join('|'))
+const globalConnectionSignature = computed(() => [
+  String(globalAiConfig.value?.provider || '').trim(),
+  String(globalAiConfig.value?.base_url || '').trim(),
+].join('|'))
+const modelListQuerySignature = computed(() => [
+  String(globalAiConfig.value?.provider || '').trim(),
+  String(globalAiConfig.value?.base_url || '').trim(),
+  String(globalAiConfig.value?.api_key || '').trim(),
+].join('|'))
+const runtimePrefs = computed(() => aiStore.getAssistantRuntimePrefs(props.ownerKey, {
+  enabledTools: [...defaultEnabledToolIds.value],
+}))
 
 const userInput = computed({
   get: () => currentSession()?.userInput || '',
@@ -425,18 +451,17 @@ const userInput = computed({
 const isThinking = computed(() => !!currentSession()?.isThinking)
 const sessionModel = computed({
   get: () => {
-    const explicitModel = String(currentSession()?.sessionModel || '').trim()
+    const explicitModel = runtimePrefs.value?.modelTouched ? String(runtimePrefs.value?.model || '').trim() : ''
     if (explicitModel) return explicitModel
     return String(globalAiConfig.value?.model || '').trim()
   },
   set: (value) => {
-    const session = currentSession()
-    if (session) session.sessionModel = String(value || '').trim()
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, { model: String(value || '').trim() })
   }
 })
 const sessionTemperature = computed({
   get: () => {
-    const explicitTemperature = currentSession()?.sessionTemperature
+    const explicitTemperature = runtimePrefs.value?.temperatureTouched ? runtimePrefs.value?.temperature : null
     if (explicitTemperature != null && Number.isFinite(Number(explicitTemperature))) {
       return Number(explicitTemperature)
     }
@@ -444,12 +469,10 @@ const sessionTemperature = computed({
     return Number.isFinite(globalTemperature) ? globalTemperature : 0.7
   },
   set: (value) => {
-    const session = currentSession()
-    if (!session) return
     const numeric = Number(value)
-    session.sessionTemperature = Number.isFinite(numeric)
-      ? Math.min(2, Math.max(0, numeric))
-      : 0.7
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+      temperature: Number.isFinite(numeric) ? Math.min(2, Math.max(0, numeric)) : 0.7,
+    })
   }
 })
 const sessionModelConfig = computed(() => {
@@ -470,8 +493,10 @@ const reasoningOptions = computed(() => {
 })
 const reasoningMode = computed({
   get: () => {
-    const currentValue = String(currentSession()?.reasoningMode || '').trim().toLowerCase()
     const supportedValues = new Set(reasoningOptions.value.map(item => String(item?.value || '').trim().toLowerCase()))
+    const currentValue = runtimePrefs.value?.reasoningModeTouched
+      ? String(runtimePrefs.value?.reasoningMode || '').trim().toLowerCase()
+      : ''
     if (currentValue && supportedValues.has(currentValue)) {
       return currentValue
     }
@@ -479,29 +504,28 @@ const reasoningMode = computed({
     return supportedValues.has(fallback) ? fallback : (reasoningOptions.value[0]?.value || 'off')
   },
   set: (value) => {
-    const session = currentSession()
-    if (session) {
-      session.reasoningMode = String(value || 'off').trim().toLowerCase() || 'off'
-    }
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+      reasoningMode: String(value || 'off').trim().toLowerCase() || 'off',
+    })
   }
 })
 const sessionModelTooltip = computed(() => {
   const provider = String(sessionModelConfig.value.provider || 'unknown')
   const model = String(sessionModel.value || '未选择')
   return [
-    '当前会话使用的模型。',
+    '当前助手面板临时使用的模型。',
     `服务类型 ^^${provider}^^`,
     `模型 ^^${model}^^`,
-    '没有单独修改时，会沿用全局 AI 设置。',
+    '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。',
   ].join('\n')
 })
 const sessionTemperatureTooltip = computed(() => {
   const temperature = Number(sessionTemperature.value).toFixed(1)
   return [
-    '当前会话的输出随机性。',
+    '当前助手面板临时使用的输出随机性。',
     `temperature ^^${temperature}^^`,
     '值越低越稳定，适合需要精确回答的情况，值越高越发散，适合需要创意回答的情况。',
-    '没有单独修改时，会沿用全局 AI 设置。',
+    '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。',
   ].join('\n')
 })
 const reasoningModeTooltip = computed(() => {
@@ -519,43 +543,86 @@ const reasoningModeTooltip = computed(() => {
     ].join('\n')
   }
   return [
-    '当前会话的思考模式。',
+    '当前助手面板临时使用的思考模式。',
     '自动：由系统按当前模型选择合适方式。',
     '如果模型支持更多等级，这里会显示对应选项。',
   ].join('\n')
 })
 const enabledTools = computed({
   get: () => {
-    const session = currentSession()
-    if (Array.isArray(session?.enabledTools)) {
-      return normalizeEnabledToolIds(session.enabledTools)
+    if (Array.isArray(runtimePrefs.value?.enabledTools)) {
+      return normalizeEnabledToolIds(runtimePrefs.value.enabledTools)
     }
     return [...defaultEnabledToolIds.value]
   },
   set: (value) => {
-    const session = currentSession()
-    if (session) session.enabledTools = normalizeEnabledToolIds(value)
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, { enabledTools: normalizeEnabledToolIds(value) })
   }
 })
 
+const resetUntouchedRuntimePrefsForGlobalConfig = () => {
+  const prefs = runtimePrefs.value
+  if (!prefs) return
+  const patch = {}
+  if (!prefs.modelTouched) {
+    patch.model = ''
+    patch.modelTouched = false
+  }
+  if (!prefs.temperatureTouched) {
+    patch.temperature = null
+    patch.temperatureTouched = false
+  }
+  if (!prefs.reasoningModeTouched) {
+    patch.reasoningMode = String(reasoningCapabilities.value?.default_session_reasoning_mode || 'auto').trim().toLowerCase() || 'auto'
+    patch.reasoningModeTouched = false
+  }
+  if (!prefs.enabledToolsTouched) {
+    patch.enabledTools = [...defaultEnabledToolIds.value]
+    patch.enabledToolsTouched = false
+  }
+  if (Object.keys(patch).length > 0) {
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, patch)
+  }
+}
+
+const resetRuntimePrefsForConnectionSwitch = () => {
+  aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+    model: '',
+    modelTouched: false,
+    temperature: null,
+    temperatureTouched: false,
+    reasoningMode: 'auto',
+    reasoningModeTouched: false,
+    enabledTools: [...defaultEnabledToolIds.value],
+    enabledToolsTouched: false,
+  })
+}
+
 watch([allowedToolIds, defaultEnabledToolIds], () => {
-  const session = currentSession()
-  if (!session) return
-  if (Array.isArray(session.enabledTools)) {
-    session.enabledTools = normalizeEnabledToolIds(session.enabledTools)
+  const prefs = runtimePrefs.value
+  if (!prefs) return
+  if (!prefs.enabledToolsTouched) {
+    aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+      enabledTools: [...defaultEnabledToolIds.value],
+      enabledToolsTouched: false,
+    })
     return
   }
-  session.enabledTools = [...defaultEnabledToolIds.value]
+  aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+    enabledTools: normalizeEnabledToolIds(prefs.enabledTools),
+    enabledToolsTouched: true,
+  })
 }, { immediate: true })
 
 // -----------------------------------------------------------------
 // 远程能力刷新 (Data Loading)
 // -----------------------------------------------------------------
-const refreshModelOptions = async () => {
+const refreshModelOptions = async ({ forceRefresh = true } = {}) => {
   /**
    * 刷新当前会话可选模型列表。
    *
-   * 会优先命中 aiStore 的本地缓存，只有配置真的变化时才重新请求后端。
+   * 助手面板这里统一走后端 ai_get_models 流程，避免前端继续沿用旧协议/
+   * 旧 base_url 对应的展示缓存；真正的短期缓存交给后端维护。
    */
   const config = globalAiConfig.value || {}
   if (!config?.provider) {
@@ -567,8 +634,11 @@ const refreshModelOptions = async () => {
     base_url: config.base_url,
     api_key: config.api_key,
   }
-  const cachedModels = aiStore.getCachedAiModels(query)
-  const models = cachedModels.length > 0 ? cachedModels : await aiStore.getAiModels(query)
+  const models = await aiStore.getAiModels(query, {
+    forceRefresh,
+    warnOnEmpty: false,
+    silent: true,
+  })
   const modelSet = new Set(
     (Array.isArray(models) ? models : [])
       .map(item => String(item || '').trim())
@@ -617,11 +687,7 @@ const resetChatState = () => {
     title: props.title,
     sourceType: String(props.sessionMeta?.sourceType || ''),
     filename: String(props.sessionMeta?.filename || ''),
-    enabledTools: [...defaultEnabledToolIds.value],
   })
-  if (session && (!Array.isArray(session.enabledTools) || session.enabledTools.length === 0)) {
-    session.enabledTools = [...defaultEnabledToolIds.value]
-  }
 }
 
 const clearChat = async () => {
@@ -686,6 +752,20 @@ const getAssistantText = (content) => {
 }
 
 const hasAssistantText = (msg) => getAssistantText(msg?.content).trim().length > 0
+const getAssistantWarnings = (msg) => {
+  if (!Array.isArray(msg?.warnings)) return []
+  return msg.warnings
+    .map((warning) => {
+      if (warning && typeof warning === 'object') {
+        return {
+          code: String(warning.code || ''),
+          message: String(warning.message || warning.detail || '').trim(),
+        }
+      }
+      return { code: '', message: String(warning || '').trim() }
+    })
+    .filter(warning => warning.message)
+}
 const shouldShowAssistantLoading = (msg) => {
   const isLatestMessage = chatHistory.value[chatHistory.value.length - 1] === msg
   return isLatestMessage && isThinking.value && !hasAssistantText(msg)
@@ -746,20 +826,21 @@ watch(
   },
 )
 
-watch(
-  () => [
-    globalAiConfig.value?.provider,
-    globalAiConfig.value?.base_url,
-    globalAiConfig.value?.api_key,
-    globalAiConfig.value?.model,
-  ],
-  () => {
-    refreshModelOptions().catch(() => {
-      availableModelOptions.value = []
-    })
-  },
-  { immediate: true },
-)
+watch(globalAiConfigSignature, () => {
+  resetUntouchedRuntimePrefsForGlobalConfig()
+}, { immediate: true })
+
+watch(globalConnectionSignature, (nextSignature, previousSignature) => {
+  if (!previousSignature || nextSignature === previousSignature) return
+  availableModelOptions.value = []
+  resetRuntimePrefsForConnectionSwitch()
+}, { immediate: true })
+
+watch(modelListQuerySignature, () => {
+  refreshModelOptions({ forceRefresh: true }).catch(() => {
+    availableModelOptions.value = []
+  })
+}, { immediate: true })
 
 watch(
   () => [sessionModel.value, sessionModelConfig.value?.provider, sessionModelConfig.value?.base_url],
@@ -770,18 +851,22 @@ watch(
 )
 
 watch(reasoningOptions, (options) => {
-  const session = currentSession()
-  if (!session) return
   const normalizedOptions = Array.isArray(options)
     ? options.map(item => String(item?.value || '').trim().toLowerCase()).filter(Boolean)
     : []
   if (normalizedOptions.length === 0) return
-  const currentMode = String(session.reasoningMode || '').trim().toLowerCase()
+  const hasExplicitOverride = !!runtimePrefs.value?.reasoningModeTouched
+  const currentMode = hasExplicitOverride
+    ? String(runtimePrefs.value?.reasoningMode || '').trim().toLowerCase()
+    : ''
   if (currentMode && normalizedOptions.includes(currentMode)) {
     return
   }
   const preferredMode = String(reasoningCapabilities.value?.default_session_reasoning_mode || normalizedOptions[0] || 'off').trim().toLowerCase()
-  session.reasoningMode = normalizedOptions.includes(preferredMode) ? preferredMode : normalizedOptions[0]
+  aiStore.updateAssistantRuntimePrefs(props.ownerKey, {
+    reasoningMode: normalizedOptions.includes(preferredMode) ? preferredMode : normalizedOptions[0],
+    reasoningModeTouched: hasExplicitOverride,
+  })
 }, { immediate: true })
 
 const sessionUsageSummary = computed(() => currentSession()?.sessionUsageSummary || null)
@@ -904,7 +989,7 @@ const sendMessage = async () => {
    * 这里会一起提交：
    * - 当前会话输入框文本
    * - 当前会话可见附件
-   * - 当前会话的模型/温度/思考模式/工具覆写
+   * - 当前助手组件实例的模型/温度/思考模式/工具覆写
    */
   const session = currentSession() || syncBoundSession()
   if (!session || isSendDisabled.value) return

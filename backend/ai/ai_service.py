@@ -9,9 +9,10 @@ AI 管理器。
 
 import json
 import asyncio
+import re
 import threading
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Protocol, cast
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -39,6 +40,10 @@ from backend.ai.assistant_runtime import (
     normalize_message_text,
     safe_format_template,
 )
+
+
+class _SupportsModelDump(Protocol):
+    def model_dump(self) -> Any: ...
 
 class AIManager:
     """全局单例 AI 管理器。"""
@@ -72,6 +77,24 @@ class AIManager:
         }
         
         logger.info("AI Manager initialized.")
+
+    def _coerce_int(self, value: Any, default: int) -> int:
+        """把动态来源的数值安全收口为 int，避免静态类型和运行时都不稳定。"""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _dump_model_like(self, value: Any) -> Any:
+        """把 pydantic 风格对象收口成原生可序列化结构。"""
+        if value is None:
+            return None
+        model_dump = getattr(value, "model_dump", None)
+        if callable(model_dump):
+            return cast("_SupportsModelDump", value).model_dump()
+        if isinstance(value, list):
+            return [self._dump_model_like(item) for item in value]
+        return value
 
     def _get_ai_config(self) -> AIConfig:
         raw_cfg = settings.config.ai
@@ -133,13 +156,7 @@ class AIManager:
         try:
             parsed = adapter.validate_json(text)
             # 对外仍返回原生 dict/list，避免调用方被迫感知 pydantic 模型。
-            if hasattr(parsed, "model_dump"): return parsed.model_dump() # type: ignore
-            if isinstance(parsed, list):
-                return [
-                    item.model_dump() if hasattr(item, "model_dump") else item
-                    for item in parsed
-                ]
-            return parsed
+            return self._dump_model_like(parsed)
         except ValidationError as e:
             logger.warning(f"[AI结构化输出] 校验失败 task={task_key}: {e}")
             return self._extract_json_from_text(text, is_batch=(task_key == "task.mod_alias_generation"))
@@ -228,6 +245,25 @@ class AIManager:
         因此这里单独保留一份规整逻辑，避免它在历史消息构建阶段被悄悄丢掉。
         """
         return self._message_text(reasoning_content)
+
+    def _extract_reasoning_content(self, obj: Any) -> str:
+        """兼容 reasoning_content 与部分本地兼容层的 reasoning 字段。"""
+        reasoning_content = getattr(obj, "reasoning_content", None)
+        if reasoning_content is None or reasoning_content == "":
+            reasoning_content = getattr(obj, "reasoning", "")
+        return self._normalize_reasoning_content(reasoning_content)
+
+    def _split_inline_reasoning_from_content(self, content: str, existing_reasoning: str = "") -> tuple[str, str]:
+        """兼容本地模型把 <think>...</think> 混在正文开头返回。"""
+        normalized_content = str(content or "")
+        match = re.match(r"^\s*<think>\s*([\s\S]*?)\s*</think>\s*", normalized_content, flags=re.IGNORECASE)
+        if not match:
+            return normalized_content, str(existing_reasoning or "")
+
+        inline_reasoning = match.group(1).strip()
+        remaining_content = normalized_content[match.end():]
+        reasoning_parts = [part for part in (str(existing_reasoning or "").strip(), inline_reasoning) if part]
+        return remaining_content, "\n".join(reasoning_parts)
 
     def _build_prompt_messages(
         self,
@@ -371,6 +407,55 @@ class AIManager:
                 })
         return normalized_items
 
+    def _resolve_mod_alias_chunk_token_budget(
+        self,
+        *,
+        cfg: AIConfig,
+        model_name: str,
+        prompt_config: dict,
+        runtime_variables: dict[str, Any],
+    ) -> tuple[int, int]:
+        """估算模组别名批处理的输入分块预算。
+
+        `max_output_tokens` 是输出上限，不等于模型上下文窗口。若配置里提供
+        `max_input_tokens` 或 `context_window_tokens`，优先使用更明确的输入预算。
+        """
+        resolve_output_tokens = getattr(cfg, "resolved_max_output_tokens", None)
+        resolved_output_value = (
+            resolve_output_tokens()
+            if callable(resolve_output_tokens)
+            else getattr(cfg, "max_output_tokens", 0)
+        )
+        output_token_budget = max(
+            256,
+            self._coerce_int(resolved_output_value or 4096, 4096),
+        )
+        resolve_input_tokens = getattr(cfg, "resolved_max_input_tokens", None)
+        if callable(resolve_input_tokens):
+            request_input_budget = self._coerce_int(resolve_input_tokens(), 0)
+        else:
+            explicit_input_budget = self._coerce_int(getattr(cfg, "max_input_tokens", 0) or 0, 0)
+            context_window_tokens = self._coerce_int(getattr(cfg, "context_window_tokens", 0) or 0, 0)
+            if explicit_input_budget > 0:
+                request_input_budget = explicit_input_budget
+            elif context_window_tokens > 0:
+                request_input_budget = max(1000, context_window_tokens - output_token_budget - 512)
+            else:
+                request_input_budget = max(2000, min(12000, output_token_budget * 2))
+
+        try:
+            probe_variables = dict(runtime_variables or {})
+            probe_variables["mod_alias_input_json"] = "[]"
+            base_messages = self._build_prompt_messages(prompt_config, probe_variables)
+            base_prompt_tokens = self.llm.estimate_messages_tokens(base_messages, model_name)
+        except Exception as exc:
+            logger.debug(f"[AI任务] 分块基础 Prompt Token 估算失败，使用保守预算: {exc}")
+            base_prompt_tokens = 0
+
+        chunk_item_budget = max(500, int(request_input_budget) - int(base_prompt_tokens or 0) - 256)
+        max_item_tokens = max(300, chunk_item_budget - 200)
+        return chunk_item_budget, max_item_tokens
+
     # =========================================================================
     #  核心：异步任务执行引擎
     # =========================================================================
@@ -446,8 +531,12 @@ class AIManager:
             "max_attempts": max_attempts,
         }
 
-        safe_input_tokens = max(1000, int(getattr(cfg, "max_tokens", 4096)) - 1000)
-        max_item_tokens = max(300, safe_input_tokens - 200)
+        safe_input_tokens, max_item_tokens = self._resolve_mod_alias_chunk_token_budget(
+            cfg=cfg,
+            model_name=model_name,
+            prompt_config=prompt_config,
+            runtime_variables=runtime_variables,
+        )
 
         def estimate_item_tokens(item: Dict[str, Any]) -> int:
             """按当前模型口径估算单条输入会占用多少 token。"""
@@ -714,7 +803,7 @@ class AIManager:
         """
         用于前端“测试模型”按钮的方法。
 
-        这里会主动把 temperature 留空、max_tokens 压到很小，
+        这里会主动把 temperature 留空、输出上限压到很小，
         目的是尽量用最低成本验证“能否通”和“接口是否兼容”。
         """
         safe_override = dict(override_config or {})
@@ -722,21 +811,44 @@ class AIManager:
         safe_override["enable_reasoning"] = bool(safe_override.get("enable_reasoning", False))
         # 测试按钮默认不强传 temperature
         safe_override["temperature"] = None
-        # 测试只要极小输出即可
-        safe_override["max_tokens"] = min(int(safe_override.get("max_tokens") or 64), 64)
+        # 测试只要极小输出即可。
+        test_output_tokens = min(
+            int(safe_override.get("max_output_tokens") or 64),
+            64,
+        )
+        safe_override["max_output_tokens"] = test_output_tokens
         # 默认自动 endpoint 选择
         safe_override["endpoint_mode"] = safe_override.get("endpoint_mode") or "auto"
         llm_kwargs = self._get_llm_kwargs(safe_override)
         messages = [{"role": "user", "content": message}]
         try:
             response = self.llm.completion(messages=messages, llm_kwargs=llm_kwargs)
-            message_obj = response.choices[0].message  # type: ignore
-            content_text = self._message_text(getattr(message_obj, "content", ""))
-            reasoning_text = self._normalize_reasoning_content(getattr(message_obj, "reasoning_content", ""))
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                response_summary = ""
+                try:
+                    response_summary = json.dumps(
+                        self._dump_model_like(response) or getattr(response, "__dict__", {}),
+                        ensure_ascii=False,
+                        default=str,
+                    )[:800]
+                except Exception:
+                    response_summary = str(response)[:800]
+                raise ValueError(
+                    "模型接口返回了非 OpenAI Chat Completions 兼容格式或空 choices。"
+                    "请确认当前 Base URL 指向 /v1 兼容接口，并检查模型名/协议是否匹配。"
+                    f"响应摘要: {response_summary}"
+                )
+            message_obj = choices[0].message  # type: ignore
+            content_text, reasoning_text = self._split_inline_reasoning_from_content(
+                self._message_text(getattr(message_obj, "content", "")),
+                self._extract_reasoning_content(message_obj),
+            )
 
             raw_message = {
                 "content": getattr(message_obj, "content", ""),
                 "reasoning_content": getattr(message_obj, "reasoning_content", ""),
+                "reasoning": getattr(message_obj, "reasoning", ""),
                 "tool_calls": getattr(message_obj, "tool_calls", None),
             }
             result = {

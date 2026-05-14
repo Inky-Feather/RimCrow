@@ -84,8 +84,56 @@ class AIConfig:
     api_key: str = ""
     model: str = "gpt-3.5-turbo"
     temperature: Optional[float] = 0.7     # 温度参数（控制输出随机性）允许“不传”
-    max_tokens: int = 5000       # 最大令牌数（限制模型输出长度）
+    max_output_tokens: int = 0     # 单次请求最大输出 Token；0 表示按模型自动
+    max_input_tokens: int = 0      # 高级输入预算；0 表示自动按上下文窗口或输出预算推导
+    context_window_tokens: int = 0 # 模型上下文窗口；0 表示按模型预设
     max_concurrency: int = 3     # 最大并发请求数（避免被API封锁）
+
+    def model_token_budget(self) -> dict[str, Any]:
+        """返回当前模型的 token 预算预设。"""
+        from backend.ai.def_model_capabilities import resolve_model_token_budget
+
+        base_url = self.base_url
+        if not base_url and str(self.provider or "").strip().lower() == "ollama":
+            base_url = "http://127.0.0.1:11434"
+        return resolve_model_token_budget(self.model, base_url)
+
+    def resolved_context_window_tokens(self) -> int:
+        """解析模型上下文窗口，用户显式配置优先，否则走模型预设。"""
+        try:
+            explicit_context = int(self.context_window_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_context = 0
+        if explicit_context > 0:
+            return explicit_context
+        return int(self.model_token_budget().get("context_window_tokens") or 32768)
+
+    def resolved_max_output_tokens(self) -> int:
+        """解析单次请求输出上限，用户显式配置优先，否则走模型预设。"""
+        try:
+            explicit_output = int(self.max_output_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_output = 0
+        if explicit_output > 0:
+            return explicit_output
+        return int(self.model_token_budget().get("default_output_tokens") or 4096)
+
+    def resolved_max_input_tokens(self) -> int:
+        """解析输入预算，避免把输出上限误当上下文窗口。"""
+        try:
+            explicit_input = int(self.max_input_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_input = 0
+        if explicit_input > 0:
+            return explicit_input
+
+        output_budget = self.resolved_max_output_tokens()
+        context_window = self.resolved_context_window_tokens()
+        if context_window > 0:
+            return max(1000, context_window - output_budget - 512)
+
+        from backend.ai.def_model_capabilities import DEFAULT_INPUT_TOKENS
+        return max(2000, min(DEFAULT_INPUT_TOKENS, output_budget * 2))
 
 @dataclass
 class UIConfig:
@@ -476,6 +524,20 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        ai_cfg = self.config.ai
+        if isinstance(ai_cfg, AIConfig):
+            try:
+                ai_cfg.max_output_tokens = max(0, int(ai_cfg.max_output_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.max_output_tokens = 0
+            try:
+                ai_cfg.max_input_tokens = max(0, int(ai_cfg.max_input_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.max_input_tokens = 0
+            try:
+                ai_cfg.context_window_tokens = max(0, int(ai_cfg.context_window_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.context_window_tokens = 0
     
     def _sync_derived_paths(self):
         """

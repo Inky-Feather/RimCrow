@@ -389,26 +389,26 @@
                     <div data-tour="settings-ai-connection" class="p-4 rounded-xl bg-text-main/5 border border-text-main/10 space-y-5">
                       <div class="grid grid-cols-2 gap-3">
                         <!-- 厂商/协议选择 -->
-                        <CommonSelect label="接口协议" description="大多数中转服务和国产模型接口都可以选 OpenAI 兼容协议。"
+                        <CommonSelect label="接口协议" description="大多数中转服务、本地运行时、国产模型平台都优先兼容 OpenAI-compatible 接口。只有目标服务没有稳定的 OpenAI-compatible API 时，才建议切换到原生协议。"
                           v-model="formData.ai.provider" :options="currentAiProviders" @change="handleProviderChange"/>
                         <!-- 模型选择 (带刷新动作) -->
                         <div class="relative flex items-end gap-2">
                           <div class="flex-1">
                             <!-- 加上 editable 允许用户手输未被探测到的模型名 -->
                             <CommonSelect label="模型" editable v-model="formData.ai.model" :options="currentAiModels" 
-                              placeholder="下拉选择或手动输入模型名称" @visible-change="(val) => val && fetchAiModels()"/>
+                              placeholder="下拉选择或手动输入模型名称" @visible-change="(val) => val && fetchAiModels({ silent: true })"/>
                           </div>
                           <!-- 对于自定义模式，提供显式的刷新按钮让用户主动拉取 -->
-                          <button @click="fetchAiModels(true)" v-tooltip="'重新获取模型列表'" 
+                          <button @click="fetchAiModels({ forceRefresh: true, warnOnEmpty: true, silent: false })" v-tooltip="'重新获取模型列表'"
                             class="h-9 px-3 bg-black/30 hover:bg-accent-special/20 text-accent-special border border-accent-special/30 rounded-lg flex items-center justify-center transition-colors">
                             <svg class="size-4" :class="{'animate-spin': aiStore.isLoading}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
                           </button>
                         </div>
 
                         <!-- Base URL (自定义必填，官方高级选填) -->
-                        <CommonInput label="Base URL" v-model="formData.ai.base_url" class="col-span-2" 
-                          placeholder="例如: http://127.0.0.1:11434 或 https://api.deepseek.com/v1" 
-                          description="填写你要连接的接口地址，例如官方接口、中转服务或本地服务地址。"
+                        <CommonInput label="Base URL" v-model="formData.ai.base_url" class="col-span-2"
+                          placeholder="留空使用协议默认地址；也可填写 http://127.0.0.1:11434 或 https://api.deepseek.com/v1"
+                          description="留空时使用当前协议的默认地址。Ollama 默认连接本机 127.0.0.1:11434；中转服务或非默认本地地址需要手动填写。"
                         />
                         <!-- API Key -->
                         <CommonInput label="API Key" v-model="formData.ai.api_key" is-password class="col-span-2" 
@@ -420,16 +420,21 @@
 
                     <!-- 3. 测试与高级参数区 -->
                     <div data-tour="settings-ai-advanced" class="grid grid-cols-2 gap-4">
-                      <CommonNumber label="最大 Token 限制" v-model="formData.ai.max_tokens" :step="100" :min="500" />
                       <CommonNumber label="最大并发数" v-model="formData.ai.max_concurrency" :step="1" :min="1" :max="100" description="同时发出的请求数量。大多数情况下设为 3 到 5 就够了。" />
                       <CommonNumber label="输出随机性" v-model="formData.ai.temperature" :step="0.1" :min="0" :max="2.0" description="值越低越稳定，值越高越发散。一般用 0.7 左右即可。" />
+                      <CommonNumber label="上下文窗口" v-model="formData.ai.context_window_tokens" :step="1024" :min="0"
+                        description="模型总上下文窗口。0 表示按模型名自动预设；本地模型如果服务端限制了上下文，建议填实际值。" />
+                      <CommonNumber label="最大输入预算" v-model="formData.ai.max_input_tokens" :step="1024" :min="0"
+                        description="日志、附件、批量任务最多喂给模型的输入预算。0 表示自动按上下文窗口扣除输出预算。" />
+                      <CommonNumber label="最大输出预算" v-model="formData.ai.max_output_tokens" :step="512" :min="0"
+                        description="单次回复的输出保护阀。0 表示按模型预设自动控制；只有排查成本、延迟或长回复截断时才需要手动设置。" />
                       <CommonSelect v-if="formData.ai.provider === 'openai_compatible'"
-                        label="兼容模式" v-model="formData.ai.endpoint_mode"
-                        description="自动模式会按当前模型选择更合适的兼容方式。只有排查兼容问题时才需要手动切换。"
+                        label="接口模式" v-model="formData.ai.endpoint_mode"
+                        description="用于指定 OpenAI-compatible 接口应走哪一类 endpoint。`Auto` 会根据模型能力和请求结构自动选择更稳妥的路径；只有在排查特定中转服务或本地运行时兼容问题时，才建议手动切换。"
                         :options="[
-                          { label: '自动选择', value: 'auto' },
-                          { label: '标准对话模式', value: 'chat_completions' },
-                          { label: '高级响应模式', value: 'responses' }
+                          { label: 'Auto', value: 'auto' },
+                          { label: 'Chat Completions API', value: 'chat_completions' },
+                          { label: 'Responses API', value: 'responses' }
                         ]" />
 
                       <!-- 测试区 -->
@@ -868,8 +873,9 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       // AI 厂商定义已在 aiStore 初始化时一并获取。
       // 模型列表仍按需请求，但优先复用 aiStore 缓存，避免设置面板维护重复状态。
       if (formData.value.ai) {
+        hydrateAiProviderDrafts()
         if (formData.value.ai.provider) {
-          await fetchAiModels()
+          await fetchAiModels({ silent: true })
         }
       }
     })
@@ -1007,6 +1013,57 @@ const clearTestResult = () => {
   testResponse.value = ""
   testRawResponse.value = null
 }
+const aiProviderDrafts = ref({})
+
+const DEFAULT_AI_BASE_URLS = {
+  openai_compatible: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  ollama: 'http://127.0.0.1:11434',
+}
+
+const normalizeAiProvider = (provider = '') => {
+  const normalized = String(provider || '').trim().toLowerCase()
+  if (['openai', 'custom_openai'].includes(normalized)) return 'openai_compatible'
+  return normalized || 'openai_compatible'
+}
+
+const createAiProviderDraft = (ai = {}) => ({
+  provider: normalizeAiProvider(ai.provider),
+  base_url: String(ai.base_url || '').trim(),
+  api_key: String(ai.api_key || '').trim(),
+  model: String(ai.model || '').trim(),
+  endpoint_mode: String(ai.endpoint_mode || 'auto').trim().toLowerCase() || 'auto',
+})
+
+const syncCurrentAiProviderDraft = () => {
+  const ai = formData.value?.ai
+  if (!ai) return
+  const provider = normalizeAiProvider(ai.provider)
+  aiProviderDrafts.value[provider] = createAiProviderDraft(ai)
+}
+
+const hydrateAiProviderDrafts = () => {
+  const ai = formData.value?.ai
+  if (!ai) return
+  aiProviderDrafts.value = {
+    [normalizeAiProvider(ai.provider)]: createAiProviderDraft(ai),
+  }
+}
+
+const applyAiDraftForProvider = (provider) => {
+  const ai = formData.value?.ai
+  if (!ai) return
+  const normalizedProvider = normalizeAiProvider(provider)
+  const hasDraft = Object.prototype.hasOwnProperty.call(aiProviderDrafts.value, normalizedProvider)
+  const draft = hasDraft ? aiProviderDrafts.value[normalizedProvider] : null
+  ai.provider = normalizedProvider
+  ai.base_url = draft ? String(draft.base_url || '') : (DEFAULT_AI_BASE_URLS[normalizedProvider] || '')
+  ai.api_key = draft ? String(draft.api_key || '') : ''
+  ai.model = draft ? String(draft.model || '') : ''
+  ai.endpoint_mode = draft ? (String(draft.endpoint_mode || 'auto').trim().toLowerCase() || 'auto') : 'auto'
+}
+
 // 测试模型
 const testModel = async () => {
   clearTestResult()
@@ -1026,17 +1083,18 @@ const testModel = async () => {
   toast.error(res?.error || '模型测试失败')
 }
 
-// 切换厂商/协议时，如果是官方模式，立即获取模型；若是代理模式，清空让用户重新获取
-const handleProviderChange = async () => {
-  formData.value.ai.model = ''
-  await fetchAiModels()
+// 切换协议只重置连接表单，不主动探测模型列表；模型列表由下拉展开或手动刷新触发。
+const handleProviderChange = (selectedProvider) => {
+  syncCurrentAiProviderDraft()
+  const nextProvider = normalizeAiProvider(selectedProvider?.value ?? selectedProvider ?? formData.value?.ai?.provider)
+  applyAiDraftForProvider(nextProvider)
 }
 // 拉取模型列表 (兼容旧的，组装为 CommonSelect 接受的结构)
-const fetchAiModels = async (forceRefresh = false) => {
+const fetchAiModels = async ({ forceRefresh = false, warnOnEmpty = false, silent = true } = {}) => {
   if (!formData.value.ai.provider || !formData.value.ai.enabled) {
     return
   }
-  await aiStore.getAiModels(formData.value.ai, { forceRefresh })
+  await aiStore.getAiModels(formData.value.ai, { forceRefresh, warnOnEmpty, silent })
 }
 
 const openUrlOnSteam = (url) => {

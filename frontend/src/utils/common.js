@@ -126,11 +126,13 @@ export const checkResult = (res, workname, showSuccess = false, options = {}) =>
   const debugMode = options?.debugMode ?? (
     typeof window !== 'undefined' ? !!window.__RMM_DEBUG_MODE__ : false
   )
+  const silent = !!options?.silent
   if (debugMode) console.log('checkResult', workname, res)
   if (res.status === 'success') {
-    if (showSuccess) toast.success(`${workname}成功`, { timeout: 1000 })
+    if (showSuccess && !silent) toast.success(`${workname}成功`, { timeout: 1000 })
     return true
   }
+  if (silent) return false
   if (res.status === 'warning') {
     toast.warning(`${workname}注意: \n${res.message}`)
   } else {

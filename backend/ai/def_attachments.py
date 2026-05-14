@@ -358,7 +358,7 @@ class AttachmentResolver:
                         if raw_logs:
                             condensed = LogCondenser.condense_for_ai(
                                 raw_logs,
-                                token_limit=settings.config.ai.max_tokens,
+                                token_limit=settings.config.ai.resolved_max_input_tokens(),
                                 char_budget_ratio=0.65,
                                 stack_preview_lines=2,
                             )
