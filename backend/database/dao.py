@@ -1241,12 +1241,16 @@ class GroupDAO:
         """
         重排分组内成员顺序。
 
-        前端当前拿到的是“当前上下文下可见成员”的子集，因此这里不能再直接
-        删整组后按子集重建，否则会把跨 profile 持久存在但当前不可见的成员误删。
+        前端当前拿到的是“当前上下文下可见成员”的子集，而且拖入分组时
+        还会把“新加入成员”一并放进这个顺序列表里。
+        因此这里不能再要求提交列表必须完全属于当前组内成员，否则会把
+        “拖拽新增成员”误判成非法数据。
+
         正确做法是：
-        1. 校验传入列表必须是当前组内成员的子集，且不能有重复
-        2. 仅重排这批“可见成员”的相对顺序
-        3. 保留其余不可见成员，并把它们稳定地续接在后面
+        1. 校验提交列表不能有重复
+        2. 允许列表中带有“当前尚未在组内，但在 ModAsset 中有效”的新增成员
+        3. 按提交顺序重排当前可见成员与新增成员
+        4. 保留其余不可见成员，并把它们稳定地续接在后面
         """
         normalized_ids = normalize_package_ids(mod_id_list)
         if not normalized_ids:
@@ -1266,15 +1270,25 @@ class GroupDAO:
             existing_id_set = set(existing_ids)
             if len(normalized_ids) != len(set(normalized_ids)):
                 raise ValueError("分组内排序失败：提交的成员列表存在重复项。")
-            if not set(normalized_ids).issubset(existing_id_set):
-                raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
 
-            visible_id_set = set(normalized_ids)
-            reordered_visible_iter = iter(normalized_ids)
-            merged_ids = [
-                next(reordered_visible_iter) if mod_id in visible_id_set else mod_id
-                for mod_id in existing_ids
+            new_member_ids = [mod_id for mod_id in normalized_ids if mod_id not in existing_id_set]
+            if new_member_ids:
+                valid_new_ids = {
+                    normalize_package_id(asset.package_id)
+                    for asset in ModAsset.select(ModAsset.package_id).where(
+                        cast(Any, ModAsset.package_id).in_(new_member_ids)
+                    )
+                }
+                invalid_new_ids = [mod_id for mod_id in new_member_ids if mod_id not in valid_new_ids]
+                if invalid_new_ids:
+                    raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
+
+            submitted_existing_set = {mod_id for mod_id in normalized_ids if mod_id in existing_id_set}
+            hidden_existing_ids = [
+                mod_id for mod_id in existing_ids
+                if mod_id not in submitted_existing_set
             ]
+            merged_ids = normalized_ids + hidden_existing_ids
 
             _ensure_user_data_rows(merged_ids)
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()

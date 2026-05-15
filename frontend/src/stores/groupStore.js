@@ -2,12 +2,22 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { checkResult, toast } from '../utils/common'
 import { useAppStore } from './appStore'
+import { normalizePackageId } from '../utils/modIdentity'
 
 export const useGroupStore = defineStore('groups', () => {
   const appStore = useAppStore()
+  const normalizeGroupModIds = (modIds = []) => {
+    const source = Array.isArray(modIds) ? modIds : [modIds]
+    return [...new Set(
+      source
+        .map(id => normalizePackageId(id))
+        .filter(Boolean)
+    )]
+  }
   const normalizeGroup = (group = {}) => ({
     ...group,
-    mod_ids: Array.isArray(group?.mod_ids) ? [...group.mod_ids] : []
+    // 分组始终只持久化裸包名，避免 `_steam/_local` token 把同一模组拆成两条关系。
+    mod_ids: normalizeGroupModIds(group?.mod_ids || [])
   })
   const normalizeGroups = (groups) => (
     Array.isArray(groups) ? groups.map(group => normalizeGroup(group)) : []
@@ -61,7 +71,7 @@ export const useGroupStore = defineStore('groups', () => {
   }
   // 根据 Mod ID 获取所属分组列表
   const takeGroupsByModId = (modId) => {
-    const normalizedModId = String(modId ?? '').trim()
+    const normalizedModId = normalizePackageId(modId)
     if (!normalizedModId) return []
     return groupList.value.filter(g => Array.isArray(g?.mod_ids) && g.mod_ids.includes(normalizedModId))
   }
@@ -180,14 +190,16 @@ export const useGroupStore = defineStore('groups', () => {
     if (!window.pywebview) return false
     return enqueueWrite(async () => {
       try {
+      const normalizedIds = normalizeGroupModIds(modIds)
+      if (normalizedIds.length === 0) return false
       // 更新本地分组
         const group = groupList.value.find(g => g.group_id === groupId)
         if (group) { // 确保分组存在, 并去重
           const currentIds = Array.isArray(group.mod_ids) ? group.mod_ids : []
-          group.mod_ids = [...new Set([...currentIds, ...modIds])]
+          group.mod_ids = normalizeGroupModIds([...currentIds, ...normalizedIds])
         }
         else return false
-        const res = await window.pywebview.api.group_add_mods(groupId, modIds)
+        const res = await window.pywebview.api.group_add_mods(groupId, normalizedIds)
       // console.log("分组添加模组:", res)
         if (!checkResult(res, "分组添加模组")) {
         // 失败时才重新拉取数据进行还原
@@ -209,14 +221,16 @@ export const useGroupStore = defineStore('groups', () => {
     if (!window.pywebview) return false
     return enqueueWrite(async () => {
       try {
-        const res = await window.pywebview.api.group_remove_mods(groupId, modIds)
+        const normalizedIds = normalizeGroupModIds(modIds)
+        if (normalizedIds.length === 0) return false
+        const res = await window.pywebview.api.group_remove_mods(groupId, normalizedIds)
       // console.log("分组移除模组:", res)
         if (checkResult(res, "分组移除模组")) {
         // 更新本地分组
           const group = groupList.value.find(g => g.group_id === groupId)
           if (group) {
             const currentIds = Array.isArray(group.mod_ids) ? group.mod_ids : []
-            group.mod_ids = currentIds.filter(id => !modIds.includes(id))
+            group.mod_ids = currentIds.filter(id => !normalizedIds.includes(normalizePackageId(id)))
           }
           return true
         }
@@ -283,11 +297,13 @@ export const useGroupStore = defineStore('groups', () => {
     if (!modIds || modIds.length === 0) return false
     return enqueueWrite(async () => {
       try {
+      const normalizedIds = normalizeGroupModIds(modIds)
+      if (normalizedIds.length === 0) return false
       // 更新本地分组
         const group = groupList.value.find(g => g.group_id === groupId)
-        if (group) group.mod_ids = [...modIds]
+        if (group) group.mod_ids = [...normalizedIds]
         else return false
-        const res = await window.pywebview.api.group_content_reorder(groupId, modIds)
+        const res = await window.pywebview.api.group_content_reorder(groupId, normalizedIds)
       // console.log("分组内排序:", res)
         if (!checkResult(res, "分组内排序")) {
         // 失败时才重新拉取数据进行还原

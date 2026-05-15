@@ -87,7 +87,7 @@
               @drop="updateChildren" @drag="startDrag"
               v-selectable-list="{ 
                 data: groupModIds, 
-                selectedIds: modStore.selectedIds, 
+                selectedIds: Array.from(selectedCanonicalIds), 
                 onSelect: (ids, anchor) => modStore.selectMods(ids, anchor),
                 onClear: () => modStore.clearSelection(),
                 clickClass: 'select-trigger', 
@@ -97,7 +97,8 @@
 
                 <div class="relative group">
                   <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-                          :is-selected="modStore.selectedIds.includes(dataKey)" 
+                          :is-selected="selectedCanonicalIds.has(normalizeGroupModId(dataKey))" 
+                          :search-match="targetCanonicalModId === normalizeGroupModId(dataKey)"
                           :show-index="appStore.settings.ui.show_group_index"  
                           :show-icon="appStore.settings.ui.show_group_icon"
                           :simple="true">
@@ -109,7 +110,7 @@
                           opacity-0 group-hover:opacity-80 transition-opacity duration-200
                           flex items-center justify-center text-xs z-10 hover:scale-110">×
                   </button>
-                  <div v-if="modStore.activeIds.includes(dataKey)" v-tooltip="'已启用'" tabindex="0" class="absolute w-3 h-3 bg-accent-success text-text-main rounded-full 
+                  <div v-if="activeCanonicalIds.has(normalizeGroupModId(dataKey))" v-tooltip="'已启用'" tabindex="0" class="absolute w-3 h-3 bg-accent-success text-text-main rounded-full 
                           transition-opacity duration-200 flex items-center justify-center text-xs z-10 hover:scale-110"
                           :class="[appStore.settings.ui.show_group_index?'top-0 left-6':'top-0 left-0']">
                   </div>
@@ -135,6 +136,7 @@ import { useGroupStore } from '../../stores/groupStore';
 import { useAppStore } from '../../stores/appStore';
 import { toast } from '../../utils/common';
 import { hexToRgbComponents } from '../../utils/color'
+import { normalizePackageId } from '../../utils/modIdentity'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -142,6 +144,7 @@ const props = defineProps({
   groupData: { type: Object, required: true },
   isHighlight: { type: Boolean, default: false }, // 用于外部控制样式
   expanded: { type: Boolean, default: false }, // 这个 props 会由父组件 GroupList 传递
+  targetModId: { type: String, default: '' },
   listColor: { type: String, default: 'primary' }, // 用于不同列表的颜色区分
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
@@ -158,7 +161,16 @@ const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group
 
 
 const itemHeight = computed(() => appStore.scalePx(30)+4 )
+const normalizeGroupModId = (value: string) => normalizePackageId(value)
 const groupModIds = computed(() => Array.isArray(props.groupData?.mod_ids) ? props.groupData.mod_ids : [])
+const selectedCanonicalIds = computed(() => new Set(
+  (modStore.selectedIds || []).map(id => normalizeGroupModId(id)).filter(Boolean)
+))
+const activeCanonicalIds = computed(() => new Set(
+  (modStore.activeIds || []).map(id => normalizeGroupModId(id)).filter(Boolean)
+))
+const targetCanonicalModId = computed(() => normalizeGroupModId(props.targetModId))
+const targetScrollTimer = ref<number>()
 // 计算属性computed无法直接修改props.groupData.mod_ids，因为它是只读的。
 // 监听 props 变化，同步到本地 (单向数据流：父 -> 子)
 watch(
@@ -171,6 +183,24 @@ watch(
   { immediate: true, deep: true }
   // 设置immediate: true后，监听器会在初始化时立即执行一次回调，无需等待数据首次变化。
   // 设置deep: true后，监听器会 “递归遍历” 嵌套结构，感知所有层级属性的变化，确保嵌套数据修改时能触发回调。
+)
+const scrollToTargetMod = async () => {
+  const targetId = targetCanonicalModId.value
+  if (!props.expanded || !targetId) return
+  if (!groupModIds.value.some(id => normalizeGroupModId(id) === targetId)) return
+  await nextTick()
+  if (targetScrollTimer.value) {
+    clearTimeout(targetScrollTimer.value)
+  }
+  targetScrollTimer.value = setTimeout(() => {
+    vListRef.value?.scrollToKey?.(targetId)
+  }, 50)
+}
+watch(
+  [() => props.expanded, targetCanonicalModId, () => groupModIds.value.join('|')],
+  async () => {
+    await scrollToTargetMod()
+  }
 )
 
 // --- 数据传递与事件处理 ---
@@ -212,9 +242,9 @@ const resolveUniqueGroupName = (rawName: string) => {
 }
 // 解析本次真正需要拖入分组的 Mod 列表
 const resolveDraggedModIds = (selectedIds: Array<string>, draggedId: string) => {
-  const normalizedDraggedId = String(draggedId ?? '').trim()
+  const normalizedDraggedId = normalizeGroupModId(draggedId)
   const normalizedSelectedIds = [...new Set(
-    selectedIds.map(id => String(id ?? '').trim()).filter(Boolean)
+    selectedIds.map(id => normalizeGroupModId(id)).filter(Boolean)
   )]
   if (!normalizedDraggedId) return normalizedSelectedIds
   // 若当前拖拽项不在选中集中，说明是“直接拖未选中项”，此时只处理当前拖拽项
@@ -225,14 +255,16 @@ const resolveDraggedModIds = (selectedIds: Array<string>, draggedId: string) => 
 }
 // 构建拖入分组后的新顺序
 const buildDroppedGroupModIds = (newIds: Array<string>, selectedIds: Array<string>, draggedId: string, newIndex: number) => {
-  const movingIds = resolveDraggedModIds(selectedIds, draggedId)
-  if (!draggedId || movingIds.length === 0) return newIds
+  const normalizedDraggedId = normalizeGroupModId(draggedId)
+  const normalizedNewIds = newIds.map(id => normalizeGroupModId(id)).filter(Boolean)
+  const movingIds = resolveDraggedModIds(selectedIds, normalizedDraggedId)
+  if (!normalizedDraggedId || movingIds.length === 0) return normalizedNewIds
   // 保留拖拽落点占位，再移除其余重复项
-  const dedupedIds = newIds.filter((id, index) => {
-    if (index === newIndex && id === draggedId) return true
+  const dedupedIds = normalizedNewIds.filter((id, index) => {
+    if (index === newIndex && id === normalizedDraggedId) return true
     return !movingIds.includes(id)
   })
-  const insertIndex = dedupedIds.indexOf(draggedId)
+  const insertIndex = dedupedIds.indexOf(normalizedDraggedId)
   if (insertIndex === -1) return dedupedIds
   // 用真实拖拽集合替换掉占位项，保持插入位置不变
   dedupedIds.splice(insertIndex, 1, ...movingIds)
@@ -291,7 +323,7 @@ const updateChildren = (e) => {
   finishDragSession()
   console.log("更新子项排序:", e)
   const oldIds = [...groupModIds.value]  // 原始顺序
-  const newIds = internalModList.value.map(item => item.id)  // 获取当前的最新顺序 ID列表
+  const newIds = internalModList.value.map(item => normalizeGroupModId(item.id)).filter(Boolean)  // 获取当前的最新顺序 ID列表
   const tempSelectedIds = modStore.selectedIds
   const currentListDom = vListRef.value?.$el
   if (!currentListDom) {
@@ -327,7 +359,7 @@ const updateChildren = (e) => {
 
   console.log(props.groupData.name, "插入结束:", e)
   // 优先取事件里的拖拽项 ID，异常情况下再回退到落点位置的脏数据
-  const draggedId = e.item?.id || newIds[e.newIndex]
+  const draggedId = normalizeGroupModId(e.item?.id || newIds[e.newIndex])
   const uniqueIds = buildDroppedGroupModIds(newIds, tempSelectedIds, draggedId, e.newIndex)
   // （修复漏洞：如果拖入相同项到相邻位置，去重后实际列表顺序不变，但组件会渲染拖入的相同项，所以目前必须强制更新）
   internalModList.value = uniqueIds.map(id => ({ id: id }))
@@ -347,6 +379,9 @@ watch(() => appStore.isLoading, async (loading) => {
 
 onBeforeUnmount(() => {
   saveGroupColor.flush?.()
+  if (targetScrollTimer.value) {
+    clearTimeout(targetScrollTimer.value)
+  }
   if (isDragging.value) {
     finishDragSession({ suppressDrop: true })
     dispatchSyntheticDragEnd()

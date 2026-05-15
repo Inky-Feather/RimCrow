@@ -249,7 +249,7 @@ const selectedSectionHeaderIds = computed(() => {
 })
 
 // 是否启用
-const isActive = computed(() => modStore.activeIds.includes(props.item_id))
+const isActive = computed(() => modStore.activeIds.some(id => normalizePackageId(id) === currentCanonicalId.value))
 
 const modType = computed(() => modStore.displayModType(modData.value))
 

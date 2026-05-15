@@ -14,7 +14,7 @@
     <!-- 搜索栏 -->
     <div class="px-2 py-1 shadow-xl" >
       <div data-tour="group-list-search" class="w-full inline-flex items-center gap-1">
-        <input type="text" placeholder="搜索模组名称..." v-model="searchText"
+        <input type="text" placeholder="搜索分组名称、模组名称/包名/作者..." v-model="searchText"
           :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-text-main/10 text-sm 
           text-text-main placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
         <!-- 定位按钮 -->
@@ -66,6 +66,7 @@
           <template v-slot:item="{ record, index, dataKey }">
             <GroupItem v-if="isValidGroupSlot(record, dataKey)" :id="dataKey" :key="dataKey" :index="index" :groupData="record" :list-color="listColor"
               :expanded="expandedIds.has(record.group_id)" :isHighlight="currentSearchGroupId === dataKey"
+              :target-mod-id="currentSearchGroupId === dataKey ? currentSearchModId : ''"
               @toggle="toggle" @delete-group="deleteGroup"
               @remove-item="removeMod" @update-group="updateGroup" @update-children="updateChildren">
             </GroupItem>
@@ -103,6 +104,7 @@ import VirtualList from 'vue-virtual-sortable';
 import GroupItem from './utils/GroupItem.vue'
 import { CircleQuestionMarkIcon } from 'lucide-vue-next';
 import { useAppStore } from '../stores/appStore';
+import { normalizePackageId } from '../utils/modIdentity'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -120,12 +122,19 @@ const listKey = ref(0)
 const isDragging = ref(false)
 const suppressNextDrop = ref(false)
 
+type GroupSearchResult = {
+  groupId: string,
+  modId: string,
+  matchType: 'group' | 'mod'
+}
+
 // 搜索文本
 const searchText = ref('')
 const oldSearchText = ref('')
-const searchResults = ref([])
+const searchResults = ref<GroupSearchResult[]>([])
 const currentSearchIndex = ref(-1)
 const currentSearchGroupId = ref('')
+const currentSearchModId = ref('')
 
 const highlightTimer = ref<number>()
 
@@ -152,6 +161,37 @@ const isValidGroupSlot = (record: any, dataKey: unknown) => {
 const safeGroupList = computed(() => props.modelValue.filter(item => isValidGroupRecord(item)))
 // 用 Set 存储所有被展开的 ID
 const expandedIds = computed(() => new Set(safeGroupList.value.filter(item => item.is_expanded).map(item => item.group_id)))
+const normalizeSearchText = (value: unknown) => String(value ?? '').trim().toLowerCase()
+const isTextMatch = (value: unknown, query: string) => {
+  if (!query) return false
+  return normalizeSearchText(value).includes(query)
+}
+const buildSearchResults = (rawQuery: string) => {
+  const query = normalizeSearchText(rawQuery)
+  if (!query) return []
+  const groupHits: GroupSearchResult[] = []
+  const modHits: GroupSearchResult[] = []
+  safeGroupList.value.forEach(group => {
+    if (isTextMatch(group?.name, query)) {
+      groupHits.push({ groupId: group.group_id, modId: '', matchType: 'group' })
+    }
+    const modIds = Array.isArray(group?.mod_ids) ? group.mod_ids : []
+    modIds.forEach(modId => {
+      const normalizedModId = normalizePackageId(modId)
+      if (!normalizedModId) return
+      const mod = modStore.takeModById(normalizedModId)
+      const matches = [
+        mod?.alias_name,
+        mod?.display_name,
+        mod?.name,
+        mod?.package_id
+      ].some(value => isTextMatch(value, query))
+      if (!matches) return
+      modHits.push({ groupId: group.group_id, modId: normalizedModId, matchType: 'mod' })
+    })
+  })
+  return modHits.length > 0 ? [...modHits, ...groupHits] : groupHits
+}
 
 // 分组列表
 const groupList = computed({
@@ -190,26 +230,31 @@ const groupHelpTooltip = computed(() => {
 
 
 
-const executeSearch = (forward: boolean) => {
+const executeSearch = async (forward: boolean) => {
   if (!searchText.value) return
   // 搜索文本改变时更新结果
   if (searchText.value !== oldSearchText.value) {
-    // console.log(groupList.value)
-    searchResults.value = safeGroupList.value.filter(item => item.name.includes(searchText.value))
+    searchResults.value = buildSearchResults(searchText.value)
     currentSearchIndex.value = -1
   }
   // 搜索无结果时直接退出，避免出现 NaN 索引
   if (searchResults.value.length === 0) {
     currentSearchIndex.value = -1
     currentSearchGroupId.value = ''
+    currentSearchModId.value = ''
     oldSearchText.value = searchText.value
     return
   }
   currentSearchIndex.value = getNextSearchIndex(currentSearchIndex.value, searchResults.value.length, forward)
   // 确保索引有效
   if (currentSearchIndex.value === -1) return
-  // 更新当前搜索的分组 ID
-  currentSearchGroupId.value = searchResults.value[currentSearchIndex.value].group_id
+  const currentResult = searchResults.value[currentSearchIndex.value]
+  currentSearchGroupId.value = currentResult.groupId
+  currentSearchModId.value = currentResult.modId || ''
+  if (currentResult.matchType === 'mod' && !expandedIds.value.has(currentResult.groupId)) {
+    await groupStore.updateGroup(currentResult.groupId, { is_expanded: true })
+    await nextTick()
+  }
   const index = safeGroupList.value.findIndex(item => item.group_id === currentSearchGroupId.value)
   if (index !== -1) {
     // 稍微延迟一下确保虚拟列表渲染就绪
@@ -224,6 +269,7 @@ const executeSearch = (forward: boolean) => {
     }
     highlightTimer.value = setTimeout(() => {
       currentSearchGroupId.value = ''
+      currentSearchModId.value = ''
     }, 2000)
   }
   oldSearchText.value = searchText.value

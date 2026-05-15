@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from backend.database.models import GameProfile
-from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, settings
+from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, settings
 
 
 @dataclass
@@ -40,6 +40,9 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
 
     if LooseVersion(last_version) < LooseVersion("0.19.21"):
         _migrate_legacy_launch_preference_to_default_profile()
+
+    if LooseVersion(last_version) < LooseVersion("0.20.4"):
+        _migrate_legacy_workshop_cache_schema(result)
 
     result.pending_actions.append("show_update_news")
     return result
@@ -89,3 +92,29 @@ def _migrate_legacy_launch_preference_to_default_profile():
 
     # 迁移完成后立刻清空临时缓存，避免本次进程后续逻辑再把它当成有效配置源。
     settings._legacy_prefer_steam_launch = None
+
+
+def _migrate_legacy_workshop_cache_schema(result: AppUpgradeResult):
+    """
+    清理旧版 workshop_cache.db。
+
+    0.20.4 起外置工坊缓存的表模型已从旧 `WorkshopMeta` 拆分为新结构，
+    这里直接删除旧缓存库，让新版启动后的默认重建流程按新结构重新生成。
+    """
+    db_path = DATA_DIR / "workshop_cache.db"
+    sidecar_paths = [
+        db_path,
+        db_path.with_name(db_path.name + "-wal"),
+        db_path.with_name(db_path.name + "-shm"),
+        db_path.with_name(db_path.name + "-journal"),
+    ]
+
+    removed_any = False
+    for path in sidecar_paths:
+        if not path.exists():
+            continue
+        path.unlink()
+        removed_any = True
+
+    if removed_any:
+        result.messages.append("检测到工坊缓存结构升级，已清理旧版 workshop_cache 缓存库，启动后将按新结构自动重建。")
