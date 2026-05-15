@@ -278,10 +278,7 @@ const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
   )
   if (!check) return
 
-  const res = await appStore.unsubscribeWorkshopIds(workshopIds)
-  if (res && deleteFile && pathHashes.length) {
-    modStore.deleteMods(pathHashes)
-  }
+  await appStore.unsubscribeWorkshopIds(workshopIds, deleteFile ? pathHashes : null)
 }
 
 const downloadMods = async (pathHashes) => {

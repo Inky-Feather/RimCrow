@@ -13,6 +13,7 @@ from typing import Any, Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from backend.database.dao import ModDAO, GroupDAO
+from backend.load_order.package_tokens import parse_package_token
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.managers.mgr_game_logs import LogCondenser
@@ -612,7 +613,12 @@ class AIToolExecutor:
         """辅助方法：返回当前启用列表中的 package_id 集合"""
         if not self.context: return set()
         lo_mgr = LoadOrderManager(self.context)
-        return set(pid.lower() for pid in lo_mgr.read_active_mods().get('active_mods', []))
+        return {
+            token_info.canonical_package_id
+            for pid in lo_mgr.read_active_mods().get('active_mods', [])
+            for token_info in [parse_package_token(pid)]
+            if token_info.canonical_package_id
+        }
 
     def _tool_get_log_context(self, args: GetLogContextArgs) -> dict[str, Any]:
         """获取指定行号的日志上下文，包含完整调用栈。"""

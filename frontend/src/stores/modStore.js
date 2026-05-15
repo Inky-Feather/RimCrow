@@ -9,15 +9,28 @@ import { useMissingInstallStore } from './missingInstallStore'
 import { useProfileStore } from './profileStore'
 import { useSupplementStore } from './supplementStore'
 import {
+  buildSteamPackageToken,
   dedupeInstallSources,
   normalizeInstallSource,
   normalizePackageId,
+  normalizePackageToken,
   normalizeWorkshopId,
+  parsePackageToken,
+  stripPackageTokenSuffix,
 } from '../utils/modIdentity'
 
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
+  const normalizeListToken = (id = '') => normalizePackageToken(id)
+  const normalizeCanonicalId = (id = '') => stripPackageTokenSuffix(id)
+  const buildCanonicalIdSet = (ids = []) => new Set(
+    (ids || []).map(normalizeCanonicalId).filter(Boolean)
+  )
+  const resolveStoredMod = (id = '') => {
+    const canonicalId = normalizeCanonicalId(id)
+    return canonicalId ? allModsMap.value.get(canonicalId) : null
+  }
   // 检查两个值是否相等
   const arePlainValuesEqual = (left, right) => {
     if (left === right) return true
@@ -169,7 +182,7 @@ export const useModStore = defineStore('mods', () => {
     const source = Array.isArray(ids) ? ids : [ids]
     return [...new Set(
       source
-        .map(id => String(id || '').trim().toLowerCase())
+        .map(id => normalizeListToken(id))
         .filter(Boolean)
     )]
   }
@@ -177,7 +190,7 @@ export const useModStore = defineStore('mods', () => {
   const createModTimeSnapshot = (ids = []) => {
     const snapshot = {}
     normalizeHistoryModIds(ids).forEach(id => {
-      const mod = allModsMap.value.get(id)
+      const mod = resolveStoredMod(id)
       if (!mod) return
       snapshot[id] = {
         last_active_time: mod.last_active_time || 0,
@@ -200,7 +213,7 @@ export const useModStore = defineStore('mods', () => {
   const captureListHistorySnapshot = (trackedModIds = []) => createListHistorySnapshot(trackedModIds)
   const restoreModTimeSnapshot = (modTimes = {}) => {
     Object.entries(modTimes || {}).forEach(([id, times]) => {
-      const mod = allModsMap.value.get(String(id).toLowerCase())
+      const mod = resolveStoredMod(id)
       if (!mod) return
       mod.last_active_time = times?.last_active_time || 0
       mod.last_moved_time = times?.last_moved_time || 0
@@ -313,28 +326,46 @@ export const useModStore = defineStore('mods', () => {
   // 获取 Mod 对象
   const takeModById = (id, defaultName = '未知模组') => {
     if (!id) return null
-    const lowerId = id.toLowerCase()
-    if (allModsMap.value.has(lowerId)) {
-      const mod = allModsMap.value.get(lowerId)
-      applyInstallSourceHintToMod(mod, lowerId)
+    const tokenInfo = parsePackageToken(id)
+    const canonicalId = tokenInfo.canonicalPackageId || normalizeCanonicalId(id)
+    if (canonicalId && allModsMap.value.has(canonicalId)) {
+      const mod = allModsMap.value.get(canonicalId)
+      applyInstallSourceHintToMod(mod, canonicalId)
+      if (tokenInfo.sourcePreference === 'steam' && mod?.coexist_workshop_variant) {
+        const variant = {
+          ...mod,
+          ...mod.coexist_workshop_variant,
+          package_id: canonicalId,
+          canonical_package_id: canonicalId,
+          active_package_token: buildSteamPackageToken(canonicalId),
+          source_preference: 'steam',
+          is_coexistence: true,
+        }
+        applyInstallSourceHintToMod(variant, canonicalId)
+        return variant
+      }
+      mod.canonical_package_id = canonicalId
+      mod.active_package_token = canonicalId
+      mod.source_preference = 'local'
       return mod
     }
     // 构造缺失模组的“幽灵对象”
     const ghostMod = {
-      package_id: id,
-      name: `⚠ ${defaultName} (${id})`,
+      package_id: canonicalId || id,
+      canonical_package_id: canonicalId || id,
+      active_package_token: tokenInfo.sourcePreference === 'steam' ? buildSteamPackageToken(canonicalId || id) : (canonicalId || id),
+      name: `⚠ ${defaultName} (${canonicalId || id})`,
       path: null,
       description: '该模组在本地未找到，可能未下载，或已被手动删除。',
       isMissing: true,
     }
-    applyInstallSourceHintToMod(ghostMod, lowerId)
+    applyInstallSourceHintToMod(ghostMod, canonicalId || id)
     return ghostMod
   }
   const hasRealModById = (id) => {
     if (!id) return false
-    const lowerId = String(id).toLowerCase()
-    if (!allModsMap.value.has(lowerId)) return false
-    const mod = allModsMap.value.get(lowerId)
+    const mod = resolveStoredMod(id)
+    if (!mod) return false
     // ghost 项虽然会被塞进 allModsMap，但它们不应该被当成“真实已安装模组”。
     return !!mod && !mod.isMissing && !!mod.path
   }
@@ -453,7 +484,7 @@ export const useModStore = defineStore('mods', () => {
   }
   // 获取 Mod 对象列表
   const takeModListByIds = (ids) => {
-    return Array.from(allModsMap.value.values()).filter(mod => ids.includes(mod.package_id))
+    return (ids || []).map(id => takeModById(id)).filter(Boolean)
   }
   // 显示 Mod 名称（优先 alias_name -> display_name -> name -> package_id）
   const displayModName = (modOrId, defaultName = '未知模组') => {
@@ -488,21 +519,21 @@ export const useModStore = defineStore('mods', () => {
   // 刷新未激活Mod列表 (实现“新Mod置顶，旧Mod持久，联锁聚拢”)
   const updateInactiveIds = () => {
     // 清理临时列表 (Temp - Active) （Temp列表 是前端的临时列表，防止与刷新后的 Active列表 出现重复项）
-    const activeSet = new Set(activeIds.value)
-    tempIds.value = tempIds.value.filter(id => !activeSet.has(id.toLowerCase()))
+    const activeSet = buildCanonicalIdSet(activeIds.value)
+    tempIds.value = tempIds.value.filter(id => !activeSet.has(normalizeCanonicalId(id)))
     inactiveIds.value = takeInactiveIds()
   }
   // 获取未激活Mod ID 列表 (全集 - 活跃 - 临时)
   const takeInactiveIds = () => {
-    const activeSet = new Set(activeIds.value.map(id => id.toLowerCase()))
-    const tempSet = new Set(tempIds.value.map(id => id.toLowerCase()))
+    const activeSet = buildCanonicalIdSet(activeIds.value)
+    const tempSet = buildCanonicalIdSet(tempIds.value)
     // 1. 获取所有没在 active 和 temp 里的 Mod
     const newMods = [] // 收集"新" Mod（未在保存的 inactive 列表中出现过）
     // 建立旧顺序的查找索引 O(1)
     const savedIndexMap = new Map()
-    savedInactiveIds.value.forEach((id, idx) => savedIndexMap.set(id.toLowerCase(), idx))
+    savedInactiveIds.value.forEach((id, idx) => savedIndexMap.set(normalizeCanonicalId(id), idx))
     for (const mod of allModsMap.value.values()) {
-      const pid = mod.package_id.toLowerCase()
+      const pid = normalizeCanonicalId(mod.package_id)
       if (!activeSet.has(pid) && !tempSet.has(pid)) {
         if (!savedIndexMap.has(pid)) {
           newMods.push(mod)
@@ -518,17 +549,18 @@ export const useModStore = defineStore('mods', () => {
     const newModIds = newMods.map(m => m.package_id)
     // 3. 将 "旧 Mod" 按照 savedInactiveIds 中的原始顺序排列
     const oldModIds = savedInactiveIds.value.filter(id => {
-      const pid = id.toLowerCase()
+      const pid = normalizeCanonicalId(id)
       return !activeSet.has(pid) && !tempSet.has(pid) && hasRealModById(pid)
     })
     // 4. 基础合并
     const baseInactive = [...newModIds, ...oldModIds]
     const finalInactive = []
     const processed = new Set()
+    const tokenByCanonicalId = new Map(baseInactive.map(id => [normalizeCanonicalId(id), id]))
     // 建立查找表提升性能
-    const baseInactiveSet = new Set(baseInactive.map(id => id.toLowerCase()))
+    const baseInactiveSet = buildCanonicalIdSet(baseInactive)
     for (const id of baseInactive) {
-      const pid = id.toLowerCase()
+      const pid = normalizeCanonicalId(id)
       if (processed.has(pid)) continue
 
       const mod = allModsMap.value.get(pid)
@@ -537,10 +569,10 @@ export const useModStore = defineStore('mods', () => {
         const chain = interlocksMap.value[mod.interlock_id]
         // 遍历该链条，把所有属于 inactive 列表的兄弟姐妹都拉过来，按链条固有顺序排列
         for (const chainId of chain) {
-          const cid = chainId.toLowerCase()
+          const cid = normalizeCanonicalId(chainId)
           if (baseInactiveSet.has(cid) && !processed.has(cid)) {
             // 找到原始大小写格式的 ID 并存入
-            finalInactive.push(chainId)
+            finalInactive.push(tokenByCanonicalId.get(cid) || chainId)
             processed.add(cid)
           }
         }
@@ -559,7 +591,7 @@ export const useModStore = defineStore('mods', () => {
 
     const normalizedIds = [...new Set(
       ids
-        .map(id => String(id || '').trim().toLowerCase())
+        .map(id => normalizeCanonicalId(id))
         .filter(Boolean)
     )]
 
@@ -647,21 +679,21 @@ export const useModStore = defineStore('mods', () => {
     if (resetHistory) clearListHistory()
     clearInstallSourceHintsByOrigin('import')
     dismissedUnavailableIds.clear()
-    activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
+    activeIds.value = normalizeHistoryModIds(data.active_load_order || [])
     setActiveLoadBaseline(
-      data.active_load_order || [],
+      normalizeHistoryModIds(data.active_load_order || []),
       data.active_load_modify_time || 0,
       data.active_load_version_token || {}
     )
-    savedInactiveIds.value = [...data.inactive_load_order] || [] // 接收持久化停用顺序
+    savedInactiveIds.value = normalizeHistoryModIds(data.inactive_load_order || []) // 接收持久化停用顺序
     interlocksMap.value = data.interlocks || {}             // 接收联锁字典
     // 创建一个 Set 用于 O(1) 快速查找
-    const activeSet = new Set(activeIds.value);
+    const activeSet = buildCanonicalIdSet(activeIds.value)
     // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
     const tempMap = new Map()
     data.all_mods.forEach(mod => {
       // 初始化启用时间（如果 Mod 是 Active 但没有启用时间，则记录为排序文件更新时间，若仍有问题则记录为当前时间）
-      if (mod.package_id && activeSet.has(mod.package_id.toLowerCase()) && !mod.last_active_time) {
+      if (mod.package_id && activeSet.has(normalizeCanonicalId(mod.package_id)) && !mod.last_active_time) {
         mod.last_active_time = data.active_load_modify_time || Date.now()
       }
       // 强制保证列表字段存在且格式正确
@@ -675,7 +707,7 @@ export const useModStore = defineStore('mods', () => {
       if (!Array.isArray(mod.tags)) mod.tags = []
       if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
       applyInstallSourceHintToMod(mod, mod.package_id)
-      tempMap.set(mod.package_id.toLowerCase(), mod)
+      tempMap.set(normalizeCanonicalId(mod.package_id), mod)
     })
     allModsMap.value = tempMap
     // 重新计算 Inactive列表 (排除 Active 和 Temp)（本质上 Temp列表 与 Inactive列表 一样，但在前端分出差异方便整理）
@@ -700,20 +732,20 @@ export const useModStore = defineStore('mods', () => {
   }
   // 从所有列表中移除指定 IDs
   const removeIdsOnAllList = (ids) => {
-    const normalizedIds = normalizeHistoryModIds(ids)
-    const lowerIdsSet = new Set(normalizedIds)
-    activeIds.value = activeIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
-    inactiveIds.value = inactiveIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
-    tempIds.value = tempIds.value.filter(i => !lowerIdsSet.has(String(i || '').toLowerCase()))
+    const normalizedIds = buildCanonicalIdSet(normalizeHistoryModIds(ids))
+    activeIds.value = activeIds.value.filter(i => !normalizedIds.has(normalizeCanonicalId(i)))
+    inactiveIds.value = inactiveIds.value.filter(i => !normalizedIds.has(normalizeCanonicalId(i)))
+    tempIds.value = tempIds.value.filter(i => !normalizedIds.has(normalizeCanonicalId(i)))
   }
   const removeUnavailableIdsCompletely = (ids) => {
     const normalizedIds = normalizeHistoryModIds(ids)
-    if (normalizedIds.length === 0) return 0
+    const normalizedIdSet = buildCanonicalIdSet(normalizedIds)
+    if (normalizedIdSet.size === 0) return 0
 
     removeIdsOnAllList(normalizedIds)
 
     let changed = false
-    normalizedIds.forEach(id => {
+    normalizedIdSet.forEach(id => {
       dismissedUnavailableIds.add(id)
       const mod = allModsMap.value.get(id)
       if (mod && (mod.isMissing || !mod.path)) {
@@ -723,15 +755,15 @@ export const useModStore = defineStore('mods', () => {
     })
 
     const selectedBefore = selectedIds.value.length
-    selectedIds.value = selectedIds.value.filter(id => !normalizedIds.includes(String(id || '').toLowerCase()))
+    selectedIds.value = selectedIds.value.filter(id => !normalizedIdSet.has(normalizeCanonicalId(id)))
     if (selectedIds.value.length !== selectedBefore) {
       changed = true
     }
-    if (normalizedIds.includes(String(currentTargetId.value || '').toLowerCase())) {
+    if (normalizedIdSet.has(normalizeCanonicalId(currentTargetId.value))) {
       currentTargetId.value = ''
       changed = true
     }
-    if (normalizedIds.includes(String(lastSelectedMod.value?.package_id || '').toLowerCase())) {
+    if (normalizedIdSet.has(normalizeCanonicalId(lastSelectedMod.value?.active_package_token || lastSelectedMod.value?.package_id))) {
       lastSelectedMod.value = selectedIds.value.length > 0
         ? takeModById(selectedIds.value[selectedIds.value.length - 1])
         : null
@@ -741,7 +773,7 @@ export const useModStore = defineStore('mods', () => {
     if (changed) {
       dataVersion.value++
     }
-    return normalizedIds.length
+    return normalizedIdSet.size
   }
   // 批量启用/停用Mod
   const changeModsActive = async (ids, active) => {
@@ -764,6 +796,57 @@ export const useModStore = defineStore('mods', () => {
         mod.last_active_time = Date.now()
       })
     })
+  }
+  const canSwitchCoexistenceSource = (id) => {
+    const mod = resolveStoredMod(id)
+    return !!mod?.coexist_workshop_variant
+  }
+  const buildCoexistenceListToken = (id, targetSource = 'local') => {
+    const canonicalId = normalizeCanonicalId(id)
+    if (!canonicalId) return ''
+    if (targetSource === 'steam' && canSwitchCoexistenceSource(canonicalId)) {
+      return buildSteamPackageToken(canonicalId)
+    }
+    return canonicalId
+  }
+  const replaceCoexistenceTokensInList = (list = [], canonicalIds = new Set(), targetSource = 'local') => {
+    return (list || []).map(id => {
+      const canonicalId = normalizeCanonicalId(id)
+      if (!canonicalIds.has(canonicalId) || !canSwitchCoexistenceSource(canonicalId)) {
+        return normalizeListToken(id)
+      }
+      return buildCoexistenceListToken(canonicalId, targetSource)
+    })
+  }
+  const switchCoexistenceSource = async (ids, targetSource = 'local') => {
+    const canonicalIds = buildCanonicalIdSet(Array.isArray(ids) ? ids : [ids])
+    const switchableIds = new Set([...canonicalIds].filter(id => canSwitchCoexistenceSource(id)))
+    if (switchableIds.size === 0) return false
+    return await runListHistoryTransaction({
+      type: `coexist-source-${targetSource}`,
+      label: targetSource === 'steam' ? `切换 ${switchableIds.size} 个 Mod 到工坊版` : `切换 ${switchableIds.size} 个 Mod 到本地版`,
+      trackedModIds: [...switchableIds],
+    }, async () => {
+      activeIds.value = replaceCoexistenceTokensInList(activeIds.value, switchableIds, targetSource)
+      inactiveIds.value = replaceCoexistenceTokensInList(inactiveIds.value, switchableIds, targetSource)
+      tempIds.value = replaceCoexistenceTokensInList(tempIds.value, switchableIds, targetSource)
+      savedInactiveIds.value = replaceCoexistenceTokensInList(savedInactiveIds.value, switchableIds, targetSource)
+      selectedIds.value = replaceCoexistenceTokensInList(selectedIds.value, switchableIds, targetSource)
+      if (currentTargetId.value && switchableIds.has(normalizeCanonicalId(currentTargetId.value))) {
+        currentTargetId.value = buildCoexistenceListToken(currentTargetId.value, targetSource)
+      }
+      if (lastSelectedMod.value) {
+        const activeToken = lastSelectedMod.value.active_package_token || lastSelectedMod.value.package_id
+        if (switchableIds.has(normalizeCanonicalId(activeToken))) {
+          lastSelectedMod.value = takeModById(buildCoexistenceListToken(activeToken, targetSource))
+        }
+      }
+    })
+  }
+  const toggleCoexistenceSource = async (id) => {
+    const currentInfo = parsePackageToken(id)
+    const targetSource = currentInfo.sourcePreference === 'steam' ? 'local' : 'steam'
+    return await switchCoexistenceSource([id], targetSource)
   }
   // 智能插入 Mod 到 Active 列表
   const smartInsertMods = async (ids) => {
@@ -794,12 +877,12 @@ export const useModStore = defineStore('mods', () => {
     // 2. 建立索引映射 (ID -> 原始输入位置)
     // 同时也作为快速查找表
     const inputMap = new Map();
-    inputIds.forEach((id, idx) => inputMap.set(id.toLowerCase(), idx));
+    inputIds.forEach((id, idx) => inputMap.set(normalizeListToken(id), idx));
     const finalChunks = []; // 存储 { index: number, items: string[] }
     const processed = new Set(); // 记录已处理过的输入ID
     // 3. 遍历输入列表
     for (let i = 0; i < inputIds.length; i++) {
-      const currentId = inputIds[i].toLowerCase();
+      const currentId = normalizeListToken(inputIds[i]);
       // 如果该ID已经被包含在之前的某个链条中处理过了，直接跳过
       if (processed.has(currentId)) continue;
       const mod = takeModById(currentId);
@@ -809,7 +892,7 @@ export const useModStore = defineStore('mods', () => {
         let anchorIndex = -1;
         // 遍历整个链条，找出第一个在用户点击/圈选范围内的项，作为锚点位置
         for (const chainId of chainItems) {
-          const pid = chainId.toLowerCase();
+          const pid = normalizeListToken(chainId);
           processed.add(pid); // 把整条链上的 ID 都标记为已处理
           if (anchorIndex === -1 && inputMap.has(pid)) {
             anchorIndex = inputMap.get(pid);
@@ -835,7 +918,7 @@ export const useModStore = defineStore('mods', () => {
     // 处理最后选中项高亮
     if (lastId) {
       // 检查 lastId 是否在最终结果中 (大小写敏感处理)
-      const target = result.find(id => id.toLowerCase() === lastId.toLowerCase());
+      const target = result.find(id => normalizeListToken(id) === normalizeListToken(lastId));
       lastSelectedMod.value = target ? takeModById(target) : takeModById(result[result.length - 1]);
     } else {
       lastSelectedMod.value = takeModById(result[result.length - 1]);
@@ -969,25 +1052,26 @@ export const useModStore = defineStore('mods', () => {
   // 创建本地共存
   const localizeSelectedMods = async (store='workshop') => {
     if (selectedIds.value.length === 0) return;
-    // 过滤出选中的工坊模组（如果是本地模组则没必要转换）
-    const workshopIds = selectedMods.value
+    // 使用 path_hash 精确定位当前副本，避免共存场景误选到另一份同包名模组。
+    const pathHashes = selectedMods.value
       .filter(m => m.store === store)
-      .map(m => m.package_id);
-    if (workshopIds.length === 0) {
+      .map(m => m.path_hash)
+      .filter(Boolean);
+    if (pathHashes.length === 0) {
       toast.info("选中的模组中没有来自工坊的项");
       return;
     }
-    await localizeMods(workshopIds, store)
+    await localizeMods(pathHashes, store)
   }
-  const localizeMods = async (workshopIds, store='workshop') => {
+  const localizeMods = async (pathHashes, store='workshop') => {
     const confirm = await confirmStore.confirmAction(
       '本地化确认',
-      `确定要将选中的 ${workshopIds.length} 个${store}模组复制到本地目录吗？\n复制后将独立占用磁盘空间，Steam / 管理器 的更新将不再影响这些本地副本。`,
+      `确定要将选中的 ${pathHashes.length} 个${store}模组复制到本地目录吗？\n复制后将独立占用磁盘空间，Steam / 管理器 的更新将不再影响这些本地副本。`,
       { type: 'info' }
     );
     if (confirm) {
       appStore.isLoading = true;
-      const res = await window.pywebview.api.localize_workshop_mods(workshopIds, store);
+      const res = await window.pywebview.api.localize_workshop_mods(pathHashes, store);
       if (checkResult(res, '模组本地化')) {
         // 成功后会在完成时刷新数据
       }
@@ -1040,7 +1124,7 @@ export const useModStore = defineStore('mods', () => {
     if (!window.pywebview) return
     try {
       // 更新本地 Map
-      const mod = allModsMap.value.get(modId.toLowerCase())
+      const mod = resolveStoredMod(modId)
       if (mod) Object.assign(mod, userData)
       const res = await window.pywebview.api.mod_user_data_update(modId, userData)
       if (!checkResult(res, "更新Mod用户数据", true)) {
@@ -1261,7 +1345,7 @@ export const useModStore = defineStore('mods', () => {
     try {
       // 1. 乐观更新：立即更新本地 Map 状态
       updatesList.forEach(u => {
-        const mod = allModsMap.value.get(u.mod_id.toLowerCase())
+        const mod = resolveStoredMod(u.mod_id)
         if (mod) {
           Object.assign(mod, u)
         }
@@ -1328,7 +1412,7 @@ export const useModStore = defineStore('mods', () => {
     // 范围：所有已加载的 Mod (无论是否启用)
     // -------------------------------------------------
     for (const mod of allModsMap.value.values()) {
-      const id = mod.package_id.toLowerCase()
+      const id = normalizeCanonicalId(mod.package_id)
 
       // A. 文件缺失
       if (!mod.path || mod.isMissing) {
@@ -1380,9 +1464,14 @@ export const useModStore = defineStore('mods', () => {
     // -------------------------------------------------
     // 构建 Map 以实现 O(1) 查找 active 列表中的索引
     const activeIndexMap = new Map()
+    const activeTokenMap = new Map()
     const len = activeIds.value.length
     for (let i = 0; i < len; i++) {
-        activeIndexMap.set(activeIds.value[i].toLowerCase(), i)
+        const canonicalId = normalizeCanonicalId(activeIds.value[i])
+        const tokenId = normalizeListToken(activeIds.value[i])
+        if (!canonicalId) continue
+        activeIndexMap.set(canonicalId, i)
+        activeTokenMap.set(canonicalId, tokenId)
     }
     // 快速判定任意两个 Mod 之间的合法顺序
     // isMustBefore.get(A)?.has(B) 为 true，表示规则要求 A 必须在 B 之前
@@ -1392,27 +1481,28 @@ export const useModStore = defineStore('mods', () => {
         isMustBefore.get(beforeId).add(afterId)
     }
     for (let i = 0; i < len; i++) {
-        const currentId = activeIds.value[i].toLowerCase()
-        const mod = takeModById(currentId)
+        const currentId = normalizeCanonicalId(activeIds.value[i])
+        const mod = takeModById(activeIds.value[i])
         if (!mod || mod.isMissing || !mod.rules) continue
         const rules = mod.rules || {}
         // 我必须在别人之后 -> 别人必须在我之前
         const afterTargets = [...(rules.load_after || []), ...(rules.dependencies || [])]
         afterTargets.forEach(r => {
-            const tid = r.target_id.toLowerCase()
+            const tid = normalizeCanonicalId(r.target_id)
             addMustBeforeRule(tid, currentId) // tid 必须在 currentId 之前
         })
         // 我必须在别人之前 -> 我必须在别人之前
         const beforeTargets = rules.load_before || []
         beforeTargets.forEach(r => {
-            const tid = r.target_id.toLowerCase()
+            const tid = normalizeCanonicalId(r.target_id)
             addMustBeforeRule(currentId, tid) // currentId 必须在 tid 之前
         })
     }
     
     for (let i = 0; i < len; i++) {
-      const currentId = activeIds.value[i].toLowerCase()
-      const mod = takeModById(currentId)
+      const currentToken = normalizeListToken(activeIds.value[i])
+      const currentId = normalizeCanonicalId(activeIds.value[i])
+      const mod = takeModById(activeIds.value[i])
       if (!mod || mod.isMissing) continue // X. 文件缺失已在全局检查中处理，这里简单跳过
       if(!mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
 
@@ -1427,31 +1517,33 @@ export const useModStore = defineStore('mods', () => {
       
       // 1. 置顶检查 (<= 0)
       if (finalWeight <= 0 && i > 0) { // 只检查非首位元素
-        const prevId = activeIds.value[i - 1].toLowerCase()
-        const prevMod = takeModById(prevId)
+        const prevId = normalizeCanonicalId(activeIds.value[i - 1])
+        const prevToken = activeTokenMap.get(prevId) || prevId
+        const prevMod = takeModById(activeIds.value[i - 1])
         const prevW = prevMod?.rules?.weight_info?.final_weight ?? 500
         // 如果紧邻的前一个模组不是置顶的
         if (prevW > 0) {
           // 【关键豁免】：检查是否存在规则要求 prevId 必须在 currentId 之前
           const isAllowedByRule = isMustBefore.get(prevId)?.has(currentId)
           if (!isAllowedByRule) {
-            _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-              `^^排序警告^^：根据 ${sourceName} 要求置顶，但被排在了非前置依赖的常规模组 [[${displayModName(prevId)}]] 之后`, prevId)
+            _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+              `^^排序警告^^：根据 ${sourceName} 要求置顶，但被排在了非前置依赖的常规模组 [[${displayModName(prevId)}]] 之后`, prevToken)
           }
         }
       }
       // 2. 置底检查 (>= 10000)
       if (finalWeight >= 10000 && i < len - 1) { // 只检查非末位元素
-        const nextId = activeIds.value[i + 1].toLowerCase()
-        const nextMod = takeModById(nextId)
+        const nextId = normalizeCanonicalId(activeIds.value[i + 1])
+        const nextToken = activeTokenMap.get(nextId) || nextId
+        const nextMod = takeModById(activeIds.value[i + 1])
         const nextW = nextMod?.rules?.weight_info?.final_weight ?? 500
         // 如果紧邻的后一个模组不是置底的
         if (nextW < 10000) {
           // 【关键豁免】：检查是否存在规则要求 currentId 必须在 nextId 之前
           const isAllowedByRule = isMustBefore.get(currentId)?.has(nextId)
           if (!isAllowedByRule) {
-            _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-              `^^排序警告^^：根据 ${sourceName} 要求置底，但前方拦截了非后置依赖的常规模组 [[${displayModName(nextId)}]]`, nextId)
+            _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+              `^^排序警告^^：根据 ${sourceName} 要求置底，但前方拦截了非后置依赖的常规模组 [[${displayModName(nextId)}]]`, nextToken)
           }
         }
       }
@@ -1462,7 +1554,7 @@ export const useModStore = defineStore('mods', () => {
       // A. 依赖检查 (Dependencies) - 必须存在且启用
       // 这里的 rules.dependencies 来源于 Native (About.xml)
       for (const dep of rules.dependencies || []) {
-        const baseTargetId = dep.target_id.toLowerCase()
+        const baseTargetId = normalizeCanonicalId(dep.target_id)
         let activeTargetId = baseTargetId
         let usedAlternative = null
 
@@ -1470,15 +1562,16 @@ export const useModStore = defineStore('mods', () => {
         if (!activeIndexMap.has(baseTargetId)) {
           // 寻找是否有被激活的备选项 (Alternatives)
           const alts = dep.alternatives || []
-          usedAlternative = alts.find(alt => activeIndexMap.has(alt.toLowerCase()))
+          usedAlternative = alts.find(alt => activeIndexMap.has(normalizeCanonicalId(alt)))
 
           if (usedAlternative) {
-            activeTargetId = usedAlternative.toLowerCase()
+            activeTargetId = normalizeCanonicalId(usedAlternative)
+            const activeTargetToken = activeTokenMap.get(activeTargetId) || activeTargetId
             // 提示备选项生效 (仅作 INFO 级提示，不报红错)
             const baseName = displayModName(baseTargetId)
             const altName = displayModName(activeTargetId)
-            _add(currentId, ISSUE_TYPE.INFO_ALTERNATIVE_USED, ISSUE_LEVEL.INFO, 
-              `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_ALTERNATIVE_USED]}__：前置依赖 [[${baseName}]] 已由备选模组 [[${altName}]] 替代`, activeTargetId)
+            _add(currentToken, ISSUE_TYPE.INFO_ALTERNATIVE_USED, ISSUE_LEVEL.INFO, 
+              `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_ALTERNATIVE_USED]}__：前置依赖 [[${baseName}]] 已由备选模组 [[${altName}]] 替代`, activeTargetToken)
           } else {
             // 缺失或未启用
             const baseMod = allModsMap.value.get(baseTargetId)
@@ -1489,15 +1582,15 @@ export const useModStore = defineStore('mods', () => {
               // 主包不在本地，找找备选包在不在本地！
               const localAlt = alts.find(alt => hasRealModById(alt))
               if (localAlt) {
-                _add(currentId, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
-                  `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]}!!：未启用备选前置模组 [[${displayModName(localAlt)}]]`, localAlt.toLowerCase())
+                _add(currentToken, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
+                  `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]}!!：未启用备选前置模组 [[${displayModName(localAlt)}]]`, activeTokenMap.get(normalizeCanonicalId(localAlt)) || normalizeCanonicalId(localAlt))
               } else {
                 // 全都不在本地，彻底缺失
-                _add(currentId, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY, ISSUE_LEVEL.ERROR, 
+                _add(currentToken, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY, ISSUE_LEVEL.ERROR, 
                   `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_MISSING_DEPENDENCY]}!!：缺少前置模组 [[${baseName}]]`, baseTargetId)
               }
             } else {
-              _add(currentId, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
+              _add(currentToken, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR, 
                 `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]}!!：未启用前置模组 [[${baseName}]]`, baseTargetId)
             }
             continue // 基础依赖和备选依赖都没满足，不用查排序了
@@ -1509,14 +1602,14 @@ export const useModStore = defineStore('mods', () => {
         
         // 3. 排序检查：依赖项必须在当前 Mod 之前
         if (activeIndexMap.get(activeTargetId) > i) {
-          _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.ERROR, 
-            `!!依赖后置!!：必须在依赖 [[${displayModName(activeTargetId)}]] 之后加载`, activeTargetId)
+          _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, ISSUE_LEVEL.ERROR, 
+            `!!依赖后置!!：必须在依赖 [[${displayModName(activeTargetId)}]] 之后加载`, activeTokenMap.get(activeTargetId) || activeTargetId)
         }
       }
 
       // B. 排序规则 (Load After) - 仅当目标存在且激活时检查
       for (const rule of rules.load_after || []) {
-        const targetId = rule.target_id.toLowerCase()
+        const targetId = normalizeCanonicalId(rule.target_id)
         if (processedDependencies.has(targetId)) continue
         if (!activeIndexMap.has(targetId)) continue
         
@@ -1526,14 +1619,14 @@ export const useModStore = defineStore('mods', () => {
         const prefix = rule.is_force ? '!!排序错误!!' : '^^排序警告^^'
         
         if (activeIndexMap.get(targetId) > i) {
-          _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, level, 
-            `${prefix}：根据 __${sourceName}__，应在 [[${targetName}]] 之后加载`, targetId)
+          _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, level, 
+            `${prefix}：根据 __${sourceName}__，应在 [[${targetName}]] 之后加载`, activeTokenMap.get(targetId) || targetId)
         }
       }
 
       // C. 排序规则 (Load Before) - 仅当目标存在且激活时检查
       for (const rule of rules.load_before || []) {
-        const targetId = rule.target_id.toLowerCase()
+        const targetId = normalizeCanonicalId(rule.target_id)
         if (processedDependencies.has(targetId)) continue
         if (!activeIndexMap.has(targetId)) continue
         
@@ -1543,20 +1636,20 @@ export const useModStore = defineStore('mods', () => {
         const prefix = rule.is_force ? '!!排序错误!!' : '^^排序警告^^'
         
         if (activeIndexMap.get(targetId) < i) {
-          _add(currentId, ISSUE_TYPE.WARN_WRONG_ORDER, level, 
-            `${prefix}：根据 __${sourceName}__，应在 [[${targetName}]] 之前加载`, targetId)
+          _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, level, 
+            `${prefix}：根据 __${sourceName}__，应在 [[${targetName}]] 之前加载`, activeTokenMap.get(targetId) || targetId)
         }
       }
 
       // D. 冲突检查 (Incompatible) - 目标存在且激活即报错
       for (const rule of rules.incompatible || []) {
-        const targetId = rule.target_id.toLowerCase()
+        const targetId = normalizeCanonicalId(rule.target_id)
         if (activeIndexMap.has(targetId)) {
           const targetName = displayModName(targetId)
           const sourceName = rule.source?.name || '未知规则'
           const extra = rule.source?.detail?.comment ? ` (${rule.source.detail.comment})` : ''
-          _add(currentId, ISSUE_TYPE.ERROR_INCOMPATIBLE, ISSUE_LEVEL.ERROR, 
-            `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INCOMPATIBLE]}!!：__${sourceName}__ 指出与 [[${targetName}]] 不兼容${extra}`, targetId)
+          _add(currentToken, ISSUE_TYPE.ERROR_INCOMPATIBLE, ISSUE_LEVEL.ERROR, 
+            `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INCOMPATIBLE]}!!：__${sourceName}__ 指出与 [[${targetName}]] 不兼容${extra}`, activeTokenMap.get(targetId) || targetId)
         }
       }
 
@@ -1600,8 +1693,8 @@ export const useModStore = defineStore('mods', () => {
             const availablePacks = langPackMap.get(currentId) || []
             const fallbackPacks = langPackFallbackMap.get(currentId) || []
             // 检查是否有被激活的适配语言包
-            const activePack = availablePacks.find(p => activeIndexMap.has(p.package_id.toLowerCase()))
-            const activeFallbackPack = fallbackPacks.find(p => activeIndexMap.has(p.package_id.toLowerCase()))
+            const activePack = availablePacks.find(p => activeIndexMap.has(normalizeCanonicalId(p.package_id)))
+            const activeFallbackPack = fallbackPacks.find(p => activeIndexMap.has(normalizeCanonicalId(p.package_id)))
             if (activePack || activeFallbackPack) {
               // pass: 严格语言包或可信兜底语言包已经启用，不再误报缺语言
             }
@@ -1610,16 +1703,16 @@ export const useModStore = defineStore('mods', () => {
               if (availablePacks.length > 0) {
                 const localPack = availablePacks[0] // 取第一个本地找到的语言包
                 const packName = displayModName(localPack.package_id)
-                _add(currentId, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在语言包 [[${packName}]]`, localPack.package_id.toLowerCase())
+                _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
+                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在语言包 [[${packName}]]`, activeTokenMap.get(normalizeCanonicalId(localPack.package_id)) || normalizeCanonicalId(localPack.package_id))
               } else if (fallbackPacks.length > 0) {
                 const fallbackPack = fallbackPacks[0]
                 const packName = displayModName(fallbackPack.package_id)
-                _add(currentId, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在可能相关的语言包 [[${packName}]]（该语言包未声明支持当前语言）`, fallbackPack.package_id.toLowerCase())
+                _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
+                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在可能相关的语言包 [[${packName}]]（该语言包未声明支持当前语言）`, activeTokenMap.get(normalizeCanonicalId(fallbackPack.package_id)) || normalizeCanonicalId(fallbackPack.package_id))
               } else {
                 // 本地彻底没有相关语言包
-                _add(currentId, ISSUE_TYPE.WARN_MISSING_LANGUAGE, ISSUE_LEVEL.WARN,
+                _add(currentToken, ISSUE_TYPE.WARN_MISSING_LANGUAGE, ISSUE_LEVEL.WARN,
                   `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_MISSING_LANGUAGE]}^^：不支持当前语言，且未在本地发现相关语言包`)
               }
             }
@@ -1627,7 +1720,7 @@ export const useModStore = defineStore('mods', () => {
           else if(isSelfLangPack) {
             const allRelatedModIds = getLanguagePackOwnerIds(mod)
             if(allRelatedModIds.length === 0) {
-              _add(currentId, ISSUE_TYPE.WARN_UNKNOWN_TARGET, ISSUE_LEVEL.WARN,
+              _add(currentToken, ISSUE_TYPE.WARN_UNKNOWN_TARGET, ISSUE_LEVEL.WARN,
                 `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_UNKNOWN_TARGET]}^^：语言包指向对象未知，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
             }
             // 如果存在依赖或前置，检测是否有任意一个启用(部分语言包支持多个Mod，只要有一个启用即可)，
@@ -1635,7 +1728,7 @@ export const useModStore = defineStore('mods', () => {
             else {
               const anyActive = allRelatedModIds.some(id => activeIndexMap.has(id))
               if(!anyActive) {
-                _add(currentId, ISSUE_TYPE.WARN_INACTIVE_TARGET, ISSUE_LEVEL.WARN,
+                _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_TARGET, ISSUE_LEVEL.WARN,
                   `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_TARGET]}^^：语言包指向对象未启用，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
               }
             }
@@ -1652,28 +1745,31 @@ export const useModStore = defineStore('mods', () => {
     const _checkListChain = (list) => {
       const len = list.length
       for (let i = 0; i < len; i++) {
-        const id = list[i].toLowerCase()
+        const tokenId = normalizeListToken(list[i])
+        const id = normalizeCanonicalId(list[i])
         const mod = allModsMap.value.get(id)
         if (mod && mod.interlock_id && interlocksMap.value[mod.interlock_id]) {
           const chain = interlocksMap.value[mod.interlock_id]
-          const myIdx = chain.findIndex(cid => cid.toLowerCase() === id)
+          const myIdx = chain.findIndex(cid => normalizeCanonicalId(cid) === id)
           if (myIdx !== -1) {
             // A. 检查向上断裂 (期待的前一个元素不在我紧挨着的上方)
             if (myIdx > 0) {
-              const prevExpected = chain[myIdx - 1].toLowerCase()
-              if (i === 0 || list[i-1].toLowerCase() !== prevExpected) {
+              const prevExpected = normalizeCanonicalId(chain[myIdx - 1])
+              const prevExpectedToken = activeTokenMap.get(prevExpected) || prevExpected
+              if (i === 0 || normalizeCanonicalId(list[i-1]) !== prevExpected) {
                 // targetId 传入 prevExpected，方便组件识别这是 "前驱断裂"
-                _add(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-                  `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpected)
+                _add(tokenId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧跟在 [[${displayModName(prevExpected)}]] 之后`, prevExpectedToken)
               }
             }
             // B. 检查向下断裂 (期待的后一个元素不在我紧挨着的下方)
             if (myIdx < chain.length - 1) {
-              const nextExpected = chain[myIdx + 1].toLowerCase()
-              if (i === len - 1 || list[i+1].toLowerCase() !== nextExpected) {
+              const nextExpected = normalizeCanonicalId(chain[myIdx + 1])
+              const nextExpectedToken = activeTokenMap.get(nextExpected) || nextExpected
+              if (i === len - 1 || normalizeCanonicalId(list[i+1]) !== nextExpected) {
                 // targetId 传入 nextExpected，方便组件识别这是 "后继断裂"
-                _add(id, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
-                  `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpected)
+                _add(tokenId, ISSUE_TYPE.WARN_LINK_WRONG_ORDER, ISSUE_LEVEL.WARN, 
+                  `^^联锁断裂^^：必须紧接 [[${displayModName(nextExpected)}]] 之前`, nextExpectedToken)
               }
             }
           }
@@ -1695,7 +1791,7 @@ export const useModStore = defineStore('mods', () => {
   const getIssusTargetIds = (targetIds, issueType) => {
     const toActivate = new Set()
     targetIds.forEach(id => {
-      const issues = modIssues.value.get(id.toLowerCase())
+      const issues = modIssues.value.get(normalizeListToken(id))
       if (issues) {
         issues.forEach(issue => {
           if (issue.type === issueType && issue.targetId) {
@@ -1708,7 +1804,7 @@ export const useModStore = defineStore('mods', () => {
   }
   // 获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
-    const issues = modIssues.value.get(id.toLowerCase())
+    const issues = modIssues.value.get(normalizeListToken(id))
     if (!issues || issues.length === 0) return null
     // 优先级: ERROR > WARN > INFO
     if (issues.some(i => i.level === 'error')) return 'error'
@@ -1763,7 +1859,7 @@ export const useModStore = defineStore('mods', () => {
           }
         } else {
           // - 模式 B: 忽略特定问题
-          const currentModIssues = modIssues.value.get(id.toLowerCase()) || [];
+          const currentModIssues = modIssues.value.get(normalizeListToken(id)) || [];
           const hasThisIssue = currentModIssues.some(i => i.type === type);
           if (hasThisIssue && !currentIgnored.includes(type)) {
             currentIgnored.push(type);
@@ -1816,7 +1912,7 @@ export const useModStore = defineStore('mods', () => {
     }
     // 3. 遍历统计
     targetIds.forEach(id => {
-      const issues = modIssues.value.get(id.toLowerCase())
+      const issues = modIssues.value.get(normalizeListToken(id))
       if (!issues || issues.length === 0) return
       // result.count += issues.length // 累加总问题数
       result.count++  // 累加出问题的Mod数
@@ -1830,8 +1926,8 @@ export const useModStore = defineStore('mods', () => {
           result.stats[typeKey] = []
         }
         // 避免同一个 Mod 在同一个类型下重复 (虽然一般不会)
-        if (!result.stats[typeKey].includes(id.toLowerCase())) {
-          result.stats[typeKey].push(id.toLowerCase())
+        if (!result.stats[typeKey].includes(normalizeListToken(id))) {
+          result.stats[typeKey].push(normalizeListToken(id))
         }
       })
     })
@@ -1856,6 +1952,7 @@ export const useModStore = defineStore('mods', () => {
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
+    canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource,
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds,

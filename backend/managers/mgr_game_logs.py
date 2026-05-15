@@ -7,6 +7,7 @@ from datetime import datetime
 import threading
 import time
 
+from backend.load_order.package_tokens import parse_package_token
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.event_bus import EventBus
@@ -258,7 +259,12 @@ class GameLogManager(BaseLogReader): # 继承基类
         try:
             lo_mgr = LoadOrderManager(self.context)
             active_mods = lo_mgr.read_active_mods().get('active_mods', [])
-            active_mods_set = {m.lower() for m in active_mods}
+            active_mods_set = {
+                token_info.canonical_package_id
+                for mod_id in active_mods
+                for token_info in [parse_package_token(mod_id)]
+                if token_info.canonical_package_id
+            }
         except Exception: pass
 
         for block in page_blocks:

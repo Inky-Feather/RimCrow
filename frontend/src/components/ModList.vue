@@ -164,7 +164,7 @@
                 :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
                 :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
                 :show-index="appStore.settings.ui.show_list_index"
-                :search-match="currentTargetId === dataKey"
+                :search-match="resolvedCurrentTargetId === dataKey"
                 :section-feature-enabled="sectionFeatureEnabled"
                 :section-header="isSectionHeaderId(dataKey)"
                 :section-collapsed="isSectionCollapsed(dataKey)"
@@ -235,6 +235,7 @@ import { useProfileStore } from '../stores/profileStore';
 import { useSupplementStore } from '../stores/supplementStore';
 import { useMissingInstallStore } from '../stores/missingInstallStore';
 import { isSectionHeaderTitle } from '../utils/common';
+import { normalizePackageId, normalizePackageToken } from '../utils/modIdentity';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -286,6 +287,18 @@ const collapsedSectionIds = ref<string[]>([])
 // 获取 Engine 实例 (computed 确保响应式)
 const engine = computed(() => searchStore.engine)
 const normalizeId = (value: string) => String(value ?? '').trim().toLowerCase()
+const normalizeTokenId = (value: string) => normalizePackageToken(value)
+const normalizeCanonicalId = (value: string) => normalizePackageId(value)
+const resolveTargetListId = (targetId: string, candidates: string[] = []) => {
+  const normalizedTargetToken = normalizeTokenId(targetId)
+  if (!normalizedTargetToken) return ''
+  const exactMatch = (candidates || []).find(id => normalizeTokenId(id) === normalizedTargetToken)
+  if (exactMatch) return exactMatch
+  const canonicalTargetId = normalizeCanonicalId(targetId)
+  if (!canonicalTargetId) return ''
+  return (candidates || []).find(id => normalizeCanonicalId(id) === canonicalTargetId) || ''
+}
+const resolvedCurrentTargetId = computed(() => resolveTargetListId(currentTargetId.value, props.modelValue))
 const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
 // 标题分组功能只允许在 active 列表开启，避免影响其它列表原本的拖拽/显示语义。
 const sectionFeatureEnabled = computed(() => props.listId === 'active' && !!appStore.settings.ui.enable_active_section_collapse)
@@ -575,7 +588,7 @@ const displayList = computed(() => {
   if (isFilterByIssue.value) {
     list = list.filter(id => {
       // 从所有问题项中检测是否有该 Mod 的问题
-      const issues = modStore.modIssues.get(id.toLowerCase())
+      const issues = modStore.modIssues.get(normalizeTokenId(id))
       // 有问题项且符合筛选类型
       if (filterIssueType.value) {
         return issues && issues.some(issue => issue.type === filterIssueType.value)
@@ -596,9 +609,9 @@ const displayList = computed(() => {
     // engine.search 返回的是 Mod 对象数组
     const matchedObjects = engine.value.search(filterQuery.value, filterLogic.value)
     // B. 提取 ID 并建立 Set 供快速查找
-    const matchedSet = new Set(matchedObjects.map(m => m.package_id))
+    const matchedSet = new Set(matchedObjects.map(m => normalizeCanonicalId(m.package_id)))
     // C. 取交集 (当前列表 AND 搜索结果)
-    list = list.filter(id => matchedSet.has(id))
+    list = list.filter(id => matchedSet.has(normalizeCanonicalId(id)))
   }
 
   // 4. 排序 (仅视觉)
@@ -904,33 +917,33 @@ const sortIcon = computed(() => {
 // 监听 currentTargetId 变化
 watch(currentTargetId, async (newVal, oldVal) => {
   if (!newVal || newVal === oldVal) return
-  // 1. 检查目标是否在当前所有的 modelValue 中（不仅是 displayList）
-  if (!props.modelValue.includes(newVal)) {
-    // 如果这个 ID 根本不在当前传进来的列表里（比如它在另一个分组，或者被彻底移除了）
+  const resolvedTargetId = resolveTargetListId(newVal, props.modelValue)
+  if (!resolvedTargetId) {
     console.info(`Item ${newVal} not found in ${props.title} list model.`)
-    // toast.warning(`Item ${newVal} not found in ${props.title} list model.`)
     return
-  } 
+  }
+  // 1. 检查目标是否在当前所有的 modelValue 中（不仅是 displayList）
+  if (!props.modelValue.includes(resolvedTargetId)) return
 
   // 2. 检查是否被当前的筛选器过滤掉了
-  if (!displayList.value.includes(newVal)) {
-    console.info(`Item ${newVal} is filtered out by current ${props.title} filter.`)
-    toast.warning(`搜索项 ${newVal} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
+  if (!displayList.value.includes(resolvedTargetId)) {
+    console.info(`Item ${resolvedTargetId} is filtered out by current ${props.title} filter.`)
+    toast.warning(`搜索项 ${resolvedTargetId} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
     // 策略 A: 自动清除筛选 (推荐)
     // searchQuery.value = [] // 清空搜索 Tag
     // filterQuery.value = [] // 清空筛选 Tag
     // // 等待 Vue 重新计算 displayList
     // await nextTick()
   }
-  await revealCollapsedSectionFor(newVal)
+  await revealCollapsedSectionFor(resolvedTargetId)
 
   // 3. 执行定位
-  const index = visibleList.value.indexOf(newVal)
+  const index = visibleList.value.indexOf(resolvedTargetId)
   if (index !== -1) {
     // 稍微延迟一下确保虚拟列表渲染就绪
     setTimeout(() => {
         if (vListRef.value) {
-            vListRef.value.scrollToKey(newVal)
+            vListRef.value.scrollToKey(resolvedTargetId)
         }
     }, 50)
     // 延迟一段时间后移除高亮
@@ -955,9 +968,9 @@ const executeSearch = (next = true) => {
   if (!engine.value) return
    // 1. 全局搜索
   const matchedObjects = engine.value.search(searchQuery.value, searchLogic.value)
-  const matchedSet = new Set(matchedObjects.map(m => m.package_id))
+  const matchedSet = new Set(matchedObjects.map(m => normalizeCanonicalId(m.package_id)))
   // 2. 过滤结果：定位当前筛选/排序后的结果，隐藏分组会在跳转前自动展开
-  const results = displayList.value.filter(id => matchedSet.has(id))
+  const results = displayList.value.filter(id => matchedSet.has(normalizeCanonicalId(id)))
   if (JSON.stringify(results) !== JSON.stringify(searchResults.value)) {
     searchResults.value = results
     currentSearchIndex.value = -1
@@ -1082,18 +1095,17 @@ const updateChildren = async (e) => {
     while (true) {
       const mod = modStore.takeModById(curr)
       if (!mod || !mod.lock_next_mod) break
-      const nextId = mod.lock_next_mod.toLowerCase()
+      const nextId = normalizeCanonicalId(mod.lock_next_mod)
       // 关键判断：
       // 如果 lock_next 指向的 Mod 就在 baseList 中，
       // 说明链条在 baseList 中是连续存在的。 必须跳过，不能插在它前面。
-      if (baseList.includes(nextId)) {
-        // 找到 nextId 在 baseList 中的位置
-        const nextIndexInBase = baseList.indexOf(nextId)
+      const nextIndexInBase = baseList.findIndex(id => normalizeCanonicalId(id) === nextId)
+      if (nextIndexInBase !== -1) {
         // 如果 nextId 就在当前插入点或其后方，说明插在了链条中间
         // 将插入点顺延到 nextId 的后面
         if (nextIndexInBase >= correctedIndex) {
           correctedIndex = nextIndexInBase + 1
-          curr = nextId // 继续检查 nextId 是否还有 next
+          curr = baseList[nextIndexInBase] // 继续检查链条中的下一个真实列表项
         } else {
           // nextId 在更前面？说明链条已经乱序了，或者逻辑没问题，停止修正
           break
@@ -1168,7 +1180,7 @@ const issueContextMenu = async (event) => {
     // },
   ]
   // 1. 获取所有选中 Mod 的当前问题并集
-  const allSelectedIssues = props.modelValue.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);
+  const allSelectedIssues = props.modelValue.flatMap(id => modStore.modIssues.get(normalizeTokenId(id)) || []);
   // 2. 提取唯一的错误类型 (Type Unique Set)
   const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))];
 

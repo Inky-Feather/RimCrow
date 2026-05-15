@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Iterable
 from xml.etree import ElementTree
 
 from backend.settings import CACHE_DIR
+from backend.load_order.package_tokens import parse_package_token, is_steam_package_token
 from backend.utils.tools import normalize_package_id
 
 from .models import CandidateFile, SearchRequest, SearchRoot, matches_all_file_types
@@ -98,9 +99,9 @@ def _active_ids_for_context(context: ProfileContext | None, load_order_mgr) -> s
         return set()
     active_ids = set()
     for package_id in result.get("active_mods", []) or []:
-        normalized = normalize_package_id(package_id)
-        if normalized:
-            active_ids.add(normalized)
+        token_info = parse_package_token(package_id)
+        if token_info.canonical_package_id:
+            active_ids.add(token_info.canonical_package_id)
     return active_ids
 
 
@@ -108,8 +109,8 @@ def _build_search_planning_context(context: ProfileContext | None, load_order_mg
     active_ids = _active_ids_for_context(context, load_order_mgr)
     active_tokens = set(active_ids)
     for package_id in list(active_ids):
-        if package_id.endswith("_steam"):
-            active_tokens.add(package_id.removesuffix("_steam"))
+        if is_steam_package_token(package_id):
+            active_tokens.add(parse_package_token(package_id).canonical_package_id)
         else:
             active_tokens.add(f"{package_id}_steam")
 

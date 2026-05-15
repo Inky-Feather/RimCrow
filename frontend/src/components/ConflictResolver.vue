@@ -125,7 +125,7 @@
                       </button>
                       <button v-if="mod.workshop_id && normalizeStore(mod.store) === 'workshop'"
                         class="rounded-full border border-text-main/10 bg-black/20 px-2 py-1 text-[0.7rem] font-bold text-text-dim transition-colors hover:text-accent-danger"
-                        v-tooltip="'取消 Steam 工坊订阅，Steam 后续会移除这个副本'"
+                        v-tooltip="'取消 Steam 工坊订阅，并立即删除当前工坊副本以解除冲突'"
                         @click="handleUnsubscribe(mod)"
                       >
                         退订
@@ -780,21 +780,21 @@ const handleCoexistenceToggle = async (value) => {
 }
 
 const handleLocalize = async (mod) => {
-  if (!mod?.workshop_id) return
+  if (!mod?.path_hash) return
   const store = normalizeStore(mod.store)
   if (!['self', 'workshop'].includes(store)) return
-  await modStore.localizeMods([mod.workshop_id], store)
+  await modStore.localizeMods([mod.path_hash], store)
 }
 
 const handleUnsubscribe = async (mod) => {
-  if (!mod?.workshop_id) return
+  if (!mod?.workshop_id || !mod?.path_hash) return
   const ok = await confirmStore.confirmAction(
     '取消订阅',
-    `确定要取消订阅 [${mod.name || mod.workshop_id}] 吗？\nSteam 后续会移除对应工坊副本。`,
+    `确定要取消订阅并删除 [${mod.name || mod.workshop_id}] 的当前工坊副本吗？\n这样会立即移除该冲突副本，并同时向 Steam 发送退订请求。`,
     { type: 'warning', confirmText: '确认取消订阅' }
   )
   if (!ok) return
-  await appStore.unsubscribeWorkshopIds([mod.workshop_id])
+  await appStore.unsubscribeWorkshopIds([mod.workshop_id], [mod.path_hash])
 }
 </script>
 

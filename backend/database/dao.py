@@ -68,6 +68,18 @@ def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
     return asset
 
 
+def _should_include_workshop_in_runtime_detection(context: ProfileContext | None) -> bool:
+    if not context:
+        return False
+    return bool(getattr(context, "prefer_steam_launch", False) or getattr(context, "use_workshop_mods", False))
+
+
+def _should_include_workshop_in_runtime_deploy(context: ProfileContext | None) -> bool:
+    if not context:
+        return False
+    return bool((not getattr(context, "prefer_steam_launch", False)) and getattr(context, "use_workshop_mods", False))
+
+
 def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
     """
     确保 UserModData 中存在这些 mod_id 的占位记录。
@@ -130,7 +142,7 @@ class _ProfilePathScope:
             use_tool_mods=bool(settings.config.enable_tool_mods),
         )
 
-    def build_visibility_conditions(self, include_workshop: bool = True) -> list[Any]:
+    def build_visibility_conditions(self, include_workshop: bool = True, force_include_workshop: bool = False) -> list[Any]:
         """
         生成当前 Profile 下“哪些路径应被视为可见资产”的查询条件。
 
@@ -141,7 +153,7 @@ class _ProfilePathScope:
             conditions.append(ModAsset.path.startswith(self.local_root))
         if self.dlc_root:
             conditions.append(ModAsset.path.startswith(self.dlc_root))
-        if self.use_workshop_mods and self.workshop_root and include_workshop:
+        if self.workshop_root and include_workshop and (self.use_workshop_mods or force_include_workshop):
             conditions.append(ModAsset.path.startswith(self.workshop_root))
         if self.use_self_mods and self.self_root:
             conditions.append(ModAsset.path.startswith(self.self_root))
@@ -192,7 +204,7 @@ class _ProfilePathScope:
             return "tool"
         return "unknown"
 
-    def includes_runtime_path(self, path: str | None) -> bool:
+    def includes_runtime_path(self, path: str | None, include_workshop: bool | None = None) -> bool:
         """
         判断一个路径是否属于“当前 Profile 运行时会参与仲裁的域”。
 
@@ -204,7 +216,9 @@ class _ProfilePathScope:
         if domain == "self":
             return self.use_self_mods
         if domain == "workshop":
-            return self.use_workshop_mods
+            if include_workshop is None:
+                return self.use_workshop_mods
+            return bool(include_workshop and self.workshop_root)
         if domain == "tool":
             return self.use_tool_mods
         return False
@@ -314,7 +328,11 @@ class ModDAO:
         if not context: return []
 
         scope = _ProfilePathScope.from_context(context)
-        conditions = scope.build_visibility_conditions()
+        include_workshop = _should_include_workshop_in_runtime_detection(context)
+        conditions = scope.build_visibility_conditions(
+            include_workshop=include_workshop,
+            force_include_workshop=include_workshop,
+        )
         if not conditions: return []
 
         combined_condition = reduce(operator.or_, conditions)
@@ -327,22 +345,55 @@ class ModDAO:
         )
 
         group_map = _load_group_names_by_mod_id()
-        visible_by_package: dict[str, dict[str, Any]] = {}
-        sorted_assets = sorted(list(query), key=lambda asset: scope.priority_for_path(asset.get("path")), reverse=True)
+        grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-        for asset in sorted_assets:
+        for asset in query.dicts():
             _normalize_language_fields(asset)
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:
                 continue
-
-            had_shadowed_versions = package_id in visible_by_package
             asset["groups"] = group_map.get(package_id, [])
-            visible_by_package[package_id] = asset
-            if had_shadowed_versions:
-                visible_by_package[package_id]["_has_shadow_version"] = True
+            grouped_assets[package_id].append(asset)
 
-        return list(visible_by_package.values())
+        visible_mods: list[dict[str, Any]] = []
+        for package_id in sorted(grouped_assets.keys()):
+            group = sorted(
+                grouped_assets[package_id],
+                key=lambda asset: (
+                    scope.priority_for_path(asset.get("path")),
+                    os.path.dirname(str(asset.get("path") or "")).lower(),
+                    str(asset.get("path") or "").lower(),
+                ),
+            )
+            if not group:
+                continue
+
+            winner = dict(group[0])
+            if len(group) > 1:
+                winner["_has_shadow_version"] = True
+
+            by_parent: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for asset in group:
+                by_parent[os.path.dirname(str(asset.get("path") or "")).lower()].append(asset)
+            has_hard_conflict = any(len(items) > 1 for items in by_parent.values())
+            if has_hard_conflict:
+                winner["has_package_conflict"] = True
+
+            if not has_hard_conflict and scope.domain_for_path(winner.get("path")) in {"local", "self"}:
+                workshop_variants = [
+                    dict(asset)
+                    for asset in group[1:]
+                    if scope.domain_for_path(asset.get("path")) == "workshop"
+                ]
+                if workshop_variants:
+                    workshop_variant = workshop_variants[0]
+                    workshop_variant["groups"] = group_map.get(package_id, [])
+                    winner["is_coexistence"] = True
+                    winner["coexist_workshop_variant"] = workshop_variant
+
+            visible_mods.append(winner)
+
+        return visible_mods
 
     @staticmethod
     def get_visible_profile_mod(context: ProfileContext | None, package_id: str):
@@ -387,7 +438,9 @@ class ModDAO:
     def get_profile_conflict_analysis(
         context: ProfileContext | None = None,
         assets: Sequence[dict[str, Any]] | None = None,
-        include_workshop: bool = True,
+        include_workshop: bool | None = None,
+        include_workshop_in_detection: bool | None = None,
+        include_workshop_in_deploy: bool | None = None,
     ):
         """
         生成当前 Profile 的运行态分析结果。
@@ -403,10 +456,31 @@ class ModDAO:
         if not context: return empty_result
 
         scope = _ProfilePathScope.from_context(context)
+        detect_workshop = (
+            include_workshop_in_detection
+            if include_workshop_in_detection is not None
+            else (
+                include_workshop
+                if include_workshop is not None
+                else _should_include_workshop_in_runtime_detection(context)
+            )
+        )
+        deploy_workshop = (
+            include_workshop_in_deploy
+            if include_workshop_in_deploy is not None
+            else (
+                include_workshop
+                if include_workshop is not None
+                else _should_include_workshop_in_runtime_deploy(context)
+            )
+        )
         active_assets: list[dict[str, Any]] = []
 
         if assets is None:
-            conditions = scope.build_visibility_conditions(include_workshop=include_workshop)
+            conditions = scope.build_visibility_conditions(
+                include_workshop=detect_workshop,
+                force_include_workshop=detect_workshop,
+            )
             if not conditions: return empty_result
             combined_condition = reduce(operator.or_, conditions)
             active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
@@ -421,14 +495,14 @@ class ModDAO:
                 asset_dict = dict(asset)
                 if asset_dict.get("disabled"):
                     continue
-                if not scope.includes_runtime_path(asset_dict.get("path")):
+                if not scope.includes_runtime_path(asset_dict.get("path"), include_workshop=detect_workshop):
                     continue
                 active_assets.append(asset_dict)
 
         grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for asset in active_assets:
             path = str(asset.get("path") or "").strip()
-            if not path or not scope.includes_runtime_path(path):
+            if not path or not scope.includes_runtime_path(path, include_workshop=detect_workshop):
                 continue
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:
@@ -453,33 +527,36 @@ class ModDAO:
             for asset in group:
                 by_parent[os.path.dirname(str(asset.get("path") or "")).lower()].append(asset)
 
-            group_has_hard_conflict = False
+            hard_conflict_paths: set[str] = set()
             for same_dir_items in by_parent.values():
                 if len(same_dir_items) > 1:
-                    group_has_hard_conflict = True
+                    for conflict_item in same_dir_items:
+                        hard_conflict_paths.add(str(conflict_item.get("path") or ""))
                     hard_conflicts.append({
                         "package_id": package_id,
                         "items": same_dir_items,
                         "type": "same_directory",
                     })
 
-            if group_has_hard_conflict:
-                # 同目录硬冲突仍然全部部署，让用户在冲突弹窗里自行决策。
-                for asset in group:
-                    conflict_domain = scope.domain_for_path(asset.get("path"))
-                    if conflict_domain in deploy_buckets:
-                        deploy_buckets[conflict_domain].append(str(asset["path"]))
-                continue
+            safe_candidates = [
+                asset for asset in group
+                if str(asset.get("path") or "") not in hard_conflict_paths
+            ]
 
-            if len(group) > 1:
+            if not hard_conflict_paths and len(group) > 1:
                 coexistences.append({
                     "package_id": package_id,
                     "items": group,
                     "type": "different_directory",
                 })
 
-            winner = group[0]
+            if not safe_candidates:
+                continue
+
+            winner = safe_candidates[0]
             winner_domain = scope.domain_for_path(winner.get("path"))
+            if winner_domain == "workshop" and not deploy_workshop:
+                continue
             if winner_domain in deploy_buckets:
                 deploy_buckets[winner_domain].append(str(winner["path"]))
 

@@ -79,6 +79,7 @@ from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import run_app_upgrade_migrations
@@ -517,9 +518,62 @@ class API:
                 disk_result,
             ),
             "editing_order": {
-                "active_ids": [str(package_id or "").strip().lower() for package_id in (editing_ids or []) if str(package_id or "").strip()],
+                "active_ids": self._normalize_load_order_tokens(editing_ids),
             },
         }
+
+    @staticmethod
+    def _normalize_load_order_token(package_id: str) -> str:
+        token_info = parse_package_token(package_id)
+        if not token_info.canonical_package_id:
+            return ""
+        return token_info.normalized_token if token_info.source_preference == "steam" else token_info.canonical_package_id
+
+    @classmethod
+    def _normalize_load_order_tokens(cls, package_ids: list[str] | None) -> list[str]:
+        normalized_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for package_id in package_ids or []:
+            normalized = cls._normalize_load_order_token(str(package_id or ""))
+            if not normalized or normalized in seen_ids:
+                continue
+            seen_ids.add(normalized)
+            normalized_ids.append(normalized)
+        return normalized_ids
+
+    @classmethod
+    def _canonicalize_load_order_ids(cls, package_ids: list[str] | None):
+        canonical_ids: list[str] = []
+        preferred_tokens: dict[str, str] = {}
+        seen_ids: set[str] = set()
+        for package_id in package_ids or []:
+            token_info = parse_package_token(package_id)
+            canonical = token_info.canonical_package_id
+            if not canonical:
+                continue
+            normalized_token = cls._normalize_load_order_token(str(package_id or ""))
+            preferred_tokens[canonical] = normalized_token or canonical
+            if canonical in seen_ids:
+                continue
+            seen_ids.add(canonical)
+            canonical_ids.append(canonical)
+        return canonical_ids, preferred_tokens
+
+    @staticmethod
+    def _restore_load_order_tokens(package_ids: list[str], preferred_tokens: dict[str, str] | None = None) -> list[str]:
+        result: list[str] = []
+        seen_ids: set[str] = set()
+        token_map = preferred_tokens or {}
+        for package_id in package_ids or []:
+            canonical = normalize_package_id(package_id)
+            if not canonical:
+                continue
+            restored = str(token_map.get(canonical) or canonical).strip().lower()
+            if not restored or restored in seen_ids:
+                continue
+            seen_ids.add(restored)
+            result.append(restored)
+        return result
 
     @staticmethod
     def _normalize_existing_dir(path_value: str | None) -> str:
@@ -2062,7 +2116,18 @@ class API:
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
         if not local_mods_root or not os.path.exists(local_mods_root): return False
-        runtime_analysis = ModDAO.get_profile_conflict_analysis(context, include_workshop=include_workshop)
+        runtime_analysis = ModDAO.get_profile_conflict_analysis(
+            context,
+            include_workshop_in_detection=bool(
+                getattr(context, 'prefer_steam_launch', False)
+                or getattr(context, 'use_workshop_mods', False)
+            ),
+            include_workshop_in_deploy=bool(
+                include_workshop
+                and (not getattr(context, 'prefer_steam_launch', False))
+                and getattr(context, 'use_workshop_mods', False)
+            ),
+        )
         return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
 
     def _start_profile_game(self, profile_id: str, game_install_path: str, extra_args: list[str] | None = None):
@@ -2617,19 +2682,24 @@ class API:
             return ApiResponse.error(f"启动文件搜索失败: {e}")
     
     @log_api_call
-    def localize_workshop_mods(self, mod_ids: List[str], store: str = 'workshop'):
+    def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):
         """
-        将工坊模组转为本地模组，并推送实时进度
+        将指定副本转为本地模组，并推送实时进度。
+        这里使用 path_hash 精确定位副本，避免共存场景下 workshop_id/package_id 指向不唯一。
         """
         cfg = settings.config
         local_root = self.active_context.local_mods_path if self.active_context else ""
         if not local_root: return ApiResponse.error("未指定本地模组路径")
-        
+
+        normalized_hashes = [str(item or "").strip() for item in path_hashes if str(item or "").strip()]
+        if not normalized_hashes:
+            return ApiResponse.warning(f"没有可转换的{store}模组")
+
         # 1. 准备任务 (使用 JOIN 一次性查出所有需要的数据)
-        # 这里的退回顺序逻辑直接在 Python 循环中处理，清晰易维护
+        # 使用 path_hash 锁定当前副本，避免共存副本间串改。
         query = (ModAsset.select(ModAsset, UserModData.alias_name)
             .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-            .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.store == store) # type: ignore
+            .where(ModAsset.path_hash << normalized_hashes, ModAsset.store == store) # type: ignore
             .dicts())
         try:
             # 2. 执行任务
@@ -2736,8 +2806,11 @@ class API:
         前端点击“自动排序”时调用
         """
         try:
-            result = self.sorter.sort(active_ids) if self.sorter else {}
+            canonical_active_ids, preferred_tokens = self._canonicalize_load_order_ids(active_ids)
+            result = self.sorter.sort(canonical_active_ids) if self.sorter else {}
             if not result: return ApiResponse.error("排序失败, 排序引擎未初始化")
+            result["sorted_ids"] = self._restore_load_order_tokens(result.get("sorted_ids", []), preferred_tokens)
+            result["auto_activated"] = self._restore_load_order_tokens(result.get("auto_activated", []), preferred_tokens)
             # result 包含: sorted_ids, auto_activated, warnings
             msg = "排序完成"
             if result.get('auto_activated'):
@@ -2759,9 +2832,12 @@ class API:
         if not self.sorter:
             return ApiResponse.error("规则引擎未初始化")
         try:
+            canonical_target_ids, target_token_map = self._canonicalize_load_order_ids(package_ids)
+            canonical_current_ids, current_token_map = self._canonicalize_load_order_ids(current_active_ids)
             context_mods = ModDAO.get_profile_mods(self.active_context)
             mod_map = {m['package_id'].lower(): m for m in context_mods}
-            final_ids = self.sorter.smart_insert_mods(package_ids, current_active_ids, mod_map)
+            final_ids = self.sorter.smart_insert_mods(canonical_target_ids, canonical_current_ids, mod_map)
+            final_ids = self._restore_load_order_tokens(final_ids, {**current_token_map, **target_token_map})
             return ApiResponse.success(data=final_ids) if final_ids else ApiResponse.error("插入失败")
         except Exception as e:
             return ApiResponse.error(f"插入失败: {str(e)}")
@@ -4876,16 +4952,29 @@ class API:
     
     def _resolve_mod_paths(self, package_ids: List[str]) -> List[str]:
         """内部辅助方法：将前端传来的 package_id 列表转换为当前环境下绝对物理路径列表"""
-        target_ids = {normalize_package_id(pid) for pid in package_ids if pid}
-        if not target_ids: return []
+        target_tokens = [parse_package_token(pid) for pid in (package_ids or []) if pid]
+        if not target_tokens: return []
         
         # 使用当前 Profile 上下文，确保获取的是正在使用的正确 Mod 路径 (解决软冲突路径)
         context_mods = ModDAO.get_profile_mods(self.active_context)
-        paths =[]
-        for m in context_mods:
-            pid = normalize_package_id(m.get('package_id', ''))
-            if pid in target_ids and m.get('path'):
-                paths.append(m['path'])
+        mod_map = {
+            normalize_package_id(m.get('package_id', '')): m
+            for m in context_mods
+            if normalize_package_id(m.get('package_id', ''))
+        }
+        paths = []
+        seen_paths: set[str] = set()
+        for token_info in target_tokens:
+            mod = mod_map.get(token_info.canonical_package_id)
+            if not mod:
+                continue
+            target_mod = mod
+            if token_info.source_preference == "steam":
+                target_mod = mod.get("coexist_workshop_variant") or mod
+            path = str(target_mod.get('path') or '').strip()
+            if path and path not in seen_paths:
+                seen_paths.add(path)
+                paths.append(path)
         return paths
 
     @log_api_call

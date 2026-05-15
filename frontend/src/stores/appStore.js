@@ -1558,11 +1558,25 @@ export const useAppStore = defineStore('app', () => {
     return false
   }
   // 取消订阅模组
-  const unsubscribeWorkshopIds = async (workshop_ids) => {
+  const unsubscribeWorkshopIds = async (workshop_ids, deletePathHashes = null, deleteOptions = {}) => {
     if (!window.pywebview) return false
     if (!workshop_ids || workshop_ids.length === 0) return
     const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
     if (res?.status === 'success') {
+      const normalizedDeleteHashes = Array.isArray(deletePathHashes)
+        ? deletePathHashes.filter(Boolean)
+        : []
+      if (normalizedDeleteHashes.length > 0) {
+        const deleteRes = await window.pywebview.api.mods_delete(normalizedDeleteHashes, !!deleteOptions.force)
+        if (deleteRes?.status !== 'success') {
+          toast.error(`取消订阅成功，但删除副本失败: ${deleteRes?.message || '未知错误'}`)
+          return false
+        }
+        const modStore = useModStore()
+        await modStore.scanMods()
+        toast.info(`已取消订阅并删除 ${normalizedDeleteHashes.length} 个工坊副本`, { timeout: 2500 })
+        return true
+      }
       toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的取消订阅请求`, { timeout: 2500 })
       return true
     }

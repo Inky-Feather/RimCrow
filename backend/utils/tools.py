@@ -71,7 +71,12 @@ def extract_zip(zip_path: str, target_dir: str) -> None:
 
 
 def normalize_package_id(package_id: Any) -> str:
-    return normalize_text(package_id).lower()
+    normalized = normalize_text(package_id).lower()
+    if normalized.endswith("_steam"):
+        return normalized[:-6]
+    if normalized.endswith("_local"):
+        return normalized[:-6]
+    return normalized
 
 
 def normalize_package_ids(package_ids: list[Any]) -> list[str]:
