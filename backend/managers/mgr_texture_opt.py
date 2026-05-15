@@ -487,6 +487,7 @@ class TextureOptimizationManager:
             self._set_task_state(task, status="running", message="正在执行贴图队列...")
             summary = self._clean_outputs(task) if task.action == "clean_generated" else self._optimize(task)
             success_message = str(summary.pop("message", "贴图优化任务完成"))
+            final_status = str(summary.pop("final_status", "success") or "success")
             final_summary = summary.pop("final_summary", None)
             final_mods = summary.pop("final_mods", None)
             refresh_after_analyze = bool(summary.pop("refresh_after_analyze", True))
@@ -496,11 +497,14 @@ class TextureOptimizationManager:
                 metrics["summary"] = final_summary
             if isinstance(final_mods, list):
                 metrics["final_mods"] = final_mods
+            failed_items = summary.get("failed_items")
+            if isinstance(failed_items, list) and failed_items:
+                metrics["failed_items"] = failed_items
             metrics["refresh_after_analyze"] = refresh_after_analyze
             metrics["elapsed_ms"] = elapsed_ms
             self._set_task_state(
                 task,
-                status="success",
+                status=final_status,
                 progress=100,
                 message=f"{success_message}，用时 {self._format_elapsed_ms(elapsed_ms)}",
                 summary=summary,
@@ -541,12 +545,15 @@ class TextureOptimizationManager:
         optimized = 0
         skipped = 0
         failed = 0
+        failed_items: list[dict[str, Any]] = []
         scan_results = self._scan_mods_for_optimize(task, options)
         all_entries: list[dict[str, Any]] = []
+        entries_by_mod_path: dict[str, list[dict[str, Any]]] = {}
         for result in scan_results:
             mod_path = str(result["mod_path"])
             entries = list(result["entries"])
             all_entries.extend(entries)
+            entries_by_mod_path[mod_path] = entries
             skipped += self._count_skipped_entries(entries, options)
             final_mods_by_path[mod_path] = dict(result["stat"])
 
@@ -555,6 +562,37 @@ class TextureOptimizationManager:
         total_sources = len(all_entries)
         total_pending = sum(len(batch["entries"]) for batch in batches)
         phase_plan_total = total_pending
+
+        def is_recoverable_encode_error(exc: Exception) -> bool:
+            if not isinstance(exc, TextureOptError):
+                return False
+            message = str(exc or "")
+            return message.startswith("todds 执行失败") or message.startswith("todds 执行超时")
+
+        def remember_failed_entry(entry: dict[str, Any], exc: Exception) -> None:
+            error_text = str(exc or "未知错误")
+            entry["last_error"] = error_text
+            if len(failed_items) >= 20:
+                return
+            failed_items.append(
+                {
+                    "mod_name": str(entry.get("mod_name") or ""),
+                    "rel_path": str(entry.get("rel_path") or ""),
+                    "error": error_text,
+                }
+            )
+
+        def refresh_mod_stats(mod_paths: set[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+            for mod_path in mod_paths:
+                entries = entries_by_mod_path.get(mod_path) or []
+                mod_name = str(entries[0].get("mod_name") or Path(mod_path).name) if entries else Path(mod_path).name
+                final_mods_by_path[mod_path] = self._build_mod_stat(
+                    mod_path,
+                    mod_name,
+                    entries,
+                    self._collect_output_stats(mod_path),
+                )
+            return self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
         self._emit_progress(
             task,
@@ -586,12 +624,17 @@ class TextureOptimizationManager:
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("DDS 生成任务已取消")
             batch_size = len(batch["entries"])
-            batch_completed_base = optimized
+            batch_completed_base = optimized + failed
             last_batch_progress = 0
             batch_total_hint = batch_size
             scale_percent = batch.get("scale_percent")
             scale_label = f"{int(scale_percent)}%" if scale_percent is not None else "原尺寸"
             last_live_emit_at = 0.0
+            affected_mod_paths = {
+                str(entry.get("mod_path") or "")
+                for entry in batch["entries"]
+                if str(entry.get("mod_path") or "")
+            }
 
             def handle_todds_output(line: str) -> None:
                 nonlocal last_batch_progress, batch_total_hint, last_live_emit_at
@@ -607,6 +650,7 @@ class TextureOptimizationManager:
                 last_batch_progress = current
                 last_live_emit_at = now
                 cumulative_done = batch_completed_base + current
+                optimized_live = optimized + current
                 encode_progress_live = 25 + int((cumulative_done / max(1, total_pending)) * 65)
                 self._emit_progress(
                     task,
@@ -616,7 +660,7 @@ class TextureOptimizationManager:
                     metrics={
                         "done": cumulative_done,
                         "total": total_pending,
-                        "optimized": cumulative_done,
+                        "optimized": optimized_live,
                         "skipped": skipped,
                         "failed": failed,
                         "phase": "encode",
@@ -644,29 +688,149 @@ class TextureOptimizationManager:
                 )
             except TextureOptCancelled:
                 raise
-            except Exception:
-                failed += len(batch["entries"])
-                raise
+            except Exception as exc:
+                if not is_recoverable_encode_error(exc):
+                    raise
+                if batch_size == 1:
+                    failed += 1
+                    remember_failed_entry(batch["entries"][0], exc)
+                    final_summary, final_mods = refresh_mod_stats(affected_mod_paths)
+                    processed_done = optimized + failed
+                    encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
+                    self._emit_progress(
+                        task,
+                        status="running",
+                        progress=min(90, max(25, encode_progress)),
+                        message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})，单张失败已跳过",
+                        metrics={
+                            "done": processed_done,
+                            "total": total_pending,
+                            "optimized": optimized,
+                            "skipped": skipped,
+                            "failed": failed,
+                            "phase": "encode",
+                            "phase_label": "生成阶段",
+                            "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                            "phase_done": processed_done,
+                            "phase_total": phase_plan_total,
+                            "phase_unit": "张",
+                            "current_batch_index": batch_index,
+                            "current_batch_total": len(batches),
+                            "current_batch_size": batch_size,
+                            "current_batch_scale": scale_percent,
+                            "current_batch_done": 1,
+                            "current_batch_progress_total": 1,
+                            "summary": final_summary,
+                            "final_mods": final_mods,
+                            "refresh_after_analyze": False,
+                        },
+                    )
+                    continue
+
+                self._emit_progress(
+                    task,
+                    status="running",
+                    progress=max(25, task.progress),
+                    message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label}) 失败，正在逐张重试",
+                    metrics={
+                        "done": optimized + failed,
+                        "total": total_pending,
+                        "optimized": optimized,
+                        "skipped": skipped,
+                        "failed": failed,
+                        "phase": "encode",
+                        "phase_label": "生成阶段",
+                        "phase_percent": int(((optimized + failed) / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                        "phase_done": optimized + failed,
+                        "phase_total": phase_plan_total,
+                        "phase_unit": "张",
+                        "current_batch_index": batch_index,
+                        "current_batch_total": len(batches),
+                        "current_batch_size": batch_size,
+                        "current_batch_scale": scale_percent,
+                        "current_batch_done": 0,
+                        "current_batch_progress_total": batch_size,
+                        "refresh_after_analyze": False,
+                    },
+                )
+
+                batch_completed = 0
+                for entry in batch["entries"]:
+                    if task._cancel_event.is_set():
+                        raise TextureOptCancelled("DDS 生成任务已取消")
+                    single_mod_path = str(entry.get("mod_path") or "")
+                    try:
+                        encoder.encode_batch(
+                            task._cancel_event,
+                            source_paths=[str(entry.get("source_path") or "")],
+                            overwrite_existing=bool(batch["overwrite_existing"]),
+                            scale_percent=batch["scale_percent"],
+                        )
+                    except TextureOptCancelled:
+                        raise
+                    except Exception as single_exc:
+                        if not is_recoverable_encode_error(single_exc):
+                            raise
+                        failed += 1
+                        remember_failed_entry(entry, single_exc)
+                    else:
+                        optimized += 1
+                        self._apply_batch_results([entry])
+
+                    batch_completed += 1
+                    final_summary, final_mods = refresh_mod_stats({single_mod_path} if single_mod_path else set())
+                    processed_done = optimized + failed
+                    encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
+                    self._emit_progress(
+                        task,
+                        status="running",
+                        progress=min(90, max(25, encode_progress)),
+                        message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})，逐张重试中",
+                        metrics={
+                            "done": processed_done,
+                            "total": total_pending,
+                            "optimized": optimized,
+                            "skipped": skipped,
+                            "failed": failed,
+                            "phase": "encode",
+                            "phase_label": "生成阶段",
+                            "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                            "phase_done": processed_done,
+                            "phase_total": phase_plan_total,
+                            "phase_unit": "张",
+                            "current_batch_index": batch_index,
+                            "current_batch_total": len(batches),
+                            "current_batch_size": batch_size,
+                            "current_batch_scale": scale_percent,
+                            "current_batch_done": batch_completed,
+                            "current_batch_progress_total": batch_size,
+                            "summary": final_summary,
+                            "final_mods": final_mods,
+                            "refresh_after_analyze": False,
+                        },
+                    )
+                continue
 
             optimized += batch_size
             self._apply_batch_results(batch["entries"])
-            encode_progress = 25 + int((optimized / max(1, total_pending)) * 65)
-            final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
+            final_summary, final_mods = refresh_mod_stats(affected_mod_paths)
+            processed_done = optimized + failed
+            encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
             self._emit_progress(
                 task,
                 status="running",
                 progress=min(90, max(25, encode_progress)),
                 message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
                 metrics={
-                    "done": optimized,
+                    "done": processed_done,
                     "total": total_pending,
                     "optimized": optimized,
                     "skipped": skipped,
                     "failed": failed,
                     "phase": "encode",
                     "phase_label": "生成阶段",
-                    "phase_percent": int((optimized / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
-                    "phase_done": optimized,
+                    "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                    "phase_done": processed_done,
                     "phase_total": phase_plan_total,
                     "phase_unit": "张",
                     "current_batch_index": batch_index,
@@ -684,17 +848,21 @@ class TextureOptimizationManager:
         final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
         scale_summary_text = self._format_scale_counts(final_summary)
+        failure_summary_text = f"失败 {failed} 张" if failed > 0 else ""
+        message_parts = [part for part in [scale_summary_text, failure_summary_text] if part]
         return {
             "optimized": optimized,
             "skipped": skipped,
             "failed": failed,
+            "failed_items": failed_items,
+            "final_status": "failed" if failed > 0 and optimized == 0 and total_pending > 0 else "success",
             "preexisting_dds": int(final_summary.get("current_output_count", 0)),
             "orphan_deleted": 0,
             "total_jobs": len(task.mod_paths),
             "final_summary": final_summary,
             "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": f"DDS 生成完成{f'，{scale_summary_text}' if scale_summary_text else ''}",
+            "message": f"DDS 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
         }
 
     def _apply_batch_results(self, entries: list[dict[str, Any]]) -> None:

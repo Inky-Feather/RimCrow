@@ -1014,7 +1014,7 @@ export const useModStore = defineStore('mods', () => {
     appStore.isLoading = false;
   }
   // 批量删除Mod文件及数据记录
-  const deleteMods = async (path_hashes, scanMods = true) => {
+  const deleteMods = async (path_hashes, finish_scan = true) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
     const decision = await confirmStore.confirmDeleteAction(
@@ -1026,7 +1026,7 @@ export const useModStore = defineStore('mods', () => {
     );
     if(!decision?.confirmed) return
     const res = await window.pywebview.api.mods_delete(path_hashes, !!decision.force)
-    if(scanMods) await scanMods()
+    if(finish_scan) await scanMods()
     if (checkResult(res, "批量删除Mod")) {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${res.data.success_count} 个Mod`)
       // 刷新Mod列表
@@ -1522,7 +1522,7 @@ export const useModStore = defineStore('mods', () => {
         
         const targetName = displayModName(targetId)
         const sourceName = rule.source?.name || '未知规则'
-        const level = rule.is_force ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
+        const level = (rule.is_force || rule.source?.type==="native") ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
         const prefix = rule.is_force ? '!!排序错误!!' : '^^排序警告^^'
         
         if (activeIndexMap.get(targetId) > i) {
