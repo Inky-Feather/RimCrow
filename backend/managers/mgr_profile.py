@@ -342,18 +342,20 @@ class ProfileManager:
         return self.build_profile_context(profile.id)
         
     
-    def get_launch_args(self, profile_id: str = ''):
+    def get_launch_args(self, profile_id: str = '', include_executable: bool = True):
         """
         获取启动参数
         :param profile_id: 环境ID，默认当前环境
+        :param include_executable: 是否包含游戏可执行文件路径
         :return: 启动参数列表
         """
         if not profile_id:
             profile_id = self.current_profile.id
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         if not profile: return []
-        # 获取当前 Profile 的 EXE 路径
-        args = [GameManager.detect_executable(profile.game_install_path) or '']
+        args = []
+        if include_executable:
+            args.append(GameManager.detect_executable(profile.game_install_path) or '')
         # 只要环境显式绑定了用户数据根目录，就始终把 savedatafolder 注入启动参数。
         default_user_data_path = GameManager.auto_detect_paths().get('user_data_path','')
         if profile.user_data_path and profile.user_data_path != default_user_data_path:
@@ -361,15 +363,7 @@ class ProfileManager:
         # 合并自定义参数
         if profile.run_commands:
             args.extend(profile.run_commands)
-            
-        return args
-    
-    def get_launch_args_only(self, profile_id: str = ''):
-        """
-        获取当前 Profile 的命令行参数（不含 EXE 路径）
-        :param profile_id: 环境ID，默认当前环境
-        """
-        args = self.get_launch_args(profile_id)[1:]
+
         return args
 
     def _clone_user_data(self, src_config_dir, target_root):

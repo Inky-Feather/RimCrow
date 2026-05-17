@@ -150,6 +150,7 @@ export const useGroupStore = defineStore('groups', () => {
           groupList.value = groupList.value.filter(group => group.group_id !== groupId)
           return true
         }
+        await getGroups()
       } catch (e) {
         console.error("删除分组异常:", e)
         toast.error(`删除分组异常: \n${e.message}\n正在还原...`)
@@ -234,6 +235,7 @@ export const useGroupStore = defineStore('groups', () => {
           }
           return true
         }
+        await getGroups()
       } catch (e) {
         console.error("分组移除模组异常:", e)
         toast.error(`分组移除模组异常: \n${e.message}\n正在还原...`)

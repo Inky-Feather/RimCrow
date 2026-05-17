@@ -7,6 +7,7 @@ from backend.settings import DATA_DIR
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
+from backend.utils.tools import current_ms
 
 from backend.static_page import build_idle_home_html, build_idle_logs_html
 
@@ -17,6 +18,7 @@ class GameMonitor:
         self.running = False
         self.game_process_name = "RimWorldWin64.exe" 
         self.is_game_running = False
+        self.launch_profile_id = ""
         self.resume_url = None
         # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
         self.manual_override_idle = False 
@@ -91,12 +93,23 @@ class GameMonitor:
                 if game_found and not self.is_game_running:
                     self.is_game_running = True
                     # 通知前端游戏开始了（无论是否静默，前端都需要知道这个状态）
-                    EventBus.emit('game-status-changed', {'running': True})
+                    payload: dict[str, object] = {'running': True}
+                    try:
+                        tracked_profile_id = str(self.launch_profile_id or '').strip()
+                        if tracked_profile_id:
+                            last_played_time = current_ms()
+                            self.api.profile_mgr.update_profile(tracked_profile_id, {"last_played_time": last_played_time})
+                            payload["profile_id"] = tracked_profile_id
+                            payload["last_played_time"] = last_played_time
+                    except Exception as e:
+                        logger.warning(f"[Monitor] 记录游戏启动时间失败: {e}", exc_info=True)
+                    EventBus.emit('game-status-changed', payload)
                     if settings.config.auto_enter_silent_mode and not self.manual_override_idle:
                         self._enter_idle_mode()
                         
                 elif not game_found and self.is_game_running:
                     self.is_game_running = False
+                    self.launch_profile_id = ""
                     EventBus.emit('game-status-changed', {'running': False})
                     
                     # 【核心修复1】：如果用户已经手动唤醒了，不要再去强刷页面！

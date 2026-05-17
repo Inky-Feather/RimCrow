@@ -697,32 +697,43 @@ class SteamManager:
 
         return status
 
-    def start_steam(self) -> bool:
-        """尝试启动 Steam 客户端"""
-        if self.is_steam_running(): return True
-            
+    def start_steam(self) -> dict:
+        """尝试启动 Steam 客户端，优先本体，失败时再回退协议唤醒。"""
+        if self.is_steam_running():
+            return {
+                "ok": True,
+                "method": "already_running",
+                "used_url_fallback": False,
+            }
+
         steam_exe = str(self.steam_exe) if self.steam_exe else None
-        
-        # 找不到执行文件时的兜底策略：使用系统协议唤醒
-        if not steam_exe or not os.path.exists(steam_exe):
+        if steam_exe and os.path.exists(steam_exe):
             try:
-                if platform.system() == "Windows":
-                    os.startfile("steam://open/main")
-                    return True
-            except:
-                pass
-            return False
-            
-        try:
-            # 独立进程启动，绝不阻塞当前程序的运行
-            if platform.system() == "Windows":
                 subprocess.Popen([steam_exe])
-            else:
-                subprocess.Popen([steam_exe])
-            return True
-        except Exception as e:
-            logger.error(f"Failed to start Steam: {e}")
-            return False
+                return {
+                    "ok": True,
+                    "method": "steam_exe",
+                    "used_url_fallback": False,
+                }
+            except Exception as e:
+                logger.warning(f"Failed to start Steam via executable: {e}", exc_info=True)
+
+        if platform.system() == "Windows":
+            try:
+                os.startfile("steam://open/main")
+                return {
+                    "ok": True,
+                    "method": "steam_url",
+                    "used_url_fallback": True,
+                }
+            except Exception as e:
+                logger.error(f"Failed to start Steam via URL protocol: {e}", exc_info=True)
+
+        return {
+            "ok": False,
+            "method": "failed",
+            "used_url_fallback": False,
+        }
     
     
     # =========================================================

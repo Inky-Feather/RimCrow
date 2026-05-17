@@ -46,6 +46,15 @@ export const useProfileStore = defineStore('profile', () => {
     profiles.value.find(p => p.id === currentProfileId.value) || null
   )
 
+  const applyLastPlayedTime = (profileId, lastPlayedTime) => {
+    const normalizedProfileId = String(profileId || '').trim()
+    const normalizedPlayedTime = Number(lastPlayedTime || 0)
+    if (!normalizedProfileId || !normalizedPlayedTime) return
+
+    const profile = profiles.value.find(item => item.id === normalizedProfileId)
+    if (profile) profile.last_played_time = normalizedPlayedTime
+  }
+
   // === Actions ===
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
 
@@ -56,14 +65,6 @@ export const useProfileStore = defineStore('profile', () => {
     ].join('<br>')
   )
 
-  const isSteamVdfShortcutFlow = (profile) => {
-    if (!profile || profile.id === 'default') return false
-    if (!profile.prefer_steam_launch) return false
-    const defaultProfile = profiles.value.find(item => item.id === 'default')
-    if (!defaultProfile?.game_install_path || !profile.game_install_path) return false
-    return String(defaultProfile.game_install_path).trim().toLowerCase() !== String(profile.game_install_path).trim().toLowerCase()
-  }
-  
   // 获取环境列表
   const fetchProfiles = async () => {
     if (!window.pywebview) return
@@ -144,11 +145,11 @@ export const useProfileStore = defineStore('profile', () => {
   // 创建环境桌面快捷方式
   const createDesktopShortcut = async (profileId) => {
     const profile = profiles.value.find(item => item.id === profileId)
-    if (isSteamVdfShortcutFlow(profile)) {
+    const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
+    if (res?.status === 'warning' && res?.data?.shortcut_kind === 'steam_vdf_flow_required') {
+      if (!profile) return null
       return await createSteamVdfDesktopShortcut(profile)
     }
-
-    const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
     if (checkResult(res, '创建环境桌面快捷方式', true)) {
       return res.data
     }
@@ -264,6 +265,7 @@ export const useProfileStore = defineStore('profile', () => {
   return {
     profiles, currentProfileId, orphanedProfiles, currentProfile, isLoading, activeContext,
     fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile, createDesktopShortcut,
+    applyLastPlayedTime,
     scanOrphans, importOrphan
   }
 })

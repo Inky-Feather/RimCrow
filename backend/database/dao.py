@@ -1264,7 +1264,30 @@ class GroupDAO:
                 .dicts()
             )
             if not existing_rows:
-                raise ValueError("分组内排序失败：目标分组不存在或没有成员。")
+                if not GroupData.get_or_none(GroupData.group_id == group_id):
+                    raise ValueError("分组内排序失败：目标分组不存在。")
+
+                if len(normalized_ids) != len(set(normalized_ids)):
+                    raise ValueError("分组内排序失败：提交的成员列表存在重复项。")
+
+                valid_new_ids = {
+                    normalize_package_id(asset.package_id)
+                    for asset in ModAsset.select(ModAsset.package_id).where(
+                        cast(Any, ModAsset.package_id).in_(normalized_ids)
+                    )
+                }
+                invalid_new_ids = [mod_id for mod_id in normalized_ids if mod_id not in valid_new_ids]
+                if invalid_new_ids:
+                    raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
+
+                _ensure_user_data_rows(normalized_ids)
+                data_source = [
+                    {"group_id": group_id, "mod_id": mod_id, "sort_index": index}
+                    for index, mod_id in enumerate(normalized_ids)
+                ]
+                for batch in chunked(data_source, 500):
+                    GroupMod.insert_many(batch).execute()
+                return
 
             existing_ids = [normalize_package_id(row.get("mod_id")) for row in existing_rows]
             existing_id_set = set(existing_ids)
@@ -1283,12 +1306,15 @@ class GroupDAO:
                 if invalid_new_ids:
                     raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
 
-            submitted_existing_set = {mod_id for mod_id in normalized_ids if mod_id in existing_id_set}
-            hidden_existing_ids = [
-                mod_id for mod_id in existing_ids
-                if mod_id not in submitted_existing_set
+            visible_existing_set = {mod_id for mod_id in normalized_ids if mod_id in existing_id_set}
+            reordered_visible_iter = iter(normalized_ids)
+            merged_ids = [
+                next(reordered_visible_iter) if mod_id in visible_existing_set else mod_id
+                for mod_id in existing_ids
             ]
-            merged_ids = normalized_ids + hidden_existing_ids
+            for mod_id in normalized_ids:
+                if mod_id not in existing_id_set:
+                    merged_ids.append(mod_id)
 
             _ensure_user_data_rows(merged_ids)
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()

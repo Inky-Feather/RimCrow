@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import threading
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
@@ -535,8 +536,11 @@ class TestApiScanMods(unittest.TestCase):
 
 
 class TestApiGameLaunch(unittest.TestCase):
-    def test_game_launch_prefers_steam_command_and_syncs_runtime_links(self):
+    def test_game_launch_prefers_steam_waits_until_ready_then_direct_launches_game(self):
         api = API.__new__(API)
+        api._pending_launch_lock = threading.Lock()
+        api._pending_launch_profile_id = ""
+        api._pending_launch_deadline_ms = 0
         profile = SimpleNamespace(
             id="default",
             game_install_path="C:/Games/RimWorld",
@@ -546,13 +550,14 @@ class TestApiGameLaunch(unittest.TestCase):
         api.profile_mgr = SimpleNamespace(
             current_profile=profile,
             get_profile=Mock(return_value=profile),
-            get_launch_args_only=Mock(return_value=["-savedatafolder=C:/Profiles/default"]),
+            get_launch_args=Mock(return_value=["-savedatafolder=C:/Profiles/default"]),
         )
         api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
             get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
-            launch_via_steam_cmd=Mock(),
         )
-        api._sync_runtime_links_for_profile = Mock()
+        api._ensure_steam_ready = Mock(return_value=(True, {"running": True, "ready": True, "reason": "ready"}, ""))
+        api._launch_profile_with_runtime_links = Mock()
 
         config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam")
         with patch("backend.api.settings.config", config), \
@@ -560,12 +565,48 @@ class TestApiGameLaunch(unittest.TestCase):
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "success")
-        api._sync_runtime_links_for_profile.assert_called_once_with("default", include_workshop=False)
-        api.steam_mgr.launch_via_steam_cmd.assert_called_once_with(
-            extra_args=["-savedatafolder=C:/Profiles/default"]
+        api._ensure_steam_ready.assert_called_once_with(timeout_seconds=45)
+        api._launch_profile_with_runtime_links.assert_called_once_with(
+            "default",
+            "C:/Games/RimWorld",
+            ["-savedatafolder=C:/Profiles/default"],
+            include_workshop=True,
         )
 
-    def test_game_launch_auto_falls_back_to_direct_launch_when_steam_path_invalid(self):
+    def test_game_launch_default_steam_profile_uses_url_fallback_when_steam_path_invalid(self):
+        api = API.__new__(API)
+        api._pending_launch_lock = threading.Lock()
+        api._pending_launch_profile_id = ""
+        api._pending_launch_deadline_ms = 0
+        profile = SimpleNamespace(
+            id="default",
+            game_install_path="C:/Games/RimWorld",
+            prefer_steam_launch=True,
+            is_steam=True,
+        )
+        api.profile_mgr = SimpleNamespace(
+            current_profile=profile,
+            get_profile=Mock(return_value=profile),
+            get_launch_args=Mock(return_value=[]),
+        )
+        api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value=""),
+            get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
+        )
+        api._sync_runtime_links_for_profile = Mock()
+
+        config = SimpleNamespace(steam_path="")
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": False}), \
+             patch("backend.api.os.startfile") as startfile:
+            res = API.game_launch(api, "default")
+
+        self.assertEqual(res["status"], "warning")
+        self.assertIn("URL 协议启动", res["message"])
+        api._sync_runtime_links_for_profile.assert_called_once_with("default", include_workshop=False)
+        startfile.assert_called_once_with("steam://run/294100")
+
+    def test_game_launch_returns_warning_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)
         profile = SimpleNamespace(
             id="default",
@@ -576,26 +617,107 @@ class TestApiGameLaunch(unittest.TestCase):
         api.profile_mgr = SimpleNamespace(
             current_profile=profile,
             get_profile=Mock(return_value=profile),
-            get_launch_args_only=Mock(return_value=[]),
+            get_launch_args=Mock(return_value=[]),
         )
         api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
             get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
         )
-        api._launch_profile_with_runtime_links = Mock()
+        api._ensure_steam_ready = Mock(return_value=(
+            False,
+            {"running": True, "ready": False, "reason": "steam_ready_timeout"},
+            "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。您可以继续改为游戏本体直启，或先确认 Steam 已登录后重试。",
+        ))
 
-        config = SimpleNamespace(steam_path="")
+        config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam")
         with patch("backend.api.settings.config", config), \
-             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": False}):
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}):
             res = API.game_launch(api, "default")
 
-        self.assertEqual(res["status"], "success")
-        self.assertIn("自动改为游戏本体直接启动", res["message"])
-        api._launch_profile_with_runtime_links.assert_called_once_with(
-            "default",
-            "C:/Games/RimWorld",
-            [],
-            include_workshop=True,
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["data"]["action"], "confirm_direct_launch")
+        self.assertTrue(res["data"]["requires_fallback_confirm"])
+
+    def test_on_game_process_started_updates_last_played_time_only_after_pending_launch(self):
+        api = API.__new__(API)
+        api._pending_launch_lock = threading.Lock()
+        api._pending_launch_profile_id = ""
+        api._pending_launch_deadline_ms = 0
+        api.profile_mgr = SimpleNamespace(update_profile=Mock())
+
+        API._arm_pending_game_launch(api, "profile-a", timeout_ms=5000)
+        payload = API.on_game_process_started(api)
+
+        self.assertEqual(payload["profile_id"], "profile-a")
+        self.assertGreater(payload["last_played_time"], 0)
+        api.profile_mgr.update_profile.assert_called_once()
+        called_profile_id, called_updates = api.profile_mgr.update_profile.call_args.args
+        self.assertEqual(called_profile_id, "profile-a")
+        self.assertEqual(called_updates["last_played_time"], payload["last_played_time"])
+
+    def test_profile_create_desktop_shortcut_returns_vdf_flow_warning_for_diff_install(self):
+        api = API.__new__(API)
+        profile = SimpleNamespace(
+            id="profile-a",
+            name="Profile A",
+            game_install_path="D:/Games/RimWorld",
+            user_data_path="D:/Profiles/profile-a",
+            prefer_steam_launch=True,
         )
+        default_profile = SimpleNamespace(
+            id="default",
+            name="Default",
+            game_install_path="C:/Steam/steamapps/common/RimWorld",
+            user_data_path="C:/Profiles/default",
+            prefer_steam_launch=True,
+        )
+        api.profile_mgr = SimpleNamespace(
+            get_profile=Mock(side_effect=lambda profile_id: default_profile if profile_id == "default" else profile),
+            get_launch_args=Mock(return_value=["-savedatafolder=D:/Profiles/profile-a"]),
+        )
+        api.steam_mgr = SimpleNamespace(
+            steam_exe="C:/Program Files (x86)/Steam/steam.exe",
+            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
+            get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
+        )
+        api.file_mgr = SimpleNamespace(
+            create_profile_desktop_shortcut=Mock(),
+            remove_existing_shortcut_variants=Mock(),
+        )
+
+        config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam")
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.PathChecker.check_install_path", return_value={"pass": True}), \
+             patch("backend.api.PathChecker.check_normal_path", return_value={"pass": True}), \
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}):
+            res = API.profile_create_desktop_shortcut(api, "profile-a")
+
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["data"]["shortcut_kind"], "steam_vdf_flow_required")
+        self.assertEqual(res["data"]["launch_mode"], "Steam VDF")
+        api.file_mgr.create_profile_desktop_shortcut.assert_not_called()
+
+    def test_on_game_process_started_resolves_profile_from_savedatafolder_when_no_pending_launch(self):
+        api = API.__new__(API)
+        api._pending_launch_lock = threading.Lock()
+        api._pending_launch_profile_id = ""
+        api._pending_launch_deadline_ms = 0
+        api.profile_mgr = SimpleNamespace(
+            update_profile=Mock(),
+            get_profile=Mock(return_value=SimpleNamespace(id="default")),
+        )
+        fake_process = SimpleNamespace(cmdline=Mock(return_value=[
+            "C:/Games/RimWorld/RimWorldWin64.exe",
+            "-savedatafolder=D:/Profiles/profile-b",
+        ]))
+
+        matched_profile = SimpleNamespace(id="profile-b", user_data_path="D:/Profiles/profile-b")
+        with patch("backend.api.GameProfile.select", return_value=[matched_profile]):
+            payload = API.on_game_process_started(api, fake_process)
+
+        self.assertEqual(payload["profile_id"], "profile-b")
+        self.assertGreater(payload["last_played_time"], 0)
+        api.profile_mgr.update_profile.assert_called_once()
 
 
 if __name__ == "__main__":

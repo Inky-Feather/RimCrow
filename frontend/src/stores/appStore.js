@@ -846,7 +846,11 @@ export const useAppStore = defineStore('app', () => {
     });
     // 监听游戏状态变化
     window.addEventListener('game-status-changed', (e) => {
-      isGameRunning.value = e.detail.running
+      const detail = e?.detail || {}
+      isGameRunning.value = !!detail.running
+      if (detail.profile_id && detail.last_played_time) {
+        useProfileStore().applyLastPlayedTime(detail.profile_id, detail.last_played_time)
+      }
     })
     window.addEventListener('app-suspending', () => {
       isSuspended.value = true

@@ -82,7 +82,7 @@ from backend.load_order.language_pack_ownership import resolve_language_pack_own
 from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
-from backend.migrations.app_upgrade import run_app_upgrade_migrations
+from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
 from backend.text_search.manager import FileSearchManager
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
@@ -239,6 +239,13 @@ class API:
         # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
         # 会在 Windows 上撞到已打开文件句柄导致无法删除。
         self._handle_app_version_upgrade()
+        renamed_groups = normalize_duplicate_group_names_on_load()
+        if renamed_groups:
+            self._upgrade_context["messages"].append(f"检测到重名分组，已自动重命名 {len(renamed_groups)} 项。")
+            logger.warning(
+                "Duplicate group names normalized on load: %s",
+                ", ".join(f"{old_name!r}->{new_name!r}" for _, old_name, new_name in renamed_groups),
+            )
         # 2. 实例化各个管理器
         self.workshop_db_mgr = WorkshopDBManager()
         self.game_mgr = GameManager()
@@ -2057,8 +2064,9 @@ class API:
             if not profile_id: profile_id = self.profile_mgr.current_profile.id
             if not profile_id: return ApiResponse.error("未指定 Profile ID")
             profile = self.profile_mgr.get_profile(profile_id)
-            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+            extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
             prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            # 检查 Steam 路径是否有效，无效则尝试重新获取
             if prefer_steam_launch and not settings.config.steam_path:
                 settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
             steam_path_valid = bool(
@@ -2080,15 +2088,53 @@ class API:
                 profile.is_steam,
             )
 
-            if prefer_steam_launch and steam_path_valid:
-                # Steam 启动前仍需先收敛本地 Mods 目录，保留 Self/Tool 链接并移除额外的 Workshop 链接。
-                self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
-                self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
-                return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
-            if prefer_steam_launch and not steam_path_valid:
-                if profile.is_steam and profile.id == 'default':
-                    os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
-                    return ApiResponse.warning(message="未找到 Steam.exe，请检查 Steam 安装路径是否正确，已回退到 URL 协议启动，如果仍然失败，可关闭“优先Steam启动”选项。")
+            if prefer_steam_launch:
+                if profile.is_steam:
+                    # Steam 启动前仍需先收敛本地 Mods 目录，保留 Self/Tool 链接并移除额外的 Workshop 链接。
+                    self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
+
+                    if steam_path_valid:
+                        if self.game_monitor:
+                            self.game_monitor.launch_profile_id = profile_id
+                        self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+                        return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+
+                    if profile.id == 'default':
+                        try:
+                            if self.game_monitor:
+                                self.game_monitor.launch_profile_id = profile_id
+                            os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
+                            return ApiResponse.warning(
+                                message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Launch Steam game via URL failed: {e}", exc_info=True)
+
+                    return self._build_direct_launch_confirmation(
+                        profile_id=profile_id,
+                        steam_running=bool(steam_running),
+                        reason="steam_path_invalid",
+                        message="当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径，无法安全自动启动。您可以继续改为游戏本体直启，或先修复 Steam 路径后重试。",
+                        requires_fallback_confirm=True,
+                        steam_status=self._attach_steam_user_hint(steam_status),
+                    )
+                # 非Steam游戏，优先启动Steam客户端，确保Steam客户端状态为可用，再启动游戏本体
+                ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=45)
+                if ok:
+                    self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=True)
+                    return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+
+                # Steam 客户端未进入可用状态，提示用户确认
+                return self._build_direct_launch_confirmation(
+                    profile_id=profile_id,
+                    steam_running=bool((ensured_status or {}).get("running")),
+                    reason=str((ensured_status or {}).get("reason") or "steam_not_ready"),
+                    message=message or "Steam 未能进入可用状态。您可以继续改为游戏本体直启，或稍后重试。",
+                    requires_fallback_confirm=True,
+                    steam_status=ensured_status,
+                )
+
+            # 不使用Steam启动，且Steam 已在运行，提示用户确认
             if steam_running:
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
@@ -2097,12 +2143,11 @@ class API:
                     message="检测到 Steam 已在运行，当前环境若继续以游戏本体直启，Steam 可能会接管本次启动并同时加载工坊内容。",
                     steam_status=steam_status,
                 )
-            self._launch_profile_with_runtime_links(
-                profile_id,
-                profile.game_install_path,
-                extra_args,
-                include_workshop=True,
-            )
+
+            # 不使用Steam启动，且Steam 未在运行，直接启动游戏本体
+            self._launch_profile_with_runtime_links( profile_id, profile.game_install_path, extra_args, include_workshop=True )
+
+            # 使用Steam启动，且Steam路径无效，提示用户
             if prefer_steam_launch and not steam_path_valid:
                 return ApiResponse.warning(message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。")
             return ApiResponse.success(message="直接启动游戏成功，祝你游玩愉快！")
@@ -2132,11 +2177,6 @@ class API:
         )
         return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
 
-    def _start_profile_game(self, profile_id: str, game_install_path: str, extra_args: list[str] | None = None):
-        """启动指定环境的游戏本体并记录游玩时间。"""
-        self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
-        self.profile_mgr.update_profile(profile_id, {"last_played_time": current_ms()})
-
     def _launch_profile_with_runtime_links(
         self,
         profile_id: str,
@@ -2148,11 +2188,12 @@ class API:
         直启相关分支的统一入口。
         作用：
         1. 先把本地 Mods 链接收敛到当前环境需要的状态。
-        2. 再启动游戏并记录游玩时间。
+        2. 再启动游戏，并由游戏监视器在确认进程出现后记录最后启动时间。
         这样可以避免多个启动分支重复维护同一段流程。
         """
         self._sync_runtime_links_for_profile(profile_id, include_workshop=include_workshop)
-        self._start_profile_game(profile_id, game_install_path, extra_args)
+        if self.game_monitor: self.game_monitor.launch_profile_id = profile_id
+        self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
 
     def _build_direct_launch_confirmation(
         self,
@@ -2193,24 +2234,42 @@ class API:
         try:
             steam_status = self.steam_mgr.get_steam_client_status()
             if steam_status.get("ready"):
-                return True, self._attach_steam_user_hint(steam_status), ""
+                ready_status = self._attach_steam_user_hint(steam_status)
+                ready_status["reason"] = "ready"
+                return True, ready_status, ""
 
-            started = self.steam_mgr.start_steam()
-            if not started:
-                return False, self._attach_steam_user_hint(steam_status), "无法自动启动 Steam，请检查 Steam 路径配置。"
+            start_result = self.steam_mgr.start_steam()
+            if not start_result.get("ok"):
+                failed_status = self._attach_steam_user_hint(steam_status)
+                failed_status["reason"] = "steam_start_failed"
+                failed_status["start_result"] = start_result
+                return False, failed_status, "无法自动启动 Steam 客户端，请检查 Steam 路径配置或系统协议关联。"
 
             deadline = time.time() + max(1.0, float(timeout_seconds or 0))
             while time.time() < deadline:
                 steam_status = self.steam_mgr.get_steam_client_status()
                 if steam_status.get("ready"):
-                    return True, self._attach_steam_user_hint(steam_status), ""
+                    ready_status = self._attach_steam_user_hint(steam_status)
+                    ready_status["reason"] = "ready"
+                    ready_status["start_result"] = start_result
+                    return True, ready_status, ""
                 time.sleep(1.0)
 
             steam_status = self.steam_mgr.get_steam_client_status()
-            return False, self._attach_steam_user_hint(steam_status, waiting=True), "Steam 未能在限定时间内进入已登录可用状态，请确认已完成登录。"
+            timeout_status = self._attach_steam_user_hint(steam_status, waiting=True)
+            timeout_status["reason"] = "steam_ready_timeout"
+            timeout_status["start_result"] = start_result
+            return False, timeout_status, "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。您可以继续改为游戏本体直启，或先确认 Steam 已登录后重试。"
         except Exception as e:
             logger.error(f"Ensure Steam ready failed: {e}", exc_info=True)
-            return False, {}, f"检测 Steam 状态失败: {e}"
+            failed_status = {
+                "running": False,
+                "logged_in": False,
+                "ready": False,
+                "reason": "steam_status_probe_failed",
+                "detail": str(e),
+            }
+            return False, self._attach_steam_user_hint(failed_status), f"检测 Steam 状态失败: {e}。您可以继续改为游戏本体直启，或稍后重试。"
 
     @staticmethod
     def _describe_steam_status(steam_status: dict | None, waiting: bool = False) -> dict:
@@ -2272,7 +2331,7 @@ class API:
                 return ApiResponse.warning("已取消启动")
 
             profile = self.profile_mgr.get_profile(profile_id)
-            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+            extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
 
             if normalized_action == LaunchWarningAction.WAIT_STEAM_EXIT.value:
                 steam_running = self.steam_mgr.is_steam_running()
@@ -2364,7 +2423,7 @@ class API:
             )
             effective_steam_shortcut = bool(prefer_steam_launch and steam_path_valid)
             if effective_steam_shortcut:
-                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+                extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
                 if same_install_as_default:
                     shortcut = self.file_mgr.create_profile_desktop_shortcut(
                         profile=profile,
@@ -2399,7 +2458,7 @@ class API:
 
             shortcut = self.file_mgr.create_profile_desktop_shortcut(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
                 prefer_steam_launch=False,
                 steam_exe_path=self.steam_mgr.steam_exe,
                 steam_app_id=RIMWORLD_APP_ID,
@@ -2445,11 +2504,11 @@ class API:
 
             log_probe = self.steam_mgr.get_shortcut_log_probe(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
             )
             result = self.steam_mgr.register_profile_non_steam_shortcut(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
             )
             result["log_probe"] = log_probe
             return ApiResponse.success(result, message="已写入 Steam 快捷方式配置")
