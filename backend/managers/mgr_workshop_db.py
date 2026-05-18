@@ -105,8 +105,13 @@ class WorkshopDBManager:
         ).on_conflict_replace().execute()
 
     def _read_dataset_payload(self, path: Path) -> dict[str, Any]:
-        """按文件后缀读取 JSON / GZip JSON，统一导入入口。"""
-        if str(path).endswith(".gz"):
+        """按文件内容优先识别 JSON / GZip JSON，兼容历史错误后缀。"""
+        header = b""
+        with open(path, "rb") as probe:
+            header = probe.read(2)
+
+        is_gzip = header == b"\x1f\x8b" or str(path).lower().endswith(".gz")
+        if is_gzip:
             with gzip.open(path, "rt", encoding="utf-8-sig") as handle:
                 return json.load(handle)
         with open(path, "r", encoding="utf-8-sig") as handle:

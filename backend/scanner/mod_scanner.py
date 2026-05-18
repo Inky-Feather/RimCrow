@@ -29,6 +29,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
+from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_codes
@@ -245,16 +246,11 @@ class ModScanner:
                 logger.error(f"批量入库失败: {e}", exc_info=True)
                 raise e
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
+            runtime_caps = resolve_profile_runtime_capabilities(self.context)
             runtime_analysis = ModDAO.get_profile_conflict_analysis(
                 self.context,
-                include_workshop_in_detection=bool(
-                    getattr(self.context, 'prefer_steam_launch', False)
-                    or getattr(self.context, 'use_workshop_mods', False)
-                ),
-                include_workshop_in_deploy=bool(
-                    (not getattr(self.context, 'prefer_steam_launch', False))
-                    and getattr(self.context, 'use_workshop_mods', False)
-                ),
+                include_workshop_in_detection=bool(runtime_caps.get('workshop_detection_enabled')),
+                include_workshop_in_deploy=bool(runtime_caps.get('workshop_deploy_enabled')),
             )
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']

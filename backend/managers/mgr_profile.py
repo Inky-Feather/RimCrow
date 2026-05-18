@@ -11,7 +11,12 @@ from dataclasses import asdict, dataclass, field
 from playhouse.shortcuts import model_to_dict
 from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
+from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_game import GameManager
+from backend.managers.profile_runtime import (
+    normalize_profile_runtime_flags,
+    resolve_profile_runtime_capabilities,
+)
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
 from backend.utils.logger import logger 
 from backend.utils.tools import delete_fs_path
@@ -28,6 +33,9 @@ class ProfileContext:
     use_workshop_mods: bool
     use_self_mods: bool
     inactive_mods_order: list = field(default_factory=list)
+    is_steam: bool = False
+    is_steam_managed: bool = False
+    runtime_capabilities: dict = field(default_factory=dict)
     
     is_healthy: bool = True
     health_report: dict = field(default_factory=dict) 
@@ -106,9 +114,19 @@ class ProfileManager:
     }
     
     def __init__(self):
+        self.install_inspector = GameInstallInspector()
         self._ensure_default_profile()
         self.current_profile = GameProfile.get_or_none(GameProfile.id == settings.config.current_profile_id)
         self.update_version()
+
+    def _get_install_inspector(self) -> GameInstallInspector:
+        inspector = getattr(self, 'install_inspector', None)
+        if inspector is None:
+            # 单测里常用 `__new__` 绕过 `__init__`，这里做一次兜底，
+            # 保证创建/更新/构造上下文时都能拿到同一套安装探针逻辑。
+            inspector = GameInstallInspector()
+            self.install_inspector = inspector
+        return inspector
 
     def _ensure_default_profile(self):
         """确保至少有一个默认 Profile (通常是当前设置的 Steam 版)"""
@@ -122,9 +140,9 @@ class ProfileManager:
                     game_install_path='',
                     user_data_path='',
                     game_version='',
-                    is_steam=False,
+                    is_steam=True,
                     prefer_steam_launch=True,
-                    use_workshop_mods=True, # 默认非Steam版不加载工坊
+                    use_workshop_mods=False,
                     use_self_mods=False,    # 默认不加载 Self Mod
                     run_commands=[]
                 )
@@ -160,8 +178,14 @@ class ProfileManager:
         data_dir = self._ensure_user_data_structure(
             data.get('user_data_path') or str(DATA_DIR / "profiles" / profile_id)
         )
-        
-        isSteam = os.path.normpath(data.get('game_install_path','')).lower().rfind(os.path.join('steamapps', 'common')) != -1
+        install_facts = self._get_install_inspector().inspect(data.get('game_install_path', ''))
+        runtime_flags = normalize_profile_runtime_flags(
+            install_facts.is_steam,
+            data.get('prefer_steam_launch') if 'prefer_steam_launch' in data else None,
+            data.get('use_workshop_mods') if 'use_workshop_mods' in data else None,
+            default_prefer_steam_launch=install_facts.is_steam,
+            default_use_workshop_mods=False,
+        )
         
         # 如果需要继承数据
         if copy_current_data:
@@ -177,11 +201,11 @@ class ProfileManager:
                 description=data.get('description', ''),
                 user_data_path=data_dir,
                 game_install_path=data.get('game_install_path'),
-                game_version=GameManager.get_game_version(data.get('game_install_path')),
-                prefer_steam_launch=bool(data.get('prefer_steam_launch', isSteam)),
-                use_workshop_mods=data.get('use_workshop_mods', True),
+                game_version=install_facts.game_version or GameManager.get_game_version(data.get('game_install_path')),
+                prefer_steam_launch=runtime_flags['prefer_steam_launch'],
+                use_workshop_mods=runtime_flags['use_workshop_mods'],
                 use_self_mods=data.get('use_self_mods', False), # 默认不加载 Self Mod
-                is_steam=isSteam,
+                is_steam=runtime_flags['is_steam'],
                 run_commands=data.get('run_commands', [])
             )
         # 同步到磁盘
@@ -195,6 +219,7 @@ class ProfileManager:
         # 验证 Profile 是否在数据库中
         if profile_id not in [p.id for p in GameProfile.select()]: 
             raise ValueError(f"Profile not found: {profile_id}")
+        profile = self.get_profile(profile_id)
         # 过滤掉非环境字段
         clean_data = {k: v for k, v in data.items() if k in self.PROFILE_KEYS}
         if not clean_data: return False
@@ -202,18 +227,41 @@ class ProfileManager:
         # valid_field_names = set(GameProfile._meta.fields.keys()) # type: ignore
         # clean_data = {k: v for k, v in data.items() if k in valid_field_names}
         # if 'id' in clean_data: del clean_data['id']
-        if('game_install_path' in clean_data):
-            clean_data['game_version'] = GameManager.get_game_version(clean_data.get('game_install_path'))
-            clean_data['is_steam'] = os.path.normpath(clean_data.get('game_install_path','')).lower().rfind(os.path.join('steamapps', 'common')) != -1
-        if('use_workshop_mods' in clean_data):
-            clean_data['use_workshop_mods'] = True if profile_id =='default' else clean_data.get('use_workshop_mods', True)
-        
         if 'user_data_path' in clean_data:
             clean_data['user_data_path'] = self._ensure_user_data_structure(clean_data['user_data_path'])
         if 'game_install_path' in clean_data:
             if not os.path.exists(clean_data['game_install_path']):
                 raise ValueError(f"Path not found: {clean_data['game_install_path']}")
             clean_data['game_install_path'] = os.path.normpath(clean_data['game_install_path'])
+            install_facts = self._get_install_inspector().inspect(clean_data['game_install_path'], force=True)
+            clean_data['game_version'] = install_facts.game_version or GameManager.get_game_version(clean_data['game_install_path'])
+            clean_data['is_steam'] = install_facts.is_steam
+
+        target_is_steam = bool(clean_data.get('is_steam', getattr(profile, 'is_steam', False)))
+        prefer_input = (
+            clean_data.get('prefer_steam_launch')
+            if 'prefer_steam_launch' in clean_data
+            else (None if 'game_install_path' in clean_data else getattr(profile, 'prefer_steam_launch', False))
+        )
+        workshop_input = (
+            clean_data.get('use_workshop_mods')
+            if 'use_workshop_mods' in clean_data
+            else getattr(profile, 'use_workshop_mods', False)
+        )
+        runtime_flags = normalize_profile_runtime_flags(
+            target_is_steam,
+            prefer_input,
+            workshop_input,
+            default_prefer_steam_launch=target_is_steam,
+            default_use_workshop_mods=False,
+        )
+        # 更新阶段同样强制走统一归一化：
+        # 1. 安装路径变化时，重新以探测结果决定默认 Steam 启动值；
+        # 2. 用户手动开启 Steam 启动时，Workshop 链接部署开关立即归零；
+        # 3. 非 Steam 正版副本不保留 `prefer_steam_launch=True` 的脏状态。
+        clean_data['prefer_steam_launch'] = runtime_flags['prefer_steam_launch']
+        clean_data['use_workshop_mods'] = runtime_flags['use_workshop_mods']
+        clean_data['is_steam'] = runtime_flags['is_steam']
                 
         query = GameProfile.update(**clean_data).where(GameProfile.id == profile_id)
         query.execute()
@@ -279,16 +327,30 @@ class ProfileManager:
         if not profile_id:
             profile_id = 'default'
         profile = self.get_profile(profile_id)
+        install_facts = self._get_install_inspector().quick_inspect(profile.game_install_path)
+        runtime_flags = normalize_profile_runtime_flags(
+            bool(getattr(profile, 'is_steam', False)),
+            getattr(profile, 'prefer_steam_launch', None),
+            getattr(profile, 'use_workshop_mods', None),
+            default_prefer_steam_launch=bool(getattr(profile, 'is_steam', False)),
+            default_use_workshop_mods=False,
+        )
         context = ProfileContext(
             profile_id=profile.id,
             game_version=profile.game_version,
             game_install_path=profile.game_install_path,
             user_data_path=profile.user_data_path,
-            prefer_steam_launch=bool(getattr(profile, 'prefer_steam_launch', True)),
-            use_workshop_mods=profile.use_workshop_mods,
+            prefer_steam_launch=runtime_flags['prefer_steam_launch'],
+            use_workshop_mods=runtime_flags['use_workshop_mods'],
             use_self_mods=profile.use_self_mods,
             inactive_mods_order=list(profile.inactive_mods_order or []),
+            is_steam=runtime_flags['is_steam'],
+            is_steam_managed=install_facts.is_steam_managed,
         )
+        # 这里把“持久化事实 + 动态事实”一起封进上下文：
+        # - `is_steam` 来自已缓存/迁移后的真实探测结果；
+        # - `is_steam_managed` 每次按路径动态计算，承接旧语义。
+        object.__setattr__(context, 'runtime_capabilities', resolve_profile_runtime_capabilities(context))
         context.validate_health()
         return context
     
@@ -297,6 +359,24 @@ class ProfileManager:
         res = list(GameProfile.select().dicts())
         # 遍历环境对象检测路径是否存在
         for profile in res:
+            install_facts = self._get_install_inspector().quick_inspect(profile.get('game_install_path', ''))
+            runtime_flags = normalize_profile_runtime_flags(
+                bool(profile.get('is_steam')),
+                profile.get('prefer_steam_launch'),
+                profile.get('use_workshop_mods'),
+                default_prefer_steam_launch=bool(profile.get('is_steam')),
+                default_use_workshop_mods=False,
+            )
+            profile['prefer_steam_launch'] = runtime_flags['prefer_steam_launch']
+            profile['use_workshop_mods'] = runtime_flags['use_workshop_mods']
+            profile['is_steam_managed'] = install_facts.is_steam_managed
+            profile_context_stub = type("ProfileStub", (), {
+                "is_steam": runtime_flags['is_steam'],
+                "is_steam_managed": install_facts.is_steam_managed,
+                "prefer_steam_launch": runtime_flags['prefer_steam_launch'],
+                "use_workshop_mods": runtime_flags['use_workshop_mods'],
+            })()
+            profile['runtime_capabilities'] = resolve_profile_runtime_capabilities(profile_context_stub)
             # 验证游戏安装路径是否有效
             check_install = PathChecker.check_install_path(profile.get('game_install_path',''))
             # 验证用户数据路径是否有效
@@ -466,10 +546,33 @@ class ProfileManager:
             # 确保 ID 存在
             if 'id' not in profile_data: return False, "Profile data missing ID"
 
+            valid_field_names = set(GameProfile._meta.fields.keys()) # type: ignore[attr-defined]
+            clean_data = {key: value for key, value in profile_data.items() if key in valid_field_names}
+
+            install_path = str(clean_data.get('game_install_path') or '').strip()
+            install_facts = None
+            if install_path:
+                normalized_install_path = os.path.normpath(install_path)
+                clean_data['game_install_path'] = normalized_install_path
+                install_facts = self._get_install_inspector().inspect(normalized_install_path, force=True)
+            detected_is_steam = bool(install_facts.is_steam) if install_facts else False
+            runtime_flags = normalize_profile_runtime_flags(
+                detected_is_steam,
+                clean_data.get('prefer_steam_launch', True),
+                clean_data.get('use_workshop_mods', False),
+                default_prefer_steam_launch=True,
+                default_use_workshop_mods=False,
+            )
+            clean_data['prefer_steam_launch'] = runtime_flags['prefer_steam_launch']
+            clean_data['use_workshop_mods'] = runtime_flags['use_workshop_mods']
+            clean_data['is_steam'] = runtime_flags['is_steam']
+            if install_facts and install_facts.game_version:
+                clean_data['game_version'] = install_facts.game_version
+             
             with db.atomic():
                 # 使用 upsert 防止并发冲突
-                GameProfile.insert(**profile_data).on_conflict_replace().execute()
-            
+                GameProfile.insert(**clean_data).on_conflict_replace().execute()
+             
             return True, "导入成功"
         except Exception as e: return False, str(e)
             

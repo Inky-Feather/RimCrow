@@ -357,7 +357,11 @@ class LoadOrderManager:
             entry["source_url_raw"] = entry.get("source_url_raw") or ""
 
             token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or entry.get("package_id"))
-            if token_info.source_preference == "steam" and not visible_meta.get("has_coexist_workshop_variant"):
+            if (
+                token_info.source_preference == "steam"
+                and package_id in visible_map
+                and not visible_meta.get("has_coexist_workshop_variant")
+            ):
                 # stale `_steam` 只在 workshop 共存副本实际可用时才保留；
                 # 否则回落到裸包名，避免前端显示本地版但保存时仍写回 `_steam`。
                 entry["package_token"] = entry.get("package_id") or token_info.canonical_package_id or ""

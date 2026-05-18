@@ -93,7 +93,7 @@
           <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏安装目录</button>
           <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏DLC目录</button>
           <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >本地Mod目录</button>
-          <button @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
+          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
           <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">管理器Mod目录</button>
         </div>
       </div>

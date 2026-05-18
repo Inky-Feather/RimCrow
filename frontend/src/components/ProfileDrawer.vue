@@ -78,8 +78,9 @@
                   <!-- 标识 -->
                   <div class="flex items-center gap-1 min-w-0">
                     <span v-tooltip="'游戏版本'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary border border-text-dim/10 ">{{ p.game_version || 'Unknown' }}</span>
-                    <span v-if="p.use_workshop_mods" v-tooltip="'使用Workshop模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Workshop</span>
-                    <span v-if="p.use_self_mods" v-tooltip="'使用管理器 Mod'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Mannager</span>
+                    <span v-if="showSteamVersionBadge(p)" v-tooltip="p.is_steam_managed ? '游戏为 Steam 正在管理的主版本。' : '游戏为 Steam 版。'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-text-dim/10 ">Steam</span>
+                    <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="'已使用 Workshop 模组（含 Steam 自动挂载或本地链接部署）'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Workshop</span>
+                    <span v-if="p.use_self_mods" v-tooltip="'已使用管理器模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Mannager</span>
                     <span v-if="p.id === 'default'" v-tooltip="'默认环境'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-text-dim/10 ">Default</span>
                   </div>
                   
@@ -159,9 +160,9 @@
             :check="form.check_info?.user_data_path" @blur="checkPath('user_data_path', form.user_data_path)"
             description="游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。"
             :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
-          <CommonSwitch label="优先使用 Steam 启动" v-model="form.prefer_steam_launch" description="开启后，默认环境会使用 Steam 官方入口；其它环境会先确保 Steam 运行，再启动当前环境绑定的游戏本体。" />
-          <CommonSwitch v-if="appStore.settings.workshop_mods_path" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod，仅在非Steam启动时生效，Steam 运行时会自动加载创意工坊 Mod。" />
-          <CommonSwitch v-if="appStore.settings.self_mods_path" label="使用管理器 Mod" v-model="form.use_self_mods" description="启用后将通过链接方式自动为游戏添加管理器 Mod。" />
+          <CommonSwitch v-if="showWorkshopSwitch" :disabled="!canUseSteamLaunch" label="优先使用 Steam 启动" v-model="form.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动游戏，进而挂载创意工坊内容。（前提是账号正常使用该游戏和相关关创意工坊内容。）" />
+          <CommonSwitch v-if="showWorkshopSwitch" :disabled="form.prefer_steam_launch" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="适用于非 Steam 版环境。为当前环境使用创意工坊模组，启用后将通过链接方式自动为游戏添加创意工坊模组。（前提是账号正常使用该游戏和相关关创意工坊内容。）" />
+          <CommonSwitch v-if="appStore.settings.self_mods_path" label="使用管理器 Mod" v-model="form.use_self_mods" description="启用后将通过链接方式自动为游戏添加管理器模组。" />
           <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
           <CommonTagInput label="游戏启动参数" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
 
@@ -185,7 +186,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import { Database, Plus, Trash2, Settings2, Link2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
+import { Database, Plus, Trash2, Settings2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
 import { toast } from '../utils/common'
 import { useProfileStore } from '../stores/profileStore'
 import { useAppStore } from '../stores/appStore'
@@ -211,17 +212,52 @@ const form = reactive({
   description: '',
   game_install_path: '',
   user_data_path: '',
-  prefer_steam_launch: true,
+  prefer_steam_launch: false,
   use_workshop_mods: false,
   use_self_mods: false,
   copy_current_data: false,
   run_commands: [],
   check_info: {}
 })
+const detectedIsSteam = computed(() => {
+  const checkedInstall = form.check_info?.game_install_path
+  if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
+    if (checkedInstall.data && Object.prototype.hasOwnProperty.call(checkedInstall.data, 'is_steam')) {
+      return !!checkedInstall.data.is_steam
+    }
+    return false
+  }
+  if (isEditing.value) {
+    const editingProfile = profileStore.profiles.find(item => item.id === form.id)
+    return !!editingProfile?.is_steam
+  }
+  return !!profileStore.activeContext?.is_steam
+})
+const canUseSteamLaunch = computed(() => detectedIsSteam.value)
+const showWorkshopSwitch = computed(() => !!appStore.settings.workshop_mods_path)
+
+const showSteamVersionBadge = (profile) => !!profile?.is_steam
+const showWorkshopRuntimeBadge = (profile) => {
+  const caps = profile?.runtime_capabilities || {}
+  // 这里的徽标语义不是“字段是否勾选”，而是“当前运行时 Workshop 会不会真正参与”：
+  // - Steam 启动时，Workshop 由 Steam 自动挂载；
+  // - 非 Steam 启动时，Workshop 只在链接部署生效时参与。
+  return !!(caps.steam_launch_enabled || caps.workshop_deploy_enabled)
+}
 
 // --- 逻辑 ---
 watch(() => appStore.uiState.showProfileDrawer, (val) => {
   if (val) profileStore.scanOrphans()
+})
+watch(() => form.prefer_steam_launch, (enabled) => {
+  if (enabled) {
+    form.use_workshop_mods = false
+  }
+})
+watch(detectedIsSteam, (isSteam) => {
+  if (!isSteam && form.prefer_steam_launch) {
+    form.prefer_steam_launch = false
+  }
 })
 
 const openCreate = () => {
@@ -230,8 +266,8 @@ const openCreate = () => {
   form.description = ''
   form.game_install_path = profileStore.activeContext.game_install_path
   form.user_data_path = ''
-  form.prefer_steam_launch = true
-  form.use_workshop_mods = true
+  form.prefer_steam_launch = !!profileStore.activeContext?.is_steam
+  form.use_workshop_mods = false
   form.use_self_mods = false
   form.copy_current_data = false
   form.run_commands = []
@@ -261,7 +297,7 @@ const browsePath = async (type) => {
   const path = await appStore.getFolderPath(form[type])
   if (path) form[type] = path
   if (type === 'game_install_path') {
-    checkPath('game_install_path', form.game_install_path)
+    await checkPath('game_install_path', form.game_install_path)
   }
 }
 

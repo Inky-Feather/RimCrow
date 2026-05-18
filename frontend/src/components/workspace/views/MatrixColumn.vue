@@ -6,8 +6,9 @@
         <h3 class="text-sm font-bold text-text-main flex items-center gap-2 cursor-help" v-tooltip="tooltip">
           <div class="w-2.5 h-2.5 rounded-full shadow-lg" :class="iconColor.replace('text-', 'bg-')"></div>
           {{ title }}
-          <CommonSwitch v-if="profileStore.currentProfile?.id!='default' && storeType === 'workshop'" label="" mini class="w-22 -ml-4"
-            v-model="use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod，仅在非Steam启动时生效，Steam 运行时会自动加载创意工坊 Mod。" />
+          <CommonSwitch v-if="storeType === 'workshop' && canToggleWorkshopMods" label="" mini class="w-22 -ml-4"
+            :disabled="workshopSwitchDisabled"
+            v-model="use_workshop_mods" description="适用于非 Steam 版环境。为当前环境使用创意工坊模组，启用后将通过链接方式自动为游戏添加创意工坊模组。（前提是账号拥有游戏，或创意工坊内容本身可正常使用。）" />
           <CommonSwitch v-else-if="storeType === 'self'" label="" mini class="w-22 -ml-4"
             v-model="use_self_mods" description="为当前环境使用管理器Mod，启用后将通过链接方式自动为游戏添加管理器 Mod。" />
         </h3>
@@ -135,9 +136,12 @@ const localSelectedPathHashes = ref([])
 const vListRef = ref(null)
 
 const lastPlayedTime = computed(() => profileStore.currentProfile?.last_played_time || 0)
+const hasWorkshopLibrary = computed(() => !!appStore.settings.workshop_mods_path)
+const canToggleWorkshopMods = computed(() => hasWorkshopLibrary.value)
+const workshopSwitchDisabled = computed(() => !!profileStore.currentProfile?.prefer_steam_launch)
 const use_workshop_mods = computed({
   get() {
-    return profileStore.currentProfile?.use_workshop_mods || true
+    return !!profileStore.currentProfile?.use_workshop_mods
   },
   set(val) {
     profileStore.updateProfile(profileStore.currentProfileId, { use_workshop_mods: val })
@@ -305,6 +309,20 @@ const handleContextMenu = async (event, targetMod) => {
   const replacementTargets = getMatrixReplacementTargets(targetMod, workspaceStore)
 
   const menuItems = []
+  const transferTargets = [
+    { label: '复制到 游戏本地库', disabled: props.storeType === 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'copy') },
+    { label: '复制到 管理器库', disabled: props.storeType === 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'copy') },
+  ]
+  const moveTargets = [
+    { label: '移动到 游戏本地库', disabled: props.storeType === 'local' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'move') },
+    { label: '移动到 管理器库', disabled: props.storeType === 'self' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'move') },
+  ]
+  if (hasWorkshopLibrary.value) {
+    // 工坊库路径缺失时，这类入口会把用户带到一个并不存在的落点；
+    // 因此这里直接不渲染“转入工坊库”的菜单项，避免出现隐藏列仍可操作的残留入口。
+    transferTargets.push({ label: '复制到 创意工坊库', disabled: props.storeType === 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'copy') })
+    moveTargets.push({ label: '移动到 创意工坊库', disabled: props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'move') })
+  }
 
   // 1. 常规信息操作
   if (!isMissing) {
@@ -325,14 +343,10 @@ const handleContextMenu = async (event, targetMod) => {
       label: '转移...' + selectedNumStr,
       icon: ArrowRightLeft,
       children: [
-        { label: '复制到 游戏本地库', disabled: props.storeType === 'local', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'copy') },
-        { label: '复制到 管理器库', disabled: props.storeType === 'self', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'copy') },
-        { label: '复制到 创意工坊库', disabled: props.storeType === 'workshop', icon: Copy, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'copy') },
+        ...transferTargets,
         { divider: true },
-        // 移动操作 (如果是工坊则不可移动)
-        { label: '移动到 游戏本地库', disabled: props.storeType === 'local' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'local', 'move') },
-        { label: '移动到 管理器库', disabled: props.storeType === 'self' || props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'self', 'move') },
-        { label: '移动到 创意工坊库', disabled: props.storeType === 'workshop', icon: FolderInput, action: () => workspaceStore.modTransfer(localSelectedPathHashes.value, 'workshop', 'move') },
+        // 移动操作对工坊源本身仍保持禁用；这里只额外收口“目标工坊库不存在”的情况。
+        ...moveTargets,
       ]
     })
   }

@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonNumber.vue -->
 <template>
   <div class="mx-0 p-0" :class="mini?'flex items-center gap-1 min-w-fit':''">
-    <label v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}
+    <label v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1 mb-1">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-0.5 cursor-help italic underline hover:text-text-main">?</label>
     </label>
     <div class="flex items-center input-glass px-1 m-0 " :class="mini?'flex-1 h-7 min-w-fit':'h-9'">

@@ -16,6 +16,7 @@ import webview
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
+from types import SimpleNamespace
 from typing import Any, Dict, List
 from peewee import Model, JOIN
 from playhouse.shortcuts import model_to_dict
@@ -60,6 +61,7 @@ from backend.database.repair import (
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game import GameManager
+from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_files import FileManager, file_mgr, PathChecker
 from backend.managers.mgr_game_logs import GameLogManager, LogCondenser
@@ -73,6 +75,7 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
+from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
@@ -317,6 +320,19 @@ class API:
             'force': bool(force),
             'paths': normalized_paths,
         }
+
+    def _resolve_profile_runtime_caps_from_profile(self, profile) -> dict[str, Any]:
+        # API 经常只拿到数据库 Profile，而不是完整 ProfileContext。
+        # 这里单独补一层轻量解析，把持久化的 `is_steam` 和动态的
+        # `is_steam_managed` 拼成统一事实，再交给运行能力解析层。
+        install_facts = GameInstallInspector().quick_inspect(getattr(profile, 'game_install_path', ''))
+        profile_state = SimpleNamespace(
+            is_steam=bool(getattr(profile, 'is_steam', False)),
+            is_steam_managed=bool(getattr(profile, 'is_steam_managed', install_facts.is_steam_managed)),
+            prefer_steam_launch=getattr(profile, 'prefer_steam_launch', False),
+            use_workshop_mods=getattr(profile, 'use_workshop_mods', False),
+        )
+        return resolve_profile_runtime_capabilities(profile_state)
     
     
     def _bootstrap_context(self, profile_id: str):
@@ -2065,7 +2081,9 @@ class API:
             if not profile_id: return ApiResponse.error("未指定 Profile ID")
             profile = self.profile_mgr.get_profile(profile_id)
             extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
+            is_steam_managed = bool(runtime_caps.get('is_steam_managed'))
             # 检查 Steam 路径是否有效，无效则尝试重新获取
             if prefer_steam_launch and not settings.config.steam_path:
                 settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
@@ -2077,7 +2095,7 @@ class API:
             steam_running = bool(steam_status.get("running"))
             steam_ready = bool(steam_status.get("ready"))
             logger.debug(
-                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s",
+                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s, is_steam_managed=%s",
                 profile_id,
                 prefer_steam_launch,
                 steam_path_valid,
@@ -2086,23 +2104,27 @@ class API:
                 steam_status.get("source"),
                 steam_status.get("detail"),
                 profile.is_steam,
+                is_steam_managed,
             )
 
             if prefer_steam_launch:
-                if profile.is_steam:
-                    # Steam 启动前仍需先收敛本地 Mods 目录，保留 Self/Tool 链接并移除额外的 Workshop 链接。
+                if is_steam_managed:
+                    # Steam 管理主版本可以走 Steam 官方入口。
+                    # 进入 Steam 前先清掉额外 Workshop 链接，避免“Steam 自动挂载 + 本地链接部署”重复参与。
                     self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
 
                     if steam_path_valid:
-                        if self.game_monitor:
-                            self.game_monitor.launch_profile_id = profile_id
+                        game_monitor = getattr(self, "game_monitor", None)
+                        if game_monitor:
+                            game_monitor.launch_profile_id = profile_id
                         self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
                         return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
 
                     if profile.id == 'default':
                         try:
-                            if self.game_monitor:
-                                self.game_monitor.launch_profile_id = profile_id
+                            game_monitor = getattr(self, "game_monitor", None)
+                            if game_monitor:
+                                game_monitor.launch_profile_id = profile_id
                             os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
                             return ApiResponse.warning(
                                 message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。"
@@ -2118,10 +2140,12 @@ class API:
                         requires_fallback_confirm=True,
                         steam_status=self._attach_steam_user_hint(steam_status),
                     )
-                # 非Steam游戏，优先启动Steam客户端，确保Steam客户端状态为可用，再启动游戏本体
+                # 非 Steam 管理主版本的 Steam 正版副本：
+                # 不适合再假装它是“官方 AppID 安装”，但仍然可以通过
+                # “先等 Steam 就绪，再直启游戏本体”的方式进入 Steam 运行态。
                 ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=45)
                 if ok:
-                    self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=True)
+                    self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=False)
                     return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
 
                 # Steam 客户端未进入可用状态，提示用户确认
@@ -2135,7 +2159,7 @@ class API:
                 )
 
             # 不使用Steam启动，且Steam 已在运行，提示用户确认
-            if steam_running:
+            if steam_running and bool(runtime_caps.get('is_steam')):
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
                     steam_running=True,
@@ -2163,17 +2187,11 @@ class API:
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
         if not local_mods_root or not os.path.exists(local_mods_root): return False
+        runtime_caps = resolve_profile_runtime_capabilities(context)
         runtime_analysis = ModDAO.get_profile_conflict_analysis(
             context,
-            include_workshop_in_detection=bool(
-                getattr(context, 'prefer_steam_launch', False)
-                or getattr(context, 'use_workshop_mods', False)
-            ),
-            include_workshop_in_deploy=bool(
-                include_workshop
-                and (not getattr(context, 'prefer_steam_launch', False))
-                and getattr(context, 'use_workshop_mods', False)
-            ),
+            include_workshop_in_detection=bool(runtime_caps.get('workshop_detection_enabled')),
+            include_workshop_in_deploy=bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
         )
         return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
 
@@ -2192,7 +2210,9 @@ class API:
         这样可以避免多个启动分支重复维护同一段流程。
         """
         self._sync_runtime_links_for_profile(profile_id, include_workshop=include_workshop)
-        if self.game_monitor: self.game_monitor.launch_profile_id = profile_id
+        game_monitor = getattr(self, "game_monitor", None)
+        if game_monitor:
+            game_monitor.launch_profile_id = profile_id
         self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
 
     def _build_direct_launch_confirmation(
@@ -2414,7 +2434,8 @@ class API:
                 msg = f"{check_install.get('msg', '')}\n{check_data.get('msg', '')}".strip()
                 return ApiResponse.error(msg or "环境路径无效，无法创建快捷方式")
 
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             default_profile = self.profile_mgr.get_profile('default')
             same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
             steam_path_valid = bool(
@@ -2424,7 +2445,7 @@ class API:
             effective_steam_shortcut = bool(prefer_steam_launch and steam_path_valid)
             if effective_steam_shortcut:
                 extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
-                if same_install_as_default:
+                if same_install_as_default and bool(runtime_caps.get('is_steam_managed')):
                     shortcut = self.file_mgr.create_profile_desktop_shortcut(
                         profile=profile,
                         extra_args=extra_args,
@@ -2493,13 +2514,14 @@ class API:
                 return ApiResponse.error("未指定 Profile ID")
 
             profile = self.profile_mgr.get_profile(profile_id)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             if not prefer_steam_launch:
                 return ApiResponse.error("当前环境未启用 Steam 启动，无需注册 Steam 快捷方式")
 
             default_profile = self.profile_mgr.get_profile('default')
             same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
-            if same_install_as_default:
+            if same_install_as_default and bool(runtime_caps.get('is_steam_managed')):
                 return ApiResponse.error("当前环境与默认环境使用同一游戏本体，无需注册 Steam 非 Steam 快捷方式")
 
             log_probe = self.steam_mgr.get_shortcut_log_probe(

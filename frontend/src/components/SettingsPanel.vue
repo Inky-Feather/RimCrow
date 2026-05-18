@@ -90,6 +90,17 @@
                     :description="'创意工坊目录即创意工坊下载的模组所在的目录，该设置所有环境通用'" 
                     @blur="checkPath('workshop_mods_path', formData.workshop_mods_path)"/>
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
+                  <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
+                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
+                    <CommonPathInput label="Steam程序路径" :check="formData.check_info?.steam_path"
+                      :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
+                      v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
+                    />
+                    <div class="grid grid-cols-2 gap-2">
+                      <CommonSwitch label="优先使用 Steam 启动" :disabled="steamLaunchDisabled" v-model="formData.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。" />
+                      <CommonSwitch label="使用创意工坊 Mod" :disabled="workshopModsDisabled" v-model="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。" />
+                    </div>
+                  </div>
                   <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
                     <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">管理器模组</h3>
                     <CommonPathInput class=" col-span-2" label="管理器下载模组路径" :check="formData.check_info?.self_mods_path"
@@ -104,23 +115,14 @@
                       <button @click="handleCheckSteamcmdMods" class="px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all"> 检查更新 </button>
                     </div>
                   </div>
-                  <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
-                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
-                    <CommonSwitch class="-mx-1.5" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" mini description="开启后将优先使用Steam启动Steam版游戏。开启后，会先确保 Steam 运行，再启动当前环境绑定的游戏本体。" />
-                    <CommonPathInput :class="{' pointer-events-none opacity-50':!formData.prefer_steam_launch}" label="Steam程序路径" 
-                      :check="formData.check_info?.steam_path"
-                      :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
-                      v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
-                    />
-                  </div>
                   <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
-                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">导入/导出 起始目录配置</h3>
+                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">排序导入/导出 起始选择窗口配置</h3>
                     <CommonSelect class="col-span-1" label="导入起始目录" v-model="formData.load_order_import_dir_mode"
-                      :description="'控制“导入加载序列”文件选择器的初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
+                      :description="'控制“导入加载序列”文件选择器的选择窗口初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
                       :options="LOAD_ORDER_DIR_MODE_OPTIONS"
                     />
                     <CommonSelect class="col-span-1" label="导出起始目录" v-model="formData.load_order_export_dir_mode"
-                      :description="'控制“导出加载序列”文件选择器的初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
+                      :description="'控制“导出加载序列”文件选择器的选择窗口初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
                       :options="LOAD_ORDER_DIR_MODE_OPTIONS"
                     />
                     <CommonPathInput v-if="formData.load_order_import_dir_mode === 'custom'" class="col-span-2" label="自定义导入起始目录" v-model="formData.load_order_import_custom_path"
@@ -718,6 +720,19 @@ const guideStore = useGuideStore()
 
 const currentTab = ref('paths')
 const formData = ref({})
+const detectedIsSteam = computed(() => {
+  const checkedInstall = formData.value?.check_info?.game_install_path
+  if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
+    if (checkedInstall.data && Object.prototype.hasOwnProperty.call(checkedInstall.data, 'is_steam')) {
+      return !!checkedInstall.data.is_steam
+    }
+    return false
+  }
+  return !!formData.value?.is_steam
+})
+const steamLaunchDisabled = computed(() => !detectedIsSteam.value)
+const hasWorkshopPath = computed(() => !!String(formData.value?.workshop_mods_path || '').trim())
+const workshopModsDisabled = computed(() => steamLaunchDisabled.value || !!formData.value?.prefer_steam_launch || !hasWorkshopPath.value)
 
 const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
   [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
@@ -882,6 +897,21 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   } else {
     showDataBundleModal.value = false
     showBundleProfilePicker.value = false
+  }
+})
+watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
+  if (enabled && formData.value) {
+    formData.value.use_workshop_mods = false
+  }
+})
+watch(detectedIsSteam, (isSteam) => {
+  if (!isSteam && formData.value?.prefer_steam_launch) {
+    formData.value.prefer_steam_launch = false
+  }
+})
+watch(hasWorkshopPath, (available) => {
+  if (!available && formData.value?.use_workshop_mods) {
+    formData.value.use_workshop_mods = false
   }
 })
 

@@ -20,6 +20,7 @@ from backend.database.models import (
     UserModData,
     db,
 )
+from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
@@ -69,15 +70,11 @@ def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
 
 
 def _should_include_workshop_in_runtime_detection(context: ProfileContext | None) -> bool:
-    if not context:
-        return False
-    return bool(getattr(context, "prefer_steam_launch", False) or getattr(context, "use_workshop_mods", False))
+    return bool(resolve_profile_runtime_capabilities(context).get("workshop_detection_enabled", False))
 
 
 def _should_include_workshop_in_runtime_deploy(context: ProfileContext | None) -> bool:
-    if not context:
-        return False
-    return bool((not getattr(context, "prefer_steam_launch", False)) and getattr(context, "use_workshop_mods", False))
+    return bool(resolve_profile_runtime_capabilities(context).get("workshop_deploy_enabled", False))
 
 
 def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
@@ -278,6 +275,13 @@ def _build_group_structures(allowed_ids: set[str] | None = None) -> list[dict[st
     `get_all_groups_structured()` 和 `get_groups_structured_by_mod_ids()` 的唯一区别，
     只是是否需要按当前可见 Mod 集合过滤成员，因此用一个内部函数收口。
     """
+    if getattr(db, "deferred", False):
+        # 单测会用假的 DAO / Models 预注入来隔离排序逻辑。
+        # 一旦其它测试先导入了真实 DAO，这里就可能在“数据库尚未初始化”时被调用。
+        # 对这类预初始化场景，分组信息本来就只是可选增强数据，直接回退为空更安全，
+        # 也能避免排序、预览等纯内存逻辑被数据库初始化顺序绑死。
+        return []
+
     groups = list(
         GroupData.select()
         .order_by(GroupData.sort_index, GroupData.group_id)
@@ -347,7 +351,7 @@ class ModDAO:
         group_map = _load_group_names_by_mod_id()
         grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-        for asset in query.dicts():
+        for asset in query:
             _normalize_language_fields(asset)
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:

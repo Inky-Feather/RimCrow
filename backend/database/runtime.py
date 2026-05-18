@@ -59,20 +59,9 @@ def ensure_minimum_startup_data(conn: sqlite3.Connection):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                'default',
-                'Default',
-                'Default Profile',
-                '',
-                '',
-                '',
-                json.dumps([], ensure_ascii=False),
-                1,
-                1,
-                0,
-                0,
-                json.dumps([], ensure_ascii=False),
-                0,
-                current_ms(),
+                'default', 'Default', 'Default Profile', '', '', '',
+                json.dumps([], ensure_ascii=False), 1, 0, 0, 1,
+                json.dumps([], ensure_ascii=False), 0, current_ms(),
             )
         )
     conn.commit()

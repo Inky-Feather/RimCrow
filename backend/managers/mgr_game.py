@@ -1,7 +1,11 @@
 import os
-import winreg
 import subprocess
 import platform
+
+try:
+    import winreg
+except ImportError:  # pragma: no cover - 仅在非 Windows 平台触发
+    winreg = None
 
 class GameManager:
     """
@@ -31,7 +35,9 @@ class GameManager:
         paths['user_data_path'] = cls._detect_userdata_path()
         paths['game_config_path'] = os.path.join(paths['user_data_path'], 'Config') if paths['user_data_path'] else ''
 
-        # 2. 检测 安装路径 (主要针对 Windows Steam)
+        # 2. 检测安装路径。
+        # 这里只覆盖“当前平台最常见的 Steam 默认安装位”，
+        # 找不到时仍允许用户手动配置，不把自动探测做成唯一入口。
         install_loc = cls._detect_steam_install_path()
         
         # 3. 检测 安装路径
@@ -153,22 +159,48 @@ class GameManager:
     
     @staticmethod
     def _detect_steam_install_path():
-        """通过 Windows 注册表查找 Steam 安装路径"""
-        if platform.system() != 'Windows': return None
-            
-        # 常见注册表位置
-        keys = [
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100",
-            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100"
-        ]
-        
-        for key_path in keys:
-            try:
-                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
-                    install_loc, _ = winreg.QueryValueEx(key, "InstallLocation")
-                    if install_loc: return install_loc
-            except OSError:
-                continue
+        """
+        检测各平台常见的 Steam 版 RimWorld 安装路径。
+
+        注意这里只收口最常见默认位置，不递归扫描磁盘：
+        - Windows 走 Steam App 注册表；
+        - macOS / Linux 走 Steam 默认库目录；
+        - 多 Steam Library / 自定义磁盘库仍交给用户手动指定。
+        """
+        system_name = platform.system()
+        candidate_paths = []
+
+        if system_name == 'Windows':
+            if winreg is None:
+                return None
+            keys = [
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100",
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100"
+            ]
+            for key_path in keys:
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                        install_loc, _ = winreg.QueryValueEx(key, "InstallLocation")
+                        if install_loc:
+                            candidate_paths.append(install_loc)
+                except OSError:
+                    continue
+        elif system_name == 'Darwin':
+            home = os.path.expanduser('~')
+            candidate_paths.extend([
+                os.path.join(home, 'Library', 'Application Support', 'Steam', 'steamapps', 'common', 'RimWorld'),
+            ])
+        else:
+            home = os.path.expanduser('~')
+            candidate_paths.extend([
+                os.path.join(home, '.steam', 'steam', 'steamapps', 'common', 'RimWorld'),
+                os.path.join(home, '.local', 'share', 'Steam', 'steamapps', 'common', 'RimWorld'),
+                os.path.join(home, 'snap', 'steam', 'common', '.local', 'share', 'Steam', 'steamapps', 'common', 'RimWorld'),
+            ])
+
+        for install_loc in candidate_paths:
+            if install_loc and os.path.exists(install_loc):
+                return install_loc
         return None
 
 

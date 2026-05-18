@@ -11,6 +11,8 @@ from packaging.version import Version
 from backend.database.models_ext import ext_db
 from backend.database.repair import _remove_file_with_retry
 from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
+from backend.managers.mgr_game_install import GameInstallInspector
+from backend.managers.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, settings
 from backend.utils.logger import logger
 from backend.utils.tools import normalize_package_id
@@ -55,6 +57,9 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
 
     if last < Version("0.21.0"):
         _migrate_legacy_group_memberships(result)
+
+    if last < Version("0.21.1"):
+        _migrate_profile_steam_runtime_flags(result)
 
     result.pending_actions.append("show_update_news")
     return result
@@ -158,10 +163,6 @@ def _migrate_legacy_launch_preference_to_default_profile():
         if bool(getattr(default_profile, 'prefer_steam_launch', True)) != target_value:
             default_profile.prefer_steam_launch = target_value
             default_profile.save()
-
-    # 迁移完成后立刻清空临时缓存，避免本次进程后续逻辑再把它当成有效配置源。
-    settings._legacy_prefer_steam_launch = None
-
 
 def _migrate_legacy_workshop_cache_schema(result: AppUpgradeResult):
     """
@@ -303,3 +304,56 @@ def _migrate_legacy_group_memberships(result: AppUpgradeResult):
         if data_source: GroupMod.insert_many(data_source).execute()
 
     result.messages.append(f"已完成旧版分组数据修复：纠正 {fixed_count} 项，去重 {deduped_count} 项。")
+
+
+def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
+    """
+    在 0.21.1 统一修正 Steam 相关历史字段。
+
+    这一步不再信任旧 `is_steam` 的路径语义，而是重新探测：
+    - `is_steam`：当前副本是否像一个真实 Steam 正版副本；
+    - `prefer_steam_launch`：默认按历史缺省值视作 True，仅在重新探测为非 Steam 时关闭；
+    - `use_workshop_mods`：优先保留旧值，仅在 Steam 启动开启时归零。
+    """
+    if not str(settings.config.steam_path or "").strip():
+        try:
+            from backend.managers.mgr_steam import SteamManager
+
+            detected_steam_path = str(SteamManager().get_steam_path() or "").strip()
+            if detected_steam_path:
+                settings.config.steam_path = detected_steam_path
+                settings.save()
+                result.messages.append("升级迁移时已自动补全 Steam 程序路径。")
+        except Exception as exc:
+            logger.warning(f"升级迁移时探测 Steam 路径失败: {exc}", exc_info=True)
+
+    inspector = GameInstallInspector()
+    normalized_count = 0
+    with db.atomic():
+        for profile in GameProfile.select():
+            install_path = str(profile.game_install_path or "").strip()
+            install_facts = inspector.inspect(install_path, force=True) if install_path else None
+            detected_is_steam = bool(install_facts.is_steam) if install_facts else False
+            prefer_input = getattr(profile, 'prefer_steam_launch', None)
+            if prefer_input is None:
+                prefer_input = True
+            normalized_flags = normalize_profile_runtime_flags(
+                detected_is_steam,
+                bool(prefer_input),
+                bool(getattr(profile, 'use_workshop_mods', False)),
+                default_prefer_steam_launch=True,
+                default_use_workshop_mods=False,
+            )
+            updates = {
+                "is_steam": normalized_flags["is_steam"],
+                "prefer_steam_launch": normalized_flags["prefer_steam_launch"],
+                "use_workshop_mods": normalized_flags["use_workshop_mods"],
+            }
+            changed = any(bool(getattr(profile, key)) != bool(value) for key, value in updates.items())
+            if not changed:
+                continue
+            GameProfile.update(**updates).where(GameProfile.id == profile.id).execute()
+            normalized_count += 1
+
+    if normalized_count:
+        result.messages.append(f"已归一化 {normalized_count} 个环境的 Steam / Workshop 运行配置。")

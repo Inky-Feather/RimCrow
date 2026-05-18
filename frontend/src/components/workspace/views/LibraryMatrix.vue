@@ -9,7 +9,7 @@
         <span class="text-sm font-bold text-accent-primary animate-pulse">正在扫描所有存储位置...</span>
       </div>
       <!-- 左：Steam工坊目录 (Workshop) -->
-      <MatrixColumn title="Steam 创意工坊" iconColor="text-accent-primary" storeType="workshop" data-tour="workspace-workshop-list"
+      <MatrixColumn v-if="hasWorkshopLibrary" title="Steam 创意工坊" iconColor="text-accent-primary" storeType="workshop" data-tour="workspace-workshop-list"
         :mods="workspaceStore.librariesMods.workshop" @open-timeline="handleOpenTimeline"
         tooltip="由 Steam 客户端管理和自动更新的模组。" />
       <!-- 中：管理器目录 (SteamCMD) -->
@@ -25,7 +25,7 @@
     <!-- 顶部控制栏 -->
     <div class="h-12 shrink-0 px-6 flex justify-between items-center bg-black/20 border-t border-text-main/5">
       <div class="text-xs font-mono text-text-dim/60 uppercase tracking-widest">
-        总计数量: {{ workspaceStore.librariesMods.workshop.length + workspaceStore.librariesMods.self.length + workspaceStore.librariesMods.local.length }} 
+        总计数量: {{ visibleTotalCount }} 
         | 总计大小：{{ formatFileSize(workspaceStore.librariesSize.total) }}
         | 状态: {{ workspaceStore.isFetching ? '扫描中...' : '就绪' }}
       </div>
@@ -50,17 +50,25 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import MatrixColumn from './MatrixColumn.vue'
 import TimelineDrawer from '../components/TimelineDrawer.vue'
 import { checkResult } from '../../../utils/common'
 import { useWorkspaceStore } from '../../../stores/workspaceStore'
+import { useAppStore } from '../../../stores/appStore'
 import { formatFileSize } from '../../../utils/format'
 
 const toast = useToast()
 const workspaceStore = useWorkspaceStore()
+const appStore = useAppStore()
+const hasWorkshopLibrary = computed(() => !!appStore.settings.workshop_mods_path)
+const visibleTotalCount = computed(() => (
+  workspaceStore.librariesMods.self.length
+  + workspaceStore.librariesMods.local.length
+  + (hasWorkshopLibrary.value ? workspaceStore.librariesMods.workshop.length : 0)
+))
 
 const handleOpenTimeline = (mod) => {
   if (!mod) return

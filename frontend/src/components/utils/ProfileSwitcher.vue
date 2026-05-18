@@ -32,7 +32,7 @@
             : 'hover:bg-text-main/5 border border-transparent cursor-pointer') 
             : 'bg-accent-danger/10 border border-accent-danger/20 cursor-not-allowed'"
           >
-            <component :is="p.use_workshop_mods ? SteamIcon : Folder" class="size-4" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-dim'" />
+            <component :is="p.is_steam ? SteamIcon : Folder" class="size-4" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-dim'" />
             <div class="flex-1 text-left">
               <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-main/80'">{{ p.name }}</div>
               <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || '未知版本' }}</div>
