@@ -441,8 +441,8 @@ class ProfileManager:
         if profile.user_data_path and profile.user_data_path != default_user_data_path:
             args.append(f"-savedatafolder={os.path.abspath(profile.user_data_path)}")
         # 合并自定义参数
-        if profile.run_commands:
-            args.extend(profile.run_commands)
+        run_commands = getattr(profile, "run_commands", None) or []
+        if run_commands: args.extend(run_commands)
 
         return args
 

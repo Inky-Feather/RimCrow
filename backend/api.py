@@ -3155,7 +3155,7 @@ class API:
     @log_api_call
     def open_log_folder(self):
         """ 打开日志所在文件夹 """
-        path = self.active_context.user_data_path if self.active_context else None
+        path = self.game_log_mgr.get_preferred_log_directory() if self.game_log_mgr else None
         if path and os.path.exists(path):
             file_mgr.open_in_explorer(path)
             return ApiResponse.success()
@@ -3868,7 +3868,7 @@ class API:
         if not reader: return ApiResponse.error("日志读取器未初始化")
         
         if source_type == 'game':
-            filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
+            filepath = self.game_log_mgr.resolve_log_file_path(filename) if self.game_log_mgr else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
@@ -3967,7 +3967,7 @@ class API:
         import os
         from backend.settings import DATA_DIR
         if source_type == 'game':
-            filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
+            filepath = self.game_log_mgr.resolve_log_file_path(filename) if self.game_log_mgr else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         if not os.path.exists(filepath):

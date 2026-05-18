@@ -11,6 +11,71 @@ class GameManager:
     """
     游戏管理：路径检测、启动游戏
     """
+
+    @staticmethod
+    def _unique_paths(candidates: list[str]) -> list[str]:
+        """按顺序去重并规范化路径。"""
+        result: list[str] = []
+        seen: set[str] = set()
+        for raw_path in candidates:
+            path = str(raw_path or "").strip()
+            if not path: continue
+            normalized = os.path.normpath(path)
+            key = normalized.lower() if platform.system() == 'Windows' else normalized
+            if key in seen: continue
+            seen.add(key)
+            result.append(normalized)
+        return result
+
+    @classmethod
+    def get_default_user_data_paths(cls) -> list[str]:
+        """返回与 Profile 环境无关的默认用户数据目录候选。"""
+        system_name = platform.system()
+
+        if system_name == 'Windows':
+            user_profile = os.getenv('USERPROFILE') or os.path.expanduser('~')
+            return cls._unique_paths([
+                os.path.join(user_profile, 'AppData', 'LocalLow', 'Ludeon Studios', 'RimWorld by Ludeon Studios')
+            ])
+
+        home = os.path.expanduser('~')
+        if system_name == 'Darwin':
+            return cls._unique_paths([
+                os.path.join(home, 'Library', 'Application Support', 'RimWorld'),
+            ])
+
+        return cls._unique_paths([
+            os.path.join(home, '.config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios'),
+            os.path.join(home, '.var', 'app', 'com.valvesoftware.Steam', 'config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios'),
+        ])
+
+    @classmethod
+    def get_default_player_log_paths(cls, filename: str = "Player.log") -> list[str]:
+        """返回各平台默认 Player 日志文件候选位置。"""
+        target_name = os.path.basename(str(filename or "").strip()) or "Player.log"
+        system_name = platform.system()
+
+        if system_name == 'Darwin':
+            home = os.path.expanduser('~')
+            return cls._unique_paths([
+                os.path.join(home, 'Library', 'Logs', 'Ludeon Studios', 'RimWorld by Ludeon Studios', target_name),
+                os.path.join(home, 'Library', 'Logs', 'Unity', target_name),
+            ])
+
+        return cls._unique_paths([
+            os.path.join(root, target_name)
+            for root in cls.get_default_user_data_paths()
+        ])
+
+    @classmethod
+    def resolve_default_user_data_path(cls) -> str:
+        """优先返回存在的默认用户数据目录，否则返回首选候选。"""
+        candidates = cls.get_default_user_data_paths()
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return candidates[0] if candidates else ""
+
     @classmethod
     def auto_detect_paths(cls):
         """
@@ -138,24 +203,7 @@ class GameManager:
     @staticmethod
     def _detect_userdata_path():
         """检测 Config 文件夹位置"""
-        #  (%USERPROFILE%\Appdata\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios)
-        if platform.system() == 'Windows':
-            user_profile = os.getenv('USERPROFILE')
-            # 这里的 APPDATA 环境变量通常指向 Roaming，但 RimWorld 在 LocalLow
-            # 所以最好手动拼 LocalLow
-            if user_profile:
-                base = os.path.join(user_profile, 'AppData', 'LocalLow')
-                path = os.path.join(base, 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-                if os.path.exists(path): return path
-        elif platform.system() == 'Darwin':
-            home = os.path.expanduser('~')
-            path = os.path.join(home, 'Library', 'Application Support', 'RimWorld')
-            if os.path.exists(path): return path
-        else: # Linux
-            home = os.path.expanduser('~')
-            path = os.path.join(home, '.config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-            if os.path.exists(path): return path
-        return ''
+        return GameManager.resolve_default_user_data_path()
     
     @staticmethod
     def _detect_steam_install_path():

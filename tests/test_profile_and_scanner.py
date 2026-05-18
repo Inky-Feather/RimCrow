@@ -89,8 +89,7 @@ class TestProfileManager(unittest.TestCase):
         profile = SimpleNamespace(
             id="default",
             game_install_path=str(temp_root),
-            user_data_path=str(temp_root / "userdata"),
-            run_commands=["-logfile=Player.log"],
+            user_data_path=str(temp_root / "userdata")
         )
         manager.current_profile = profile
 

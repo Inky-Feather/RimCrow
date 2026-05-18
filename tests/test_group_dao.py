@@ -38,6 +38,22 @@ class TestGroupDAO(unittest.TestCase):
             UserModData.create(mod_id=mod_id)
             GroupMod.create(group_id=group_id, mod_id=mod_id, sort_index=index)
 
+    def test_create_group_starts_at_zero_and_normalizes_name(self):
+        first_group = GroupDAO.create_group("  A  ")
+        second_group = GroupDAO.create_group("B")
+
+        self.assertEqual(first_group.name, "A")
+        self.assertEqual(first_group.sort_index, 0)
+        self.assertEqual(second_group.sort_index, 1)
+
+    def test_create_group_rejects_blank_or_duplicate_name(self):
+        GroupDAO.create_group("UI")
+
+        with self.assertRaisesRegex(ValueError, "分组名称不能为空"):
+            GroupDAO.create_group("   ")
+        with self.assertRaisesRegex(ValueError, "分组名称已存在"):
+            GroupDAO.create_group(" UI ")
+
     def test_reorder_groups_rejects_partial_payload(self):
         GroupData.create(group_id="g1", name="A", color="#ffffff", sort_index=0, is_expanded=True)
         GroupData.create(group_id="g2", name="B", color="#ffffff", sort_index=1, is_expanded=True)
@@ -63,7 +79,62 @@ class TestGroupDAO(unittest.TestCase):
         self.assertEqual(group.name, "A")
         self.assertEqual(group.sort_index, 0)
 
-    def test_reorder_mods_in_group_keeps_hidden_members_and_positions(self):
+    def test_update_group_info_rejects_missing_or_duplicate_group_name(self):
+        GroupData.create(group_id="g1", name="A", color="#ffffff", sort_index=0, is_expanded=True)
+        GroupData.create(group_id="g2", name="B", color="#ffffff", sort_index=1, is_expanded=True)
+
+        with self.assertRaisesRegex(ValueError, "目标分组不存在"):
+            GroupDAO.update_group_info("missing", name="C")
+        with self.assertRaisesRegex(ValueError, "分组名称已存在"):
+            GroupDAO.update_group_info("g2", name=" A ")
+
+    def test_delete_group_rejects_missing_group(self):
+        with self.assertRaisesRegex(ValueError, "目标分组不存在"):
+            GroupDAO.delete_group("missing")
+
+    def test_add_mods_to_group_appends_only_valid_new_members(self):
+        self._seed_group(mod_ids=["visible.a"])
+        self._create_asset("visible.a")
+        self._create_asset("visible.b")
+
+        inserted_count = GroupDAO.add_mods_to_group("g1", ["visible.a", "visible.b", "visible.b_steam"])
+
+        ordered_ids = [
+            row.mod_id.mod_id
+            for row in GroupMod.select(GroupMod.mod_id)
+            .where(GroupMod.group_id == "g1")
+            .order_by(GroupMod.sort_index, GroupMod.mod_id)
+        ]
+        self.assertEqual(inserted_count, 1)
+        self.assertEqual(ordered_ids, ["visible.a", "visible.b"])
+
+    def test_add_mods_to_group_rejects_missing_group_or_invalid_member(self):
+        GroupData.create(group_id="g1", name="A", color="#ffffff", sort_index=0, is_expanded=True)
+        self._create_asset("visible.a")
+
+        with self.assertRaisesRegex(ValueError, "目标分组不存在"):
+            GroupDAO.add_mods_to_group("missing", ["visible.a"])
+        with self.assertRaisesRegex(ValueError, "包含无效成员"):
+            GroupDAO.add_mods_to_group("g1", ["missing.mod"])
+
+    def test_remove_mods_from_group_rejects_missing_group(self):
+        with self.assertRaisesRegex(ValueError, "目标分组不存在"):
+            GroupDAO.remove_mods_from_group("missing", ["visible.a"])
+
+    def test_get_groups_structured_dedupes_normalized_legacy_members(self):
+        GroupData.create(group_id="g1", name="Group 1", color="#ffffff", sort_index=0, is_expanded=True)
+        UserModData.create(mod_id="mod.alpha")
+        UserModData.create(mod_id="mod.alpha_steam")
+        GroupMod.insert_many([
+            {"group_id": "g1", "mod_id": "mod.alpha", "sort_index": 0},
+            {"group_id": "g1", "mod_id": "mod.alpha_steam", "sort_index": 1},
+        ]).execute()
+
+        groups = GroupDAO.get_all_groups_structured()
+
+        self.assertEqual(groups[0]["mod_ids"], ["mod.alpha"])
+
+    def test_reorder_mods_in_group_appends_hidden_members_to_tail(self):
         self._seed_group(mod_ids=["visible.a", "hidden.x", "visible.b", "hidden.y"])
 
         GroupDAO.reorder_mods_in_group("g1", ["visible.b", "visible.a"])
@@ -72,7 +143,44 @@ class TestGroupDAO(unittest.TestCase):
             row.mod_id.mod_id
             for row in GroupMod.select(GroupMod.mod_id).where(GroupMod.group_id == "g1").order_by(GroupMod.sort_index, GroupMod.mod_id)
         ]
-        self.assertEqual(ordered_ids, ["visible.b", "hidden.x", "visible.a", "hidden.y"])
+        self.assertEqual(ordered_ids, ["visible.b", "visible.a", "hidden.x", "hidden.y"])
+
+    def test_reorder_mods_in_group_appends_new_members_only_once(self):
+        self._seed_group(mod_ids=["visible.a", "hidden.x"])
+        self._create_asset("visible.a")
+        self._create_asset("hidden.x")
+        self._create_asset("visible.b")
+
+        GroupDAO.reorder_mods_in_group("g1", ["visible.b", "visible.a"])
+
+        ordered_ids = [
+            row.mod_id.mod_id
+            for row in GroupMod.select(GroupMod.mod_id)
+            .where(GroupMod.group_id == "g1")
+            .order_by(GroupMod.sort_index, GroupMod.mod_id)
+        ]
+        self.assertEqual(ordered_ids, ["visible.b", "visible.a", "hidden.x"])
+
+    def test_reorder_mods_in_group_dedupes_hidden_legacy_variants_before_appending(self):
+        GroupData.create(group_id="g1", name="Group 1", color="#ffffff", sort_index=0, is_expanded=True)
+        UserModData.create(mod_id="visible.a")
+        UserModData.create(mod_id="legacy.hidden")
+        UserModData.create(mod_id="legacy.hidden_steam")
+        GroupMod.insert_many([
+            {"group_id": "g1", "mod_id": "visible.a", "sort_index": 0},
+            {"group_id": "g1", "mod_id": "legacy.hidden", "sort_index": 1},
+            {"group_id": "g1", "mod_id": "legacy.hidden_steam", "sort_index": 2},
+        ]).execute()
+
+        GroupDAO.reorder_mods_in_group("g1", ["visible.a"])
+
+        ordered_ids = [
+            row.mod_id.mod_id
+            for row in GroupMod.select(GroupMod.mod_id)
+            .where(GroupMod.group_id == "g1")
+            .order_by(GroupMod.sort_index, GroupMod.mod_id)
+        ]
+        self.assertEqual(ordered_ids, ["visible.a", "legacy.hidden"])
 
     def test_reorder_mods_in_group_rejects_unknown_member(self):
         self._seed_group(mod_ids=["visible.a", "visible.b"])
@@ -81,6 +189,13 @@ class TestGroupDAO(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "包含无效成员"):
             GroupDAO.reorder_mods_in_group("g1", ["visible.b", "missing.mod"])
+
+    def test_reorder_mods_in_group_rejects_duplicates_after_normalization(self):
+        self._seed_group(mod_ids=["visible.a"])
+        self._create_asset("visible.a")
+
+        with self.assertRaisesRegex(ValueError, "存在重复项"):
+            GroupDAO.reorder_mods_in_group("g1", ["visible.a", "visible.a_steam"])
 
     def test_reorder_mods_in_group_heals_orphan_group_rows(self):
         GroupData.create(group_id="g1", name="Group 1", color="#ffffff", sort_index=0, is_expanded=True)
