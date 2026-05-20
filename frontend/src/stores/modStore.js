@@ -22,6 +22,7 @@ import {
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
+  const profileStore = useProfileStore()
   const normalizeListToken = (id = '') => normalizePackageToken(id)
   const normalizeCanonicalId = (id = '') => stripPackageTokenSuffix(id)
   const buildCanonicalIdSet = (ids = []) => new Set(
@@ -30,6 +31,23 @@ export const useModStore = defineStore('mods', () => {
   const resolveStoredMod = (id = '') => {
     const canonicalId = normalizeCanonicalId(id)
     return canonicalId ? allModsMap.value.get(canonicalId) : null
+  }
+  const normalizeRuntimeRoot = (path = '') => {
+    const normalized = String(path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+    return normalized ? `${normalized}/` : ''
+  }
+  const isExportableRuntimeMod = (mod) => {
+    if (!mod || mod.isMissing || !mod.path) return false
+    const localRoot = normalizeRuntimeRoot(profileStore.activeContext?.local_mods_path)
+    const selfRoot = normalizeRuntimeRoot(appStore.settings?.self_mods_path)
+    const workshopRoot = normalizeRuntimeRoot(appStore.settings?.workshop_mods_path)
+    const modPath = normalizeRuntimeRoot(mod.path)
+    if (!modPath) return false
+    return (
+      (localRoot && modPath.startsWith(localRoot))
+      || (selfRoot && modPath.startsWith(selfRoot))
+      || (workshopRoot && modPath.startsWith(workshopRoot))
+    )
   }
   // 检查两个值是否相等
   const arePlainValuesEqual = (left, right) => {
@@ -62,6 +80,11 @@ export const useModStore = defineStore('mods', () => {
     const confidence = String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase()
     return confidence === 'high' || confidence === 'medium'
   }
+  const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
+  const currentLanguage = computed(() => String(appStore.settings?.language || '').trim())
+  const isDeclaredForCurrentLanguage = (mod) => (
+    !!currentLanguage.value && (mod?.supported_languages || []).includes(currentLanguage.value)
+  )
   
   // === State ===
   const allModsMap = ref(new Map())   // 核心数据，使用 Map 加速查找
@@ -171,6 +194,160 @@ export const useModStore = defineStore('mods', () => {
         .filter(Boolean)
     )
   })
+  const currentVisibleCanonicalIds = computed(() => [
+    ...new Set([
+      ...activeIds.value,
+      ...inactiveIds.value,
+      ...tempIds.value,
+    ].map(normalizeCanonicalId).filter(Boolean)),
+  ])
+  const exportableModsMap = computed(() => {
+    const result = new Map()
+    for (const canonicalId of currentVisibleCanonicalIds.value) {
+      const mod = takeModById(canonicalId)
+      if (!canonicalId || !isExportableRuntimeMod(mod)) continue
+      result.set(canonicalId, mod)
+    }
+    return result
+  })
+  const exportableVisibleIds = computed(() => Array.from(exportableModsMap.value.keys()))
+  const exportableVisibleIdSet = computed(() => new Set(exportableVisibleIds.value))
+  const exportableActiveIds = computed(() => (
+    activeIds.value
+      .map(id => normalizeCanonicalId(id))
+      .filter(id => id && exportableVisibleIdSet.value.has(id))
+  ))
+  const exportableActiveIdSet = computed(() => new Set(exportableActiveIds.value))
+  const exportableVisibleCount = computed(() => exportableVisibleIds.value.length)
+  const exportableActiveCount = computed(() => exportableActiveIds.value.length)
+  const takeInterlockChainIds = (interlockId = '', scopeSet = exportableVisibleIdSet.value) => {
+    const normalizedId = String(interlockId || '').trim()
+    if (!normalizedId) return []
+    const source = interlocksMap.value
+    const chain = source instanceof Map ? source.get(normalizedId) : source?.[normalizedId]
+    return Array.isArray(chain)
+      ? chain.map(normalizeCanonicalId).filter(id => id && scopeSet.has(id))
+      : []
+  }
+  const collectExportDependencyIds = (mod) => {
+    const result = []
+    const pushDependencyId = (rawId = '') => {
+      const dependencyId = normalizeCanonicalId(rawId)
+      if (dependencyId && !result.includes(dependencyId)) {
+        result.push(dependencyId)
+      }
+    }
+    ;(mod?.rules?.dependencies || []).forEach(dep => pushDependencyId(dep?.package_id))
+    if (result.length > 0) return result
+    ;(mod?.dependencies_mods || []).forEach(dep => pushDependencyId(dep?.package_id))
+    return result
+  }
+  const exportDependencyMap = computed(() => {
+    const result = new Map()
+    exportableModsMap.value.forEach((mod, canonicalId) => {
+      result.set(
+        canonicalId,
+        collectExportDependencyIds(mod).filter(depId => exportableVisibleIdSet.value.has(depId))
+      )
+    })
+    return result
+  })
+  const exportLanguagePackMaps = computed(() => {
+    const strictMap = new Map()
+    const fallbackMap = new Map()
+    if (!appStore.settings.check_language_support || !currentLanguage.value) {
+      return { strictMap, fallbackMap }
+    }
+    exportableModsMap.value.forEach(mod => {
+      if (!isLanguagePackMod(mod) || !canUseLanguagePackForIssueDetection(mod)) return
+      const ownerIds = getLanguagePackOwnerIds(mod)
+      if (ownerIds.length === 0) return
+      const targetMap = isDeclaredForCurrentLanguage(mod) ? strictMap : fallbackMap
+      ownerIds.forEach(ownerId => {
+        if (!exportableVisibleIdSet.value.has(ownerId)) return
+        if (!targetMap.has(ownerId)) targetMap.set(ownerId, [])
+        targetMap.get(ownerId).push(normalizeCanonicalId(mod?.package_id))
+      })
+    })
+    return { strictMap, fallbackMap }
+  })
+  const resolveCurrentExportBaseIds = ({
+    exportScope = 'custom',
+    modIds = [],
+  } = {}) => {
+    const normalizedScope = String(exportScope || 'custom').trim().toLowerCase()
+    if (normalizedScope === 'profile-effective') return [...exportableVisibleIds.value]
+    if (normalizedScope === 'profile-active') return [...exportableActiveIds.value]
+    return [...new Set(
+      (modIds || [])
+        .map(id => normalizeCanonicalId(id))
+        .filter(id => id && exportableVisibleIdSet.value.has(id))
+    )]
+  }
+  const pickExportLanguagePackId = (ownerId = '', selectedSet = new Set()) => {
+    const owner = exportableModsMap.value.get(ownerId)
+    if (!owner || isLanguagePackMod(owner) || isDeclaredForCurrentLanguage(owner)) return ''
+    const strictCandidates = (exportLanguagePackMaps.value.strictMap.get(ownerId) || []).filter(candidateId => !selectedSet.has(candidateId))
+    const fallbackCandidates = (exportLanguagePackMaps.value.fallbackMap.get(ownerId) || []).filter(candidateId => !selectedSet.has(candidateId))
+    const preferredActive = [...strictCandidates, ...fallbackCandidates].find(candidateId => exportableActiveIdSet.value.has(candidateId))
+    return preferredActive || strictCandidates[0] || fallbackCandidates[0] || ''
+  }
+  const resolveCurrentExportPlan = ({
+    exportScope = 'custom',
+    modIds = [],
+    includeDependencies = false,
+    includeInterlocks = false,
+    includeLanguagePacks = false,
+  } = {}) => {
+    const baseIds = resolveCurrentExportBaseIds({ exportScope, modIds })
+    const orderedIds = []
+    const selectedSet = new Set()
+    const pushModId = (rawId = '') => {
+      const canonicalId = normalizeCanonicalId(rawId)
+      if (!canonicalId || selectedSet.has(canonicalId) || !exportableVisibleIdSet.value.has(canonicalId)) return false
+      selectedSet.add(canonicalId)
+      orderedIds.push(canonicalId)
+      return true
+    }
+
+    baseIds.forEach(pushModId)
+
+    let changed = true
+    while (changed) {
+      changed = false
+      const snapshot = [...orderedIds]
+
+      if (includeDependencies) {
+        snapshot.forEach(id => {
+          (exportDependencyMap.value.get(id) || []).forEach(depId => {
+            if (pushModId(depId)) changed = true
+          })
+        })
+      }
+
+      if (includeInterlocks) {
+        snapshot.forEach(id => {
+          takeInterlockChainIds(exportableModsMap.value.get(id)?.interlock_id, exportableVisibleIdSet.value).forEach(linkedId => {
+            if (pushModId(linkedId)) changed = true
+          })
+        })
+      }
+
+      if (includeLanguagePacks) {
+        snapshot.forEach(id => {
+          const languagePackId = pickExportLanguagePackId(id, selectedSet)
+          if (pushModId(languagePackId)) changed = true
+        })
+      }
+    }
+
+    return {
+      selected_count: baseIds.length,
+      mod_count: orderedIds.length,
+      extra_count: Math.max(0, orderedIds.length - baseIds.length),
+      mod_ids: orderedIds,
+    }
+  }
   const listHistoryTotal = computed(() => listHistoryUndoStack.value.length + listHistoryRedoStack.value.length)
   const listHistoryPosition = computed(() => listHistoryUndoStack.value.length)
   const canUndoListHistory = computed(() => listHistoryUndoStack.value.length > 0)
@@ -1943,7 +2120,7 @@ export const useModStore = defineStore('mods', () => {
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
     // Getters
-    isDirty, selectedMods, selectedStats, allModTags, modIssues,
+    isDirty, selectedMods, selectedStats, allModTags, modIssues, exportableVisibleCount, exportableActiveCount,
     listHistoryTotal, listHistoryPosition,
     canUndoListHistory, canRedoListHistory,
 
@@ -1957,5 +2134,6 @@ export const useModStore = defineStore('mods', () => {
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds,
     clearListHistory, runListHistoryTransaction, recordListHistory, undoListHistory, redoListHistory,
+    resolveCurrentExportBaseIds, resolveCurrentExportPlan,
   }
 })

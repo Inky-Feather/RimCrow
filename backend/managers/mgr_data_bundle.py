@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-import tempfile
 import uuid
 import zipfile
 from copy import deepcopy
@@ -14,9 +13,18 @@ from backend._version import __version__
 from backend.ai.ai_service import AIManager
 from backend.database.dao import CollectionDAO
 from backend.database.models import GameProfile, GithubModRecord, db
+from backend.utils.bundle_io import (
+    create_sibling_stage_dir,
+    extract_prefix_to_dir,
+    normalize_zip_compresslevel,
+    replace_dir_atomically,
+    summarize_zip_members,
+    write_tree_to_zip,
+)
 from backend.managers.mgr_game import GameManager
+from backend.managers.mgr_game_install import GameInstallRegistry
 from backend.managers.mgr_profile import ProfileManager
-from backend.managers.profile_runtime import normalize_profile_runtime_flags
+from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import DATA_DIR, settings
 
 
@@ -32,8 +40,10 @@ class DataBundleManager:
 
     FORMAT = "rmm.data.bundle"
     SCHEMA_VERSION = 1
-    FILE_EXTENSION = ".rmmdata"
+    FILE_EXTENSION = ".rmmdata.zip"
+    LEGACY_FILE_EXTENSIONS = (".rmmdata",)
     RULE_PRESET = ["rules", "user_custom", "groups"]
+    PROFILE_IMPORT_MODES = {"create", "overwrite", "skip"}
 
     MODULE_DEFINITIONS = [
         {
@@ -176,6 +186,7 @@ class DataBundleManager:
             "format": self.FORMAT,
             "schema_version": self.SCHEMA_VERSION,
             "file_extension": self.FILE_EXTENSION,
+            "legacy_file_extensions": list(self.LEGACY_FILE_EXTENSIONS),
             "modules": self.module_definitions(),
             "presets": {
                 "rules": {
@@ -184,7 +195,56 @@ class DataBundleManager:
                 }
             },
             "profiles": profiles,
+            "available_installs": self.get_available_install_choices(),
         }
+
+    def get_available_install_choices(self) -> list[dict[str, Any]]:
+        """
+        汇总当前机器可复用的 RimWorld 本体候选。
+
+        来源：
+        1. `known_game_installs.json` 中已经探测通过的缓存；
+        2. 现有环境里仍有效的 `game_install_path`。
+
+        返回结果统一去重，并附带轻量版本与 Steam 事实，供导入面板直接展示。
+        """
+        registry = GameInstallRegistry()
+        collected: dict[str, dict[str, Any]] = {}
+
+        def _push(install_path: str, source: str):
+            normalized_path = os.path.normpath(str(install_path or "").strip())
+            executable_path = str(GameManager.detect_executable(normalized_path) or "")
+            if not normalized_path or not executable_path:
+                return
+            facts = registry.get(normalized_path)
+            key = os.path.normcase(normalized_path)
+            collected[key] = {
+                "install_path": normalized_path,
+                "game_version": str(
+                    (facts.game_version if facts else "")
+                    or GameManager.get_game_version(normalized_path)
+                    or ""
+                ),
+                "is_steam": bool(facts.is_steam) if facts else False,
+                "is_steam_managed": bool(facts.is_steam_managed) if facts else False,
+                "source": source,
+            }
+
+        try:
+            payload = registry._load().get("installs", {})
+            if isinstance(payload, dict):
+                for item in payload.values():
+                    if isinstance(item, dict):
+                        _push(str(item.get("install_path") or ""), "known")
+        except Exception:
+            pass
+
+        for profile in self.profile_mgr.get_all_profiles():
+            _push(str(profile.get("game_install_path") or ""), "profile")
+
+        result = list(collected.values())
+        result.sort(key=lambda item: (str(item.get("game_version") or ""), str(item.get("install_path") or "").lower()))
+        return result
 
     def write_bundle(
         self,
@@ -201,7 +261,13 @@ class DataBundleManager:
         module_payloads = self._collect_modules_payload(normalized_modules, dynamic_rule_ids)
         profile_entries: list[dict[str, Any]] = []
 
-        with zipfile.ZipFile(target_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        with zipfile.ZipFile(
+            target_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=normalize_zip_compresslevel(getattr(settings.config, "bundle_compress_level", 6)),
+            allowZip64=True,
+        ) as bundle:
             for module_key, payload in module_payloads.items():
                 bundle.writestr(
                     f"modules/{module_key}.json",
@@ -247,6 +313,9 @@ class DataBundleManager:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
                 if not isinstance(manifest, dict):
                     raise ValueError("数据包缺少有效的 manifest.json")
+                archive_stats = summarize_zip_members(bundle)
+                module_payload_stats = summarize_zip_members(bundle, ["modules"])
+                environment_payload_stats = summarize_zip_members(bundle, ["environments"])
 
             module_entries = manifest.get("modules", [])
             profiles = manifest.get("profiles", [])
@@ -258,11 +327,19 @@ class DataBundleManager:
                 "preset": manifest.get("preset", "custom"),
                 "modules": module_entries if isinstance(module_entries, list) else [],
                 "profiles": profiles if isinstance(profiles, list) else [],
+                "bundle_size_bytes": int(path.stat().st_size),
+                "archive_stats": archive_stats,
+                "module_payload_stats": module_payload_stats,
+                "environment_payload_stats": environment_payload_stats,
                 "has_default_profile": any(
                     str(profile.get("original_profile_id")) == "default"
                     for profile in profiles
                     if isinstance(profile, dict)
                 ),
+                "profile_conflicts": self._build_profile_conflict_entries(
+                    profiles if isinstance(profiles, list) else []
+                ),
+                "available_installs": self.get_available_install_choices(),
                 "legacy_rule_bundle": False,
             }
 
@@ -291,6 +368,7 @@ class DataBundleManager:
         bundle_path: str,
         module_keys: list[str] | None = None,
         default_profile_mode: str = "clone",
+        profile_import_plan: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         path = Path(str(bundle_path or "").strip())
         if not path.is_file():
@@ -329,6 +407,7 @@ class DataBundleManager:
                         bundle,
                         manifest.get("profiles", []),
                         default_profile_mode=default_profile_mode,
+                        profile_import_plan=profile_import_plan,
                     )
                     result["profiles"] = imported_profiles
                     result["warnings"].extend(warnings)
@@ -460,15 +539,7 @@ class DataBundleManager:
                 f"environments/{archive_key}/profile.json",
                 json.dumps(profile_meta, indent=2, ensure_ascii=False),
             )
-
-            for root, _, files in os.walk(source_root):
-                for filename in files:
-                    file_path = Path(root) / filename
-                    rel_path = file_path.relative_to(source_root).as_posix()
-                    bundle.write(
-                        file_path,
-                        arcname=f"environments/{archive_key}/user_data/{rel_path}",
-                    )
+            write_tree_to_zip(source_root, bundle, f"environments/{archive_key}/user_data")
 
         return profile_entries
 
@@ -606,97 +677,124 @@ class DataBundleManager:
         bundle: zipfile.ZipFile,
         profile_entries: list[Any],
         default_profile_mode: str = "clone",
+        profile_import_plan: list[dict[str, Any]] | None = None,
+        progress_callback: Callable[[int, int, dict[str, Any]], None] | None = None,
+        cancel_check: Callable[[], None] | None = None,
     ) -> tuple[list[dict[str, Any]], list[str]]:
         imported_profiles: list[dict[str, Any]] = []
         warnings: list[str] = []
+        plan_map = self._normalize_profile_import_plan(profile_import_plan)
+        conflict_map = self._build_profile_conflict_map(profile_entries)
+        normalized_entries = [entry for entry in profile_entries if isinstance(entry, dict) and str(entry.get("archive_key") or "").strip()]
+        total_profiles = len(normalized_entries)
 
-        for profile_entry in profile_entries:
-            if not isinstance(profile_entry, dict):
-                continue
+        for index, profile_entry in enumerate(normalized_entries, start=1):
+            if cancel_check:
+                cancel_check()
             archive_key = str(profile_entry.get("archive_key") or "").strip()
-            if not archive_key:
-                continue
+            if progress_callback:
+                progress_callback(index, total_profiles, profile_entry)
 
             profile_meta = self._read_json_from_zip(bundle, f"environments/{archive_key}/profile.json", {})
-            source_dir = self._extract_profile_user_data(bundle, archive_key)
             try:
-                if bool(profile_meta.get("is_default")) and default_profile_mode == "overwrite":
-                    imported_profiles.append(self._overwrite_default_profile(profile_meta, source_dir))
+                plan_item = plan_map.get(archive_key) or self._build_legacy_profile_import_plan(
+                    profile_meta,
+                    conflict_map.get(archive_key, []),
+                    default_profile_mode=default_profile_mode,
+                )
+                mode = str(plan_item.get("mode") or "skip").strip().lower()
+                if mode == "skip":
+                    warnings.append(f'已跳过环境 "{profile_meta.get("name", archive_key)}"')
+                    continue
+                staging_root = self._extract_profile_user_data(
+                    bundle,
+                    archive_key,
+                    cancel_check=cancel_check,
+                    target_profile_id=str(plan_item.get("target_profile_id") or "").strip() if mode == "overwrite" else "",
+                )
+                if mode == "overwrite":
+                    target_profile_id = str(plan_item.get("target_profile_id") or "").strip()
+                    imported_profiles.append(
+                        self._overwrite_existing_profile(
+                            target_profile_id,
+                            profile_meta,
+                            staging_root,
+                            cancel_check=cancel_check,
+                        )
+                    )
                 else:
-                    imported_profiles.append(self._create_imported_profile(profile_meta, source_dir))
+                    imported_profiles.append(
+                        self._create_imported_profile(
+                            profile_meta,
+                            staging_root,
+                            selected_install_path=str(plan_item.get("game_install_path") or "").strip(),
+                            cancel_check=cancel_check,
+                        )
+                    )
             except Exception as exc:
                 warnings.append(f'导入环境 "{profile_meta.get("name", archive_key)}" 失败: {exc}')
             finally:
-                shutil.rmtree(source_dir.parent, ignore_errors=True)
+                if "staging_root" in locals():
+                    shutil.rmtree(staging_root, ignore_errors=True)
+                    del staging_root
 
         return imported_profiles, warnings
 
-    def _extract_profile_user_data(self, bundle: zipfile.ZipFile, archive_key: str) -> Path:
-        temp_root = Path(tempfile.mkdtemp(prefix="rmm-import-profile-"))
-        target_root = temp_root / "user_data"
-        prefix = f"environments/{archive_key}/user_data/"
-        matched_names = [name for name in bundle.namelist() if name.startswith(prefix)]
-        if not matched_names:
-            raise ValueError("数据包中缺少 user_data 目录内容")
+    def _extract_profile_user_data(
+        self,
+        bundle: zipfile.ZipFile,
+        archive_key: str,
+        cancel_check: Callable[[], None] | None = None,
+        target_profile_id: str = "",
+    ) -> Path:
+        target_root = self._resolve_profile_import_target_root(target_profile_id)
+        staging_root = create_sibling_stage_dir(target_root, "rmm-import-profile-")
+        extract_prefix_to_dir(
+            bundle,
+            f"environments/{archive_key}/user_data",
+            staging_root,
+            cancel_check=cancel_check,
+        )
+        return staging_root
 
-        for member_name in matched_names:
-            relative_path = member_name[len(prefix):]
-            if not relative_path:
-                continue
-            target_path = target_root / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            with bundle.open(member_name, "r") as source_handle:
-                with open(target_path, "wb") as target_handle:
-                    shutil.copyfileobj(source_handle, target_handle)
-        return target_root
-
-    def _overwrite_default_profile(self, profile_meta: dict[str, Any], source_dir: Path) -> dict[str, Any]:
-        default_profile = self.profile_mgr.get_profile("default")
-        target_root_str = str(default_profile.user_data_path or "").strip()
+    def _overwrite_existing_profile(
+        self,
+        target_profile_id: str,
+        profile_meta: dict[str, Any],
+        source_dir: Path,
+        cancel_check: Callable[[], None] | None = None,
+    ) -> dict[str, Any]:
+        if not target_profile_id:
+            raise ValueError("缺少目标环境，无法覆盖导入")
+        target_profile = self.profile_mgr.get_profile(target_profile_id)
+        target_root_str = str(target_profile.user_data_path or "").strip()
         target_root = Path(target_root_str)
         if not target_root_str:
-            raise ValueError("当前默认环境缺少用户数据目录，无法覆盖")
-        target_root.mkdir(parents=True, exist_ok=True)
-        self._replace_directory_contents(target_root, source_dir)
-
-        resolved_install_path = self._resolve_game_install_path(profile_meta.get("game_version"))
-        install_facts = self.profile_mgr._get_install_inspector().inspect(resolved_install_path) if resolved_install_path else None
-        runtime_flags = normalize_profile_runtime_flags(
-            bool(install_facts.is_steam) if install_facts else False,
-            profile_meta.get("prefer_steam_launch") if "prefer_steam_launch" in profile_meta else None,
-            profile_meta.get("use_workshop_mods") if "use_workshop_mods" in profile_meta else None,
-            default_prefer_steam_launch=bool(install_facts.is_steam) if install_facts else False,
-            default_use_workshop_mods=False,
-        )
-        default_profile.name = str(profile_meta.get("name") or default_profile.name)
-        default_profile.description = profile_meta.get("description",'')
-        default_profile.game_install_path = resolved_install_path
-        default_profile.game_version = install_facts.game_version if install_facts else (GameManager.get_game_version(resolved_install_path) if resolved_install_path else str(profile_meta.get("game_version") or ""))
-        default_profile.prefer_steam_launch = runtime_flags["prefer_steam_launch"]
-        default_profile.use_workshop_mods = runtime_flags["use_workshop_mods"]
-        default_profile.use_self_mods = bool(profile_meta.get("use_self_mods", False))
-        default_profile.is_steam = runtime_flags["is_steam"]
-        default_profile.run_commands = list(profile_meta.get("run_commands") or [])
-        default_profile.inactive_mods_order = list(profile_meta.get("inactive_mods_order") or [])
-        default_profile.last_played_time = int(profile_meta.get("last_played_time") or 0)
-        default_profile.save()
-        self.profile_mgr._sync_profile_to_disk(default_profile)
+            raise ValueError("目标环境缺少用户数据目录，无法覆盖")
+        if cancel_check:
+            cancel_check()
+        replace_dir_atomically(target_root, source_dir)
 
         return {
-            "profile_id": "default",
-            "name": default_profile.name,
-            "mode": "overwrite-default",
-            "game_install_path": default_profile.game_install_path,
-            "game_version": default_profile.game_version,
+            "profile_id": target_profile.id,
+            "name": target_profile.name,
+            "mode": "overwrite",
+            "game_install_path": target_profile.game_install_path,
+            "game_version": target_profile.game_version,
         }
 
-    def _create_imported_profile(self, profile_meta: dict[str, Any], source_dir: Path) -> dict[str, Any]:
+    def _create_imported_profile(
+        self,
+        profile_meta: dict[str, Any],
+        source_dir: Path,
+        selected_install_path: str = "",
+        cancel_check: Callable[[], None] | None = None,
+    ) -> dict[str, Any]:
         profile_id = uuid.uuid4().hex
         target_root = DATA_DIR / "profiles" / profile_id
-        target_root.mkdir(parents=True, exist_ok=True)
-        self._replace_directory_contents(target_root, source_dir)
-
-        resolved_install_path = self._resolve_game_install_path(profile_meta.get("game_version"))
+        resolved_install_path = self._resolve_import_install_path(
+            selected_install_path=selected_install_path,
+        )
         install_facts = self.profile_mgr._get_install_inspector().inspect(resolved_install_path) if resolved_install_path else None
         runtime_flags = normalize_profile_runtime_flags(
             bool(install_facts.is_steam) if install_facts else False,
@@ -706,23 +804,32 @@ class DataBundleManager:
             default_use_workshop_mods=False,
         )
         game_version = install_facts.game_version if install_facts else (GameManager.get_game_version(resolved_install_path) if resolved_install_path else str(profile_meta.get("game_version") or ""))
+        profile_name = self._ensure_unique_profile_name(str(profile_meta.get("name") or "Imported Profile"))
 
-        with db.atomic():
-            profile = GameProfile.create(
-                id=profile_id,
-                name=str(profile_meta.get("name") or "Imported Profile"),
-                description=profile_meta.get("description"),
-                user_data_path=str(target_root),
-                game_install_path=resolved_install_path,
-                game_version=game_version,
-                prefer_steam_launch=runtime_flags["prefer_steam_launch"],
-                use_workshop_mods=runtime_flags["use_workshop_mods"],
-                use_self_mods=bool(profile_meta.get("use_self_mods", False)),
-                is_steam=runtime_flags["is_steam"],
-                run_commands=list(profile_meta.get("run_commands") or []),
-                inactive_mods_order=list(profile_meta.get("inactive_mods_order") or []),
-                last_played_time=int(profile_meta.get("last_played_time") or 0),
-            )
+        if cancel_check:
+            cancel_check()
+        replace_dir_atomically(target_root, source_dir)
+
+        try:
+            with db.atomic():
+                profile = GameProfile.create(
+                    id=profile_id,
+                    name=profile_name,
+                    description=profile_meta.get("description"),
+                    user_data_path=str(target_root),
+                    game_install_path=resolved_install_path,
+                    game_version=game_version,
+                    prefer_steam_launch=runtime_flags["prefer_steam_launch"],
+                    use_workshop_mods=runtime_flags["use_workshop_mods"],
+                    use_self_mods=bool(profile_meta.get("use_self_mods", False)),
+                    is_steam=runtime_flags["is_steam"],
+                    run_commands=list(profile_meta.get("run_commands") or []),
+                    inactive_mods_order=list(profile_meta.get("inactive_mods_order") or []),
+                    last_played_time=int(profile_meta.get("last_played_time") or 0),
+                )
+        except Exception:
+            shutil.rmtree(target_root, ignore_errors=True)
+            raise
 
         self.profile_mgr._sync_profile_to_disk(profile)
         return {
@@ -733,47 +840,109 @@ class DataBundleManager:
             "game_version": profile.game_version,
         }
 
-    def _resolve_game_install_path(self, expected_version: Any) -> str:
-        version = str(expected_version or "").strip()
-        if not version: return ""
-
-        candidate_paths: list[str] = []
-        seen_paths: set[str] = set()
-        for profile in GameProfile.select().dicts():
-            install_path = str(profile.get("game_install_path") or "").strip()
-            if not install_path or not GameManager.detect_executable(install_path):
-                continue
-            if str(profile.get("game_version") or "").strip() != version:
-                continue
-            normalized = os.path.normcase(os.path.normpath(install_path))
-            if normalized in seen_paths:
-                continue
-            seen_paths.add(normalized)
-            candidate_paths.append(install_path)
-
-        if len(candidate_paths) == 1: return candidate_paths[0]
-
-        auto_detect = self.game_mgr.auto_detect_paths() or {}
-        detected_path = str(auto_detect.get("game_install_path") or "").strip()
-        if detected_path and GameManager.get_game_version(detected_path) == version: return detected_path
+    def _resolve_import_install_path(self, selected_install_path: str = "") -> str:
+        normalized_selected = str(selected_install_path or "").strip()
+        if normalized_selected and GameManager.detect_executable(normalized_selected):
+            return os.path.normpath(normalized_selected)
         return ""
 
-    def _replace_directory_contents(self, target_root: Path, source_root: Path) -> None:
-        target_root.mkdir(parents=True, exist_ok=True)
-        for child in list(target_root.iterdir()):
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
+    def _resolve_profile_import_target_root(self, target_profile_id: str = "") -> Path:
+        if target_profile_id:
+            target_profile = self.profile_mgr.get_profile(target_profile_id)
+            target_root_str = str(target_profile.user_data_path or "").strip()
+            if not target_root_str:
+                raise ValueError("目标环境缺少用户数据目录，无法导入")
+            return Path(target_root_str)
+        return DATA_DIR / "profiles" / uuid.uuid4().hex
 
-        for source_path in source_root.rglob("*"):
-            relative_path = source_path.relative_to(source_root)
-            target_path = target_root / relative_path
-            if source_path.is_dir():
-                target_path.mkdir(parents=True, exist_ok=True)
-            else:
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source_path, target_path)
+    def _ensure_unique_profile_name(self, base_name: str) -> str:
+        normalized_name = str(base_name or "").strip() or "Imported Profile"
+        existing_names = [str(item.get("name") or "").strip() for item in self.profile_mgr.get_all_profiles()]
+        if normalized_name not in existing_names:
+            return normalized_name
+        index = 1
+        while f"{normalized_name}-{index}" in existing_names:
+            index += 1
+        return f"{normalized_name}-{index}"
+
+    def _normalize_profile_import_plan(self, profile_import_plan: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+        plan_map: dict[str, dict[str, Any]] = {}
+        for item in profile_import_plan or []:
+            if not isinstance(item, dict):
+                continue
+            archive_key = str(item.get("archive_key") or "").strip()
+            mode = str(item.get("mode") or "").strip().lower()
+            if not archive_key or mode not in self.PROFILE_IMPORT_MODES:
+                continue
+            plan_map[archive_key] = {
+                "mode": mode,
+                "target_profile_id": str(item.get("target_profile_id") or "").strip(),
+                "game_install_path": str(item.get("game_install_path") or "").strip(),
+            }
+        return plan_map
+
+    def _build_profile_conflict_entries(self, profile_entries: list[Any]) -> list[dict[str, Any]]:
+        result = []
+        conflict_map = self._build_profile_conflict_map(profile_entries)
+        for entry in profile_entries:
+            if not isinstance(entry, dict):
+                continue
+            archive_key = str(entry.get("archive_key") or "").strip()
+            if not archive_key:
+                continue
+            result.append({
+                "archive_key": archive_key,
+                "name": str(entry.get("name") or "").strip(),
+                "conflicts": conflict_map.get(archive_key, []),
+            })
+        return result
+
+    def _build_profile_conflict_map(self, profile_entries: list[Any]) -> dict[str, list[dict[str, Any]]]:
+        all_profiles = self.profile_mgr.get_all_profiles()
+        result: dict[str, list[dict[str, Any]]] = {}
+        for entry in profile_entries:
+            if not isinstance(entry, dict):
+                continue
+            archive_key = str(entry.get("archive_key") or "").strip()
+            target_name = str(entry.get("name") or "").strip()
+            if not archive_key:
+                continue
+            matches = []
+            if target_name:
+                for profile in all_profiles:
+                    if str(profile.get("name") or "").strip() != target_name:
+                        continue
+                    matches.append({
+                        "profile_id": str(profile.get("id") or "").strip(),
+                        "name": str(profile.get("name") or "").strip(),
+                        "description": str(profile.get("description") or "").strip(),
+                        "game_install_path": str(profile.get("game_install_path") or "").strip(),
+                        "user_data_path": str(profile.get("user_data_path") or "").strip(),
+                        "game_version": str(profile.get("game_version") or "").strip(),
+                        "last_played_time": int(profile.get("last_played_time") or 0),
+                    })
+            result[archive_key] = matches
+        return result
+
+    def _build_legacy_profile_import_plan(
+        self,
+        profile_meta: dict[str, Any],
+        conflicts: list[dict[str, Any]],
+        default_profile_mode: str = "clone",
+    ) -> dict[str, Any]:
+        if bool(profile_meta.get("is_default")) and default_profile_mode == "overwrite":
+            default_match = next((item for item in conflicts if str(item.get("profile_id")) == "default"), None)
+            if default_match:
+                return {
+                    "mode": "overwrite",
+                    "target_profile_id": "default",
+                    "game_install_path": "",
+                }
+        return {
+            "mode": "create",
+            "target_profile_id": "",
+            "game_install_path": "",
+        }
 
     @staticmethod
     def _read_json_from_zip(bundle: zipfile.ZipFile, member_name: str, default: Any = None) -> Any:

@@ -66,6 +66,7 @@
                     </div>
                     <!-- 操作组 -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button @click.stop="openExportDialog(p)" v-tooltip="'导出环境模组包'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-special hover:bg-accent-special/15"><Package class="size-3.5" /></button>
                       <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15" :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
                       <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="'删除环境'" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
                       <button @click.stop="handleEdit(p)" v-tooltip="'编辑环境'" class="p-1.5 rounded-lg hover:bg-text-main/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
@@ -77,11 +78,11 @@
 
                   <!-- 标识 -->
                   <div class="flex items-center gap-1 min-w-0">
-                    <span v-tooltip="'游戏版本'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary border border-text-dim/10 ">{{ p.game_version || 'Unknown' }}</span>
-                    <span v-if="showSteamVersionBadge(p)" v-tooltip="p.is_steam_managed ? '游戏为 Steam 正在管理的主版本。' : '游戏为 Steam 版。'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-text-dim/10 ">Steam</span>
-                    <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="'已使用 Workshop 模组（含 Steam 自动挂载或本地链接部署）'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Workshop</span>
-                    <span v-if="p.use_self_mods" v-tooltip="'已使用管理器模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">Mannager</span>
-                    <span v-if="p.id === 'default'" v-tooltip="'默认环境'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-text-dim/10 ">Default</span>
+                    <span v-tooltip="'游戏版本'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary border border-text-dim/10 ">{{ p.game_version || '版本未知' }}</span>
+                    <span v-if="showSteamVersionBadge(p)" v-tooltip="p.is_steam_managed ? '游戏由 Steam 管理。' : '这是一个 Steam 版环境。'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-text-dim/10 ">Steam 版</span>
+                    <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="'当前环境会使用创意工坊模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">工坊模组</span>
+                    <span v-if="p.use_self_mods" v-tooltip="'当前环境会使用管理器模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">管理器模组</span>
+                    <span v-if="p.id === 'default'" v-tooltip="'默认环境'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-text-dim/10 ">默认</span>
                   </div>
                   
                   <!-- 路径 -->
@@ -186,9 +187,10 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import { Database, Plus, Trash2, Settings2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
+import { Database, Plus, Trash2, Settings2, X, Play, AlertTriangle, SquareArrowOutUpRight, Package } from 'lucide-vue-next'
 import { toast } from '../utils/common'
 import { useProfileStore } from '../stores/profileStore'
+import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import CommonInput from './common/input/CommonInput.vue'
@@ -199,6 +201,7 @@ import { RUN_COMMAND_TAGS } from '../utils/constants'
 import { formatDate } from '../utils/format'
 
 const profileStore = useProfileStore()
+const modStore = useModStore()
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 
@@ -377,6 +380,55 @@ const handleCreateShortcut = async (p) => {
   )
   if (!ok) return
   await profileStore.createDesktopShortcut(p.id)
+}
+
+const buildProfileExportScopeOptions = ({
+  effectiveCount = null,
+  activeCount = null,
+  loading = false,
+} = {}) => {
+  const formatLabel = (title, count) => {
+    if (loading) return `${title}（读取中）`
+    return Number.isFinite(count) ? `${title}（${count}）` : title
+  }
+  return [
+    { value: 'profile-effective', label: formatLabel('当前环境有效模组', effectiveCount), description: loading ? '正在读取这个环境里可导出的模组数量。' : '导出当前环境里能正常使用的模组。' },
+    { value: 'profile-active', label: formatLabel('当前环境启用模组', activeCount), description: loading ? '正在读取这个环境里已启用的模组数量。' : '导出当前环境里已经启用的模组。' },
+  ]
+}
+
+const openExportDialog = async (profile) => {
+  const profileId = profile?.id || appStore.settings.current_profile_id || 'default'
+  const isCurrentProfile = profileId === (appStore.settings.current_profile_id || 'default')
+  const scopeOptions = isCurrentProfile
+    ? buildProfileExportScopeOptions({
+      effectiveCount: modStore.exportableVisibleCount,
+      activeCount: modStore.exportableActiveCount,
+    })
+    : buildProfileExportScopeOptions({ loading: true })
+  appStore.openPackageTransferDialog('mod-export', {
+    title: `导出环境模组: ${profile?.name || '未命名环境'}`,
+    description: '可选择导出当前环境有效模组或当前启用模组，并按需附带环境数据。',
+    sourceProfile: true,
+    profileId,
+    profileName: profile?.name || '当前环境',
+    scopeOptions,
+    scopeOptionsLoading: !isCurrentProfile,
+    export_scope: 'profile-effective',
+  })
+  if (isCurrentProfile) return
+
+  const summary = await appStore.getModPackageProfileSummary(profileId)
+  if (!appStore.uiState.showPackageTransferDialog) return
+  if (appStore.packageTransferDialog.mode !== 'mod-export') return
+  if (appStore.packageTransferDialog.preset.profileId !== profileId) return
+  appStore.updatePackageTransferDialogPreset({
+    scopeOptions: buildProfileExportScopeOptions({
+      effectiveCount: summary?.effective_count ?? null,
+      activeCount: summary?.active_count ?? null,
+    }),
+    scopeOptionsLoading: false,
+  })
 }
 
 

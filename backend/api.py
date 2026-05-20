@@ -75,11 +75,12 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
-from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
+from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import parse_package_token
@@ -89,6 +90,24 @@ from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_lo
 from backend.text_search.manager import FileSearchManager
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
+
+
+def _ensure_bundle_filename_extension(filename: str, preferred_extension: str, accepted_extensions: list[str] | tuple[str, ...]) -> str:
+    normalized = str(filename or "").strip()
+    lowered = normalized.lower()
+    for extension in accepted_extensions:
+        if lowered.endswith(str(extension or "").lower()):
+            return normalized
+    return f"{normalized}{preferred_extension}"
+
+
+def _build_dialog_file_type_label(label: str, extensions: list[str] | tuple[str, ...]) -> str:
+    normalized_extensions = [
+        f"*{str(extension or '').strip()}"
+        for extension in extensions
+        if str(extension or "").strip()
+    ]
+    return f"{label} ({';'.join(normalized_extensions)})" if normalized_extensions else f"{label} (*.*)"
 
 
 def log_api_call(func):
@@ -271,6 +290,12 @@ class API:
             self.ai_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
         )
+        self.mod_package_mgr = ModPackageManager(
+            self.profile_mgr,
+            data_bundle_mgr=self.data_bundle_mgr,
+            load_order_mgr_provider=lambda: self.load_order_mgr,
+            rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
+        )
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
@@ -333,6 +358,23 @@ class API:
             use_workshop_mods=getattr(profile, 'use_workshop_mods', False),
         )
         return resolve_profile_runtime_capabilities(profile_state)
+
+    @staticmethod
+    def _collect_overwritten_profile_ids(import_result: dict[str, Any] | None) -> set[str]:
+        return {
+            str(profile.get("profile_id") or "").strip()
+            for profile in ((import_result or {}).get("profiles") or [])
+            if str(profile.get("mode") or "").strip().lower() == "overwrite"
+        }
+
+    def _reload_current_profile_after_import(self, import_result: dict[str, Any] | None) -> bool:
+        current_profile_id = str(settings.config.current_profile_id or "").strip()
+        if not current_profile_id:
+            return False
+        if current_profile_id not in self._collect_overwritten_profile_ids(import_result):
+            return False
+        self._bootstrap_context(current_profile_id)
+        return True
     
     
     def _bootstrap_context(self, profile_id: str):
@@ -1351,15 +1393,20 @@ class API:
                     suggested_name = f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
                 else:
                     suggested_name = f"RimModManager_Data_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
-            if not suggested_name.lower().endswith(DataBundleManager.FILE_EXTENSION):
-                suggested_name = f"{suggested_name}{DataBundleManager.FILE_EXTENSION}"
+            suggested_name = _ensure_bundle_filename_extension(
+                suggested_name,
+                DataBundleManager.FILE_EXTENSION,
+                [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+            )
 
             target_path = file_mgr.save_file_dialog(
                 initial_dir=str(DATA_DIR),
                 default_filename=suggested_name,
                 file_types=(
-                    f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION})',
-                    'ZIP Files (*.zip)',
+                    _build_dialog_file_type_label(
+                        'RMM Data Package',
+                        [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+                    ),
                     'All Files (*.*)',
                 ),
             )
@@ -1384,16 +1431,16 @@ class API:
         try:
             module_keys = payload.get("module_keys")
             default_profile_mode = str(payload.get("default_profile_mode") or "clone").strip().lower() or "clone"
+            profile_import_plan = payload.get("profile_import_plan")
             import_result = self.data_bundle_mgr.import_bundle(
                 bundle_path,
                 module_keys=module_keys,
                 default_profile_mode=default_profile_mode,
+                profile_import_plan=profile_import_plan,
             )
 
             network_mgr.apply()
-            if any(profile.get("mode") == "overwrite-default" for profile in import_result.get("profiles", [])):
-                if settings.config.current_profile_id == "default":
-                    self._bootstrap_context("default")
+            self._reload_current_profile_after_import(import_result)
 
             response_data = {
                 "result": import_result,
@@ -1406,6 +1453,73 @@ class API:
             return ApiResponse.success(response_data, message=message)
         except Exception as e:
             logger.error(f"Data bundle import failed: {e}", exc_info=True)
+            return ApiResponse.error(f"导入失败: {e}")
+
+    @log_api_call
+    def mod_package_get_schema(self):
+        """获取环境/模组打包所需的导入导出基础配置。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.get_schema())
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_prepare_import(self, bundle_path: str, payload: dict | None = None):
+        """预检模组包导入冲突。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.prepare_import(bundle_path, payload or {}))
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_export(self, payload: dict | None = None):
+        """导出模组实体包。"""
+        payload = payload or {}
+        try:
+            suggested_name = str(payload.get("filename") or "").strip() or f"RimModManager_Mods_{datetime.now().strftime('%Y%m%d')}{self.mod_package_mgr.FILE_EXTENSION}"
+            suggested_name = _ensure_bundle_filename_extension(
+                suggested_name,
+                self.mod_package_mgr.FILE_EXTENSION,
+                [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+            )
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=str(DATA_DIR),
+                default_filename=suggested_name,
+                file_types=(
+                    _build_dialog_file_type_label(
+                        'RMM Mod Package',
+                        [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+                    ),
+                    'All Files (*.*)',
+                ),
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+            task_id = self.mod_package_mgr.start_export_task(target_path, payload)
+            return ApiResponse.success({"task_id": task_id, "target_path": target_path}, message="导出任务已启动")
+        except Exception as e:
+            logger.error(f"Mod package export failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_get_profile_summary(self, profile_id: str):
+        """读取指定环境的导出统计。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.get_profile_export_summary(profile_id))
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_import(self, bundle_path: str, payload: dict | None = None):
+        """启动模组包导入任务。"""
+        try:
+            normalized_payload = dict(payload or {})
+            normalized_payload["current_profile_id"] = str(settings.config.current_profile_id or "").strip()
+            normalized_payload["current_local_mods_path"] = getattr(self.active_context, "local_mods_path", "") if self.active_context else ""
+            task_id = self.mod_package_mgr.start_import_task(bundle_path, normalized_payload)
+            return ApiResponse.success({"task_id": task_id}, message="导入任务已启动")
+        except Exception as e:
+            logger.error(f"Mod package import failed: {e}", exc_info=True)
             return ApiResponse.error(f"导入失败: {e}")
     
     @log_api_call
@@ -3092,9 +3206,10 @@ class API:
         """规则中心导入入口，同时兼容旧版 JSON 规则包。"""
         try:
             path = file_mgr.select_file_dialog(file_types=(
-                f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION};*.json;*.zip)',
-                'JSON Files (*.json)',
-                'ZIP Files (*.zip)',
+                _build_dialog_file_type_label(
+                    'RMM Data Package',
+                    [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS, '.json'],
+                ),
                 'All Files (*.*)',
             ))
             if path:
@@ -3238,6 +3353,18 @@ class API:
                 return ApiResponse.error("缺少任务 ID")
             ok = self.ai_mgr.cancel_task(normalized_task_id)
             return ApiResponse.success(message="已请求取消 AI 任务") if ok else ApiResponse.error("当前没有可取消的 AI 任务")
+
+        if normalized_type == "mod-export":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.mod_package_mgr.cancel_export_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消模组导出任务") if ok else ApiResponse.error("当前没有可取消的模组导出任务")
+
+        if normalized_type == "mod-import":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.mod_package_mgr.cancel_import_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消模组导入任务") if ok else ApiResponse.error("当前没有可取消的模组导入任务")
 
         return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
 

@@ -16,7 +16,7 @@ from backend.managers.mgr_game_install import GameInstallFacts, GameInstallInspe
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam import SteamManager
-from backend.managers.profile_runtime import normalize_profile_runtime_flags, resolve_profile_runtime_capabilities
+from backend.utils.profile_runtime import normalize_profile_runtime_flags, resolve_profile_runtime_capabilities
 from backend.migrations.app_upgrade import AppUpgradeResult, _migrate_profile_steam_runtime_flags
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.mod_scanner import ModScanner

@@ -29,7 +29,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
-from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_codes

@@ -191,7 +191,7 @@ import { useConfirmStore } from '../../stores/confirmStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../utils/color'
 import { isSectionHeaderTitle } from '../../utils/common'
 import { normalizePackageId, normalizePackageToken } from '../../utils/modIdentity'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen, SquaresExclude } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen, SquaresExclude, Package } from 'lucide-vue-next';
 
 
 const props = defineProps({
@@ -578,6 +578,16 @@ const handleContextMenu = async (event) => {
   const selectedMenuItems = [
     { divider: true },
     { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
+    {
+      label: '打包导出模组' + selectedCountStr,
+      icon: Package,
+      action: () => appStore.openCustomModExportDialog({
+        title: `打包导出已选模组${selectedCountStr}`,
+        description: '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。',
+        modIds: [...selectedIds],
+        summary: `已选 ${selectedIds.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
+      })
+    },
   ]
   // 只要选中项中包含标题分组，就允许直接批量展开/折叠。
   // 这里不要求“全部都是分组项”，因为用户常见操作是多选混合项后统一处理分组。

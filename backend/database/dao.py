@@ -20,7 +20,7 @@ from backend.database.models import (
     UserModData,
     db,
 )
-from backend.managers.profile_runtime import resolve_profile_runtime_capabilities
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
@@ -740,17 +740,9 @@ class ModDAO:
 
         for payload in mods_data_list:
             path_hash = str(payload.get("path_hash") or "").strip()
-            if not path_hash:
-                continue
-            signature = tuple(
-                sorted(
-                    key
-                    for key in payload.keys()
-                    if key != "path_hash" and key in field_map
-                )
-            )
-            if not signature:
-                continue
+            if not path_hash: continue
+            signature = tuple( sorted( key for key in payload.keys() if key != "path_hash" and key in field_map ) )
+            if not signature: continue
             batches_by_signature.setdefault(signature, []).append({"path_hash": path_hash, **payload})
 
         with db.atomic():

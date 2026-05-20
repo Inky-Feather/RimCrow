@@ -231,6 +231,9 @@
     <!-- 设置弹窗 -->
     <SettingsModal />
 
+    <!-- 模组包/数据包传输弹窗 -->
+    <PackageTransferDialog />
+
     <!-- 规则面板 -->
     <RulePanel />
 
@@ -292,6 +295,7 @@ import GuideCenter from './components/GuideCenter.vue'
 import TextureOptModal from './components/TextureOptModal.vue'
 import SupplementSelectionDialog from './components/SupplementSelectionDialog.vue'
 import MissingInstallDialog from './components/MissingInstallDialog.vue'
+import PackageTransferDialog from './components/PackageTransferDialog.vue'
 
 const updateModal = ref(null);
 

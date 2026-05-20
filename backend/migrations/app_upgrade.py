@@ -12,7 +12,7 @@ from backend.database.models_ext import ext_db
 from backend.database.repair import _remove_file_with_retry
 from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
 from backend.managers.mgr_game_install import GameInstallInspector
-from backend.managers.profile_runtime import normalize_profile_runtime_flags
+from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, settings
 from backend.utils.logger import logger
 from backend.utils.tools import normalize_package_id

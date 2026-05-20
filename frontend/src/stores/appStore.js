@@ -40,6 +40,11 @@ export const useAppStore = defineStore('app', () => {
     showWorkspace: false,        // 是否显示工坊更新管理中心
     showTextureOptModal: false,  // 是否显示贴图优化弹窗
     showFileSearchWorkbench: false, // 是否显示文件内容搜索工作台
+    showPackageTransferDialog: false, // 是否显示模组包/数据包传输弹窗
+  })
+  const packageTransferDialog = reactive({
+    mode: 'mod-import',
+    preset: {},
   })
   // 存储各个列表的滚动偏移量
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
@@ -253,6 +258,8 @@ export const useAppStore = defineStore('app', () => {
     'download',
     'update',
     'localize',
+    'mod-import',
+    'mod-export',
     'steamcmd-download',
     'steamcmd-init',
     'steam-subscribe',
@@ -800,6 +807,32 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  const applyModPackageImportPostActions = async (task) => {
+    const profileStore = useProfileStore()
+    const workspaceStore = useWorkspaceStore()
+    const postActions = task?.metrics?.post_actions || {}
+    const shouldScanCurrentView = !!postActions.scan_current_view
+    const shouldRefreshCurrentProfile = !!postActions.refresh_current_profile
+    const shouldRefreshProfileList = !!postActions.refresh_profile_list
+
+    const followUpTasks = []
+    if (shouldRefreshProfileList) {
+      followUpTasks.push(profileStore.fetchProfiles())
+    }
+    if (shouldRefreshCurrentProfile) {
+      followUpTasks.push(refreshData())
+    }
+    if (shouldRefreshProfileList) {
+      followUpTasks.push(workspaceStore.fetchGithubRepos())
+      followUpTasks.push(workspaceStore.fetchSavedCollections())
+    }
+    if (followUpTasks.length > 0) {
+      await Promise.all(followUpTasks)
+    }
+    if (shouldScanCurrentView) {
+      await requestModScan()
+    }
+  }
   // 注册事件监听
   const setupEventListeners = () => {
     // 防止重复添加监听器
@@ -915,6 +948,31 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'update' && task.status === 'failed') {
         toast.error(`更新出错: ${task.metrics?.error || task.message}`)
+      }
+      if (task.type === 'mod-export' && task.status === 'success') {
+        toast.success('模组包导出完成')
+      }
+      if (task.type === 'mod-export' && task.status === 'failed') {
+        toast.error(task.metrics?.error || task.message || '模组包导出失败')
+      }
+      if (task.type === 'mod-export' && task.status === 'cancelled') {
+        toast.warning('模组包导出已取消')
+      }
+      if (task.type === 'mod-import' && task.status === 'success') {
+        void (async () => {
+          await applyModPackageImportPostActions(task)
+          const warnings = Array.isArray(task.metrics?.warnings) ? task.metrics.warnings : []
+          if (warnings.length > 0) {
+            toast.warning(warnings.join('\n'), { timeout: 8000 })
+          }
+          toast.success('模组包导入完成')
+        })()
+      }
+      if (task.type === 'mod-import' && task.status === 'failed') {
+        toast.error(task.metrics?.error || task.message || '模组包导入失败')
+      }
+      if (task.type === 'mod-import' && task.status === 'cancelled') {
+        toast.warning('模组包导入已取消')
       }
     });
     // 监听：后端弹窗
@@ -1450,6 +1508,43 @@ export const useAppStore = defineStore('app', () => {
     return res.data
   }
 
+  const openPackageTransferDialog = (mode = 'mod-import', preset = {}) => {
+    packageTransferDialog.mode = String(mode || 'mod-import')
+    packageTransferDialog.preset = { ...(preset || {}) }
+    uiState.showPackageTransferDialog = true
+  }
+
+  const openCustomModExportDialog = ({
+    title = '导出模组',
+    description = '可按需附带依赖、联锁项和语言包。',
+    modIds = [],
+    summary = '',
+  } = {}) => {
+    const normalizedModIds = [...new Set(
+      (modIds || [])
+        .map(id => String(id || '').trim())
+        .filter(Boolean)
+    )]
+    openPackageTransferDialog('mod-export', {
+      title,
+      description,
+      mod_ids: normalizedModIds,
+      allowExtraOptions: true,
+      export_scope: 'custom',
+      summary: summary || `已选 ${normalizedModIds.length} 个模组。`,
+    })
+  }
+
+  const updatePackageTransferDialogPreset = (patch = {}) => {
+    Object.assign(packageTransferDialog.preset, patch || {})
+  }
+
+  const closePackageTransferDialog = () => {
+    uiState.showPackageTransferDialog = false
+    packageTransferDialog.mode = 'mod-import'
+    packageTransferDialog.preset = {}
+  }
+
   // === Steam客户端交互 ===
   // 兼容旧调用名：手动检查工具环境并按需弹窗。
   const checkSteamTools = async () => checkToolMaintenance({ manual: true, prompt: true })
@@ -1644,6 +1739,66 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  const getModPackageSchema = async () => {
+    if (!window.pywebview) return null
+    const res = await window.pywebview.api.mod_package_get_schema()
+    return checkResult(res, '获取模组打包配置') ? res.data : null
+  }
+  const prepareModPackageImport = async (bundlePath, payload = {}) => {
+    if (!window.pywebview || !bundlePath) return null
+    const res = await window.pywebview.api.mod_package_prepare_import(bundlePath, payload)
+    return checkResult(res, '预检模组包导入') ? res.data : null
+  }
+  const getModPackageProfileSummary = async (profileId = '') => {
+    if (!window.pywebview) return null
+    const res = await window.pywebview.api.mod_package_get_profile_summary(profileId)
+    return checkResult(res, '读取环境导出统计') ? res.data : null
+  }
+  const exportModPackage = async (payload = {}) => {
+    if (!window.pywebview) return false
+    const res = await window.pywebview.api.mod_package_export(payload)
+    if (!checkResult(res, '启动导出任务')) return false
+    const taskId = String(res.data?.task_id || '').trim()
+    if (taskId) {
+      taskStore.createPlaceholderTask({
+        id: taskId,
+        type: 'mod-export',
+        status: 'pending',
+        progress: 0,
+        message: '准备导出模组包...',
+        metrics: {
+          title: '导出模组包',
+          target_path: res.data?.target_path || '',
+        },
+      })
+    }
+    return res.data
+  }
+  const importModPackage = async (bundlePath, payload = {}) => {
+    if (!window.pywebview || !bundlePath) return false
+    if (taskStore.hasActiveTaskOfType('mod-import')) {
+      toast.info('已有模组包导入任务正在进行')
+      return false
+    }
+    const normalizedPayload = { ...(payload || {}) }
+    const res = await window.pywebview.api.mod_package_import(bundlePath, normalizedPayload)
+    if (!checkResult(res, '启动模组包导入')) return false
+    const taskId = String(res.data?.task_id || '').trim()
+    if (taskId) {
+      taskStore.createPlaceholderTask({
+        id: taskId,
+        type: 'mod-import',
+        status: 'pending',
+        progress: 0,
+        message: '准备导入模组包...',
+        metrics: {
+          title: '导入模组包',
+          bundle_path: bundlePath,
+        },
+      })
+    }
+    return res.data
+  }
 
   // === 更新相关函数 ===
   // 检查更新
@@ -1755,6 +1910,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
+    packageTransferDialog,
     remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     refreshModsData,
@@ -1764,9 +1920,11 @@ export const useAppStore = defineStore('app', () => {
   checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
     
     checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks,
     openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
     getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,
+    getModPackageSchema, prepareModPackageImport, getModPackageProfileSummary, exportModPackage, importModPackage,
   }
 })

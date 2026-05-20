@@ -634,7 +634,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview folder dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开文件夹选择框失败: {e}") from e
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askdirectory(initialdir=path or os.getcwd()) or None
         )
@@ -677,7 +677,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview open dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开文件选择框失败: {e}") from e
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askopenfilename(
@@ -718,7 +718,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview save dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开保存对话框失败: {e}") from e
 
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(

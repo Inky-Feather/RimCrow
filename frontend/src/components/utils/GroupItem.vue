@@ -37,6 +37,9 @@
 
       <!-- 编辑/保存 与 删除 -->
       <span class="flex items-center">
+        <button @mousedown.prevent @click.stop="openExportDialog" v-tooltip="`打包导出分组模组`" :class="`rounded-lg p-1 hover:bg-text-dim/30 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
+          <Package class="size-4.5 hover:text-accent-special" />
+        </button>
         <!-- 编辑/保存按钮 -->
         <button @mousedown.prevent @click.stop="toggleEditName" v-tooltip="`编辑分组名称`" :class="`rounded-lg p-1 hover:bg-text-dim/30 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
           <svg v-if="!isEditingName" class="hover:text-accent-secondary size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -137,6 +140,7 @@ import { useAppStore } from '../../stores/appStore';
 import { toast } from '../../utils/common';
 import { hexToRgbComponents } from '../../utils/color'
 import { normalizePackageId } from '../../utils/modIdentity'
+import { Package } from 'lucide-vue-next'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -204,6 +208,14 @@ watch(
 )
 
 // --- 数据传递与事件处理 ---
+const openExportDialog = () => {
+  appStore.openCustomModExportDialog({
+    title: `导出分组模组: ${props.groupData?.name || '未命名分组'}`,
+    description: '可按需附带依赖、联锁项和语言包。',
+    modIds: [...groupModIds.value],
+    summary: `分组内共 ${groupModIds.value.length} 个模组。`,
+  })
+}
 // 切换展开状态
 const toggle = () => {
   emit('toggle', props.id)

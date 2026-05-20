@@ -232,6 +232,7 @@ class AppConfig:
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
+    bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
     enable_auto_scan: bool = True             # 启动时自动扫描
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
@@ -506,6 +507,10 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        try:
+            self.config.bundle_compress_level = max(0, min(9, int(self.config.bundle_compress_level or 0)))
+        except (TypeError, ValueError):
+            self.config.bundle_compress_level = 6
         ai_cfg = self.config.ai
         if isinstance(ai_cfg, AIConfig):
             try:

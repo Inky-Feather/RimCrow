@@ -13,7 +13,7 @@ from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_game import GameManager
-from backend.managers.profile_runtime import (
+from backend.utils.profile_runtime import (
     normalize_profile_runtime_flags,
     resolve_profile_runtime_capabilities,
 )
