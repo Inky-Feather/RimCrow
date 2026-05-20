@@ -204,7 +204,7 @@ class TestProfileRuntimeHelpers(unittest.TestCase):
             use_workshop_mods=True,
         )
 
-        with patch("backend.managers.profile_runtime.settings.config", SimpleNamespace(workshop_mods_path="D:/Workshop", steam_path="C:/Steam")):
+        with patch("backend.utils.profile_runtime.settings.config", SimpleNamespace(workshop_mods_path="D:/Workshop", steam_path="C:/Steam")):
             caps = resolve_profile_runtime_capabilities(context)
 
         self.assertTrue(caps["steam_launch_enabled"])
@@ -321,6 +321,7 @@ class TestGameInstallInspector(unittest.TestCase):
 
         self.assertEqual(Path(facts.steam_api_path).resolve(), target_dll.resolve())
         self.assertTrue(facts.is_steam)
+        self.assertIn("probe_fallback:probe_error", facts.signals)
 
     def test_find_linux_steam_api_in_unity_plugins_directory(self):
         install_root = self.temp_root / "RimWorld"
@@ -336,6 +337,7 @@ class TestGameInstallInspector(unittest.TestCase):
 
         self.assertEqual(Path(facts.steam_api_path).resolve(), target_lib.resolve())
         self.assertTrue(facts.is_steam)
+        self.assertIn("probe_fallback:probe_error", facts.signals)
 
     def test_find_macos_steam_api_in_bundle_plugins_directory(self):
         install_root = self.temp_root / "RimWorld"
@@ -355,6 +357,60 @@ class TestGameInstallInspector(unittest.TestCase):
         self.assertEqual(Path(facts.steam_api_path).resolve(), target_lib.resolve())
         self.assertEqual(Path(facts.steam_appid_path).resolve(), (bundle_root / "steam_appid.txt").resolve())
         self.assertTrue(facts.is_steam)
+        self.assertIn("probe_fallback:probe_error", facts.signals)
+
+    def test_quick_inspect_uncached_path_runs_full_inspect_and_persists_result(self):
+        install_root = self.temp_root / "RimWorld"
+        plugin_dir = install_root / "RimWorldWin64_Data" / "Plugins" / "x86_64"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (install_root / "RimWorldWin64.exe").write_text("", encoding="utf-8")
+        (install_root / "steam_appid.txt").write_text("294100", encoding="utf-8")
+        (plugin_dir / "steam_api64.dll").write_text("", encoding="utf-8")
+        registry_path = self.temp_root / "known_game_installs.json"
+
+        with patch("backend.managers.mgr_game_install.GameInstallRegistry", side_effect=lambda: GameInstallRegistry(registry_path)), \
+             patch("backend.managers.mgr_game_install.platform.system", return_value="Windows"), \
+             patch.object(GameInstallInspector, "_probe_official_steam_api", return_value="emulator") as probe_mock:
+            facts = GameInstallInspector().quick_inspect(str(install_root))
+            cached = GameInstallRegistry(registry_path).get(str(install_root))
+
+        self.assertFalse(facts.is_steam)
+        self.assertEqual(facts.steam_api_probe, "emulator")
+        self.assertEqual(probe_mock.call_count, 1)
+        self.assertIsNotNone(cached)
+        self.assertFalse(cached.is_steam)
+
+    def test_quick_inspect_uses_cached_result_without_reprobing(self):
+        install_root = self.temp_root / "RimWorld"
+        registry_path = self.temp_root / "known_game_installs.json"
+        plugin_dir = install_root / "RimWorldWin64_Data" / "Plugins" / "x86_64"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (install_root / "RimWorldWin64.exe").write_text("", encoding="utf-8")
+        (install_root / "steam_appid.txt").write_text("294100", encoding="utf-8")
+        (plugin_dir / "steam_api64.dll").write_text("", encoding="utf-8")
+        GameInstallRegistry(registry_path).set(
+            GameInstallFacts(
+                install_path=str(install_root),
+                executable_path=str(install_root / "RimWorldWin64.exe"),
+                game_version="1.6.0",
+                is_steam=False,
+                is_steam_managed=False,
+                steam_api_path=str(plugin_dir / "steam_api64.dll"),
+                steam_appid_path=str(install_root / "steam_appid.txt"),
+                steam_api_probe="emulator",
+                signals=["steam_api_emulator"],
+                checked_at=123,
+            )
+        )
+
+        with patch("backend.managers.mgr_game_install.GameInstallRegistry", side_effect=lambda: GameInstallRegistry(registry_path)), \
+             patch("backend.managers.mgr_game_install.platform.system", return_value="Windows"), \
+             patch.object(GameInstallInspector, "_probe_official_steam_api", side_effect=AssertionError("probe should not run")):
+            facts = GameInstallInspector().quick_inspect(str(install_root))
+
+        self.assertFalse(facts.is_steam)
+        self.assertEqual(facts.steam_api_probe, "emulator")
+        self.assertIn("known_install_cache", facts.signals)
 
     def test_inspector_init_prunes_invalid_cache_once_on_startup(self):
         registry_path = self.temp_root / "known_game_installs.json"
@@ -639,6 +695,41 @@ class TestModScanner(unittest.TestCase):
         self.assertIsNotNone(mod_data)
         self.assertEqual(mod_data["package_id"], "ludeon.rimworld")
         self.assertEqual(mod_data["source"], "core")
+
+    def test_finish_scan_normalizes_terminal_payload(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
+
+        with patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            scanner._finish_scan({"status": "error", "message": "boom"}, "task-1")
+
+        emit.assert_called_once()
+        event_name, payload = emit.call_args.args
+        self.assertEqual(event_name, "scan-complete")
+        self.assertEqual(payload["task_id"], "task-1")
+        self.assertEqual(payload["id"], "task-1")
+        self.assertEqual(payload["type"], "scan")
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["progress"], 0)
+        self.assertEqual(payload["message"], "boom")
+        self.assertEqual(payload["metrics"], {})
+
+    def test_handle_interruption_emits_progress_and_standard_complete_payload(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
+        scanner._is_scanning = True
+
+        with patch("backend.scanner.mod_scanner.EventBus.emit_progress") as emit_progress, \
+             patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            scanner._handle_interruption("task-2")
+
+        emit_progress.assert_called_once()
+        emit.assert_called_once()
+        event_name, payload = emit.call_args.args
+        self.assertEqual(event_name, "scan-complete")
+        self.assertEqual(payload["task_id"], "task-2")
+        self.assertEqual(payload["status"], "cancelled")
+        self.assertEqual(payload["type"], "scan")
+        self.assertEqual(payload["id"], "task-2")
+        self.assertEqual(payload["progress"], 0)
 
 
 class TestProfileConflictAnalysis(unittest.TestCase):
@@ -991,7 +1082,7 @@ class TestApiGameLaunch(unittest.TestCase):
             get_steam_path=Mock(return_value=""),
             get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
         )
-        api._sync_runtime_links_for_profile = Mock()
+        api._ensure_runtime_links_for_launch = Mock(return_value=True)
         api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
             "steam_launch_enabled": True,
             "is_steam": True,
@@ -1006,7 +1097,7 @@ class TestApiGameLaunch(unittest.TestCase):
 
         self.assertEqual(res["status"], "warning")
         self.assertIn("URL 协议启动", res["message"])
-        api._sync_runtime_links_for_profile.assert_called_once_with("default", include_workshop=False)
+        api._ensure_runtime_links_for_launch.assert_called_once_with("default", include_workshop=False)
         startfile.assert_called_once_with("steam://run/294100")
 
     def test_game_launch_returns_warning_when_steam_not_ready_for_direct_game_launch(self):
@@ -1110,6 +1201,216 @@ class TestApiGameLaunch(unittest.TestCase):
         self.assertTrue(caps["steam_launch_enabled"])
         self.assertFalse(caps["is_steam_managed"])
         self.assertFalse(caps["workshop_deploy_enabled"])
+
+
+class TestApiRuntimeLinkSync(unittest.TestCase):
+    def test_refresh_active_profile_context_after_update_light_updates_manager_contexts(self):
+        api = API.__new__(API)
+        refreshed_context = SimpleNamespace(profile_id="profile-a")
+        api.profile_mgr = SimpleNamespace(activate_profile=Mock(return_value=refreshed_context))
+        api._bootstrap_context = Mock()
+        api.scanner = SimpleNamespace(context=None)
+        api.load_order_mgr = SimpleNamespace(context=None)
+        api.game_log_mgr = SimpleNamespace(context=None)
+        api.sorter = SimpleNamespace(context=None, rule_mgr=SimpleNamespace(context=None))
+
+        mode = API._refresh_active_profile_context_after_update(api, "profile-a", {"use_self_mods": True})
+
+        self.assertEqual(mode, "light")
+        api.profile_mgr.activate_profile.assert_called_once_with("profile-a")
+        api._bootstrap_context.assert_not_called()
+        self.assertIs(api.active_context, refreshed_context)
+        self.assertIs(api.scanner.context, refreshed_context)
+        self.assertIs(api.load_order_mgr.context, refreshed_context)
+        self.assertIs(api.game_log_mgr.context, refreshed_context)
+        self.assertIs(api.sorter.context, refreshed_context)
+        self.assertIs(api.sorter.rule_mgr.context, refreshed_context)
+
+    def test_refresh_active_profile_context_after_update_rebootstraps_for_path_changes(self):
+        api = API.__new__(API)
+        api.profile_mgr = SimpleNamespace(activate_profile=Mock())
+        api._bootstrap_context = Mock()
+        api.scanner = None
+        api.load_order_mgr = None
+        api.game_log_mgr = None
+        api.sorter = None
+
+        mode = API._refresh_active_profile_context_after_update(api, "profile-a", {"user_data_path": "D:/Profiles/A"})
+
+        self.assertEqual(mode, "rebootstrap")
+        api._bootstrap_context.assert_called_once_with("profile-a")
+        api.profile_mgr.activate_profile.assert_not_called()
+
+    def test_profile_update_current_profile_uses_refresh_helper_instead_of_profile_activate(self):
+        api = API.__new__(API)
+        api.profile_mgr = SimpleNamespace(update_profile=Mock())
+        api._refresh_active_profile_context_after_update = Mock(side_effect=lambda *_args, **_kwargs: setattr(api, "active_context", SimpleNamespace(profile_id="profile-a")) or "light")
+        api._sync_runtime_links_for_profile = Mock(return_value=True)
+        api.profile_activate = Mock(side_effect=AssertionError("profile_activate should not be called"))
+
+        with patch("backend.api.settings.config", SimpleNamespace(current_profile_id="profile-a")):
+            res = API.profile_update(api, "profile-a", {"use_workshop_mods": True})
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["refresh_mode"], "light")
+        api.profile_mgr.update_profile.assert_called_once_with("profile-a", {"use_workshop_mods": True})
+        api._refresh_active_profile_context_after_update.assert_called_once_with("profile-a", {"use_workshop_mods": True})
+        api._sync_runtime_links_for_profile.assert_called_once_with("profile-a", include_workshop=True)
+
+    def test_sync_runtime_links_after_scan_only_runs_for_current_profile(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api._sync_runtime_links_for_profile = Mock(side_effect=lambda *_args, **_kwargs: setattr(api, "_last_runtime_link_sync_result", {"status": "deployed"}) or True)
+
+        deploy_msg = API._sync_runtime_links_after_scan(api, "profile-a")
+        stale_msg = API._sync_runtime_links_after_scan(api, "profile-b")
+
+        self.assertEqual(deploy_msg, "Deployed runtime links")
+        self.assertEqual(stale_msg, "Skipped runtime link sync for stale profile")
+        api._sync_runtime_links_for_profile.assert_called_once_with("profile-a", include_workshop=True)
+
+    def test_bootstrap_context_stops_old_scanner_and_injects_runtime_sync_handler(self):
+        api = API.__new__(API)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        old_scanner = Mock()
+        old_log_mgr = Mock()
+        context = SimpleNamespace(is_healthy=True, profile_id="profile-a")
+        api.scanner = old_scanner
+        api.game_log_mgr = old_log_mgr
+        api.profile_mgr = SimpleNamespace(activate_profile=Mock(return_value=context))
+
+        config = SimpleNamespace(self_mods_path=str(temp_root / "selfmods"))
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.ModScanner") as mock_scanner_cls, \
+             patch("backend.api.LoadOrderManager"), \
+             patch("backend.api.GameLogManager") as mock_log_mgr_cls, \
+             patch("backend.api.OrderSorter"), \
+             patch("backend.api.os.makedirs"):
+            new_scanner = Mock()
+            new_log_mgr = Mock()
+            mock_scanner_cls.return_value = new_scanner
+            mock_log_mgr_cls.return_value = new_log_mgr
+
+            API._bootstrap_context(api, "profile-a")
+
+        old_log_mgr.stop_realtime_monitor.assert_called_once_with()
+        old_scanner.stop_scan.assert_called_once_with()
+        old_scanner.wait_until_idle.assert_called_once_with(timeout=2.0)
+        mock_scanner_cls.assert_called_once()
+        self.assertIs(api.scanner, new_scanner)
+        handler = mock_scanner_cls.call_args.kwargs["runtime_link_sync_handler"]
+        self.assertIs(handler.__self__, api)
+        self.assertIs(handler.__func__, API._sync_runtime_links_after_scan)
+        new_log_mgr.start_realtime_monitor.assert_called_once_with()
+
+    def test_profile_activate_reconciles_runtime_links_for_active_profile(self):
+        api = API.__new__(API)
+        current_profile = SimpleNamespace(id="profile-a", name="Profile A")
+
+        def bootstrap(pid):
+            api.active_context = SimpleNamespace(profile_id=pid)
+
+        api._bootstrap_context = Mock(side_effect=bootstrap)
+        api._sync_runtime_links_for_profile = Mock(return_value=True)
+        api.profile_mgr = SimpleNamespace(get_current_profile=Mock(return_value=current_profile))
+
+        with patch("backend.api.asdict", return_value={}), \
+             patch("backend.api.ApiResponse.success", return_value={"status": "success"}) as mock_success:
+            res = API.profile_activate(api, "profile-a")
+
+        self.assertEqual(res["status"], "success")
+        api._bootstrap_context.assert_called_once_with("profile-a")
+        api._sync_runtime_links_for_profile.assert_called_once_with("profile-a", include_workshop=True)
+        mock_success.assert_called_once()
+
+    def test_sync_runtime_links_for_profile_skips_duplicate_fingerprint(self):
+        api = API.__new__(API)
+        api._runtime_link_sync_state = {}
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        local_mods_root = temp_root / "Mods"
+        local_mods_root.mkdir(parents=True)
+        context = SimpleNamespace(local_mods_path=str(local_mods_root))
+        api.profile_mgr = SimpleNamespace(build_profile_context=Mock(return_value=context))
+        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=True))
+
+        runtime_caps = {"workshop_detection_enabled": True, "workshop_deploy_enabled": True}
+        runtime_analysis = {"deploy_paths": ["D:/mods/a", "D:/mods/b"]}
+        with patch("backend.api.resolve_profile_runtime_capabilities", return_value=runtime_caps), \
+             patch("backend.api.ModDAO.get_profile_conflict_analysis", return_value=runtime_analysis):
+            first = API._sync_runtime_links_for_profile(api, "profile-a", include_workshop=True)
+            second = API._sync_runtime_links_for_profile(api, "profile-a", include_workshop=True)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        api.file_mgr.sync_managed_links.assert_called_once_with(str(local_mods_root), runtime_analysis["deploy_paths"])
+
+    def test_sync_runtime_links_for_profile_redeploys_when_mode_changes(self):
+        api = API.__new__(API)
+        api._runtime_link_sync_state = {}
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        local_mods_root = temp_root / "Mods"
+        local_mods_root.mkdir(parents=True)
+        context = SimpleNamespace(local_mods_path=str(local_mods_root))
+        api.profile_mgr = SimpleNamespace(build_profile_context=Mock(return_value=context))
+        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=True))
+
+        runtime_caps = {"workshop_detection_enabled": True, "workshop_deploy_enabled": True}
+        runtime_analysis = {"deploy_paths": ["D:/mods/a"]}
+        with patch("backend.api.resolve_profile_runtime_capabilities", return_value=runtime_caps), \
+             patch("backend.api.ModDAO.get_profile_conflict_analysis", return_value=runtime_analysis):
+            first = API._sync_runtime_links_for_profile(api, "profile-a", include_workshop=True)
+            second = API._sync_runtime_links_for_profile(api, "profile-a", include_workshop=False)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        self.assertEqual(api.file_mgr.sync_managed_links.call_count, 2)
+
+    def test_ensure_runtime_links_for_launch_skips_when_active_profile_state_matches(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api._runtime_link_sync_state = {
+            "profile-a": {
+                "profile_id": "profile-a",
+                "local_mods_root": "c:/games/rimworld/mods",
+                "include_workshop": False,
+                "workshop_detection_enabled": True,
+                "workshop_deploy_enabled": False,
+                "deploy_paths": ("d:/mods/a",),
+            }
+        }
+        api._sync_runtime_links_for_profile = Mock(return_value=True)
+
+        result = API._ensure_runtime_links_for_launch(api, "profile-a", include_workshop=False)
+
+        self.assertTrue(result)
+        api._sync_runtime_links_for_profile.assert_not_called()
+        self.assertEqual(api._last_runtime_link_sync_result["status"], "noop")
+
+    def test_ensure_runtime_links_for_launch_reconciles_when_mode_differs(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api._runtime_link_sync_state = {
+            "profile-a": {
+                "profile_id": "profile-a",
+                "local_mods_root": "c:/games/rimworld/mods",
+                "include_workshop": True,
+                "workshop_detection_enabled": True,
+                "workshop_deploy_enabled": True,
+                "deploy_paths": ("d:/mods/a",),
+            }
+        }
+        api._sync_runtime_links_for_profile = Mock(return_value=True)
+
+        result = API._ensure_runtime_links_for_launch(api, "profile-a", include_workshop=False)
+
+        self.assertTrue(result)
+        api._sync_runtime_links_for_profile.assert_called_once_with("profile-a", include_workshop=False)
 
 
 if __name__ == "__main__":

@@ -255,6 +255,8 @@ class API:
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
+        self._runtime_link_sync_state: dict[str, dict[str, Any]] = {}
+        self._last_runtime_link_sync_result: dict[str, Any] = {}
         # 桌面模式首屏阶段只允许触发一次后台预热，避免 loaded / ready 多次回调时重复导入大缓存文件。
         self._startup_warmup_started = False
         # 应用层升级迁移必须早于外置缓存库管理器初始化。
@@ -381,6 +383,11 @@ class API:
         """装载当前环境，并重建所有业务引擎"""
         # 在重建前，先停止旧的监视器
         if self.game_log_mgr: self.game_log_mgr.stop_realtime_monitor()
+        old_scanner = getattr(self, 'scanner', None)
+        if old_scanner:
+            old_scanner.stop_scan()
+            if not old_scanner.wait_until_idle(timeout=2.0):
+                logger.warning("旧扫描器未在切换环境前及时退出，继续重建上下文。")
         
         try:
             # 获取上下文
@@ -407,7 +414,10 @@ class API:
             logger.warning("self_mods_path 为空，跳过管理器 Mod 目录创建。")
         
         # 依赖注入：将上下文发给所有的 Manager
-        self.scanner = ModScanner(self.active_context)
+        self.scanner = ModScanner(
+            self.active_context,
+            runtime_link_sync_handler=self._sync_runtime_links_after_scan,
+        )
         self.load_order_mgr = LoadOrderManager(self.active_context)
         self.game_log_mgr = GameLogManager(self.active_context)
         self.sorter = OrderSorter(self.active_context)
@@ -1554,7 +1564,7 @@ class API:
     def scan_mods(self, specific_paths: List[str]|None = None, forced_update: bool = False):
         """
         触发后台模组扫描。
-        扫描完成后，Scanner 会自动根据当前 Profile 配置执行链接部署。
+        扫描完成后，Scanner 会回调当前环境的运行态收敛入口。
         立即返回状态，前端通过统一任务流和 `scan-complete` 事件获取更新。
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
         :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
@@ -1594,8 +1604,7 @@ class API:
             # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
             # 1. 扫描所有路径入库
             # 2. 识别 Local vs Workshop 冲突
-            # 3. 读取 local_mods_path 和 workshop_mods_path
-            # 4. 执行 FileManager.clear_links 部署软链接
+            # 3. 触发当前环境的运行态收敛回调（若仍是当前环境）
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
             result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
         except Exception as e:
@@ -2225,7 +2234,7 @@ class API:
                 if is_steam_managed:
                     # Steam 管理主版本可以走 Steam 官方入口。
                     # 进入 Steam 前先清掉额外 Workshop 链接，避免“Steam 自动挂载 + 本地链接部署”重复参与。
-                    self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
+                    self._ensure_runtime_links_for_launch(profile_id, include_workshop=False)
 
                     if steam_path_valid:
                         game_monitor = getattr(self, "game_monitor", None)
@@ -2293,6 +2302,31 @@ class API:
             logger.error(f"Launch Game Error: {e}", exc_info=True)
             return ApiResponse.error(f"启动游戏时出错: {e}")
 
+    @staticmethod
+    def _build_runtime_link_sync_fingerprint(
+        profile_id: str,
+        local_mods_root: str,
+        include_workshop: bool,
+        runtime_caps: dict[str, Any],
+        deploy_paths: list[str] | tuple[str, ...],
+    ) -> dict[str, Any]:
+        normalized_root = os.path.normpath(str(local_mods_root or "")).lower()
+        normalized_deploy_paths = tuple(
+            sorted(
+                os.path.normpath(str(path)).lower()
+                for path in (deploy_paths or [])
+                if str(path or "").strip()
+            )
+        )
+        return {
+            "profile_id": str(profile_id or "").strip(),
+            "local_mods_root": normalized_root,
+            "include_workshop": bool(include_workshop),
+            "workshop_detection_enabled": bool(runtime_caps.get('workshop_detection_enabled')),
+            "workshop_deploy_enabled": bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
+            "deploy_paths": normalized_deploy_paths,
+        }
+
     def _sync_runtime_links_for_profile(self, profile_id: str, include_workshop: bool):
         """
         按指定环境的运行方式收敛本地 Mods 链接。
@@ -2300,14 +2334,119 @@ class API:
         """
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
-        if not local_mods_root or not os.path.exists(local_mods_root): return False
+        runtime_link_sync_state = getattr(self, "_runtime_link_sync_state", {})
+        normalized_profile_id = str(profile_id or "").strip()
+        if not local_mods_root or not os.path.exists(local_mods_root):
+            runtime_link_sync_state.pop(normalized_profile_id, None)
+            self._runtime_link_sync_state = runtime_link_sync_state
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "missing_root"}
+            return False
         runtime_caps = resolve_profile_runtime_capabilities(context)
         runtime_analysis = ModDAO.get_profile_conflict_analysis(
             context,
             include_workshop_in_detection=bool(runtime_caps.get('workshop_detection_enabled')),
             include_workshop_in_deploy=bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
         )
-        return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
+        deploy_paths = runtime_analysis.get('deploy_paths', [])
+        sync_fingerprint = self._build_runtime_link_sync_fingerprint(
+            normalized_profile_id,
+            local_mods_root,
+            include_workshop,
+            runtime_caps,
+            deploy_paths,
+        )
+        if runtime_link_sync_state.get(normalized_profile_id) == sync_fingerprint:
+            logger.debug("Runtime links already up to date for profile %s", normalized_profile_id)
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
+            return True
+
+        success = self.file_mgr.sync_managed_links(local_mods_root, deploy_paths)
+        if success:
+            runtime_link_sync_state[normalized_profile_id] = sync_fingerprint
+            self._runtime_link_sync_state = runtime_link_sync_state
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "deployed"}
+        else:
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "failed"}
+        return success
+
+    def _sync_runtime_links_after_scan(self, scanned_profile_id: str) -> str:
+        """
+        扫描写库后的统一部署入口。
+        只允许当前激活环境执行，避免旧扫描任务把新环境链接回滚。
+        """
+        active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+        target_profile_id = str(scanned_profile_id or '').strip()
+        if not active_profile_id or active_profile_id != target_profile_id:
+            return "Skipped runtime link sync for stale profile"
+
+        success = self._sync_runtime_links_for_profile(target_profile_id, include_workshop=True)
+        sync_status = str(getattr(self, "_last_runtime_link_sync_result", {}).get("status", "") or "").strip()
+        if success and sync_status == "deployed":
+            return "Deployed runtime links"
+        return "Runtime links already up to date" if success and sync_status == "noop" else "Runtime link sync skipped"
+
+    def _ensure_runtime_links_for_launch(self, profile_id: str, include_workshop: bool) -> bool:
+        """
+        启动前兜底检查。
+        如果当前进程里已经对同一激活环境收敛到相同运行模式，则直接跳过；
+        只有缺少收敛记录、目标环境不是当前激活环境，或启动模式发生变化时才真正执行收敛。
+        """
+        normalized_profile_id = str(profile_id or "").strip()
+        active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+        current_state = getattr(self, "_runtime_link_sync_state", {}).get(normalized_profile_id)
+        if (
+            current_state
+            and active_profile_id == normalized_profile_id
+            and bool(current_state.get("include_workshop")) == bool(include_workshop)
+        ):
+            logger.debug(
+                "Launch runtime link check reused in-memory sync state for profile %s (include_workshop=%s)",
+                normalized_profile_id,
+                include_workshop,
+            )
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
+            return True
+        return self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
+
+    @staticmethod
+    def _profile_update_requires_rebootstrap(data: Dict[str, Any] | None) -> bool:
+        changed_keys = {
+            str(key or "").strip()
+            for key in ((data or {}).keys())
+            if str(key or "").strip()
+        }
+        return bool(changed_keys & {"game_install_path", "user_data_path"})
+
+    def _refresh_active_profile_context_after_update(self, profile_id: str, data: Dict[str, Any] | None = None) -> str:
+        """
+        当前激活环境更新后的后端收口。
+
+        - 路径类变更：继续走完整 `_bootstrap_context()`，因为 scanner / load order / 日志路径都可能变化；
+        - 运行态/元数据变更：只刷新当前 ProfileContext 与相关 manager 的 context，避免重建整套对象。
+        """
+        normalized_profile_id = str(profile_id or "").strip()
+        if not normalized_profile_id:
+            return "noop"
+
+        if self._profile_update_requires_rebootstrap(data):
+            self._bootstrap_context(normalized_profile_id)
+            return "rebootstrap"
+
+        refreshed_context = self.profile_mgr.activate_profile(normalized_profile_id)
+        self.active_context = refreshed_context
+
+        if self.scanner:
+            self.scanner.context = refreshed_context
+        if self.load_order_mgr:
+            self.load_order_mgr.context = refreshed_context
+        if self.game_log_mgr:
+            self.game_log_mgr.context = refreshed_context
+        if self.sorter:
+            self.sorter.context = refreshed_context
+            if getattr(self.sorter, "rule_mgr", None):
+                self.sorter.rule_mgr.context = refreshed_context
+
+        return "light"
 
     def _launch_profile_with_runtime_links(
         self,
@@ -2323,7 +2462,7 @@ class API:
         2. 再启动游戏，并由游戏监视器在确认进程出现后记录最后启动时间。
         这样可以避免多个启动分支重复维护同一段流程。
         """
-        self._sync_runtime_links_for_profile(profile_id, include_workshop=include_workshop)
+        self._ensure_runtime_links_for_launch(profile_id, include_workshop=include_workshop)
         game_monitor = getattr(self, "game_monitor", None)
         if game_monitor:
             game_monitor.launch_profile_id = profile_id
@@ -4216,7 +4355,14 @@ class API:
         try:
             self.profile_mgr.update_profile(pid, data)
             if pid == settings.config.current_profile_id:
-                self.profile_activate(pid)
+                refresh_mode = self._refresh_active_profile_context_after_update(pid, data)
+                active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+                if active_profile_id:
+                    self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
+                return ApiResponse.success(
+                    message="配置已更新",
+                    data={"refresh_mode": refresh_mode},
+                )
             return ApiResponse.success(message="配置已更新")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -4237,6 +4383,9 @@ class API:
         """
         try:
             self._bootstrap_context(pid)
+            active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+            if active_profile_id:
+                self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
             # 切换成功后，前端通常会调用 get_initial_data 刷新全界面，所以这里只需返回成功
             res = {
                 "profile": self.profile_mgr.get_current_profile().__dict__,

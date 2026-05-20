@@ -251,7 +251,7 @@ export const useAppStore = defineStore('app', () => {
   const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
   const updateInstallPrompted = new Set()
-  const pendingModScanRequested = ref(false)
+  const pendingModScanRequested = ref(null)
   // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
   const cancellableTaskTypes = new Set([
     'scan',
@@ -434,22 +434,43 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const requestModScan = async ({ forcedUpdate = false, specificPaths = null } = {}) => {
+    const normalizeScanRequest = (request = {}) => {
+      const normalizedPaths = Array.isArray(request.specificPaths)
+        ? request.specificPaths.map(path => String(path || '').trim()).filter(Boolean)
+        : null
+      return {
+        forcedUpdate: !!request.forcedUpdate,
+        specificPaths: normalizedPaths && normalizedPaths.length > 0 ? [...new Set(normalizedPaths)] : null,
+      }
+    }
+    const mergeScanRequest = (left, right) => {
+      if (!left) return right
+      if (!right) return left
+      return {
+        forcedUpdate: !!(left.forcedUpdate || right.forcedUpdate),
+        specificPaths: (!left.specificPaths || !right.specificPaths)
+          ? null
+          : [...new Set([...left.specificPaths, ...right.specificPaths])],
+      }
+    }
+    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths })
     if (isScanRunning.value) {
-      pendingModScanRequested.value = true
+      pendingModScanRequested.value = mergeScanRequest(pendingModScanRequested.value, scanRequest)
       return false
     }
 
-    pendingModScanRequested.value = false
+    pendingModScanRequested.value = null
     const modStore = useModStore()
-    await modStore.scanMods(specificPaths, forcedUpdate)
+    await modStore.scanMods(scanRequest.specificPaths, scanRequest.forcedUpdate)
     return true
   }
 
   const flushQueuedModScan = async () => {
     if (!pendingModScanRequested.value || isScanRunning.value) return false
-    pendingModScanRequested.value = false
+    const queuedRequest = pendingModScanRequested.value
+    pendingModScanRequested.value = null
     const modStore = useModStore()
-    await modStore.scanMods()
+    await modStore.scanMods(queuedRequest.specificPaths, queuedRequest.forcedUpdate)
     return true
   }
 
@@ -841,9 +862,27 @@ export const useAppStore = defineStore('app', () => {
 
     // 监听：扫描完成
     window.addEventListener('scan-complete', async (e) => {
+      const detail = e?.detail || {}
+      const taskId = String(detail.task_id || detail.id || '')
+      if (taskId) {
+        taskStore.upsertTask({
+          id: taskId,
+          type: 'scan',
+          status: String(detail.status || 'success'),
+          progress: Number(detail.progress ?? (detail.status === 'success' ? 100 : 0)),
+          message: detail.message || (detail.status === 'success' ? '扫描完成' : ''),
+          metrics: {
+            title: '模组扫描',
+            ...(detail.metrics || {}),
+            ...(detail.stats ? { stats: detail.stats } : {}),
+            ...(detail.runtime_sync_message ? { runtime_sync_message: detail.runtime_sync_message } : {}),
+          },
+          timestamp: Date.now(),
+        })
+      }
       // 扫描完成后的逻辑主要涉及 Mod 数据更新
       const modStore = useModStore()
-      await modStore.scanComplete(e.detail)
+      await modStore.scanComplete(detail)
       if (pendingModScanRequested.value) {
         window.setTimeout(() => {
           void flushQueuedModScan()

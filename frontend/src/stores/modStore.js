@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { toast, checkResult } from '../utils/common'
 import { useAppStore } from './appStore'
 import { useGroupStore } from './groupStore'
+import { useTaskStore } from './taskStore'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../utils/constants'
 import { useConfirmStore } from './confirmStore'
 import { useMissingInstallStore } from './missingInstallStore'
@@ -21,6 +22,7 @@ import {
 
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
+  const taskStore = useTaskStore()
   const confirmStore = useConfirmStore()
   const profileStore = useProfileStore()
   const normalizeListToken = (id = '') => normalizePackageToken(id)
@@ -1113,6 +1115,22 @@ export const useModStore = defineStore('mods', () => {
         console.error("启动扫描失败:", res)
         toast.error(`扫描启动失败: \n${res.message}`)
         return
+      }
+      const taskDetail = res?.data?.details || {}
+      const taskId = String(taskDetail?.task_id || '')
+      if (taskId && taskDetail?.status === 'started') {
+        taskStore.createPlaceholderTask({
+          id: taskId,
+          type: 'scan',
+          status: 'pending',
+          progress: 0,
+          message: '任务已加入后台队列',
+          metrics: {
+            title: '模组扫描',
+            forced_update: !!forced_update,
+            specific_paths: Array.isArray(path_list) ? path_list : [],
+          },
+        })
       }
     } catch (e) {
       console.error("扫描请求异常:", e)

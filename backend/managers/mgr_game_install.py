@@ -330,6 +330,35 @@ class GameInstallInspector:
                 return str(candidate)
         return ""
 
+    def _scan_install_layout(self, normalized_path: str) -> dict[str, Any]:
+        executable = GameManager.detect_executable(normalized_path)
+        executable_path = str(executable or "")
+        steam_api_path = self._find_steam_api_path(normalized_path, executable_path)
+        steam_appid_path = self._find_appid_path(normalized_path, executable_path)
+        appid_match = bool(
+            steam_appid_path
+            and self._read_appid(Path(steam_appid_path)) == RIMWORLD_APP_ID
+        )
+        is_steam_library_path = detect_is_steam_managed_install(normalized_path)
+
+        signals: list[str] = []
+        if appid_match:
+            signals.append("steam_appid")
+        if steam_api_path:
+            signals.append("steam_api")
+        if is_steam_library_path:
+            signals.append("steam_library_path")
+
+        return {
+            "executable_path": executable_path,
+            "game_version": GameManager.get_game_version(normalized_path) if executable_path else "",
+            "steam_api_path": steam_api_path,
+            "steam_appid_path": steam_appid_path,
+            "appid_match": appid_match,
+            "is_steam_library_path": is_steam_library_path,
+            "signals": signals,
+        }
+
     def _probe_official_steam_api(self, install_path: str, steam_api_path: str, steam_appid_path: str = "") -> str:
         """
         用“伪造 appid + 原始安装目录”校验当前副本实际会加载的 Steam API。
@@ -404,52 +433,35 @@ finally:
 
     def quick_inspect(self, install_path: str) -> GameInstallFacts:
         """
-        轻量探测。
+        读穿缓存探测。
 
         用途：
-        - 给路径检查 UI 返回即时提示；
-        - 给运行时上下文补 `is_steam_managed`；
-        - 复用历史缓存，避免每次输入框失焦都跑 DLL 探针。
+        - 已有记录：直接复用完整探测缓存；
+        - 新路径：立即补一次完整探测并落缓存，避免前后结果不一致；
+        - 运行时仍然按当前路径动态刷新 `is_steam_managed`。
         """
         normalized_path = self._normalize_install_path(install_path)
         if not normalized_path:
             return GameInstallFacts()
 
         cached = self.registry.get(normalized_path)
-        executable = GameManager.detect_executable(normalized_path)
-        executable_path = str(executable or "")
-        # 同一轮轻量探测里复用一次 exe 解析结果，避免反复做同样的文件系统判断。
-        steam_api_path = self._find_steam_api_path(normalized_path, executable_path)
-        steam_appid_path = self._find_appid_path(normalized_path, executable_path)
-        appid_match = bool(
-            steam_appid_path
-            and self._read_appid(Path(steam_appid_path)) == RIMWORLD_APP_ID
-        )
-        is_steam_library_path = detect_is_steam_managed_install(normalized_path)
+        if not cached:
+            return self.inspect(normalized_path, force=True)
 
-        signals: list[str] = []
-        if appid_match:
-            signals.append("steam_appid")
-        if steam_api_path:
-            signals.append("steam_api")
-        if is_steam_library_path:
-            signals.append("steam_library_path")
-        if cached and cached.is_steam:
-            signals.append("known_install_cache")
-
-        quick_is_steam = bool(cached.is_steam) if cached else bool(appid_match and steam_api_path)
-        quick_is_steam_managed = bool(quick_is_steam and is_steam_library_path)
+        layout = self._scan_install_layout(normalized_path)
+        signals = list(layout["signals"])
+        signals.append("known_install_cache")
         return GameInstallFacts(
             install_path=normalized_path,
-            executable_path=executable_path,
-            game_version=GameManager.get_game_version(normalized_path) if executable_path else "",
-            is_steam=quick_is_steam,
-            is_steam_managed=quick_is_steam_managed,
-            steam_api_path=steam_api_path,
-            steam_appid_path=steam_appid_path,
-            steam_api_probe=cached.steam_api_probe if cached else "skipped",
+            executable_path=layout["executable_path"],
+            game_version=layout["game_version"],
+            is_steam=bool(cached.is_steam),
+            is_steam_managed=bool(cached.is_steam and layout["is_steam_library_path"]),
+            steam_api_path=layout["steam_api_path"],
+            steam_appid_path=layout["steam_appid_path"],
+            steam_api_probe=cached.steam_api_probe or "skipped",
             signals=signals,
-            checked_at=cached.checked_at if cached else 0,
+            checked_at=cached.checked_at,
         )
 
     def inspect(self, install_path: str, *, force: bool = False) -> GameInstallFacts:
@@ -470,9 +482,13 @@ finally:
         if cached and not force:
             return cached
 
-        quick = self.quick_inspect(normalized_path)
-        probe_result = self._probe_official_steam_api(normalized_path, quick.steam_api_path, quick.steam_appid_path)
-        signals = list(quick.signals)
+        layout = self._scan_install_layout(normalized_path)
+        probe_result = self._probe_official_steam_api(
+            normalized_path,
+            layout["steam_api_path"],
+            layout["steam_appid_path"],
+        )
+        signals = list(layout["signals"])
         if probe_result == "official":
             signals.append("steam_api_verified")
             is_steam = True
@@ -486,19 +502,19 @@ finally:
             # 避免因为系统动态库装载差异把真实 Steam 副本误判成非 Steam。
             # 这条回退规则只在探针本身失败时生效；若探针明确命中模拟器，则直接判否。
             is_steam = bool(
-                quick.steam_api_path
-                and quick.steam_appid_path
-                and self._read_appid(Path(quick.steam_appid_path)) == RIMWORLD_APP_ID
+                layout["steam_api_path"]
+                and layout["steam_appid_path"]
+                and self._read_appid(Path(layout["steam_appid_path"])) == RIMWORLD_APP_ID
             )
 
         facts = GameInstallFacts(
-            install_path=quick.install_path,
-            executable_path=quick.executable_path,
-            game_version=quick.game_version,
+            install_path=normalized_path,
+            executable_path=layout["executable_path"],
+            game_version=layout["game_version"],
             is_steam=is_steam,
-            is_steam_managed=bool(is_steam and detect_is_steam_managed_install(normalized_path)),
-            steam_api_path=quick.steam_api_path,
-            steam_appid_path=quick.steam_appid_path,
+            is_steam_managed=bool(is_steam and layout["is_steam_library_path"]),
+            steam_api_path=layout["steam_api_path"],
+            steam_appid_path=layout["steam_appid_path"],
             steam_api_probe=probe_result,
             signals=signals,
             checked_at=current_ms(),

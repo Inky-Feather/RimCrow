@@ -111,8 +111,10 @@ export const useProfileStore = defineStore('profile', () => {
         groupStore.reset()
         // 2. 先立即拉取一次新环境上下文，确保停用列表等持久化状态即时恢复
         await appStore.refreshData()
-        // 3. 再后台触发一次扫描，补齐该环境的 DLC / Local / Workshop 实际磁盘状态
-        await modStore.scanMods()
+        // 3. 当前环境链接已由后端即时收敛；仅在开启自动扫描时再补磁盘事实
+        if (appStore.settings.enable_auto_scan !== false && activeContext.value?.is_healthy !== false) {
+          await appStore.requestModScan()
+        }
         toast.success(`已切换至环境: ${currentProfile.value?.name || profileId}`)
       }
     } finally {
@@ -127,7 +129,7 @@ export const useProfileStore = defineStore('profile', () => {
     if (checkResult(res, `更新环境 "${profileId}"`, true)) {
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
-        switchProfile(profileId)
+        await appStore.refreshData()
       }
     }
   }
