@@ -18,6 +18,18 @@ import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIde
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
+
+  const createDefaultRuntimeSession = () => ({
+    profile_id: '',
+    state: 'idle',
+    source: 'manager',
+    launch_mode: 'unknown',
+    requested_at: null,
+    deadline_at: null,
+    started_at: null,
+    failure_reason: '',
+    message: '',
+  })
   
   // === State ===
   const appVersion = ref('')     // 应用版本号
@@ -25,6 +37,8 @@ export const useAppStore = defineStore('app', () => {
   const isLoading = ref(false)   // 加载状态
   const isGameRunning = ref(false) // 全局游戏运行状态
   const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
+  // 运行时会话与 UI 当前环境分离：这里只记录“游戏现在实际按谁在跑”。
+  const runtimeSession = ref(createDefaultRuntimeSession())
   
   // UI 状态
   const uiState = reactive({
@@ -363,6 +377,14 @@ export const useAppStore = defineStore('app', () => {
     remoteImageCache.total_bytes = Number(cacheStats?.total_bytes || 0)
   }
 
+  const setRuntimeSession = (session = {}) => {
+    runtimeSession.value = {
+      ...createDefaultRuntimeSession(),
+      ...(session || {}),
+    }
+    isGameRunning.value = runtimeSession.value.state === 'running'
+  }
+
   const applyInitialPayload = (payload, { isInit = false, historyLabel = '刷新磁盘状态' } = {}) => {
     if (!payload) return false
 
@@ -381,6 +403,7 @@ export const useAppStore = defineStore('app', () => {
 
     appVersion.value = payload.app_version || 'Unknown'
     buildMode.value = payload.build_mode || ''
+    setRuntimeSession(payload.runtime_session)
 
     const profileStore = useProfileStore()
     profileStore.fetchProfiles()
@@ -920,9 +943,19 @@ export const useAppStore = defineStore('app', () => {
     // 监听游戏状态变化
     window.addEventListener('game-status-changed', (e) => {
       const detail = e?.detail || {}
-      isGameRunning.value = !!detail.running
+      if (detail.runtime_session) {
+        setRuntimeSession(detail.runtime_session)
+      } else {
+        isGameRunning.value = !!detail.running
+      }
       if (detail.profile_id && detail.last_played_time) {
         useProfileStore().applyLastPlayedTime(detail.profile_id, detail.last_played_time)
+      }
+      if (detail.source === 'external' && detail.message) {
+        toast.info(detail.message, { timeout: 4000 })
+      }
+      if (detail.failure_reason && detail.message) {
+        toast.error(detail.message)
       }
     })
     window.addEventListener('app-suspending', () => {
@@ -1195,6 +1228,9 @@ export const useAppStore = defineStore('app', () => {
     const profileStore = useProfileStore()
     const normalizedTargetProfileId = String(profile_id || '').trim()
     const currentProfileId = String(profileStore.currentProfileId || '').trim()
+    const effectiveTargetProfileId = normalizedTargetProfileId || currentProfileId
+    const targetProfile = (profileStore.profiles || []).find(item => item.id === effectiveTargetProfileId)
+    const targetProfileName = targetProfile?.name || effectiveTargetProfileId || '当前环境'
     // 当前环境启动前必须先把界面里的最新工作序列落盘；
     // 只有“启动别的环境”时，才允许跳过这一步。
     if (!normalizedTargetProfileId || normalizedTargetProfileId === currentProfileId) {
@@ -1207,7 +1243,12 @@ export const useAppStore = defineStore('app', () => {
     gameRes = await resolveGameLaunchWarning(gameRes, profile_id)
     if (!gameRes) return
     if (checkResult(gameRes, "启动游戏程序")) {
-      toast.success(gameRes.message)
+      const runtimeState = String(gameRes?.data?.runtime_session?.state || '').trim()
+      if (runtimeState === 'launching') {
+        toast.success(`正在启动“${targetProfileName}”环境，请等待游戏进程确认。`)
+      } else {
+        toast.success(gameRes.message)
+      }
     }
   }
   // 触发睡眠 API
@@ -1385,20 +1426,57 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const WAIT_STEAM_EXIT_ACTION = 'wait_steam_exit'
+  const GAME_LAUNCH_WARNING_REASON = Object.freeze({
+    STEAM_PATH_INVALID: 'steam_path_invalid',
+    STEAM_RUNNING_WORKSHOP_CONFLICT: 'steam_running_workshop_conflict',
+  })
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
-
-  const buildDirectLaunchSteamRunningMessage = () => (
-    '当前环境配置为直接启动游戏本体，且已将创意工坊模组链接部署到本地模组目录。\n'
-    + '检测到 Steam 已在运行，如果现在继续启动游戏，Steam 会接管本次启动，游戏内将同时出现两套创意工坊模组。\n'
-    + '默认会优先加载本地目录中的那一套，一般不会影响实际游戏，但界面显示和后续管理会变得混乱。\n'
-    + '请手动退出 Steam，或先删掉这批额外生成的 Workshop 链接后再运行。\n'
-    + '当前窗口会保持等待，Steam 完全退出后将自动启动游戏。'
-  )
 
   const showSteamNotReadyHint = (res) => {
     const statusHint = res?.data?.steam_status?.user_hint
     if (res?.data?.action === 'steam_not_ready' && statusHint?.message) {
       toast.warning(`${statusHint.title || 'Steam 未就绪'}\n${statusHint.message}`, { timeout: 6000 })
+    }
+  }
+
+  const buildGameLaunchWarningConfig = (gameRes) => {
+    const reason = String(gameRes?.data?.reason || '').trim()
+    const fallbackMessage = String(gameRes?.message || '').trim()
+    switch (reason) {
+      case GAME_LAUNCH_WARNING_REASON.STEAM_PATH_INVALID:
+        return {
+          type: 'warning',
+          mode: 'confirm',
+          title: 'Steam 启动不可用',
+          message: '当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。\n你可以改为直接启动游戏本体，或先修复 Steam 路径后重试。',
+          confirmText: '直接启动',
+          cancelText: '取消',
+          action: 'continue',
+        }
+      case GAME_LAUNCH_WARNING_REASON.STEAM_RUNNING_WORKSHOP_CONFLICT:
+        return {
+          type: 'warning',
+          mode: 'wait_steam_exit',
+          title: '建议先停用 Steam',
+          message: '当前环境配置为直接启动游戏本体，且已将创意工坊模组链接部署到本地模组目录。\n检测到 Steam 已在运行，如果现在继续启动游戏，Steam 会接管本次启动，游戏内将同时出现两套创意工坊模组。\n默认会优先加载本地目录中的那一套，一般不会影响实际游戏，但界面显示和后续管理会变得混乱。\n你可以手动退出 Steam；当前窗口会保持等待，Steam 完全退出后将自动启动游戏。\n如果你清楚影响，也可以直接继续运行。',
+          actionButtons: [
+            { label: '继续运行', value: 'continue', kind: 'primary' },
+            { label: '取消', value: 'cancel', kind: 'secondary' },
+          ],
+        }
+      default:
+        if (gameRes?.data?.requires_fallback_confirm) {
+          return {
+            type: 'warning',
+            mode: 'confirm',
+            title: '启动前确认',
+            message: fallbackMessage || '当前环境需要先确认后再继续启动。',
+            confirmText: '继续',
+            cancelText: '取消',
+            action: 'continue',
+          }
+        }
+        return null
     }
   }
 
@@ -1409,44 +1487,50 @@ export const useAppStore = defineStore('app', () => {
 
     const profileStore = useProfileStore()
     const targetProfileId = gameRes?.data?.profile_id || requestedProfileId || profileStore.currentProfileId
-    if (gameRes?.data?.requires_fallback_confirm) {
-      const confirmStore = useConfirmStore()
+    const confirmStore = useConfirmStore()
+    const warningConfig = buildGameLaunchWarningConfig(gameRes)
+    if (!warningConfig) {
+      return gameRes
+    }
+
+    if (warningConfig.mode === 'confirm') {
       const ok = await confirmStore.confirmAction(
-        'Steam 启动不可用',
-        gameRes?.message || '当前环境无法按 Steam 方式启动。\n是否改为按游戏本体直接启动？',
-        { type: 'warning', confirmText: '直接启动', cancelText: '取消' }
+        warningConfig.title,
+        warningConfig.message,
+        { type: warningConfig.type, confirmText: warningConfig.confirmText, cancelText: warningConfig.cancelText }
       )
       if (!ok) return null
+      return window.pywebview.api.game_launch_resolve_warning(targetProfileId, warningConfig.action || 'continue')
     }
 
-    if (gameRes?.data?.steam_running) {
-      return await waitSteamExitAndLaunch(targetProfileId, buildDirectLaunchSteamRunningMessage())
+    if (warningConfig.mode === 'wait_steam_exit') {
+      return await waitSteamExitAndLaunch(targetProfileId, warningConfig)
     }
-    return window.pywebview.api.game_launch_resolve_warning(targetProfileId, 'continue')
+    return gameRes
   }
 
-  const waitSteamExitAndLaunch = async (targetProfileId, waitingMessage) => {
+  const waitSteamExitAndLaunch = async (targetProfileId, warningConfig) => {
     const confirmStore = useConfirmStore()
     let stopPolling = false
     let autoLaunchResult = null
     let autoResolved = false
 
     const choicePromise = confirmStore.open({
-      title: 'Steam 已在运行',
-      message: waitingMessage,
+      title: warningConfig?.title || '建议先停用 Steam',
+      message: warningConfig?.message || '',
       mode: 'confirm',
-      type: 'warning',
-      actionButtons: [
-        { label: '继续运行', value: 'continue', kind: 'primary' },
-        { label: '删链运行', value: 'clear_workshop', kind: 'danger' },
-        { label: '取消', value: 'cancel', kind: 'secondary' },
-      ],
+      type: warningConfig?.type || 'warning',
+      actionButtons: Array.isArray(warningConfig?.actionButtons) && warningConfig.actionButtons.length
+        ? warningConfig.actionButtons
+        : [
+            { label: '继续运行', value: 'continue', kind: 'primary' },
+            { label: '取消', value: 'cancel', kind: 'secondary' },
+          ],
     })
 
     const pollingPromise = (async () => {
       while (!stopPolling && confirmStore.isVisible) {
         try {
-          // 等待 Steam 退出时只检测进程，避免 Steamworks/登录态在退出瞬间干扰判断。
           const statusRes = await window.pywebview.api.steam_process_status()
           const isRunning = !!statusRes?.data?.running
           if (statusRes?.status === 'success' && !isRunning) {
@@ -1456,7 +1540,7 @@ export const useAppStore = defineStore('app', () => {
               && launchRes?.data?.action === WAIT_STEAM_EXIT_ACTION
               && launchRes?.data?.steam_running
             ) {
-              // Steam 仍未完全退出，继续等待下一轮轮询。
+              // Steam 尚未完全退出，继续等待下一轮轮询。
             } else {
               autoLaunchResult = launchRes
               autoResolved = true
@@ -1951,7 +2035,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
     packageTransferDialog,
-    remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, upgradeContext,
+    remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     refreshModsData,
     requestModScan,

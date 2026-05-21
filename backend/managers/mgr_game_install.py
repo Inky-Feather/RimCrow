@@ -84,7 +84,8 @@ def detect_is_steam_managed_install(path_str: str) -> bool:
 
 class GameInstallRegistry:
     def __init__(self, path: Path = KNOWN_INSTALLS_PATH):
-        self.path = path
+        # 只作为缓存文件定位，不需要暴露给 pywebview 的 API 反射层。
+        self._path = path
         self._cache: dict[str, Any] | None = None
         self._write_lock = threading.Lock()
 
@@ -94,32 +95,32 @@ class GameInstallRegistry:
     def _load(self) -> dict[str, Any]:
         if self._cache is not None:
             return self._cache
-        if not self.path.exists():
+        if not self._path.exists():
             self._cache = {"installs": {}}
             return self._cache
         try:
-            with open(self.path, "r", encoding="utf-8") as handle:
+            with open(self._path, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
             installs = payload.get("installs") if isinstance(payload, dict) else {}
             self._cache = {"installs": installs if isinstance(installs, dict) else {}}
         except Exception as exc:
             logger.warning(f"读取已知游戏本体缓存失败，将回退到空缓存: {exc}")
             try:
-                corrupt_path = self.path.with_name(self.path.name + ".corrupt")
-                self.path.replace(corrupt_path)
+                corrupt_path = self._path.with_name(self._path.name + ".corrupt")
+                self._path.replace(corrupt_path)
             except Exception:
                 pass
             self._cache = {"installs": {}}
         return self._cache
 
     def _write_payload(self, payload: dict[str, Any]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = self.path.with_name(self.path.name + ".tmp")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = self._path.with_name(self._path.name + ".tmp")
         with open(temp_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, ensure_ascii=False)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp_path, self.path)
+        os.replace(temp_path, self._path)
 
     def get(self, install_path: str) -> GameInstallFacts | None:
         key = self._normalize_key(install_path)

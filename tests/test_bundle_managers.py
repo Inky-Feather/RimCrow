@@ -103,6 +103,57 @@ class TestDataBundleManager(unittest.TestCase):
             self.assertEqual(result["name"], "本地环境")
             self.assertEqual(result["game_install_path"], "D:/RimWorld")
 
+    def test_create_imported_profile_restores_metadata_but_uses_new_local_root_and_empty_install_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_root = temp_root / "source"
+            source_root.mkdir(parents=True)
+            (source_root / "Config").mkdir()
+            (source_root / "Config" / "ModsConfig.xml").write_text("<mods />", encoding="utf-8")
+
+            profile_mgr = _StubProfileManager()
+            profile_mgr._get_install_inspector = lambda: SimpleNamespace(inspect=lambda *_args, **_kwargs: None)
+            profile_mgr._sync_profile_to_disk = lambda _profile: None
+            manager = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
+
+            created_rows = []
+
+            class _Atomic:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return False
+
+            def _create(**payload):
+                created_rows.append(payload)
+                return SimpleNamespace(**payload)
+
+            with patch("backend.managers.mgr_data_bundle.DATA_DIR", temp_root / "appdata"), \
+                 patch("backend.managers.mgr_data_bundle.uuid.uuid4", return_value=SimpleNamespace(hex="profile-new")), \
+                 patch("backend.managers.mgr_data_bundle.GameProfile.create", side_effect=_create), \
+                 patch("backend.managers.mgr_data_bundle.db.atomic", return_value=_Atomic()):
+                result = manager._create_imported_profile(  # noqa: SLF001
+                    {
+                        "name": "导入环境",
+                        "description": "desc",
+                        "game_version": "1.6",
+                        "prefer_steam_launch": True,
+                        "use_workshop_mods": True,
+                        "use_self_mods": False,
+                        "run_commands": ["-foo"],
+                        "inactive_mods_order": ["a"],
+                        "last_played_time": 123,
+                    },
+                    source_root,
+                    selected_install_path="",
+                )
+
+            self.assertEqual(result["mode"], "create")
+            self.assertEqual(created_rows[0]["game_install_path"], "")
+            self.assertEqual(created_rows[0]["user_data_path"], str(temp_root / "appdata" / "profiles" / "profile-new"))
+            self.assertEqual(created_rows[0]["name"], "导入环境")
+
 
 class TestModPackageManager(unittest.TestCase):
     def test_import_bundle_post_actions_keeps_profile_refresh_and_scan_independent(self):

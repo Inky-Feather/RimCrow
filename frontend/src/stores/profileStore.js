@@ -102,7 +102,7 @@ export const useProfileStore = defineStore('profile', () => {
       await orderStore.saveInactiveOrder();  // 先保存停用列表顺序
       const res = await window.pywebview.api.profile_activate(profileId)
       if (checkResult(res, '切换环境')) {
-        currentProfileId.value = profileId
+        currentProfileId.value = res?.data?.profile?.id || profileId
         // 【关键逻辑】环境切换后，重置并刷新所有数据
         const groupStore = useGroupStore()
         // 1. 清空当前前端的缓存，防止数据交叉
@@ -115,7 +115,14 @@ export const useProfileStore = defineStore('profile', () => {
         if (appStore.settings.enable_auto_scan !== false && activeContext.value?.is_healthy !== false) {
           await appStore.requestModScan()
         }
-        toast.success(`已切换至环境: ${currentProfile.value?.name || profileId}`)
+        toast.success(`已切换至环境: ${currentProfile.value?.name || currentProfileId.value}`)
+      } else {
+        const fallbackProfileId = String(res?.data?.fallback_profile_id || '').trim()
+        if (fallbackProfileId) {
+          currentProfileId.value = fallbackProfileId
+          await appStore.refreshData()
+          await fetchProfiles()
+        }
       }
     } finally {
       appStore.isLoading = false

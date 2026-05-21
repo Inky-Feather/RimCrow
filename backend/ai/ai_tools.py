@@ -631,7 +631,10 @@ class AIToolExecutor:
         filename = self.log_filename
         if not filename: return {"error": "当前会话缺少日志文件上下文，无法执行日志定位工具。"}
         if source_type == 'game':
-            filepath = os.path.join(self.context.user_data_path, filename) if self.context else ""
+            if self.reader and hasattr(self.reader, "resolve_log_file_path"):
+                filepath = self.reader.resolve_log_file_path(filename)
+            else:
+                filepath = os.path.join(self.context.user_data_path, filename) if self.context else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         if not os.path.exists(filepath):

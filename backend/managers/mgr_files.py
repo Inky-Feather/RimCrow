@@ -19,6 +19,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import webview # 引入 webview 库
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
+from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
@@ -1539,7 +1540,13 @@ class PathChecker:
     @classmethod
     def check_user_data_path(cls, path_str:str) -> Dict:
         if not path_str: return cls._format_res(False, msg="用户数据路径不能为空")
-        normalized_path = os.path.normpath(os.path.abspath(path_str))
+        try:
+            normalized_path = UserDataRoot.from_raw(
+                path_str,
+                default_roots=GameManager.get_default_user_data_paths(),
+            ).root_path
+        except ValueError as e:
+            return cls._format_res(False, msg=str(e))
         # 哪怕目录不存在，只要父目录存在且有写入权限，我们就认为合法（因为我们可以创建它）
         parent_dir = os.path.dirname(normalized_path)
         if parent_dir and not os.path.exists(parent_dir):

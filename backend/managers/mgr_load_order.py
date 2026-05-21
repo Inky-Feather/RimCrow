@@ -3,6 +3,7 @@ import shutil
 import glob
 import datetime
 import hashlib
+import tempfile
 from pathlib import Path
 from typing import Any
 from backend.database.dao import ModDAO
@@ -642,6 +643,55 @@ class LoadOrderManager:
                 'version_token': self._build_version_token(mods_config_file_path, [], modify_time=modify_time),
             }
 
+    def _build_empty_modsconfig_tree(self, current_version: str):
+        root = etree.Element("ModsConfigData")
+        ver = etree.SubElement(root, "version")
+        ver.text = current_version
+        etree.SubElement(root, "activeMods")
+        etree.SubElement(root, "knownExpansions")
+        return etree.ElementTree(root)
+
+    def _backup_broken_modsconfig(self, source_path: str):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        dest_path = os.path.join(self.other_dir, f"ModsConfig_broken_{timestamp}.xml")
+        try:
+            shutil.copy2(source_path, dest_path)
+            logger.warning(f"已备份损坏的 ModsConfig.xml 到: {dest_path}")
+        except Exception as backup_error:
+            logger.warning(f"备份损坏的 ModsConfig.xml 失败，将继续覆盖保存: {backup_error}")
+
+    def _load_modsconfig_tree_for_save(self, current_version: str):
+        parser = etree.XMLParser(remove_blank_text=True)
+        source_path = self.context.mods_config_file
+        if not os.path.exists(source_path):
+            return self._build_empty_modsconfig_tree(current_version)
+        try:
+            return etree.parse(source_path, parser)
+        except Exception as e:
+            self._backup_broken_modsconfig(source_path)
+            logger.warning(f"ModsConfig.xml 无法解析，保存时将重建并覆盖: {source_path}, error={e}")
+            return self._build_empty_modsconfig_tree(current_version)
+
+    def _write_xml_tree_atomically(self, tree, write_path: str):
+        parent_dir = os.path.dirname(write_path) or "."
+        os.makedirs(parent_dir, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(
+            prefix=f".{Path(write_path).stem}_",
+            suffix=f"{Path(write_path).suffix}.tmp",
+            dir=parent_dir,
+        )
+        os.close(fd)
+        try:
+            tree.write(temp_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+            os.replace(temp_path, write_path)
+        except Exception:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            raise
+
     def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, export_format: str = EXPORT_FORMAT_MODSCONFIG, list_name: str | None = None):
         """
         保存加载顺序。
@@ -708,20 +758,9 @@ class LoadOrderManager:
                 self._write_rml_file(write_path, entries)
                 logger.info(f"成功导出 {len(entries)} 个模组到 RML: {write_path}")
             else:
-                # 尝试保留原有的 knownExpansions 等信息
-                parser = etree.XMLParser(remove_blank_text=True)
-                if os.path.exists(self.context.mods_config_file):
-                    tree = etree.parse(self.context.mods_config_file, parser)
-                    root = tree.getroot()
-                else:
-                    # 如果文件不存在，创建基本骨架
-                    root = etree.Element("ModsConfigData")
-                    # 尝试从 settings 获取版本，或者默认 Unknow
-                    ver = etree.SubElement(root, "version")
-                    ver.text = current_version # 这是一个兜底，理想情况应该读 Version.txt
-                    etree.SubElement(root, "activeMods")
-                    etree.SubElement(root, "knownExpansions")
-                    tree = etree.ElementTree(root)
+                # 尝试保留原有的 knownExpansions 等信息；旧文件坏掉时直接重建后覆盖。
+                tree = self._load_modsconfig_tree_for_save(current_version)
+                root = tree.getroot()
                 # 更新 activeMods 节点，没有则创建
                 active_node = root.find("activeMods")
                 if active_node is None:
@@ -732,8 +771,8 @@ class LoadOrderManager:
                 for mod_id in final_ids:
                     li = etree.SubElement(active_node, "li")
                     li.text = mod_id
-                # 4. 格式化写入
-                tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+                # 4. 用临时文件原子替换，避免中途失败留下空文件。
+                self._write_xml_tree_atomically(tree, write_path)
                 # 同步一份最近备份，改用 RML 格式，方便后续完整恢复和识别。
                 self._write_rml_file(os.path.join(self.backup_root, "Latest_ModList.rml"), entries)
                 logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")

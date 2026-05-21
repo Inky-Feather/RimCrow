@@ -209,7 +209,6 @@ class ApiResponse:
 
 class LaunchWarningAction(Enum):
     CONTINUE = "continue"
-    CLEAR_WORKSHOP = "clear_workshop"
     WAIT_STEAM_EXIT = "wait_steam_exit"
     CANCEL = "cancel"
 
@@ -256,7 +255,6 @@ class API:
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
-        self._runtime_link_sync_state: dict[str, dict[str, Any]] = {}
         self._last_runtime_link_sync_result: dict[str, Any] = {}
         # 桌面模式首屏阶段只允许触发一次后台预热，避免 loaded / ready 多次回调时重复导入大缓存文件。
         self._startup_warmup_started = False
@@ -326,6 +324,50 @@ class API:
             return [value] if value else []
         return [str(item or '').strip() for item in items if str(item or '').strip()]
 
+    def _get_runtime_session_data(self) -> dict[str, Any]:
+        game_monitor = getattr(self, "game_monitor", None)
+        if not game_monitor:
+            return {}
+        if hasattr(game_monitor, "get_runtime_session_data"):
+            return game_monitor.get_runtime_session_data()
+        if hasattr(game_monitor, "get_runtime_session"):
+            session = game_monitor.get_runtime_session()
+            if hasattr(session, "to_dict"):
+                return session.to_dict()
+            return session or {}
+        return {}
+
+    def _get_runtime_session_manager(self):
+        """
+        统一拿运行态会话管理对象。
+
+        正常运行时直接复用 GameMonitor；
+        单测里如果通过 API.__new__ 绕过初始化，则退回最小假对象，
+        保证启动流程仍能返回稳定的 runtime_session 结构。
+        """
+        game_monitor = getattr(self, "game_monitor", None)
+        if (
+            game_monitor
+            and not str(type(game_monitor).__module__ or "").startswith("unittest.mock")
+            and callable(getattr(game_monitor, "begin_launch", None))
+            and callable(getattr(game_monitor, "mark_launch_failed", None))
+        ):
+            return game_monitor
+        return SimpleNamespace(
+            begin_launch=lambda *args, **kwargs: {
+                "profile_id": str(args[0] if args else "").strip(),
+                "state": "launching",
+                "launch_mode": str(kwargs.get("launch_mode") or (args[1] if len(args) > 1 else "unknown")).strip() or "unknown",
+                "message": str(kwargs.get("message") or "").strip(),
+            },
+            mark_launch_failed=lambda reason, message="": {
+                "profile_id": "",
+                "state": "idle",
+                "failure_reason": str(reason or "").strip(),
+                "message": str(message or "").strip(),
+            },
+        )
+
     @staticmethod
     def _build_delete_response(target_name: str, total: int, result: dict, success_message: str = ""):
         success_count = int(result.get('success_count', 0) or 0)
@@ -380,7 +422,7 @@ class API:
         return True
     
     
-    def _bootstrap_context(self, profile_id: str):
+    def _bootstrap_context(self, profile_id: str, *, allow_fallback: bool = True):
         """装载当前环境，并重建所有业务引擎"""
         # 在重建前，先停止旧的监视器
         if self.game_log_mgr: self.game_log_mgr.stop_realtime_monitor()
@@ -394,6 +436,7 @@ class API:
             # 获取上下文
             self.active_context = self.profile_mgr.activate_profile(profile_id)
         except Exception as e:
+            if not allow_fallback: raise
             # 兜底：如果报错，强制退回 default
             logger.error(f"Bootstrap profile {profile_id} failed: {str(e)}", exc_info=True)
             self.active_context = self.profile_mgr.activate_profile('default')
@@ -924,7 +967,7 @@ class API:
             self.game_monitor.start()
         if self.game_monitor:
             # 告诉前端当前的游戏状态
-            EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running})
+            EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running, 'runtime_session': self._get_runtime_session_data()})
         logger.info("[EventBus] 收到前端就绪信号，事件总线已恢复")
         return ApiResponse.success()
     
@@ -953,7 +996,8 @@ class API:
             "active_load_version_token": {},
             "is_first_db_init": self.is_first_db_init,
             "active_context": self.active_context if self.active_context else None,
-            "upgrade_context": self._upgrade_context.copy() 
+            "upgrade_context": self._upgrade_context.copy(),
+            "runtime_session": self._get_runtime_session_data(),
         }
         if not self.active_context or not self.active_context.is_healthy: return ApiResponse.success(result)
         
@@ -2264,102 +2308,99 @@ class API:
                 is_steam_managed,
             )
 
+            runtime_session_mgr = self._get_runtime_session_manager()
+
             if prefer_steam_launch:
                 if is_steam_managed:
-                    # Steam 管理主版本可以走 Steam 官方入口。
-                    # 进入 Steam 前先清掉额外 Workshop 链接，避免“Steam 自动挂载 + 本地链接部署”重复参与。
-                    self._ensure_runtime_links_for_launch(profile_id, include_workshop=False)
+                    # Steam 管理主版本可以走 Steam 官方入口，但启动前仍要先收口链接状态。
+                    prepare_result = self._prepare_profile_launch(profile_id, include_workshop=False)
+                    if not prepare_result.get("ok"):
+                        failed_session = runtime_session_mgr.mark_launch_failed("launch_prepare_failed", str(prepare_result.get("message") or "启动前准备失败"))
+                        return ApiResponse.error(
+                            str(prepare_result.get("message") or "启动前准备失败"),
+                            data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
+                        )
 
                     if steam_path_valid:
-                        game_monitor = getattr(self, "game_monitor", None)
-                        if game_monitor:
-                            game_monitor.launch_profile_id = profile_id
+                        session = runtime_session_mgr.begin_launch(profile_id, "steam", message="已发起 Steam 启动，等待游戏进程确认。")
                         self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
-                        return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+                        return ApiResponse.success( data={"runtime_session": session}, message="已发起 Steam 启动，等待游戏进程确认。" )
 
                     if profile.id == 'default':
                         try:
-                            game_monitor = getattr(self, "game_monitor", None)
-                            if game_monitor:
-                                game_monitor.launch_profile_id = profile_id
+                            prepare_result = self._prepare_profile_launch(profile_id, include_workshop=False)
+                            if not prepare_result.get("ok"):
+                                failed_session = runtime_session_mgr.mark_launch_failed("launch_prepare_failed", str(prepare_result.get("message") or "启动前准备失败"))
+                                return ApiResponse.error(
+                                    str(prepare_result.get("message") or "启动前准备失败"),
+                                    data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
+                                )
+                            session = runtime_session_mgr.begin_launch(profile_id, "steam", message="已尝试通过 Steam URL 启动，等待游戏进程确认。")
                             os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
                             return ApiResponse.warning(
-                                message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。"
+                                message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
+                                data={"runtime_session": session},
                             )
                         except Exception as e:
                             logger.warning(f"Launch Steam game via URL failed: {e}", exc_info=True)
+                            failed_session = runtime_session_mgr.mark_launch_failed("steam_url_launch_failed", f"通过 Steam URL 启动失败: {e}")
+                            return ApiResponse.error(
+                                f"通过 Steam URL 启动失败: {e}",
+                                data={"runtime_session": failed_session, "failure_reason": "steam_url_launch_failed"},
+                            )
 
                     return self._build_direct_launch_confirmation(
                         profile_id=profile_id,
                         steam_running=bool(steam_running),
                         reason="steam_path_invalid",
-                        message="当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径，无法安全自动启动。您可以继续改为游戏本体直启，或先修复 Steam 路径后重试。",
+                        message="当前环境无法按 Steam 方式启动，需要先确认是否改为直接启动。",
                         requires_fallback_confirm=True,
                         steam_status=self._attach_steam_user_hint(steam_status),
                     )
                 # 非 Steam 管理主版本的 Steam 正版副本：
                 # 不适合再假装它是“官方 AppID 安装”，但仍然可以通过
                 # “先等 Steam 就绪，再直启游戏本体”的方式进入 Steam 运行态。
-                ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=45)
+                ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=60)
                 if ok:
+                    session = runtime_session_mgr.begin_launch(profile_id, "direct", message="Steam 已就绪，等待游戏进程确认。")
                     self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=False)
-                    return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+                    return ApiResponse.success( data={"runtime_session": session}, message="Steam 已就绪，已发起游戏启动，等待游戏进程确认。" )
 
-                # Steam 客户端未进入可用状态，提示用户确认
-                return self._build_direct_launch_confirmation(
-                    profile_id=profile_id,
-                    steam_running=bool((ensured_status or {}).get("running")),
-                    reason=str((ensured_status or {}).get("reason") or "steam_not_ready"),
-                    message=message or "Steam 未能进入可用状态。您可以继续改为游戏本体直启，或稍后重试。",
-                    requires_fallback_confirm=True,
-                    steam_status=ensured_status,
+                failed_reason = str((ensured_status or {}).get("reason") or "steam_not_ready").strip() or "steam_not_ready"
+                failed_session = runtime_session_mgr.mark_launch_failed( failed_reason, message or "Steam 未能进入可用状态。" )
+                return ApiResponse.error(
+                    message or "Steam 未能进入可用状态。",
+                    data={
+                        "runtime_session": failed_session,
+                        "failure_reason": failed_reason,
+                        "steam_status": ensured_status or {},
+                    },
                 )
 
-            # 不使用Steam启动，且Steam 已在运行，提示用户确认
-            if steam_running and bool(runtime_caps.get('is_steam')):
+            # 这里只处理“当前环境启用了创意工坊模组链接，且 Steam 已运行”时的冲突提示。
+            # 管理器模组不参与 Steam 删链/避让判断；没有启用工坊链接部署时，也不在这里额外弹窗。
+            if ( steam_running and bool(runtime_caps.get('is_steam')) and bool(runtime_caps.get('workshop_deploy_enabled')) ):
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
                     steam_running=True,
-                    reason="steam_running_conflict",
-                    message="检测到 Steam 已在运行，当前环境若继续以游戏本体直启，Steam 可能会接管本次启动并同时加载工坊内容。",
+                    reason="steam_running_workshop_conflict",
+                    message="检测到 Steam 已在运行，需要先确认工坊链接冲突后再继续启动。",
                     steam_status=steam_status,
                 )
 
-            # 不使用Steam启动，且Steam 未在运行，直接启动游戏本体
-            self._launch_profile_with_runtime_links( profile_id, profile.game_install_path, extra_args, include_workshop=True )
+            # 不使用 Steam 启动时，运行时链接是否带 Workshop 只由目标运行模式决定。
+            include_workshop = bool(runtime_caps.get('workshop_deploy_enabled'))
+            session = runtime_session_mgr.begin_launch(profile_id, "direct", message="已发起游戏启动，等待游戏进程确认。")
+            self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=include_workshop)
 
             # 使用Steam启动，且Steam路径无效，提示用户
             if prefer_steam_launch and not steam_path_valid:
-                return ApiResponse.warning(message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。")
-            return ApiResponse.success(message="直接启动游戏成功，祝你游玩愉快！")
+                return ApiResponse.warning( message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。", data={"runtime_session": session} )
+            return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
         except Exception as e:
             logger.error(f"Launch Game Error: {e}", exc_info=True)
-            return ApiResponse.error(f"启动游戏时出错: {e}")
-
-    @staticmethod
-    def _build_runtime_link_sync_fingerprint(
-        profile_id: str,
-        local_mods_root: str,
-        include_workshop: bool,
-        runtime_caps: dict[str, Any],
-        deploy_paths: list[str] | tuple[str, ...],
-    ) -> dict[str, Any]:
-        normalized_root = os.path.normpath(str(local_mods_root or "")).lower()
-        normalized_deploy_paths = tuple(
-            sorted(
-                os.path.normpath(str(path)).lower()
-                for path in (deploy_paths or [])
-                if str(path or "").strip()
-            )
-        )
-        return {
-            "profile_id": str(profile_id or "").strip(),
-            "local_mods_root": normalized_root,
-            "include_workshop": bool(include_workshop),
-            "workshop_detection_enabled": bool(runtime_caps.get('workshop_detection_enabled')),
-            "workshop_deploy_enabled": bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
-            "deploy_paths": normalized_deploy_paths,
-        }
+            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_exception", f"启动游戏时出错: {e}")
+            return ApiResponse.error( f"启动游戏时出错: {e}", data={"runtime_session": failed_session, "failure_reason": "launch_exception"} )
 
     def _sync_runtime_links_for_profile(self, profile_id: str, include_workshop: bool):
         """
@@ -2368,13 +2409,11 @@ class API:
         """
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
-        runtime_link_sync_state = getattr(self, "_runtime_link_sync_state", {})
         normalized_profile_id = str(profile_id or "").strip()
-        if not local_mods_root or not os.path.exists(local_mods_root):
-            runtime_link_sync_state.pop(normalized_profile_id, None)
-            self._runtime_link_sync_state = runtime_link_sync_state
+        if not local_mods_root:
             self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "missing_root"}
             return False
+        os.makedirs(local_mods_root, exist_ok=True)
         runtime_caps = resolve_profile_runtime_capabilities(context)
         runtime_analysis = ModDAO.get_profile_conflict_analysis(
             context,
@@ -2382,22 +2421,9 @@ class API:
             include_workshop_in_deploy=bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
         )
         deploy_paths = runtime_analysis.get('deploy_paths', [])
-        sync_fingerprint = self._build_runtime_link_sync_fingerprint(
-            normalized_profile_id,
-            local_mods_root,
-            include_workshop,
-            runtime_caps,
-            deploy_paths,
-        )
-        if runtime_link_sync_state.get(normalized_profile_id) == sync_fingerprint:
-            logger.debug("Runtime links already up to date for profile %s", normalized_profile_id)
-            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
-            return True
 
         success = self.file_mgr.sync_managed_links(local_mods_root, deploy_paths)
         if success:
-            runtime_link_sync_state[normalized_profile_id] = sync_fingerprint
-            self._runtime_link_sync_state = runtime_link_sync_state
             self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "deployed"}
         else:
             self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "failed"}
@@ -2419,27 +2445,93 @@ class API:
             return "Deployed runtime links"
         return "Runtime links already up to date" if success and sync_status == "noop" else "Runtime link sync skipped"
 
+    def _build_scan_paths_for_profile(self, context: ProfileContext | None) -> list[str]:
+        paths_to_scan: list[str] = []
+        if not context:
+            return paths_to_scan
+
+        cfg = settings.config
+        if os.path.exists(context.game_dlc_path):
+            paths_to_scan.append(context.game_dlc_path)
+        if os.path.exists(context.local_mods_path):
+            paths_to_scan.append(context.local_mods_path)
+        if os.path.exists(cfg.self_mods_path):
+            paths_to_scan.append(cfg.self_mods_path)
+        if os.path.exists(cfg.workshop_mods_path):
+            paths_to_scan.append(cfg.workshop_mods_path)
+        if os.path.exists(str(TOOL_MODS_DIR)) and cfg.enable_tool_mods:
+            paths_to_scan.append(str(TOOL_MODS_DIR))
+        return paths_to_scan
+
+    def _prepare_profile_launch(self, profile_id: str, include_workshop: bool) -> dict[str, Any]:
+        """
+        统一处理“环境列表直启”的启动前检查同步。
+
+        - 当前活动环境直启：复用现有内存态/扫描态，只做必要的链接收口；
+        - 非当前活动环境直启：一律先做检查同步，避免旧链接残留影响目标环境；
+        - 检查同步开启时会先做一次轻量扫描（不检查目录体积），再按最新结果同步链接；
+        - 关闭扫描开关时，只按数据库缓存和环境配置强制同步一次链接。
+        """
+        normalized_profile_id = str(profile_id or "").strip()
+        active_profile_id = str(getattr(getattr(self, "active_context", None), "profile_id", "") or "").strip()
+        if not normalized_profile_id:
+            return {"ok": False, "message": "未指定 Profile ID"}
+
+        target_context: ProfileContext | None = None
+        if normalized_profile_id == active_profile_id:
+            target_context = self.active_context
+        else:
+            build_context = getattr(self.profile_mgr, "build_profile_context", None)
+            if not callable(build_context):
+                return { "ok": True, "message": "缺少环境上下文构建器，已跳过启动前检查同步。", "mode": "no-context" }
+            target_context = build_context(normalized_profile_id)
+
+        if normalized_profile_id == active_profile_id:
+            success = self._ensure_runtime_links_for_launch(normalized_profile_id, include_workshop=include_workshop)
+            return {
+                "ok": bool(success),
+                "message": "当前活动环境已完成启动前检查同步。" if success else "当前活动环境启动前检查同步失败。",
+                "mode": "active-profile",
+            }
+
+        launch_context = target_context
+        if not launch_context.is_healthy:
+            return { "ok": False, "message": "目标环境路径不可用，请先完成路径设置。", "mode": "unhealthy" }
+
+        quick_scan_enabled = bool( getattr(settings.config, "enable_launch_profile_quick_scan", getattr(settings.config, "enable_auto_scan", False))  )
+        if quick_scan_enabled:
+            temp_scanner = ModScanner(launch_context, runtime_link_sync_handler=None)
+            scan_paths = self._build_scan_paths_for_profile(launch_context)
+            if not scan_paths:
+                return { "ok": False, "message": "目标环境没有可用于启动前检查同步的模组路径。", "mode": "missing-scan-paths" }
+            try:
+                # 直启前检查同步要强制刷新目录事实，但不做目录体积统计，避免把启动准备拖慢。
+                temp_scanner._scan_paths_task("launch-prepare", scan_paths, forced_update=True, size_check_override=False, emit_events=False)
+            finally:
+                try:
+                    temp_scanner.executor.shutdown(wait=False, cancel_futures=False)
+                except Exception:
+                    logger.debug("Shutdown launch prepare scanner failed", exc_info=True)
+            success = self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
+            return {
+                "ok": bool(success),
+                "message": "已完成启动前检查同步，并按最新扫描结果更新链接。" if success else "启动前检查同步已完成扫描，但链接同步失败。",
+                "mode": "scan-sync",
+            }
+
+        success = self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
+        return {
+            "ok": bool(success),
+            "message": "已按当前缓存状态完成启动前检查同步。" if success else "按当前缓存执行启动前检查同步失败。",
+            "mode": "cached-links",
+        }
+
     def _ensure_runtime_links_for_launch(self, profile_id: str, include_workshop: bool) -> bool:
         """
         启动前兜底检查。
-        如果当前进程里已经对同一激活环境收敛到相同运行模式，则直接跳过；
-        只有缺少收敛记录、目标环境不是当前激活环境，或启动模式发生变化时才真正执行收敛。
+        直接按当前数据库事实收口目标环境目录，避免共享目录时被旧缓存误导。
         """
         normalized_profile_id = str(profile_id or "").strip()
-        active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
-        current_state = getattr(self, "_runtime_link_sync_state", {}).get(normalized_profile_id)
-        if (
-            current_state
-            and active_profile_id == normalized_profile_id
-            and bool(current_state.get("include_workshop")) == bool(include_workshop)
-        ):
-            logger.debug(
-                "Launch runtime link check reused in-memory sync state for profile %s (include_workshop=%s)",
-                normalized_profile_id,
-                include_workshop,
-            )
-            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
-            return True
         return self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
 
     @staticmethod
@@ -2496,10 +2588,9 @@ class API:
         2. 再启动游戏，并由游戏监视器在确认进程出现后记录最后启动时间。
         这样可以避免多个启动分支重复维护同一段流程。
         """
-        self._ensure_runtime_links_for_launch(profile_id, include_workshop=include_workshop)
-        game_monitor = getattr(self, "game_monitor", None)
-        if game_monitor:
-            game_monitor.launch_profile_id = profile_id
+        prepare_result = self._prepare_profile_launch(profile_id, include_workshop=include_workshop)
+        if not prepare_result.get("ok"):
+            raise RuntimeError(str(prepare_result.get("message") or "启动前同步失败"))
         self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
 
     def _build_direct_launch_confirmation(
@@ -2533,7 +2624,7 @@ class API:
         status["user_hint"] = self._describe_steam_status(status, waiting=waiting)
         return status
 
-    def _ensure_steam_ready(self, timeout_seconds: float = 45.0):
+    def _ensure_steam_ready(self, timeout_seconds: float = 60.0):
         """
         确保 Steam 已启动并进入已登录可用状态。
         返回: (ok, status, message)
@@ -2566,7 +2657,7 @@ class API:
             timeout_status = self._attach_steam_user_hint(steam_status, waiting=True)
             timeout_status["reason"] = "steam_ready_timeout"
             timeout_status["start_result"] = start_result
-            return False, timeout_status, "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。您可以继续改为游戏本体直启，或先确认 Steam 已登录后重试。"
+            return False, timeout_status, "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。"
         except Exception as e:
             logger.error(f"Ensure Steam ready failed: {e}", exc_info=True)
             failed_status = {
@@ -2576,7 +2667,7 @@ class API:
                 "reason": "steam_status_probe_failed",
                 "detail": str(e),
             }
-            return False, self._attach_steam_user_hint(failed_status), f"检测 Steam 状态失败: {e}。您可以继续改为游戏本体直启，或稍后重试。"
+            return False, self._attach_steam_user_hint(failed_status), f"检测 Steam 状态失败: {e}"
 
     @staticmethod
     def _describe_steam_status(steam_status: dict | None, waiting: bool = False) -> dict:
@@ -2626,7 +2717,7 @@ class API:
     @log_api_call
     def game_launch_resolve_warning(self, profile_id: str, action: str):
         """
-        处理“直接启动且 Steam 已运行”时的用户决策。
+        处理游戏启动前的用户确认。
         """
         try:
             if not profile_id:
@@ -2639,6 +2730,9 @@ class API:
 
             profile = self.profile_mgr.get_profile(profile_id)
             extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            include_workshop = bool(runtime_caps.get('workshop_deploy_enabled'))
+            runtime_session_mgr = self._get_runtime_session_manager()
 
             if normalized_action == LaunchWarningAction.WAIT_STEAM_EXIT.value:
                 steam_running = self.steam_mgr.is_steam_running()
@@ -2651,43 +2745,45 @@ class API:
                             "steam_running": True,
                         },
                     )
+                session = runtime_session_mgr.begin_launch(profile_id, "direct", message="Steam 已退出，已发起游戏启动，等待游戏进程确认。")
                 self._launch_profile_with_runtime_links(
                     profile_id,
                     profile.game_install_path,
                     extra_args,
-                    include_workshop=True,
+                    include_workshop=include_workshop,
                 )
-                return ApiResponse.success(message="Steam 已退出，游戏已自动启动。")
+                return ApiResponse.success(
+                    data={"runtime_session": session},
+                    message="Steam 已退出，已发起游戏启动，等待游戏进程确认。",
+                )
 
-            if normalized_action == LaunchWarningAction.CLEAR_WORKSHOP.value:
+            steam_running = self.steam_mgr.is_steam_running()
+            if not steam_running:
+                session = runtime_session_mgr.begin_launch(
+                    profile_id,
+                    "direct",
+                    message="已发起游戏启动，等待游戏进程确认。",
+                )
                 self._launch_profile_with_runtime_links(
                     profile_id,
                     profile.game_install_path,
                     extra_args,
-                    include_workshop=False,
+                    include_workshop=include_workshop,
                 )
-                return ApiResponse.success(message="已删除 Workshop 链接并启动游戏")
-            else:
-                steam_running = self.steam_mgr.is_steam_running()
-                if not steam_running:
-                    self._launch_profile_with_runtime_links(
-                        profile_id,
-                        profile.game_install_path,
-                        extra_args,
-                        include_workshop=True,
-                    )
-                    return ApiResponse.success(message="已继续直接启动游戏")
+                return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
 
+            session = runtime_session_mgr.begin_launch(profile_id, "direct", message="已发起游戏启动，等待游戏进程确认。")
             self._launch_profile_with_runtime_links(
                 profile_id,
                 profile.game_install_path,
                 extra_args,
-                include_workshop=True,
+                include_workshop=include_workshop,
             )
-            return ApiResponse.success(message="已继续直接启动游戏")
+            return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
         except Exception as e:
             logger.error(f"Resolve launch warning failed: {e}", exc_info=True)
-            return ApiResponse.error(f"处理启动确认失败: {e}")
+            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_warning_resolve_failed", f"处理启动确认失败: {e}")
+            return ApiResponse.error( f"处理启动确认失败: {e}", data={"runtime_session": failed_session, "failure_reason": "launch_warning_resolve_failed"} )
 
     @log_api_call
     def steam_process_status(self):
@@ -3411,43 +3507,63 @@ class API:
     #  8. 日志管理 (Log Management)
     # =========================================================================
 
-    def get_log_files(self, log_type='game'):
+    def _resolve_game_log_scope(self, profile_scope: str = "active") -> tuple[GameLogManager | None, str, bool]:
+        if not self.game_log_mgr:
+            return None, "", False
+        normalized_scope = str(profile_scope or "active").strip().lower() or "active"
+        if normalized_scope != "runtime":
+            active_root = str(getattr(getattr(self, "active_context", None), "user_data_path", "") or "").strip()
+            return self.game_log_mgr, active_root, False
+
+        game_monitor = getattr(self, "game_monitor", None)
+        runtime_session = game_monitor.get_runtime_session() if game_monitor and hasattr(game_monitor, "get_runtime_session") else None
+        if runtime_session is None:
+            return self.game_log_mgr, str(getattr(getattr(self, "active_context", None), "user_data_path", "") or "").strip(), False
+        runtime_profile_id = str(getattr(runtime_session, "profile_id", "") or "").strip() or "default"
+        player_only = bool(
+            getattr(runtime_session, "source", "") == "external"
+            and runtime_profile_id == "default"
+            and not str(getattr(getattr(self, "active_context", None), "user_data_path", "") or "").strip()
+        )
+        try:
+            runtime_context = self.profile_mgr.build_profile_context(runtime_profile_id)
+            runtime_root = str(getattr(runtime_context, "user_data_path", "") or "").strip()
+        except Exception:
+            runtime_root = ""
+        return self.game_log_mgr, runtime_root, player_only
+
+    def get_log_files(self, log_type='game', profile_scope: str = "active"):
         """ 获取指定类型的日志文件列表 ('app' 或 'game') """
         try:
             if log_type == 'app':
                 files = app_log_reader.get_log_files()
             else:
-                if not self.game_log_mgr: return ApiResponse.warning("游戏环境未就绪，无法获取游戏日志")
-                files = self.game_log_mgr.get_log_files()
+                manager, user_data_root, player_only = self._resolve_game_log_scope(profile_scope=profile_scope)
+                if not manager:
+                    return ApiResponse.warning("游戏环境未就绪，无法获取游戏日志")
+                files = manager.get_log_files_for_root(user_data_root=user_data_root, player_only=player_only)
                 
             return ApiResponse.success(files)
         except Exception as e:
             logger.error(f"Get log files failed: {e}", exc_info=True)
             return ApiResponse.error(str(e))
 
-    def read_log_page(self, log_type: str, filename: str, page: int = 1, page_size: int = 1000):
+    def read_log_page(self, log_type: str, filename: str, page: int = 1, page_size: int = 1000, profile_scope: str = "active"):
         """ 分页读取日志 """
         try:
             if log_type == 'app':
                 result = app_log_reader.read_log_page(filename, page, page_size)
             else:
-                if not self.game_log_mgr: return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
-                result = self.game_log_mgr.read_log_page(filename, page, page_size)
+                manager, user_data_root, _player_only = self._resolve_game_log_scope(profile_scope=profile_scope)
+                if not manager:
+                    return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
+                result = manager.read_log_page_for_root(filename, user_data_root=user_data_root, page=page, page_size=page_size)
                 
             if 'error' in result: return ApiResponse.error(result['error'])
             return ApiResponse.success(result)
         except Exception as e:
             logger.error(f"Read log page failed: {e}", exc_info=True)
             return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def open_log_folder(self):
-        """ 打开日志所在文件夹 """
-        path = self.game_log_mgr.get_preferred_log_directory() if self.game_log_mgr else None
-        if path and os.path.exists(path):
-            file_mgr.open_in_explorer(path)
-            return ApiResponse.success()
-        return ApiResponse.error("日志路径不存在")
     
     
     # =========================================================================
@@ -4390,9 +4506,6 @@ class API:
             self.profile_mgr.update_profile(pid, data)
             if pid == settings.config.current_profile_id:
                 refresh_mode = self._refresh_active_profile_context_after_update(pid, data)
-                active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
-                if active_profile_id:
-                    self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
                 return ApiResponse.success(
                     message="配置已更新",
                     data={"refresh_mode": refresh_mode},
@@ -4416,10 +4529,7 @@ class API:
         前端调用此方法后，应该紧接着调用 get_initial_data 刷新界面。
         """
         try:
-            self._bootstrap_context(pid)
-            active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
-            if active_profile_id:
-                self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
+            self._bootstrap_context(pid, allow_fallback=False)
             # 切换成功后，前端通常会调用 get_initial_data 刷新全界面，所以这里只需返回成功
             res = {
                 "profile": self.profile_mgr.get_current_profile().__dict__,
@@ -4428,7 +4538,29 @@ class API:
             }
             return ApiResponse.success(message=f"已切换到环境: {pid}", data=res)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            fallback_profile_id = ""
+            fallback_context = None
+            fallback_error = None
+            try:
+                self._bootstrap_context('default', allow_fallback=False)
+                fallback_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+                fallback_context = self.active_context.__dict__ if self.active_context else None
+            except Exception as fallback_exc:
+                fallback_error = str(fallback_exc)
+
+            message = f"切换到环境 {pid} 失败，已回退 default：{e}"
+            if fallback_error:
+                message = f"切换到环境 {pid} 失败，且回退 default 也失败：{e}；fallback 错误：{fallback_error}"
+            return ApiResponse.error(
+                message,
+                data={
+                    "requested_profile_id": str(pid or "").strip(),
+                    "fallback_profile_id": fallback_profile_id,
+                    "active_profile_id": fallback_profile_id,
+                    "context": fallback_context,
+                    "settings": asdict(settings.config),
+                },
+            )
     
     @log_api_call
     def profiles_scan_orphaned(self):

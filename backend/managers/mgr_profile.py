@@ -13,6 +13,7 @@ from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_game import GameManager
+from backend.profile import UserDataRoot
 from backend.utils.profile_runtime import (
     normalize_profile_runtime_flags,
     resolve_profile_runtime_capabilities,
@@ -42,15 +43,34 @@ class ProfileContext:
     
     # 动态计算出来的绝对路径（初始化时即确定，拒绝中途修改）
     @property
-    def local_mods_path(self): return str(Path(self.game_install_path) / "Mods")
+    def local_mods_path(self):
+        install_path = str(self.game_install_path or "").strip()
+        return str(Path(install_path) / "Mods") if install_path else ""
     @property
-    def game_dlc_path(self): return str(Path(self.game_install_path) / "Data")
+    def game_dlc_path(self):
+        install_path = str(self.game_install_path or "").strip()
+        return str(Path(install_path) / "Data") if install_path else ""
     @property
-    def game_config_path(self): return str(Path(self.user_data_path) / "Config")
+    def _user_data_root(self):
+        user_data_path = str(self.user_data_path or "").strip()
+        if not user_data_path:
+            return None
+        return UserDataRoot.from_raw(
+            user_data_path,
+            default_roots=GameManager.get_default_user_data_paths(),
+        )
     @property
-    def game_saves_path(self): return str(Path(self.user_data_path) / "Saves")
+    def game_config_path(self):
+        root = self._user_data_root
+        return root.config_dir if root else ""
     @property
-    def mods_config_file(self): return str(Path(self.game_config_path) / "ModsConfig.xml")
+    def game_saves_path(self):
+        root = self._user_data_root
+        return root.saves_dir if root else ""
+    @property
+    def mods_config_file(self):
+        root = self._user_data_root
+        return root.mods_config_file if root else ""
     @property
     def backup_dir(self): 
         result = str(BACKUP_DIR / "profile" / self.profile_id) # 强隔离：备份跟环境走！
@@ -114,55 +134,94 @@ class ProfileManager:
     }
     
     def __init__(self):
-        self.install_inspector = GameInstallInspector()
+        # 仅供内部探测逻辑使用，避免被 pywebview 误当成可暴露对象递归扫描。
+        self._install_inspector = GameInstallInspector()
         self._ensure_default_profile()
         self.current_profile = GameProfile.get_or_none(GameProfile.id == settings.config.current_profile_id)
         self.update_version()
 
     def _get_install_inspector(self) -> GameInstallInspector:
-        inspector = getattr(self, 'install_inspector', None)
+        inspector = getattr(self, '_install_inspector', None)
         if inspector is None:
             # 单测里常用 `__new__` 绕过 `__init__`，这里做一次兜底，
             # 保证创建/更新/构造上下文时都能拿到同一套安装探针逻辑。
             inspector = GameInstallInspector()
-            self.install_inspector = inspector
+            self._install_inspector = inspector
         return inspector
 
     def _ensure_default_profile(self):
         """确保至少有一个默认 Profile (通常是当前设置的 Steam 版)"""
-        if GameProfile.select().count() == 0:
-            # 默认数据路径
-            with db.atomic():
-                GameProfile.create(
-                    id='default',
-                    name='Default',
-                    description='Default Profile',
-                    game_install_path='',
-                    user_data_path='',
-                    game_version='',
-                    is_steam=True,
-                    prefer_steam_launch=True,
-                    use_workshop_mods=False,
-                    use_self_mods=False,    # 默认不加载 Self Mod
-                    run_commands=[]
-                )
-            self.activate_profile('default')  # 切换到默认环境
+        default_profile = GameProfile.get_or_none(GameProfile.id == "default")
+        if default_profile:
+            return
+        # 默认数据路径
+        with db.atomic():
+            GameProfile.create(
+                id='default',
+                name='Default',
+                description='Default Profile',
+                game_install_path='',
+                user_data_path='',
+                game_version='',
+                is_steam=True,
+                prefer_steam_launch=True,
+                use_workshop_mods=False,
+                use_self_mods=False,    # 默认不加载 Self Mod
+                run_commands=[]
+            )
+        # 这里只负责补建保底记录，不在这里递归走切换链路。
+        # 真正的激活由调用方按当前流程继续处理，避免 default 缺失时再次回到 activate_profile
+        # 造成启动阶段的补建链路绕回自身。
+        if str(getattr(settings.config, "current_profile_id", "") or "").strip() == "":
+            settings.set("current_profile_id", "default")
 
     def _ensure_user_data_structure(self, user_data_path: str) -> str:
         """
         统一收敛 user_data_path 的目录策略。
         允许目标目录不存在，只要其父目录可落盘，就在保存时自动补齐 Config / Saves 结构。
         """
-        normalized_path = os.path.normpath(os.path.abspath(str(user_data_path or "").strip()))
-        if not normalized_path:
-            raise ValueError("用户数据路径不能为空")
+        normalized_path = self._normalize_user_data_path(user_data_path)
         parent_dir = os.path.dirname(normalized_path)
         if parent_dir and not os.path.exists(parent_dir):
             raise ValueError(f"Parent path not found: {parent_dir}")
-        os.makedirs(normalized_path, exist_ok=True)
-        os.makedirs(os.path.join(normalized_path, "Config"), exist_ok=True)
-        os.makedirs(os.path.join(normalized_path, "Saves"), exist_ok=True)
-        return normalized_path
+        root = UserDataRoot.from_raw(normalized_path, default_roots=GameManager.get_default_user_data_paths())
+        os.makedirs(root.root_path, exist_ok=True)
+        os.makedirs(root.config_dir, exist_ok=True)
+        os.makedirs(root.saves_dir, exist_ok=True)
+        return root.root_path
+
+    def _normalize_user_data_path(self, user_data_path: str) -> str:
+        """
+        所有持久化入口统一使用“用户数据根目录”语义。
+
+        这里只对默认路径类误填做自动纠偏；其它疑似子路径直接失败，
+        避免把用户的自定义路径猜错。
+        """
+        normalized_input = str(user_data_path or "").strip()
+        # 环境路径可为空；空值代表“尚未初始化”，由前端提示用户补全，
+        # 这里不能把它当成结构错误，否则 default 保底环境会在启动阶段崩溃。
+        if not normalized_input:
+            return ""
+        return UserDataRoot.from_raw(
+            normalized_input,
+            default_roots=GameManager.get_default_user_data_paths(),
+        ).root_path
+
+    def _profile_snapshot_path(self, profile_id: str) -> Path:
+        return DATA_DIR / "profiles" / str(profile_id or "").strip() / "profile.json"
+
+    def _snapshot_profile_data(self, profile: GameProfile | Any):
+        data = model_to_dict(profile)
+        data['created_time'] = data.get('created_time')
+        data['last_played_time'] = data.get('last_played_time')
+        return data
+
+    def _write_profile_snapshot(self, profile: GameProfile | Any):
+        snapshot_path = self._profile_snapshot_path(getattr(profile, "id", ""))
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(snapshot_path, 'w', encoding='utf-8') as f:
+            json.dump(self._snapshot_profile_data(profile), f, indent=2, ensure_ascii=False)
+        return str(snapshot_path)
 
     def create_profile(self, data: Dict[str, Any], copy_current_data: bool = False):
         """
@@ -339,7 +398,7 @@ class ProfileManager:
             profile_id=profile.id,
             game_version=profile.game_version,
             game_install_path=profile.game_install_path,
-            user_data_path=profile.user_data_path,
+            user_data_path=self._normalize_user_data_path(profile.user_data_path),
             prefer_steam_launch=runtime_flags['prefer_steam_launch'],
             use_workshop_mods=runtime_flags['use_workshop_mods'],
             use_self_mods=profile.use_self_mods,
@@ -382,7 +441,6 @@ class ProfileManager:
             # 验证用户数据路径是否有效
             check_data = PathChecker.check_user_data_path(profile.get('user_data_path',''))
             if not check_install['pass'] or not check_data['pass']: 
-                self.activate_profile('default')
                 msg = (check_install['msg'] if not check_install['pass'] else "") + (check_data['msg'] if not check_data['pass'] else '') + " 环境路径可能被删除，请重新配置或删除环境。"
                 profile['msg'] = msg.strip()
                 profile['check'] = False
@@ -403,13 +461,23 @@ class ProfileManager:
         """
         if not profile_id: profile_id = 'default'
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
+        if not profile and profile_id == 'default':
+            # default 是系统保底环境；如果记录被误删，这里直接补建，
+            # 避免启动、回退、外部接管等任何依赖 default 的流程整体崩溃。
+            self._ensure_default_profile()
+            profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         if not profile: raise ValueError("环境不存在")   # 检测环境数据是否存在
         # 验证游戏安装路径是否有效
         check_install = PathChecker.check_install_path(profile.game_install_path)
         # 验证用户数据路径是否有效
         check_data = PathChecker.check_user_data_path(profile.user_data_path)
-        if (not check_install['pass'] or not check_data['pass']) and profile_id != 'default': 
-            self.activate_profile('default')
+        install_path = str(profile.game_install_path or "").strip()
+        user_data_path = str(profile.user_data_path or "").strip()
+        # 空路径表示环境尚未初始化，允许前端接管并引导用户补全；
+        # 只有“用户已经填了值，但值本身无效”时，才阻止切换到该环境。
+        has_invalid_install = bool(install_path) and not check_install['pass']
+        has_invalid_user_data = bool(user_data_path) and not check_data['pass']
+        if (has_invalid_install or has_invalid_user_data) and profile_id != 'default':
             msg = f"""{check_install['msg'] if not check_install['pass'] else ""}\n{check_data['msg'] if not check_data['pass'] else ''}"""
             raise ValueError(msg.strip())
         
@@ -438,8 +506,15 @@ class ProfileManager:
             args.append(GameManager.detect_executable(profile.game_install_path) or '')
         # 只要环境显式绑定了用户数据根目录，就始终把 savedatafolder 注入启动参数。
         default_user_data_path = GameManager.auto_detect_paths().get('user_data_path','')
-        if profile.user_data_path and profile.user_data_path != default_user_data_path:
-            args.append(f"-savedatafolder={os.path.abspath(profile.user_data_path)}")
+        profile_root = self._normalize_user_data_path(profile.user_data_path) if profile.user_data_path else ""
+        is_default_root = False
+        if default_user_data_path and profile_root:
+            is_default_root = UserDataRoot.from_raw(
+                default_user_data_path,
+                default_roots=GameManager.get_default_user_data_paths(),
+            ).equivalent_to(profile_root)
+        if profile_root and not is_default_root:
+            args.append(f"-savedatafolder={os.path.abspath(profile_root)}")
         # 合并自定义参数
         run_commands = getattr(profile, "run_commands", None) or []
         if run_commands: args.extend(run_commands)
@@ -454,8 +529,10 @@ class ProfileManager:
         try:
             # 复制 Config
             shutil.copytree(os.path.join(src_root, "Config"), os.path.join(target_root, "Config"), dirs_exist_ok=True)
-            # 复制 Saves (可选，或者询问用户)
-            # shutil.copytree(os.path.join(src_root, "Saves"), os.path.join(target_root, "Saves"), dirs_exist_ok=True)
+            # `copy_current_data` 语义应完整复制当前环境的 Config 与 Saves。
+            saves_dir = os.path.join(src_root, "Saves")
+            if os.path.exists(saves_dir):
+                shutil.copytree(saves_dir, os.path.join(target_root, "Saves"), dirs_exist_ok=True)
         except Exception as e:
             logger.error(f"Clone data failed: {e}")
             
@@ -464,26 +541,9 @@ class ProfileManager:
         将 Profile 配置写入隔离区的 profile.json
         相当于物理“存档”
         """
-        # 1. 如果没有自定义隔离路径（例如使用系统默认路径的 Default 环境），则不写入
-        # 防止污染用户的 AppData
-        if not profile.user_data_path or not os.path.exists(profile.user_data_path): return
-
-        json_path = os.path.join(profile.user_data_path, "profile.json")
-        
         try:
-            # 2. 序列化模型
-            # Peewee 的 model_to_dict 会把 datetime 对象转好，但为了保险手动处理一下非 JSON 类型
-            data = model_to_dict(profile)
-            
-            # 处理 datetime 转字符串
-            data['created_time'] = data.get('created_time')
-            data['last_played_time'] = data.get('last_played_time')
-
-            # 3. 写入文件
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                
-            # logger.info(f"Profile synced to disk: {json_path}")
+            # 统一把快照写到应用数据目录，避免污染真实用户数据根目录。
+            self._write_profile_snapshot(profile)
         except Exception as e:
             logger.error(f"Failed to sync profile to disk: {e}")
             
@@ -548,6 +608,8 @@ class ProfileManager:
 
             valid_field_names = set(GameProfile._meta.fields.keys()) # type: ignore[attr-defined]
             clean_data = {key: value for key, value in profile_data.items() if key in valid_field_names}
+            if 'user_data_path' in clean_data:
+                clean_data['user_data_path'] = self._normalize_user_data_path(clean_data['user_data_path'])
 
             install_path = str(clean_data.get('game_install_path') or '').strip()
             install_facts = None
