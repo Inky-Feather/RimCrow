@@ -104,7 +104,7 @@
       </div>
 
       <!-- 虚拟滚动容器 -->
-      <DynamicScroller v-if="filteredLogs.length" :items="filteredLogs" :min-item-size="28" class="h-full custom-scrollbarpx-2" 
+      <DynamicScroller v-if="filteredLogs.length" :items="filteredLogs" :min-item-size="28" class="h-full custom-scrollbar px-2" 
         key-field="id" ref="scrollerRef" @scroll="onScroll" v-selectable-list="selectionConfig" >
         <template v-slot="{ item, index, active }">
           <DynamicScrollerItem :item="item" :active="active" :data-index="index" :size-dependencies="getRowSizeDependencies(item)" >
@@ -724,7 +724,9 @@ const selectionConfig = computed(() => ({
   clickMode: 'toggle',            // 日志勾选更接近复选框语义：点击默认切换多选
   idAttribute: 'data-id',         // DOM 绑定的 ID 属性
   onSelect: (newSelectedIds, anchorId) => {
-    const nextSelectedLogs = allLoadedLogs.value.filter(log => newSelectedIds.includes(log.id))
+    // 日志多选可能一次选中大量行，用 Set 避免每条日志都 includes 扫描选中数组。
+    const selectedSet = new Set(newSelectedIds)
+    const nextSelectedLogs = allLoadedLogs.value.filter(log => selectedSet.has(log.id))
     logStore.replaceSelection({
       sourceType: props.sourceType,
       filename: selectedFile.value,

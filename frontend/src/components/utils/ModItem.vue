@@ -18,7 +18,9 @@
     </button>
     
     <!-- 内容区域 -->
-    <div class="select-trigger drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg border hover:opacity-90 backdrop-blur-sm group shadow-sm text-text-main/80"
+    <!-- 行组件会被虚拟列表频繁复用。这里避免在每一行使用 backdrop-filter，
+      否则开启多列列表时浏览器会为大量半透明卡片持续保留合成层，空闲 GPU 占用会明显升高。 -->
+    <div class="select-trigger drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg relative group border hover:brightness-150 group shadow-sm text-text-main/80"
       :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', cardClass]" 
       :style="getCardStyle(item_id)"
       v-preview="modData">
@@ -161,6 +163,7 @@
           </div>
         </div>
       </div>
+      <div class="absolute top-0 left-0 -z-100 w-full rounded-lg h-full group-hover:bg-white/10"></div>
 
     </div>
 
@@ -178,7 +181,7 @@
 </template>
 
 <script setup>
-import { computed, h, nextTick, watch  } from 'vue'
+import { computed, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP, IconSteam, IconSelf } from '../../utils/constants'
 import { useAppStore } from '../../stores/appStore'
@@ -350,15 +353,18 @@ const linkWarn = computed(() => {
   }
   return [lockPrev, lockNext]
 })
-// 监听：只有当警告触发，且缓存里没有时，才“点火”触发 Store 去后台静默请求
-watch(linkWarn, (newVal) => {
-  if ((newVal[0] || newVal[1]) && modData.value?.interlock_id) {
-    modStore.loadInterlockDetails(modData.value.interlock_id)
-  }
-}, { immediate: true })
+const ensureInterlockDetails = async () => {
+  // 旧实现会在每个可见 ModItem 挂载时立即 watch(linkWarn)，
+  // 展开多个列表时会同时计算联锁链并触发后台详情查询，表现为列表刚显示就有一波额外响应式和 IO 压力。
+  // 详情只服务于右键菜单里的修复操作，按需加载能保留功能，同时让普通滚动和空闲状态更轻。
+  const [lockPrevWarn, lockNextWarn] = linkWarn.value
+  const interlockId = modData.value?.interlock_id
+  if ((!lockPrevWarn && !lockNextWarn) || !interlockId || modStore.interlockDetailsMap[interlockId]) return
+  await modStore.loadInterlockDetails(interlockId)
+}
 
 const getCardStyle = (id) => {
-  const base = { height: (props.simple ? appStore.scalePx(30) : appStore.scalePx(50))+'px' }
+  const base = { height: (props.simple ? appStore.scalePx(30) : appStore.scalePx(50))+'px', backgroundColor: 'rgba(255,255,255,0.05)' }
   // 标题项保持固定高度，不参与普通模组的签名色着色逻辑。
   if (props.sectionHeader) return base
   const color = modStore.takeModById(id)?.sign_color
@@ -470,6 +476,7 @@ const handleContextMenu = async (event) => {
     modStore.selectMods(props.item_id)
     await nextTick()
   }
+  await ensureInterlockDetails()
   const selectedIds = modStore.selectedIds; 
   const selectedCountStr = selectedIds.length>1?` (${selectedIds.length}项)`:''
   const coexistSelectedIds = selectedIds.filter(id => modStore.canSwitchCoexistenceSource(id))

@@ -555,6 +555,7 @@ import { formatFileSize } from '../utils/format'
 import ImageCloud from './utils/ImageCloud.vue';
 import LampEffect from './utils/LampEffect.vue';
 import LuxBreatheIcon from './utils/LuxBreatheIcon.vue'
+import StatItem from './common/StatItem.vue'
 import { ChevronDown, ChevronUp, CircleX, Copy } from 'lucide-vue-next'
 import FixedPopover from './common/FixedPopover.vue'
 import { useProfileStore } from '../stores/profileStore'
@@ -567,23 +568,6 @@ const imageUrls = computed(() => Array.from(modStore.allModsMap.values())
   .slice(0, 30) // 取前30个
   .map(mod => mod.icon_url))
 
-// 子组件: 简单统计块
-const StatItem = {
-  props: ['label', 'value', 'highlight'],
-  template: `
-    <!-- 外层改为 flex-row 横向排列，加 gap 控制图标与内容间距 -->
-    <div class="bg-text-main/5 rounded-lg p-1 flex items-center border border-text-main/5 gap-0">
-      <!-- 图标插槽：flex-shrink-0 防止图标被压缩，可选插槽（无图标时不占空间） -->
-      <slot />
-      
-      <!-- 内容容器：保持垂直布局，居中对齐 -->
-      <div class="flex flex-col items-center flex-1 min-w-10">
-        <span class="text-lg font-bold leading-none" :class="highlight && value > 0 ? 'text-accent-primary' : 'text-gray-400'">{{ value }}</span>
-        <span class="text-[0.7rem] text-text-dim uppercase scale-90">{{ label }}</span>
-      </div>
-    </div>
-  `
-}
 const appStore = useAppStore()
 const aiStore = useAiStore()
 const modStore = useModStore()

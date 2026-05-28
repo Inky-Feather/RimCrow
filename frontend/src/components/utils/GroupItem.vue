@@ -1,11 +1,11 @@
 <template>
-  <div :style="{ '--drag-color': `var(--color-accent-${listColor})`, '--rgb-components': hexToRgb(groupData.color) }"
+  <div :style="{ '--rgb-components': hexToRgb(groupData.color) }"
     :class="isHighlight ? 'ring-2 ring-accent-highlight rounded-lg' : ''">
-    <!-- 标题区 -->
-    <div @click="toggle" :class="['list-none select-none px-1.5 flex text-text-dim hover:text-text-main items-center justify-between gap-0.5 rounded-lg font-medium',
-      'bg-[rgba(var(--rgb-components),0.4)] hover:bg-[rgba(var(--rgb-components),0.6)] border border-text-main/5']">
-      <!-- 抓取图标 -->
-      <div v-tooltip="`移动`" class="drag-handle cursor-move p-1 text-text-dim hover:text-text-main hover:scale-130 transition-all">
+    <!-- 标题区：分组面板现在由外层统一虚拟滚动，标题只负责分组自身操作。 -->
+    <div @click="toggle" :class="['list-none select-none px-1 flex text-text-dim hover:text-text-main items-center justify-between gap-0.5 rounded-lg font-medium',
+      'bg-[rgba(var(--rgb-components),0.5)] hover:bg-[rgba(var(--rgb-components),0.6)] border border-text-main/5']">
+      <!-- 抓取图标。真正的拖拽会话由外层 VirtualDragList 接管，避免嵌套列表互相抢事件。 -->
+      <div v-tooltip="`移动`" class="select-trigger cursor-move p-1 text-text-dim hover:text-text-main hover:scale-130 transition-all">
         <svg class="size-5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z"
@@ -16,9 +16,19 @@
             stroke-linejoin="round" />
         </svg>
       </div>
+
       <!-- 颜色选择与展开显示 -->
-      <div @click.stop v-tooltip="`改变颜色`" class="relative inline-flex items-center justify-center text-text-main hover:text-transparent transition-all">
-        <ColorPicker v-model:pureColor="groupData.color" @pureColorChange="saveGroupColor" shape="circle" format="hex" picker-type="fk" disable-alpha round-history />
+      <div @click.stop v-tooltip="`改变颜色`" class="no-drag relative inline-flex items-center justify-center text-text-main hover:text-transparent transition-all">
+        <!--
+          取色器内部会创建 Popper/Teleport 和拖拽监听，不适合在虚拟滚动标题行里常驻。
+          默认只渲染轻量色块；用户明确点击改色时再挂载真实 ColorPicker，避免滚动穿过大量分组时反复创建重组件。
+        -->
+        <button v-if="!isColorPickerOpen" type="button" class="size-4 rounded-full border border-text-main/20 shadow-sm transition-transform hover:scale-125"
+          :style="{ backgroundColor: groupData.color || '#888888' }"
+          @mousedown.stop
+          @click.stop="isColorPickerOpen = true">
+        </button>
+        <ColorPicker v-else v-model:pureColor="groupData.color" @pureColorChange="saveGroupColor" shape="circle" format="hex" picker-type="fk" disable-alpha round-history default-popup blur-close />
         <svg :class="expanded ? '-rotate-180' : ''" class="absolute pointer-events-none t-0 size-4 transition-transform duration-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
         </svg>
@@ -65,81 +75,17 @@
         </button>
       </span>
     </div>
-    <Transition
-      enter-active-class="grid transition-[grid-template-rows] duration-200 ease-out"
-      enter-from-class="grid-rows-[0fr]"
-      enter-to-class="grid-rows-[1fr]"
-      leave-active-class="grid transition-[grid-template-rows] duration-200 ease-in"
-      leave-from-class="grid-rows-[1fr]"
-      leave-to-class="grid-rows-[0fr]"
-    >
-      <!-- 内容区 -->
-      <div v-if="expanded" >
-        <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
-        <div class="min-h-0 overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
-          <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-text-main/5 border-x-text-main/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
-            <div v-if="groupModIds.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
-              可拖拽模组到此
-              <!-- 点阵背景 -->
-              <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
-            </div>
-
-            <VirtualList v-model="internalModList" :key="listKey" dataKey="id" :keeps="50" class="max-h-[45vh] min-h-15 transition-all duration-200" ref="vListRef"
-              placeholderClass="ghost" wrapClass="mb-5" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }" :delay="appStore.settings.ui.drag_delay"
-              :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150" :size="itemHeight" handle=".drag-handle" :sortable="!appStore.isLoading" :disabled="appStore.isLoading"
-              @drop="updateChildren" @drag="startDrag"
-              v-selectable-list="{ 
-                data: groupModIds, 
-                selectedIds: Array.from(selectedCanonicalIds), 
-                onSelect: (ids, anchor) => modStore.selectMods(ids, anchor),
-                onClear: () => modStore.clearSelection(),
-                clickClass: 'select-trigger', 
-                swipeClass: 'swipe-trigger'
-              }">
-              <template v-slot:item="{ record, index, dataKey }">
-
-                <div class="relative group">
-                  <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-                          :is-selected="selectedCanonicalIds.has(normalizeGroupModId(dataKey))" 
-                          :search-match="targetCanonicalModId === normalizeGroupModId(dataKey)"
-                          :show-index="appStore.settings.ui.show_group_index"  
-                          :show-icon="appStore.settings.ui.show_group_icon"
-                          :simple="true">
-                  </ModItem>
-                  
-                  <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
-                  <button @click.stop="removeItem(dataKey)" @mousedown.stop v-tooltip="`移除`"
-                    class="absolute top-1 right-1 w-3 h-3 bg-accent-danger text-text-main rounded-full 
-                          opacity-0 group-hover:opacity-80 transition-opacity duration-200
-                          flex items-center justify-center text-xs z-10 hover:scale-110">×
-                  </button>
-                  <div v-if="activeCanonicalIds.has(normalizeGroupModId(dataKey))" v-tooltip="'已启用'" tabindex="0" class="absolute w-3 h-3 bg-accent-success text-text-main rounded-full 
-                          transition-opacity duration-200 flex items-center justify-center text-xs z-10 hover:scale-110"
-                          :class="[appStore.settings.ui.show_group_index?'top-0 left-6':'top-0 left-0']">
-                  </div>
-                </div>
-
-              </template>
-            </VirtualList>
-          </div>
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { watch, ref, nextTick, computed, onBeforeUnmount } from 'vue' // 引入 ref
-import VirtualList from 'vue-virtual-sortable';
-import ModItem from './ModItem.vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ColorPicker } from "vue3-colorpicker";
-import { useModStore } from '../../stores/modStore';
-import { useGroupStore } from '../../stores/groupStore';
 import { useAppStore } from '../../stores/appStore';
-import { toast } from '../../utils/common';
+import { useGroupStore } from '../../stores/groupStore';
 import { hexToRgbComponents } from '../../utils/color'
-import { normalizePackageId } from '../../utils/modIdentity'
+import { toast } from '../../utils/common';
 import { Package } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -148,64 +94,14 @@ const props = defineProps({
   groupData: { type: Object, required: true },
   isHighlight: { type: Boolean, default: false }, // 用于外部控制样式
   expanded: { type: Boolean, default: false }, // 这个 props 会由父组件 GroupList 传递
-  targetModId: { type: String, default: '' },
   listColor: { type: String, default: 'primary' }, // 用于不同列表的颜色区分
-  isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
-const modStore = useModStore()
 const appStore = useAppStore()
 const groupStore = useGroupStore()
-const internalModList = ref([])
-const vListRef = ref(null)
-const listKey = ref(0)
-const isDragging = ref(false)
-const suppressNextDrop = ref(false)
-const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group', 'update-children'])
+const emit = defineEmits(['toggle', 'delete-group', 'update-group'])
 
-
-const itemHeight = computed(() => appStore.scalePx(30)+4 )
-const normalizeGroupModId = (value: string) => normalizePackageId(value)
 const groupModIds = computed(() => Array.isArray(props.groupData?.mod_ids) ? props.groupData.mod_ids : [])
-const selectedCanonicalIds = computed(() => new Set(
-  (modStore.selectedIds || []).map(id => normalizeGroupModId(id)).filter(Boolean)
-))
-const activeCanonicalIds = computed(() => new Set(
-  (modStore.activeIds || []).map(id => normalizeGroupModId(id)).filter(Boolean)
-))
-const targetCanonicalModId = computed(() => normalizeGroupModId(props.targetModId))
-const targetScrollTimer = ref<number>()
-// 计算属性computed无法直接修改props.groupData.mod_ids，因为它是只读的。
-// 监听 props 变化，同步到本地 (单向数据流：父 -> 子)
-watch(
-  () => groupModIds.value,
-  (newIds) => {
-    // 将纯 ID 转换为 VirtualList 需要的对象格式
-    // 注意：这里要创建一个新的数组引用，防止污染
-    internalModList.value = newIds.map(id => ({ id: id }))
-  },
-  { immediate: true, deep: true }
-  // 设置immediate: true后，监听器会在初始化时立即执行一次回调，无需等待数据首次变化。
-  // 设置deep: true后，监听器会 “递归遍历” 嵌套结构，感知所有层级属性的变化，确保嵌套数据修改时能触发回调。
-)
-const scrollToTargetMod = async () => {
-  const targetId = targetCanonicalModId.value
-  if (!props.expanded || !targetId) return
-  if (!groupModIds.value.some(id => normalizeGroupModId(id) === targetId)) return
-  await nextTick()
-  if (targetScrollTimer.value) {
-    clearTimeout(targetScrollTimer.value)
-  }
-  targetScrollTimer.value = setTimeout(() => {
-    vListRef.value?.scrollToKey?.(targetId)
-  }, 50)
-}
-watch(
-  [() => props.expanded, targetCanonicalModId, () => groupModIds.value.join('|')],
-  async () => {
-    await scrollToTargetMod()
-  }
-)
 
 // --- 数据传递与事件处理 ---
 const openExportDialog = () => {
@@ -223,14 +119,6 @@ const toggle = () => {
 // 删除分组
 const deleteGroup = () => {
   emit('delete-group', props.id)
-}
-// 移除模组
-const removeItem = (itemId: string) => {
-  emit('remove-item', props.id, [itemId])
-}
-// 更新分组信息
-const updateGroup = (data = props.groupData) => {
-  emit('update-group', props.id, data)
 }
 // 生成唯一分组名
 const resolveUniqueGroupName = (rawName: string) => {
@@ -252,41 +140,12 @@ const resolveUniqueGroupName = (rawName: string) => {
   }
   return { name: `${trimmedName}-${index}`, renamed: true, index, valid: true }
 }
-// 解析本次真正需要拖入分组的 Mod 列表
-const resolveDraggedModIds = (selectedIds: Array<string>, draggedId: string) => {
-  const normalizedDraggedId = normalizeGroupModId(draggedId)
-  const normalizedSelectedIds = [...new Set(
-    selectedIds.map(id => normalizeGroupModId(id)).filter(Boolean)
-  )]
-  if (!normalizedDraggedId) return normalizedSelectedIds
-  // 若当前拖拽项不在选中集中，说明是“直接拖未选中项”，此时只处理当前拖拽项
-  if (!normalizedSelectedIds.includes(normalizedDraggedId)) {
-    return [normalizedDraggedId]
-  }
-  return normalizedSelectedIds
-}
-// 构建拖入分组后的新顺序
-const buildDroppedGroupModIds = (newIds: Array<string>, selectedIds: Array<string>, draggedId: string, newIndex: number) => {
-  const normalizedDraggedId = normalizeGroupModId(draggedId)
-  const normalizedNewIds = newIds.map(id => normalizeGroupModId(id)).filter(Boolean)
-  const movingIds = resolveDraggedModIds(selectedIds, normalizedDraggedId)
-  if (!normalizedDraggedId || movingIds.length === 0) return normalizedNewIds
-  // 保留拖拽落点占位，再移除其余重复项
-  const dedupedIds = normalizedNewIds.filter((id, index) => {
-    if (index === newIndex && id === normalizedDraggedId) return true
-    return !movingIds.includes(id)
-  })
-  const insertIndex = dedupedIds.indexOf(normalizedDraggedId)
-  if (insertIndex === -1) return dedupedIds
-  // 用真实拖拽集合替换掉占位项，保持插入位置不变
-  dedupedIds.splice(insertIndex, 1, ...movingIds)
-  return dedupedIds
-}
 // 保存分组名称
 const saveGroupName = () => {
   if (!isEditingName.value) return  // 确保在编辑状态下调用
   const result = resolveUniqueGroupName(editingGroupName.value)
   if (result.renamed) {
+    // 分组名称冲突时沿用旧行为：自动添加序号，而不是阻断用户输入。
     toast.warning(`分组名称已存在，已添加序号 ${result.index}`)
   }
   if (result.valid && result.name !== props.groupData.name) {
@@ -296,112 +155,16 @@ const saveGroupName = () => {
 }
 // 保存分组颜色
 const saveGroupColor = useDebounceFn((color) => {
-  console.log("保存颜色:", color)
   emit('update-group', props.id, { color: color })
 }, 1000)
 
-const finishDragSession = ({ suppressDrop = false } = {}) => {
-  if (suppressDrop) {
-    suppressNextDrop.value = true
-  }
-  isDragging.value = false
-  modStore.isDraggingMod = false
-}
-const dispatchSyntheticDragEnd = () => {
-  if (typeof document === 'undefined') return
-  document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
-  document.dispatchEvent(new Event('touchend', { bubbles: true, cancelable: true }))
-  document.dispatchEvent(new Event('touchcancel', { bubbles: true, cancelable: true }))
-}
-const cancelActiveDrag = async () => {
-  if (!isDragging.value) return
-  finishDragSession({ suppressDrop: true })
-  dispatchSyntheticDragEnd()
-  await nextTick()
-  listKey.value += 1
-}
-const startDrag = (e) => {
-  isDragging.value = true
-  modStore.isDraggingMod = true
-  console.log("开始拖拽:", e)
-}
-// 更新子项的排序
-const updateChildren = (e) => {
-  if (suppressNextDrop.value || appStore.isLoading) {
-    suppressNextDrop.value = false
-    finishDragSession()
-    return
-  }
-  finishDragSession()
-  console.log("更新子项排序:", e)
-  const oldIds = [...groupModIds.value]  // 原始顺序
-  const newIds = internalModList.value.map(item => normalizeGroupModId(item.id)).filter(Boolean)  // 获取当前的最新顺序 ID列表
-  const tempSelectedIds = modStore.selectedIds
-  const currentListDom = vListRef.value?.$el
-  if (!currentListDom) {
-    internalModList.value = oldIds.map(id => ({ id }))
-    return
-  }
-  const fromCurrent = e?.event?.from === currentListDom
-  const toCurrent = e?.event?.to === currentListDom
-  if (!fromCurrent && !toCurrent) {
-    internalModList.value = oldIds.map(id => ({ id }))
-    return
-  }
-  // 检查是否是当前分组的列表，排除当前列表自身的触发
-  if (fromCurrent && toCurrent) {
-    console.log(props.groupData.name, "排序结束:", e)
-    // 只有顺序真的变了才发请求
-    if (JSON.stringify(newIds) !== JSON.stringify(oldIds)) {
-      emit('update-children', props.id, newIds)
-    }
-    return
-  }
-  if (!toCurrent) {
-    internalModList.value = oldIds.map(id => ({ id }))
-    return
-  }
-
-  // 拖动项来自分组，不允许插入
-  if (e.item?.group_id) {
-    console.log("分组错误插入:", e)
-    internalModList.value = oldIds.map(id => ({ id }))
-    return
-  }
-
-  console.log(props.groupData.name, "插入结束:", e)
-  // 优先取事件里的拖拽项 ID，异常情况下再回退到落点位置的脏数据
-  const draggedId = normalizeGroupModId(e.item?.id || newIds[e.newIndex])
-  const uniqueIds = buildDroppedGroupModIds(newIds, tempSelectedIds, draggedId, e.newIndex)
-  // （修复漏洞：如果拖入相同项到相邻位置，去重后实际列表顺序不变，但组件会渲染拖入的相同项，所以目前必须强制更新）
-  internalModList.value = uniqueIds.map(id => ({ id: id }))
-  console.log("排序前:", oldIds)
-  console.log("排序后:", uniqueIds)
-  // 只有顺序真的变了才发请求
-  if (JSON.stringify(uniqueIds) !== JSON.stringify(oldIds)) {
-    emit('update-children', props.id, uniqueIds)
-  }
-}
-
-watch(() => appStore.isLoading, async (loading) => {
-  if (loading) {
-    await cancelActiveDrag()
-  }
-})
-
 onBeforeUnmount(() => {
   saveGroupColor.flush?.()
-  if (targetScrollTimer.value) {
-    clearTimeout(targetScrollTimer.value)
-  }
-  if (isDragging.value) {
-    finishDragSession({ suppressDrop: true })
-    dispatchSyntheticDragEnd()
-  }
 })
 
 // ===== 分组名称编辑逻辑 =====
 const isEditingName = ref(false)
+const isColorPickerOpen = ref(false)
 const editingGroupName = ref('')
 const nameInputRef = ref(null) // 绑定 input DOM
 // 切换编辑状态
@@ -423,27 +186,11 @@ const toggleEditName = async () => {
   }
 }
 
-const handleInputBlur = () => {
-  // 失焦时，退出编辑状态
-  isEditingName.value = false
-}
-
 // 颜色格式转换统一复用公共 util，避免分组卡片和其它组件各维护一份。
 const hexToRgb = hexToRgbComponents
-
 </script>
 
 <style scoped>
-.ghost {
-  opacity: 0.5;
-  border: 2px dashed var(--drag-color);
-  scale: 90%;
-  padding: 5px;
-  border-radius: 10px;
-  /* transform: scale(0.9); */
-  /* transition: none; */
-}
-
 /* 取色器样式优化 */
 :deep(.vc-color-wrap.round) {
   width: 1rem !important;

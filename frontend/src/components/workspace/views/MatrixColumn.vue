@@ -60,11 +60,10 @@
     </div>
 
     <div class="flex-1 overflow-hidden relative p-1">
-      <VirtualList v-if="displayMods.length > 0" ref="vListRef" v-model="displayMods"
-        dataKey="path_hash" class="h-full custom-scrollbar pb-10" :keeps="40"
-        :sortable="false" group="none" :disabled="true"
+      <div v-if="displayMods.length > 0" ref="scrollRef"
+        class="relative h-full overflow-auto custom-scrollbar pb-10"
         v-selectable-list="{
-          data: displayMods.map(m => m.path_hash),
+          data: displayPathHashes,
           selectedIds: localSelectedPathHashes,
           onSelect: handleSelect,
           onClear: clearSelection,
@@ -73,15 +72,25 @@
           idAttribute: 'data-id'
         }"
       >
-        <template v-slot:item="{ record, dataKey }">
-          <div class="relative group">
-            <MatrixItem class="timeline-trigger" :mod="record" :storeType="storeType"
-              :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedPathHashes.includes(dataKey)"
-              @contextmenu="handleContextMenu" @click="$emit('open-timeline', record)"
+        <!--
+          矩阵列只需要虚拟滚动，不需要拖拽。
+          这里直接使用 TanStack Virtual，避免为了“禁用拖拽”保留额外的列表库。
+          外层总高度负责撑开滚动条，可见行用 translateY 放回真实位置；vSelection 仍绑定在滚动容器上。
+        -->
+        <div :style="{ height: `${totalSize}px`, position: 'relative' }">
+          <div
+            v-for="virtualRow in virtualRows"
+            :key="displayMods[virtualRow.index]?.path_hash || virtualRow.index"
+            class="absolute left-0 right-0"
+            :style="{ transform: `translateY(${virtualRow.start}px)`, height: `${virtualRow.size}px` }"
+          >
+            <MatrixItem class="timeline-trigger h-full" :mod="displayMods[virtualRow.index]" :storeType="storeType"
+              :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedPathHashes.includes(displayMods[virtualRow.index]?.path_hash)"
+              @contextmenu="handleContextMenu" @click="$emit('open-timeline', displayMods[virtualRow.index])"
             />
           </div>
-        </template>
-      </VirtualList>
+        </div>
+      </div>
 
       <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-text-dim/30">
         <svg class="size-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
@@ -93,7 +102,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import VirtualList from 'vue-virtual-sortable'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Motion } from 'motion-v'
 import { Activity, ArrowRightLeft, Cable, Copy, CornerUpRight, DownloadCloud, Flag, FlagOff, FolderInput, Lock, LockOpen, Trash2, Upload } from 'lucide-vue-next'
 import CommonSelect from '../../common/input/CommonSelect.vue'
@@ -133,7 +142,7 @@ const sortBy = ref('change')
 const isSortDsc = ref(true)
 const filterState = ref('default')
 const localSelectedPathHashes = ref([])
-const vListRef = ref(null)
+const scrollRef = ref(null)
 
 const lastPlayedTime = computed(() => profileStore.currentProfile?.last_played_time || 0)
 const hasWorkshopLibrary = computed(() => !!appStore.settings.workshop_mods_path)
@@ -155,7 +164,6 @@ const use_self_mods = computed({
     profileStore.updateProfile(profileStore.currentProfileId, { use_self_mods: val })
   }
 })
-
 
 const clearSelection = () => {
   localSelectedPathHashes.value = []
@@ -202,10 +210,16 @@ const focusMatrixItem = async (pathHash) => {
 
   localSelectedPathHashes.value = [pathHash]
   await nextTick()
-  vListRef.value?.scrollToKey?.(pathHash)
+  scrollToPathHash(pathHash)
   requestAnimationFrame(() => {
-    vListRef.value?.scrollToKey?.(pathHash)
+    scrollToPathHash(pathHash)
   })
+}
+
+const scrollToPathHash = (pathHash) => {
+  const index = displayMods.value.findIndex(mod => mod.path_hash === pathHash)
+  if (index === -1) return
+  virtualizer.value.scrollToIndex(index, { align: 'center' })
 }
 
 const modsWithState = computed(() => {
@@ -247,6 +261,24 @@ const displayMods = computed(() => {
 
   const sortedList = isSortDsc.value ? list : list.reverse()
   return sortedList.map(({ mod }) => mod)
+})
+// vSelection 只需要有序 ID 列表；单独缓存避免每次模板渲染都重新 map。
+const displayPathHashes = computed(() => displayMods.value.map(mod => mod.path_hash))
+
+const matrixRowHeight = computed(() => appStore.scalePx(62))
+const virtualizer = useVirtualizer(computed(() => ({
+  count: displayMods.value.length,
+  getScrollElement: () => scrollRef.value,
+  estimateSize: () => matrixRowHeight.value,
+  overscan: 10,
+})))
+const virtualRows = computed(() => virtualizer.value.getVirtualItems())
+const totalSize = computed(() => virtualizer.value.getTotalSize())
+
+watch([matrixRowHeight, () => displayMods.value.length], async () => {
+  await nextTick()
+  // 切换排序、筛选或全局缩放后刷新估算缓存，避免虚拟行高度沿用旧值造成半行裁切。
+  virtualizer.value.measure()
 })
 
 watch(

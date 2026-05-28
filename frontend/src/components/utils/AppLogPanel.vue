@@ -27,10 +27,11 @@
 
         <!-- 级别筛选 Checkbox -->
         <div class="flex items-center gap-1 bg-black/20 p-1 rounded-lg border border-text-main/5">
-          <FilterToggle v-model="filters.info" color="text-text-main" label="INFO" />
-          <FilterToggle v-model="filters.warn" color="text-accent-warn" label="WARN" />
-          <FilterToggle v-model="filters.error" color="text-accent-danger" label="ERR" />
-          <FilterToggle v-model="filters.debug" color="text-accent-cool" label="DEBUG" />
+          <button v-for="option in filterOptions" :key="option.key" class="px-2 py-0.5 rounded text-xs font-bold border transition-all duration-200 select-none"
+            :class="filters[option.key] ? [option.color, 'bg-text-main/10 border-text-main/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'"
+            @click="filters[option.key] = !filters[option.key]">
+            {{ option.label }}
+          </button>
         </div>
 
         <div class="h-4 w-px bg-text-main/10 mx-1"></div>
@@ -97,19 +98,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 
-// --- 子组件: 筛选开关 ---
-const FilterToggle = {
-  props: ['modelValue', 'color', 'label'],
-  emits: ['update:modelValue'],
-  template: `
-    <button @click="$emit('update:modelValue', !modelValue)"
-      class="px-2 py-0.5 rounded text-xs font-bold border transition-all duration-200 select-none"
-      :class="modelValue ? [color, 'bg-text-main/10 border-text-main/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'">
-      {{ label }}
-    </button>
-  `
-}
-
 const appLogs = ref([])
 const activeFileName = ref('app.log')
 const searchQuery = ref('')
@@ -123,6 +111,12 @@ const filters = ref({
   error: true,
   debug: false
 })
+const filterOptions = [
+  { key: 'info', label: 'INFO', color: 'text-text-main' },
+  { key: 'warn', label: 'WARN', color: 'text-accent-warn' },
+  { key: 'error', label: 'ERR', color: 'text-accent-danger' },
+  { key: 'debug', label: 'DEBUG', color: 'text-accent-cool' },
+]
 
 // --- 核心逻辑 ---
 

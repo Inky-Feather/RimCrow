@@ -62,11 +62,12 @@
                     leave-active-class="transition-opacity duration-300 ease-in"
                     leave-from-class="opacity-100"
                     leave-to-class="opacity-0">
-                    <KeepAlive>
-                      <ModList v-if="appStore.activeSidebarTab === 'temp'" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                      <GroupList v-else-if="appStore.activeSidebarTab === 'group'" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                      <BackupList v-else-if="appStore.activeSidebarTab === 'backup'" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                    </KeepAlive>
+                    <!-- 列表类标签页不使用 KeepAlive：
+                      虚拟列表、框选指令和行组件缓存如果在后台保活，会让隐藏列表继续占用内存并保留全局事件监听。
+                      切换标签时正常卸载，滚动位置由各列表自己的恢复逻辑处理。 -->
+                    <ModList v-if="appStore.activeSidebarTab === 'temp'" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                    <GroupList v-else-if="appStore.activeSidebarTab === 'group'" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                    <BackupList v-else-if="appStore.activeSidebarTab === 'backup'" class="rounded-b-none col-start-1 row-start-1 w-full"/>
                   </Transition>
                 </div>
                 

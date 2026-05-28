@@ -53,7 +53,7 @@
               <div v-if="workspaceStore.workshopSearch.sourceMode === 'online'"
                 class="size-12 shrink-0 overflow-hidden rounded-lg border border-text-main/10 bg-black/50"
               >
-                <img v-if="item.preview_url" class="h-full w-full object-cover" :src="appStore.getRemoteUrl(item.preview_url)" />
+                <img v-if="item.preview_url" class="h-full w-full object-cover" loading="lazy" :src="appStore.getRemoteUrl(item.preview_url)" />
                 <div v-else class="flex h-full w-full items-center justify-center text-text-dim/40">
                   <Image class="size-4" />
                 </div>

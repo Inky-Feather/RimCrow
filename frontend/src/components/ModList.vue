@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col relative h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
+  <div class="flex flex-col relative h-full bg-bg-surface/40  shadow-2xl"
       :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
     <div :data-tour="listId=='active'?'list-header':null" :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
@@ -113,7 +113,7 @@
     
     <!-- (tabindex="0" @keydown.ctrl.a.prevent="selectAll") 非焦点容器需要 tabindex 才能响应键盘事件 -->
     <!-- 列表区（底部渐变隐藏） -->
-    <div ref="listContainerRef" class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
+    <div ref="listContainerRef" class="flex-1 min-h-0 flex pb-0.5 overflow-y-auto after:pointer-events-none 
       after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
       after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent focus:outline-none"
       @click.self="modStore.clearSelection()">
@@ -121,15 +121,13 @@
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" :data-tour="listId=='active'?'list-dependency':null" class="w-[55px] h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
-        <DependencyGraph v-if="showDependencyGraph" 
-              :listIds="lineData" :isFilter="filterByLine.length>0"
-          :itemHeight="itemHeight" 
-          :scrollElement="vListRef"
+        <DependencyGraph v-if="showDependencyGraph" :listIds="lineData" :isFilter="filterByLine.length>0"
+          :itemHeight="itemHeight" :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />
       </div>
       <!-- 列表主体部分 -->
-      <div @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative" :data-tour="listId=='active'?'list-modItem':null">
+      <div @click.self="modStore.clearSelection()" class="flex-1 h-full min-h-0 pl-1 pr-1 min-w-0 relative" :data-tour="listId=='active'?'list-modItem':null">
         <!-- 列表为空时的提示 -->
         <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed border-text-dim/60 text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
           可拖拽模组到此
@@ -138,11 +136,13 @@
         </div>
         <!-- 列表 -->
           <!-- :size="isSimpleView ? 34 : 54" -->
-        <VirtualList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1 pb-10" placeholderClass="ghost" wrapClass="" 
-          :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort && !appStore.isLoading" :disabled="appStore.isLoading" :delay="appStore.settings.ui.drag_delay"
+        <VirtualDragList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1 pb-10" wrapClass="" 
+          :draggable="!appStore.isLoading" :droppable="allowSort && !appStore.isLoading" :sortable="allowSort && !appStore.isLoading" :disabled="appStore.isLoading"
+          :delay="appStore.settings.ui.drag_delay"
+          :get-drag-meta="getModRowDragMeta"
           :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
           :size="itemHeight"
-          @drop="updateChildren" @drag="startDrag"
+          @drop="updateChildren" @drag="startDrag" @dragend="finishDragSession"
           @click="focusContainer"
           v-selectable-list="{ 
             data: visibleList, 
@@ -158,8 +158,8 @@
           <template v-slot:item="{ record, index, dataKey }">
             <div class=" relative">
               <ModItem :item_id="dataKey" :index="getRealIndex(dataKey)" :key="dataKey" :list-color="listColor" 
-                :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView"
-                :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
+                :is-selected="selectedIdSet.has(normalizeId(dataKey))" :simple="isSimpleView"
+                :is-in-search="searchResultSet.has(dataKey) && searchQuery.length > 0"
                 :show-icon="appStore.settings.ui.show_list_icon" 
                 :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
                 :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
@@ -179,7 +179,7 @@
               </div>
             </div>
           </template>
-        </VirtualList>
+        </VirtualDragList>
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2"
           :data-tour="listId=='active'?'list-quick-actions':null">
@@ -216,7 +216,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, nextTick, onBeforeUnmount } from 'vue';
-import VirtualList from 'vue-virtual-sortable';
+import VirtualDragList from './common/VirtualDragList.vue';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
 import { useAppStore } from '../stores/appStore';
@@ -287,6 +287,8 @@ const collapsedSectionIds = ref<string[]>([])
 // 获取 Engine 实例 (computed 确保响应式)
 const engine = computed(() => searchStore.engine)
 const normalizeId = (value: string) => String(value ?? '').trim().toLowerCase()
+const selectedIdSet = computed(() => new Set((modStore.selectedIds || []).map(id => normalizeId(id)).filter(Boolean)))
+const searchResultSet = computed(() => new Set(searchResults.value))
 const normalizeTokenId = (value: string) => normalizePackageToken(value)
 const normalizeCanonicalId = (value: string) => normalizePackageId(value)
 const resolveTargetListId = (targetId: string, candidates: string[] = []) => {
@@ -335,7 +337,6 @@ const activeCollapsedSectionIds = computed(() => {
 })
 const collapsedSectionIdSet = computed(() => new Set(activeCollapsedSectionIds.value))
 const hasSectionHeaders = computed(() => sectionHeaderIds.value.length > 0)
-const allMods = computed(() => modStore.allModsMap ? Array.from(modStore.allModsMap.values()) : [])
 const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4 )
 // 只有在完成一次“历史状态恢复 / 默认折叠应用”之后，才允许把状态重新写回本地存储，
 // 这样可以避免初次挂载时用空数组覆盖已有状态。
@@ -877,16 +878,17 @@ watch(() => appStore.settings.ui.default_collapse_active_sections, (enabled) => 
   sectionStateReady.value = true
   persistSectionIds()
 })
-// VueVirtualSortable 需要对象数组 {id: ...}
+// VirtualDragList 使用对象数组 { id: ... } 作为渲染与拖拽事件载体。
 // 这里做一个中间层，处理 visibleList 和 modelValue 之间的映射。
-// 折叠标题会额外挂上 mod_ids，让拖拽库把它视为“整组代理项”。
+// 注意：拖拽数量、虚影标题这类“只在拖拽开始时需要”的数据不要放进这里。
+// 否则每次多选变化都会重建整条虚拟列表，并连带触发 VirtualDragList 的行高/偏移缓存重算。
 const internalListProxy = computed({
     get() {
       return visibleList.value.map(id => {
         if (isSectionHeaderId(id) && isSectionCollapsed(id)) {
           return {
             id,
-            mod_ids: getSectionMemberIds(id, props.modelValue)
+            mod_ids: getSectionMemberIds(id, props.modelValue),
           }
         }
         return { id }
@@ -896,6 +898,22 @@ const internalListProxy = computed({
       // 排序结果最终由 drop 事件统一回写；这里保留空实现，只满足 v-model 接口要求。
     }
 })
+
+const getModRowDragMeta = (row) => {
+  // 这段逻辑只在 dragstart 执行。选择集合可能频繁变化，但不应该反向污染虚拟列表 row 流。
+  if (row?.mod_ids?.length) {
+    return {
+      dragCount: Math.max(1, row.mod_ids.length),
+      dragLabel: row.id,
+    }
+  }
+  const selectedSet = new Set((modStore.selectedIds || []).map(id => normalizeId(id)).filter(Boolean))
+  const id = normalizeId(row?.id)
+  return {
+    dragCount: id && selectedSet.has(id) ? Math.max(1, selectedSet.size) : 1,
+    dragLabel: row?.id,
+  }
+}
 
 // ===== 排序模式切换 =====
 const SORT_MODE_MAP = {
@@ -1013,22 +1031,27 @@ const dispatchSyntheticDragEnd = () => {
   document.dispatchEvent(new Event('touchend', { bubbles: true, cancelable: true }))
   document.dispatchEvent(new Event('touchcancel', { bubbles: true, cancelable: true }))
 }
-const resetVirtualListInstance = async () => {
+const resetListInstance = async () => {
   await nextTick()
   listKey.value += 1
+}
+const refreshVirtualList = async () => {
+  await nextTick()
+  // 列表数据写回后只需要刷新虚拟列表尺寸缓存。
+  // 旧实现通过反复切换排序状态触发软重绘，会让筛选、排序、依赖线和行代理全部额外重算。
+  await vListRef.value?.refresh?.()
 }
 const cancelActiveDrag = async () => {
   if (!isDragging.value) return
   finishDragSession({ suppressDrop: true })
   dispatchSyntheticDragEnd()
-  await resetVirtualListInstance()
+  await resetListInstance()
 }
 
 // 开始拖拽时，清空反选集合
 const startDrag = (e) => {
   isDragging.value = true
   modStore.isDraggingMod = true
-  console.log("开始拖拽:", e)
 }
 // 更新子项的排序
 const updateChildren = async (e) => {
@@ -1141,12 +1164,8 @@ const updateChildren = async (e) => {
         }
       })
     })
-    await nextTick()
+    await refreshVirtualList()
   }
-  // 通过翻转排序两次，实现软重绘
-  isSortAsc.value=!isSortAsc.value
-  await nextTick()
-  isSortAsc.value=!isSortAsc.value
 }
 
 // 移除无效的mod
@@ -1160,11 +1179,7 @@ const removeInvalidMod = async () => {
   }, async () => {
     modStore.removeUnavailableIdsCompletely(invalidMods)
   })
-  await nextTick()
-  // 通过翻转排序两次，实现软重绘
-  isSortAsc.value=!isSortAsc.value
-  await nextTick()
-  isSortAsc.value=!isSortAsc.value
+  await refreshVirtualList()
 }
 
 // 问题提示右键菜单

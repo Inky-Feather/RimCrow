@@ -165,11 +165,18 @@
                       <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">主页布局
                         <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                       </span>
-                      <VueDraggable class="col-span-2 flex gap-1" ref="el" v-model="formData.ui.main_layout" :animation="150">
-                        <div v-for="item, index in formData.ui.main_layout" class="flex items-center ">
+                      <div class="col-span-2 flex gap-1">
+                        <div v-for="item, index in formData.ui.main_layout" :key="item.id"
+                          class="flex items-center transition-transform duration-150"
+                          :class="getLayoutDragClass('main_layout', index)"
+                          draggable="true"
+                          @dragstart="handleLayoutDragStart('main_layout', index, $event)"
+                          @dragover.prevent="handleLayoutDragOver('main_layout', index)"
+                          @drop.prevent="handleLayoutDrop('main_layout', index)"
+                          @dragend="handleLayoutDragEnd">
                           <CommonSwitch class="flex-1 cursor-move" :key="item.id" :label="appStore.MAIN_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.MAIN_LAYOUT_MAPS[item.id].desc" />
                         </div>
-                      </VueDraggable>
+                      </div>
                       
                     </div>
 
@@ -180,13 +187,20 @@
                       <span class="col-span-2 text-xs ml-2 mt-2">Mod 详情布局
                         <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                       </span>
-                      <VueDraggable class="col-span-2 flex flex-col gap-1 p-2 rounded-xl bg-text-main/5 border border-text-main/10" 
-                        ref="el" v-model="formData.ui.mod_details_layout" :animation="150" :disabled="!getDataById('details', formData.ui.main_layout).visible">
-                        <div v-for="item, index in formData.ui.mod_details_layout" class="flex items-center ">
+                      <div class="col-span-2 flex flex-col gap-1 p-2 rounded-xl bg-text-main/5 border border-text-main/10"
+                        :class="{ 'pointer-events-none opacity-50': !getDataById('details', formData.ui.main_layout).visible }">
+                        <div v-for="item, index in formData.ui.mod_details_layout" :key="item.id"
+                          class="flex items-center transition-transform duration-150"
+                          :class="getLayoutDragClass('mod_details_layout', index)"
+                          :draggable="getDataById('details', formData.ui.main_layout).visible"
+                          @dragstart="handleLayoutDragStart('mod_details_layout', index, $event)"
+                          @dragover.prevent="handleLayoutDragOver('mod_details_layout', index)"
+                          @drop.prevent="handleLayoutDrop('mod_details_layout', index)"
+                          @dragend="handleLayoutDragEnd">
                           <span class="p-1 mr-1 rounded-md bg-accent-primary/30">{{ index }}</span>
                           <CommonSwitch class="flex-1 cursor-move" :disabled="!getDataById('details', formData.ui.main_layout).visible" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
                         </div>
-                      </VueDraggable>
+                      </div>
                       
                     </div>
                     <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
@@ -738,8 +752,6 @@ import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle, X } from 'lucide-vue-next'
 import { deepClone, toast } from '../utils/common'
 import { flashComponent, shakeComponent } from '../utils/domEffects'
-import { VueDraggable } from 'vue-draggable-plus'
-import { color } from 'motion-v'
 
 // 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
@@ -769,6 +781,47 @@ const guideStore = useGuideStore()
 
 const currentTab = ref('paths')
 const formData = ref({})
+const layoutDragState = ref({ key: '', fromIndex: -1, overIndex: -1 })
+
+const getLayoutList = (layoutKey) => {
+  const list = formData.value?.ui?.[layoutKey]
+  return Array.isArray(list) ? list : []
+}
+const handleLayoutDragStart = (layoutKey, index, event) => {
+  // 设置页只有少量布局项，不需要再依赖 SortableJS。
+  // 这里用原生拖拽维护“从哪个布局、哪个下标开始拖”，drop 时直接重排数组即可。
+  const list = getLayoutList(layoutKey)
+  if (!list[index]) return
+  layoutDragState.value = { key: layoutKey, fromIndex: index, overIndex: index }
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', `${layoutKey}:${index}`)
+}
+const handleLayoutDragOver = (layoutKey, index) => {
+  if (layoutDragState.value.key !== layoutKey) return
+  layoutDragState.value = { ...layoutDragState.value, overIndex: index }
+}
+const handleLayoutDrop = (layoutKey, toIndex) => {
+  const { key, fromIndex } = layoutDragState.value
+  const list = getLayoutList(layoutKey)
+  if (key !== layoutKey || fromIndex < 0 || toIndex < 0 || fromIndex === toIndex || !list[fromIndex]) {
+    handleLayoutDragEnd()
+    return
+  }
+  const nextList = [...list]
+  const [moving] = nextList.splice(fromIndex, 1)
+  nextList.splice(toIndex, 0, moving)
+  formData.value.ui[layoutKey] = nextList
+  handleLayoutDragEnd()
+}
+const handleLayoutDragEnd = () => {
+  layoutDragState.value = { key: '', fromIndex: -1, overIndex: -1 }
+}
+const getLayoutDragClass = (layoutKey, index) => {
+  if (layoutDragState.value.key !== layoutKey) return ''
+  if (layoutDragState.value.fromIndex === index) return 'opacity-50 scale-[0.98]'
+  if (layoutDragState.value.overIndex === index) return 'translate-y-0 ring-1 ring-accent-primary/60 rounded-xl'
+  return ''
+}
 const detectedIsSteam = computed(() => {
   const checkedInstall = formData.value?.check_info?.game_install_path
   if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {

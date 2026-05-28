@@ -23,10 +23,17 @@ class SelectionManager {
       swipeClass: 'swipe-trigger',  // 触发划动选择的类
       clickMode: 'single', // 点击行为：single=单选，toggle=切换多选
       idAttribute: 'data-id',  // 存储ID的属性名
+      getItemId: null, // 可选：自定义从 DOM 事件目标解析 ID，便于虚拟列表或复杂卡片复用
+      getItemScope: null, // 可选：返回 ID 所属选择域，用于分组列表这类需要隔离连续选择的场景
+      selectAllRequiresScope: false, // 可选：没有当前选择域时禁用 Ctrl+A，避免误选整棵虚拟列表
+      ignoreClass: 'no-select', // 可选：命中该类名的区域直接放行，不参与点击/框选
+      shouldIgnoreEvent: null, // 可选：(event) => boolean，用于调用方处理更复杂的忽略规则
       // 可自定义选框样式，支持 Tailwind 类名
       boxClass: 'absolute z-9999 rounded border-2 border-dashed border-accent-special bg-accent-special/20 pointer-events-none transition-none',
       disabled: false  // 特定情况下禁止选择
     }
+    this.dataIndexMap = new Map()
+    this.dataIndexKeys = []
     this.updateConfig(binding.value)
 
     // 运行时状态
@@ -67,19 +74,53 @@ class SelectionManager {
 
   updateConfig(value) {
     if (!value) return
-    this.config = { ...this.config, ...value }
+    const nextConfig = { ...this.config, ...value }
+    const nextData = Array.isArray(nextConfig.data) ? nextConfig.data : []
+    const shouldRebuildIndex = !this.areDataKeysSame(nextData)
+    this.config = nextConfig
+    // 大列表框选/Shift 连选会频繁按 ID 反查索引。
+    // 只有数据顺序真的改变时才重建索引；选中态、回调函数或模板内联对象变化不应该触发 O(n) 扫描。
+    if (shouldRebuildIndex) {
+      this.rebuildDataIndexMap(nextData)
+    }
   }
 
   // --- 辅助方法 ---
+  areDataKeysSame(data = []) {
+    if (!Array.isArray(data) || data.length !== this.dataIndexKeys.length) return false
+    for (let index = 0; index < data.length; index++) {
+      if (String(data[index]) !== this.dataIndexKeys[index]) return false
+    }
+    return true
+  }
+  rebuildDataIndexMap(data = []) {
+    this.dataIndexKeys = data.map(id => String(id))
+    this.dataIndexMap = new Map(this.dataIndexKeys.map((id, index) => [id, index]))
+  }
   // 获取事件目标对应的 Item ID
   getItemId(target) {
+    if (typeof this.config.getItemId === 'function') {
+      return this.config.getItemId(target, this.el)
+    }
     const el = target.closest(`[${this.config.idAttribute}]`)
     return el ? el.getAttribute(this.config.idAttribute) : null
   }
   // 获取 ID 在数据中的索引位置
   getIndexById(id) {
     if (!this.config.data) return -1
-    return this.config.data.indexOf(id)
+    return this.dataIndexMap.get(String(id)) ?? -1
+  }
+  getItemScope(id) {
+    if (!id || typeof this.config.getItemScope !== 'function') return null
+    const scope = this.config.getItemScope(id)
+    return scope == null ? null : String(scope)
+  }
+  filterIdsToScope(ids = [], scope = null) {
+    if (scope == null || typeof this.config.getItemScope !== 'function') return [...ids]
+    return ids.filter(id => this.getItemScope(id) === scope)
+  }
+  getScopedData(scope = null) {
+    return this.filterIdsToScope(this.config.data || [], scope)
   }
 
   // --- 视觉选框逻辑 ---
@@ -147,10 +188,13 @@ class SelectionManager {
       e.preventDefault() // 阻止默认的全选文本行为
       // 如果列表为空，直接返回
       if (!this.config.data || this.config.data.length === 0) return
-      // 执行全选，传入的是当前列表的所有 ID
+      // 执行全选，传入的是当前列表的所有 ID。
+      // 如果调用方提供选择域，则 Ctrl+A 只选中当前锚点/焦点所在域，避免分组列表一次选中所有分组。
       // 调用回调函数，而不是操作 Store
-      if (this.config.onSelect) this.config.onSelect([...this.config.data], this.anchorId)
-      console.log(`[vSelection] Selected all ${this.config.data.length} items.`)
+      const scope = this.getItemScope(this.currentFocusId || this.anchorId)
+      if (this.config.selectAllRequiresScope && scope == null) return
+      const ids = this.getScopedData(scope)
+      if (this.config.onSelect) this.config.onSelect(ids, this.currentFocusId || this.anchorId)
       return
     }
     // 2. 键盘上下导航逻辑
@@ -183,7 +227,8 @@ class SelectionManager {
       }
       // 更新光标状态
       this.currentFocusId = nextId
-      // 触发外部的回调，让外部组件（如 VirtualList）去处理滚动对齐
+      // 触发外部的回调，让外部组件（例如虚拟列表适配器）处理滚动对齐。
+      // 指令只负责“选择语义”，不直接绑定某一个虚拟滚动库。
       if (this.config.onNavigate) {
           this.config.onNavigate(nextId, nextIndex, direction)
       }
@@ -193,6 +238,10 @@ class SelectionManager {
   // 处理鼠标按下事件
   onMouseDown(e) {
     if (this.config.disabled || e.button !== 0) return
+    // 通用忽略入口：复杂卡片里经常有按钮、输入框、颜色选择器等控件。
+    // 调用方可以用 no-select 类名或 shouldIgnoreEvent 回调明确告诉指令“这里不是选择行为”。
+    if (e.target.closest?.(`.${this.config.ignoreClass}`)) return
+    if (typeof this.config.shouldIgnoreEvent === 'function' && this.config.shouldIgnoreEvent(e)) return
 
     // 修正输入框焦点
     if (document.activeElement instanceof HTMLElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
@@ -236,7 +285,9 @@ class SelectionManager {
     if (this.isSwipeTarget) {
       this.swipeStartIndex = this.getIndexById(itemId)
       this.lastHoveredId = itemId
-      this.selectionSnapshot = isMulti ? new Set(this.config.selectedIds) : new Set()
+      // 分组列表等场景会给 ID 配置选择域；跨域多选会让“从当前分组移除”等操作语义变得模糊。
+      // 因此划动时只继承同一选择域内已有项，不把其它分组的选择带进来。
+      this.selectionSnapshot = isMulti ? new Set(this.filterIdsToScope(this.config.selectedIds, this.getItemScope(itemId))) : new Set()
     }
 
     // 命中点击区域时，进入“点击候选”状态。
@@ -347,7 +398,7 @@ class SelectionManager {
       
     } else if (isMulti || this.config.clickMode === 'toggle') {
       // --- Ctrl 多选 / 默认切换多选 ---
-      const newSet = new Set(this.config.selectedIds)
+      const newSet = new Set(this.filterIdsToScope(this.config.selectedIds, this.getItemScope(itemId)))
       if (isSelected) newSet.delete(itemId)
       else newSet.add(itemId)
       if (newSet.size === 0) {
@@ -378,6 +429,7 @@ class SelectionManager {
    * 逻辑：当前选中 = 快照 U (Start 到 Current 的范围)
    */
   updateSwipeRange(currentId) {
+    if (this.getItemScope(this.mouseDownItemId) !== this.getItemScope(currentId)) return
     const currentIndex = this.getIndexById(currentId)
     if (currentIndex === -1 || this.swipeStartIndex === -1) return
 
@@ -410,7 +462,15 @@ class SelectionManager {
   
   // Shift 连选处理
   handleRangeSelect(targetId, keepOthers = false) {
-    if (!this.anchorId || !this.config.data.includes(this.anchorId)) {
+    const targetScope = this.getItemScope(targetId)
+    if (this.anchorId && this.getItemScope(this.anchorId) !== targetScope) {
+        // 跨选择域 Shift 连选不做“穿透式范围选择”，否则分组 A 到分组 B 会把中间所有分组都选进去。
+        // 这里退化为单选并重建锚点，符合“分组之间相互隔离”的操作语义。
+        if (this.config.onSelect) this.config.onSelect([targetId], targetId)
+        this.anchorId = targetId
+        return
+    }
+    if (!this.anchorId || !this.dataIndexMap.has(String(this.anchorId))) {
         // 如果没有锚点，退化为单选并建立锚点
         if (this.config.onSelect) this.config.onSelect([targetId], targetId)
         this.anchorId = targetId
@@ -427,7 +487,7 @@ class SelectionManager {
     const max = Math.max(start, end)
     let newSet
     if (keepOthers) {
-        newSet = new Set(this.config.selectedIds)  // Ctrl+Shift
+        newSet = new Set(this.filterIdsToScope(this.config.selectedIds, targetScope))  // Ctrl+Shift
     } else {
         newSet = new Set() // 纯 Shift: 清空其他的
     }

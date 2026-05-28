@@ -114,7 +114,7 @@
                 </div>
 
                 <div v-else class="relative min-h-0 flex-1 overflow-hidden">
-                  <RecycleScroller ref="treeScrollerRef" :items="flatRows" key-field="id" :min-item-size="24" class="h-full custom-scrollbar" >
+                  <RecycleScroller ref="treeScrollerRef" :items="flatRows" key-field="id" :item-size="TREE_ROW_HEIGHT" class="h-full custom-scrollbar" >
                     <template #default="{ item }">
                       <button v-if="item.type === 'mod'"
                         class="flex h-8 w-full items-center gap-1 px-2 text-left text-sm transition-colors hover:bg-text-main/6"
@@ -231,14 +231,14 @@
                     >
                       文件过大已截断
                     </span>
-                    <button class="flex items-center justify-center text-xs text-text-dim transition-colors hover:text-text-main disabled:opacity-40"
-                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFile" v-tooltip="'打开文件'"
-                    ><FileSymlink class="size-5" />
-                    </button>
                     <button class="flex items-center justify-center text-xs transition-colors text-text-dim hover:text-text-main disabled:opacity-40"
                       :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFolder" v-tooltip="'打开文件所在目录'"
                     >
-                      <FolderOpen class="size-5" />
+                      <FolderInput class="size-5" />
+                    </button>
+                    <button class="flex items-center justify-center text-xs text-text-dim transition-colors hover:text-text-main disabled:opacity-40"
+                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFile" v-tooltip="'打开文件'"
+                    ><FileSymlink class="size-5" />
                     </button>
                   </div>
                 </div>
@@ -267,7 +267,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { ChevronDown, ChevronRight, ChevronUp, FileCode2, FileInput, FileSymlink, FolderOpen, Search, Square, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ChevronUp, FileCode2, FileInput, FileSymlink, FolderInput, FolderOpen, Search, Square, X } from 'lucide-vue-next'
 import { RecycleScroller } from 'vue-virtual-scroller'
 
 import CommonSelect from './common/input/CommonSelect.vue'

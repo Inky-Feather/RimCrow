@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useModStore } from '../../stores/modStore'
 import { useHoverStore } from '../../stores/hoverStore'
 
@@ -71,15 +71,17 @@ const lastSelectedId = computed(() => {
   return modStore.lastSelectedMod?.package_id || null
 })
 
+const listIndexMap = computed(() => {
+  // 依赖线多处需要从 ID 反查视觉索引；集中建表，避免选中态和绘制阶段反复 indexOf。
+  return new Map(props.listIds.map((id, index) => [String(id || '').toLowerCase(), index]))
+})
+
 // 缓存当前选中项对应的索引集合 (用于快速碰撞检测判定高亮)
 const selectedIndicesSet = computed(() => {
   const set = new Set()
   modStore.selectedIds.forEach(id => {
-    // 这里需要反查 id 在 listIds 中的索引
-    // 注意：如果 listIds 很大，indexOf 可能稍慢，但通常 UI 响应够用
-    // 极致优化可以依赖外部传入 map，但这里直接查即可
-    const idx = props.listIds.indexOf(id) // 注意大小写，如果 listIds 是原始ID
-    if (idx !== -1) set.add(idx)
+    const idx = listIndexMap.value.get(String(id || '').toLowerCase())
+    if (idx != null && idx !== -1) set.add(idx)
   })
   return set
 })
@@ -180,7 +182,7 @@ const processGraph = () => {
   }
 
   const ids = props.listIds
-  const idToIndex = new Map(ids.map((id, index) => [id.toLowerCase(), index]))
+  const idToIndex = listIndexMap.value
   const tempGroups = new Map() // parentId -> group
 
   // 1.1 收集依赖关系 (反转 Child->Parent 为 Parent->Children)
@@ -189,7 +191,7 @@ const processGraph = () => {
     if (!mod || !mod.dependencies_mods) return
 
     mod.dependencies_mods.forEach(parentMod => {
-      const pidLower = parentMod.package_id.toLowerCase()
+      const pidLower = String(parentMod.package_id || '').toLowerCase()
       // 只有当父项也在当前可视列表中时才绘制
       // 如果父项被筛选掉了，就不画这根线（或者画一半？这里选择不画）
       if (!idToIndex.has(pidLower)) return 
@@ -398,7 +400,47 @@ const handleMouseLeave = () => {
 }
 
 // --- 3. 渲染循环 (Render) ---
-let animationFrameId
+// 依赖线只在滚动、选中、尺寸或列表数据变化时重绘。
+// 旧实现用 requestAnimationFrame 常驻循环，即使画面静止也每帧重绘 Canvas；
+// 长列表滚动时这会持续占用主线程预算，容易和虚拟列表渲染抢帧。
+let animationFrameId = 0
+let scrollCleanup = null
+const requestDraw = () => {
+  if (animationFrameId) return
+  animationFrameId = requestAnimationFrame(() => {
+    animationFrameId = 0
+    draw()
+  })
+}
+
+const resolveScrollElement = () => {
+  const target = props.scrollElement?.value || props.scrollElement
+  const exposedEl = target?.$el?.value || target?.$el
+  if (exposedEl?.addEventListener) return exposedEl
+  if (target?.addEventListener) return target
+  return null
+}
+const getScrollOffset = () => {
+  const target = props.scrollElement?.value || props.scrollElement
+  if (typeof target?.getOffset === 'function') return Number(target.getOffset() || 0)
+  return Number(resolveScrollElement()?.scrollTop || 0)
+}
+
+const bindScrollListener = async () => {
+  scrollCleanup?.()
+  scrollCleanup = null
+  await nextTick()
+  const el = resolveScrollElement()
+  if (!el?.addEventListener) {
+    requestDraw()
+    return
+  }
+  const handleScroll = () => requestDraw()
+  el.addEventListener('scroll', handleScroll, { passive: true })
+  scrollCleanup = () => el.removeEventListener('scroll', handleScroll)
+  requestDraw()
+}
+
 const draw = () => {
   const canvas = canvasRef.value
   const ctx = canvas?.getContext('2d')
@@ -407,7 +449,7 @@ const draw = () => {
   // 尺寸同步
   const width = canvas.width
   const height = canvas.height
-  const scrollTop = props.scrollElement?.getOffset ? props.scrollElement.getOffset() : 0
+  const scrollTop = getScrollOffset()
 
   // 视口优化
   const viewportStart = Math.floor(scrollTop / props.itemHeight)
@@ -420,7 +462,7 @@ const draw = () => {
   // --- 确定高亮组 ---
   // 1. 手动激活的优先
   // 2. 其次是包含选中项的
-  const selectedIdLower = lastSelectedId.value?.toLowerCase()
+  const selectedIdLower = lastSelectedId.value ? String(lastSelectedId.value).toLowerCase() : ''
   
   // 预计算每个组的状态
   const groupStates = groups.map(g => {
@@ -436,9 +478,7 @@ const draw = () => {
     } else if (selectedIdLower) {
       // 检查当前选中项是否是该组的 Parent 或 Child
       if (g.parentId === selectedIdLower) isActive = true
-      // 这里需要回溯原始数据比较快，或者直接用 index 判断（如果 listIds 没变）
-      // 为准确性，用 index 判断是否命中 g.allIndices
-      const selectedIndex = props.listIds.findIndex(id => id.toLowerCase() === selectedIdLower)
+      const selectedIndex = listIndexMap.value.get(selectedIdLower) ?? -1
       if (g.allIndices.has(selectedIndex)) isActive = true
     }
 
@@ -580,8 +620,6 @@ const draw = () => {
   drawPass(false)
   // 第二次绘制：高亮层 (Active) - 盖在上面
   drawPass(true)
-
-  animationFrameId = requestAnimationFrame(draw)
 }
 
 // --- 生命周期 ---
@@ -596,20 +634,39 @@ const resizeObserver = new ResizeObserver(entries => {
     canvasRef.value.style.height = height + 'px'
     const ctx = canvasRef.value.getContext('2d')
     ctx.scale(dpr, dpr)
+    requestDraw()
   }
 })
 
 watch(() => props.listIds, () => {
   manualActiveGroupId.value = null // 列表变动重置手动激活
   processGraph()
+  requestDraw()
 }, { deep: true, immediate: true })
+
+watch(() => props.scrollElement, () => {
+  bindScrollListener()
+}, { immediate: true })
+
+watch(
+  () => [
+    props.itemHeight,
+    props.isFilter,
+    lastSelectedId.value,
+    Array.isArray(modStore.selectedIds) ? modStore.selectedIds.join('|') : '',
+    manualActiveGroupId.value,
+  ],
+  () => requestDraw()
+)
 
 onMounted(() => {
   if (containerRef.value) resizeObserver.observe(containerRef.value)
-  animationFrameId = requestAnimationFrame(draw)
+  bindScrollListener()
+  requestDraw()
 })
 onUnmounted(() => {
-  cancelAnimationFrame(animationFrameId)
+  if (animationFrameId) cancelAnimationFrame(animationFrameId)
+  scrollCleanup?.()
   resizeObserver.disconnect()
 })
 </script>
