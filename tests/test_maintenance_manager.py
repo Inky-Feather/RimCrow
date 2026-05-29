@@ -63,6 +63,33 @@ def test_github_mod_update_check_uses_cached_versions(monkeypatch):
     assert updates[1]["target_version"] == "main"
 
 
+def test_github_source_update_check_skips_when_local_is_newer(monkeypatch):
+    _FakeGithubRecord.rows = [
+        {
+            "repo_url": "https://github.com/example/source-mod",
+            "repo_name": "source-mod",
+            "install_type": "source",
+            "target_branch": "main",
+            "installed_version": "main@2025-07-04T09:07:38Z",
+            "online_info_cache": {"latest_source_version": "main@2025-06-27T04:22:57Z", "latest_source_branch": "main"},
+        },
+        {
+            "repo_url": "https://github.com/example/outdated-source-mod",
+            "repo_name": "outdated-source-mod",
+            "install_type": "source",
+            "target_branch": "main",
+            "installed_version": "main@2025-06-27T04:22:57Z",
+            "online_info_cache": {"latest_source_version": "main@2025-07-04T09:07:38Z", "latest_source_branch": "main"},
+        },
+    ]
+    monkeypatch.setattr(mgr_maintenance, "GithubModRecord", _FakeGithubRecord)
+
+    manager = MaintenanceManager.__new__(MaintenanceManager)
+    updates = manager._check_github_mod_updates()
+
+    assert [item["repo_url"] for item in updates] == ["https://github.com/example/outdated-source-mod"]
+
+
 def test_managed_mod_update_check_combines_steamcmd_and_github(monkeypatch):
     _FakeGithubRecord.rows = [
         {

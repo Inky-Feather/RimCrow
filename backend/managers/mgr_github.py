@@ -2094,9 +2094,9 @@ class GithubManager:
             if value:
                 return value
         commit_info = commit_payload.get("commit") if isinstance(commit_payload, dict) else {}
-        author_info = commit_info.get("author", {}) if isinstance(commit_info, dict) else {}
         committer_info = commit_info.get("committer", {}) if isinstance(commit_info, dict) else {}
-        return str(author_info.get("date") or committer_info.get("date") or "").strip()
+        author_info = commit_info.get("author", {}) if isinstance(commit_info, dict) else {}
+        return str(committer_info.get("date") or author_info.get("date") or "").strip()
 
     @staticmethod
     def _parse_iso_datetime_to_ms(value: str) -> int:
@@ -2193,6 +2193,13 @@ class GithubManager:
                 record.local_folder = local_folder
                 info = dict(record.online_info_cache or {})
                 info.pop("local_missing_recorded", None)
+                if str(record.install_type or "").strip() == "source" and version:
+                    source_branch, _, source_commit_at = version.partition("@")
+                    info["latest_source_version"] = version
+                    if source_branch:
+                        info["latest_source_branch"] = source_branch
+                    if source_commit_at:
+                        info["latest_source_commit_at"] = source_commit_at
                 record.online_info_cache = info
                 record.last_sync_time = current_ms()
                 record.save()

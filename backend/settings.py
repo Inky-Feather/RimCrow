@@ -492,13 +492,17 @@ class SettingsManager:
             self._normalize_config()
             self._sync_derived_paths()
 
-    def _normalize_config(self):
+    def _normalize_config(self) -> list[str]:
+        warnings: list[str] = []
         self.config.home_path = str(HOME_DIR)
         self.config.current_profile_id = str(self.config.current_profile_id or "").strip() or "default"
         self.config.steam_path = str(self.config.steam_path or "").strip()
         self.config.workshop_mods_path = str(self.config.workshop_mods_path or "").strip()
         self.config.steamcmd_path = str(self.config.steamcmd_path or "").strip() or str(TOOLS_DIR / "steamcmd")
         self.config.self_mods_path = str(self.config.self_mods_path or "").strip() or str(MODS_DIR)
+        if self.config.workshop_mods_path and Path(self.config.self_mods_path).resolve() == Path(self.config.workshop_mods_path).resolve():
+            self.config.self_mods_path = str(MODS_DIR)
+            warnings.append("管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
         self.config.ripgrep_path = str(self.config.ripgrep_path or "").strip() or str(TOOLS_DIR / "ripgrep")
         self.config.language = normalize_language_code(self.config.language, default="zh-CN") or "zh-CN"
         valid_modes = {"default", "remember", "custom"}
@@ -528,6 +532,7 @@ class SettingsManager:
                 ai_cfg.context_window_tokens = max(0, int(ai_cfg.context_window_tokens or 0))
             except (TypeError, ValueError):
                 ai_cfg.context_window_tokens = 0
+        return warnings
     
     def _sync_derived_paths(self):
         """
@@ -623,16 +628,17 @@ class SettingsManager:
                 pass
 
     # 强烈建议新增这个方法供 api.save_all_settings 使用
-    def update_from_dict(self, data_dict: Dict[str, Any]):
+    def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
         """
         全量更新，同样需要处理逻辑触发
         """
         before_state = asdict(self.config)
         self._recursive_update(self.config, data_dict)
-        self._normalize_config()
+        normalization_warnings = self._normalize_config()
         self._sync_derived_paths()
         after_state = asdict(self.config)
-        if after_state == before_state: return
+        if after_state == before_state:
+            return normalization_warnings
         old_self_mods_path = before_state.get('self_mods_path', '')
         old_steamcmd_path = before_state.get('steamcmd_path', '')
         new_self_mods_path = after_state.get('self_mods_path', '')
@@ -646,6 +652,7 @@ class SettingsManager:
                 move_old_data=self.config.move_old_self_mods
             )
         self.save()
+        return normalization_warnings
 
     def update_paths(self, paths_dict: Dict[str, str]):
         """批量更新路径"""

@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.tools import generate_path_hash, get_folder_size
-from backend.database.models import db
+from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -227,6 +227,7 @@ class ModScanner:
                 )
             
             mods_to_upsert = []
+            mods_to_touch = []
 
             shadow_paths_map = {}
             for entries in temp_registry.values():
@@ -242,7 +243,19 @@ class ModScanner:
                     if path_hash:
                         shadow_paths_map[path_hash] = disabled_paths if not mod.get('disabled') else []
                     # 扫描阶段只负责同步库存事实，不在这里做 Profile 遮蔽。
-                    if not mod.get('_skipped'):
+                    if mod.get('_skipped'):
+                        # 跳过解析不代表这次没看见；轻量回写可让 missing/seen 状态保持可信。
+                        mods_to_touch.append({
+                            'path_hash': path_hash,
+                            'path': mod.get('path'),
+                            'file_modify_time': mod.get('file_modify_time', 0),
+                            'file_size': mod.get('file_size', 0),
+                            'disabled': mod.get('disabled', False),
+                            'state': MOD_ASSET_STATE_PRESENT,
+                            'last_seen_at': mod.get('last_seen_at', 0),
+                            'last_scanned_at': mod.get('last_scanned_at', 0),
+                        })
+                    else:
                         mods_to_upsert.append(mod)
 
             # --- 4. 批量入库 ---
@@ -250,6 +263,8 @@ class ModScanner:
             try:
                 if mods_to_upsert: 
                     ModDAO.batch_upsert_mods(mods_to_upsert)
+                if mods_to_touch:
+                    ModDAO.batch_update_mods(mods_to_touch)
                 if shadow_paths_map:
                     ModDAO.batch_update_shadow_paths(shadow_paths_map)
                 # 扫描完成后再基于本轮 self 域磁盘结果补齐 SteamCMD ACF，
@@ -388,12 +403,18 @@ class ModScanner:
             need_size_check = bool(size_check_override)
 
         disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
+        snapshot_missing = bool(
+            snapshot and (
+                str(snapshot.get("state") or "").strip().lower() == MOD_ASSET_STATE_MISSING
+                or not str(snapshot.get("path") or "").strip()
+            )
+        )
         
         # 增量检测逻辑 (Time AND Size)
         # 如果快照存在且修改时间一致
         if disabled_change: pass
         
-        elif snapshot and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update :
+        elif snapshot and not snapshot_missing and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update :
             # 修改时间没变，此时通过开关决定是否开启“深层大小检测”
             if need_size_check:
                 # 优化点：只有在修改时间没变时，才执行耗时的 get_folder_size
@@ -484,6 +505,7 @@ class ModScanner:
         elif (need_size_check):
             final_size = get_folder_size(mod_path) # 增量 Mod 时，在需要检测大小的情况下，计算大小
             
+        scan_time = int(time.time() * 1000)
         mod_data.update({
             'path_hash': path_hash,
             'supported_languages': normalize_language_codes(
@@ -497,11 +519,15 @@ class ModScanner:
             'file_size': final_size,
             'source': mod_data.get('source', 'local'), # 来源
             'disabled': is_disabled,
+            'state': MOD_ASSET_STATE_PRESENT,
+            'last_seen_at': scan_time,
+            'last_scanned_at': scan_time,
         })
         
         return mod_data
     
     def _build_skipped_result(self, snapshot: dict, path_hash, mod_path, mtime, current_size, is_disabled):
+        scan_time = int(time.time() * 1000)
         return {
             '_skipped': True, 
             'path_hash': path_hash,
@@ -516,7 +542,10 @@ class ModScanner:
             'file_modify_time': mtime,
             'mtime': mtime,
             'file_size': current_size,
-            'disabled': is_disabled
+            'disabled': is_disabled,
+            'state': MOD_ASSET_STATE_PRESENT,
+            'last_seen_at': scan_time,
+            'last_scanned_at': scan_time,
         }
 
     def _resolve_workshop_id(self, mod_path):

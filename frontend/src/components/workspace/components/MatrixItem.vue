@@ -76,6 +76,9 @@
         <span v-if="matrixState.isMissing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           MISSING
         </span>
+        <span v-if="matrixState.isWorkshopUnavailable" title="Steam 已无法获取该工坊项目详情，可能已下架或不可访问" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
+          失效
+        </span>
         <span v-if="matrixState.isDeleted" title="已删除" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-black bg-accent-danger animate-pulse">
           DELETED
         </span>

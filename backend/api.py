@@ -45,7 +45,7 @@ from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
+from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.dao_ext import ExtDAO
 from backend.database.runtime import close_db, clear_db, init_db
@@ -1365,13 +1365,14 @@ class API:
                 env_changed = True
             # B. 处理全局设置数据
             if global_data:
-                settings.update_from_dict(global_data)  # recursive_update 批量更新
+                normalization_warnings = settings.update_from_dict(global_data)  # recursive_update 批量更新
                 network_mgr.apply() # 应用网络设置
                 # 如果修改了某些会影响环境的全局路径（如 steamcmd_path）
                 if 'steamcmd_path' in global_data or 'workshop_mods_path' in global_data:
                     env_changed = True
                 rule_paths_changed = 'user_rules_path' in global_data or 'community_rules_path' in global_data
             else:
+                normalization_warnings = []
                 rule_paths_changed = False
             if env_changed:
                 logger.info("检测到核心路径变动，正在重新装配执行引擎...")
@@ -1381,7 +1382,9 @@ class API:
                 # 规则文件路径切换后必须立即重载，否则本次会话仍会持有旧文件内容。
                 logger.info("检测到规则文件路径变动，正在重载规则缓存...")
                 self.sorter.rule_mgr.load_all()
-             
+            if normalization_warnings:
+                EventBus.send_toast("\n".join(normalization_warnings), type="warning", duration=5000)
+
             return ApiResponse.success({
                 "settings": asdict(settings.config),
                 "active_context": self.active_context # 这里的 serialize_data 会自动调用 to_dict
@@ -1622,7 +1625,12 @@ class API:
                         paths_to_scan.append(self.active_context.local_mods_path)
                     # 3. Self Mods (管理器的 Mods 目录)
                     if os.path.exists(cfg.self_mods_path):
-                        paths_to_scan.append(cfg.self_mods_path)
+                        self_path = Path(cfg.self_mods_path).resolve()
+                        if (
+                            (not self.active_context.local_mods_path or self_path != Path(self.active_context.local_mods_path).resolve())
+                            and (not cfg.workshop_mods_path or self_path != Path(cfg.workshop_mods_path).resolve())
+                        ):
+                            paths_to_scan.append(cfg.self_mods_path)
                     # 4. Workshop Mods (公共工坊目录)
                     # 注意：库存扫描始终同步所有已配置域。
                     # use_workshop_mods / use_self_mods 只影响后续运行态冲突分析与链接部署，
@@ -2444,7 +2452,12 @@ class API:
         if os.path.exists(context.local_mods_path):
             paths_to_scan.append(context.local_mods_path)
         if os.path.exists(cfg.self_mods_path):
-            paths_to_scan.append(cfg.self_mods_path)
+            self_path = Path(cfg.self_mods_path).resolve()
+            if (
+                (not context.local_mods_path or self_path != Path(context.local_mods_path).resolve())
+                and (not cfg.workshop_mods_path or self_path != Path(cfg.workshop_mods_path).resolve())
+            ):
+                paths_to_scan.append(cfg.self_mods_path)
         if os.path.exists(cfg.workshop_mods_path):
             paths_to_scan.append(cfg.workshop_mods_path)
         if os.path.exists(str(TOOL_MODS_DIR)) and cfg.enable_tool_mods:
@@ -4924,7 +4937,7 @@ class API:
             if r.get('old_workshop_id')
         }
         
-        install_workshop_ids = set()
+        known_workshop_ids = set()
         # install_self_ids = set()
         
         def inject_workspace_fields(mod: dict, steam_map: dict | None = None):
@@ -4932,14 +4945,21 @@ class API:
             if steam_map and wid and wid in steam_map:
                 mod['steam_status'] = steam_map[wid]
             mod['replacement'] = replacements_map.get(wid)
-            mod['is_missing'] = False
+            state = str(mod.get('state') or MOD_ASSET_STATE_PRESENT).strip().lower()
+            is_missing = state == MOD_ASSET_STATE_MISSING or not str(mod.get('path') or '').strip()
+            mod['state'] = MOD_ASSET_STATE_MISSING if is_missing else (state or MOD_ASSET_STATE_PRESENT)
+            mod['is_missing'] = is_missing
+            if is_missing and wid and str(mod.get('store') or '').lower() == 'workshop':
+                is_subscribed = (mod.get('steam_status') or {}).get('is_subscribed') is True
+                mod['workshop_missing_status'] = 'subscribed_missing' if is_subscribed else 'not_subscribed_missing'
+                mod['workshop_missing_can_unsubscribe'] = is_subscribed
             return wid
 
         # 3. 为已有的物理模组注入 Steam 状态
         for mod in matrix['workshop']:
             wid = inject_workspace_fields(mod, ws_map)
-            if mod.get('path') and wid:
-                install_workshop_ids.add(wid)
+            if wid:
+                known_workshop_ids.add(wid)
         
         # 为 self (管理器) 域注入数据
         for mod in matrix['self']:
@@ -4950,8 +4970,8 @@ class API:
             inject_workspace_fields(mod)
         
         # 4. 核心逻辑：找出“已订阅但物理丢失”的模组 (Ghost Mods)
-        # 找出 ACF 中标记已订阅，但物理文件没被扫描到的 ID
-        ghost_ws_ids = set([wid for wid, data in ws_map.items() if data.get('is_subscribed')]) - install_workshop_ids
+        # ACF 中仍标记订阅、但 DB 没有对应工坊资产的条目，仍然属于“工坊列表”视图。
+        ghost_ws_ids = set([wid for wid, data in ws_map.items() if data.get('is_subscribed')]) - known_workshop_ids
         # ghost_self_ids = set([wid for wid, data in mg_map.items() if data.get('is_subscribed')]) - install_self_ids
         
         # 5. 从 ExtDB (外置社区库) 中获取这些幽灵模组的信息，使其在 UI 上能显示名字和图片
@@ -4972,9 +4992,12 @@ class API:
                 "path_hash": f"ghost_{store_type}_{wid}", # 临时唯一哈希
                 "store": store_type,
                 "source": "workshop",
+                "state": MOD_ASSET_STATE_MISSING,
                 "is_missing": True, 
                 "steam_status": steam_status,
-                "replacement": replacements_map.get(wid)
+                "replacement": replacements_map.get(wid),
+                "workshop_missing_status": "subscribed_missing",
+                "workshop_missing_can_unsubscribe": True,
             }
         for wid in ghost_ws_ids:
             matrix['workshop'].append(create_ghost(wid, 'workshop', ws_map.get(wid)))
@@ -4982,9 +5005,18 @@ class API:
         res = {
             "workshop": matrix['workshop'],
             "self": matrix['self'],
-            "local": matrix['local']
+            "local": matrix['local'],
         }
         
+        missing_workshop_ids = list({
+            str(mod.get("workshop_id") or "").strip()
+            for mod in matrix["workshop"]
+            if mod.get("is_missing") and str(mod.get("workshop_id") or "").strip().isdigit()
+        })
+        if missing_workshop_ids:
+            import threading
+            threading.Thread(target=self._bg_probe_missing_workshop_items, args=(missing_workshop_ids,), daemon=True).start()
+
         # 6. 后台触发在线比对，统一只针对 self / SteamCMD 域做在线状态预热与更新标记。
         all_wids = list({
             str(item.get("workshop_id") or "").strip()
@@ -5004,6 +5036,12 @@ class API:
             threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
 
         return ApiResponse.success(res)
+
+    def _bg_probe_missing_workshop_items(self, workshop_ids: list[str]):
+        """后台探查缺失工坊项目是否仍可从 Steam 获取详情，用于给 UI 标记疑似下架。"""
+        probe_result = SteamWebAPI.probe_item_availability(workshop_ids)
+        from backend.utils.event_bus import EventBus
+        EventBus.emit('workspace-missing-workshop-probe', probe_result)
     
     def _bg_check_online_updates(self, all_wids: list):
         """后台静默检测，完成后通过 EventBus 推送"""

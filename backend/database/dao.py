@@ -14,6 +14,8 @@ from peewee import JOIN, chunked, fn
 from backend.database.models import (
     GroupData,
     GroupMod,
+    MOD_ASSET_STATE_MISSING,
+    MOD_ASSET_STATE_PRESENT,
     ModAsset,
     ModInterlock,
     SubscribedCollection,
@@ -37,6 +39,24 @@ from backend.utils.tools import (
 
 
 _MOD_ASSET_UPSERT_EXCLUDED_FIELDS = {"path_hash"}
+
+
+def _present_asset_condition():
+    """
+    数据库层统一的“物理资产仍有效”条件。
+
+    缺失记录现在会保留最后路径，所以不能再只靠 path 是否为空判断有效性。
+    """
+    return (
+        ((ModAsset.state == MOD_ASSET_STATE_PRESENT) | ModAsset.state.is_null())  # type: ignore
+        & ModAsset.path.is_null(False)  # type: ignore
+        & (ModAsset.path != "")
+    )
+
+
+def _asset_marked_missing(asset: dict[str, Any]) -> bool:
+    state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
+    return state == MOD_ASSET_STATE_MISSING or not str(asset.get("path") or "").strip()
 
 
 def _normalize_path_hashes(path_hashes: Sequence[str] | str) -> list[str]:
@@ -224,23 +244,20 @@ class _ProfilePathScope:
         """
         将资产归入工作区三域视图。
 
-        这里优先信任数据库里的 `store`，仅在 `store` 不能覆盖时再回退到路径判断。
+        本地/DLC 必须按当前 Profile 路径归属判断，不能只信任 `store=local`。
+        否则其它环境扫描过的本地模组会混入当前工作区。
         """
         store = str(asset.get("store") or "").strip().lower()
         path = str(asset.get("path") or "")
         normalized_path = self._normalize_asset_path(path)
 
+        if ((self.local_root and normalized_path.startswith(self.local_root))
+            or (self.dlc_root and normalized_path.startswith(self.dlc_root))):
+            return "local"
         if store == "workshop":
             return "workshop"
         if store == "self":
             return "self"
-        if not path:
-            return "missing"
-        if (
-            (self.local_root and normalized_path.startswith(self.local_root))
-            or (self.dlc_root and normalized_path.startswith(self.dlc_root))
-        ):
-            return "local"
         return "unknown"
 
 
@@ -401,7 +418,10 @@ class ModDAO:
         if not conditions: return []
 
         combined_condition = reduce(operator.or_, conditions)
-        active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
+        active_condition = (
+            ((ModAsset.disabled == False) | (ModAsset.disabled.is_null()))  # type: ignore
+            & _present_asset_condition()
+        )
         query = (
             ModAsset.select(ModAsset, UserModData)
             .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
@@ -493,7 +513,7 @@ class ModDAO:
             .dicts()
         )
 
-        result = {"workshop": [], "self": [], "local": [], "missing": [], "unknown": []}
+        result = {"workshop": [], "self": [], "local": [], "unknown": []}
         for asset in all_assets:
             _normalize_language_fields(asset)
             result[scope.classify_asset(asset)].append(asset)
@@ -548,7 +568,10 @@ class ModDAO:
             )
             if not conditions: return empty_result
             combined_condition = reduce(operator.or_, conditions)
-            active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
+            active_condition = (
+                ((ModAsset.disabled == False) | (ModAsset.disabled.is_null()))  # type: ignore
+                & _present_asset_condition()
+            )
             query = (
                 ModAsset.select()
                 .where(combined_condition & active_condition)
@@ -559,6 +582,8 @@ class ModDAO:
             for asset in assets:
                 asset_dict = dict(asset)
                 if asset_dict.get("disabled"):
+                    continue
+                if _asset_marked_missing(asset_dict):
                     continue
                 if not scope.includes_runtime_path(asset_dict.get("path"), include_workshop=detect_workshop):
                     continue
@@ -649,7 +674,7 @@ class ModDAO:
             .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
         )
         if ignore_missing:
-            query = query.where((ModAsset.path.is_null(False)) & (ModAsset.path != ""))  # type: ignore
+            query = query.where(_present_asset_condition())
         return [_normalize_language_fields(asset) for asset in query.dicts()]
 
     @staticmethod
@@ -673,10 +698,12 @@ class ModDAO:
                 ModAsset.file_size,
                 ModAsset.package_id,
                 ModAsset.workshop_id,
+                ModAsset.path,
                 ModAsset.disabled,
                 ModAsset.name,
                 ModAsset.version,
                 ModAsset.store,
+                ModAsset.state,
                 ModAsset.supported_versions,
             )
             .dicts()
@@ -690,10 +717,12 @@ class ModDAO:
                 "size": row["file_size"] or 0,
                 "package_id": normalize_package_id(row.get("package_id")),
                 "workshop_id": row.get("workshop_id"),
+                "path": row.get("path"),
                 "disabled": row.get("disabled"),
                 "name": row.get("name", ""),
                 "version": row.get("version", ""),
                 "store": row.get("store", "local"),
+                "state": row.get("state") or MOD_ASSET_STATE_PRESENT,
                 "supported_versions": row.get("supported_versions", []),
             }
         return snapshots
@@ -960,8 +989,7 @@ class ModInterlockDAO:
         with db.atomic():
             existing_assets = ModAsset.select(ModAsset.package_id).where(
                 (ModAsset.package_id << interlock.chain)
-                & (ModAsset.path.is_null(False))  # type: ignore
-                & (ModAsset.path != "")
+                & _present_asset_condition()
             )
             valid_ids = {normalize_package_id(asset.package_id) for asset in existing_assets}
             healed_chain = [mod_id for mod_id in interlock.chain if normalize_package_id(mod_id) in valid_ids]
@@ -988,7 +1016,7 @@ class ModInterlockDAO:
         if not interlock: return []
 
         all_assets = (
-            ModAsset.select(ModAsset.package_id, ModAsset.path, ModAsset.disabled, ModAsset.workshop_id)
+            ModAsset.select(ModAsset.package_id, ModAsset.path, ModAsset.disabled, ModAsset.workshop_id, ModAsset.state)
             .where(ModAsset.package_id << interlock.chain)
             .dicts()
         )
@@ -1012,7 +1040,7 @@ class ModInterlockDAO:
             }
 
             if asset:
-                if not asset.get("path") or not _mod_dir_exists(asset["path"]):
+                if _asset_marked_missing(asset) or not _mod_dir_exists(asset["path"]):
                     detail["reason"] = "missing"
                 elif asset.get("disabled"):
                     detail["reason"] = "disabled"
@@ -1072,16 +1100,24 @@ class ModMaintenanceDAO:
         if not normalized_hashes: return {"success_count": 0, "errors": []}
 
         assets = list(
-            ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
+            ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name, ModAsset.state)
             .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
             .dicts()
         )
         if not assets: return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
 
-        target_paths = [asset["path"] for asset in assets if asset.get("path")]
+        target_paths: list[str] = []
         valid_hashes = [asset["path_hash"] for asset in assets]
         errors: list[str] = []
         success_count = 0
+
+        for asset in assets:
+            path = str(asset.get("path") or "")
+            state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
+            if state == MOD_ASSET_STATE_MISSING or not path or not os.path.exists(path):
+                success_count += 1
+                continue
+            target_paths.append(path)
 
         try:
             with db.atomic():
@@ -1147,16 +1183,17 @@ class ModMaintenanceDAO:
         """
         查找数据库中已经失效的 Mod。
 
-        - missing_mods: path 本来就为空，说明以前已经标记过缺失
+        - missing_mods: 已经标记缺失，或旧版本留下的空路径记录
         - deleted_mods: path 仍存在，但物理 Mod 结构已经不完整或目录消失
         """
         missing_mods: list[str] = []
         deleted_mods: list[str] = []
 
-        query = ModAsset.select(ModAsset.path_hash, ModAsset.path).dicts()
+        query = ModAsset.select(ModAsset.path_hash, ModAsset.path, ModAsset.state).dicts()
         for asset in query:
             path = asset["path"]
-            if not path:
+            state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
+            if state == MOD_ASSET_STATE_MISSING or not path:
                 missing_mods.append(asset["path_hash"])
             elif not _mod_dir_exists(path):
                 deleted_mods.append(asset["path_hash"])
@@ -1168,7 +1205,19 @@ class ModMaintenanceDAO:
             if delete:
                 ModAsset.delete().where(cast(Any, ModAsset.path_hash).in_(total_invalid_mods)).execute()
             else:
-                ModAsset.update(path="").where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
+                now = current_ms()
+                if missing_mods:
+                    ModAsset.update(
+                        state=MOD_ASSET_STATE_MISSING,
+                        last_scanned_at=now,
+                        file_modify_time=now,
+                    ).where(cast(Any, ModAsset.path_hash).in_(missing_mods)).execute()
+                if deleted_mods:
+                    ModAsset.update(
+                        state=MOD_ASSET_STATE_MISSING,
+                        last_scanned_at=now,
+                        file_modify_time=now,
+                    ).where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
 
         return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
 

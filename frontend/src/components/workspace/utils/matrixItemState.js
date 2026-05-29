@@ -55,6 +55,7 @@ export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
   const isDisabled = !!mod?.disabled
   const isMissing = !!mod?.is_missing
   const isDeleted = !isMissing && !mod?.path
+  const isWorkshopUnavailable = mod?.workshop_online_status === 'unavailable'
 
   return {
     sameTargets,
@@ -80,6 +81,7 @@ export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
     isDisabled,
     isDeleted,
     isMissing,
+    isWorkshopUnavailable,
   }
 }
 

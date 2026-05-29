@@ -491,6 +491,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       mergeOnlineData(librariesMods.self)
     })
+    // 【监听 A2】: 缺失工坊项可用性探查。只更新运行时标签，不改变库存状态。
+    window.addEventListener('workspace-missing-workshop-probe', (e) => {
+      const probeMap = e.detail || {}
+      librariesMods.workshop.forEach(mod => {
+        const wid = normalizeWorkshopId(mod?.workshop_id)
+        if (!wid || !probeMap[wid]) return
+        const probe = probeMap[wid]
+        mod.workshop_online_status = probe.status || 'unknown'
+        mod.workshop_online_result = probe.result ?? null
+        if (probe.online_info) mod.online_info = probe.online_info
+      })
+    })
     // 【监听 B】: Git 仓库在线状态静默更新
     // payload 格式: { "https://host/group/repo": { latest_release_tag: "v1.2", ... }, ... }
     window.addEventListener('github-online-update', (e) => {

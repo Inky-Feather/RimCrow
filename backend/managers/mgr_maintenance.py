@@ -273,6 +273,21 @@ class MaintenanceManager:
             )
             if not installed_version or not latest_version or installed_version == latest_version:
                 continue
+            if install_type == "source":
+                local_branch, _, local_marker = installed_version.partition("@")
+                latest_branch, _, latest_marker = latest_version.partition("@")
+                if local_branch and latest_branch and local_branch != latest_branch:
+                    continue
+                local_time = latest_time = 0
+                try:
+                    if local_marker:
+                        local_time = int(datetime.fromisoformat(local_marker.replace("Z", "+00:00")).timestamp() * 1000)
+                    if latest_marker:
+                        latest_time = int(datetime.fromisoformat(latest_marker.replace("Z", "+00:00")).timestamp() * 1000)
+                except Exception:
+                    local_time = latest_time = 0
+                if local_time and latest_time and latest_time <= local_time:
+                    continue
 
             # source 模式下载参数仍然是分支名；latest_source_version 只用于判断和展示版本差异。
             target_version = (

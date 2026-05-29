@@ -12,13 +12,14 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from backend.api import API
-from backend.database.dao import ModDAO
+from backend.database.dao import ModDAO, _ProfilePathScope
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_install import GameInstallFacts, GameInstallInspector, GameInstallRegistry, detect_is_steam_managed_install
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game_monitor import RuntimeSession
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam import SteamManager, run_steam_worker
+from backend.settings import MODS_DIR, settings
 from backend.utils.profile_runtime import normalize_profile_runtime_flags, resolve_profile_runtime_capabilities
 from backend.migrations.app_upgrade import AppUpgradeResult, _migrate_profile_steam_runtime_flags
 from backend.scanner.analyzer import ModAnalyzer
@@ -1397,6 +1398,60 @@ class TestApiScanMods(unittest.TestCase):
             forced_update=False,
         )
 
+    def test_scan_mods_skips_self_when_current_local_matches_self(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(
+            game_dlc_path="C:/Games/RimWorld/Data",
+            local_mods_path="C:/Games/RimWorld/Mods",
+            use_workshop_mods=False,
+            use_self_mods=True,
+            profile_id="profile-a",
+        )
+        api.scanner = Mock()
+        api.scanner.scan_paths_async.return_value = {"status": "started", "task_id": "task-1"}
+
+        config = SimpleNamespace(
+            self_mods_path="C:/Games/RimWorld/Mods",
+            workshop_mods_path="D:/Steam/workshop/content/294100",
+            enable_tool_mods=False,
+        )
+
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.os.path.exists", return_value=True):
+            res = API.scan_mods(api)
+
+        self.assertEqual(res["status"], "success")
+        api.scanner.scan_paths_async.assert_called_once_with(
+            [
+                "C:/Games/RimWorld/Data",
+                "C:/Games/RimWorld/Mods",
+                "D:/Steam/workshop/content/294100",
+            ],
+            forced_update=False,
+        )
+
+    def test_workspace_classification_treats_current_local_self_path_as_local_only(self):
+        scope = _ProfilePathScope(
+            local_root=_ProfilePathScope._normalize_root("C:/Games/RimWorld/Mods"),
+            self_root=_ProfilePathScope._normalize_root("C:/Games/RimWorld/Mods"),
+        )
+
+        self.assertEqual(
+            scope.classify_asset({"path": "C:/Games/RimWorld/Mods/TestMod", "store": "self"}),
+            "local",
+        )
+
+    def test_workspace_classification_keeps_other_profile_local_path_as_self(self):
+        scope = _ProfilePathScope(
+            local_root=_ProfilePathScope._normalize_root("D:/Profiles/A/Mods"),
+            self_root=_ProfilePathScope._normalize_root("C:/Games/RimWorld/Mods"),
+        )
+
+        self.assertEqual(
+            scope.classify_asset({"path": "C:/Games/RimWorld/Mods/TestMod", "store": "self"}),
+            "self",
+        )
+
 
 class TestApiGameLaunch(unittest.TestCase):
     def test_game_launch_prefers_steam_waits_until_ready_then_direct_launches_game(self):
@@ -1643,6 +1698,28 @@ class TestApiGameLaunch(unittest.TestCase):
 
 
 class TestApiRuntimeLinkSync(unittest.TestCase):
+    def test_build_scan_paths_for_profile_skips_self_when_local_matches_self(self):
+        api = API.__new__(API)
+        context = SimpleNamespace(
+            game_dlc_path="D:/Games/RimWorld/Data",
+            local_mods_path="D:/Games/RimWorld/Mods",
+        )
+        cfg = SimpleNamespace(
+            self_mods_path="D:/Games/RimWorld/Mods",
+            workshop_mods_path="D:/WorkshopMods",
+            enable_tool_mods=False,
+        )
+
+        with patch("backend.api.settings.config", cfg), \
+             patch("backend.api.os.path.exists", return_value=True):
+            paths = API._build_scan_paths_for_profile(api, context)
+
+        self.assertEqual(paths, [
+            "D:/Games/RimWorld/Data",
+            "D:/Games/RimWorld/Mods",
+            "D:/WorkshopMods",
+        ])
+
     def test_prepare_profile_launch_runs_fast_scan_for_direct_launch_profile(self):
         api = API.__new__(API)
         context = SimpleNamespace(
@@ -1716,6 +1793,66 @@ class TestApiRuntimeLinkSync(unittest.TestCase):
         self.assertFalse(res["ok"])
         self.assertEqual(res["mode"], "missing-context")
         api._sync_runtime_links_for_profile.assert_not_called()
+
+
+class TestSettingsPathNormalization(unittest.TestCase):
+    def test_update_from_dict_resets_self_mods_path_when_equal_to_workshop(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        original_self = settings.config.self_mods_path
+        original_workshop = settings.config.workshop_mods_path
+        self.addCleanup(setattr, settings.config, "self_mods_path", original_self)
+        self.addCleanup(setattr, settings.config, "workshop_mods_path", original_workshop)
+
+        settings.config.self_mods_path = str(temp_root / "SelfMods")
+        settings.config.workshop_mods_path = str(temp_root / "WorkshopMods")
+        target_workshop_path = str(temp_root / "WorkshopMods")
+
+        with patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link"), \
+             patch.object(settings, "save"):
+            warnings = settings.update_from_dict({"self_mods_path": target_workshop_path})
+
+        self.assertEqual(settings.config.self_mods_path, str(MODS_DIR))
+        self.assertEqual(
+            warnings,
+            ["管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。"],
+        )
+
+
+class TestApiSaveSettings(unittest.TestCase):
+    def test_save_all_settings_emits_warning_toast_when_self_path_conflicts_with_workshop(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        original_self = settings.config.self_mods_path
+        original_workshop = settings.config.workshop_mods_path
+        self.addCleanup(setattr, settings.config, "self_mods_path", original_self)
+        self.addCleanup(setattr, settings.config, "workshop_mods_path", original_workshop)
+
+        settings.config.self_mods_path = str(temp_root / "SelfMods")
+        settings.config.workshop_mods_path = str(temp_root / "WorkshopMods")
+
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = SimpleNamespace(PROFILE_KEYS=set())
+        api.sorter = None
+        api._bootstrap_context = Mock()
+        api.file_mgr = SimpleNamespace(get_remote_cache_stats=Mock(return_value={}))
+
+        with patch("backend.api.network_mgr.apply"), \
+             patch("backend.api.EventBus.send_toast") as mock_send_toast, \
+             patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link"), \
+             patch.object(settings, "save"):
+            res = API.save_all_settings(api, {"self_mods_path": str(temp_root / "WorkshopMods")})
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["settings"]["self_mods_path"], str(MODS_DIR))
+        mock_send_toast.assert_called_once_with(
+            "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。",
+            type="warning",
+            duration=5000,
+        )
 
     def test_get_initial_data_includes_runtime_session_even_without_active_context(self):
         api = API.__new__(API)

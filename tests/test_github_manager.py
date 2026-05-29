@@ -129,6 +129,16 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(info["info_source"], "api")
         self.assertFalse(info["is_degraded"])
 
+    def test_extract_commit_timestamp_prefers_committer_date(self):
+        timestamp = self.manager._extract_commit_timestamp({
+            "commit": {
+                "author": {"date": "2025-06-27T04:22:57Z"},
+                "committer": {"date": "2025-07-04T09:07:38Z"},
+            }
+        })
+
+        self.assertEqual(timestamp, "2025-07-04T09:07:38Z")
+
     def test_fetch_gitlab_repo_info_maps_to_common_payload(self):
         identity = self.manager.parse_git_repo_url("https://gitgud.io/Ed86/rjw")
         self.assertIsNotNone(identity)
