@@ -66,6 +66,7 @@
 │   │   ├──  runtime.py
 │   │   └──  workshop_selection.py
 │   │   
+│   ├── ·[environment]
 │   ├── ·[load_order]
 │   │   ├──  __init__.py
 │   │   ├──  detector.py
@@ -104,6 +105,10 @@
 │   │   
 │   ├── ·[migrations]
 │   │   └──  app_upgrade.py
+│   │   
+│   ├── ·[profile]
+│   │   ├──  __init__.py
+│   │   └──  user_data_root.py
 │   │   
 │   ├── ·[scanner]
 │   │   ├──  __init__.py
@@ -175,7 +180,6 @@
 │   │   │   │   ├──  DependencyGraph.vue
 │   │   │   │   ├──  FileSearchPreviewEditor.vue
 │   │   │   │   ├──  FocusTabs.vue
-│   │   │   │   ├──  GameLogPanel.vue
 │   │   │   │   ├──  GroupItem.vue
 │   │   │   │   ├──  ImageCloud.vue
 │   │   │   │   ├──  LampEffect.vue
@@ -301,6 +305,7 @@
 │   ├──  test_ai_service_helpers.py
 │   ├──  test_bundle_managers.py
 │   ├──  test_download_manager.py
+│   ├──  test_environment_runtime.py
 │   ├──  test_file_search.py
 │   ├──  test_game_log_paths.py
 │   ├──  test_github_manager.py
@@ -308,6 +313,7 @@
 │   ├──  test_import_check.py
 │   ├──  test_language_pack_ownership.py
 │   ├──  test_load_order_manager_import_check.py
+│   ├──  test_load_order_manager_save.py
 │   ├──  test_load_order_parsers.py
 │   ├──  test_load_order_share_code.py
 │   ├──  test_mod_config_manager.py
@@ -315,8 +321,10 @@
 │   ├──  test_rule_manager_dynamic_weights.py
 │   ├──  test_shortcuts.py
 │   ├──  test_sorter_strategies.py
+│   ├──  test_texture_opt_api.py
 │   ├──  test_texture_opt_batch_recovery.py
 │   ├──  test_texture_opt_manager.py
+│   ├──  test_user_data_root.py
 │   ├──  test_workshop_db_manager.py
 │   └──  test_workshop_selection.py
 │   
@@ -328,6 +336,7 @@
 ├──  icon.ico
 ├──  icon.svg
 ├──  main.py
+├──  pack_gitignore_zip.py
 ├──  pack_nuitka.py
 ├──  pack_pyinstaller.py
 ├──  pyproject.toml

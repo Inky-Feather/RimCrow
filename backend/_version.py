@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.21.5"  # 主版本.次版本.补丁
+__version__ = "0.21.9"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,39 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.21.9",
+        "date": "2026-05-22",
+        "entries": [
+            {
+                "title": "Steam 工作进程重构",
+                "changes": [
+                    { "type": "feature", "text": "将 Steam API 探测从游戏安装检查器内联脚本重构为独立 worker 进程，避免多次调用主程序导致启动多个实例的问题" },
+                    { "type": "feature", "text": "使用 base64 编码传递参数，添加结果标记解析，并设置子进程环境抑制闪屏" }
+                ]
+            },
+            {
+                "title": "贴图优化功能优化",
+                "changes": [
+                    { "type": "feature", "text": "新增贴图排除管理（模组/文件）、结果历史记录、范围扫描模式、清单文件跟踪、重试机制与清理优化" },
+                    { "type": "feature", "text": "新增贴图优化结果面板、排除规则界面、失败项详情（打开文件/日志/排除）、路径识别排除及清理后自动重分析" },
+                    { "type": "optimize", "text": "重构贴图优化管理器，提取统一解析器，优化缓存签名和投影逻辑，清理废弃 API 与冗余代码" }
+                ]
+            },
+            {
+                "title": "运行时会话与启动流程优化",
+                "changes": [
+                    { "type": "feature", "text": "引入运行时会话机制，启动流程可返回运行状态并支持超时/失败通知" },
+                    { "type": "feature", "text": "新增启动前检查同步流程，支持轻量扫描与链接同步；新增配置项控制直启前是否执行快速扫描" },
+                    { "type": "feature", "text": "重构用户数据路径处理，新增 UserDataRoot 值对象，支持默认路径纠偏、子路径校验及 profile 快照独立存储" },
+                    { "type": "feature", "text": "统一游戏日志接口，支持 active/runtime 作用域与按用户数据根目录解析；日志面板增加运行时环境标识与切换入口" },
+                    { "type": "feature", "text": "新增静默扫描能力，跳过事件发射与大小检查，用于启动前快速检查同步" },
+                    { "type": "fix", "text": "修复损坏的 ModsConfig.xml 导致保存空白的问题，增加备份与原子写入替换" },
+                    { "type": "optimize", "text": "使用运行时会话收敛运行态管理，移除旧的启动分支与重复逻辑；清理运行时链接同步指纹缓存" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.21.5",
         "date": "2026-05-20",
