@@ -146,9 +146,11 @@
                   </button>
                 </h3>
                 <div class="space-y-6">
-                  <div class="grid grid-cols-2 gap-4 aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="true">
-                    <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-CN'}, {label:'English', value:'en'}]" />
-                    <CommonSelect label="配色方案" v-model="formData.theme" :options="[{label:'自动同步系统', value:'system'}, {label:'黑曜石', value:'dark'}]" />
+                  <div class="grid grid-cols-2 gap-4">
+                    <CommonSelect class="pointer-events-none opacity-50" label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-CN'}, {label:'English', value:'en'}]" />
+                    <ThemeSelect v-if="formData.ui" v-model="currentThemeId" :themes="appStore.themes"
+                      @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
+                    />
                   </div>
                   <!-- <div class="grid grid-cols-2 gap-4">
                     <CommonNumber label="窗口宽度" v-model="formData.window_width" :step="10" />
@@ -761,8 +763,10 @@ import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
+import ThemeSelect from './settings/ThemeSelect.vue'
 import { RUN_COMMAND_TAGS } from '../utils/constants'
 import { formatFileSize } from '../utils/format'
+import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, normalizeTheme } from '../modules/theme/themeManager'
 import { useRuleStore } from '../stores/ruleStore'
 import { useAppStore } from '../stores/appStore'
 import { useAiStore } from '../stores/aiStore'
@@ -782,6 +786,38 @@ const guideStore = useGuideStore()
 const currentTab = ref('paths')
 const formData = ref({})
 const layoutDragState = ref({ key: '', fromIndex: -1, overIndex: -1 })
+
+const selectedFormTheme = computed(() => {
+  return findThemeById(appStore.themes, currentThemeId.value)
+})
+const currentThemeId = computed({
+  get: () => appStore.settings.ui?.theme_id || DEFAULT_THEME_ID,
+  set: async (themeId) => {
+    if (!appStore.settings.ui) appStore.settings.ui = {}
+    appStore.settings.ui.theme_id = themeId || DEFAULT_THEME_ID
+    applyTheme(findThemeById(appStore.themes, appStore.settings.ui.theme_id))
+    await appStore.saveSetting('ui', appStore.settings.ui)
+  },
+})
+
+const openThemeCreate = () => {
+  appStore.themeEditor.theme = createEditableThemeFrom(selectedFormTheme.value)
+  appStore.themeEditor.isOpen = true
+}
+const openThemeEdit = (theme) => {
+  if (!theme || theme.builtin) return
+  appStore.themeEditor.theme = normalizeTheme(theme)
+  appStore.themeEditor.isOpen = true
+}
+const handleThemeDelete = async (theme) => {
+  if (!theme || theme.builtin) return
+  const ok = await confirmStore.confirmAction('删除主题', `确定要删除自定义主题「${theme.name}」吗？此操作不可撤销。`, { type: 'error' })
+  if (!ok) return
+  const deleted = await appStore.deleteUserTheme(theme.id)
+  if (deleted && currentThemeId.value === theme.id) {
+    currentThemeId.value = DEFAULT_THEME_ID
+  }
+}
 
 const getLayoutList = (layoutKey) => {
   const list = formData.value?.ui?.[layoutKey]
@@ -999,6 +1035,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   } else {
     showDataBundleModal.value = false
     showBundleProfilePicker.value = false
+    if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
   }
 })
 watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
@@ -1415,6 +1452,9 @@ const save = async () => {
   //   toast.error("存在无效路径，请修正后再保存！")
   //   return
   // }
+  if (formData.value?.ui) {
+    formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
+  }
   await appStore.applySettings(formData.value)
 }
 </script>

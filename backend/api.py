@@ -90,6 +90,7 @@ from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
 from backend.text_search.manager import FileSearchManager
 from backend.startup import StartupCoordinator
+from backend.theme_store import ThemeStore
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
 
@@ -257,6 +258,7 @@ class API:
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
         self._last_runtime_link_sync_result: dict[str, Any] = {}
+        self.theme_store = ThemeStore()
         # 应用层升级迁移必须早于外置缓存库管理器初始化。
         # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
         # 会在 Windows 上撞到已打开文件句柄导致无法删除。
@@ -970,6 +972,11 @@ class API:
         """
         前端启动时调用，一次性获取所有必要数据。
         """
+        try:
+            user_themes = self.theme_store.list_user_themes()
+        except Exception as e:
+            logger.error(f"Load user themes during startup failed: {e}", exc_info=True)
+            user_themes = []
         result = {
             "app_version": __version__,
             "build_mode": __build__,
@@ -988,6 +995,7 @@ class API:
             "active_context": self.active_context if self.active_context else None,
             "upgrade_context": self._upgrade_context.copy(),
             "runtime_session": self._get_runtime_session_data(),
+            "user_themes": user_themes,
         }
         if not self.active_context or not self.active_context.is_healthy: return ApiResponse.success(result)
         
@@ -1395,6 +1403,35 @@ class API:
         except Exception as e:
             logger.error(f"Save all settings failed: {str(e)}", exc_info=True)
             return ApiResponse.error(f"保存所有设置失败：{str(e)}")
+
+    @log_api_call
+    def theme_list_user(self):
+        """读取用户自定义主题；内置主题由前端只读资源提供。"""
+        try:
+            return ApiResponse.success({"themes": self.theme_store.list_user_themes()})
+        except Exception as e:
+            logger.error(f"Load user themes failed: {e}", exc_info=True)
+            return ApiResponse.error(f"读取用户主题失败：{e}")
+
+    @log_api_call
+    def theme_save_user(self, theme: dict):
+        """新增或覆盖用户自定义主题。"""
+        try:
+            saved_theme = self.theme_store.save_user_theme(theme)
+            return ApiResponse.success({"theme": saved_theme}, message="主题已保存")
+        except Exception as e:
+            logger.error(f"Save user theme failed: {e}", exc_info=True)
+            return ApiResponse.error(f"保存用户主题失败：{e}")
+
+    @log_api_call
+    def theme_delete_user(self, theme_id: str):
+        """删除用户自定义主题。"""
+        try:
+            deleted = self.theme_store.delete_user_theme(theme_id)
+            return ApiResponse.success({"deleted": deleted}, message="主题已删除" if deleted else "主题不存在")
+        except Exception as e:
+            logger.error(f"Delete user theme failed: {e}", exc_info=True)
+            return ApiResponse.error(f"删除用户主题失败：{e}")
 
     @log_api_call
     def get_remote_image_cache_stats(self):

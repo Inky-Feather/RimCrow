@@ -138,7 +138,7 @@ class AIConfig:
 
 @dataclass
 class UIConfig:
-    theme: str = "system"       # light, dark, system
+    theme_id: str = "obsidian-cyan"  # 当前使用的主题 ID；完整主题数据由主题文件管理。
     font_size: int = 16
     drag_delay: int = 30            # 拖动判定延迟 (毫秒)
     detail_delay: int = 200         # Mod 详情页加载延迟 (毫秒)

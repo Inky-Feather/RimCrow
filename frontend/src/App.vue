@@ -260,6 +260,14 @@
 
     <!-- 状态条 -->
     <StatusBar class="relative z-20 flex-none" />
+
+    <!-- 全局主题编辑器 -->
+    <ThemeEditorModal
+      :is-open="appStore.themeEditor.isOpen"
+      :theme="appStore.themeEditor.theme"
+      @close="closeThemeEditor"
+      @save="saveThemeEditor"
+    />
   </div>
 </template>
 
@@ -303,6 +311,8 @@ import ModConfigManagerModal from './components/ModConfigManagerModal.vue'
 import SupplementSelectionDialog from './components/SupplementSelectionDialog.vue'
 import MissingInstallDialog from './components/MissingInstallDialog.vue'
 import PackageTransferDialog from './components/PackageTransferDialog.vue'
+import ThemeEditorModal from './components/settings/ThemeEditorModal.vue'
+import { applyTheme } from './modules/theme/themeManager'
 
 const updateModal = ref(null);
 
@@ -323,6 +333,22 @@ const currentBackupDisplayTitle = computed(() => {
   }
   return '对比文件'
 })
+
+const closeThemeEditor = () => {
+  appStore.themeEditor.isOpen = false
+  appStore.themeEditor.theme = null
+  applyTheme(appStore.currentTheme)
+}
+
+const saveThemeEditor = async (theme) => {
+  const savedTheme = await appStore.saveUserTheme(theme)
+  if (!savedTheme) return
+  if (!appStore.settings.ui) appStore.settings.ui = {}
+  appStore.settings.ui.theme_id = savedTheme.id
+  await appStore.saveSetting('ui', appStore.settings.ui)
+  appStore.themeEditor.isOpen = false
+  appStore.themeEditor.theme = null
+}
 
 // --- 拖拽调整宽度逻辑 ---
 const containerRef = ref(null)

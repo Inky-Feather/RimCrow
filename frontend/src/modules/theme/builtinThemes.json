@@ -1,0 +1,112 @@
+[
+  {
+    "id": "obsidian-cyan",
+    "name": "黑曜石青",
+    "builtin": true,
+    "tokens": {
+      "bg": { "deep": "#0f172a", "surface": "#1e293b", "highlight": "#2d3748" },
+      "glass": { "light": "rgba(255, 255, 255, 0.03)", "medium": "rgba(30, 41, 59, 0.7)", "heavy": "rgba(15, 23, 42, 0.9)" },
+      "accent": {
+        "danger": "#ef4444",
+        "highlight": "#ec4899",
+        "special": "#8b5cf6",
+        "cool": "#3b82f6",
+        "primary": "#06b6d4",
+        "success": "#10b981",
+        "tip": "#84cc16",
+        "warn": "#eab308",
+        "secondary": "#f59e0b",
+        "warning": "#f97316"
+      },
+      "text": { "main": "#f1f5f9", "dim": "#94a3b8" }
+    }
+  },
+  {
+    "id": "midnight-violet",
+    "name": "午夜紫",
+    "builtin": true,
+    "tokens": {
+      "bg": { "deep": "#12101f", "surface": "#211b35", "highlight": "#31284a" },
+      "glass": { "light": "rgba(255, 255, 255, 0.04)", "medium": "rgba(33, 27, 53, 0.72)", "heavy": "rgba(18, 16, 31, 0.92)" },
+      "accent": {
+        "danger": "#fb7185",
+        "highlight": "#f472b6",
+        "special": "#a78bfa",
+        "cool": "#60a5fa",
+        "primary": "#c084fc",
+        "success": "#34d399",
+        "tip": "#bef264",
+        "warn": "#facc15",
+        "secondary": "#fbbf24",
+        "warning": "#fb923c"
+      },
+      "text": { "main": "#f8fafc", "dim": "#a5b4fc" }
+    }
+  },
+  {
+    "id": "porcelain-blue",
+    "name": "瓷白蓝",
+    "builtin": true,
+    "tokens": {
+      "bg": { "deep": "#edf4ff", "surface": "#ffffff", "highlight": "#dbeafe" },
+      "glass": { "light": "rgba(255, 255, 255, 0.72)", "medium": "rgba(255, 255, 255, 0.86)", "heavy": "rgba(237, 244, 255, 0.94)" },
+      "accent": {
+        "danger": "#dc2626",
+        "highlight": "#db2777",
+        "special": "#7c3aed",
+        "cool": "#2563eb",
+        "primary": "#0284c7",
+        "success": "#059669",
+        "tip": "#65a30d",
+        "warn": "#ca8a04",
+        "secondary": "#d97706",
+        "warning": "#ea580c"
+      },
+      "text": { "main": "#0f172a", "dim": "#475569" }
+    }
+  },
+  {
+    "id": "mint-paper",
+    "name": "薄荷纸",
+    "builtin": true,
+    "tokens": {
+      "bg": { "deep": "#eefbf5", "surface": "#fbfffc", "highlight": "#d8f3e7" },
+      "glass": { "light": "rgba(255, 255, 255, 0.68)", "medium": "rgba(251, 255, 252, 0.86)", "heavy": "rgba(238, 251, 245, 0.94)" },
+      "accent": {
+        "danger": "#e11d48",
+        "highlight": "#be185d",
+        "special": "#7c3aed",
+        "cool": "#2563eb",
+        "primary": "#0f766e",
+        "success": "#16a34a",
+        "tip": "#4d7c0f",
+        "warn": "#b45309",
+        "secondary": "#ca8a04",
+        "warning": "#ea580c"
+      },
+      "text": { "main": "#10231b", "dim": "#53645d" }
+    }
+  },
+  {
+    "id": "ember-coffee",
+    "name": "余烬咖啡",
+    "builtin": true,
+    "tokens": {
+      "bg": { "deep": "#211713", "surface": "#36251d", "highlight": "#4a3328" },
+      "glass": { "light": "rgba(255, 244, 214, 0.05)", "medium": "rgba(54, 37, 29, 0.74)", "heavy": "rgba(33, 23, 19, 0.92)" },
+      "accent": {
+        "danger": "#ef4444",
+        "highlight": "#fb7185",
+        "special": "#f59e0b",
+        "cool": "#38bdf8",
+        "primary": "#f97316",
+        "success": "#22c55e",
+        "tip": "#a3e635",
+        "warn": "#facc15",
+        "secondary": "#fb923c",
+        "warning": "#ea580c"
+      },
+      "text": { "main": "#fff7ed", "dim": "#d6bca8" }
+    }
+  }
+]

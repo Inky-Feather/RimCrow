@@ -69,7 +69,7 @@
               @toggle="toggle" @delete-group="deleteGroup" @update-group="updateGroup">
             </GroupItem>
 
-            <div v-else-if="record.row_type === 'mod'" class="relative group h-full pr-2 pl-3 transition-[opacity,transform,background-color] duration-180 ease-out"
+            <div v-else-if="record.row_type === 'mod'" class="relative group h-full pr-3 pl-3 transition-[opacity,transform,background-color] duration-180 ease-out"
               :class="[
                 record.is_expanding ? 'group-row-expanding' : '',
                 record.is_collapsing ? 'group-row-collapsing' : ''
@@ -86,7 +86,7 @@
               </div>
               <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
               <button @click.stop="removeMod(record.group_id, [record.id])" @mousedown.stop v-tooltip="`移除`"
-                class="absolute top-1 right-2 w-3 h-3 bg-accent-danger text-text-main rounded-full 
+                class="absolute top-1 right-3 w-4 h-4 bg-accent-danger text-text-main rounded-full 
                       opacity-0 group-hover:opacity-80 transition-opacity duration-200
                       flex items-center justify-center text-xs z-10 hover:scale-110">×
               </button>
@@ -94,6 +94,8 @@
                       transition-opacity duration-200 flex items-center justify-center text-xs z-10 hover:scale-110"
                       :class="[appStore.settings.ui.show_group_index?'-top-1.5 left-8.5':'-top-1.5 left-1.5']">
               </div>
+              <div class="absolute right-1.5 -top-1 bottom-1 w-1 bg-[rgba(var(--rgb-components),0.6)]"></div>
+              
             </div>
             <div v-else class="bg-[rgba(var(--rgb-components),0.3)] h-full py-1 mx-1 rounded-b-md transition-[opacity,transform] duration-180 ease-out"
               :class="[

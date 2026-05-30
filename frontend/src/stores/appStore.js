@@ -16,6 +16,7 @@ import { usePromptQueueStore } from './promptQueueStore'
 import { useStartupStore } from './startupStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
 import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIdentity'
+import { DEFAULT_THEME_ID, applyTheme, findThemeById, mergeThemes } from '../modules/theme/themeManager'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
@@ -160,7 +161,7 @@ export const useAppStore = defineStore('app', () => {
 
     // --- 界面（UI） ---
     ui: {
-      theme: 'system',
+      theme_id: DEFAULT_THEME_ID,
       font_size: 14,
       drag_delay: 30,            // 拖动判定延迟 (毫秒)
       detail_delay: 300,          // 详情页加载延迟 (毫秒)
@@ -262,6 +263,17 @@ export const useAppStore = defineStore('app', () => {
     last_steamcmd_mod_update_check_time: 0,
 
   })
+  const userThemes = ref([])
+  const themes = computed(() => mergeThemes(userThemes.value))
+  const currentTheme = computed(() => findThemeById(themes.value, settings.value.ui?.theme_id || DEFAULT_THEME_ID))
+  const themeEditor = reactive({
+    isOpen: false,
+    theme: null,
+  })
+
+  const applyCurrentTheme = () => {
+    applyTheme(currentTheme.value)
+  }
 
 
   // === Getters ===
@@ -335,6 +347,9 @@ export const useAppStore = defineStore('app', () => {
       window.__RMM_DEBUG_MODE__ = !!enabled
     }
   }, { immediate: true });
+  watch(currentTheme, (theme) => {
+    applyTheme(theme)
+  }, { immediate: true, deep: true })
   // 像素值缩放函数
   const scalePx = (basePx, defaultFontSize = 16) => {
     if (!settings.value.ui.font_size) return basePx;
@@ -412,6 +427,10 @@ export const useAppStore = defineStore('app', () => {
     } else {
       Object.assign(settings.value, payload.settings)
     }
+    if (Array.isArray(payload.user_themes)) {
+      userThemes.value = payload.user_themes
+    }
+    applyCurrentTheme()
 
     syncRemoteImageCache(payload.remote_image_cache)
     if (payload.is_first_db_init && payload.context_healthy && (!payload.all_mods || payload.all_mods?.length === 0)) {
@@ -1154,6 +1173,35 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  const refreshUserThemes = async () => {
+    if (!window.pywebview) return userThemes.value
+    const res = await window.pywebview.api.theme_list_user()
+    if (checkResult(res, "读取用户主题", true)) {
+      userThemes.value = res.data?.themes || []
+      applyCurrentTheme()
+    }
+    return userThemes.value
+  }
+  const saveUserTheme = async (theme) => {
+    if (!window.pywebview) return null
+    const res = await window.pywebview.api.theme_save_user(theme)
+    if (!checkResult(res, "保存用户主题")) return null
+    const savedTheme = res.data?.theme
+    if (savedTheme) {
+      const nextThemes = userThemes.value.filter(item => item.id !== savedTheme.id)
+      userThemes.value = [...nextThemes, savedTheme]
+      applyCurrentTheme()
+    }
+    return savedTheme
+  }
+  const deleteUserTheme = async (themeId) => {
+    if (!window.pywebview) return false
+    const res = await window.pywebview.api.theme_delete_user(themeId)
+    if (!checkResult(res, "删除用户主题")) return false
+    userThemes.value = userThemes.value.filter(item => item.id !== themeId)
+    applyCurrentTheme()
+    return !!res.data?.deleted
+  }
   // 应用全部设置（保存到后端并更新本地）
   const applySettings = async (newSettings) => {
     if (!window.pywebview) return
@@ -1164,6 +1212,7 @@ export const useAppStore = defineStore('app', () => {
         const profileStore = useProfileStore()
         // 更新本地 store
         Object.assign(settings.value, res.data.settings)
+        applyCurrentTheme()
         syncRemoteImageCache(res.data.remote_image_cache)
         profileStore.activeContext = res.data.active_context
 
@@ -2141,6 +2190,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
+    themes, currentTheme, userThemes, themeEditor,
     packageTransferDialog,
     remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
@@ -2150,7 +2200,7 @@ export const useAppStore = defineStore('app', () => {
     // 游戏相关
   checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
     
     checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks,

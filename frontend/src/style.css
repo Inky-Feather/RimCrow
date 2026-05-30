@@ -134,13 +134,13 @@ body {
 }
 /* 取色器切换按钮（禁用点击事件-切换颜色格式） */
 .vc-display .vc-input-toggle {
-  pointer-events: none;
+  /* pointer-events: none; */
 }
 /* 取色器切换按钮（背景边框调整） */
 .vc-display .vc-input-toggle:hover {
   background-color: var(--color-text-dim) !important;
   color: var(--color-bg-deep) !important;
-  pointer-events: none;
+  /* pointer-events: none; */
 }
 /* 取色器颜色列表（透明背景去除-去除不规则白边） */
 .vc-colorPicker__record .color-list .color-item.transparent {
