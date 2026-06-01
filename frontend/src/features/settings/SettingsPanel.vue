@@ -65,7 +65,6 @@
                 :profile-store="profileStore"
                 :steam-launch-disabled="steamLaunchDisabled"
                 :workshop-mods-disabled="workshopModsDisabled"
-                :load-order-dir-mode-options="LOAD_ORDER_DIR_MODE_OPTIONS"
                 :auto-detect="autoDetect"
                 :handle-game-browse="handleGameBrowse"
                 :handle-browse="handleBrowse"
@@ -307,11 +306,6 @@ const currentTabLabel = computed(() => (
   tabs.find(item => item.id === currentTab.value)?.label || currentTab.value
 ))
 
-const LOAD_ORDER_DIR_MODE_OPTIONS = [
-  { label: '默认', value: 'default' },
-  { label: '记忆', value: 'remember' },
-  { label: '自定义', value: 'custom' },
-]
 
 
 const downloadState = ref({

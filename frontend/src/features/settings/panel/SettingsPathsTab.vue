@@ -91,11 +91,17 @@ defineProps({
   profileStore: { type: Object, required: true },
   steamLaunchDisabled: Boolean,
   workshopModsDisabled: Boolean,
-  loadOrderDirModeOptions: { type: Array, required: true },
   autoDetect: { type: Function, required: true },
   handleGameBrowse: { type: Function, required: true },
   handleBrowse: { type: Function, required: true },
   checkPath: { type: Function, required: true },
   handleCheckSteamcmdMods: { type: Function, required: true },
 })
+
+
+const LOAD_ORDER_DIR_MODE_OPTIONS = [
+  { label: '默认', value: 'default' },
+  { label: '记忆', value: 'remember' },
+  { label: '自定义', value: 'custom' },
+]
 </script>

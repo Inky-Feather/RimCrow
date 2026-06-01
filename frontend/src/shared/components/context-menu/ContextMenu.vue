@@ -3,7 +3,7 @@
   <Teleport to="body">
     <Transition name="scale">
       <div v-if="menuStore.show" ref="menuRef"
-        class="fixed z-9999 min-w-[160px] py-[4px] rounded-xl border border-border-base/10 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-border-base/5 shadow-black/40"
+        class="context-menu-surface fixed z-9999 min-w-[160px] py-[4px] rounded-xl border border-border-base/10 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-border-base/5 shadow-black/40"
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
         :style="menuStyle" @contextmenu.prevent
       >
@@ -95,6 +95,8 @@ const menuStyle = computed(() => ({
 // 点击外部关闭
 onClickOutside(menuRef, () => {
   menuStore.close()
+}, {
+  ignore: ['.context-submenu-surface']
 })
 
 // 监听 ESC 键关闭

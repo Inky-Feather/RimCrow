@@ -362,6 +362,17 @@ body {
   .popover-surface {
     @apply border border-border-base/10 bg-glass-medium shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur-xl;
   }
+  .context-menu-surface {
+    background-color: color-mix(in srgb, var(--color-glass-medium) 92%, transparent);
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
+    isolation: isolate;
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+  .context-submenu-surface {
+    background-color: color-mix(in srgb, var(--color-glass-medium) 88%, transparent);
+  }
 }
 
 :root {

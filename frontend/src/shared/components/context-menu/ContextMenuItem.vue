@@ -1,7 +1,7 @@
 <!-- components/common/ContextMenu/ContextMenuItem.vue -->
 <template>
   <div v-if="item" ref="itemRef" class="group relative px-[4px] py-[2px] transition-all duration-200"
-    :class="[item.type === 'grid' ? 'w-full min-w-[200px]' : 'max-w-[200px]']"
+    :class="[item.type === 'grid' ? 'w-[200px] max-w-[200px]' : 'max-w-[200px]']"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
@@ -87,20 +87,25 @@
       </div>
     </button>
 
-    <!-- 递归子菜单 (仅针对非 Grid 类型的子菜单) -->
-    <Transition name="submenu">
-      <div v-if="item.children && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
-        class="absolute z-50 min-w-fit rounded-xl border border-border-base/10 bg-glass-medium p-[1px] backdrop-blur-lg shadow-xl shadow-black/40"
-        :class="subMenuPositionClass" >
-        <ContextMenuItem v-for="(subItem, idx) in item.children" :key="idx"
-          :item="subItem" @close-menu="$emit('close-menu')" />
-      </div>
-    </Transition>
+    <!-- 递归子菜单独立挂到 body，避免嵌套 backdrop-filter 被父菜单截断。 -->
+    <Teleport to="body">
+      <Transition name="submenu">
+        <div v-if="item.children && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
+          class="context-menu-surface context-submenu-surface fixed z-10000 min-w-fit rounded-xl border border-border-base/10 bg-glass-medium p-[1px] backdrop-blur-lg shadow-xl shadow-black/40"
+          :style="subMenuStyle"
+          @mouseenter="handleSubMenuMouseEnter"
+          @mouseleave="handleMouseLeave"
+          @contextmenu.prevent.stop>
+          <ContextMenuItem v-for="(subItem, idx) in item.children" :key="idx"
+            :item="subItem" @close-menu="$emit('close-menu')" />
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useWindowSize } from '@vueuse/core'
 import ContextMenuColorPickerItem from './ContextMenuColorPickerItem.vue'
 
@@ -113,8 +118,11 @@ const emit = defineEmits(['close-menu'])
 const itemRef = ref(null)
 const subMenuRef = ref(null)
 const activeSubMenu = ref(false)
-const subMenuSide = ref('right') // 'right' | 'left'
-const subMenuVerticalAlign = ref('top') // 'top' | 'bottom'
+const subMenuStyle = ref({
+  left: '-9999px',
+  top: '-9999px',
+  transformOrigin: 'top left',
+})
 const { width: windowWidth, height: windowHeight } = useWindowSize()
 
 // 样式映射
@@ -155,26 +163,35 @@ const handleMouseEnter = () => {
   nextTick(() => {
     if (!itemRef.value || !subMenuRef.value) return
     const parentRect = itemRef.value.getBoundingClientRect()
-    // 动态计算方向：如果右侧放不下，就放左侧
-    // 预估子菜单宽度 (Grid 可能会比较宽)
+    // 子菜单已 Teleport 到 body，必须用 fixed 坐标手动对齐父菜单项。
     const subWidth = subMenuRef.value.offsetWidth || 200
-    const subHeight = subMenuRef.value.offsetHeight || 0 // 获取子菜单高度
+    const subHeight = subMenuRef.value.offsetHeight || 0
+    const margin = 10
+    const overlap = 4
 
-    // X轴方向判断，如果右侧空间不足，显示在左侧
-    if (parentRect.right + subWidth > windowWidth.value) {
-      subMenuSide.value = 'left'
-    } else {
-      subMenuSide.value = 'right'
-    }
-    // Y轴方向判断 (新增逻辑)
-    // 如果 [父元素顶部 + 子菜单高度] 超过了 [屏幕高度 - 底部安全距离(10px)]
-    // 则该子菜单向上展开（底部对齐）
-    if (parentRect.top + subHeight > windowHeight.value - 10) {
-      subMenuVerticalAlign.value = 'bottom'
-    } else {
-      subMenuVerticalAlign.value = 'top'
+    const opensLeft = parentRect.right + subWidth > windowWidth.value - margin
+    const opensUp = parentRect.top + subHeight > windowHeight.value - margin
+
+    let left = opensLeft
+      ? parentRect.left - subWidth + overlap
+      : parentRect.right - overlap
+    let top = opensUp
+      ? parentRect.bottom - subHeight
+      : parentRect.top
+
+    left = Math.max(margin, Math.min(left, windowWidth.value - subWidth - margin))
+    top = Math.max(margin, Math.min(top, windowHeight.value - subHeight - margin))
+
+    subMenuStyle.value = {
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`,
+      transformOrigin: `${opensLeft ? 'right' : 'left'} ${opensUp ? 'bottom' : 'top'}`,
     }
   })
+}
+
+const handleSubMenuMouseEnter = () => {
+  clearTimeout(hoverTimer)
 }
 
 // 鼠标离开：延迟关闭，防止鼠标划过间隙时消失
@@ -185,25 +202,6 @@ const handleMouseLeave = () => {
   }, 200)
 }
 
-// 动态计算子菜单位置类名
-const subMenuPositionClass = computed(() => {
-  let classes = []
-  // X轴
-  if (subMenuSide.value === 'right') {
-    classes.push('left-[98%] -ml-[1px]')
-  } else {
-    classes.push('right-[98%] -mr-[1px]')
-  }
-  // Y轴 
-  if (subMenuVerticalAlign.value === 'bottom') {
-    // 底部对齐：子菜单底部与父菜单项底部对齐
-    classes.push('bottom-0 origin-bottom-left')
-  } else {
-    // 顶部对齐：子菜单顶部与父菜单项顶部对齐
-    classes.push('top-0 origin-top-left')
-  }
-  return classes.join(' ')
-})
 </script>
 <style scoped>
 /* 子菜单过渡动画 */
