@@ -277,7 +277,7 @@ import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../shared/components/input/CommonNumber.vue'
 import AiActionCard from './AiActionCard.vue'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
-import { createActionExecutorRegistry, createActionPresentationRuntime } from './aiActionRuntime'
+import { createActionExecutorRegistry, createActionPresentationRuntime } from './runtime/aiActionRuntime.js'
 import {
   buildAssistantMessageUsageTooltip,
   buildRequestTotalUsageTooltip,

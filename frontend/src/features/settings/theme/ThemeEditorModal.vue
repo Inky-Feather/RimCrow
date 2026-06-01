@@ -74,7 +74,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import GlobalColorPicker from '../../shared/components/GlobalColorPicker.vue'
+import GlobalColorPicker from '../../../shared/components/GlobalColorPicker.vue'
 import { THEME_TOKEN_GROUPS, applyTheme, createEditableThemeFrom, normalizeTheme } from './themeManager'
 import { X } from 'lucide-vue-next'
 

@@ -220,7 +220,7 @@ import { zhCN } from 'date-fns/locale'
 import { Copy, HelpCircle, ClipboardPlus } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
-import { isBrowserRuntime as detectBrowserRuntime } from '../../runtime/bridge/runtimeBridge.js'
+import { isBrowserRuntime as detectBrowserRuntime } from '../../app/bridge/runtimeBridge.js'
 
 const appStore = useAppStore()
 const orderStore = useOrderStore()

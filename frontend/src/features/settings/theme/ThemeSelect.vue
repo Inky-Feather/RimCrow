@@ -50,7 +50,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
-import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
+import FixedPopover from '../../../shared/components/popover/FixedPopover.vue'
 import ThemeSwatches from './ThemeSwatches.vue'
 
 const props = defineProps({

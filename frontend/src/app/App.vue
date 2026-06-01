@@ -310,8 +310,8 @@ import ModConfigManagerModal from '../features/mod/ModConfigManagerModal.vue'
 import SupplementSelectionDialog from '../features/supplement/SupplementSelectionDialog.vue'
 import MissingInstallDialog from '../features/supplement/MissingInstallDialog.vue'
 import PackageTransferDialog from '../features/package-transfer/PackageTransferDialog.vue'
-import ThemeEditorModal from '../features/settings/ThemeEditorModal.vue'
-import { applyTheme } from '../features/settings/themeManager'
+import ThemeEditorModal from '../features/settings/theme/ThemeEditorModal.vue'
+import { applyTheme } from '../features/settings/theme/themeManager'
 
 const updateModal = ref(null);
 

@@ -1,4 +1,4 @@
-import { normalizeText } from '../../shared/lib/common'
+import { normalizeText } from '../../../shared/lib/common'
 
 // -----------------------------------------------------------------
 // AI 附件显示与草稿构造

@@ -14,9 +14,9 @@ import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
 import { useTaskStore } from './taskStore'
 import { usePromptQueueStore } from '../../features/ai/promptQueueStore'
 import { useStartupStore } from './startupStore'
-import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../runtime/bridge/runtimeBridge'
+import { isBrowserRuntime, openManagedSubBrowserUrl } from '../bridge/runtimeBridge'
 import { normalizeInstallSource, normalizeInstallSources } from '../../features/mod/lib/modIdentity'
-import { DEFAULT_THEME_ID, applyTheme, findThemeById, mergeThemes } from '../../features/settings/themeManager'
+import { DEFAULT_THEME_ID, applyTheme, findThemeById, mergeThemes } from '../../features/settings/theme/themeManager'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()

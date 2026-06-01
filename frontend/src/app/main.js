@@ -11,7 +11,7 @@ import App from './App.vue'
 import {vPreview} from '../shared/directives/vPreview.js'
 import {vTooltip} from '../shared/directives/vTooltip.js'
 import { vSelectableList } from '../shared/directives/vSelection' // 引入指令
-import { setupPywebviewBridge } from '../runtime/bridge/pywebviewBridge'
+import { setupPywebviewBridge } from '../app/bridge/pywebviewBridge'
 
 await setupPywebviewBridge()
 
