@@ -115,16 +115,15 @@
 │   ├──  api.py
 │   ├──  browser_runtime.py
 │   ├──  settings.py
-│   └──  static_page.py
+│   ├──  static_page.py
+│   └──  theme_store.py
 │   
 ├── ·[data]
 ├── ·[frontend]
-│   ├── ·[localization]
 │   ├── ·[public]
 │   │   ├──  icon.svg
 │   │   └──  vite.svg
 │   │   
-│   ├── ·[scripts]
 │   ├── ·[src]
 │   │   ├── ·[assets]
 │   │   │   └──  vue.svg
@@ -135,17 +134,33 @@
 │   │   │   │   ├──  AiAssistantPanel.vue
 │   │   │   │   └──  AiDiagnosticSidebar.vue
 │   │   │   │   
+│   │   │   ├── ·[backup]
+│   │   │   │   └──  BackupItem.vue
+│   │   │   │   
 │   │   │   ├── ·[common]
 │   │   │   │   ├── ·[ContextMenu]
 │   │   │   │   ├── ·[input]
 │   │   │   │   ├── ·[TagsSearch]
+│   │   │   │   ├──  CommonModalShell.vue
 │   │   │   │   ├──  Confirm.vue
 │   │   │   │   ├──  FixedPopover.vue
-│   │   │   │   └──  HoverPanel.vue
+│   │   │   │   ├──  GlobalColorPicker.vue
+│   │   │   │   ├──  HoverPanel.vue
+│   │   │   │   ├──  SimpleDropList.vue
+│   │   │   │   ├──  StatItem.vue
+│   │   │   │   └──  VirtualDragList.vue
+│   │   │   │   
+│   │   │   ├── ·[mod-rule]
+│   │   │   │   └──  RuleRelationSection.vue
 │   │   │   │   
 │   │   │   ├── ·[packageTransfer]
 │   │   │   │   ├──  ModConflictPlanEditor.vue
 │   │   │   │   └──  ProfileConflictPlanEditor.vue
+│   │   │   │   
+│   │   │   ├── ·[settings]
+│   │   │   │   ├──  ThemeEditorModal.vue
+│   │   │   │   ├──  ThemeSelect.vue
+│   │   │   │   └──  ThemeSwatches.vue
 │   │   │   │   
 │   │   │   ├── ·[utils]
 │   │   │   │   ├──  AppLogPanel.vue
@@ -153,6 +168,7 @@
 │   │   │   │   ├──  FileSearchPreviewEditor.vue
 │   │   │   │   ├──  FocusTabs.vue
 │   │   │   │   ├──  GroupItem.vue
+│   │   │   │   ├──  GroupModRow.vue
 │   │   │   │   ├──  ImageCloud.vue
 │   │   │   │   ├──  LampEffect.vue
 │   │   │   │   ├──  LuxBreatheIcon.vue
@@ -200,19 +216,20 @@
 │   │   │   ├──  vSelection.js
 │   │   │   └──  vTooltip.js
 │   │   │   
-│   │   ├── ·[i18n]
-│   │   │   └── ·[messages]
-│   │   │   
 │   │   ├── ·[modules]
 │   │   │   ├── ·[guide]
 │   │   │   │   └──  guideConfig.js
 │   │   │   │   
-│   │   │   └── ·[search]
+│   │   │   ├── ·[search]
+│   │   │   │   ├──  QueryParser.js
+│   │   │   │   ├──  SearchEngine.js
+│   │   │   │   ├──  SearchHelp.js
+│   │   │   │   └──  SearchTypes.js
+│   │   │   │   
+│   │   │   └── ·[theme]
 │   │   │   
-│   │   │       ├──  QueryParser.js
-│   │   │       ├──  SearchEngine.js
-│   │   │       ├──  SearchHelp.js
-│   │   │       └──  SearchTypes.js
+│   │   │       ├──  builtinThemes.json
+│   │   │       └──  themeManager.js
 │   │   │       
 │   │   ├── ·[runtime]
 │   │   │   ├──  aiActionRuntime.js
@@ -250,6 +267,7 @@
 │   │   │   ├──  constants.js
 │   │   │   ├──  domEffects.js
 │   │   │   ├──  format.js
+│   │   │   ├──  markdown.js
 │   │   │   ├──  modIdentity.js
 │   │   │   ├──  packageScope.js
 │   │   │   ├──  text.js
@@ -260,7 +278,6 @@
 │   │   ├──  style.css
 │   │   └──  toast.scss
 │   │   
-│   ├── ·[tests]
 │   ├──  .gitignore
 │   ├──  index.html
 │   ├──  package-lock.json
@@ -290,6 +307,8 @@
 │   ├──  test_load_order_manager_save.py
 │   ├──  test_load_order_parsers.py
 │   ├──  test_load_order_share_code.py
+│   ├──  test_maintenance_manager.py
+│   ├──  test_mod_asset_missing_state.py
 │   ├──  test_mod_config_manager.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_rule_manager_dynamic_weights.py

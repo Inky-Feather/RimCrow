@@ -152,11 +152,7 @@
                       @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
                     />
                   </div>
-                  <!-- <div class="grid grid-cols-2 gap-4">
-                    <CommonNumber label="窗口宽度" v-model="formData.window_width" :step="10" />
-                    <CommonNumber label="窗口高度" v-model="formData.window_height" :step="10" />
-                  </div> -->
-                  <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
+                  <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置浏览器" />
                   <div class="grid grid-cols-2 gap-4">
                     <CommonNumber label="字体大小" description="控制界面字体大小，影响所有控件的内容显示" v-model="formData.ui.font_size" :step="1" :min="8" :max="40" />
                     <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" :min="100" :max="5000" />

@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.21.9"  # 主版本.次版本.补丁
+__version__ = "0.22.0"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,90 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.22.0",
+        "date": "2026-06-01",
+        "entries": [
+            {
+                "title": "模组导出功能增强与纹理优化修复",
+                "changes": [
+                    { "type": "feature", "text": "模组导出支持选择包内文件夹命名方式（别名、模组名、ID），并进行合法性校验与去重" },
+                    { "type": "fix", "text": "修正纹理优化在不进行缩放时对最大尺寸和候选比例的处理逻辑" },
+                    { "type": "feature", "text": "导出任务完成后显示成功提示对话框，并支持打开导出目录" },
+                    { "type": "optimize", "text": "调整部分组件样式，统一界面风格" }
+                ]
+            },
+            {
+                "title": "自定义主题管理与样式统一",
+                "changes": [
+                    { "type": "feature", "text": "引入自定义主题管理功能，支持全局颜色选择器、主题编辑器、主题选择器及色板预览" },
+                    { "type": "feature", "text": "内置多种主题预设，用户可在设置面板中自定义主题UI交互" },
+                    { "type": "optimize", "text": "重新处理全局颜色映射，调整前端组件显示样式，统一风格" }
+                ]
+            },
+            {
+                "title": "引导中心与对话框交互优化",
+                "changes": [
+                    { "type": "feature", "text": "重构引导中心交互，支持拖动浮动按钮、动态调整面板位置，由悬停改为点击打开" },
+                    { "type": "feature", "text": "新增跳过所有引导功能，优化引导文本与跳过按钮样式" },
+                    { "type": "optimize", "text": "调整引导面板过渡动画与层级，确保弹窗覆盖" },
+                    { "type": "optimize", "text": "调整模组详情分组选择下拉框样式，避免多选项缩放" },
+                    { "type": "feature", "text": "缺失安装对话框操作按钮添加进行中禁用状态和加载文本" },
+                    { "type": "optimize", "text": "缺失安装对话框宽度改为响应式，优化取消与继续操作的禁用逻辑" }
+                ]
+            },
+            {
+                "title": "模组状态管理增强与工坊缺失检测",
+                "changes": [
+                    { "type": "feature", "text": "新增模组数据模型状态字段，统一缺失判断条件并支持状态标记" },
+                    { "type": "feature", "text": "后台探查缺失工坊项目的可用性，注入详细缺失状态与失效标签" },
+                    { "type": "feature", "text": "工坊列显示失效标签，本地列默认隐藏官方模组并增加显示开关" },
+                    { "type": "feature", "text": "添加清理工坊缺失订阅及清理缺失数据记录的右键菜单功能" },
+                    { "type": "feature", "text": "自动检测管理器路径与工坊目录冲突，恢复默认并推送警告通知" },
+                    { "type": "fix", "text": "修复设置更新时路径冲突导致的自动恢复逻辑未触发、无通知的问题" },
+                    { "type": "fix", "text": "修复GitHub提交日期获取顺序，优先使用committer字段" },
+                    { "type": "optimize", "text": "改进GitHub版本比较逻辑，支持source类型分支与时间戳对比" }
+                ]
+            },
+            {
+                "title": "组件重构与性能优化",
+                "changes": [
+                    { "type": "feature", "text": "新实现通用虚拟拖拽列表组件，支持可变行高、自动边缘滚动、拖拽预览与全局会话" },
+                    { "type": "optimize", "text": "用VirtualDragList替换旧拖拽组件，优化模组列表、分组与设置布局的拖拽体验" },
+                    { "type": "optimize", "text": "将分组列表重构为扁平虚拟列表，支持右键上下文菜单和多选跨组复制" },
+                    { "type": "optimize", "text": "调整部分前端组件显示样式，降低性能开销" }
+                ]
+            },
+            {
+                "title": "Git订阅功能扩展与多托管源支持",
+                "changes": [
+                    { "type": "feature", "text": "支持GitLab/GitGud仓库的解析、API调用与Release/Source部署" },
+                    { "type": "feature", "text": "新增Provider Catalog推荐清单管理，内置RJW与Mlie的相关项目清单，支持多源合并与本地缓存" },
+                    { "type": "feature", "text": "支持zip直链类型订阅、签名刷新与部署" },
+                    { "type": "feature", "text": "实现推荐列表视图、搜索筛选、依赖解析与工坊联动订阅" },
+                    { "type": "feature", "text": "新增Markdown渲染工具函数并集成图片缓存代理" },
+                    { "type": "feature", "text": "设置面板新增Git推荐清单来源配置项" },
+                    { "type": "fix", "text": "修复移除订阅时错误删除时间线记录的问题" },
+                    { "type": "fix", "text": "修复时间线日志中缺失与移除动作的标题/颜色映射" },
+                    { "type": "fix", "text": "修复订阅状态计算支持本地文件缺失和分支变更检测" },
+                    { "type": "optimize", "text": "重构GitHub视图为已订阅和推荐列表双模式" }
+                ]
+            },
+            {
+                "title": "启动与维护流程优化",
+                "changes": [
+                    { "type": "feature", "text": "新增启动编排协调器，将后台预热逻辑从API中分离" },
+                    { "type": "feature", "text": "新增队列弹窗存储，支持工具环境检查、外部库更新检查、SteamCMD模组更新检查等排队处理" },
+                    { "type": "feature", "text": "应用更新提示改为使用队列弹窗模式" },
+                    { "type": "feature", "text": "新增统一维护日志函数，支持工具升级状态和模组更新合并检查" },
+                    { "type": "fix", "text": "修复确认弹窗按钮在非待处理状态仍可点击及防重复提交问题" },
+                    { "type": "fix", "text": "修复模组存储判断逻辑，增加自定路径与工坊路径的区分条件" },
+                    { "type": "fix", "text": "修复启动预热成功消息不应写入升级上下文" },
+                    { "type": "optimize", "text": "将维护检查调度改为描述表配置，新增SteamCMD模组检查自动调度" }
+                ]
+            }
+        ],
+    },
     {
         "version": "0.21.9",
         "date": "2026-05-22",
