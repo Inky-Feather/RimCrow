@@ -1,6 +1,6 @@
 <template>
-  <div class="relative flex items-center py-1 px-2 rounded-lg border transition-all duration-200 cursor-pointer select-none"
-    :class="[isSelected ? 'bg-accent-primary/10 border-accent-primary/30 shadow-[inset_0_0_10px_rgba(var(--rgb-accent-primary),0.1)]' : 'bg-glass-light border-border-base/5 hover:bg-bg-overlay/5 hover:border-border-base/10' ]"
+  <div class="relative flex items-center py-1 px-2 rounded-lg group border transition-all duration-200 cursor-pointer select-none"
+    :class="[isSelected ? 'bg-accent-primary/10 border-accent-primary/30 shadow-[inset_0_0_10px_rgba(var(--rgb-accent-primary),0.1)]' : 'bg-glass-medium border-border-base/5 hover:bg-bg-overlay/5 hover:border-border-base/18' ]"
     @click="$emit('select', item)">
     <!-- 中间信息 -->
     <div class="flex-1 min-w-0 flex flex-col justify-center">
@@ -30,8 +30,8 @@
 
     <!-- 右侧操作 (Hover显示) -->
     <div class="relative w-6 h-6 flex items-center justify-center">
-      <div class="absolute -right-2 mr-1 overflow-visible gap-1 group text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
-        <button @click.stop="$emit('load', $event, item)" class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
+      <div class="absolute -right-2 mr-1 overflow-visible gap-1 text-sm font-medium flex flex-row-reverse items-center rtl:space-x-reverse">
+        <button @click.stop="$emit('load', $event, item)" class=" z-10 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
           inline-flex items-center self-center justify-center justify-self-center tracking-wide transition-all duration-300
           text-text-dim bg-accent-primary/10
           hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100

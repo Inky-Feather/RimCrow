@@ -32,7 +32,7 @@
 
       <!-- 路径浏览按钮 -->
       <button v-if="isPath" @click="$emit('browse')"
-        class="shrink-0 p-2.5 bg-bg-overlay/5 hover:bg-accent-primary/20 border border-border-base/10 hover:border-accent-primary/50 rounded-lg text-text-dim hover:text-accent-primary transition-all active:scale-95"
+        class="input-addon-button rounded-lg p-2.5 active:scale-95"
         v-tooltip="'浏览路径'">
         <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2-2z" />

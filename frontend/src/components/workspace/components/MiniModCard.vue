@@ -1,7 +1,7 @@
 <!-- src/components/workspace/components/MiniModCard.vue -->
 <template>
   <div class="relative w-36 shrink-0 bg-bg-inset/80 rounded-xl border border-border-base/10 overflow-hidden group cursor-pointer hover:border-accent-primary/50 transition-all"
-       @click="$emit('navigate', mod.workshop_id)">
+    @click="$emit('navigate', mod.workshop_id)">
     
     <!-- 封面图 -->
     <div class="h-24 w-full bg-bg-inset relative overflow-hidden">
@@ -9,7 +9,7 @@
       <div v-else class="absolute inset-0 flex items-center justify-center text-text-dim text-xs">无封面</div>
       
       <!-- 悬浮操作层 -->
-      <div class="absolute inset-0 bg-bg-inset opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm" @click.stop>
+      <div class="absolute inset-0 rounded-t-xl bg-bg-inset opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm" @click.stop>
         <!-- 订阅 -->
         <button v-if="!isSubscribed" @click="subscribe" v-tooltip="'订阅'" class="p-1.5 rounded-full bg-accent-primary/80 hover:bg-accent-primary text-on-accent-primary transition-transform hover:scale-110">
           <Flag class="size-3.5" />

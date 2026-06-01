@@ -11,9 +11,7 @@
           </h3>
           <div class="flex items-center gap-3">
             <label class="flex items-center gap-2 text-[0.7rem] font-bold text-text-dim cursor-pointer select-none">
-              <input :checked="workspaceStore.workshopSearch.sourceMode === 'online'"
-                type="checkbox" class="accent-cyan-400" @change="toggleOnlineSearch"
-              />
+              <input :checked="workspaceStore.workshopSearch.sourceMode === 'online'" type="checkbox" class="accent-cyan-400" @change="toggleOnlineSearch" />
               在线搜索
             </label>
             <span class="text-[0.7rem] text-text-dim font-mono">共 {{ workspaceStore.workshopSearch.total }} 项</span>
@@ -33,7 +31,7 @@
       </div>
 
       <!-- 列表内容区 -->
-      <div class="flex-1 overflow-hidden relative bg-bg-muted/70">
+      <div class="content-surface relative flex-1 overflow-hidden">
         
         <!-- 首次加载大遮罩 -->
         <div v-if="workspaceStore.workshopSearch.isLoading" class="absolute inset-0 flex flex-col items-center justify-center text-accent-primary z-10 bg-bg-deep/50 backdrop-blur-sm">
@@ -43,16 +41,13 @@
 
         <!-- 替换为 RecycleScroller -->
         <RecycleScroller v-if="workspaceStore.workshopSearch.results.length > 0"
-          ref="scrollerRef" class="h-full custom-scrollbar" :items="workspaceStore.workshopSearch.results" :item-size="72" key-field="workshop_id"
-          @scroll="handleScroll"
-        >
+          ref="scrollerRef" class="h-full custom-scrollbar p-2 bg-bg-inset/90" :items="workspaceStore.workshopSearch.results" :item-size="itemHeight" key-field="workshop_id"
+          @scroll="handleScroll" >
           <template v-slot="{ item }">
             <div @click="selectMod(item)" v-tooltip="buildResultTooltip(item)"
-              class="h-18 px-3 py-2 border-b border-border-base/5 cursor-pointer transition-all hover:bg-accent-primary/10 group flex items-center gap-3"
+              class="h-18 px-3 py-2 rounded-md bg-glass-medium/60 border border-border-base/5 cursor-pointer transition-all hover:bg-accent-primary/10 group flex items-center gap-3"
               :class="workspaceStore.workshopSearch.selectedId === item.workshop_id ? 'bg-accent-primary/20 border-r-4 border-r-accent-primary shadow-[inset_2px_0_10px_rgba(var(--rgb-accent-cool),0.1)]' : ''">
-              <div v-if="workspaceStore.workshopSearch.sourceMode === 'online'"
-                class="size-12 shrink-0 overflow-hidden rounded-lg border border-border-base/10 bg-bg-inset/90"
-              >
+              <div v-if="workspaceStore.workshopSearch.sourceMode === 'online'" class="size-12 shrink-0 overflow-hidden rounded-lg border border-border-base/10 bg-bg-inset/90" >
                 <img v-if="item.preview_url" class="h-full w-full object-cover" loading="lazy" :src="appStore.getRemoteUrl(item.preview_url)" />
                 <div v-else class="flex h-full w-full items-center justify-center text-text-disabled">
                   <Image class="size-4" />
@@ -69,10 +64,10 @@
                     {{ item.package_id || item.short_description || item.author_steam_id || 'N/A' }}
                   </div>
                   <div class="flex items-center gap-1 text-[0.7rem] shrink-0">
-                    <span v-if="item.subscriptions" class="font-bold px-1 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
+                    <span v-if="item.subscriptions" class="font-bold px-1 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20" v-tooltip="'订阅人数'">
                       {{ formatCount(item.subscriptions) }}
                     </span>
-                    <div class="font-bold px-1 rounded bg-bg-inset/80 text-text-dim border border-border-base/10">
+                    <div class="font-bold px-1 rounded bg-bg-inset/80 text-text-dim border border-border-base/10" v-tooltip="'工坊ID'">
                       {{ item.workshop_id }}
                     </div>
                   </div>
@@ -210,7 +205,7 @@
         </div>
 
         <!-- 内容区 (使用 Tailwind Typography) -->
-        <div class="flex-1 overflow-y-auto p-5 custom-scrollbar bg-glass-light">
+        <div class="workshop-detail-scroll content-surface flex-1 overflow-y-auto p-5 custom-scrollbar">
           <!-- 依赖提示框 (如果是解析得到的) -->
           <div v-if="selectedMod?.dependencies_mods && dependencies_ids.length > 0" data-tour="workspace-workshop-dependencies"
             class="mb-6 p-3 rounded-xl bg-accent-warn/10 border border-accent-warn/30">
@@ -289,7 +284,7 @@
           </div>
 
           <!-- 反向依赖推荐 (有谁依赖了我) -->
-          <div v-if="selectedMod.dependents_mods?.length > 0" class="space-y-2 border-t border-border-base/10 pt-4">
+          <div v-if="selectedMod.dependents_mods?.length > 0" class="space-y-2 mt-3 border-t border-border-base/10 pt-4">
             <h4 class="text-xs font-bold text-accent-primary uppercase tracking-widest flex items-center gap-1">
               <Network class="size-3" /> 生态关联 (被以下模组依赖)
             </h4>
@@ -360,6 +355,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (searchTimeout) clearTimeout(searchTimeout)
 })
+const itemHeight = computed(() => appStore.scalePx(72)+4 )
 
 const selectedMod = computed(() => {
   return workspaceStore.workshopSearch.detailData
@@ -445,7 +441,7 @@ const selectMod = (item) => {
 // 点击详情页内的推荐卡片 (会压入历史栈)
 const handleNavigateInside = (workshop_id) => {
   // 滚动条回到顶部 (可选，提升体验)
-  const scrollContainer = document.querySelector('.custom-scrollbar.bg-glass-light')
+  const scrollContainer = document.querySelector('.workshop-detail-scroll')
   if (scrollContainer) scrollContainer.scrollTop = 0
   loadedScreenshotMap.value = {}
   workspaceStore.fetchWorkshopDetails(workshop_id, true)

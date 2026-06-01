@@ -1,21 +1,6 @@
 <template>
-  <transition name="fade">
-    <div v-if="appStore.uiState.showModAliasReviewModal" class="fixed inset-0 z-120 flex items-center justify-center bg-bg-deep/80 backdrop-blur-md">
-      <!-- 主容器：批量别名检阅工作台 -->
-      <div class="w-[90%] max-w-7xl h-[86vh] flex flex-col bg-bg-surface/92 border border-accent-special/25 rounded-2xl shadow-[0_0_50px_var(--shadow-color)] overflow-hidden relative">
-        <!-- 顶部标题栏：任务总览与关闭入口 -->
-        <div class="px-6 py-4 border-b border-border-base/10 flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h2 class="text-lg font-black text-text-main">模组别名检阅</h2>
-            <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-dim">
-              <span>待检阅任务 {{ totalTaskCount }} 组</span>
-              <span>待检阅条目 {{ totalPendingItems }} 项</span>
-            </div>
-          </div>
-          <button class="p-2 rounded-lg text-text-dim hover:text-accent-special hover:bg-accent-special/10 transition-all" @click="closeModal">
-            <X class="size-5" />
-          </button>
-        </div>
+  <CommonModalShell :show="appStore.uiState.showModAliasReviewModal" title="模组别名检阅" :description="`待检阅任务 ${totalTaskCount} 组，待检阅条目 ${totalPendingItems} 项。`"
+    size="xl" :z-index="120" accent="special" panel-class="border-accent-special/25" content-class="h-full flex flex-col" @close="closeModal" >
 
         <!-- 主滚动区：按任务组展示待检阅结果 -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
@@ -23,9 +8,9 @@
             当前没有待检阅的批量结果
           </div>
 
-          <div v-for="group in reviewTasks" :key="group.taskId" class="rounded-2xl border border-border-base/10 bg-bg-muted/70 overflow-hidden" >
+          <div v-for="group in reviewTasks" :key="group.taskId" class="modal-section overflow-hidden" >
             <!-- 任务组头部：显示生成轮次、输入规模与状态 -->
-            <div class="px-5 py-4 border-b border-border-base/10 bg-bg-muted/70">
+            <div class="toolbar-surface px-5 py-4">
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
                   <div class="text-base font-black text-text-main">{{ group.title || '模组别名生成任务' }}</div>
@@ -57,7 +42,7 @@
                     <div class="shrink-0 mt-1">
                       <img v-if="getMod(item.package_id)?.preview_path" :src="appStore.getThumbUrl(item.package_id, getMod(item.package_id).preview_path)"
                         class="size-10 rounded-lg object-cover border border-border-base/10 shadow-md" >
-                      <div v-else class="size-10 rounded-lg border border-dashed border-border-base/18 flex items-center justify-center bg-bg-muted/70 text-text-disabled">
+                      <div v-else class="size-10 rounded-lg border border-dashed border-border-base/18 flex items-center justify-center bg-bg-inset/70 text-text-disabled">
                         <FolderInput class="size-5" />
                       </div>
                     </div>
@@ -79,7 +64,7 @@
                       </label>
                       <input v-model="item.alias_name" placeholder="请输入或点击重试生成..."
                         class="flex-1 bg-bg-inset/80 border rounded-md px-3 py-1.5 text-sm text-accent-cool font-medium focus:outline-none transition-all"
-                        :class="!item.alias_name ? 'border-accent-warn/50 focus:border-accent-warn focus:ring-1 focus:ring-accent-warn/30 placeholder-accent-warn/50' : 'border-border-base/10 focus:border-accent-special focus:ring-1 focus:ring-accent-special/30'"
+                        :class="!item.alias_name ? 'border-accent-warn/30 focus:border-accent-warn focus:ring-1 focus:ring-accent-warn/30 placeholder-accent-warn/50' : 'border-border-base/10 focus:border-accent-special focus:ring-1 focus:ring-accent-special/30'"
                       />
                     </div>
                     <div class="flex items-start gap-2 flex-1">
@@ -88,7 +73,7 @@
                       </label>
                       <textarea v-model="item.notes" placeholder="请输入或点击重新生成..."
                         class="flex-1 h-full bg-bg-inset/80 border rounded-md px-3 py-2 text-xs text-text-main leading-relaxed focus:outline-none resize-none transition-all"
-                        :class="!item.notes ? 'border-accent-warn/50 focus:border-accent-warn focus:ring-1 focus:ring-accent-warn/30 placeholder-accent-warn/50' : 'border-border-base/10 focus:border-accent-special focus:ring-1 focus:ring-accent-special/30'">
+                        :class="!item.notes ? 'border-accent-warn/30 focus:border-accent-warn focus:ring-1 focus:ring-accent-warn/30 placeholder-accent-warn/50' : 'border-border-base/10 focus:border-accent-special focus:ring-1 focus:ring-accent-special/30'">
                       </textarea>
                     </div>
                   </div>
@@ -107,7 +92,7 @@
               </div>
             </div>
 
-            <div class="px-5 py-3 border-t border-border-base/10 bg-bg-muted/60 flex items-center justify-end gap-3">
+            <div class="modal-footer flex items-center justify-end gap-3 px-5 py-3">
               <button class="px-4 py-2 rounded-lg text-sm text-accent-danger bg-accent-danger/10 hover:bg-accent-danger/20 transition-colors"
                 @click="removeTaskGroup(group.taskId)" >
                 移除此组
@@ -121,7 +106,8 @@
         </div>
 
         <!-- 底部总操作栏：保留、清空或一次性应用全部结果 -->
-        <div class="px-6 py-4 border-t border-border-base/10 flex items-center justify-between gap-4">
+    <template #footer>
+        <div class="flex items-center justify-between gap-4">
           <div class="text-xs text-text-dim">
             未确认应用前，结果会一直保留在这里，可随时回来继续检阅。
           </div>
@@ -140,19 +126,19 @@
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  </transition>
+    </template>
+  </CommonModalShell>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FolderInput, Trash2, Wand2, X } from 'lucide-vue-next'
+import { FolderInput, Trash2, Wand2 } from 'lucide-vue-next'
 import { useAiStore } from '../stores/aiStore'
 import { useAppStore } from '../stores/appStore'
 import { useModStore } from '../stores/modStore'
 import { useToast } from 'vue-toastification'
 import { normalizeText } from '../utils/common'
+import CommonModalShell from './common/CommonModalShell.vue'
 
 // -----------------------------------------------------------------
 // Store 依赖 (Stores)

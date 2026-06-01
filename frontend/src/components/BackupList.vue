@@ -1,17 +1,11 @@
 <template>
-  <div
-    id="backup-drop-zone"
-    class="relative flex flex-col h-full bg-bg-surface/40 border-2 border-border-base/5 rounded-2xl overflow-hidden shadow-2xl"
+  <div id="backup-drop-zone" class="relative flex flex-col h-full bg-bg-surface/40 border-2 border-border-base/5 rounded-2xl overflow-hidden shadow-2xl"
     @dragenter="handleDragEnter"
     @dragover="handleDragOver"
     @dragleave="handleDragLeave"
-    @drop="handleDrop"
-  >
+    @drop="handleDrop" >
     <Transition name="fade-drop">
-      <div
-        v-if="showDropOverlay"
-        class="absolute inset-0 z-30 flex items-center justify-center bg-bg-deep/70 backdrop-blur-sm"
-      >
+      <div v-if="showDropOverlay" class="absolute inset-0 z-30 flex items-center justify-center bg-bg-deep/70 backdrop-blur-sm" >
         <div class="mx-4 w-full max-w-md rounded-2xl border border-accent-primary/30 bg-accent-primary/10 px-6 py-8 text-center shadow-[0_0_40px_rgba(var(--rgb-accent-primary),0.18)]">
           <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-primary/35 bg-accent-primary/15 text-accent-primary shadow-[0_0_25px_rgba(var(--rgb-accent-primary),0.18)]">
             <svg class="size-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
@@ -38,7 +32,7 @@
       </span>
     </div>
     <!-- 功能栏 -->
-    <div class="px-2 py-1 shadow-xl flex items-center justify-between gap-2 z-50" data-tour="backup-toolbar">
+    <div class="px-2 py-1 shadow-xl flex items-center justify-between gap-2 z-10" data-tour="backup-toolbar">
       <div>
         <HelpCircle v-tooltip="backupRulesTooltip" class="size-5 m-1 text-text-dim transition-colors duration-200 cursor-help hover:text-accent-primary"></HelpCircle>
       </div>
@@ -47,7 +41,7 @@
         :options="backupProfileOptions" @change="handleBackupProfileChange" />
       <div class="relative w-6 h-6 flex items-center justify-center">
         <div class="absolute top-0 overflow-visible gap-1 group text-sm font-medium flex flex-col items-center rtl:space-y-reverse">
-          <button class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
+          <button class="group z-10 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
             inline-flex items-center self-center justify-center tracking-wide transition-all duration-300
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
@@ -73,7 +67,7 @@
 
       <div class="relative w-6 h-6 flex items-center justify-center">
         <div class="absolute top-0 overflow-visible gap-1 group text-sm font-medium flex flex-col items-center rtl:space-y-reverse">
-          <button class="group z-50 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
+          <button class="group z-10 h-6 px-3 relative rounded-md whitespace-nowrap cursor-pointer
             inline-flex items-center self-center justify-center tracking-wide transition-all duration-300
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100

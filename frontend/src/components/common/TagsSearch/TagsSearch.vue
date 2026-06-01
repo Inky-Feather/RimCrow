@@ -35,8 +35,7 @@
     <!-- 主要区域 -->
     <div class="relative flex-1 z-50 min-w-0 w-6 outline-none">
       <!-- 主输入容器（@keydown.tab.prevent禁止切换焦点功能） -->
-      <div @keydown.tab.prevent class="w-full flex items-center gap-1 px-1 pt-0.5 outline-none bg-bg-deep/50 transition-all 
-        border rounded-lg text-text-main border-border-base/18 fshadow-inner"
+      <div @keydown.tab.prevent class="input-glass flex w-full items-center gap-1 px-1 pt-0.5 text-text-main outline-none"
         :class="`hover:border-accent-${listColor} focus:border-accent-${listColor} focus-within:border-accent-${listColor}`">
         <!-- 图标 -->
         <slot name="icon">
@@ -81,7 +80,7 @@
       <!-- 自动补全下拉菜单 -->
       <Transition name="fade-drop">
         <div v-if="showSuggestions && suggestionList.length > 0" ref="suggestionContainer"
-          class="absolute top-full mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden bg-bg-surface/70 border border-border-base/10 backdrop-blur-md rounded-lg shadow-2xl z-100"
+          class="popover-surface absolute top-full z-100 mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden rounded-lg"
         >
           <div v-for="(item, index) in suggestionList" :key="index"
             class="pl-1 pr-3 py-1.5 text-xs cursor-pointer flex items-center justify-between group transition-colors"

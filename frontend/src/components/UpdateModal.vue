@@ -1,19 +1,17 @@
 <template>
-  <transition name="modal-fade">
-    <div v-if="appStore.uiState.showUpdateModal" 
-      class="fixed inset-0 z-9999 flex items-center justify-center bg-bg-deep/70 backdrop-blur-md"
-      @click.self="shakeComponent('.update-modal-box')">
-      
-      <!-- 弹窗主体 -->
-      <div class="update-modal-box relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-bg-surface/95 border border-border-base/10 rounded-2xl shadow-[0_20px_60px_var(--shadow-color)] overflow-hidden animate-in zoom-in-95 duration-300">
+  <CommonModalShell :show="appStore.uiState.showUpdateModal" :show-header="false"
+    :close-on-backdrop="false" size="custom" :z-index="9999" accent="primary" panel-class="update-modal-box w-full max-w-2xl max-h-[85vh]" content-class="h-full flex flex-col"
+    @backdrop="shakeComponent('.update-modal-box')"
+    @close="closeModal"
+  >
         
         <!-- 背景光效 -->
         <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-32 bg-accent-primary/20 blur-[60px] rounded-full pointer-events-none"></div>
 
         <!-- Header -->
-        <header class="relative px-8 py-3 bg-bg-deep/40 border-b border-border-base/5 flex items-center justify-between shrink-0">
+        <header class="relative px-5 py-3 bg-bg-deep/40 border-b border-border-base/5 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-4">
-            <div class="p-2 bg-accent-primary/20 text-accent-primary rounded-xl ring-1 ring-accent-primary/50 shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.3)]">
+            <div class="p-2 bg-accent-primary/20 text-accent-primary rounded-xl shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.3)]">
               <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             </div>
             <div>
@@ -29,8 +27,12 @@
             </div>
           </div>
           
-          <!-- 全量切换开关 -->
-          <common-switch v-model="showFullHistory" mini label="完整历史" class="w-35" />
+          <div class="flex items-center gap-2">
+            <common-switch v-model="showFullHistory" mini label="完整历史" class="w-35" />
+            <button class="modal-close-button" aria-label="关闭" @click="closeModal">
+              <X class="size-4" />
+            </button>
+          </div>
         </header>
 
         <!-- 滚动时间线区域 -->
@@ -47,7 +49,7 @@
                   :class="{ 'bg-accent-primary border-accent-primary/30 ring-2 ring-accent-primary': idx === 0 }">
               </div>
               <!-- 内容卡片：占据右侧剩余空间 (flex-1) -->
-              <div class="flex-1 p-4 rounded-xl border border-border-base/10 bg-bg-muted/70 backdrop-blur-sm transition-all hover:bg-bg-inset/80 hover:border-border-base/18 hover:shadow-lg">
+              <div class="modal-section flex-1 rounded-xl p-4 backdrop-blur-sm transition-all hover:bg-bg-inset/80 hover:border-border-base/18 hover:shadow-lg">
                 <div class="flex items-center justify-between mb-3">
                   <span class="text-lg font-black font-mono text-text-main" :class="{'text-accent-primary drop-shadow-[0_0_5px_rgba(var(--rgb-accent-primary),0.8)]': idx === 0}">
                     v{{ log.version }}
@@ -89,10 +91,7 @@
             我知道了
           </button>
         </footer>
-
-      </div>
-    </div>
-  </transition>
+  </CommonModalShell>
 </template>
 
 <script setup>
@@ -100,7 +99,8 @@ import { ref, computed, watch } from 'vue'
 import { useAppStore } from '../stores/appStore'
 import { shakeComponent } from '../utils/domEffects'
 import CommonSwitch from './common/input/CommonSwitch.vue'
-import { Bug, CircleFadingPlus, Dna, Zap } from 'lucide-vue-next'
+import CommonModalShell from './common/CommonModalShell.vue'
+import { Bug, CircleFadingPlus, Dna, Zap, X } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 
 const appStore = useAppStore()
@@ -172,8 +172,3 @@ const closeModal = () => {
 }
 
 </script>
-
-<style scoped>
-.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.3s ease; }
-.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
-</style>

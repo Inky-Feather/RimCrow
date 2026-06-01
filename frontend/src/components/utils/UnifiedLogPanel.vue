@@ -1,9 +1,9 @@
 <!-- frontend/src/components/utils/UnifiedLogPanel.vue -->
 <template>
-  <div class="flex flex-col h-full w-full bg-bg-muted/70 font-mono text-sm">
+  <div class="content-surface flex h-full w-full flex-col font-mono text-sm">
 
     <!-- ================= 1. 顶部工具栏 ================= -->
-    <div class="flex flex-wrap items-center justify-between px-3 py-2 border-b border-border-base/5 bg-glass-light gap-2">
+    <div class="toolbar-surface flex flex-wrap items-center justify-between gap-2 px-3 py-2">
 
       <!-- A. 文件选择 / 实时切换 与 刷新 -->
       <div class="flex items-center gap-2">
@@ -31,7 +31,7 @@
           class="px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border transition-all"
           :class="isLiveView
             ? 'bg-accent-success/20 text-accent-success border-accent-success/40'
-            : 'bg-bg-muted/50 text-text-dim border-border-base/10 hover:bg-accent-success/10 hover:text-accent-success'">
+            : 'bg-bg-overlay/5 text-text-dim border-border-base/10 hover:bg-accent-success/10 hover:text-accent-success'">
           <span
             class="w-2 h-2 rounded-full"
             :class="isLiveView ? 'bg-accent-success shadow-[0_0_8px_rgba(var(--rgb-accent-success),0.8)]' : 'bg-bg-neutral'">
@@ -72,7 +72,7 @@
       </div>
 
       <!-- C. 级别筛选 -->
-      <div class="flex items-center gap-1 bg-bg-muted/70 p-1 rounded-lg border border-border-base/5">
+      <div class="flex items-center gap-1 rounded-lg border border-border-base/10 bg-bg-inset/70 p-1">
         <button v-for="lvl in ['INFO','WARNING','ERROR','DEBUG']" :key="lvl"
           @click="filters[lvl] = !filters[lvl]"
           class="px-2 py-0.5 text-xs font-bold rounded transition-all select-none"

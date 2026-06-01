@@ -24,7 +24,7 @@
     </div>
 
     <!-- 顶部控制栏 -->
-    <div class="h-12 shrink-0 px-6 flex justify-between items-center bg-bg-muted/70 border-t border-border-base/5">
+    <div class="modal-footer flex h-12 shrink-0 items-center justify-between px-6">
       <div class="text-xs font-mono text-text-disabled uppercase tracking-widest">
         总计数量: {{ visibleTotalCount }} 
         | 总计大小：{{ formatFileSize(visibleTotalSize) }}

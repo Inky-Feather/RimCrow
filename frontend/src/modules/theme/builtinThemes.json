@@ -28,7 +28,7 @@
     "name": "石墨灰夜",
     "builtin": true,
     "tokens": {
-      "bg": { "deep": "#0b0b0c", "surface": "#151517", "elevated": "#1d1d20", "highlight": "#2a2a2e", "muted": "#111113", "inset": "#050506", "overlay": "#f5f5f5", "contrast": "#f5f5f5", "neutral": "#8b8b91" },
+      "bg": { "deep": "#0b0b0c", "surface": "#151517", "elevated": "#1d1d20", "highlight": "#2a2a2e", "muted": "#111113", "inset": "#0f1421", "overlay": "#f5f5f5", "contrast": "#f5f5f5", "neutral": "#8b8b91" },
       "glass": { "light": "rgba(255, 255, 255, 0.045)", "medium": "rgba(22, 22, 24, 0.78)", "heavy": "rgba(8, 8, 9, 0.94)" },
       "accent": {
         "danger": "#827676",
@@ -52,16 +52,16 @@
     "name": "云母浅灰",
     "builtin": true,
     "tokens": {
-      "bg": { "deep": "#f3f3f3", "surface": "#ffffff", "elevated": "#fbfbfb", "highlight": "#e8f1fb", "muted": "#f7f7f7", "inset": "#ffffff", "overlay": "#1f2937", "contrast": "#1f1f1f", "neutral": "#8a8a8a" },
+      "bg": { "deep": "#d4d4d4", "surface": "#ebebeb", "elevated": "#fbfbfb", "highlight": "#e8f1fb", "muted": "#f7f7f7", "inset": "#ededed", "overlay": "#1f2937", "contrast": "#1f1f1f", "neutral": "#8a8a8a" },
       "glass": { "light": "rgba(255, 255, 255, 0.62)", "medium": "rgba(249, 249, 249, 0.84)", "heavy": "rgba(243, 243, 243, 0.94)" },
       "accent": {
         "danger": "#f53838",
-        "highlight": "#fff176",
-        "special": "#aa47bc",
+        "highlight": "#fcc02e",
+        "special": "#be71cc",
         "cool": "#4258ff",
         "primary": "#64b5f6",
         "success": "#51d134",
-        "tip": "#a8db6e",
+        "tip": "#a3d968",
         "warn": "#ffeb3c",
         "secondary": "#ff8a66",
         "warning": "#f5971d"

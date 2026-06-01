@@ -36,7 +36,7 @@
 
       <!-- 标题 - 根据编辑状态显示输入框或文本 -->
       <span v-tooltip="groupData.name" :class="`flex-1 flex min-w-0 text-sm px-1 mx-1 text-text-main font-bold tracking-wider items-center gap-2`">
-        <input class="flex-1 px-0 py-0.5 min-w-0 rounded bg-bg-deep/70 border border-border-base/10 text-text-main focus:border-accent-primary focus:outline-none"
+        <input class="input-glass min-w-0 flex-1 px-2 py-0.5 text-text-main focus:outline-none"
           v-if="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="saveGroupName" ref="nameInputRef"/>
         <span v-if="!isEditingName" class="min-w-0 truncate">{{ groupData.name }}</span>
       </span>

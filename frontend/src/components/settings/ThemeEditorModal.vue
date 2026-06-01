@@ -14,9 +14,10 @@
             <p class="mt-0.5 text-xs text-text-dim">可随意拖动窗口，边看界面边调颜色。</p>
           </div>
           <div class="flex shrink-0 items-center gap-2" @pointerdown.stop>
-            <button class="rounded-full text-xs font-bold text-text-dim hover:text-accent-danger/80"
+            <button class="modal-close-button"
+              aria-label="关闭"
               @click="$emit('close')" >
-              <CircleX class="size-6" />
+              <X class="size-4" />
           </button>
           </div>
         </header>
@@ -27,10 +28,10 @@
             <input v-model="draft.name" class="input-glass h-9 w-full px-3 text-sm text-text-main focus:outline-none" placeholder="例如：我的主题">
           </label>
 
-          <section v-for="group in THEME_TOKEN_GROUPS" :key="group.key" class="mt-2 rounded-2xl border border-border-base/10 bg-glass-light p-2.5">
+          <section v-for="group in THEME_TOKEN_GROUPS" :key="group.key" class="modal-section mt-2 p-2.5">
             <h4 class="mb-2 text-sm font-black text-text-main">{{ group.label }}</h4>
             <div class="grid gap-1" :style="{ gridTemplateColumns: groupGridTemplate(group.key) }">
-              <div v-for="token in group.tokens" :key="`${group.key}-${token.key}`" class="rounded-xl bg-bg-muted/50 px-2 py-0.5">
+              <div v-for="token in group.tokens" :key="`${group.key}-${token.key}`" class="rounded-xl bg-bg-inset/45 px-2 py-0.5">
                 <div class="flex items-start gap-2.5">
                   <button type="button" class="relative mt-0.5 size-7.5 shrink-0 overflow-hidden rounded-md ring-2 ring-border-base/55 shadow-sm transition-transform hover:scale-105"
                     :class="activeColorKey === colorFieldKey(group.key, token.key) ? 'ring-accent-primary/70' : ''" v-tooltip="draft.tokens[group.key][token.key]"
@@ -49,7 +50,7 @@
           </section>
         </div>
 
-        <footer class="relative z-10 flex items-center justify-between gap-3 border-t border-border-base/10 bg-bg-muted/60 px-4 py-3">
+        <footer class="modal-footer relative z-10 flex items-center justify-between gap-3 px-4 py-3">
           <p class="text-xs text-text-dim">保存后会保留为自定义主题。</p>
           <div class="flex shrink-0 gap-2">
             <button class="text-sm font-bold text-text-dim hover:text-text-main" @click="$emit('close')">取消</button>
@@ -75,7 +76,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import GlobalColorPicker from '../common/GlobalColorPicker.vue'
 import { THEME_TOKEN_GROUPS, applyTheme, createEditableThemeFrom, normalizeTheme } from '../../modules/theme/themeManager'
-import { CircleX } from 'lucide-vue-next'
+import { X } from 'lucide-vue-next'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },

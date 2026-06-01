@@ -224,16 +224,12 @@
               <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-highlight">依赖于</div>
               <!-- 依赖项列表 -->
               <!-- 显示前5个或全部（展开状态） -->
-              <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)"
-                :key="dep.package_id"
-                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-muted/70 border-l-2 transition-colors text-xs border-accent-highlight hover:bg-accent-highlight/10">
+              <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)" :key="dep.package_id"
+                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-highlight hover:bg-accent-highlight/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
                   <span v-preview="modStore.takeModById(dep.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByMod(dep) }}</span>
-                  <span
-                    v-if="relationVersionInactive(dep)"
-                    v-tooltip="relationVersionTooltip(dep)"
-                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18"
-                  >
+                  <span v-if="relationVersionInactive(dep)" v-tooltip="relationVersionTooltip(dep)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     未生效
                   </span>
                 </div>
@@ -249,10 +245,8 @@
 
               </div>
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
-              <button v-if="selectedMod.dependencies_mods.length > 5"
-                @click="showAllDependencies = !showAllDependencies"
-                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-highlight transition-all group"
-              >
+              <button v-if="selectedMod.dependencies_mods.length > 5" @click="showAllDependencies = !showAllDependencies"
+                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-highlight transition-all group" >
                 {{ showAllDependencies ? '收起' : `查看全部(${selectedMod.dependencies_mods.length})` }}
                 <svg :class="{'rotate-180': showAllDependencies}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -265,14 +259,11 @@
               <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-danger">冲突于</div>
               <!-- 不兼容项列表 -->
               <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc.package_id"
-                  class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-muted/70 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
+                  class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
                   <span v-preview="modStore.takeModById(inc.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(inc.package_id) }}</span>
-                  <span
-                    v-if="relationVersionInactive(inc)"
-                    v-tooltip="relationVersionTooltip(inc)"
-                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18"
-                  >
+                  <span v-if="relationVersionInactive(inc)" v-tooltip="relationVersionTooltip(inc)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     未生效
                   </span>
                 </div>
@@ -284,10 +275,8 @@
                 </div>
               </div>
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
-              <button v-if="selectedMod.incompatible_mods.length > 5"
-                @click="showAllIncompatible = !showAllIncompatible"
-                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-danger transition-all group"
-              >
+              <button v-if="selectedMod.incompatible_mods.length > 5" @click="showAllIncompatible = !showAllIncompatible"
+                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-danger transition-all group" >
                 {{ showAllIncompatible ? '收起' : `展开全部 (${selectedMod.incompatible_mods.length})` }}
                 <svg :class="{'rotate-180': showAllIncompatible}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -300,14 +289,11 @@
               <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-warn">前置加载</div>
               <!-- 前置加载项列表 -->
               <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft"
-                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-muted/70 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
+                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
                   <span v-preview="modStore.takeModById(aft.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(aft.package_id) }}</span>
-                  <span
-                    v-if="relationVersionInactive(aft)"
-                    v-tooltip="relationVersionTooltip(aft)"
-                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18"
-                  >
+                  <span v-if="relationVersionInactive(aft)" v-tooltip="relationVersionTooltip(aft)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     未生效
                   </span>
                 </div>
@@ -319,10 +305,8 @@
                 </div>
               </div>
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
-              <button v-if="selectedMod.load_after_mods.length > 5"
-                @click="showAllLoadAfter = !showAllLoadAfter"
-                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-warn transition-all group"
-              >
+              <button v-if="selectedMod.load_after_mods.length > 5" @click="showAllLoadAfter = !showAllLoadAfter"
+                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-warn transition-all group" >
                 {{ showAllLoadAfter ? '收起' : `展开全部 (${selectedMod.load_after_mods.length})` }}
                 <svg :class="{'rotate-180': showAllLoadAfter}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -335,14 +319,11 @@
               <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-primary">后置加载</div>
               <!-- 后置加载项列表 -->
               <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef"
-                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-muted/70 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
+                class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
                   <span v-preview="modStore.takeModById(bef.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(bef.package_id) }}</span>
-                  <span
-                    v-if="relationVersionInactive(bef)"
-                    v-tooltip="relationVersionTooltip(bef)"
-                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18"
-                  >
+                  <span v-if="relationVersionInactive(bef)" v-tooltip="relationVersionTooltip(bef)"
+                    class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     未生效
                   </span>
                 </div>
@@ -354,10 +335,8 @@
                 </div>
               </div>
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
-              <button v-if="selectedMod.load_before_mods.length > 5"
-                @click="showAllLoadBefore = !showAllLoadBefore"
-                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-primary transition-all group"
-              >
+              <button v-if="selectedMod.load_before_mods.length > 5" @click="showAllLoadBefore = !showAllLoadBefore"
+                class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-primary transition-all group" >
                 {{ showAllLoadBefore ? '收起' : `展开全部 (${selectedMod.load_before_mods.length})` }}
                 <svg :class="{'rotate-180': showAllLoadBefore}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -392,11 +371,11 @@
                   <input type="text" v-model="tagInput" @focus="showTagSuggest = true" placeholder="+"
                     @keydown.enter.prevent="confirmAddTag" @keydown.up.prevent="navTag(-1)" @keydown.down.prevent="navTag(1)"
                     @keydown.esc="showTagSuggest = false" v-tooltip="'添加新标签'"
-                    class="px-1 py-0.5 w-5 text-center rounded bg-bg-muted/70 border border-border-base/10 text-xs text-text-main placeholder:text-text-disabled focus:flex-1 focus:bg-bg-inset/80 focus:border-accent-primary focus:outline-none focus:w-24 transition-all"
+                    class="input-glass w-5 rounded px-1 py-0.5 text-center text-xs text-text-main placeholder:text-text-disabled focus:flex-1 focus:w-24 focus:outline-none"
                   />
                   <FixedPopover :is-open="showTagSuggest && filteredKnownTags.length > 0" :trigger-ref="tagInputRef">
                       <!-- 标签建议下拉框 -->
-                      <div class="max-h-40 overflow-y-auto bg-bg-surface border border-border-base/10 rounded-lg shadow-xl z-50 flex flex-col gap-0.5 p-1 items-center">
+                      <div class="popover-surface z-50 flex max-h-40 flex-col items-center gap-0.5 overflow-y-auto rounded-lg p-1">
                         <button v-for="(t, idx) in filteredKnownTags" :key="t"  @click="addTag(t)"
                           class="text-left px-2 min-w-20 text-xs items-center rounded hover:bg-accent-primary/20 hover:text-accent-primary transition-colors truncate"
                           :class="{'bg-accent-primary/10 text-accent-primary': idx === tagNavIndex}">
@@ -429,20 +408,20 @@
 
                 <!-- 添加分组按钮 (Dropdown) -->
                 <div class="relative" :ref="el => groupDropRef = el" v-tooltip="'添加新分组'">
-                  <button @click="toggleGroupDrop" class="px-1 py-1 rounded bg-bg-muted/70 border border-border-base/10 text-xs text-text-dim hover:text-text-main hover:border-border-base/18 hover:bg-bg-inset/80 transition-all flex items-center gap-1">
+                  <button @click="toggleGroupDrop" class="flex items-center gap-1 rounded border border-border-base/10 bg-bg-overlay/5 px-1 py-1 text-xs text-text-dim transition-all hover:border-border-base/18 hover:bg-bg-overlay/10 hover:text-text-main">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
                   </button>
                   <FixedPopover :is-open="showGroupDrop" :trigger-ref="groupDropRef">
 
                     <!-- 分组选择下拉框 -->
-                    <div class="w-40 max-h-48 bg-bg-surface border border-border-base/10 rounded-sm shadow-xl z-50 flex flex-col p-1">
+                    <div class="popover-surface z-50 flex max-h-48 w-40 flex-col rounded-sm p-1">
                       <!-- 搜索过滤 -->
                       <input v-model="groupSearch" :ref="el => groupSearchRef = el" placeholder="搜索分组..."
-                        class="mb-1 px-2 py-1 text-xs bg-bg-muted/70 rounded border border-border-base/5 focus:outline-none focus:border-accent-primary" />
+                        class="input-glass mb-1 px-2 py-1 text-xs text-text-main focus:outline-none" />
                       <div class="overflow-y-auto">
                         <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-disabled text-center">无可用分组</div>
                         <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
-                          class="text-left min-h-5 px-2 py-1 text-xs rounded hover:bg-bg-overlay/10 transition-colors truncate flex items-center gap-2">
+                          class="text-left min-h-5 w-full px-2 py-1 text-xs rounded hover:bg-bg-overlay/10 transition-colors truncate flex items-center gap-2">
                           <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
                           {{ g.name }}
                         </button>
@@ -475,7 +454,7 @@
             <!-- 别名 -->
             <div class="mb-2 flex flex-row items-center justify-around">
               <input v-model="userAliasName" @blur="saveUserData" placeholder="在此添加自定义别名"
-                class="flex-1 w-full bg-bg-muted/70 border border-border-base/10 rounded p-2 text-sm text-text-main focus:border-accent-primary focus:outline-none"/>
+                class="input-glass w-full flex-1 p-2 text-sm text-text-main focus:outline-none"/>
               <!-- 翻译按钮 -->
               <button @click="generateModAlias" v-tooltip="'通过AI生成Mod别名及备注，需要配置AI'" :disabled="isUsingAI"
                 class="min-w-8 h-6 px-1.5 ml-1 flex items-center justify-center text-sm rounded-sm bg-bg-highlight hover:bg-accent-primary hover:text-text-main transition-colors active:bg-accent-cool">
@@ -487,8 +466,8 @@
             <!-- 备注 -->
             <div>
               <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注" :class="[expandTextarea?'min-h-100':'']"
-                class="w-full bg-bg-muted/70 border border-border-base/10 rounded p-2 text-sm text-text-soft
-                focus:border-accent-primary focus:outline-none min-h-20 resize-none custom-scrollbar">
+                class="input-glass min-h-20 w-full resize-none p-2 text-sm text-text-soft
+                focus:outline-none custom-scrollbar">
               </textarea>
               <button @click="expandTextarea=!expandTextarea" v-tooltip="'展开/收起'" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-bg-overlay/10 transition-colors">
                 <ChevronUp v-if="expandTextarea" class="size-5"/>

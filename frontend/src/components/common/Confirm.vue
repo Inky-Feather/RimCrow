@@ -71,9 +71,7 @@
               <input v-model="confirmStore.state.inputValue"
                 ref="inputRef" type="text" spellcheck="false"
                 :placeholder="confirmStore.state.placeholder"
-                class="block w-full bg-bg-inset/80 border border-border-base/10 rounded-lg py-1 px-2 text-sm text-text-main font-mono placeholder:text-text-disabled
-                        focus:outline-none focus:border-border-base/18 focus:bg-bg-inset focus:shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.05)]
-                        transition-all duration-200"
+                class="input-glass block w-full px-2 py-1 font-mono text-sm text-text-main placeholder:text-text-disabled focus:outline-none"
               />
               <!-- 输入框角落装饰 -->
               <div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-border-base/18 rounded-br-lg pointer-events-none group-focus-within:border-border-base/10 transition-colors"></div>
@@ -163,7 +161,7 @@
           </div>
 
           <!-- D. 底部操作栏 (玻璃分割线) -->
-          <div class=" flex items-center justify-end gap-3 border-t border-border-base/5 bg-glass-light"
+          <div class="modal-footer flex items-center justify-end gap-3"
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
 
             <!-- 自定义底部按钮用于“全部处理/全部稍后”等窗口级动作，保持普通确认弹窗的旧按钮逻辑不变。 -->

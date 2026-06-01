@@ -17,7 +17,7 @@
         </div>
 
         <div class="flex items-center gap-1.5">
-          <button class="rounded border border-border-base/10 bg-bg-muted/70 px-2.5 py-1 text-xs transition-colors hover:border-accent-special/30 hover:text-accent-special"
+          <button class="rounded border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1 text-xs transition-colors hover:border-accent-special/30 hover:text-accent-special"
             v-if="showTraceButton" @click="openTracePanel" >
             查看请求记录
           </button>
@@ -213,8 +213,8 @@
       </div>
 
       <!-- 底部操作栏 -->
-      <div class="p-3 bg-bg-inset/60 rounded-b-2xl border-t border-border-base/10 shrink-0 z-50">
-        <div class="relative bg-bg-overlay/5 border border-border-base/10 rounded-xl transition-all duration-300 focus-within:border-accent-special/50 focus-within:bg-bg-inset/90 flex flex-col shadow-inner">
+      <div class="modal-footer z-50 shrink-0 rounded-b-2xl p-3">
+        <div class="input-glass relative flex flex-col rounded-xl shadow-inner transition-all duration-300 focus-within:border-accent-special/50">
           <slot name="composer-context" :attachments="composerAttachments"></slot>
 
           <transition name="fade-up">

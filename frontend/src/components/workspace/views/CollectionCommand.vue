@@ -53,7 +53,7 @@
           <!-- 单个子 Mod 卡片 -->
           <div v-for="mod in wsStore.activeChildrenWithStatus" :key="mod.workshop_id"
             class="flex items-center gap-3 p-2 rounded-xl border transition-all group hover:bg-bg-overlay/5"
-            :class="(mod.is_workshop || mod.is_self || mod.is_local) ? 'border-border-base/10 bg-glass-light' : 'border-accent-danger/30 bg-accent-danger/5 opacity-80'">
+            :class="(mod.is_workshop || mod.is_self || mod.is_local) ? 'border-border-base/10 bg-glass-medium/60' : 'border-accent-danger/30 bg-accent-danger/5 opacity-80'">
             
             <img v-if="mod.preview_url" :src="appStore.getRemoteUrl(mod.preview_url)" class="size-10 rounded-lg object-cover border border-border-base/10 shadow-sm" />
             <div v-else class="size-10 rounded-lg bg-bg-inset/90 border border-border-base/10 flex items-center justify-center"><Package class="size-4 text-text-dim"/></div>

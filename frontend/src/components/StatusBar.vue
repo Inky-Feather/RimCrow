@@ -1,6 +1,6 @@
 <!-- frontend/src/components/StatusBar.vue -->
 <template>
-  <div class="h-6 w-full flex items-center px-3 justify-between text-xs text-text-dim select-none relative z-40 bg-bg-deep border-t border-border-base/5">
+  <div class="h-6 w-full flex items-center px-3 justify-between text-xs text-text-dim select-none relative z-40 ">
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-accent-warn' : 'bg-accent-success']"></div>
@@ -71,7 +71,7 @@
             </div>
 
             <div class="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
-              <div v-for="task in taskStore.tasks" :key="task.id" class="rounded-xl border border-border-base/10 bg-bg-muted/60 px-3 py-2">
+              <div v-for="task in taskStore.tasks" :key="task.id" class="modal-section-subtle px-3 py-2">
                 <div class="flex items-center gap-2">
                   <component :is="taskIcon(task)" class="h-4 w-4 shrink-0" :class="taskAccentText(task, true)" />
                   <div class="min-w-0 flex-1">

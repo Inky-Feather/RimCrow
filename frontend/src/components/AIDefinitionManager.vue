@@ -1,30 +1,15 @@
 <!-- frontend/src/components/AIDefinitionManager.vue -->
 <template>
-  <transition name="fade">
-    <div v-if="appStore.uiState.showAIDefinitionManager" class="fixed inset-0 z-130 flex items-center justify-center bg-bg-deep/80 backdrop-blur-md">
-      <!-- 主容器：定义管理三段式工作台 -->
-      <div class="relative flex h-[88vh] w-[92%] max-w-7xl flex-col overflow-hidden rounded-2xl border border-accent-special/30 bg-bg-surface/95 shadow-[0_0_80px_var(--shadow-color)]">
-        <div class="pointer-events-none absolute right-0 top-0 h-125 w-125 rounded-full bg-accent-special/5 blur-2xl"></div>
+  <CommonModalShell :show="appStore.uiState.showAIDefinitionManager" title="AI 定义管理" description="在这里集中管理 AI 助手、任务和模板。"
+    size="xl" :z-index="130" accent="special" panel-class="border-accent-special/30" content-class="h-full flex flex-col"
+    @close="closeModal" >
+    <template #icon>
+      <Drama class="size-5 text-accent-special" />
+    </template>
 
-        <!-- 顶部标题栏：当前模块标题与关闭入口 -->
-        <div class="relative z-10 flex h-16 shrink-0 items-center justify-between border-b border-border-base/10 bg-bg-inset/80 px-6">
-          <div class="flex items-center gap-4">
-            <div class="rounded-lg border border-accent-special/30 bg-accent-special/20 p-2 text-accent-special">
-              <Drama class="size-5" />
-            </div>
-            <div>
-              <h2 class="text-lg font-black tracking-widest text-text-main">AI 定义管理</h2>
-              <p class="mt-0.5 text-[0.65rem] font-mono uppercase text-text-dim">在这里集中管理 AI 助手、任务和模板。</p>
-            </div>
-          </div>
-          <button class="p-2 text-text-dim transition-colors hover:text-accent-special" @click="closeModal">
-            <X class="size-6" />
-          </button>
-        </div>
-
-        <div class="relative z-10 flex flex-1 overflow-hidden">
+        <div class="relative z-10 flex h-full flex-1 overflow-hidden">
           <!-- 左侧导航栏：入口/模板切换、搜索与列表 -->
-          <div class="flex w-[22rem] shrink-0 flex-col border-r border-border-base/10 bg-bg-muted/70">
+          <div class="sidebar-surface flex w-88 shrink-0 flex-col">
             <div class="space-y-3 border-b border-border-base/5 p-4">
               <div class="flex gap-2">
                 <button v-for="tab in TABS" :key="tab.id" @click="activeTab = tab.id"
@@ -84,9 +69,9 @@
             </div>
           </div>
 
-          <div class="flex flex-1 flex-col bg-bg-surface/50">
+          <div class="content-surface flex flex-1 flex-col">
             <template v-if="activeTab === 'entries' && currentEntryForm">
-              <div class="flex h-12 shrink-0 items-center justify-between border-b border-border-base/10 bg-bg-muted/50 px-6">
+              <div class="toolbar-surface flex h-12 shrink-0 items-center justify-between px-6">
                 <div class="flex items-center gap-2">
                   <span class="rounded border border-accent-special/20 bg-accent-special/10 px-2 py-0.5 font-mono text-xs text-accent-special">
                     ID: {{ currentEntryId }}
@@ -127,7 +112,7 @@
                   <div class="mb-3 text-sm font-bold text-text-main">可用工具</div>
                   <p class="mb-3 text-xs text-text-dim">这里决定这个助手能使用哪些工具。新会话默认会全部开启，你也可以在会话里临时关闭部分工具。</p>
                   <div class="grid grid-cols-2 gap-2">
-                    <label v-for="tool in toolDefinitionEntries" :key="`assistant-${tool.id}`" class="flex items-start gap-2 rounded-lg bg-bg-muted/70 px-3 py-2 text-xs text-text-main">
+                    <label v-for="tool in toolDefinitionEntries" :key="`assistant-${tool.id}`" class="modal-section-subtle flex items-start gap-2 px-3 py-2 text-xs text-text-main">
                       <input :checked="currentEntryForm.tool_scope_selectable.includes(tool.id)" type="checkbox" @change="toggleAssistantTool(tool.id, $event.target.checked)" />
                       <div class="min-w-0">
                         <div class="font-semibold" v-tooltip="getToolTooltip(tool)">{{ tool.label || tool.id }}</div>
@@ -139,7 +124,7 @@
             </template>
 
             <template v-else-if="activeTab === 'prompts' && currentPromptForm">
-              <div class="flex h-12 shrink-0 items-center justify-between border-b border-border-base/10 bg-bg-muted/50 px-6">
+              <div class="toolbar-surface flex h-12 shrink-0 items-center justify-between px-6">
                 <div class="flex items-center gap-2">
                   <span class="rounded border border-accent-special/20 bg-accent-special/10 px-2 py-0.5 font-mono text-xs text-accent-special">
                     ID: {{ currentPromptId || '保存后自动生成' }}
@@ -192,22 +177,22 @@
                     <Paperclip class="size-4 text-accent-special" /> 可用附件
                   </div>
                   <div class="grid grid-cols-2 gap-2">
-                    <label v-for="attachment in attachmentDefinitionEntries" :key="attachment.kind" class="flex items-center gap-2 rounded-lg bg-bg-muted/70 px-3 py-2 text-xs text-text-main" :class="currentPromptForm.is_system ? 'opacity-80' : ''">
+                    <label v-for="attachment in attachmentDefinitionEntries" :key="attachment.kind" class="modal-section-subtle flex items-center gap-2 px-3 py-2 text-xs text-text-main" :class="currentPromptForm.is_system ? 'opacity-80' : ''">
                       <input :checked="currentPromptForm.attachment_kinds.includes(attachment.kind)" :disabled="currentPromptForm.is_system" type="checkbox" @change="togglePromptAttachment(attachment.kind, $event.target.checked)" />
                       <span>{{ attachment.label }}</span>
                     </label>
                   </div>
                 </div>
 
-                <div v-if="selectedAttachmentDefinitions.length > 0" class="rounded-lg border border-border-base/10 bg-bg-muted/70 p-4">
+                <div v-if="selectedAttachmentDefinitions.length > 0" class="modal-section p-4">
                   <div class="mb-3 text-sm font-bold text-text-main">发送给 AI 的附件内容</div>
                   <p class="mb-4 text-xs text-text-dim">控制附件里哪些信息会发给 AI。取消勾选后，这部分内容通常不会发送。</p>
                   <div class="space-y-4">
-                    <div v-for="attachment in selectedAttachmentDefinitions" :key="`projection-${attachment.kind}`" class="rounded-lg border border-border-base/10 bg-bg-muted/70 p-3">
+                    <div v-for="attachment in selectedAttachmentDefinitions" :key="`projection-${attachment.kind}`" class="modal-section-subtle p-3">
                       <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ attachment.label }}</div>
                       <div class="grid grid-cols-2 gap-2">
                         <label v-for="field in attachment.projection_options || []" :key="`${attachment.kind}-${field.path}`"
-                          class="flex items-start gap-2 rounded-lg bg-bg-inset/60 px-3 py-2 text-xs text-text-main" >
+                          class="flex items-start gap-2 rounded-lg border border-border-base/10 bg-bg-inset/60 px-3 py-2 text-xs text-text-main" >
                           <input :checked="isProjectionFieldEnabled(attachment.kind, field.path)" :disabled="currentPromptForm.is_system"
                             type="checkbox" @change="toggleProjectionField(attachment.kind, field.path, $event.target.checked)" />
                           <div class="min-w-0">
@@ -256,7 +241,7 @@
                     <span class="flex items-center gap-2"><Bot class="size-4 text-accent-special" /> 系统提示词</span>
                     <span class="font-mono text-[0.6rem] opacity-50">给 AI 的固定说明</span>
                   </label>
-                  <textarea v-model="currentPromptForm.system" :disabled="currentPromptForm.is_system" class="min-h-60 w-full resize-y rounded-lg border border-border-base/10 bg-bg-inset p-3 font-mono text-sm leading-relaxed text-accent-cool focus:border-accent-special focus:outline-none disabled:opacity-70"></textarea>
+                  <textarea v-model="currentPromptForm.system" :disabled="currentPromptForm.is_system" class="input-glass min-h-60 w-full resize-y p-3 font-mono text-sm leading-relaxed text-accent-cool focus:outline-none disabled:opacity-70"></textarea>
                 </div>
 
                 <div class="space-y-2">
@@ -264,7 +249,7 @@
                     <span class="flex items-center gap-2"><User class="size-4 text-accent-primary" /> 用户输入模板</span>
                     <span class="font-mono text-[0.6rem] opacity-50">每次发送时的输入格式</span>
                   </label>
-                  <textarea v-model="currentPromptForm.user_template" :disabled="currentPromptForm.is_system" class="min-h-60 w-full resize-y rounded-lg border border-border-base/10 bg-bg-inset p-3 font-mono text-sm leading-relaxed text-text-main focus:border-accent-special focus:outline-none disabled:opacity-70"></textarea>
+                  <textarea v-model="currentPromptForm.user_template" :disabled="currentPromptForm.is_system" class="input-glass min-h-60 w-full resize-y p-3 font-mono text-sm leading-relaxed text-text-main focus:outline-none disabled:opacity-70"></textarea>
                 </div>
               </div>
             </template>
@@ -275,14 +260,13 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  </transition>
+  </CommonModalShell>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Bot, Braces, Drama, Lock, Paperclip, Plus, TerminalSquare, User, X } from 'lucide-vue-next'
+import { Bot, Braces, Drama, Lock, Paperclip, Plus, TerminalSquare, User } from 'lucide-vue-next'
+import CommonModalShell from './common/CommonModalShell.vue'
 import CommonInput from './common/input/CommonInput.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import { useAppStore } from '../stores/appStore'

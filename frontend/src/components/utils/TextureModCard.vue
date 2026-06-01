@@ -1,5 +1,5 @@
 <template>
-  <div class="group flex min-h-24 flex-col justify-between border-b border-border-base/5 px-3 py-2 transition-colors hover:bg-bg-overlay/5">
+  <div class="group flex min-h-24 flex-col justify-between rounded-lg border border-border-base/2 px-3 py-2 transition-colors hover:bg-bg-overlay/5">
     <div class="flex min-w-0 items-center justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-2">
         <span class="truncate text-sm font-bold text-text-main">{{ mod.mod_name }}</span>
@@ -34,7 +34,7 @@
       </div>
     </div>
 
-    <div class="items-center text-xs">
+    <div class="items-center text-xs my-1">
       <div class="flex items-center gap-2">
         <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="shrink-0 font-bold text-accent-tip/80">PNG</div>
         <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="flex-1 relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">

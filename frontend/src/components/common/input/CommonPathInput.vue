@@ -39,7 +39,7 @@
 
       <!-- 浏览按钮 -->
       <button v-if="!readOnly" @click="$emit('browse')"
-        class="shrink-0 h-9 w-9 flex items-center justify-center bg-accent-primary/10 border border-accent-primary/30 rounded-lg text-accent-primary hover:bg-accent-primary hover:text-on-accent-primary transition-all duration-300 active:scale-90 shadow-lg"
+        class="input-addon-button flex h-9 w-9 items-center justify-center rounded-lg active:scale-90"
         v-tooltip="'通过文件浏览器选择'"
       >
         <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

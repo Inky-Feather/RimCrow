@@ -6,7 +6,7 @@
         class="fixed inset-0 z-200 flex flex-col bg-bg-deep/95 backdrop-blur-2xl overflow-hidden font-sans text-text-main">
         
         <!-- 1. 顶部全局导航栏 (Glowing Segmented Control) -->
-        <header class="relative h-16 shrink-0 flex items-center justify-between px-8 border-b border-border-base/10 bg-bg-muted/70 z-20">
+        <header class="toolbar-surface relative z-20 flex h-16 shrink-0 items-center justify-between px-8">
           <!-- 左侧：返回按钮 -->
           <button @click="appStore.uiState.showWorkspace = false" v-tooltip="'返回主界面 (Esc)'"
             class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-all cursor-pointer">

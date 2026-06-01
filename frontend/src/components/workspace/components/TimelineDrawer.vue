@@ -5,7 +5,7 @@
       <div v-if="isOpen" ref="drawerRef" class="fixed top-18 bottom-0 right-0 w-96 bg-glass-heavy backdrop-blur-3xl border-l border-border-base/10 shadow-[-10px_0_30px_var(--shadow-color)] z-300 flex flex-col">
         
         <!-- Header -->
-        <div class="px-6 py-5 border-b border-border-base/5 flex justify-between items-start bg-bg-muted/70">
+        <div class="toolbar-surface flex items-start justify-between px-6 py-5">
           <div>
             <h3 class="text-xl font-black italic tracking-wider flex items-center gap-2">
               <History class="size-5 text-accent-primary" />
@@ -58,7 +58,7 @@
               </div>
               
               <!-- 具体描述 -->
-              <div class="text-xs text-text-dim mt-2 leading-relaxed bg-bg-muted/70 p-2.5 rounded-lg border border-border-base/5 break-all">
+              <div class="modal-section-subtle mt-2 break-all p-2.5 text-xs leading-relaxed text-text-dim">
                 {{ log.desc }}
               </div>
             </div>

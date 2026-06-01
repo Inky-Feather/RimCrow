@@ -307,13 +307,60 @@ body {
 @layer components {
   /* 统一的输入框玻璃质感 */
   .input-glass {
-    @apply bg-bg-inset/80 border border-border-base/10 rounded-lg transition-all duration-200;
+    @apply bg-bg-inset/80 border border-border-base/8 rounded-lg transition-all duration-200;
   }
   .input-glass:hover {
-    @apply border-border-base/18 bg-bg-inset;
+    @apply border-border-base/15 bg-bg-inset;
   }
   .input-glass:focus-within {
     @apply border-accent-primary/50 ring-1 ring-accent-primary/20 shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.1)];
+  }
+  .input-addon-button {
+    @apply shrink-0 border border-border-base/10 bg-bg-overlay/5 text-text-dim transition-all duration-200;
+  }
+  .input-addon-button:hover {
+    @apply border-accent-primary/35 bg-accent-primary/12 text-accent-primary;
+  }
+
+  /* 弹窗和浮层的基础层级：主面板、标题栏、内容区、底部操作区保持同一套明暗关系。 */
+  .modal-surface {
+    @apply border border-border-base/10 bg-glass-heavy shadow-[0_24px_90px_var(--shadow-color)] ring-1 ring-border-base/5;
+  }
+  .modal-header {
+    @apply border-b border-border-base/10 bg-bg-muted/70;
+  }
+  .modal-body {
+    @apply bg-bg-surface/40;
+  }
+  .modal-footer {
+    @apply border-t border-border-base/10 bg-bg-muted/60;
+  }
+  .modal-close-button {
+    @apply flex size-9 shrink-0 items-center justify-center rounded-xl border border-border-base/10 bg-bg-overlay/5 text-text-dim transition-all duration-200;
+  }
+  .modal-close-button:hover {
+    @apply border-accent-danger/25 bg-accent-danger/15 text-text-main;
+  }
+  .modal-close-button:focus-visible {
+    @apply outline-none ring-2 ring-accent-danger/30;
+  }
+  .modal-section {
+    @apply rounded-2xl border border-border-base/5 bg-bg-muted/70;
+  }
+  .modal-section-subtle {
+    @apply rounded-xl border border-border-base/10 bg-bg-inset/55;
+  }
+  .toolbar-surface {
+    @apply border-b border-border-base/10 bg-bg-muted/70;
+  }
+  .sidebar-surface {
+    @apply border-r border-border-base/10 bg-bg-muted/70;
+  }
+  .content-surface {
+    @apply bg-bg-surface/40;
+  }
+  .popover-surface {
+    @apply border border-border-base/10 bg-glass-medium shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur-xl;
   }
 }
 

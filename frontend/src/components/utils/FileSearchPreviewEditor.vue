@@ -85,7 +85,7 @@ const editorCssVars = computed(() => ({
   '--file-search-active-line-gutter-bg': getTailwindColorRgba('accent-highlight', 0.12),
   '--file-search-selection-bg': getTailwindColorRgba('accent-highlight', 0.28),
   '--file-search-gutter-border': getTailwindColorRgba('text-main', 0.12),
-  '--file-search-gutter-bg': 'var(--color-bg-inset)',
+  '--file-search-gutter-bg': getTailwindColorRgba('bg-surface', 0.7),
   '--file-search-gutter-color': getTailwindColorRgba('text-dim', 0.7),
 }))
 

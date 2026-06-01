@@ -1,182 +1,174 @@
 <template>
-  <transition name="mod-config-fade">
-    <div v-if="visible" class="fixed inset-0 z-120 flex items-center justify-center bg-bg-deep/80 backdrop-blur-md"
-      @click.self="emit('close')" >
-      <div class=" h-[88vh] w-[92vw] max-w-screen-2xl flex flex-col overflow-hidden rounded-2xl border border-border-base/10 bg-bg-deep shadow-2xl">
+  <CommonModalShell :show="visible" title="模组配置" description="查看当前环境里的官方模组配置，区分不同配置，并在同一种配置之间手动覆盖内容。"
+    size="wide" :z-index="120" accent="primary" content-class="h-full"
+    @close="emit('close')" >
+    <template #header-actions>
+      <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-2 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10 disabled:opacity-50"
+        @click="loadOverview()" :disabled="loading" >
+        刷新
+      </button>
+    </template>
 
-        <header class="border-b border-border-base/10 bg-bg-muted/70 px-6 py-4">
-          <div class="flex items-center gap-4">
-            <!-- 标题 -->
-            <div class="min-w-0 flex-1">
-              <h2 class="text-lg font-black tracking-wide text-text-main">模组配置</h2>
-              <p class="mt-1 text-xs text-text-dim">
-                查看当前环境里的官方模组配置，区分不同配置，并在同一种配置之间手动覆盖内容。
-              </p>
-            </div>
-            <!-- 按钮 -->
-            <div class="flex items-center gap-2">
-              <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-2 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
-                @click="loadOverview()" :disabled="loading" >
-                刷新
-              </button>
-              <button
-                class="rounded-lg p-2 text-text-dim transition-colors hover:bg-accent-danger/15 hover:text-text-main"
-                @click="emit('close')"
-              >
-                <X class="size-5" />
-              </button>
+      <div class="flex flex-col h-full flex-1 overflow-hidden">
+        <!-- 标题信息 -->
+        <div class="grid grid-cols-5 bg-bg-muted shadow-md">
+          <!-- 配置目录信息 -->
+          <div class=" col-span-3 px-4 py-2 text-[0.7rem] text-text-dim ">
+            <span class="text-xs">配置目录: {{ overview?.config_path || '未知' }}</span>
+            <div class="flex items-center gap-x-2 mt-2">
+              <span>文件 {{ overview?.total_files || 0 }}</span>
+              <span>已识别 {{ overview?.matched_group_count || 0 }} 组</span>
+              <span>未识别 {{ overview?.orphan_file_count || 0 }}</span>
             </div>
           </div>
-        </header>
+          <!-- 配置文件预览 -->
+          <header class="col-span-2 px-5 py-4 flex items-center justify-end gap-2">
+            <div class="text-sm font-black text-text-main">文件预览</div>
+            <div class="mt-1 text-[0.7rem] text-text-dim">
+              {{ selectedInstance?.file_name || '未选择配置文件' }}
+            </div>
+          </header>
+        </div>
 
-        <section class="grid grid-cols-5 h-full flex-1 overflow-hidden">
-          <div class="col-span-2 h-full flex flex-col overflow-hidden border-r border-border-base/10">
-            <!-- 配置目录信息 -->
-            <div class="px-4 py-2 text-[0.7rem] bg-bg-surface/90 text-text-dim border-b border-border-base/10">
-              <span class="text-xs">配置目录: <br>{{ overview?.config_path || '未知' }}</span>
-              <div class="flex items-center gap-x-2 mt-2">
-                <span>文件 {{ overview?.total_files || 0 }}</span>
-                <span>已识别 {{ overview?.matched_group_count || 0 }} 组</span>
-                <span>未识别 {{ overview?.orphan_file_count || 0 }}</span>
-              </div>
+        <!-- 结果列表与文件预览 -->
+        <div class="flex-1 overflow-hidden grid grid-cols-5">
+          <!-- 结果列表 -->
+          <div class="col-span-2 overflow-y-auto px-4 py-4 border-r border-border-base/5">
+            <div v-if="loading" class="flex h-full items-center justify-center gap-3 text-sm text-text-dim">
+              <Loader2 class="size-5 animate-spin text-accent-primary" />
+              正在读取配置...
             </div>
 
-            <div class="flex-1 overflow-y-auto px-4 py-4">
-              <div v-if="loading" class="flex h-full items-center justify-center gap-3 text-sm text-text-dim">
-                <Loader2 class="size-5 animate-spin text-accent-primary" />
-                正在读取配置...
-              </div>
+            <div v-else-if="groups.length === 0" class="flex h-full flex-col items-center justify-center text-sm text-text-dim">
+              <Files class="mb-4 size-14 opacity-50" />
+              当前环境里还没有可识别的模组配置
+            </div>
 
-              <div v-else-if="groups.length === 0" class="flex h-full flex-col items-center justify-center text-sm text-text-dim">
-                <Files class="mb-4 size-14 opacity-50" />
-                当前环境里还没有可识别的模组配置
-              </div>
-
-              <div v-else class="space-y-4">
-                <article v-for="group in groups" :key="group.group_key" class="overflow-hidden rounded-2xl border transition-colors"
-                  :class="selectedGroupKey === group.group_key ? 'border-accent-primary/50 bg-bg-elevated/60' : 'border-border-base/10 bg-bg-muted/90'" >
-                  <button
-                    class="flex w-full items-start justify-between gap-4 border-b border-border-base/10 px-5 py-4 text-left"
-                    @click="selectGroup(group)"
-                  >
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-sm font-black text-text-main">{{ group.mod_name }}</span>
-                        <span
-                          class="rounded px-2 py-0.5 text-[0.65rem] font-bold"
-                          :class="group.status === 'matched' ? 'bg-accent-success/15 text-accent-success' : 'bg-accent-danger/15 text-accent-danger'"
-                        >
-                          {{ group.status === 'matched' ? '已识别' : '未识别文件' }}
-                        </span>
-                        <span v-if="group.is_active_group" class="rounded bg-accent-primary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-primary">
-                          含当前使用的文件
-                        </span>
-                      </div>
-                      <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.7rem] text-text-dim">
-                        <span>模组标识: {{ group.package_id || '未知' }}</span>
-                        <span>配置名称: {{ group.settings_class_name || '未知' }}</span>
-                        <span>文件 {{ group.instance_count }}</span>
-                        <span v-if="group.can_sync">可在同一种配置之间互相覆盖</span>
-                      </div>
+            <div v-else class="space-y-4">
+              <article v-for="group in groups" :key="group.group_key" class="overflow-hidden rounded-2xl border transition-colors"
+                :class="selectedGroupKey === group.group_key ? 'border-accent-primary/50 bg-accent-primary/5' : 'border-border-base/10 bg-bg-muted/70'" >
+                <button class="flex w-full items-start justify-between gap-4 border-b border-border-base/10 px-5 py-4 text-left"
+                  @click="selectGroup(group)" >
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-sm font-black text-text-main">{{ group.mod_name }}</span>
+                      <span class="rounded px-2 py-0.5 text-[0.65rem] font-bold"
+                        :class="group.status === 'matched' ? 'bg-accent-success/15 text-accent-success' : 'bg-accent-danger/15 text-accent-danger'" >
+                        {{ group.status === 'matched' ? '已识别' : '未识别文件' }}
+                      </span>
+                      <span v-if="group.is_active_group" class="rounded bg-accent-primary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-primary">
+                        含当前使用的文件
+                      </span>
                     </div>
-                  </button>
-
-                  <div class="space-y-3 px-4 py-4">
-                    <div v-for="item in group.instances" :key="item.instance_key" class="relative rounded-xl border p-4 transition-colors group"
-                      :class="selectedInstanceKey === item.instance_key ? 'border-accent-primary/45 bg-accent-primary/6' : 'border-border-base/10 bg-bg-highlight/50'"
-                      @click="selectInstance(group, item)">
-
-                        <div class="min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <button class="truncate text-left text-sm font-bold text-text-main hover:text-accent-primary" @click="selectInstance(group, item)">
-                              {{ item.file_name }}
-                            </button>
-                            <span class="rounded bg-bg-overlay/10 px-2 py-0.5 text-[0.65rem] font-bold text-text-dim">
-                              {{ item.source_label }}
-                            </span>
-                            <span v-if="item.is_active_instance" class="rounded bg-accent-primary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-primary">
-                              当前激活
-                            </span>
-                            <span v-if="group.can_sync && currentSourceKey(group.group_key) === item.instance_key"
-                              class="rounded bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-secondary" >
-                              基准文件
-                            </span>
-                          </div>
-                          <div class="mt-2 space-y-1 text-[0.7rem] text-text-dim">
-                            <div>配置名称: {{ item.settings_class_name || '未知' }}</div>
-                            <div>来源文件夹: {{ item.folder_name || '未知' }}</div>
-                            <div class="truncate">文件位置: {{ item.file_path }}</div>
-                            <div>大小: {{ formatSize(item.file_size) }} | 修改时间: {{ formatTime(item.modified_time) }}</div>
-                          </div>
-                        </div>
-
-                        <div class="absolute bottom-0 right-0 left-0 z-100 flex flex-wrap items-center justify-end gap-2 bg-bg-surface/90 border border-border-base/5 p-2 rounded-b-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                          <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-[0.7rem] font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
-                            @click="appStore.openFile(item.file_path)" >
-                            打开文件
-                          </button>
-                          <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-[0.7rem] font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
-                            @click="appStore.openPath(item.file_path)" >
-                            打开目录
-                          </button>
-                          <button v-if="group.can_sync" class="rounded-lg border px-3 py-1.5 text-[0.7rem] font-bold transition-colors"
-                            :class="currentSourceKey(group.group_key) === item.instance_key ? 'border-accent-secondary/35 bg-accent-secondary/15 text-accent-secondary' : 'border-border-base/10 bg-bg-overlay/5 text-text-main hover:bg-bg-overlay/10'"
-                            v-tooltip="currentSourceKey(group.group_key) === item.instance_key ? '当前以这个文件为准' : '把这个文件设为基准，之后可用它覆盖同组里的其它文件'"
-                            @click="setSource(group.group_key, item.instance_key)" >
-                            {{ currentSourceKey(group.group_key) === item.instance_key ? '当前基准' : '设为基准' }}
-                          </button>
-                          <button v-if="group.can_sync && currentSourceKey(group.group_key) && currentSourceKey(group.group_key) !== item.instance_key"
-                            class="rounded-lg border border-accent-warning/35 bg-accent-warning/10 px-3 py-1.5 text-[0.7rem] font-bold text-accent-warning transition-colors hover:bg-accent-warning/18"
-                            :disabled="syncingTargetPath === item.file_path" v-tooltip="buildSyncTooltip(group, item)"
-                            @click="syncTo(group, item)" >
-                            {{ syncingTargetPath === item.file_path ? '覆盖中...' : '用基准文件覆盖当前文件' }}
-                          </button>
-                        </div>
-
+                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.7rem] text-text-dim">
+                      <span>模组标识: {{ group.package_id || '未知' }}</span>
+                      <span>配置名称: {{ group.settings_class_name || '未知' }}</span>
+                      <span>文件 {{ group.instance_count }}</span>
+                      <span v-if="group.can_sync">可在同一种配置之间互相覆盖</span>
                     </div>
                   </div>
-                </article>
-              </div>
+                </button>
+
+                <div class="space-y-3 px-4 py-4">
+                  <div v-for="item in group.instances" :key="item.instance_key" class="relative rounded-xl border p-4 transition-colors group"
+                    :class="selectedInstanceKey === item.instance_key ? 'border-accent-primary/45 bg-accent-primary/20' : 'border-border-base/10 bg-bg-surface'"
+                    @click="selectInstance(group, item)">
+
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <button class="truncate text-left text-sm font-bold text-text-main hover:text-accent-primary" @click="selectInstance(group, item)">
+                            {{ item.file_name }}
+                          </button>
+                          <span class="rounded bg-bg-overlay/10 px-2 py-0.5 text-[0.65rem] font-bold text-text-dim">
+                            {{ item.source_label }}
+                          </span>
+                          <span v-if="item.is_active_instance" class="rounded bg-accent-primary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-primary">
+                            当前激活
+                          </span>
+                          <span v-if="group.can_sync && currentSourceKey(group.group_key) === item.instance_key"
+                            class="rounded bg-accent-secondary/15 px-2 py-0.5 text-[0.65rem] font-bold text-accent-secondary" >
+                            基准文件
+                          </span>
+                        </div>
+                        <div class="mt-2 space-y-1 text-[0.7rem] text-text-dim">
+                          <div>配置名称: {{ item.settings_class_name || '未知' }}</div>
+                          <div>来源文件夹: {{ item.folder_name || '未知' }}</div>
+                          <div class="truncate">文件位置: {{ item.file_path }}</div>
+                          <div>大小: {{ formatSize(item.file_size) }} | 修改时间: {{ formatTime(item.modified_time) }}</div>
+                        </div>
+                      </div>
+
+                      <!-- 操作按钮 -->
+                      <div class="absolute bottom-0 right-0 left-0 z-100 flex flex-wrap items-center justify-end gap-2 backdrop-blur-2xl border border-border-base/5 p-2 rounded-b-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                        <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-[0.7rem] font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
+                          @click="appStore.openFile(item.file_path)" >
+                          打开文件
+                        </button>
+                        <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-[0.7rem] font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
+                          @click="appStore.openPath(item.file_path)" >
+                          打开目录
+                        </button>
+                        <button v-if="group.can_sync" class="rounded-lg border px-3 py-1.5 text-[0.7rem] font-bold transition-colors"
+                          :class="currentSourceKey(group.group_key) === item.instance_key ? 'border-accent-secondary/35 bg-accent-secondary/15 text-accent-secondary' : 'border-border-base/10 bg-bg-overlay/5 text-text-main hover:bg-bg-overlay/10'"
+                          v-tooltip="currentSourceKey(group.group_key) === item.instance_key ? '当前以这个文件为准' : '把这个文件设为基准，之后可用它覆盖同组里的其它文件'"
+                          @click="setSource(group.group_key, item.instance_key)" >
+                          {{ currentSourceKey(group.group_key) === item.instance_key ? '当前基准' : '设为基准' }}
+                        </button>
+                        <button v-if="group.can_sync && currentSourceKey(group.group_key) && currentSourceKey(group.group_key) !== item.instance_key"
+                          class="rounded-lg border border-accent-warning/35 bg-accent-warning/10 px-3 py-1.5 text-[0.7rem] font-bold text-accent-warning transition-colors hover:bg-accent-warning/18"
+                          :disabled="syncingTargetPath === item.file_path" v-tooltip="buildSyncTooltip(group, item)"
+                          @click="syncTo(group, item)" >
+                          {{ syncingTargetPath === item.file_path ? '覆盖中...' : '用基准文件覆盖当前文件' }}
+                        </button>
+                      </div>
+
+                  </div>
+                </div>
+              </article>
             </div>
           </div>
 
-          <aside class="col-span-3 flex shrink-0 flex-col bg-bg-muted/70">
-            <header class="bg-bg-surface/90 border-b border-border-base/10 px-5 py-4">
-              <div class="text-sm font-black text-text-main">文件预览</div>
-              <div class="mt-1 text-[0.7rem] text-text-dim">
-                {{ selectedInstance?.file_name || '未选择配置文件' }}
-              </div>
-            </header>
-
-            <div class="min-h-0 flex-1 overflow-hidden">
-              <div v-if="previewLoading" class="flex h-full items-center justify-center gap-3 text-sm text-text-dim">
-                <Loader2 class="size-5 animate-spin text-accent-primary" />
-                正在读取内容...
-              </div>
-              <div v-else-if="!previewData" class="flex h-full items-center justify-center text-sm text-text-dim">
-                点左侧文件即可在这里查看内容
-              </div>
-              <div v-else class="flex h-full min-h-0 flex-col">
-                <div v-if="previewData.truncated" class="px-5 py-3 border-b border-border-base/10 text-[0.7rem] text-accent-warning">内容过长，仅显示前 2 MB</div>
-                <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all px-5 py-4 text-xs leading-6 text-text-main select-text">{{ previewData.content || '' }}</pre>
-              </div>
+          <!-- 文件预览区域 -->
+          <div class="col-span-3 flex-1 overflow-hidden">
+            <div v-if="previewLoading" class="flex h-full items-center justify-center gap-3 text-sm text-text-dim">
+              <Loader2 class="size-5 animate-spin text-accent-primary" />
+              正在读取内容...
             </div>
+            <div v-else-if="!previewData" class="flex h-full items-center justify-center text-sm text-text-dim">
+              点左侧文件即可在这里查看内容
+            </div>
+            <div v-else class="flex h-full min-h-0 flex-col">
+              <div v-if="previewData.truncated" class="px-5 py-3 border-b border-border-base/10 text-[0.7rem] text-accent-warning">内容过长，仅显示前 2 MB</div>
+              <pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-all px-5 py-4 text-xs leading-6 text-text-main select-text">{{ previewData.content || '' }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+        <section class="grid grid-cols-5 h-full flex-1 overflow-hidden">
+          <div class=" col-span-2 h-full flex flex-col overflow-hidden border-r border-border-base/10">
+            
+
+          </div>
+
+          <!-- 文件预览区域 -->
+          <aside class="col-span-3 flex shrink-0 flex-col">
+
+            
           </aside>
 
         </section>
-
-      </div>
-    </div>
-  </transition>
+  </CommonModalShell>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { ChevronRight, Files, Loader2, X } from 'lucide-vue-next'
+import { ChevronRight, Files, Loader2 } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { formatFileSize } from '../utils/format'
+import CommonModalShell from './common/CommonModalShell.vue'
 
 const props = defineProps({
   visible: {

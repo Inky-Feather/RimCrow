@@ -19,14 +19,14 @@
         <div class="flex-1 relative group/search">
           <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-dim group-focus-within/search:text-accent-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input v-model="searchQuery" type="text" placeholder="搜索日志内容 (支持 Regex)..." 
-            class="w-full bg-bg-muted/70 border border-border-base/10 rounded-lg py-1.5 pl-8 pr-8 text-xs text-text-main focus:outline-none focus:border-accent-primary/50 focus:bg-bg-inset/70 transition-all font-mono placeholder:text-text-disabled" />
+            class="input-glass w-full py-1.5 pl-8 pr-8 font-mono text-xs text-text-main placeholder:text-text-disabled focus:outline-none" />
           <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
 
         <!-- 级别筛选 Checkbox -->
-        <div class="flex items-center gap-1 bg-bg-muted/70 p-1 rounded-lg border border-border-base/5">
+        <div class="flex items-center gap-1 rounded-lg border border-border-base/10 bg-bg-inset/70 p-1">
           <button v-for="option in filterOptions" :key="option.key" class="px-2 py-0.5 rounded text-xs font-bold border transition-all duration-200 select-none"
             :class="filters[option.key] ? [option.color, 'bg-bg-overlay/10 border-border-base/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'"
             @click="filters[option.key] = !filters[option.key]">
@@ -82,7 +82,7 @@
                 </span>
               </div>
               <!-- 详情折叠区 (如果有 details) -->
-              <div v-if="log.details" class="mt-1 ml-1 pl-2 border-l border-border-base/10 text-text-dim text-xs whitespace-pre-wrap font-mono bg-bg-muted/70 rounded p-1">
+              <div v-if="log.details" class="mt-1 ml-1 rounded border-l border-border-base/10 bg-bg-inset/55 p-1 pl-2 font-mono text-xs whitespace-pre-wrap text-text-dim">
                 {{ log.details }}
               </div>
             </div>

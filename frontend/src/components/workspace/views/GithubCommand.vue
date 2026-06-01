@@ -26,9 +26,9 @@
         </div>
       </div>
 
-      <div class="p-2 border-b border-border-base/10 bg-bg-muted/70">
-        
-        <div v-if="listMode === 'recommend'" class="mt-2 flex gap-2">
+      <div v-if="listMode === 'recommend'" class="toolbar-surface p-2">
+
+        <div class="mt-2 flex gap-2">
           <div class="w-32 shrink-0">
             <CommonSelect v-model="catalogSourceFilter" :options="catalogSourceOptions" mini />
           </div>
@@ -39,17 +39,18 @@
               class="w-full bg-bg-inset/90 border border-border-base/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-main outline-none focus:border-border-base/18" />
           </div>
         </div>
-        <div v-if="listMode === 'recommend' && workspaceStore.github.catalogMeta.total" class="mt-2 truncate text-[0.6rem] text-text-dim">
+        <div v-if="workspaceStore.github.catalogMeta.total" class="mt-2 truncate text-[0.6rem] text-text-dim">
           推荐来源: {{ workspaceStore.github.catalogMeta.total || 0 }} 项 / {{ catalogSourceOptions.length - 1 }} 个来源
           <span v-if="workspaceStore.github.catalogMeta.is_stale" class="text-accent-warn">缓存</span>
         </div>
+
       </div>
 
       <div v-if="listMode === 'subscribed'" class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
         <div v-for="repo in workspaceStore.github.subscribedRepos" :key="repo.repo_url"
           @click="selectRepo(repo)"
           class="flex flex-col gap-1 px-3 py-2 rounded-xl border transition-all cursor-pointer group relative overflow-hidden"
-          :class="workspaceStore.github.activeRepo?.repo_url === repo.repo_url ? 'bg-bg-overlay/10 border-border-base/18 shadow-inner' : 'border-border-base/5 bg-bg-muted/70 hover:bg-bg-overlay/5'">
+          :class="workspaceStore.github.activeRepo?.repo_url === repo.repo_url ? 'bg-bg-overlay/10 border-border-base/18 shadow-inner' : 'border-border-base/10 bg-glass-medium/60 hover:bg-bg-overlay/5'">
           
           <div class="flex justify-between items-center z-10">
             <div class="font-bold text-sm text-text-main truncate">{{ repo.repo_name }}</div>
@@ -69,7 +70,7 @@
             </span>
           </div>
           
-          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-20">
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 bg-glass-medium/60 p-1 rounded-xl backdrop-blur-lg border border-border-base/5 opacity-0 group-hover:opacity-100 transition-all z-20">
             <button @click.stop="openRepoOriginal(repo)" v-tooltip="'打开原始地址'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
@@ -100,7 +101,7 @@
           @click="selectRecommendedItem(item)"
           v-tooltip="catalogItemTooltip(item)"
           class="p-3 rounded-xl border transition-colors cursor-pointer"
-          :class="selectedCatalogItem?.key === item.key && selectedCatalogItem?.source_id === item.source_id ? 'bg-bg-overlay/10 border-border-base/18' : 'border-border-base/5 bg-bg-muted/70 hover:bg-bg-overlay/5'">
+          :class="selectedCatalogItem?.key === item.key && selectedCatalogItem?.source_id === item.source_id ? 'bg-bg-overlay/10 border-border-base/18' : 'border-border-base/10 bg-glass-medium/60 hover:bg-bg-overlay/5'">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -250,7 +251,7 @@
               {{ version }}
             </span>
           </div>
-          <div class="mb-4 rounded-lg bg-bg-inset/70 border border-border-base/10 p-3">
+          <div class="mb-4 rounded-lg bg-bg-muted/80 border border-border-base/10 p-3">
             <div class="grid grid-cols-4 gap-3 text-xs">
               <div class="min-w-0 flex items-center gap-2">
                 <div class="text-text-dim shrink-0">来源</div>
@@ -270,7 +271,7 @@
               </div>
             </div>
           </div>
-          <div v-if="catalogDependencies.length" class="mb-4 rounded-lg bg-bg-inset/70 border border-border-base/10 p-3">
+          <div v-if="catalogDependencies.length" class="mb-4 rounded-lg bg-bg-muted/70 border border-border-base/10 p-3">
             <div class="text-xs font-bold text-text-dim uppercase tracking-widest mb-2">依赖项</div>
             <div class="flex flex-wrap gap-2">
               <span v-for="dep in catalogDependencies" :key="dep.package_id"

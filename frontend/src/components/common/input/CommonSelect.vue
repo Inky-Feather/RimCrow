@@ -11,8 +11,8 @@
     <!-- 主输入区域 -->
     <div class="relative group min-w-0 max-w-full flex items-center" :class="{ 'flex-1': mini }" >
       <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable"
-        :class="[ 'input-glass min-w-0 w-full bg-bg-elevated/70 border truncate border-border-base/10 rounded-lg text-sm text-text-main transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.15)] placeholder:text-text-disabled placeholder:italic',
-          mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3',
+        :class="[ 'input-glass min-w-0 w-full truncate text-sm text-text-main focus:outline-none placeholder:text-text-disabled placeholder:italic',
+          mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3', editable ? 'cursor-text' : ' bg-bg-surface',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
         ]"
         @click="openMenu"
@@ -23,10 +23,8 @@
 
       <!-- 右侧图标 (指示器) -->
       <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-text-dim">
-        <svg class="size-4 transition-transform duration-300"
-          :class="{ 'rotate-180 text-accent-primary': isOpen }"
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
-        >
+        <svg class="size-4 transition-transform duration-300" :class="{ 'rotate-180 text-accent-primary': isOpen }"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" >
           <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </div>
@@ -34,13 +32,12 @@
 
     <!-- 下拉面板 -->
     <FixedPopover :triggerRef="inputRef" :isOpen="isOpen">
-      <div @mousedown.prevent class="p-1 bg-bg-surface backdrop-blur-xl border border-border-base/10 rounded-xl shadow-[0_10px_40px_-10px_var(--shadow-color)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
+      <div @mousedown.prevent class="popover-surface bg-glass-medium flex max-h-60 flex-col gap-0.5 overflow-y-auto rounded-xl p-1 custom-scrollbar">
         <!-- 有选项时 -->
         <!-- 体验优化：当有自定义输入且未完全匹配时，提示用户可以作为新值 -->
         <button v-if="showCustomHint" type="button" @click="commitInputValue"
           class="w-full flex items-center px-2 py-1.5 rounded-lg text-xs text-left bg-bg-overlay/5 border border-dashed border-border-base/18 text-accent-primary mb-1 hover:bg-accent-primary/10 transition-colors"
-          :class="{'ring-1 ring-accent-primary/50': highlightedIndex === -1}"
-        >
+          :class="{'ring-1 ring-accent-primary/50': highlightedIndex === -1}" >
           <span class="mr-1.5 opacity-70">↵</span>
           使用 "<span class="font-bold">{{ internalSearch }}</span>"
         </button>

@@ -57,7 +57,7 @@
             </div>
 
             <!-- 2. 标题栏 -->
-            <div class="flex items-center border-b border-border-base/5 bg-bg-muted/70 text-xs font-bold text-text-dim py-1 z-20 shrink-0">
+            <div class="toolbar-surface z-20 flex shrink-0 items-center py-1 text-xs font-bold text-text-dim">
               <div class="flex-1 px-2 text-center text-accent-success border-r border-border-base/5 truncate">{{ titleA }} ({{ listA.length }})</div>
               <div class="flex-1 px-2 text-center truncate">{{ titleB }} ({{ listB.length }})</div>
             </div>
@@ -98,7 +98,7 @@
                 </div>
 
                 <!-- 中间画布 (SVG) -->
-                <div class="w-[48px] shrink-0 relative z-10 bg-bg-muted/70">
+                <div class="relative z-10 w-[48px] shrink-0 bg-bg-inset/60">
                   <svg class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible">
                     <!-- 绘制区块 (fill) -->
                     <path v-for="block in renderBlocks" :key="block.id"
@@ -198,7 +198,7 @@
           </div>
   
           <!-- 底部动作栏 -->
-          <div class="p-2 px-5 bg-bg-muted/70 flex items-center justify-between gap-3 border-t border-border-base/5">
+          <div class="modal-footer flex items-center justify-between gap-3 p-2 px-5">
             <div class="min-w-0">
               <h2 class="text-text-soft font-bold">Mod序列对比</h2>
             </div>

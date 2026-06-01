@@ -34,7 +34,7 @@
         
         <!-- 标签建议下拉框 -->
         <div v-if="showTagSuggest && filteredKnownTags.length > 0" 
-            class="absolute left-0 bottom-full mb-1 w-48 max-h-40 overflow-y-auto bg-bg-surface border border-border-base/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+            class="popover-surface absolute bottom-full left-0 z-50 mb-1 flex max-h-40 w-48 flex-col overflow-y-auto rounded-lg p-1">
           <button 
             v-for="(tag, idx) in filteredKnownTags" 
             :key="tag.value"  

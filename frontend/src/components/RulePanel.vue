@@ -1,15 +1,13 @@
 <template>
-  <transition name="panel-fade">
-    <div v-if="appStore.uiState.showRuleDrawer" 
-      class="fixed inset-0 z-100 flex items-center justify-center bg-bg-deep/60 backdrop-blur-md"
-      @click.self="appStore.uiState.showRuleDrawer = false">
-
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-bg-muted/70 backdrop-blur-md p-10" @click.self="appStore.uiState.showRuleDrawer = false">
+  <CommonModalShell :show="appStore.uiState.showRuleDrawer"  :show-header="false" size="full" :z-index="100" accent="primary" frameless
+    panel-class="bg-transparent" content-class="h-full p-10"
+    @close="appStore.uiState.showRuleDrawer = false" >
+      <div class="flex h-full w-full items-center justify-center" @click.self="appStore.uiState.showRuleDrawer = false">
         
-        <div class="flex w-full max-w-9/10 h-full max-h-[90vh] bg-bg-deep/95 border border-border-base/10 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
+        <div class="modal-surface flex w-full max-w-9/10 h-full max-h-[90vh] bg-bg-deep/95 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
           
           <!-- ================= 左侧侧边栏 ================= -->
-          <aside class="w-64 bg-bg-muted/30 border-r border-border-base/5 flex flex-col">
+          <aside class="sidebar-surface flex w-64 flex-col">
             <div class="p-6">
               <h2 class="text-xl font-bold text-text-main flex items-center gap-2" @click="ruleStore.fetchRules">
                 <svg class="w-6 h-6 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -87,24 +85,16 @@
           <main class="flex-1 flex flex-col min-w-0 bg-bg-deep">
             
             <!-- 顶部工具栏 -->
-            <header class="h-16 border-b border-border-base/5 flex items-center justify-between px-6 bg-bg-muted/30">
+            <header class="toolbar-surface flex h-16 items-center px-6 gap-4">
               <!-- 搜索 -->
-              <div class="relative w-72 group" data-tour="rule-search">
+              <div class="relative w-1/3 group" data-tour="rule-search">
                 <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim group-focus-within:text-accent-primary transition-colors" />
                 <input v-model="searchQuery" placeholder="搜索规则、Mod名称或ID..." 
-                  class="w-full bg-bg-surface border border-border-base/10 rounded-full pl-9 pr-4 py-1.5 text-sm text-text-main focus:border-accent-primary focus:bg-bg-inset/80 outline-none transition-all" />
+                  class="input-glass w-full rounded-full py-1.5 pl-9 pr-4 text-sm text-text-main outline-none" />
               </div>
 
               <!-- 全局开关与操作 -->
               <div class="flex items-center gap-4" data-tour="rule-actions">
-                
-                <label v-if="currentTab == 'workshop'" class="flex items-center gap-2 cursor-pointer select-none">
-                  <div class="relative">
-                    <input type="checkbox" v-model="workshopRulesAsDependency" class="sr-only peer" >
-                    <div class="w-9 h-5 bg-bg-overlay/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-bg-contrast after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-bg-contrast after:border-border-base/18 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-highlight"></div>
-                  </div>
-                  <span class="text-sm text-text-dim font-bold">作为强依赖</span>
-                </label>
 
                 <label v-if="currentTab !== 'dynamic'" class="flex items-center gap-2 cursor-pointer select-none">
                   <div class="relative">
@@ -118,6 +108,7 @@
                   class="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary/80 text-on-accent-primary text-sm font-bold rounded-lg shadow-lg shadow-accent-primary/20 transition-all active:scale-95">
                   <Plus class="w-4 h-4" /> 新建规则
                 </button>
+
                 <label class="flex items-center gap-2 cursor-pointer select-none" :key="currentTab + 'Enable'">
                   <div class="relative">
                     <input type="checkbox" v-model="globalRulesEnable" class="sr-only peer" >
@@ -125,7 +116,23 @@
                   </div>
                   <span class="text-sm text-text-dim font-bold">启用规则</span>
                 </label>
+                
+                <label v-if="currentTab == 'workshop'" class="flex items-center gap-2 cursor-pointer select-none">
+                  <div class="relative">
+                    <input type="checkbox" v-model="workshopRulesAsDependency" class="sr-only peer" >
+                    <div class="w-9 h-5 bg-bg-overlay/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-bg-contrast after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-bg-contrast after:border-border-base/18 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-highlight"></div>
+                  </div>
+                  <span class="text-sm text-text-dim font-bold">作为强依赖</span>
+                </label>
+
               </div>
+
+              <div class="flex-1 flex justify-end">
+                <button class="modal-close-button" type="button" aria-label="关闭"  @click="appStore.uiState.showRuleDrawer = false" >
+                  <X class="size-4" />
+                </button>
+              </div>
+
             </header>
 
             <!-- 内容列表 -->
@@ -134,7 +141,7 @@
               <!-- 1. 动态规则列表 -->
               <template v-if="currentTab === 'dynamic'">
                 <div v-for="rule in filteredDynamicRules" :key="rule.rule_id" 
-                  class="group relative bg-bg-surface border border-border-base/10 hover:border-accent-primary/30 rounded-xl p-4 transition-all duration-200">
+                  class="group relative rounded-xl border border-border-base/10 bg-bg-muted/70 p-4 transition-all duration-200 hover:border-accent-primary/30">
                   
                   <div class="flex justify-between items-start ">
                     <div class="flex-1">
@@ -326,19 +333,19 @@
         <!-- ================= 3. 规则编辑器 (Modal) ================= -->
         <Transition name="fade">
           <div v-if="editingRule" class="fixed inset-0 z-60 flex items-center justify-center bg-bg-deep/30 backdrop-blur-sm p-4">
-            <div class="w-full max-w-[70%] bg-bg-surface border border-border-base/10 rounded-2xl shadow-3xl flex flex-col max-h-[90%] animate-scale-in">
+            <div class="modal-surface flex w-full max-w-[70%] max-h-[90%] flex-col rounded-2xl animate-scale-in">
               
-              <header class="px-6 py-4 border-b border-border-base/5 flex justify-between items-center bg-glass-light">
+              <header class="modal-header flex items-center justify-between px-6 py-4">
                 <div class="flex items-center gap-3">
                   <div class="w-8 h-8 rounded-lg bg-accent-primary/20 flex items-center justify-center">
                     <Zap class="w-4 h-4 text-accent-primary" />
                   </div>
                   <h2 class="text-lg font-bold text-text-main">{{ editingRule.rule_id.startsWith('new_') ? '新建动态规则' : '编辑规则' }}</h2>
                 </div>
-                <button @click="editingRule = null" class="text-text-dim hover:text-text-main"><X class="w-6 h-6"/></button>
+                <button @click="editingRule = null" class="modal-close-button" aria-label="关闭编辑面板"><X class="w-4 h-4"/></button>
               </header>
               
-              <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-bg-muted">
+              <div class="modal-body flex-1 overflow-y-auto p-6 space-y-6">
                 
                 <!-- 基础设置 -->
                 <div class="grid grid-cols-12 gap-4">
@@ -354,7 +361,7 @@
                     <button @click="addFilter" class="text-accent-primary text-sm hover:underline flex items-center gap-1"><Plus class="w-3 h-3"/>添加条件</button>
                   </div>
                   
-                  <div class="space-y-2 bg-glass-light rounded-xl p-3 border border-border-base/5">
+                  <div class="modal-section-subtle space-y-2 p-3">
                     <div v-for="(filter, idx) in editingRule.filters" :key="idx" class="flex gap-2 items-center group">
                       <CommonSelect class="min-w-20" v-model="filter.field" :options="Object.entries(ruleStore.DYNAMIC_RULE_PROPS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                       <CommonSelect class="min-w-30" v-model="filter.operator" :options="getOperatorOptions(filter.field)"></CommonSelect>
@@ -402,7 +409,7 @@
 
               </div>
 
-              <footer class="p-4 border-t border-border-base/5 bg-glass-light flex justify-end gap-3">
+              <footer class="modal-footer flex justify-end gap-3 p-4">
                 <button @click="editingRule = null" class="px-5 py-2 rounded-lg hover:bg-bg-overlay/5 text-sm font-bold text-text-dim transition-colors">取消</button>
                 <button @click="saveDynamicRule" class="px-6 py-2 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary rounded-lg text-sm font-bold shadow-lg transition-transform active:scale-95">保存规则</button>
               </footer>
@@ -411,9 +418,7 @@
         </Transition>
 
       </div>
-
-    </div>
-  </transition>
+  </CommonModalShell>
 </template>
 
 <script setup>
@@ -430,6 +435,7 @@ import CommonNumber from './common/input/CommonNumber.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import { IconSteam, MOD_TYPE_MAP } from '../utils/constants'
 import { deepClone } from '../utils/common'
+import CommonModalShell from './common/CommonModalShell.vue'
 
 
 
@@ -945,11 +951,6 @@ const resetPriority = () => {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
-
-/* 页面切换动画 */
-.panel-fade-enter-active, .panel-fade-leave-active { transition: opacity 0.4s ease; }
-.panel-fade-enter-from, .panel-fade-leave-to { opacity: 0; }
-
 
 /* 1. 核心：当处于拖拽状态时，禁用列表中所有子元素的鼠标事件 */
 /* 这能防止鼠标进入图标或文字时，意外触发 dragenter 导致抖动 */

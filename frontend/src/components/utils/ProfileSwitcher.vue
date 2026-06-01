@@ -46,7 +46,7 @@
           </button>
         </div>
 
-        <div class="p-1 border-t border-border-base/5 bg-glass-light">
+        <div class="modal-footer p-1">
           <button @click="openManager" class="w-full py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-black uppercase text-text-dim hover:text-text-main hover:bg-accent-primary/20 transition-all cursor-pointer">
             <Settings2 class="size-3" />
             管理环境中心

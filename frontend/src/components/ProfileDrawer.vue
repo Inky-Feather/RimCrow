@@ -1,23 +1,21 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-left">
-      <div v-if="appStore.uiState.showProfileDrawer"
-        class="fixed inset-y-8 top-18 left-0 w-100 z-100 flex flex-col"
-      >
+      <div v-if="appStore.uiState.showProfileDrawer" class="fixed inset-y-8 top-18 left-0 w-100 z-100 flex flex-col" >
         <!-- 1. 上方内凹边角 (对称自 ListDiffView) -->
         <div class="absolute -top-[1.1rem] left-0 w-5 h-5 z-10 ">
-          <div class="w-full h-full bg-bg-deep/70 backdrop-blur-xl mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]"></div>
+          <div class="w-full h-full bg-bg-elevated/90 backdrop-blur-xl mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]"></div>
           <svg class="absolute inset-0 w-full h-full text-border-default fill-none pointer-events-none" viewBox="0 0 20 20">
             <path d="M0,0 A20,20 0 0,0 20,20" stroke="currentColor" stroke-width="2" />
           </svg>
         </div>
 
         <!-- 2. 主体容器 -->
-        <div class="flex-1 flex flex-col bg-bg-highlight/90 backdrop-blur-xl rounded-l-none rounded-r-2xl border-y border-r transition-all duration-300 border-border-base/10 shadow-3xl overflow-hidden relative"
+        <div class="flex-1 flex flex-col bg-bg-muted/80 backdrop-blur-xl rounded-l-none rounded-r-2xl border-y border-r transition-all duration-300 border-border-base/10 shadow-3xl overflow-hidden relative"
           :class="{'blur-sm pointer-events-none': profileStore.isLoading}">
 
           <!-- 头部：标题与快速新建 -->
-          <header class="p-3 bg-bg-inset/80 border-b border-border-base/5">
+          <header class="p-3 bg-bg-elevated/90 border-b border-border-base/5">
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-xl font-black italic text-text-main flex items-center gap-2">
@@ -125,7 +123,7 @@
           </div>
 
           <!-- 底部工具栏 -->
-          <footer class="p-4 bg-bg-muted/70 border-t border-border-base/5 flex items-center justify-between">
+          <footer class="bg-bg-elevated/90 flex items-center justify-between p-4">
             <div></div>
             <button @click="appStore.uiState.showProfileDrawer = false" class="px-4 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-text-main text-xs font-bold transition-all">
               收起
@@ -136,7 +134,7 @@
 
         <!-- 3. 下方内凹边角 -->
         <div class="absolute -bottom-[1.2rem] left-0 w-5 h-5 z-10 rotate-90">
-          <div class="w-full h-full bg-bg-surface/80 mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]"></div>
+          <div class="w-full h-full bg-bg-elevated/90 mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]"></div>
           <svg class="absolute inset-0 w-full h-full text-border-default fill-none pointer-events-none" viewBox="0 0 20 20">
             <path d="M0,0 A20,20 0 0,0 20,20" stroke="currentColor" stroke-width="2" />
           </svg>
@@ -148,8 +146,8 @@
   <!-- 4. 编辑/创建 模态框 (标准 RulePanel 风格) -->
   <Transition name="fade">
     <div v-if="showModal" class="fixed inset-0 z-150 flex items-center justify-center bg-bg-deep/40 backdrop-blur-md">
-      <div class="w-full max-w-[70%] bg-bg-highlight/90 border border-border-base/10 rounded-2xl shadow-3xl overflow-hidden animate-scale-in">
-        <header class="px-6 py-4 border-b border-border-base/5 bg-bg-deep/50 flex justify-between items-center">
+      <div class="modal-surface w-full max-w-[70%] overflow-hidden rounded-2xl bg-bg-highlight/90 animate-scale-in">
+        <header class="modal-header flex items-center justify-between px-6 py-4">
           <h3 class="text-lg font-bold text-text-main">{{ isEditing ? '编辑环境属性' : '创建新环境快照' }}</h3>
           <button @click="showModal = false" class="text-text-dim hover:text-text-main"><X class="size-5" /></button>
         </header>
@@ -177,7 +175,7 @@
           </div>
         </div>
 
-        <footer class="px-6 py-4 border-t border-border-base/5 bg-bg-muted/70 flex justify-end gap-3">
+        <footer class="modal-footer flex justify-end gap-3 px-6 py-4">
           <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">取消</button>
           <button @click="submitForm" class="px-6 py-2 rounded-xl bg-accent-primary text-on-accent-primary font-black text-sm shadow-lg shadow-accent-primary/20 transition-all hover:scale-105 active:scale-95">
             {{ isEditing ? '保存变更' : '确认创建' }}

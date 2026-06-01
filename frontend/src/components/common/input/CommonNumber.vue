@@ -5,14 +5,14 @@
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-0.5 cursor-help italic underline hover:text-text-main">?</label>
     </label>
     <div class="flex items-center input-glass m-0 overflow-hidden" :class="mini?'flex-1 h-7 min-w-fit':'h-9'">
-      <button @click="change(-1)" class="w-1/5 h-full bg-bg-highlight hover:brightness-125 rounded-l-md text-text-dim hover:text-text-main transition-colors border border-border-base/5">-</button>
+      <button @click="change(-1)" class="h-full w-1/5 border-r border-border-base/10 bg-bg-overlay/5 text-text-dim transition-colors hover:bg-accent-primary/12 hover:text-accent-primary">-</button>
       
       <input type="number" :value="modelValue" :min="min" :max="max" :step="step"
         @input="$emit('update:modelValue', Number($event.target.value))"
         class="flex-1 bg-transparent min-w-0 text-center text-sm text-text-main font-mono focus:outline-none [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       
-      <button @click="change(1)" class="w-1/5 h-full bg-bg-highlight hover:brightness-125 rounded-r-md text-text-dim hover:text-text-main transition-colors border border-border-base/5">+</button>
+      <button @click="change(1)" class="h-full w-1/5 border-l border-border-base/10 bg-bg-overlay/5 text-text-dim transition-colors hover:bg-accent-primary/12 hover:text-accent-primary">+</button>
     </div>
   </div>
 </template>

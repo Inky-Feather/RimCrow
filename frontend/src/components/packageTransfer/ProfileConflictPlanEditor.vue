@@ -3,13 +3,13 @@
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs font-bold uppercase tracking-wide text-text-dim">批量处理</span>
       <label v-for="option in strategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
-        :class="strategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-muted/60 text-text-dim'" >
+        :class="strategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
         <input class="mr-1 accent-accent-primary" type="radio" :checked="strategy === option.value" @change="strategy = option.value" >
         {{ option.label }}
       </label>
     </div>
 
-    <div v-for="row in rows" :key="row.archive_key" class="rounded-xl border border-border-base/10 bg-bg-muted/60 p-3" >
+    <div v-for="row in rows" :key="row.archive_key" class="modal-section-subtle p-3" >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="text-sm font-bold text-text-main">{{ row.name || row.archive_key }}</div>
         <span class="text-[0.68rem] text-text-dim">
@@ -29,7 +29,7 @@
           <CommonSelect v-model="row.game_install_path" label="要使用的游戏目录" :options="availableInstallOptions" />
         </div>
 
-        <div v-else class="col-span-2 rounded-lg border border-border-base/10 bg-bg-muted/50 px-3 py-2 text-xs text-text-dim">
+        <div v-else class="col-span-2 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2 text-xs text-text-dim">
           这项将跳过。
         </div>
       </div>

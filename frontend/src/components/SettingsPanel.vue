@@ -1,11 +1,11 @@
 <template>
-  <transition name="panel-fade">
-    <div v-show="appStore.uiState.showSettingsPanel" 
-      class="fixed inset-0 z-100 flex items-center justify-center bg-bg-deep/60 backdrop-blur-md"
-      @click.self="shakeComponent('#btn-cancel')">
-      
-      <!-- 主容器 -->
-      <div class="relative w-[75%] h-[80%] flex bg-bg-deep border border-border-base/18 rounded-4xl shadow-[0_0_50px_var(--shadow-color)] overflow-hidden animate-in zoom-in-95 duration-300">
+  <CommonModalShell :show="appStore.uiState.showSettingsPanel" persistent
+    :show-header="false" :close-on-backdrop="false" size="custom" :z-index="100"
+    accent="primary"
+    panel-class="w-[75%] h-[80%] border-border-base/18" content-class="h-full flex"
+    @backdrop="shakeComponent('#btn-cancel')"
+    @close="shakeComponent('#btn-cancel')"
+  >
         
         <!-- A. 装饰光效 -->
         <div class="absolute -top-24 -left-24 w-64 h-64 bg-accent-primary/10 blur-3xl rounded-full pointer-events-none"></div>
@@ -91,7 +91,7 @@
                     @blur="checkPath('workshop_mods_path', formData.workshop_mods_path)"/>
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
                   <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
-                  <div class="p-3 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-1 gap-2">
+                  <div class="modal-section grid grid-cols-1 gap-2 p-3">
                     <CommonPathInput label="Steam程序路径" :check="formData.check_info?.steam_path"
                       :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
@@ -101,7 +101,7 @@
                       <CommonSwitch label="使用创意工坊 Mod" :disabled="workshopModsDisabled" v-model="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。" />
                     </div>
                   </div>
-                  <div class="p-3 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
+                  <div class="modal-section grid grid-cols-2 gap-2 p-3">
                     <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">管理器模组</h3>
                     <CommonPathInput class=" col-span-2" label="管理器下载模组路径" :check="formData.check_info?.self_mods_path"
                       :description="'由管理器下载的模组所在的目录，可自定义位置，如果将其设为游戏本地模组路径，请关闭该使用开关。'" 
@@ -115,7 +115,7 @@
                       <button @click="handleCheckSteamcmdMods" class="px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all"> 检查更新 </button>
                     </div>
                   </div>
-                  <div class="p-3 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
+                  <div class="modal-section grid grid-cols-2 gap-2 p-3">
                     <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">排序导入/导出 起始选择窗口配置</h3>
                     <CommonSelect class="col-span-1" label="导入起始目录" v-model="formData.load_order_import_dir_mode"
                       :description="'控制“导入加载序列”文件选择器的选择窗口初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
@@ -160,10 +160,51 @@
                   <div class="grid grid-cols-2 gap-4">
                     <CommonNumber label="字体大小" description="控制界面字体大小，影响所有控件的内容显示" v-model="formData.ui.font_size" :step="1" :min="8" :max="40" />
                     <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" :min="100" :max="5000" />
-                    <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
-                    <CommonSwitch label="双击启用/停用 Mod" v-model="formData.ui.double_click_active_mod" description="控制 Mod 列表中双击启用/停用 Mod 动作。" />
+                    <CommonNumber label="拖动判定延迟" description="控制列表项拖动操作的判定延迟，单位是毫秒，默认值为 30 毫秒，为 0 时可能使点击操作出现抖动。" v-model="formData.ui.drag_delay" :step="10" :min="0" :max="500" />
+                    <div></div>
                     
-                    <div class="col-span-2 p-2 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
+                      <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">列表设定
+                        <label v-tooltip="'可调整列表的显示方式与辅助功能'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
+                      <CommonSwitch label="双击启用/停用 Mod" v-model="formData.ui.double_click_active_mod" description="控制 Mod 列表中双击启用/停用 Mod 动作。" />
+                      <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
+                      <CommonSwitch label="列表索引" v-model="formData.ui.show_list_index" description="控制列表中索引列的显示。" />
+                    </div>
+
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
+                      <CommonSwitch class="col-span-2 px-2 pt-2" label="列表图标" v-model="formData.ui.show_list_icon" description="控制列表中的所有图标显示，包括简单视图和详细视图。" mini />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 图标" v-model="formData.ui.show_list_mod_icon" description="控制列表中 Mod 图标显示，不影响详细视图。" />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 类型图标" v-model="formData.ui.show_list_modtype_icon" description="控制列表中 Mod 类型图标显示，不影响详细视图。" />
+                    </div>
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
+                      <CommonSwitch class="col-span-2 px-2 pt-2" mini label="列表分类折叠" v-model="formData.ui.enable_active_section_collapse" description="仅在启用列表生效。名称或别名满足 `=标题=` 或 `/*标题*/` 的纯标题模组会被识别为可折叠分类标题；折叠后拖动标题即整组拖动。^^可工坊订阅 [[分类排列标签合集]] 配合使用。^^" />
+                      <CommonSwitch :disabled="!formData.ui.enable_active_section_collapse" label="默认折叠" v-model="formData.ui.default_collapse_active_sections" description="开启后，启用列表中的标题分组会在初始显示时默认折叠。" />
+                      <div class="flex items-center gap-1" :class="{'pointer-events-none opacity-50': !formData.ui.enable_active_section_collapse}">
+                        <button @click="appStore.openSteamWorkshopById('2138932352')"
+                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
+                          <span class="flex items-center gap-2">
+                            访问<p class="text-accent-cool">分类排列标签合集</p>工坊页面
+                          </span>
+                        </button>
+                        <button @click="appStore.openSteamWorkshopById('3542535605')"
+                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
+                          <span class="flex items-center gap-2">
+                            访问<p class="text-accent-cool">分类排序合集</p>工坊页面
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
+                      <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">分组设定
+                        <label v-tooltip="'可调整分组列表的显示方式'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <CommonSwitch label="分组索引" v-model="formData.ui.show_group_index" description="控制分组列表中Mod索引的显示。" />
+                      <CommonSwitch label="分组图标" v-model="formData.ui.show_group_icon" description="控制分组列表中Mod图标的显示。" />
+                    </div>
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
                       <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">主页布局
                         <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                       </span>
@@ -182,8 +223,8 @@
                       
                     </div>
 
-                    <div class="col-span-2 p-2 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
-                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="getDataById('details', formData.ui.main_layout).visible" description="可关闭Mod详情栏。" />
+                    <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
+                      <CommonSwitch class="col-span-2 px-2 pt-2" mini label="Mod 详情面板" v-model="getDataById('details', formData.ui.main_layout).visible" description="可关闭Mod详情栏。" />
                       <CommonSwitch :disabled="!getDataById('details', formData.ui.main_layout).visible" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
                       <CommonNumber label="详情页加载延迟" description="控制 Mod 详情页加载的延迟时间，单位是毫秒，默认值为 200 毫秒。" v-model="formData.ui.detail_delay" :step="10" :min="0" :max="5000" />
                       <span class="col-span-2 text-xs ml-2 mt-2">Mod 详情布局
@@ -205,35 +246,7 @@
                       </div>
                       
                     </div>
-                    <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
-                    <CommonSwitch label="列表索引" v-model="formData.ui.show_list_index" description="控制列表中索引列的显示。" />
-                    <CommonNumber label="拖动判定延迟" description="控制列表项拖动操作的判定延迟，单位是毫秒，默认值为 30 毫秒，为 0 时可能使点击操作出现抖动。" v-model="formData.ui.drag_delay" :step="10" :min="0" :max="500" />
-                    <div class="col-span-2 p-2 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
-                      <CommonSwitch class="col-span-2" mini label="列表分组折叠" v-model="formData.ui.enable_active_section_collapse" description="仅在启用列表生效。名称或别名满足 `=标题=` 或 `/*标题*/` 的纯标题模组会被识别为可折叠分组标题；折叠后拖动标题即整组拖动。^^可工坊订阅 [[分类排列标签合集]] 配合使用。^^" />
-                      <CommonSwitch :disabled="!formData.ui.enable_active_section_collapse" label="默认折叠" v-model="formData.ui.default_collapse_active_sections" description="开启后，启用列表中的标题分组会在初始显示时默认折叠。" />
-                      <div class="flex items-center gap-1" :class="{'pointer-events-none opacity-50': !formData.ui.enable_active_section_collapse}">
-                        <button @click="appStore.openSteamWorkshopById('2138932352')"
-                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
-                          <span class="flex items-center gap-2">
-                            访问<p class="text-accent-cool">分类排列标签合集</p>工坊页面
-                          </span>
-                        </button>
-                        <button @click="appStore.openSteamWorkshopById('3542535605')"
-                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
-                          <span class="flex items-center gap-2">
-                            访问<p class="text-accent-cool">分类排序合集</p>工坊页面
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                    <div class="col-span-2 p-2 rounded-2xl bg-glass-light border border-border-base/5 grid grid-cols-2 gap-2">
-                      <CommonSwitch class="col-span-2" label="列表图标" v-model="formData.ui.show_list_icon" description="控制列表中的所有图标显示，包括简单视图和详细视图。" mini />
-                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 图标" v-model="formData.ui.show_list_mod_icon" description="控制列表中 Mod 图标显示，不影响详细视图。" />
-                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 类型图标" v-model="formData.ui.show_list_modtype_icon" description="控制列表中 Mod 类型图标显示，不影响详细视图。" />
-                    </div>
-
-                    <CommonSwitch label="分组索引" v-model="formData.ui.show_group_index" description="控制分组列表中Mod索引的显示。" />
-                    <CommonSwitch label="分组图标" v-model="formData.ui.show_group_icon" description="控制分组列表中Mod图标的显示。" />
+                    
                   </div>
                 </div>
               </section>
@@ -277,7 +290,7 @@
                   </button>
                 </h3>
                 <div class="space-y-6">
-                  <div class="p-5 rounded-2xl bg-glass-light border border-border-base/10 space-y-4">
+                  <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部工具</h4><p class="text-xs text-text-dim mt-1">SteamCMD、贴图工具等由管理器调用的外部程序配置与状态检查。</p></div>
                       <button @click="handleCheckTools" class="px-3 py-1.5 bg-accent-tip/10 hover:bg-accent-tip/25 border border-accent-tip/20 rounded-lg text-xs font-bold transition-all">
@@ -293,7 +306,7 @@
                     </div>
                   </div>
 
-                  <div class="p-5 rounded-2xl bg-glass-light border border-border-base/10 space-y-4">
+                  <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部库与规则</h4><p class="text-xs text-text-dim mt-1">规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。</p></div>
                       <button @click="handleCheckExternalData" class="px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
@@ -310,7 +323,7 @@
                       </button>
                     </div>
                     <CommonPathInput label="社区规则库路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_rules_path" />
-                    <div class="py-2 pt-2 place-self-center w-[95%] border-b border-border-base/10"></div>
+                    <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="w-full">
                       <div class="flex justify-between items-center px-1 mb-1">
                         <label class="text-xs text-text-dim uppercase font-bold tracking-widest">
@@ -319,10 +332,10 @@
                         </label>
                       </div>
                       <textarea v-model="formData.git_provider_catalog_url" rows="3"
-                        class="w-full input-glass bg-transparent px-3 py-2 text-sm text-text-main focus:outline-none font-mono resize-y"
+                        class="input-glass w-full resize-y px-3 py-2 font-mono text-sm text-text-main focus:outline-none"
                         placeholder="RJW|https://example.invalid/providers.json"></textarea>
                     </div>
-                    <div class="py-2 pt-2 place-self-center w-[95%] border-b border-border-base/10"></div>
+                    <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="工坊数据库 URL" v-model="formData.community_workshop_db_url" />
                       <button @click="updateExternalDB('workshop_db')" v-tooltip="'下载更新 社区工坊数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['workshop_db'] }"
@@ -331,7 +344,7 @@
                       </button>
                     </div>
                     <CommonPathInput label="工坊数据库路径" v-model="formData.community_workshop_db_path" @browse="handleBrowse('community_workshop_db_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_workshop_db_path" />
-                    <div class="py-2 pt-2 place-self-center w-[95%] border-b border-border-base/10"></div>
+                    <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="替代 Mod 数据库 URL" v-model="formData.community_instead_db_url" />
                       <button @click="updateExternalDB('instead_db')" v-tooltip="'下载更新 社区替代 Mod 数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['instead_db'] }"
@@ -352,7 +365,7 @@
               <section v-if="currentTab === 'network'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6">网络协议与代理</h3>
                 <div class="space-y-8">
-                  <div class="p-4 rounded-2xl bg-glass-light border border-border-base/5 space-y-6">
+                  <div class="modal-section space-y-6 p-4">
                     <CommonSwitch label="启用代理服务" v-model="formData.network.proxy.enabled" :description="'启用代理服务，所有网络请求将通过代理服务器处理，部分外置数据下载、更新检查、简介图片加载、内部浏览器访问等功能可能需要该配置才能正常使用。\n\n也可以在软件外部自行配置全局网络环境。'" mini />
                     <div v-if="formData.network.proxy.enabled" class="grid grid-cols-6 gap-3 animate-in zoom-in-95">
                       <CommonSelect class="col-span-2" label="协议" v-model="formData.network.proxy.type" :options="[{label:'HTTP', value:'http'},{label:'SOCKS5', value:'socks5'}]" />
@@ -373,7 +386,7 @@
                   <CommonKVEditor label="自定义 Hosts 映射" v-model="formData.network.hosts" />
                   <CommonSwitch label="将自定义 Hosts 写入系统 hosts 文件" v-model="formData.network.write_to_system_hosts" description="注意：这将直接修改系统 hosts 文件，可能需要管理员权限。" />
                 
-                  <div class="p-4 rounded-2xl bg-glass-light border border-border-base/5 space-y-4">
+                  <div class="modal-section space-y-4 p-4">
                     <div class="text-xs ">
                       <h4 class="text-sm font-bold text-text-main">Steamworks Web API</h4>
                       <p class="mt-1 leading-relaxed text-text-dim">
@@ -471,7 +484,7 @@
                       </div>
 
                       <!-- 测试区 -->
-                      <div data-tour="settings-ai-test" class="pt-4 border-t border-border-base/5 flex gap-3">
+                      <div data-tour="settings-ai-test" class="pt-4 flex gap-3">
                         <CommonInput label="测试内容" class="flex-1" v-model="testPrompt" placeholder="输入一句简单的话测试连接，例如：你好" @keydown.enter="testModel"></CommonInput>
                         <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
                           :class="[aiStore.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
@@ -485,7 +498,7 @@
                         <button @click="clearTestResult" class="absolute top-2 right-2 text-text-dim hover:text-text-main">×</button>
                         <div class="text-xs text-text-dim mb-1 font-bold">AI 响应结果：</div>
                         <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ testResponse }}</div>
-                        <details v-if="testRawResponse" class="mt-3 rounded-lg border border-border-base/10 bg-bg-muted/70 p-3 text-xs text-text-dim">
+                        <details v-if="testRawResponse" class="modal-section-subtle mt-3 p-3 text-xs text-text-dim">
                           <summary class="cursor-pointer font-bold text-text-main">查看原始返回内容</summary>
                           <pre class="mt-2 whitespace-pre-wrap break-all rounded-lg border border-border-base/10 bg-bg-inset/70 p-3 text-xs text-text-main">{{ prettyTestRawResponse }}</pre>
                         </details>
@@ -503,8 +516,8 @@
                   <div class="grid grid-cols-2 gap-4">
                     <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
                     <CommonSwitch class="col-span-2" label="浏览器模式启动" v-model="formData.browser_mode" description="默认仍使用内置 WebView。开启后，无启动参数时将改为在本机浏览器中启动；关闭浏览器主页面后程序会自动退出。" />
-                    <div class="col-span-2 p-2 rounded-2xl bg-glass-light border border-border-base/5">
-                      <CommonSwitch class="-ml-2" label="自动进入静默模式" v-model="formData.auto_enter_silent_mode" mini description="开启后，检测到 RimWorld 运行时会自动切换到静默模式；关闭后仅保留手动进入能力。" />
+                    <div class="modal-section col-span-2 p-2">
+                      <CommonSwitch class="mb-2" label="自动进入静默模式" v-model="formData.auto_enter_silent_mode" mini description="开启后，检测到 RimWorld 运行时会自动切换到静默模式；关闭后仅保留手动进入能力。" />
                       <div class="grid grid-cols-3 items-center">
                         <p class="col-span-2 text-xs ml-1 leading-relaxed text-text-dim">
                           游戏运行时可切到更轻量的界面，减少资源占用，并可直接查看游戏日志。
@@ -520,7 +533,7 @@
                     </div>
                     <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
                     <!-- 手动检查按钮 -->
-                    <div class="flex items-center justify-between bg-glass-light border border-border-base/5 p-3 input-glass">
+                    <div class="modal-section flex items-center justify-between p-3">
                       <div class="flex flex-col">
                         <span class="text-sm font-bold text-text-main">软件版本</span>
                         <span class="text-xs text-text-dim">当前版本: v{{ appStore.appVersion }}</span>
@@ -547,7 +560,7 @@
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" :min="0" :max="365" />
                   </div>
-                  <div class="p-4 rounded-2xl bg-glass-light border border-border-base/5">
+                  <div class="modal-section p-4">
                     <div class="flex items-center justify-between gap-4">
                       <div class="min-w-0">
                         <h4 class="text-sm font-bold text-text-main">网络图片缓存</h4>
@@ -575,13 +588,11 @@
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
                         <button @click="openDataBundleImportDialog"
-                          class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all"
-                        >
+                          class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
                           导入数据包
                         </button>
                         <button @click="openDataBundleModal"
-                          class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.2)] transition-all"
-                        >
+                          class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.2)] transition-all" >
                           导出软件数据
                         </button>
                       </div>
@@ -597,13 +608,11 @@
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
                         <button @click="openModPackageImportDialog"
-                          class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all"
-                        >
+                          class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
                           导入模组包
                         </button>
                         <button @click="openCurrentProfileExportDialog"
-                          class="px-4 py-1.5 rounded-lg bg-accent-special hover:bg-accent-special/85 text-on-accent-special text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-cool),0.2)] transition-all"
-                        >
+                          class="px-4 py-1.5 rounded-lg bg-accent-special hover:bg-accent-special/85 text-on-accent-special text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-cool),0.2)] transition-all" >
                           导出环境模组
                         </button>
                       </div>
@@ -615,10 +624,8 @@
                       <CommonSelect class="col-span-1" label="Mod文件夹重命名" v-model="formData.bundle_mod_folder_name_type" showBottom mini
                         description="影响打包Mod时的文件夹名称，默认原文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名创建文件夹。" 
                         :options="[{label:'默认', value:'default'},{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
-                      <CommonNumber class="col-span-1" label="打包压缩级别" v-model="formData.bundle_compress_level"
-                        description="0 最快，9 最省空间。默认 6。压缩级别越高，导出越慢，但包体通常更小。"
-                        :step="1" :min="0" :max="9" mini
-                      />
+                      <CommonNumber class="col-span-1" label="打包压缩级别" v-model="formData.bundle_compress_level" :step="1" :min="0" :max="9" mini
+                        description="0 最快，9 最省空间。默认 6。压缩级别越高，导出越慢，但包体通常更小。"  />
                     </div>
                   </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
@@ -626,13 +633,11 @@
                     <p class="text-xs text-accent-danger/60 leading-relaxed">修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。</p>
                     <div class="grid grid-cols-2 gap-3">
                       <button @click="handleRepair" :disabled="appStore.isLoading"
-                        class="w-full py-2 bg-accent-warn/10 hover:bg-accent-warn text-accent-warn hover:text-text-main border border-accent-warn/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                      >
+                        class="w-full py-2 bg-accent-warn/10 hover:bg-accent-warn text-accent-warn hover:text-text-main border border-accent-warn/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50" >
                         强制修复本地数据库
                       </button>
                       <button @click="handleReset" :disabled="appStore.isLoading"
-                        class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                      >
+                        class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50" >
                         立即重置本地数据库
                       </button>
                     </div>
@@ -644,7 +649,7 @@
           </div>
 
           <!-- D. 底部操作栏 -->
-          <footer class="flex items-center justify-end px-10 py-3 gap-4 border-t border-border-base/5 bg-glass-light">
+          <footer class="modal-footer flex items-center justify-end gap-4 px-10 py-3">
             <button id="btn-cancel" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
             <button data-tour="settings-save-button" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
               <div class="absolute inset-0 bg-bg-overlay/10 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
@@ -653,38 +658,26 @@
           </footer>
         </main>
 
-      </div>
-    </div>
-  </transition>
+  </CommonModalShell>
 
-  <Teleport to="body">
-    <transition name="panel-fade">
-      <div v-if="showDataBundleModal && appStore.uiState.showSettingsPanel"
-        class="fixed inset-0 z-120 flex items-center justify-center bg-bg-deep/70 backdrop-blur-md"
-        @click.self="closeDataBundleModal"
-      >
-        <div class="relative w-[min(920px,92vw)] max-h-[84vh] flex flex-col overflow-hidden rounded-4xl border border-accent-primary/20 bg-bg-deep/95 shadow-[0_0_50px_var(--shadow-color)]">
+  <CommonModalShell
+    :show="showDataBundleModal && appStore.uiState.showSettingsPanel"
+    title="导出软件数据"
+    description="勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。"
+    size="custom"
+    :z-index="120"
+    accent="primary"
+    panel-class="w-[min(920px,92vw)] max-h-[84vh] border-accent-primary/20"
+    content-class="min-h-0 flex flex-col"
+    @close="closeDataBundleModal"
+  >
           <div class="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
           <div class="absolute -bottom-20 -right-16 w-56 h-56 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
-
-          <header class="relative z-10 flex items-center justify-between gap-4 px-5 py-4 border-b border-border-base/10">
-            <div class="min-w-0">
-              <h3 class="text-lg font-black text-text-main">导出软件数据</h3>
-              <p class="text-xs text-text-dim leading-relaxed mt-1">
-                勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。
-              </p>
-            </div>
-            <button class="shrink-0 flex items-center justify-center size-9 rounded-full bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-text-dim hover:text-text-main transition-all"
-              aria-label="关闭导出面板" @click="closeDataBundleModal"
-            >
-              <X class="size-4" />
-            </button>
-          </header>
 
           <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
             <div class="grid grid-cols-3 gap-3">
               <label v-for="module in bundleModuleDefs" :key="module.key" class="rounded-xl border px-3 py-2.5 transition-all"
-                :class="dataBundleModuleSelection[module.key] ? 'border-accent-primary/40 bg-accent-primary/10' : 'border-border-base/10 bg-bg-muted/70 hover:border-border-base/18'"
+                :class="dataBundleModuleSelection[module.key] ? 'border-accent-primary/40 bg-accent-primary/10' : 'modal-section-subtle hover:border-border-base/18'"
               >
                 <div class="flex items-center gap-2">
                   <input :checked="!!dataBundleModuleSelection[module.key]" type="checkbox" class="accent-accent-primary"
@@ -699,7 +692,7 @@
               </label>
             </div>
 
-            <div v-if="isBundleProfileModuleSelected" class="mt-4 rounded-2xl bg-bg-muted/70">
+            <div v-if="isBundleProfileModuleSelected" class="modal-section mt-4">
               <button @click="showBundleProfilePicker = !showBundleProfilePicker" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" >
                 <div>
                   <div class="text-sm font-bold text-text-main">环境数据</div>
@@ -713,7 +706,7 @@
               <div v-if="showBundleProfilePicker" class="px-4 pb-4">
                 <div class="grid grid-cols-2 gap-3">
                   <label v-for="profile in bundleProfileDefs" :key="profile.id" class="rounded-xl border p-3 transition-all"
-                    :class="profile.has_user_data ? 'border-border-base/10 bg-bg-muted/60 hover:border-border-base/18' : 'border-accent-danger/20 bg-accent-danger/8 opacity-60'"
+                    :class="profile.has_user_data ? 'border-border-base/10 bg-bg-inset/55 hover:border-border-base/18' : 'border-accent-danger/20 bg-accent-danger/8 opacity-60'"
                   >
                     <div class="flex items-start gap-3">
                       <input v-model="dataBundleProfileSelection" :disabled="!profile.has_user_data" :value="profile.id" type="checkbox" class="mt-0.5 accent-accent-primary"  >
@@ -734,7 +727,7 @@
             </div>
           </div>
 
-          <footer class="relative z-10 flex items-center justify-between gap-4 px-5 py-4 border-t border-border-base/10 bg-bg-muted/60">
+          <footer class="modal-footer relative z-10 flex items-center justify-between gap-4 px-5 py-4">
             <p class="text-xs leading-relaxed text-text-dim">
               <span class="text-accent-primary font-bold">环境数据</span> 会打包整个环境目录；
               <span class="text-accent-tip font-bold">路径绑定、敏感信息、当前激活环境 ID</span> 不会导出。
@@ -746,15 +739,12 @@
               导出当前选择
             </button>
           </footer>
-        </div>
-      </div>
-    </transition>
-  </Teleport>
+  </CommonModalShell>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle, X } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle } from 'lucide-vue-next'
 import { deepClone, toast } from '../utils/common'
 import { flashComponent, shakeComponent } from '../utils/domEffects'
 
@@ -767,6 +757,7 @@ import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
 import ThemeSelect from './settings/ThemeSelect.vue'
+import CommonModalShell from './common/CommonModalShell.vue'
 import { RUN_COMMAND_TAGS } from '../utils/constants'
 import { formatFileSize } from '../utils/format'
 import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, normalizeTheme } from '../modules/theme/themeManager'
@@ -1477,10 +1468,6 @@ const save = async () => {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--color-accent-primary);
 }
-
-/* 页面切换动画 */
-.panel-fade-enter-active, .panel-fade-leave-active { transition: opacity 0.4s ease; }
-.panel-fade-enter-from, .panel-fade-leave-to { opacity: 0; }
 
 /* 简单的类名修复，如果 Tailwind 不支持 */
 .direction-rtl { direction: rtl; }
