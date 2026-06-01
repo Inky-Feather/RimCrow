@@ -739,6 +739,34 @@ class TestTextureOptimizationManager(unittest.TestCase):
             (128, 128),
         )
 
+    def test_no_compression_does_not_read_min_clarity(self):
+        self._write_png("Textures/source.png", size=(512, 512))
+
+        with patch.object(TextureOptimizationManager, "_get_scale_target_size", side_effect=AssertionError("不压缩时不应读取最小清晰度")):
+            behavior = self.manager._resolve_encode_behavior(
+                512,
+                512,
+                {**self.options, "scale_factor": 1.0, "max_size": 1024},
+            )
+            snapshot = self.manager._scan_mods_snapshot(
+                [str(self.mod_root)],
+                {**self.options, "scale_factor": 1.0, "max_size": 1024},
+            )
+
+        self.assertEqual(behavior["mode"], "keep_original")
+        self.assertIsNone(behavior["scale_percent"])
+        self.assertEqual(snapshot["summary"]["scaled_count"], 0)
+        self.assertEqual(snapshot["summary"]["keep_original_count"], 1)
+
+    def test_no_compression_signature_ignores_min_clarity(self):
+        no_compress_128 = self.manager._build_signature({**self.options, "scale_factor": 1.0, "max_size": 128})
+        no_compress_1024 = self.manager._build_signature({**self.options, "scale_factor": 1.0, "max_size": 1024})
+        scaled_128 = self.manager._build_signature({**self.options, "scale_factor": 0.5, "max_size": 128})
+        scaled_1024 = self.manager._build_signature({**self.options, "scale_factor": 0.5, "max_size": 1024})
+
+        self.assertEqual(no_compress_128, no_compress_1024)
+        self.assertNotEqual(scaled_128, scaled_1024)
+
     def test_optimize_scale_strategy_splits_scaled_and_original_size_batches(self):
         scaled_source = self._write_png("Textures/scaled.png", size=(256, 256))
         fallback_source = self._write_png("Textures/fallback.png", size=(136, 136))

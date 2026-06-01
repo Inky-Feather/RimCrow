@@ -1,8 +1,8 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showPackageTransferDialog" :title="dialogTitle" :description="dialogDesc" size="custom" :z-index="140" accent="primary"
-    panel-class="max-h-[88vh] w-[min(980px,94vw)] border-accent-primary/20" content-class="min-h-0 flex flex-col"
+    panel-class="max-h-[88vh] w-4/5 border-accent-primary/20" content-class="min-h-0 flex flex-col"
     @close="closeDialog" >
-      <div class="absolute -top-18 -left-12 h-52 w-52 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
+      <div class="absolute -top-18 -left-12 h-52 w-52 rounded-full bg-accent-primary/30 blur-3xl pointer-events-none"></div>
       <div class="absolute -bottom-18 -right-12 h-52 w-52 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
 
       <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
@@ -194,12 +194,8 @@
           <section v-if="exportScopeOptions.length > 0" class="modal-section p-4">
             <div class="mb-2 text-sm font-bold text-text-main">导出范围</div>
             <div class="grid grid-cols-2 gap-3">
-              <label
-                v-for="option in exportScopeOptions"
-                :key="option.value"
-                class="rounded-xl border px-3 py-3"
-                :class="exportForm.export_scope === option.value ? 'border-accent-primary/35 bg-accent-primary/8' : 'border-border-base/10 bg-bg-inset/55'"
-              >
+              <label v-for="option in exportScopeOptions" :key="option.value" class="rounded-xl border px-3 py-3"
+                :class="exportForm.export_scope === option.value ? 'border-accent-primary/35 bg-accent-primary/8' : 'border-border-base/10 bg-bg-inset/55'" >
                 <div class="flex items-start gap-3">
                   <input v-model="exportForm.export_scope" class="mt-0.5 accent-accent-primary" :value="option.value" type="radio">
                   <div>
@@ -247,8 +243,8 @@
             </div>
           </section>
 
-          <section v-if="allowExportEnvironmentAttach" class="modal-section p-4">
-            <label class="modal-section-subtle flex items-start gap-3 px-3 py-3">
+          <section class="modal-section p-4 grid grid-cols-2 gap-3">
+            <label v-if="allowExportEnvironmentAttach" class="modal-section-subtle flex items-start gap-3 px-3 py-3">
               <input v-model="exportForm.include_environment_data" class="mt-0.5 accent-accent-primary" type="checkbox">
               <div>
                 <div class="text-sm font-bold text-text-main">附带当前环境数据</div>
@@ -257,6 +253,10 @@
                 </div>
               </div>
             </label>
+          
+            <CommonSelect v-model="exportForm.folder_name_type" label="包内Mod文件夹命名" showBottom
+              description="只影响导出包里的文件夹名称，不会改动原始Mod目录。遇到不适合作为文件名的字符会自动替换，重名会自动追加序号。"
+              :options="modFolderNameTypeOptions" />
           </section>
         </div>
       </div>
@@ -319,11 +319,20 @@ const exportForm = reactive({
   profile_id: '',
   export_scope: 'custom',
   mod_ids: [],
+  folder_name_type: 'default',
   include_dependencies: false,
   include_interlocks: false,
   include_language_packs: false,
   include_environment_data: false,
 })
+
+const modFolderNameTypeOptions = [
+  { label: '默认', value: 'default' },
+  { label: '按别名', value: 'alias_name' },
+  { label: '按原模组名', value: 'name' },
+  { label: '按工坊ID', value: 'workshop_id' },
+  { label: '按包名', value: 'package_id' },
+]
 
 const modImportForm = reactive({
   import_mods: true,
@@ -484,6 +493,7 @@ const resetState = () => {
   exportForm.profile_id = String(dialogPreset.value?.profileId || profileStore.currentProfile?.id || appStore.settings.current_profile_id || 'default')
   exportForm.export_scope = String(dialogPreset.value?.export_scope || (exportScopeOptions.value[0]?.value || 'custom'))
   exportForm.mod_ids = Array.isArray(dialogPreset.value?.mod_ids) ? [...dialogPreset.value.mod_ids] : []
+  exportForm.folder_name_type = String(dialogPreset.value?.folder_name_type || dialogPreset.value?.folderNameType || appStore.settings.bundle_mod_folder_name_type || 'default')
   exportForm.include_dependencies = !!dialogPreset.value?.include_dependencies
   exportForm.include_interlocks = !!dialogPreset.value?.include_interlocks
   exportForm.include_language_packs = !!dialogPreset.value?.include_language_packs
@@ -655,6 +665,7 @@ const handleSubmit = async () => {
       include_interlocks: showExportExtraOptions.value ? false : exportForm.include_interlocks,
       include_language_packs: showExportExtraOptions.value ? false : exportForm.include_language_packs,
       include_environment_data: allowExportEnvironmentAttach.value && exportForm.include_environment_data,
+      folder_name_type: exportForm.folder_name_type || 'default',
     })
     closeDialog()
     const exported = await exportPromise

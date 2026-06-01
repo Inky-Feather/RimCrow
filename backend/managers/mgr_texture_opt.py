@@ -693,11 +693,13 @@ class TextureOptimizationManager:
 
     @staticmethod
     def _signature_payload(options: dict[str, Any]) -> dict[str, Any]:
+        scale_factor = float(options.get("scale_factor", 1.0) or 1.0)
+        scale_percent = TextureOptimizationManager._get_scale_factor_percent({"scale_factor": scale_factor})
         return {
             "process_mode": str(options.get("process_mode", "")),
             "generate_mipmaps": bool(options.get("generate_mipmaps", True)),
-            "scale_factor": float(options.get("scale_factor", 1.0) or 1.0),
-            "max_size": int(options.get("max_size", 0) or 0),
+            "scale_factor": scale_factor,
+            "max_size": int(options.get("max_size", 0) or 0) if scale_percent is not None else 0,
             "skip_small_textures": bool(options.get("skip_small_textures", True)),
             "min_dimension": int(options.get("min_dimension", 128) or 128),
             "max_source_dimension": int(options.get("max_source_dimension", 2048) or 2048),
@@ -2185,9 +2187,9 @@ class TextureOptimizationManager:
         options_signature = self._build_signature(options)
         process_mode = str(options.get("process_mode", "scaled_only_overwrite"))
         preferred_scale = self._get_scale_factor_percent(options)
-        min_output_size = self._get_scale_target_size(options)
+        min_output_size = self._get_scale_target_size(options) if preferred_scale is not None else 0
         generate_mipmaps = bool(options.get("generate_mipmaps", True))
-        scale_candidates = set(self._iter_scale_step_candidates(options))
+        scale_candidates = set(self._iter_scale_step_candidates(options)) if preferred_scale is not None else set()
         package_id = normalize_package_id(base_index.get("package_id", ""))
         if apply_exclusions and excluded_indexes is None:
             excluded_indexes = self._build_exclusion_indexes()
@@ -2227,7 +2229,7 @@ class TextureOptimizationManager:
                 for scale in entry.get("supported_scale_percents", ())
                 if int(scale) in scale_candidates
             )
-            scale_percent = None if oversize_or_small else self._pick_scale_step_percent_from_supported(
+            scale_percent = None if preferred_scale is None or oversize_or_small else self._pick_scale_step_percent_from_supported(
                 width,
                 height,
                 supported_scales,
@@ -2579,6 +2581,8 @@ class TextureOptimizationManager:
     @staticmethod
     def _resolve_encode_behavior(width: int, height: int, options: dict[str, Any]) -> dict[str, Any]:
         preferred = TextureOptimizationManager._get_scale_factor_percent(options)
+        if preferred is None:
+            return {"mode": "keep_original", "scale_percent": None, "use_fix_size": True}
         min_output_size = TextureOptimizationManager._get_scale_target_size(options)
         candidates = TextureOptimizationManager._iter_scale_step_candidates(options)
         supported = TextureOptimizationManager._collect_supported_scale_percents(width, height)
@@ -2588,7 +2592,7 @@ class TextureOptimizationManager:
             candidates,
             min_output_size,
         )
-        if preferred is None or scale_percent is None or scale_percent not in supported:
+        if scale_percent is None or scale_percent not in supported:
             return {"mode": "keep_original", "scale_percent": None, "use_fix_size": True}
         return {"mode": "scale", "scale_percent": scale_percent, "use_fix_size": False}
 

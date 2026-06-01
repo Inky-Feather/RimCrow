@@ -622,8 +622,8 @@
                         当前环境：<span class="font-bold text-text-main">{{ profileStore.currentProfile?.name || '未激活' }}</span>
                       </div>
                       <CommonSelect class="col-span-1" label="Mod文件夹重命名" v-model="formData.bundle_mod_folder_name_type" showBottom mini
-                        description="影响打包Mod时的文件夹名称，默认原文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名创建文件夹。" 
-                        :options="[{label:'默认', value:'default'},{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
+                        description="影响打包Mod时的文件夹名称，默认原文件夹名称，处理优先级是 别名>模组名>默认，或者 工坊>ID包名>默认，所以即使Mod没有别名，也能按模组原名创建文件夹。"
+                        :options="[{label:'默认', value:'default'},{label:'按别名', value:'alias_name'},{label:'按原模组名', value:'name'},{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'}]" />
                       <CommonNumber class="col-span-1" label="打包压缩级别" v-model="formData.bundle_compress_level" :step="1" :min="0" :max="9" mini
                         description="0 最快，9 最省空间。默认 6。压缩级别越高，导出越慢，但包体通常更小。"  />
                     </div>
@@ -1387,6 +1387,7 @@ const openCurrentProfileExportDialog = () => {
       { value: 'profile-active', label: `当前环境启用模组（${modStore.exportableActiveCount}）`, description: '只导出当前环境里已经启用的模组。' },
     ],
     export_scope: 'profile-effective',
+    folder_name_type: formData.value?.bundle_mod_folder_name_type || appStore.settings.bundle_mod_folder_name_type || 'default',
   })
 }
 

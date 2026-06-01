@@ -188,7 +188,7 @@
                   <CommonSelect label="缩放比例" v-model.number="config.scale_factor" @change="saveConfig"
                     description="优先按当前比例处理；如果某些图片不适合这个比例，会自动回退到更稳妥的比例，必要时保持原尺寸。"
                     :options="[
-                      { label: '100%', value: 1.0 },
+                      { label: '不压缩', value: 1.0 },
                       { label: '80%', value: 0.8 },
                       { label: '75%', value: 0.75 },
                       { label: '60%', value: 0.6 },
@@ -199,7 +199,8 @@
                     ]"
                   />
                   <CommonSelect label="最小清晰度" v-model.number="config.max_size" @change="saveConfig"
-                    description="缩放时会尽量保证最短边不低于这个目标，避免图片被压得过小。"
+                    :disabled="isNoCompressionMode"
+                    :description="maxSizeDescription"
                     :options="[
                       { label: '256 px', value: 256 },
                       { label: '128 px', value: 128 }
@@ -415,6 +416,12 @@ const summary = computed(() => textureStore.globalSummary || {})
 const progressState = computed(() => textureStore.progressState)
 const toolStatus = computed(() => textureStore.toolStatus)
 const isBusy = computed(() => textureStore.isAnalyzing || textureStore.isOptimizing)
+const isNoCompressionMode = computed(() => Math.abs(Number(config.value?.scale_factor || 1) - 1) <= 1e-6)
+const maxSizeDescription = computed(() => (
+  isNoCompressionMode.value
+    ? '当前为不压缩，最小清晰度不会参与处理。'
+    : '缩放时会尽量保证最短边不低于这个目标，避免图片被压得过小。'
+))
 const resultHistory = computed(() => textureStore.resultHistory)
 const textureExclusions = computed(() => textureStore.textureExclusions)
 const now = useNow({ interval: 1000 })

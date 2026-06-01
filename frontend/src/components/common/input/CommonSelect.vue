@@ -1,6 +1,6 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
-  <div class="relative mx-0 p-0" :class="{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}" ref="target">
+  <div class="relative mx-0 p-0" :aria-disabled="disabled" :class="[{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}, disabled ? 'opacity-50' : '']" ref="target">
     <!-- Label：点击时联动聚焦 -->
     <span v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
       :class="[mini ? '' : 'mb-1']" @click="handleLabelClick" >
@@ -10,10 +10,10 @@
     
     <!-- 主输入区域 -->
     <div class="relative group min-w-0 max-w-full flex items-center" :class="{ 'flex-1': mini }" >
-      <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable"
+      <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable" :disabled="disabled"
         :class="[ 'input-glass min-w-0 w-full truncate text-sm text-text-main focus:outline-none placeholder:text-text-disabled placeholder:italic',
-          mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3', editable ? 'cursor-text' : ' bg-bg-surface',
-          { 'cursor-pointer': !editable, 'cursor-text': editable }
+           mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3', editable ? 'cursor-text' : ' bg-bg-surface',
+          { 'cursor-pointer': !editable && !disabled, 'cursor-text': editable && !disabled, 'cursor-not-allowed text-text-disabled': disabled }
         ]"
         @click="openMenu"
         @input="handleInput"
@@ -84,6 +84,7 @@ const props = defineProps({
   mini: { type: Boolean, default: false },
   showBottom: { type: Boolean, default: false }, // 默认向下展开
   editable: { type: Boolean, default: false }, // 是否可输入
+  disabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue', 'change', 'visible-change'])
@@ -169,10 +170,12 @@ const isMatch = (opt) => {
 
 // 1. 切换开关
 const handleLabelClick = () => {
+  if (props.disabled) return
   openMenu()
 }
 
 const openMenu = () => {
+  if (props.disabled) return
   if (isOpen.value) return
   isOpen.value = true
   emit('visible-change', true) // 懒加载触发点
@@ -208,6 +211,7 @@ const selectOption = (opt) => {
 
 // 3. 输入处理 (Editable)
 const commitInputValue = () => {
+  if (props.disabled) return
   if (!props.editable || internalSearch.value === null) return
   
   const val = String(internalSearch.value).trim()
@@ -232,6 +236,7 @@ const commitInputValue = () => {
   }
 }
 const handleInput = (e) => {
+  if (props.disabled) return
   if (!props.editable) return
   internalSearch.value = e.target.value
   if (!isOpen.value) isOpen.value = true
@@ -241,6 +246,7 @@ const handleInput = (e) => {
 }
 
 const handleBlur = () => {
+  if (props.disabled) return
   // 因为 options 加了 @mousedown.prevent，点击列表不会触发 blur。
   // 这里的 blur 只有在真正离开输入框（点击外部 / Tab）时触发。
   if (isOpen.value) {

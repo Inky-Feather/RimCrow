@@ -240,6 +240,7 @@ export const useAppStore = defineStore('app', () => {
     auto_sort_strategy: "classic_sort_logic",  // 自动排序策略
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
+    bundle_mod_folder_name_type: "default", // 模组包内文件夹命名方式
     show_coexistence_message: true,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
@@ -280,6 +281,7 @@ export const useAppStore = defineStore('app', () => {
   const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
   const updateInstallPrompted = new Set()
+  const exportCompletePrompted = new Set()
   const pendingModScanRequested = ref(null)
   // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
   const cancellableTaskTypes = new Set([
@@ -975,6 +977,29 @@ export const useAppStore = defineStore('app', () => {
       await requestModScan()
     }
   }
+  const showExportCompleteDialog = async (title, targetPath) => {
+    const normalizedPath = String(targetPath || '').trim()
+    if (!normalizedPath) {
+      toast.success(`${title}完成`)
+      return
+    }
+    const confirmStore = useConfirmStore()
+    const action = await confirmStore.confirmAction(
+      `${title}完成`,
+      `导出路径：${normalizedPath}`,
+      {
+        type: 'success',
+        actionButtons: [
+          { label: '打开导出目录', value: 'open', kind: 'primary' },
+          { label: '关闭', value: 'close', kind: 'secondary' },
+        ],
+      }
+    )
+    if (action === 'open') {
+      // 后端会在传入文件路径时打开其所在目录，这里保留完整导出路径方便日志和异常提示定位。
+      await openPath(normalizedPath)
+    }
+  }
   // 注册事件监听
   const setupEventListeners = () => {
     // 防止重复添加监听器
@@ -1120,7 +1145,10 @@ export const useAppStore = defineStore('app', () => {
         toast.error(`更新出错: ${task.metrics?.error || task.message}`)
       }
       if (task.type === 'mod-export' && task.status === 'success') {
-        toast.success('模组包导出完成')
+        if (!task.id || !exportCompletePrompted.has(task.id)) {
+          if (task.id) exportCompletePrompted.add(task.id)
+          void showExportCompleteDialog('模组包导出', task.metrics?.target_path)
+        }
       }
       if (task.type === 'mod-export' && task.status === 'failed') {
         toast.error(task.metrics?.error || task.message || '模组包导出失败')
@@ -1960,7 +1988,11 @@ export const useAppStore = defineStore('app', () => {
   const exportDataBundle = async (payload = {}) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.data_bundle_export(payload)
-    return checkResult(res, '导出软件数据', true) ? res.data : false
+    if (!checkResult(res, '导出软件数据', true)) return false
+    window.setTimeout(() => {
+      void showExportCompleteDialog('软件数据导出', res.data?.path)
+    }, 0)
+    return res.data
   }
   const importDataBundle = async (bundlePath, payload = {}) => {
     if (!window.pywebview || !bundlePath) return false

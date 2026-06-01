@@ -244,6 +244,7 @@ class TestModPackageManager(unittest.TestCase):
             with (
                 patch.object(settings.config, "self_mods_path", str(self_root)),
                 patch.object(settings.config, "workshop_mods_path", str(workshop_root)),
+                patch.object(settings.config, "bundle_mod_folder_name_type", "default"),
                 patch.object(ModDAO, "get_profile_mods", return_value=visible_mods),
                 patch.object(manager, "_read_active_tokens", return_value=[]),
             ):
@@ -267,6 +268,116 @@ class TestModPackageManager(unittest.TestCase):
             self.assertEqual(inspect_result["mods"][0]["folder_name"], "LocalMod")
             self.assertEqual(import_result["imported_mods"][0]["folder_name"], "LocalMod")
             self.assertTrue((self_root / "LocalMod" / "About.xml").exists())
+
+    def test_export_bundle_can_rename_packaged_mod_folders(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            local_root = temp_root / "Game" / "Mods"
+            self_root = temp_root / "SelfMods"
+            user_data_root = temp_root / "UserData"
+            local_root.mkdir(parents=True, exist_ok=True)
+            self_root.mkdir(parents=True, exist_ok=True)
+            user_data_root.mkdir(parents=True, exist_ok=True)
+
+            first_mod_path = local_root / "OriginalOne"
+            second_mod_path = local_root / "OriginalTwo"
+            for mod_path in (first_mod_path, second_mod_path):
+                mod_path.mkdir(parents=True, exist_ok=True)
+                (mod_path / "About.xml").write_text("<mod />", encoding="utf-8")
+
+            target_profile = SimpleNamespace(
+                id="profile-1",
+                name="环境一",
+                description="desc",
+                local_mods_path=str(local_root),
+                game_dlc_path="",
+                user_data_path=str(user_data_root),
+                game_install_path="D:/RimWorld",
+                game_version="1.6",
+                prefer_steam_launch=False,
+                use_workshop_mods=False,
+                use_self_mods=True,
+                run_commands=[],
+                inactive_mods_order=[],
+                last_played_time=0,
+            )
+            profile_mgr = _StubProfileManager(target_profile=target_profile)
+            data_bundle_mgr = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
+            manager = ModPackageManager(profile_mgr, data_bundle_mgr, load_order_mgr_provider=lambda: None)
+            bundle_path = temp_root / "mods_export.rmmmods.zip"
+            visible_mods = [
+                {"package_id": "local.one", "name": "First", "alias_name": "Same:Name?", "path": str(first_mod_path)},
+                {"package_id": "local.two", "name": "Second", "alias_name": "Same/Name*", "path": str(second_mod_path)},
+            ]
+
+            with (
+                patch.object(settings.config, "self_mods_path", str(self_root)),
+                patch.object(settings.config, "workshop_mods_path", ""),
+                patch.object(ModDAO, "get_profile_mods", return_value=visible_mods),
+                patch.object(manager, "_read_active_tokens", return_value=[]),
+            ):
+                export_result = manager.export_bundle(str(bundle_path), {
+                    "profile_id": "profile-1",
+                    "export_scope": "custom",
+                    "mod_ids": ["local.one", "local.two"],
+                    "folder_name_type": "alias_name",
+                })
+
+            self.assertTrue(first_mod_path.exists())
+            self.assertTrue(second_mod_path.exists())
+            self.assertEqual([item["folder_name"] for item in export_result["mods"]], ["Same_Name_", "Same_Name_2"])
+            self.assertEqual([item["original_folder_name"] for item in export_result["mods"]], ["OriginalOne", "OriginalTwo"])
+            self.assertTrue(any("非法字符" in item for item in export_result["warnings"]))
+            self.assertTrue(any("重名" in item for item in export_result["warnings"]))
+            with zipfile.ZipFile(bundle_path, "r") as bundle:
+                names = set(bundle.namelist())
+                self.assertIn("mods/Same_Name_/About.xml", names)
+                self.assertIn("mods/Same_Name_2/About.xml", names)
+                manifest = manager._read_json_from_zip(bundle, "manifest.json", {})  # noqa: SLF001
+            self.assertEqual([item["folder_name"] for item in manifest["mods"]], ["Same_Name_", "Same_Name_2"])
+            self.assertEqual([item["original_folder_name"] for item in manifest["mods"]], ["OriginalOne", "OriginalTwo"])
+
+    def test_export_folder_name_type_uses_expected_fallback_chain(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            local_root = temp_root / "Game" / "Mods"
+            local_root.mkdir(parents=True, exist_ok=True)
+            mod_path = local_root / "OriginalLocal"
+            mod_path.mkdir(parents=True, exist_ok=True)
+            (mod_path / "About.xml").write_text("<mod />", encoding="utf-8")
+
+            target_profile = SimpleNamespace(
+                id="profile-1",
+                name="环境一",
+                description="desc",
+                local_mods_path=str(local_root),
+                game_dlc_path="",
+                user_data_path=str(temp_root / "UserData"),
+                game_install_path="D:/RimWorld",
+                game_version="1.6",
+                prefer_steam_launch=False,
+                use_workshop_mods=False,
+                use_self_mods=True,
+                run_commands=[],
+                inactive_mods_order=[],
+                last_played_time=0,
+            )
+            profile_mgr = _StubProfileManager(target_profile=target_profile)
+            data_bundle_mgr = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
+            manager = ModPackageManager(profile_mgr, data_bundle_mgr, load_order_mgr_provider=lambda: None)
+            visible_mods = [{"package_id": "fallback.package", "name": "", "alias_name": "", "path": str(mod_path)}]
+
+            with (
+                patch.object(settings.config, "self_mods_path", str(temp_root / "SelfMods")),
+                patch.object(settings.config, "workshop_mods_path", ""),
+                patch.object(ModDAO, "get_profile_mods", return_value=visible_mods),
+                patch.object(manager, "_read_active_tokens", return_value=[]),
+            ):
+                alias_plan = manager.preview_export({"profile_id": "profile-1", "mod_ids": ["fallback.package"], "folder_name_type": "alias_name"})
+                workshop_plan = manager.preview_export({"profile_id": "profile-1", "mod_ids": ["fallback.package"], "folder_name_type": "workshop_id"})
+
+            self.assertEqual(alias_plan["mods"][0]["folder_name"], "OriginalLocal")
+            self.assertEqual(workshop_plan["mods"][0]["folder_name"], "fallback.package")
 
     def test_prepare_import_returns_payload_stats_and_disk_estimate(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -442,6 +553,7 @@ class TestModPackageManager(unittest.TestCase):
             with (
                 patch.object(settings.config, "self_mods_path", str(Path(temp_dir) / "SelfMods")),
                 patch.object(settings.config, "workshop_mods_path", str(Path(temp_dir) / "WorkshopMods")),
+                patch.object(settings.config, "bundle_mod_folder_name_type", "default"),
                 patch.object(ModDAO, "get_profile_mods", return_value=visible_mods),
                 patch.object(manager, "_read_active_tokens", return_value=[]),
                 patch.object(manager, "_build_interlock_map", side_effect=AssertionError("unexpected interlock lookup")),

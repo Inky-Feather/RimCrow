@@ -47,6 +47,12 @@ class ModPackageManager:
     LEGACY_FILE_EXTENSIONS: tuple[str, ...] = ()
     EXPORT_TASK_TYPE = "mod-export"
     IMPORT_TASK_TYPE = "mod-import"
+    EXPORT_FOLDER_NAME_TYPES = {"default", "workshop_id", "package_id", "name", "alias_name"}
+    RESERVED_WINDOWS_NAMES = {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    }
 
     def __init__(
         self,
@@ -216,6 +222,9 @@ class ModPackageManager:
         active_tokens = self._read_active_tokens(profile_id, context)
         active_token_set = {str(token or "").strip().lower() for token in active_tokens if str(token or "").strip()}
         requested_ids = self._resolve_requested_mod_ids(payload, exportable_visible_mods, active_tokens)
+        folder_name_type = self._normalize_export_folder_name_type(
+            payload.get("folder_name_type") or getattr(settings.config, "bundle_mod_folder_name_type", "default")
+        )
         expanded_ids = self._expand_mod_ids(
             requested_ids,
             visible_mods,
@@ -223,9 +232,10 @@ class ModPackageManager:
             include_interlocks=bool(payload.get("include_interlocks")),
             include_language_packs=bool(payload.get("include_language_packs")),
         )
-        export_mods, warnings = self._resolve_export_mods(visible_mods, expanded_ids, active_token_set, path_scope)
+        export_mods, warnings = self._resolve_export_mods(visible_mods, expanded_ids, active_token_set, path_scope, folder_name_type)
         return {
             "profile_id": profile_id,
+            "folder_name_type": folder_name_type,
             "selected_count": len(requested_ids),
             "mod_count": len(export_mods),
             "extra_count": max(0, len(export_mods) - len(requested_ids)),
@@ -536,8 +546,10 @@ class ModPackageManager:
         requested_ids: list[str],
         active_token_set: set[str],
         path_scope: _ProfilePathScope,
+        folder_name_type: str = "default",
     ) -> tuple[list[dict[str, Any]], list[str]]:
         warnings: list[str] = []
+        normalized_folder_name_type = self._normalize_export_folder_name_type(folder_name_type)
         visible_map = {
             normalize_package_id(mod.get("package_id")): mod
             for mod in visible_mods
@@ -545,6 +557,7 @@ class ModPackageManager:
         }
         export_mods: list[dict[str, Any]] = []
         seen_paths: set[str] = set()
+        seen_folder_names: set[str] = set()
 
         for raw_id in requested_ids:
             token_info = parse_package_token(raw_id)
@@ -575,13 +588,111 @@ class ModPackageManager:
             if normalized_path in seen_paths:
                 continue
             seen_paths.add(normalized_path)
-            folder_name = Path(mod_path).name
+            original_folder_name = Path(mod_path).name
+            folder_name, folder_warnings = self._resolve_export_folder_name(
+                chosen,
+                mod,
+                original_folder_name,
+                normalized_folder_name_type,
+                seen_folder_names,
+            )
+            warnings.extend(folder_warnings)
             export_mods.append({
                 **chosen,
                 "folder_name": folder_name,
+                "original_folder_name": original_folder_name,
+                "folder_name_type": normalized_folder_name_type,
             })
 
         return export_mods, warnings
+
+    @classmethod
+    def _normalize_export_folder_name_type(cls, value: Any) -> str:
+        normalized = str(value or "default").strip().lower()
+        return normalized if normalized in cls.EXPORT_FOLDER_NAME_TYPES else "default"
+
+    @staticmethod
+    def _first_text(*values: Any) -> str:
+        for value in values:
+            normalized = str(value or "").strip()
+            if normalized:
+                return normalized
+        return ""
+
+    @classmethod
+    def _export_folder_name_candidates(
+        cls,
+        selected: dict[str, Any],
+        original: dict[str, Any],
+        original_folder_name: str,
+        folder_name_type: str,
+    ) -> list[str]:
+        def field(name: str) -> str:
+            return cls._first_text(selected.get(name), original.get(name))
+
+        if folder_name_type == "alias_name":
+            return [field("alias_name"), field("name"), original_folder_name]
+        if folder_name_type == "name":
+            return [field("name"), original_folder_name]
+        if folder_name_type == "workshop_id":
+            return [field("workshop_id"), field("package_id"), original_folder_name]
+        if folder_name_type == "package_id":
+            return [field("package_id"), original_folder_name]
+        return [original_folder_name]
+
+    @classmethod
+    def _sanitize_export_folder_name(cls, value: Any) -> str:
+        raw_name = str(value or "").strip()
+        if not raw_name:
+            return ""
+        # 包内路径最终仍可能落到 Windows 文件系统，统一替换路径分隔符、控制字符和 Windows 禁用字符。
+        sanitized = "".join("_" if ord(ch) < 32 or ch in '<>:"/\\|?*' else ch for ch in raw_name).strip(" .")
+        while "__" in sanitized:
+            sanitized = sanitized.replace("__", "_")
+        if sanitized in {"", ".", ".."}:
+            return ""
+        if sanitized.upper() in cls.RESERVED_WINDOWS_NAMES:
+            sanitized = f"{sanitized}_"
+        return sanitized[:160].rstrip(" .") or ""
+
+    @classmethod
+    def _dedupe_export_folder_name(cls, base_name: str, seen_folder_names: set[str]) -> str:
+        name = base_name
+        index = 2
+        while name.lower() in seen_folder_names:
+            suffix = f"_{index}"
+            suffix_base = base_name.rstrip(" _") or base_name
+            name = f"{suffix_base[: max(1, 160 - len(suffix))]}{suffix}"
+            index += 1
+        seen_folder_names.add(name.lower())
+        return name
+
+    def _resolve_export_folder_name(
+        self,
+        selected: dict[str, Any],
+        original: dict[str, Any],
+        original_folder_name: str,
+        folder_name_type: str,
+        seen_folder_names: set[str],
+    ) -> tuple[str, list[str]]:
+        warnings: list[str] = []
+        display_name = self._first_text(selected.get("name"), original.get("name"), selected.get("package_id"), original_folder_name, "未知模组")
+        raw_candidates = self._export_folder_name_candidates(selected, original, original_folder_name, folder_name_type)
+        raw_name = self._first_text(*raw_candidates)
+        safe_name = ""
+        for candidate in raw_candidates:
+            safe_name = self._sanitize_export_folder_name(candidate)
+            if safe_name:
+                raw_name = str(candidate or "").strip()
+                break
+        if not safe_name:
+            safe_name = "mod"
+        if raw_name and safe_name != raw_name.strip(" ."):
+            warnings.append(f'模组 "{display_name}" 的包内文件夹名包含非法字符，已改为 "{safe_name}"')
+        folder_name = self._dedupe_export_folder_name(safe_name, seen_folder_names)
+        if folder_name != safe_name:
+            warnings.append(f'模组 "{display_name}" 的包内文件夹名 "{safe_name}" 重名，已改为 "{folder_name}"')
+        return folder_name, warnings
 
     def _select_export_asset(
         self,
@@ -926,6 +1037,7 @@ class ModPackageManager:
     def _serialize_mod_manifest_entry(self, item: dict[str, Any]) -> dict[str, Any]:
         return {
             "folder_name": item.get("folder_name"),
+            "original_folder_name": item.get("original_folder_name") or item.get("folder_name"),
             "package_id": item.get("package_id"),
             "name": item.get("name"),
             "store": item.get("store"),

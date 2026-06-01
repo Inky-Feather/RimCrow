@@ -234,6 +234,7 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
+    bundle_mod_folder_name_type: str = "default"  # 模组包内文件夹命名方式
     enable_auto_scan: bool = True             # 启动时自动扫描
     enable_launch_profile_quick_scan: bool = True  # 环境列表直启前是否执行检查同步
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
@@ -518,6 +519,9 @@ class SettingsManager:
             self.config.bundle_compress_level = max(0, min(9, int(self.config.bundle_compress_level or 0)))
         except (TypeError, ValueError):
             self.config.bundle_compress_level = 6
+        valid_mod_folder_name_types = {"default", "workshop_id", "package_id", "name", "alias_name"}
+        mod_folder_name_type = str(getattr(self.config, "bundle_mod_folder_name_type", "default") or "default").strip().lower()
+        self.config.bundle_mod_folder_name_type = mod_folder_name_type if mod_folder_name_type in valid_mod_folder_name_types else "default"
         ai_cfg = self.config.ai
         if isinstance(ai_cfg, AIConfig):
             try:
