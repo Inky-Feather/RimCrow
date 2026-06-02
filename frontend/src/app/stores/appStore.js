@@ -12,11 +12,14 @@ import { useProfileStore } from '../../features/profiles/profileStore'
 import { useTextureStore } from '../../features/texture-opt/textureStore'
 import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
 import { useTaskStore } from './taskStore'
-import { usePromptQueueStore } from '../../features/ai/promptQueueStore'
 import { useStartupStore } from './startupStore'
-import { isBrowserRuntime, openManagedSubBrowserUrl } from '../bridge/runtimeBridge'
-import { normalizeInstallSource, normalizeInstallSources } from '../../features/mod/lib/modIdentity'
 import { DEFAULT_THEME_ID, applyTheme, findThemeById, mergeThemes } from '../../features/settings/theme/themeManager'
+import { usePathActions } from './app/pathActions'
+import { useSettingsActions } from './app/settingsActions'
+import { usePackageTransferActions } from './app/packageTransferActions'
+import { useSteamWorkshopActions } from './app/steamWorkshopActions'
+import { useMaintenanceActions } from './app/maintenanceActions'
+import { useUpdateActions } from './app/updateActions'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
@@ -276,6 +279,110 @@ export const useAppStore = defineStore('app', () => {
     applyTheme(currentTheme.value)
   }
 
+  const {
+    autoDetectPaths,
+    getDefaultExternalPaths,
+    checkPath,
+    checkPaths,
+    openPath,
+    openFile,
+    readTextFile,
+    getFilePath,
+    getFolderPath,
+    deletePath,
+    deletePaths,
+    openUrl,
+  } = usePathActions({ settings })
+
+  const {
+    openSettingsPanel,
+    closeSettingsPanel,
+    saveSetting,
+    refreshUserThemes,
+    saveUserTheme,
+    deleteUserTheme,
+    applySettings,
+  } = useSettingsActions({
+    settings,
+    uiState,
+    isLoading,
+    userThemes,
+    applyCurrentTheme,
+    syncRemoteImageCache: (...args) => syncRemoteImageCache(...args),
+    refreshData: (...args) => refreshData(...args),
+  })
+
+  const {
+    applyModPackageImportPostActions,
+    showExportCompleteDialog,
+    openPackageTransferDialog,
+    openCustomModExportDialog,
+    updatePackageTransferDialogPreset,
+    closePackageTransferDialog,
+    getDataBundleSchema,
+    inspectDataBundle,
+    exportDataBundle,
+    importDataBundle,
+    getModPackageSchema,
+    prepareModPackageImport,
+    getModPackageProfileSummary,
+    exportModPackage,
+    importModPackage,
+  } = usePackageTransferActions({
+    uiState,
+    packageTransferDialog,
+    isLoading,
+    settings,
+    taskStore,
+    openPath,
+    refreshData: (...args) => refreshData(...args),
+    requestModScan: (...args) => requestModScan(...args),
+  })
+
+  const {
+    downloadWorkshopItems,
+    openSteamWorkshopUrl,
+    openSteamWorkshopById,
+    openInstallSource,
+    subscribeInstallSources,
+    downloadInstallSources,
+    downloadPackageIds,
+    subscribePackageIds,
+    subscribeWorkshopIds,
+    unsubscribeWorkshopIds,
+    getCollectionItems,
+  } = useSteamWorkshopActions({
+    openUrl,
+  })
+
+  const {
+    logMaintenanceCheck,
+    checkSteamTools,
+    checkToolMaintenance,
+    checkExternalDataUpdates,
+    checkManagedModUpdates,
+    checkSteamcmdModUpdates,
+    runScheduledMaintenanceChecks,
+    updateExternalDB,
+  } = useMaintenanceActions({
+    settings,
+    waitForDownload: (...args) => waitForDownload(...args),
+    refreshData: (...args) => refreshData(...args),
+    downloadWorkshopItems: (...args) => downloadWorkshopItems(...args),
+  })
+
+  const {
+    checkUpdate,
+    showChangelog,
+    _showInstallPrompt,
+  } = useUpdateActions({
+    updateState,
+    upgradeContext,
+    isLoading,
+    uiState,
+    logMaintenanceCheck,
+  })
+
 
   // === Getters ===
   const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
@@ -370,39 +477,6 @@ export const useAppStore = defineStore('app', () => {
       // 情况 2: API 还没来（前端加载快），监听 pywebviewready 事件, { once: true } 确保只触发一次
       else window.addEventListener('pywebviewready', () => resolve(), { once: true })
     })
-  }
-
-  const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
-    if (!enabled) return false
-    const last = Number(lastCheckTime || 0)
-    const interval = Math.max(1, Number(intervalDays || fallbackDays)) * 24 * 60 * 60 * 1000
-    const duration = Date.now() - last
-    return !last || duration > interval || duration < 0
-  }
-
-  const buildTimedCheckDecision = ({ enabled, lastCheckTime, intervalDays, fallbackDays = 1 } = {}) => {
-    const last = Number(lastCheckTime || 0)
-    const interval = Math.max(1, Number(intervalDays || fallbackDays)) * 24 * 60 * 60 * 1000
-    const elapsed = Date.now() - last
-    const due = !!enabled && (!last || elapsed > interval || elapsed < 0)
-    const reason = !enabled ? 'disabled' : (!last ? 'never_checked' : (elapsed < 0 ? 'clock_rollback' : (due ? 'interval_due' : 'interval_not_due')))
-    return { due, reason, enabled: !!enabled, lastCheckTime: last, intervalDays: Math.round(interval / 24 / 60 / 60 / 1000), elapsedMs: elapsed }
-  }
-
-  const logMaintenanceCheck = (event, payload = {}, level = 'info') => {
-    // 统一启动/维护检测日志格式，排查“为什么没自动检查”时只需要搜索这个前缀。
-    const method = level === 'warn' ? 'warn' : level === 'error' ? 'error' : 'info'
-    console[method]('[RMM][maintenance-check]', { event, ...payload })
-  }
-
-  const formatDateTime = (timestamp) => {
-    const value = Number(timestamp || 0)
-    if (!value) return '未知'
-    try {
-      return new Date(value).toLocaleString('zh-CN')
-    } catch {
-      return '未知'
-    }
   }
 
   const syncRemoteImageCache = (cacheStats = {}) => {
@@ -570,340 +644,6 @@ export const useAppStore = defineStore('app', () => {
     return suspendRecoveryPromise
   }
 
-  const installToolIssues = async (issues = []) => {
-    if (!window.pywebview || !Array.isArray(issues) || issues.length === 0) return false
-    let started = false
-    const hasSteamCmdIssue = issues.some(item => item?.tool_id === 'steamcmd')
-    const hasToddsIssue = issues.some(item => item?.tool_id === 'todds')
-    const hasRipgrepIssue = issues.some(item => item?.tool_id === 'ripgrep')
-
-    if (hasSteamCmdIssue) {
-      const res = await window.pywebview.api.steam_tools_install()
-      if (checkResult(res, '处理 SteamCMD 环境')) {
-        started = true
-        if (Array.isArray(res.data?.pending_tasks) && res.data.pending_tasks.length > 0) {
-          toast.info('SteamCMD 相关任务已启动，请留意底部状态栏。')
-        }
-      }
-    }
-
-    if (hasToddsIssue) {
-      const res = await window.pywebview.api.texture_prepare_download(settings.value.texture_opt)
-      if (checkResult(res, '处理 todds 环境')) {
-        started = true
-        if (!res.data?.already_ready) {
-          toast.info('todds 下载任务已启动，请留意底部状态栏。')
-        }
-      }
-    }
-
-    if (hasRipgrepIssue) {
-      const ripgrepIssue = issues.find(item => item?.tool_id === 'ripgrep') || {}
-      const res = await window.pywebview.api.ripgrep_prepare_download(ripgrepIssue?.maintenance_action === 'upgrade')
-      if (checkResult(res, '处理 ripgrep 环境')) {
-        started = true
-        if (!res.data?.already_ready) {
-          toast.info('ripgrep 下载任务已启动，请留意底部状态栏。')
-        }
-      }
-    }
-    return started
-  }
-
-  const getToolIssueActionLabel = (item = {}) => {
-    // 后端会把存在性、初始化、升级判断统一成 maintenance_action，前端只负责显示用户能理解的动作。
-    const action = String(item?.maintenance_action || '').trim()
-    if (action === 'upgrade') return '升级'
-    if (action === 'initialize') return '初始化'
-    if (action === 'install') return '安装'
-    return '处理'
-  }
-
-  const triggerGithubManagedModUpdate = async (item = {}) => {
-    if (!window.pywebview || !item?.repo_url) return false
-    const targetVersion = String(item.target_version || item.latest_version || '').trim()
-    const res = await window.pywebview.api.github_trigger_download(item.repo_url, item.install_type || 'source', targetVersion)
-    if (!checkResult(res, `更新 Git 仓库模组 ${item.title || ''}`.trim())) return false
-    toast.info('Git 仓库部署任务已启动，请留意底部状态栏。', { timeout: 4000 })
-    const workspaceStore = useWorkspaceStore()
-    workspaceStore.startGithubTimelinePolling(item.repo_url, { intervalMs: 4000, maxPolls: 15 })
-    return true
-  }
-
-  const updateManagedModItems = async (items = []) => {
-    // 批量动作按来源拆分：SteamCMD 支持合并下载，Git 仓库订阅逐项启动部署任务。
-    const normalizedItems = Array.isArray(items) ? items : []
-    const workshopIds = [...new Set(
-      normalizedItems
-        .filter(item => String(item?.source || '').toLowerCase() === 'steamcmd')
-        .map(item => String(item?.workshop_id || '').trim())
-        .filter(Boolean)
-    )]
-    if (workshopIds.length > 0) await downloadWorkshopItems(workshopIds)
-
-    for (const item of normalizedItems.filter(item => String(item?.source || '').toLowerCase() === 'github')) {
-      await triggerGithubManagedModUpdate(item)
-    }
-    return workshopIds.length > 0 || normalizedItems.some(item => String(item?.source || '').toLowerCase() === 'github')
-  }
-
-  // 维护检查的时间戳统一在前端落到 settings，避免每个检查函数重复处理“何时算检查成功”。
-  const persistMaintenanceCheckedAt = (settingKey, data, shouldPersist = null) => {
-    const checkedAt = Number(data?.checked_at || 0)
-    if (!settingKey || !checkedAt) return
-    if (typeof shouldPersist === 'function' && !shouldPersist(data)) return
-    settings.value[settingKey] = checkedAt
-  }
-
-  // 维护类接口都遵循同一返回格式：手动触发走 checkResult 给用户反馈，启动期静默触发只接受 success。
-  const fetchMaintenanceData = async ({
-    apiName,
-    workName,
-    manual = true,
-    lastCheckKey = '',
-    shouldPersistCheckedAt = null,
-  } = {}) => {
-    if (!window.pywebview) return null
-    const caller = window.pywebview.api?.[apiName]
-    if (typeof caller !== 'function') return null
-
-    const res = await caller()
-    if (manual ? !checkResult(res, workName) : res?.status !== 'success') {
-      logMaintenanceCheck('api_result', { apiName, workName, manual, status: res?.status || 'missing', message: res?.message || '' }, manual ? 'warn' : 'error')
-      return null
-    }
-
-    const data = res.data || {}
-    persistMaintenanceCheckedAt(lastCheckKey, data, shouldPersistCheckedAt)
-    logMaintenanceCheck('api_result', { apiName, workName, manual, status: res.status, checkedAt: data.checked_at || 0, count: data.count ?? data.issues?.length ?? data.updates?.length ?? 0 })
-    return data
-  }
-
-  // 工具环境可能涉及外部下载，因此只做检查本身静默；发现问题后统一进入提示队列交给用户决定。
-  const checkToolMaintenance = async ({ manual = true, prompt = true } = {}) => {
-    const data = await fetchMaintenanceData({
-      apiName: 'maintenance_check_tools',
-      workName: '检查工具环境',
-      manual,
-      lastCheckKey: 'last_tool_check_time',
-    })
-    if (!data) return null
-
-    const issues = Array.isArray(data.issues) ? data.issues : []
-    if (!prompt) return data
-    if (issues.length === 0) {
-      if (manual) toast.success('工具环境检查完成，当前均已就绪。')
-      return data
-    }
-
-    const promptQueue = usePromptQueueStore()
-    await promptQueue.enqueue({
-      category: 'startup-tools',
-      title: '工具环境需要处理',
-      message: '以下工具当前未就绪，可单独处理，也可以批量处理。',
-      type: 'warning',
-      priority: manual ? 30 : 60,
-      items: issues.map(item => ({
-        id: item.tool_id || item.name,
-        title: item.name || item.tool_id || '工具',
-        description: item.message || '需要处理',
-        meta: [
-          item.resolved_path,
-          item.current_version ? `当前版本 ${item.current_version}` : '',
-          item.latest_version ? `最新版本 ${item.latest_version}` : '',
-        ].filter(Boolean),
-        raw: item,
-        actions: [
-          { id: 'install', label: getToolIssueActionLabel(item), kind: 'primary' },
-          { id: 'skip', label: '稍后', kind: 'secondary' },
-        ],
-      })),
-      bulkActions: [
-        { id: 'install_all', label: '全部处理', kind: 'primary' },
-        { id: 'skip_all', label: '全部稍后', kind: 'secondary' },
-      ],
-      onItemAction: async (item, actionId) => {
-        if (actionId === 'install') await installToolIssues([item])
-      },
-      onBulkAction: async (actionId, items) => {
-        if (actionId === 'install_all') await installToolIssues(items)
-      },
-    })
-    return data
-  }
-
-  // 外部库更新属于网络下载动作：启动期可以静默检查，但实际更新必须经由队列弹窗确认。
-  const checkExternalDataUpdates = async ({ manual = true, prompt = true } = {}) => {
-    const data = await fetchMaintenanceData({
-      apiName: 'maintenance_check_external_data',
-      workName: '检查外部库更新',
-      manual,
-      lastCheckKey: 'last_external_data_update_check_time',
-      // 整轮远端状态都没拿到时，不要把失败记录成一次成功检查。
-      shouldPersistCheckedAt: (payload) => {
-        const items = Array.isArray(payload?.items) ? payload.items : []
-        const failed = Array.isArray(payload?.failed) ? payload.failed : []
-        return items.length === 0 || failed.length < items.length
-      },
-    })
-    if (!data) return null
-
-    const updates = Array.isArray(data.updates) ? data.updates : []
-    const failed = Array.isArray(data.failed) ? data.failed : []
-    if (!prompt) return data
-    if (failed.length > 0 && updates.length === 0) {
-      const summary = failed.slice(0, 3).map(item => item.name || item.data_type || '外部库').join('、')
-      const remain = failed.length > 3 ? ` 等 ${failed.length} 项` : ''
-      toast.warning(`外部库检查未完成：${summary}${remain} 检查失败，请稍后重试或检查网络环境。`, { timeout: 4500 })
-      return data
-    }
-    if (updates.length === 0) {
-      if (manual) toast.success('外部库检查完成，当前均已是最新。')
-      return data
-    }
-
-    const promptQueue = usePromptQueueStore()
-    await promptQueue.enqueue({
-      category: 'startup-external-data',
-      title: '发现外部库更新',
-      message: failed.length > 0
-        ? `另有 ${failed.length} 项外部库暂时检查失败，本次只展示已成功获取到远端状态的更新项。`
-        : '以下外部库文件检测到更新，可单独更新，也可以批量更新。',
-      type: 'warning',
-      priority: manual ? 35 : 65,
-      items: updates.map(item => ({
-        id: item.data_type || item.name,
-        title: item.name || item.data_type || '外部库',
-        description: item.message || '检测到远端版本与本地不一致。',
-        meta: [
-          item.local_version ? `本地版本 ${item.local_version}` : `本地时间 ${formatDateTime(item.local_mtime)}`,
-          item.remote_version ? `远端签名 ${item.remote_version}` : `远端时间 ${formatDateTime(item.remote_updated_at)}`,
-        ],
-        raw: item,
-        actions: [
-          { id: 'update', label: '更新', kind: 'primary' },
-          { id: 'skip', label: '稍后', kind: 'secondary' },
-        ],
-      })),
-      bulkActions: [
-        { id: 'update_all', label: '全部更新', kind: 'primary' },
-        { id: 'skip_all', label: '全部稍后', kind: 'secondary' },
-      ],
-      onItemAction: async (item, actionId) => {
-        if (actionId === 'update') await updateExternalDB(item.data_type)
-      },
-      onBulkAction: async (actionId, items) => {
-        if (actionId !== 'update_all') return
-        for (const item of items) {
-          // 顺序执行，避免同时刷新同一批缓存时互相打断。
-          await updateExternalDB(item.data_type)
-        }
-      },
-    })
-    return data
-  }
-
-  // 管理器负责的模组更新包含 SteamCMD 工坊模组和 Git 仓库订阅模组，统一弹窗避免多来源重复打扰。
-  const checkManagedModUpdates = async ({ manual = true, prompt = true } = {}) => {
-    const data = await fetchMaintenanceData({
-      apiName: 'maintenance_check_managed_mod_updates',
-      workName: '检查管理器模组更新',
-      manual,
-      lastCheckKey: 'last_steamcmd_mod_update_check_time',
-    })
-    if (!data) return null
-
-    const updates = Array.isArray(data.updates) ? data.updates : []
-    if (!prompt) return data
-    if (updates.length === 0) {
-      if (manual) toast.success('管理器模组检查完成，当前均已是最新。')
-      return data
-    }
-
-    const promptQueue = usePromptQueueStore()
-    await promptQueue.enqueue({
-      category: 'startup-managed-mods',
-      title: '发现管理器模组更新',
-      message: `检测到 ${updates.length} 个由管理器维护的模组有新版本。`,
-      type: 'warning',
-      priority: manual ? 40 : 70,
-      items: updates.map(item => ({
-        id: `${item.source || 'mod'}:${item.workshop_id || item.repo_url || item.title}`,
-        title: item.title || item.workshop_id || '未知模组',
-        description: item.message || (item.workshop_id ? `Workshop ID: ${item.workshop_id}` : item.repo_url || ''),
-        meta: [
-          item.source_label || item.source,
-          item.installed_version ? `当前版本 ${item.installed_version}` : '',
-          item.latest_version ? `最新版本 ${item.latest_version}` : '',
-        ].filter(Boolean),
-        raw: item,
-        actions: [
-          { id: 'update', label: '更新', kind: 'primary' },
-          { id: 'skip', label: '稍后', kind: 'secondary' },
-        ],
-      })),
-      bulkActions: [
-        { id: 'update_all', label: '全部更新', kind: 'primary' },
-        { id: 'skip_all', label: '全部稍后', kind: 'secondary' },
-      ],
-      onItemAction: async (item, actionId) => {
-        if (actionId === 'update') await updateManagedModItems([item])
-      },
-      onBulkAction: async (actionId, items) => {
-        if (actionId === 'update_all') await updateManagedModItems(items)
-      },
-    })
-    return data
-  }
-  const checkSteamcmdModUpdates = checkManagedModUpdates
-
-  // 启动后的维护检查只做轻量描述表，不引入任务引擎；以后新增检查时只追加一项配置。
-  const getScheduledMaintenanceChecks = () => [
-    {
-      id: 'tools',
-      name: '外部工具',
-      enabled: settings.value.enable_auto_tool_check,
-      lastCheckTime: settings.value.last_tool_check_time,
-      intervalDays: settings.value.tool_check_interval_days,
-      fallbackDays: 3,
-      run: () => checkToolMaintenance({ manual: false, prompt: true }),
-    },
-    {
-      id: 'external-data',
-      name: '外部库',
-      enabled: settings.value.enable_auto_external_data_update_check,
-      lastCheckTime: settings.value.last_external_data_update_check_time,
-      intervalDays: settings.value.external_data_update_check_interval_days,
-      fallbackDays: 1,
-      run: () => checkExternalDataUpdates({ manual: false, prompt: true }),
-    },
-    {
-      id: 'managed-mods',
-      name: '管理器模组更新',
-      enabled: settings.value.enable_auto_steamcmd_mod_update_check,
-      lastCheckTime: settings.value.last_steamcmd_mod_update_check_time,
-      intervalDays: settings.value.steamcmd_mod_update_check_interval_days,
-      fallbackDays: 1,
-      run: () => checkManagedModUpdates({ manual: false, prompt: true }),
-    },
-  ]
-
-  const runScheduledMaintenanceChecks = async () => {
-    for (const check of getScheduledMaintenanceChecks()) {
-      const decision = buildTimedCheckDecision(check)
-      logMaintenanceCheck('schedule_decision', { id: check.id, name: check.name, ...decision })
-      if (!decision.due) continue
-      try {
-        logMaintenanceCheck('schedule_run', { id: check.id, name: check.name })
-        await check.run()
-        logMaintenanceCheck('schedule_done', { id: check.id, name: check.name })
-      } catch (error) {
-        logMaintenanceCheck('schedule_error', { id: check.id, name: check.name, message: error?.message || String(error || '') }, 'error')
-        throw error
-      }
-    }
-  }
-
   // === Actions ===
   // 初始化只保留“设置 loading + 调用启动编排 + 统一失败提示”，具体启动步骤交给 startupStore。
   const initialize = async () => {
@@ -949,55 +689,6 @@ export const useAppStore = defineStore('app', () => {
       return false
     } finally {
       isLoading.value = false
-    }
-  }
-  const applyModPackageImportPostActions = async (task) => {
-    const profileStore = useProfileStore()
-    const workspaceStore = useWorkspaceStore()
-    const postActions = task?.metrics?.post_actions || {}
-    const shouldScanCurrentView = !!postActions.scan_current_view
-    const shouldRefreshCurrentProfile = !!postActions.refresh_current_profile
-    const shouldRefreshProfileList = !!postActions.refresh_profile_list
-
-    const followUpTasks = []
-    if (shouldRefreshProfileList) {
-      followUpTasks.push(profileStore.fetchProfiles())
-    }
-    if (shouldRefreshCurrentProfile) {
-      followUpTasks.push(refreshData())
-    }
-    if (shouldRefreshProfileList) {
-      followUpTasks.push(workspaceStore.fetchGithubRepos())
-      followUpTasks.push(workspaceStore.fetchSavedCollections())
-    }
-    if (followUpTasks.length > 0) {
-      await Promise.all(followUpTasks)
-    }
-    if (shouldScanCurrentView) {
-      await requestModScan()
-    }
-  }
-  const showExportCompleteDialog = async (title, targetPath) => {
-    const normalizedPath = String(targetPath || '').trim()
-    if (!normalizedPath) {
-      toast.success(`${title}完成`)
-      return
-    }
-    const confirmStore = useConfirmStore()
-    const action = await confirmStore.confirmAction(
-      `${title}完成`,
-      `导出路径：${normalizedPath}`,
-      {
-        type: 'success',
-        actionButtons: [
-          { label: '打开导出目录', value: 'open', kind: 'primary' },
-          { label: '关闭', value: 'close', kind: 'secondary' },
-        ],
-      }
-    )
-    if (action === 'open') {
-      // 后端会在传入文件路径时打开其所在目录，这里保留完整导出路径方便日志和异常提示定位。
-      await openPath(normalizedPath)
     }
   }
   // 注册事件监听
@@ -1180,88 +871,6 @@ export const useAppStore = defineStore('app', () => {
     })
   }
 
-  // --- 设置相关 ---
-  // 打开/关闭设置页面
-  const openSettingsPanel = () => { uiState.showSettingsPanel = true }
-  const closeSettingsPanel = () => { uiState.showSettingsPanel = false }
-  // 保存单项设置
-  const saveSetting = async (key, value) => {
-    if (!window.pywebview) return
-    isLoading.value = true
-    try {
-      const res = await window.pywebview.api.save_setting(key, value)
-      if (checkResult(res, "保存单项设置", true)) {
-        // 更新本地 store
-        settings.value[key] = value
-      } 
-    } catch (e) {
-      console.error("保存单项设置异常:", e)
-      toast.error(`保存单项设置异常: \n${e.message}`)
-    } finally {
-      isLoading.value = false
-    }
-  }
-  const refreshUserThemes = async () => {
-    if (!window.pywebview) return userThemes.value
-    const res = await window.pywebview.api.theme_list_user()
-    if (checkResult(res, "读取用户主题", true)) {
-      userThemes.value = res.data?.themes || []
-      applyCurrentTheme()
-    }
-    return userThemes.value
-  }
-  const saveUserTheme = async (theme) => {
-    if (!window.pywebview) return null
-    const res = await window.pywebview.api.theme_save_user(theme)
-    if (!checkResult(res, "保存用户主题")) return null
-    const savedTheme = res.data?.theme
-    if (savedTheme) {
-      const nextThemes = userThemes.value.filter(item => item.id !== savedTheme.id)
-      userThemes.value = [...nextThemes, savedTheme]
-      applyCurrentTheme()
-    }
-    return savedTheme
-  }
-  const deleteUserTheme = async (themeId) => {
-    if (!window.pywebview) return false
-    const res = await window.pywebview.api.theme_delete_user(themeId)
-    if (!checkResult(res, "删除用户主题")) return false
-    userThemes.value = userThemes.value.filter(item => item.id !== themeId)
-    applyCurrentTheme()
-    return !!res.data?.deleted
-  }
-  // 应用全部设置（保存到后端并更新本地）
-  const applySettings = async (newSettings) => {
-    if (!window.pywebview) return
-    isLoading.value = true
-    try {
-      const res = await window.pywebview.api.save_all_settings(newSettings)
-      if (checkResult(res, "应用设置")) {
-        const profileStore = useProfileStore()
-        // 更新本地 store
-        Object.assign(settings.value, res.data.settings)
-        applyCurrentTheme()
-        syncRemoteImageCache(res.data.remote_image_cache)
-        profileStore.activeContext = res.data.active_context
-
-        // 如果路径变了，可能需要重新扫描
-        closeSettingsPanel()
-
-        if (settings.value.enable_auto_scan && profileStore.activeContext.is_healthy) {
-          const modStore = useModStore()
-          await modStore.scanMods(null, false)
-        } else{
-          await refreshData()
-        }
-        // await initialize()
-      }
-    } catch (e) {
-      console.error("应用设置异常:", e)
-      toast.error(`应用设置异常: \n${e.message}`)
-    } finally {
-      isLoading.value = false
-    }
-  }
   // 重置数据库
   const resetDatabase = async () => {
     if (!window.pywebview) return
@@ -1417,146 +1026,6 @@ export const useAppStore = defineStore('app', () => {
       window.pywebview.api.monitor_force_wake()
     }
   }
-  // 自动检测路径
-  const autoDetectPaths = async (updateStore = false) => {
-    if(!window.pywebview) return
-    const res = await window.pywebview.api.auto_detect_paths(false)
-    if (checkResult(res, "自动检测路径", true) && res.data.paths) {
-       // 更新本地 setting store
-      if(updateStore) {
-        Object.assign(settings.value, res.data.paths)
-        toast.success("路径已更新")
-      }
-      return res.data.paths
-    }
-  }
-  const getDefaultExternalPaths = async () => {
-    if(!window.pywebview) return
-    const res = await window.pywebview.api.get_default_external_paths()
-    if (checkResult(res, "获取默认外部路径",true) && res.data.paths) {
-      return res.data.paths
-    }
-  }
-  // 检测路径信息
-  const checkPath = async (path_type, path) => {
-    if(!path_type || !path) return
-    if(!window.pywebview) return
-    const res = await window.pywebview.api.path_check(path_type, path)
-    if (checkResult(res, "检测路径信息")) {
-      return res.data
-    }
-  }
-  // 检测路径信息
-  const checkPaths = async (path_data) => {
-    if(!path_data) return
-    if(!window.pywebview) return
-    const res = await window.pywebview.api.paths_check(path_data)
-    if (checkResult(res, "批量检测路径信息")) {
-      return res.data
-    }
-  }
-  // 打开路径
-  const openPath = async (path) => {
-    if(!window.pywebview) return
-    if(!path) return
-    console.log("打开路径:", path)
-    const res = await window.pywebview.api.path_open(path)
-    checkResult(res, "打开路径")
-  }
-  const openFile = async (path) => {
-    if (!window.pywebview) return
-    if (!path) return
-    const res = await window.pywebview.api.path_open_file(path)
-    checkResult(res, '打开文件')
-  }
-  const readTextFile = async (path, maxBytes = 2 * 1024 * 1024) => {
-    if (!window.pywebview) return null
-    if (!path) return null
-    const res = await window.pywebview.api.path_read_text_file(path, maxBytes)
-    if (checkResult(res, '读取文本文件', false)) {
-      return res.data
-    }
-    return null
-  }
-  // 获取文件路径
-  const getFilePath = async (home_path, file_types=('XML Files (*.xml;*.rws)', 'All Files (*.*)')) => {
-    if(!window.pywebview) return
-    // 调用后端 API
-    const res = await window.pywebview.api.file_select_dialog(home_path, file_types)
-    if (checkResult(res, "获取文件路径")) {
-      return res.data
-    } else return
-  }
-  // 获取文件夹路径
-  const getFolderPath = async (home_path) => {
-    if(!window.pywebview) return
-    if(!home_path) home_path=''
-    // 调用后端 API
-    const res = await window.pywebview.api.folder_select_dialog(home_path)
-    if (checkResult(res, "获取文件夹路径")) {
-        return res.data
-    } else if (res.status === 'error') {
-        console.error("获取文件夹路径异常:", res.message)
-    }
-  }
-  // 删除文件/文件夹
-  const deletePath = async (path, reScan=true) => {
-    if(!window.pywebview) return
-    const confirmStore = useConfirmStore()
-    const decision = await confirmStore.confirmDeleteAction(
-      '删除确认', `确定要删除 ${path} 吗？`,
-      {
-        trashOptionText: '移入回收站',
-        forceOptionText: '强制删除',
-      }
-    );
-    if(!decision?.confirmed) return
-    const res = await window.pywebview.api.path_delete(path, !!decision.force)
-    if (checkResult(res, "删除文件/文件夹")) {
-      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
-      if(reScan){
-        // 刷新Mod列表
-        const modStore = useModStore()
-        modStore.scanMods()
-      }
-      return true
-    }
-  }
-  // 批量删除文件/文件夹
-  const deletePaths = async (paths) => {
-    if(!window.pywebview) return
-    const confirmStore = useConfirmStore()
-    const decision = await confirmStore.confirmDeleteAction(
-      '删除确认', `确定要删除这 ${paths.length} 个文件/文件夹吗？`,
-      {
-        trashOptionText: '移入回收站',
-        forceOptionText: '强制删除',
-      }
-    );
-    if(!decision?.confirmed) return
-    const res = await window.pywebview.api.paths_delete(paths, !!decision.force)
-    if (checkResult(res, "批量删除文件/文件夹")) {
-      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${paths.length} 个文件/文件夹`)
-      // 刷新Mod列表
-      const modStore = useModStore()
-      modStore.scanMods()
-      return true
-    }
-  }
-  // 打开Url
-  const openUrl = (url) => {
-    if(!url) { toast.warning("网址为空！"); return}
-    if (isBrowserRuntime()) {
-      openManagedSubBrowserUrl(url, 'RimModManager')
-      return
-    }
-    if(settings.value.open_url_on_system){
-      window.open(url, '_blank')
-    }else{
-      if (!window.pywebview) return
-      window.pywebview.api.open_sub_browser(url)
-    }
-  }
   // 下载文件
   const startDownload = async (url, targetDir = null, filename = null) => {
     if (!window.pywebview) return
@@ -1586,13 +1055,6 @@ export const useAppStore = defineStore('app', () => {
     STEAM_RUNNING_WORKSHOP_CONFLICT: 'steam_running_workshop_conflict',
   })
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
-
-  const showSteamNotReadyHint = (res) => {
-    const statusHint = res?.data?.steam_status?.user_hint
-    if (res?.data?.action === 'steam_not_ready' && statusHint?.message) {
-      toast.warning(`${statusHint.title || 'Steam 未就绪'}\n${statusHint.message}`, { timeout: 6000 })
-    }
-  }
 
   const buildGameLaunchWarningConfig = (gameRes) => {
     const reason = String(gameRes?.data?.reason || '').trim()
@@ -1787,439 +1249,6 @@ export const useAppStore = defineStore('app', () => {
     return res.data
   }
 
-  const openPackageTransferDialog = (mode = 'mod-import', preset = {}) => {
-    packageTransferDialog.mode = String(mode || 'mod-import')
-    packageTransferDialog.preset = { ...(preset || {}) }
-    uiState.showPackageTransferDialog = true
-  }
-
-  const openCustomModExportDialog = ({
-    title = '导出模组',
-    description = '可按需附带依赖、联锁项和语言包。',
-    modIds = [],
-    summary = '',
-  } = {}) => {
-    const normalizedModIds = [...new Set(
-      (modIds || [])
-        .map(id => String(id || '').trim())
-        .filter(Boolean)
-    )]
-    openPackageTransferDialog('mod-export', {
-      title,
-      description,
-      mod_ids: normalizedModIds,
-      allowExtraOptions: true,
-      export_scope: 'custom',
-      summary: summary || `已选 ${normalizedModIds.length} 个模组。`,
-    })
-  }
-
-  const updatePackageTransferDialogPreset = (patch = {}) => {
-    Object.assign(packageTransferDialog.preset, patch || {})
-  }
-
-  const closePackageTransferDialog = () => {
-    uiState.showPackageTransferDialog = false
-    packageTransferDialog.mode = 'mod-import'
-    packageTransferDialog.preset = {}
-  }
-
-  // === Steam客户端交互 ===
-  // 兼容旧调用名：手动检查工具环境并按需弹窗。
-  const checkSteamTools = async () => checkToolMaintenance({ manual: true, prompt: true })
-  // 下载创意工坊项目
-  const downloadWorkshopItems = async (workshop_ids) => {
-    if (!window.pywebview) return
-    const res = await window.pywebview.api.steamcmd_download(workshop_ids)
-    if (checkResult(res, "下载创意工坊项目")) {
-      toast.success(`开始下载 ${workshop_ids.length} 个创意工坊项目`)
-    }
-  }
-  // 打开Steam创意工坊
-  const openSteamWorkshopUrl = (url) => {
-    if(url) {
-      const steamUrl = url.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', 'steam://url/CommunityFilePage/')
-      window.open(steamUrl, '_blank')
-    }
-  }
-  const openSteamWorkshopById = (id) => {
-    if(id) {
-      const steamUrl = `steam://url/CommunityFilePage/${id}`
-      window.open(steamUrl, '_blank')
-    }
-  }
-  const openInstallSource = (source) => {
-    const normalizedSource = normalizeInstallSource(source, source?.packageId || source?.package_id)
-    if (!normalizedSource) return false
-    if (normalizedSource.kind === 'workshop') {
-      openSteamWorkshopById(normalizedSource.workshopId)
-      return true
-    }
-    openUrl(normalizedSource.url)
-    return true
-  }
-  const subscribeInstallSources = async (sources = []) => {
-    const normalizedSources = normalizeInstallSources(sources)
-    const workshopIds = [...new Set(
-      normalizedSources
-        .filter(source => source.kind === 'workshop')
-        .map(source => source.workshopId)
-        .filter(Boolean)
-    )]
-    const skippedUrlCount = normalizedSources.filter(source => source.kind === 'url').length
-    if (workshopIds.length === 0) {
-      if (skippedUrlCount > 0) {
-        toast.info('URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。')
-      }
-      return false
-    }
-    const success = await subscribeWorkshopIds(workshopIds)
-    if (success && skippedUrlCount > 0) {
-      toast.info(`已跳过 ${skippedUrlCount} 个 URL 来源订阅项`)
-    }
-    return success
-  }
-  const downloadInstallSources = async (sources = []) => {
-    const normalizedSources = normalizeInstallSources(sources)
-    const workshopIds = [...new Set(
-      normalizedSources
-        .filter(source => source.kind === 'workshop')
-        .map(source => source.workshopId)
-        .filter(Boolean)
-    )]
-    const urlSources = normalizedSources.filter(source => source.kind === 'url' && source.url)
-    if (workshopIds.length === 0 && urlSources.length === 0) return false
-    if (workshopIds.length > 0) {
-      await downloadWorkshopItems(workshopIds)
-    }
-    if (urlSources.length > 0) {
-      urlSources.forEach(source => openUrl(source.url))
-      toast.info(`已打开 ${urlSources.length} 个外部来源，后续可接入专门下载流程。`)
-    }
-    return true
-  }
-  const resolveWorkshopIdsFromPackageIds = async (packageIds) => {
-    if (!packageIds) return []
-    const workshopStore = useWorkspaceStore()
-    return await workshopStore.resolvePackageIdsToWorkshopIds(packageIds)
-  }
-  // 根据包名下载Mod
-  const downloadPackageIds = async (packageIds) => {
-    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
-    if (workshopIds.length === 0) return false
-    // 调用下载函数
-    await downloadWorkshopItems(workshopIds)
-    return true
-  }
-  // 根据包名订阅Mod
-  const subscribePackageIds = async (packageIds) => {
-    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
-    if (workshopIds.length === 0) return false
-    // 调用订阅函数
-    await subscribeWorkshopIds(workshopIds)
-    return true
-  }
-  // 订阅模组
-  const subscribeWorkshopIds = async (workshop_ids) => {
-    if (!window.pywebview) return
-    if (!workshop_ids || workshop_ids.length === 0) return
-    const res = await window.pywebview.api.steam_subscribe(workshop_ids)
-    if (res?.status === 'success') {
-      toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的订阅请求`, { timeout: 2500 })
-      return true
-    }
-    if (res?.status === 'warning') {
-      showSteamNotReadyHint(res)
-      return false
-    }
-    toast.error(`订阅失败: ${res?.message || '未知错误'}`)
-    return false
-  }
-  // 取消订阅模组
-  const unsubscribeWorkshopIds = async (workshop_ids, deletePathHashes = null, deleteOptions = {}) => {
-    if (!window.pywebview) return false
-    if (!workshop_ids || workshop_ids.length === 0) return
-    const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
-    if (res?.status === 'success') {
-      const normalizedDeleteHashes = Array.isArray(deletePathHashes)
-        ? deletePathHashes.filter(Boolean)
-        : []
-      if (normalizedDeleteHashes.length > 0) {
-        const deleteRes = await window.pywebview.api.mods_delete(normalizedDeleteHashes, !!deleteOptions.force)
-        if (deleteRes?.status !== 'success') {
-          toast.error(`取消订阅成功，但删除副本失败: ${deleteRes?.message || '未知错误'}`)
-          return false
-        }
-        const modStore = useModStore()
-        await modStore.scanMods()
-        toast.info(`已取消订阅并删除 ${normalizedDeleteHashes.length} 个工坊副本`, { timeout: 2500 })
-        return true
-      }
-      toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的取消订阅请求`, { timeout: 2500 })
-      return true
-    }
-    if (res?.status === 'warning') {
-      showSteamNotReadyHint(res)
-      return false
-    }
-    toast.error(`取消订阅失败: ${res?.message || '未知错误'}`)
-    return false
-  }
-  // 获取订阅合集列表
-  const getCollectionItems = async (collection_id) => {
-    if (!window.pywebview) return
-    const res = await window.pywebview.api.steam_collection_items_get(collection_id)
-    if (checkResult(res, `获取订阅合集列表 ${collection_id}`)) {
-      return res.data
-    }
-  }
-
-  // --- 统一软件数据导入导出 ---
-  const getDataBundleSchema = async () => {
-    if (!window.pywebview) return null
-    const res = await window.pywebview.api.data_bundle_get_schema()
-    return checkResult(res, '获取数据导入导出配置') ? res.data : null
-  }
-  const inspectDataBundle = async (bundlePath) => {
-    if (!window.pywebview || !bundlePath) return null
-    const res = await window.pywebview.api.data_bundle_inspect(bundlePath)
-    return checkResult(res, '读取数据包摘要') ? res.data : null
-  }
-  const exportDataBundle = async (payload = {}) => {
-    if (!window.pywebview) return false
-    const res = await window.pywebview.api.data_bundle_export(payload)
-    if (!checkResult(res, '导出软件数据', true)) return false
-    window.setTimeout(() => {
-      void showExportCompleteDialog('软件数据导出', res.data?.path)
-    }, 0)
-    return res.data
-  }
-  const importDataBundle = async (bundlePath, payload = {}) => {
-    if (!window.pywebview || !bundlePath) return false
-    isLoading.value = true
-    try {
-      const res = await window.pywebview.api.data_bundle_import(bundlePath, payload)
-      if (!checkResult(res, '导入软件数据', true)) return false
-
-      const profileStore = useProfileStore()
-      const workspaceStore = useWorkspaceStore()
-      Object.assign(settings.value, res.data?.settings || {})
-      profileStore.activeContext = res.data?.active_context || profileStore.activeContext
-
-      await refreshData()
-      await Promise.all([
-        profileStore.fetchProfiles(),
-        workspaceStore.fetchGithubRepos(),
-        workspaceStore.fetchSavedCollections(),
-      ])
-
-      const warnings = res.data?.result?.warnings || []
-      if (warnings.length > 0) {
-        toast.warning(warnings.join('\n'), { timeout: 8000 })
-      }
-      return res.data
-    } finally {
-      isLoading.value = false
-    }
-  }
-  const getModPackageSchema = async () => {
-    if (!window.pywebview) return null
-    const res = await window.pywebview.api.mod_package_get_schema()
-    return checkResult(res, '获取模组打包配置') ? res.data : null
-  }
-  const prepareModPackageImport = async (bundlePath, payload = {}) => {
-    if (!window.pywebview || !bundlePath) return null
-    const res = await window.pywebview.api.mod_package_prepare_import(bundlePath, payload)
-    return checkResult(res, '预检模组包导入') ? res.data : null
-  }
-  const getModPackageProfileSummary = async (profileId = '') => {
-    if (!window.pywebview) return null
-    const res = await window.pywebview.api.mod_package_get_profile_summary(profileId)
-    return checkResult(res, '读取环境导出统计') ? res.data : null
-  }
-  const exportModPackage = async (payload = {}) => {
-    if (!window.pywebview) return false
-    const res = await window.pywebview.api.mod_package_export(payload)
-    if (!checkResult(res, '启动导出任务')) return false
-    const taskId = String(res.data?.task_id || '').trim()
-    if (taskId) {
-      taskStore.createPlaceholderTask({
-        id: taskId,
-        type: 'mod-export',
-        status: 'pending',
-        progress: 0,
-        message: '准备导出模组包...',
-        metrics: {
-          title: '导出模组包',
-          target_path: res.data?.target_path || '',
-        },
-      })
-    }
-    return res.data
-  }
-  const importModPackage = async (bundlePath, payload = {}) => {
-    if (!window.pywebview || !bundlePath) return false
-    if (taskStore.hasActiveTaskOfType('mod-import')) {
-      toast.info('已有模组包导入任务正在进行')
-      return false
-    }
-    const normalizedPayload = { ...(payload || {}) }
-    const res = await window.pywebview.api.mod_package_import(bundlePath, normalizedPayload)
-    if (!checkResult(res, '启动模组包导入')) return false
-    const taskId = String(res.data?.task_id || '').trim()
-    if (taskId) {
-      taskStore.createPlaceholderTask({
-        id: taskId,
-        type: 'mod-import',
-        status: 'pending',
-        progress: 0,
-        message: '准备导入模组包...',
-        metrics: {
-          title: '导入模组包',
-          bundle_path: bundlePath,
-        },
-      })
-    }
-    return res.data
-  }
-
-  // === 更新相关函数 ===
-  // 检查更新
-  const checkUpdate = async (manual = true) => {
-    updateState.isChecking = true
-    logMaintenanceCheck('api_start', { id: 'app-update', name: '软件更新', manual })
-    try {
-      const res = await window.pywebview.api.update_check(manual)
-      if (checkResult(res, "检查更新")) {
-        const info = res.data
-        logMaintenanceCheck('api_result', { id: 'app-update', name: '软件更新', manual, status: res.status, hasUpdate: !!info?.has_update, version: info?.version || '', localStatus: info?.local_status || '' })
-        if (info.has_update) {
-          updateState.hasUpdate = true
-          updateState.info = info
-          const promptQueue = usePromptQueueStore()
-          await promptQueue.enqueue({
-            category: 'startup-app-update',
-            title: `发现新版本 v${info.version}`,
-            message: `来源: ${info.source_name || '未知'}。文件大小: ${info.file_size || '未知'}。`,
-            type: 'success',
-            priority: manual ? 20 : 50,
-            items: [{
-              id: info.version || 'app-update',
-              title: `RimModManager v${info.version}`,
-              description: info.changelog || '发现可用更新。',
-              raw: info,
-              actions: [
-                { id: 'update', label: '立即更新', kind: 'primary' },
-                { id: manual ? 'skip' : 'ignore', label: manual ? '以后再说' : '忽略此版本', kind: 'secondary' },
-              ],
-            }],
-            bulkActions: [
-              { id: 'update_all', label: '立即更新', kind: 'primary' },
-              { id: manual ? 'skip_all' : 'ignore_all', label: manual ? '以后再说' : '忽略此版本', kind: 'secondary' },
-            ],
-            onItemAction: async (_item, actionId) => {
-              if (actionId === 'update') {
-                await _performUpdateAction()
-              } else if (actionId === 'ignore' && !manual) {
-                await window.pywebview.api.update_ignore_version(info.version)
-              }
-            },
-            onBulkAction: async (actionId) => {
-              if (actionId === 'update_all') {
-                await _performUpdateAction()
-              } else if (actionId === 'ignore_all' && !manual) {
-                await window.pywebview.api.update_ignore_version(info.version)
-              }
-            },
-          })
-        } else if (manual) {
-          toast.success("当前已是最新版本")
-        }
-      } else {
-        logMaintenanceCheck('api_result', { id: 'app-update', name: '软件更新', manual, status: res?.status || 'error', message: res?.message || '' }, 'warn')
-      }
-    } catch (error) {
-      logMaintenanceCheck('api_error', { id: 'app-update', name: '软件更新', manual, message: error?.message || String(error || '') }, 'error')
-      throw error
-    } finally {
-      updateState.isChecking = false
-    }
-  }
-  const showChangelog = async () => {
-    // 1. 如果当前没有日志数据（比如是从设置面板点进来的），主动从后端拉取
-    if (!upgradeContext.value.changelog || upgradeContext.value.changelog.length === 0) {
-      isLoading.value = true // 开启加载动画
-      try {
-        const res = await window.pywebview.api.get_changelog()
-        if (res.status === 'success') {
-          upgradeContext.value.changelog = res.data
-        }
-      } catch (e) {
-          console.error("无法获取更新日志:", e)
-      } finally {
-          isLoading.value = false
-      }
-    }
-    // 2. 显示弹窗
-    uiState.showUpdateModal = true
-  }
-  const _showInstallPrompt = async (data) => {
-    const confirmStore = useConfirmStore()
-    const ok = await confirmStore.confirmAction(
-      `确认安装更新？`,
-      `压缩包已经下载到：${data.path}\n是否继续安装更新？安装后将重启应用程序。`,
-      { confirmText: '确认安装', cancelText: '取消', type: 'warning' }
-    )
-    if (!ok) return toast.info("用户取消安装")
-    await _performUpdateAction()
-  }
-  // 触发操作 (下载 OR 安装)
-  const _performUpdateAction = async () => {
-    const info = updateState.info
-    if (!info) return
-    // 如果是 Ready 状态，弹出最后确认框 (因为会重启)
-    if (info.local_status === 'ready') {
-      const confirmStore = useConfirmStore()
-      const ok = await confirmStore.confirmAction(
-        "准备重启",
-        "安装包已准备就绪。点击确认将关闭当前程序并自动安装更新。",
-        { confirmText: '立即重启安装', type: 'warning' }
-      )
-      if (!ok) return
-    }
-
-    // 调用统一接口
-    const res = await window.pywebview.api.update_trigger_action()
-    if (checkResult(res,'开始下载更新包')) {
-      // 如果后端开始下载，这里不需要做什么，因为 EventListener 会接管进度条
-      if (res.data && res.data.status === 'downloading') {
-        toast.info("开始下载更新包...")
-      }
-    } else {
-      toast.error(res.message)
-    }
-  }
-  // 更新外置数据库
-  const updateExternalDB = async (type) => {
-    try {
-      const workNameMap = {
-        community_rules: '更新社区规则库',
-        workshop_db: '更新社区工坊数据库',
-        instead_db: '更新替代 Mod 数据库',
-      }
-      // 调用 API
-      const res = await window.pywebview.api.update_external_db(type)
-      if (checkResult(res, workNameMap[type] || `更新外置数据库 ${type}`)) {
-        const task_id = res.data.task_id
-        await waitForDownload(task_id)
-        // 重新获取数据
-        await refreshData() 
-      }
-    } catch (error) {
-      toast.error("更新社区库失败: " + error.message)
-    }
-  }
-
   return {
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
     themes, currentTheme, userThemes, themeEditor,
@@ -2230,7 +1259,7 @@ export const useAppStore = defineStore('app', () => {
     requestModScan,
     getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache,
     // 游戏相关
-  checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
+    checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
