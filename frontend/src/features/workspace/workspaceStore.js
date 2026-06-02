@@ -6,11 +6,8 @@ import { checkResult, toast } from '../../shared/lib/common'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { SOURCE_TYPE_MAP } from '../../shared/lib/constants'
 import {
-  dedupeNormalizedPackageIds,
-  normalizeInstallSources,
-  normalizePackageId,
-  normalizeUrl,
-  normalizeWorkshopId,
+  dedupeNormalizedPackageIds, normalizeInstallSources,
+  normalizePackageId, normalizeUrl, normalizeWorkshopId,
 } from '../mod/lib/modIdentity'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
@@ -35,7 +32,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return String(a.name || a.package_id || '').localeCompare(String(b.name || b.package_id || ''))
     })
   }
-  
+
   // 1. 已订阅的工坊 ID (仅统计创意工坊域)
   const subscribedWorkshopIds = computed(() => {
     return new Set(
@@ -483,7 +480,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           if (onlineMap[wid]) {
             const onlineInfo = onlineMap[wid]
             mod.online_info = onlineInfo
-            const localTime = mod.steam_status?.time_downloaded || 
+            const localTime = mod.steam_status?.time_downloaded ||
                               mod.steam_status?.installed_version_time || 0
             mod.has_update = onlineInfo.time_updated > (localTime + 3600 * 1000)
           }
@@ -639,7 +636,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (checkResult(res, '工坊检索')) {
         const newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
         if (isAppend) {
-          workshopSearch.results = [...workshopSearch.results, ...newItems] 
+          workshopSearch.results = [...workshopSearch.results, ...newItems]
         } else {
           workshopSearch.results = newItems
           workshopSearch.total = res.data.total
@@ -706,7 +703,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const prevId = workshopSearch.historyStack.pop()
     await fetchWorkshopDetails(prevId, true)
     // 抵消刚刚 push 进去的动作
-    workshopSearch.historyStack.pop() 
+    workshopSearch.historyStack.pop()
   }
 
   const normalizeGitTimelinePath = (value = '') => String(value || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/g, '').toLowerCase()
@@ -914,7 +911,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     collections.activeDetails = coll || null
     collections.activeChildren = Array.isArray(coll?.children) ? [...coll.children] : []
     collections.isChildrenLoading = true
-    
+
     // 这步会立即返回数据库里的旧数据 (或者为 null)
     try {
       const res = await window.pywebview.api.lifecycle_fetch_collection(coll.id)
@@ -1028,22 +1025,27 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       appStore.isLoading = false
     }
   }
-  
+
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (workshop_id, on_steam=true) => {
     if(!workshop_id) return
-    const steamUrl = on_steam ? `steam://url/CommunityFilePage/${workshop_id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshop_id}` 
+    const steamUrl = on_steam ? `steam://url/CommunityFilePage/${workshop_id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshop_id}`
     window.open(steamUrl, '_blank')
   }
 
 
   return {
+    // 库矩阵状态
     librariesMods, isFetching, librariesSize, activeChildrenWithStatus,
     workshopSearch, timeline, subscribedWorkshopIds, installedAllIds, missingWorkshopIds, getModStatus, modTransfer,
     matrixFocusTarget, getMatrixSameItems, getMatrixConflictItems, jumpToMatrixItem,
+    // 库数据与工坊时间线
     fetchLibrariesMods, refreshLifecycleUpdateStates, doWorkshopSearch, fetchWorkshopDetails, openTimeline, openTimelineGithub, setupListeners, setWorkshopSearchMode,
+    // GitHub 数据
     github, fetchGithubRepos, fetchGithubProviderCatalog, fetchGithubTimeline, startGithubTimelinePolling, stopGithubTimelinePolling, selectGithubRepo, clearActiveGithubRepo,
+    // 懒加载与来源映射
     getGithubOnlineVersion, getGithubRepoStatus, githubRepoNeedsUpdate, ensureLibrariesLoaded, ensureGithubLoaded, ensureCollectionsLoaded, ensureWorkspaceTabLoaded, refreshLoadedData, openSteamWorkshopUrl, getWorkshopDetailsByPackageIdsMap, getInstallSourcesByPackageIdsMap, getWorkshopIdsByPackageIdsMap, resolvePackageIdsToWorkshopIds, goBackWorkshopDetail,
-    collections, fetchSavedCollections, addCollection, removeCollection, selectCollection
+    // 合集
+    collections, fetchSavedCollections, addCollection, removeCollection, selectCollection,
   }
 })

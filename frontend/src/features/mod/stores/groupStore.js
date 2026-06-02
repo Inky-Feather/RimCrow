@@ -127,13 +127,13 @@ export const useGroupStore = defineStore('groups', () => {
           return true
         } else {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         }
       } catch (e) {
         console.error("创建分组异常:", e)
         toast.error(`创建分组异常: \n${e.message}\n正在还原...`)
       // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -155,7 +155,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("删除分组异常:", e)
         toast.error(`删除分组异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -173,7 +173,7 @@ export const useGroupStore = defineStore('groups', () => {
       // console.log("更新分组:", res)
         if (!checkResult(res, "更新分组")) {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         } else {
           return true
         }
@@ -181,7 +181,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("更新分组异常:", e)
         toast.error(`更新分组异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -204,7 +204,7 @@ export const useGroupStore = defineStore('groups', () => {
       // console.log("分组添加模组:", res)
         if (!checkResult(res, "分组添加模组")) {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         } else {
           return true
         }
@@ -212,7 +212,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("分组添加模组异常:", e)
         toast.error(`分组添加模组异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -240,7 +240,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("分组移除模组异常:", e)
         toast.error(`分组移除模组异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -256,7 +256,7 @@ export const useGroupStore = defineStore('groups', () => {
       // console.log("批量展开切换:", res)
         if (!checkResult(res, "批量展开切换")) {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         } else {
           return true
         }
@@ -264,7 +264,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("批量展开切换异常:", e)
         toast.error(`批量展开切换异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -280,7 +280,7 @@ export const useGroupStore = defineStore('groups', () => {
       // console.log("分组排序:", res)
         if (!checkResult(res, "分组排序")) {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         } else {
           return true
         }
@@ -288,7 +288,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("分组排序异常:", e)
         toast.error(`分组排序异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -309,7 +309,7 @@ export const useGroupStore = defineStore('groups', () => {
       // console.log("分组内排序:", res)
         if (!checkResult(res, "分组内排序")) {
         // 失败时才重新拉取数据进行还原
-          await getGroups() 
+          await getGroups()
         } else {
           return true
         }
@@ -317,7 +317,7 @@ export const useGroupStore = defineStore('groups', () => {
         console.error("分组内排序异常:", e)
         toast.error(`分组内排序异常: \n${e.message}\n正在还原...`)
         // 失败时才重新拉取数据进行还原
-        await getGroups() 
+        await getGroups()
       }
       return false
     })
@@ -325,9 +325,13 @@ export const useGroupStore = defineStore('groups', () => {
 
 
   return {
+    // 状态
     groupList, isDraggingGroup, allGroupNames,
-    takeGroupsByModId, takeGroupById, setGroups, reset, 
-    getGroups, createGroup, deleteGroup, updateGroup, 
-    groupAddMods, groupRemoveMods, changeAllGroupExpansion, groupReorder, groupContentReorder
+    // 查询与本地同步
+    takeGroupsByModId, takeGroupById, setGroups, reset,
+    // 分组管理
+    getGroups, createGroup, deleteGroup, updateGroup,
+    // 分组内容与排序
+    groupAddMods, groupRemoveMods, changeAllGroupExpansion, groupReorder, groupContentReorder,
   }
 })

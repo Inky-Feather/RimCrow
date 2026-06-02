@@ -4,7 +4,7 @@ import { ref, reactive } from 'vue'
 
 export const useConfirmStore = defineStore('confirm', () => {
   const isVisible = ref(false)
-  
+
   // 弹窗配置
   const state = reactive({
     type: 'info',      // 'info' | 'warning' | 'error' | 'success'
@@ -56,7 +56,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     state.promptItems = []
     state.onPromptItemAction = null
     state.isResolving = false
-    
+
     // 2. 合并配置
     Object.assign(state, {
       type: 'info',
@@ -132,14 +132,14 @@ export const useConfirmStore = defineStore('confirm', () => {
       resolvePromise && resolvePromise({ confirmed: false, force: !!state.forceDelete })
     } else if (state.mode === 'confirm') resolvePromise && resolvePromise(false)
     else resolvePromise && resolvePromise(null)
-    
+
     state.isResolving = true
     isVisible.value = false
   }
 
   // 便捷方法
   const alert = (title, message, options) => open({ title, message, mode: 'alert', ...options })
-  
+
   const confirmAction = (title, message, options) => open({ title, message, mode: 'confirm', type: 'warning', ...options })
 
   const confirmDeleteAction = (title, message, options) => open({
@@ -155,15 +155,18 @@ export const useConfirmStore = defineStore('confirm', () => {
     deleteOptionsHint: '默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。',
     ...options,
   })
-  
+
   const prompt = (title, placeholder, options) => open({ title, placeholder, mode: 'prompt', ...options })
-  
+
   // 迷弹窗便捷入口
   const popover = (target, title, message) => open({ title, message, mode: 'confirm' }, target)
 
-  return { 
-    isVisible, state, 
+  return {
+    // 状态
+    isVisible, state,
+    // 基础流程
     open, confirm, cancel, chooseAction, choosePromptItemAction, closeSilently,
-    alert, confirmAction, confirmDeleteAction, prompt, popover
+    // 便捷入口
+    alert, confirmAction, confirmDeleteAction, prompt, popover,
   }
 })

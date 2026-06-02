@@ -8,7 +8,7 @@ export const useHoverStore = defineStore('hover', () => {
   const isHovering = ref(false)
   const type = ref('preview') // 类型：'preview' | 'text'
   const isHtml = ref(false) // 标记内容是否为原始 HTML
-  
+
   // 数据与坐标
   const data = ref(null)
   const targetX = ref(0)
@@ -38,11 +38,11 @@ export const useHoverStore = defineStore('hover', () => {
     if (!content) return
     // console.log('show', content, event)
     // 记录触发源 (可以是 DOM 元素或者一个唯一标识)
-    activeTarget.value = event?.currentTarget || true 
+    activeTarget.value = event?.currentTarget || true
     // 延迟显示，避免立即显示导致的闪烁
     timer = setTimeout(() => {
       // 重置 html 标记
-      isHtml.value = false 
+      isHtml.value = false
       const appStore = useAppStore()
       // 情况 A: 自定义组件模式
       if (content && content.component) {
@@ -56,16 +56,16 @@ export const useHoverStore = defineStore('hover', () => {
         data.value = content.content
         // 如果标记了 html: true，则开启 HTML 模式
         if (content.html) isHtml.value = true
-        
+
         // 如果传入了 type (比如 'preview')，则使用传入的，否则默认为 text
-        type.value = content.type || 'text' 
+        type.value = content.type || 'text'
       }
       // 情况 C: 传入的是普通对象 (Mod数据预览) 且设置中允许显示悬浮面板
       else if (typeof content === 'object') {
         if (!appStore.settings.ui.show_mod_hover_panel) return
         data.value = content
         type.value = 'preview'
-      } 
+      }
       // 情况 D: 纯文本
       else {
         data.value = content
@@ -97,8 +97,10 @@ export const useHoverStore = defineStore('hover', () => {
     targetY.value = event.clientY
   }
 
-  return { 
+  return {
+    // 状态
     isHovering, data, type, isHtml, targetX, targetY, customComponent, componentProps,
-    show, hide, updatePosition 
+    // 操作
+    show, hide, updatePosition,
   }
 })

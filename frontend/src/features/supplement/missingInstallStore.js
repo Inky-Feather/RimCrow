@@ -992,31 +992,14 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   }
 
   return {
-    isVisible,
-    pendingAction,
-    isActionPending,
-    state,
-    visibleRows,
-    selectedCount,
-    totalCount,
-    isSelected,
-    getSummaryForActiveList,
-    getVersionTooltip,
-    getRowVersionInfo,
-    getSelectedChoice,
-    getSelectedSource,
-    openForActiveList,
-    ensureResolvedBeforeAction,
-    close,
-    toggleRow,
-    setChoice,
-    selectAll,
-    clearSelection,
-    subscribeSelected,
-    downloadSelected,
-    cleanupUnknownItems,
-    continueCurrentAction,
-    disableRelatedOwners,
-    openSource,
+    // 弹窗状态
+    isVisible, pendingAction, isActionPending, state, visibleRows, selectedCount, totalCount,
+    // 读取与展示
+    isSelected, getSummaryForActiveList, getVersionTooltip, getRowVersionInfo, getSelectedChoice, getSelectedSource,
+    // 打开与前置检查
+    openForActiveList, ensureResolvedBeforeAction, close,
+    // 选择与处理动作
+    toggleRow, setChoice, selectAll, clearSelection,
+    subscribeSelected, downloadSelected, cleanupUnknownItems, continueCurrentAction, disableRelatedOwners, openSource,
   }
 })

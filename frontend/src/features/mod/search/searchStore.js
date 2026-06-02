@@ -39,38 +39,38 @@ export const useSearchStore = defineStore('search', () => {
       label: '存在共存版本',
       getter: (mod) => !!mod.coexist_workshop_variant
     },
-    last_active: { 
-      type: FIELD_TYPES.BOOLEAN, 
-      label: '最近启用', 
+    last_active: {
+      type: FIELD_TYPES.BOOLEAN,
+      label: '最近启用',
       getter: (mod) => mod.last_active_time > appStore.settings.last_run_time
     },
 
     // === 来源 (枚举) ===
-    source: { 
-      type: FIELD_TYPES.STRING, 
+    source: {
+      type: FIELD_TYPES.STRING,
       suggest: true,
       label: '来源',
     },
-    mod_type: { 
-      type: FIELD_TYPES.STRING, 
-      suggest: true, 
+    mod_type: {
+      type: FIELD_TYPES.STRING,
+      suggest: true,
       label: '类型',
       getter: (mod) => modStore.displayModType(mod)
     },
     sign_color:{
-      type: FIELD_TYPES.STRING, 
-      suggest: true, 
+      type: FIELD_TYPES.STRING,
+      suggest: true,
       label: '标记颜色',
       label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || color || '无',
       color_getter: (color) => color || 'var(--color-text-main)',
     },
-    store: { 
-      type: FIELD_TYPES.STRING, 
-      suggest: true, 
-      label: '储存位置', 
-      label_getter: (store) => STORE_MAP[store] || '未知' 
+    store: {
+      type: FIELD_TYPES.STRING,
+      suggest: true,
+      label: '储存位置',
+      label_getter: (store) => STORE_MAP[store] || '未知'
     },
-    
+
     // === 时间 (假设 mod 对象里有 updated_at) ===
     // last_updated: {
     //   type: FIELD_TYPES.DATE,
@@ -86,14 +86,14 @@ export const useSearchStore = defineStore('search', () => {
   // 3. 初始化/重建引擎的逻辑
   const rebuildEngine = () => {
     const allMods = Array.from(modStore.allModsMap.values())
-  
+
     engine.value = new SearchEngine(allMods, {
         // 1. 强制指定的 Schema (特殊逻辑)
         schema: searchSchema,
-        
+
         // 2. 开启自动检测 (填充 name, author, version 等常规字段)
         autoDetect: false,
-        
+
         // 3. [新增] 排除规则
         // 支持正则，彻底屏蔽不需要的字段
         excludeFields: [
@@ -120,7 +120,7 @@ export const useSearchStore = defineStore('search', () => {
   }, { immediate: true }) // 立即执行一次
 
   return {
-    engine, // 暴露引擎实例供组件调用
-    rebuildEngine
+    // 搜索引擎
+    engine, rebuildEngine,
   }
 })

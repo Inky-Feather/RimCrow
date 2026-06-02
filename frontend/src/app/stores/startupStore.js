@@ -123,7 +123,9 @@ export const useStartupStore = defineStore('startup', () => {
   }
 
   return {
+    // 启动状态
     phase, lastError,
+    // 启动入口
     run,
   }
 })

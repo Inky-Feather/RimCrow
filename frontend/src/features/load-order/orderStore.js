@@ -13,7 +13,7 @@ export const useOrderStore = defineStore('order', () => {
   const modStore = useModStore()
   const confirmStore = useConfirmStore()
   const supplementStore = useSupplementStore()
-  
+
   // === State ===
   const backups = ref(null)           // 备份文件列表
   const backupProfileId = ref('')     // 当前查看的备份所属环境
@@ -425,11 +425,11 @@ export const useOrderStore = defineStore('order', () => {
         // console.log("导出加载顺序成功:", res)
         toast.success("Mod序列已导出")
         return true
-      } 
+      }
     } catch (e) {
       console.error("导出Mod序列异常:", e)
       toast.error(`导出Mod序列异常: \n${e.message}`)
-    } 
+    }
     return false
   }
   const copyTextToClipboard = async (text) => {
@@ -499,10 +499,10 @@ export const useOrderStore = defineStore('order', () => {
   // 从文件获取加载顺序
   const getFileOrder = async (mods_config_file_path=null, source_profile_id='') => {
     if (!window.pywebview) return
-    const res = (mods_config_file_path || source_profile_id) ? 
-      await window.pywebview.api.load_order_file_open(mods_config_file_path, source_profile_id || null) : 
+    const res = (mods_config_file_path || source_profile_id) ?
+      await window.pywebview.api.load_order_file_open(mods_config_file_path, source_profile_id || null) :
       await window.pywebview.api.load_order_get()
-    
+
     if (checkResult(res, "打开加载顺序")) {
       console.log("打开加载顺序:", res)
       return res.data
@@ -719,11 +719,16 @@ export const useOrderStore = defineStore('order', () => {
     }
   }
   return {
+    // 备份状态
     backups, backupProfileId, backupProfileDir, tempImports, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
+    // 导入检查状态
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
+    // 读取、导入与导出
     getLoadOrder, selectBackupOrder, importExternalOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
     exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, getImportCheckItem, takeImportCheckItems, getImportCheckTargetSource, openImportCheckWorkshop,
+    // 导入检查处理
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
+    // 备份状态维护
     setBackupOrder, clearBackupOrder, setBackupProfile, registerTempImport, removeTempImport, clearTempImports, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
   }
 })

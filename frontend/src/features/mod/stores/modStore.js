@@ -89,7 +89,7 @@ export const useModStore = defineStore('mods', () => {
   const isDeclaredForCurrentLanguage = (mod) => (
     !!currentLanguage.value && (mod?.supported_languages || []).includes(currentLanguage.value)
   )
-  
+
   // === State ===
   const allModsMap = ref(new Map())   // 核心数据，使用 Map 加速查找
   const dataVersion = ref(0)          // 数据版本，用于响应式刷新触发器
@@ -105,7 +105,7 @@ export const useModStore = defineStore('mods', () => {
   const inactiveIds = ref([])         // 未激活Mod列表
   const tempIds = ref([])             // 临时Mod列表
   const activeIds = ref([])           // 已激活Mod列表
-  
+
   const interlocksMap = ref(new Map()) // 联锁字典: Map<String(interlock_id), Array<String(package_ids)>>
   const savedInactiveIds = ref([])   // 从后端拉取的历史停用顺序
   const savedActiveIds = ref([])      // 原始已激活列表快照（用于判断 列表变化）
@@ -486,7 +486,7 @@ export const useModStore = defineStore('mods', () => {
         mod.last_active_time = data.active_load_modify_time || Date.now()
       }
       // 强制保证列表字段存在且格式正确
-      if (!Array.isArray(mod.author) && !mod.author) mod.author = ['Unknown'] 
+      if (!Array.isArray(mod.author) && !mod.author) mod.author = ['Unknown']
       if (!Array.isArray(mod.supported_versions)) mod.supported_versions = []
       if (!Array.isArray(mod.supported_languages)) mod.supported_languages = []
       if (!Array.isArray(mod.gallery_paths)) mod.gallery_paths = []
@@ -643,7 +643,7 @@ export const useModStore = defineStore('mods', () => {
     if (!window.pywebview) return
     if(typeof ids === 'string') ids = [ids]
     console.log(ids)
-    
+
     const res = await window.pywebview.api.smart_insert_mod_in_actives(ids, activeIds.value)
     if(checkResult(res, '智能插入 Mod 到 Active 列表') && res.data){
       activeIds.value = [...res.data]
@@ -739,7 +739,7 @@ export const useModStore = defineStore('mods', () => {
   const autoSortMods = async (mod_ids) => {
     if (!window.pywebview) return
     // 处理空输入，默认使用当前活动项
-    if (!mod_ids || mod_ids.length === 0) mod_ids = activeIds.value 
+    if (!mod_ids || mod_ids.length === 0) mod_ids = activeIds.value
     try {
       const missingInstallStore = useMissingInstallStore()
       const supplementStore = useSupplementStore()
@@ -921,11 +921,11 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, "批量设置 Mod 颜色", true)) {
         await appStore.refreshData();
         return false
-      } 
+      }
       return true
     } catch (e) {
       toast.error(`批量设置颜色失败: ${e}`)
-      await appStore.refreshData() 
+      await appStore.refreshData()
       return false
     }
   }
@@ -943,11 +943,11 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, "批量设置 Mod 类型", true)) {
         await appStore.refreshData();
         return false
-      } 
+      }
       return true
     } catch (e) {
       toast.error(`批量设置类型失败: ${e}`)
-      await appStore.refreshData() 
+      await appStore.refreshData()
       return false
     }
   }
@@ -965,11 +965,11 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, "批量添加 Mod 标签", true)) {
         await appStore.refreshData();
         return false
-      } 
+      }
       return true
     } catch (e) {
       toast.error(`批量添加标签失败: ${e}`)
-      await appStore.refreshData() 
+      await appStore.refreshData()
       return false
     }
   }
@@ -987,11 +987,11 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, "批量移除 Mod 标签", true)) {
         await appStore.refreshData();
         return false
-      } 
+      }
       return true
     } catch (e) {
       toast.error(`批量移除标签失败: ${e}`)
-      await appStore.refreshData() 
+      await appStore.refreshData()
       return false
     }
   }
@@ -1048,7 +1048,7 @@ export const useModStore = defineStore('mods', () => {
         await appStore.refreshData();
         dataVersion.value++ // 数据版本+1，确保问题判断刷新
         return true
-      } 
+      }
     } catch (e) {
       return false
     }
@@ -1156,26 +1156,31 @@ export const useModStore = defineStore('mods', () => {
   })
 
   return {
-    // State
-    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, interlocksMap, savedInactiveIds, interlockDetailsMap, 
+    // 状态
+    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, interlocksMap, savedInactiveIds, interlockDetailsMap,
     savedActiveIds, activeLoadModifyTime, activeLoadVersionToken, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, isDraggingMod,
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
-    // Getters
+    // 派生状态
     isDirty, selectedMods, selectedStats, allModTags, modIssues, exportableVisibleCount, exportableActiveCount,
     listHistoryTotal, listHistoryPosition,
     canUndoListHistory, canRedoListHistory,
 
-    // Actions
+    // 列表读取与基础写入
     setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    // 来源提示与列表选择
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
+    // 扫描、排序与模组操作
     scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
     canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource,
+    // 用户数据与联锁
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
-    setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
+    setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup,
+    // 问题检测
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, getIssusTargetIds,
+    // 历史与导出
     clearListHistory, runListHistoryTransaction, recordListHistory, undoListHistory, redoListHistory,
     resolveCurrentExportBaseIds, resolveCurrentExportPlan,
   }

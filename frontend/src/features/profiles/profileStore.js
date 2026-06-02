@@ -11,7 +11,7 @@ import { useOrderStore } from '../load-order/orderStore'
 
 export const useProfileStore = defineStore('profile', () => {
   const appStore = useAppStore()
-  
+
   // === State ===
   const profiles = ref([])      // 所有环境配置
   const currentProfileId = ref('default')
@@ -38,14 +38,14 @@ export const useProfileStore = defineStore('profile', () => {
     game_saves_path: '',
     mods_config_file: '',
     backup_dir: '',
-    
+
     // 健康哨兵状态
     is_healthy: true,
     health_report: {}
   })
 
   // === Getters ===
-  const currentProfile = computed(() => 
+  const currentProfile = computed(() =>
     profiles.value.find(p => p.id === currentProfileId.value) || null
   )
 
@@ -275,9 +275,12 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   return {
+    // 状态
     profiles, currentProfileId, orphanedProfiles, currentProfile, isLoading, activeContext,
+    // 环境管理
     fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile, createDesktopShortcut,
+    // 运行记录与孤立环境
     applyLastPlayedTime,
-    scanOrphans, importOrphan
+    scanOrphans, importOrphan,
   }
 })

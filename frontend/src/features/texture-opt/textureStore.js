@@ -206,7 +206,7 @@ export const useTextureStore = defineStore('texture', () => {
   const lastTargetPackageIds = ref([])
   const lastTargetScope = ref('active')
   const lastOptimizationAction = ref('')
-  
+
   // 核心数据源
   const modsData = ref([])        // 分析后返回的所有 Mod 数据
   const globalSummary = ref(normalizeTextureStat({}, { includeModCount: true }))
@@ -262,7 +262,7 @@ export const useTextureStore = defineStore('texture', () => {
 
   // 视图控制
   const viewMode = ref('ALL') // 'ALL' | 'PNG' | 'DDS'
-  
+
   // 工具就绪状态
   const toolStatus = ref({
     available: false,
@@ -605,7 +605,7 @@ export const useTextureStore = defineStore('texture', () => {
   const handleProgressEvent = (payload) => {
     const { id, type, status, progress, message, metrics } = payload
     const isKnownTask = bindIncomingTaskIfNeeded(payload)
-    
+
     // 如果不是当前任务，忽略
     if (!isKnownTask) return
 
@@ -664,10 +664,14 @@ export const useTextureStore = defineStore('texture', () => {
   }
 
   return {
+    // 任务状态
     isAnalyzing, isOptimizing, currentTaskId, currentAnalysisTaskId, currentOptimizationTaskId,
+    // 数据与视图状态
     modsData, globalSummary, progressState, viewMode, toolStatus,
     resultHistory, textureExclusions, isResultDrawerOpen, selectedResultPath,
+    // 任务动作
     checkToolStatus, downloadTool, startAnalysis, startOptimization, cancelCurrentTask, handleProgressEvent, handleDownloadEvent,
+    // 结果与排除项
     loadResultHistory, loadExclusions, isModExcluded, isFileExcluded, toggleModExclusion, toggleFileExclusion, getRowKey,
   }
 })

@@ -482,25 +482,17 @@ export const useLogStore = defineStore('log', () => {
   setupEventListeners()
 
   return {
-    showSidebar,
-    sourceStates,
-    selectedLogsBySource,
-    tokenInfoBySource,
-    getSourceState,
-    getSourceLabel,
-    getSelectedLogs,
-    setSelectedFile,
-    replaceSelection,
-    clearSelection,
-    refreshSelectedSnapshotsFromLoadedLogs,
-    setTokenInfo,
-    syncSelectionAttachment,
-    removeSelectionAttachment,
-    beginSelectionRequest,
-    isCurrentSelectionRequest,
-    estimateSelectionTokenInfo,
-    scanGlobalErrorsSelection,
+    // 状态
+    showSidebar, sourceStates, selectedLogsBySource, tokenInfoBySource,
+    // 来源与选择读取
+    getSourceState, getSourceLabel, getSelectedLogs,
+    // 选择维护
+    setSelectedFile, replaceSelection, clearSelection, refreshSelectedSnapshotsFromLoadedLogs,
+    // Token 与附件
+    setTokenInfo, syncSelectionAttachment, removeSelectionAttachment,
+    beginSelectionRequest, isCurrentSelectionRequest, estimateSelectionTokenInfo, scanGlobalErrorsSelection,
     markAttachmentConsumed,
+    // 生命周期
     setupEventListeners,
   }
 })

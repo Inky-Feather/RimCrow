@@ -1184,26 +1184,16 @@ const createEmptySummary = () => ({
   }
 
   return {
-    isVisible,
-    state,
-    toggleSelections,
-    choiceSelections,
-    selectedCount,
-    totalCount,
-    getSuggestionSummary,
-    openForActiveList,
-    ensureRequiredBeforeSave,
-    ensureRequiredBeforeAutosort,
-    isRootChecked,
-    getChoiceSelection,
-    toggleRoot,
-    chooseRootOption,
-    selectAll,
-    selectRequiredOnly,
-    clearSelection,
-    confirm,
-    continueCurrentAction,
-    cancel,
+    // 弹窗状态
+    isVisible, state, toggleSelections, choiceSelections, selectedCount, totalCount,
+    // 摘要与打开入口
+    getSuggestionSummary, openForActiveList, ensureRequiredBeforeSave, ensureRequiredBeforeAutosort,
+    // 选择控制
+    isRootChecked, getChoiceSelection, toggleRoot, chooseRootOption,
+    selectAll, selectRequiredOnly, clearSelection,
+    // 提交流程
+    confirm, continueCurrentAction, cancel,
+    // 展示元信息
     severityMeta: SEVERITY_META,
   }
 })

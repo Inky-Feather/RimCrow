@@ -11,7 +11,7 @@ const DYNAMIC_RULE_PROPS = {
   'alias_name': '别名',
   'author': '作者',
   'tags': '标签',
-  'groups': '分组', 
+  'groups': '分组',
   'mod_type': '类型'
 }
 // 动态规则动作映射
@@ -62,12 +62,12 @@ export const useRuleStore = defineStore('rules', () => {
 
   const currentId = ref(null)
   const isLoading = ref(false)
-  
+
   // 当前正在检视的目标 Mod ID
   const targetId = computed(() => modStore.lastSelectedMod?.package_id || null)
 
   // --- Actions ---
-  
+
   // 初始化加载 (在 App 启动或 refreshModList 时调用)
   const fetchRules = async () => {
     if (!window.pywebview) return
@@ -105,34 +105,34 @@ export const useRuleStore = defineStore('rules', () => {
     // 2. Community Rules
     const comm = communityModRules.value[pid]
     if (comm) {
-      Object.entries(comm.loadAfter || {}).forEach(([id, info]) => 
+      Object.entries(comm.loadAfter || {}).forEach(([id, info]) =>
         result.loadAfter.push({ id, source: 'community', note: formatNote(info) }))
-      Object.entries(comm.loadBefore || {}).forEach(([id, info]) => 
+      Object.entries(comm.loadBefore || {}).forEach(([id, info]) =>
         result.loadBefore.push({ id, source: 'community', note: formatNote(info) }))
-      Object.entries(comm.incompatibleWith || {}).forEach(([id, info]) => 
+      Object.entries(comm.incompatibleWith || {}).forEach(([id, info]) =>
         result.incompatible.push({ id, source: 'community', note: formatNote(info) }))
     }
 
     // 3. User Single Rules
     const user = userModRules.value[pid]
     if (user) {
-      Object.keys(user.loadAfter || {}).forEach(id => 
+      Object.keys(user.loadAfter || {}).forEach(id =>
         result.loadAfter.push({ id, source: 'user' }))
-      Object.keys(user.loadBefore || {}).forEach(id => 
+      Object.keys(user.loadBefore || {}).forEach(id =>
         result.loadBefore.push({ id, source: 'user' }))
-      Object.keys(user.incompatibleWith || {}).forEach(id => 
+      Object.keys(user.incompatibleWith || {}).forEach(id =>
         result.incompatible.push({ id, source: 'user' }))
     }
 
     // 4. Workshop Rules
     const workshop = workshopModRules.value[pid]
     if (workshop) {
-      Object.keys(user.loadAfter || {}).forEach(id => 
+      Object.keys(user.loadAfter || {}).forEach(id =>
         result.loadAfter.push({ id, source: 'workshop' }))
     }
 
     // (动态规则比较复杂，暂不在此展示，以免混淆“手动编辑”的概念)
-    
+
     return result
   })
 
@@ -432,15 +432,20 @@ export const useRuleStore = defineStore('rules', () => {
       modStore.scanMods()
     }
   }
-  
+
   return {
+    // 规则状态
     communityModRules, communityRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
+    // 规则读取与用户规则
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
+    // 规则定位与语言包覆盖
     getAbsolutePosition, setAbsolutePosition,
     getLanguagePackOwnerOverride, setLanguagePackOwnerOverride,
+    // 动态规则与导入导出
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
     saveDynamicRules, changeRuleSourcePriority,
+    // 全局开关
     setGlobalEnable, toggleModRule,
   }
 })

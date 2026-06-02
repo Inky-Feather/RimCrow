@@ -7,7 +7,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
   const x = ref(0)
   const y = ref(0)
   const items = ref([])
-  
+
   // 保存触发菜单时的自定义数据（例如右键点击的那个列表项ID）
   const payload = ref(null)
   const menuId = ref(0) // 用于强制刷新
@@ -16,7 +16,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
     // 阻止默认浏览器右键
     event.preventDefault()
     event.stopPropagation() // 阻止冒泡
-    
+
     x.value = event.clientX
     y.value = event.clientY
     items.value = menuItems
@@ -29,5 +29,10 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
     show.value = false
   }
 
-  return { show, menuId, x, y, items, payload, open, close }
+  return {
+    // 状态
+    show, menuId, x, y, items, payload,
+    // 操作
+    open, close,
+  }
 })

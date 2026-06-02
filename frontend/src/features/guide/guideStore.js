@@ -36,11 +36,11 @@ import { useToast } from 'vue-toastification'
 // 引导定义 (Guide Definitions)
 // -----------------------------------------------------------------
 export const allGuides = [
-  { 
-    key: 'main', 
+  {
+    key: 'main',
     title: '主界面快速上手',
     description: '了解软件的基本功能及功能分布，还有一些常用操作。',
-    steps: mainGuideSteps 
+    steps: mainGuideSteps
   },
   {
     key: 'workflow',
@@ -48,11 +48,11 @@ export const allGuides = [
     description: '掌握 刷新 -> 排序 -> 保存 -> 启动 的标准流程。',
     steps: workflowGuideSteps,
   },
-  { 
-    key: 'modList', 
+  {
+    key: 'modList',
     title: '模组列表快速上手',
     description: '了解如何在模组列表中查看、启用、禁用、搜索模组。',
-    steps: modListGuideSteps 
+    steps: modListGuideSteps
   },
   {
     key: 'issues',
@@ -60,17 +60,17 @@ export const allGuides = [
     description: '学会看问题汇总、快速补缺失项和逐项排查。',
     steps: issueGuideSteps,
   },
-  { 
-    key: 'backup', 
+  {
+    key: 'backup',
     title: '备份管理快速上手',
     description: '了解如何备份和管理排序文件。',
-    steps: backupGuideSteps 
+    steps: backupGuideSteps
   },
-  { 
-    key: 'profile', 
+  {
+    key: 'profile',
     title: '环境管理快速上手',
     description: '了解如何管理游戏环境、路径设置和其他相关配置。',
-    steps: profileGuideSteps 
+    steps: profileGuideSteps
   },
   {
     key: 'rules',
@@ -153,7 +153,7 @@ export const allGuides = [
     }
   },
   {
-    key: 'workspace', 
+    key: 'workspace',
     title: '库存枢纽导览',
     description: '了解如何在库存枢纽中查看、管理和操作库存。',
     steps: workspaceGuideSteps,
@@ -230,7 +230,7 @@ export const useGuideStore = defineStore('guide', () => {
   const runGuide = async (guideKey, stepsConfig, force = false, beforeStartCallback = null) => {
     const uniqueKey  = `${guideKey}_${GUIDE_VERSION}`
     const completedGuides = appStore.settings.completed_guides || {}
-    
+
     if (!force && completedGuides[uniqueKey] === 'done') {
       return
     }
@@ -249,7 +249,7 @@ export const useGuideStore = defineStore('guide', () => {
         return
       }
       // 等待弹窗动画
-      await new Promise(r => setTimeout(r, 400)) 
+      await new Promise(r => setTimeout(r, 400))
     }
 
     const driverObj = driver({
@@ -262,7 +262,7 @@ export const useGuideStore = defineStore('guide', () => {
       prevBtnText: '上一步',
       // 【关键配置】针对高 z-index 的弹窗，如果不加这个，遮罩可能会被你的弹窗盖住！
       // 我们的弹窗通常 z-index 是 100 左右，这里设个大的
-    //   popoverClass: 'driver-popover', 
+    //   popoverClass: 'driver-popover',
       onDestroyStarted: () => {
         markAsDone(uniqueKey) // 调用统一的标记函数
         driverObj.destroy()
@@ -289,19 +289,19 @@ export const useGuideStore = defineStore('guide', () => {
     // 否则获取到的坐标是动画过程中的坐标，会导致高亮框错位
     setTimeout(() => {
       driverObj.drive()
-    }, 400) 
+    }, 400)
   }
 
   // 暴露具体的场景触发器
   // const startMainGuide = (force = false) => runGuide('main', mainGuideSteps, force)
   // const startWorkspaceGuide = (force = false) => runGuide('workspace', workspaceGuideSteps, force)
-  // const startModListGuide = (force = false) => { 
+  // const startModListGuide = (force = false) => {
   //   // 检测主页引导是否完成
   //   const mainGuideDone = localStorage.getItem('rim_guide_main_' + GUIDE_VERSION) === 'done'
   //   if (!mainGuideDone) return
-  //   runGuide('modList', modListGuideSteps, force) 
+  //   runGuide('modList', modListGuideSteps, force)
   // }
-  
+
   // 根据 key 动态启动引导
   const startGuideByKey = (guideKey, force = false) => {
     const guide = allGuides.find(g => g.key === guideKey)
@@ -333,5 +333,10 @@ export const useGuideStore = defineStore('guide', () => {
     }
   }
 
-  return { startGuideByKey, skipGuideByKey, skipAllGuides, resetAllGuides }
+  return {
+    // 引导入口
+    startGuideByKey,
+    // 跳过与重置
+    skipGuideByKey, skipAllGuides, resetAllGuides,
+  }
 })

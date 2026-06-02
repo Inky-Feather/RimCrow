@@ -182,7 +182,9 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
   }
 
   return {
+    // 队列状态
     queue, activePrompt, isDraining,
+    // 队列操作
     enqueue, drain,
   }
 })

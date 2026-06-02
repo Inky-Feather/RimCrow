@@ -163,17 +163,11 @@ export const useTaskStore = defineStore('tasks', () => {
   }
 
   return {
-    taskMap,
-    tasks,
-    activeTasks,
-    latestTask,
-    upsertTask,
-    createPlaceholderTask,
-    removeTask,
-    getTask,
-    getLatestTaskByType,
-    hasActiveTaskOfType,
-    waitForTaskCompletion,
-    settleActiveTasks,
+    // 状态
+    taskMap, tasks, activeTasks, latestTask,
+    // 写入与清理
+    upsertTask, createPlaceholderTask, removeTask, settleActiveTasks,
+    // 查询与等待
+    getTask, getLatestTaskByType, hasActiveTaskOfType, waitForTaskCompletion,
   }
 })

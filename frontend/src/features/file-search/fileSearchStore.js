@@ -367,33 +367,15 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
   }
 
   return {
-    form,
-    currentTaskId,
-    currentTask,
-    isLaunching,
-    isRunning,
-    isBusy,
-    results,
-    filteredResults,
-    resultFilter,
-    activeMatchId,
-    viewerState,
-    searchState,
-    scopeLabel,
-    resetResults,
-    startSearch,
-    cancelSearch,
-    handleResultsEvent,
-    openResultFile,
-    openResultFolder,
-    openResultModFolder,
-    readResultFile,
-    showFileInViewer,
-    selectMatch,
-    openWorkbench,
-    closeWorkbench,
-    toggleFileType,
-    setCustomFileTypesText,
-    setExcludeOption,
+    // 表单与任务状态
+    form, currentTaskId, currentTask, isLaunching, isRunning, isBusy,
+    // 搜索结果与查看器
+    results, filteredResults, resultFilter, activeMatchId, viewerState, searchState, scopeLabel,
+    // 搜索流程
+    resetResults, startSearch, cancelSearch, handleResultsEvent,
+    // 结果操作
+    openResultFile, openResultFolder, openResultModFolder, readResultFile, showFileInViewer, selectMatch,
+    // 工作台与筛选项
+    openWorkbench, closeWorkbench, toggleFileType, setCustomFileTypesText, setExcludeOption,
   }
 })
