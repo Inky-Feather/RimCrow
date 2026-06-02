@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { deepClone, toast, checkResult } from '../../shared/lib/common'
 

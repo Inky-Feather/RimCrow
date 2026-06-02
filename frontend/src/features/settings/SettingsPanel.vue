@@ -188,7 +188,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useProfileStore } from '../profiles/profileStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useGuideStore } from '../guide/guideStore'
 
 const appStore = useAppStore()

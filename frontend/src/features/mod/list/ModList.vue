@@ -212,7 +212,7 @@ import VirtualDragList from '../../../shared/components/list/VirtualDragList.vue
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
 import { useAppStore } from '../../../app/stores/appStore';
-import { useModStore } from '../modStore';
+import { useModStore } from '../store/modStore';
 import { useSearchStore } from '../search/searchStore';
 import { ISSUE_TYPE } from '../../../shared/lib/constants';
 import ModItem from '../ModItem.vue';

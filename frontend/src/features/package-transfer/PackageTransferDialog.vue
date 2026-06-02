@@ -292,7 +292,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { formatFileSize } from '../../shared/lib/format'
 import { toast } from '../../shared/lib/common'

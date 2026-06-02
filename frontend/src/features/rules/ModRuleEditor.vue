@@ -180,7 +180,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useRuleStore } from './ruleStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { ArrowUpToLine, ArrowDownToLine } from 'lucide-vue-next'

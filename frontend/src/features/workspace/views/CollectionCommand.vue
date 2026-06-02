@@ -173,7 +173,7 @@ import { Layers, Plus, Download, DownloadCloud, BoxSelect, Package, Trash2, List
 import { useToast } from 'vue-toastification'
 import { useWorkspaceStore } from '../workspaceStore'
 import { useAppStore } from '../../../app/stores/appStore'
-import { useModStore } from '../../mod/modStore'
+import { useModStore } from '../../mod/store/modStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { normalizePackageId } from '../../mod/lib/modIdentity'
 import { isOfficialPackageId } from '../../mod/lib/packageScope'

@@ -1,7 +1,7 @@
 // src/stores/searchStore.js
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { useModStore } from '../modStore'
+import { useModStore } from '../store/modStore'
 import { SearchEngine } from './SearchEngine'
 import { FIELD_TYPES } from './SearchTypes'
 import { MOD_SIGN_COLOR_MAP } from '../../../shared/lib/constants'

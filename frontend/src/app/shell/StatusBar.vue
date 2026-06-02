@@ -122,7 +122,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Bot, Download, Image, LoaderCircle, Radar, X, Flag, FlagOff, ScanSearch, Box, Search, Package } from 'lucide-vue-next'
-import { useModStore } from '../../features/mod/modStore'
+import { useModStore } from '../../features/mod/store/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useTaskStore } from '../stores/taskStore'

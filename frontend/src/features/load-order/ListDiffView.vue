@@ -256,7 +256,7 @@
 
 <script setup>
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useDebounceFn } from '@vueuse/core'
 import { getTailwindColorHex, hexToRgba } from '../../shared/lib/color'
 import { useOrderStore } from './orderStore'

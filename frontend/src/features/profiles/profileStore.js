@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useGroupStore } from '../mod/groupStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { toast, checkResult } from '../../shared/lib/common'

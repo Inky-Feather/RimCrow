@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia'
 import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import {

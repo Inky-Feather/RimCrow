@@ -246,7 +246,7 @@ import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 
 const appStore = useAppStore()

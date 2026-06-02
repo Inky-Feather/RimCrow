@@ -7,7 +7,7 @@ import { normalizeAssistantSessionResult } from './runtime/aiActionRuntime'
 import { buildAttachmentDisplayMeta, buildDiagnosisContextAttachmentDraft } from './runtime/aiAttachmentRuntime'
 import { cleanRichText } from '../../shared/lib/text'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useTaskStore } from '../../app/stores/taskStore'
 
 // -----------------------------------------------------------------

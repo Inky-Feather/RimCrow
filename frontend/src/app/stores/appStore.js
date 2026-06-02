@@ -3,7 +3,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { checkResult, deepClone, toast } from '../../shared/lib/common'
-import { useModStore } from '../../features/mod/modStore'
+import { useModStore } from '../../features/mod/store/modStore'
 import { useGroupStore } from '../../features/mod/groupStore'
 import { useOrderStore } from '../../features/load-order/orderStore'
 import { useRuleStore } from '../../features/rules/ruleStore'

@@ -426,7 +426,7 @@ import { ref, computed, watch } from 'vue'
 import { Edit3, Trash2, X, Shield, User, Zap, Share2, Search, Plus, Power, Download, Waypoints, CircleCheckBig, CircleOff, GripVertical, Save, RotateCcw } from 'lucide-vue-next'
 import { useToast } from "vue-toastification"
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useRuleStore } from './ruleStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useGroupStore } from '../mod/groupStore'

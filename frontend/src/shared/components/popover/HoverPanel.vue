@@ -146,7 +146,7 @@ import { Milestone } from 'lucide-vue-next';
 import { Motion } from 'motion-v'
 import { useHoverStore } from './hoverStore'
 import { useAppStore } from '../../../app/stores/appStore'
-import { useModStore } from '../../../features/mod/modStore'
+import { useModStore } from '../../../features/mod/store/modStore'
 import { useGroupStore } from '../../../features/mod/groupStore';
 import { DEFAULT_ACCENT_HEX, hexToRgbComponents } from '../../lib/color'
 

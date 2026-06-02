@@ -527,7 +527,7 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // 引入防抖函数
 import { MOD_SIGN_COLOR_MAP, MOD_TYPE_MAP, SOURCE_TYPE_MAP, MOD_TYPE_ICON_MAP } from '../../shared/lib/constants'
-import { useModStore } from './modStore'
+import { useModStore } from './store/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useGroupStore } from './groupStore'

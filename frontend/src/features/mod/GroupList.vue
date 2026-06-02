@@ -119,7 +119,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
-import { useModStore } from './modStore'
+import { useModStore } from './store/modStore'
 import { useGroupStore } from './groupStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import VirtualDragList from '../../shared/components/list/VirtualDragList.vue'

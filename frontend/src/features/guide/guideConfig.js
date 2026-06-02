@@ -1,7 +1,7 @@
 // frontend/src/modules/guide/guideConfig.js
 
 import { useAppStore } from "../../app/stores/appStore";
-import { useModStore } from "../mod/modStore";
+import { useModStore } from "../mod/store/modStore";
 
 export const GUIDE_VERSION = "v2.0"; // 修改版本号可以强制老用户重新看一遍新版引导
 

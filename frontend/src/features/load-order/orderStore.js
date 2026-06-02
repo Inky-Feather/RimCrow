@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { toast, checkResult } from '../../shared/lib/common'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useMissingInstallStore } from '../supplement/missingInstallStore'

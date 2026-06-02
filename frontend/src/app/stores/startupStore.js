@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { toast } from '../../shared/lib/common'
 import { useAiStore } from '../../features/ai/aiStore'
-import { useModStore } from '../../features/mod/modStore'
+import { useModStore } from '../../features/mod/store/modStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 
 // 启动编排只负责“先后顺序”和“阻塞/后台”的取舍，具体业务仍由各自 store/API 执行。

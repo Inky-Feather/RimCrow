@@ -37,7 +37,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from './modStore'
+import { useModStore } from './store/modStore'
 import { MOD_TYPE_ICON_MAP } from '../../shared/lib/constants'
 import { hexToRgba } from '../../shared/lib/color'
 

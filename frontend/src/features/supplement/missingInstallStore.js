@@ -17,7 +17,7 @@ import {
 import { ISSUE_TYPE } from '../../shared/lib/constants'
 import { DEFAULT_TOOL_PACKAGE_IDS, isBuiltinManagedPackageId } from '../mod/lib/packageScope'
 import { useAppStore } from '../../app/stores/appStore'
-import { useModStore } from '../mod/modStore'
+import { useModStore } from '../mod/store/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { useWorkspaceStore } from '../workspace/workspaceStore'
 

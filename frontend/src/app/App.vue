@@ -273,7 +273,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent, h } from 'vue'
-import { useModStore } from '../features/mod/modStore'
+import { useModStore } from '../features/mod/store/modStore'
 import { useAppStore } from './stores/appStore'
 import { useRuleStore } from '../features/rules/ruleStore'
 import { useGroupStore } from '../features/mod/groupStore'
