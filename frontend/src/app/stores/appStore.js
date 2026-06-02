@@ -35,7 +35,7 @@ export const useAppStore = defineStore('app', () => {
     failure_reason: '',
     message: '',
   })
-  
+
   // === State ===
   const appVersion = ref('')     // 应用版本号
   const buildMode = ref('')      // 构建模式
@@ -44,7 +44,7 @@ export const useAppStore = defineStore('app', () => {
   const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
   // 运行时会话与 UI 当前环境分离：这里只记录“游戏现在实际按谁在跑”。
   const runtimeSession = ref(createDefaultRuntimeSession())
-  
+
   // UI 状态
   const uiState = reactive({
     showSettingsPanel: false,    // 是否显示设置面板
@@ -148,7 +148,7 @@ export const useAppStore = defineStore('app', () => {
     community_workshop_db_path: '',
     community_instead_db_url: '',
     community_instead_db_path: '',
-    
+
     current_profile_id: 'default',
     browser_mode: false,
     auto_enter_silent_mode: true,
@@ -234,7 +234,7 @@ export const useAppStore = defineStore('app', () => {
       min_dimension: 128,           // 最短边低于该值时不参与缩放
       max_source_dimension: 2048,   // 最长边高于该值时不参与缩放
     },
-    
+
     // --- 高级 (Advanced) ---
     backup_retention_days: 30,
     enable_auto_scan: true,
@@ -280,28 +280,17 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const {
-    autoDetectPaths,
-    getDefaultExternalPaths,
-    checkPath,
-    checkPaths,
-    openPath,
-    openFile,
-    readTextFile,
-    getFilePath,
-    getFolderPath,
-    deletePath,
-    deletePaths,
-    openUrl,
+    // 路径检测
+    autoDetectPaths, getDefaultExternalPaths, checkPath, checkPaths,
+    // 打开、选择与删除
+    openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
   } = usePathActions({ settings })
 
   const {
-    openSettingsPanel,
-    closeSettingsPanel,
-    saveSetting,
-    refreshUserThemes,
-    saveUserTheme,
-    deleteUserTheme,
-    applySettings,
+    // 设置面板
+    openSettingsPanel, closeSettingsPanel,
+    // 设置保存与主题
+    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme,
   } = useSettingsActions({
     settings,
     uiState,
@@ -313,21 +302,14 @@ export const useAppStore = defineStore('app', () => {
   })
 
   const {
-    applyModPackageImportPostActions,
-    showExportCompleteDialog,
-    openPackageTransferDialog,
-    openCustomModExportDialog,
-    updatePackageTransferDialogPreset,
-    closePackageTransferDialog,
-    getDataBundleSchema,
-    inspectDataBundle,
-    exportDataBundle,
-    importDataBundle,
-    getModPackageSchema,
-    prepareModPackageImport,
-    getModPackageProfileSummary,
-    exportModPackage,
-    importModPackage,
+    // 弹窗入口
+    openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
+    // 导入导出后续动作
+    applyModPackageImportPostActions, showExportCompleteDialog,
+    // 数据包
+    getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,
+    // 模组包
+    getModPackageSchema, prepareModPackageImport, getModPackageProfileSummary, exportModPackage, importModPackage,
   } = usePackageTransferActions({
     uiState,
     packageTransferDialog,
@@ -340,29 +322,23 @@ export const useAppStore = defineStore('app', () => {
   })
 
   const {
-    downloadWorkshopItems,
-    openSteamWorkshopUrl,
-    openSteamWorkshopById,
-    openInstallSource,
-    subscribeInstallSources,
-    downloadInstallSources,
-    downloadPackageIds,
-    subscribePackageIds,
-    subscribeWorkshopIds,
-    unsubscribeWorkshopIds,
+    // 工坊打开
+    openSteamWorkshopUrl, openSteamWorkshopById, openInstallSource,
+    // 订阅与下载
+    downloadWorkshopItems, subscribeInstallSources, downloadInstallSources,
+    downloadPackageIds, subscribePackageIds, subscribeWorkshopIds, unsubscribeWorkshopIds,
+    // 合集
     getCollectionItems,
   } = useSteamWorkshopActions({
     openUrl,
   })
 
   const {
-    logMaintenanceCheck,
-    checkSteamTools,
-    checkToolMaintenance,
-    checkExternalDataUpdates,
-    checkManagedModUpdates,
-    checkSteamcmdModUpdates,
-    runScheduledMaintenanceChecks,
+    // 日志与调度
+    logMaintenanceCheck, runScheduledMaintenanceChecks,
+    // 检查入口
+    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates,
+    // 更新动作
     updateExternalDB,
   } = useMaintenanceActions({
     settings,
@@ -372,9 +348,8 @@ export const useAppStore = defineStore('app', () => {
   })
 
   const {
-    checkUpdate,
-    showChangelog,
-    _showInstallPrompt,
+    // 更新检查与安装提示
+    checkUpdate, showChangelog, _showInstallPrompt,
   } = useUpdateActions({
     updateState,
     upgradeContext,
@@ -1194,7 +1169,7 @@ export const useAppStore = defineStore('app', () => {
       toast[toastType](message, {
         timeout: duration || 3000
       })
-    } 
+    }
     // 模式2: 模态框 (Modal/Confirm)
     else {
       confirmStore.open({
@@ -1206,7 +1181,6 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  
   // 比如在 get_initial_data 中返回：asset_server_port: 54321
   const getAssetBaseUrl = () => `http://127.0.0.1:${settings.value.asset_port}`
 
@@ -1224,7 +1198,7 @@ export const useAppStore = defineStore('app', () => {
 
     return `${getAssetBaseUrl()}/local?path=${safePath}`
   }
-  
+
   // 生成网络代理图 URL (如 Steam 截图)
   const getRemoteUrl = (remoteUrl) => {
     if (!remoteUrl) return ''
@@ -1250,22 +1224,26 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
+    // 基础状态
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
-    themes, currentTheme, userThemes, themeEditor,
-    packageTransferDialog,
+    themes, currentTheme, userThemes, themeEditor, packageTransferDialog,
+    // 布局与运行态
     remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
+    // 生命周期与通用工具
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
-    refreshModsData,
-    requestModScan,
+    refreshModsData, requestModScan,
+    // 图片与缓存
     getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache,
-    // 游戏相关
+    // 路径与游戏启动
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
+    // 下载与工坊
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
+    openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource,
+    // 设置、任务与应用维护
     saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, updateExternalDB,
+    // 包传输
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
-    
-    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks,
-    openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
     getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,
     getModPackageSchema, prepareModPackageImport, getModPackageProfileSummary, exportModPackage, importModPackage,
   }

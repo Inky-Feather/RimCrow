@@ -157,17 +157,11 @@ export const usePathActions = ({ settings } = {}) => {
   }
 
   return {
-    autoDetectPaths,
-    getDefaultExternalPaths,
-    checkPath,
-    checkPaths,
-    openPath,
-    openFile,
-    readTextFile,
-    getFilePath,
-    getFolderPath,
-    deletePath,
-    deletePaths,
-    openUrl,
+    // 路径检测
+    autoDetectPaths, getDefaultExternalPaths, checkPath, checkPaths,
+    // 打开与选择
+    openPath, openFile, readTextFile, getFilePath, getFolderPath, openUrl,
+    // 删除
+    deletePath, deletePaths,
   }
 }

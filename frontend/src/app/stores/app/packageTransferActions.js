@@ -219,20 +219,13 @@ export const usePackageTransferActions = ({
   }
 
   return {
-    applyModPackageImportPostActions,
-    showExportCompleteDialog,
-    openPackageTransferDialog,
-    openCustomModExportDialog,
-    updatePackageTransferDialogPreset,
-    closePackageTransferDialog,
-    getDataBundleSchema,
-    inspectDataBundle,
-    exportDataBundle,
-    importDataBundle,
-    getModPackageSchema,
-    prepareModPackageImport,
-    getModPackageProfileSummary,
-    exportModPackage,
-    importModPackage,
+    // 弹窗入口
+    openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
+    // 导出完成与导入后续
+    applyModPackageImportPostActions, showExportCompleteDialog,
+    // 数据包
+    getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,
+    // 模组包
+    getModPackageSchema, prepareModPackageImport, getModPackageProfileSummary, exportModPackage, importModPackage,
   }
 }

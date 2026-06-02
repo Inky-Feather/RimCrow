@@ -400,14 +400,11 @@ export const useMaintenanceActions = ({
   }
 
   return {
-    isTimedCheckDue,
-    logMaintenanceCheck,
-    checkSteamTools,
-    checkToolMaintenance,
-    checkExternalDataUpdates,
-    checkManagedModUpdates,
-    checkSteamcmdModUpdates,
-    runScheduledMaintenanceChecks,
+    // 日志与调度
+    isTimedCheckDue, logMaintenanceCheck, runScheduledMaintenanceChecks,
+    // 检查入口
+    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates,
+    // 更新动作
     updateExternalDB,
   }
 }

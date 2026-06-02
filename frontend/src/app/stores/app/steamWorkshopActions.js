@@ -172,16 +172,12 @@ export const useSteamWorkshopActions = ({
   }
 
   return {
-    downloadWorkshopItems,
-    openSteamWorkshopUrl,
-    openSteamWorkshopById,
-    openInstallSource,
-    subscribeInstallSources,
-    downloadInstallSources,
-    downloadPackageIds,
-    subscribePackageIds,
-    subscribeWorkshopIds,
-    unsubscribeWorkshopIds,
+    // 工坊打开
+    openSteamWorkshopUrl, openSteamWorkshopById, openInstallSource,
+    // 订阅与下载
+    downloadWorkshopItems, subscribeInstallSources, downloadInstallSources,
+    downloadPackageIds, subscribePackageIds, subscribeWorkshopIds, unsubscribeWorkshopIds,
+    // 合集
     getCollectionItems,
   }
 }

@@ -129,8 +129,9 @@ export const useUpdateActions = ({
   }
 
   return {
-    checkUpdate,
-    showChangelog,
+    // 更新检查与展示
+    checkUpdate, showChangelog,
+    // 下载完成安装提示
     _showInstallPrompt,
   }
 }

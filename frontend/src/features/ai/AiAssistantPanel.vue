@@ -277,12 +277,10 @@ import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../shared/components/input/CommonNumber.vue'
 import AiActionCard from './AiActionCard.vue'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
-import { createActionExecutorRegistry, createActionPresentationRuntime } from './runtime/aiActionRuntime.js'
+import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
-  buildAssistantMessageUsageTooltip,
-  buildRequestTotalUsageTooltip,
-  buildUserMessageUsageTooltip,
-  formatTokenCount,
+  buildAssistantMessageUsageTooltip, buildRequestTotalUsageTooltip,
+  buildUserMessageUsageTooltip, formatTokenCount,
 } from './aiUsageTooltips'
 
 // -----------------------------------------------------------------
@@ -375,21 +373,14 @@ const actionPresentation = createActionPresentationRuntime({
   getModPreviewData: (modId) => modStore.takeModById(modId, '未知模组'),
 })
 const {
-  getActionType,
-  getActionVariant,
-  getActionExecuteLabel,
-  getActionTitle,
-  getActionDescription,
-  getActionPreview,
-  getActionMissingPayloadMessage,
-  getActionBlockedMessage,
-  getActionConfirmMeta,
-  getActionPostSuccessMeta,
-  getActionSuccessMessage,
-  getActionExecutionConfig,
-  getActionPreviewParts,
-  getActionCardTone,
-  getRenderableActions,
+  // 动作基础信息
+  getActionType, getActionVariant, getActionExecuteLabel,
+  getActionTitle, getActionDescription, getActionPreview,
+  // 动作提示与确认
+  getActionMissingPayloadMessage, getActionBlockedMessage,
+  getActionConfirmMeta, getActionPostSuccessMeta, getActionSuccessMessage,
+  // 动作配置与渲染
+  getActionExecutionConfig, getActionPreviewParts, getActionCardTone, getRenderableActions,
 } = actionPresentation
 
 const syncBoundSession = () => aiStore.getOrCreateBoundSession(props.ownerKey, {

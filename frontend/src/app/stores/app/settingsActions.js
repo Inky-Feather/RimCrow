@@ -99,12 +99,11 @@ export const useSettingsActions = ({
   }
 
   return {
-    openSettingsPanel,
-    closeSettingsPanel,
-    saveSetting,
-    refreshUserThemes,
-    saveUserTheme,
-    deleteUserTheme,
-    applySettings,
+    // 面板
+    openSettingsPanel, closeSettingsPanel,
+    // 设置保存
+    saveSetting, applySettings,
+    // 用户主题
+    refreshUserThemes, saveUserTheme, deleteUserTheme,
   }
 }
