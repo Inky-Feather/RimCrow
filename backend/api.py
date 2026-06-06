@@ -4066,9 +4066,13 @@ class API:
             ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
             if not ok:
                 return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
-            success = self.steam_mgr.unsubscribe_items(workshop_ids)
-            if success:
-                return ApiResponse.success(message="已发送取消订阅请求")
+            task_id = self.steam_mgr.unsubscribe_items(workshop_ids)
+            if task_id:
+                normalized_ids = [str(workshop_ids)] if isinstance(workshop_ids, (int, str)) else [str(i) for i in workshop_ids]
+                return ApiResponse.success({
+                    "task_id": task_id,
+                    "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
+                }, message="已向 Steam 提交取消订阅")
             else:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:

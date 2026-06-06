@@ -344,7 +344,6 @@ export const useOrderStore = defineStore('order', () => {
       if (checkResult(res, "保存停用列表顺序")) {
         modStore.savedInactiveIds = [...cleanInactive] || []
         modStore.savedTempIds = [...cleanTemp] || []
-        modStore.updateInactiveIds()
         return true
       }
     } finally {

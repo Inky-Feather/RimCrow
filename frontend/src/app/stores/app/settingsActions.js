@@ -2,6 +2,32 @@ import { toast, checkResult } from '../../../shared/lib/common'
 import { useModStore } from '../../../features/mod/stores/modStore'
 import { useProfileStore } from '../../../features/profiles/profileStore'
 
+const SETTING_KEYS_REQUIRING_LIST_SCAN = [
+  'workshop_mods_path',
+  'self_mods_path',
+  'steamcmd_mods_path',
+]
+
+const takeModListSettingsSnapshot = (settings = {}, context = {}) => ({
+  settings: Object.fromEntries(
+    SETTING_KEYS_REQUIRING_LIST_SCAN.map(key => [key, settings?.[key] ?? null])
+  ),
+  context: {
+    profile_id: context?.profile_id || '',
+    game_install_path: context?.game_install_path || '',
+    user_data_path: context?.user_data_path || '',
+    use_workshop_mods: !!context?.use_workshop_mods,
+    use_self_mods: !!context?.use_self_mods,
+  },
+})
+
+const shouldRefreshModListAfterSettingsSave = (before, after) => {
+  return (
+    SETTING_KEYS_REQUIRING_LIST_SCAN.some(key => before.settings[key] !== after.settings[key])
+    || Object.keys(before.context).some(key => before.context[key] !== after.context[key])
+  )
+}
+
 export const useSettingsActions = ({
   settings,
   uiState,
@@ -70,19 +96,26 @@ export const useSettingsActions = ({
     if (!window.pywebview) return
     isLoading.value = true
     try {
+      const profileStore = useProfileStore()
+      const previousListSnapshot = takeModListSettingsSnapshot(settings.value, profileStore.activeContext)
       const res = await window.pywebview.api.save_all_settings(newSettings)
       if (checkResult(res, "应用设置")) {
-        const profileStore = useProfileStore()
+        const nextSettings = res.data.settings || {}
+        const nextContext = res.data.active_context || profileStore.activeContext
         // 更新本地 store
-        Object.assign(settings.value, res.data.settings)
+        Object.assign(settings.value, nextSettings)
         applyCurrentTheme()
         syncRemoteImageCache(res.data.remote_image_cache)
-        profileStore.activeContext = res.data.active_context
+        profileStore.activeContext = nextContext
 
-        // 如果路径变了，可能需要重新扫描
         closeSettingsPanel()
 
-        if (settings.value.enable_auto_scan && profileStore.activeContext.is_healthy) {
+        const nextListSnapshot = takeModListSettingsSnapshot(settings.value, nextContext)
+        if (!shouldRefreshModListAfterSettingsSave(previousListSnapshot, nextListSnapshot)) {
+          return
+        }
+
+        if (settings.value.enable_auto_scan && nextContext?.is_healthy) {
           const modStore = useModStore()
           await modStore.scanMods(null, false)
         } else{

@@ -12,6 +12,7 @@ export const useModListHistory = ({
   dataVersion,
   normalizeHistoryModIds,
   resolveStoredMod,
+  beforeUndoListHistory,
 } = {}) => {
   // 列表历史（仅当前会话内存态）
   const listHistoryUndoStack = ref([])
@@ -93,13 +94,14 @@ export const useModListHistory = ({
   }
 
   // 记录列表历史记录
-  const recordListHistory = ({ before, trackedModIds = [], type = 'list-edit', label = '' } = {}) => {
+  const recordListHistory = ({ before, trackedModIds = [], type = 'list-edit', label = '', undoNotice = null } = {}) => {
     if (isApplyingListHistory.value || !before) return false
     const after = createListHistorySnapshot(trackedModIds)
     if (!didListHistorySnapshotChange(before, after)) return false
     pushListHistoryEntry({
       type,
       label,
+      undoNotice,
       at: Date.now(),
       before,
       after
@@ -135,9 +137,14 @@ export const useModListHistory = ({
   }
 
   // 撤销列表历史记录
-  const undoListHistory = () => {
-    const entry = listHistoryUndoStack.value.pop()
+  const undoListHistory = async () => {
+    const entry = listHistoryUndoStack.value[listHistoryUndoStack.value.length - 1]
     if (!entry) return false
+    if (typeof beforeUndoListHistory === 'function') {
+      const canContinue = await beforeUndoListHistory(entry)
+      if (!canContinue) return false
+    }
+    listHistoryUndoStack.value.pop()
     isApplyingListHistory.value = true
     try {
       restoreListHistorySnapshot(entry.before)

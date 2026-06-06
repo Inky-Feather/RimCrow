@@ -457,7 +457,7 @@ const handleListHistoryKeydown = (event) => {
 
   if (isUndo && modStore.canUndoListHistory) {
     event.preventDefault()
-    modStore.undoListHistory()
+    void modStore.undoListHistory()
   } else if (isRedo && modStore.canRedoListHistory) {
     event.preventDefault()
     modStore.redoListHistory()

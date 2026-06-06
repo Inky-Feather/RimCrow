@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { toast, checkResult } from '../../../../shared/lib/common'
+import { deepClone, toast, checkResult } from '../../../../shared/lib/common'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../../../../shared/lib/constants'
 import { useProfileStore } from '../../../profiles/profileStore'
 
@@ -466,11 +466,8 @@ export const useModIssues = ({
           currentIgnored.push(type)
       }
       // 2. 调用后端保存
-      mod.ignored_issues = currentIgnored
       const res = await updateModUserData(modId, { ignored_issues: currentIgnored })
-      if (res.status !== 'success') {
-        toast.error(`忽略问题失败：${res.message}`)
-      } else{
+      if (res) {
         dataVersion.value++ // 数据版本+1，确保问题判断刷新
       }
   }
@@ -479,6 +476,7 @@ export const useModIssues = ({
     if (!window.pywebview) return
     appStore.isLoading = true;
     const updates = []; // 准备发送给后端的批量数据
+    const rollback = new Map()
     try {
       modIds.forEach((id) => {
         const mod = takeModById(id);
@@ -501,6 +499,7 @@ export const useModIssues = ({
           }
         }
         if (needsUpdate) {
+          if (!rollback.has(id)) rollback.set(id, deepClone(mod.ignored_issues || []))
           // 1. 先更新本地 UI 状态 (响应式)
           mod.ignored_issues = currentIgnored;
           // 2. 加入批量更新队列
@@ -517,13 +516,18 @@ export const useModIssues = ({
       if (checkResult(res, "批量忽略/取消忽略问题")) {
         toast.success(type ? `已忽略 ${updates.length} 项问题` : `已恢复 ${updates.length} 项警告`);
       } else {
-        await appStore.refreshData();
+        rollback.forEach((ignoredIssues, id) => {
+          const mod = takeModById(id)
+          if (mod) mod.ignored_issues = ignoredIssues
+        })
       }
     } catch (e) {
       console.error("批量忽略操作失败:", e);
       toast.error(`操作失败: ${e.message}`);
-      // 如果失败了，重新刷新列表以保证数据一致性
-      await appStore.refreshData();
+      rollback.forEach((ignoredIssues, id) => {
+        const mod = takeModById(id)
+        if (mod) mod.ignored_issues = ignoredIssues
+      })
     } finally {
       appStore.isLoading = false;
       dataVersion.value++ // 数据版本+1，确保问题判断刷新

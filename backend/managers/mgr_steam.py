@@ -334,6 +334,8 @@ def run_steam_worker(action: str, payload: str):
                 return
         success = True
         logger.info(f"SUCCESS: {action} request sent for {total_requests} items")
+        # 主进程通过 stdout 判断 Steamworks worker 是否成功接收请求，不能依赖日志输出通道。
+        print(f"SUCCESS: {action} request sent for {total_requests} items")
     except Exception as e:
         logger.error(f"ERROR: Action failed: {e}")
 
@@ -757,7 +759,8 @@ class SteamManager:
 
         # 只有进程层面看起来 Steam 确实活着时，才值得再拉起一次短命 worker 去探测 Steamworks。
         # 这样能避免 Steam 明明没开时仍然多余地创建子进程。
-        if bool(process_running or registry_status.get("running")):
+        steamworks_probe_attempted = bool(process_running or registry_status.get("running"))
+        if steamworks_probe_attempted:
             steamworks_status = self._probe_steamworks_status()
             if steamworks_status.get("available"):
                 status["running"] = bool(steamworks_status.get("running"))
@@ -766,11 +769,20 @@ class SteamManager:
                 status["source"] = "steamworks"
                 status["detail"] = str(steamworks_status.get("detail") or "steamworks")
                 if status["ready"] or status["detail"] in {"steamworks_not_running", "steamworks_not_logged_in"}: return status
+            else:
+                # 订阅/取消订阅必须通过 Steamworks 发送；注册表只能说明用户已登录，不能证明 Steamworks 已可调用。
+                status["running"] = bool(process_running or registry_status.get("running"))
+                status["logged_in"] = bool(registry_status.get("logged_in"))
+                status["ready"] = False
+                status["source"] = "registry_fallback"
+                status["detail"] = "active_process_waiting_steamworks"
+                status["steamworks_detail"] = str(steamworks_status.get("detail") or "steamworks_unavailable")
+                return status
 
         if platform.system() == "Windows":
             status["running"] = bool(process_running or registry_status.get("running"))
             status["logged_in"] = bool(registry_status.get("logged_in"))
-            status["ready"] = bool(status["running"] and status["logged_in"])
+            status["ready"] = bool(status["running"] and status["logged_in"] and not steamworks_probe_attempted)
             status["source"] = "registry_fallback"
             status["detail"] = "active_process_ready" if status["ready"] else "active_process_not_ready"
 
@@ -1324,7 +1336,10 @@ class SteamManager:
                     to_action.append(mid)
 
         if to_action:
-            self._execute_steam_action(action, to_action)
+            # Steamworks worker 没有成功接收请求时，不注册监控任务，避免前端出现永远 0% 的假任务。
+            if not self._execute_steam_action(action, to_action):
+                logger.warning(f"Steam {action} 请求发送失败，跳过任务注册: targets={to_action}")
+                return None
 
         # 2. 生成唯一 Task ID
         task_id = f"steam_{action}_{int(time.time() * 1000)}"
@@ -1392,6 +1407,9 @@ class SteamManager:
                     
                     finished_count = 0
                     errors =[]
+                    elapsed_seconds = time.time() - start_time
+                    # 记录每个工坊项的磁盘状态，前端用它判断哪些本地数据可以清理。
+                    target_details = {}
                     
                     # 如果目标被全部修剪光了 (total == 0)
                     if total == 0:
@@ -1402,31 +1420,42 @@ class SteamManager:
                         for mid in targets:
                             item = data_dict.get(mid)
                             folder_exists = bool(ws_base_path and os.path.exists(os.path.join(ws_base_path, mid)))
+                            detail = {
+                                "workshop_id": mid,
+                                "folder_exists": folder_exists,
+                                "folder_removed": not folder_exists,
+                                "is_installed": bool(item.get('is_installed')) if item else False,
+                                "is_subscribed": item.get('is_subscribed') if item else None,
+                                "complete_reason": "",
+                            }
                             
                             if action == "subscribe":
                                 if item and item.get('is_installed') and not item.get('needs_update') and folder_exists:
                                     finished_count += 1
+                                    detail["complete_reason"] = "installed"
                                 elif item and item.get('has_error') and item.get('error_detail'):
                                     errors.append(f"Mod {mid}: {item.get('error_detail')}")
-                                    
+
                             elif action == "unsubscribe":
-                                is_installed_acf = item.get('is_installed') if item else False
-                                is_subscribed = item.get('is_subscribed') if item else False
-                                # 条件1：完美移除 (物理消失 + Steam记录消失)
+                                is_installed_acf = detail["is_installed"]
+                                is_subscribed = detail["is_subscribed"]
+                                # 取消订阅的完成标准优先看 Steam 订阅状态；文件夹可能因为残留文件或锁定而暂时不消失。
                                 if not is_installed_acf and not folder_exists:
                                     finished_count += 1
-                                # 条件2：容错放行 (物理已经消失，且指令发出了超过 3 秒)
-                                # 对付手动删文件导致 Steam 装死不更新 ACF 的情况
-                                elif not folder_exists and (time.time() - start_time > 3):
+                                    detail["complete_reason"] = "folder_and_record_removed"
+                                elif not folder_exists and elapsed_seconds > 3:
                                     finished_count += 1
-                                # 条件3：日志明确表示已经退订 
-                                # (应对 Steam 延迟删文件，或游戏运行中锁定文件的情况)
+                                    detail["complete_reason"] = "folder_removed"
                                 elif item and is_subscribed is False:
                                     finished_count += 1
-                                # 条件4：兜底超时放行 
-                                # (如果向 Steam 发出退订指令超过 10 秒，强行认定完成，防止卡 0%)
-                                elif time.time() - start_time > 10:
+                                    detail["complete_reason"] = "unsubscribed_but_folder_exists"
+                                elif elapsed_seconds > 30:
                                     finished_count += 1
+                                    detail["complete_reason"] = "timeout"
+                                else:
+                                    detail["complete_reason"] = "waiting_file_cleanup"
+
+                            target_details[mid] = detail
 
                         # 计算独立进度
                         percent = int((finished_count / total) * 100)
@@ -1436,16 +1465,18 @@ class SteamManager:
                             status = TaskStatus.COMPLETED
                         elif errors and (len(errors) + finished_count >= total):
                             status = TaskStatus.ERROR
-                        elif time.time() - start_time > 1800:
+                        elif elapsed_seconds > 1800:
                             status = TaskStatus.ERROR
                             errors.append("Steam 响应超时")
 
                         # 修复这里的越界报错！
-                        action_zh = "订阅" if action == "subscribe" else "移除"
-                        if total > 1:
-                            msg = f"Steam {action_zh} 完成 ({finished_count}/{total})" if (finished_count==total) else f"Steam {action_zh}中 ({finished_count}/{total})"
+                        action_zh = "订阅" if action == "subscribe" else "取消订阅"
+                        if status == TaskStatus.COMPLETED:
+                            msg = f"Steam {action_zh}已完成 ({finished_count}/{total})" if total > 1 else f"Steam {action_zh}已完成 {targets[0]}"
+                        elif status == TaskStatus.ERROR:
+                            msg = f"Steam {action_zh}失败 ({finished_count}/{total})" if total > 1 else f"Steam {action_zh}失败 {targets[0]}"
                         else:
-                            msg = f"{action_zh}模组 {targets[0]}"
+                            msg = f"Steam 正在{action_zh} ({finished_count}/{total})" if total > 1 else f"Steam 正在{action_zh} {targets[0]}"
 
                     # 发送独立的事件给前端
                     self._emit_progress_event(
@@ -1457,6 +1488,8 @@ class SteamManager:
                         title="Steam 托管",
                         error="; ".join(errors) if errors else None,
                         task_type=str(task.get("task_type") or "steam-subscribe"),
+                        targets=targets,
+                        target_details=target_details,
                     )
 
                     if status in[TaskStatus.COMPLETED, TaskStatus.ERROR]:
@@ -1472,7 +1505,7 @@ class SteamManager:
                 
             time.sleep(3)
     
-    def _emit_progress_event(self, tid, msg, percent, status, file_path='', title='', error=None, task_type='steam-subscribe'):
+    def _emit_progress_event(self, tid, msg, percent, status, file_path='', title='', error=None, task_type='steam-subscribe', targets=None, target_details=None):
         """对接 EventBus 格式"""
         status_map = {
             TaskStatus.COMPLETED: "success",
@@ -1492,6 +1525,8 @@ class SteamManager:
                 "error": error,
                 "provider": "steamcmd" if str(task_type).startswith("steamcmd-") else "steam",
                 "title": title or "Steam 任务",
+                "targets": list(targets or []),
+                "target_details": target_details or {},
             },
         )
 

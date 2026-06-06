@@ -345,6 +345,7 @@ export const useAppStore = defineStore('app', () => {
     settings,
     waitForDownload: (...args) => waitForDownload(...args),
     refreshData: (...args) => refreshData(...args),
+    refreshModsData: (...args) => refreshModsData(...args),
     downloadWorkshopItems: (...args) => downloadWorkshopItems(...args),
   })
 
@@ -366,6 +367,8 @@ export const useAppStore = defineStore('app', () => {
   const updateInstallPrompted = new Set()
   const exportCompletePrompted = new Set()
   const pendingModScanRequested = ref(null)
+  // 记录当前扫描请求的列表保留策略，等扫描完成事件回来时再交给 Mod Store。
+  const activeModScanRequest = ref(null)
   // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
   const cancellableTaskTypes = new Set([
     'scan',
@@ -469,6 +472,27 @@ export const useAppStore = defineStore('app', () => {
     isGameRunning.value = runtimeSession.value.state === 'running'
   }
 
+  const applyModsPayload = (payload, { isInit = false, historyLabel = '刷新磁盘状态', preserveListState = false } = {}) => {
+    if (!payload) return false
+
+    const groupStore = useGroupStore()
+    groupStore.setGroups(payload.groups || [])
+
+    const modStore = useModStore()
+    // 保留列表状态的刷新只替换模组主数据，不进入三列表撤销历史。
+    const previousSnapshot = isInit || preserveListState ? null : modStore.captureListHistorySnapshot()
+    modStore.setMods(payload, { resetHistory: !!isInit, preserveListState })
+    if (!preserveListState && previousSnapshot) {
+      modStore.recordListHistory({
+        before: previousSnapshot,
+        type: 'refresh-data',
+        label: historyLabel,
+      })
+    }
+
+    return true
+  }
+
   const applyInitialPayload = (payload, { isInit = false, historyLabel = '刷新磁盘状态' } = {}) => {
     if (!payload) return false
 
@@ -504,30 +528,20 @@ export const useAppStore = defineStore('app', () => {
       }
     }
 
-    const groupStore = useGroupStore()
-    groupStore.setGroups(payload.groups || [])
-
-    const modStore = useModStore()
-    const previousSnapshot = isInit ? null : modStore.captureListHistorySnapshot()
-    modStore.setMods(payload, { resetHistory: !!isInit })
-    if (previousSnapshot) {
-      modStore.recordListHistory({
-        before: previousSnapshot,
-        type: 'refresh-data',
-        label: historyLabel,
-      })
-    }
-
-    return true
+    return applyModsPayload(payload, { isInit, historyLabel })
   }
 
   // 扫描完成后只同步与模组相关的数据，避免再次触发整套工作区/集合/GitHub 初始化。
-  const refreshModsData = async (historyLabel = '扫描后同步模组数据') => {
+  const refreshModsData = async (historyLabel = '扫描后同步模组数据', options = {}) => {
     if (!window.pywebview) return false
     try {
       const res = await window.pywebview.api.get_initial_data()
       if (!checkResult(res, '同步模组数据')) return false
-      const applied = applyInitialPayload(res.data, { isInit: false, historyLabel })
+      const applied = applyModsPayload(res.data, {
+        isInit: false,
+        historyLabel,
+        preserveListState: !!options?.preserveListState,
+      })
       if (!applied) return false
 
       const ruleStore = useRuleStore()
@@ -545,7 +559,8 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const requestModScan = async ({ forcedUpdate = false, specificPaths = null } = {}) => {
+  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false } = {}) => {
+    // 多次扫描请求合并时，任意一次要求保留列表状态，最终扫描完成也要保留。
     const normalizeScanRequest = (request = {}) => {
       const normalizedPaths = Array.isArray(request.specificPaths)
         ? request.specificPaths.map(path => String(path || '').trim()).filter(Boolean)
@@ -553,6 +568,7 @@ export const useAppStore = defineStore('app', () => {
       return {
         forcedUpdate: !!request.forcedUpdate,
         specificPaths: normalizedPaths && normalizedPaths.length > 0 ? [...new Set(normalizedPaths)] : null,
+        preserveListState: !!request.preserveListState,
       }
     }
     const mergeScanRequest = (left, right) => {
@@ -563,15 +579,18 @@ export const useAppStore = defineStore('app', () => {
         specificPaths: (!left.specificPaths || !right.specificPaths)
           ? null
           : [...new Set([...left.specificPaths, ...right.specificPaths])],
+        preserveListState: !!(left.preserveListState || right.preserveListState),
       }
     }
-    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths })
+    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState })
     if (isScanRunning.value) {
       pendingModScanRequested.value = mergeScanRequest(pendingModScanRequested.value, scanRequest)
       return false
     }
 
     pendingModScanRequested.value = null
+    // 扫描任务本身不带前端选项，先暂存在这里，等 scan-complete 事件回来再使用。
+    activeModScanRequest.value = scanRequest
     const modStore = useModStore()
     await modStore.scanMods(scanRequest.specificPaths, scanRequest.forcedUpdate)
     return true
@@ -581,6 +600,8 @@ export const useAppStore = defineStore('app', () => {
     if (!pendingModScanRequested.value || isScanRunning.value) return false
     const queuedRequest = pendingModScanRequested.value
     pendingModScanRequested.value = null
+    // 延迟扫描同样要保留原始请求选项，避免排队后丢失列表状态策略。
+    activeModScanRequest.value = queuedRequest
     const modStore = useModStore()
     await modStore.scanMods(queuedRequest.specificPaths, queuedRequest.forcedUpdate)
     return true
@@ -695,7 +716,12 @@ export const useAppStore = defineStore('app', () => {
       }
       // 扫描完成后的逻辑主要涉及 Mod 数据更新
       const modStore = useModStore()
-      await modStore.scanComplete(detail)
+      // 取出并清空本次扫描选项，避免下一次外部扫描误用旧状态。
+      const scanRequest = activeModScanRequest.value
+      activeModScanRequest.value = null
+      await modStore.scanComplete(detail, {
+        preserveListState: !!scanRequest?.preserveListState,
+      })
       if (pendingModScanRequested.value) {
         window.setTimeout(() => {
           void flushQueuedModScan()
@@ -785,21 +811,15 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'steam-subscribe' && task.status === 'success') {
         void (async () => {
-          await requestModScan()
+          await requestModScan({ preserveListState: true })
           toast.success('Steam 订阅已完成')
-        })()
-      }
-      if (task.type === 'steam-unsubscribe' && task.status === 'success') {
-        void (async () => {
-          await requestModScan()
-          toast.success('Steam 取消订阅已完成')
         })()
       }
       if (task.type === 'steam-subscribe' && task.status === 'failed') {
         toast.error(`Steam 订阅失败: ${task.metrics?.error || task.message}`)
       }
       if (task.type === 'steam-unsubscribe' && task.status === 'failed') {
-        toast.error(`Steam 取消订阅失败: ${task.metrics?.error || task.message}`)
+        toast.error(`取消订阅失败：${task.metrics?.error || task.message}`)
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
         if (updateState.info) updateState.info.local_status = 'ready'
@@ -911,7 +931,7 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.perform_database_cleanup()
     if (checkResult(res, '数据库深度清理')) {
       toast.success('无效数据清理完成，正在刷新列表...')
-      await refreshData()
+      await refreshModsData('无效数据清理后同步模组数据')
     }
   }
   const cancelTaskByProgress = async (task) => {

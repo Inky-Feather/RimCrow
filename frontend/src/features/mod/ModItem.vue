@@ -403,14 +403,37 @@ const handleClick = (e) => {
     return
   }
 }
-// 删除选中项Mod
-const deleteModFiles = async () => {
-  const path_hashes = modStore.selectedMods.map(m => m.path_hash)
-  const selectedIds = modStore.selectedIds
-  const res = await modStore.deleteMods(path_hashes, false)
-  if(res) {
+const removeDeletedItemsFromLists = async ({ items = [], type, label }) => {
+  const selectedIds = items.map(item => item.id).filter(Boolean)
+  const dataIds = items.map(item => item.mod?.package_id || item.id).filter(Boolean)
+  if (selectedIds.length === 0) return false
+
+  // 删除类操作会从列表移除项目并清掉真实数据；撤销时只恢复列表 ID，自然显示为缺失项。
+  return await modStore.runListHistoryTransaction({
+    type,
+    label,
+    trackedModIds: selectedIds,
+  }, async () => {
+    modStore.removeDeletedModsFromLocalData(dataIds)
     modStore.selectMods([])
     modStore.removeIdsOnAllList(selectedIds)
+    return true
+  })
+}
+// 删除选中项Mod
+const deleteModFiles = async () => {
+  const deleteItems = modStore.selectedIds
+    .map(id => ({ id, mod: modStore.takeModById(id) }))
+    .filter(item => item.mod?.path_hash)
+  const path_hashes = deleteItems.map(item => item.mod.path_hash)
+  const res = await modStore.deleteMods(path_hashes, false)
+  if(res) {
+    const removed = await removeDeletedItemsFromLists({
+      items: deleteItems,
+      type: 'delete-mod-files',
+      label: `删除 ${deleteItems.length} 个本地文件`,
+    })
+    if (removed) await appStore.requestModScan({ preserveListState: true })
   }
 }
 // 批量生成别名备注
@@ -444,23 +467,42 @@ const generateAliasNotes = async () => {
 }
 // 取消订阅模组
 const unsubscribeWorkshopIds = async (delete_file = false) => {
-  // 只选择包含workshop_id的项目
-  const path_hashes = [];
-  const workshop_ids = [];
-  const selectedIds = modStore.selectedIds
-  // 遍历数组，同时收集两个字段
-  modStore.selectedMods.forEach(m => {
-    // 只选择包含 workshop_id 的项目
-    if (m.workshop_id) {
-      path_hashes.push(m.path_hash);
-      workshop_ids.push(m.workshop_id);
-    }
-  });
+  const workshopItems = modStore.selectedIds
+    .map(id => ({ id, mod: modStore.takeModById(id) }))
+    .filter(item => item.mod?.workshop_id)
+  const path_hashes = workshopItems.map(item => item.mod.path_hash).filter(Boolean)
+  const workshop_ids = workshopItems.map(item => item.mod.workshop_id)
   const res = await appStore.unsubscribeWorkshopIds(workshop_ids, delete_file ? path_hashes : null)
-  if (res && delete_file) {
-    modStore.selectMods([])
-    modStore.removeIdsOnAllList(selectedIds)
+  if (!res) return
+
+  const targetDetails = res?.task?.metrics?.target_details || {}
+  const unsubscribeCompleteReasons = new Set([
+    'folder_and_record_removed',
+    'folder_removed',
+    'unsubscribed_but_folder_exists',
+    'timeout',
+  ])
+  const removedWorkshopItems = delete_file
+    ? workshopItems
+    // 取消订阅完成可能仍有残留文件夹，不能只用 folder_removed 判断是否清理列表项。
+    : workshopItems.filter(item => unsubscribeCompleteReasons.has(targetDetails[String(item.mod.workshop_id)]?.complete_reason))
+  const removedIds = removedWorkshopItems.map(item => item.id)
+  if (removedIds.length === 0) return
+  let removed = false
+  if (delete_file) {
+    removed = await removeDeletedItemsFromLists({
+      items: removedWorkshopItems,
+      type: 'unsubscribe-delete-mod-files',
+      label: `取消订阅并删除 ${removedWorkshopItems.length} 个文件`,
+    })
+  } else {
+    removed = await removeDeletedItemsFromLists({
+      items: removedWorkshopItems,
+      type: 'unsubscribe-mods',
+      label: `取消订阅 ${removedWorkshopItems.length} 个创意工坊项目`,
+    })
   }
+  if (removed) await appStore.requestModScan({ preserveListState: true })
 }
 
 // 右键菜单
@@ -545,7 +587,7 @@ const handleContextMenu = async (event) => {
       { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.workshop_id) },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
       { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds() },
-      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
+      { label: '取消订阅并删除文件'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
     ]},
   ]
   if (modStore.selectedMods.some(m => !!m.replacement)) {

@@ -62,6 +62,9 @@ export const useRuleStore = defineStore('rules', () => {
 
   const currentId = ref(null)
   const isLoading = ref(false)
+  const refreshRuleState = async () => {
+    await appStore.refreshModsData('规则变更后同步规则数据', { preserveListState: true })
+  }
 
   // 当前正在检视的目标 Mod ID
   const targetId = computed(() => modStore.lastSelectedMod?.package_id || null)
@@ -172,7 +175,7 @@ export const useRuleStore = defineStore('rules', () => {
       toast.error(res.message)
       fetchRules() // 回滚
     } else {
-      modStore.scanMods()
+      await refreshRuleState()
     }
   }
   // 移除单项规则中的mod
@@ -196,7 +199,7 @@ export const useRuleStore = defineStore('rules', () => {
     }
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
     if (!checkResult(res, '移除用户规则')) fetchRules()
-    modStore.scanMods()
+    else await refreshRuleState()
   }
   // 修改单项规则说明
   const updateComment = async (targetModId, type, otherModId, comment) => {
@@ -210,15 +213,14 @@ export const useRuleStore = defineStore('rules', () => {
     userModRules.value[pid][type][other] = rule[type][other]
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
     if (!checkResult(res, '更新用户规则说明')) fetchRules()
-    modStore.scanMods()
+    else await refreshRuleState()
   }
   // 删除用户单项规则
   const deleteUserModRule = async (id) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_user_mod(id)
     if (checkResult(res, '删除用户规则', true)) {
-      fetchRules()
-      modStore.scanMods()
+      await refreshRuleState()
     }
   }
   // 获取某个 Mod 当前的绝对位置状态
@@ -293,7 +295,7 @@ export const useRuleStore = defineStore('rules', () => {
       fetchRules()
       return false
     }
-    modStore.scanMods()
+    await refreshRuleState()
     return true
   }
 
@@ -302,8 +304,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_set_user_mod_absolute_position(modId, position, comment)
     if (checkResult(res, '设置绝对排序位置')) {
-      fetchRules() // 刷新本地数据
-      modStore.scanMods() // 触发重新计算
+      await refreshRuleState()
     }
   }
 
@@ -312,8 +313,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.change_rule_source_priority(rules_sources)
     if (checkResult(res, '改变规则优先级', true)) {
-      fetchRules()
-      modStore.scanMods()
+      await refreshRuleState()
       return true
     }
     return false
@@ -331,10 +331,11 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     settings.value[type[key]] = enabled
     const res = await window.pywebview.api.rule_global_enable(type[key], enabled)
-    if (!checkResult(res, '全局规则开关')) fetchRules()
-    if (key === 'workshop_dependencies') {
+    if (!checkResult(res, '全局规则开关')) {
       fetchRules()
+      return
     }
+    await refreshRuleState()
   }
   // 切换规则开关
   const toggleModRule = async (rule_type, package_id) => {
@@ -363,6 +364,7 @@ export const useRuleStore = defineStore('rules', () => {
     }
     const res = await window.pywebview.api.rule_toggle_mod(rule_type, pid, excludedSet.has(pid))
     if (!checkResult(res, '用户规则开关')) fetchRules()
+    else await refreshRuleState()
   }
 
   // --- 动态规则操作 ---
@@ -374,6 +376,8 @@ export const useRuleStore = defineStore('rules', () => {
     const res = await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, rule.enabled)
     if(!checkResult(res, '切换规则')) {
       fetchRules()
+    } else {
+      await refreshRuleState()
     }
   }
   // 保存动态规则
@@ -381,7 +385,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_update_dynamic(rule)
     if (checkResult(res, '保存规则',true)) {
-      fetchRules()
+      await refreshRuleState()
       return true
     }
   }
@@ -390,7 +394,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_dynamic(rule.rule_id)
     if(checkResult(res, '删除规则', true)) {
-      fetchRules()
+      await refreshRuleState()
     }
   }
   // --- 导入导出 ---
@@ -399,8 +403,6 @@ export const useRuleStore = defineStore('rules', () => {
     isLoading.value = true
     try {
         await appStore.updateExternalDB('community_rules')
-        // 重新获取规则数据，确保规则面板立即显示最新缓存。
-        await fetchRules()
     } catch (error) {
         toast.error("更新社区库失败: " + error.message)
     } finally {
@@ -410,7 +412,7 @@ export const useRuleStore = defineStore('rules', () => {
   // 更新创意工坊库
   const updateWorkshop = async () => {
     isLoading.value = true
-    const res = await appStore.updateExternalDB('workshop_db')
+    await appStore.updateExternalDB('workshop_db')
     isLoading.value = false
   }
   // 导出规则
@@ -428,8 +430,7 @@ export const useRuleStore = defineStore('rules', () => {
       if (res.data?.warnings?.length) {
         toast.warning(res.data.warnings.join('\n'), { timeout: 8000 })
       }
-      fetchRules()
-      modStore.scanMods()
+      await refreshRuleState()
     }
   }
 

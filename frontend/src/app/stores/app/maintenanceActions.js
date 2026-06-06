@@ -6,6 +6,7 @@ export const useMaintenanceActions = ({
   settings,
   waitForDownload,
   refreshData,
+  refreshModsData,
   downloadWorkshopItems,
 } = {}) => {
   const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
@@ -392,10 +393,15 @@ export const useMaintenanceActions = ({
         const task_id = res.data.task_id
         await waitForDownload(task_id)
         // 重新获取数据
-        await refreshData()
+        const historyLabel = `${workNameMap[type] || '外置数据库更新'}后同步模组数据`
+        if (refreshModsData) await refreshModsData(historyLabel)
+        else await refreshData(false, historyLabel)
+        return true
       }
+      return false
     } catch (error) {
       toast.error("更新社区库失败: " + error.message)
+      return false
     }
   }
 

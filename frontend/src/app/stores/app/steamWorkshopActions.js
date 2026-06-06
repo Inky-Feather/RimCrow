@@ -1,8 +1,8 @@
 import { toast, checkResult } from '../../../shared/lib/common'
-import { useModStore } from '../../../features/mod/stores/modStore'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { normalizeInstallSource, normalizeInstallSources } from '../../../features/mod/lib/modIdentity'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
+import { useTaskStore } from '../taskStore'
 
 export const useSteamWorkshopActions = ({
   openUrl,
@@ -140,38 +140,55 @@ export const useSteamWorkshopActions = ({
     const normalizedDeleteHashes = Array.isArray(deletePathHashes)
       ? deletePathHashes.filter(Boolean)
       : []
+    // 纯取消订阅必须等 Steam 完成处理；主动删除文件的流程由本函数后续删除步骤负责。
+    const shouldWaitForSteamTask = options.waitForTask !== false && normalizedDeleteHashes.length === 0
     if (!options.skipConfirm) {
       const confirmStore = useConfirmStore()
       const message = normalizedDeleteHashes.length > 0
-        ? `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目，并删除本地文件吗？\n删除的文件会移入回收站。`
-        : `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目吗？\nSteam 会自动删除已取订项目的本地文件。`
+        ? `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目，并删除对应的本地文件吗？\n删除的文件会移入回收站。`
+        : `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目吗？\nSteam 完成处理后，列表会自动更新。`
       const ok = await confirmStore.confirmAction('取消订阅', message, {
         type: normalizedDeleteHashes.length > 0 ? 'error' : 'warning',
         confirmText: '确认取消订阅',
       })
       if (!ok) return false
     }
+    toast.info('正在连接 Steam...', { timeout: 2500 })
     const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
     if (res?.status === 'success') {
+      const taskId = String(res?.data?.task_id || '')
+      let task = null
+      toast.info(
+        normalizedDeleteHashes.length > 0
+          ? '已向 Steam 提交取消订阅，正在删除本地文件...'
+          : '已向 Steam 提交取消订阅，正在等待 Steam 完成处理...',
+        { timeout: 3500 }
+      )
+      if (shouldWaitForSteamTask && taskId) {
+        try {
+          task = await useTaskStore().waitForTaskCompletion(taskId)
+        } catch (e) {
+          toast.error(`取消订阅未完成：${e.message}`)
+          return false
+        }
+        toast.success('取消订阅成功，正在更新列表...', { timeout: 2500 })
+      }
       if (normalizedDeleteHashes.length > 0) {
         const deleteRes = await window.pywebview.api.mods_delete(normalizedDeleteHashes, !!options.force)
         if (deleteRes?.status !== 'success') {
-          toast.error(`取消订阅成功，但删除副本失败: ${deleteRes?.message || '未知错误'}`)
+          toast.error(`已向 Steam 提交取消订阅，但本地文件删除失败：${deleteRes?.message || '未知错误'}`)
           return false
         }
-        const modStore = useModStore()
-        await modStore.scanMods()
-        toast.info(`已取消订阅并删除 ${normalizedDeleteHashes.length} 个工坊副本`, { timeout: 2500 })
-        return true
+        toast.info(`已发送取消订阅请求，并删除 ${deleteRes.data?.success_count || normalizedDeleteHashes.length} 个本地文件`, { timeout: 2500 })
+        return { success: true, taskId, task }
       }
-      toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的取消订阅请求`, { timeout: 2500 })
-      return true
+      return { success: true, taskId, task }
     }
     if (res?.status === 'warning') {
       showSteamNotReadyHint(res)
       return false
     }
-    toast.error(`取消订阅失败: ${res?.message || '未知错误'}`)
+    toast.error(`取消订阅失败：${res?.message || '未知错误'}`)
     return false
   }
 
