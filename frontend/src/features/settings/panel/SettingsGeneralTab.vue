@@ -8,9 +8,8 @@
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4">
                     <CommonSelect class="pointer-events-none opacity-50" label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-CN'}, {label:'English', value:'en'}]" />
-                    <ThemeSelect v-if="formData.ui" :model-value="currentThemeId" :themes="appStore.themes"
-                      @update:model-value="emit('update:currentThemeId', $event)"
-                      @create="emit('open-theme-create')" @edit="emit('open-theme-edit', $event)" @delete="emit('delete-theme', $event)"
+                    <ThemeSelect v-if="formData.ui" v-model="currentThemeId" :themes="appStore.themes"
+                      @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
                     />
                   </div>
                   <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置浏览器" />
@@ -40,13 +39,13 @@
                       <CommonSwitch class="col-span-2 px-2 pt-2" mini label="启用列表分割组" v-model="formData.ui.enable_active_section_collapse" description="仅在启用列表生效。名称或别名满足 `=标题=` 或 `/*标题*/` 的纯分割线模组会被识别为可折叠分割线；折叠后拖动分割线模组即可整组移动。^^可工坊订阅 [[分类排列标签合集]] 配合使用。^^" />
                       <CommonSwitch :disabled="!formData.ui.enable_active_section_collapse" label="默认折叠分割组" v-model="formData.ui.default_collapse_active_sections" description="开启后，启用列表中的分割组会在初始显示时默认折叠。" />
                       <div class="flex items-center gap-1" :class="{'pointer-events-none opacity-50': !formData.ui.enable_active_section_collapse}">
-                        <button @click="appStore.openSteamWorkshopById('2138932352')"
+                        <button @click="appStore.openSteamWorkshopById('2138932352', false)"
                           class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
                             访问<p class="text-accent-cool">分类排列标签合集</p>工坊页面
                           </span>
                         </button>
-                        <button @click="appStore.openSteamWorkshopById('3542535605')"
+                        <button @click="appStore.openSteamWorkshopById('3542535605', false)"
                           class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
                             访问<p class="text-accent-cool">分类排序合集</p>工坊页面
@@ -111,22 +110,105 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import ThemeSelect from '../theme/ThemeSelect.vue'
+import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, normalizeTheme } from '../theme/themeManager'
+import { useAppStore } from '../../../app/stores/appStore'
+import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
+import { useGuideStore } from '../../guide/guideStore'
 
-defineProps({
+const props = defineProps({
   formData: { type: Object, required: true },
-  appStore: { type: Object, required: true },
-  guideStore: { type: Object, required: true },
-  currentThemeId: { type: String, required: true },
-  getDataById: { type: Function, required: true },
-  getLayoutDragClass: { type: Function, required: true },
-  handleLayoutDragStart: { type: Function, required: true },
-  handleLayoutDragOver: { type: Function, required: true },
-  handleLayoutDrop: { type: Function, required: true },
-  handleLayoutDragEnd: { type: Function, required: true },
 })
-const emit = defineEmits(['update:currentThemeId', 'open-theme-create', 'open-theme-edit', 'delete-theme'])
+
+const appStore = useAppStore()
+const guideStore = useGuideStore()
+const confirmStore = useConfirmStore()
+
+const layoutDragState = ref({ key: '', fromIndex: -1, overIndex: -1 })
+
+const selectedFormTheme = computed(() => {
+  return findThemeById(appStore.themes, currentThemeId.value)
+})
+
+// 主题选择需要立即生效，保存按钮只负责提交设置表单里的其它改动。
+const currentThemeId = computed({
+  get: () => appStore.settings.ui?.theme_id || DEFAULT_THEME_ID,
+  set: async (themeId) => {
+    if (!appStore.settings.ui) appStore.settings.ui = {}
+    appStore.settings.ui.theme_id = themeId || DEFAULT_THEME_ID
+    applyTheme(findThemeById(appStore.themes, appStore.settings.ui.theme_id))
+    await appStore.saveSetting('ui', appStore.settings.ui)
+  },
+})
+
+const openThemeCreate = () => {
+  appStore.themeEditor.theme = createEditableThemeFrom(selectedFormTheme.value)
+  appStore.themeEditor.isOpen = true
+}
+
+const openThemeEdit = (theme) => {
+  if (!theme || theme.builtin) return
+  appStore.themeEditor.theme = normalizeTheme(theme)
+  appStore.themeEditor.isOpen = true
+}
+
+const handleThemeDelete = async (theme) => {
+  if (!theme || theme.builtin) return
+  const ok = await confirmStore.confirmAction('删除主题', `确定要删除自定义主题「${theme.name}」吗？此操作不可撤销。`, { type: 'error' })
+  if (!ok) return
+  const deleted = await appStore.deleteUserTheme(theme.id)
+  if (deleted && currentThemeId.value === theme.id) {
+    currentThemeId.value = DEFAULT_THEME_ID
+  }
+}
+
+const getDataById = (id, datas) => datas.find(item => item.id === id)
+
+// 布局排序只修改当前设置表单副本，最终仍由设置面板的保存流程统一提交。
+const getLayoutList = (layoutKey) => {
+  const list = props.formData?.ui?.[layoutKey]
+  return Array.isArray(list) ? list : []
+}
+
+const handleLayoutDragStart = (layoutKey, index, event) => {
+  const list = getLayoutList(layoutKey)
+  if (!list[index]) return
+  layoutDragState.value = { key: layoutKey, fromIndex: index, overIndex: index }
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', `${layoutKey}:${index}`)
+}
+
+const handleLayoutDragOver = (layoutKey, index) => {
+  if (layoutDragState.value.key !== layoutKey) return
+  layoutDragState.value = { ...layoutDragState.value, overIndex: index }
+}
+
+const handleLayoutDrop = (layoutKey, toIndex) => {
+  const { key, fromIndex } = layoutDragState.value
+  const list = getLayoutList(layoutKey)
+  if (key !== layoutKey || fromIndex < 0 || toIndex < 0 || fromIndex === toIndex || !list[fromIndex]) {
+    handleLayoutDragEnd()
+    return
+  }
+  const nextList = [...list]
+  const [moving] = nextList.splice(fromIndex, 1)
+  nextList.splice(toIndex, 0, moving)
+  props.formData.ui[layoutKey] = nextList
+  handleLayoutDragEnd()
+}
+
+const handleLayoutDragEnd = () => {
+  layoutDragState.value = { key: '', fromIndex: -1, overIndex: -1 }
+}
+
+const getLayoutDragClass = (layoutKey, index) => {
+  if (layoutDragState.value.key !== layoutKey) return ''
+  if (layoutDragState.value.fromIndex === index) return 'opacity-50 scale-[0.98]'
+  if (layoutDragState.value.overIndex === index) return 'translate-y-0 ring-1 ring-accent-primary/60 rounded-xl'
+  return ''
+}
 </script>

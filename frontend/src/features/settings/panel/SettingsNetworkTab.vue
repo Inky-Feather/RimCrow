@@ -58,6 +58,9 @@ import CommonKVEditor from '../../../shared/components/input/CommonKVEditor.vue'
 
 defineProps({
   formData: { type: Object, required: true },
-  openUrlOnSteam: { type: Function, required: true },
 })
+
+const openUrlOnSteam = (url) => {
+  window.open('steam://openurl/' + url, '_blank')
+}
 </script>

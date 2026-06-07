@@ -8,7 +8,7 @@
     accent="primary"
     panel-class="w-[min(920px,92vw)] max-h-[84vh] border-accent-primary/20"
     content-class="min-h-0 flex flex-col"
-    @close="closeDataBundleModal"
+    @close="emit('close')"
   >
           <div class="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
           <div class="absolute -bottom-20 -right-16 w-56 h-56 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
@@ -32,7 +32,7 @@
             </div>
 
             <div v-if="isBundleProfileModuleSelected" class="modal-section mt-4">
-              <button @click="emit('update:showBundleProfilePicker', !showBundleProfilePicker)" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" >
+              <button @click="showBundleProfilePicker = !showBundleProfilePicker" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" >
                 <div>
                   <div class="text-sm font-bold text-text-main">环境数据</div>
                   <div class="text-xs text-text-dim mt-1">选择要打包的环境。</div>
@@ -48,7 +48,7 @@
                     :class="profile.has_user_data ? 'border-border-base/10 bg-bg-inset/55 hover:border-border-base/18' : 'border-accent-danger/20 bg-accent-danger/8 opacity-60'"
                   >
                     <div class="flex items-start gap-3">
-                      <input :checked="dataBundleProfileSelection.includes(profile.id)" @change="emit('update:dataBundleProfileSelection', $event.target.checked ? [...dataBundleProfileSelection, profile.id] : dataBundleProfileSelection.filter(id => id !== profile.id))" :disabled="!profile.has_user_data" :value="profile.id" type="checkbox" class="mt-0.5 accent-accent-primary"  >
+                      <input :checked="dataBundleProfileSelection.includes(profile.id)" @change="toggleDataBundleProfile(profile.id, $event.target.checked)" :disabled="!profile.has_user_data" :value="profile.id" type="checkbox" class="mt-0.5 accent-accent-primary"  >
                       <div class="min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
                           <span class="text-sm font-bold text-text-main">{{ profile.name }}</span>
@@ -82,20 +82,120 @@
 </template>
 
 <script setup>
+import { computed, ref, watch } from 'vue'
 import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
+import { toast } from '../../../shared/lib/common'
+import { useAppStore } from '../../../app/stores/appStore'
 
-defineProps({
+const props = defineProps({
   show: Boolean,
-  bundleModuleDefs: { type: Array, required: true },
-  bundleProfileDefs: { type: Array, required: true },
-  dataBundleModuleSelection: { type: Object, required: true },
-  dataBundleProfileSelection: { type: Array, required: true },
-  showBundleProfilePicker: Boolean,
-  isBundleProfileModuleSelected: Boolean,
-  buildBundleModuleTooltip: { type: Function, required: true },
-  toggleDataBundleModule: { type: Function, required: true },
-  closeDataBundleModal: { type: Function, required: true },
-  handleExportDataBundle: { type: Function, required: true },
+  schema: { type: Object, default: () => ({ modules: [], profiles: [] }) },
 })
-const emit = defineEmits(['update:dataBundleProfileSelection', 'update:showBundleProfilePicker'])
+const emit = defineEmits(['close'])
+
+const appStore = useAppStore()
+
+const showBundleProfilePicker = ref(false)
+const dataBundleModuleSelection = ref({})
+const dataBundleProfileSelection = ref([])
+
+const bundleModuleDefs = computed(() => props.schema?.modules || [])
+const bundleProfileDefs = computed(() => props.schema?.profiles || [])
+const selectedBundleModuleKeys = computed(() => (
+  bundleModuleDefs.value
+    .filter(module => !!dataBundleModuleSelection.value?.[module.key])
+    .map(module => module.key)
+))
+const isBundleProfileModuleSelected = computed(() => !!dataBundleModuleSelection.value?.profiles)
+
+// 每次打开弹窗都重新初始化选择，避免上一次导出残留影响本次打包。
+const resetDataBundleSelections = () => {
+  dataBundleModuleSelection.value = Object.fromEntries(
+    bundleModuleDefs.value.map(module => [module.key, false])
+  )
+  dataBundleProfileSelection.value = []
+  showBundleProfilePicker.value = false
+}
+
+// 选择模块时递归勾选依赖项，保证导出的数据包结构完整。
+const ensureModuleEnabled = (moduleKey, selection) => {
+  const target = bundleModuleDefs.value.find(module => module.key === moduleKey)
+  if (!target) return
+  selection[moduleKey] = true
+  for (const dependencyKey of target.dependencies || []) {
+    ensureModuleEnabled(dependencyKey, selection)
+  }
+}
+
+// 取消模块时同步取消依赖它的模块，避免产生缺少前置数据的导出组合。
+const disableModuleAndDependents = (moduleKey, selection) => {
+  selection[moduleKey] = false
+  const dependentKeys = bundleModuleDefs.value
+    .filter(module => (module.dependencies || []).includes(moduleKey))
+    .map(module => module.key)
+  for (const dependentKey of dependentKeys) {
+    disableModuleAndDependents(dependentKey, selection)
+  }
+}
+
+const toggleDataBundleModule = (moduleKey, enabled) => {
+  const nextSelection = { ...(dataBundleModuleSelection.value || {}) }
+  if (enabled) {
+    ensureModuleEnabled(moduleKey, nextSelection)
+  } else {
+    disableModuleAndDependents(moduleKey, nextSelection)
+  }
+  dataBundleModuleSelection.value = nextSelection
+  if (!nextSelection.profiles) {
+    dataBundleProfileSelection.value = []
+    showBundleProfilePicker.value = false
+  } else if (moduleKey === 'profiles' && enabled) {
+    showBundleProfilePicker.value = true
+  }
+}
+
+const toggleDataBundleProfile = (profileId, enabled) => {
+  dataBundleProfileSelection.value = enabled
+    ? [...dataBundleProfileSelection.value, profileId]
+    : dataBundleProfileSelection.value.filter(id => id !== profileId)
+}
+
+const buildBundleModuleTooltip = (module) => {
+  const lines = []
+  if (module?.description) {
+    lines.push(module.description)
+  }
+  const dependencyLabels = (module?.dependencies || [])
+    .map(key => bundleModuleDefs.value.find(item => item.key === key)?.label || key)
+  if (dependencyLabels.length) {
+    lines.push(`依赖：${dependencyLabels.join('、')}`)
+  }
+  return lines.join('\n')
+}
+
+const handleExportDataBundle = async () => {
+  // 导出前只校验用户当前选择，实际打包规则仍由后端 schema 和导出接口决定。
+  const moduleKeys = selectedBundleModuleKeys.value
+  if (moduleKeys.length === 0) {
+    toast.warning('请至少勾选一个要导出的数据模块')
+    return
+  }
+  if (moduleKeys.includes('profiles') && dataBundleProfileSelection.value.length === 0) {
+    toast.warning('已勾选环境数据，请至少选择一个环境')
+    return
+  }
+
+  const exported = await appStore.exportDataBundle({
+    preset: 'custom',
+    module_keys: moduleKeys,
+    profile_ids: dataBundleProfileSelection.value,
+  })
+  if (exported) {
+    emit('close')
+  }
+}
+
+watch(() => props.show, (visible) => {
+  if (visible) resetDataBundleSelections()
+})
 </script>

@@ -31,9 +31,9 @@ export const useSteamWorkshopActions = ({
     }
   }
 
-  const openSteamWorkshopById = (id) => {
+  const openSteamWorkshopById = (id, openInSteam = true) => {
     if(id) {
-      const steamUrl = `steam://url/CommunityFilePage/${id}`
+      const steamUrl = openInSteam ? `steam://url/CommunityFilePage/${id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`
       window.open(steamUrl, '_blank')
     }
   }

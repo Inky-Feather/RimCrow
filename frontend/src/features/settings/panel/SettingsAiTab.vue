@@ -73,7 +73,7 @@
 
                       <!-- 测试区 -->
                       <div data-tour="settings-ai-test" class="pt-4 flex gap-3">
-                        <CommonInput label="测试内容" class="flex-1" :model-value="testPrompt" placeholder="输入一句简单的话测试连接，例如：你好" @update:model-value="emit('update:testPrompt', $event)" @keydown.enter="testModel"></CommonInput>
+                        <CommonInput label="测试内容" class="flex-1" v-model="testPrompt" placeholder="输入一句简单的话测试连接，例如：你好" @keydown.enter="testModel"></CommonInput>
                         <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
                           :class="[aiStore.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
                           @click="testModel">
@@ -99,26 +99,141 @@
 </template>
 
 <script setup>
+import { computed, ref, watch } from 'vue'
 import { Drama } from 'lucide-vue-next'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonInput from '../../../shared/components/input/CommonInput.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
+import { toast } from '../../../shared/lib/common'
+import { useAppStore } from '../../../app/stores/appStore'
+import { useAiStore } from '../../ai/aiStore'
 
-defineProps({
+const props = defineProps({
   formData: { type: Object, required: true },
-  appStore: { type: Object, required: true },
-  aiStore: { type: Object, required: true },
-  currentAiProviders: { type: Array, required: true },
-  currentAiModels: { type: Array, required: true },
-  testPrompt: { type: String, required: true },
-  testResponse: { type: String, required: true },
-  testRawResponse: { default: null },
-  prettyTestRawResponse: { type: String, required: true },
-  handleProviderChange: { type: Function, required: true },
-  fetchAiModels: { type: Function, required: true },
-  testModel: { type: Function, required: true },
-  clearTestResult: { type: Function, required: true },
 })
-const emit = defineEmits(['update:testPrompt'])
+
+const appStore = useAppStore()
+const aiStore = useAiStore()
+
+const testPrompt = ref('介绍一下自己')
+const testResponse = ref('')
+const testRawResponse = ref(null)
+
+// 每个协议保留一份连接草稿，用户来回切换协议时不会丢失已填写的 URL、Key 和模型名。
+const aiProviderDrafts = ref({})
+const activeAiProvider = ref('')
+
+const DEFAULT_AI_BASE_URLS = {
+  openai_compatible: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  ollama: 'http://127.0.0.1:11434',
+}
+
+const currentAiProviders = computed(() => aiStore.listAiProviders())
+const currentAiModels = computed(() => aiStore.getCachedAiModelOptions(props.formData?.ai || {}))
+
+// 原始响应可能是对象或字符串，统一转成可读文本，便于排查模型兼容问题。
+const prettyTestRawResponse = computed(() => {
+  if (testRawResponse.value == null) return ''
+  try {
+    return JSON.stringify(testRawResponse.value, null, 2)
+  } catch {
+    return String(testRawResponse.value)
+  }
+})
+
+const normalizeAiProvider = (provider = '') => {
+  const normalized = String(provider || '').trim().toLowerCase()
+  if (['openai', 'custom_openai'].includes(normalized)) return 'openai_compatible'
+  return normalized || 'openai_compatible'
+}
+
+// 协议名作为草稿 key，避免 OpenAI-compatible 的历史别名生成多份重复草稿。
+const createAiProviderDraft = (ai = {}, providerOverride = undefined) => ({
+  provider: normalizeAiProvider(providerOverride ?? ai.provider),
+  base_url: String(ai.base_url || '').trim(),
+  api_key: String(ai.api_key || '').trim(),
+  model: String(ai.model || '').trim(),
+  endpoint_mode: String(ai.endpoint_mode || 'auto').trim().toLowerCase() || 'auto',
+})
+
+const syncAiProviderDraft = (provider = activeAiProvider.value) => {
+  const ai = props.formData?.ai
+  if (!ai) return
+  const normalizedProvider = normalizeAiProvider(provider || ai.provider)
+  aiProviderDrafts.value[normalizedProvider] = createAiProviderDraft(ai, normalizedProvider)
+}
+
+const hydrateAiProviderDrafts = () => {
+  const ai = props.formData?.ai
+  if (!ai) return
+  const provider = normalizeAiProvider(ai.provider)
+  activeAiProvider.value = provider
+  aiProviderDrafts.value = {
+    [provider]: createAiProviderDraft(ai, provider),
+  }
+}
+
+const applyAiDraftForProvider = (provider) => {
+  const ai = props.formData?.ai
+  if (!ai) return
+  const normalizedProvider = normalizeAiProvider(provider)
+  const hasDraft = Object.prototype.hasOwnProperty.call(aiProviderDrafts.value, normalizedProvider)
+  const draft = hasDraft ? aiProviderDrafts.value[normalizedProvider] : null
+  // 没有历史草稿时填入协议默认地址，让新协议切换后能直接看到合理的连接起点。
+  ai.provider = normalizedProvider
+  ai.base_url = draft ? String(draft.base_url || '') : (DEFAULT_AI_BASE_URLS[normalizedProvider] || '')
+  ai.api_key = draft ? String(draft.api_key || '') : ''
+  ai.model = draft ? String(draft.model || '') : ''
+  ai.endpoint_mode = draft ? (String(draft.endpoint_mode || 'auto').trim().toLowerCase() || 'auto') : 'auto'
+  activeAiProvider.value = normalizedProvider
+}
+
+const clearTestResult = () => {
+  testResponse.value = ''
+  testRawResponse.value = null
+}
+
+const testModel = async () => {
+  clearTestResult()
+  const res = await aiStore.chatWithAI(testPrompt.value, props.formData.ai)
+  testRawResponse.value = res?.raw ?? null
+  if (res?.ok) {
+    testResponse.value = res.text
+    toast.success('模型测试成功')
+    return
+  }
+  if (res?.isEmpty) {
+    testResponse.value = '模型已返回，但内容为空。可尝试切换模型、检查代理兼容策略或改用正式助手会话测试。'
+    toast.warning('模型返回了空内容')
+    return
+  }
+  testResponse.value = res?.error || '模型测试失败'
+  toast.error(res?.error || '模型测试失败')
+}
+
+// CommonSelect 会先更新 v-model 再触发 change，因此这里显式保存“上一个协议”的草稿。
+const handleProviderChange = (selectedProvider) => {
+  const previousProvider = activeAiProvider.value || normalizeAiProvider(props.formData?.ai?.provider)
+  syncAiProviderDraft(previousProvider)
+  const nextProvider = normalizeAiProvider(selectedProvider?.value ?? selectedProvider ?? props.formData?.ai?.provider)
+  applyAiDraftForProvider(nextProvider)
+}
+
+const fetchAiModels = async ({ forceRefresh = false, warnOnEmpty = false, silent = true } = {}) => {
+  const ai = props.formData?.ai
+  if (!ai?.provider || !ai.enabled) return
+  await aiStore.getAiModels(ai, { forceRefresh, warnOnEmpty, silent })
+}
+
+watch(() => props.formData?.ai, async (ai) => {
+  if (!ai) return
+  // 设置面板每次重新灌入表单对象时，同步当前协议草稿并预热已有模型缓存。
+  hydrateAiProviderDrafts()
+  if (ai.enabled && ai.provider) {
+    await fetchAiModels({ silent: true })
+  }
+}, { immediate: true })
 </script>

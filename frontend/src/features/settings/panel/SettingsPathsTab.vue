@@ -12,7 +12,7 @@
                   </button>
                 </div>
                 <div class="grid gap-6">
-                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse('game_install_path')" 
+                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse"
                     :check="formData.check_info?.game_install_path"
                     :description="'游戏安装目录即游戏主程序所在的目录，默认安装目录一般位于：\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld'" 
                     @blur="checkPath('game_install_path', formData.game_install_path)"/>
@@ -85,23 +85,36 @@ import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonTagInput from '../../../shared/components/input/CommonTagInput.vue'
 import { RUN_COMMAND_TAGS } from '../../../shared/lib/constants'
+import { useAppStore } from '../../../app/stores/appStore'
+import { useProfileStore } from '../../profiles/profileStore'
 
-defineProps({
+const props = defineProps({
   formData: { type: Object, required: true },
-  profileStore: { type: Object, required: true },
   steamLaunchDisabled: Boolean,
   workshopModsDisabled: Boolean,
   autoDetect: { type: Function, required: true },
-  handleGameBrowse: { type: Function, required: true },
   handleBrowse: { type: Function, required: true },
   checkPath: { type: Function, required: true },
-  handleCheckSteamcmdMods: { type: Function, required: true },
 })
 
+const appStore = useAppStore()
+const profileStore = useProfileStore()
 
 const LOAD_ORDER_DIR_MODE_OPTIONS = [
   { label: '默认', value: 'default' },
   { label: '记忆', value: 'remember' },
   { label: '自定义', value: 'custom' },
 ]
+
+const handleGameBrowse = async () => {
+  // 游戏目录会影响 Steam 版判定和本地模组路径，选择后立即刷新校验结果。
+  const res = await appStore.getFolderPath(props.formData.game_install_path)
+  if (!res) return
+  props.formData.game_install_path = res
+  await props.checkPath('game_install_path', props.formData.game_install_path)
+}
+
+const handleCheckSteamcmdMods = async () => {
+  await appStore.checkSteamcmdModUpdates({ manual: true, prompt: true })
+}
 </script>

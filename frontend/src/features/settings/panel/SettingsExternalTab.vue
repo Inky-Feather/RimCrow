@@ -79,21 +79,55 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { Download } from 'lucide-vue-next'
 import CommonPathInput from '../../../shared/components/input/CommonPathInput.vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonInput from '../../../shared/components/input/CommonInput.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
+import { useAppStore } from '../../../app/stores/appStore'
+import { useRuleStore } from '../../rules/ruleStore'
 
-defineProps({
+const props = defineProps({
   formData: { type: Object, required: true },
-  ruleStore: { type: Object, required: true },
-  downloadState: { type: Object, required: true },
-  resetToDefaultExternalPaths: { type: Function, required: true },
-  handleCheckTools: { type: Function, required: true },
-  handleCheckExternalData: { type: Function, required: true },
   handleBrowse: { type: Function, required: true },
   checkPath: { type: Function, required: true },
-  updateExternalDB: { type: Function, required: true },
 })
+
+const appStore = useAppStore()
+const ruleStore = useRuleStore()
+
+const downloadState = ref({
+  workshop_db: false,
+  instead_db: false,
+})
+
+const resetToDefaultExternalPaths = async () => {
+  // 默认路径按后端当前运行环境生成；贴图工具配置是嵌套对象，需要合并而不是整段覆盖。
+  const paths = await appStore.getDefaultExternalPaths()
+  if (!paths) return
+  const { texture_opt, ...rest } = paths
+  Object.assign(props.formData, rest)
+  if (texture_opt && typeof texture_opt === 'object') {
+    props.formData.texture_opt = {
+      ...(props.formData.texture_opt || {}),
+      ...texture_opt,
+    }
+  }
+}
+
+const handleCheckTools = async () => {
+  await appStore.checkToolMaintenance({ manual: true, prompt: true })
+}
+
+const handleCheckExternalData = async () => {
+  await appStore.checkExternalDataUpdates({ manual: true, prompt: true })
+}
+
+const updateExternalDB = async (dbType) => {
+  // 每个外部库独立维护下载状态，避免一个按钮下载时锁住其它更新入口。
+  downloadState.value[dbType] = true
+  await appStore.updateExternalDB(dbType)
+  downloadState.value[dbType] = false
+}
 </script>

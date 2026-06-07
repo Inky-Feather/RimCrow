@@ -133,25 +133,208 @@
                   </div>
                 </div>
               </section>
+
+  <DataBundleExportModal
+    :show="showDataBundleModal && appStore.uiState.showSettingsPanel"
+    :schema="dataBundleSchema"
+    @close="closeDataBundleModal"
+  />
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
 import { LoaderCircle } from 'lucide-vue-next'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import { formatFileSize } from '../../../shared/lib/format'
+import { toast } from '../../../shared/lib/common'
+import { useAppStore } from '../../../app/stores/appStore'
+import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
+import { useProfileStore } from '../../profiles/profileStore'
+import { useModStore } from '../../mod/stores/modStore'
+import DataBundleExportModal from './DataBundleExportModal.vue'
 
-defineProps({
+const props = defineProps({
   formData: { type: Object, required: true },
-  appStore: { type: Object, required: true },
-  profileStore: { type: Object, required: true },
-  handleClearRemoteImageCache: { type: Function, required: true },
-  openDataBundleImportDialog: { type: Function, required: true },
-  openDataBundleModal: { type: Function, required: true },
-  openModPackageImportDialog: { type: Function, required: true },
-  openCurrentProfileExportDialog: { type: Function, required: true },
-  handleRepair: { type: Function, required: true },
-  handleReset: { type: Function, required: true },
 })
+
+const appStore = useAppStore()
+const confirmStore = useConfirmStore()
+const profileStore = useProfileStore()
+const modStore = useModStore()
+
+const dataBundleSchema = ref({
+  modules: [],
+  profiles: [],
+  presets: {},
+  file_extension: '.rmmdata.zip',
+})
+const showDataBundleModal = ref(false)
+
+const loadDataBundleSchema = async () => {
+  // schema 由后端提供，前端只按模块定义渲染导出项，避免写死可打包范围。
+  const schema = await appStore.getDataBundleSchema()
+  if (!schema) return
+  dataBundleSchema.value = schema
+}
+
+const openDataBundleModal = async () => {
+  if (!(dataBundleSchema.value?.modules || []).length) {
+    await loadDataBundleSchema()
+  }
+  showDataBundleModal.value = true
+}
+
+const closeDataBundleModal = () => {
+  showDataBundleModal.value = false
+}
+
+const handleClearRemoteImageCache = async () => {
+  // 缓存清理不可撤销，先确认再执行，成功后用实际清理结果反馈用户。
+  const ok = await confirmStore.confirmAction(
+    '确认清理网络图片缓存',
+    '这会删除当前已缓存的远程图片文件。后续再次显示这些图片时，会按需重新下载。',
+    { type: 'warning', confirmText: '立即清理', cancelText: '取消' }
+  )
+  if (!ok) return
+  const cleared = await appStore.clearRemoteImageCache()
+  if (!cleared) return
+  const clearedCount = Number(cleared?.cleared?.file_count || 0)
+  const clearedBytes = formatFileSize(cleared?.cleared?.total_bytes || 0)
+  toast.success(`已清理 ${clearedCount} 张缓存图片，释放 ${clearedBytes}`)
+}
+
+const openDataBundleImportDialog = async () => {
+  // 导入前先检查数据包内容，把冲突处理交给统一的迁移面板。
+  const schema = await appStore.getDataBundleSchema()
+  if (!schema) return
+
+  const extensions = [
+    schema.file_extension || '.rmmdata.zip',
+    ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata']),
+  ]
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  const bundlePath = await appStore.getFilePath('', [
+    `RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`,
+    'All Files (*.*)',
+  ])
+  if (!bundlePath) return
+
+  const inspectData = await appStore.inspectDataBundle(bundlePath)
+  if (!inspectData) return
+
+  appStore.openPackageTransferDialog('data-import', {
+    title: '导入软件数据包',
+    bundlePath,
+    inspectData,
+    dataBundleSchema: schema,
+  })
+}
+
+const openModPackageImportDialog = async () => {
+  // 模组包导入需要先根据当前可用安装目录确定默认落点，迁移面板仍允许用户后续调整。
+  const schema = await appStore.getModPackageSchema()
+  if (!schema) return
+
+  const bundlePath = await appStore.getFilePath('', [
+    `RMM Mod Package (*${schema.file_extension || '.rmmmods.zip'})`,
+    'All Files (*.*)',
+  ])
+  if (!bundlePath) return
+
+  const availableInstalls = Array.isArray(schema.available_installs) ? schema.available_installs : []
+  const targetKind = availableInstalls.length > 0 ? 'game_install' : 'self_mods'
+  const gameInstallPath = String(availableInstalls[0]?.install_path || '')
+  const inspectData = await appStore.prepareModPackageImport(bundlePath, {
+    target_kind: targetKind,
+    game_install_path: gameInstallPath,
+  })
+  if (!inspectData) return
+
+  appStore.openPackageTransferDialog('mod-import', {
+    title: '导入模组包',
+    bundlePath,
+    inspectData,
+    modPackageSchema: schema,
+    targetKind,
+    gameInstallPath,
+  })
+}
+
+const openCurrentProfileExportDialog = () => {
+  // 导出当前环境时只提供可感知的范围选项，具体文件收集由打包流程统一处理。
+  const currentProfile = profileStore.currentProfile || {}
+  appStore.openPackageTransferDialog('mod-export', {
+    title: '导出当前环境模组',
+    description: '可在导出前选择当前环境有效模组或当前启用模组，并按需附带环境数据。',
+    sourceProfile: true,
+    profileId: currentProfile.id || appStore.settings.current_profile_id || 'default',
+    profileName: currentProfile.name || '当前环境',
+    scopeOptions: [
+      { value: 'profile-effective', label: `当前环境有效模组（${modStore.exportableVisibleCount}）`, description: '导出当前环境里能正常使用的模组。' },
+      { value: 'profile-active', label: `当前环境启用模组（${modStore.exportableActiveCount}）`, description: '只导出当前环境里已经启用的模组。' },
+    ],
+    export_scope: 'profile-effective',
+    folder_name_type: props.formData?.bundle_mod_folder_name_type || appStore.settings.bundle_mod_folder_name_type || 'default',
+  })
+}
+
+const handleReset = async () => {
+  const ok = await confirmStore.confirmAction('确认重置', '重置后，分组、备注等本地数据将被清空，且无法撤销。确定继续吗？', { type: 'error' })
+  if (ok) appStore.resetDatabase()
+}
+
+const handleRepair = async () => {
+  // 修复成功后必须重启才能切换到修复后的数据库状态。
+  const ok = await confirmStore.confirmAction(
+    '确认修复',
+    '这会尝试修复当前数据库。修复成功后需要重启软件才能生效。\n确定继续吗？',
+    { type: 'warning', confirmText: '开始修复' }
+  )
+  if (!ok) return
+
+  const res = await appStore.repairDatabase()
+  if (!res || res.status !== 'success') {
+    // 主动修复失败时不自动切换任何数据库，直接提示用户转向更保守的重置方案。
+    const shouldReset = await confirmStore.confirmAction(
+      '修复失败',
+      '数据库修复失败，当前数据可能无法正常使用。建议立即重置数据库。',
+      { type: 'error', confirmText: '立即重置', cancelText: '稍后处理' }
+    )
+    if (shouldReset) {
+      await appStore.resetDatabase()
+    }
+    return
+  }
+
+  if (res.data?.initialized) {
+    appStore.closeSettingsPanel()
+    toast.success('未找到本地数据库，已重新创建。')
+    return
+  }
+
+  const restartNow = await confirmStore.confirmAction(
+    '修复完成',
+    '数据库修复已完成。现在重启软件即可生效；如果暂不重启，当前仍会继续使用旧状态。',
+    { type: 'success', confirmText: '立即重启', cancelText: '稍后重启' }
+  )
+
+  if (!restartNow) {
+    toast.info('修复已完成，重启软件后生效。', { timeout: 4000 })
+    return
+  }
+
+  appStore.closeSettingsPanel()
+  await appStore.restartApplication()
+}
+
+watch(() => appStore.uiState.showSettingsPanel, async (visible) => {
+  if (visible) {
+    await appStore.refreshRemoteImageCacheStats()
+    return
+  }
+  closeDataBundleModal()
+}, { immediate: true })
 </script>
