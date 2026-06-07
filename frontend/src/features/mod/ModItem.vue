@@ -192,8 +192,8 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useModStore } from './stores/modStore'
 import { useGroupStore } from './stores/groupStore'
-import { useRuleStore } from '../rules/ruleStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
+import { useCommandStore } from '../../shared/commands/commandStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../shared/lib/color'
 import { extractSectionHeaderTitle, isSectionHeaderTitle } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
@@ -230,7 +230,7 @@ const aiStore = useAiStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
 const menuStore = useContextMenuStore()
-const ruleStore = useRuleStore()
+const commandStore = useCommandStore()
 const queueSetModsColor = useDebounceFn((modIds, color) => {
   modStore.setModsColor(modIds, color)
 }, 120)
@@ -396,8 +396,8 @@ const handleDoubleClick = () => {
 }
 // 点击处理
 const handleClick = (e) => {
-  if (e.altKey) { //  alt 键点击触发
-    ruleStore.currentId = props.item_id
+  if (e.altKey) { // Alt+左键是固定手势，但实际执行仍走命令系统，避免右键菜单和快捷键各写一套逻辑。
+    commandStore.executeCommand('mods.editSelectedRule', { modId: props.item_id })
     return
   }
   if (e.ctrlKey) { //  ctrl 键点击触发
@@ -408,39 +408,6 @@ const handleClick = (e) => {
   }
   if (e.button === 0) { // 左键点击
     return
-  }
-}
-const removeDeletedItemsFromLists = async ({ items = [], type, label }) => {
-  const selectedIds = items.map(item => item.id).filter(Boolean)
-  const dataIds = items.map(item => item.mod?.package_id || item.id).filter(Boolean)
-  if (selectedIds.length === 0) return false
-
-  // 删除类操作会从列表移除项目并清掉真实数据；撤销时只恢复列表 ID，自然显示为缺失项。
-  return await modStore.runListHistoryTransaction({
-    type,
-    label,
-    trackedModIds: selectedIds,
-  }, async () => {
-    modStore.removeDeletedModsFromLocalData(dataIds)
-    modStore.selectMods([])
-    modStore.removeIdsOnAllList(selectedIds)
-    return true
-  })
-}
-// 删除选中项Mod
-const deleteModFiles = async () => {
-  const deleteItems = modStore.selectedIds
-    .map(id => ({ id, mod: modStore.takeModById(id) }))
-    .filter(item => item.mod?.path_hash)
-  const path_hashes = deleteItems.map(item => item.mod.path_hash)
-  const res = await modStore.deleteMods(path_hashes, false)
-  if(res) {
-    const removed = await removeDeletedItemsFromLists({
-      items: deleteItems,
-      type: 'delete-mod-files',
-      label: `删除 ${deleteItems.length} 个本地文件`,
-    })
-    if (removed) await appStore.requestModScan({ preserveListState: true })
   }
 }
 // 批量生成别名备注
@@ -472,50 +439,6 @@ const generateAliasNotes = async () => {
     needsReview: true,
   })
 }
-// 取消订阅模组
-const unsubscribeWorkshopIds = async (delete_file = false) => {
-  const workshopItems = modStore.selectedIds
-    .map(id => ({ id, mod: modStore.takeModById(id) }))
-    .filter(item => item.mod?.workshop_id)
-  const path_hashes = workshopItems.map(item => item.mod.path_hash).filter(Boolean)
-  const workshop_ids = workshopItems.map(item => item.mod.workshop_id)
-  const res = await appStore.unsubscribeWorkshopIds(
-    workshop_ids,
-    path_hashes,
-    { deleteFiles: !!delete_file }
-  )
-  if (!res) return
-
-  const targetDetails = res?.task?.metrics?.target_details || {}
-  const unsubscribeCompleteReasons = new Set([
-    'folder_and_record_removed',
-    'folder_removed',
-    'unsubscribed_but_folder_exists',
-    'timeout',
-  ])
-  const removedWorkshopItems = delete_file
-    ? workshopItems
-    // 取消订阅完成可能仍有残留文件夹，不能只用 folder_removed 判断是否清理列表项。
-    : workshopItems.filter(item => unsubscribeCompleteReasons.has(targetDetails[String(item.mod.workshop_id)]?.complete_reason))
-  const removedIds = removedWorkshopItems.map(item => item.id)
-  if (removedIds.length === 0) return
-  let removed = false
-  if (delete_file) {
-    removed = await removeDeletedItemsFromLists({
-      items: removedWorkshopItems,
-      type: 'unsubscribe-delete-mod-files',
-      label: `取消订阅并删除 ${removedWorkshopItems.length} 个文件`,
-    })
-  } else {
-    removed = await removeDeletedItemsFromLists({
-      items: removedWorkshopItems,
-      type: 'unsubscribe-mods',
-      label: `取消订阅 ${removedWorkshopItems.length} 个创意工坊项目`,
-    })
-  }
-  if (removed) await appStore.requestModScan({ preserveListState: true })
-}
-
 // 右键菜单
 const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
@@ -580,22 +503,20 @@ const handleContextMenu = async (event) => {
         label: value, action: () => modStore.setModsType(selectedIds, key)
       })),{ label: '恢复默认', icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },
-    { label: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig,
-      action: () => modStore.changeModsActive(selectedIds, !isActive.value)
-    },
+    { commandId: 'mods.toggleSelectedActive', args: { modIds: [...selectedIds] }, labelOverride: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig },
     ...(moveMenu ? [{ label: '移动到' + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
   ]
   
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
-    { label: '编辑规则', icon: PencilRuler, shortcut: 'Alt+左键', action: () => ruleStore.currentId = props.item_id },
-    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => appStore.openUrl(modData.value.url) },
+    { commandId: 'mods.editSelectedRule', args: { modId: props.item_id }, labelOverride: '编辑规则', icon: PencilRuler, gesture: 'Alt+左键' },
+    { commandId: 'mods.openSelectedUrl', args: { modId: props.item_id }, labelOverride: '访问网页', icon: ExternalLink },
     { label: 'Steam操作', icon: IconSteam, disabled: !modData.value.workshop_id, children: [
-      { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.workshop_id) },
+      { commandId: 'mods.openSelectedWorkshopPage', args: { modId: props.item_id }, labelOverride: '访问创意工坊', icon: IconSteam },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
-      { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds() },
-      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
+      { commandId: 'mods.unsubscribeSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff },
+      { commandId: 'mods.unsubscribeAndDeleteSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2 },
     ]},
   ]
   if (modStore.selectedMods.some(m => !!m.replacement)) {
@@ -626,7 +547,7 @@ const handleContextMenu = async (event) => {
   // 文件处理菜单
   const fileMenuItems = [
     { divider: true },
-    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
+    { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: '打开文件夹', icon: FolderInput },
     { label: '创建本地共存'+ selectedCountStr, icon: Copy, disabled: !modStore.selectedMods.some(m => m.store === 'workshop'), action: () => modStore.localizeSelectedMods('workshop'), },
     { label: '切换共存版本', icon: SquaresExclude, disabled: !coexistSelectedIds.length,
       children: [
@@ -634,7 +555,7 @@ const handleContextMenu = async (event) => {
         { label: '切换为本地版' + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
       ]
     },
-    { label: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
+    { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
   ]
 
   // 多选菜单

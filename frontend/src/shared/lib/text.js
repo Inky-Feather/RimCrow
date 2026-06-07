@@ -27,6 +27,68 @@ export function buildSearchRegExp(query, { useRegex = false, caseSensitive = fal
   return new RegExp(source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
 }
 
+let rememberedSelection = {
+  text: '',
+  source: '',
+  updatedAt: 0,
+}
+
+// 选中文本会被用于搜索框填充，先清理不可见空格，避免用户复制到奇怪的查询词。
+const normalizeSelectedText = (value = '') => String(value || '').replace(/\u00a0/g, ' ').trim()
+
+const readInputSelectedText = (target = null) => {
+  const element = target && typeof target === 'object' ? target : null
+  if (!element || !['INPUT', 'TEXTAREA'].includes(element.tagName)) return ''
+  if (typeof element.selectionStart !== 'number' || typeof element.selectionEnd !== 'number') return ''
+  if (element.selectionStart === element.selectionEnd) return ''
+  return normalizeSelectedText(String(element.value || '').slice(element.selectionStart, element.selectionEnd))
+}
+
+const readDocumentSelectedText = () => {
+  if (typeof window === 'undefined' || typeof window.getSelection !== 'function') return ''
+  return normalizeSelectedText(window.getSelection()?.toString() || '')
+}
+
+const readRememberedSelectedText = () => {
+  if (!rememberedSelection.text) return ''
+  if (rememberedSelection.source === 'codemirror') {
+    const activeElement = typeof document === 'undefined' ? null : document.activeElement
+    // CodeMirror 的原生 selection 可能不暴露给 window.getSelection，只在编辑器仍聚焦时复用缓存。
+    if (!activeElement?.closest?.('.cm-editor')) return ''
+  }
+  return rememberedSelection.text
+}
+
+export const rememberSelectedText = (value = '', { source = '' } = {}) => {
+  const text = normalizeSelectedText(value)
+  const normalizedSource = String(source || '').trim()
+  if (!text) {
+    // 只允许当前来源清空自己的缓存，避免普通页面空选区误清掉 CodeMirror 选区。
+    if (!normalizedSource || rememberedSelection.source === normalizedSource) {
+      rememberedSelection = { text: '', source: '', updatedAt: 0 }
+    }
+    return ''
+  }
+  rememberedSelection = {
+    text,
+    source: normalizedSource,
+    updatedAt: Date.now(),
+  }
+  return text
+}
+
+export const getCurrentSelectedText = () => {
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  // 读取优先级：表单选区 > 页面选区 > 最近记录的编辑器选区。
+  const inputText = readInputSelectedText(activeElement)
+  if (inputText) return rememberSelectedText(inputText, { source: 'input' })
+
+  const documentText = readDocumentSelectedText()
+  if (documentText) return rememberSelectedText(documentText, { source: 'document' })
+
+  return readRememberedSelectedText()
+}
+
 /**
  * 将 Unity Rich Text (BBCode 变体) 转换为 HTML
  * 

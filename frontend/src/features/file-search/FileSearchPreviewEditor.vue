@@ -28,7 +28,7 @@ import { csharp } from '@replit/codemirror-lang-csharp'
 import { EditorSelection, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { getTailwindColorRgba } from '../../shared/lib/color'
-import { buildSearchRegExp } from '../../shared/lib/text'
+import { buildSearchRegExp, rememberSelectedText } from '../../shared/lib/text'
 
 const props = defineProps({
   filePath: {
@@ -147,8 +147,24 @@ const editorTheme = EditorView.theme({
   },
 }, { dark: true })
 
+const getEditorSelectedText = (view) => {
+  if (!view?.state?.selection) return ''
+  return view.state.selection.ranges
+    .filter(range => !range.empty)
+    .map(range => view.state.sliceDoc(range.from, range.to))
+    .join('\n')
+    .trim()
+}
+
+const selectionMemoryExtension = EditorView.updateListener.of((update) => {
+  if (!update.selectionSet) return
+  // 只读 CodeMirror 的选区不一定能被 window.getSelection 可靠读到，记录最近选中文本供全局搜索快捷键使用。
+  rememberSelectedText(getEditorSelectedText(update.view), { source: 'codemirror' })
+})
+
 const editorExtensions = computed(() => [
   searchDecorationField,
+  selectionMemoryExtension,
   editorTheme,
   ...(props.wrapLines ? [EditorView.lineWrapping] : []),
 ])

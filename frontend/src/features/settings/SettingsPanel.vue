@@ -89,6 +89,7 @@
                 @delete-theme="handleThemeDelete"
               />
               <SettingsFeaturesTab v-if="currentTab === 'features'" :form-data="formData" />
+              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsExternalTab
                 v-if="currentTab === 'community'"
                 :form-data="formData"
@@ -167,15 +168,17 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Keyboard } from 'lucide-vue-next'
 import { deepClone, toast } from '../../shared/lib/common'
 import { flashComponent, shakeComponent } from '../../shared/lib/domEffects'
+import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
 
 // 导入 Common UI
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import SettingsPathsTab from './panel/SettingsPathsTab.vue'
 import SettingsGeneralTab from './panel/SettingsGeneralTab.vue'
 import SettingsFeaturesTab from './panel/SettingsFeaturesTab.vue'
+import SettingsKeybindingsTab from './panel/SettingsKeybindingsTab.vue'
 import SettingsExternalTab from './panel/SettingsExternalTab.vue'
 import SettingsNetworkTab from './panel/SettingsNetworkTab.vue'
 import SettingsAiTab from './panel/SettingsAiTab.vue'
@@ -296,6 +299,7 @@ const tabs = [
   { id: 'paths', label: '路径配置', icon: FolderTree },
   { id: 'general', label: '界面设置', icon: AppWindow },
   { id: 'features', label: '功能设置', icon: Component },
+  { id: 'keybindings', label: '快捷键', icon: Keyboard },
   { id: 'community', label: '外部依赖', icon: Steam },
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
@@ -428,6 +432,10 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       }
       if (formData.value.ui && formData.value.ui.smooth_list_target_scroll === undefined) {
         formData.value.ui.smooth_list_target_scroll = true
+      }
+      if (formData.value.ui && !formData.value.ui.keybindings) {
+        // 兼容旧配置文件：默认键位由前端命令注册表决定，设置里只保存用户覆盖项。
+        formData.value.ui.keybindings = createDefaultKeybindingConfig()
       }
       // 如果当前上下文不健康，自动检测路径
       if (!profileStore.activeContext || profileStore.activeContext.is_healthy === false) {

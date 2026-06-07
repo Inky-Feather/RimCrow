@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { deepClone, toast, checkResult } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useGroupStore } from './groupStore'
@@ -733,6 +733,25 @@ export const useModStore = defineStore('mods', () => {
     const targetSource = currentInfo.sourcePreference === 'steam' ? 'local' : 'steam'
     return await switchCoexistenceSource([id], targetSource)
   }
+  const toggleSelectedCoexistenceSource = async (ids = selectedIds.value) => {
+    const targetIds = Array.isArray(ids) && ids.length ? ids : selectedIds.value
+    const firstSwitchableId = targetIds.find(id => canSwitchCoexistenceSource(id))
+    if (!firstSwitchableId) return false
+    const currentInfo = parsePackageToken(firstSwitchableId)
+    const currentMod = resolveStoredMod(firstSwitchableId)
+    const currentSource = currentInfo.sourcePreference || currentMod?.source_preference || currentMod?.store
+    const targetSource = currentSource === 'steam' || currentSource === 'workshop' ? 'local' : 'steam'
+    return await switchCoexistenceSource(targetIds, targetSource)
+  }
+  const revealSelectedMod = async (id = selectedIds.value[0]) => {
+    const targetId = normalizeListToken(id)
+    if (!targetId) return false
+    // 连续定位同一个 Mod 时需要先清空目标，否则 Vue watch 不会再次触发滚动。
+    currentTargetId.value = ''
+    await nextTick()
+    currentTargetId.value = targetId
+    return true
+  }
   // 智能插入 Mod 到 Active 列表
   const smartInsertMods = async (ids) => {
     if (!ids || ids.length === 0) return
@@ -953,6 +972,78 @@ export const useModStore = defineStore('mods', () => {
       if(finish_scan) await scanMods()
       return true
     }
+  }
+  const resolveSelectedActionItems = (ids = selectedIds.value) => {
+    const targetIds = Array.isArray(ids) && ids.length ? ids : selectedIds.value
+    return targetIds.map(id => ({
+      id: normalizeListToken(id),
+      mod: takeModById(id),
+    })).filter(item => item.id)
+  }
+  const removeDeletedItemsFromLists = async ({ items = [], type, label }) => {
+    const listIds = items.map(item => item.id).filter(Boolean)
+    const dataIds = items.map(item => item.mod?.package_id || item.id).filter(Boolean)
+    if (listIds.length === 0) return false
+
+    // 删除类动作会移除真实数据；撤销列表历史时只恢复列表 ID，缺失状态由扫描结果继续接管。
+    return await runListHistoryTransaction({
+      type,
+      label,
+      trackedModIds: listIds,
+    }, async () => {
+      removeDeletedModsFromLocalData(dataIds)
+      selectMods([])
+      removeIdsOnAllList(listIds)
+      return true
+    })
+  }
+  const deleteSelectedModFiles = async (ids = selectedIds.value) => {
+    const deleteItems = resolveSelectedActionItems(ids).filter(item => item.mod?.path_hash)
+    const pathHashes = [...new Set(deleteItems.map(item => item.mod.path_hash).filter(Boolean))]
+    if (pathHashes.length === 0) return false
+    const res = await deleteMods(pathHashes, false)
+    if (!res) return false
+    const removed = await removeDeletedItemsFromLists({
+      items: deleteItems,
+      type: 'delete-mod-files',
+      label: `删除 ${deleteItems.length} 个本地文件`,
+    })
+    if (removed) await appStore.requestModScan({ preserveListState: true })
+    return removed
+  }
+  const unsubscribeSelectedWorkshopMods = async (deleteFiles = false, ids = selectedIds.value) => {
+    const workshopItems = resolveSelectedActionItems(ids).filter(item => item.mod?.workshop_id)
+    const pathHashes = workshopItems.map(item => item.mod.path_hash).filter(Boolean)
+    const workshopIds = [...new Set(workshopItems.map(item => item.mod.workshop_id).filter(Boolean))]
+    if (workshopIds.length === 0) return false
+    const res = await appStore.unsubscribeWorkshopIds(
+      workshopIds,
+      pathHashes,
+      { deleteFiles: !!deleteFiles }
+    )
+    if (!res) return false
+
+    const targetDetails = res?.task?.metrics?.target_details || {}
+    const unsubscribeCompleteReasons = new Set([
+      'folder_and_record_removed',
+      'folder_removed',
+      'unsubscribed_but_folder_exists',
+      'timeout',
+    ])
+    const removedWorkshopItems = deleteFiles
+      ? workshopItems
+      // 取消订阅完成可能仍有残留文件夹，不能只用 folder_removed 判断是否清理列表项。
+      : workshopItems.filter(item => unsubscribeCompleteReasons.has(targetDetails[String(item.mod.workshop_id)]?.complete_reason))
+    if (removedWorkshopItems.length === 0) return false
+    const removed = await removeDeletedItemsFromLists({
+      items: removedWorkshopItems,
+      type: deleteFiles ? 'unsubscribe-delete-mod-files' : 'unsubscribe-mods',
+      label: deleteFiles
+        ? `取消订阅并删除 ${removedWorkshopItems.length} 个文件`
+        : `取消订阅 ${removedWorkshopItems.length} 个创意工坊项目`,
+    })
+    if (removed) await appStore.requestModScan({ preserveListState: true })
+    return removed
   }
 
   // --- Mod数据操作 ---
@@ -1279,8 +1370,8 @@ export const useModStore = defineStore('mods', () => {
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeDeletedModsFromLocalData, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     // 扫描、排序与模组操作
-    scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, smartInsertMods,
-    canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource,
+    scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
+    canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource, toggleSelectedCoexistenceSource, revealSelectedMod,
     // 用户数据与联锁
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup,

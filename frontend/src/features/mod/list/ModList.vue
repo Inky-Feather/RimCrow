@@ -1,5 +1,7 @@
 <template>
   <div class="flex flex-col relative h-full bg-bg-surface/40  shadow-2xl"
+      :data-key-scope="`mod-list:${listId}`"
+      @pointerdown="setListKeyScope"
       :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
     <div :data-tour="listId=='active'?'list-header':null" :class="`px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-accent-${listColor}/10`">
@@ -210,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import VirtualDragList from '../../../shared/components/list/VirtualDragList.vue';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
@@ -233,6 +235,8 @@ import { useModListIssues } from './useModListIssues'
 import { useModListSections } from './useModListSections'
 import { useModListDrag } from './useModListDrag'
 import { useModListViewport } from './useModListViewport'
+import { setActiveKeyScope } from '../../../shared/commands/keyScopeStore'
+import { registerModListActions } from '../../../app/commands/modListActions'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -255,6 +259,8 @@ const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 
 const searchTagsRef = ref(null)
 const listContainerRef = ref(null)
+// 最近交互过的列表作为键盘作用域兜底；焦点不在列表 DOM 内时也能继续处理列表级快捷键。
+const setListKeyScope = () => setActiveKeyScope(`mod-list:${props.listId}`)
 
 const normalizeId = (value: string) => String(value ?? '').trim().toLowerCase()
 const selectedIdSet = computed(() => new Set((modStore.selectedIds || []).map(id => normalizeId(id)).filter(Boolean)))
@@ -397,6 +403,23 @@ const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
     modStore.currentTargetId = ids[0]
   }
 }
+
+const revealFirstSelected = async () => {
+  const targetId = modStore.selectedIds?.[0]
+  if (!targetId) return false
+  modStore.currentTargetId = ''
+  await nextTick()
+  modStore.currentTargetId = targetId
+  return true
+}
+
+const unregisterModListActions = registerModListActions(`mod-list:${props.listId}`, {
+  moveSelectedToListBoundary: (position: 'top' | 'bottom') => handleMoveSelected({
+    action: position === 'top' ? 'list-top' : 'list-bottom',
+  }),
+  revealFirstSelected,
+})
+onBeforeUnmount(unregisterModListActions)
 
 bindTargetReveal({ vListRef, visibleList, revealCollapsedSectionFor })
 // 依赖线路数据

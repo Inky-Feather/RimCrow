@@ -1,10 +1,56 @@
 // stores/contextMenuStore.js
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { getCommand } from '../../commands/commandRegistry'
+import { useCommandStore } from '../../commands/commandStore'
+import { formatKeybindingLabel } from '../../commands/keybindingParser'
 
 export const getVisibleMenuItems = (items = []) => (items || []).filter(item => item && !item.hidden)
 
+const getCommandShortcutLabel = (commandStore, commandId = '') => {
+  return commandStore.getCommandKeybindings(commandId)
+    .map(keybinding => formatKeybindingLabel(keybinding))
+    .filter(Boolean)
+    .join(' / ')
+}
+
+const normalizeMenuItem = (item, commandStore) => {
+  if (!item) return item
+
+  // 菜单项可以只声明 commandId，标题、禁用状态、快捷键文案和执行动作都从命令注册表补齐。
+  const children = Array.isArray(item.children)
+    ? item.children.map(child => normalizeMenuItem(child, commandStore))
+    : item.children
+  const commandId = String(item.commandId || '').trim()
+  if (!commandId) return { ...item, children }
+
+  const command = getCommand(commandId)
+  if (!command) return { ...item, children, disabled: true, tooltip: item.tooltip || `命令不存在：${commandId}` }
+
+  const args = item.args || {}
+  const commandDisabled = !commandStore.isCommandEnabled(commandId, args)
+  const commandShortcut = getCommandShortcutLabel(commandStore, commandId)
+  // gesture 用于展示固定鼠标手势；真实键盘快捷键仍来自用户当前配置。
+  const shortcut = item.shortcut ?? [item.gesture, commandShortcut].filter(Boolean).join(' / ')
+
+  return {
+    ...item,
+    children,
+    label: item.labelOverride || item.label || command.title,
+    shortcut,
+    disabled: !!(item.disabled || commandDisabled),
+    level: item.level || (command.dangerLevel === 'warning' ? 'danger' : undefined),
+    tooltip: item.tooltip || command.description || item.labelOverride || item.label || command.title,
+    action: item.action || (() => commandStore.executeCommand(commandId, args)),
+  }
+}
+
+const normalizeMenuItems = (items = [], commandStore) => {
+  return (items || []).map(item => normalizeMenuItem(item, commandStore))
+}
+
 export const useContextMenuStore = defineStore('contextMenu', () => {
+  const commandStore = useCommandStore()
   const show = ref(false)
   const x = ref(0)
   const y = ref(0)
@@ -21,7 +67,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
 
     x.value = event.clientX
     y.value = event.clientY
-    items.value = menuItems
+    items.value = normalizeMenuItems(menuItems, commandStore)
     payload.value = data
     menuId.value = Date.now() // 每次打开更新 ID
     show.value = true

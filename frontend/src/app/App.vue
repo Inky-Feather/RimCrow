@@ -279,6 +279,9 @@ import { useRuleStore } from '../features/rules/ruleStore'
 import { useGroupStore } from '../features/mod/stores/groupStore'
 import { useOrderStore } from '../features/load-order/orderStore'
 import { useGuideStore } from '../features/guide/guideStore'
+import { useCommandStore } from '../shared/commands/commandStore'
+import { startKeybindingRuntime } from '../shared/commands/keybindingRuntime'
+import { registerBuiltinCommands } from './commands/builtinCommands'
 import RimHeader from './shell/RimHeader.vue'
 import StatusBar from './shell/StatusBar.vue'
 import ModDetails from '../features/mod/ModDetails.vue'
@@ -301,6 +304,7 @@ import ProfileDrawer from '../features/profiles/ProfileDrawer.vue'
 import ModAliasReviewModal from '../features/ai/ModAliasReviewModal.vue'
 import AiSessionTraceModal from '../features/ai/AiSessionTraceModal.vue'
 import FileSearchWorkbench from '../features/file-search/FileSearchWorkbench.vue'
+import { useFileSearchStore } from '../features/file-search/fileSearchStore'
 import AIDefinitionManager from '../features/ai/AIDefinitionManager.vue'
 import WorkspaceOverlay from '../features/workspace/WorkspaceOverlay.vue'
 import UpdateModal from '../features/dialogs/UpdateModal.vue'
@@ -321,6 +325,15 @@ const ruleStore = useRuleStore()
 const groupStore = useGroupStore()
 const orderStore = useOrderStore()
 const guideStore = useGuideStore()
+const commandStore = useCommandStore()
+const fileSearchStore = useFileSearchStore()
+
+registerBuiltinCommands()
+// 快捷键命令只持有运行所需的 store 引用，不直接 import 业务 store，便于后续插件命令复用同一套上下文。
+commandStore.setCommandContext({
+  appStore, modStore, ruleStore, groupStore, orderStore, guideStore, fileSearchStore,
+})
+commandStore.setKeybindingConfigProvider(() => appStore.settings?.ui?.keybindings || {})
 
 const tabs = ['临时', '分组', '备份']
 const activeTab = ref(tabs[0])
@@ -442,27 +455,6 @@ const stopResize = () => {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
-const isEditableHistoryTarget = (target) => {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  return !!target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')
-}
-const handleListHistoryKeydown = (event) => {
-  if (isEditableHistoryTarget(event.target)) return
-  const key = String(event.key || '').toLowerCase()
-  const isModifierPressed = event.ctrlKey || event.metaKey
-  const isUndo = isModifierPressed && !event.shiftKey && key === 'z'
-  const isRedo = isModifierPressed && (key === 'y' || (event.shiftKey && key === 'z'))
-  if (!isUndo && !isRedo) return
-
-  if (isUndo && modStore.canUndoListHistory) {
-    event.preventDefault()
-    void modStore.undoListHistory()
-  } else if (isRedo && modStore.canRedoListHistory) {
-    event.preventDefault()
-    modStore.redoListHistory()
-  }
-}
 // 处理更新弹窗
 function handleUpdate(changelog) {
   // updateModal.value.show(changelog); // 注意要加 .value
@@ -470,9 +462,10 @@ function handleUpdate(changelog) {
 
 // 生命周期与自适应
 let resizeObserver = null
+let stopKeybindingRuntime = null
 onMounted(() => {
   console.log("应用已启动，正在初始化存储……")
-  window.addEventListener('keydown', handleListHistoryKeydown)
+  stopKeybindingRuntime = startKeybindingRuntime({ commandStore })
   // 确保 API 存在
   if (window.pywebview) {
     window.pywebview.api.monitor_frontend_ready()
@@ -519,7 +512,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleListHistoryKeydown)
+  if (stopKeybindingRuntime) stopKeybindingRuntime()
   orderStore.saveInactiveOrder();  // 退出前先保存停用列表顺序
   if (resizeObserver) resizeObserver.disconnect()
   stopResize()
