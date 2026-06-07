@@ -2,6 +2,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
+export const getVisibleMenuItems = (items = []) => (items || []).filter(item => item && !item.hidden)
+
 export const useContextMenuStore = defineStore('contextMenu', () => {
   const show = ref(false)
   const x = ref(0)

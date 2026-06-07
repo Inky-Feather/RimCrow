@@ -252,7 +252,8 @@ export function useModListQuery({
         // 稍微延迟一下确保虚拟列表渲染就绪
         setTimeout(() => {
           if (vListRef.value) {
-            vListRef.value.scrollToKey(resolvedTargetId)
+            const scrollOptions = appStore.settings.ui.smooth_list_target_scroll !== false ? { behavior: 'smooth' } : {}
+            vListRef.value.scrollToKey(resolvedTargetId, scrollOptions)
           }
         }, 50)
         // 延迟一段时间后移除高亮
@@ -261,7 +262,7 @@ export function useModListQuery({
         }
         highlightTimer.value = setTimeout(() => {
           modStore.currentTargetId = ''
-        }, 2000)
+        }, 3000)
       }
     })
   }

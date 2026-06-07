@@ -7,8 +7,8 @@
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
         :style="menuStyle" @contextmenu.prevent
       >
-        <ContextMenuItem v-for="(item, idx) in menuStore.items" 
-          :key="idx + '-' + menuStore.x + '-' + menuStore.y" :item="item"
+        <ContextMenuItem v-for="(item, idx) in visibleMenuItems" 
+          :key="idx + '-' + menuStore.x + '-' + menuStore.y" :item="item" :path="String(idx)"
           @close-menu="menuStore.close()"
         />
       </div>
@@ -17,20 +17,28 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, provide } from 'vue'
 import { onClickOutside, useWindowSize, useEventListener } from '@vueuse/core'
-import { useContextMenuStore } from './contextMenuStore' // 调整路径
+import { getVisibleMenuItems, useContextMenuStore } from './contextMenuStore' // 调整路径
 import ContextMenuItem from './ContextMenuItem.vue'
 
 const menuStore = useContextMenuStore()
 const menuRef = ref(null)
 const { width: winWidth, height: winHeight } = useWindowSize()
 const enableTransition = ref(false)
+// hidden 只控制渲染，不改变菜单数据本身，便于调用方在同一语义区块内保留完整结构。
+const visibleMenuItems = computed(() => getVisibleMenuItems(menuStore.items))
 
 // 实际渲染坐标 (防止溢出)
 const actualX = ref(0)
 const actualY = ref(0)
-
+const hoveredMenuPath = ref('')
+provide('context-menu-hover-path', {
+  hoveredPath: hoveredMenuPath,
+  setHoveredPath: (path = '') => {
+    hoveredMenuPath.value = String(path || '')
+  },
+})
 // 监听 menuStore 打开状态，进行坐标计算
 watch([() => menuStore.show, () => menuStore.x, () => menuStore.y],
   async ([show, x, y]) => {
@@ -47,19 +55,12 @@ watch([() => menuStore.show, () => menuStore.x, () => menuStore.y],
       const { offsetWidth, offsetHeight } = menuRef.value
       // 注意：这里使用传入的新 x, y 进行计算
       
-      // X轴 边界检测
-      if (x + offsetWidth > winWidth.value) {
-        actualX.value = x - offsetWidth
-      } else {
-        actualX.value = x
-      }
-
-      // Y轴 边界检测
-      if (y + offsetHeight > winHeight.value) {
-        actualY.value = y - offsetHeight
-      } else {
-        actualY.value = y
-      }
+      const margin = 8
+      const maxX = Math.max(margin, winWidth.value - offsetWidth - margin)
+      const maxY = Math.max(margin, winHeight.value - offsetHeight - margin)
+      // 右键点靠近窗口边缘时仍要把菜单完整留在视口内，避免主菜单第一层就被裁掉。
+      actualX.value = Math.max(margin, Math.min(x + offsetWidth > winWidth.value ? x - offsetWidth : x, maxX))
+      actualY.value = Math.max(margin, Math.min(y + offsetHeight > winHeight.value ? y - offsetHeight : y, maxY))
       // 关键点2：坐标计算赋值完毕后，下一帧开启过渡
       // 这样后续的移动（第二次右键）就会有动画了
       requestAnimationFrame(() => {
@@ -70,6 +71,7 @@ watch([() => menuStore.show, () => menuStore.x, () => menuStore.y],
     } else {
       // 关闭时重置
       enableTransition.value = false
+      hoveredMenuPath.value = ''
     }
   }
 )
@@ -100,7 +102,7 @@ onClickOutside(menuRef, () => {
 })
 
 // 监听 ESC 键关闭
-window.addEventListener('keydown', (e) => {
+useEventListener(window, 'keydown', (e) => {
   if (e.key === 'Escape' && menuStore.show) menuStore.close()
 })
 </script>

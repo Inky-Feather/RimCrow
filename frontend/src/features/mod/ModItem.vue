@@ -8,9 +8,9 @@
       class="swipe-trigger w-6 h-6 flex items-center justify-center rounded transition-all"
       :class="[ props.isSelected ? `text-text-main bg-accent-${listColor}/50` : `text-accent-${listColor}/50 bg-accent-${listColor}/10 hover:text-text-main hover:bg-accent-${listColor}/50`, !sectionHeader ? `digits-${(index+1).toString().length}` : '', isInSearch ? ' ring-2 ring-accent-highlight' : '', sectionHeader && !sectionCollapsed ? 'rotate-180' : '']"
       :style="{ width: appStore.scalePx(25) + 'px', height: appStore.scalePx(25) + 'px'}"
-      :title="sectionHeader ? (sectionCollapsed ? '展开分组' : '折叠分组') : null"
+      :title="sectionHeader ? (sectionCollapsed ? '展开分割组' : '折叠分割组') : null"
       @click.stop="sectionHeader ? emit('toggle-section', item_id) : null">
-      <!-- 标题项复用普通序号列，只把数字替换为折叠图标，避免额外引入新布局。 -->
+      <!-- 分割线项复用普通序号列，只把数字替换为折叠图标，避免额外引入新布局。 -->
       <svg v-if="sectionHeader" class="size-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
       </svg>
@@ -38,7 +38,7 @@
           </div>
 
           <!-- 图标 -->
-          <div v-if="showTypeIcon" class="flex items-center justify-center -mr-1">
+          <div v-if="showTypeIcon && !sectionHeader" class="flex items-center justify-center -mr-1">
             <!-- 类型图标 -->
             <span class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`类型：${MOD_TYPE_MAP[modType] || modType || '未知'}`">
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
@@ -96,11 +96,15 @@
       <!-- 文字信息 -->
       <div class="flex-1 min-w-0">
         <template v-if="sectionHeader">
-          <div class="text-sm font-medium truncate">
-            {{ displayName }}
+          <div class="flex items-center gap-1 min-w-0">
+            <div :class="`h-1 flex-1 min-w-0 bg-text-main`"></div>
+            <div class="min-w-0 px-1 text-center text-sm font-semibold tracking-[0.08em] truncate">
+              {{ sectionHeaderDisplayName }}
+            </div>
+            <div :class="`h-1 flex-1 min-w-0 bg-text-main`"></div>
           </div>
-          <div v-if="!simple" class="text-[0.68rem] text-text-dim truncate font-mono">
-            {{ sectionCollapsed ? '拖动标题将整组移动，插入时默认落在组尾' : '当前为展开状态，拖动标题仅移动该标题项' }}
+          <div v-if="!simple" class="text-[0.68rem] text-center text-text-dim truncate font-mono mt-0.5">
+            {{ sectionCollapsed ? '拖动分割线模组将整组移动，插入时默认落在组尾' : '当前为展开状态，拖动分割线模组仅移动该项' }}
           </div>
         </template>
         <template v-else>
@@ -123,7 +127,7 @@
         </template>
       </div>
 
-      <!-- 标题项把“组内数量”放到最右侧，保持左侧图标区与普通项一致。 -->
+      <!-- 分割线项把“组内数量”放到最右侧，保持左侧图标区与普通项一致。 -->
       <div v-if="sectionHeader" class="shrink-0 flex items-center gap-2">
         <span :class="`rounded bg-bg-inset/70 px-2 py-0.5 text-xs text-accent-${listColor}`">
           {{ sectionChildCount }}
@@ -191,9 +195,9 @@ import { useGroupStore } from './stores/groupStore'
 import { useRuleStore } from '../rules/ruleStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../shared/lib/color'
-import { isSectionHeaderTitle } from '../../shared/lib/common'
+import { extractSectionHeaderTitle, isSectionHeaderTitle } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen, SquaresExclude, Package } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, Goal, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
 
 
 const props = defineProps({
@@ -209,15 +213,17 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false }, // 用于外部控制样式
   isInSearch: { type: Boolean, default: false }, // 是否在搜索结果中
   searchMatch: { type: Boolean, default: false }, // 是否是当前搜索焦点
-  // 仅用于在右键菜单中判断“当前选中项里是否包含标题分组”，不参与普通模组逻辑。
+  moveMenu: { type: Object, default: null },
+  currentSplitGroup: { type: Object, default: null },
+  // 仅用于在右键菜单中判断“当前选中项里是否包含分割线模组”，不参与普通模组逻辑。
   sectionFeatureEnabled: { type: Boolean, default: false },
   sectionHeader: { type: Boolean, default: false },
   sectionCollapsed: { type: Boolean, default: false },
   sectionChildCount: { type: Number, default: 0 }
 })
 
-// 标题项需要把折叠动作回传给父列表，真正的折叠状态由父组件统一维护。
-const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections'])
+// 分割线项需要把折叠动作回传给父列表，真正的折叠状态由父组件统一维护。
+const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections', 'move-selected'])
 
 const appStore = useAppStore()
 const aiStore = useAiStore()
@@ -235,9 +241,10 @@ const modData = computed(() => modStore.takeModById(props.item_id))
 const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
 // const modIcon = computed(() => modStore.getIconUrl(props.id))
 const displayName = computed(() => modData.value?.alias_name ? modData.value.alias_name : (modData.value?.name ? modData.value.name : props.item_id))
+const sectionHeaderDisplayName = computed(() => extractSectionHeaderTitle(displayName.value) || displayName.value)
 const normalizePackageKey = (value = '') => String(value || '').trim().toLowerCase().replace(/_(steam|local)$/, '')
 const currentCanonicalId = computed(() => normalizePackageKey(modData.value?.canonical_package_id || modData.value?.package_id || props.item_id))
-// ModItem 自己也需要识别“哪些选中项属于标题分组”，这样右键菜单才能按批量分组操作显示。
+// ModItem 自己也需要识别“哪些选中项属于分割线模组”，这样右键菜单才能按批量分割组操作显示。
 const isSectionHeaderName = (value) => isSectionHeaderTitle(value)
 const isSectionHeaderId = (id) => {
   if (!props.sectionFeatureEnabled) return false
@@ -296,7 +303,7 @@ const sectionHeaderClass = computed(() => {
   const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
   return `${select} bg-accent-${props.listColor}/12 border-accent-${props.listColor}/35 hover:bg-accent-${props.listColor}/20`
 })
-// 标题项只替换局部内容，整体卡片仍复用普通项卡片样式体系。
+// 分割线项只替换局部内容，整体卡片仍复用普通项卡片样式体系。
 const cardClass = computed(() => props.sectionHeader ? sectionHeaderClass.value : getCardClass.value)
 
 // 构造提示文本
@@ -363,7 +370,7 @@ const ensureInterlockDetails = async () => {
 
 const getCardStyle = (id) => {
   const base = { height: (props.simple ? appStore.scalePx(30) : appStore.scalePx(50))+'px', backgroundColor: 'rgba(var(--rgb-bg-highlight),0.3)' }
-  // 标题项保持固定高度，不参与普通模组的签名色着色逻辑。
+  // 分割线项保持固定高度，不参与普通模组的签名色着色逻辑。
   if (props.sectionHeader) return base
   const color = modStore.takeModById(id)?.sign_color
   // console.log(color)
@@ -379,7 +386,7 @@ const getCardStyle = (id) => {
 // 双击启用/停用 Mod
 const handleDoubleClick = () => {
   if (props.sectionHeader) {
-    // 标题项双击改为折叠/展开，避免误触发普通模组的启用/停用语义。
+    // 分割线项双击改为折叠/展开，避免误触发普通模组的启用/停用语义。
     emit('toggle-section', props.item_id)
     return
   }
@@ -529,6 +536,23 @@ const handleContextMenu = async (event) => {
     ? stats.color
     : (modData.value?.sign_color || null)
   const pickerColor = normalizeHexColor(selectedColor, DEFAULT_ACCENT_HEX)
+  // 移动菜单
+  const moveMenu = props.moveMenu
+  const splitGroupOptions = moveMenu?.splitGroupOptions || []
+  const moveMenuEnabled = !!moveMenu?.enabled
+  const moveableWithinSplitGroup = moveMenu?.listId === 'active' && moveMenu.canMoveWithinSplitGroup
+  const moveMenuItems = [
+    { label: '列表顶部', icon: ChevronsUp, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-top' }) },
+    { label: '列表底部', icon: ChevronsDown, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-bottom' }) },
+    { label: '组内顶部', icon: ChevronUp, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-top' }) },
+    { label: '组内底部', icon: ChevronDown, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-bottom' }) },
+    { label: moveMenu?.splitGroupLabel || '其他分割组...', icon: BetweenHorizontalStart, hidden: !splitGroupOptions.length, disabled: !moveMenuEnabled,
+      children: splitGroupOptions.map(group => ({
+        label: `${group.label}${Number.isInteger(group.count) ? ` (${group.count}项)` : ''}`,
+        action: () => emit('move-selected', { action: 'split-group', targetGroupId: group.groupId })
+      }))
+    }
+  ]
   // 通用菜单
   const commnMenuItems = [
     { label: '标签管理'+ selectedCountStr , icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
@@ -544,10 +568,7 @@ const handleContextMenu = async (event) => {
     { label: '标记颜色'+ selectedCountStr, icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
         children:[...Object.entries(MOD_SIGN_COLOR_MAP).map(([c, name]) => ({ tooltip: name, color: c,
             active: stats.color === c, action: () => modStore.setModsColor(selectedIds, c)
-          })), {
-            type: 'color-picker',
-            tooltip: stats.color === 'mixed' ? '为当前多选项设置统一自定义颜色' : '自定义颜色',
-            color: pickerColor,
+          })), { type: 'color-picker', color: pickerColor, tooltip: stats.color === 'mixed' ? '为当前多选项设置统一自定义颜色' : '自定义颜色',
             action: (color) => queueSetModsColor(selectedIds, normalizeHexColor(color, DEFAULT_ACCENT_HEX))
           }, { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }
         ]
@@ -562,36 +583,19 @@ const handleContextMenu = async (event) => {
     { label: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig,
       action: () => modStore.changeModsActive(selectedIds, !isActive.value)
     },
+    ...(moveMenu ? [{ label: '移动到' + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
   ]
-  // 文件处理菜单
-  const fileMenuItems = [
-    { divider: true },
-    { label: '创建本地共存'+ selectedCountStr, icon: Copy,
-      disabled: !modStore.selectedMods.some(m => m.store === 'workshop'),
-      action: () => modStore.localizeSelectedMods('workshop'),
-    },
-    {
-      label: '切换共存版本',
-      icon: SquaresExclude,
-      disabled: !coexistSelectedIds.length,
-      children: [
-        { label: '切换为工坊版' + coexistSelectedCountStr, icon: IconSteam, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
-        { label: '切换为本地版' + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
-      ]
-    },
-    { label: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
-  ]
+  
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
     { label: '编辑规则', icon: PencilRuler, shortcut: 'Alt+左键', action: () => ruleStore.currentId = props.item_id },
     { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => appStore.openUrl(modData.value.url) },
-    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
     { label: 'Steam操作', icon: IconSteam, disabled: !modData.value.workshop_id, children: [
       { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.workshop_id) },
       { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
       { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds() },
-      { label: '取消订阅并删除文件'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
+      { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
     ]},
   ]
   if (modStore.selectedMods.some(m => !!m.replacement)) {
@@ -606,7 +610,6 @@ const handleContextMenu = async (event) => {
       ]}
     )
   }
-
   if (modStore.selectedMods.some(m => (m.isMissing || !m.path))) {
     const package_ids = modStore.selectedMods.filter(m => (m.isMissing || !m.path)).map(m => m.package_id)
     const workshop_ids = modStore.selectedMods.filter(m => (m.isMissing || !m.path)&&!!m.workshop_id).map(m => m.workshop_id)
@@ -620,14 +623,25 @@ const handleContextMenu = async (event) => {
       ]}
     )
   }
+  // 文件处理菜单
+  const fileMenuItems = [
+    { divider: true },
+    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
+    { label: '创建本地共存'+ selectedCountStr, icon: Copy, disabled: !modStore.selectedMods.some(m => m.store === 'workshop'), action: () => modStore.localizeSelectedMods('workshop'), },
+    { label: '切换共存版本', icon: SquaresExclude, disabled: !coexistSelectedIds.length,
+      children: [
+        { label: '切换为工坊版' + coexistSelectedCountStr, icon: IconSteam, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
+        { label: '切换为本地版' + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
+      ]
+    },
+    { label: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
+  ]
 
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
     { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
-    {
-      label: '打包导出模组' + selectedCountStr,
-      icon: Package,
+    { label: '打包导出模组' + selectedCountStr, icon: Package,
       action: () => appStore.openCustomModExportDialog({
         title: `打包导出已选模组${selectedCountStr}`,
         description: '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。',
@@ -636,13 +650,29 @@ const handleContextMenu = async (event) => {
       })
     },
   ]
-  // 只要选中项中包含标题分组，就允许直接批量展开/折叠。
+  // 只要选中项中包含分割线模组，就允许直接批量展开/折叠。
   // 这里不要求“全部都是分组项”，因为用户常见操作是多选混合项后统一处理分组。
-  const sectionMenuItems = selectedSectionHeaderIds.value.length > 0 ? [
-    { divider: true },
-    { label: '展开选中分组', action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
-    { label: '折叠选中分组', action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
-  ] : []
+  const currentSplitGroup = props.currentSplitGroup || null
+  const showCurrentSplitGroupMenu = props.sectionFeatureEnabled && currentSplitGroup?.headerId
+  const showSelectedSplitGroupMenu = selectedSectionHeaderIds.value.length > 1
+  const splitGroupMenuItems = [
+    { divider: true, hidden: !showCurrentSplitGroupMenu && !showSelectedSplitGroupMenu },
+    currentSplitGroup?.collapsed
+      ? {
+          label: `展开本分割组${currentSplitGroup?.label ? `：${currentSplitGroup.label}` : ''}`,
+          icon: ChevronsUpDown,
+          hidden: !showCurrentSplitGroupMenu,
+          action: () => emit('expand-selected-sections', [currentSplitGroup.headerId]),
+        }
+      : {
+          label: `折叠本分割组${currentSplitGroup?.label ? `：${currentSplitGroup.label}` : ''}`,
+          icon: ChevronsDownUp,
+          hidden: !showCurrentSplitGroupMenu,
+          action: () => emit('collapse-selected-sections', [currentSplitGroup?.headerId]),
+        },
+    { label: '展开选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsUpDown, hidden: !showSelectedSplitGroupMenu, action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
+    { label: '折叠选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsDownUp, hidden: !showSelectedSplitGroupMenu, action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
+  ]
   const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
   if (!allInterlocked) {
     selectedMenuItems.push({ label: '创建联锁'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) })
@@ -704,9 +734,9 @@ const handleContextMenu = async (event) => {
   // 合并菜单
   const menuItems = [
   ...commnMenuItems,
+  ...splitGroupMenuItems,
   ...singleMenuItems,
   ...(selectedIds.length > 1 ? selectedMenuItems : []),
-  ...sectionMenuItems,
   ...issueManagementItems, // 插入新的批量忽略逻辑
   ...fileMenuItems, // 插入文件处理菜单
 ];

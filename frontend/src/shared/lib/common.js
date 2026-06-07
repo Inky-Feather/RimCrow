@@ -4,23 +4,31 @@ import { createToastInterface, globalEventBus } from 'vue-toastification'
 // 文本与列表工具 (Text / Collection Utils)
 // -----------------------------------------------------------------
 /**
- * 判断一个名称是否应被视为“启用列表分组标题”。
- * 目前兼容两种写法：
- * 1. `=标题=`
- * 2. 斜杠星号包裹标题，例如注释风格标题
+ * 提取分割线模组标题的有效文本。
+ * 兼容两类语法，且包裹符号数量不固定：
+ * 1. 等号包裹：`=标题=`、`===标题===`
+ * 2. 注释风格包裹：斜杠 + 多个星号 + 标题 + 多个星号 + 斜杠
  *
- * 这样既兼容旧的等号包裹方案，也兼容部分用户使用注释风格名称
- * 来做纯标题模组的习惯，避免折叠功能只认单一格式。
+ * 返回空字符串表示它不是合法的分割线标题。
  */
-export const isSectionHeaderTitle = (value = '') => {
+export const extractSectionHeaderTitle = (value = '') => {
   const name = String(value ?? '').trim()
-  if (!name) return false
+  if (!name) return ''
 
-  const isEqualsWrapped = name.length >= 2 && name.startsWith('=') && name.endsWith('=')
-  const isCommentWrapped = name.length >= 4 && name.startsWith('/*') && name.endsWith('*/')
+  const equalsMatch = name.match(/^=+\s*(.*?)\s*=+$/)
+  if (equalsMatch) {
+    return String(equalsMatch[1] || '').trim()
+  }
 
-  return isEqualsWrapped || isCommentWrapped
+  const commentMatch = name.match(/^\/\*+\s*(.*?)\s*\*+\/$/)
+  if (commentMatch) {
+    return String(commentMatch[1] || '').trim()
+  }
+
+  return ''
 }
+
+export const isSectionHeaderTitle = (value = '') => !!extractSectionHeaderTitle(value)
 
 export const normalizeText = (value, fallback = '') => {
   // 统一在边界层收口空值和首尾空白，避免各 store/组件重复写 String(...).trim()。

@@ -11,8 +11,8 @@ export function useModListDrag({
   isSectionCollapsed,
   getSectionMemberIds,
   resolveInsertionIndex,
+  correctInterlockInsertIndex,
   normalizeId,
-  normalizeCanonicalId,
 }) {
   const listKey = ref(0)
   const isDragging = ref(false)
@@ -114,37 +114,8 @@ export function useModListDrag({
     // 3.1 生成 BaseList：从原始列表中剔除所有移动项
     const baseList = oldIds.filter(id => !movingIdSet.has(normalizeId(id)))
     let correctedIndex = resolveInsertionIndex(baseList, dirtyIds, movingIds, e.newIndex, preferSectionEnd)
-    // 联锁修正逻辑仍然保留在真实列表层面，确保标题分组拖拽不会破坏现有联锁语义。
-    // 只有当插入点不在头部也不在尾部时才需要检查
-    if (!preferSectionEnd && correctedIndex > 0 && correctedIndex < baseList.length) {
-      const prevId = baseList[correctedIndex - 1]
-      // 检查前一个元素是否有向后的联锁
-      let curr = prevId
-      while (true) {
-        const mod = modStore.takeModById(curr)
-        if (!mod || !mod.lock_next_mod) break
-        const nextId = normalizeCanonicalId(mod.lock_next_mod)
-        // 关键判断：
-        // 如果 lock_next 指向的 Mod 就在 baseList 中，
-        // 说明链条在 baseList 中是连续存在的。 必须跳过，不能插在它前面。
-        const nextIndexInBase = baseList.findIndex(id => normalizeCanonicalId(id) === nextId)
-        if (nextIndexInBase !== -1) {
-          // 如果 nextId 就在当前插入点或其后方，说明插在了链条中间
-          // 将插入点顺延到 nextId 的后面
-          if (nextIndexInBase >= correctedIndex) {
-            correctedIndex = nextIndexInBase + 1
-            curr = baseList[nextIndexInBase] // 继续检查链条中的下一个真实列表项
-          } else {
-            // nextId 在更前面？说明链条已经乱序了，或者逻辑没问题，停止修正
-            break
-          }
-        } else {
-          // lock_next 指向的元素不在 baseList 中（可能在 movingIds 里，或者被删了）
-          // 这种情况下，链条已经断了，插入在这里是安全的
-          break
-        }
-      }
-    }
+    // 拖拽和菜单移动都走同一个联锁修正，避免两套插入规则出现细微差异。
+    if (!preferSectionEnd) correctedIndex = correctInterlockInsertIndex(baseList, correctedIndex)
 
     // 3.2 插入：在计算出的纯净位置插入移动项
     const finalList = [...baseList]

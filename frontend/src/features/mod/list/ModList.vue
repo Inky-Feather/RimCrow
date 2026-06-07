@@ -165,13 +165,16 @@
                 :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
                 :show-index="appStore.settings.ui.show_list_index"
                 :search-match="resolvedCurrentTargetId === dataKey"
+                :move-menu="moveMenuContext"
+                :current-split-group="getCurrentSplitGroupMeta(dataKey)"
                 :section-feature-enabled="sectionFeatureEnabled"
                 :section-header="isSectionHeaderId(dataKey)"
                 :section-collapsed="isSectionCollapsed(dataKey)"
                 :section-child-count="getSectionChildCount(dataKey)"
                 @toggle-section="toggleSection"
                 @expand-selected-sections="expandSections"
-                @collapse-selected-sections="collapseSections">
+                @collapse-selected-sections="collapseSections"
+                @move-selected="handleMoveSelected">
               </ModItem>
               <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
                 class="absolute top-0 right-0 rounded-md bg-accent-primary text-text-main px-1 py-0.5 text-[0.6rem] text-center flex items-center justify-center">
@@ -207,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import VirtualDragList from '../../../shared/components/list/VirtualDragList.vue';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
@@ -259,45 +262,17 @@ const normalizeTokenId = (value: string) => normalizePackageToken(value)
 const normalizeCanonicalId = (value: string) => normalizePackageId(value)
 const {
   SORT_MODE_MAP,
-  isSimpleView,
-  isSortAsc,
-  sortMode,
-  searchQuery,
-  searchLogic,
-  searchResults,
-  currentSearchIndex,
-  filterQuery,
-  filterLogic,
-  filterByLine,
-  isFilterByIssue,
-  isSortChange,
-  searchResultSet,
-  resolvedCurrentTargetId,
-  allowSort,
-  isFiltered,
-  itemHeight,
-  toggleIssueFilter,
-  toggleIssueTypeFilter,
-  clearFilter,
-  clearSort,
-  searchHelpText,
-  sortTooltip,
-  filterTooltip,
-  handleLineClick,
-  showDependencyGraph,
-  displayList,
-  sortIcon,
-  executeSearch,
-  bindTargetReveal,
-} = useModListQuery({
-  props,
-  appStore,
-  modStore,
-  searchStore,
-  toast,
-  normalizeTokenId,
-  normalizeCanonicalId,
-})
+  // 视图与排序
+  isSimpleView, isSortAsc, sortMode, allowSort, sortIcon, isSortChange,
+  // 搜索定位
+  searchQuery, searchLogic, searchResults, currentSearchIndex, searchResultSet, resolvedCurrentTargetId, executeSearch, bindTargetReveal,
+  // 筛选状态
+  filterQuery, filterLogic, filterByLine, isFilterByIssue, isFiltered, toggleIssueFilter, toggleIssueTypeFilter, clearFilter, clearSort, handleLineClick,
+  // 展示与提示
+  itemHeight, searchHelpText, sortTooltip, filterTooltip, showDependencyGraph, displayList,
+} = useModListQuery({ 
+  props, appStore,  modStore, searchStore, toast, normalizeTokenId, normalizeCanonicalId,
+ })
 // 序号始终以真实列表顺序为准，而不是以当前可见列表顺序为准。
 const realIndexMap = computed(() => {
   const map = new Map<string, number>()
@@ -313,45 +288,115 @@ const getRealIndex = (id: string) => realIndexMap.value.get(normalizeId(id)) ?? 
 const issuesSummary = computed(() => modStore.getListIssues(props.listId))
 
 const {
-  missingInstallSummary,
-  missingInstallTooltip,
-  missingInstallButtonClass,
-  supplementSummary,
-  supplementTooltip,
-  supplementButtonClass,
-  invalidModsToRemove,
-  openMissingInstallDialog,
-  openSupplementDialog,
+  // 缺失安装
+  missingInstallSummary, missingInstallTooltip, missingInstallButtonClass, invalidModsToRemove, openMissingInstallDialog,
+  // 补全提示
+  supplementSummary, supplementTooltip, supplementButtonClass, openSupplementDialog,
 } = useModListQuickActions({
-  props,
-  profileStore,
-  supplementStore,
-  missingInstallStore,
-  issuesSummary,
-  missingFileIssueType: ISSUE_TYPE.ERROR_MISSING_FILE,
+  props, profileStore, supplementStore, missingInstallStore, issuesSummary, missingFileIssueType: ISSUE_TYPE.ERROR_MISSING_FILE, 
 })
 const {
-  sectionFeatureEnabled,
-  isSectionHeaderId,
-  isSectionCollapsed,
-  getSectionChildCount,
-  toggleSection,
-  expandSections,
-  collapseSections,
-  visibleList,
-  revealCollapsedSectionFor,
-  getSectionMemberIds,
-  resolveInsertionIndex,
-  internalListProxy,
+  // 分割组状态
+  sectionFeatureEnabled, splitGroupFeatureEnabled, activeSectionGroups,
+  isSectionHeaderId, isSectionCollapsed, getSectionChildCount,
+  // 折叠操作
+  toggleSection, expandSections, collapseSections,
+  // 可见列表与定位
+  visibleList, revealCollapsedSectionFor, findActiveSectionGroupById,
+  // 拖拽与移动
+  getSectionMemberIds, resolveInsertionIndex, correctInterlockInsertIndex, internalListProxy,
+  moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToActiveSectionGroup,
 } = useModListSections({
-  props,
-  appStore,
-  modStore,
-  profileStore,
-  displayList,
-  allowSort,
-  normalizeId,
+  props, appStore, modStore, profileStore, displayList, allowSort, normalizeId, normalizeCanonicalId,
 })
+
+const canMoveListItems = computed(() => !appStore.isLoading && allowSort.value)
+const selectedHasSplitHeader = computed(() => (
+  props.listId === 'active'
+  && (modStore.selectedIds || []).some(id => isSectionHeaderId(id))
+))
+const currentSplitGroupId = computed(() => {
+  if (props.listId !== 'active' || selectedHasSplitHeader.value) return ''
+  const groupIds = [...new Set(
+    (modStore.selectedIds || [])
+      .map(id => findActiveSectionGroupById(id)?.groupId || '')
+      .filter(Boolean)
+  )]
+  return groupIds.length === 1 ? groupIds[0] : ''
+})
+const canMoveWithinSplitGroup = computed(() => (
+  props.listId === 'active'
+  && splitGroupFeatureEnabled.value
+  && canMoveListItems.value
+  && !selectedHasSplitHeader.value
+  && !!currentSplitGroupId.value
+))
+const splitGroupMenuOptions = computed(() => {
+  if (!splitGroupFeatureEnabled.value || !canMoveListItems.value) return []
+  if (selectedHasSplitHeader.value) return []
+  return activeSectionGroups.value
+    .filter(group => !currentSplitGroupId.value || group.groupId !== currentSplitGroupId.value)
+    .map(group => ({
+      groupId: group.groupId,
+      label: group.label,
+      count: group.modIds.length,
+    }))
+})
+const moveMenuContext = computed(() => ({
+  listId: props.listId,
+  enabled: canMoveListItems.value,
+  canMoveWithinSplitGroup: canMoveWithinSplitGroup.value,
+  splitGroupLabel: props.listId === 'active' ? '其他分割组...' : '主列表分割组...',
+  splitGroupOptions: splitGroupMenuOptions.value,
+}))
+const currentSplitGroupMetaById = computed(() => {
+  const map = new Map<string, { headerId: string, label: string, collapsed: boolean }>()
+  if (props.listId !== 'active' || !splitGroupFeatureEnabled.value) return map
+  activeSectionGroups.value.forEach(group => {
+    const meta = {
+      headerId: group.headerId,
+      label: group.label,
+      collapsed: !!isSectionCollapsed(group.headerId),
+    }
+    map.set(normalizeId(group.headerId), meta)
+    group.modIds.forEach(id => map.set(normalizeId(id), meta))
+  })
+  return map
+})
+const getCurrentSplitGroupMeta = (id: string) => currentSplitGroupMetaById.value.get(normalizeId(id)) || null
+
+// 处理移动菜单点击事件
+const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
+  const ids = [...(modStore.selectedIds || [])]
+  if (!ids.length || !canMoveListItems.value) return
+
+  let changed = false
+  if (action === 'list-top' || action === 'list-bottom') {
+    changed = await moveIdsToListBoundary({
+      ids,
+      position: action === 'list-top' ? 'top' : 'bottom',
+    })
+  } else if (action === 'group-top' || action === 'group-bottom') {
+    changed = await moveIdsToCurrentSectionBoundary({
+      ids,
+      position: action === 'group-top' ? 'top' : 'bottom',
+    })
+  } else if (action === 'split-group' && targetGroupId) {
+    changed = await moveIdsToActiveSectionGroup({
+      ids,
+      targetGroupId,
+      position: 'bottom',
+    })
+  }
+
+  if (changed) {
+    await refreshVirtualList()
+    // 复用现有搜索定位链路。先清空再设置，确保连续移动同一项时也会重新触发滚动。
+    modStore.currentTargetId = ''
+    await nextTick()
+    modStore.currentTargetId = ids[0]
+  }
+}
 
 bindTargetReveal({ vListRef, visibleList, revealCollapsedSectionFor })
 // 依赖线路数据
@@ -360,14 +405,12 @@ const lineData = computed(() => {
 })
 
 const {
-  listKey,
-  isDragging,
-  finishDragSession,
-  dispatchSyntheticDragEnd,
-  refreshVirtualList,
-  cancelActiveDrag,
-  startDrag,
-  updateChildren,
+  // 拖拽状态
+  listKey, isDragging,
+  // 会话控制
+  finishDragSession, dispatchSyntheticDragEnd, refreshVirtualList, cancelActiveDrag,
+  // 拖拽入口
+  startDrag, updateChildren,
 } = useModListDrag({
   props,
   appStore,
@@ -379,14 +422,13 @@ const {
   isSectionCollapsed,
   getSectionMemberIds,
   resolveInsertionIndex,
+  correctInterlockInsertIndex,
   normalizeId,
-  normalizeCanonicalId,
 })
 
 const {
-  issueTooltip,
-  removeInvalidMod,
-  issueContextMenu,
+  // 问题提示与操作
+  issueTooltip, removeInvalidMod, issueContextMenu,
 } = useModListIssues({
   props,
   appStore,
@@ -401,19 +443,11 @@ const {
 })
 
 const {
-  focusContainer,
-  handleDirectiveNavigate,
+  // 视口导航
+  focusContainer, handleDirectiveNavigate,
 } = useModListViewport({
-  props,
-  appStore,
-  modStore,
-  vListRef,
-  visibleList,
-  itemHeight,
-  isDragging,
-  finishDragSession,
-  dispatchSyntheticDragEnd,
-  cancelActiveDrag,
+  props, appStore, modStore, vListRef,  visibleList, itemHeight, isDragging, 
+  finishDragSession, dispatchSyntheticDragEnd, cancelActiveDrag,
 })
 
 const getModRowDragMeta = (row) => {

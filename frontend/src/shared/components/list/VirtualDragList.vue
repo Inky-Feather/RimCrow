@@ -122,15 +122,34 @@ watch(rowSizes, async () => {
 })
 
 const getOffset = () => scrollRef.value?.scrollTop || 0
-const scrollToOffset = (offset = 0) => {
+const scrollToOffset = (offset = 0, options = {}) => {
   if (!scrollRef.value) return
-  scrollRef.value.scrollTop = Math.max(0, Number(offset) || 0)
+  const top = Math.max(0, Number(offset) || 0)
+  if (options.behavior === 'smooth') {
+    scrollRef.value.scrollTo({ top, behavior: 'smooth' })
+    return
+  }
+  scrollRef.value.scrollTop = top
 }
 const scrollToIndex = (index = 0, options = {}) => {
   // 搜索/定位时默认把目标放到视口中央，用户更容易在上下文中确认目标位置。
   // TanStack Virtual 会自动夹住顶部/底部边界：目标靠近列表首尾时不会强行留出不存在的空白。
   const align = options.align || 'center'
-  virtualizer.value.scrollToIndex(Math.max(0, Number(index) || 0), { align })
+  const targetIndex = Math.max(0, Number(index) || 0)
+  if (options.behavior === 'smooth' && scrollRef.value) {
+    const start = rowOffsets.value[targetIndex] || 0
+    const size = getItemSize(targetIndex)
+    const viewHeight = scrollRef.value.clientHeight || 0
+    const rawOffset = align === 'start'
+      ? start
+      : align === 'end'
+        ? start + size - viewHeight
+        : start - ((viewHeight - size) / 2)
+    const maxOffset = Math.max(0, totalSize.value - viewHeight)
+    scrollToOffset(Math.max(0, Math.min(rawOffset, maxOffset)), { behavior: 'smooth' })
+    return
+  }
+  virtualizer.value.scrollToIndex(targetIndex, { align })
 }
 const scrollToKey = async (key, options = {}) => {
   const index = items.value.findIndex(item => String(item?.[props.dataKey]) === String(key))

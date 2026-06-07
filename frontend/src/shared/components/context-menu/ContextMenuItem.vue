@@ -1,6 +1,7 @@
 <!-- components/common/ContextMenu/ContextMenuItem.vue -->
 <template>
-  <div v-if="item" ref="itemRef" class="group relative px-[4px] py-[2px] transition-all duration-200"
+  <div v-if="item && !item.hidden" ref="itemRef" class="group relative px-[4px] py-[2px] transition-all duration-200"
+    :data-menu-path="path"
     :class="[item.type === 'grid' ? 'w-[200px] max-w-[200px]' : 'max-w-[200px]']"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
@@ -16,7 +17,7 @@
       </div>
       
       <div class="flex flex-wrap gap-[4px]">
-        <template v-for="(subItem, idx) in item.children" :key="idx">
+        <template v-for="(subItem, idx) in visibleChildren" :key="idx">
           <ContextMenuColorPickerItem v-if="subItem.type === 'color-picker'" :item="subItem" :picker-container="itemRef || 'body'" />
           <button v-else @click.stop="handleClick(subItem)"
           v-tooltip="subItem.tooltip || subItem.label || ''"
@@ -67,6 +68,7 @@
 
     <!-- 3. 普通菜单项 -->
     <button v-else :disabled="item.disabled" @click.stop="handleClick(item)"
+      :title="item.tooltip || item.label || ''"
       class="flex w-full cursor-default items-center justify-between rounded-md px-[5px] py-[4px] text-[13px] font-medium transition-all duration-200 outline-none
       disabled:cursor-not-allowed disabled:opacity-40
       bg-transparent hover:bg-bg-highlight focus:bg-bg-highlight "
@@ -83,21 +85,22 @@
       <div class="ml-[22px] flex items-center gap-[7px] opacity-60">
         <span v-if="item.shortcut" class="text-[11px] tracking-widest font-sans">{{ item.shortcut }}</span>
         <!-- 有子菜单且不是 Grid 模式时显示箭头 -->
-        <svg v-if="item.children && item.type !== 'grid'" class="size-[13px] -mr-[2px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        <svg v-if="hasVisibleChildren && item.type !== 'grid'" class="size-[13px] -mr-[2px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </button>
 
     <!-- 递归子菜单独立挂到 body，避免嵌套 backdrop-filter 被父菜单截断。 -->
     <Teleport to="body">
       <Transition name="submenu">
-        <div v-if="item.children && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
+        <div v-if="hasVisibleChildren && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
+          :data-menu-path="path"
           class="context-menu-surface context-submenu-surface fixed z-10000 min-w-fit rounded-xl border border-border-base/10 bg-glass-medium p-[1px] backdrop-blur-lg shadow-xl shadow-black/40"
           :style="subMenuStyle"
           @mouseenter="handleSubMenuMouseEnter"
           @mouseleave="handleMouseLeave"
           @contextmenu.prevent.stop>
-          <ContextMenuItem v-for="(subItem, idx) in item.children" :key="idx"
-            :item="subItem" @close-menu="$emit('close-menu')" />
+          <ContextMenuItem v-for="(subItem, idx) in visibleChildren" :key="idx"
+            :item="subItem" :path="`${path}.${idx}`" @close-menu="$emit('close-menu')" />
         </div>
       </Transition>
     </Teleport>
@@ -105,12 +108,14 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick, inject, onBeforeUnmount } from 'vue'
 import { useWindowSize } from '@vueuse/core'
 import ContextMenuColorPickerItem from './ContextMenuColorPickerItem.vue'
+import { getVisibleMenuItems } from './contextMenuStore'
 
 const props = defineProps({
-  item: { type: Object, required: true }
+  item: { type: Object, required: true },
+  path: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close-menu'])
@@ -124,6 +129,10 @@ const subMenuStyle = ref({
   transformOrigin: 'top left',
 })
 const { width: windowWidth, height: windowHeight } = useWindowSize()
+const hoverPathState = inject('context-menu-hover-path', null)
+const getVisibleChildren = (targetItem) => getVisibleMenuItems(targetItem?.children)
+const visibleChildren = computed(() => getVisibleChildren(props.item))
+const hasVisibleChildren = computed(() => visibleChildren.value.length > 0)
 
 // 样式映射
 const levelClass = () => {
@@ -144,7 +153,7 @@ const handleClick = (targetItem) => {
   if (targetItem.disabled) return
   
   // 如果是普通父菜单（非 Grid），不执行动作，仅用于展开
-  if (targetItem.children && targetItem.type !== 'grid') return 
+  if (getVisibleChildren(targetItem).length > 0 && targetItem.type !== 'grid') return 
 
   if (targetItem.action) {
     targetItem.action()
@@ -154,10 +163,23 @@ const handleClick = (targetItem) => {
 
 // 鼠标进入：计算子菜单应该显示在左边还是右边
 let hoverTimer = null
-const handleMouseEnter = () => {
-  if (props.item.disabled || !props.item.children || props.item.type === 'grid') return
-  
+const closeSubMenu = () => {
   clearTimeout(hoverTimer)
+  activeSubMenu.value = false
+}
+const setHoveredPathFromTarget = (target = null) => {
+  const nextPath = target?.closest?.('[data-menu-path]')?.dataset?.menuPath || ''
+  hoverPathState?.setHoveredPath(nextPath)
+}
+const isOwnBranchPath = (path = '') => {
+  if (!path || !props.path) return false
+  return path === props.path || path.startsWith(`${props.path}.`)
+}
+const handleMouseEnter = () => {
+  clearTimeout(hoverTimer)
+  hoverPathState?.setHoveredPath(props.path)
+  if (props.item.disabled || !hasVisibleChildren.value || props.item.type === 'grid') return
+
   activeSubMenu.value = true
 
   nextTick(() => {
@@ -192,15 +214,23 @@ const handleMouseEnter = () => {
 
 const handleSubMenuMouseEnter = () => {
   clearTimeout(hoverTimer)
+  hoverPathState?.setHoveredPath(props.path)
 }
 
 // 鼠标离开：延迟关闭，防止鼠标划过间隙时消失
-const handleMouseLeave = () => {
+const handleMouseLeave = (event) => {
   if (props.item.type === 'grid') return // Grid 不需要关闭逻辑
+  clearTimeout(hoverTimer)
+  setHoveredPathFromTarget(event?.relatedTarget || null)
   hoverTimer = setTimeout(() => {
-    activeSubMenu.value = false
-  }, 200)
+    if (isOwnBranchPath(hoverPathState?.hoveredPath?.value || '')) return
+    closeSubMenu()
+  }, 180)
 }
+
+onBeforeUnmount(() => {
+  clearTimeout(hoverTimer)
+})
 
 </script>
 <style scoped>

@@ -14,7 +14,7 @@
     <!-- 搜索栏 -->
     <div class="px-2 py-1 shadow-xl" >
       <div data-tour="group-list-search" class="w-full inline-flex items-center gap-1">
-        <input type="text" placeholder="搜索分组名称、模组名称/包名/作者..." v-model="searchText"
+        <input type="text" placeholder="搜索分组名称、模组名称/包名/作者..." v-model="searchText" @keyup.enter="executeSearch(true)"
           :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-border-base/10 text-sm
           text-text-main placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
         <!-- 定位按钮 -->
@@ -393,7 +393,8 @@ const executeSearch = async (forward: boolean) => {
   const index = flatRows.value.findIndex(item => item.row_key === rowKey)
   if (index !== -1) {
     setTimeout(() => {
-      vListRef.value?.scrollToIndex?.(index)
+      const scrollOptions = appStore.settings.ui.smooth_list_target_scroll !== false ? { behavior: 'smooth' } : {}
+      vListRef.value?.scrollToIndex?.(index, scrollOptions)
     }, 50)
     if (highlightTimer.value) {
       clearTimeout(highlightTimer.value)

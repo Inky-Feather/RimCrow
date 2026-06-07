@@ -426,6 +426,9 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
           ...JSON.parse(JSON.stringify(profileStore.activeContext))
         }
       }
+      if (formData.value.ui && formData.value.ui.smooth_list_target_scroll === undefined) {
+        formData.value.ui.smooth_list_target_scroll = true
+      }
       // 如果当前上下文不健康，自动检测路径
       if (!profileStore.activeContext || profileStore.activeContext.is_healthy === false) {
         await autoDetect()
