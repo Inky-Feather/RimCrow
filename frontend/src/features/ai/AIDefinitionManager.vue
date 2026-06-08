@@ -1,7 +1,7 @@
 <!-- frontend/src/components/AIDefinitionManager.vue -->
 <template>
   <CommonModalShell :show="appStore.uiState.showAIDefinitionManager" title="AI 定义管理" description="在这里集中管理 AI 助手、任务和模板。"
-    size="xl" :z-index="130" accent="special" panel-class="border-accent-special/30" content-class="h-full flex flex-col"
+    size="page" :z-index="130" accent="special" panel-class="border-accent-special/30" content-class="h-full flex flex-col"
     @close="closeModal" >
     <template #icon>
       <Drama class="size-5 text-accent-special" />

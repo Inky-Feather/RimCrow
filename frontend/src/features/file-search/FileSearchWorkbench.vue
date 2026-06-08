@@ -1,6 +1,6 @@
 <template>
-  <CommonModalShell :show="appStore.uiState.showFileSearchWorkbench" title="文件内容搜索" size="custom" :z-index="120" accent="primary"
-    panel-class="h-19/20 w-19/20 border-accent-primary/18" content-class="h-full flex flex-col"
+  <CommonModalShell :show="appStore.uiState.showFileSearchWorkbench" title="文件内容搜索" size="page" :z-index="120" accent="primary"
+    panel-class="border-accent-primary/18" content-class="h-full flex flex-col"
     @close="fileSearchStore.closeWorkbench()" >
         <template #icon>
           <Search class="size-5" />

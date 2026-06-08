@@ -1,6 +1,6 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showUpdateModal" :show-header="false"
-    :close-on-backdrop="false" size="custom" :z-index="9999" accent="primary" panel-class="update-modal-box w-full max-w-2xl max-h-[85vh]" content-class="h-full flex flex-col"
+    :close-on-backdrop="false" size="compact" :z-index="9999" accent="primary" panel-class="update-modal-box" content-class="h-full flex flex-col"
     @backdrop="shakeComponent('.update-modal-box')"
     @close="closeModal"
   >

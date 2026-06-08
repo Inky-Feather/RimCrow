@@ -1,6 +1,6 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showModAliasReviewModal" title="模组别名检阅" :description="`待检阅任务 ${totalTaskCount} 组，待检阅条目 ${totalPendingItems} 项。`"
-    size="xl" :z-index="120" accent="special" panel-class="border-accent-special/25" content-class="h-full flex flex-col" @close="closeModal" >
+    size="page" :z-index="120" accent="special" panel-class="border-accent-special/25" content-class="h-full flex flex-col" @close="closeModal" >
 
         <!-- 主滚动区：按任务组展示待检阅结果 -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">

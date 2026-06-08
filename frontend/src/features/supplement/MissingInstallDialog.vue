@@ -1,6 +1,6 @@
 <template>
-  <CommonModalShell :show="missingInstallStore.isVisible" :show-header="false" size="custom" :z-index="9999" accent="primary"
-    panel-class="w-[80vw] max-h-[86vh] max-w-[94vw]" content-class="h-full flex flex-col"
+  <CommonModalShell :show="missingInstallStore.isVisible" :show-header="false" size="page" :z-index="9999" accent="primary"
+    content-class="h-full flex flex-col"
     @close="missingInstallStore.close()" >
     <div class="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-accent-primary to-transparent opacity-80"></div>
 

@@ -1,6 +1,6 @@
 <template>
   <CommonModalShell :show="visible" title="模组配置" description="查看当前环境里的官方模组配置，区分不同配置，并在同一种配置之间手动覆盖内容。"
-    size="wide" :z-index="120" accent="primary" content-class="h-full"
+    size="page" :z-index="120" accent="primary" content-class="h-full"
     @close="emit('close')" >
     <template #header-actions>
       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-2 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10 disabled:opacity-50"

@@ -1,6 +1,6 @@
 <template>
-  <CommonModalShell :show="visible" :show-header="false" size="custom" :z-index="100" accent="danger"
-    panel-class="h-[min(88vh,780px)] w-[min(95vw,1360px)] border-accent-danger/18" content-class="h-full flex flex-col"
+  <CommonModalShell :show="visible" :show-header="false" size="page" :z-index="100" accent="danger"
+    panel-class="border-accent-danger/18" content-class="flex flex-col"
     @close="visible = false" >
         <div class="shrink-0 border-b border-border-base/10 bg-[linear-gradient(135deg,rgba(var(--rgb-bg-deep),0.94),rgba(var(--rgb-bg-inset),0.92))] px-4 py-3" data-tour="conflict-summary">
           <div class="flex items-start justify-between gap-3">

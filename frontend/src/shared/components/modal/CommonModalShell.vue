@@ -54,7 +54,7 @@ const props = defineProps({
   persistent: { type: Boolean, default: false },
   title: { type: String, default: '' },
   description: { type: String, default: '' },
-  size: { type: String, default: 'lg' },
+  size: { type: String, default: 'page' },
   zIndex: { type: [Number, String], default: 120 },
   teleport: { type: Boolean, default: true },
   showHeader: { type: Boolean, default: true },
@@ -84,14 +84,17 @@ const surfaceClass = computed(() => (
 const sizeClass = computed(() => {
   const map = {
     compact: 'w-[min(760px,94vw)]',
-    md: 'w-[min(900px,94vw)]',
-    lg: 'h-[86vh] w-[min(1100px,94vw)]',
-    xl: 'h-[88vh] w-[92vw] max-w-7xl',
+    default: 'w-[75vw] h-[80vh]',
+    page: 'h-[90vh] w-[92vw] -top-[1vh] max-w-screen-2xl',
     wide: 'h-[88vh] w-[92vw] max-w-screen-2xl',
     full: 'h-[calc(100vh-2.5rem)] w-[calc(100vw-2.5rem)]',
     custom: '',
+    // 兼容旧写法，新的页面级弹窗统一走 page。
+    md: 'w-[min(760px,94vw)]',
+    lg: 'w-[75vw] h-[80vh]',
+    xl: 'w-[75vw] h-[80vh]',
   }
-  return map[props.size] || map.lg
+  return map[props.size] || map.page
 })
 const accentGlow = computed(() => {
   const map = {

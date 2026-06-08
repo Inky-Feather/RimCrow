@@ -1,5 +1,5 @@
 <template>
-  <CommonModalShell :show="appStore.uiState.showTextureOptModal" :show-header="false" size="custom" :z-index="100" accent="highlight" panel-class="h-[92vh] w-[92vw] max-w-screen-2xl" content-class="h-full flex flex-col"
+  <CommonModalShell :show="appStore.uiState.showTextureOptModal" :show-header="false" size="page" :z-index="100" accent="highlight" content-class="h-full flex flex-col"
     @close="closeModal" >
       <div data-tour="texture-opt-modal" class="flex h-full w-full flex-col overflow-hidden">
         <header class="shrink-0 border-b border-border-base/5 bg-[linear-gradient(135deg,rgba(var(--rgb-bg-deep),0.88),rgba(var(--rgb-bg-inset),0.96))] px-6 py-2">

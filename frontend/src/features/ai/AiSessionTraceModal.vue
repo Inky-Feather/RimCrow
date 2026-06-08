@@ -3,7 +3,7 @@
     :show="aiStore.traceModalState.visible"
     title="会话请求链路"
     :description="activeSession?.session_id || aiStore.traceModalState.sessionId"
-    size="xl"
+    size="page"
     :z-index="140"
     accent="special"
     panel-class="select-text border-accent-special/20"

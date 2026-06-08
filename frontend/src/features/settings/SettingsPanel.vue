@@ -1,8 +1,8 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showSettingsPanel" persistent
-    :show-header="false" :close-on-backdrop="false" size="custom" :z-index="100"
+    :show-header="false" :close-on-backdrop="false" size="default" :z-index="100"
     accent="primary"
-    panel-class="w-[75%] h-[80%] border-border-base/18" content-class="h-full flex"
+    panel-class="border-border-base/18" content-class="h-full flex"
     @backdrop="shakeComponent('#btn-cancel')"
     @close="shakeComponent('#btn-cancel')"
   >

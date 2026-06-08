@@ -1,6 +1,6 @@
 <template>
-  <CommonModalShell :show="appStore.uiState.showPackageTransferDialog" :title="dialogTitle" :description="dialogDesc" size="custom" :z-index="140" accent="primary"
-    panel-class="max-h-[88vh] w-4/5 border-accent-primary/20" content-class="min-h-0 flex flex-col"
+  <CommonModalShell :show="appStore.uiState.showPackageTransferDialog" :title="dialogTitle" :description="dialogDesc" size="default" :z-index="140" accent="primary"
+    panel-class="border-accent-primary/20" content-class="min-h-0 flex flex-col"
     @close="closeDialog" >
       <div class="absolute -top-18 -left-12 h-52 w-52 rounded-full bg-accent-primary/30 blur-3xl pointer-events-none"></div>
       <div class="absolute -bottom-18 -right-12 h-52 w-52 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
