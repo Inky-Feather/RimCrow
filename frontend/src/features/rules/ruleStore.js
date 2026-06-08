@@ -44,6 +44,7 @@ export const useRuleStore = defineStore('rules', () => {
   // --- State ---
   const communityModRules = ref({}) // { pkg_id: { loadAfter: ... } }
   const communityRulesUpdateTime = ref(0)
+  const workshopRulesUpdateTime = ref(0)
   const userModRules = ref({})   // { pkg_id: { loadAfter: ... } }
   const workshopModRules = ref({}) // { pkg_id: [dep_pid1, dep_pid2, ...] }
   const userDynamicRules = ref([])
@@ -79,6 +80,7 @@ export const useRuleStore = defineStore('rules', () => {
       if (checkResult(res, '获取规则')) {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time
+        workshopRulesUpdateTime.value = res.data.workshop_rules_update_time || 0
         userModRules.value = res.data.user_mod_rules
         workshopModRules.value = res.data.workshop_rules
         userDynamicRules.value = res.data.user_dynamic_rules
@@ -436,7 +438,7 @@ export const useRuleStore = defineStore('rules', () => {
 
   return {
     // 规则状态
-    communityModRules, communityRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading,
+    communityModRules, communityRulesUpdateTime, workshopRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     // 规则读取与用户规则
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
@@ -444,7 +446,7 @@ export const useRuleStore = defineStore('rules', () => {
     getAbsolutePosition, setAbsolutePosition,
     getLanguagePackOwnerOverride, setLanguagePackOwnerOverride,
     // 动态规则与导入导出
-    toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
+    toggleDynamicRule, deleteDynamicRule, updateCommunity, updateWorkshop, handleExport, handleImport,
     saveDynamicRules, changeRuleSourcePriority,
     // 全局开关
     setGlobalEnable, toggleModRule,

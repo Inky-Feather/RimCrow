@@ -43,7 +43,7 @@
         <FileSliders class="size-6" />
       </button>
 
-      <button @click="openModResidueCleanup" v-tooltip="`清理卸载残留`"
+      <button @click="openModResidueCleanup" v-tooltip="`查看和清理卸载残留`"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <BrushCleaning class="size-6" />
       </button>

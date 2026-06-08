@@ -2188,35 +2188,35 @@ class API:
             return ApiResponse.success(overview)
         except Exception as e:
             logger.warning("读取卸载残留总览失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"读取卸载残留失败: {e}")
+            return ApiResponse.error(f"读取卸载残留列表失败: {e}")
 
     @log_api_call
     def mod_residue_whitelist_add(self, paths: List[str] | str):
-        """把残留项加入卸载残留白名单，后续扫描直接跳过。"""
+        """把残留路径加入白名单，之后扫描直接跳过。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
         try:
             result = ModResidueManager.add_whitelist_paths(paths)
             paths_to_scan = self._build_scan_paths_for_profile(self.active_context)
             result["overview"] = ModResidueManager.get_overview(paths_to_scan, self.active_context, self._read_active_mod_tokens())
-            return ApiResponse.success(result, message="已加入残留白名单")
+            return ApiResponse.success(result, message="已加入白名单，之后扫描会跳过它")
         except Exception as e:
-            logger.warning("加入卸载残留白名单失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"加入残留白名单失败: {e}")
+            logger.warning("加入卸载残留清理白名单失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"加入白名单失败: {e}")
 
     @log_api_call
     def mod_residue_whitelist_remove(self, paths: List[str] | str):
-        """从卸载残留白名单移除残留项。"""
+        """从白名单移除残留路径。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
         try:
             result = ModResidueManager.remove_whitelist_paths(paths)
             paths_to_scan = self._build_scan_paths_for_profile(self.active_context)
             result["overview"] = ModResidueManager.get_overview(paths_to_scan, self.active_context, self._read_active_mod_tokens())
-            return ApiResponse.success(result, message="已移出残留白名单")
+            return ApiResponse.success(result, message="已移出白名单，之后扫描会再次提示它")
         except Exception as e:
-            logger.warning("移除卸载残留白名单失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"移除残留白名单失败: {e}")
+            logger.warning("移出卸载残留清理白名单失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"移出白名单失败: {e}")
 
     @log_api_call
     def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
@@ -3584,6 +3584,7 @@ class API:
             "community_rules": self.sorter.rule_mgr.community_rules, # 返回完整字典
             "community_rules_update_time": self.sorter.rule_mgr.community_rules_update_time,
             "workshop_rules": self.sorter.rule_mgr.get_workshop_rules(),
+            "workshop_rules_update_time": self.workshop_db_mgr.get_workshopdb_update_time() if self.workshop_db_mgr else 0,
             "user_mod_rules": self.sorter.rule_mgr.user_mod_rules,
             "user_dynamic_rules": self.sorter.rule_mgr.user_dynamic_rules,
             "settings": self.sorter.rule_mgr.settings,

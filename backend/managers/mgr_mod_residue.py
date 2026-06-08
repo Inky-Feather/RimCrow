@@ -386,7 +386,7 @@ class ModResidueManager:
         return {
             "id": f"settings_file:{record.get('path_key')}",
             "type": "settings_file",
-            "type_label": "设置文件",
+            "type_label": "模组设置文件",
             "path": record.get("path") or "",
             "name": record.get("name") or Path(str(record.get("path") or "")).name,
             "parent_path": str(Path(str(record.get("path") or "")).parent) if record.get("path") else "",

@@ -101,8 +101,14 @@
                     <input type="checkbox" v-model="filterInstalled" class="sr-only peer">
                     <div class="w-9 h-5 bg-bg-overlay/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-bg-contrast after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-bg-contrast after:border-border-base/18 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-secondary"></div>
                   </div>
-                  <span class="text-sm text-text-dim font-bold">仅显示已安装</span>
+                  <span class="relative text-sm text-text-dim font-bold">
+                    仅显示已安装
+                    <span class="absolute top-full left-0 rounded-full border border-border-base/10 bg-bg-inset/70 px-1 text-xs text-text-dim">
+                      {{ filteredStaticRules.length }} / {{ staticRuleTotal }}
+                    </span>
+                  </span>
                 </label>
+
 
                 <button v-if="currentTab === 'dynamic'" data-tour="rule-create" @click="createDynamicRule"
                   class="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary/80 text-on-accent-primary text-sm font-bold rounded-lg shadow-lg shadow-accent-primary/20 transition-all active:scale-95">
@@ -136,10 +142,10 @@
             </header>
 
             <!-- 内容列表 -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar" data-tour="rule-list">
+            <div class="flex-1 min-h-0 p-6" data-tour="rule-list">
               
               <!-- 1. 动态规则列表 -->
-              <template v-if="currentTab === 'dynamic'">
+              <div v-if="currentTab === 'dynamic'" class="h-full overflow-y-auto space-y-2 custom-scrollbar">
                 <div v-for="rule in filteredDynamicRules" :key="rule.rule_id" 
                   class="group relative rounded-xl border border-border-base/10 bg-bg-muted/70 p-4 transition-all duration-200 hover:border-accent-primary/30">
                   
@@ -193,14 +199,14 @@
                   <Zap class="w-12 h-12 mb-2" />
                   <p class="text-sm">暂无动态规则</p>
                 </div>
-              </template>
+              </div>
 
               <!-- 2. 用户规则 & 社区规则列表 (共用结构) -->
-              <template v-else>
-                <div v-if="currentTab === 'community'" class="mb-4 p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
+              <div v-else class="flex h-full min-h-0 flex-col gap-4">
+                <div v-if="currentTab === 'community'" class="p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
                   <div class="text-sm text-accent-secondary">
                     <p class="font-bold mb-1">社区规则库 (RimSort)</p>
-                    <p class="opacity-80">包含众多由社区维护的排序建议。此处仅展示与已安装模组相关的条目。</p>
+                    <p class="opacity-80">包含众多由社区维护的排序建议。关闭“仅显示已安装”后可浏览完整规则库。</p>
                   </div>
                   <div class="flex flex-col items-center gap-2">
                     <button @click="ruleStore.updateCommunity" class="px-3 py-1.5 bg-accent-secondary/20 hover:bg-accent-secondary/40 text-accent-secondary rounded-lg text-sm font-bold transition-all border border-accent-secondary/30">
@@ -213,13 +219,13 @@
                   </div>
                 </div>
 
-                <div v-if="currentTab === 'workshop'" class="mb-4 p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
+                <div v-if="currentTab === 'workshop'" class="p-4 rounded-xl bg-accent-secondary/10 border border-accent-secondary/20 flex justify-between items-center">
                   <div class="text-sm text-accent-secondary">
                     <p class="font-bold mb-1">创意工坊离线数据库</p>
                     <p class="opacity-80">社区维护定期更新的创意工坊离线模组数据。</p>
                   </div>
                   <div class="flex flex-col items-center gap-2">
-                    <button @click="ruleStore.updateCommunity" class="px-3 py-1.5 bg-accent-secondary/20 hover:bg-accent-secondary/40 text-accent-secondary rounded-lg text-sm font-bold transition-all border border-accent-secondary/30">
+                    <button @click="ruleStore.updateWorkshop" class="px-3 py-1.5 bg-accent-secondary/20 hover:bg-accent-secondary/40 text-accent-secondary rounded-lg text-sm font-bold transition-all border border-accent-secondary/30">
                       手动更新库
                     </button>
                     <span class="text-xs px-2 py-0.5 rounded bg-bg-overlay/5 text-text-dim border border-border-base/5">
@@ -229,8 +235,12 @@
                   </div>
                 </div>
 
-                <div v-for="item in filteredStaticRules" :key="item.id" 
-                  class="flex gap-2 p-2 rounded-xl bg-bg-surface/80 border border-border-base/5 hover:brightness-125 transition-colors">
+                <DynamicScroller v-if="filteredStaticRules.length > 0" :items="filteredStaticRules" :min-item-size="96" key-field="id"
+                  class="min-h-0 flex-1 custom-scrollbar pr-1">
+                  <template #default="{ item, index, active }">
+                    <DynamicScrollerItem :item="item" :active="active" :data-index="index" :size-dependencies="getStaticRuleRowSizeDependencies(item)">
+                      <div class="pb-2">
+                        <div class="flex gap-2 p-2 rounded-xl bg-bg-surface/80 border border-border-base/5 hover:brightness-125 transition-colors">
                   
                   <!-- Mod 信息 -->
                   <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="modStore.takeModById(item.id)">
@@ -240,15 +250,20 @@
                     </div>
                     <div class="min-w-0 flex flex-col gap-1"> 
                       <div class="text-sm font-bold text-text-main truncate">{{ item.name }}</div>
-                      <div class="text-xs text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
+                      <div class="flex items-center gap-1 min-w-0">
+                        <div class="text-xs text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
+                        <span v-if="!item.isInstalled" class="shrink-0 rounded px-1.5 py-0.5 text-[0.62rem] border border-border-base/10 bg-bg-inset/70 text-text-disabled">
+                          未安装
+                        </span>
+                      </div>
 
                       <span v-if="item.rules.loadTop?.value"
-                        v-tooltip="formatTooltip(item.id, item.rules.loadTop?.comment)"
+                        v-tooltip="formatTooltip(item.id, item.rules.loadTop)"
                         class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-tip/10 text-text-main text-[0.8rem] border border-accent-tip/20 truncate cursor-help">
                         强制置顶
                       </span>
                       <span v-else-if="item.rules.loadBottom?.value"
-                        v-tooltip="formatTooltip(item.id, item.rules.loadBottom?.comment)"
+                        v-tooltip="formatTooltip(item.id, item.rules.loadBottom)"
                         class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
                         强制置底
                       </span>
@@ -318,13 +333,17 @@
                     </button>
                   </div>
 
-                </div>
+                        </div>
+                      </div>
+                    </DynamicScrollerItem>
+                  </template>
+                </DynamicScroller>
                 
-                <div v-if="filteredStaticRules.length === 0" class="flex flex-col items-center justify-center h-64 text-text-disabled">
+                <div v-else class="flex flex-1 flex-col items-center justify-center text-text-disabled">
                   <Shield class="w-12 h-12 mb-2" />
                   <p class="text-sm">没有找到相关规则</p>
                 </div>
-              </template>
+              </div>
 
             </div>
           </main>
@@ -436,6 +455,7 @@ import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import { IconSteam, MOD_TYPE_MAP } from '../../shared/lib/constants'
 import { deepClone } from '../../shared/lib/common'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 
 
 
@@ -472,6 +492,15 @@ const allRules = computed(() => ({
   excluded_community_mods_set: new Set(ruleStore.settings?.excluded_community_mods || []),
   excluded_workshop_mods_set: new Set(ruleStore.settings?.excluded_workshop_mods || []),
 }))
+
+const currentStaticRuleSource = computed(() => {
+  if (currentTab.value === 'user') return allRules.value.user_mod_rules
+  if (currentTab.value === 'workshop') return allRules.value.workshop_mod_rules
+  if (currentTab.value === 'community') return allRules.value.community_mod_rules
+  return {}
+})
+
+const staticRuleTotal = computed(() => Object.keys(currentStaticRuleSource.value || {}).length)
 
 const modIdList = computed(() =>
   Array.from(modStore.allModsMap.values(), mod => ({
@@ -645,19 +674,17 @@ const filteredDynamicRules = computed(() => {
 // 2. 静态规则过滤 (用户单项 & 社区)
 const filteredStaticRules = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
-  let source = {}
-  if (currentTab.value === 'user') source = allRules.value.user_mod_rules
-  if (currentTab.value === 'workshop') source = allRules.value.workshop_mod_rules
-  if (currentTab.value === 'community') source = allRules.value.community_mod_rules
+  const source = currentStaticRuleSource.value
   // 转换为数组方便渲染: [{ id: 'package_id', rules: {...}, name: 'Mod Name', icon: '...' }]
   let list = Object.entries(source).map(([id, rules]) => {
     const mod = modStore.takeModById(id) // 从 store 获取 Mod 信息
+    const isInstalled = modStore.hasRealModById(id)
     return {
       id: id,
       rules: rules,
-      name: mod?.name || id,
-      icon: mod?.preview_path ? appStore.getThumbUrl(id, mod.preview_path) : null,
-      isInstalled: mod && !!mod.path // 判断是否安装
+      name: isInstalled ? modStore.displayModName(mod) : id,
+      icon: isInstalled && mod?.preview_path ? appStore.getThumbUrl(id, mod.preview_path) : null,
+      isInstalled
     }
   })
   // 过滤器 1: 仅显示已安装
@@ -671,12 +698,31 @@ const filteredStaticRules = computed(() => {
       item.name.toLowerCase().includes(q)
     )
   }
-  // 排序：已安装的排前面，然后按名字
+  // 开启过滤时只剩已安装项；关闭过滤时按规则 ID 排列，方便直接浏览完整规则库。
   return list.sort((a, b) => {
-    if (a.isInstalled !== b.isInstalled) return b.isInstalled - a.isInstalled
-    return a.name.localeCompare(b.name)
+    if (filterInstalled.value && a.isInstalled !== b.isInstalled) return Number(b.isInstalled) - Number(a.isInstalled)
+    return a.id.localeCompare(b.id, 'zh-CN')
   })
 })
+
+const getRuleSectionCount = (section) => (
+  section && typeof section === 'object' ? Object.keys(section).length : 0
+)
+
+const getStaticRuleRowSizeDependencies = (item) => {
+  const rules = item?.rules || {}
+  return [
+    item?.id || '',
+    item?.name || '',
+    item?.isInstalled,
+    getRuleSectionCount(rules.dependencies),
+    getRuleSectionCount(rules.loadAfter),
+    getRuleSectionCount(rules.loadBefore),
+    getRuleSectionCount(rules.incompatibleWith),
+    !!rules.loadTop?.value,
+    !!rules.loadBottom?.value,
+  ]
+}
 
 // --- 辅助显示方法 ---
 const formatOperator = (op) => {
@@ -695,6 +741,8 @@ const getDisplayName = (id, defaultName) => modStore.displayModName(id, defaultN
 // 格式化动态规则的提示信息
 const formatTooltip = (targetId, info) => {
   let text = `ID: ${targetId}`
+  if (!info) return text
+  if (typeof info === 'string') return `${text}\n\n说明:\n${info}`
   if (info.name) text += `\nName: ${Array.isArray(info.name) ? info.name[0] : info.name}`
   if (info.comment) text += `\n\n说明:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
   return text
