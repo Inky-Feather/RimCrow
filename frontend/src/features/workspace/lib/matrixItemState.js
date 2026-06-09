@@ -33,13 +33,37 @@ export const getMatrixReplacementTargets = (mod, workspaceStore) => {
   )
 }
 
+export const normalizeMatrixTimestamp = (value) => {
+  if (value === null || value === undefined || value === '' || value === '0') return 0
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return 0
+    return value < 1e11 ? Math.trunc(value * 1000) : Math.trunc(value)
+  }
+
+  const raw = String(value).trim()
+  if (!raw) return 0
+  if (/^\d+$/.test(raw)) {
+    const numeric = Number(raw)
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0
+    return numeric < 1e11 ? Math.trunc(numeric * 1000) : Math.trunc(numeric)
+  }
+
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+export const getMatrixMeaningfulChangeTime = (mod = {}) => Math.max(
+  normalizeMatrixTimestamp(mod?.download_status?.download_time),
+  normalizeMatrixTimestamp(mod?.steam_status?.installed_version_time),
+  normalizeMatrixTimestamp(mod?.file_modify_time),
+  normalizeMatrixTimestamp(mod?.file_create_time),
+)
+
 export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
   const normalizedLastPlayedTime = Number(lastPlayedTime || 0)
   const hasLastPlayedTime = normalizedLastPlayedTime > 0
-  const createTime = Number(mod?.file_create_time || 0)
-  const lastSyncTime = Number(mod?.steam_status?.time_last_sync || 0)
-  const modifyTime = Number(mod?.file_modify_time || 0)
-  const lastChangeTime = Math.max(lastSyncTime, modifyTime)
+  const createTime = normalizeMatrixTimestamp(mod?.file_create_time)
+  const lastChangeTime = getMatrixMeaningfulChangeTime(mod)
 
   const sameTargets = workspaceStore?.getMatrixSameItems?.(mod?.path_hash) || []
   const conflictTargets = workspaceStore?.getMatrixConflictItems?.(mod?.path_hash) || []

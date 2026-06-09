@@ -5223,14 +5223,63 @@ class API:
             for r in self.workshop_db_mgr.get_replacements()
             if r.get('old_workshop_id')
         }
+        github_download_map = {}
+        if matrix.get('self'):
+            github_records = list(GithubModRecord.select(
+                GithubModRecord.repo_url,
+                GithubModRecord.local_folder,
+                GithubModRecord.installed_version,
+            ).where(GithubModRecord.local_folder.is_null(False)).dicts())
+            github_urls = [str(record.get("repo_url") or "").strip() for record in github_records if str(record.get("repo_url") or "").strip()]
+            latest_success_time = {}
+            if github_urls:
+                success_logs = (
+                    GithubTimeline
+                    .select(GithubTimeline.repo_url, GithubTimeline.time)
+                    .where((GithubTimeline.repo_url.in_(github_urls)) & (GithubTimeline.action == "success"))
+                    .order_by(GithubTimeline.repo_url, GithubTimeline.time.desc())
+                )
+                for log in success_logs:
+                    latest_success_time.setdefault(str(log.repo_url), int(log.time or 0))
+
+            def normalize_folder(value: str = "") -> str:
+                return str(value or "").strip().replace("\\", "/").strip("/").lower()
+
+            github_download_map = {
+                normalize_folder(record.get("local_folder")): {
+                    "repo_url": str(record.get("repo_url") or "").strip(),
+                    "download_time": latest_success_time.get(str(record.get("repo_url") or "").strip(), 0),
+                    "source": "github_timeline_success",
+                    "installed_version": str(record.get("installed_version") or "").strip(),
+                }
+                for record in github_records
+                if normalize_folder(record.get("local_folder")) and latest_success_time.get(str(record.get("repo_url") or "").strip(), 0)
+            }
         
         known_workshop_ids = set()
         # install_self_ids = set()
         
+        def build_steam_download_status(steam_status: dict | None):
+            status = steam_status or {}
+            try:
+                download_time = int(status.get("time_last_sync") or 0)
+            except (TypeError, ValueError):
+                download_time = 0
+            if download_time <= 0: return None
+            return {"download_time": download_time, "source": "steam_sync_log"}
+
         def inject_workspace_fields(mod: dict, steam_map: dict | None = None):
             wid = str(mod.get('workshop_id') or '')
             if steam_map and wid and wid in steam_map:
                 mod['steam_status'] = steam_map[wid]
+                download_status = build_steam_download_status(mod['steam_status'])
+                if download_status:
+                    mod['download_status'] = download_status
+            if str(mod.get('source') or '').strip().lower() == 'github':
+                folder = str(mod.get('path') or '').replace("\\", "/").strip("/").split("/")[-1].lower()
+                download_status = github_download_map.get(folder)
+                if download_status:
+                    mod['download_status'] = download_status
             mod['replacement'] = replacements_map.get(wid)
             state = str(mod.get('state') or MOD_ASSET_STATE_PRESENT).strip().lower()
             is_missing = state == MOD_ASSET_STATE_MISSING or not str(mod.get('path') or '').strip()

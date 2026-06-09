@@ -36,14 +36,11 @@
 
       <!-- 右侧时间与大小 -->
       <div class="shrink-0 flex flex-col items-end gap-1 pr-2">
-        <span v-if="mod.steam_status?.time_last_sync" class="text-[0.65rem] font-mono" :class="matrixState.isChange ? 'text-accent-tip font-black' : 'text-text-dim'">
-          更新：{{ formatTime(mod.steam_status?.time_last_sync) }}
+        <span v-for="(entry, index) in summaryTimeEntries" :key="entry.key" class="text-[0.65rem] font-mono" :class="getSummaryTimeClass(entry, index)">
+          {{ entry.label }}：{{ formatTime(entry.timestamp) }}
         </span>
-        <span v-else class="text-[0.65rem] font-mono" :class="matrixState.isChange ? 'text-accent-tip font-black' : 'text-text-dim'">
-          修改：{{ formatTime(mod.file_modify_time) }}
-        </span>
-        <span class="text-[0.65rem] font-mono" :class="matrixState.isNew ? 'text-accent-primary font-black' : 'text-text-dim'">
-          创建：{{ formatTime(mod.file_create_time) }}
+        <span v-if="!summaryTimeEntries.length" class="text-[0.65rem] font-mono text-text-dim">
+          时间：无记录
         </span>
         <span class="text-[0.6rem] font-mono text-text-dim opacity-50 bg-bg-inset/80 px-1 rounded">
           {{ formatFileSize(mod.file_size) }}
@@ -102,13 +99,10 @@
           </div>
           
             <div class="space-y-1.5 text-xs text-text-dim font-mono">
-              <div class="flex justify-between"><span class="opacity-60">创建时间:</span> <span>{{ formatTime(mod.file_create_time, true) }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">修改时间:</span> <span>{{ formatTime(mod.file_modify_time, true) }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">上传时间:</span> <span>{{ formatTime(mod.steam_status?.latest_version_time, true) || '无记录' }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">同步时间:</span> <span>{{ formatTime(mod.steam_status?.time_last_sync, true) || '无记录' }}</span></div>
-            <div class="flex justify-between"><span class="opacity-60">下载时间:</span> <span>{{ formatTime(mod.steam_status?.time_downloaded, true) || '无记录' }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">订阅时间:</span> <span>{{ formatTime(mod.steam_status?.time_subscribed, true) || '无记录' }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">取订时间:</span> <span>{{ formatTime(mod.steam_status?.time_unsubscribed, true) || '无记录' }}</span></div>
+              <div v-for="entry in detailTimeEntries" :key="entry.key" class="flex justify-between gap-3">
+                <span class="opacity-60">{{ entry.label }}:</span>
+                <span class="text-right">{{ formatTime(entry.timestamp, true) || '无记录' }}</span>
+              </div>
               <div class="flex justify-between"><span class="opacity-60">储存占用:</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
               <div class="flex justify-between"><span class="opacity-60">跨库同项:</span> <span>{{ sameTargets.length || '无' }}</span></div>
               <div class="flex justify-between"><span class="opacity-60">同库冲突:</span> <span>{{ conflictTargets.length || '无' }}</span></div>
@@ -135,7 +129,7 @@ import { formatFileSize } from '../../../shared/lib/format'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
 import { SOURCE_TYPE_MAP } from '../../../shared/lib/constants'
-import { getMatrixItemState } from '../lib/matrixItemState'
+import { getMatrixItemState, normalizeMatrixTimestamp } from '../lib/matrixItemState'
 
 const appStore = useAppStore()
 const workspaceStore = useWorkspaceStore()
@@ -186,16 +180,98 @@ const sameItemsTooltip = computed(() => formatRelationTooltip('其它库存在�
 const conflictItemsTooltip = computed(() => formatRelationTooltip('当前库存在同包名冲突项', conflictTargets.value))
 const replacementItemsTooltip = computed(() => formatRelationTooltip('已检测到替代项', replacementTargets.value))
 
-const formatTime = (ts, full = false) => {
-  if (!ts) return 'N/A'
-  const d = new Date(ts)
-  if (full) return d.toLocaleString()
-  const options = {
+const formatTime = (value, full = false) => {
+  const timestamp = normalizeMatrixTimestamp(value)
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (full) {
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+  }
+  return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+  })
+}
+
+const buildTimeEntry = (key, label, value) => ({ key, label, timestamp: normalizeMatrixTimestamp(value) })
+const appendUniqueTimeEntry = (entries, entry) => {
+  if (!entry?.timestamp || entries.some(item => item.key === entry.key)) return
+  entries.push(entry)
+}
+const appendLatestVersionTimeEntry = (entries, latestVersionTime, installedVersionTime) => {
+  const latestTimestamp = normalizeMatrixTimestamp(latestVersionTime)
+  const installedTimestamp = normalizeMatrixTimestamp(installedVersionTime)
+  if (!latestTimestamp || latestTimestamp === installedTimestamp) return
+  appendUniqueTimeEntry(entries, { key: 'latest', label: '可用版本', timestamp: latestTimestamp })
+}
+const appendWorkshopActionTimeEntry = (entries, steamStatus) => {
+  const subscribedTimestamp = normalizeMatrixTimestamp(steamStatus.time_subscribed)
+  const unsubscribedTimestamp = normalizeMatrixTimestamp(steamStatus.time_unsubscribed)
+  if (!subscribedTimestamp && !unsubscribedTimestamp) return
+  if (unsubscribedTimestamp > subscribedTimestamp) {
+    appendUniqueTimeEntry(entries, { key: 'unsubscribed', label: '取消订阅', timestamp: unsubscribedTimestamp })
+    return
   }
-  return d.toLocaleDateString('zh-CN', options)
+  appendUniqueTimeEntry(entries, { key: 'subscribed', label: '订阅时间', timestamp: subscribedTimestamp })
+}
+const appendDownloadTimeEntry = (entries, mod) => {
+  appendUniqueTimeEntry(entries, {
+    key: 'download',
+    label: '下载时间',
+    timestamp: normalizeMatrixTimestamp(mod.download_status?.download_time)
+  })
+}
+const detailTimeEntries = computed(() => {
+  const mod = props.mod || {}
+  const steamStatus = mod.steam_status || {}
+  const entries = []
+
+  if (props.storeType === 'workshop') {
+    appendDownloadTimeEntry(entries, mod)
+    appendUniqueTimeEntry(entries, buildTimeEntry('installed', '当前版本', steamStatus.installed_version_time))
+    appendLatestVersionTimeEntry(entries, steamStatus.latest_version_time, steamStatus.installed_version_time)
+    appendWorkshopActionTimeEntry(entries, steamStatus)
+  } else if (props.storeType === 'self') {
+    appendDownloadTimeEntry(entries, mod)
+    appendUniqueTimeEntry(entries, buildTimeEntry('installed', '当前版本', steamStatus.installed_version_time))
+    appendLatestVersionTimeEntry(entries, steamStatus.latest_version_time, steamStatus.installed_version_time)
+  }
+
+  appendUniqueTimeEntry(entries, buildTimeEntry('modify', '文件修改', mod.file_modify_time))
+  appendUniqueTimeEntry(entries, buildTimeEntry('create', '文件创建', mod.file_create_time))
+  return entries
+})
+const summaryTimeEntries = computed(() => {
+  const summaryKeys = props.storeType === 'local'
+    ? ['modify', 'create']
+    : matrixState.value.isUpdate
+      ? ['latest', 'download', 'installed', 'modify', 'create']
+      : ['download', 'installed', 'modify', 'create']
+
+  const summary = []
+  summaryKeys.forEach(key => {
+    const entry = detailTimeEntries.value.find(item => item.key === key)
+    if (entry && !summary.some(item => item.key === entry.key) && summary.length < 2) {
+      summary.push(entry)
+    }
+  })
+  return summary
+})
+const getSummaryTimeClass = (entry, index) => {
+  if (!entry) return 'text-text-dim'
+  if (entry.key === 'create') return matrixState.value.isNew ? 'text-accent-primary font-black' : 'text-text-dim'
+  if (entry.key === 'latest' && matrixState.value.isUpdate) return 'text-accent-warn font-black'
+  if (index === 0 && matrixState.value.isChange) return 'text-accent-tip font-black'
+  return 'text-text-dim'
 }
 
 // --- 智能悬浮层逻辑 ---

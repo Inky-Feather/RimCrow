@@ -118,7 +118,7 @@ import { useWorkspaceStore } from '../workspaceStore'
 import { IconSteam, SOURCE_TYPE_MAP } from '../../../shared/lib/constants'
 import { formatFileSize } from '../../../shared/lib/format'
 import { checkResult, toast } from '../../../shared/lib/common'
-import { getMatrixItemState, getMatrixReplacementTargets, matchesMatrixFilter, MATRIX_FILTER_STATE_OPTIONS } from '../lib/matrixItemState'
+import { getMatrixItemState, getMatrixMeaningfulChangeTime, getMatrixReplacementTargets, matchesMatrixFilter, MATRIX_FILTER_STATE_OPTIONS } from '../lib/matrixItemState'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 
 const props = defineProps({
@@ -266,9 +266,7 @@ const displayMods = computed(() => {
     if (sortBy.value === 'mtime') return (right.file_modify_time || 0) - (left.file_modify_time || 0)
     if (sortBy.value === 'ctime') return (right.file_create_time || 0) - (left.file_create_time || 0)
     if (sortBy.value === 'change') {
-      if (props.storeType === 'workshop') return (right.steam_status?.time_last_sync || 0) - (left.steam_status?.time_last_sync || 0)
-      if (props.storeType === 'self') return (right.steam_status?.time_downloaded || 0) - (left.steam_status?.time_downloaded || 0)
-      return (right.file_modify_time || 0) - (left.file_modify_time || 0)
+      return getMatrixMeaningfulChangeTime(right) - getMatrixMeaningfulChangeTime(left)
     }
     return 0
   })
