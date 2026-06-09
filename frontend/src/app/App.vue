@@ -243,6 +243,15 @@
     <!-- 模组包/数据包传输弹窗 -->
     <PackageTransferDialog />
 
+    <!-- 推荐导出弹窗 -->
+    <RecommendationExportModal
+      :show="appStore.uiState.showRecommendationExportDialog"
+      :title="appStore.recommendationExportDialog.title"
+      :source-name="appStore.recommendationExportDialog.sourceName"
+      :mod-ids="appStore.recommendationExportDialog.modIds"
+      @close="appStore.closeRecommendationExportDialog"
+    />
+
     <!-- 规则面板 -->
     <RulePanel />
 
@@ -319,6 +328,7 @@ import ModResidueCleanupModal from '../features/mod-residue/ModResidueCleanupMod
 import SupplementSelectionDialog from '../features/supplement/SupplementSelectionDialog.vue'
 import MissingInstallDialog from '../features/supplement/MissingInstallDialog.vue'
 import PackageTransferDialog from '../features/package-transfer/PackageTransferDialog.vue'
+import RecommendationExportModal from '../features/mod/RecommendationExportModal.vue'
 import ThemeEditorModal from '../features/settings/theme/ThemeEditorModal.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
 

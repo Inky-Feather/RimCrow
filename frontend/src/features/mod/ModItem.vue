@@ -197,7 +197,7 @@ import { useCommandStore } from '../../shared/commands/commandStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../shared/lib/color'
 import { extractSectionHeaderTitle, isSectionHeaderTitle } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
-import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, Goal, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, LockOpen, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
 
 
 const props = defineProps({
@@ -570,6 +570,14 @@ const handleContextMenu = async (event) => {
         description: '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。',
         modIds: [...selectedIds],
         summary: `已选 ${selectedIds.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
+      })
+    },
+    // 推荐导出只面向当前多选模组的介绍信息，不处理模组文件和依赖打包。
+    { label: '导出推荐' + selectedCountStr, icon: MessageSquareHeart, disabled: selectedIds.length === 0,
+      action: () => appStore.openRecommendationExportDialog({
+        title: `推荐导出已选模组${selectedCountStr}`,
+        sourceName: '已选模组',
+        modIds: [...selectedIds],
       })
     },
   ]

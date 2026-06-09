@@ -126,7 +126,7 @@ import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import VirtualDragList from '../../shared/components/list/VirtualDragList.vue'
 import GroupItem from './GroupItem.vue'
 import GroupModRow from './GroupModRow.vue'
-import { ChevronDown, ChevronsDownUp, ChevronsUpDown, ChevronUp, CircleCheckBig, CircleQuestionMarkIcon, CircleSlash2, CopyCheck, CornerUpRight, Crosshair, Eraser, FolderInput, Package, Search, Target, Trash2 } from 'lucide-vue-next';
+import { ChevronsDownUp, ChevronsUpDown, MessageSquareHeart, CircleCheckBig, CircleQuestionMarkIcon, CircleSlash2, CopyCheck, Crosshair, Eraser, FolderInput, Package } from 'lucide-vue-next';
 import { useAppStore } from '../../app/stores/appStore';
 import { hexToRgbComponents } from '../../shared/lib/color'
 import { normalizePackageId } from './lib/modIdentity'
@@ -571,6 +571,15 @@ const openCustomExport = (ids: string[], title: string, description: string) => 
     summary: `共 ${ids.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
   })
 }
+const openRecommendationExport = (ids: string[]) => {
+  const countText = ids.length > 1 ? ` (${ids.length}项)` : ''
+  // 分组面板的推荐导出只沿用当前右键选中的模组，不把“分组本身”当成导出对象。
+  appStore.openRecommendationExportDialog({
+    title: `推荐导出已选模组${countText}`,
+    sourceName: '已选模组',
+    modIds: [...ids],
+  })
+}
 const buildGroupModMenuItems = ({ ids, clickedId, groupId, groupName, groupSize = 0 }) => {
   const countText = ids.length > 1 ? ` (${ids.length}项)` : ''
   const clickedMod = modStore.takeModById(clickedId)
@@ -586,6 +595,8 @@ const buildGroupModMenuItems = ({ ids, clickedId, groupId, groupName, groupSize 
       const group = groupStore.takeGroupById(groupId)
       await selectContextIds(getNormalizedGroupModIds(group), groupId)
     }},
+    // 推荐导出关注介绍信息；打包导出关注实际文件，两者在菜单里分开呈现。
+    { label: '推荐导出' + countText, icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
     { label: '打包导出' + countText, icon: Package, disabled: ids.length === 1, action: () => openCustomExport(ids, `打包导出分组模组${countText}`, `来源分组：${groupName || '未命名分组'}。`) },
     { label: `从「${groupName || '分组'}」移除` + countText, icon: Eraser, level: 'warn', disabled: ids.length === 0 || !groupId, action: () => groupStore.groupRemoveMods(groupId, ids) },
 
@@ -612,15 +623,15 @@ const openGroupContextMenu = async (event, row) => {
   const group = row?.group || groupStore.takeGroupById(row?.group_id)
   const ids = await selectContextIds(getNormalizedGroupModIds(group), row?.group_id)
   const groupName = group?.name || '未命名分组'
-  const firstId = ids[0] || ''
   menuStore.open(event, [
     { label: `启用整组 (${ids.length}项)`, icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
     { label: `停用整组 (${ids.length}项)`, icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
     { divider: true },
     { label: expandedIds.value.has(row?.group_id) ? '收缩分组' : '展开分组', icon: expandedIds.value.has(row?.group_id) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(row.group_id) },
-    { label: '打包导出整组', icon: Package, disabled: ids.length === 0, action: () => openCustomExport(ids, `打包导出分组: ${groupName}`, '可按需附带依赖、联锁项和语言包。') },
+    { label: '打包整组', icon: Package, disabled: ids.length === 0, action: () => openCustomExport(ids, `打包导出分组: ${groupName}`, '可按需附带依赖、联锁项和语言包。') },
+    { label: '推荐整组', icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
     { divider: true },
-    { label: '清空分组模组', icon: Eraser, level: 'danger', disabled: ids.length === 0, action: async () => {
+    { label: '清空分组', icon: Eraser, level: 'danger', disabled: ids.length === 0, action: async () => {
       const ok = await confirmStore.confirmAction(
         '清空分组模组',
         `确定要从「${groupName}」移除全部 ${ids.length} 个模组吗？\n只会清空分组内容，不会删除模组文件。`,

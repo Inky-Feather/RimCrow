@@ -86,6 +86,7 @@ from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
+from backend.managers.mgr_recommendation_export import RecommendationExportManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
@@ -301,6 +302,8 @@ class API:
             load_order_mgr_provider=lambda: self.load_order_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
         )
+        # 推荐导出只负责生成分享内容，和模组包导出保持独立，避免两类导出互相影响。
+        self.recommendation_export_mgr = RecommendationExportManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
@@ -3410,6 +3413,42 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
+
+    @log_api_call
+    def recommendation_export(self, payload: dict | None = None):
+        """导出选中模组推荐介绍。"""
+        payload = payload or {}
+        try:
+            export_format = str(payload.get("format") or "txt").strip().lower()
+            if export_format in {"clipboard"}:
+                # 剪贴板内容返回给前端写入，避免后端直接操作系统剪贴板带来权限差异。
+                return ApiResponse.success(self.recommendation_export_mgr.export(payload), message="已生成推荐文本")
+
+            if export_format in {"markdown", "image"}:
+                # Markdown 需要同级 img 目录，纯图片会生成多个文件，所以这里选择目标文件夹。
+                target_dir = file_mgr.select_folder_dialog(self._get_default_export_dir())
+                if not target_dir:
+                    return ApiResponse.warning("已取消")
+                result = self.recommendation_export_mgr.export(payload, target_dir=target_dir)
+                return ApiResponse.success(result, message="导出成功")
+
+            # TXT/DOCX/PDF 都是单文件导出，先用后端生成默认文件名和文件类型过滤器。
+            default_filename = self.recommendation_export_mgr.default_filename(payload)
+            file_types = self.recommendation_export_mgr.file_types_for_format(export_format)
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=self._get_default_export_dir(),
+                default_filename=default_filename,
+                file_types=file_types,
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+            # 保存对话框可能被用户手动删掉扩展名，导出前统一补齐，避免生成未知类型文件。
+            target_path = self.recommendation_export_mgr.ensure_extension(target_path, export_format)
+            result = self.recommendation_export_mgr.export(payload, target_path=target_path)
+            return ApiResponse.success(result, message="导出成功")
+        except Exception as e:
+            logger.error("推荐导出失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"推荐导出失败: {e}")
     
     @log_api_call
     def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):

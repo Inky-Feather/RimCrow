@@ -82,11 +82,11 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ColorPicker } from "vue3-colorpicker";
+import { Package } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore';
 import { useGroupStore } from './stores/groupStore';
 import { hexToRgbComponents } from '../../shared/lib/color'
 import { toast } from '../../shared/lib/common';
-import { Package } from 'lucide-vue-next'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -102,8 +102,7 @@ const groupStore = useGroupStore()
 const emit = defineEmits(['toggle', 'delete-group', 'update-group'])
 
 const groupModIds = computed(() => Array.isArray(props.groupData?.mod_ids) ? props.groupData.mod_ids : [])
-
-// --- 数据传递与事件处理 ---
+// 分组标题上的打包导出是原有模组包功能，和推荐导出入口分开处理。
 const openExportDialog = () => {
   appStore.openCustomModExportDialog({
     title: `导出分组模组: ${props.groupData?.name || '未命名分组'}`,

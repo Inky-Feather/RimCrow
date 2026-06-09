@@ -63,10 +63,17 @@ export const useAppStore = defineStore('app', () => {
     showModResidueCleanup: false, // 是否显示卸载残留清理弹窗
     showFileSearchWorkbench: false, // 是否显示文件内容搜索工作台
     showPackageTransferDialog: false, // 是否显示模组包/数据包传输弹窗
+    showRecommendationExportDialog: false, // 是否显示推荐导出弹窗
   })
   const packageTransferDialog = reactive({
     mode: 'mod-import',
     preset: {},
+  })
+  // 推荐导出弹窗只保存入口上下文，真正的模组详情在弹窗打开时从 modStore 读取最新值。
+  const recommendationExportDialog = reactive({
+    title: '推荐导出',
+    sourceName: '已选模组',
+    modIds: [],
   })
   // 存储各个列表的滚动偏移量
   // Key: listId (如 'active', 'inactive', 'temp'), Value: Number
@@ -327,6 +334,29 @@ export const useAppStore = defineStore('app', () => {
     refreshData: (...args) => refreshData(...args),
     requestModScan: (...args) => requestModScan(...args),
   })
+
+  const openRecommendationExportDialog = ({
+    title = '推荐导出',
+    sourceName = '已选模组',
+    modIds = [],
+  } = {}) => {
+    // 右键菜单、分组列表等入口都可能传入重复 ID，打开弹窗前先收敛成稳定的导出列表。
+    const normalizedModIds = [...new Set(
+      (modIds || []).map(id => String(id || '').trim()).filter(Boolean)
+    )]
+    recommendationExportDialog.title = String(title || '推荐导出')
+    recommendationExportDialog.sourceName = String(sourceName || '已选模组')
+    recommendationExportDialog.modIds = normalizedModIds
+    uiState.showRecommendationExportDialog = true
+  }
+
+  const closeRecommendationExportDialog = () => {
+    // 关闭时清掉上一次选择，避免下次打开弹窗时短暂显示旧的导出对象。
+    uiState.showRecommendationExportDialog = false
+    recommendationExportDialog.title = '推荐导出'
+    recommendationExportDialog.sourceName = '已选模组'
+    recommendationExportDialog.modIds = []
+  }
 
   const {
     // 工坊打开
@@ -1258,7 +1288,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     // 基础状态
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
-    themes, currentTheme, userThemes, themeEditor, packageTransferDialog,
+    themes, currentTheme, userThemes, themeEditor, packageTransferDialog, recommendationExportDialog,
     // 布局与运行态
     remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     // 生命周期与通用工具
@@ -1278,5 +1308,7 @@ export const useAppStore = defineStore('app', () => {
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
     getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,
     getModPackageSchema, prepareModPackageImport, getModPackageProfileSummary, exportModPackage, importModPackage,
+    // 推荐导出
+    openRecommendationExportDialog, closeRecommendationExportDialog,
   }
 })
