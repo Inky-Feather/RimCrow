@@ -117,11 +117,31 @@ const resetToDefaultExternalPaths = async () => {
 }
 
 const handleCheckTools = async () => {
-  await appStore.checkToolMaintenance({ manual: true, prompt: true })
+  await appStore.checkToolMaintenance({
+    manual: true,
+    prompt: true,
+    overrides: {
+      steamcmd_path: props.formData.steamcmd_path,
+      ripgrep_path: props.formData.ripgrep_path,
+      texture_opt: props.formData.texture_opt,
+    },
+  })
 }
 
 const handleCheckExternalData = async () => {
-  await appStore.checkExternalDataUpdates({ manual: true, prompt: true })
+  await appStore.checkExternalDataUpdates({
+    manual: true,
+    prompt: true,
+    overrides: {
+      user_rules_path: props.formData.user_rules_path,
+      community_rules_url: props.formData.community_rules_url,
+      community_rules_path: props.formData.community_rules_path,
+      community_workshop_db_url: props.formData.community_workshop_db_url,
+      community_workshop_db_path: props.formData.community_workshop_db_path,
+      community_instead_db_url: props.formData.community_instead_db_url,
+      community_instead_db_path: props.formData.community_instead_db_path,
+    },
+  })
 }
 
 const updateExternalDB = async (dbType) => {

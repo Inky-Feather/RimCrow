@@ -73,6 +73,7 @@
 │   │   └──  mgr_workshop_db.py
 │   │   
 │   ├── ·[migrations]
+│   │   ├──  app_relocation.py
 │   │   └──  app_upgrade.py
 │   │   
 │   ├── ·[profile]
@@ -313,6 +314,7 @@
 │   ├──  test_ai_attachment_resolver.py
 │   ├──  test_ai_gateway_request_compat.py
 │   ├──  test_ai_service_helpers.py
+│   ├──  test_app_relocation.py
 │   ├──  test_bundle_managers.py
 │   ├──  test_download_manager.py
 │   ├──  test_environment_runtime.py

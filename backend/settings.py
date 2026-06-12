@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 from typing import Dict, Any, List, Optional, Tuple
 from backend.utils.constants import normalize_language_code
+from backend.migrations.app_relocation import apply_config_relocation
 
 
 # 1. 资源目录：存放前端文件、内置工具 (对应开发时的项目根目录)
@@ -320,6 +321,7 @@ class SettingsManager:
         if self._initialized: return
         self._ensure_config_dir()
         self._save_lock = threading.Lock()
+        self.last_relocation = None
         # self.config: AppConfig = self._load() # 加载配置
         
         # 1. 先初始化一个空的配置对象，防止加载过程中访问 self.config 崩溃
@@ -493,7 +495,7 @@ class SettingsManager:
             self._apply_config_fragment(effective_fragment)
 
             # 只有备份确实补进了缺失字段时才回写，避免“备份一直存在时每次启动都重写配置”。
-            if recovered_from_backup:
+            if recovered_from_backup or (self.last_relocation and self.last_relocation.moved):
                 self.save()
         except Exception as e:
             print(f"Config load error: {e}")
@@ -503,6 +505,10 @@ class SettingsManager:
 
     def _normalize_config(self) -> list[str]:
         warnings: list[str] = []
+        previous_home_path = str(self.config.home_path or "").strip()
+        relocation = apply_config_relocation(self.config, previous_home_path, str(HOME_DIR))
+        if relocation.moved:
+            self.last_relocation = relocation
         self.config.home_path = str(HOME_DIR)
         self.config.current_profile_id = str(self.config.current_profile_id or "").strip() or "default"
         self.config.steam_path = str(self.config.steam_path or "").strip()

@@ -92,6 +92,7 @@ from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
+from backend.migrations.app_relocation import apply_database_relocation, write_relocation_marker
 from backend.text_search.manager import FileSearchManager
 from backend.startup import StartupCoordinator
 from backend.theme_store import ThemeStore
@@ -248,6 +249,7 @@ class API:
             self._upgrade_context["messages"].append("数据库加载失败，部分功能可能暂时不可用。")
         self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
         self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
+        self._handle_app_relocation()
         self._native_drop_bound = False
         self._native_drop_selector = '#backup-drop-zone'
         self._native_drop_element = None
@@ -329,6 +331,22 @@ class API:
             self._ensure_browser_mode_shortcut()
 
         logger.info("API Layer Ready.")
+
+    def _handle_app_relocation(self):
+        relocation = getattr(settings, "last_relocation", None)
+        if not relocation or not getattr(relocation, "old_home", ""):
+            return
+        try:
+            db_result = apply_database_relocation(relocation.old_home, relocation.new_home)
+            relocation.profile_updates = db_result.profile_updates
+            relocation.asset_updates = db_result.asset_updates
+            relocation.messages.extend(db_result.messages)
+            if relocation.messages:
+                self._upgrade_context["messages"].extend(relocation.messages)
+            write_relocation_marker(relocation, DATA_DIR)
+        except Exception as e:
+            logger.warning(f"管理器目录迁移处理失败: {e}", exc_info=True)
+            self._upgrade_context["messages"].append("检测到管理器目录变化，但部分内部路径迁移失败，请检查路径设置。")
         
     @staticmethod
     def _normalize_str_items(items: List[str] | str) -> list[str]:
@@ -1449,7 +1467,7 @@ class API:
                 normalization_warnings = settings.update_from_dict(global_data)  # recursive_update 批量更新
                 network_mgr.apply() # 应用网络设置
                 # 如果修改了某些会影响环境的全局路径（如 steamcmd_path）
-                if 'steamcmd_path' in global_data or 'workshop_mods_path' in global_data:
+                if any(key in global_data for key in ['steam_path', 'steamcmd_path', 'workshop_mods_path', 'self_mods_path']):
                     env_changed = True
                 rule_paths_changed = 'user_rules_path' in global_data or 'community_rules_path' in global_data
             else:
@@ -1463,6 +1481,9 @@ class API:
                 # 规则文件路径切换后必须立即重载，否则本次会话仍会持有旧文件内容。
                 logger.info("检测到规则文件路径变动，正在重载规则缓存...")
                 self.sorter.rule_mgr.load_all()
+            steam_mgr = getattr(self, "steam_mgr", None)
+            if steam_mgr and any(key in global_data for key in ["steam_path", "steamcmd_path"]):
+                steam_mgr.reload_paths_from_settings()
             if normalization_warnings:
                 EventBus.send_toast("\n".join(normalization_warnings), type="warning", duration=5000)
 
@@ -3502,7 +3523,6 @@ class API:
         if not target_root or not os.path.exists(target_root):
             return ApiResponse.error(f"目标库 {target_store} 的目录未配置或不存在！")
         # 3. 查出源文件信息
-        from backend.database.models import ModAsset
         source_mods = ModAsset.select(ModAsset.path_hash, ModAsset.path, ModAsset.package_id, ModAsset.store, ModAsset.name).where(ModAsset.path_hash.in_(path_hashes)).dicts() # type: ignore
         source_mods = list(source_mods)
         if not source_mods: return ApiResponse.error("未找到指定的源文件")
@@ -3510,8 +3530,7 @@ class API:
         import shutil
         success_count = 0
         errors = []
-        # 确定文件夹命名策略
-        name_strategy = settings.config.coexist_mod_folder_name_type
+        moved_records = []
         for mod in source_mods:
             src_path = mod['path']
             # 防御：禁止对工坊项目执行 Move 操作
@@ -3534,6 +3553,11 @@ class API:
             try:
                 if current_mode == 'move':
                     shutil.move(src_path, dst_path)
+                    moved_records.append({
+                        "old_path_hash": mod['path_hash'],
+                        "new_path": dst_path,
+                        "target_store": target_store,
+                    })
                 else:
                     shutil.copytree(src_path, dst_path)
                 success_count += 1
@@ -3542,20 +3566,17 @@ class API:
         
         # 物理操作完成后，同步更新数据库记录，避免前端全量扫描
         with db.atomic():
-            for mod in source_mods:
+            for record in moved_records:
                 if mode == 'move':
                     # 如果是移动，更新 path 和 store
-                    # 注意：path_hash 也要重新生成，因为物理路径变了
-                    new_path = os.path.join(target_root, os.path.basename(mod['path']))
+                    # 注意：path_hash 也要按实际落地路径重新生成，避免重名避让后数据库指向旧目录名。
+                    new_path = record["new_path"]
                     new_hash = generate_path_hash(new_path)
                     ModAsset.update(
                         path=new_path,
                         path_hash=new_hash,
-                        store=target_store
-                    ).where(ModAsset.path_hash == mod['path_hash']).execute()
-                else:
-                    # 如果是复制，直接 return success 然后让前端触发异步扫描
-                    pass
+                        store=record["target_store"]
+                    ).where(ModAsset.path_hash == record["old_path_hash"]).execute()
 
         msg = f"成功转移 {success_count} 个模组。"
         if errors:
@@ -4073,12 +4094,14 @@ class API:
         return ApiResponse.success()
 
     @log_api_call
-    def maintenance_check_tools(self):
+    def maintenance_check_tools(self, overrides: dict | None = None):
         """检查外部工具环境状态，不自动下载。"""
         try:
-            checked = self.maintenance_mgr.check_tools()
+            check_overrides = overrides if isinstance(overrides, dict) else None
+            checked = self.maintenance_mgr.check_tools(check_overrides)
             checked_at = int(checked.get("checked_at") or current_ms())
-            settings.set("last_tool_check_time", checked_at)
+            if not check_overrides:
+                settings.set("last_tool_check_time", checked_at)
             self._log_maintenance_check("api_result", "tools", status="success", checked_at=checked_at, issues=len(checked.get("issues") or []), total=len(checked.get("items") or []))
             return ApiResponse.success(checked)
         except Exception as e:
@@ -4086,17 +4109,18 @@ class API:
             return ApiResponse.error(f"检查工具环境失败: {e}")
 
     @log_api_call
-    def maintenance_check_external_data(self):
+    def maintenance_check_external_data(self, overrides: dict | None = None):
         """检查社区规则/数据库等外部文件是否需要更新。"""
         try:
-            checked = self.maintenance_mgr.check_external_data()
+            check_overrides = overrides if isinstance(overrides, dict) else None
+            checked = self.maintenance_mgr.check_external_data(check_overrides)
             checked_at = int(checked.get("checked_at") or current_ms())
             items = checked.get("items") if isinstance(checked, dict) else []
             failed = checked.get("failed") if isinstance(checked, dict) else []
             items = items if isinstance(items, list) else []
             failed = failed if isinstance(failed, list) else []
             # 整轮远端状态都没拿到时，不刷新“上次成功检查时间”，避免自动检查被失败结果错误限流。
-            if not items or len(failed) < len(items):
+            if not check_overrides and (not items or len(failed) < len(items)):
                 settings.set("last_external_data_update_check_time", checked_at)
             self._log_maintenance_check("api_result", "external-data", status="success", checked_at=checked_at, updates=len(checked.get("updates") or []), failed=len(failed), total=len(items))
             return ApiResponse.success(checked)

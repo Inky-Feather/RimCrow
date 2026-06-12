@@ -67,12 +67,18 @@ class MaintenanceManager:
         self.rule_mgr_provider = rule_mgr_provider
         self.github_mgr = GithubManager()
 
-    def check_tools(self) -> dict[str, Any]:
+    def check_tools(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        overrides = overrides or {}
         checked_at = current_ms()
-        steamcmd_dir = Path(self.steam_mgr.steamcmd_dir)
-        steamcmd_exe = Path(self.steam_mgr.steamcmd_exe)
-        steamcmd_installed = steamcmd_exe.exists()
-        steamcmd_initialized = (steamcmd_dir / "public").exists()
+        steamcmd_path = (
+            str(overrides.get("steamcmd_path") or "").strip()
+            if "steamcmd_path" in overrides
+            else str(self.steam_mgr.steamcmd_dir or "").strip()
+        )
+        steamcmd_dir = Path(steamcmd_path) if steamcmd_path else None
+        steamcmd_exe = steamcmd_dir / ("steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh") if steamcmd_dir else None
+        steamcmd_installed = bool(steamcmd_exe and steamcmd_exe.exists())
+        steamcmd_initialized = bool(steamcmd_dir and (steamcmd_dir / "public").exists())
         steamcmd_ready = steamcmd_installed and steamcmd_initialized
 
         items: list[dict[str, Any]] = [
@@ -84,7 +90,7 @@ class MaintenanceManager:
                 "can_install": True,
                 "action": "steam_tools_install",
                 "maintenance_action": "none" if steamcmd_ready else ("install" if not steamcmd_installed else "initialize"),
-                "resolved_path": str(steamcmd_exe),
+                "resolved_path": str(steamcmd_exe or ""),
                 "state": "ready" if steamcmd_ready else ("missing" if not steamcmd_installed else "not_initialized"),
                 "message": (
                     "SteamCMD 已安装并完成初始化。"
@@ -95,6 +101,11 @@ class MaintenanceManager:
         ]
 
         texture_options = asdict(settings.config.texture_opt)
+        texture_overrides = overrides.get("texture_opt")
+        if isinstance(texture_overrides, dict):
+            texture_options.update(texture_overrides)
+        if "texture_tools_path" in overrides:
+            texture_options["texture_tools_path"] = overrides.get("texture_tools_path")
         todds_status = self.texture_mgr.get_backend_status(texture_options)
         todds_release = self.github_mgr.fetch_release("todds-encoder", "todds", missing_ok=True) or {}
         todds_ready = bool(todds_status.get("available"))
@@ -114,11 +125,16 @@ class MaintenanceManager:
             }
         )
 
-        ripgrep_status = get_ripgrep_status(getattr(settings.config, "ripgrep_path", ""))
+        ripgrep_path = (
+            str(overrides.get("ripgrep_path") or "")
+            if "ripgrep_path" in overrides
+            else str(getattr(settings.config, "ripgrep_path", "") or "")
+        )
+        ripgrep_status = get_ripgrep_status(ripgrep_path)
         ripgrep_release = self.github_mgr.fetch_release("BurntSushi", "ripgrep", missing_ok=True) or {}
         ripgrep_current_version = str(ripgrep_status.current_version or "")
         ripgrep_latest_version = str(ripgrep_release.get("tag_name") or "")
-        ripgrep_can_install = platform.system() == "Windows" and Path(str(getattr(settings.config, "ripgrep_path", "") or "")).suffix.lower() != ".exe"
+        ripgrep_can_install = platform.system() == "Windows" and Path(ripgrep_path).suffix.lower() != ".exe"
         ripgrep_outdated = bool(ripgrep_status.available) and ripgrep_can_install and self._is_version_outdated(ripgrep_current_version, ripgrep_latest_version)
         items.append(
             {
@@ -148,9 +164,9 @@ class MaintenanceManager:
             "has_issues": bool(issues),
         }
 
-    def check_external_data(self) -> dict[str, Any]:
+    def check_external_data(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         checked_at = current_ms()
-        items = [self._check_external_dataset(spec) for spec in self.EXTERNAL_DATASETS]
+        items = [self._check_external_dataset(spec, overrides or {}) for spec in self.EXTERNAL_DATASETS]
         updates = [item for item in items if item.get("needs_update")]
         missing = [item for item in items if not item.get("exists")]
         # 远端检查失败不等于“已是最新”。
@@ -313,16 +329,26 @@ class MaintenanceManager:
             )
         return updates
 
-    def _check_external_dataset(self, spec: dict[str, str]) -> dict[str, Any]:
+    def _check_external_dataset(self, spec: dict[str, str], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        overrides = overrides or {}
         data_type = str(spec["data_type"])
         name = str(spec["name"])
-        path = Path(str(getattr(settings.config, spec["path_key"], "") or ""))
-        url = str(getattr(settings.config, spec["url_key"], "") or "")
-        exists = path.exists()
+        path_text = (
+            str(overrides.get(spec["path_key"]) or "")
+            if spec["path_key"] in overrides
+            else str(getattr(settings.config, spec["path_key"], "") or "")
+        )
+        url = (
+            str(overrides.get(spec["url_key"]) or "")
+            if spec["url_key"] in overrides
+            else str(getattr(settings.config, spec["url_key"], "") or "")
+        )
+        path = Path(path_text) if path_text else None
+        exists = bool(path and path.exists())
 
-        local_size = path.stat().st_size if exists else 0
-        local_mtime = int(path.stat().st_mtime * 1000) if exists else 0
-        local_signature = self._compute_git_blob_sha(path) if exists else ""
+        local_size = path.stat().st_size if exists and path else 0
+        local_mtime = int(path.stat().st_mtime * 1000) if exists and path else 0
+        local_signature = self._compute_git_blob_sha(path) if exists and path else ""
         local_version = self._resolve_local_dataset_version(data_type)
 
         remote_info = self._probe_remote_file(url)
@@ -349,7 +375,7 @@ class MaintenanceManager:
         return {
             "data_type": data_type,
             "name": name,
-            "path": str(path),
+            "path": path_text,
             "url": url,
             "exists": exists,
             "needs_update": needs_update,

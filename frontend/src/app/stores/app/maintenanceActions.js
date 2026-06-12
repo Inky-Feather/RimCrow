@@ -134,12 +134,13 @@ export const useMaintenanceActions = ({
     manual = true,
     lastCheckKey = '',
     shouldPersistCheckedAt = null,
+    overrides = null,
   } = {}) => {
     if (!window.pywebview) return null
     const caller = window.pywebview.api?.[apiName]
     if (typeof caller !== 'function') return null
 
-    const res = await caller()
+    const res = overrides ? await caller(overrides) : await caller()
     if (manual ? !checkResult(res, workName) : res?.status !== 'success') {
       logMaintenanceCheck('api_result', { apiName, workName, manual, status: res?.status || 'missing', message: res?.message || '' }, manual ? 'warn' : 'error')
       return null
@@ -152,12 +153,13 @@ export const useMaintenanceActions = ({
   }
 
   // 工具环境可能涉及外部下载，因此只做检查本身静默；发现问题后统一进入提示队列交给用户决定。
-  const checkToolMaintenance = async ({ manual = true, prompt = true } = {}) => {
+  const checkToolMaintenance = async ({ manual = true, prompt = true, overrides = null } = {}) => {
     const data = await fetchMaintenanceData({
       apiName: 'maintenance_check_tools',
       workName: '检查工具环境',
       manual,
       lastCheckKey: 'last_tool_check_time',
+      overrides,
     })
     if (!data) return null
 
@@ -205,12 +207,13 @@ export const useMaintenanceActions = ({
   }
 
   // 外部库更新属于网络下载动作：启动期可以静默检查，但实际更新必须经由队列弹窗确认。
-  const checkExternalDataUpdates = async ({ manual = true, prompt = true } = {}) => {
+  const checkExternalDataUpdates = async ({ manual = true, prompt = true, overrides = null } = {}) => {
     const data = await fetchMaintenanceData({
       apiName: 'maintenance_check_external_data',
       workName: '检查外部库更新',
       manual,
       lastCheckKey: 'last_external_data_update_check_time',
+      overrides,
       // 整轮远端状态都没拿到时，不要把失败记录成一次成功检查。
       shouldPersistCheckedAt: (payload) => {
         const items = Array.isArray(payload?.items) ? payload.items : []

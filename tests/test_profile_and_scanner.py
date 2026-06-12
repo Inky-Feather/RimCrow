@@ -1883,6 +1883,115 @@ class TestApiSaveSettings(unittest.TestCase):
             duration=5000,
         )
 
+    def test_save_all_settings_refreshes_steam_manager_when_steam_paths_change(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        original_steam = settings.config.steam_path
+        original_steamcmd = settings.config.steamcmd_path
+        self.addCleanup(setattr, settings.config, "steam_path", original_steam)
+        self.addCleanup(setattr, settings.config, "steamcmd_path", original_steamcmd)
+
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = SimpleNamespace(PROFILE_KEYS=set())
+        api.sorter = None
+        api._bootstrap_context = Mock()
+        api.file_mgr = SimpleNamespace(get_remote_cache_stats=Mock(return_value={}))
+        api.steam_mgr = SimpleNamespace(reload_paths_from_settings=Mock())
+
+        payload = {
+            "steam_path": str(temp_root / "Steam"),
+            "steamcmd_path": str(temp_root / "tools" / "steamcmd"),
+        }
+        with patch("backend.api.network_mgr.apply"), \
+             patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link"), \
+             patch.object(settings, "save"):
+            res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        api._bootstrap_context.assert_called_once_with("default")
+        api.steam_mgr.reload_paths_from_settings.assert_called_once_with()
+
+    def test_maintenance_check_tools_uses_overrides_without_persisting_timestamp(self):
+        api = API.__new__(API)
+        api.maintenance_mgr = SimpleNamespace(check_tools=Mock(return_value={"checked_at": 123, "items": [], "issues": []}))
+
+        with patch("backend.api.settings.set") as mock_set:
+            res = API.maintenance_check_tools(api, {"steamcmd_path": "D:/NewSteamCMD"})
+
+        self.assertEqual(res["status"], "success")
+        api.maintenance_mgr.check_tools.assert_called_once_with({"steamcmd_path": "D:/NewSteamCMD"})
+        mock_set.assert_not_called()
+
+    def test_maintenance_check_external_data_uses_overrides_without_persisting_timestamp(self):
+        api = API.__new__(API)
+        api.maintenance_mgr = SimpleNamespace(check_external_data=Mock(return_value={"checked_at": 123, "items": [], "failed": [], "updates": []}))
+
+        with patch("backend.api.settings.set") as mock_set:
+            res = API.maintenance_check_external_data(api, {"community_rules_path": "D:/rules.json"})
+
+        self.assertEqual(res["status"], "success")
+        api.maintenance_mgr.check_external_data.assert_called_once_with({"community_rules_path": "D:/rules.json"})
+        mock_set.assert_not_called()
+
+    def test_workspace_transfer_move_updates_database_with_actual_unique_path(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        target_root = temp_root / "target"
+        source_root = temp_root / "source"
+        target_root.mkdir()
+        source_mod = source_root / "SameName"
+        source_mod.mkdir(parents=True)
+        (target_root / "SameName").mkdir()
+
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(local_mods_path=str(target_root))
+        source_mods = [{
+            "path_hash": "old-hash",
+            "path": str(source_mod),
+            "package_id": "demo.mod",
+            "store": "local",
+            "name": "Demo",
+        }]
+        update_result = Mock()
+        update_result.where = Mock(return_value=update_result)
+        update_result.execute = Mock(return_value=1)
+        update_mock = Mock(return_value=update_result)
+
+        class QueryStub:
+            def where(self, *_args, **_kwargs):
+                return self
+
+            def dicts(self):
+                return source_mods
+
+        class FieldStub:
+            def in_(self, _values):
+                return True
+
+        mod_asset_stub = SimpleNamespace(
+            path_hash=FieldStub(),
+            path=FieldStub(),
+            package_id=FieldStub(),
+            store=FieldStub(),
+            name=FieldStub(),
+            select=Mock(return_value=QueryStub()),
+            update=update_mock,
+        )
+
+        with patch("backend.api.settings.config", SimpleNamespace(self_mods_path="", workshop_mods_path="")), \
+             patch("backend.api.ModAsset", mod_asset_stub), \
+             patch("backend.api.db.atomic", return_value=nullcontext()):
+            res = API.workspace_transfer_mods(api, ["old-hash"], "local", "move")
+
+        self.assertEqual(res["status"], "success")
+        actual_path = str(target_root / "SameName_1")
+        self.assertFalse(source_mod.exists())
+        self.assertTrue(Path(actual_path).exists())
+        update_kwargs = update_mock.call_args.kwargs
+        self.assertEqual(update_kwargs["path"], actual_path)
+
     def test_get_initial_data_includes_runtime_session_even_without_active_context(self):
         api = API.__new__(API)
         api._runtime_mode = "desktop"

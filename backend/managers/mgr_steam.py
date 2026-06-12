@@ -419,6 +419,31 @@ class SteamManager:
             return os.path.join(self.steamcmd_dir, "steamcmd.sh")
         return ""
 
+    def reload_paths_from_settings(self):
+        """配置保存或目录迁移后刷新运行时缓存的 Steam/SteamCMD 路径。"""
+        old_steamcmd_dir = getattr(self, "steamcmd_dir", "")
+        self.steam_dir = settings.config.steam_path or self.get_steam_path()
+        self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True)
+        self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
+        self.steamcmd_exe = self._get_steamcmd_exe_path()
+        os.makedirs(self.steamcmd_dir, exist_ok=True)
+        self.steamcmd_ready = os.path.exists(self.steamcmd_exe)
+
+        if old_steamcmd_dir != self.steamcmd_dir:
+            self._last_cmd_log_mtime = 0
+            self._last_cmd_acf_mtime = 0
+            self._cached_cmd_map = None
+            self._last_acf_mtime = 0
+            self._last_log_mtime = 0
+            self._cached_merged_data = []
+        return {
+            "steam_dir": self.steam_dir,
+            "steam_exe": self.steam_exe,
+            "steamcmd_dir": self.steamcmd_dir,
+            "steamcmd_exe": self.steamcmd_exe,
+            "steamcmd_ready": self.steamcmd_ready,
+        }
+
     # =========================================================
     #  1. 环境准备
     # =========================================================

@@ -1,8 +1,11 @@
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from backend.managers.mgr_steam import SteamManager
+from backend.settings import settings
 
 
 class TestSteamActionReadiness(unittest.TestCase):
@@ -48,6 +51,35 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertIsNone(task_id)
         self.assertEqual(manager._active_tasks, {})
         self.assertFalse(manager._monitor_running)
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Windows")
+    def test_reload_paths_from_settings_refreshes_cached_paths(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        steam_root = temp_root / "Steam"
+        steamcmd_root = temp_root / "steamcmd"
+        steam_root.mkdir()
+        steamcmd_root.mkdir()
+
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = "old"
+        manager._cached_cmd_map = {"old": True}
+        manager._last_cmd_log_mtime = 1
+        manager._last_cmd_acf_mtime = 1
+        manager._last_acf_mtime = 1
+        manager._last_log_mtime = 1
+        manager._cached_merged_data = [{"old": True}]
+        manager.get_steam_path = lambda exe=False: ""
+
+        with patch.object(settings.config, "steam_path", str(steam_root)), \
+             patch.object(settings.config, "steamcmd_path", str(steamcmd_root)):
+            result = manager.reload_paths_from_settings()
+
+        self.assertEqual(result["steam_dir"], str(steam_root))
+        self.assertEqual(result["steamcmd_dir"], str(steamcmd_root))
+        self.assertEqual(manager.steamcmd_exe, str(steamcmd_root / "steamcmd.exe"))
+        self.assertIsNone(manager._cached_cmd_map)
+        self.assertEqual(manager._last_cmd_log_mtime, 0)
 
 
 if __name__ == "__main__":

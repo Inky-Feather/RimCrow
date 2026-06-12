@@ -48,8 +48,9 @@ export const useSettingsActions = ({
     try {
       const res = await window.pywebview.api.save_setting(key, value)
       if (checkResult(res, "保存单项设置", true)) {
-        // 更新本地 store
-        settings.value[key] = value
+        const nextSettings = res.data?.settings || null
+        if (nextSettings) Object.assign(settings.value, nextSettings)
+        else settings.value[key] = value
       }
     } catch (e) {
       console.error("保存单项设置异常:", e)

@@ -222,11 +222,22 @@ const autoDetect = async () => {
 // 检查游戏路径是否有效
 const checkPath = async (type, path) => {
   console.log('checkPath:', type, path)
-  const res = await appStore.checkPath(type, path)
   if (!formData.value['check_info']) {
     formData.value['check_info'] = {};
   }
+  if (!String(path || '').trim()) {
+    formData.value['check_info'][type] = {
+      pass: false,
+      type: 'warn',
+      msg: '未填写路径',
+    }
+    return
+  }
+  const res = await appStore.checkPath(type, path)
   formData.value['check_info'][type] = res
+  if (res?.pass && res?.data && type === 'ripgrep_path') {
+    formData.value.ripgrep_path = res.data
+  }
 }
 // 检查全部路径
 const checkPaths = async () => {
