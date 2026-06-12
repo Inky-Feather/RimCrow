@@ -207,7 +207,7 @@ export const useModIssues = ({
             _add(currentToken, ISSUE_TYPE.INFO_ALTERNATIVE_USED, ISSUE_LEVEL.INFO,
               `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_ALTERNATIVE_USED]}__：前置依赖 [[${baseName}]] 已由备选模组 [[${altName}]] 替代`, activeTargetToken)
           } else {
-            // 缺失或未启用
+            // 缺失或停用
             const baseMod = allModsMap.value.get(baseTargetId)
             const baseName = baseMod ? displayModName(baseMod) : baseTargetId
             const hasInstalledBaseMod = hasRealModById(baseTargetId)

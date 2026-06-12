@@ -41,7 +41,7 @@
 
             <!-- 2. 待选库 (Library) -->
             <div v-else-if="col.id === 'library'" class="h-full">
-              <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" data-tour="inactive-list" />
+              <ModList v-model="modStore.inactiveIds" title="停用" listColor="primary" listId="inactive" data-tour="inactive-list" />
             </div>
 
             <!-- 3. 启用/排序 (Active) - 包含规则编辑器逻辑 -->

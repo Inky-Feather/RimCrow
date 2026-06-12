@@ -21,8 +21,8 @@ export const mainGuideSteps = [
   {
     element: '[data-tour="inactive-list"]',
     popover: {
-      title: "未启用列表",
-      description: "这里是你拥有的所有未启用模组。可以拖拽它们到右侧，或者双击启用。",
+      title: "停用列表",
+      description: "这里是你拥有的所有停用模组。可以拖拽它们到右侧，或者双击启用。",
       side: "right",
     },
   },
