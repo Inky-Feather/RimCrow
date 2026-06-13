@@ -73,3 +73,59 @@ export function flashComponent(target, options = {}) {
 export function pulseComponent(target, options = {}) {
   highlightComponent(target, { ...options, mode: 'pulse' })
 }
+
+const shouldPreviewImage = (image) => {
+  if (!image || typeof image.closest !== 'function') return false
+  return !image.closest('a')
+}
+
+const blurActiveViewerFocus = () => {
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  if (activeElement?.closest?.('.viewer-container')) {
+    activeElement.blur()
+  }
+}
+
+export const imageViewerOptions = {
+  focus: false,
+  navbar: false,
+  title: false,
+  toolbar: true,
+  tooltip: true,
+  movable: true,
+  zoomable: true,
+  rotatable: true,
+  scalable: true,
+  transition: false,
+  zIndex: 100000,
+  filter: shouldPreviewImage,
+  hide: blurActiveViewerFocus,
+}
+
+export const decoratePreviewableHtmlImages = (html, options = {}) => {
+  if (typeof document === 'undefined') return html
+
+  const { resolveImageUrl = null } = options
+  const wrapper = document.createElement('div')
+  wrapper.innerHTML = String(html || '')
+
+  wrapper.querySelectorAll('img[src]').forEach((img) => {
+    const rawSrc = String(img.getAttribute('src') || '').trim()
+    const nextSrc = typeof resolveImageUrl === 'function'
+      ? String(resolveImageUrl(rawSrc) || rawSrc).trim()
+      : rawSrc
+
+    if (nextSrc) {
+      img.setAttribute('src', nextSrc)
+    }
+    img.setAttribute('loading', 'lazy')
+
+    if (shouldPreviewImage(img)) {
+      img.classList.add('cursor-zoom-in')
+    } else {
+      img.classList.remove('cursor-zoom-in')
+    }
+  })
+
+  return wrapper.innerHTML
+}

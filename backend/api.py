@@ -2190,7 +2190,7 @@ class API:
         """读取当前启用列表 token；配置文件识别只需要这个轻量输入。"""
         if not getattr(self, "load_order_mgr", None):
             return []
-        return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
+        return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or []) # type: ignore
 
     @log_api_call
     def mod_settings_workshop_details(self, workshop_ids: List[str]):

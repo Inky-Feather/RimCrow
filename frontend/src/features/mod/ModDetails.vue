@@ -1,13 +1,13 @@
 <template>
   <div v-if="selectedMod" class="flex flex-col h-full p-1 bg-bg-surface/50 select-text">
     <!-- 1. 顶部大图与标题区 (保持原有设计风格但优化) -->
-    <div class="w-full aspect-video opacity-90 backdrop-blur-sm bg-bg-inset/80 rounded-xl overflow-hidden relative border border-border-base/10 shadow-lg group">
+    <div v-viewer="imageViewerOptions" class="w-full aspect-video opacity-90 backdrop-blur-sm bg-bg-inset/80 rounded-xl overflow-hidden relative border border-border-base/10 shadow-lg group">
 
       <!-- 图片 (优先显示大图，没有大图时回退显示 store 中的缩略图，防止留白) -->
       <Transition :name="appStore.settings.ui.detail_delay ?'fade': ''">
         <!-- 这里的 key Mod ID，变动时触发动画 -->
         <img v-if="selectedMod.preview_path" :key="selectedMod.package_id" :src="appStore.getLocalUrl(selectedMod.preview_path)"
-          class="absolute inset-0 w-full h-full object-cover" loading="lazy"/>
+          class="absolute inset-0 w-full h-full cursor-zoom-in object-cover" loading="lazy"/>
         <!-- 文字提示兜底 -->
         <div v-else class="absolute inset-0 flex items-center justify-center text-text-subtle/70 bg-bg-surface">
           <div class="text-center">
@@ -480,7 +480,7 @@
           <!-- 描述 (HTML) -->
           <div v-if="block.id === 'description'" class="p-1 space-y-2">
             <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-border-base/5 pb-1">描述</h3>
-            <div class="prose prose-invert prose-sm max-w-none text-text-soft leading-relaxed wrap-break-word" v-html="formattedDescription"></div>
+            <div v-viewer.rebuild="imageViewerOptions" class="prose prose-invert prose-sm max-w-none text-text-soft leading-relaxed wrap-break-word" v-html="formattedDescription"></div>
           </div>
 
         </template>
@@ -542,6 +542,7 @@ import { ChevronDown, ChevronUp, CircleX, Copy } from 'lucide-vue-next'
 import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
 import { useProfileStore } from '../profiles/profileStore'
 import { ColorPicker } from 'vue3-colorpicker'
+import { imageViewerOptions } from '../../shared/lib/domEffects'
 
 // 随机选30个Mod的图标URL
 const imageUrls = computed(() => Array.from(modStore.allModsMap.values())

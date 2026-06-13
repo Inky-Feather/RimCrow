@@ -132,8 +132,10 @@
           
           <div class="pt-3 flex gap-6 items-end">
             
-            <img v-if="selectedMod?.preview_url" :src="appStore.getRemoteUrl(selectedMod?.preview_url)" 
-              class="size-40 rounded-xl shadow-[0_10px_30px_var(--shadow-color)] border-2 border-border-base/10 object-cover z-10" />
+            <div v-if="selectedMod?.preview_url" v-viewer="imageViewerOptions"
+              class="size-40 rounded-xl shadow-[0_10px_30px_var(--shadow-color)] border-2 border-border-base/10 object-cover z-10 overflow-hidden">
+              <img :src="appStore.getRemoteUrl(selectedMod?.preview_url)" class="h-full w-full cursor-zoom-in object-cover" />
+            </div>
             <div class="size-40 rounded-xl bg-bg-inset/90 border-2 border-dashed border-border-base/18 flex items-center justify-center z-10" v-else>
               <span class="text-xs text-text-dim">NO IMAGE</span>
             </div>
@@ -246,7 +248,7 @@
               <Image class="size-3" /> 截图
             </h4>
             <!-- 使用 flex nowrap 和 overflow-x-auto 实现横向滚动 -->
-            <div v-viewer.rebuild="screenshotViewerOptions" class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
+            <div v-viewer.rebuild="imageViewerOptions" class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
               <div v-for="(img, idx) in selectedMod.screenshots" :key="idx"
                 class="relative h-32 w-56 shrink-0 snap-start overflow-hidden rounded-lg border border-border-base/10 bg-bg-inset/80"
               >
@@ -263,7 +265,7 @@
             </div>
           </div>
 
-          <div class="prose prose-invert prose-sm md:prose-base max-w-none prose-img:rounded-xl prose-a:text-accent-primary select-text">
+          <div v-viewer.rebuild="imageViewerOptions" class="prose prose-invert prose-sm md:prose-base max-w-none prose-img:rounded-xl prose-a:text-accent-primary select-text">
             <div v-if="parsedDescription" v-html="parsedDescription"></div>
             <div v-else class="text-text-dim italic">该模组没有提供详细描述。</div>
           </div>
@@ -329,6 +331,7 @@ import { Search, Globe, X, Cpu, Calendar, CloudDownload, Download, Link, Flag, F
 import { useAppStore } from '../../../app/stores/appStore'
 import { useToast } from 'vue-toastification'
 import { parseUnityRichText } from '../../../shared/lib/text'
+import { imageViewerOptions } from '../../../shared/lib/domEffects'
 import { useWorkspaceStore } from '../workspaceStore'
 import MiniModCard from '../components/MiniModCard.vue'
 
@@ -342,26 +345,6 @@ let searchTimeout = null
 const scrollerRef = ref(null)
 const isLocalFetching = ref(false)  // 局部硬锁，绝对同步，防穿透
 const loadedScreenshotMap = ref({})
-const blurActiveViewerFocus = () => {
-  const activeElement = document.activeElement
-  if (activeElement?.closest?.('.viewer-container')) {
-    activeElement.blur()
-  }
-}
-const screenshotViewerOptions = {
-  focus: false,
-  navbar: false,
-  title: false,
-  toolbar: true,
-  tooltip: true,
-  movable: true,
-  zoomable: true,
-  rotatable: true,
-  scalable: true,
-  transition: false,
-  zIndex: 100000,
-  hide: blurActiveViewerFocus,
-}
 
 // 仅在用户真正打开工坊页且当前没有任何结果时，才触发默认搜索。
 onMounted(() => {

@@ -1,6 +1,8 @@
 /**
  * 对纯文本做 HTML 转义，避免直接插入 DOM 时破坏结构。
  */
+import { decoratePreviewableHtmlImages } from './domEffects'
+
 export const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -419,6 +421,7 @@ export const parseUnityRichText = (unityText, removeImg = true, remoteImageResol
     .replace(/<blockquote[^>]*>\s*<\/blockquote>/gi, '')
     .replace(/<strong>\s*<\/strong>/gi, '')
     .trim()
+  htmlText = decoratePreviewableHtmlImages(htmlText)
 
   // 13. 统一包裹展示容器，保持现有样式和 white-space 行为不变。
   return `<div class="unity-content text-sm leading-relaxed" style="white-space: pre-wrap;">${htmlText}</div>`

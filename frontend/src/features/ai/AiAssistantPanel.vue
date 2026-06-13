@@ -151,10 +151,10 @@
                     <span class="text-text-dim">思考过程</span>
                   </template>
                 </summary>
-                <div class="prose prose-sm prose-invert max-w-none select-text text-text-dim mt-2" v-html="renderMarkdown(msg.reasoning)"></div>
+                <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none select-text text-text-dim mt-2" v-html="renderMarkdown(msg.reasoning)"></div>
               </details>
 
-              <div class="prose prose-sm prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none select-text text-wrap break-all relative">
+              <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none select-text text-wrap break-all relative">
                 <div v-if="shouldShowAssistantLoading(msg)" class="flex items-center gap-2 py-1 text-text-dim">
                   <LoaderCircle class="w-4 h-4 animate-spin text-accent-special shrink-0"></LoaderCircle>
                   <span class="text-xs font-mono">正在生成回答...</span>
@@ -276,6 +276,7 @@ import { CircleHelp, Copy, LoaderCircle, Square } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../shared/components/input/CommonNumber.vue'
 import AiActionCard from './AiActionCard.vue'
+import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
 import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
