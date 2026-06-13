@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.managers.mgr_mod_config import ModSettingsManager
+from backend.managers.mgr_mod_settings import ModSettingsManager
 from backend.managers.mgr_profile import ProfileContext
 
 
@@ -28,6 +28,8 @@ class TestModSettingsManager(unittest.TestCase):
     def _build_triple_domain_assets(self, *assets: dict) -> dict[str, list[dict]]:
         grouped = {"local": [], "self": [], "workshop": [], "missing": [], "unknown": []}
         for asset in assets:
+            if asset.get("path"):
+                Path(str(asset["path"])).mkdir(parents=True, exist_ok=True)
             store = str(asset.get("store") or "").strip().lower()
             grouped[store if store in grouped else "unknown"].append(dict(asset))
         return grouped
@@ -66,9 +68,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):
@@ -86,6 +88,8 @@ class TestModSettingsManager(unittest.TestCase):
             self.assertEqual(setting_group["identity"], "class")
             self.assertTrue(setting_group["can_cover_active"])
             self.assertEqual(setting_group["active_file_path"], str(workshop_file.resolve()))
+            self.assertEqual(setting_group["files"][0]["state_kind"], "active")
+            self.assertEqual(setting_group["files"][1]["state_kind"], "coexist_disabled")
             self.assertEqual(
                 [item["name"] for item in setting_group["files"]],
                 ["Mod_2876543210_DemoSettings.xml", "Mod_LocalCopy_DemoSettings.xml"],
@@ -118,9 +122,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):
@@ -159,9 +163,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):
@@ -192,9 +196,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod),
                 ),
             ):
@@ -227,8 +231,8 @@ class TestModSettingsManager(unittest.TestCase):
             self._write_settings(file_path, "Achtung.Settings")
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[]),
-                patch("backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets", return_value={}),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets", return_value={}),
             ):
                 overview = ModSettingsManager.get_overview(context, [])
 
@@ -238,6 +242,8 @@ class TestModSettingsManager(unittest.TestCase):
             self.assertEqual(mod_group["status"], "uninstalled")
             self.assertEqual(mod_group["workshop_id"], "730936602")
             self.assertEqual(mod_group["mod_name"], "Achtung")
+            self.assertEqual(mod_group["setting_groups"][0]["files"][0]["state_kind"], "uninstalled")
+            self.assertEqual(mod_group["setting_groups"][0]["files"][0]["state_label"], "已卸载")
 
     def test_external_database_package_merges_file_into_installed_same_package_mod(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -255,13 +261,13 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod),
                 ),
                 patch(
-                    "backend.managers.mgr_mod_config.ExtDAO.get_workshop_details_by_workshop_ids",
+                    "backend.managers.mgr_mod_settings.ExtDAO.get_workshop_details_by_workshop_ids",
                     return_value={
                         "3226502149": {
                             "workshop_id": "3226502149",
@@ -290,10 +296,10 @@ class TestModSettingsManager(unittest.TestCase):
             self._write_settings(file_path, "CallTradeShips.Settings")
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[]),
-                patch("backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets", return_value={}),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets", return_value={}),
                 patch(
-                    "backend.managers.mgr_mod_config.ExtDAO.get_workshop_details_by_workshop_ids",
+                    "backend.managers.mgr_mod_settings.ExtDAO.get_workshop_details_by_workshop_ids",
                     return_value={
                         "3226502149": {
                             "workshop_id": "3226502149",
@@ -328,9 +334,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod),
                 ),
             ):
@@ -341,6 +347,136 @@ class TestModSettingsManager(unittest.TestCase):
             setting_group = mod_group["setting_groups"][0]
             self.assertEqual(setting_group["active_file_path"], str(active_file.resolve()))
             self.assertTrue(setting_group["files"][0]["active"])
+
+    def test_folder_prefix_match_prefers_full_folder_name_with_underscores(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            config_dir = Path(context.game_config_path)
+            settings_file = config_dir / "Mod_Local_Copy_DemoSettings.xml"
+            self._write_settings(settings_file, "Author.Demo.Settings", "copy")
+
+            local_short = {
+                "package_id": "author.local",
+                "name": "Local",
+                "path": str(Path(temp_dir) / "mods" / "Local"),
+                "store": "local",
+                "workshop_id": "",
+            }
+            local_copy = {
+                "package_id": "author.copy",
+                "name": "Local Copy",
+                "path": str(Path(temp_dir) / "mods" / "Local_Copy"),
+                "store": "local",
+                "workshop_id": "",
+            }
+
+            with (
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[local_short, local_copy]),
+                patch(
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
+                    return_value=self._build_triple_domain_assets(local_short, local_copy),
+                ),
+            ):
+                overview = ModSettingsManager.get_overview(context, ["author.copy"])
+
+            self.assertEqual(overview["unknown_file_count"], 0)
+            mod_group = overview["mod_groups"][0]
+            self.assertEqual(mod_group["package_id"], "author.copy")
+            setting_group = mod_group["setting_groups"][0]
+            self.assertEqual(setting_group["fallback_name"], "DemoSettings")
+            self.assertEqual(setting_group["active_file_path"], str(settings_file.resolve()))
+
+    def test_workshop_id_fallback_groups_residue_but_does_not_mark_it_active(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            config_dir = Path(context.game_config_path)
+            residue_file = config_dir / "Mod__730936602__Achtung.xml"
+            self._write_settings(residue_file, "AchtungMod.AchtungSettings", "padded")
+
+            visible_mod = {
+                "package_id": "brrainz.achtung",
+                "name": "Achtung!",
+                "path": str(Path(temp_dir) / "workshop" / "730936602"),
+                "store": "workshop",
+                "workshop_id": "730936602",
+            }
+
+            with (
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch(
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
+                    return_value=self._build_triple_domain_assets(visible_mod),
+                ),
+            ):
+                overview = ModSettingsManager.get_overview(context, ["brrainz.achtung_steam"])
+
+            self.assertEqual(overview["unknown_file_count"], 0)
+            mod_group = overview["mod_groups"][0]
+            self.assertEqual(mod_group["package_id"], "brrainz.achtung")
+            setting_group = mod_group["setting_groups"][0]
+            self.assertEqual(setting_group["active_file_path"], "")
+            self.assertFalse(setting_group["files"][0]["active"])
+            self.assertEqual(setting_group["files"][0]["source_label"], "链接副本")
+            self.assertEqual(setting_group["files"][0]["state_kind"], "uninstalled")
+            self.assertEqual(setting_group["files"][0]["state_label"], "已卸载")
+
+    def test_runtime_link_folder_name_matches_original_installed_mod(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            config_dir = Path(context.game_config_path)
+            link_settings_file = config_dir / "Mod__Link_730936602_Achtung.xml"
+            self._write_settings(link_settings_file, "AchtungMod.AchtungSettings", "linked")
+
+            visible_mod = {
+                "package_id": "brrainz.achtung",
+                "name": "Achtung!",
+                "path": str(Path(temp_dir) / "workshop" / "730936602"),
+                "store": "workshop",
+                "workshop_id": "730936602",
+            }
+
+            with (
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch(
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
+                    return_value=self._build_triple_domain_assets(visible_mod),
+                ),
+            ):
+                overview = ModSettingsManager.get_overview(context, ["brrainz.achtung_steam"])
+
+            self.assertEqual(overview["unknown_file_count"], 0)
+            mod_group = overview["mod_groups"][0]
+            self.assertEqual(mod_group["package_id"], "brrainz.achtung")
+            setting_group = mod_group["setting_groups"][0]
+            self.assertEqual(setting_group["fallback_name"], "Achtung")
+            self.assertEqual(setting_group["active_file_path"], str(link_settings_file.resolve()))
+            self.assertEqual(setting_group["files"][0]["folder_name"], "_Link_730936602")
+
+    def test_missing_installed_folder_marks_file_instance_as_uninstalled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            config_dir = Path(context.game_config_path)
+            settings_file = config_dir / "Mod_MissingCopy_DemoSettings.xml"
+            self._write_settings(settings_file, "Author.Demo.Settings", "old")
+
+            missing_mod = {
+                "package_id": "author.demo",
+                "name": "Demo Mod",
+                "path": str(Path(temp_dir) / "mods" / "MissingCopy"),
+                "store": "local",
+                "workshop_id": "",
+            }
+            triple_assets = {"local": [missing_mod], "self": [], "workshop": [], "missing": [], "unknown": []}
+
+            with (
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[missing_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets", return_value=triple_assets),
+            ):
+                overview = ModSettingsManager.get_overview(context, [])
+
+            setting_group = overview["mod_groups"][0]["setting_groups"][0]
+            self.assertEqual(setting_group["files"][0]["state_kind"], "uninstalled")
+            self.assertEqual(setting_group["files"][0]["state_label"], "已卸载")
 
     def test_coexist_local_active_uses_effective_instance_folder_to_pick_active_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -367,9 +503,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):
@@ -405,9 +541,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod),
                 ),
             ):
@@ -446,9 +582,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):
@@ -483,9 +619,9 @@ class TestModSettingsManager(unittest.TestCase):
             }
 
             with (
-                patch("backend.managers.mgr_mod_config.ModDAO.get_profile_mods", return_value=[visible_mod]),
+                patch("backend.managers.mgr_mod_settings.ModDAO.get_profile_mods", return_value=[visible_mod]),
                 patch(
-                    "backend.managers.mgr_mod_config.ModDAO.get_triple_domain_assets",
+                    "backend.managers.mgr_mod_settings.ModDAO.get_triple_domain_assets",
                     return_value=self._build_triple_domain_assets(visible_mod, visible_mod["coexist_workshop_variant"]),
                 ),
             ):

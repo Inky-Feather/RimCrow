@@ -56,7 +56,7 @@
 │   │   ├──  mgr_github.py
 │   │   ├──  mgr_load_order.py
 │   │   ├──  mgr_maintenance.py
-│   │   ├──  mgr_mod_config.py
+│   │   ├──  mgr_mod_settings.py
 │   │   ├──  mgr_mod_package.py
 │   │   ├──  mgr_mod_residue.py
 │   │   ├──  mgr_network.py
@@ -331,7 +331,7 @@
 │   ├──  test_load_order_share_code.py
 │   ├──  test_maintenance_manager.py
 │   ├──  test_mod_asset_missing_state.py
-│   ├──  test_mod_config_manager.py
+│   ├──  test_mod_settings_manager.py
 │   ├──  test_mod_residue_manager.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_recommendation_export_manager.py

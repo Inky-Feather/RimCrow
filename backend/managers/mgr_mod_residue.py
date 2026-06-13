@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from backend.managers.mgr_mod_config import ModSettingsManager
+from backend.managers.mgr_mod_settings import ModSettingsManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.settings import DATA_DIR

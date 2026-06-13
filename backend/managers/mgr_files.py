@@ -489,7 +489,8 @@ class FileManager:
             try:
                 # Windows 和 macOS 支持直接选中文件；Linux 桌面环境差异较大，退回打开父目录更稳定。
                 if system_name == 'Windows':
-                    subprocess.Popen(['explorer.exe', f'/select,{path}'])
+                    normalized_path = os.path.normpath(path)
+                    subprocess.Popen(f'explorer.exe /select,"{normalized_path}"')
                     return None
                 if system_name == 'Darwin':
                     subprocess.call(['open', '-R', path])

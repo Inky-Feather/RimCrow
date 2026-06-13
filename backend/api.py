@@ -77,7 +77,7 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
-from backend.managers.mgr_mod_config import ModSettingsManager
+from backend.managers.mgr_mod_settings import ModSettingsManager
 from backend.managers.mgr_mod_residue import ModResidueManager
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
@@ -264,7 +264,7 @@ class API:
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
         self._last_runtime_link_sync_result: dict[str, Any] = {}
-        self.theme_store = ThemeStore()
+        self._theme_store = ThemeStore()
         # 应用层升级迁移必须早于外置缓存库管理器初始化。
         # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
         # 会在 Windows 上撞到已打开文件句柄导致无法删除。
@@ -1052,7 +1052,7 @@ class API:
         前端启动时调用，一次性获取所有必要数据。
         """
         try:
-            user_themes = self.theme_store.list_user_themes()
+            user_themes = self._theme_store.list_user_themes()
         except Exception as e:
             logger.error(f"Load user themes during startup failed: {e}", exc_info=True)
             user_themes = []
@@ -1502,7 +1502,7 @@ class API:
     def theme_list_user(self):
         """读取用户自定义主题；内置主题由前端只读资源提供。"""
         try:
-            return ApiResponse.success({"themes": self.theme_store.list_user_themes()})
+            return ApiResponse.success({"themes": self._theme_store.list_user_themes()})
         except Exception as e:
             logger.error(f"Load user themes failed: {e}", exc_info=True)
             return ApiResponse.error(f"读取用户主题失败：{e}")
@@ -1511,7 +1511,7 @@ class API:
     def theme_save_user(self, theme: dict):
         """新增或覆盖用户自定义主题。"""
         try:
-            saved_theme = self.theme_store.save_user_theme(theme)
+            saved_theme = self._theme_store.save_user_theme(theme)
             return ApiResponse.success({"theme": saved_theme}, message="主题已保存")
         except Exception as e:
             logger.error(f"Save user theme failed: {e}", exc_info=True)
@@ -1521,7 +1521,7 @@ class API:
     def theme_delete_user(self, theme_id: str):
         """删除用户自定义主题。"""
         try:
-            deleted = self.theme_store.delete_user_theme(theme_id)
+            deleted = self._theme_store.delete_user_theme(theme_id)
             return ApiResponse.success({"deleted": deleted}, message="主题已删除" if deleted else "主题不存在")
         except Exception as e:
             logger.error(f"Delete user theme failed: {e}", exc_info=True)
@@ -2160,7 +2160,7 @@ class API:
         })
 
     @log_api_call
-    def mod_config_get_overview(self):
+    def mod_settings_get_overview(self):
         """读取当前环境下官方 ModSettings 配置文件总览。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
@@ -2171,7 +2171,7 @@ class API:
             return ApiResponse.error(f"读取模组配置总览失败: {e}")
 
     @log_api_call
-    def mod_config_sync(self, source_path: str, target_path: str):
+    def mod_settings_sync(self, source_path: str, target_path: str):
         """在同一 package_id 分组内手动覆盖同步配置文件。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
@@ -2193,7 +2193,7 @@ class API:
         return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
 
     @log_api_call
-    def mod_config_workshop_details(self, workshop_ids: List[str]):
+    def mod_settings_workshop_details(self, workshop_ids: List[str]):
         """批量补全模组配置残留文件里猜测出的工坊信息。"""
         try:
             return ApiResponse.success(SteamWebAPI.get_workshop_details(workshop_ids or [], trace_label="mod-config"))
