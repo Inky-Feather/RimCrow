@@ -1,5 +1,4 @@
 import { computed, ref, watch } from 'vue'
-import { generateHtmlHelp } from '../search/SearchHelp'
 import { ISSUE_TYPE } from '../../../shared/lib/constants'
 
 const SORT_MODE_MAP = {
@@ -90,13 +89,6 @@ export function useModListQuery({
     sortMode.value = 'default'
     isSortAsc.value = true
   }
-
-  // 动态计算帮助文本
-  const searchHelpText = computed(() => {
-    if (!engine.value) return 'Loading...'
-    // 这里可以做一层缓存，避免每次 render 都生成字符串
-    return generateHtmlHelp(engine.value)
-  })
 
   // 排序提示
   const sortTooltip = computed(() => {
@@ -293,7 +285,6 @@ export function useModListQuery({
     toggleIssueTypeFilter,
     clearFilter,
     clearSort,
-    searchHelpText,
     sortTooltip,
     filterTooltip,
     handleLineClick,
