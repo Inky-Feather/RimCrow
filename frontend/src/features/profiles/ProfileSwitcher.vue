@@ -22,8 +22,9 @@
     </button>
 
     <!-- 下拉列表 -->
-    <FixedPopover :is-open="isOpen" :trigger-ref="containerRef" :offset="6">
-      <div class="w-64 bg-glass-medium backdrop-blur-2xl  border border-border-base/10 rounded-2xl shadow-[0_20px_50px_var(--shadow-color)] overflow-hidden z-100">
+    <FixedPopover :is-open="isOpen" :trigger-ref="containerRef" :offset="6"
+      @request-close="isOpen = false" >
+      <div class="w-64 bg-glass-light backdrop-blur-2xl border border-border-base/10 rounded-2xl overflow-hidden z-100">
 
         <div class="p-1 space-y-1">
           <button v-for="p in profileStore.profiles" :key="p.id" @click="p.check ? handleSwitch(p.id) : null"
@@ -62,7 +63,6 @@ import { computed, ref, h } from 'vue'
 import { ChevronDown, Settings2, Folder, Quote, AlertOctagon } from 'lucide-vue-next'
 import { useProfileStore } from './profileStore'
 import { useAppStore } from '../../app/stores/appStore'
-import { onClickOutside } from '@vueuse/core'
 import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
 
 const appStore = useAppStore()
@@ -86,7 +86,6 @@ const openManager = () => {
   appStore.uiState.showProfileDrawer = true
 }
 
-onClickOutside(containerRef, () => isOpen.value = false)
 </script>
 
 <style scoped>

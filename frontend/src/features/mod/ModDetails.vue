@@ -373,7 +373,7 @@
                     @keydown.esc="showTagSuggest = false" v-tooltip="'添加新标签'"
                     class="input-glass w-5 rounded px-1 py-0.5 text-center text-xs text-text-main placeholder:text-text-disabled focus:flex-1 focus:w-24 focus:outline-none"
                   />
-                  <FixedPopover :is-open="showTagSuggest && filteredKnownTags.length > 0" :trigger-ref="tagInputRef">
+                  <FixedPopover :is-open="showTagSuggest && filteredKnownTags.length > 0" :trigger-ref="tagInputRef" @request-close="showTagSuggest = false">
                       <!-- 标签建议下拉框 -->
                       <div class="popover-surface z-50 flex max-h-40 flex-col items-center gap-0.5 overflow-y-auto rounded-lg p-1">
                         <button v-for="(t, idx) in filteredKnownTags" :key="t"  @click="addTag(t)"
@@ -411,7 +411,7 @@
                   <button @click="toggleGroupDrop" class="flex items-center gap-1 rounded border border-border-base/10 bg-bg-overlay/5 px-1 py-1 text-xs text-text-dim transition-all hover:border-border-base/18 hover:bg-bg-overlay/10 hover:text-text-main">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
                   </button>
-                  <FixedPopover :is-open="showGroupDrop" :trigger-ref="groupDropRef">
+                  <FixedPopover :is-open="showGroupDrop" :trigger-ref="groupDropRef" @request-close="showGroupDrop = false">
 
                     <!-- 分组选择下拉框 -->
                     <div class="popover-surface z-50 flex max-h-48 w-40 flex-col rounded-sm p-1">
@@ -760,10 +760,6 @@ const addGroup = (groupId) => {
   showGroupDrop.value = false
 }
 
-// 点击外部关闭分组下拉
-onClickOutside(groupDropRef, () => {
-  showGroupDrop.value = false
-})
 // 从分组中移除模组
 const removeModInGroup =(groupId, modId) => {
   groupStore.groupRemoveMods(groupId, [modId]);
@@ -800,12 +796,6 @@ const navTag = (step) => {
   if (len === 0) return
   tagNavIndex.value = (tagNavIndex.value + step + len) % len
 }
-// 点击外部关闭标签建议
-onClickOutside(tagInputRef, () => {
-  showTagSuggest.value = false
-})
-
-
 const persistSignColor = useDebounceFn((packageId, color) => {
   // 自定义取色拖动时会连续触发事件，这里做轻量防抖，避免频繁写后端。
   modStore.updateModUserData(packageId, { sign_color: color })

@@ -71,7 +71,7 @@
       <!-- 自动补全菜单：key 建议继续输入 value，value 建议直接生成 token。 -->
       <Transition name="fade-drop">
         <div v-if="showSuggestions && suggestionList.length > 0" ref="suggestionContainer"
-          class="popover-surface absolute top-full z-100 mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden rounded-lg">
+          class="popover-surface absolute top-full z-100 mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden rounded-lg shadow-[0_18px_50px_var(--shadow-color)]">
           <div v-for="(item, index) in suggestionList" :key="index"
             class="pl-1 pr-3 py-1.5 text-xs cursor-pointer flex items-center justify-between group transition-colors"
             :class="[highlightIndex === index ? 'bg-accent-primary/20 text-text-main' : 'text-text-dim hover:bg-bg-overlay/5']"
@@ -272,7 +272,7 @@ const cancelEditing = () => {
 const handleKeydown = (event) => {
   if (event.key === 'Enter') {
     if (inputValue.value) addTag(inputValue.value)
-    else emit('search')
+    emit('search')
   } else if (event.key === 'Tab' && showSuggestions.value && suggestionList.value.length > 0) {
     event.preventDefault()
     applySuggestion(suggestionList.value[highlightIndex.value])

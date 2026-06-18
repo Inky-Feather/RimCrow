@@ -360,7 +360,7 @@ body {
     @apply bg-bg-surface/40;
   }
   .popover-surface {
-    @apply border border-border-base/10 bg-glass-medium shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur-xl;
+    @apply border border-border-base/10 bg-glass-medium backdrop-blur-xl;
   }
   .context-menu-surface {
     background-color: color-mix(in srgb, var(--color-glass-medium) 92%, transparent);
