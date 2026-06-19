@@ -5207,12 +5207,6 @@ class API:
         info = details.get(str(workshop_id))
         if not info: return ApiResponse.error("无法从 Steam 获取该模组详情")
         
-        # 将原始截图 URL 转换为代理缓存 URL
-        cache_screenshots = []
-        for raw_url in info.get("screenshots", []):
-            cache_url = file_mgr.get_gallery_url(workshop_id, raw_url)
-            cache_screenshots.append(cache_url)
-        
         # 需要先查出这个工坊 ID 对应的 PackageID, 才能查询替代建议
         meta = ExtDAO.get_merged_meta_by_workshop_id(str(workshop_id))
         replacement = None
@@ -5224,7 +5218,7 @@ class API:
             "workshop_id": workshop_id,
             "title": info["title"],
             "description": info["description"],
-            "screenshots": cache_screenshots, # 这里的 URL 列表直接发给前端 v-for
+            "screenshots": info.get("screenshots", []),
             "preview_url": info["preview_url"],
             "online_time": info["time_updated"],
             "replacement": replacement # 如果有替代品，这里会包含 new_id 和 new_name

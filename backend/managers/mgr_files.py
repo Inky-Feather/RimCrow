@@ -55,6 +55,10 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
     REMOTE_FAILURE_COOLDOWN_SECONDS = 300
     _remote_failure_cache: dict[str, float] = {}
     _remote_failure_lock = threading.Lock()
+    _remote_download_locks: dict[str, threading.Lock] = {}
+    _remote_download_locks_lock = threading.Lock()
+    _thumbnail_locks: dict[str, threading.Lock] = {}
+    _thumbnail_locks_lock = threading.Lock()
     
     def do_GET(self):
         try:
@@ -75,25 +79,11 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 if not pkg_id or not os.path.isfile(src_path):
                     self.send_error(404, "Source not found")
                     return
-                target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{pkg_id}.webp")
-                # 检查缓存是否有效
-                need_generate = True
-                if os.path.exists(target_path):
-                    if os.path.getmtime(src_path) <= os.path.getmtime(target_path):
-                        need_generate = False
-                # 即时生成
-                if need_generate:
-                    try:
-                        with Image.open(src_path) as img:
-                            if img.mode not in ('RGB', 'RGBA'):
-                                img = img.convert('RGBA')
-                            img.thumbnail((64, 64), Image.Resampling.LANCZOS)
-                            img.save(target_path, 'WEBP', quality=80)
-                    except Exception as e:
-                        logger.warning(f"Thumbnail gen failed for {pkg_id}, serving original. Error: {e}")
-                        self._serve_local_file(src_path) # 生成失败，直接降级返回原图
-                        return
-                self._serve_local_file(target_path)
+                target_path = self._ensure_thumbnail(pkg_id, src_path)
+                if target_path:
+                    self._serve_local_file(target_path)
+                    return
+                self._serve_local_file(src_path)
                 return
             # --- 路由 3：代理缓存网络图片 (完美降级) ---
             elif parsed.path == '/remote':
@@ -124,7 +114,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             except: pass
 
     def _fallback_to_browser(self, original_url):
-        """【神级降级】：告诉浏览器我下载失败了，你自己去直接请求原网址吧"""
+        """下载失败时回退到浏览器直接请求原始地址。"""
         self.send_response(302) # Found / Redirect
         self.send_header('Location', original_url)
         self.end_headers()
@@ -188,6 +178,49 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         with self._remote_failure_lock:
             self._remote_failure_cache[remote_url] = time.time()
 
+    @classmethod
+    def _get_lock(cls, lock_map: dict[str, threading.Lock], map_lock: threading.Lock, key: str) -> threading.Lock:
+        with map_lock:
+            lock = lock_map.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                lock_map[key] = lock
+            return lock
+
+    @classmethod
+    def _resolve_thumbnail_path(cls, package_id: str, original_path: str) -> str:
+        cache_key = hashlib.md5(f"{package_id}\0{os.path.abspath(original_path)}".encode('utf-8')).hexdigest()
+        return os.path.join(THUMBNAIL_CACHE_DIR, f"{cache_key}.webp")
+
+    @classmethod
+    def _ensure_thumbnail(cls, package_id: str, original_path: str, max_size: int = 64) -> str | None:
+        if not package_id or not original_path or not os.path.isfile(original_path): return None
+        target_path = cls._resolve_thumbnail_path(package_id, original_path)
+        lock = cls._get_lock(cls._thumbnail_locks, cls._thumbnail_locks_lock, target_path)
+        with lock:
+            try:
+                if os.path.exists(target_path) and os.path.getmtime(original_path) <= os.path.getmtime(target_path):
+                    return target_path
+            except OSError:
+                pass
+
+            temp_path = f"{target_path}.{uuid.uuid4().hex}.tmp"
+            try:
+                with Image.open(original_path) as img:
+                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                    else:
+                        img = img.convert('RGB')
+                    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                    img.save(temp_path, 'WEBP', quality=80)
+                os.replace(temp_path, target_path)
+                return target_path
+            except Exception as e:
+                delete_fs_path(temp_path)
+                logger.warning(f"Thumbnail gen failed for {package_id}, serving original. Error: {e}")
+                return None
+
     def _resolve_remote_cache_path(self, remote_url: str) -> str:
         """
         按 URL 哈希定位缓存文件。
@@ -196,8 +229,8 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         因此直接长期复用本地缓存，不再引入额外 TTL。
         """
         url_hash = hashlib.md5(remote_url.encode('utf-8')).hexdigest()
-        existing_candidates = sorted(Path(GALLERY_CACHE_DIR).glob(f"{url_hash}.*"))
-        if existing_candidates: return str(existing_candidates[0])
+        existing_cache_path = self._find_remote_cache_candidate(os.path.join(GALLERY_CACHE_DIR, f"{url_hash}.img"))
+        if existing_cache_path: return existing_cache_path
 
         guessed_ext = self._guess_remote_extension(remote_url, content_type="")
         return os.path.join(GALLERY_CACHE_DIR, f"{url_hash}{guessed_ext}")
@@ -215,6 +248,14 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             return ".jpg" if suffix == ".jpeg" else suffix
         return ".img"
 
+    def _find_remote_cache_candidate(self, cache_path: str) -> str | None:
+        candidates = sorted(
+            entry
+            for entry in Path(GALLERY_CACHE_DIR).glob(f"{Path(cache_path).stem}.*")
+            if entry.is_file() and entry.suffix.lower() != ".tmp"
+        )
+        return str(candidates[0]) if candidates else None
+
     def _download_remote_to_cache(self, remote_url: str, cache_path: str) -> str | None:
         """
         下载远程图片到缓存目录。
@@ -225,71 +266,78 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             logger.debug(f"Rejected remote image by safety policy: {remote_url}")
             return None
         if self._is_remote_failure_cooled_down(remote_url): return None
+        lock = self._get_lock(self._remote_download_locks, self._remote_download_locks_lock, cache_path)
+        with lock:
+            existing_cache_path = self._find_remote_cache_candidate(cache_path)
+            if existing_cache_path: return existing_cache_path
 
-        try:
-            with build_retry_session(total=2, connect=2, read=2, allowed_methods=("GET", "HEAD")) as session:
-                request_kwargs = {
-                    "headers": merge_headers({"Accept": "image/*"}),
-                    "timeout": (5, 12),
-                    "stream": True,
-                }
-                proxy_url = network_mgr.get_proxy_url()
-                if proxy_url:
-                    request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
+            temp_path = ""
+            try:
+                with build_retry_session(total=2, connect=2, read=2, allowed_methods=("GET", "HEAD")) as session:
+                    request_kwargs = {
+                        "headers": merge_headers({"Accept": "image/*"}),
+                        "timeout": (5, 12),
+                        "stream": True,
+                    }
+                    proxy_url = network_mgr.get_proxy_url()
+                    if proxy_url:
+                        request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
 
-                response = session.get(remote_url, **request_kwargs)
-                if response.status_code != 200:
-                    logger.debug(f"Remote image download failed with status {response.status_code}: {remote_url}")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    response = session.get(remote_url, **request_kwargs)
+                    if response.status_code != 200:
+                        logger.debug(f"Remote image download failed with status {response.status_code}: {remote_url}")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-                if content_type and content_type not in self.REMOTE_IMAGE_CONTENT_TYPES:
-                    logger.debug(f"Remote image content-type rejected: {content_type} ({remote_url})")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                    if content_type and content_type not in self.REMOTE_IMAGE_CONTENT_TYPES:
+                        logger.debug(f"Remote image content-type rejected: {content_type} ({remote_url})")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                declared_length = int(response.headers.get("Content-Length") or 0)
-                if declared_length > self.REMOTE_MAX_FILE_SIZE:
-                    logger.debug(f"Remote image too large by content-length: {declared_length} ({remote_url})")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    declared_length = int(response.headers.get("Content-Length") or 0)
+                    if declared_length > self.REMOTE_MAX_FILE_SIZE:
+                        logger.debug(f"Remote image too large by content-length: {declared_length} ({remote_url})")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                final_cache_path = cache_path
-                expected_ext = self._guess_remote_extension(remote_url, content_type)
-                current_ext = Path(cache_path).suffix.lower()
-                if expected_ext and current_ext != expected_ext:
-                    final_cache_path = str(Path(cache_path).with_suffix(expected_ext))
+                    final_cache_path = cache_path
+                    expected_ext = self._guess_remote_extension(remote_url, content_type)
+                    current_ext = Path(cache_path).suffix.lower()
+                    if expected_ext and current_ext != expected_ext:
+                        final_cache_path = str(Path(cache_path).with_suffix(expected_ext))
 
-                temp_path = f"{final_cache_path}.{uuid.uuid4().hex}.tmp"
-                total_bytes = 0
-                with open(temp_path, 'wb') as handle:
-                    for chunk in response.iter_content(chunk_size=64 * 1024):
-                        if not chunk:
-                            continue
-                        total_bytes += len(chunk)
-                        if total_bytes > self.REMOTE_MAX_FILE_SIZE:
-                            handle.close()
-                            delete_fs_path(temp_path)
-                            logger.debug(f"Remote image exceeded size limit while streaming: {remote_url}")
-                            self._mark_remote_failure(remote_url)
-                            return None
-                        handle.write(chunk)
+                    temp_path = f"{final_cache_path}.{uuid.uuid4().hex}.tmp"
+                    total_bytes = 0
+                    with open(temp_path, 'wb') as handle:
+                        for chunk in response.iter_content(chunk_size=64 * 1024):
+                            if not chunk:
+                                continue
+                            total_bytes += len(chunk)
+                            if total_bytes > self.REMOTE_MAX_FILE_SIZE:
+                                handle.close()
+                                delete_fs_path(temp_path)
+                                logger.debug(f"Remote image exceeded size limit while streaming: {remote_url}")
+                                self._mark_remote_failure(remote_url)
+                                return None
+                            handle.write(chunk)
 
-                if total_bytes <= 0:
+                    if total_bytes <= 0:
+                        delete_fs_path(temp_path)
+                        self._mark_remote_failure(remote_url)
+                        return None
+
+                    os.replace(temp_path, final_cache_path)
+                    return final_cache_path
+            except Exception as e:
+                if temp_path:
                     delete_fs_path(temp_path)
-                    self._mark_remote_failure(remote_url)
-                    return None
-
-                os.replace(temp_path, final_cache_path)
-                return final_cache_path
-        except Exception as e:
-            logger.debug(f"Proxy download failed, fallback to original URL: {e}")
-            self._mark_remote_failure(remote_url)
-            return None
+                logger.debug(f"Proxy download failed, fallback to original URL: {e}")
+                self._mark_remote_failure(remote_url)
+                return None
 
     def _serve_local_file(self, file_path):
-        """发送本地文件流并设置强缓存"""
+        """发送本地文件流。图片内容可能被用户清理或重新生成，浏览器需回到本地服务确认。"""
         ext = os.path.splitext(file_path)[1].lower()
         ctype = 'application/octet-stream'
         if ext == '.png': ctype = 'image/png'
@@ -301,11 +349,11 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', ctype)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Cache-Control', 'max-age=2592000') # 让浏览器缓存 30 天
+        self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         
         with open(file_path, 'rb') as f:
-            self.wfile.write(f.read())
+            shutil.copyfileobj(f, self.wfile, length=64 * 1024)
 
     def log_message(self, format, *args):
         pass # 屏蔽控制台刷屏
@@ -407,32 +455,19 @@ class FileManager:
             LocalAssetHandler._remote_failure_cache.clear()
         return cleared_stats
     
-    def get_asset_url(self, local_path):
-        """
-        将本地绝对路径转换为前端可访问的 HTTP URL
-        例如: C:/Mod/Preview.png -> http://127.0.0.1:xxxxx/image?path=C%3A%2FMod%2FPreview.png
-        """
-        if not local_path or not self._port: return ""
-        # 对路径进行 URL 编码
-        safe_path = urllib.parse.quote(local_path)
-        return f"http://127.0.0.1:{self._port}/image?path={safe_path}"
-
     # =========================================================
     #  2. 缩略图管理 (Thumbnail)
     # =========================================================
-    def get_gallery_url(self, workshop_id, remote_url):
-        """生成指向本地服务器的代理 URL"""
-        if not remote_url: return ""
-        safe_url = urllib.parse.quote(remote_url)
-        return f"http://127.0.0.1:{self._port}/gallery?wid={workshop_id}&url={safe_url}"
-    
     @staticmethod
-    def get_thumbnail_path(package_id):
+    def get_thumbnail_path(package_id, original_path=""):
         """
         获取某个 Mod 已生成的缩略图路径 (物理路径)。
         如果不存在返回 None。
         """
-        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
+        if original_path:
+            target_path = LocalAssetHandler._resolve_thumbnail_path(package_id, original_path)
+        else:
+            target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
         if os.path.exists(target_path): return target_path
         return None
 
@@ -442,37 +477,7 @@ class FileManager:
         如果缩略图已存在且未过期，直接返回路径；否则重新生成。
         :return: 缩略图的绝对路径 (str) 或 None
         """
-        if not original_path or not os.path.exists(original_path): return None
-        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
-        # 检查是否需要重新生成 (存在性 + 修改时间)
-        need_generate = True
-        if os.path.exists(target_path):
-            try:
-                # 如果原图修改时间比缩略图早，说明缩略图是最新的
-                if os.path.getmtime(original_path) <= os.path.getmtime(target_path):
-                    need_generate = False
-            except OSError:
-                pass
-        if not need_generate: return target_path
-        # 开始生成
-        try:
-            with Image.open(original_path) as img:
-                # 预处理：处理调色板模式、RGBA 等
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    # 创建白色背景处理透明度 (或者保留透明度转为 RGBA，WebP 支持透明)
-                    # 这里为了列表显示统一，建议转为 RGB 或保留 RGBA
-                    if img.mode != 'RGBA':
-                        img = img.convert('RGBA')
-                else:
-                    img = img.convert('RGB')
-                # 缩放 (长宽最大 128px)
-                img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                # 保存 (WEBP 格式，体积小速度快)
-                img.save(target_path, 'WEBP', quality=80)
-                return target_path
-        except Exception as e:
-            logger.error(f"Thumbnail error for {package_id}: {e}")
-            return None
+        return LocalAssetHandler._ensure_thumbnail(package_id, original_path, max_size=max_size)
 
     # =========================================================
     #  3. 常规文件操作

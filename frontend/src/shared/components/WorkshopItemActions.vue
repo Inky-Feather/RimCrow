@@ -122,7 +122,7 @@ const iconSizeClass = computed(() => {
   return 'size-4'
 })
 const buttonClass = computed(() => ([
-  'inline-flex items-center justify-center gap-[0.35rem] border transition-all duration-300 cursor-pointer',
+  'inline-flex items-center justify-center gap-[0.35rem] border transition-all duration-200 cursor-pointer',
   props.colorful
     ? 'border-transparent text-text-main hover:scale-110 focus-visible:scale-110 active:scale-95 rounded-full'
     : 'border-transparent bg-transparent text-text-dim hover:-translate-y-[0.03125rem] hover:border-border-base/10 hover:bg-bg-overlay/10',

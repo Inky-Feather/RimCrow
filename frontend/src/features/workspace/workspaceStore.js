@@ -846,6 +846,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       language: workshopSearch.language || appStore.settings.language || '',
       appid: 294100,
       type: 0,
+      return_vote_data: true,
       strip_description_bbcode: false,
       excluded_appids_required_for_use: compiledTokens.excludedDlcAppids,
     }

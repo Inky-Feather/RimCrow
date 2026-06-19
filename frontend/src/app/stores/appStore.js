@@ -1255,8 +1255,9 @@ export const useAppStore = defineStore('app', () => {
   // 生成列表缩略图 URL
   const getThumbUrl = (packageId, rawPath) => {
     if (!rawPath) return ''
+    const safeId = encodeURIComponent(packageId || '')
     const safePath = encodeURIComponent(rawPath)
-    return `${getAssetBaseUrl()}/thumb?id=${packageId}&path=${safePath}`
+    return `${getAssetBaseUrl()}/thumb?id=${safeId}&path=${safePath}`
   }
 
   // 生成详情页本地大图 URL
@@ -1270,6 +1271,7 @@ export const useAppStore = defineStore('app', () => {
   // 生成网络代理图 URL (如 Steam 截图)
   const getRemoteUrl = (remoteUrl) => {
     if (!remoteUrl) return ''
+    if (String(remoteUrl).startsWith(getAssetBaseUrl())) return remoteUrl
     const safeUrl = encodeURIComponent(remoteUrl)
     return `${getAssetBaseUrl()}/remote?url=${safeUrl}`
   }

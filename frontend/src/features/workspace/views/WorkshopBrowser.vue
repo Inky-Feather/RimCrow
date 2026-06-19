@@ -196,7 +196,7 @@
           <!-- 背景 -->
           <div class="absolute inset-0 z-0 overflow-hidden">
             <img v-if="selectedPreviewUrl" :src="selectedPreviewUrl" :alt="selectedMod?.title || selectedMod?.name || '工坊项目背景'"
-              class="h-full w-full scale-[1.03] object-cover object-center opacity-74 blur-[10px] transition-[filter,transform,opacity] duration-700 group-hover:blur-[18px] group-hover:opacity-86" />
+              class="h-full w-full scale-[1.03] object-cover object-center opacity-74 blur-[10px] transition-[filter,transform,opacity] duration-700 group-hover:blur-[18px] group-hover:opacity-86 group-hover:brightness-70" />
             <div v-else class="h-full w-full bg-bg-inset/95"></div>
           </div>
           <!-- 上下阴影遮罩 -->
@@ -210,120 +210,118 @@
             </div>
           </div>
           <div v-else class="absolute left-0 top-0 z-3 h-full aspect-4/3 bg-bg-inset/50"></div>
-
-          <div class="absolute inset-y-0 left-[25%] right-0 z-4 flex items-center">
-            <div class="flex h-full w-full flex-col justify-center gap-2 px-5 py-4 text-left text-text-main">
-              <span class="flex items-center justify-start gap-2">
-                <h2 class="pointer-events-none min-w-0 text-[1.75rem] font-black leading-tight text-balance text-shadow-lg">
-                  {{ selectedMod?.title || selectedMod?.name }}
-                </h2>
-                <button type="button" v-tooltip="'点击可复制项目名称'" class="hover:text-accent-primary scale-95 hover:scale-105 active:scale-95 transition-all duration-300"
-                  @click.stop="copyHeaderValue('项目名称', selectedMod?.title || selectedMod?.name)">
-                  <Copy class="size-6" />
-                </button> 
+          <!-- 项目名称及数据 -->
+          <div class="absolute inset-y-0 left-[25%] right-0 z-4 flex flex-col justify-center gap-2 px-5 py-4 text-text-main">
+            <span class="flex items-center justify-start gap-2">
+              <button type="button" v-tooltip="'点击可复制项目名称'" class="hover:text-accent-primary scale-95 hover:scale-105 active:scale-95 transition-all duration-300"
+                @click.stop="copyHeaderValue('项目名称', selectedMod?.title || selectedMod?.name)">
+                <Copy class="size-6" />
+              </button> 
+              <h2 class="min-w-0 text-[1.75rem] font-black leading-tight text-balance text-shadow-lg" v-tooltip="selectedMod?.title || selectedMod?.name">
+                {{ selectedMod?.title || selectedMod?.name }}
+              </h2>
+            </span>
+            <!-- 项目信息 -->
+            <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+              <button type="button" v-tooltip="'Steam 工坊项目的唯一编号。单击可复制。'" class="group relative workshop-detail-chip border-accent-primary/20 bg-accent-primary/10 pr-7 text-left transition-colors hover:border-accent-primary/36 hover:bg-accent-primary/14 active:scale-[0.99]" @click.stop="copyHeaderValue('工坊 ID', selectedIdLabel)">
+                <Hash class="workshop-detail-chip__icon text-accent-primary" />
+                <span class="workshop-detail-chip__title">工坊 ID</span>
+                <span class="workshop-detail-chip__value">{{ selectedIdLabel }}</span>
+                <Copy class="size-3 text-text-dim " />
+              </button>
+              <button type="button" v-tooltip="'模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。'" class="group relative workshop-detail-chip border-accent-cool/20 bg-accent-cool/10 pr-7 text-left transition-colors hover:border-accent-cool/30 hover:bg-accent-cool/12 active:scale-[0.99]" @click.stop="copyHeaderValue('包名', selectedPackageId)">
+                <Package class="workshop-detail-chip__icon text-accent-cool" />
+                <span class="workshop-detail-chip__title">包名</span>
+                <span class="workshop-detail-chip__value">{{ selectedPackageId }}</span>
+                <Copy class="size-3 text-text-dim " />
+              </button>
+              <button type="button" v-tooltip="'作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。'" class="group relative workshop-detail-chip border-accent-success/20 bg-accent-success/10 pr-7 text-left transition-colors hover:border-accent-success/30 hover:bg-accent-success/12 active:scale-[0.99]" @click.stop="copyHeaderValue('作者', selectedAuthorLabel)">
+                <UserRound class="workshop-detail-chip__icon text-accent-success" />
+                <span class="workshop-detail-chip__title">作者</span>
+                <span class="workshop-detail-chip__value">{{ selectedAuthorLabel }}</span>
+                <Copy class="size-3 text-text-dim " />
+              </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+              <span v-tooltip="'当前 Steam 工坊公开订阅人数。'" class="workshop-detail-chip border-accent-primary/20 bg-accent-primary/10">
+                <Flag class="workshop-detail-chip__icon text-accent-primary" />
+                <span class="workshop-detail-chip__title">订阅数</span>
+                <strong class="workshop-detail-chip__value">{{ selectedSubscriptionLabel }}</strong>
               </span>
-              <!-- 项目信息 -->
-              <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
-                <button type="button" v-tooltip="'Steam 工坊项目的唯一编号。单击可复制。'" class="group relative workshop-detail-chip border-accent-primary/20 bg-accent-primary/10 pr-7 text-left transition-colors hover:border-accent-primary/36 hover:bg-accent-primary/14 active:scale-[0.99]" @click.stop="copyHeaderValue('工坊 ID', selectedIdLabel)">
-                  <Hash class="workshop-detail-chip__icon text-accent-primary" />
-                  <span class="workshop-detail-chip__title">工坊 ID</span>
-                  <span class="workshop-detail-chip__value">{{ selectedIdLabel }}</span>
-                  <Copy class="size-3 text-text-dim " />
-                </button>
-                <button type="button" v-tooltip="'模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。'" class="group relative workshop-detail-chip border-accent-cool/20 bg-accent-cool/10 pr-7 text-left transition-colors hover:border-accent-cool/30 hover:bg-accent-cool/12 active:scale-[0.99]" @click.stop="copyHeaderValue('包名', selectedPackageId)">
-                  <Package class="workshop-detail-chip__icon text-accent-cool" />
-                  <span class="workshop-detail-chip__title">包名</span>
-                  <span class="workshop-detail-chip__value">{{ selectedPackageId }}</span>
-                  <Copy class="size-3 text-text-dim " />
-                </button>
-                <button type="button" v-tooltip="'作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。'" class="group relative workshop-detail-chip border-accent-success/20 bg-accent-success/10 pr-7 text-left transition-colors hover:border-accent-success/30 hover:bg-accent-success/12 active:scale-[0.99]" @click.stop="copyHeaderValue('作者', selectedAuthorLabel)">
-                  <UserRound class="workshop-detail-chip__icon text-accent-success" />
-                  <span class="workshop-detail-chip__title">作者</span>
-                  <span class="workshop-detail-chip__value">{{ selectedAuthorLabel }}</span>
-                  <Copy class="size-3 text-text-dim " />
-                </button>
-              </div>
-              <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
-                <span v-tooltip="'当前 Steam 工坊公开订阅人数。'" class="workshop-detail-chip border-accent-primary/20 bg-accent-primary/10">
-                  <Flag class="workshop-detail-chip__icon text-accent-primary" />
-                  <span class="workshop-detail-chip__title">订阅数</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedSubscriptionLabel }}</strong>
-                </span>
-                <span v-tooltip="'Steam 返回的综合评分。适合快速判断整体用户反馈。'" class="workshop-detail-chip border-accent-tip/22 bg-accent-tip/10">
-                  <Star class="workshop-detail-chip__icon text-accent-tip" />
-                  <span class="workshop-detail-chip__title">评分</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedVoteScoreLabel }}</strong>
-                </span>
-                <span v-tooltip="'公开点赞数量。适合结合评分一起看口碑。'" class="workshop-detail-chip border-accent-success/20 bg-accent-success/10">
-                  <ThumbsUp class="workshop-detail-chip__icon text-accent-success" />
-                  <span class="workshop-detail-chip__title">点赞</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedVoteUpLabel }}</strong>
-                </span>
-                <span v-tooltip="'公开点踩数量。'" class="workshop-detail-chip border-accent-danger/20 bg-accent-danger/10">
-                  <ThumbsDown class="workshop-detail-chip__icon text-accent-danger" />
-                  <span class="workshop-detail-chip__title">点踩</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedVoteDownLabel }}</strong>
-                </span>
-                <span v-tooltip="'被加入收藏的次数。适合判断长期关注度。'" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
-                  <Heart class="workshop-detail-chip__icon text-accent-cool" />
-                  <span class="workshop-detail-chip__title">收藏</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedFavoriteLabel }}</strong>
-                </span>
-                <span v-tooltip="'Steam 工坊公开评论数量。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
-                  <MessageSquareMore class="workshop-detail-chip__icon text-text-dim" />
-                  <span class="workshop-detail-chip__title">评论</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedCommentLabel }}</strong>
-                </span>
-                <span v-tooltip="'Steam 返回的文件体积，可用来粗略判断下载耗时和磁盘占用。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
-                  <HardDrive class="workshop-detail-chip__icon text-text-dim" />
-                  <span class="workshop-detail-chip__title">大小</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedFileSizeLabel }}</strong>
-                </span>
-                <span v-tooltip="'项目首次发布到 Steam 工坊的时间。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
-                  <CalendarPlus class="workshop-detail-chip__icon text-text-dim" />
-                  <span class="workshop-detail-chip__title">创建</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedCreatedLabel }}</strong>
-                </span>
-                <span v-tooltip="'项目最近一次在 Steam 工坊更新的时间。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
-                  <CalendarArrowUp class="workshop-detail-chip__icon text-text-dim" />
-                  <span class="workshop-detail-chip__title">更新</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedUpdatedLabel }}</strong>
-                </span>
-                <span v-if="selectedStatusLabel" v-tooltip="'项目当前状态异常。通常表示该项目已被 Steam 限制或封禁。'" class="workshop-detail-chip border-accent-danger/20 bg-accent-danger/10">
-                  <ShieldAlert class="workshop-detail-chip__icon text-accent-danger" />
-                  <span class="workshop-detail-chip__title">状态</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedStatusLabel }}</strong>
-                </span>
-                <span v-if="selectedContentWarningLabel" v-tooltip="'项目被 Steam 标记为可能含有敏感内容，展示前建议自行确认。'" class="workshop-detail-chip border-accent-warn/24 bg-accent-warn/12">
-                  <TriangleAlert class="workshop-detail-chip__icon text-accent-warn" />
-                  <span class="workshop-detail-chip__title">内容</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedContentWarningLabel }}</strong>
-                </span>
-                <span v-for="tag in selectedDisplayTags" :key="`${selectedId}-${tag}`"
-                  v-tooltip="`工坊标签：${tag}`" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
-                  <Tag class="workshop-detail-chip__icon text-accent-cool" />
-                  <span class="workshop-detail-chip__title">标签</span>
-                  <strong class="workshop-detail-chip__value">{{ tag }}</strong>
-                </span>
-                <span v-if="!selectedDisplayTags.length" v-tooltip="'该项目没有返回可展示的工坊标签。'" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
-                  <Tag class="workshop-detail-chip__icon text-accent-cool" />
-                  <span class="workshop-detail-chip__title">标签</span>
-                  <strong class="workshop-detail-chip__value">-</strong>
-                </span>
-                <span v-if="selectedHiddenTagCount > 0" v-tooltip="selectedHiddenTagTooltip" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
-                  <Plus class="workshop-detail-chip__icon text-text-dim" />
-                  <strong class="workshop-detail-chip__value">+{{ selectedHiddenTagCount }}</strong>
-                </span>
-                <span v-tooltip="'该项目标注的 RimWorld 适用版本。这里会合并后端缓存和标签中的版本信息。'" class="workshop-detail-chip border-accent-tip/22 bg-accent-tip/10">
-                  <Layers class="workshop-detail-chip__icon text-accent-tip" />
-                  <span class="workshop-detail-chip__title">版本</span>
-                  <strong class="workshop-detail-chip__value">{{ selectedVersionSummary }}</strong>
-                </span>
-              </div>
+              <span v-tooltip="'Steam 返回的综合评分。适合快速判断整体用户反馈。'" class="workshop-detail-chip border-accent-tip/22 bg-accent-tip/10">
+                <Star class="workshop-detail-chip__icon text-accent-tip" />
+                <span class="workshop-detail-chip__title">评分</span>
+                <strong class="workshop-detail-chip__value">{{ selectedVoteScoreLabel }}</strong>
+              </span>
+              <span v-tooltip="'公开点赞数量。适合结合评分一起看口碑。'" class="workshop-detail-chip border-accent-success/20 bg-accent-success/10">
+                <ThumbsUp class="workshop-detail-chip__icon text-accent-success" />
+                <span class="workshop-detail-chip__title">点赞</span>
+                <strong class="workshop-detail-chip__value">{{ selectedVoteUpLabel }}</strong>
+              </span>
+              <span v-tooltip="'公开点踩数量。'" class="workshop-detail-chip border-accent-danger/20 bg-accent-danger/10">
+                <ThumbsDown class="workshop-detail-chip__icon text-accent-danger" />
+                <span class="workshop-detail-chip__title">点踩</span>
+                <strong class="workshop-detail-chip__value">{{ selectedVoteDownLabel }}</strong>
+              </span>
+              <span v-tooltip="'被加入收藏的次数。适合判断长期关注度。'" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
+                <Heart class="workshop-detail-chip__icon text-accent-cool" />
+                <span class="workshop-detail-chip__title">收藏</span>
+                <strong class="workshop-detail-chip__value">{{ selectedFavoriteLabel }}</strong>
+              </span>
+              <span v-tooltip="'Steam 工坊公开评论数量。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
+                <MessageSquareMore class="workshop-detail-chip__icon text-text-dim" />
+                <span class="workshop-detail-chip__title">评论</span>
+                <strong class="workshop-detail-chip__value">{{ selectedCommentLabel }}</strong>
+              </span>
+              <span v-tooltip="'Steam 返回的文件体积，可用来粗略判断下载耗时和磁盘占用。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
+                <HardDrive class="workshop-detail-chip__icon text-text-dim" />
+                <span class="workshop-detail-chip__title">大小</span>
+                <strong class="workshop-detail-chip__value">{{ selectedFileSizeLabel }}</strong>
+              </span>
+              <span v-tooltip="'项目首次发布到 Steam 工坊的时间。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
+                <CalendarPlus class="workshop-detail-chip__icon text-text-dim" />
+                <span class="workshop-detail-chip__title">创建</span>
+                <strong class="workshop-detail-chip__value">{{ selectedCreatedLabel }}</strong>
+              </span>
+              <span v-tooltip="'项目最近一次在 Steam 工坊更新的时间。'" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
+                <CalendarArrowUp class="workshop-detail-chip__icon text-text-dim" />
+                <span class="workshop-detail-chip__title">更新</span>
+                <strong class="workshop-detail-chip__value">{{ selectedUpdatedLabel }}</strong>
+              </span>
+              <span v-if="selectedStatusLabel" v-tooltip="'项目当前状态异常。通常表示该项目已被 Steam 限制或封禁。'" class="workshop-detail-chip border-accent-danger/20 bg-accent-danger/10">
+                <ShieldAlert class="workshop-detail-chip__icon text-accent-danger" />
+                <span class="workshop-detail-chip__title">状态</span>
+                <strong class="workshop-detail-chip__value">{{ selectedStatusLabel }}</strong>
+              </span>
+              <span v-if="selectedContentWarningLabel" v-tooltip="'项目被 Steam 标记为可能含有敏感内容，展示前建议自行确认。'" class="workshop-detail-chip border-accent-warn/24 bg-accent-warn/12">
+                <TriangleAlert class="workshop-detail-chip__icon text-accent-warn" />
+                <span class="workshop-detail-chip__title">内容</span>
+                <strong class="workshop-detail-chip__value">{{ selectedContentWarningLabel }}</strong>
+              </span>
+              <span v-for="tag in selectedDisplayTags" :key="`${selectedId}-${tag}`"
+                v-tooltip="`工坊标签：${tag}`" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
+                <Tag class="workshop-detail-chip__icon text-accent-cool" />
+                <span class="workshop-detail-chip__title">标签</span>
+                <strong class="workshop-detail-chip__value">{{ tag }}</strong>
+              </span>
+              <span v-if="!selectedDisplayTags.length" v-tooltip="'该项目没有返回可展示的工坊标签。'" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
+                <Tag class="workshop-detail-chip__icon text-accent-cool" />
+                <span class="workshop-detail-chip__title">标签</span>
+                <strong class="workshop-detail-chip__value">-</strong>
+              </span>
+              <span v-if="selectedHiddenTagCount > 0" v-tooltip="selectedHiddenTagTooltip" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
+                <Plus class="workshop-detail-chip__icon text-text-dim" />
+                <strong class="workshop-detail-chip__value">+{{ selectedHiddenTagCount }}</strong>
+              </span>
+              <span v-tooltip="'该项目标注的 RimWorld 适用版本。这里会合并后端缓存和标签中的版本信息。'" class="workshop-detail-chip border-accent-tip/22 bg-accent-tip/10">
+                <Layers class="workshop-detail-chip__icon text-accent-tip" />
+                <span class="workshop-detail-chip__title">版本</span>
+                <strong class="workshop-detail-chip__value">{{ selectedVersionSummary }}</strong>
+              </span>
             </div>
           </div>
           <!-- 操作按钮 -->
-          <WorkshopItemActions :workshop-id="selectedId" class="absolute right-3 top-3 z-5 pointer-events-auto" />
+          <WorkshopItemActions :workshop-id="selectedId" class="absolute right-3 top-3 z-5 pointer-events-none group-hover:pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         </div>
 
         <!-- 内容区 (使用 Tailwind Typography) -->
@@ -355,7 +353,7 @@
                 :class="[isSubscribed([mod.workshop_id]) ? 'bg-accent-primary/20 text-accent-primary' : isInstalled([mod.workshop_id]) ? 'bg-accent-success/20 text-accent-success' : 'bg-bg-overlay/10 text-text-dim']"
                 @click="handleNavigateInside(mod.workshop_id)" >
                 {{ mod.title || mod.name || mod.workshop_id }} <span class="opacity-50 text-[0.6rem]">({{ mod.workshop_id }})</span>
-                <WorkshopItemActions :workshop-id="mod.workshop_id" colorful size="xs" class="absolute z-5 right-0 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300" />
+                <WorkshopItemActions :workshop-id="mod.workshop_id" :showUnsubscribe="isInstalled([mod.workshop_id])" colorful size="xs" class="absolute z-5 right-0 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300" />
               </span>
             </div>
           </div>
