@@ -526,7 +526,8 @@ const viewModes = [
 const sortOptions = [
   { label: '按总体积占比', value: 'impact' },
   { label: '按待生成数量', value: 'pending' },
-  { label: '按显存节省', value: 'vram' },
+  { label: '按预估显存', value: 'vram' },
+  { label: '按显存节省', value: 'vram_saved' },
   { label: '按名称', value: 'name' },
 ]
 
@@ -557,9 +558,11 @@ const sortRows = (rows) => {
         || (Number(b.combined_total_bytes || 0) - Number(a.combined_total_bytes || 0))
     }
     if (sortMetric.value === 'vram') {
+      return Number(b.output_vram_bytes_est || 0) - Number(a.output_vram_bytes_est || 0)
+    }
+    if (sortMetric.value === 'vram_saved') {
       return Number(b.vram_saved || 0) - Number(a.vram_saved || 0)
     }
-
     const aMetric = getViewMetricBytes(a)
     const bMetric = getViewMetricBytes(b)
     return bMetric - aMetric

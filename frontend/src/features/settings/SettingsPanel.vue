@@ -70,7 +70,6 @@
               />
               <SettingsGeneralTab v-if="currentTab === 'general'" :form-data="formData" />
               <SettingsFeaturesTab v-if="currentTab === 'features'" :form-data="formData" />
-              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsExternalTab
                 v-if="currentTab === 'community'"
                 :form-data="formData"
@@ -79,6 +78,7 @@
               />
               <SettingsNetworkTab v-if="currentTab === 'network'" :form-data="formData" />
               <SettingsAiTab v-if="currentTab === 'ai'" :form-data="formData" />
+              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
 
             </div>
