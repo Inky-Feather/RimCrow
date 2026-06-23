@@ -32,6 +32,7 @@
         <!-- 大小：{{ computedFontSize }}
         字数：{{ selectedMod.name.length }} -->
         <h2 class="font-bold leading-tight line-clamp-2 text-shadow wrap-break-word adaptive-text"
+          @contextmenu.prevent.stop="copyDetailValue('名称', selectedMod.name)"
           :style="{ fontSize: computedFontSize }" v-tooltip="selectedMod.name">{{ selectedMod.name }}</h2>
       </div>
     </div>
@@ -39,9 +40,16 @@
     <!-- 2. 内容滚动区 -->
     <div class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-3 space-y-4">
       <!-- 包ID -->
-      <div class="px-2 text-xs flex items-center gap-1 text-text-dim tracking-wider border-b border-border-base/5 pb-1" v-tooltip="selectedMod.package_id">
-        <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M44 14L24 4L4 14V34L24 44L44 34V14Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M4 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 44V24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 9L14 19" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="truncate flex-1 min-w-0">{{ selectedMod.package_id_raw }}</span>
+      <div class="px-2 text-xs flex items-center justify-between gap-1 text-text-dim tracking-wider border-b border-border-base/5 pb-1" v-tooltip="selectedMod.package_id"
+        @contextmenu.prevent.stop="copyDetailValue('包名', selectedMod.package_id_raw || selectedMod.package_id)">
+        <div class="flex min-w-0 flex-1 items-center gap-1">
+          <svg class="size-4 shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M44 14L24 4L4 14V34L24 44L44 34V14Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M4 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 44V24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 9L14 19" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="truncate flex-1 min-w-0">{{ selectedMod.package_id_raw || selectedMod.package_id }}</span>
+        </div>
+        <button type="button" class="shrink-0 rounded-md p-1 text-text-dim transition-colors hover:bg-bg-overlay/10 hover:text-accent-primary active:scale-95"
+          v-tooltip="'定位当前 Mod 所在列表位置'" @click.stop="targetItem(selectedMod.package_id)">
+          <Crosshair class="size-4" />
+        </button>
       </div>
       <!-- 遍历布局配置 -->
       <template v-for="block in layoutConfig" :key="block.id">
@@ -61,7 +69,10 @@
                   <div class="text-xs text-text-dim uppercase">作者</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.author?.join(', ')">
                     <span v-if="selectedMod.author?.length" v-for="author in selectedMod.author" :key="author"
-                      class="px-1 rounded bg-accent-highlight/20 text-text-soft text-sm border border-accent-highlight/20 flex items-center gap-1 group">
+                      v-tooltip="`作者：${author}\n[[左键筛选/右键复制]]`"
+                      @click.stop="toggleMainListExactFilter('author', author, '作者')"
+                      @contextmenu.prevent.stop="copyDetailValue('作者', author)"
+                      class="px-1 rounded bg-accent-highlight/20 text-text-soft text-sm border border-accent-highlight/20 flex items-center gap-1 group cursor-pointer">
                       {{ author }}
                     </span>
                     <span v-else v-tooltip="'未知'" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
@@ -77,7 +88,10 @@
                   <div class="text-xs text-text-dim uppercase">支持语言</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.supported_languages?.join(', ')">
                     <span v-if="selectedMod.supported_languages?.length" v-for="lang in selectedMod.supported_languages" :key="lang"
-                      class="px-1 rounded bg-accent-secondary/20 text-accent-secondary text-sm border border-accent-secondary/20 flex items-center gap-1 group">
+                      v-tooltip="`语言：${lang}\n[[左键筛选/右键复制]]`"
+                      @click.stop="toggleMainListExactFilter('supported_languages', lang, '语言')"
+                      @contextmenu.prevent.stop="copyDetailValue('语言', lang)"
+                      class="px-1 rounded bg-accent-secondary/20 text-accent-secondary text-sm border border-accent-secondary/20 flex items-center gap-1 group cursor-pointer">
                       {{ lang }}
                     </span>
                     <span v-else v-tooltip="'未知'" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
@@ -89,6 +103,7 @@
               <!-- Url显示 -->
               <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 "
                 :class="[selectedMod.source === 'local' || !selectedMod.url ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-bg-overlay/10']"
+                @contextmenu.prevent.stop="copyDetailValue('来源地址', selectedMod.url)"
                 @click="openUrl(selectedMod.url)">
                 <svg v-if="selectedMod.source==='workshop'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M568 320C568 457 456.8 568 319.6 568C205.8 568 110 491.7 80.6 387.6L175.8 426.9C182.2 459 210.7 483.3 244.7 483.3C283.9 483.3 316.6 450.9 314.9 409.8L399.4 349.6C451.5 350.9 495.2 308.7 495.2 256.1C495.2 204.5 453.2 162.6 401.5 162.6C349.8 162.6 307.8 204.6 307.8 256.1L307.8 257.3L248.6 343C233.1 342.1 217.9 346.4 205.1 355.1L72 300.1C82.2 172.4 189.1 72 319.6 72C456.8 72 568 183 568 320zM227.7 448.3L197.2 435.7C202.8 447.3 212.5 456.5 224.4 461.5C251.3 472.7 282.2 459.9 293.4 433.1C298.8 420.1 298.9 405.8 293.5 392.8C288.1 379.8 278 369.6 265 364.2C252.1 358.8 238.3 359 226.1 363.6L257.6 376.6C277.4 384.8 286.8 407.5 278.5 427.3C270.2 447.2 247.5 456.5 227.7 448.3zM401.5 193.8C435.9 193.8 463.8 221.7 463.8 256.1C463.8 290.5 435.9 318.4 401.5 318.4C367.1 318.4 339.2 290.5 339.2 256.1C339.2 221.7 367.1 193.8 401.5 193.8zM401.6 302.8C427.4 302.8 448.4 281.8 448.4 256C448.4 230.2 427.4 209.2 401.6 209.2C375.8 209.2 354.8 230.2 354.8 256C354.8 281.8 375.8 302.8 401.6 302.8z"/></svg>
                 <svg v-else-if="selectedMod.source==='github'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M237.9 461.4C237.9 463.4 235.6 465 232.7 465C229.4 465.3 227.1 463.7 227.1 461.4C227.1 459.4 229.4 457.8 232.3 457.8C235.3 457.5 237.9 459.1 237.9 461.4zM206.8 456.9C206.1 458.9 208.1 461.2 211.1 461.8C213.7 462.8 216.7 461.8 217.3 459.8C217.9 457.8 216 455.5 213 454.6C210.4 453.9 207.5 454.9 206.8 456.9zM251 455.2C248.1 455.9 246.1 457.8 246.4 460.1C246.7 462.1 249.3 463.4 252.3 462.7C255.2 462 257.2 460.1 256.9 458.1C256.6 456.2 253.9 454.9 251 455.2zM316.8 72C178.1 72 72 177.3 72 316C72 426.9 141.8 521.8 241.5 555.2C254.3 557.5 258.8 549.6 258.8 543.1C258.8 536.9 258.5 502.7 258.5 481.7C258.5 481.7 188.5 496.7 173.8 451.9C173.8 451.9 162.4 422.8 146 415.3C146 415.3 123.1 399.6 147.6 399.9C147.6 399.9 172.5 401.9 186.2 425.7C208.1 464.3 244.8 453.2 259.1 446.6C261.4 430.6 267.9 419.5 275.1 412.9C219.2 406.7 162.8 398.6 162.8 302.4C162.8 274.9 170.4 261.1 186.4 243.5C183.8 237 175.3 210.2 189 175.6C209.9 169.1 258 202.6 258 202.6C278 197 299.5 194.1 320.8 194.1C342.1 194.1 363.6 197 383.6 202.6C383.6 202.6 431.7 169 452.6 175.6C466.3 210.3 457.8 237 455.2 243.5C471.2 261.2 481 275 481 302.4C481 398.9 422.1 406.6 366.2 412.9C375.4 420.8 383.2 435.8 383.2 459.3C383.2 493 382.9 534.7 382.9 542.9C382.9 549.4 387.5 557.3 400.2 555C500.2 521.8 568 426.9 568 316C568 177.3 455.5 72 316.8 72zM169.2 416.9C167.9 417.9 168.2 420.2 169.9 422.1C171.5 423.7 173.8 424.4 175.1 423.1C176.4 422.1 176.1 419.8 174.4 417.9C172.8 416.3 170.5 415.6 169.2 416.9zM158.4 408.8C157.7 410.1 158.7 411.7 160.7 412.7C162.3 413.7 164.3 413.4 165 412C165.7 410.7 164.7 409.1 162.7 408.1C160.7 407.5 159.1 407.8 158.4 408.8zM190.8 444.4C189.2 445.7 189.8 448.7 192.1 450.6C194.4 452.9 197.3 453.2 198.6 451.6C199.9 450.3 199.3 447.3 197.3 445.4C195.1 443.1 192.1 442.8 190.8 444.4zM179.4 429.7C177.8 430.7 177.8 433.3 179.4 435.6C181 437.9 183.7 438.9 185 437.9C186.6 436.6 186.6 434 185 431.7C183.6 429.4 181 428.4 179.4 429.7z"/></svg>
@@ -106,6 +121,7 @@
               <!-- 路径显示 -->
               <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 "
                 :class="[!selectedMod.path ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-bg-overlay/10']"
+                @contextmenu.prevent.stop="copyDetailValue('路径', selectedMod.path)"
                 @click="openPath(selectedMod.path)">
                 <svg class="size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0">
@@ -176,8 +192,8 @@
               {{ appStore.DETAILS_LAYOUT_MAPS[block.id].label }}
             </h3>
             <div class="grid grid-flow-col grid-cols-4 grid-rows-2 gap-1.5">
-              <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-bg-overlay/5 rounded-lg border border-border-base/5">
-                <img v-if="selectedMod.icon_url" :src="selectedMod.icon_url" class="size-8 inline-block">
+              <div v-tooltip="selectedModIconUrl ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-bg-overlay/5 rounded-lg border border-border-base/5">
+                <img v-if="selectedModIconUrl" :src="selectedModIconUrl" class="size-8 inline-block">
                 <svg v-else class="text-text-dim size-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
               </div>
               <!-- 是否破坏存档 -->
@@ -236,10 +252,10 @@
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(dep.package_id)?.path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+                    <Crosshair class="size-4" />
                   </span>
                   <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
+                    <SquareArrowOutUpRight class="size-4" />
                   </span>
                 </div>
 
@@ -270,7 +286,7 @@
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(inc.package_id)?.path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+                    <Crosshair class="size-4" />
                   </span>
                 </div>
               </div>
@@ -300,7 +316,7 @@
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(aft.package_id)?.path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+                    <Crosshair class="size-4" />
                   </span>
                 </div>
               </div>
@@ -330,7 +346,7 @@
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
                   <span v-if="!!modStore.takeModById(bef.package_id)?.path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
-                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+                    <Crosshair class="size-4" />
                   </span>
                 </div>
               </div>
@@ -528,6 +544,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // 引入防抖函数
 import { MOD_SIGN_COLOR_MAP, MOD_TYPE_MAP, SOURCE_TYPE_MAP, MOD_TYPE_ICON_MAP } from '../../shared/lib/constants'
 import { useModStore } from './stores/modStore'
+import { useSearchStore } from './stores/searchStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useGroupStore } from './stores/groupStore'
@@ -538,24 +555,33 @@ import ImageCloud from '../../shared/decorations/ImageCloud.vue';
 import LampEffect from '../../shared/decorations/LampEffect.vue';
 import LuxBreatheIcon from '../../shared/decorations/LuxBreatheIcon.vue'
 import StatItem from '../../shared/components/StatItem.vue'
-import { ChevronDown, ChevronUp, CircleX, Copy } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, CircleX, Copy, Crosshair, SquareArrowOutUpRight } from 'lucide-vue-next'
 import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
 import { useProfileStore } from '../profiles/profileStore'
 import { ColorPicker } from 'vue3-colorpicker'
 import { imageViewerOptions } from '../../shared/lib/domEffects'
-
-// 随机选30个Mod的图标URL
-const imageUrls = computed(() => Array.from(modStore.allModsMap.values())
-  .filter(mod => mod.icon_url) // 过滤掉没有图标URL的Mod
-  .sort(() => 0.5 - Math.random()) // 随机排序
-  .slice(0, 30) // 取前30个
-  .map(mod => mod.icon_url))
+import { useToast } from 'vue-toastification'
 
 const appStore = useAppStore()
 const aiStore = useAiStore()
 const modStore = useModStore()
+const searchStore = useSearchStore()
 const groupStore = useGroupStore()
 const profileStore = useProfileStore()
+const toast = useToast()
+
+const resolveModIconUrl = (mod) => {
+  if (!mod) return ''
+  if (mod.icon_path) return appStore.getLocalUrl(mod.icon_path)
+  return ''
+}
+
+// 随机选30个本地图标，图标云只展示真正的 Mod 图标。
+const imageUrls = computed(() => Array.from(modStore.allModsMap.values())
+  .map(resolveModIconUrl)
+  .filter(Boolean)
+  .sort(() => 0.5 - Math.random())
+  .slice(0, 30))
 const userTags = ref([])
 const userAliasName = ref('')
 const userNotes = ref('')
@@ -587,8 +613,31 @@ const rawSelectedMod = computed(() => modStore.lastSelectedMod)
 // 2. 创建一个防抖的引用
 // 含义：当 rawSelectedMod 变化时，debouncedMod 会等待 200ms 且无新变化后才更新
 const selectedMod = refDebounced(rawSelectedMod, appStore.settings.ui.detail_delay)
+const selectedModIconUrl = computed(() => resolveModIconUrl(selectedMod.value))
 const modType = computed(() => modStore.displayModType(selectedMod.value))
 
+const copyDetailValue = async (label, value) => {
+  const text = Array.isArray(value)
+    ? value.map(item => String(item ?? '').trim()).filter(Boolean).join(', ')
+    : String(value ?? '').trim()
+  if (!text || !navigator?.clipboard?.writeText) return
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(`${label}已复制`, { timeout: 1000 })
+  } catch {
+    toast.error(`${label}复制失败`, { timeout: 1500 })
+  }
+}
+
+const toggleMainListExactFilter = (field, value, label) => {
+  const text = String(value ?? '').trim()
+  searchStore.applyMainListExactFilter({ field, value: text, label: text })
+  if (searchStore.mainListExactFilter) {
+    toast.success(`已按${label}筛选：${text}`, { timeout: 1200 })
+  } else {
+    toast.info('已清除列表筛选', { timeout: 1200 })
+  }
+}
 
 // 获取布局配置 (如果没有配置则使用默认兜底)
 const layoutConfig = computed(() => {

@@ -370,8 +370,31 @@ class ModScanner:
                 len(final_coexistences), int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0),
                 runtime_sync_msg,
             )
-            logger.debug("扫描禁用状态详情: %s", scan_details)
-            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s residue=%s", final_conflicts, final_coexistences, residue_cleanup)
+            disabled_debug = {
+                key: [
+                    item.get("package_id") or item.get("path") or item.get("path_hash")
+                    for item in items
+                ]
+                for key, items in scan_details.items()
+                if items
+            }
+            conflict_debug = [
+                {
+                    "package_id": item.get("package_id"),
+                    "paths": [entry.get("path") for entry in item.get("items", []) if entry.get("path")],
+                }
+                for item in final_conflicts
+            ]
+            coexistence_debug = [
+                {
+                    "package_id": item.get("package_id"),
+                    "paths": [entry.get("path") for entry in item.get("items", []) if entry.get("path")],
+                }
+                for item in final_coexistences
+            ]
+            residue_debug = (residue_cleanup or {}).get("summary") if residue_cleanup else None
+            logger.debug("扫描禁用状态详情: %s", disabled_debug)
+            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s residue=%s", conflict_debug, coexistence_debug, residue_debug)
         except Exception as e:
             import traceback
             traceback.print_exc()

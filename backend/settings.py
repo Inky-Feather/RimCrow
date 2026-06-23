@@ -189,6 +189,7 @@ class UIConfig:
 
     show_dependency_graph: bool = True  # 是否显示依赖关系图
     smooth_list_target_scroll: bool = True  # 定位到列表项时是否使用平滑滚动
+    hidden_dependency_graph_source_ids: List[str] = field(default_factory=list)  # 全局隐藏的依赖源包名列表
     keybindings: Dict[str, Any] = field(default_factory=lambda: {
         "version": 1,
         "bindings": {},

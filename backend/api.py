@@ -105,6 +105,22 @@ from backend.startup import StartupCoordinator
 from backend.theme_store import ThemeStore
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
+IMAGE_SAVE_MIME_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+}
+IMAGE_SAVE_FILE_TYPES = (
+    "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
+    "PNG Files (*.png)",
+    "JPEG Files (*.jpg;*.jpeg)",
+    "WebP Files (*.webp)",
+    "GIF Files (*.gif)",
+    "BMP Files (*.bmp)",
+    "All Files (*.*)",
+)
 
 
 def _resolve_github_local_path(local_folder: str = "") -> str:
@@ -3519,6 +3535,58 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
+
+    def _default_image_save_filename(self, filename: str = "", mime_type: str = "") -> str:
+        raw_name = str(filename or "").strip()
+        suffix = Path(raw_name).suffix.lower()
+        default_suffix = IMAGE_SAVE_MIME_EXTENSIONS.get(str(mime_type or "").split(";")[0].lower(), ".png")
+        stem = FileManager.sanitize_filename(Path(raw_name).stem or "image").strip() or "image"
+        if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+            suffix = default_suffix
+        return f"{stem}{suffix}"
+
+    def _ensure_image_save_extension(self, target_path: str, default_filename: str) -> str:
+        path = Path(str(target_path or "").strip())
+        if path.suffix:
+            return str(path)
+        default_suffix = Path(default_filename).suffix or ".png"
+        return str(path.with_suffix(default_suffix))
+
+    @log_api_call
+    def image_save_as(self, payload: dict | None = None):
+        """保存前端当前预览的图片内容。"""
+        payload = payload or {}
+        try:
+            content_base64 = str(payload.get("content_base64") or "")
+            if not content_base64:
+                return ApiResponse.warning("没有可保存的图片内容")
+            image_bytes = base64.b64decode(content_base64)
+            if not image_bytes:
+                return ApiResponse.warning("图片内容为空")
+
+            default_filename = self._default_image_save_filename(
+                payload.get("filename") or "",
+                payload.get("mime_type") or "",
+            )
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=str(DATA_DIR),
+                default_filename=default_filename,
+                file_types=IMAGE_SAVE_FILE_TYPES,
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+
+            target = Path(self._ensure_image_save_extension(target_path, default_filename))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # 图片字节来自前端已经加载成功的预览图，后端只负责落盘，不再重新请求网络资源。
+            target.write_bytes(image_bytes)
+            return ApiResponse.success({
+                "path": normalize_path_for_storage(str(target)),
+                "size": len(image_bytes),
+            }, message="图片已保存")
+        except Exception as e:
+            logger.error("图片另存为失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"图片另存为失败: {e}")
 
     @log_api_call
     def recommendation_export(self, payload: dict | None = None):

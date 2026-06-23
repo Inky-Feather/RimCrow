@@ -3,6 +3,7 @@
     ref="canvasRef"
     :width="size"
     :height="size"
+    :class="props.class"
     role="img"
     aria-label="Interactive 3D Image Cloud"
     @mousedown="handleMouseDown"
@@ -42,6 +43,7 @@ const animationFrameRef = ref<number>(0);
 const imageCanvases = ref<HTMLCanvasElement[]>([]);
 const imagesLoaded = ref<boolean[]>([]);
 const imagePositions = ref<SphereImage[]>([]);
+let imageLoadBatch = 0;
 
 const rotation = reactive({ x: 0, y: 0 });
 const isDragging = ref(false);
@@ -56,11 +58,18 @@ function easeOutCubic(t: number): number { return 1 - Math.pow(1 - t, 3); }
 
 // --- 初始化图片 (离屏绘制) ---
 watch(() => props.images, (newUrls) => {
-  if (!newUrls) return;
+  const batchId = ++imageLoadBatch;
+  const urls = Array.isArray(newUrls) ? newUrls.filter(Boolean) : [];
   const radius = props.imageSize / 2;
   
-  imagesLoaded.value = new Array(newUrls.length).fill(false);
-  imageCanvases.value = newUrls.map((url, idx) => {
+  imagesLoaded.value = new Array(urls.length).fill(false);
+  imagePositions.value = [];
+  if (!urls.length) {
+    imageCanvases.value = [];
+    return;
+  }
+
+  imageCanvases.value = urls.map((url, idx) => {
     const offscreen = document.createElement("canvas");
     offscreen.width = props.imageSize;
     offscreen.height = props.imageSize;
@@ -68,21 +77,27 @@ watch(() => props.images, (newUrls) => {
     
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = url;
     img.onload = () => {
+      if (batchId !== imageLoadBatch) return;
       if (!offCtx) return;
       // 绘制圆形裁剪
+      offCtx.clearRect(0, 0, props.imageSize, props.imageSize);
       offCtx.beginPath();
       offCtx.arc(radius, radius, radius, 0, Math.PI * 2);
       offCtx.clip();
       offCtx.drawImage(img, 0, 0, props.imageSize, props.imageSize);
       imagesLoaded.value[idx] = true;
     };
+    img.onerror = () => {
+      if (batchId !== imageLoadBatch) return;
+      imagesLoaded.value[idx] = false;
+    };
+    img.src = url;
     return offscreen;
   });
 
   // 分布算法 (斐波那契球体)
-  const count = newUrls.length;
+  const count = urls.length;
   const newPositions: SphereImage[] = [];
   const offset = 2 / count;
   const increment = Math.PI * (3 - Math.sqrt(5));
@@ -110,12 +125,12 @@ function handleMouseDown(e: MouseEvent) {
   const y = e.clientY - rect.top;
 
   // 点击检测：是否点击了某个图片，如果是则触发自动旋转聚焦
-  imagePositions.value.forEach((icon) => {
-    const cosX = Math.cos(rotation.x);
-    const sinX = Math.sin(rotation.x);
-    const cosY = Math.cos(rotation.y);
-    const sinY = Math.sin(rotation.y);
+  const cosX = Math.cos(rotation.x);
+  const sinX = Math.sin(rotation.x);
+  const cosY = Math.cos(rotation.y);
+  const sinY = Math.sin(rotation.y);
 
+  imagePositions.value.forEach((icon) => {
     const rotatedX = icon.x * cosY - icon.z * sinY;
     const rotatedZ = icon.x * sinY + icon.z * cosY;
     const rotatedY = icon.y * cosX + rotatedZ * sinX;
@@ -189,25 +204,26 @@ onMounted(() => {
       rotation.y += (mousePos.x - centerX) * 0.00005;
     }
 
-    // 排序：先画后面的，再画前面的 (简单的深度排序)
-    const sortedIndices = imagePositions.value
-      .map((_, i) => i)
-      .sort((a, b) => {
-        const az = imagePositions.value[a].x * Math.sin(rotation.y) + imagePositions.value[a].z * Math.cos(rotation.y);
-        const bz = imagePositions.value[b].x * Math.sin(rotation.y) + imagePositions.value[b].z * Math.cos(rotation.y);
-        return az - bz;
-      });
+    const positions = imagePositions.value;
+    const cosX = Math.cos(rotation.x);
+    const sinX = Math.sin(rotation.x);
+    const cosY = Math.cos(rotation.y);
+    const sinY = Math.sin(rotation.y);
 
-    sortedIndices.forEach((index) => {
-      const icon = imagePositions.value[index];
-      const cosX = Math.cos(rotation.x);
-      const sinX = Math.sin(rotation.x);
-      const cosY = Math.cos(rotation.y);
-      const sinY = Math.sin(rotation.y);
+    // 每帧只计算一次旋转结果，同时按深度从后往前绘制。
+    const frameItems = positions
+      .map((icon, index) => {
+        const rotatedX = icon.x * cosY - icon.z * sinY;
+        const rotatedZ = icon.x * sinY + icon.z * cosY;
+        const rotatedY = icon.y * cosX + rotatedZ * sinX;
+        return { index, rotatedX, rotatedY, rotatedZ };
+      })
+      .sort((a, b) => a.rotatedZ - b.rotatedZ);
 
-      const rotatedX = icon.x * cosY - icon.z * sinY;
-      const rotatedZ = icon.x * sinY + icon.z * cosY;
-      const rotatedY = icon.y * cosX + rotatedZ * sinX;
+    frameItems.forEach(({ index, rotatedX, rotatedY, rotatedZ }) => {
+      if (!imageCanvases.value[index] || !imagesLoaded.value[index]) {
+        return;
+      }
 
       const scale = (rotatedZ + 200) / 300;
       const opacity = Math.max(0.1, Math.min(1, (rotatedZ + 150) / 200));
@@ -217,10 +233,8 @@ onMounted(() => {
       ctx.scale(scale, scale);
       ctx.globalAlpha = opacity;
 
-      if (imageCanvases.value[index] && imagesLoaded.value[index]) {
-        const offset = -(props.imageSize / 2);
-        ctx.drawImage(imageCanvases.value[index], offset, offset);
-      }
+      const offset = -(props.imageSize / 2);
+      ctx.drawImage(imageCanvases.value[index], offset, offset);
       ctx.restore();
     });
 

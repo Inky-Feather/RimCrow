@@ -195,7 +195,7 @@ import { useGroupStore } from './stores/groupStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useCommandStore } from '../../shared/commands/commandStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../shared/lib/color'
-import { extractSectionHeaderTitle, isSectionHeaderTitle } from '../../shared/lib/common'
+import { extractSectionHeaderTitle, isSectionHeaderTitle, toast } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
 import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
 
@@ -439,6 +439,37 @@ const generateAliasNotes = async () => {
     needsReview: true,
   })
 }
+const COPY_INFO_FIELDS = [
+  { key: 'name', label: '名称' },
+  { key: 'package_id', label: '包名' },
+  { key: 'workshop_id', label: '工坊ID' },
+  { key: 'url', label: '网址' },
+  { key: 'path', label: '路径' },
+]
+const normalizeCopyInfoValue = (value) => String(value ?? '').trim()
+const getModCopyInfoValue = (mod, fieldKey) => {
+  if (!mod) return ''
+  if (fieldKey === 'name') return normalizeCopyInfoValue(mod.name)
+  if (fieldKey === 'package_id') return normalizeCopyInfoValue(mod.package_id_raw || mod.package_id || mod.canonical_package_id)
+  if (fieldKey === 'workshop_id') return normalizeCopyInfoValue(mod.workshop_id)
+  if (fieldKey === 'path') return normalizeCopyInfoValue(mod.path)
+  if (fieldKey === 'url') return normalizeCopyInfoValue(mod.url)
+  return ''
+}
+const copyTextToClipboard = async (text, label) => {
+  try {
+    if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持剪贴板')
+    await navigator.clipboard.writeText(text)
+    toast.success(`已复制${label}`)
+  } catch (error) {
+    toast.error(`复制${label}失败：${error?.message || error}`)
+  }
+}
+const copySelectedModInfo = async (fieldKey, label, selectedIds = []) => {
+  // 批量复制必须保留空值行，确保复制结果和当前选中顺序一一对应。
+  const lines = (selectedIds || []).map(id => getModCopyInfoValue(modStore.takeModById(id), fieldKey))
+  await copyTextToClipboard(lines.join('\n'), label)
+}
 // 右键菜单
 const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
@@ -450,6 +481,13 @@ const handleContextMenu = async (event) => {
   await ensureInterlockDetails()
   const selectedIds = modStore.selectedIds;
   const selectedCountStr = selectedIds.length>1?` (${selectedIds.length}项)`:''
+  const singleSelectedMod = selectedIds.length === 1 ? modStore.takeModById(selectedIds[0]) : null
+  const copyInfoMenuItems = COPY_INFO_FIELDS.map(field => ({
+    label: field.label + selectedCountStr,
+    icon: Copy,
+    disabled: selectedIds.length === 1 && !getModCopyInfoValue(singleSelectedMod, field.key),
+    action: () => copySelectedModInfo(field.key, field.label, [...selectedIds]),
+  }))
   const selectedHasPathHash = modStore.selectedMods.some(m => !!m?.path_hash)
   const coexistSelectedIds = selectedIds.filter(id => modStore.canSwitchCoexistenceSource(id))
   const coexistSelectedCountStr = coexistSelectedIds.length>1?` (${coexistSelectedIds.length}项)`:''
@@ -479,6 +517,7 @@ const handleContextMenu = async (event) => {
   ]
   // 通用菜单
   const commnMenuItems = [
+    { commandId: 'mods.toggleSelectedActive', args: { modIds: [...selectedIds] }, labelOverride: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig },
     { label: '标签管理'+ selectedCountStr , icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
       children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null,
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
@@ -504,7 +543,7 @@ const handleContextMenu = async (event) => {
         label: value, action: () => modStore.setModsType(selectedIds, key)
       })),{ label: '恢复默认', icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },
-    { commandId: 'mods.toggleSelectedActive', args: { modIds: [...selectedIds] }, labelOverride: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig },
+    { label: '复制信息' + selectedCountStr, icon: Copy, children: copyInfoMenuItems },
     ...(moveMenu ? [{ label: '移动到' + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
   ]
   

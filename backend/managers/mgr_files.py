@@ -11,7 +11,7 @@ import threading
 import subprocess
 import platform
 import time
-from PIL import Image
+from PIL import Image, ImageFile, UnidentifiedImageError
 from pathlib import Path
 from typing import Any, Dict
 import urllib.parse
@@ -60,6 +60,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
     _remote_download_locks_lock = threading.Lock()
     _thumbnail_locks: dict[str, threading.Lock] = {}
     _thumbnail_locks_lock = threading.Lock()
+    _thumbnail_tolerant_image_lock = threading.Lock()
     
     def do_GET(self):
         try:
@@ -207,14 +208,33 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
 
             temp_path = f"{target_path}.{uuid.uuid4().hex}.tmp"
             try:
-                with Image.open(original_path) as img:
-                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                        if img.mode != 'RGBA':
-                            img = img.convert('RGBA')
-                    else:
-                        img = img.convert('RGB')
-                    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                    img.save(temp_path, 'WEBP', quality=80)
+                def save_thumbnail():
+                    with Image.open(original_path) as img:
+                        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                            if img.mode != 'RGBA':
+                                img = img.convert('RGBA')
+                        else:
+                            img = img.convert('RGB')
+                        img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                        img.save(temp_path, 'WEBP', quality=80)
+
+                try:
+                    save_thumbnail()
+                except (UnidentifiedImageError, SyntaxError, OSError):
+                    with open(original_path, "rb") as f:
+                        is_png = f.read(8) == b"\x89PNG\r\n\x1a\n"
+                    if not is_png:
+                        raise
+
+                    # 部分工坊封面只有 PNG 元数据校验损坏，像素数据仍可正常读取。
+                    with cls._thumbnail_tolerant_image_lock:
+                        old_load_truncated = ImageFile.LOAD_TRUNCATED_IMAGES
+                        try:
+                            ImageFile.LOAD_TRUNCATED_IMAGES = True
+                            save_thumbnail()
+                        finally:
+                            ImageFile.LOAD_TRUNCATED_IMAGES = old_load_truncated
+
                 os.replace(temp_path, target_path)
                 return target_path
             except Exception as e:

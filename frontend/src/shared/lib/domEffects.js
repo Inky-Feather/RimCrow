@@ -1,3 +1,7 @@
+import { Copy, Download, Link } from 'lucide-vue-next'
+import { useContextMenuStore } from '../components/context-menu/contextMenuStore'
+import { checkResult, toast } from './common'
+
 /**
  * 给元素添加一次性的强调动画，用于提示用户关注某个控件。
  * @param {String|HTMLElement} target - 选择器或DOM元素
@@ -86,7 +90,213 @@ const blurActiveViewerFocus = () => {
   }
 }
 
+const IMAGE_SAVE_TYPES = new Map([
+  ['image/png', '.png'],
+  ['image/jpeg', '.jpg'],
+  ['image/webp', '.webp'],
+  ['image/gif', '.gif'],
+  ['image/bmp', '.bmp'],
+])
+const IMAGE_VIEWER_STYLE_ID = 'rmm-image-viewer-style'
+
+const ensureImageViewerStyle = () => {
+  if (typeof document === 'undefined' || document.getElementById(IMAGE_VIEWER_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = IMAGE_VIEWER_STYLE_ID
+  style.textContent = `
+    .rmm-image-viewer .viewer-toolbar > ul {
+      padding: 12px 6px 18px;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > li {
+      width: 48px;
+      height: 48px;
+      margin-left: 6px;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > li:first-child {
+      margin-left: 0;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > li::before {
+      margin: 14px;
+      transform: scale(2);
+      transform-origin: center;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > .viewer-small {
+      width: 36px;
+      height: 36px;
+      margin-top: 6px;
+      margin-bottom: 6px;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > .viewer-small::before {
+      margin: 8px;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > .viewer-large {
+      width: 60px;
+      height: 60px;
+      margin-top: -6px;
+      margin-bottom: -6px;
+    }
+    .rmm-image-viewer .viewer-toolbar > ul > .viewer-large::before {
+      margin: 20px;
+    }
+  `
+  document.head.appendChild(style)
+}
+
+const stripQueryAndHash = (value = '') => String(value || '').split(/[?#]/)[0]
+
+const imageFilenameFromUrl = (url = '', fallback = 'image.png') => {
+  try {
+    const parsed = new URL(String(url || ''), window.location.href)
+    if (parsed.pathname === '/local' || parsed.pathname === '/thumb') {
+      const localPath = parsed.searchParams.get('path') || ''
+      const basename = stripQueryAndHash(decodeURIComponent(localPath)).split(/[\\/]/).pop()
+      if (basename) return basename
+    }
+    if (parsed.pathname === '/remote') {
+      const remoteUrl = parsed.searchParams.get('url') || ''
+      if (remoteUrl) return imageFilenameFromUrl(remoteUrl, fallback)
+    }
+    const basename = stripQueryAndHash(decodeURIComponent(parsed.pathname)).split('/').pop()
+    if (basename) return basename
+  } catch {
+    const basename = stripQueryAndHash(url).split(/[\\/]/).pop()
+    if (basename) return basename
+  }
+  return fallback
+}
+
+const ensureImageFilenameExtension = (filename = '', mimeType = '') => {
+  const fallbackExt = IMAGE_SAVE_TYPES.get(String(mimeType || '').toLowerCase()) || '.png'
+  const normalized = String(filename || '').trim() || `image${fallbackExt}`
+  return /\.[a-z0-9]{2,5}$/i.test(normalized) ? normalized : `${normalized}${fallbackExt}`
+}
+
+const getViewerImagePayload = (viewerImage, originalImage) => {
+  const originalSrc = originalImage?.currentSrc || originalImage?.src || ''
+  const displayedSrc = viewerImage?.currentSrc || viewerImage?.src || originalSrc
+  const label = originalImage?.alt || originalImage?.title || ''
+  return {
+    src: displayedSrc,
+    originalSrc,
+    filename: ensureImageFilenameExtension(label || imageFilenameFromUrl(originalSrc || displayedSrc)),
+  }
+}
+
+const fetchViewerImageBlob = async (imagePayload) => {
+  if (!imagePayload?.src) throw new Error('未找到可复制的图片地址')
+  const response = await fetch(imagePayload.src, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`读取图片失败：${response.status}`)
+  const blob = await response.blob()
+  if (!blob?.size) throw new Error('图片内容为空')
+  return blob
+}
+
+const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
+  reader.onerror = () => reject(reader.error || new Error('读取图片内容失败'))
+  reader.readAsDataURL(blob)
+})
+
+const convertImageBlobToPng = (blob) => new Promise((resolve, reject) => {
+  const image = new Image()
+  const objectUrl = URL.createObjectURL(blob)
+  image.onload = () => {
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = image.naturalWidth || image.width
+      canvas.height = image.naturalHeight || image.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(image, 0, 0)
+      canvas.toBlob((pngBlob) => {
+        URL.revokeObjectURL(objectUrl)
+        if (pngBlob) resolve(pngBlob)
+        else reject(new Error('转换图片格式失败'))
+      }, 'image/png')
+    } catch (error) {
+      URL.revokeObjectURL(objectUrl)
+      reject(error)
+    }
+  }
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl)
+    reject(new Error('图片解码失败'))
+  }
+  image.src = objectUrl
+})
+
+const copyViewerImage = async (imagePayload) => {
+  try {
+    if (!navigator?.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      throw new Error('当前环境不支持复制图片到剪贴板')
+    }
+    const sourceBlob = await fetchViewerImageBlob(imagePayload)
+    // 系统剪贴板对 PNG 支持最稳定，其他图片格式统一转成 PNG 后写入。
+    const clipboardBlob = sourceBlob.type === 'image/png'
+      ? sourceBlob
+      : await convertImageBlobToPng(sourceBlob)
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': clipboardBlob })])
+    toast.success('已复制图片')
+  } catch (error) {
+    toast.error(`复制图片失败：${error?.message || error}`)
+  }
+}
+
+const copyViewerImageUrl = async (imagePayload) => {
+  try {
+    if (!imagePayload?.originalSrc) throw new Error('未找到图片地址')
+    if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持复制文本到剪贴板')
+    await navigator.clipboard.writeText(imagePayload.originalSrc)
+    toast.success('已复制图片地址')
+  } catch (error) {
+    toast.error(`复制图片地址失败：${error?.message || error}`)
+  }
+}
+
+const saveViewerImageAs = async (imagePayload) => {
+  try {
+    if (!window.pywebview?.api?.image_save_as) {
+      throw new Error('当前环境不支持图片另存为')
+    }
+    const blob = await fetchViewerImageBlob(imagePayload)
+    const contentBase64 = await blobToBase64(blob)
+    const res = await window.pywebview.api.image_save_as({
+      filename: ensureImageFilenameExtension(imagePayload.filename, blob.type),
+      mime_type: blob.type || 'application/octet-stream',
+      content_base64: contentBase64,
+    })
+    if (res?.status === 'warning' && res?.message === '已取消') return
+    checkResult(res, '图片另存为', true)
+  } catch (error) {
+    toast.error(`图片另存为失败：${error?.message || error}`)
+  }
+}
+
+const openViewerImageContextMenu = (event, imagePayload) => {
+  const contextMenuStore = useContextMenuStore()
+  contextMenuStore.open(event, [
+    { label: '复制图片', icon: Copy, action: () => copyViewerImage(imagePayload) },
+    { label: '另存为...', icon: Download, action: () => saveViewerImageAs(imagePayload) },
+    { divider: true },
+    { label: '复制图片地址', icon: Link, action: () => copyViewerImageUrl(imagePayload) },
+  ], imagePayload)
+}
+
+const attachViewerImageContextMenu = (event) => {
+  ensureImageViewerStyle()
+  const viewerImage = event?.detail?.image
+  if (!viewerImage) return
+  if (viewerImage._rmmViewerImageContextMenu) {
+    viewerImage.removeEventListener('contextmenu', viewerImage._rmmViewerImageContextMenu)
+  }
+  const imagePayload = getViewerImagePayload(viewerImage, event?.detail?.originalImage)
+  const handler = (menuEvent) => openViewerImageContextMenu(menuEvent, imagePayload)
+  viewerImage.addEventListener('contextmenu', handler)
+  viewerImage._rmmViewerImageContextMenu = handler
+}
+
 export const imageViewerOptions = {
+  className: 'rmm-image-viewer',
   focus: false,
   navbar: false,
   title: false,
@@ -97,9 +307,11 @@ export const imageViewerOptions = {
   rotatable: true,
   scalable: true,
   transition: false,
-  zIndex: 100000,
+  zIndex: 9000,
   filter: shouldPreviewImage,
+  shown: ensureImageViewerStyle,
   hide: blurActiveViewerFocus,
+  viewed: attachViewerImageContextMenu,
 }
 
 export const decoratePreviewableHtmlImages = (html, options = {}) => {

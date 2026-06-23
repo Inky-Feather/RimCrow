@@ -43,6 +43,30 @@ export function useModListQuery({
   const engine = computed(() => searchStore.engine)
   const searchResultSet = computed(() => new Set(searchResults.value))
 
+  const normalizeExactText = (value) => String(value ?? '').trim().toLowerCase()
+  const getExactTagValues = (mod, tag) => {
+    const config = tag?.schema || engine.value?.schema?.[tag?.key]
+    const rawValue = config?.getter ? config.getter(mod) : mod?.[tag?.key]
+    return Array.isArray(rawValue) ? rawValue : [rawValue]
+  }
+  const matchesExactTag = (mod, tag) => {
+    if (!mod || !tag?.key) return false
+    const expected = normalizeExactText(tag.value)
+    const matched = getExactTagValues(mod, tag).some(value => normalizeExactText(value) === expected)
+    return tag.exclude ? !matched : matched
+  }
+  const buildMainListExactTag = (filter) => {
+    if (!filter?.field || !filter?.value || !engine.value) return null
+    const tag = engine.value.parse(`${filter.field}:${filter.value}`)
+    if (!tag || tag.type !== 'rule') return null
+    return {
+      ...tag,
+      id: `main-list-exact-${filter.field}-${filter.normalizedValue}-${searchStore.mainListFilterRevision}`,
+      exact: true,
+      displayValue: filter.label || tag.displayValue,
+    }
+  }
+
   const resolveTargetListId = (targetId, candidates = []) => {
     const normalizedTargetToken = normalizeTokenId(targetId)
     if (!normalizedTargetToken) return ''
@@ -57,6 +81,22 @@ export function useModListQuery({
   const isFiltered = computed(() => filterQuery.value.length > 0 || isFilterByIssue.value || filterByLine.value?.length > 0)
   const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
   const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4)
+
+  const normalizeLineIds = (lineIds = []) => (
+    (Array.isArray(lineIds) ? lineIds : [lineIds]).map(normalizeCanonicalId).filter(Boolean)
+  )
+  const isSameLineFilter = (lineIds = []) => {
+    const currentIds = normalizeLineIds(filterByLine.value)
+    const nextIds = normalizeLineIds(lineIds)
+    if (currentIds.length !== nextIds.length) return false
+    return currentIds.every((id, index) => id === nextIds[index])
+  }
+  const setLineFilter = (lineIds = []) => {
+    filterByLine.value = normalizeLineIds(lineIds)
+  }
+  const clearLineFilter = () => {
+    filterByLine.value = []
+  }
 
   // 切换问题项筛选
   const toggleIssueFilter = () => {
@@ -81,9 +121,18 @@ export function useModListQuery({
   const clearFilter = () => {
     filterQuery.value = []
     isFilterByIssue.value = false
-    filterByLine.value = []
+    clearLineFilter()
     filterIssueType.value = ''
   }
+  const applyMainListExactFilter = () => {
+    // 来自详情页的筛选是一次性覆盖动作：先清掉列表已有筛选，再放入当前精确条件。
+    clearFilter()
+    const tag = buildMainListExactTag(searchStore.mainListExactFilter)
+    if (!tag) return
+    filterLogic.value = 'AND'
+    filterQuery.value = [tag]
+  }
+  watch(() => searchStore.mainListFilterRevision, applyMainListExactFilter, { immediate: true })
   // 清除排序
   const clearSort = () => {
     sortMode.value = 'default'
@@ -111,12 +160,15 @@ export function useModListQuery({
   })
   // 处理点击依赖图线路（筛选依赖组）
   const handleLineClick = (lines) => {
-    // 重复点击清空
-    if (filterByLine.value.length > 0) {
-      filterByLine.value = []
+    if (!Array.isArray(lines) || lines.length === 0) {
+      clearLineFilter()
       return
     }
-    filterByLine.value = lines
+    if (isSameLineFilter(lines)) {
+      clearLineFilter()
+      return
+    }
+    setLineFilter(lines)
   }
   // 左侧依赖线只跟随当前“可见列表”，这样折叠后视觉和交互才能保持同步。
   const showDependencyGraph = computed(() => allowSort.value || filterByLine.value.length > 0)
@@ -144,10 +196,18 @@ export function useModListQuery({
       })
     }
     // 3. 标签筛选
-    if (filterQuery.value.length > 0 && engine.value) {
+    const exactTags = filterQuery.value.filter(tag => tag?.exact)
+    if (exactTags.length > 0) {
+      list = list.filter(id => {
+        const mod = modStore.takeModById(id)
+        return exactTags.every(tag => matchesExactTag(mod, tag))
+      })
+    }
+    const searchTags = filterQuery.value.filter(tag => !tag?.exact)
+    if (searchTags.length > 0 && engine.value) {
       // A. 全局搜索符合条件的对象
       // engine.search 返回的是 Mod 对象数组
-      const matchedObjects = engine.value.search(filterQuery.value, filterLogic.value)
+      const matchedObjects = engine.value.search(searchTags, filterLogic.value)
       // B. 提取 ID 并建立 Set 供快速查找
       const matchedSet = new Set(matchedObjects.map(m => normalizeCanonicalId(m.package_id)))
       // C. 取交集 (当前列表 AND 搜索结果)
@@ -288,6 +348,9 @@ export function useModListQuery({
     sortTooltip,
     filterTooltip,
     handleLineClick,
+    setLineFilter,
+    clearLineFilter,
+    isSameLineFilter,
     showDependencyGraph,
     displayList,
     sortIcon,

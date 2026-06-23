@@ -204,6 +204,9 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       if (formData.value.ui && formData.value.ui.smooth_list_target_scroll === undefined) {
         formData.value.ui.smooth_list_target_scroll = true
       }
+      if (formData.value.ui && !Array.isArray(formData.value.ui.hidden_dependency_graph_source_ids)) {
+        formData.value.ui.hidden_dependency_graph_source_ids = []
+      }
       if (formData.value.ui && !formData.value.ui.keybindings) {
         // 兼容旧配置文件：默认键位由前端命令注册表决定，设置里只保存用户覆盖项。
         formData.value.ui.keybindings = createDefaultKeybindingConfig()

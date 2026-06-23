@@ -117,7 +117,7 @@
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" :data-tour="listId=='active'?'list-dependency':null" class="w-[55px] h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
-        <DependencyGraph v-if="showDependencyGraph" :listIds="lineData" :isFilter="filterByLine.length>0"
+        <DependencyGraph v-if="showDependencyGraph" :listIds="lineData" :line-filter-ids="filterByLine" :isFilter="filterByLine.length>0"
           :itemHeight="itemHeight" :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />

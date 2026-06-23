@@ -333,12 +333,10 @@ export const useModStore = defineStore('mods', () => {
     const res = mod?.user_mod_type || mod?.mod_type || 'Unknown'
     return res
   }
-  // 显示 Mod 图标（优先 icon_url -> thumb_url -> preview_url）
+  // 显示 Mod 图标，只使用 About 中声明或默认发现的图标。
   const displayModIcon = (id) => {
     const mod = takeModById(id)
-    if (mod && mod.icon_url) return mod.icon_url // 列表图标
-    if (mod && mod.thumb_url) return mod.thumb_url // 缩略图
-    if (mod && mod.preview_url) return mod.preview_url // 详情大图
+    if (mod && mod.icon_path) return appStore.getLocalUrl(mod.icon_path)
     return '' // 返回空或默认图路径
   }
 
@@ -866,7 +864,14 @@ export const useModStore = defineStore('mods', () => {
       toast.success(`扫描完成，共计扫描${total}个模组，新增${added}个，\n更新${updated}个，删除${removed}个，已知${skipped}个。${disabledStateText ? `\n${disabledStateText}` : ''}`,{position: "top-center",timeout: 5000})
     }
     // 扫描结束后只回填模组主数据，避免把工作区、GitHub、合集等页面也一起重刷。
-    console.log("扫描统计:", detail)
+    console.log("扫描统计:", {
+      status: detail?.status,
+      total,
+      stats,
+      conflict_count: conflictList.value.length,
+      coexistence_count: coexistenceList.value.length,
+      residue_count: Number(detail?.residue_cleanup?.summary?.item_count || 0),
+    })
     await appStore.refreshModsData('扫描后同步模组数据', {
       preserveListState: !!options?.preserveListState,
     })

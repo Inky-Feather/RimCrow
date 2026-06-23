@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { shallowRef, watch } from 'vue'
+import { ref, shallowRef, watch } from 'vue'
 import { useModStore } from './modStore'
 import { TagSearchEngine, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
 import { MOD_SIGN_COLOR_MAP } from '../../../shared/lib/constants'
@@ -73,6 +73,34 @@ export const useSearchStore = defineStore('search', () => {
 
   // 引擎内部持有 Map/Set 索引，只需要在重建时替换实例，不需要深层响应式代理。
   const engine = shallowRef(null)
+  const mainListExactFilter = ref(null)
+  const mainListFilterRevision = ref(0)
+
+  const normalizeFilterText = (value) => String(value ?? '').trim()
+  const normalizeFilterKey = (value) => normalizeFilterText(value).toLowerCase()
+
+  const applyMainListExactFilter = ({ field = '', value = '', label = '' } = {}) => {
+    const normalizedField = normalizeFilterText(field)
+    const normalizedValue = normalizeFilterText(value)
+    const normalizedKey = normalizeFilterKey(normalizedValue)
+    const current = mainListExactFilter.value
+
+    if (!normalizedField || !normalizedValue || (
+      current?.field === normalizedField && current?.normalizedValue === normalizedKey
+    )) {
+      mainListExactFilter.value = null
+      mainListFilterRevision.value += 1
+      return
+    }
+
+    mainListExactFilter.value = {
+      field: normalizedField,
+      value: normalizedValue,
+      normalizedValue: normalizedKey,
+      label: normalizeFilterText(label) || normalizedValue,
+    }
+    mainListFilterRevision.value += 1
+  }
 
   const rebuildEngine = () => {
     const allMods = Array.from(modStore.allModsMap.values())
@@ -99,5 +127,7 @@ export const useSearchStore = defineStore('search', () => {
   return {
     // 搜索引擎
     engine, rebuildEngine,
+    // 主列表筛选
+    mainListExactFilter, mainListFilterRevision, applyMainListExactFilter,
   }
 })
