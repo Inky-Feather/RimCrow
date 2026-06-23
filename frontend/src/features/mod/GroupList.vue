@@ -363,6 +363,23 @@ const groupHelpTooltip = computed(() => {
  - 将分组整体拖入停用列表，可一次性停用该分组下所有 Mod。`
 })
 
+const scrollToFlatRowIndex = (index: number) => {
+  if (index === -1) return false
+  setTimeout(() => {
+    const scrollOptions = appStore.settings.ui.smooth_list_target_scroll !== false ? { behavior: 'smooth' } : {}
+    vListRef.value?.scrollToIndex?.(index, scrollOptions)
+  }, 50)
+  return true
+}
+const keepSearchHighlight = () => {
+  if (highlightTimer.value) {
+    clearTimeout(highlightTimer.value)
+  }
+  highlightTimer.value = setTimeout(() => {
+    currentSearchGroupId.value = ''
+    currentSearchModId.value = ''
+  }, 2000)
+}
 const executeSearch = async (forward: boolean) => {
   if (!searchText.value) return
   // 搜索文本改变时更新结果
@@ -391,20 +408,21 @@ const executeSearch = async (forward: boolean) => {
     ? `mod:${currentResult.groupId}:${currentResult.modId}`
     : `group:${currentResult.groupId}`
   const index = flatRows.value.findIndex(item => item.row_key === rowKey)
-  if (index !== -1) {
-    setTimeout(() => {
-      const scrollOptions = appStore.settings.ui.smooth_list_target_scroll !== false ? { behavior: 'smooth' } : {}
-      vListRef.value?.scrollToIndex?.(index, scrollOptions)
-    }, 50)
-    if (highlightTimer.value) {
-      clearTimeout(highlightTimer.value)
-    }
-    highlightTimer.value = setTimeout(() => {
-      currentSearchGroupId.value = ''
-      currentSearchModId.value = ''
-    }, 2000)
+  if (scrollToFlatRowIndex(index)) {
+    keepSearchHighlight()
   }
   oldSearchText.value = searchText.value
+}
+const focusRequestedGroup = async (request) => {
+  const groupId = String(request?.groupId || '').trim()
+  if (!groupId || !groupStore.takeGroupById(groupId)) return
+  currentSearchGroupId.value = groupId
+  currentSearchModId.value = ''
+  await nextTick()
+  const index = flatRows.value.findIndex(item => item.row_key === `group:${groupId}`)
+  if (scrollToFlatRowIndex(index)) {
+    keepSearchHighlight()
+  }
 }
 
 const stopCollapseTimer = (id: string) => {
@@ -764,6 +782,11 @@ watch(() => appStore.isLoading, async (loading) => {
     await cancelActiveDrag()
   }
 })
+watch(
+  () => [groupStore.targetGroupRequest, safeGroupList.value.length],
+  ([request]) => focusRequestedGroup(request),
+  { immediate: true }
+)
 
 onBeforeUnmount(() => {
   if (isDragging.value) {

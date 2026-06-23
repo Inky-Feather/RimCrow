@@ -160,9 +160,9 @@
       <div v-if="!sectionHeader" class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
         <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
           <!-- 悬浮显示分组信息 -->
-          <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
-            :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-border-base/18`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']"
-            :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`">
+          <div v-for="(g, index) in modGroups" :key="g.group_id || g.id" @click.prevent.stop="focusGroupPanel(g)"
+            :class="[`w-full flex-1 cursor-pointer hover:scale-120 transition-all hover:border hover:border-border-base/18`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']"
+            :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}\n点击打开分组页`">
             <!-- v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}"> -->
           </div>
         </div>
@@ -255,6 +255,12 @@ const selectedSectionHeaderIds = computed(() => {
   if (!props.sectionFeatureEnabled) return []
   return [...new Set(modStore.selectedIds.filter(id => isSectionHeaderId(id)))]
 })
+const focusGroupPanel = (group = {}) => {
+  const groupId = String(group?.group_id || group?.id || '').trim()
+  if (!groupId) return
+  appStore.activeSidebarTab = 'group'
+  groupStore.focusGroup(groupId)
+}
 
 // 是否启用
 const isActive = computed(() => modStore.activeIds.some(id => normalizePackageId(id) === currentCanonicalId.value))

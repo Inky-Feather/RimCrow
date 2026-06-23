@@ -215,7 +215,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { toast } from '../../shared/lib/common.js'
+import { checkResult, toast } from '../../shared/lib/common.js'
 import { useOrderStore } from './orderStore.js'
 import { useAppStore } from '../../app/stores/appStore.js'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore.js'
@@ -227,6 +227,7 @@ import { ClipboardPlus, Copy, Download, Edit3, FileInput, FileText, FolderOpen, 
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
 import { isBrowserRuntime as detectBrowserRuntime } from '../../app/bridge/runtimeBridge.js'
+import { copyTextToClipboard } from '../mod/lib/modContextMenuItems.js'
 
 const appStore = useAppStore()
 const orderStore = useOrderStore()
@@ -366,6 +367,7 @@ const parsedData = computed(() => {
         source_profile_id: file.source_profile_id || '',
         warnings: file.warnings || [],
         errors: file.errors || [],
+        active_ids: file.active_ids || [],
         workshop_ids: file.workshop_ids || [],
       }
     }).sort((a, b) => {
@@ -423,11 +425,71 @@ const handleOpenFolder = (item) => {
   appStore.openPath(item.path)
 }
 
-const handleSaveAs = async (item) => {
-  const success = await orderStore.saveBackupAs(item.path, item.source_profile_id || selectedBackupProfileId.value)
-  if (success) {
-    await refresh(selectedBackupProfileId.value)
+const resolveBackupExportOrder = async (item) => {
+  if (Array.isArray(item?.active_ids) && item.active_ids.length > 0) return item
+  if (!isLocalFilePath(item?.path)) {
+    toast.warning('该条目没有可导出的包名序列')
+    return null
   }
+  const res = await window.pywebview.api.load_order_file_open(item.path, item.source_profile_id || selectedBackupProfileId.value || null)
+  if (!checkResult(res, '读取备份文件')) return null
+  return res.data || null
+}
+
+const exportBackupItemAsFile = async (item, format = 'modlist') => {
+  if (!window.pywebview) return false
+  const order = await resolveBackupExportOrder(item)
+  const activeIds = (order?.active_ids || []).filter(Boolean)
+  if (activeIds.length === 0) {
+    toast.warning('该备份没有可导出的包名序列')
+    return false
+  }
+
+  const pickRes = await window.pywebview.api.load_order_export_pick_path(format)
+  if (pickRes?.status === 'warning') return false
+  if (!checkResult(pickRes, '选择导出路径')) return false
+  const targetPath = pickRes.data?.path || ''
+  if (!targetPath) return false
+
+  const listName = order?.list_name || item?.displayTitle || item?.name || null
+  const res = await window.pywebview.api.load_order_export(activeIds, targetPath, false, format, listName, true)
+  if (checkResult(res, format === 'rml' ? '导出 RML' : '导出 ModList')) {
+    toast.success(format === 'rml' ? '备份已导出为 RML' : '备份已导出为 ModList')
+    await refresh(selectedBackupProfileId.value)
+    return true
+  }
+  return false
+}
+
+const exportBackupItemShareCode = async (item) => {
+  if (!window.pywebview) return ''
+  const order = await resolveBackupExportOrder(item)
+  const activeIds = (order?.active_ids || []).filter(Boolean)
+  if (activeIds.length === 0) {
+    toast.warning('该备份没有可生成分享码的包名序列')
+    return ''
+  }
+
+  const listName = order?.list_name || item?.displayTitle || item?.name || 'Shared Load Order'
+  const res = await window.pywebview.api.load_order_share_export(activeIds, listName)
+  if (!checkResult(res, '生成分享码')) return ''
+  const shareCode = res.data?.share_code || ''
+  if (!shareCode) {
+    toast.error('后端没有返回有效的分享码')
+    return ''
+  }
+  await copyTextToClipboard(shareCode, '分享码')
+  await confirmStore.open({
+    title: '分享码已生成',
+    message: `已生成 ${res.data?.count || activeIds.length} 个模组的分享码。`,
+    mode: 'prompt',
+    type: 'success',
+    inputValue: shareCode,
+    placeholder: 'RMM1-...',
+    confirmText: '关闭',
+    cancelText: '取消',
+  })
+  return shareCode
 }
 
 const handleRename = async (event, item) => {
@@ -459,11 +521,17 @@ const buildBackupMenuItems = (item) => {
   const canUsePath = isLocalFilePath(item?.path)
   const isTempImport = item?.type === 'import'
   const isManualBackup = item?.type === 'other'
+  const canExportOrder = canUsePath || (Array.isArray(item?.active_ids) && item.active_ids.length > 0)
   return [
     { label: '加载文件', icon: FileInput, action: () => handleLoad(null, item) },
     { label: '打开文件', icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
     { label: '打开所在目录', icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
-    { label: '另存为...', icon: Download, disabled: isTempImport || !canUsePath, action: () => handleSaveAs(item) },
+    { label: '复制文件路径', icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, '文件路径') },
+    { label: '导出为...', icon: Download, disabled: !canExportOrder, children: [
+      { label: '分享码', icon: ClipboardPlus, action: () => exportBackupItemShareCode(item) },
+      { label: 'ModList', icon: FileText, action: () => exportBackupItemAsFile(item, 'modlist') },
+      { label: 'RML', icon: FileText, action: () => exportBackupItemAsFile(item, 'rml') },
+    ] },
     { label: '重命名', icon: Edit3, disabled: !isManualBackup, action: () => handleRename(null, item) },
     { divider: true },
     isTempImport

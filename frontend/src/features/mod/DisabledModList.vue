@@ -107,13 +107,14 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Motion } from 'motion-v'
-import { AlertTriangle, FlagOff, Folder, FolderInput, LockOpen, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, Copy, FlagOff, Folder, FolderInput, LockOpen, Trash2 } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useModStore } from './stores/modStore'
 import { IconSelf, IconSteam, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
 import { formatFileSize } from '../../shared/lib/format'
+import { buildModExternalMenuItem, copyTextToClipboard } from './lib/modContextMenuItems'
 
 const appStore = useAppStore()
 const menuStore = useContextMenuStore()
@@ -237,6 +238,29 @@ const deleteSelectedMods = async () => {
   const ok = await modStore.deleteMods(selectedPathHashes.value)
   if (ok) clearSelection()
 }
+const buildSelectedDisabledCopyMenuItem = (selectedMods) => {
+  const selectedCountText = selectedMods.length > 1 ? ` (${selectedMods.length} 项)` : ''
+  const copyField = (label, getter) => {
+    const lines = selectedMods.map(mod => String(getter(mod) || '').trim()).filter(Boolean)
+    return {
+      label: `复制${label}${selectedCountText}`,
+      icon: Copy,
+      disabled: lines.length === 0,
+      action: () => copyTextToClipboard(lines.join('\n'), label),
+    }
+  }
+  return {
+    label: '复制模组信息' + selectedCountText,
+    icon: Copy,
+    disabled: selectedMods.length === 0,
+    children: [
+      copyField('名称', mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
+      copyField('包名', mod => mod.package_id),
+      copyField('工坊 ID', mod => mod.workshop_id),
+      copyField('路径', mod => mod.path),
+    ],
+  }
+}
 const handleContextMenu = (event, targetMod) => {
   event.preventDefault()
   if (!targetMod?.path_hash) return
@@ -251,6 +275,10 @@ const handleContextMenu = (event, targetMod) => {
   menuStore.open(event, [
     { label: '解除禁用' + selectedCountText, icon: LockOpen, level: 'success', action: enableSelectedMods },
     { label: '打开文件夹', icon: FolderInput, disabled: !targetMod.path, action: () => appStore.openPath(targetMod.path) },
+    { divider: true },
+    buildSelectedDisabledCopyMenuItem(selectedMods),
+    buildModExternalMenuItem(targetMod, appStore, { label: '访问页面' }),
+    { divider: true },
     { label: '取消订阅' + selectedCountText, icon: FlagOff, level: 'danger', disabled: !hasWorkshop, action: unsubscribeSelectedMods },
     { label: '删除文件' + selectedCountText, icon: Trash2, level: 'danger', disabled: !hasPath, action: deleteSelectedMods },
   ])

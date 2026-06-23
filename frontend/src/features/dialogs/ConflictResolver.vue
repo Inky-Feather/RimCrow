@@ -22,6 +22,9 @@
                 <span class="rounded-full border border-accent-danger/22 bg-accent-danger/10 px-2 py-0.5 text-xs text-accent-danger">
                   删除 {{ summary.deleteCount }}
                 </span>
+                <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
+                  跳过 {{ summary.skipCount }}
+                </span>
               </div>
               <p class="mt-1 text-xs text-text-dim">
                 先选要保留的副本，再决定其余副本是禁用还是删除。
@@ -69,7 +72,8 @@
                     :class="isWinner(group, mod)
                       ? 'border-accent-success/30 bg-accent-success/8'
                       : 'border-border-base/10 bg-bg-inset/55 hover:border-border-base/18 hover:bg-bg-inset/80'"
-                    @click="selectVersion(group.key, getItemKey(mod))" >
+                    @click="selectVersion(group.key, getItemKey(mod))"
+                    @contextmenu.prevent.stop="openConflictItemMenu($event, group, mod)" >
                     <div class="flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.7rem] font-black"
                       :class="isWinner(group, mod)
                         ? 'border-accent-success bg-accent-success text-on-accent-success'
@@ -102,20 +106,18 @@
                     </div>
 
                     <div class="flex shrink-0 items-center gap-1.5" @click.stop>
-                      <button v-if="mod.workshop_id && ['workshop', 'self'].includes(normalizeStore(mod.store))"
-                        class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-[0.7rem] font-bold text-text-dim transition-colors hover:text-accent-primary"
-                        v-tooltip="'将该副本复制为本地模组，后续不再受原来源更新影响'"
-                        @click="handleLocalize(mod)" >
-                        本地化共存
-                      </button>
-                      <button v-if="mod.workshop_id && normalizeStore(mod.store) === 'workshop'" v-tooltip="'取消 Steam 工坊订阅，并立即删除当前工坊副本以解除冲突'"
-                        class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-[0.7rem] font-bold text-text-dim transition-colors hover:text-accent-danger"
-                        @click="handleUnsubscribe(mod)" >
-                        退订并删除
-                      </button>
                       <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-accent-cool/30 hover:text-accent-cool"
                         v-tooltip="'打开该副本所在目录'" @click="appStore.openPath(mod.path)" >
                         <Folder class="size-3.5" />
+                      </button>
+                      <button v-if="canOpenModPage(mod)"
+                        class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-accent-primary/30 hover:text-accent-primary"
+                        v-tooltip="'访问该副本页面'" @click="openModPage(mod)" >
+                        <ExternalLink class="size-3.5" />
+                      </button>
+                      <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-border-base/18 hover:text-text-main"
+                        v-tooltip="'更多操作'" @click="openConflictItemMenu($event, group, mod)" >
+                        <EllipsisVertical class="size-3.5" />
                       </button>
 
                       <div v-if="!isWinner(group, mod)" class="flex items-center gap-0.5 rounded-full border border-border-base/10 bg-bg-overlay/5 p-0.5">
@@ -133,6 +135,14 @@
                           @click.stop v-tooltip="'将该副本移到回收站，不再保留文件'" >
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'delete'" @change="setItemAction(group, mod, 'delete')" >
                           删除
+                        </label>
+                        <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
+                          :class="actionMap[getItemKey(mod)] === 'skip'
+                            ? 'bg-bg-overlay/20 text-text-main'
+                            : 'text-text-dim hover:text-text-main'"
+                          @click.stop v-tooltip="'本次不处理该副本，重新扫描后可能仍会提示冲突'" >
+                          <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'skip'" @change="setItemAction(group, mod, 'skip')" >
+                          跳过
                         </label>
                       </div>
                     </div>
@@ -182,6 +192,7 @@
                   <span>待处理 {{ countPendingForScope }}</span>
                   <span class="text-accent-warn">禁用 {{ countDisableForScope }}</span>
                   <span class="text-accent-danger">删除 {{ countDeleteForScope }}</span>
+                  <span>跳过 {{ countSkipForScope }}</span>
                 </div>
                 <div class="mt-2">
                   推荐方案会优先保留实际更容易生效的副本：本地 &gt; 管理器 &gt; 工坊。
@@ -241,17 +252,20 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useToast } from 'vue-toastification'
-import { Check, Folder, X, XCircle } from 'lucide-vue-next'
+import { Check, EllipsisVertical, ExternalLink, Folder, FolderInput, X, XCircle } from 'lucide-vue-next'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
+import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
+import { buildModExternalMenuItem, buildModInfoCopyMenuItem, normalizeModMenuSource } from '../mod/lib/modContextMenuItems'
 
 const appStore = useAppStore()
 const modStore = useModStore()
 const confirmStore = useConfirmStore()
+const contextMenuStore = useContextMenuStore()
 const toast = useToast()
 
 const visible = ref(false)
@@ -502,16 +516,22 @@ const summarizeGroups = (groups) => {
   let pending = 0
   let disable = 0
   let deleteCount = 0
+  let skipCount = 0
   groups.forEach((group) => {
     const keepKey = selections[group.key]
     group.items.forEach((item) => {
       if (getItemKey(item) === keepKey) return
+      const action = actionMap[getItemKey(item)] || 'disable'
+      if (action === 'skip') {
+        skipCount += 1
+        return
+      }
       pending += 1
-      if ((actionMap[getItemKey(item)] || 'disable') === 'delete') deleteCount += 1
+      if (action === 'delete') deleteCount += 1
       else disable += 1
     })
   })
-  return { pending, disable, deleteCount }
+  return { pending, disable, deleteCount, skipCount }
 }
 
 const summary = computed(() => {
@@ -522,6 +542,7 @@ const summary = computed(() => {
     pendingCount: 0,
     disableCount: 0,
     deleteCount: 0,
+    skipCount: 0,
     workshopDeleteCount: 0,
   }
 
@@ -532,8 +553,12 @@ const summary = computed(() => {
     const keepKey = selections[group.key]
     group.items.forEach((item) => {
       if (getItemKey(item) === keepKey) return
-      result.pendingCount += 1
       const action = actionMap[getItemKey(item)] || 'disable'
+      if (action === 'skip') {
+        result.skipCount += 1
+        return
+      }
+      result.pendingCount += 1
       if (action === 'delete') {
         result.deleteCount += 1
         if (normalizeStore(item.store) === 'workshop') result.workshopDeleteCount += 1
@@ -550,6 +575,7 @@ const scopedSummary = computed(() => summarizeGroups(scopedGroups.value))
 const countPendingForScope = computed(() => scopedSummary.value.pending)
 const countDisableForScope = computed(() => scopedSummary.value.disable)
 const countDeleteForScope = computed(() => scopedSummary.value.deleteCount)
+const countSkipForScope = computed(() => scopedSummary.value.skipCount)
 
 const isWinner = (group, mod) => selections[group.key] === getItemKey(mod)
 
@@ -576,6 +602,34 @@ const setItemAction = (group, mod, action) => {
   if (!itemKey || isWinner(group, mod)) return
   actionMap[itemKey] = action
   submitFeedback.value = null
+}
+
+const canLocalize = (mod) => !!mod?.path_hash && !!mod?.workshop_id && ['workshop', 'self'].includes(normalizeStore(mod.store))
+const canUnsubscribe = (mod) => !!mod?.workshop_id && !!mod?.path_hash && normalizeStore(mod.store) === 'workshop'
+const canOpenModPage = (mod) => {
+  const info = normalizeModMenuSource(mod)
+  return !!info.url || !!info.workshopId
+}
+const openModPage = (mod) => {
+  const info = normalizeModMenuSource(mod)
+  if (info.url) {
+    appStore.openUrl(info.url)
+    return
+  }
+  if (info.workshopId) appStore.openSteamWorkshopById(info.workshopId)
+}
+const openConflictItemMenu = (event, group, mod) => {
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
+  contextMenuStore.open(event, [
+    buildModInfoCopyMenuItem(mod, { label: '复制信息' }),
+    buildModExternalMenuItem(mod, appStore, { label: '访问页面' }),
+    { divider: true },
+    { label: '打开目录', icon: Folder, disabled: !mod?.path, action: () => appStore.openPath(mod.path) },
+    { divider: true },
+    { label: '本地化共存', icon: FolderInput, disabled: !canLocalize(mod), action: () => handleLocalize(mod) },
+    { label: '退订并删除', icon: XCircle, level: 'danger', disabled: !canUnsubscribe(mod), action: () => handleUnsubscribe(mod) },
+  ], { group, mod })
 }
 
 const applyBatchRule = () => {
@@ -636,8 +690,10 @@ const buildOperations = () => {
     if (!winner) return
     group.items.forEach((item) => {
       if (getItemKey(item) === getItemKey(winner)) return
+      const action = actionMap[getItemKey(item)] || 'disable'
+      if (action === 'skip') return
       operations.push({
-        action: actionMap[getItemKey(item)] || 'disable',
+        action,
         target_path: item.path,
         target_path_hash: item.path_hash,
         force_delete: false,
@@ -664,6 +720,9 @@ const submit = async () => {
     `禁用 ${summary.value.disableCount} 个，删除 ${summary.value.deleteCount} 个。`,
     summary.value.workshopDeleteCount > 0
       ? `其中 ${summary.value.workshopDeleteCount} 个工坊副本会被删除，Steam 后续可能重新下载。`
+      : null,
+    summary.value.skipCount > 0
+      ? `已跳过 ${summary.value.skipCount} 个副本，本次不会处理。`
       : null,
     '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。',
   ].filter(Boolean).join('\n')

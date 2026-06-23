@@ -223,7 +223,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { ChevronDown, ChevronRight, ChevronUp, FileCode2, FileInput, FileSymlink, FolderInput, FolderOpen, Search, Square } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ChevronUp, Copy, FileCode2, FileInput, FileSymlink, FolderInput, FolderOpen, Search, Square } from 'lucide-vue-next'
 import { RecycleScroller } from 'vue-virtual-scroller'
 
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
@@ -232,11 +232,14 @@ import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue
 import { FILE_SEARCH_EXCLUDE_OPTIONS, FILE_SEARCH_SCOPE_OPTIONS, useFileSearchStore, } from './fileSearchStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useAppStore } from '../../app/stores/appStore'
+import { useModStore } from '../mod/stores/modStore'
 import { buildSearchRegExp, escapeHtml } from '../../shared/lib/text'
+import { buildModExternalMenuItem, buildModInfoCopyMenuItem, copyTextToClipboard } from '../mod/lib/modContextMenuItems'
 
 const appStore = useAppStore()
 const fileSearchStore = useFileSearchStore()
 const contextMenuStore = useContextMenuStore()
+const modStore = useModStore()
 const queryInputRef = ref(null)
 const treeScrollerRef = ref(null)
 const previewEditorRef = ref(null)
@@ -741,18 +744,43 @@ const selectTreeMatch = async (row) => {
 }
 
 const openModMenu = (event, group) => {
+  const modSource = buildFileSearchModSource(group)
   contextMenuStore.open(event, [
     { label: '打开模组目录', icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
+    { divider: true },
+    buildModInfoCopyMenuItem(modSource, { label: '复制模组信息' }),
+    buildModExternalMenuItem(modSource, appStore, { label: '访问页面' }),
   ], group)
 }
 
 const openFileMenu = (event, group, file) => {
   const firstRow = file.rows?.[0]
+  const relativePath = getRelativeSearchFilePath(group, file)
   contextMenuStore.open(event, [
     { label: '打开文件', icon: FileCode2, disabled: !firstRow, action: () => fileSearchStore.openResultFile(firstRow) },
     { label: '打开所在目录', icon: FolderOpen, disabled: !firstRow, action: () => fileSearchStore.openResultFolder(firstRow) },
     { label: '打开模组目录', icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
+    { divider: true },
+    { label: '复制文件路径', icon: Copy, disabled: !file?.file_path, action: () => copyTextToClipboard(file.file_path, '文件路径') },
+    { label: '复制相对路径', icon: Copy, disabled: !relativePath, action: () => copyTextToClipboard(relativePath, '相对路径') },
+    { label: '复制匹配行', icon: Copy, disabled: !firstRow?.matched_line, action: () => copyTextToClipboard(firstRow.matched_line, '匹配行') },
   ], { group, file })
+}
+
+const buildFileSearchModSource = (group = {}) => ({
+  ...(modStore.takeModById(group?.package_id) || {}),
+  mod_name: group?.mod_name,
+  package_id: group?.package_id,
+  mod_path: group?.mod_path,
+})
+
+const getRelativeSearchFilePath = (group = {}, file = {}) => {
+  const root = String(group?.mod_path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  const fullPath = String(file?.file_path || '').replace(/\\/g, '/')
+  if (!root || !fullPath) return ''
+  return fullPath.toLowerCase().startsWith(`${root.toLowerCase()}/`)
+    ? fullPath.slice(root.length + 1)
+    : fullPath
 }
 
 const openCurrentFile = async () => {

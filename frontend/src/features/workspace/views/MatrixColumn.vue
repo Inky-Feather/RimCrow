@@ -123,6 +123,7 @@ import { formatFileSize } from '../../../shared/lib/format'
 import { checkResult, toast } from '../../../shared/lib/common'
 import { getMatrixItemState, getMatrixMeaningfulChangeTime, getMatrixReplacementTargets, matchesMatrixFilter, MATRIX_FILTER_STATE_OPTIONS } from '../lib/matrixItemState'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
+import { buildModExternalMenuItem, copyTextToClipboard } from '../../mod/lib/modContextMenuItems'
 
 const props = defineProps({
   title: String,
@@ -379,6 +380,29 @@ const downloadMods = async (pathHashes) => {
   if (!workshopIds.length) return
   await appStore.downloadWorkshopItems(workshopIds)
 }
+const buildMatrixCopyMenuItem = (selectedMods) => {
+  const selectedNumStr = selectedMods.length > 1 ? ` (${selectedMods.length} 项)` : ''
+  const copyField = (label, getter) => {
+    const lines = selectedMods.map(mod => String(getter(mod) || '').trim()).filter(Boolean)
+    return {
+      label: `复制${label}${selectedNumStr}`,
+      icon: Copy,
+      disabled: lines.length === 0,
+      action: () => copyTextToClipboard(lines.join('\n'), label),
+    }
+  }
+  return {
+    label: '复制信息' + selectedNumStr,
+    icon: Copy,
+    disabled: selectedMods.length === 0,
+    children: [
+      copyField('名称', mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
+      copyField('包名', mod => mod.package_id),
+      copyField('工坊 ID', mod => mod.workshop_id),
+      copyField('路径', mod => mod.path),
+    ],
+  }
+}
 
 const handleContextMenu = async (event, targetMod) => {
   event.preventDefault()
@@ -424,6 +448,8 @@ const handleContextMenu = async (event, targetMod) => {
     menuItems.push({ label: '查看变动', icon: Activity, action: () => emit('open-timeline', targetMod) })
     menuItems.push({ label: '打开文件夹', icon: FolderInput, action: () => appStore.openPath(targetMod.path) })
   }
+  menuItems.push(buildMatrixCopyMenuItem(selectedMods))
+  menuItems.push(buildModExternalMenuItem(targetMod, appStore, { label: '访问页面' }))
 
   const sameJumpItem = buildJumpMenuItem('跳转到相同项', CornerUpRight, sameTargets)
   if (sameJumpItem) menuItems.push(sameJumpItem)

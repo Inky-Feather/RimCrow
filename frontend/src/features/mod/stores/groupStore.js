@@ -58,8 +58,14 @@ export const useGroupStore = defineStore('groups', () => {
   // === State ===
   const groupList = ref([]) // 分组列表
   const isDraggingGroup = ref(false) // 是否正在拖动分组
+  const targetGroupRequest = ref(null) // 外部页面请求分组面板定位的目标
 
   // === Actions ===
+  const focusGroup = (groupId) => {
+    const id = String(groupId ?? '').trim()
+    if (!id) return
+    targetGroupRequest.value = { groupId: id, requestedAt: Date.now() }
+  }
   // 设置分组数据
   const setGroups = (groups) => {
     groupList.value = normalizeGroups(groups)
@@ -326,9 +332,9 @@ export const useGroupStore = defineStore('groups', () => {
 
   return {
     // 状态
-    groupList, isDraggingGroup, allGroupNames,
+    groupList, isDraggingGroup, targetGroupRequest, allGroupNames,
     // 查询与本地同步
-    takeGroupsByModId, takeGroupById, setGroups, reset,
+    focusGroup, takeGroupsByModId, takeGroupById, setGroups, reset,
     // 分组管理
     getGroups, createGroup, deleteGroup, updateGroup,
     // 分组内容与排序

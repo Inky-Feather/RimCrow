@@ -340,7 +340,8 @@
                       class="input-glass w-40 px-2 py-1 text-xs text-text-main outline-none" >
                   </div>
                   <div v-if="filteredFailedItems.length === 0" class="text-text-dim">当前结果没有失败项</div>
-                  <div v-for="item in filteredFailedItems" :key="`${item.mod_path}-${item.rel_path}-${item.error}`" class="modal-section-subtle p-2">
+                  <div v-for="item in filteredFailedItems" :key="`${item.mod_path}-${item.rel_path}-${item.error}`" class="modal-section-subtle p-2"
+                    @contextmenu.prevent="openTextureFailedItemMenu($event, item)">
                     <div class="font-bold text-text-main">{{ item.mod_name || item.package_id || '未知模组' }}</div>
                     <div class="mt-1 break-all font-mono text-text-dim">{{ item.rel_path }}</div>
                     <div class="mt-1 text-accent-warning">{{ item.error }}</div>
@@ -410,7 +411,8 @@
                   <div v-if="filteredFileExclusionRows.length === 0" class="text-text-dim">
                     {{ fileExclusionRows.length === 0 ? '暂无文件排除' : '没有匹配的已排除文件' }}
                   </div>
-                  <div v-for="item in filteredFileExclusionRows" :key="`${item.mod_path}:${item.rel_path}`" class="modal-section-subtle p-2">
+                  <div v-for="item in filteredFileExclusionRows" :key="`${item.mod_path}:${item.rel_path}`" class="modal-section-subtle p-2"
+                    @contextmenu.prevent="openTextureFileExclusionMenu($event, item)">
                     <div class="font-bold text-text-main">{{ item.mod_name }}</div>
                     <div class="mt-1 break-all font-mono text-text-main">{{ item.rel_path }}</div>
                     <div class="mt-1 break-all text-text-dim">{{ item.mod_path }}</div>
@@ -442,7 +444,7 @@
 import { computed, ref, watch } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import { useNow } from '@vueuse/core'
-import { AlertTriangle, Ban, BrushCleaning, CheckCircle2, Cpu, FileText, FolderOpen, Images, Inbox, Loader2, Plus, Rocket, ScanSearch, ScrollText, Search, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, Ban, BrushCleaning, CheckCircle2, Copy, Cpu, FileText, FolderOpen, Images, Inbox, Loader2, Plus, Rocket, ScanSearch, ScrollText, Search, Trash2, X } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
 import { useTextureStore } from './textureStore'
 import { useModStore } from '../mod/stores/modStore'
@@ -454,6 +456,7 @@ import { useContextMenuStore } from '../../shared/components/context-menu/contex
 import TextureModCard from './TextureModCard.vue'
 import { formatFileSize } from '../../shared/lib/format'
 import { toast } from '../../shared/lib/common'
+import { copyTextToClipboard } from '../mod/lib/modContextMenuItems'
 
 const appStore = useAppStore()
 const textureStore = useTextureStore()
@@ -973,6 +976,38 @@ const openTextureModMenu = (event, item) => {
     { divider: true },
     { label: textureStore.isModExcluded(item?.package_id) ? '取消排除模组' : '排除模组', icon: Ban, disabled: !item?.package_id, action: () => handleToggleModExclusion(item) },
     { label: '打开模组目录', icon: FolderOpen, disabled: !item?.mod_path, action: () => appStore.openPath(item.mod_path) },
+  ], item)
+}
+
+const buildTextureFileCopyItems = (item) => {
+  const fullPath = item?.file_path || buildTextureFilePath(item?.mod_path, item?.rel_path)
+  const relPath = String(item?.rel_path || '').trim()
+  return [
+    { label: '复制完整路径', icon: Copy, disabled: !fullPath, action: () => copyTextToClipboard(fullPath, '完整路径') },
+    { label: '复制相对路径', icon: Copy, disabled: !relPath, action: () => copyTextToClipboard(relPath, '相对路径') },
+  ]
+}
+
+const openTextureFailedItemMenu = (event, item) => {
+  contextMenuStore.open(event, [
+    { label: '打开文件', icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
+    { label: '打开所在目录', icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
+    { label: '打开 todds 日志', icon: ScrollText, disabled: !getFailedItemLogPath(item), action: () => handleOpenToddsLog(item) },
+    { divider: true },
+    { label: '加入文件排除', icon: Plus, disabled: !item?.mod_path || !item?.rel_path, action: () => handleAddFailedItemExclusion(item) },
+    { divider: true },
+    ...buildTextureFileCopyItems(item),
+  ], item)
+}
+
+const openTextureFileExclusionMenu = (event, item) => {
+  contextMenuStore.open(event, [
+    { label: '打开文件', icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
+    { label: '打开所在目录', icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
+    { divider: true },
+    { label: '移除文件排除', icon: Trash2, level: 'danger', disabled: !item?.mod_path || !item?.rel_path, action: () => handleRemoveFileExclusion(item) },
+    { divider: true },
+    ...buildTextureFileCopyItems(item),
   ], item)
 }
 
