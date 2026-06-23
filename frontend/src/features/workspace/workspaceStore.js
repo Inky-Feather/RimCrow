@@ -105,7 +105,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 2. 工坊检索状态
   // 普通模式走外置缓存库和旧版详情接口；增强模式走 Steam Web API。
   // 两种模式的请求能力不同，但对前端列表和详情页要归一成同一套字段结构。
-  const hasSteamWebApiKey = () => !!String(appStore.settings.steam_web_api_key || '').trim()
+  const hasSteamWebApiKey = () => (
+    !!String(appStore.settings.steam_web_api_key || '').trim()
+    || !!appStore.settings?._secret_status?.['steam.web_api_key']?.has_value
+  )
   // 增强模式必须同时满足“开关已开”和“Key 已填写”；任一条件缺失都回到普通模式。
   const isEnhancedWorkshopSearchEnabled = () => !!appStore.settings.enable_steam_enhanced_api && hasSteamWebApiKey()
   const canUseCollectionOnlineSearch = () => !!window.pywebview && hasSteamWebApiKey()
@@ -1563,6 +1566,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       !!appStore.settingsReady,
       !!appStore.settings?.enable_steam_enhanced_api,
       String(appStore.settings?.steam_web_api_key || '').trim(),
+      !!appStore.settings?._secret_status?.['steam.web_api_key']?.has_value,
     ],
     () => { void syncWorkshopSearchModeFromSettings() },
     { immediate: true }

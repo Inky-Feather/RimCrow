@@ -92,6 +92,21 @@ export const useSettingsActions = ({
     return !!res.data?.deleted
   }
 
+  const revealSecret = async (secretKey, options = {}) => {
+    if (!window.pywebview) return null
+    const res = await window.pywebview.api.settings_reveal_secret(secretKey)
+    if (!checkResult(res, '读取已保存密钥', false, { ...options, debugMode: false })) return null
+    return res.data || null
+  }
+
+  const clearSecret = async (secretKey) => {
+    if (!window.pywebview) return false
+    const res = await window.pywebview.api.settings_clear_secret(secretKey)
+    if (!checkResult(res, '清除密钥', true)) return false
+    if (res.data?.settings) Object.assign(settings.value, res.data.settings)
+    return true
+  }
+
   // 应用全部设置（保存到后端并更新本地）
   const applySettings = async (newSettings) => {
     if (!window.pywebview) return
@@ -137,6 +152,8 @@ export const useSettingsActions = ({
     openSettingsPanel, closeSettingsPanel,
     // 设置保存
     saveSetting, applySettings,
+    // 密钥
+    revealSecret, clearSecret,
     // 用户主题
     refreshUserThemes, saveUserTheme, deleteUserTheme,
   }

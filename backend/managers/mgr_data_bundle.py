@@ -4,7 +4,6 @@ import shutil
 import uuid
 import zipfile
 from copy import deepcopy
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -464,13 +463,15 @@ class DataBundleManager:
         return payloads
 
     def _collect_sanitized_settings(self) -> dict[str, Any]:
-        config = asdict(settings.config)
+        config = settings.to_storage_dict()
         for key in list(self._SETTINGS_EXCLUDED_KEYS):
             config.pop(key, None)
 
         ai_config = config.get("ai", {})
         if isinstance(ai_config, dict):
             ai_config.pop("api_key", None)
+
+        config.pop("steam_web_api_key", None)
 
         network_config = config.get("network", {})
         proxy_config = network_config.get("proxy", {}) if isinstance(network_config, dict) else {}

@@ -77,8 +77,22 @@
                 :handle-browse="handleBrowse"
                 :check-path="checkPath"
               />
-              <SettingsNetworkTab v-if="currentTab === 'network'" :form-data="formData" />
-              <SettingsAiTab v-if="currentTab === 'ai'" :form-data="formData" />
+              <SettingsNetworkTab
+                v-if="currentTab === 'network'"
+                :form-data="formData"
+                :reveal-secret="appStore.revealSecret"
+                :is-secret-preserved="isSecretPreserved"
+                @preserve-secret="preserveFormSecret"
+                @clear-secret="clearFormSecret"
+              />
+              <SettingsAiTab
+                v-if="currentTab === 'ai'"
+                :form-data="formData"
+                :reveal-secret="appStore.revealSecret"
+                :is-secret-preserved="isSecretPreserved"
+                @preserve-secret="preserveFormSecret"
+                @clear-secret="clearFormSecret"
+              />
               <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
 
@@ -102,6 +116,7 @@
 import { ref, watch, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard } from 'lucide-vue-next'
 import { shakeComponent } from '../../shared/lib/domEffects'
+import { toast } from '../../shared/lib/common'
 import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
 
 // 导入 Common UI
@@ -152,6 +167,13 @@ const tabs = [
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
 ]
+const SECRET_FIELD_PATHS = {
+  'ai.api_key': 'ai.api_key',
+  'steam.web_api_key': 'steam_web_api_key',
+  'network.proxy.username': 'network.proxy.username',
+  'network.proxy.password': 'network.proxy.password',
+}
+let settingsPanelOpenVersion = 0
 
 const currentTabLabel = computed(() => (
   tabs.find(item => item.id === currentTab.value)?.label || currentTab.value
@@ -160,10 +182,12 @@ const currentTabLabel = computed(() => (
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
+    const openVersion = ++settingsPanelOpenVersion
     steamLaunchTouched.value = false
     // 利用 requestAnimationFrame 或 setTimeout
     // 让浏览器先渲染出弹窗的“背景”和“动画第一帧”，然后再去塞数据
     requestAnimationFrame(async () => {
+      if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)，将全局 Settings 和 当前 Context 捏合成一个对象给表单用
       // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
       try {
@@ -188,16 +212,21 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
         formData.value.translation = {}
       }
       formData.value.translation = appStore.normalizeTranslationSettings(formData.value.translation)
+      markSavedSecretsPreserved(formData.value)
+      showSecretStorageWarning(formData.value)
       // 如果当前上下文不健康，自动检测路径
       const autoDetected = !profileStore.activeContext || profileStore.activeContext.is_healthy === false
       if (autoDetected) {
         await autoDetect(false)
+        if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       }
       // 检测所有路径是否有效
       await checkPaths()
     })
   } else {
+    settingsPanelOpenVersion += 1
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
+    clearFormSecrets(formData.value)
   }
 })
 watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
@@ -313,6 +342,46 @@ const setNestedField = (target, pathKey, value) => {
     current = current[key]
   }
   current[segments[segments.length - 1]] = value
+}
+
+const clearFormSecrets = (target) => {
+  if (!target || typeof target !== 'object') return
+  Object.values(SECRET_FIELD_PATHS).forEach(pathKey => setNestedField(target, pathKey, ''))
+  delete target._preserve_secret_keys
+}
+
+const getPreserveSecretKeys = () => (
+  Array.isArray(formData.value?._preserve_secret_keys) ? formData.value._preserve_secret_keys : []
+)
+
+const setPreserveSecretKeys = (keys) => {
+  const nextKeys = [...new Set(keys.filter(key => SECRET_FIELD_PATHS[key]))]
+  if (nextKeys.length) {
+    formData.value._preserve_secret_keys = nextKeys
+  } else {
+    delete formData.value._preserve_secret_keys
+  }
+}
+
+const markSavedSecretsPreserved = (target) => {
+  const savedKeys = Object.keys(SECRET_FIELD_PATHS).filter(key => target?._secret_status?.[key]?.has_value)
+  if (savedKeys.length) target._preserve_secret_keys = [...new Set([...(target._preserve_secret_keys || []), ...savedKeys])]
+}
+
+const isSecretPreserved = (secretKey) => getPreserveSecretKeys().includes(secretKey)
+
+const preserveFormSecret = (secretKey) => {
+  setPreserveSecretKeys([...getPreserveSecretKeys(), secretKey])
+}
+
+const clearFormSecret = (secretKey) => {
+  setNestedField(formData.value, SECRET_FIELD_PATHS[secretKey], '')
+  setPreserveSecretKeys(getPreserveSecretKeys().filter(key => key !== secretKey))
+}
+
+const showSecretStorageWarning = (target) => {
+  if (!target?._secret_storage_warning) return
+  toast.warning(target._secret_storage_warning, { timeout: 9000 })
 }
 
 // 手动选择其他路径

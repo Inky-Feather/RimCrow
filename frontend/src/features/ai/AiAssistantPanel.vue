@@ -411,10 +411,15 @@ const globalAiConfig = computed(() => (
   || aiStore.runtimeAiConfig?.config
   || {}
 ))
+const globalAiSecretStatus = computed(() => (
+  appStore.settings?._secret_status?.['ai.api_key']
+  || globalAiConfig.value?._secret_status
+  || {}
+))
 const globalAiConfigSignature = computed(() => [
   String(globalAiConfig.value?.provider || '').trim(),
   String(globalAiConfig.value?.base_url || '').trim(),
-  String(globalAiConfig.value?.api_key || '').trim(),
+  String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : globalAiConfig.value?.api_key || '').trim(),
   String(globalAiConfig.value?.model || '').trim(),
   String(globalAiConfig.value?.temperature ?? '').trim(),
 ].join('|'))
@@ -425,7 +430,7 @@ const globalConnectionSignature = computed(() => [
 const modelListQuerySignature = computed(() => [
   String(globalAiConfig.value?.provider || '').trim(),
   String(globalAiConfig.value?.base_url || '').trim(),
-  String(globalAiConfig.value?.api_key || '').trim(),
+  String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : globalAiConfig.value?.api_key || '').trim(),
 ].join('|'))
 const runtimePrefs = computed(() => aiStore.getAssistantRuntimePrefs(props.ownerKey, {
   enabledTools: [...defaultEnabledToolIds.value],
@@ -471,6 +476,7 @@ const sessionModelConfig = computed(() => {
     provider: String(config.provider || '').trim(),
     base_url: String(config.base_url || '').trim(),
     api_key: String(config.api_key || '').trim(),
+    api_key_fingerprint: String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : '').trim(),
     model: String(sessionModel.value || config.model || '').trim(),
     temperature: Number(sessionTemperature.value),
   }
@@ -623,6 +629,7 @@ const refreshModelOptions = async ({ forceRefresh = true } = {}) => {
     provider: config.provider,
     base_url: config.base_url,
     api_key: config.api_key,
+    api_key_fingerprint: globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : '',
   }
   const models = await aiStore.getAiModels(query, {
     forceRefresh,

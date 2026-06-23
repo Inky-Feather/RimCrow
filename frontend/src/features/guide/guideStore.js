@@ -123,6 +123,7 @@ export const allGuides = [
       const provider = String(ai.provider || 'openai_compatible').trim().toLowerCase();
       const baseUrl = String(ai.base_url || '').trim();
       const apiKey = String(ai.api_key || '').trim();
+      const hasSavedApiKey = !!appStore.settings?._secret_status?.['ai.api_key']?.has_value;
       const normalizedProvider = provider === 'openai' || provider === 'custom_openai'
         ? 'openai_compatible'
         : provider;
@@ -140,7 +141,7 @@ export const allGuides = [
         ai.enabled &&
         String(ai.model || '').trim() &&
         normalizedProvider &&
-        (!requiresApiKey || apiKey)
+        (!requiresApiKey || apiKey || hasSavedApiKey)
       );
       if (!hasMinimalAiConfig) {
         return {

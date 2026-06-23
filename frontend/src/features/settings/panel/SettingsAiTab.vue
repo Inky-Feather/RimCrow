@@ -43,8 +43,10 @@
                           description="留空时使用当前协议的默认地址。Ollama 默认连接本机 127.0.0.1:11434；中转服务或非默认本地地址需要手动填写。"
                         />
                         <!-- API Key -->
-                        <CommonInput label="API Key" v-model="formData.ai.api_key" is-password class="col-span-2" 
-                          placeholder="接口需要时填写 API Key；本地部署通常可以留空。" 
+                        <CommonSecretInput label="API Key" v-model="formData.ai.api_key" class="col-span-2"
+                          secret-key="ai.api_key" :secret-status="aiSecretStatus" :preserved="isSecretPreserved('ai.api_key')" :reveal-secret="revealSecret"
+                          placeholder="接口需要时填写 API Key；本地部署通常可以留空。"
+                          @preserve="$emit('preserve-secret', $event)" @clear="$emit('clear-secret', $event)"
                         />
                       </div>
 
@@ -103,6 +105,7 @@ import { computed, ref, watch } from 'vue'
 import { Drama } from 'lucide-vue-next'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonInput from '../../../shared/components/input/CommonInput.vue'
+import CommonSecretInput from '../../../shared/components/input/CommonSecretInput.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import { toast } from '../../../shared/lib/common'
@@ -111,7 +114,11 @@ import { useAiStore } from '../../ai/aiStore'
 
 const props = defineProps({
   formData: { type: Object, required: true },
+  revealSecret: { type: Function, default: null },
+  isSecretPreserved: { type: Function, default: () => false },
 })
+
+defineEmits(['preserve-secret', 'clear-secret'])
 
 const appStore = useAppStore()
 const aiStore = useAiStore()
@@ -132,7 +139,12 @@ const DEFAULT_AI_BASE_URLS = {
 }
 
 const currentAiProviders = computed(() => aiStore.listAiProviders())
-const currentAiModels = computed(() => aiStore.getCachedAiModelOptions(props.formData?.ai || {}))
+const aiSecretStatus = computed(() => props.formData?._secret_status?.['ai.api_key'] || {})
+const aiModelQuery = computed(() => ({
+  ...(props.formData?.ai || {}),
+  api_key_fingerprint: props.formData?.ai?.api_key ? '' : (aiSecretStatus.value?.hint || ''),
+}))
+const currentAiModels = computed(() => aiStore.getCachedAiModelOptions(aiModelQuery.value))
 
 // 原始响应可能是对象或字符串，统一转成可读文本，便于排查模型兼容问题。
 const prettyTestRawResponse = computed(() => {
@@ -225,7 +237,7 @@ const handleProviderChange = (selectedProvider) => {
 const fetchAiModels = async ({ forceRefresh = false, warnOnEmpty = false, silent = true } = {}) => {
   const ai = props.formData?.ai
   if (!ai?.provider || !ai.enabled) return
-  await aiStore.getAiModels(ai, { forceRefresh, warnOnEmpty, silent })
+  await aiStore.getAiModels(aiModelQuery.value, { forceRefresh, warnOnEmpty, silent })
 }
 
 watch(() => props.formData?.ai, async (ai) => {

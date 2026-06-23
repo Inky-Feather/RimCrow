@@ -1,10 +1,12 @@
 import json
 import re
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
 
 from backend.settings import DATA_DIR
+from backend.utils.json_io import write_json_atomic
 
 
 THEMES_PATH = DATA_DIR / "themes.json"
@@ -16,6 +18,7 @@ class ThemeStore:
 
     def __init__(self, path: Path = THEMES_PATH):
         self.path = path
+        self._write_lock = threading.Lock()
 
     def _empty_payload(self) -> dict[str, Any]:
         return {"schema_version": 1, "themes": []}
@@ -33,12 +36,7 @@ class ThemeStore:
         return {"schema_version": int(payload.get("schema_version") or 1), "themes": themes}
 
     def _write_payload(self, payload: dict[str, Any]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = self.path.with_name(self.path.name + ".tmp")
-        with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-            handle.flush()
-        temp_path.replace(self.path)
+        write_json_atomic(self.path, payload, indent=2, lock=self._write_lock)
 
     def _normalize_theme(self, theme: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(theme, dict):

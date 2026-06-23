@@ -326,6 +326,7 @@ export const useAppStore = defineStore('app', () => {
     },
     enable_steam_enhanced_api: false,
     steam_web_api_key: '',
+    _secret_status: {},
 
     // --- 贴图优化 ---
     texture_opt: {
@@ -398,7 +399,7 @@ export const useAppStore = defineStore('app', () => {
     // 设置面板
     openSettingsPanel, closeSettingsPanel,
     // 设置保存与主题
-    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme,
+    saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme,
   } = useSettingsActions({
     settings,
     uiState,
@@ -1412,7 +1413,7 @@ export const useAppStore = defineStore('app', () => {
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource,
     // 设置、任务与应用维护
-    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, updateExternalDB,
     // 包传输
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,

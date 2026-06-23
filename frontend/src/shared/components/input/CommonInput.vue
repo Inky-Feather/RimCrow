@@ -24,7 +24,7 @@
         />
 
         <!-- 密码切换按钮 -->
-        <button v-if="isPassword" @click="showPassword = !showPassword" 
+        <button v-if="isPassword" @click="handlePasswordToggle"
           class="pr-3 text-text-dim hover:text-accent-primary transition-colors">
           <component :is="showPassword ? EyeOff : Eye" class="size-4" />
         </button>
@@ -43,10 +43,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import { Eye, EyeOff } from 'lucide-vue-next'
 
-defineProps({
+const props = defineProps({
   label: String,
   modelValue: [String, Number],
   placeholder: String,
@@ -58,4 +58,37 @@ defineProps({
 
 defineEmits(['update:modelValue', 'browse'])
 const showPassword = ref(false)
+let showPasswordTimer = null
+
+const clearShowPasswordTimer = () => {
+  if (!showPasswordTimer) return
+  window.clearTimeout(showPasswordTimer)
+  showPasswordTimer = null
+}
+
+const handlePasswordToggle = () => {
+  showPassword.value = !showPassword.value
+  clearShowPasswordTimer()
+  if (showPassword.value) {
+    showPasswordTimer = window.setTimeout(() => {
+      showPassword.value = false
+      showPasswordTimer = null
+    }, 30000)
+  }
+}
+
+watch(() => props.modelValue, (value) => {
+  if (String(value ?? '')) return
+  showPassword.value = false
+  clearShowPasswordTimer()
+})
+
+onUnmounted(clearShowPasswordTimer)
 </script>
+
+<style scoped>
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+</style>

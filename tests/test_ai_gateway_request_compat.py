@@ -100,6 +100,19 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
         self.assertEqual(redacted["max_output_tokens"], 64)
         self.assertNotEqual(redacted["access_token"], "secret-token-value")
 
+    def test_model_cache_key_does_not_contain_plain_api_key(self):
+        secret = "sk-plain-cache-secret"
+        self.gateway._fetch_models = lambda provider, base_url, api_key: ["model-a"]
+
+        self.gateway.get_models({
+            "provider": "openai_compatible",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": secret,
+        })
+
+        self.assertTrue(self.gateway._model_cache)
+        self.assertFalse(any(secret in cache_key for cache_key in self.gateway._model_cache))
+
     def test_ollama_connection_config_allows_empty_base_url(self):
         cfg = AIConfig(
             enabled=True,

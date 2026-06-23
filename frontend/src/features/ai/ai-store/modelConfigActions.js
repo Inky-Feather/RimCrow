@@ -34,6 +34,17 @@ const resolveAiProviderBaseUrl = (provider = '', baseUrl = '') => {
   return explicitBaseUrl || DEFAULT_AI_BASE_URLS[normalizedProvider] || ''
 }
 
+const fingerprintText = (value = '') => {
+  const text = normalizeText(value)
+  if (!text) return ''
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
 const normalizeReasoningCapabilityResult = (payload = {}, fallback = UNSUPPORTED_REASONING_CAPABILITIES) => ({
   supports_reasoning: !!payload?.supports_reasoning,
   supports_reasoning_effort: !!payload?.supports_reasoning_effort,
@@ -60,7 +71,7 @@ export const useModelConfigActions = ({
   const buildAiModelCacheKey = (tempConfig = {}) => JSON.stringify({
     provider: normalizeText(tempConfig?.provider),
     base_url: resolveAiProviderBaseUrl(tempConfig?.provider, tempConfig?.base_url),
-    api_key: normalizeText(tempConfig?.api_key),
+    api_key_fingerprint: normalizeText(tempConfig?.api_key_fingerprint) || fingerprintText(tempConfig?.api_key),
   })
 
   const getAiConfig = async () => {

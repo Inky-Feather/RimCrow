@@ -40,6 +40,7 @@ from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
+from backend.utils.redaction import redact_sensitive_data
 from backend.utils.tools import normalize_package_id, normalize_path_for_compare, normalize_path_for_storage, normalize_workshop_id
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
@@ -142,8 +143,11 @@ def log_api_call(func):
     def wrapper(self, *args, **kwargs):
         start_time = time.time()
         func_name = func.__name__
-        # 截断过长的参数显示（如巨大的文件内容）
-        safe_args = [str(a)[:50] + '...' if len(str(a)) > 50 else a for a in args]
+        # 先递归脱敏，再截断过长内容，避免 API Key 等凭据写入调试日志。
+        safe_args = []
+        for arg in args:
+            text = str(redact_sensitive_data(arg))
+            safe_args.append(text[:50] + "..." if len(text) > 50 else text)
         try:
             EventBus.resume() # 在执行操作前恢复事件总线
             # 执行原函数
@@ -386,6 +390,16 @@ class API:
                 return session.to_dict()
             return session or {}
         return {}
+
+    def _settings_payload(self) -> dict[str, Any]:
+        return settings.to_public_dict()
+
+    def _resolve_ai_request_config(self, config_data: dict | None) -> dict:
+        resolved = dict(config_data or {})
+        if not str(resolved.get("api_key") or "").strip():
+            ai_cfg = settings.config.ai
+            resolved["api_key"] = str(getattr(ai_cfg, "api_key", "") or "").strip()
+        return resolved
 
     def _get_runtime_session_manager(self):
         """
@@ -1087,7 +1101,7 @@ class API:
             "app_version": __version__,
             "build_mode": __build__,
             "runtime_mode": self._runtime_mode,
-            "settings": asdict(settings.config), # 转为字典发给前端
+            "settings": self._settings_payload(), # 转为字典发给前端，密钥只返回保存状态。
             "asset_port": self.file_mgr.get_port(),
             "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             "context_healthy": False, 
@@ -1459,6 +1473,33 @@ class API:
         return self.save_all_settings({key: value})
 
     @log_api_call
+    def settings_reveal_secret(self, secret_key: str):
+        """读取一项已保存密钥；前端只在用户进入密钥输入框时调用。"""
+        try:
+            value = settings.reveal_secret(secret_key)
+            return ApiResponse.success({
+                "key": secret_key,
+                "value": value,
+                "status": settings.get_secret_status().get(secret_key),
+            })
+        except Exception as e:
+            logger.warning("Reveal secret failed: %s", secret_key, exc_info=True)
+            return ApiResponse.error(str(e) or "无法读取已保存密钥，请确认本机安全存储可用后重试")
+
+    @log_api_call
+    def settings_clear_secret(self, secret_key: str):
+        """删除一项已保存密钥。"""
+        try:
+            settings.clear_secret(secret_key)
+            return ApiResponse.success({
+                "key": secret_key,
+                "settings": self._settings_payload(),
+            }, message="密钥已清除")
+        except Exception as e:
+            logger.warning("Clear secret failed: %s", secret_key, exc_info=True)
+            return ApiResponse.error(str(e) or "无法删除已保存密钥，请确认本机安全存储可用后重试")
+
+    @log_api_call
     def save_all_settings(self, settings_obj: dict):
         """
         保存所有设置 (前端设置面板保存时调用)
@@ -1476,6 +1517,8 @@ class API:
                 # 如果修改的是核心路径，同步到当前环境
                 if k in profile_keys:
                     profile_data[k] = v
+                elif k == "_preserve_secret_keys":
+                    global_data[k] = v
                 else:
                     # 只有 AppConfig 里定义的字段才进全局配置（过滤掉冗余的 UI 状态）
                     if hasattr(settings.config, k):
@@ -1515,7 +1558,7 @@ class API:
                 EventBus.send_toast("\n".join(normalization_warnings), type="warning", duration=5000)
 
             return ApiResponse.success({
-                "settings": asdict(settings.config),
+                "settings": self._settings_payload(),
                 "active_context": self.active_context # 这里的 serialize_data 会自动调用 to_dict
                 ,
                 "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
@@ -1650,7 +1693,7 @@ class API:
 
             response_data = {
                 "result": import_result,
-                "settings": asdict(settings.config),
+                "settings": self._settings_payload(),
                 "active_context": self.active_context,
             }
             message = "导入成功"
@@ -4344,6 +4387,8 @@ class API:
         if isinstance(ai_cfg, dict):
             ai_cfg = AIConfig(**ai_cfg)
         config_payload = asdict(ai_cfg)
+        config_payload["api_key"] = ""
+        config_payload["_secret_status"] = settings.get_secret_status().get("ai.api_key", {})
         config_payload["resolved_token_budget"] = {
             "profile": ai_cfg.model_token_budget(),
             "context_window_tokens": ai_cfg.resolved_context_window_tokens(),
@@ -4365,12 +4410,13 @@ class API:
         """保存 AI 配置"""
         try:
             current_ai = settings.config.ai
+            config_data = dict(config_data or {})
+            settings.apply_secret_inputs({"ai": config_data})
             editable_keys = {
                 "enabled",
                 "provider",
                 "endpoint_mode",
                 "base_url",
-                "api_key",
                 "model",
                 "temperature",
                 "max_output_tokens",
@@ -4378,7 +4424,7 @@ class API:
                 "context_window_tokens",
                 "max_concurrency",
             }
-            for k, v in (config_data or {}).items():
+            for k, v in config_data.items():
                 if k not in editable_keys or not hasattr(current_ai, k):
                     continue
                 setattr(current_ai, k, v)
@@ -4402,6 +4448,7 @@ class API:
             ai_cfg = AIConfig(**ai_cfg)
 
         if override_config:
+            override_config = self._resolve_ai_request_config(override_config)
             merged = asdict(ai_cfg)
             for key, value in override_config.items():
                 if key in merged:
@@ -4435,7 +4482,7 @@ class API:
         :param temp_config: 前端表单中的临时配置 {provider, base_url, api_key}
         """
         try:
-            models = self.ai_mgr.get_models(temp_config)
+            models = self.ai_mgr.get_models(self._resolve_ai_request_config(temp_config))
             return ApiResponse.success(models)
         except Exception as e:
             return ApiResponse.error(f"获取模型列表失败: {str(e)}")
@@ -4452,6 +4499,7 @@ class API:
     @log_api_call
     def ai_chat(self, message: str, config_data: dict={}):
         """测试对话"""
+        config_data = self._resolve_ai_request_config(config_data)
         result = self._ai_check_enable_with_config(config_data)
         if not result['status'] == 'success': return result
         try:
@@ -4930,7 +4978,7 @@ class API:
             res = {
                 "profile": self.profile_mgr.get_current_profile().__dict__,
                 "context": self.active_context.__dict__,
-                "settings": asdict(settings.config)
+                "settings": self._settings_payload()
             }
             return ApiResponse.success(message=f"已切换到环境: {pid}", data=res)
         except Exception as e:
@@ -4954,7 +5002,7 @@ class API:
                     "fallback_profile_id": fallback_profile_id,
                     "active_profile_id": fallback_profile_id,
                     "context": fallback_context,
-                    "settings": asdict(settings.config),
+                    "settings": self._settings_payload(),
                 },
             )
     
@@ -5659,7 +5707,7 @@ class API:
         try:
             raw_document = document if isinstance(document, dict) else {}
             translation_document = TranslationDocument.from_segments(
-                raw_document.get("segments") if isinstance(raw_document.get("segments"), list) else [],
+                raw_document.get("segments", []) if isinstance(raw_document.get("segments"), list) else [],
                 format=raw_document.get("format") or "plain_text",
                 context=raw_document.get("context") or "",
                 glossary=raw_document.get("glossary") if isinstance(raw_document.get("glossary"), list) else [],

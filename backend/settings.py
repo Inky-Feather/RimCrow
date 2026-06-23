@@ -4,13 +4,14 @@ import json
 import os
 import shutil
 import threading
-from datetime import datetime
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, normalize_language_code
 from backend.migrations.app_relocation import apply_config_relocation
+from backend.utils.json_io import write_json_atomic
+from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_store
 from backend.utils.tools import normalize_path_for_storage, same_path
 
 
@@ -352,6 +353,7 @@ class SettingsManager:
         self.config = AppConfig()
         # 2. 执行加载（此时 _recursive_update 访问 self.config 就安全了）
         self._load_to_config()
+        self._hydrate_secrets()
         
         self._initialized = True
 
@@ -527,6 +529,12 @@ class SettingsManager:
             self._normalize_config()
             self._sync_derived_paths()
 
+    def _hydrate_secrets(self):
+        """加载配置后迁移旧明文，并把系统凭据库中的值回灌到运行时配置。"""
+        migrated = secret_store.migrate_and_hydrate(self.config)
+        if migrated:
+            self.save()
+
     def _normalize_config(self) -> list[str]:
         warnings: list[str] = []
         previous_home_path = str(self.config.home_path or "").strip()
@@ -693,24 +701,65 @@ class SettingsManager:
 
     def save(self):
         """保存当前配置到磁盘"""
-        temp_path = CONFIG_PATH.with_name(CONFIG_PATH.name + ".tmp")
         try:
-            with self._save_lock:
-                self._normalize_config()
-                self._sync_derived_paths()
-                with open(temp_path, 'w', encoding='utf-8') as f:
-                    json.dump(asdict(self.config), f, indent=4, ensure_ascii=False)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(temp_path, CONFIG_PATH)
+            self._normalize_config()
+            self._sync_derived_paths()
+            write_json_atomic(CONFIG_PATH, self.to_storage_dict(), indent=4, lock=self._save_lock)
             # print("Settings saved.")
         except Exception as e:
             print(f"Error saving settings: {e}")
-            try:
-                if temp_path.exists():
-                    temp_path.unlink()
-            except Exception:
-                pass
+
+    def apply_secret_inputs(self, data_dict: Dict[str, Any]) -> bool:
+        """保存设置提交中的密钥：有值则更新，空值则清除，保留列表中的空值不处理。"""
+        try:
+            changed = secret_store.apply_secret_inputs(self.config, data_dict)
+            if changed:
+                self.save()
+            return changed
+        except SecretStoreError as e:
+            raise RuntimeError(str(e)) from e
+
+    def clear_secret(self, secret_key: str):
+        secret_store.delete_secret(secret_key)
+        secret_store.clear_runtime_secret(self.config, secret_key)
+        self.save()
+
+    def reveal_secret(self, secret_key: str) -> str:
+        value = secret_store.get_secret(secret_key)
+        if value:
+            return value
+        path = SECRET_FIELDS[secret_store.validate_key(secret_key)]
+        current: Any = self.config
+        for segment in path:
+            current = getattr(current, segment, "") if not isinstance(current, dict) else current.get(segment, "")
+        return str(current or "")
+
+    def get_secret_status(self) -> dict[str, dict[str, Any]]:
+        return secret_store.status_map(self.config)
+
+    def to_storage_dict(self) -> Dict[str, Any]:
+        payload = asdict(self.config)
+        self._clear_secret_fields(payload, preserve_keys=secret_store.fallback_keys)
+        return payload
+
+    def to_public_dict(self) -> Dict[str, Any]:
+        payload = self.to_storage_dict()
+        payload["_secret_status"] = self.get_secret_status()
+        if secret_store.fallback_keys:
+            payload["_secret_storage_warning"] = "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。"
+        return payload
+
+    def _clear_secret_fields(self, payload: Dict[str, Any], preserve_keys: Set[str] | None = None) -> None:
+        for key, path in SECRET_FIELDS.items():
+            if preserve_keys and key in preserve_keys:
+                continue
+            current: Any = payload
+            for segment in path[:-1]:
+                current = current.get(segment) if isinstance(current, dict) else None
+                if current is None:
+                    break
+            if isinstance(current, dict):
+                current[path[-1]] = ""
 
     # 强烈建议新增这个方法供 api.save_all_settings 使用
     def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
@@ -718,6 +767,7 @@ class SettingsManager:
         全量更新，同样需要处理逻辑触发
         """
         before_state = asdict(self.config)
+        self.apply_secret_inputs(data_dict)
         self._recursive_update(self.config, data_dict)
         normalization_warnings = self._normalize_config()
         self._sync_derived_paths()
@@ -756,12 +806,7 @@ settings = SettingsManager()
 def backup_config_for_update() -> bool:
     if not CONFIG_PATH.exists(): return False
     try:
-        config_backup_dir = BACKUP_DIR / "config"
-        config_backup_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(CONFIG_PATH, CONFIG_UPDATE_BACKUP_PATH)
-        # 除了“更新中途可直接回滚”的固定备份，再保留一份时间戳快照，避免后续排查时只剩最后一次状态。
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        shutil.copy2(CONFIG_PATH, config_backup_dir / f"config-update-{timestamp}.json")
         return True
     except Exception as e:
         print(f"Backup config for update error: {e}")

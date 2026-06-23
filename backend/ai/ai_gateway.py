@@ -43,6 +43,7 @@ from backend.ai.def_model_capabilities import (
 from backend.settings import settings
 from backend.managers.mgr_network import network_mgr
 from backend.utils.logger import logger
+from backend.utils.redaction import fingerprint_secret, redact_sensitive_data
 
 DEFAULT_BASE_URLS = {
     "openai_compatible": "https://api.openai.com/v1",
@@ -149,7 +150,7 @@ class LiteLLMGateway:
             os.environ["LITELLM_LOG"] = "DEBUG"
         
         # 轻量级缓存字典，用于缓存自定义接口的模型列表
-        # 格式: { "provider_baseurl_apikey": (timestamp, [models...]) }
+        # 格式: { "provider_baseurl_keyfingerprint": (timestamp, [models...]) }
         self._model_cache: dict[str, tuple[float, list[str]]] = {}
         self._cache_ttl = 300  # 缓存有效期 5 分钟 (300秒)
 
@@ -430,20 +431,7 @@ class LiteLLMGateway:
 
     def _redact_request_kwargs_for_log(self, request_kwargs: dict) -> dict:
         """脱敏请求参数，避免 Debug 日志泄露 API Key。"""
-        redacted = dict(request_kwargs or {})
-        for key in list(redacted.keys()):
-            lowered = str(key).lower()
-            is_sensitive = (
-                lowered in {"api_key", "authorization", "password", "secret"}
-                or lowered.endswith("_api_key")
-                or lowered.endswith("_token")
-                or lowered.endswith("_password")
-                or lowered.endswith("_secret")
-            )
-            if is_sensitive:
-                value = str(redacted.get(key) or "")
-                redacted[key] = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
-        return redacted
+        return redact_sensitive_data(dict(request_kwargs or {}))
 
     # =========================================================================
     # 厂商与模型探测
@@ -467,7 +455,7 @@ class LiteLLMGateway:
         api_key = config_dict.get("api_key", "")
 
         if not provider or not base_url: return []
-        cache_key = f"{provider}_{base_url}_{api_key}"
+        cache_key = f"{provider}_{base_url}_{fingerprint_secret(api_key)}"
         if cache_key in self._model_cache:
             timestamp, cached_models = self._model_cache[cache_key]
             if time.time() - timestamp < self._cache_ttl:
