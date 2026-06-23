@@ -4365,9 +4365,13 @@ class API:
             ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
             if not ok:
                 return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
-            success = self.steam_mgr.subscribe_items(workshop_ids)
-            if success:
-                return ApiResponse.success(message="已发送订阅请求 (需Steam运行中)")
+            task_id = self.steam_mgr.subscribe_items(workshop_ids)
+            if task_id:
+                normalized_ids = [str(workshop_ids)] if isinstance(workshop_ids, (int, str)) else [str(i) for i in workshop_ids]
+                return ApiResponse.success({
+                    "task_id": task_id,
+                    "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
+                }, message="已发送订阅请求 (需Steam运行中)")
             else:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪 (请确保Steam已运行)")
         except Exception as e:
@@ -4436,8 +4440,8 @@ class API:
                 return ApiResponse.error("SteamCMD 未安装，正在尝试自动修复，请稍后...")
             
             # 启动后台下载
-            self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
-            return ApiResponse.success(message="SteamCMD 下载任务已启动")
+            task_id = self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
+            return ApiResponse.success({"task_id": task_id}, message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
     

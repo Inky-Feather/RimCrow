@@ -7,8 +7,10 @@
                       {{ profileStore?.currentProfile?.name }}
                     </label>
                   </h3>
-                  <button @click="autoDetect" v-tooltip="'尝试通过注册表自动搜索路径'" class="px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
-                    自动搜索路径
+                  <button @click="handleAutoDetect" :disabled="isPending('auto-detect')" :class="isPending('auto-detect') ? 'rmm-action-disabled' : ''"
+                    v-tooltip="isPending('auto-detect') ? '正在自动搜索路径' : '尝试通过注册表自动搜索路径'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
+                    <LoaderCircle v-if="isPending('auto-detect')" class="size-3 animate-spin" />
+                    {{ isPending('auto-detect') ? '搜索中' : '自动搜索路径' }}
                   </button>
                 </div>
                 <div class="grid gap-6">
@@ -53,7 +55,11 @@
                     <CommonSwitch class="col-span-1" label="自动检查管理器模组更新" v-model="formData.enable_auto_steamcmd_mod_update_check" description="按设定间隔检查管理器模组目录中由 SteamCMD 下载的工坊模组更新。" />
                     <div class="col-span-1 grid grid-cols-2 gap-3 items-end">
                       <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.steamcmd_mod_update_check_interval_days" :step="1" :min="1" :max="365" />
-                      <button @click="handleCheckSteamcmdMods" class="px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all"> 检查更新 </button>
+                      <button @click="handleCheckSteamcmdMods" :disabled="isPending('steamcmd-mods')" :class="isPending('steamcmd-mods') ? 'rmm-action-disabled' : ''"
+                        class="inline-flex items-center justify-center gap-1 px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all">
+                        <LoaderCircle v-if="isPending('steamcmd-mods')" class="size-3 animate-spin" />
+                        {{ isPending('steamcmd-mods') ? '检查中' : '检查更新' }}
+                      </button>
                     </div>
                   </div>
                   <div class="modal-section grid grid-cols-2 gap-2 p-3">
@@ -81,6 +87,8 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { LoaderCircle } from 'lucide-vue-next'
 import CommonPathInput from '../../../shared/components/input/CommonPathInput.vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
@@ -102,6 +110,7 @@ const props = defineProps({
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()
+const pendingAction = ref('')
 
 const LOAD_ORDER_DIR_MODE_OPTIONS = [
   { label: '默认', value: 'default' },
@@ -121,8 +130,21 @@ const handlePreferSteamLaunchUpdate = (value) => {
   props.markSteamLaunchTouched?.()
   props.formData.prefer_steam_launch = !!value
 }
+const isPending = (action) => pendingAction.value === action
+const runPendingAction = async (action, runner) => {
+  if (pendingAction.value) return
+  pendingAction.value = action
+  try {
+    await runner?.()
+  } finally {
+    pendingAction.value = ''
+  }
+}
+const handleAutoDetect = async () => {
+  await runPendingAction('auto-detect', () => props.autoDetect())
+}
 
 const handleCheckSteamcmdMods = async () => {
-  await appStore.checkSteamcmdModUpdates({ manual: true, prompt: true })
+  await runPendingAction('steamcmd-mods', () => appStore.checkSteamcmdModUpdates({ manual: true, prompt: true }))
 }
 </script>

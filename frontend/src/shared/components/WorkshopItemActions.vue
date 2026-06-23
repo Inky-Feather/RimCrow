@@ -2,27 +2,31 @@
   <div :class="groupClass">
     <slot name="before" :workshop-id="normalizedWorkshopId" :payload="workshopPayload" />
     <template v-for="action in normalizedBeforeActions" :key="action.key">
-      <button type="button" :class="[buttonClass, action.class]" :disabled="action.disabled" :aria-label="action.ariaLabel || action.label" v-tooltip="action.tooltip || action.label" @click.stop="runExtraAction(action)">
-        <component v-if="action.icon" :is="action.icon" />
+      <button type="button" :class="[buttonClass, action.class]" :disabled="isPendingAction(action.key) || action.disabled" :aria-label="action.ariaLabel || action.label" v-tooltip="actionTooltip(action)" @click.stop="runExtraAction(action)">
+        <LoaderCircle v-if="isPendingAction(action.key)" :class="[iconSizeClass, 'animate-spin']" />
+        <component v-else-if="action.icon" :is="action.icon" />
         <span v-if="showLabels && action.label" class="text-[0.68rem] font-bold leading-none">{{ action.label }}</span>
       </button>
     </template>
 
     <button v-if="!showUnsubscribe" type="button" :class="[buttonClass, builtInActionClass.primary]"
-      :disabled="!canSubscribe" aria-label="订阅" v-tooltip="'订阅该工坊项目到 Steam'" @click.stop="subscribe">
-      <Flag :class="iconSizeClass" />
+      :disabled="isPendingAction('subscribe') || !canSubscribe" aria-label="订阅" v-tooltip="isPendingAction('subscribe') ? '正在发送订阅请求' : '订阅该工坊项目到 Steam'" @click.stop="subscribe">
+      <LoaderCircle v-if="isPendingAction('subscribe')" :class="[iconSizeClass, 'animate-spin']" />
+      <Flag v-else :class="iconSizeClass" />
       <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">订阅</span>
     </button>
 
     <button v-if="showUnsubscribe" type="button" :class="[buttonClass, builtInActionClass.danger]"
-      :disabled="!canUnsubscribe" aria-label="取订" v-tooltip="'取消订阅该工坊项目'"  @click.stop="unsubscribe">
-      <FlagOff :class="iconSizeClass" />
+      :disabled="isPendingAction('unsubscribe') || !canUnsubscribe" aria-label="取订" v-tooltip="isPendingAction('unsubscribe') ? '正在发送取消订阅请求' : '取消订阅该工坊项目'"  @click.stop="unsubscribe">
+      <LoaderCircle v-if="isPendingAction('unsubscribe')" :class="[iconSizeClass, 'animate-spin']" />
+      <FlagOff v-else :class="iconSizeClass" />
       <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">取订</span>
     </button>
 
     <button type="button" :class="[buttonClass, builtInActionClass.success]"
-      :disabled="!canDownload" aria-label="下载" v-tooltip="'下载该工坊项目到管理器'" @click.stop="download">
-      <Download :class="iconSizeClass" />
+      :disabled="isPendingAction('download') || !canDownload" aria-label="下载" v-tooltip="isPendingAction('download') ? '正在发送下载请求' : '下载该工坊项目到管理器'" @click.stop="download">
+      <LoaderCircle v-if="isPendingAction('download')" :class="[iconSizeClass, 'animate-spin']" />
+      <Download v-else :class="iconSizeClass" />
       <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">下载</span>
     </button>
 
@@ -45,8 +49,9 @@
     </button>
 
     <template v-for="action in normalizedAfterActions" :key="action.key">
-      <button type="button" :class="[buttonClass, action.class]" :disabled="action.disabled" :aria-label="action.ariaLabel || action.label" v-tooltip="action.tooltip || action.label" @click.stop="runExtraAction(action)">
-        <component v-if="action.icon" :is="action.icon" />
+      <button type="button" :class="[buttonClass, action.class]" :disabled="isPendingAction(action.key) || action.disabled" :aria-label="action.ariaLabel || action.label" v-tooltip="actionTooltip(action)" @click.stop="runExtraAction(action)">
+        <LoaderCircle v-if="isPendingAction(action.key)" :class="[iconSizeClass, 'animate-spin']" />
+        <component v-else-if="action.icon" :is="action.icon" />
         <span v-if="showLabels && action.label" class="text-[0.68rem] font-bold leading-none">{{ action.label }}</span>
       </button>
     </template>
@@ -55,9 +60,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { Download, Flag, FlagOff, Link, Trash2 } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Download, Flag, FlagOff, Link, LoaderCircle, Trash2 } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
+import { useTaskStore } from '../../app/stores/taskStore'
 import { IconSteam } from '../lib/constants'
 
 const props = defineProps({
@@ -83,6 +89,8 @@ const props = defineProps({
 const emit = defineEmits(['subscribe', 'unsubscribe', 'download', 'delete', 'action'])
 
 const appStore = useAppStore()
+const taskStore = useTaskStore()
+const pendingActions = ref(new Set())
 
 const normalizedWorkshopId = computed(() => String(props.workshopId || '').trim())
 const workshopPayload = computed(() => normalizedWorkshopId.value)
@@ -182,30 +190,73 @@ const openSteam = () => {
   }
   appStore.openSteamWorkshopUrl(normalizedWebUrl.value)
 }
-const subscribe = () => {
+const isPendingAction = (key) => pendingActions.value.has(key)
+const setPendingAction = (key, pending) => {
+  const next = new Set(pendingActions.value)
+  if (pending) next.add(key)
+  else next.delete(key)
+  pendingActions.value = next
+}
+const actionTooltip = (action) => (
+  isPendingAction(action?.key) ? `${action?.label || '操作'}处理中` : (action?.tooltip || action?.label || '')
+)
+const getTaskIdFromResult = (result) => String(result?.taskId || result?.task_id || result?.data?.task_id || '')
+const waitForActionTask = async (types, startedAt, result) => {
+  const taskId = getTaskIdFromResult(result)
+  if (taskId) {
+    await taskStore.waitForTaskCompletion(taskId).catch(() => null)
+    return
+  }
+  if (!types) return
+  await taskStore.waitForLatestTaskByType(types, { since: startedAt, startTimeout: 5000 }).catch(() => null)
+}
+const runWithPending = async (key, runner, taskTypes = null) => {
+  if (isPendingAction(key)) return
+  const startedAt = Date.now()
+  setPendingAction(key, true)
+  try {
+    const result = await runner?.()
+    await waitForActionTask(taskTypes, startedAt, result)
+    return result
+  } finally {
+    setPendingAction(key, false)
+  }
+}
+const subscribe = async () => {
   if (!canSubscribe.value) return
-  appStore.subscribeWorkshopIds([workshopPayload.value])
-  emit('subscribe', workshopPayload.value)
+  await runWithPending('subscribe', async () => {
+    const result = await appStore.subscribeWorkshopIds([workshopPayload.value])
+    if (result) emit('subscribe', workshopPayload.value)
+    return result
+  }, 'steam-subscribe')
 }
-const unsubscribe = () => {
+const unsubscribe = async () => {
   if (!canUnsubscribe.value) return
-  appStore.unsubscribeWorkshopIds([workshopPayload.value])
-  emit('unsubscribe', workshopPayload.value)
+  await runWithPending('unsubscribe', async () => {
+    const result = await appStore.unsubscribeWorkshopIds([workshopPayload.value])
+    if (result) emit('unsubscribe', workshopPayload.value)
+    return result
+  }, 'steam-unsubscribe')
 }
-const download = () => {
+const download = async () => {
   if (!canDownload.value) return
-  appStore.downloadWorkshopItems([workshopPayload.value])
-  emit('download', workshopPayload.value)
+  await runWithPending('download', async () => {
+    const result = await appStore.downloadWorkshopItems([workshopPayload.value])
+    if (result) emit('download', workshopPayload.value)
+    return result
+  }, 'steamcmd-download')
 }
 const deleteItem = () => {
   const payload = props.deletePayload === undefined ? workshopPayload.value : props.deletePayload
   if (props.onDelete) props.onDelete(payload)
   emit('delete', payload)
 }
-const runExtraAction = (action) => {
+const runExtraAction = async (action) => {
   if (!action || action.disabled) return
-  const payload = action.payload === undefined ? workshopPayload.value : action.payload
-  if (typeof action.onClick === 'function') action.onClick(payload, action)
-  emit('action', { action, payload })
+  await runWithPending(action.key, async () => {
+    const payload = action.payload === undefined ? workshopPayload.value : action.payload
+    if (typeof action.onClick === 'function') await action.onClick(payload, action)
+    emit('action', { action, payload })
+  })
 }
 </script>

@@ -29,10 +29,11 @@
                       </div>
 
                       <div class="flex items-center justify-between gap-1">
-                        <button @click="appStore.showChangelog()"
+                        <button @click="handleShowChangelog" :disabled="isPending('changelog')" :class="isPending('changelog') ? 'rmm-action-disabled' : ''"
                           class="px-3 py-1.5 bg-accent-tip/15 hover:bg-accent-tip/30 border border-accent-tip/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
-                            更新日志
+                            <LoaderCircle v-if="isPending('changelog')" class="h-3 w-3 animate-spin" />
+                            {{ isPending('changelog') ? '读取中' : '更新日志' }}
                           </span>
                         </button>
                         <button @click="appStore.checkUpdate(true)" :disabled="appStore.updateState.isChecking"
@@ -76,13 +77,19 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button @click="openDataBundleImportDialog"
+                        <button @click="openDataBundleImportDialog" :disabled="isPending('data-import')" :class="isPending('data-import') ? 'rmm-action-disabled' : ''"
                           class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
-                          导入数据包
+                          <span class="inline-flex items-center gap-1">
+                            <LoaderCircle v-if="isPending('data-import')" class="h-3 w-3 animate-spin" />
+                            {{ isPending('data-import') ? '读取中' : '导入数据包' }}
+                          </span>
                         </button>
-                        <button @click="openDataBundleModal"
+                        <button @click="openDataBundleModal" :disabled="isPending('data-export')" :class="isPending('data-export') ? 'rmm-action-disabled' : ''"
                           class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.2)] transition-all" >
-                          导出软件数据
+                          <span class="inline-flex items-center gap-1">
+                            <LoaderCircle v-if="isPending('data-export')" class="h-3 w-3 animate-spin" />
+                            {{ isPending('data-export') ? '读取中' : '导出软件数据' }}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -96,9 +103,12 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button @click="openModPackageImportDialog"
+                        <button @click="openModPackageImportDialog" :disabled="isPending('mod-import')" :class="isPending('mod-import') ? 'rmm-action-disabled' : ''"
                           class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
-                          导入模组包
+                          <span class="inline-flex items-center gap-1">
+                            <LoaderCircle v-if="isPending('mod-import')" class="h-3 w-3 animate-spin" />
+                            {{ isPending('mod-import') ? '读取中' : '导入模组包' }}
+                          </span>
                         </button>
                         <button @click="openCurrentProfileExportDialog"
                           class="px-4 py-1.5 rounded-lg bg-accent-special hover:bg-accent-special/85 text-on-accent-special text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-cool),0.2)] transition-all" >
@@ -171,6 +181,20 @@ const dataBundleSchema = ref({
   file_extension: '.rmmdata.zip',
 })
 const showDataBundleModal = ref(false)
+const pendingAction = ref('')
+const isPending = (action) => pendingAction.value === action
+const runPendingAction = async (action, runner) => {
+  if (pendingAction.value) return
+  pendingAction.value = action
+  try {
+    await runner?.()
+  } finally {
+    pendingAction.value = ''
+  }
+}
+const handleShowChangelog = async () => {
+  await runPendingAction('changelog', () => appStore.showChangelog())
+}
 
 const loadDataBundleSchema = async () => {
   // schema 由后端提供，前端只按模块定义渲染导出项，避免写死可打包范围。
@@ -180,10 +204,12 @@ const loadDataBundleSchema = async () => {
 }
 
 const openDataBundleModal = async () => {
-  if (!(dataBundleSchema.value?.modules || []).length) {
-    await loadDataBundleSchema()
-  }
-  showDataBundleModal.value = true
+  await runPendingAction('data-export', async () => {
+    if (!(dataBundleSchema.value?.modules || []).length) {
+      await loadDataBundleSchema()
+    }
+    showDataBundleModal.value = true
+  })
 }
 
 const closeDataBundleModal = () => {
@@ -206,60 +232,64 @@ const handleClearRemoteImageCache = async () => {
 }
 
 const openDataBundleImportDialog = async () => {
-  // 导入前先检查数据包内容，把冲突处理交给统一的迁移面板。
-  const schema = await appStore.getDataBundleSchema()
-  if (!schema) return
+  await runPendingAction('data-import', async () => {
+    // 导入前先检查数据包内容，把冲突处理交给统一的迁移面板。
+    const schema = await appStore.getDataBundleSchema()
+    if (!schema) return
 
-  const extensions = [
-    schema.file_extension || '.rmmdata.zip',
-    ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata']),
-  ]
-    .map(item => String(item || '').trim())
-    .filter(Boolean)
-  const bundlePath = await appStore.getFilePath('', [
-    `RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`,
-    'All Files (*.*)',
-  ])
-  if (!bundlePath) return
+    const extensions = [
+      schema.file_extension || '.rmmdata.zip',
+      ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata']),
+    ]
+      .map(item => String(item || '').trim())
+      .filter(Boolean)
+    const bundlePath = await appStore.getFilePath('', [
+      `RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`,
+      'All Files (*.*)',
+    ])
+    if (!bundlePath) return
 
-  const inspectData = await appStore.inspectDataBundle(bundlePath)
-  if (!inspectData) return
+    const inspectData = await appStore.inspectDataBundle(bundlePath)
+    if (!inspectData) return
 
-  appStore.openPackageTransferDialog('data-import', {
-    title: '导入软件数据包',
-    bundlePath,
-    inspectData,
-    dataBundleSchema: schema,
+    appStore.openPackageTransferDialog('data-import', {
+      title: '导入软件数据包',
+      bundlePath,
+      inspectData,
+      dataBundleSchema: schema,
+    })
   })
 }
 
 const openModPackageImportDialog = async () => {
-  // 模组包导入需要先根据当前可用安装目录确定默认落点，迁移面板仍允许用户后续调整。
-  const schema = await appStore.getModPackageSchema()
-  if (!schema) return
+  await runPendingAction('mod-import', async () => {
+    // 模组包导入需要先根据当前可用安装目录确定默认落点，迁移面板仍允许用户后续调整。
+    const schema = await appStore.getModPackageSchema()
+    if (!schema) return
 
-  const bundlePath = await appStore.getFilePath('', [
-    `RMM Mod Package (*${schema.file_extension || '.rmmmods.zip'})`,
-    'All Files (*.*)',
-  ])
-  if (!bundlePath) return
+    const bundlePath = await appStore.getFilePath('', [
+      `RMM Mod Package (*${schema.file_extension || '.rmmmods.zip'})`,
+      'All Files (*.*)',
+    ])
+    if (!bundlePath) return
 
-  const availableInstalls = Array.isArray(schema.available_installs) ? schema.available_installs : []
-  const targetKind = availableInstalls.length > 0 ? 'game_install' : 'self_mods'
-  const gameInstallPath = String(availableInstalls[0]?.install_path || '')
-  const inspectData = await appStore.prepareModPackageImport(bundlePath, {
-    target_kind: targetKind,
-    game_install_path: gameInstallPath,
-  })
-  if (!inspectData) return
+    const availableInstalls = Array.isArray(schema.available_installs) ? schema.available_installs : []
+    const targetKind = availableInstalls.length > 0 ? 'game_install' : 'self_mods'
+    const gameInstallPath = String(availableInstalls[0]?.install_path || '')
+    const inspectData = await appStore.prepareModPackageImport(bundlePath, {
+      target_kind: targetKind,
+      game_install_path: gameInstallPath,
+    })
+    if (!inspectData) return
 
-  appStore.openPackageTransferDialog('mod-import', {
-    title: '导入模组包',
-    bundlePath,
-    inspectData,
-    modPackageSchema: schema,
-    targetKind,
-    gameInstallPath,
+    appStore.openPackageTransferDialog('mod-import', {
+      title: '导入模组包',
+      bundlePath,
+      inspectData,
+      modPackageSchema: schema,
+      targetKind,
+      gameInstallPath,
+    })
   })
 }
 

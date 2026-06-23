@@ -355,14 +355,20 @@
               </h4>
               <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">加载中...</span>
               <div class="flex flex-wrap justify-end gap-1.5">
-                <button @click="handleUnsubscribe(dependencyIds)" class="cursor-pointer rounded-lg border border-accent-danger/30 bg-accent-danger/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger active:scale-[0.98]">
-                  取消订阅全部依赖
+                <button @click="handleUnsubscribe(dependencyIds)" :disabled="isDependencyActionPending('unsubscribe')" :class="isDependencyActionPending('unsubscribe') ? 'rmm-action-disabled' : ''"
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-danger/30 bg-accent-danger/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger active:scale-[0.98]">
+                  <LoaderCircle v-if="isDependencyActionPending('unsubscribe')" class="size-3 animate-spin" />
+                  {{ isDependencyActionPending('unsubscribe') ? '取消中' : '取消订阅全部依赖' }}
                 </button>
-                <button @click="handleSubscribe(dependencyIds)" class="cursor-pointer rounded-lg border border-accent-primary/30 bg-accent-primary/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-primary transition-all hover:bg-accent-primary hover:text-on-accent-primary active:scale-[0.98]">
-                  订阅全部依赖
+                <button @click="handleSubscribe(dependencyIds)" :disabled="isDependencyActionPending('subscribe')" :class="isDependencyActionPending('subscribe') ? 'rmm-action-disabled' : ''"
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-primary/30 bg-accent-primary/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-primary transition-all hover:bg-accent-primary hover:text-on-accent-primary active:scale-[0.98]">
+                  <LoaderCircle v-if="isDependencyActionPending('subscribe')" class="size-3 animate-spin" />
+                  {{ isDependencyActionPending('subscribe') ? '订阅中' : '订阅全部依赖' }}
                 </button>
-                <button @click="handleDownload(dependencyIds)" class="cursor-pointer rounded-lg border border-accent-success/30 bg-accent-success/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-success transition-all hover:bg-accent-success hover:text-on-accent-success active:scale-[0.98]">
-                  下载全部依赖
+                <button @click="handleDownload(dependencyIds)" :disabled="isDependencyActionPending('download')" :class="isDependencyActionPending('download') ? 'rmm-action-disabled' : ''"
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-success/30 bg-accent-success/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-success transition-all hover:bg-accent-success hover:text-on-accent-success active:scale-[0.98]">
+                  <LoaderCircle v-if="isDependencyActionPending('download')" class="size-3 animate-spin" />
+                  {{ isDependencyActionPending('download') ? '下载中' : '下载全部依赖' }}
                 </button>
               </div>
             </div>
@@ -501,8 +507,9 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css' // 确保引入 CSS
-import { Search, Globe, Cpu, Download, Link, Flag, FlagOff, Network, User, Image, Layers, UserRound, SlidersHorizontal, Star, ThumbsUp, ThumbsDown, HardDrive, ShieldAlert, TriangleAlert, Heart, Hash, Copy, Tag, Plus, MessageSquareMore, Package, CalendarPlus, CalendarArrowUp } from 'lucide-vue-next'
+import { Search, Globe, Cpu, Download, Link, Flag, FlagOff, LoaderCircle, Network, User, Image, Layers, UserRound, SlidersHorizontal, Star, ThumbsUp, ThumbsDown, HardDrive, ShieldAlert, TriangleAlert, Heart, Hash, Copy, Tag, Plus, MessageSquareMore, Package, CalendarPlus, CalendarArrowUp } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
+import { useTaskStore } from '../../../app/stores/taskStore'
 import { toast } from '../../../shared/lib/common'
 import { cleanRichText, parseUnityRichText } from '../../../shared/lib/text'
 import { imageViewerOptions } from '../../../shared/lib/domEffects'
@@ -521,6 +528,7 @@ import {
 } from '../workshopSearchOptions'
 
 const appStore = useAppStore()
+const taskStore = useTaskStore()
 const workspaceStore = useWorkspaceStore()
 
 const workshopSearchInputRef = ref(null)
@@ -530,6 +538,14 @@ const scrollerRef = ref(null)
 const detailScrollRef = ref(null)
 const isLocalFetching = ref(false)  // 局部硬锁，绝对同步，防穿透
 const loadedScreenshotMap = ref({})
+const dependencyActionPending = ref(new Set())
+const isDependencyActionPending = (action) => dependencyActionPending.value.has(action)
+const setDependencyActionPending = (action, pending) => {
+  const next = new Set(dependencyActionPending.value)
+  if (pending) next.add(action)
+  else next.delete(action)
+  dependencyActionPending.value = next
+}
 const versionTagPattern = /^\d+(?:\.\d+)+$/
 const normalSortOptions = [
   { label: '最近更新', value: 'latest' },
@@ -996,16 +1012,38 @@ const openWebUrl = (url, on_steam=true) => {
   workspaceStore.openSteamWorkshopUrl(url, on_steam)
 }
 // 订阅模组
-const handleSubscribe = (workshop_ids) => {
-  appStore.subscribeWorkshopIds(workshop_ids)
+const getTaskIdFromResult = (result) => String(result?.taskId || result?.task_id || result?.data?.task_id || '')
+const waitForDependencyTask = async (types, startedAt, result) => {
+  const taskId = getTaskIdFromResult(result)
+  if (taskId) {
+    await taskStore.waitForTaskCompletion(taskId).catch(() => null)
+    return
+  }
+  if (!types) return
+  await taskStore.waitForLatestTaskByType(types, { since: startedAt, startTimeout: 5000 }).catch(() => null)
+}
+const runDependencyAction = async (action, runner, taskTypes = null) => {
+  if (isDependencyActionPending(action)) return
+  const startedAt = Date.now()
+  setDependencyActionPending(action, true)
+  try {
+    const result = await runner?.()
+    await waitForDependencyTask(taskTypes, startedAt, result)
+    return result
+  } finally {
+    setDependencyActionPending(action, false)
+  }
+}
+const handleSubscribe = async (workshop_ids) => {
+  await runDependencyAction('subscribe', () => appStore.subscribeWorkshopIds(workshop_ids), 'steam-subscribe')
 }
 // 取消订阅
-const handleUnsubscribe = (workshop_ids) => {
-  appStore.unsubscribeWorkshopIds(workshop_ids)
+const handleUnsubscribe = async (workshop_ids) => {
+  await runDependencyAction('unsubscribe', () => appStore.unsubscribeWorkshopIds(workshop_ids), 'steam-unsubscribe')
 }
 // 下载模组
-const handleDownload = (workshop_ids) => {
-  appStore.downloadWorkshopItems(workshop_ids)
+const handleDownload = async (workshop_ids) => {
+  await runDependencyAction('download', () => appStore.downloadWorkshopItems(workshop_ids), 'steamcmd-download')
 }
 const handleDownloadSingle = (workshop_ids) => {
   handleDownload(workshop_ids)

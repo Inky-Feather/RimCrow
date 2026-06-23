@@ -1,16 +1,20 @@
 <template>
               <section class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">外部依赖
-                  <button @click="resetToDefaultExternalPaths" v-tooltip="'将外部依赖相关路径重置为默认值'" class="px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
-                    重置为默认路径
+                  <button @click="resetToDefaultExternalPaths" :disabled="isPending('reset-default-paths')" :class="isPending('reset-default-paths') ? 'rmm-action-disabled' : ''"
+                    v-tooltip="isPending('reset-default-paths') ? '正在读取默认路径' : '将外部依赖相关路径重置为默认值'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
+                    <LoaderCircle v-if="isPending('reset-default-paths')" class="size-3 animate-spin" />
+                    {{ isPending('reset-default-paths') ? '读取中' : '重置为默认路径' }}
                   </button>
                 </h3>
                 <div class="space-y-6">
                   <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部工具</h4><p class="text-xs text-text-dim mt-1">SteamCMD、贴图工具等由管理器调用的外部程序配置与状态检查。</p></div>
-                      <button @click="handleCheckTools" class="px-3 py-1.5 bg-accent-tip/10 hover:bg-accent-tip/25 border border-accent-tip/20 rounded-lg text-xs font-bold transition-all">
-                        检查外部工具
+                      <button @click="handleCheckTools" :disabled="isPending('check-tools')" :class="isPending('check-tools') ? 'rmm-action-disabled' : ''"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-accent-tip/10 hover:bg-accent-tip/25 border border-accent-tip/20 rounded-lg text-xs font-bold transition-all">
+                        <LoaderCircle v-if="isPending('check-tools')" class="size-3 animate-spin" />
+                        {{ isPending('check-tools') ? '检查中' : '检查外部工具' }}
                       </button>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -25,17 +29,20 @@
                   <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部库与规则</h4><p class="text-xs text-text-dim mt-1">规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。</p></div>
-                      <button @click="handleCheckExternalData" class="px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
-                        检查外部库更新
+                      <button @click="handleCheckExternalData" :disabled="isPending('check-external-data')" :class="isPending('check-external-data') ? 'rmm-action-disabled' : ''"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
+                        <LoaderCircle v-if="isPending('check-external-data')" class="size-3 animate-spin" />
+                        {{ isPending('check-external-data') ? '检查中' : '检查外部库更新' }}
                       </button>
                     </div>
 
                     <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.user_rules_path" />
                     <div class="flex items-end gap-1.5">
                         <CommonInput label="社区规则库 URL" v-model="formData.community_rules_url" />
-                      <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
+                      <button @click="ruleStore.updateCommunity()" :disabled="ruleStore.isLoading" v-tooltip="ruleStore.isLoading ? '正在下载更新社区规则' : '下载更新 社区规则'" :class="ruleStore.isLoading ? 'rmm-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                        <Download class="size-5" :class="{'animate-bounce': ruleStore.isLoading}" />
+                        <LoaderCircle v-if="ruleStore.isLoading" class="size-5 animate-spin" />
+                        <Download v-else class="size-5" />
                       </button>
                     </div>
                     <CommonPathInput label="社区规则库路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_rules_path" />
@@ -54,18 +61,20 @@
                     <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="工坊数据库 URL" v-model="formData.community_workshop_db_url" />
-                      <button @click="updateExternalDB('workshop_db')" v-tooltip="'下载更新 社区工坊数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['workshop_db'] }"
+                      <button @click="updateExternalDB('workshop_db')" :disabled="downloadState['workshop_db']" v-tooltip="downloadState['workshop_db'] ? '正在下载更新社区工坊数据库' : '下载更新 社区工坊数据库'" :class="downloadState['workshop_db'] ? 'rmm-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                        <Download class="size-5" :class="{'animate-bounce': downloadState['workshop_db']}" />
+                        <LoaderCircle v-if="downloadState['workshop_db']" class="size-5 animate-spin" />
+                        <Download v-else class="size-5" />
                       </button>
                     </div>
                     <CommonPathInput label="工坊数据库路径" v-model="formData.community_workshop_db_path" @browse="handleBrowse('community_workshop_db_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_workshop_db_path" />
                     <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="替代 Mod 数据库 URL" v-model="formData.community_instead_db_url" />
-                      <button @click="updateExternalDB('instead_db')" v-tooltip="'下载更新 社区替代 Mod 数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['instead_db'] }"
+                      <button @click="updateExternalDB('instead_db')" :disabled="downloadState['instead_db']" v-tooltip="downloadState['instead_db'] ? '正在下载更新社区替代 Mod 数据库' : '下载更新 社区替代 Mod 数据库'" :class="downloadState['instead_db'] ? 'rmm-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                        <Download class="size-5" :class="{'animate-bounce': downloadState['instead_db']}" />
+                        <LoaderCircle v-if="downloadState['instead_db']" class="size-5 animate-spin" />
+                        <Download v-else class="size-5" />
                       </button>
                     </div>
                     <CommonPathInput label="替代 Mod 数据库路径" v-model="formData.community_instead_db_path" @browse="handleBrowse('community_instead_db_path', ['JSON Files (*.json;*.gz)'])" :check="formData.check_info?.community_instead_db_path" />
@@ -80,7 +89,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { Download } from 'lucide-vue-next'
+import { Download, LoaderCircle } from 'lucide-vue-next'
 import CommonPathInput from '../../../shared/components/input/CommonPathInput.vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonInput from '../../../shared/components/input/CommonInput.vue'
@@ -101,23 +110,26 @@ const downloadState = ref({
   workshop_db: false,
   instead_db: false,
 })
+const pendingAction = ref('')
 
 const resetToDefaultExternalPaths = async () => {
-  // 默认路径按后端当前运行环境生成；贴图工具配置是嵌套对象，需要合并而不是整段覆盖。
-  const paths = await appStore.getDefaultExternalPaths()
-  if (!paths) return
-  const { texture_opt, ...rest } = paths
-  Object.assign(props.formData, rest)
-  if (texture_opt && typeof texture_opt === 'object') {
-    props.formData.texture_opt = {
-      ...(props.formData.texture_opt || {}),
-      ...texture_opt,
+  await runPendingAction('reset-default-paths', async () => {
+    // 默认路径按后端当前运行环境生成；贴图工具配置是嵌套对象，需要合并而不是整段覆盖。
+    const paths = await appStore.getDefaultExternalPaths()
+    if (!paths) return
+    const { texture_opt, ...rest } = paths
+    Object.assign(props.formData, rest)
+    if (texture_opt && typeof texture_opt === 'object') {
+      props.formData.texture_opt = {
+        ...(props.formData.texture_opt || {}),
+        ...texture_opt,
+      }
     }
-  }
+  })
 }
 
 const handleCheckTools = async () => {
-  await appStore.checkToolMaintenance({
+  await runPendingAction('check-tools', () => appStore.checkToolMaintenance({
     manual: true,
     prompt: true,
     overrides: {
@@ -125,11 +137,11 @@ const handleCheckTools = async () => {
       ripgrep_path: props.formData.ripgrep_path,
       texture_opt: props.formData.texture_opt,
     },
-  })
+  }))
 }
 
 const handleCheckExternalData = async () => {
-  await appStore.checkExternalDataUpdates({
+  await runPendingAction('check-external-data', () => appStore.checkExternalDataUpdates({
     manual: true,
     prompt: true,
     overrides: {
@@ -141,13 +153,27 @@ const handleCheckExternalData = async () => {
       community_instead_db_url: props.formData.community_instead_db_url,
       community_instead_db_path: props.formData.community_instead_db_path,
     },
-  })
+  }))
 }
 
 const updateExternalDB = async (dbType) => {
+  if (downloadState.value[dbType]) return
   // 每个外部库独立维护下载状态，避免一个按钮下载时锁住其它更新入口。
   downloadState.value[dbType] = true
-  await appStore.updateExternalDB(dbType)
-  downloadState.value[dbType] = false
+  try {
+    await appStore.updateExternalDB(dbType)
+  } finally {
+    downloadState.value[dbType] = false
+  }
+}
+const isPending = (action) => pendingAction.value === action
+const runPendingAction = async (action, runner) => {
+  if (pendingAction.value) return
+  pendingAction.value = action
+  try {
+    await runner?.()
+  } finally {
+    pendingAction.value = ''
+  }
 }
 </script>

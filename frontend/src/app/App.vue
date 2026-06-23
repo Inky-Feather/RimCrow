@@ -81,62 +81,69 @@
                 <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-glass-medium shadow-2xl backdrop-blur-md border-t border-border-base/5" data-tour="base-button-group">
 
                   <!-- 刷新按钮 -->
-                  <div :class="{'scan': appStore.isScanRunning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
+                  <div role="button" :aria-disabled="isBaseActionDisabled('scan')"
+                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'rmm-action-disabled' : '']" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
                     data-tour="refresh-button"
                     class="col-span-1 py-1 rounded-lg bg-bg-overlay/5 border border-border-base/5 group
                           text-sm text-text-soft font-bold uppercase tracking-wider relative cursor-pointer
                           hover:bg-bg-overlay/10 hover:text-text-main hover:border-border-base/18
                           active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
-                    @click="modStore.scanMods()"
-                    :disabled="appStore.isScanRunning"
+                    @click="runBaseScan(false)"
                   >
                     <!-- 这里保留注释位，必要时可恢复独立图标 -->
                     <span >{{ appStore.isScanRunning ? '扫描中...' : '刷新' }}</span>
 
                     <button v-show="!appStore.isScanRunning" v-tooltip="'强制刷新，会扫描所有文件，包括未变动的文件，比较耗时'"
+                      :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'rmm-action-disabled' : ''"
                       class="absolute bottom-full py-1 px-2 mb-1.5 rounded-lg bg-accent-secondary/50 border border-border-base/10 transition-all duration-500
                           text-sm text-text-dim font-bold uppercase tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
                           hover:bg-accent-secondary/80 hover:text-text-main hover:border-border-base/18"
-                          @click.stop="modStore.scanMods(null, true)">
-                      强制刷新
+                          @click.stop="runBaseScan(true)">
+                      {{ baseActionPending === 'force-scan' ? '刷新中...' : '强制刷新' }}
                     </button>
 
                   </div>
                   <!-- 自动排序按钮 -->
-                  <button data-tour="autosort-button" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
+                  <button data-tour="autosort-button" :disabled="isBaseActionDisabled('autosort')" :class="isBaseActionDisabled('autosort') ? 'rmm-action-disabled' : ''"
+                    class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                          @click="modStore.autoSortMods()" v-tooltip="'根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。'"
+                          @click="runBaseAction('autosort', () => modStore.autoSortMods())" v-tooltip="'根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。'"
                   >
-                    <span >自动排序</span>
+                    <LoaderCircle v-if="baseActionPending === 'autosort'" class="size-3 animate-spin" />
+                    <span>{{ baseActionPending === 'autosort' ? '排序中...' : '自动排序' }}</span>
                   </button>
 
                   <!-- 保存按钮 (Dirty 状态提示) -->
-                  <button data-tour="save-button" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
+                  <button data-tour="save-button" :disabled="isBaseActionDisabled('save')" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                     :class="[modStore.isDirty
                         ? 'bg-accent-secondary text-on-accent-secondary hover:bg-accent-warn hover:text-on-accent-warn shadow-[0_0_15px_rgba(var(--rgb-accent-warn),0.4)] animate-pulse-soft'
-                        : 'bg-accent-primary/60 text-on-accent-primary hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
+                        : 'bg-accent-primary/60 text-on-accent-primary hover:bg-accent-primary shadow-lg shadow-accent-primary/10',
+                        isBaseActionDisabled('save') ? 'rmm-action-disabled' : ''
                     ]"
-                    @click="orderStore.saveLoadOrder()"
+                    @click="runBaseAction('save', () => orderStore.saveLoadOrder())"
                   >
                     <!-- Dirty 状态下的流光效果 -->
                     <div v-if="modStore.isDirty" class="absolute inset-0 bg-bg-overlay/10 -translate-x-full animate-shimmer skew-x-12"></div>
 
-                    <svg v-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+                    <LoaderCircle v-if="baseActionPending === 'save'" class="size-3 animate-spin" />
+                    <svg v-else-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
                     <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
 
-                    <span>{{ modStore.isDirty ? '保存变动' : '保存' }}</span>
+                    <span>{{ baseActionPending === 'save' ? '保存中...' : (modStore.isDirty ? '保存变动' : '保存') }}</span>
                   </button>
 
                   <!-- 启动游戏 -->
-                  <button data-tour="launch-button" class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
+                  <button data-tour="launch-button" :disabled="isBaseActionDisabled('launch')" :class="isBaseActionDisabled('launch') ? 'rmm-action-disabled' : ''"
+                    class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
                           shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2
                           transition-all duration-200 uppercase tracking-widest
                           hover:bg-accent-success/85 hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-                    @click="appStore.launchGame()"
+                    @click="runBaseAction('launch', () => appStore.launchGame())"
                   >
-                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
-                    启动游戏
+                    <LoaderCircle v-if="baseActionPending === 'launch'" class="size-4 animate-spin" />
+                    <svg v-else class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
+                    {{ baseActionPending === 'launch' ? '启动中...' : '启动游戏' }}
                   </button>
 
                 </div>
@@ -287,6 +294,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent, h } from 'vue'
 import { useModStore } from '../features/mod/stores/modStore'
 import { useAppStore } from './stores/appStore'
+import { useTaskStore } from './stores/taskStore'
 import { useRuleStore } from '../features/rules/ruleStore'
 import { useGroupStore } from '../features/mod/stores/groupStore'
 import { useOrderStore } from '../features/load-order/orderStore'
@@ -331,10 +339,12 @@ import PackageTransferDialog from '../features/package-transfer/PackageTransferD
 import RecommendationExportModal from '../features/mod/RecommendationExportModal.vue'
 import ThemeEditorModal from '../features/settings/theme/ThemeEditorModal.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
+import { LoaderCircle } from 'lucide-vue-next'
 
 const updateModal = ref(null);
 
 const appStore = useAppStore()
+const taskStore = useTaskStore()
 const modStore = useModStore()
 const ruleStore = useRuleStore()
 const groupStore = useGroupStore()
@@ -358,6 +368,33 @@ const currentBackupDisplayTitle = computed(() => {
   }
   return '对比文件'
 })
+
+const baseActionPending = ref('')
+const baseActionBusy = computed(() => appStore.isLoading || appStore.isScanRunning || !!baseActionPending.value)
+const isBaseActionDisabled = (action) => {
+  if (baseActionPending.value) return true
+  if (action === 'scan' || action === 'force-scan') return appStore.isLoading || appStore.isScanRunning
+  return baseActionBusy.value
+}
+const waitForTaskTypes = async (types, startedAt) => {
+  if (!types) return
+  await taskStore.waitForLatestTaskByType(types, { since: startedAt, startTimeout: 5000 }).catch(() => null)
+}
+const runBaseAction = async (action, runner, taskTypes = null) => {
+  if (isBaseActionDisabled(action)) return
+  const startedAt = Date.now()
+  baseActionPending.value = action
+  try {
+    await runner?.()
+    await waitForTaskTypes(taskTypes, startedAt)
+  } finally {
+    baseActionPending.value = ''
+  }
+}
+const runBaseScan = async (forced = false) => {
+  const action = forced ? 'force-scan' : 'scan'
+  await runBaseAction(action, () => modStore.scanMods(null, forced), 'scan')
+}
 
 const closeThemeEditor = () => {
   appStore.themeEditor.isOpen = false

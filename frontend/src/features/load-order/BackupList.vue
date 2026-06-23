@@ -46,9 +46,11 @@
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
-          @click="loadOrder('0')" v-tooltip="'导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'">
+          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+          @click="runBackupToolbarAction('import-file', () => loadOrder('0'))" v-tooltip="isToolbarActionPending('import-file') ? '正在导入加载序列' : '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'">
             <span class="relative transition duration-300 only:-mx-6">
-              <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
+              <LoaderCircle v-if="isToolbarActionPending('import-file')" class="size-5 animate-spin" />
+              <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
             </span>
           </button>
           <button class="w-0 h-0 px-1 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer
@@ -57,9 +59,11 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            @click="importShareCode()" v-tooltip="'导入分享码（粘贴 RMM1 分享码）'" >
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+            @click="importShareCode()" v-tooltip="isToolbarActionPending('import-share-code') ? '正在导入分享码' : '导入分享码（粘贴 RMM1 分享码）'" >
             <span class="relative only:-mx-6">
-              <ClipboardPlus class="size-5" />
+              <LoaderCircle v-if="isToolbarActionPending('import-share-code')" class="size-5 animate-spin" />
+              <ClipboardPlus v-else class="size-5" />
             </span>
           </button>
         </div>
@@ -72,9 +76,11 @@
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
-          @click="exportOrder()" v-tooltip="'导出为 ModsConfig.xml（仅含包名）'">
+          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+          @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? '正在导出 ModsConfig' : '导出为 ModsConfig.xml（仅含包名）'">
             <span class="relative transition duration-300 only:-mx-6">
-              <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+              <LoaderCircle v-if="isToolbarActionPending('export-order')" class="size-5 animate-spin" />
+              <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
             </span>
           </button>
           <button class="w-0 h-0 px-1 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer
@@ -83,9 +89,11 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            @click="exportRml()" v-tooltip="'导出为 RML 游戏原生格式（含包名和工坊ID）'" >
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+            @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? '正在导出 RML' : '导出为 RML 游戏原生格式（含包名和工坊ID）'" >
             <span class="relative only:-mx-6">
-              <svg class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="m648-140 112-112v92h40v-160H640v40h92L620-168l28 28Zm-448 20q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Z"/></svg>
+              <LoaderCircle v-if="isToolbarActionPending('export-rml')" class="size-5 animate-spin" />
+              <svg v-else class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="m648-140 112-112v92h40v-160H640v40h92L620-168l28 28Zm-448 20q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Z"/></svg>
             </span>
           </button>
           <button class="w-0 h-0 px-1 opacity-0 overflow-hidden rounded-md whitespace-nowrap cursor-pointer
@@ -94,9 +102,11 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            @click="exportShareCode()" v-tooltip="'生成当前启用序列的分享码并复制到剪贴板'" >
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+            @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? '正在生成分享码' : '生成当前启用序列的分享码并复制到剪贴板'" >
             <span class="relative only:-mx-6">
-              <Copy class="size-5" />
+              <LoaderCircle v-if="isToolbarActionPending('export-share-code')" class="size-5 animate-spin" />
+              <Copy v-else class="size-5" />
             </span>
           </button>
         </div>
@@ -105,9 +115,10 @@
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <svg class="size-5"  xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
-      <button @click="refresh()" v-tooltip="'刷新'"
+      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'rmm-action-disabled' : ''" v-tooltip="loading ? '正在刷新备份列表' : '刷新'"
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
-        <svg :class="{'spin-once-reverse': loading}" @animationend.self="loading = false" class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        <LoaderCircle v-if="loading" class="size-5 animate-spin" />
+        <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       </button>
       </div>
     </div>
@@ -223,7 +234,7 @@ import { useContextMenuStore } from '../../shared/components/context-menu/contex
 import { useProfileStore } from '../profiles/profileStore.js'
 import { parse, formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { ClipboardPlus, Copy, Download, Edit3, FileInput, FileText, FolderOpen, HelpCircle, Trash2, X } from 'lucide-vue-next'
+import { ClipboardPlus, Copy, Download, Edit3, FileInput, FileText, FolderOpen, HelpCircle, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
 import { isBrowserRuntime as detectBrowserRuntime } from '../../app/bridge/runtimeBridge.js'
@@ -235,6 +246,18 @@ const confirmStore = useConfirmStore()
 const contextMenuStore = useContextMenuStore()
 const profileStore = useProfileStore()
 const loading = ref(false)
+const toolbarActionPending = ref('')
+const isToolbarBusy = computed(() => !!toolbarActionPending.value)
+const isToolbarActionPending = (action) => toolbarActionPending.value === action
+const runBackupToolbarAction = async (action, runner) => {
+  if (toolbarActionPending.value) return false
+  toolbarActionPending.value = action
+  try {
+    return await runner?.()
+  } finally {
+    toolbarActionPending.value = ''
+  }
+}
 const showDropOverlay = ref(false)
 const dragDepth = ref(0)
 const activeDroppedFile = ref('')
@@ -806,22 +829,30 @@ const handleRemove = async (item) => {
 }
 // 导出当前加载顺序
 const exportOrder = async (path, format='modsconfig') => {
-  // 调用后端另存为接口
-  await orderStore.exportLoadOrder(path, true, format)
-  refresh(selectedBackupProfileId.value)
+  const action = format === 'rml' ? 'export-rml' : 'export-order'
+  return await runBackupToolbarAction(action, async () => {
+    // 调用后端另存为接口，只有导出成功后才刷新备份列表。
+    const exported = await orderStore.exportLoadOrder(path, true, format)
+    if (exported) await refresh(selectedBackupProfileId.value)
+    return exported
+  })
 }
 const exportRml = async (path) => {
   // RML 更接近 RimWorld 自己导出的列表格式，也被自动备份流程复用。
   await exportOrder(path, 'rml')
 }
 const exportShareCode = async () => {
-  await orderStore.exportLoadOrderShareCode(profileStore.currentProfile?.name || currentProfileId.value || 'Shared Load Order')
+  await runBackupToolbarAction('export-share-code', () => (
+    orderStore.exportLoadOrderShareCode(profileStore.currentProfile?.name || currentProfileId.value || 'Shared Load Order')
+  ))
 }
 const importShareCode = async () => {
-  const data = await orderStore.promptImportShareCode(selectedBackupProfileId.value)
-  if (data) {
-    appStore.uiState.showDiffDrawer = true
-  }
+  await runBackupToolbarAction('import-share-code', async () => {
+    const data = await orderStore.promptImportShareCode(selectedBackupProfileId.value)
+    if (data) {
+      appStore.uiState.showDiffDrawer = true
+    }
+  })
 }
 // 从导入列表加载
 const loadOrder = async (path) => {

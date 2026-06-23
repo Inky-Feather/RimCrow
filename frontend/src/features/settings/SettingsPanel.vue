@@ -101,8 +101,8 @@
 
           <!-- D. 底部操作栏 -->
           <footer class="modal-footer flex items-center justify-end gap-4 px-10 py-3">
-            <button id="btn-cancel" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
-            <button data-tour="settings-save-button" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
+            <button id="btn-cancel" :disabled="saving" :class="saving ? 'rmm-action-disabled' : ''" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
+            <button data-tour="settings-save-button" :disabled="saving" :class="saving ? 'rmm-action-disabled' : ''" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
               <div class="absolute inset-0 bg-bg-overlay/10 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
               应用并保存配置
             </button>
@@ -139,6 +139,7 @@ const profileStore = useProfileStore()
 const currentTab = ref('paths')
 const formData = ref({})
 const steamLaunchTouched = ref(false)
+const saving = ref(false)
 const detectedIsSteam = computed(() => {
   const checkedInstall = formData.value?.check_info?.game_install_path
   if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
@@ -408,6 +409,7 @@ const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
 }
 
 const save = async () => {
+  if (saving.value) return
   // 校验拦截
   // const hasError = Object.values(formData.value.check_info || {}).some(info => info && !info.pass)
   // if (hasError) {
@@ -417,7 +419,12 @@ const save = async () => {
   if (formData.value?.ui) {
     formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
   }
-  await appStore.applySettings(formData.value)
+  saving.value = true
+  try {
+    await appStore.applySettings(formData.value)
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 

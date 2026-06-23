@@ -132,6 +132,36 @@ export const useTaskStore = defineStore('tasks', () => {
     })
   }
 
+  const waitForLatestTaskByType = (types, { since = 0, timeout = 600000, startTimeout = 1500 } = {}) => {
+    const targets = (Array.isArray(types) ? types : [types]).map(type => String(type || '')).filter(Boolean)
+    const startedAfter = Math.max(0, Number(since || 0) - 500)
+    const findTask = () => tasks.value.find(task => (
+      targets.includes(task.type)
+      && (!startedAfter || Number(task.joinedAt || task.metrics?.task_created_at || 0) >= startedAfter)
+    )) || null
+    const currentTask = findTask()
+    if (currentTask?.id) return waitForTaskCompletion(currentTask.id, timeout)
+
+    return new Promise((resolve, reject) => {
+      const startedAt = Date.now()
+      let timer = 0
+      const tick = () => {
+        const task = findTask()
+        if (task?.id) {
+          window.clearTimeout(timer)
+          waitForTaskCompletion(task.id, timeout).then(resolve, reject)
+          return
+        }
+        if (Date.now() - startedAt >= startTimeout) {
+          resolve(null)
+          return
+        }
+        timer = window.setTimeout(tick, 50)
+      }
+      tick()
+    })
+  }
+
   const settleActiveTasks = (types = null, { status = 'cancelled', message = '', metrics = {} } = {}) => {
     const normalizedTypes = types == null
       ? null
@@ -168,6 +198,6 @@ export const useTaskStore = defineStore('tasks', () => {
     // 写入与清理
     upsertTask, createPlaceholderTask, removeTask, settleActiveTasks,
     // 查询与等待
-    getTask, getLatestTaskByType, hasActiveTaskOfType, waitForTaskCompletion,
+    getTask, getLatestTaskByType, hasActiveTaskOfType, waitForTaskCompletion, waitForLatestTaskByType,
   }
 })

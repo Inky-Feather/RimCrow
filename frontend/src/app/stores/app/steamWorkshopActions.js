@@ -16,11 +16,13 @@ export const useSteamWorkshopActions = ({
 
   // 下载创意工坊项目
   const downloadWorkshopItems = async (workshop_ids) => {
-    if (!window.pywebview) return
+    if (!window.pywebview) return false
     const res = await window.pywebview.api.steamcmd_download(workshop_ids)
     if (checkResult(res, "下载创意工坊项目")) {
       toast.success(`开始下载 ${workshop_ids.length} 个创意工坊项目`)
+      return { success: true, taskId: String(res?.data?.task_id || '') }
     }
+    return false
   }
 
   // 打开Steam创意工坊
@@ -81,14 +83,15 @@ export const useSteamWorkshopActions = ({
     )]
     const urlSources = normalizedSources.filter(source => source.kind === 'url' && source.url)
     if (workshopIds.length === 0 && urlSources.length === 0) return false
+    let downloadResult = null
     if (workshopIds.length > 0) {
-      await downloadWorkshopItems(workshopIds)
+      downloadResult = await downloadWorkshopItems(workshopIds)
     }
     if (urlSources.length > 0) {
       urlSources.forEach(source => openUrl(source.url))
       toast.info(`已打开 ${urlSources.length} 个外部来源，后续可接入专门下载流程。`)
     }
-    return true
+    return downloadResult || urlSources.length > 0
   }
 
   const resolveWorkshopIdsFromPackageIds = async (packageIds) => {
@@ -102,8 +105,7 @@ export const useSteamWorkshopActions = ({
     const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
     if (workshopIds.length === 0) return false
     // 调用下载函数
-    await downloadWorkshopItems(workshopIds)
-    return true
+    return await downloadWorkshopItems(workshopIds)
   }
 
   // 根据包名订阅Mod
@@ -122,7 +124,7 @@ export const useSteamWorkshopActions = ({
     const res = await window.pywebview.api.steam_subscribe(workshop_ids)
     if (res?.status === 'success') {
       toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的订阅请求`, { timeout: 2500 })
-      return true
+      return { success: true, taskId: String(res?.data?.task_id || '') }
     }
     if (res?.status === 'warning') {
       showSteamNotReadyHint(res)
