@@ -278,6 +278,7 @@ class AppConfig:
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
     enable_action_prechecks: bool = True       # 是否启用操作前检查功能
+    regular_mods_follow_dependencies: bool = False # 是否让普通模组贴紧其最后一个依赖目标
     language_packs_follow_targets: bool = False # 是否让语言包贴紧其最后一个前置/依赖目标
     
     # --- 社区设置 ---

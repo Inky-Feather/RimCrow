@@ -19,6 +19,9 @@ sys.modules.setdefault("backend.managers.mgr_profile", fake_profile_module)
 
 fake_rules_module = types.ModuleType("backend.managers.mgr_rules")
 fake_rules_module.RuleManager = type("RuleManager", (), {"__init__": lambda self, context: None})
+fake_rules_module.POSITION_WEIGHT_TOP = 0
+fake_rules_module.POSITION_WEIGHT_DEFAULT = 500
+fake_rules_module.POSITION_WEIGHT_BOTTOM = 1000
 sys.modules.setdefault("backend.managers.mgr_rules", fake_rules_module)
 
 import backend.managers.mgr_sorter as mgr_sorter_module
@@ -37,6 +40,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
             "enable_tool_mods": False,
             "auto_activate_dependencies": False,
             "sort_mods_by": "name",
+            "regular_mods_follow_dependencies": False,
             "language_packs_follow_targets": False,
         }
         if config_overrides:
@@ -312,6 +316,174 @@ class TestOrderSorterStrategies(unittest.TestCase):
         )
 
         self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
+
+    def test_regular_mod_follow_dependencies_can_pull_same_weight_mod_up_to_dependency(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_addon = AtomicGroup(["mod.addon"])
+        groups = [group_core, group_unrelated, group_addon]
+        adj = {
+            id(group_core): {id(group_addon): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.addon", "name": "ZAddon", "mod_type": "XML"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.addon": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"regular_mods_follow_dependencies": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.addon", "mod.unrelated"])
+
+    def test_regular_mod_follow_dependencies_does_not_cross_weight_bucket(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_addon = AtomicGroup(["mod.addon"])
+        groups = [group_core, group_unrelated, group_addon]
+        adj = {
+            id(group_core): {id(group_addon): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.addon", "name": "ZAddon", "mod_type": "XML"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 10, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.addon": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"regular_mods_follow_dependencies": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.unrelated", "mod.addon"])
+
+    def test_regular_mod_follow_dependencies_ignores_load_after_targets(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_addon = AtomicGroup(["mod.addon"])
+        groups = [group_core, group_unrelated, group_addon]
+        adj = {
+            id(group_core): {id(group_addon): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.addon", "name": "ZAddon", "mod_type": "XML"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.addon": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [{"target_id": "mod.core"}],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"regular_mods_follow_dependencies": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.unrelated", "mod.addon"])
+
+    def test_regular_mod_follow_dependencies_skips_language_pack_groups(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_lang = AtomicGroup(["mod.lang"])
+        groups = [group_core, group_unrelated, group_lang]
+        adj = {
+            id(group_core): {id(group_lang): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.lang", "name": "Lang", "mod_type": "LanguagePack"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.lang": {
+                    "weight_info": {"final_weight": 900, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"regular_mods_follow_dependencies": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.unrelated", "mod.lang"])
 
     def test_language_pack_follow_targets_warns_when_successor_blocks_move(self):
         group_core = AtomicGroup(["mod.core"])

@@ -356,6 +356,7 @@ export const useAppStore = defineStore('app', () => {
     show_coexistence_message: true,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
+    regular_mods_follow_dependencies: false, // 普通模组是否贴紧其最后一个依赖目标
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
 
     // --- 调试 (Debug) ---
