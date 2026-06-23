@@ -84,6 +84,15 @@ class ModScanner:
             time.sleep(max(0.01, poll_interval))
         return not self._is_scanning
 
+    def _scan_mod_detail(self, path_hash: str, mod_path: str, snapshot: dict | None = None, message: str = "") -> dict[str, Any]:
+        return {
+            "path_hash": path_hash,
+            "package_id": (snapshot or {}).get("package_id", ""),
+            "name": (snapshot or {}).get("name", ""),
+            "path": mod_path,
+            "message": message,
+        }
+
     def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
         """
         异步扫描入口。立即返回，任务在后台运行。
@@ -115,7 +124,17 @@ class ModScanner:
         logger.info(f"Scan started. Paths: {search_paths}")
         start_time = time.time()
         db.connect(reuse_if_open=True) # 确保线程有连接
-        stats = {'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0}
+        stats = {
+            'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0,
+            'external_enabled': 0, 'strict_restored_disabled': 0, 'strict_restore_failed': 0,
+            'about_conflict_cleaned': 0, 'shadow_path_cleaned': 0,
+        }
+        scan_details = {
+            'external_enabled_mods': [],
+            'strict_restored_disabled_mods': [],
+            'strict_restore_failed_mods': [],
+            'about_conflict_cleaned_mods': [],
+        }
         with db.atomic() as txn:
             try:
                 # --- 5. 清理失效数据 ---
@@ -124,7 +143,7 @@ class ModScanner:
                 stats['removed'] = len(deletion_result['deleted_mods'])
                 logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
                 # 清理失效的 Shadow Paths
-                ModMaintenanceDAO.clean_invalid_shadow_paths()
+                stats['shadow_path_cleaned'] = ModMaintenanceDAO.clean_invalid_shadow_paths()
             except Exception as e:
                 txn.rollback() # 万一出错，回滚所有改动
                 raise e
@@ -202,7 +221,7 @@ class ModScanner:
                             },
                         )
                 # 处理单个 Mod
-                mod_data = self._process_single_mod( mod_path, is_dlc, existing_snapshots, dlc_parser, forced_update, size_check_override )
+                mod_data = self._process_single_mod( mod_path, is_dlc, existing_snapshots, dlc_parser, forced_update, size_check_override, stats, scan_details )
                 if mod_data:
                     # 如果是增量跳过，需要补全 package_id 以便后续逻辑使用
                     # _process_single_mod 返回 {'_skipped': True, 'package_id': ...}
@@ -334,13 +353,25 @@ class ModScanner:
                 'conflicts': final_conflicts,
                 'coexistences': final_coexistences,
                 'runtime_sync_message': runtime_sync_msg,
+                'strict_disable_restore_failures': scan_details['strict_restore_failed_mods'],
             }
             if residue_cleanup is not None:
                 result['residue_cleanup'] = residue_cleanup
             self._finish_scan(result, task_id, emit_events=emit_events)
 
             duration = time.time() - start_time
-            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {runtime_sync_msg}")
+            logger.info(
+                "Scan finished in %.2fs. Added: %s, Updated: %s, Skipped: %s, Removed: %s, "
+                "ExternalEnabled: %s, StrictRestored: %s, StrictRestoreFailed: %s, AboutConflictsCleaned: %s, "
+                "ShadowPathsCleaned: %s, Conflicts: %s, Coexistences: %s, Residues: %s. %s",
+                duration, stats['added'], stats['updated'], stats['skipped'], stats['removed'],
+                stats['external_enabled'], stats['strict_restored_disabled'], stats['strict_restore_failed'],
+                stats['about_conflict_cleaned'], stats['shadow_path_cleaned'], len(final_conflicts),
+                len(final_coexistences), int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0),
+                runtime_sync_msg,
+            )
+            logger.debug("扫描禁用状态详情: %s", scan_details)
+            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s residue=%s", final_conflicts, final_coexistences, residue_cleanup)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -387,7 +418,7 @@ class ModScanner:
         if emit_events:
             EventBus.emit('scan-complete', payload)
 
-    def _process_single_mod( self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False, size_check_override: bool | None = None ):
+    def _process_single_mod( self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False, size_check_override: bool | None = None, stats: dict | None = None, scan_details: dict | None = None ):
         """
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
@@ -414,6 +445,33 @@ class ModScanner:
         path_hash = generate_path_hash(mod_path)
         # 增量比对 - 第一阶段：仅比对修改时间
         snapshot = existing_snapshots.get(path_hash)
+        detail = self._scan_mod_detail(path_hash, mod_path, snapshot)
+        if getattr(about_state, 'cleaned_conflict', False) and stats is not None and scan_details is not None:
+            stats['about_conflict_cleaned'] = int(stats.get('about_conflict_cleaned') or 0) + 1
+            scan_details.setdefault('about_conflict_cleaned_mods', []).append(detail)
+
+        if snapshot and snapshot.get('disabled') is True and not is_disabled:
+            if bool(getattr(settings.config, 'strict_disabled_mode', False)):
+                success, message = ModMaintenanceDAO.set_mod_disabled_status(mod_path, True)
+                if success:
+                    if stats is not None:
+                        stats['strict_restored_disabled'] = int(stats.get('strict_restored_disabled') or 0) + 1
+                    if scan_details is not None:
+                        scan_details.setdefault('strict_restored_disabled_mods', []).append({**detail, "message": message})
+                    about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=False)
+                    about_file = about_state.resolved_path or about_file
+                    is_disabled = True
+                else:
+                    if stats is not None:
+                        stats['strict_restore_failed'] = int(stats.get('strict_restore_failed') or 0) + 1
+                    if scan_details is not None:
+                        scan_details.setdefault('strict_restore_failed_mods', []).append({**detail, "message": message})
+                    is_disabled = True
+            else:
+                if stats is not None:
+                    stats['external_enabled'] = int(stats.get('external_enabled') or 0) + 1
+                if scan_details is not None:
+                    scan_details.setdefault('external_enabled_mods', []).append(detail)
         # 在开启开关或者强制更新的情况下，才需要计算大小
         # 直启前检查同步会显式绕过“大文件夹体积统计”，避免为了启动准备把耗时放大。
         if size_check_override is None:

@@ -348,6 +348,7 @@ export const useAppStore = defineStore('app', () => {
     enable_auto_scan: true,
     enable_file_size_scan: true,         // 扫描时是否检查文件大小
     enable_mod_residue_scan: true,       // 扫描时是否识别卸载残留
+    strict_disabled_mode: false,         // 扫描时是否按禁用记录自动恢复被外部启用的 Mod
     delete_missing_mods_data: false,
     auto_sort_strategy: "classic_sort_logic",  // 自动排序策略
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias

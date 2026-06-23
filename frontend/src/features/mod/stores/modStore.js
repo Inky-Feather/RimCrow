@@ -123,6 +123,7 @@ export const useModStore = defineStore('mods', () => {
   const tempIds = ref([])             // 临时Mod列表
   const activeIds = ref([])           // 已激活Mod列表
   const disabledMods = ref([])        // 当前环境路径范围内的物理禁用 Mod 资产
+  const strictDisableRestoreFailures = ref({}) // 本次扫描中严格禁用恢复失败的提示
 
   const interlocksMap = ref(new Map()) // 联锁字典: Map<String(interlock_id), Array<String(package_ids)>>
   const savedInactiveIds = ref([])   // 从后端拉取的历史停用顺序
@@ -583,6 +584,7 @@ export const useModStore = defineStore('mods', () => {
     inactiveIds.value = []
     tempIds.value = []
     disabledMods.value = []
+    strictDisableRestoreFailures.value = {}
     savedActiveIds.value = []
     savedInactiveIds.value = []
     savedTempIds.value = []
@@ -777,6 +779,7 @@ export const useModStore = defineStore('mods', () => {
   // 扫描 Mod 文件
   const scanMods = async (path_list=null, forced_update=false) => {
     if (appStore.isScanRunning || !window.pywebview) return
+    strictDisableRestoreFailures.value = {}
     try {
       // 调用 API，会立即返回 { status: 'started' }
       const res = await window.pywebview.api.scan_mods(path_list, forced_update)
@@ -810,6 +813,10 @@ export const useModStore = defineStore('mods', () => {
   const scanComplete = async (detail = {}, options = {}) => {
     coexistenceList.value = Array.isArray(detail?.coexistences) ? detail.coexistences : []
     conflictList.value = Array.isArray(detail?.conflicts) ? detail.conflicts : []
+    const restoreFailures = Array.isArray(detail?.strict_disable_restore_failures) ? detail.strict_disable_restore_failures : []
+    strictDisableRestoreFailures.value = Object.fromEntries(
+      restoreFailures.filter(item => item?.path_hash).map(item => [item.path_hash, item])
+    )
 
     if (detail?.status === 'cancelled') {
       toast.info(detail.message || '扫描已取消')
@@ -828,7 +835,15 @@ export const useModStore = defineStore('mods', () => {
     const updated = Number(stats.updated || 0)
     const removed = Number(stats.removed || 0)
     const skipped = Number(stats.skipped || 0)
+    const externalEnabled = Number(stats.external_enabled || 0)
+    const strictRestored = Number(stats.strict_restored_disabled || 0)
+    const strictRestoreFailed = Number(stats.strict_restore_failed || 0)
     const total = Number(detail?.total ?? (added + updated + skipped))
+    const disabledStateText = [
+      externalEnabled ? `外部解除禁用 ${externalEnabled} 个` : '',
+      strictRestored ? `已重新禁用 ${strictRestored} 个` : '',
+      strictRestoreFailed ? `恢复失败 ${strictRestoreFailed} 个` : '',
+    ].filter(Boolean).join('，')
 
     let totalCount = 0
     if (coexistenceList.value.length > 0) {
@@ -844,9 +859,11 @@ export const useModStore = defineStore('mods', () => {
     }
     if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning
-      toast.warning(`扫描完成，发现 ${totalCount} 个包名重复冲突需要处理！`, {timeout: 10000})
+      toast.warning(`扫描完成，发现 ${totalCount} 个包名重复冲突需要处理！${disabledStateText ? `\n${disabledStateText}` : ''}`, {timeout: 10000})
+    } else if (strictRestoreFailed > 0) {
+      toast.warning(`扫描完成，共计扫描${total}个模组，新增${added}个，\n更新${updated}个，删除${removed}个，已知${skipped}个。\n${disabledStateText}`, {position: "top-center", timeout: 8000})
     } else {
-      toast.success(`扫描完成，共计扫描${total}个模组，新增${added}个，\n更新${updated}个，删除${removed}个，已知${skipped}个。`,{position: "top-center",timeout: 5000})
+      toast.success(`扫描完成，共计扫描${total}个模组，新增${added}个，\n更新${updated}个，删除${removed}个，已知${skipped}个。${disabledStateText ? `\n${disabledStateText}` : ''}`,{position: "top-center",timeout: 5000})
     }
     // 扫描结束后只回填模组主数据，避免把工作区、GitHub、合集等页面也一起重刷。
     console.log("扫描统计:", detail)
@@ -1398,7 +1415,7 @@ export const useModStore = defineStore('mods', () => {
 
   return {
     // 状态
-    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, disabledMods, disabledPathHashes, interlocksMap, savedInactiveIds, savedTempIds, interlockDetailsMap,
+    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, disabledMods, disabledPathHashes, strictDisableRestoreFailures, interlocksMap, savedInactiveIds, savedTempIds, interlockDetailsMap,
     savedActiveIds, activeLoadModifyTime, activeLoadVersionToken, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, isDraggingMod,
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,

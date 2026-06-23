@@ -1247,7 +1247,7 @@ class ModMaintenanceDAO:
                 cleaned_count += len(current_paths) - len(valid_paths)
                 mod.shadow_paths = valid_paths
                 mod.save()
-                logger.info(f"Cleaned invalid shadow paths for {mod.package_id}")
+                logger.debug("清理失效禁用副本路径: package_id=%s removed=%s", mod.package_id, len(current_paths) - len(valid_paths))
 
         return cleaned_count
 
