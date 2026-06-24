@@ -14,27 +14,27 @@
     <!-- 搜索栏 -->
     <div class="px-2 py-1 shadow-xl" >
       <div data-tour="group-list-search" class="w-full inline-flex items-center gap-1">
-        <input type="text" placeholder="搜索分组名称、模组名称/包名/作者..." v-model="searchText" @keyup.enter="executeSearch(true)"
+        <input type="text" :placeholder="t('modGroup.searchPlaceholder')" v-model="searchText" @keyup.enter="executeSearch(true)"
           :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-border-base/10 text-sm
           text-text-main placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
         <!-- 定位按钮 -->
-        <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
+        <button @click="executeSearch(true)" v-tooltip="t('modGroup.searchTooltip')"
           :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor}
           text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10
-          transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
+          transition-all cursor-pointer hover:scale-105 active:scale-95`">{{ t('common.locate') }}
           <div v-if="currentSearchIndex !== -1 && searchText" class="text-[0.55rem] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
         </button>
       </div>
       <!-- 操作按钮 -->
       <div data-tour="group-list-actions" class="mt-1 flex items-center justify-between">
         <div class="pointer-events-auto flex gap-1.5">
-          <button @click="expandAll" v-tooltip="`展开全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`" >
+          <button @click="expandAll" v-tooltip="t('modGroup.expandAll')" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`" >
             <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9L42 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 19L42 19" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 26L24 40L42 26" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button @click="collapseAll" v-tooltip="`收拢全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
+          <button @click="collapseAll" v-tooltip="t('modGroup.collapseAll')" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
             <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 10L42 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20L42 20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40L24 26L42 40" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button @click="createGroup" v-tooltip="`新建分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
+          <button @click="createGroup" v-tooltip="t('modGroup.createGroup')" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
             <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.0605 10L24.0239 38" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 24L38 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
@@ -49,7 +49,7 @@
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent">
       <div class="h-full min-h-0 px-1 relative" @click.self="modStore.clearSelection()">
         <div v-if="safeGroupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-text-subtle/70 text-xs select-none pointer-events-none">
-            可点击 “ + ” 按钮新建分组
+            {{ t('modGroup.emptyTip') }}
         </div>
 
         <VirtualDragList :model-value="flatRows" :key="listKey" dataKey="row_key" :keeps="40" class="h-full p-1"
@@ -85,12 +85,12 @@
               </GroupModRow>
               </div>
               <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
-              <button @click.stop="removeMod(record.group_id, [record.id])" @mousedown.stop v-tooltip="`移除`"
+              <button @click.stop="removeMod(record.group_id, [record.id])" @mousedown.stop v-tooltip="t('common.remove')"
                 class="absolute top-1 right-3 w-4 h-4 bg-accent-danger text-text-main rounded-full
                       opacity-0 group-hover:opacity-80 transition-opacity duration-200
                       flex items-center justify-center text-xs z-10 hover:scale-110">×
               </button>
-              <div v-if="activeCanonicalIds.has(normalizeGroupModId(record.id))" v-tooltip="'已启用'" tabindex="0" class="absolute w-3 h-3 m-1 bg-accent-success text-text-main rounded-full
+              <div v-if="activeCanonicalIds.has(normalizeGroupModId(record.id))" v-tooltip="t('common.enabled')" tabindex="0" class="absolute w-3 h-3 m-1 bg-accent-success text-text-main rounded-full
                       transition-opacity duration-200 flex items-center justify-center text-xs z-10 hover:scale-110"
                       :class="[appStore.settings.ui.show_group_index?'-top-1.5 left-8.5':'-top-1.5 left-1.5']">
               </div>
@@ -105,7 +105,7 @@
               :style="{ '--rgb-components': hexToRgb(record.group?.color), '--group-row-delay': '0ms' }">
               <div class="mx-2 h-full rounded-lg border-2 border-dashed text-text-subtle/70 text-xs bg-bg-deep/80 select-none pointer-events-none flex items-center justify-center transition-colors duration-150 ease-out"
                 :class="record.is_collapsing ? '' : ''">
-                可拖拽模组到此
+                {{ t('modGroup.dragModsHere') }}
                 <!-- 点阵背景 -->
                 <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(var(--color-text-main) 1px, transparent 1px); background-size: 20px 20px;"></div>
               </div>
@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { t } from '../../app/i18n'
 import { useModStore } from './stores/modStore'
 import { useGroupStore } from './stores/groupStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
@@ -203,7 +204,7 @@ const flatRows = computed(() => {
       group,
       mod_ids: modIds,
       dragGroup: 'groups',
-      dragLabel: group?.name || '分组',
+      dragLabel: group?.name || t('modGroup.group'),
       rowSize: groupRowHeight.value,
     })
     if (!visualExpandedIds.value.has(group.group_id)) return
@@ -349,18 +350,7 @@ const buildSearchResults = (rawQuery: string) => {
 
 // 分组帮助提示
 const groupHelpTooltip = computed(() => {
-  return `**分组管理说明：**
-支持直接将 Mod 从列表中拖拽至任意分组。
-在列表上点击右键，可通过菜单快速将 Mod 移入或移出已有分组。
-在 Mod 详情页面，可统一管理该 Mod 所属的所有分组。
-
-分组功能类似剪贴板，移入、移出分组均为[[复制]]操作：
- - 无法通过^^移出^^分组来移除 Mod；
- - 分组之间拖拽 Mod 会执行[[复制]]，并自动跳过目标分组已有成员。
-
-分组支持整体拖拽操作：
- - 将分组整体拖入启用列表，可一次性启用该分组下所有 Mod；
- - 将分组整体拖入停用列表，可一次性停用该分组下所有 Mod。`
+  return t('modGroup.helpText')
 })
 
 const executeSearch = async (forward: boolean) => {
@@ -493,11 +483,11 @@ const createGroup = async () => {
 const deleteGroup = async (groupId: string, event?: Event) => {
   const group = groupStore.takeGroupById(groupId)
   const ok = await confirmStore.open({
-    title: '删除分组',
-    message: `确定要删除分组「${group?.name || '未命名分组'}」吗？\n分组记录会被移除，模组文件不会删除。`,
+    title: t('modGroup.deleteConfirmTitle'),
+    message: t('modGroup.deleteConfirmMessage', { name: group?.name || t('modGroup.unnamedGroup') }),
     mode: 'confirm',
     type: 'error',
-    confirmText: '删除',
+    confirmText: t('common.delete'),
   }, event)
   if (!ok) return
   groupStore.deleteGroup(groupId);
@@ -568,37 +558,37 @@ const openCustomExport = (ids: string[], title: string, description: string) => 
     title,
     description,
     modIds: [...ids],
-    summary: `共 ${ids.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
+    summary: t('modGroup.exportGroupSummary', { count: ids.length }),
   })
 }
 const openRecommendationExport = (ids: string[]) => {
-  const countText = ids.length > 1 ? ` (${ids.length}项)` : ''
+  const countText = ids.length > 1 ? ` (${ids.length})` : ''
   // 分组面板的推荐导出只沿用当前右键选中的模组，不把“分组本身”当成导出对象。
   appStore.openRecommendationExportDialog({
-    title: `推荐导出已选模组${countText}`,
-    sourceName: '已选模组',
+    title: t('modGroup.exportRecommendedTitle', { count: countText }),
+    sourceName: t('modGroup.selectedMods'),
     modIds: [...ids],
   })
 }
 const buildGroupModMenuItems = ({ ids, clickedId, groupId, groupName, groupSize = 0 }) => {
-  const countText = ids.length > 1 ? ` (${ids.length}项)` : ''
+  const countText = ids.length > 1 ? ` (${ids.length})` : ''
   const clickedMod = modStore.takeModById(clickedId)
   return [
-    { label: '启用' + countText, icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
-    { label: '停用' + countText, icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
+    { label: t('modGroup.enableCount', { count: countText }), icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
+    { label: t('modGroup.disableCount', { count: countText }), icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
     { divider: true },
-    { label: '定位到主列表', icon: Crosshair, disabled: !clickedId, action: () => locateModInMainLists(clickedId) },
-    { label: '打开文件夹', icon: FolderInput, disabled: !clickedMod?.path, action: () => appStore.openPath(clickedMod.path) },
+    { label: t('modGroup.locateInMainList'), icon: Crosshair, disabled: !clickedId, action: () => locateModInMainLists(clickedId) },
+    { label: t('modGroup.openFolder'), icon: FolderInput, disabled: !clickedMod?.path, action: () => appStore.openPath(clickedMod.path) },
     { divider: true },
-    { label: expandedIds.value.has(groupId) ? '收缩分组' : '展开分组', icon: expandedIds.value.has(groupId) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(groupId) },
-    { label: '选中整组', icon: CopyCheck, disabled: !groupId || groupSize === 0, action: async () => {
+    { label: expandedIds.value.has(groupId) ? t('modGroup.collapseGroup') : t('modGroup.expandGroup'), icon: expandedIds.value.has(groupId) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(groupId) },
+    { label: t('modGroup.selectWholeGroup'), icon: CopyCheck, disabled: !groupId || groupSize === 0, action: async () => {
       const group = groupStore.takeGroupById(groupId)
       await selectContextIds(getNormalizedGroupModIds(group), groupId)
     }},
     // 推荐导出关注介绍信息；打包导出关注实际文件，两者在菜单里分开呈现。
-    { label: '推荐导出' + countText, icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
-    { label: '打包导出' + countText, icon: Package, disabled: ids.length === 1, action: () => openCustomExport(ids, `打包导出分组模组${countText}`, `来源分组：${groupName || '未命名分组'}。`) },
-    { label: `从「${groupName || '分组'}」移除` + countText, icon: Eraser, level: 'warn', disabled: ids.length === 0 || !groupId, action: () => groupStore.groupRemoveMods(groupId, ids) },
+    { label: t('modGroup.recommendExportCount', { count: countText }), icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
+    { label: t('modGroup.packExportCount', { count: countText }), icon: Package, disabled: ids.length === 1, action: () => openCustomExport(ids, t('modGroup.packExportGroupTitle', { count: countText }), t('modGroup.sourceGroupText', { name: groupName || t('modGroup.unnamedGroup') })) },
+    { label: t('modGroup.removeFromGroupCount', { name: groupName || t('modGroup.group'), count: countText }), icon: Eraser, level: 'warn', disabled: ids.length === 0 || !groupId, action: () => groupStore.groupRemoveMods(groupId, ids) },
 
   ]
 }
@@ -622,20 +612,20 @@ const openGroupContextMenu = async (event, row) => {
   event.stopPropagation()
   const group = row?.group || groupStore.takeGroupById(row?.group_id)
   const ids = await selectContextIds(getNormalizedGroupModIds(group), row?.group_id)
-  const groupName = group?.name || '未命名分组'
+  const groupName = group?.name || t('modGroup.unnamedGroup')
   menuStore.open(event, [
-    { label: `启用整组 (${ids.length}项)`, icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
-    { label: `停用整组 (${ids.length}项)`, icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
+    { label: t('modGroup.enableWholeGroup', { count: ids.length }), icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
+    { label: t('modGroup.disableWholeGroup', { count: ids.length }), icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
     { divider: true },
-    { label: expandedIds.value.has(row?.group_id) ? '收缩分组' : '展开分组', icon: expandedIds.value.has(row?.group_id) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(row.group_id) },
-    { label: '打包整组', icon: Package, disabled: ids.length === 0, action: () => openCustomExport(ids, `打包导出分组: ${groupName}`, '可按需附带依赖、联锁项和语言包。') },
-    { label: '推荐整组', icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
+    { label: expandedIds.value.has(row?.group_id) ? t('modGroup.collapseGroup') : t('modGroup.expandGroup'), icon: expandedIds.value.has(row?.group_id) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(row.group_id) },
+    { label: t('modGroup.packWholeGroup'), icon: Package, disabled: ids.length === 0, action: () => openCustomExport(ids, t('modGroup.exportTitle', { name: groupName }), t('modGroup.exportDesc')) },
+    { label: t('modGroup.recommendWholeGroup'), icon: MessageSquareHeart, disabled: ids.length === 0, action: () => openRecommendationExport(ids) },
     { divider: true },
-    { label: '清空分组', icon: Eraser, level: 'danger', disabled: ids.length === 0, action: async () => {
+    { label: t('modGroup.clearGroup'), icon: Eraser, level: 'danger', disabled: ids.length === 0, action: async () => {
       const ok = await confirmStore.confirmAction(
-        '清空分组模组',
-        `确定要从「${groupName}」移除全部 ${ids.length} 个模组吗？\n只会清空分组内容，不会删除模组文件。`,
-        { type: 'error', confirmText: '清空' }
+        t('modGroup.clearGroupTitle'),
+        t('modGroup.clearGroupMessage', { name: groupName, count: ids.length }),
+        { type: 'error', confirmText: t('modGroup.clearText') }
       )
       if (ok) await groupStore.groupRemoveMods(row.group_id, ids)
     } },
@@ -647,7 +637,7 @@ const getFlatRowDragMeta = (row) => {
   if (row?.row_type === 'group') {
     return {
       dragCount: Math.max(1, getGroupModCount(row.group_id)),
-      dragLabel: row.group?.name || '分组',
+      dragLabel: row.group?.name || t('modGroup.group'),
     }
   }
   if (row?.row_type === 'mod') {
@@ -730,16 +720,16 @@ const copyOrReorderGroupMods = async (sourceRow, newIndex: number) => {
     : movingIds.filter(id => !baseIds.includes(id))
   const skippedCount = movingIds.length - idsToInsert.length
   if (idsToInsert.length === 0) {
-    if (skippedCount > 0) toast.info(`目标分组已包含 ${skippedCount} 个模组，已跳过`)
+    if (skippedCount > 0) toast.info(t('modGroup.groupContainsSkip', { count: skippedCount }))
     return
   }
   const nextIds = [...baseIds]
   nextIds.splice(insertIndex, 0, ...idsToInsert)
   await groupStore.groupContentReorder(target.groupId, nextIds)
   if (sourceRow.group_id !== target.groupId) {
-    const targetName = targetGroup.name || '未命名分组'
-    const suffix = skippedCount > 0 ? `，跳过 ${skippedCount} 个重复项` : ''
-    toast.info(`已复制 ${idsToInsert.length} 项到「${targetName}」${suffix}`)
+    const targetName = targetGroup.name || t('modGroup.unnamedGroup')
+    const suffix = skippedCount > 0 ? t('modGroup.skipSuffix', { count: skippedCount }) : ''
+    toast.info(t('modGroup.copiedToGroup', { count: idsToInsert.length, name: targetName, suffix }))
   }
 }
 

@@ -13,6 +13,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
+import { t } from '../../app/i18n'
 import { useModStore } from './stores/modStore'
 import { useHoverStore } from '../../shared/components/popover/hoverStore'
 
@@ -367,11 +368,11 @@ const handleMouseMove = (e) => {
       hoveredGroup.value = group
 
       // 构造显示内容 (根据全局组件支持纯文本还是HTML，这里以模版字符串为例)
-      let content = `{{${group.color}|依赖源:}} ${modStore.displayModName(group.parentId)}\n包含 ${group.childIndices.length} 个子模组`
+      let content = `{{${group.color}|${t('dependencyGraph.tooltipSource')}}} ${modStore.displayModName(group.parentId)}\n${t('dependencyGraph.containsSubmods', { count: group.childIndices.length })}`
       if (group.isError) {
-        content += `\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!`
+        content += `\n!!(${t('dependencyGraph.errorPost')})!!`
       }
-      content += '\n\n__[[(再次点击可筛选该依赖下所有模组)]]__'
+      content += `\n\n__[[(${t('dependencyGraph.clickToFilter')})]]__`
 
       // 调用全局 Store 显示
       hoverStore.show(content, e)

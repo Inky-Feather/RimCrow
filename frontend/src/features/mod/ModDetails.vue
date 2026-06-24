@@ -12,16 +12,16 @@
         <div v-else class="absolute inset-0 flex items-center justify-center text-text-subtle/70 bg-bg-surface">
           <div class="text-center">
             <div class="text-4xl mb-2 opacity-20">IMG</div>
-            <div class="text-xs">图片不存在</div>
+            <div class="text-xs">{{ t('modDetails.imageMissing') }}</div>
           </div>
         </div>
       </Transition>
       <!-- Mod版本 -->
-      <div v-tooltip="'Mod版本'" class="absolute top-1.5 left-2 px-1 py-0.5 rounded text-xs text-text-main font-bold text-shadow-lg bg-bg-surface/20 border border-border-base/5">
-        v {{ selectedMod.version ? selectedMod.version : '未知版本' }}
+      <div v-tooltip="t('modDetails.modVersion')" class="absolute top-1.5 left-2 px-1 py-0.5 rounded text-xs text-text-main font-bold text-shadow-lg bg-bg-surface/20 border border-border-base/5">
+        v {{ selectedMod.version ? selectedMod.version : t('modDetails.unknownVersion') }}
       </div>
       <!-- 支持版本标签 -->
-      <div v-tooltip="'支持的游戏版本'" v-if="displayVersions.length" class="absolute p-0 top-1.5 right-2 z-10 pointer-events-none hover:opacity-20">
+      <div v-tooltip="t('modDetails.supportedGameVersion')" v-if="displayVersions.length" class="absolute p-0 top-1.5 right-2 z-10 pointer-events-none hover:opacity-20">
         <span v-for="versions in displayVersions" :key="versions" :class="versionIsCompatible(versions) ? 'bg-accent-success/70 text-on-accent-success' : 'bg-accent-cool/60 text-on-accent-cool'"
           class="px-1 py-0.4 m-0.5 rounded-md border border-border-base/18 text-xs font-bold text-shadow-2xs shadow-md">
           {{ versions }}
@@ -58,14 +58,14 @@
               <div class="col-span-2 flex items-center gap-1 bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 space-y-1">
                 <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24 20C27.866 20 31 16.866 31 13C31 9.13401 27.866 6 24 6C20.134 6 17 9.13401 17 13C17 16.866 20.134 20 24 20Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40.8V42H42V40.8C42 36.3196 42 34.0794 41.1281 32.3681C40.3611 30.8628 39.1372 29.6389 37.6319 28.8719C35.9206 28 33.6804 28 29.2 28H18.8C14.3196 28 12.0794 28 10.3681 28.8719C8.86278 29.6389 7.63893 30.8628 6.87195 32.3681C6 34.0794 6 36.3196 6 40.8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0 space-y-1">
-                  <div class="text-xs text-text-dim uppercase">作者</div>
+                  <div class="text-xs text-text-dim uppercase">{{ t('modDetails.author') }}</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.author?.join(', ')">
                     <span v-if="selectedMod.author?.length" v-for="author in selectedMod.author" :key="author"
                       class="px-1 rounded bg-accent-highlight/20 text-text-soft text-sm border border-accent-highlight/20 flex items-center gap-1 group">
                       {{ author }}
                     </span>
-                    <span v-else v-tooltip="'未知'" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
-                      未知
+                    <span v-else v-tooltip="t('modDetails.unknown')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
+                      {{ t('modDetails.unknown') }}
                     </span>
                   </div>
                 </div>
@@ -74,14 +74,14 @@
               <div class="col-span-2 flex items-center gap-1 bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5">
                 <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0 space-y-1">
-                  <div class="text-xs text-text-dim uppercase">支持语言</div>
+                  <div class="text-xs text-text-dim uppercase">{{ t('modDetails.supportedLanguages') }}</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.supported_languages?.join(', ')">
                     <span v-if="selectedMod.supported_languages?.length" v-for="lang in selectedMod.supported_languages" :key="lang"
                       class="px-1 rounded bg-accent-secondary/20 text-accent-secondary text-sm border border-accent-secondary/20 flex items-center gap-1 group">
                       {{ lang }}
                     </span>
-                    <span v-else v-tooltip="'未知'" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
-                      未知
+                    <span v-else v-tooltip="t('modDetails.unknown')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
+                      {{ t('modDetails.unknown') }}
                     </span>
                   </div>
                 </div>
@@ -96,7 +96,7 @@
                 <svg v-else="selectedMod.source==='other'" class="fill-current size-6" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M451.5 160C434.9 160 418.8 164.5 404.7 172.7C388.9 156.7 370.5 143.3 350.2 133.2C378.4 109.2 414.3 96 451.5 96C537.9 96 608 166 608 252.5C608 294 591.5 333.8 562.2 363.1L491.1 434.2C461.8 463.5 422 480 380.5 480C294.1 480 224 410 224 323.5C224 322 224 320.5 224.1 319C224.6 301.3 239.3 287.4 257 287.9C274.7 288.4 288.6 303.1 288.1 320.8C288.1 321.7 288.1 322.6 288.1 323.4C288.1 374.5 329.5 415.9 380.6 415.9C405.1 415.9 428.6 406.2 446 388.8L517.1 317.7C534.4 300.4 544.2 276.8 544.2 252.3C544.2 201.2 502.8 159.8 451.7 159.8zM307.2 237.3C305.3 236.5 303.4 235.4 301.7 234.2C289.1 227.7 274.7 224 259.6 224C235.1 224 211.6 233.7 194.2 251.1L123.1 322.2C105.8 339.5 96 363.1 96 387.6C96 438.7 137.4 480.1 188.5 480.1C205 480.1 221.1 475.7 235.2 467.5C251 483.5 269.4 496.9 289.8 507C261.6 530.9 225.8 544.2 188.5 544.2C102.1 544.2 32 474.2 32 387.7C32 346.2 48.5 306.4 77.8 277.1L148.9 206C178.2 176.7 218 160.2 259.5 160.2C346.1 160.2 416 230.8 416 317.1C416 318.4 416 319.7 416 321C415.6 338.7 400.9 352.6 383.2 352.2C365.5 351.8 351.6 337.1 352 319.4C352 318.6 352 317.9 352 317.1C352 283.4 334 253.8 307.2 237.5z"/></svg>
                 <div class="flex-1 min-w-0 m-0">
                   <div class="text-xs text-text-dim uppercase flex justify-between items-center">
-                    <span class="min-w-0 truncate">来源地址</span>
+                    <span class="min-w-0 truncate">{{ t('modDetails.sourceUrl') }}</span>
                     <svg class="shrink-0 size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 32L33 15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15H33V33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </div>
                   <div class="text-sm text-accent-cool truncate direction-rtl ">{{ displaySourceType }}</div>
@@ -110,7 +110,7 @@
                 <svg class="size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0">
                   <div class="text-xs text-text-dim uppercase flex justify-between items-center">
-                    <span class="min-w-0 truncate flex gap-2 items-center">本地路径<Copy v-if="selectedMod.is_coexistence" class="size-3 cursor-help text-accent-primary hover:text-text-main" v-tooltip="'该Mod为共存状态，在创意工坊目录同样存在'" /></span>
+                    <span class="min-w-0 truncate flex gap-2 items-center">{{ t('modDetails.localPath') }}<Copy v-if="selectedMod.is_coexistence" class="size-3 cursor-help text-accent-primary hover:text-text-main" v-tooltip="t('modDetails.coexistenceNotice')" /></span>
                     <svg class="shrink-0 size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 32L33 15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15H33V33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </div>
                   <div class="text-sm text-accent-cool truncate direction-rtl m-0">{{ selectedMod.path }}</div>
@@ -119,9 +119,9 @@
               </div>
               <!-- 已禁用路径 shadow_paths -->
               <div v-if="selectedMod.shadow_paths?.length" class="col-span-2 flex items-center gap-1 bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5">
-                <svg class=" text-text-dim size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
+                <svg class=" text-text-dim size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
                 <div class="flex-1 min-w-0 m-0 space-y-1">
-                  <div class="text-xs text-text-dim uppercase">已禁用的包名重复Mod</div>
+                  <div class="text-xs text-text-dim uppercase">{{ t('modDetails.disabledDuplicateMods') }}</div>
                   <div class="flex flex-col gap-1 text-accent-danger text-sm">
                     <span v-for="path in selectedMod.shadow_paths" :key="path" v-tooltip="path" @click="openPath(path)"
                       class="px-1 truncate rounded bg-accent-danger/20 border border-accent-danger/20 cursor-pointer">
@@ -137,29 +137,29 @@
           <div v-if="selectedMod.file_stats && block.id === 'files_info'" class="p-1 space-y-2">
             <h3 class="flex items-center gap-1 text-xs font-bold text-text-dim uppercase tracking-wider border-b border-border-base/5 pb-1">
               {{ appStore.DETAILS_LAYOUT_MAPS[block.id].label }}
-              <span v-tooltip="'注意：本统计仅涵盖通用文件，及 Mod 所支持的游戏最高版本对应的文件（不涉及其他游戏版本的文件）。'" class="text-text-disabled hover:text-text-main">⚠︎</span>
+              <span v-tooltip="t('modDetails.sizeLimitNotice')" class="text-text-disabled hover:text-text-main">⚠︎</span>
               <!-- 文件大小 -->
               <span class="text-[0.65rem] text-text-dim font-normal flex-1 flex items-center justify-end px-1">
-                大小: {{ formatFileSize(selectedMod.file_size) }}
+                {{ t('modDetails.sizeLabel', { size: formatFileSize(selectedMod.file_size) }) }}
               </span>
             </h3>
             <div class="grid grid-cols-4 gap-1.5 text-center text-text-dim">
-              <StatItem v-tooltip="'定义XML文件数量'" label="Defs" :value="selectedMod.file_stats.game_xml || 0" >
+              <StatItem v-tooltip="t('modDetails.defsTooltip')" label="Defs" :value="selectedMod.file_stats.game_xml || 0" >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 24L32 29L27 34" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 24L16 29L21 34" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
-              <StatItem v-tooltip="'补丁XML文件数量'" label="Patches" :value="selectedMod.file_stats.patch_xml || 0" >
+              <StatItem v-tooltip="t('modDetails.patchesTooltip')" label="Patches" :value="selectedMod.file_stats.patch_xml || 0" >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="27" r="5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M24 19V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 32V35" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M29.8281 21L27.7068 23.1213" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.8281 31L17.7068 33.1213" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 21L20.1213 23.1213" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 31L30.1213 33.1213" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 27H17.5H19" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 27H30.5H32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
-              <StatItem v-tooltip="'图像纹理文件数量'" label="Textures" :value="selectedMod.file_stats.image || 0" >
+              <StatItem v-tooltip="t('modDetails.texturesTooltip')" label="Textures" :value="selectedMod.file_stats.image || 0" >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="17" r="4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 28V37H33V21L23.4894 31.5L15 28Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
-              <StatItem v-tooltip="'音频文件数量'" label="Audio" :value="selectedMod.file_stats.audio || 0" >
+              <StatItem v-tooltip="t('modDetails.audioTooltip')" label="Audio" :value="selectedMod.file_stats.audio || 0" >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M31 20L25 22.9688V33.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="33" r="4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
-              <StatItem v-tooltip="'程序集DLL文件数量'" label="DLLs" :value="selectedMod.file_stats.code_dll || 0" highlight >
+              <StatItem v-tooltip="t('modDetails.dllsTooltip')" label="DLLs" :value="selectedMod.file_stats.code_dll || 0" highlight >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 25H24L31 25" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 31H24L31 31" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 21V35" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 21V35" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
-              <StatItem v-tooltip="'语言XML文件数量'" label="Langs" :value="selectedMod.file_stats.lang_xml || 0" >
+              <StatItem v-tooltip="t('modDetails.langsTooltip')" label="Langs" :value="selectedMod.file_stats.lang_xml || 0" >
                 <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 22V36" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22H24L30 22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </StatItem>
               <div v-tooltip="tooltipModType" class="p-1 col-span-2 bg-bg-overlay/5 rounded-lg border text-text-dim border-border-base/5 flex items-center justify-center">
@@ -176,7 +176,7 @@
               {{ appStore.DETAILS_LAYOUT_MAPS[block.id].label }}
             </h3>
             <div class="grid grid-flow-col grid-cols-4 grid-rows-2 gap-1.5">
-              <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-bg-overlay/5 rounded-lg border border-border-base/5">
+              <div v-tooltip="selectedMod.icon_url ? t('modDetails.icon') : t('modDetails.iconNotFound')" class="col-span-1 row-span-1 flex items-center justify-center bg-bg-overlay/5 rounded-lg border border-border-base/5">
                 <img v-if="selectedMod.icon_url" :src="selectedMod.icon_url" class="size-8 inline-block">
                 <svg v-else class="text-text-dim size-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
               </div>
@@ -189,24 +189,24 @@
               </div>
               <div class="row-span-2 col-span-3 p-2 pr-3 space-y-1 flex flex-col justify-center text-xs text-text-dim bg-bg-overlay/5 rounded-lg border border-border-base/5">
                 <div class="flex justify-between items-center">
-                  <span class="flex-1 font-bold truncate min-w-0">文件创建时间：</span>
-                  {{ selectedMod.file_create_time ? new Date(selectedMod.file_create_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
+                  <span class="flex-1 font-bold truncate min-w-0">{{ t('modDetails.fileCreateTime') }}</span>
+                  {{ selectedMod.file_create_time ? new Date(selectedMod.file_create_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('modDetails.timeValNone') }}
                 </div>
                 <div class="flex justify-between items-center">
-                  <span class="flex-1 font-bold truncate min-w-0">文件修改时间：</span>
-                  {{ selectedMod.file_modify_time ? new Date(selectedMod.file_modify_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
+                  <span class="flex-1 font-bold truncate min-w-0">{{ t('modDetails.fileModifyTime') }}</span>
+                  {{ selectedMod.file_modify_time ? new Date(selectedMod.file_modify_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('modDetails.timeValNone') }}
                 </div>
                 <div class="flex justify-between items-center">
-                  <span class="flex-1 font-bold truncate min-w-0">最后启用时间：</span>
-                  {{ selectedMod.last_active_time ? new Date(selectedMod.last_active_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
+                  <span class="flex-1 font-bold truncate min-w-0">{{ t('modDetails.lastActiveTime') }}</span>
+                  {{ selectedMod.last_active_time ? new Date(selectedMod.last_active_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('modDetails.timeValNone') }}
                 </div>
                 <!-- <div class="flex justify-between items-center">
                   <span class="flex-1 font-bold truncate min-w-0">最后移动时间：</span>
                   {{ selectedMod.last_moved_time ? new Date(selectedMod.last_moved_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
                 </div> -->
                 <div class="flex justify-between items-center">
-                  <span class="flex-1 font-bold truncate min-w-0">工坊更新时间：</span>
-                  {{ selectedMod.mod_update_time ? new Date(selectedMod.mod_update_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
+                  <span class="flex-1 font-bold truncate min-w-0">{{ t('modDetails.workshopUpdateTime') }}</span>
+                  {{ selectedMod.mod_update_time ? new Date(selectedMod.mod_update_time).toLocaleString(globalThis.__RMM_UI_FORMAT_LOCALE__ || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('modDetails.timeValNone') }}
                 </div>
               </div>
             </div>
@@ -221,7 +221,7 @@
 
             <!-- 依赖 -->
             <div v-if="selectedMod.dependencies_mods?.length" class="space-y-1">
-              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-highlight">依赖于</div>
+              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-highlight">{{ t('modDetails.dependsOn') }}</div>
               <!-- 依赖项列表 -->
               <!-- 显示前5个或全部（展开状态） -->
               <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)" :key="dep.package_id"
@@ -230,15 +230,15 @@
                   <span v-preview="modStore.takeModById(dep.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByMod(dep) }}</span>
                   <span v-if="relationVersionInactive(dep)" v-tooltip="relationVersionTooltip(dep)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
-                    未生效
+                    {{ t('modDetails.inactive') }}
                   </span>
                 </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(dep.package_id)?.path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
+                  <span v-if="!!modStore.takeModById(dep.package_id)?.path" @click="targetItem(dep.package_id)" v-tooltip="t('modDetails.locateModTooltip')" class="hover:text-accent-highlight">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
-                  <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
+                  <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="t('modDetails.openWorkshopTooltip')" class="hover:text-accent-highlight">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
                   </span>
                 </div>
@@ -247,7 +247,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.dependencies_mods.length > 5" @click="showAllDependencies = !showAllDependencies"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-highlight transition-all group" >
-                {{ showAllDependencies ? '收起' : `查看全部(${selectedMod.dependencies_mods.length})` }}
+                {{ showAllDependencies ? t('modDetails.collapse') : t('modDetails.viewAllCount', { count: selectedMod.dependencies_mods.length }) }}
                 <svg :class="{'rotate-180': showAllDependencies}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -256,7 +256,7 @@
 
             <!-- 不兼容 -->
             <div v-if="selectedMod.incompatible_mods?.length" class="space-y-1">
-              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-danger">冲突于</div>
+              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-danger">{{ t('modDetails.incompatibleWith') }}</div>
               <!-- 不兼容项列表 -->
               <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc.package_id"
                   class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
@@ -264,12 +264,12 @@
                   <span v-preview="modStore.takeModById(inc.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(inc.package_id) }}</span>
                   <span v-if="relationVersionInactive(inc)" v-tooltip="relationVersionTooltip(inc)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
-                    未生效
+                    {{ t('modDetails.inactive') }}
                   </span>
                 </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(inc.package_id)?.path" @click="targetItem(inc.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+                  <span v-if="!!modStore.takeModById(inc.package_id)?.path" @click="targetItem(inc.package_id)" v-tooltip="t('modDetails.locateModTooltip')" class="hover:text-accent-danger">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -277,7 +277,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.incompatible_mods.length > 5" @click="showAllIncompatible = !showAllIncompatible"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-danger transition-all group" >
-                {{ showAllIncompatible ? '收起' : `展开全部 (${selectedMod.incompatible_mods.length})` }}
+                {{ showAllIncompatible ? t('modDetails.collapse') : t('modDetails.expandAllCount', { count: selectedMod.incompatible_mods.length }) }}
                 <svg :class="{'rotate-180': showAllIncompatible}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -286,7 +286,7 @@
 
             <!-- 前置加载 -->
             <div v-if="selectedMod.load_after_mods?.length" class="space-y-1">
-              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-warn">前置加载</div>
+              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-warn">{{ t('modDetails.loadAfter') }}</div>
               <!-- 前置加载项列表 -->
               <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft"
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
@@ -294,12 +294,12 @@
                   <span v-preview="modStore.takeModById(aft.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(aft.package_id) }}</span>
                   <span v-if="relationVersionInactive(aft)" v-tooltip="relationVersionTooltip(aft)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
-                    未生效
+                    {{ t('modDetails.inactive') }}
                   </span>
                 </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(aft.package_id)?.path" @click="targetItem(aft.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+                  <span v-if="!!modStore.takeModById(aft.package_id)?.path" @click="targetItem(aft.package_id)" v-tooltip="t('modDetails.locateModTooltip')" class="hover:text-accent-warn">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -307,7 +307,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.load_after_mods.length > 5" @click="showAllLoadAfter = !showAllLoadAfter"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-warn transition-all group" >
-                {{ showAllLoadAfter ? '收起' : `展开全部 (${selectedMod.load_after_mods.length})` }}
+                {{ showAllLoadAfter ? t('modDetails.collapse') : t('modDetails.expandAllCount', { count: selectedMod.load_after_mods.length }) }}
                 <svg :class="{'rotate-180': showAllLoadAfter}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -316,7 +316,7 @@
 
             <!-- 后置加载 -->
             <div v-if="selectedMod.load_before_mods?.length" class="space-y-1">
-              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-primary">后置加载</div>
+              <div class="mb-1 text-[0.7rem] font-bold uppercase tracking-wider text-accent-primary">{{ t('modDetails.loadBefore') }}</div>
               <!-- 后置加载项列表 -->
               <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef"
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
@@ -324,12 +324,12 @@
                   <span v-preview="modStore.takeModById(bef.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(bef.package_id) }}</span>
                   <span v-if="relationVersionInactive(bef)" v-tooltip="relationVersionTooltip(bef)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
-                    未生效
+                    {{ t('modDetails.inactive') }}
                   </span>
                 </div>
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2">
-                  <span v-if="!!modStore.takeModById(bef.package_id)?.path" @click="targetItem(bef.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+                  <span v-if="!!modStore.takeModById(bef.package_id)?.path" @click="targetItem(bef.package_id)" v-tooltip="t('modDetails.locateModTooltip')" class="hover:text-accent-primary">
                     <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
                   </span>
                 </div>
@@ -337,7 +337,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.load_before_mods.length > 5" @click="showAllLoadBefore = !showAllLoadBefore"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-primary transition-all group" >
-                {{ showAllLoadBefore ? '收起' : `展开全部 (${selectedMod.load_before_mods.length})` }}
+                {{ showAllLoadBefore ? t('modDetails.collapse') : t('modDetails.expandAllCount', { count: selectedMod.load_before_mods.length }) }}
                 <svg :class="{'rotate-180': showAllLoadBefore}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -353,14 +353,14 @@
             </h3>
             <!-- 标签管理 -->
             <div>
-              <label v-tooltip="'在此管理Mod标记的自定义标签'" class="text-xs uppercase text-text-dim font-bold tracking-wider mb-1 block">标签*</label>
+              <label v-tooltip="t('modDetails.tagsLabel')" class="text-xs uppercase text-text-dim font-bold tracking-wider mb-1 block">{{ t('modDetails.tagsLabel') }}</label>
               <div class="flex flex-wrap gap-1 mb-2">
                 <!-- 现有标签列表 -->
                 <TransitionGroup name="list">
                   <span v-for="tag in userTags" :key="tag"
                     class="px-1 py-0.5 rounded truncate text-shadow-lg/20 bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group animate-in">
                     {{ tag }}
-                    <button @click="removeTag(tag)" v-tooltip="'移除标签'" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
+                    <button @click="removeTag(tag)" v-tooltip="t('modDetails.removeTagTooltip')" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
                   </span>
@@ -369,8 +369,8 @@
                 <!-- 添加标签输入框 (带自定义下拉建议) -->
                 <div class="relative flex-1 flex" :ref="el => tagInputRef = el">
                   <input type="text" v-model="tagInput" @focus="showTagSuggest = true" placeholder="+"
-                    @keydown.enter.prevent="confirmAddTag" @keydown.up.prevent="navTag(-1)" @keydown.down.prevent="navTag(1)"
-                    @keydown.esc="showTagSuggest = false" v-tooltip="'添加新标签'"
+                    @keydown.prevent.enter="confirmAddTag" @keydown.prevent.up="navTag(-1)" @keydown.prevent.down="navTag(1)"
+                    @keydown.esc="showTagSuggest = false" v-tooltip="t('modDetails.addNewTagTooltip')"
                     class="input-glass w-5 rounded px-1 py-0.5 text-center text-xs text-text-main placeholder:text-text-disabled focus:flex-1 focus:w-24 focus:outline-none"
                   />
                   <FixedPopover :is-open="showTagSuggest && filteredKnownTags.length > 0" :trigger-ref="tagInputRef" @request-close="showTagSuggest = false">
@@ -390,7 +390,7 @@
 
             <!-- 分组 -->
             <div>
-              <label v-tooltip="'在此管理Mod的所属分组'" class="text-xs uppercase text-text-dim font-bold tracking-wider mb-1 block">分组*</label>
+              <label v-tooltip="t('modDetails.groupsLabel')" class="text-xs uppercase text-text-dim font-bold tracking-wider mb-1 block">{{ t('modDetails.groupsLabel') }}</label>
               <div class="flex flex-wrap gap-1 mb-2">
                 <!-- 现有分组列表 -->
                 <TransitionGroup name="list">
@@ -398,7 +398,7 @@
                     class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-border-base/5 flex items-center gap-1 group hover:border-border-base/18 transition-colors"
                     :style="{'backgroundColor': hexToRgba(group.color, 0.15), 'color': group.color}">
                     {{ group.name }}
-                    <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="'从分组移出'"
+                    <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="t('modDetails.removeFromGroupTooltip')"
                       class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
@@ -407,7 +407,7 @@
 
 
                 <!-- 添加分组按钮 (Dropdown) -->
-                <div class="relative" :ref="el => groupDropRef = el" v-tooltip="'添加新分组'">
+                <div class="relative" :ref="el => groupDropRef = el" v-tooltip="t('modDetails.addNewGroupTooltip')">
                   <button @click="toggleGroupDrop" class="flex items-center gap-1 rounded border border-border-base/10 bg-bg-overlay/5 px-1 py-1 text-xs text-text-dim transition-all hover:border-border-base/18 hover:bg-bg-overlay/10 hover:text-text-main">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
                   </button>
@@ -416,10 +416,10 @@
                     <!-- 分组选择下拉框 -->
                     <div class="popover-surface z-50 flex max-h-48 w-40 flex-col rounded-sm p-1">
                       <!-- 搜索过滤 -->
-                      <input v-model="groupSearch" :ref="el => groupSearchRef = el" placeholder="搜索分组..."
+                      <input v-model="groupSearch" :ref="el => groupSearchRef = el" :placeholder="t('modDetails.searchGroupsPlaceholder')"
                         class="input-glass mb-1 px-2 py-1 text-xs text-text-main focus:outline-none" />
                       <div class="overflow-y-auto">
-                        <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-disabled text-center">无可用分组</div>
+                        <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-disabled text-center">{{ t('modDetails.noGroupsAvailable') }}</div>
                         <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
                           class="text-left min-h-5 w-full px-2 py-1 text-xs rounded hover:bg-bg-overlay/10 transition-colors truncate flex items-center gap-2">
                           <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
@@ -434,17 +434,17 @@
 
             <!-- 颜色选择 (简单版) -->
             <div class="flex items-center">
-              <label v-tooltip="'可自定义颜色标识'" class="flex-none text-xs uppercase text-text-dim font-bold tracking-wider">颜色标记*</label>
+              <label v-tooltip="t('modDetails.colorMarkLabel')" class="flex-none text-xs uppercase text-text-dim font-bold tracking-wider">{{ t('modDetails.colorMarkLabel') }}</label>
               <div class="flex-1 flex ml-2 min-w-20 gap-1.5 items-center justify-end">
                 <button v-for="(name, c) in presetColors" :key="c" @click="updateColor(c)"
                   :class="['w-4 h-4 min-w-1 rounded-full border border-border-base/10 transition-transform hover:scale-125',
                           selectedMod.sign_color === c ? 'ring-2 ring-bg-contrast scale-110' : '']"
-                  :style="{backgroundColor: c}" v-tooltip="'点击将'+MOD_SIGN_COLOR_MAP[c]+'颜色设为标记颜色'">
+                  :style="{backgroundColor: c}" :v-tooltip="t('modDetails.colorSetTooltip', { color: MOD_SIGN_COLOR_MAP[c] })">
                 </button>
-                <div class="flex items-center" v-tooltip="'自定义其它颜色'">
+                <div class="flex items-center" v-tooltip="t('modDetails.customColorTooltip')">
                   <ColorPicker v-model:pureColor="customSignColor" @pureColorChange="handleCustomColorChange" shape="circle" format="hex" picker-type="fk" disable-alpha round-history />
                 </div>
-                <button @click="updateColor(null)" v-tooltip="'清除颜色标记'"
+                <button @click="updateColor(null)" v-tooltip="t('modDetails.clearColorTooltip')"
                   class="text-text-subtle hover:text-accent-danger/80">
                   <CircleX class="size-4.5" />
                 </button>
@@ -453,23 +453,23 @@
 
             <!-- 别名 -->
             <div class="mb-2 flex flex-row items-center justify-around">
-              <input v-model="userAliasName" @blur="saveUserData" placeholder="在此添加自定义别名"
+              <input v-model="userAliasName" @blur="saveUserData" :placeholder="t('modDetails.customAliasPlaceholder')"
                 class="input-glass w-full flex-1 p-2 text-sm text-text-main focus:outline-none"/>
               <!-- 翻译按钮 -->
-              <button @click="generateModAlias" v-tooltip="'通过AI生成Mod别名及备注，需要配置AI'" :disabled="isUsingAI"
+              <button @click="generateModAlias" v-tooltip="t('modDetails.aiGenerateTooltip')" :disabled="isUsingAI"
                 class="min-w-8 h-6 px-1.5 ml-1 flex items-center justify-center text-sm rounded-sm bg-bg-highlight hover:bg-accent-primary hover:text-text-main transition-colors active:bg-accent-cool">
-                <span v-if="!isUsingAI">AI生成</span>
+                <span v-if="!isUsingAI">{{ t('modDetails.aiGenerateBtn') }}</span>
                 <svg v-else class="animate-spin size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               </button>
             </div>
 
             <!-- 备注 -->
             <div>
-              <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注" :class="[expandTextarea?'min-h-100':'']"
+              <textarea v-model="userNotes" @blur="saveUserData" :placeholder="t('modDetails.customNotesPlaceholder')" :class="[expandTextarea?'min-h-100':'']"
                 class="input-glass min-h-20 w-full resize-none p-2 text-sm text-text-soft
                 focus:outline-none custom-scrollbar">
               </textarea>
-              <button @click="expandTextarea=!expandTextarea" v-tooltip="'展开/收起'" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-bg-overlay/10 transition-colors">
+              <button @click="expandTextarea=!expandTextarea" v-tooltip="t('modDetails.expandCollapseTooltip')" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-bg-overlay/10 transition-colors">
                 <ChevronUp v-if="expandTextarea" class="size-5"/>
                 <ChevronDown v-else class="size-5"/>
               </button>
@@ -479,7 +479,7 @@
 
           <!-- 描述 (HTML) -->
           <div v-if="block.id === 'description'" class="p-1 space-y-2">
-            <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-border-base/5 pb-1">描述</h3>
+            <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-border-base/5 pb-1">{{ t('modDetails.descriptionLabel') }}</h3>
             <div v-viewer.rebuild="imageViewerOptions" class="prose prose-invert prose-sm max-w-none text-text-soft leading-relaxed wrap-break-word" v-html="formattedDescription"></div>
           </div>
 
@@ -488,7 +488,7 @@
 
       <!-- 底部占位提示 -->
       <div class="text-xs text-text-dim opacity-50">
-        * 由于格式和规范性方面的限制，部分模组信息可能无法完全获取。
+        {{ t('modDetails.limitNotice') }}
       </div>
 
     </div>
@@ -525,6 +525,7 @@
 
 <script setup >
 import { computed, ref, watch, nextTick } from 'vue'
+import { t } from '../../app/i18n'
 import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // 引入防抖函数
 import { MOD_SIGN_COLOR_MAP, MOD_TYPE_MAP, SOURCE_TYPE_MAP, MOD_TYPE_ICON_MAP } from '../../shared/lib/constants'
 import { useModStore } from './stores/modStore'

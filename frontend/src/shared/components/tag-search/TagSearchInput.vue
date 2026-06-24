@@ -5,8 +5,8 @@
       <slot name="left">
         <button v-if="showLogic" @click="toggleLogic"
           v-tooltip="logicMode === 'AND'
-            ? '当前为^^与^^逻辑，检索满足^^所有^^条件的项\n[[(点击切换为^^或^^逻辑)]]'
-            : '当前为^^或^^逻辑，检索满足^^任意^^条件的项\n[[(点击切换为^^与^^逻辑)]]'"
+            ? t('tagSearch.andLogicTip')
+            : t('tagSearch.orLogicTip')"
           class="shrink-0 size-7 font-bold cursor-pointer border transition-all relative"
           :class="[circle ? 'rounded-full' : 'rounded-md', logicMode === 'AND' ? 'bg-accent-primary/20 text-accent-primary border-accent-primary/30' : 'bg-accent-warning/20 text-accent-warning border-accent-warning/30']">
           <div class="absolute inset-0 flex items-center justify-center transition-all duration-500 ease transform-gpu" style="transform-style: preserve-3d;">
@@ -55,12 +55,12 @@
 
         <!-- 右侧控制区：清空当前条件，或展开完整 token 面板。 -->
         <div class="flex items-center gap-0.5 shrink-0">
-          <button v-show="modelValue.length > 0 || inputValue" @click="clearAll" class="p-1 text-text-dim hover:text-accent-danger transition-colors" v-tooltip="'清除全部'">
+          <button v-show="modelValue.length > 0 || inputValue" @click="clearAll" class="p-1 text-text-dim hover:text-accent-danger transition-colors" v-tooltip="t('tagSearch.clearAll')">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
-          <button @click="isExpanded = !isExpanded" v-tooltip="'展开已输入的搜索条件'" class="p-1 text-text-dim hover:text-text-main transition-transform" :class="isExpanded ? 'rotate-180' : ''">
+          <button @click="isExpanded = !isExpanded" v-tooltip="t('tagSearch.expandConditions')" class="p-1 text-text-dim hover:text-text-main transition-transform" :class="isExpanded ? 'rotate-180' : ''">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
             </svg>
@@ -118,6 +118,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import vDragScroll from '../../directives/dragScroll.js'
 import TagToken from './TagToken.vue'
 import { DEFAULT_TAG_SEARCH_INPUT_HELP_TEXT } from './tagSearchEngine'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   // v-model 绑定解析后的 token 数组，格式由 controller.parse 统一生成。
@@ -300,13 +301,13 @@ const handleInput = () => {
 }
 
 const placeholderText = computed(() => {
-  if (props.modelValue.length > 0) return '添加条件...'
-  return props.placeholder || '输入关键词或条件'
+  if (props.modelValue.length > 0) return t('tagSearch.addCondition')
+  return props.placeholder || t('tagSearch.placeholder')
 })
 
 const inputTooltipText = computed(() => {
   if (props.inputHelpText !== undefined) return props.inputHelpText
-  return searchController.value?.inputHelpText ?? DEFAULT_TAG_SEARCH_INPUT_HELP_TEXT
+  return searchController.value?.inputHelpText ?? t('tagSearch.helpText')
 })
 const searchTooltipText = computed(() => {
   if (props.searchHelpText !== undefined) return props.searchHelpText
@@ -315,7 +316,12 @@ const searchTooltipText = computed(() => {
 
 const tagTooltip = (item) => {
   if (item.type !== 'key') return ''
-  return `**${item.desc}**\n原始格式：${item.meta?.fullKey || ''}\n其它格式：${item.meta?.aliases || ''}\n使用示例：${item.meta?.usage || ''}`
+  return t('tagSearch.itemDescPattern', {
+    desc: item.desc,
+    fullKey: item.meta?.fullKey || '',
+    aliases: item.meta?.aliases || '',
+    usage: item.meta?.usage || ''
+  })
 }
 
 defineExpose({ addTag })

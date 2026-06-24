@@ -37,7 +37,7 @@
           text-text-dim bg-accent-primary/10
           hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
-          v-tooltip="'加载文件'">
+          v-tooltip="t('backup.menu.loadFile')">
           <span class="relative transition duration-300 only:-mx-6">
             <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/></svg>
           </span>
@@ -48,7 +48,7 @@
           hover:bg-bg-overlay/12 hover:text-text-main hover:scale-110 active:scale-100
           group-hover:bg-bg-overlay/10 group-hover:text-text-dim group-hover:shadow-2xl/20
           group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-          v-tooltip="'更多操作'">
+          v-tooltip="t('common.moreActions')">
           <span class="relative only:-mx-6">
             <MoreHorizontal class="size-4" />
           </span>
@@ -60,6 +60,7 @@
 
 <script setup>
 import { MoreHorizontal } from 'lucide-vue-next'
+import { t } from '../../app/i18n'
 
 defineProps({
   item: { type: Object, required: true },

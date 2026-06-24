@@ -35,6 +35,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -253,7 +254,7 @@ const createDragPreview = (event, item, sourceEl, pointerOffset = null) => {
     ].join(';')
     el.appendChild(card)
   } else {
-    el.textContent = String(item?.dragLabel || item?.name || item?.id || item?.[props.dataKey] || '拖拽项目')
+    el.textContent = String(item?.dragLabel || item?.name || item?.id || item?.[props.dataKey] || t('common.dragItem'))
   }
   if (count > 1) {
     // 多选时保留触发拖拽的真实卡片作为最上层，底下用卡堆表示批量操作。

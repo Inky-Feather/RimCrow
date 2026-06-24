@@ -10,7 +10,7 @@
     
     <!-- 主输入区域 -->
     <div class="relative group min-w-0 max-w-full flex items-center" :class="{ 'flex-1': mini }" >
-      <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable" :disabled="disabled"
+      <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder || t('common.selectPlaceholder')" :readonly="!editable" :disabled="disabled"
         :class="[ 'input-glass min-w-0 w-full truncate text-sm text-text-main focus:outline-none placeholder:text-text-disabled placeholder:italic',
            mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3', editable ? 'cursor-text' : ' bg-bg-surface',
           { 'cursor-pointer': !editable && !disabled, 'cursor-text': editable && !disabled, 'cursor-not-allowed text-text-disabled': disabled }
@@ -43,7 +43,7 @@
           class="w-full flex items-center px-2 py-1.5 rounded-lg text-xs text-left bg-bg-overlay/5 border border-dashed border-border-base/18 text-accent-primary mb-1 hover:bg-accent-primary/10 transition-colors"
           :class="{'ring-1 ring-accent-primary/50': highlightedIndex === -1}" >
           <span class="mr-1.5 opacity-70">↵</span>
-          使用 "<span class="font-bold">{{ internalSearch }}</span>"
+          {{ t('common.use') }} "<span class="font-bold">{{ internalSearch }}</span>"
         </button>
         <template v-if="filteredOptions.length > 0">
           <button v-for="(opt, index) in filteredOptions" :key="opt.value" :ref="(el) => setOptionRef(el, index)" type="button" @click="selectOption(opt)"
@@ -67,7 +67,7 @@
         </template>
 
         <div v-else-if="!showCustomHint" class="py-3 text-center text-xs text-text-dim italic">
-          暂无选项
+          {{ t('common.noOptions') }}
         </div>
       </div>
     </FixedPopover>
@@ -77,10 +77,11 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
 import FixedPopover from '../popover/FixedPopover.vue'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   label: String,
-  placeholder: { type: String, default: '请选择...' },
+  placeholder: { type: String, default: '' },
   description: String,
   modelValue: [String, Number, Boolean],
   options: { type: Array, default: () => [] }, // { label, value, ... }

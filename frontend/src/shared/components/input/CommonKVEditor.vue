@@ -5,7 +5,7 @@
       <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
       </label>
-      <button @click="add" class="text-xs text-accent-primary hover:underline">+ 新增条目</button>
+      <button @click="add" class="text-xs text-accent-primary hover:underline">+ {{ t('common.addEntry') }}</button>
     </div>
 
     <div class="space-y-1.5">
@@ -13,7 +13,7 @@
         <input 
           :value="key"
           @change="updateKey(key, $event.target.value)"
-          placeholder="域名"
+          :placeholder="t('common.domain')"
           class="flex-1 bg-bg-inset/70 border border-border-base/5 rounded-l-md px-3 py-1.5 text-sm text-text-main font-mono focus:outline-none focus:border-accent-primary/40"
         />
         <input 
@@ -32,6 +32,7 @@
 
 <script setup>
 import { Trash2 } from 'lucide-vue-next'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   label: String,

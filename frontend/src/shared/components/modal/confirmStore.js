@@ -1,6 +1,7 @@
 // stores/confirmStore.js
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { t } from '../../../app/i18n'
 
 export const useConfirmStore = defineStore('confirm', () => {
   const isVisible = ref(false)
@@ -14,14 +15,14 @@ export const useConfirmStore = defineStore('confirm', () => {
     isHtml: false,     // 是否允许 HTML 内容
     inputValue: '',    // Prompt 模式下的输入值
     placeholder: '',
-    confirmText: '确定',
-    cancelText: '取消',
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
     targetRect: null,  // 目标元素的位置信息 (用于迷弹窗)
     validation: null,  // 输入验证函数 (val) => boolean
     showDeleteOptions: false,
     forceDelete: false,
-    trashOptionText: '移入回收站',
-    forceOptionText: '强制删除',
+    trashOptionText: t('confirm.trashOptionText'),
+    forceOptionText: t('confirm.forceOptionText'),
     deleteOptionsHint: '',
     // actionButtons 是窗口级按钮，promptItems 是队列弹窗的逐项操作列表；老 confirm/alert 调用不传则保持原行为。
     actionButtons: [],
@@ -49,8 +50,8 @@ export const useConfirmStore = defineStore('confirm', () => {
     state.validation = null
     state.showDeleteOptions = false
     state.forceDelete = false
-    state.trashOptionText = '移入回收站'
-    state.forceOptionText = '强制删除'
+    state.trashOptionText = t('confirm.trashOptionText')
+    state.forceOptionText = t('confirm.forceOptionText')
     state.deleteOptionsHint = ''
     state.actionButtons = []
     state.promptItems = []
@@ -61,8 +62,8 @@ export const useConfirmStore = defineStore('confirm', () => {
     Object.assign(state, {
       type: 'info',
       mode: 'alert',
-      confirmText: '确定',
-      cancelText: '取消',
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       ...options
     })
 
@@ -147,12 +148,12 @@ export const useConfirmStore = defineStore('confirm', () => {
     message,
     mode: 'confirm',
     type: 'error',
-    confirmText: '确认删除',
-    cancelText: '取消',
+    confirmText: t('common.confirmDelete'),
+    cancelText: t('common.cancel'),
     showDeleteOptions: true,
-    trashOptionText: '移入回收站',
-    forceOptionText: '强制删除',
-    deleteOptionsHint: '默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。',
+    trashOptionText: t('confirm.trashOptionText'),
+    forceOptionText: t('confirm.forceOptionText'),
+    deleteOptionsHint: t('confirm.deleteOptionsHint'),
     ...options,
   })
 

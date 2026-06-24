@@ -357,7 +357,7 @@ const currentBackupDisplayTitle = computed(() => {
   if (orderStore.currentBackupFile) {
     return orderStore.currentBackupFile.split(/[/\\]/).pop()
   }
-  return '对比文件'
+  return t('ui.compareFile')
 })
 
 const closeThemeEditor = () => {

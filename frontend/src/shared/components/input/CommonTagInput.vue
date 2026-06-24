@@ -28,7 +28,7 @@
           @blur="handleBlur"
           @keydown.enter.prevent="confirmAddTag"
           @keydown.backspace="handleBackspace"
-          :placeholder="placeholder || '输入并回车...'"
+          :placeholder="placeholder || t('common.inputAndEnter')"
           class="flex-1 min-w-20 bg-transparent border-none outline-none text-sm text-text-main py-1 px-1"
         />
         
@@ -52,6 +52,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   label: String,

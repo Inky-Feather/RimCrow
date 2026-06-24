@@ -5,7 +5,7 @@
     <div @click="toggle" :class="['list-none select-none px-1 flex text-text-dim hover:text-text-main items-center justify-between gap-0.5 rounded-lg font-medium',
       'bg-[rgba(var(--rgb-components),0.5)] hover:bg-[rgba(var(--rgb-components),0.6)] border border-border-base/5']">
       <!-- 抓取图标。真正的拖拽会话由外层 VirtualDragList 接管，避免嵌套列表互相抢事件。 -->
-      <div v-tooltip="`移动`" class="select-trigger cursor-move p-1 text-text-dim hover:text-text-main hover:scale-130 transition-all">
+      <div v-tooltip="t('modGroup.move')" class="select-trigger cursor-move p-1 text-text-dim hover:text-text-main hover:scale-130 transition-all">
         <svg class="size-5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path
             d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z"
@@ -18,7 +18,7 @@
       </div>
 
       <!-- 颜色选择与展开显示 -->
-      <div @click.stop v-tooltip="`改变颜色`" class="no-drag relative inline-flex items-center justify-center text-text-main hover:text-transparent transition-all">
+      <div @click.stop v-tooltip="t('modGroup.changeColor')" class="no-drag relative inline-flex items-center justify-center text-text-main hover:text-transparent transition-all">
         <!--
           取色器内部会创建 Popper/Teleport 和拖拽监听，不适合在虚拟滚动标题行里常驻。
           默认只渲染轻量色块；用户明确点击改色时再挂载真实 ColorPicker，避免滚动穿过大量分组时反复创建重组件。
@@ -47,11 +47,11 @@
 
       <!-- 编辑/保存 与 删除 -->
       <span class="flex items-center">
-        <button @mousedown.prevent @click.stop="openExportDialog" v-tooltip="`打包导出分组模组`" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
+        <button @mousedown.prevent @click.stop="openExportDialog" v-tooltip="t('modGroup.exportGroup')" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
           <Package class="size-4.5 hover:text-accent-special" />
         </button>
         <!-- 编辑/保存按钮 -->
-        <button @mousedown.prevent @click.stop="toggleEditName" v-tooltip="`编辑分组名称`" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
+        <button @mousedown.prevent @click.stop="toggleEditName" v-tooltip="t('modGroup.editName')" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer text-text-dim text-xs font-bold shadow-lg hover:shadow-bg-deep/50 transition-all`">
           <svg v-if="!isEditingName" class="hover:text-accent-secondary size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M7 42H43" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M11 26.7199V34H18.3172L39 13.3081L31.6951 6L11 26.7199Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" />
@@ -62,7 +62,7 @@
           </svg>
         </button>
         <!-- 删除按钮 -->
-        <button @click.stop="deleteGroup($event)" v-tooltip="`删除分组`" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer
+        <button @click.stop="deleteGroup($event)" v-tooltip="t('modGroup.deleteGroup')" :class="`rounded-lg p-1 hover:bg-bg-overlay/10 cursor-pointer
           text-text-dim hover:text-accent-danger text-xs font-bold shadow-lg hover:shadow-bg-deep/50
           transition-all`">
           <svg class="size-4.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -87,6 +87,7 @@ import { useAppStore } from '../../app/stores/appStore';
 import { useGroupStore } from './stores/groupStore';
 import { hexToRgbComponents } from '../../shared/lib/color'
 import { toast } from '../../shared/lib/common';
+import { t } from '../../app/i18n';
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -105,10 +106,10 @@ const groupModIds = computed(() => Array.isArray(props.groupData?.mod_ids) ? pro
 // 分组标题上的打包导出是原有模组包功能，和推荐导出入口分开处理。
 const openExportDialog = () => {
   appStore.openCustomModExportDialog({
-    title: `导出分组模组: ${props.groupData?.name || '未命名分组'}`,
-    description: '可按需附带依赖、联锁项和语言包。',
+    title: t('modGroup.exportTitle', { name: props.groupData?.name || t('modGroup.unnamedGroup') }),
+    description: t('modGroup.exportDesc'),
     modIds: [...groupModIds.value],
-    summary: `分组内共 ${groupModIds.value.length} 个模组。`,
+    summary: t('modGroup.exportSummary', { count: groupModIds.value.length }),
   })
 }
 // 切换展开状态
@@ -145,7 +146,7 @@ const saveGroupName = () => {
   const result = resolveUniqueGroupName(editingGroupName.value)
   if (result.renamed) {
     // 分组名称冲突时沿用旧行为：自动添加序号，而不是阻断用户输入。
-    toast.warning(`分组名称已存在，已添加序号 ${result.index}`)
+    toast.warning(t('modGroup.nameExists', { index: result.index }))
   }
   if (result.valid && result.name !== props.groupData.name) {
     emit('update-group', props.id, { name: result.name })

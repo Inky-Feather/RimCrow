@@ -8,20 +8,20 @@
       <button v-if="modelValue" @click="openInExplorer" 
         class="text-xs text-accent-primary/60 hover:text-accent-primary transition-colors hover:underline"
       >
-        在资源管理器中打开
+        {{ t('common.openInExplorer') }}
       </button>
     </div>
     
     <div :class="{' opacity-50 cursor-not-allowed pointer-events-none': readOnly}" class="flex items-center gap-1.5 group w-full">
       <!-- 路径显示区 -->
-      <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0" v-tooltip="checkMsg || (modelValue || '未配置路径')" 
+      <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0" v-tooltip="checkMsg || (modelValue || t('common.pathNotConfigured'))" 
         :class="[ checkClassStyle ]">
         <!-- 固定前缀标签 -->
         <div class="shrink-0 mr-2 text-text-disabled italic text-xs font-mono uppercase select-none">Path</div>
         
         <!-- 手动输入框 -->
         <input type="text" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)"
-          :placeholder="placeholder || '请输入或粘贴路径...'"
+          :placeholder="placeholder || t('common.enterOrPastePath')"
           class="flex-1 bg-transparent text-sm text-text-soft font-mono outline-none min-w-0 "
           :class="{ 'direction-rtl': !isFocused }"
           @focus="isFocused = true" @blur="isFocused = false; $emit('blur')"
@@ -33,14 +33,14 @@
             modelValue ? 'bg-accent-success shadow-[0_0_8px_rgba(var(--rgb-accent-success),0.5)]' : 'bg-accent-danger shadow-[0_0_8px_rgba(var(--rgb-accent-danger),0.5)]',
             modelValue ? 'opacity-100' : 'opacity-40 animate-pulse'
           ]"
-          v-tooltip="modelValue ? '已填写路径' : '路径为空，可能导致功能失效'"
+          v-tooltip="modelValue ? t('common.pathConfigured') : t('common.pathEmptyWarning')"
         ></div>
       </div>
 
       <!-- 浏览按钮 -->
       <button v-if="!readOnly" @click="$emit('browse')"
         class="input-addon-button flex h-9 w-9 items-center justify-center rounded-lg active:scale-90"
-        v-tooltip="'通过文件浏览器选择'"
+        v-tooltip="t('common.selectViaBrowser')"
       >
         <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -53,6 +53,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useAppStore } from '../../../app/stores/appStore'
+import { t } from '../../../app/i18n'
 
 const props = defineProps({
   label: String,
@@ -80,8 +81,8 @@ const checkMsg = computed(() => {
     // console.log(props.check)
     let msg = props.check['msg'] || ''
     if (props.check['type'] === 'success') msg='##'+msg+'##'
-    else if (props.check['type'] === 'error') msg='!!'+msg+'\n请检查路径是否有效！'+'!!'
-    else if (props.check['type'] === 'warn') msg='^^'+msg+'\n请检查路径是否正确！'+'^^'
+    else if (props.check['type'] === 'error') msg='!!'+msg+'\n'+t('common.checkPathValid')+'!!'
+    else if (props.check['type'] === 'warn') msg='^^'+msg+'\n'+t('common.checkPathCorrect')+'^^'
     // console.log(msg)
     return msg
   }

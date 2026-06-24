@@ -13,7 +13,7 @@ const normalizeCommand = (command = {}) => {
   return {
     id,
     title: String(command.title || id).trim(),
-    category: String(command.category || '其他').trim(),
+    category: String(command.category || 'common.other').trim(),
     scope: String(command.scope || 'global').trim() || 'global',
     defaultKeys: normalizeKeybindingList(command.defaultKeys || []),
     lockedKeys: normalizeKeybindingList(command.lockedKeys || []),

@@ -28,32 +28,32 @@
       </button>
 
       <!-- 贴图优化入口 -->
-      <button data-tour="texture-opt-entry" @click="appStore.toggleUiState('showTextureOptModal')" v-tooltip="`贴图优化`"
+      <button data-tour="texture-opt-entry" @click="appStore.toggleUiState('showTextureOptModal')" v-tooltip="t('header.textureOpt')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <Images class="size-6" />
       </button>
 
-      <button data-tour="file-search-entry" @click="appStore.toggleUiState('showFileSearchWorkbench')" v-tooltip="`文件内容搜索`"
+      <button data-tour="file-search-entry" @click="appStore.toggleUiState('showFileSearchWorkbench')" v-tooltip="t('header.fileSearch')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <FileSearch2 class="size-6" />
       </button>
 
-      <button @click="appStore.toggleUiState('showModSettingsManager')" v-tooltip="`查看模组配置`"
+      <button @click="appStore.toggleUiState('showModSettingsManager')" v-tooltip="t('header.viewModSettings')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <FileSliders class="size-6" />
       </button>
 
-      <button @click="openModResidueCleanup" v-tooltip="`查看和清理卸载残留`"
+      <button @click="openModResidueCleanup" v-tooltip="t('header.residueCleanup')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <BrushCleaning class="size-6" />
       </button>
 
-      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
+      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="t('header.logs')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
       </button>
 
-      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showModAliasReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !aiStore.modAliasReviewItemCount}"
+      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showModAliasReviewModal')" v-tooltip="t('header.aiReview')" :class="{'opacity-30 pointer-events-none': !aiStore.modAliasReviewItemCount}"
         class="p-2 rounded-full relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent cursor-pointer">
         <BotMessageSquare class="size-6" />
         <span v-show="aiStore.modAliasReviewItemCount > 0" class="absolute top-0 right-0 p-0.5 leading-none text-xs text-text-main font-bold rounded-full bg-accent-secondary/70 animate-pulse">
@@ -62,60 +62,60 @@
       </button>
 
 
-      <div v-tooltip="`加载序列`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+      <div v-tooltip="t('header.loadOrder')" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <ClipboardList class="size-6" />
         <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-lg opacity-0
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
           <button @click="loadOrder('0')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'" >
-            导入加载序列
+            v-tooltip="t('header.importLoadOrderTip')" >
+            {{ t('header.importLoadOrder') }}
           </button>
           <button @click="exportOrder()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'导出为 ModsConfig.xml（仅含包名）'">
-            导出加载序列
+            v-tooltip="t('header.exportModsConfigTip')">
+            {{ t('header.exportLoadOrder') }}
           </button>
           <button @click="exportOrder(null,'modlist')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'导出为 ModList.xml（含包名和工坊ID）'" >
-            导出分享列表
+            v-tooltip="t('header.exportModListTip')" >
+            {{ t('header.exportShareList') }}
           </button>
           <button @click="exportOrder(null,'rml')" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'导出为 RML（游戏原生导出格式）'" >
-            导出原生分享
+            v-tooltip="t('header.exportRmlTip')" >
+            {{ t('header.exportNativeShare') }}
           </button>
           <button @click="importShareCode()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'粘贴 RMM1 分享码并导入到对比视图'" >
-            导入分享码
+            v-tooltip="t('header.importShareCodeTip')" >
+            {{ t('header.importShareCode') }}
           </button>
           <button @click="exportShareCode()" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent"
-            v-tooltip="'生成 RMM1 分享码并复制到剪贴板'" >
-            复制分享码
+            v-tooltip="t('header.exportShareCodeTip')" >
+            {{ t('header.copyShareCode') }}
           </button>
         </div>
       </div>
 
-      <div v-tooltip="`打开文件夹`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+      <div v-tooltip="t('header.openFolder')" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
         <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-sm opacity-0
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
-          <button @click="appStore.openPath(profileStore.activeContext.user_data_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">用户数据目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_saves_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏存档目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_config_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏配置目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏安装目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏DLC目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >本地Mod目录</button>
-          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
-          <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">管理器Mod目录</button>
+          <button @click="appStore.openPath(profileStore.activeContext.user_data_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.userDataPath') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_saves_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.gameSavesPath') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_config_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.gameConfigPath') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.gameInstallPath') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.gameDlcPath') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >{{ t('header.localModsPath') }}</button>
+          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.workshopModsPath') }}</button>
+          <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('header.selfModsPath') }}</button>
         </div>
       </div>
 
 
-      <button data-tour="rulePanel-btn" @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="`规则页面`"
+      <button data-tour="rulePanel-btn" @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="t('header.rules')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
       </button>
 
       <!-- 设置按钮 -->
-      <button data-tour="settings-button" @click="appStore.openSettingsPanel()" v-tooltip="`设置`"
+      <button data-tour="settings-button" @click="appStore.openSettingsPanel()" v-tooltip="t('header.settings')"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
