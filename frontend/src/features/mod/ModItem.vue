@@ -223,7 +223,7 @@ const props = defineProps({
 })
 
 // 分割线项需要把折叠动作回传给父列表，真正的折叠状态由父组件统一维护。
-const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections', 'move-selected'])
+const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections', 'expand-all-sections', 'collapse-all-sections', 'move-selected'])
 
 const appStore = useAppStore()
 const aiStore = useAiStore()
@@ -508,20 +508,24 @@ const handleContextMenu = async (event) => {
   const sortedGroups = sortByDisplayName(groupStore.groupList, group => group?.name)
   // 移动菜单
   const moveMenu = props.moveMenu
-  const splitGroupOptions = moveMenu?.splitGroupOptions || []
+  const splitGroupTargets = moveMenu?.splitGroupTargets || []
   const moveMenuEnabled = !!moveMenu?.enabled
-  const moveableWithinSplitGroup = moveMenu?.listId === 'active' && moveMenu.canMoveWithinSplitGroup
+  const moveableWithinSplitGroup = !!moveMenu?.canMoveWithinSplitGroup
   const moveMenuItems = [
     { label: '列表顶部', icon: ChevronsUp, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-top' }) },
     { label: '列表底部', icon: ChevronsDown, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-bottom' }) },
     { label: '组内顶部', icon: ChevronUp, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-top' }) },
     { label: '组内底部', icon: ChevronDown, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-bottom' }) },
-    { label: moveMenu?.splitGroupLabel || '其他分割组...', icon: BetweenHorizontalStart, hidden: !splitGroupOptions.length, disabled: !moveMenuEnabled,
-      children: splitGroupOptions.map(group => ({
+    ...splitGroupTargets.map(target => ({
+      label: target.label || '其它分割组...',
+      icon: BetweenHorizontalStart,
+      hidden: !target.groups?.length,
+      disabled: !moveMenuEnabled,
+      children: (target.groups || []).map(group => ({
         label: `${group.label}${Number.isInteger(group.count) ? ` (${group.count}项)` : ''}`,
-        action: () => emit('move-selected', { action: 'split-group', targetGroupId: group.groupId })
+        action: () => emit('move-selected', { action: 'split-group', targetGroupId: group.groupId, targetListId: target.listId })
       }))
-    }
+    }))
   ]
   // 通用菜单
   const commnMenuItems = [
@@ -633,6 +637,9 @@ const handleContextMenu = async (event) => {
   const currentSplitGroup = props.currentSplitGroup || null
   const showCurrentSplitGroupMenu = props.sectionFeatureEnabled && currentSplitGroup?.headerId
   const showSelectedSplitGroupMenu = selectedSectionHeaderIds.value.length > 1
+  const sectionGroupCount = Number(moveMenu?.sectionGroupCount || 0)
+  const collapsedSectionGroupCount = Number(moveMenu?.collapsedSectionGroupCount || 0)
+  const expandedSectionGroupCount = Math.max(0, sectionGroupCount - collapsedSectionGroupCount)
   const splitGroupMenuItems = [
     { divider: true, hidden: !showCurrentSplitGroupMenu && !showSelectedSplitGroupMenu },
     currentSplitGroup?.collapsed
@@ -650,6 +657,10 @@ const handleContextMenu = async (event) => {
         },
     { label: '展开选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsUpDown, hidden: !showSelectedSplitGroupMenu, action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
     { label: '折叠选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsDownUp, hidden: !showSelectedSplitGroupMenu, action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
+    { label: `展开全部分割组${sectionGroupCount > 0 ? ` (${collapsedSectionGroupCount}个已折叠)` : ''}`, icon: ChevronsUpDown,
+      hidden: !props.sectionFeatureEnabled || collapsedSectionGroupCount === 0, action: () => emit('expand-all-sections') },
+    { label: `折叠全部分割组${sectionGroupCount > 0 ? ` (${expandedSectionGroupCount}个已展开)` : ''}`, icon: ChevronsDownUp,
+      hidden: !props.sectionFeatureEnabled || expandedSectionGroupCount === 0, action: () => emit('collapse-all-sections') },
   ]
   const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
   if (!allInterlocked) {

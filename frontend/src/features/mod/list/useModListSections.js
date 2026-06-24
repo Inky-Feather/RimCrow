@@ -13,9 +13,14 @@ export function useModListSections({
 }) {
   const collapsedSectionIds = ref([])
 
-  // 分割组折叠只允许在 active 列表开启，避免影响其它列表原本的拖拽/显示语义。
-  const sectionFeatureEnabled = computed(() => props.listId === 'active' && !!appStore.settings.ui.enable_active_section_collapse)
-  const splitGroupFeatureEnabled = computed(() => !!appStore.settings.ui.enable_active_section_collapse)
+  const isSectionFeatureEnabledForList = (listId = props.listId) => {
+    if (listId === 'active') return !!appStore.settings.ui.enable_active_section_collapse
+    if (listId === 'inactive') return !!appStore.settings.ui.enable_inactive_section_collapse
+    return false
+  }
+  // 分割组折叠按列表分别控制，避免临时列表等不支持分割线的区域误触发这套语义。
+  const sectionFeatureEnabled = computed(() => isSectionFeatureEnabledForList(props.listId))
+  const splitGroupFeatureEnabled = computed(() => sectionFeatureEnabled.value)
   const isSectionHeaderName = (value) => isSectionHeaderTitle(value)
   const isSectionHeaderModId = (id) => {
     const mod = modStore.takeModById(id)
@@ -73,8 +78,8 @@ export function useModListSections({
     const rawText = mod?.alias_name || mod?.name || id
     return extractSectionHeaderTitle(rawText) || rawText || '未命名分割组'
   }
-  const buildSectionGroupsFromList = (sourceList = []) => {
-    if (!splitGroupFeatureEnabled.value) return []
+  const buildSectionGroupsFromList = (sourceList = [], listId = props.listId) => {
+    if (!isSectionFeatureEnabledForList(listId)) return []
     const groups = []
     let currentGroup = null
     sourceList.forEach(id => {
@@ -93,22 +98,23 @@ export function useModListSections({
     })
     return groups
   }
-  const activeSectionGroups = computed(() => buildSectionGroupsFromList(modStore.activeIds))
-  const findSectionGroupInList = (targetId, sourceList = modStore.activeIds) => {
+  const currentSectionGroups = computed(() => buildSectionGroupsFromList(props.modelValue, props.listId))
+  const takeSectionGroupsByListId = (listId = props.listId) => buildSectionGroupsFromList(takeListIdsById(listId), listId)
+  const findSectionGroupInList = (targetId, sourceList = props.modelValue, listId = props.listId) => {
     const key = normalizeId(targetId)
     if (!key) return null
-    return buildSectionGroupsFromList(sourceList).find(group => (
+    return buildSectionGroupsFromList(sourceList, listId).find(group => (
       normalizeId(group.headerId) === key
       || group.modIds.some(id => normalizeId(id) === key)
     )) || null
   }
-  const findActiveSectionGroupById = (targetId) => findSectionGroupInList(targetId, modStore.activeIds)
   const takeListIdsById = (listId = props.listId) => {
     if (listId === 'active') return modStore.activeIds
     if (listId === 'inactive') return modStore.inactiveIds
     if (listId === 'temp') return modStore.tempIds
     return []
   }
+  const findCurrentSectionGroupById = (targetId) => findSectionGroupInList(targetId, props.modelValue, props.listId)
   const LIST_LABEL_MAP = {
     active: '启用列表',
     inactive: '停用列表',
@@ -164,8 +170,8 @@ export function useModListSections({
     })
     return true
   }
-  const resolveSectionInsertIndex = (sourceList, targetGroupId, position = 'bottom') => {
-    const targetGroup = buildSectionGroupsFromList(sourceList)
+  const resolveSectionInsertIndex = (sourceList, targetGroupId, position = 'bottom', listId = props.listId) => {
+    const targetGroup = buildSectionGroupsFromList(sourceList, listId)
       .find(group => group.groupId === normalizeId(targetGroupId))
     if (!targetGroup) return -1
     const headerIndex = sourceList.findIndex(id => sameId(id, targetGroup.headerId))
@@ -184,22 +190,23 @@ export function useModListSections({
       label: `移动 ${normalizeMoveIds(ids).length} 项到${LIST_LABEL_MAP[listId] || props.title}${position === 'top' ? '顶部' : '底部'}`,
     })
   }
-  const moveIdsToActiveSectionGroup = async ({ ids, targetGroupId, position = 'bottom' }) => {
-    if (!splitGroupFeatureEnabled.value) return false
+  const moveIdsToSectionGroup = async ({ ids, targetGroupId, targetListId = props.listId, position = 'bottom' }) => {
+    if (!isSectionFeatureEnabledForList(targetListId)) return false
     const movingIds = normalizeMoveIds(ids)
     if (movingIds.length === 0 || !targetGroupId) return false
-    const targetGroup = activeSectionGroups.value.find(group => group.groupId === normalizeId(targetGroupId))
+    const targetGroups = takeSectionGroupsByListId(targetListId)
+    const targetGroup = targetGroups.find(group => group.groupId === normalizeId(targetGroupId))
     if (!targetGroup) return false
-    const activeBaseList = modStore.activeIds.filter(id => !movingIds.some(movingId => sameId(movingId, id)))
-    const insertIndex = resolveSectionInsertIndex(activeBaseList, targetGroupId, position)
+    const targetBaseList = takeListIdsById(targetListId).filter(id => !movingIds.some(movingId => sameId(movingId, id)))
+    const insertIndex = resolveSectionInsertIndex(targetBaseList, targetGroupId, position, targetListId)
     if (insertIndex < 0) return false
     const groupPositionText = position === 'top' ? '顶部' : '底部'
     return await moveIdsToList({
       ids: movingIds,
-      targetListId: 'active',
+      targetListId,
       insertIndex,
       type: position === 'top' ? 'move-to-section-top' : 'move-to-section-bottom',
-      label: `移动 ${movingIds.length} 项到分割组「${targetGroup.label}」${groupPositionText}`,
+      label: `移动 ${movingIds.length} 项到${LIST_LABEL_MAP[targetListId] || props.title}分割组「${targetGroup.label}」${groupPositionText}`,
     })
   }
   const moveIdsToCurrentSectionBoundary = async ({ ids, position = 'top' }) => {
@@ -207,13 +214,14 @@ export function useModListSections({
     if (movingIds.length === 0) return false
     const groupIds = [...new Set(
       movingIds
-        .map(id => findActiveSectionGroupById(id)?.groupId || '')
+        .map(id => findCurrentSectionGroupById(id)?.groupId || '')
         .filter(Boolean)
     )]
     if (groupIds.length !== 1) return false
-    return await moveIdsToActiveSectionGroup({
+    return await moveIdsToSectionGroup({
       ids: movingIds,
       targetGroupId: groupIds[0],
+      targetListId: props.listId,
       position,
     })
   }
@@ -273,6 +281,22 @@ export function useModListSections({
     if (!targetIds.length) return
     collapsedSectionIds.value = [...new Set([...activeCollapsedSectionIds.value, ...targetIds])]
   }
+  const expandableSectionIds = computed(() => normalizeSectionIds(sectionHeaderIds.value)
+    .filter(id => getSectionChildCount(id) > 0))
+  const collapsedSectionCount = computed(() => activeCollapsedSectionIds.value.length)
+  const expandAllSections = () => {
+    if (!activeCollapsedSectionIds.value.length) return
+    collapsedSectionIds.value = []
+  }
+  const collapseAllSections = () => {
+    if (!canUseSectionCollapse.value || expandableSectionIds.value.length === 0) return
+    collapsedSectionIds.value = [...expandableSectionIds.value]
+  }
+  const defaultCollapseEnabled = computed(() => {
+    if (props.listId === 'active') return !!appStore.settings.ui.default_collapse_active_sections
+    if (props.listId === 'inactive') return !!appStore.settings.ui.default_collapse_inactive_sections
+    return false
+  })
 
   // 统一的“折叠状态初始化”入口：
   // 1. 若功能关闭或当前列表没有分割线项，则清空；
@@ -293,7 +317,7 @@ export function useModListSections({
     if (persistedIds) {
       collapsedSectionIds.value = normalizeSectionIds(persistedIds)
         .filter(id => getSectionChildCount(id) > 0)
-    } else if (appStore.settings.ui.default_collapse_active_sections) {
+    } else if (defaultCollapseEnabled.value) {
       collapsedSectionIds.value = normalizeSectionIds(sectionHeaderIds.value)
         .filter(id => getSectionChildCount(id) > 0)
     } else {
@@ -451,7 +475,7 @@ export function useModListSections({
   })
 
   // 默认折叠只负责“没有历史状态时”的初始值，不主动覆盖用户已经保存的展开/折叠结果。
-  watch(() => appStore.settings.ui.default_collapse_active_sections, (enabled) => {
+  watch(defaultCollapseEnabled, (enabled) => {
     if (!sectionFeatureEnabled.value || sectionHeaderIds.value.length === 0) return
     const persistedIds = getPersistedSectionIds()
     if (persistedIds) return
@@ -486,23 +510,28 @@ export function useModListSections({
   return {
     sectionFeatureEnabled,
     splitGroupFeatureEnabled,
-    activeSectionGroups,
+    currentSectionGroups,
+    takeSectionGroupsByListId,
     isSectionHeaderId,
     isSectionCollapsed,
     getSectionChildCount,
+    collapsedSectionCount,
+    expandableSectionCount: computed(() => expandableSectionIds.value.length),
     toggleSection,
     expandSections,
     collapseSections,
+    expandAllSections,
+    collapseAllSections,
     visibleList,
     revealCollapsedSectionFor,
     sameId,
-    findActiveSectionGroupById,
+    findCurrentSectionGroupById,
     getSectionMemberIds,
     resolveInsertionIndex,
     correctInterlockInsertIndex,
     moveIdsToListBoundary,
     moveIdsToCurrentSectionBoundary,
-    moveIdsToActiveSectionGroup,
+    moveIdsToSectionGroup,
     internalListProxy,
   }
 }

@@ -170,6 +170,8 @@
                 @toggle-section="toggleSection"
                 @expand-selected-sections="expandSections"
                 @collapse-selected-sections="collapseSections"
+                @expand-all-sections="expandAllSections"
+                @collapse-all-sections="collapseAllSections"
                 @move-selected="handleMoveSelected">
               </ModItem>
               <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
@@ -297,62 +299,88 @@ const {
 })
 const {
   // 分割组状态
-  sectionFeatureEnabled, splitGroupFeatureEnabled, activeSectionGroups,
-  isSectionHeaderId, isSectionCollapsed, getSectionChildCount,
+  sectionFeatureEnabled, splitGroupFeatureEnabled, currentSectionGroups, takeSectionGroupsByListId,
+  isSectionHeaderId, isSectionCollapsed, getSectionChildCount, collapsedSectionCount, expandableSectionCount,
   // 折叠操作
-  toggleSection, expandSections, collapseSections,
+  toggleSection, expandSections, collapseSections, expandAllSections, collapseAllSections,
   // 可见列表与定位
-  visibleList, revealCollapsedSectionFor, findActiveSectionGroupById,
+  visibleList, revealCollapsedSectionFor, findCurrentSectionGroupById,
   // 拖拽与移动
   getSectionMemberIds, resolveInsertionIndex, correctInterlockInsertIndex, internalListProxy,
-  moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToActiveSectionGroup,
+  moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToSectionGroup,
 } = useModListSections({
   props, appStore, modStore, profileStore, displayList, allowSort, normalizeId, normalizeCanonicalId,
 })
 
 const canMoveListItems = computed(() => !appStore.isLoading && allowSort.value)
 const selectedHasSplitHeader = computed(() => (
-  props.listId === 'active'
+  sectionFeatureEnabled.value
   && (modStore.selectedIds || []).some(id => isSectionHeaderId(id))
 ))
 const currentSplitGroupId = computed(() => {
-  if (props.listId !== 'active' || selectedHasSplitHeader.value) return ''
+  if (!sectionFeatureEnabled.value || selectedHasSplitHeader.value) return ''
   const groupIds = [...new Set(
     (modStore.selectedIds || [])
-      .map(id => findActiveSectionGroupById(id)?.groupId || '')
+      .map(id => findCurrentSectionGroupById(id)?.groupId || '')
       .filter(Boolean)
   )]
   return groupIds.length === 1 ? groupIds[0] : ''
 })
 const canMoveWithinSplitGroup = computed(() => (
-  props.listId === 'active'
-  && splitGroupFeatureEnabled.value
+  splitGroupFeatureEnabled.value
   && canMoveListItems.value
   && !selectedHasSplitHeader.value
   && !!currentSplitGroupId.value
 ))
-const splitGroupMenuOptions = computed(() => {
-  if (!splitGroupFeatureEnabled.value || !canMoveListItems.value) return []
-  if (selectedHasSplitHeader.value) return []
-  return activeSectionGroups.value
-    .filter(group => !currentSplitGroupId.value || group.groupId !== currentSplitGroupId.value)
-    .map(group => ({
-      groupId: group.groupId,
-      label: group.label,
-      count: group.modIds.length,
-    }))
+const SECTION_TARGET_MENU_LABEL_MAP = {
+  active: '启用列表分割组...',
+  inactive: '停用列表分割组...',
+}
+const splitGroupTargets = computed(() => {
+  if (!canMoveListItems.value || selectedHasSplitHeader.value) return []
+  const targets = []
+  const currentGroups = splitGroupFeatureEnabled.value
+    ? currentSectionGroups.value.filter(group => !currentSplitGroupId.value || group.groupId !== currentSplitGroupId.value)
+    : []
+  if (currentGroups.length) {
+    targets.push({
+      listId: props.listId,
+      label: props.listId === 'active' ? '其他分割组...' : '当前列表其他分割组...',
+      groups: currentGroups.map(group => ({
+        groupId: group.groupId,
+        label: group.label,
+        count: group.modIds.length,
+      })),
+    })
+  }
+  ;['active', 'inactive'].forEach((listId) => {
+    if (listId === props.listId) return
+    const targetGroups = takeSectionGroupsByListId(listId)
+    if (!targetGroups.length) return
+    targets.push({
+      listId,
+      label: SECTION_TARGET_MENU_LABEL_MAP[listId] || '其它列表分割组...',
+      groups: targetGroups.map(group => ({
+        groupId: group.groupId,
+        label: group.label,
+        count: group.modIds.length,
+      })),
+    })
+  })
+  return targets.filter(target => target.groups.length > 0)
 })
 const moveMenuContext = computed(() => ({
   listId: props.listId,
   enabled: canMoveListItems.value,
   canMoveWithinSplitGroup: canMoveWithinSplitGroup.value,
-  splitGroupLabel: props.listId === 'active' ? '其他分割组...' : '主列表分割组...',
-  splitGroupOptions: splitGroupMenuOptions.value,
+  splitGroupTargets: splitGroupTargets.value,
+  sectionGroupCount: expandableSectionCount.value,
+  collapsedSectionGroupCount: collapsedSectionCount.value,
 }))
 const currentSplitGroupMetaById = computed(() => {
   const map = new Map<string, { headerId: string, label: string, collapsed: boolean }>()
-  if (props.listId !== 'active' || !splitGroupFeatureEnabled.value) return map
-  activeSectionGroups.value.forEach(group => {
+  if (!splitGroupFeatureEnabled.value) return map
+  currentSectionGroups.value.forEach(group => {
     const meta = {
       headerId: group.headerId,
       label: group.label,
@@ -366,7 +394,7 @@ const currentSplitGroupMetaById = computed(() => {
 const getCurrentSplitGroupMeta = (id: string) => currentSplitGroupMetaById.value.get(normalizeId(id)) || null
 
 // 处理移动菜单点击事件
-const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
+const handleMoveSelected = async ({ action, targetGroupId, targetListId } = {}) => {
   const ids = [...(modStore.selectedIds || [])]
   if (!ids.length || !canMoveListItems.value) return
 
@@ -382,9 +410,10 @@ const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
       position: action === 'group-top' ? 'top' : 'bottom',
     })
   } else if (action === 'split-group' && targetGroupId) {
-    changed = await moveIdsToActiveSectionGroup({
+    changed = await moveIdsToSectionGroup({
       ids,
       targetGroupId,
+      targetListId: targetListId || props.listId,
       position: 'bottom',
     })
   }

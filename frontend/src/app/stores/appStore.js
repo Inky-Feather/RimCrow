@@ -269,8 +269,10 @@ export const useAppStore = defineStore('app', () => {
       smooth_list_target_scroll: true,  // 定位到列表项时是否使用平滑滚动
       hidden_dependency_graph_source_ids: [],  // 全局隐藏的依赖源包名列表
       keybindings: { version: 1, bindings: {}, disabledDefaults: {} },  // 用户自定义快捷键覆盖配置
-      enable_active_section_collapse: false,  // 是否启用启用列表标题分组折叠（仅 active 列表生效）
-      default_collapse_active_sections: false,  // 若当前环境/列表还没有保存过折叠状态，首次是否默认折叠
+      enable_active_section_collapse: false,  // 是否启用启用列表标题分组折叠
+      enable_inactive_section_collapse: false,  // 是否启用停用列表标题分组折叠
+      default_collapse_active_sections: false,  // 若当前环境/启用列表还没有保存过折叠状态，首次是否默认折叠
+      default_collapse_inactive_sections: false,  // 若当前环境/停用列表还没有保存过折叠状态，首次是否默认折叠
       persist_temp_mod_list: false,  // 是否按环境保存临时列表
       show_list_index: true,  // 是否显示列表索引列
       show_list_icon: true,       // 是否显示 Mod 图标

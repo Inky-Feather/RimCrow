@@ -195,8 +195,10 @@ class UIConfig:
         "bindings": {},
         "disabledDefaults": {},
     })  # 快捷键覆盖配置；实际默认键位由前端命令注册表提供
-    enable_active_section_collapse: bool = False  # 是否启用启用列表标题分组折叠（仅 active 列表使用）
-    default_collapse_active_sections: bool = False  # 在没有历史折叠状态时，是否让标题分组首次默认折叠
+    enable_active_section_collapse: bool = False  # 是否启用启用列表标题分组折叠
+    enable_inactive_section_collapse: bool = False  # 是否启用停用列表标题分组折叠
+    default_collapse_active_sections: bool = False  # 在没有历史折叠状态时，是否让启用列表分割组首次默认折叠
+    default_collapse_inactive_sections: bool = False  # 在没有历史折叠状态时，是否让停用列表分割组首次默认折叠
     persist_temp_mod_list: bool = False  # 是否按环境保存临时列表
     show_list_index: bool = True  # 是否显示列表索引列
     show_list_icon: bool = True  # 是否显示 Mod 图标

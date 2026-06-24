@@ -36,9 +36,14 @@
                       <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 类型图标" v-model="formData.ui.show_list_modtype_icon" description="控制列表中 Mod 类型图标显示，不影响详细视图。" />
                     </div>
                     <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
-                      <CommonSwitch class="col-span-2 px-2 pt-2" mini label="启用列表分割组" v-model="formData.ui.enable_active_section_collapse" description="仅在启用列表生效。名称或别名满足 `=标题=` 或 `/*标题*/` 的纯分割线模组会被识别为可折叠分割线；折叠后拖动分割线模组即可整组移动。^^可工坊订阅 [[分类排列标签合集]] 配合使用。^^" />
-                      <CommonSwitch :disabled="!formData.ui.enable_active_section_collapse" label="默认折叠分割组" v-model="formData.ui.default_collapse_active_sections" description="开启后，启用列表中的分割组会在初始显示时默认折叠。" />
-                      <div class="flex items-center gap-1" :class="{'pointer-events-none opacity-50': !formData.ui.enable_active_section_collapse}">
+                      <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">列表分割组功能
+                        <label v-tooltip="'为列表支持分割线折叠分组的功能，需要安装了分割线模组才能启用。开启后，列表会识别名称或别名满足 `=标题=`、`/*标题*/` 的纯分割线模组，并支持折叠、整组拖动和右键分割组移动。'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                      </span>
+                      <CommonSwitch label="“启用列表”分割组支持" v-model="formData.ui.enable_active_section_collapse" description="开启后，启用列表会支持分割组折叠、整组拖动和右键分割组移动。" />
+                      <CommonSwitch label="“停用列表”分割组支持" v-model="formData.ui.enable_inactive_section_collapse" description="开启后，停用列表会支持分割组折叠、整组拖动和右键分割组移动。" />
+                      <CommonSwitch :disabled="!formData.ui.enable_active_section_collapse" label="启用列表默认折叠分割组" v-model="formData.ui.default_collapse_active_sections" description="开启后，启用列表中的分割组会在初始显示时默认折叠。" />
+                      <CommonSwitch :disabled="!formData.ui.enable_inactive_section_collapse" label="停用列表默认折叠分割组" v-model="formData.ui.default_collapse_inactive_sections" description="开启后，停用列表中的分割组会在初始显示时默认折叠。" />
+                      <div class="flex items-center gap-1">
                         <button @click="appStore.openSteamWorkshopById('2138932352', false)"
                           class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
