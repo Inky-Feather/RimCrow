@@ -11,7 +11,7 @@ from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.tools import generate_path_hash, get_folder_size, normalize_path_for_storage
-from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -139,9 +139,19 @@ class ModScanner:
             try:
                 # --- 5. 清理失效数据 ---
                 # 扫描缺失的 Mod (物理文件没了)
-                deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data)
-                stats['removed'] = len(deletion_result['deleted_mods'])
-                logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
+                workshop_status = SteamManager().workshop_merged_data()
+                subscribed_workshop_ids = [wid for wid, data in workshop_status.items() if data.get("is_subscribed")]
+                deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data, subscribed_workshop_ids)
+                missing_count = len(deletion_result.get('missing_mods') or [])
+                deleted_count = len(deletion_result.get('deleted_mods') or [])
+                stats['removed'] = missing_count + deleted_count if settings.config.delete_missing_mods_data else deleted_count
+                logger.info(
+                    "库存失效检测完成: missing=%s deleted=%s restored=%s delete_data=%s",
+                    missing_count,
+                    deleted_count,
+                    len(deletion_result.get('restored_mods') or []),
+                    settings.config.delete_missing_mods_data,
+                )
                 # 清理失效的 Shadow Paths
                 stats['shadow_path_cleaned'] = ModMaintenanceDAO.clean_invalid_shadow_paths()
             except Exception as e:
@@ -517,7 +527,7 @@ class ModScanner:
         disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
         snapshot_missing = bool(
             snapshot and (
-                str(snapshot.get("state") or "").strip().lower() == MOD_ASSET_STATE_MISSING
+                str(snapshot.get("state") or "").strip().lower() in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED}
                 or not str(snapshot.get("path") or "").strip()
             )
         )

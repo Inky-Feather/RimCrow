@@ -297,6 +297,7 @@ import { isOfficialPackageId } from '../../mod/lib/packageScope'
 import { formatDate } from '../../../shared/lib/format'
 import { cleanRichText, parseUnityRichText } from '../../../shared/lib/text'
 import { imageViewerOptions } from '../../../shared/lib/domEffects'
+import { isMatrixModAvailable } from '../lib/matrixItemState'
 import FixedPopover from '../../../shared/components/popover/FixedPopover.vue'
 import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue'
 import { createTagSearchController, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
@@ -458,9 +459,9 @@ const getListMissingCount = (coll) => {
       const wid = String(child.workshop_id)
       const pid = child.package_id ? String(child.package_id).toLowerCase() : null
       const is_installed =
-          wsStore.librariesMods.workshop.some(m => !m.is_missing && String(m.workshop_id) === wid) ||
-          wsStore.librariesMods.self.some(m => !m.is_missing && String(m.workshop_id) === wid) ||
-          wsStore.librariesMods.local.some(m => !m.is_missing && ((pid && m.package_id?.toLowerCase() === pid) || (m.workshop_id && String(m.workshop_id) === wid)))
+          wsStore.librariesMods.workshop.some(m => isMatrixModAvailable(m) && String(m.workshop_id) === wid) ||
+          wsStore.librariesMods.self.some(m => isMatrixModAvailable(m) && String(m.workshop_id) === wid) ||
+          wsStore.librariesMods.local.some(m => isMatrixModAvailable(m) && ((pid && m.package_id?.toLowerCase() === pid) || (m.workshop_id && String(m.workshop_id) === wid)))
       return !is_installed
   }).length;
 }

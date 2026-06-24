@@ -20,8 +20,8 @@
             'bg-glass-heavy backdrop-blur-2xl shadow-2xl ring-1 ring-border-base/10',
             // 模式区分
             isMini
-              ? 'rounded-xl w-80 absolute shadow-[0_20px_30px_var(--shadow-color)]'
-              : 'rounded-2xl w-140 max-w-[90vw] shadow-[0_20px_50px_var(--shadow-color)]',
+              ? 'rounded-xl w-80 max-h-[calc(100vh-1rem)] absolute shadow-[0_20px_30px_var(--shadow-color)]'
+              : 'rounded-2xl w-140 max-w-[90vw] max-h-[calc(100vh-2rem)] shadow-[0_20px_50px_var(--shadow-color)]',
             // 抖动动画类
             shake ? 'animate-shake' : ''
           ]"
@@ -57,9 +57,9 @@
                 {{ confirmStore.state.title }}
               </h3>
 
-              <div v-if="confirmStore.state.message" class="text-xs text-text-dim leading-relaxed text-pretty font-medium">
-                <span v-if="confirmStore.state.isHtml" v-html="confirmStore.state.message" class="text-wrap break-all"></span>
-                <span v-else class="text-wrap break-all">{{ confirmStore.state.message }}</span>
+              <div v-if="confirmStore.state.message" class="max-h-[52vh] overflow-y-auto pr-1 text-xs text-text-dim leading-relaxed text-pretty font-medium">
+                <div v-if="confirmStore.state.isHtml" v-html="confirmStore.state.message" class="text-wrap break-all"></div>
+                <div v-else class="whitespace-pre-line break-words">{{ confirmStore.state.message }}</div>
               </div>
             </div>
           </div>
@@ -161,7 +161,7 @@
           </div>
 
           <!-- D. 底部操作栏 (玻璃分割线) -->
-          <div class="modal-footer flex items-center justify-end gap-3"
+          <div class="modal-footer flex shrink-0 flex-wrap items-center justify-end gap-2"
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
 
             <!-- 自定义底部按钮用于“全部处理/全部稍后”等窗口级动作，保持普通确认弹窗的旧按钮逻辑不变。 -->

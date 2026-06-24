@@ -50,7 +50,7 @@ from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.dao_ext import ExtDAO
 from backend.database.models_ext import WorkshopOnlineCache, ext_db
@@ -1452,7 +1452,9 @@ class API:
         """手动触发：清理无效的 UserModData、GroupMod 和 ModAsset"""
         try:
             # 1. 清理文件已不存在的 ModAsset
-            missing = ModMaintenanceDAO.find_missing_mods(delete=True)
+            ws_map = self.steam_mgr.workshop_merged_data()
+            subscribed_workshop_ids = [wid for wid, data in ws_map.items() if data.get("is_subscribed")]
+            ModMaintenanceDAO.find_missing_mods(delete=True, subscribed_workshop_ids=subscribed_workshop_ids)
             # 2. 清理孤立的用户数据和分组关联
             ModMaintenanceDAO.clean_orphaned_data()
             return ApiResponse.success(message="数据库清理完成")
@@ -5433,11 +5435,13 @@ class API:
         """
         三域数据全量获取 (统合 DB、ACF、Log 数据)
         """
-        # 1. 获取数据库基础数据 (含有 URL)
-        matrix = ModDAO.get_triple_domain_assets(self.active_context)
-        # 2. 获取 Steam 状态数据 (ACF/Log)
+        # 1. 获取 Steam 状态数据 (ACF/Log)，只使用本地记录做缺失判定。
         ws_map = self.steam_mgr.workshop_merged_data()
         mg_map = self.steam_mgr.steamcmd_merged_data()
+        subscribed_workshop_ids = [wid for wid, data in ws_map.items() if data.get("is_subscribed")]
+        ModMaintenanceDAO.find_missing_mods(False, subscribed_workshop_ids)
+        # 2. 获取数据库基础数据 (含有 URL)
+        matrix = ModDAO.get_triple_domain_assets(self.active_context)
         replacements_map = {
             str(r['old_workshop_id']): r
             for r in self.workshop_db_mgr.get_replacements()
@@ -5498,9 +5502,14 @@ class API:
                     mod['download_status'] = download_status
             mod['replacement'] = replacements_map.get(wid)
             state = str(mod.get('state') or MOD_ASSET_STATE_PRESENT).strip().lower()
-            is_missing = state == MOD_ASSET_STATE_MISSING or not str(mod.get('path') or '').strip()
-            mod['state'] = MOD_ASSET_STATE_MISSING if is_missing else (state or MOD_ASSET_STATE_PRESENT)
+            if state not in {MOD_ASSET_STATE_PRESENT, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED}:
+                state = MOD_ASSET_STATE_PRESENT
+            is_deleted = state == MOD_ASSET_STATE_DELETED
+            is_missing = state == MOD_ASSET_STATE_MISSING or (not is_deleted and not str(mod.get('path') or '').strip())
+            mod['state'] = state
             mod['is_missing'] = is_missing
+            mod['is_deleted'] = is_deleted
+            mod['is_unavailable'] = is_missing or is_deleted
             if is_missing and wid and str(mod.get('store') or '').lower() == 'workshop':
                 is_subscribed = (mod.get('steam_status') or {}).get('is_subscribed') is True
                 mod['workshop_missing_status'] = 'subscribed_missing' if is_subscribed else 'not_subscribed_missing'
@@ -5545,7 +5554,9 @@ class API:
                 "store": store_type,
                 "source": "workshop",
                 "state": MOD_ASSET_STATE_MISSING,
-                "is_missing": True, 
+                "is_missing": True,
+                "is_deleted": False,
+                "is_unavailable": True,
                 "steam_status": steam_status,
                 "replacement": replacements_map.get(wid),
                 "workshop_missing_status": "subscribed_missing",

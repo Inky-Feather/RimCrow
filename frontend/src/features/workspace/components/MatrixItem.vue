@@ -8,7 +8,7 @@
       @mouseleave="handleMouseLeave"
       class="matrix-select-trigger flex items-center gap-2 p-1.5 rounded-lg border transition-all cursor-pointer group bg-bg-overlay/5"
       :class="[
-        mod.is_missing ? 'opacity-70 grayscale border-dashed border-accent-danger/50 bg-accent-danger/5 hover:bg-accent-danger/10 hover:border-accent-danger/30' :
+        mod.is_unavailable ? 'opacity-70 grayscale border-dashed border-accent-danger/50 bg-accent-danger/5 hover:bg-accent-danger/10 hover:border-accent-danger/30' :
         storeType === 'workshop' ? 'border-accent-primary/10 hover:bg-accent-primary/10 hover:border-accent-primary/30' :
         storeType === 'self' ? 'border-accent-success/10 hover:bg-accent-success/10 hover:border-accent-success/30' :
         'border-accent-warn/10 hover:bg-accent-warn/10 hover:border-accent-warn/30', 
@@ -70,8 +70,11 @@
         <span v-if="matrixState.isDisabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warning animate-pulse">
           DISABLED
         </span>
-        <span v-if="matrixState.isMissing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isMissing" title="工坊记录存在，但本地没有有效模组文件" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           MISSING
+        </span>
+        <span v-if="matrixState.isDeleted" title="库存记录存在，但本地模组目录已删除或失效" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+          DELETED
         </span>
         <span v-if="matrixState.isWorkshopUnavailable" title="Steam 已无法获取该工坊项目详情，可能已下架或不可访问" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           失效

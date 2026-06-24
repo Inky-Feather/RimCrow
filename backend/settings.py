@@ -273,6 +273,7 @@ class AppConfig:
     enable_launch_profile_quick_scan: bool = True  # 环境列表直启前是否执行检查同步
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     enable_mod_residue_scan: bool = True      # 扫描完成后是否识别卸载残留
+    startup_inventory_prompt_new_only: bool = False  # 启动库存提醒是否只显示新发现的问题
     strict_disabled_mode: bool = False          # 扫描时是否按数据库记录自动恢复被外部解除的禁用状态
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接

@@ -10,8 +10,9 @@ import {
   dedupeNormalizedPackageIds, normalizeInstallSources,
   normalizePackageId, normalizeUrl, normalizeWorkshopId,
 } from '../mod/lib/modIdentity'
+import { escapeHtml } from '../../shared/lib/text'
 import { hasWorkshopSearchText, resolveWorkshopDays, resolveWorkshopSort } from './workshopSearchOptions'
-import { normalizeMatrixTimestamp } from './lib/matrixItemState'
+import { isMatrixModAvailable, isMatrixModDeleted, isMatrixModMissing, normalizeMatrixTimestamp } from './lib/matrixItemState'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const appStore = useAppStore()
@@ -28,6 +29,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     prompted: false,
     changes: [],
   })
+  const STARTUP_INVENTORY_ACK_KEY = 'rmm.startupInventoryPromptAck.v1'
 
   const storeSortOrder = {
     workshop: 0,
@@ -59,7 +61,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     )
   })
   // 3. 全局已安装的 ID (工坊 + 管理器 + 本地)
-  // 只要 path 不为空，且没有标记 is_missing，就算已安装
+  // 只有存在有效路径且没有缺失/删除状态，才算已安装。
   const installedAllIds = computed(() => {
     const all = [
       ...librariesMods.workshop,
@@ -68,7 +70,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     ]
     return new Set(
       all
-        .filter(m => m.path && !m.is_missing && normalizeWorkshopId(m.workshop_id))
+        .filter(m => isMatrixModAvailable(m) && normalizeWorkshopId(m.workshop_id))
         .map(m => String(m.workshop_id))
     )
   })
@@ -451,6 +453,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (!path || seen.has(key) || mod?.download_status?.source !== 'steam_sync_log' || !downloadTime || downloadTime <= scannedTime) return null
         seen.add(key)
         return {
+          status: 'changed',
+          store: mod?.store || 'workshop',
           workshopId: normalizeWorkshopId(mod?.workshop_id),
           pathHash: String(mod?.path_hash || '').trim(),
           path,
@@ -461,34 +465,101 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       })
       .filter(Boolean)
   }
-  const detectStartupWorkshopChanges = (mods = librariesMods.workshop) => {
+  const resolveStartupInventoryEvents = (mods = []) => {
+    const allMods = Array.isArray(mods) && mods.length
+      ? mods
+      : [...librariesMods.workshop, ...librariesMods.self, ...librariesMods.local]
+    const changedEvents = resolveWorkshopChangedMods(allMods.filter(mod => mod?.store === 'workshop'))
+    const issueEvents = allMods
+      .map(mod => {
+        const isDeleted = isMatrixModDeleted(mod)
+        const isMissing = isMatrixModMissing(mod)
+        const status = isDeleted ? 'deleted' : (isMissing ? 'missing' : '')
+        if (!status) return null
+        return {
+          status,
+          store: mod?.store || 'workshop',
+          workshopId: normalizeWorkshopId(mod?.workshop_id),
+          pathHash: String(mod?.path_hash || '').trim(),
+          path: String(mod?.path || '').trim(),
+          name: mod?.name || mod?.package_id || mod?.workshop_id || '未知模组',
+          downloadTime: normalizeMatrixTimestamp(mod?.download_status?.download_time),
+          scannedTime: normalizeMatrixTimestamp(mod?.last_scanned_at),
+        }
+      })
+      .filter(Boolean)
+    return [...changedEvents, ...issueEvents]
+  }
+  const detectStartupWorkshopChanges = (mods = []) => {
     if (startupWorkshopChangeState.detected) return startupWorkshopChangeState.changes
     startupWorkshopChangeState.detected = true
     startupWorkshopChangeState.prompted = false
-    startupWorkshopChangeState.changes = resolveWorkshopChangedMods(mods)
+    startupWorkshopChangeState.changes = resolveStartupInventoryEvents(mods)
     return startupWorkshopChangeState.changes
   }
-  const takeStartupWorkshopChangesForScan = () => startupWorkshopChangeState.changes.filter(item => item.path)
-  const formatStartupWorkshopChangeNames = (changes = [], limit = 8) => {
-    const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.path)
+  const takeStartupWorkshopChangesForScan = () => startupWorkshopChangeState.changes.filter(item => item.status === 'changed' && item.path)
+  const STARTUP_EVENT_GROUPS = [
+    ['deleted', '已删除/失效', '这些库存记录原本有本地目录，但现在目录不存在或不再包含有效 About.xml。常见原因是文件被手动删除、Steam 清理缓存、磁盘迁移后路径失效，或同步中断留下了记录。'],
+    ['missing', '工坊缺失', 'Steam 仍显示这些工坊项已订阅，但本地没有可扫描的有效 Mod。工坊订阅超过 1000 项时，Steam 同步队列偶尔会漏掉少量项目；重新订阅可以再次把请求发送给 Steam，促使它重新校验并补下载。'],
+    ['changed', '工坊变更', '这些模组最近被作者在 Steam 工坊更新过。重新扫描后，管理器才能刷新文件时间、大小和库存状态，避免继续按旧数据判断。'],
+  ]
+  const STARTUP_EVENT_FILTER_MAP = {
+    deleted: 'deleted',
+    missing: 'missing',
+    changed: 'change',
+  }
+  const formatStartupEventNames = (changes = [], status = '', limit = 8) => {
+    const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status)
     const shown = targets.slice(0, limit).map(item => `· ${item.name}`).join('\n')
     const more = targets.length > limit ? `\n等 ${targets.length} 个模组。` : ''
     return shown ? `${shown}${more}` : ''
+  }
+  const formatStartupWorkshopChangeNames = (changes = [], limit = 8) => formatStartupEventNames(changes, 'changed', limit)
+  const formatStartupInventorySummaryHtml = (changes = [], beforeScan = false, limit = 8) => {
+    const prefix = beforeScan ? '检测到以下库存状态，建议刷新库存数据：' : '已根据扫描结果确认以下库存状态：'
+    const groups = STARTUP_EVENT_GROUPS
+      .map(([status, title, description]) => {
+        const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status)
+        if (!targets.length) return ''
+        const items = targets.slice(0, limit)
+          .map(item => `<li class="rounded-md bg-bg-inset/60 px-2 py-1 text-text-main">${escapeHtml(item.name || item.packageId || item.workshopId || '未知模组')}</li>`)
+          .join('')
+        const more = targets.length > limit ? `<li class="px-2 py-1 text-text-dim">还有 ${targets.length - limit} 项未显示。</li>` : ''
+        return `
+          <section class="space-y-1">
+            <div class="flex items-center justify-between gap-3">
+              <div class="font-bold text-text-main">${title}</div>
+              <div class="shrink-0 rounded-md border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim">${targets.length} 项</div>
+            </div>
+            <div class="text-[11px] text-text-dim">${description}</div>
+            <ul class="space-y-1">${items}${more}</ul>
+          </section>
+        `
+      })
+      .filter(Boolean)
+      .join('')
+    return `<div class="space-y-3 max-h-[46vh] overflow-y-auto pr-1"><p>${prefix}</p>${groups}</div>`
+  }
+  const resolveStartupInventoryFilterState = (changes = []) => {
+    const statuses = new Set((Array.isArray(changes) ? changes : []).map(item => item?.status).filter(Boolean))
+    const status = STARTUP_EVENT_GROUPS.find(([key]) => statuses.has(key))?.[0]
+    return STARTUP_EVENT_FILTER_MAP[status] || 'default'
   }
   const resolveStartupWorkshopChangePathHashes = (changes = []) => {
     const targets = Array.isArray(changes) ? changes : []
     const byPath = new Map()
     const byWorkshopId = new Map()
-    librariesMods.workshop.forEach(mod => {
+    ;[...librariesMods.workshop, ...librariesMods.self, ...librariesMods.local].forEach(mod => {
       const pathKey = normalizeSizeRefreshPathKey(mod?.path)
       const workshopId = normalizeWorkshopId(mod?.workshop_id)
-      if (pathKey && mod?.path_hash) byPath.set(pathKey, mod.path_hash)
-      if (workshopId && mod?.path_hash) byWorkshopId.set(workshopId, mod.path_hash)
+      if (pathKey && mod?.path_hash) byPath.set(`${mod.store || ''}:${pathKey}`, mod.path_hash)
+      if (workshopId && mod?.path_hash) byWorkshopId.set(`${mod.store || ''}:${workshopId}`, mod.path_hash)
     })
     return [...new Set(targets.map(item => {
       const pathKey = normalizeSizeRefreshPathKey(item?.path)
       const workshopId = normalizeWorkshopId(item?.workshopId)
-      return (pathKey && byPath.get(pathKey)) || (workshopId && byWorkshopId.get(workshopId)) || String(item?.pathHash || '').trim()
+      const store = item?.store || ''
+      return (pathKey && byPath.get(`${store}:${pathKey}`)) || (workshopId && byWorkshopId.get(`${store}:${workshopId}`)) || String(item?.pathHash || '').trim()
     }).filter(Boolean))]
   }
   const openWorkspaceForStartupChanges = async (changes = startupWorkshopChangeState.changes) => {
@@ -497,8 +568,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await ensureWorkspaceTabLoaded('library')
     const pathHashes = resolveStartupWorkshopChangePathHashes(changes)
     matrixFilterTarget.value = {
-      store: 'workshop',
+      store: 'all',
       pathHashes,
+      filterState: resolveStartupInventoryFilterState(changes),
       stamp: Date.now(),
     }
     if (pathHashes.length === 1) {
@@ -508,23 +580,91 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     return true
   }
-  const showStartupWorkshopChangesPrompt = async (changes = startupWorkshopChangeState.changes) => {
-    const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.path)
+  const getStartupEventFingerprint = (item = {}) => [
+    item.status || '',
+    item.store || '',
+    item.workshopId || '',
+    item.pathHash || '',
+    normalizeSizeRefreshPathKey(item.path),
+    item.downloadTime || 0,
+  ].join('|')
+  const loadStartupPromptAck = () => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(STARTUP_INVENTORY_ACK_KEY) || '[]'))
+    } catch {
+      return new Set()
+    }
+  }
+  const saveStartupPromptAck = (items = []) => {
+    const ack = loadStartupPromptAck()
+    items.forEach(item => {
+      const key = getStartupEventFingerprint(item)
+      if (key) ack.add(key)
+    })
+    localStorage.setItem(STARTUP_INVENTORY_ACK_KEY, JSON.stringify([...ack].slice(-1000)))
+  }
+  const getPromptableStartupEvents = (changes = []) => {
+    const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status)
+    if (!appStore.settings?.startup_inventory_prompt_new_only) return targets
+    const ack = loadStartupPromptAck()
+    return targets.filter(item => !ack.has(getStartupEventFingerprint(item)))
+  }
+  const cleanupDeletedStartupRecords = async (changes = []) => {
+    const deletedHashes = [...new Set((Array.isArray(changes) ? changes : [])
+      .filter(item => item?.status === 'deleted')
+      .map(item => String(item?.pathHash || '').trim())
+      .filter(pathHash => pathHash && !pathHash.startsWith('ghost_')))]
+    if (!deletedHashes.length || !window.pywebview) return false
+
+    const check = await confirmStore.confirmAction(
+      '清理已删除记录',
+      `确定要清理这些已删除/失效的库存记录吗？（${deletedHashes.length} 项）\n这不会删除任何文件，也不会清理用户标签、笔记和分组。`,
+      { type: 'warning' }
+    )
+    if (!check) return false
+
+    const res = await window.pywebview.api.mods_delete(deletedHashes, false, false)
+    if (!checkResult(res, '清理已删除记录')) return false
+    toast.success(`已清理 ${res.data?.success_count || deletedHashes.length} 条已删除记录`)
+    await fetchLibrariesMods()
+    return true
+  }
+  const addStartupDetailButton = (actionButtons, targets, status, label) => {
+    if (targets.some(item => item?.status === status)) {
+      actionButtons.push({ label, value: `details_${status}`, kind: actionButtons.length ? 'secondary' : 'primary' })
+    }
+  }
+  const showStartupWorkshopChangesPrompt = async (changes = startupWorkshopChangeState.changes, options = {}) => {
+    const targets = getPromptableStartupEvents(changes)
     if (!targets.length || startupWorkshopChangeState.prompted) return false
     startupWorkshopChangeState.prompted = true
+    const deletedTargets = targets.filter(item => item.status === 'deleted')
+    const actionButtons = []
+    if (options?.scanAction) actionButtons.push({ label: '立即扫描', value: 'scan', kind: 'primary' })
+    if (deletedTargets.length) actionButtons.push({ label: '清理已删除记录', value: 'cleanup_deleted', kind: options?.scanAction ? 'secondary' : 'primary' })
+    addStartupDetailButton(actionButtons, targets, 'deleted', '删除项详情')
+    addStartupDetailButton(actionButtons, targets, 'missing', '缺失项详情')
+    addStartupDetailButton(actionButtons, targets, 'changed', '变更项详情')
+    actionButtons.push(
+      { label: '关闭', value: 'close', kind: 'secondary' },
+    )
     const action = await confirmStore.confirmAction(
-      '工坊模组已刷新',
-      `Steam 已同步以下工坊模组，库存数据已完成刷新：\n${formatStartupWorkshopChangeNames(targets)}`,
+      options?.beforeScan ? '检测到库存状态变化' : '库存状态已刷新',
+      formatStartupInventorySummaryHtml(targets, !!options?.beforeScan),
       {
-        type: 'success',
-        actionButtons: [
-          { label: '查看详情', value: 'details', kind: 'primary' },
-          { label: '关闭', value: 'close', kind: 'secondary' },
-        ],
+        type: deletedTargets.length ? 'warning' : 'success',
+        isHtml: true,
+        actionButtons,
       }
     )
-    if (action === 'details') {
-      await openWorkspaceForStartupChanges(targets)
+    saveStartupPromptAck(targets)
+    if (action === 'scan' && options?.scanAction) {
+      await options.scanAction()
+    } else if (action === 'cleanup_deleted') {
+      await cleanupDeletedStartupRecords(targets)
+    } else if (typeof action === 'string' && action.startsWith('details_')) {
+      const status = action.replace('details_', '')
+      await openWorkspaceForStartupChanges(targets.filter(item => item?.status === status))
     }
     return true
   }
@@ -581,10 +721,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return collections.activeChildren.map(child => {
       const wid = String(child.workshop_id)
       const pid = child.package_id ? String(child.package_id).toLowerCase() : null
-      const is_workshop = librariesMods.workshop.some(m => !m.is_missing && String(m.workshop_id) === wid)
-      const is_self = librariesMods.self.some(m => !m.is_missing && String(m.workshop_id) === wid)
+      const is_workshop = librariesMods.workshop.some(m => isMatrixModAvailable(m) && String(m.workshop_id) === wid)
+      const is_self = librariesMods.self.some(m => isMatrixModAvailable(m) && String(m.workshop_id) === wid)
       // 本地目录用包名比对最准，没有包名回退使用 wid
-      const is_local = librariesMods.local.some(m => !m.is_missing &&
+      const is_local = librariesMods.local.some(m => isMatrixModAvailable(m) &&
           ((pid && m.package_id?.toLowerCase() === pid) || (m.workshop_id && String(m.workshop_id) === wid))
       )
       return {

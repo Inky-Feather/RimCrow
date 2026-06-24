@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { toast } from '../../shared/lib/common'
 import { useAiStore } from '../../features/ai/aiStore'
-import { useModStore } from '../../features/mod/stores/modStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
 
@@ -88,13 +87,12 @@ export const useStartupStore = defineStore('startup', () => {
       setPhase('post_hydration')
       const scanForce = handleUpgradeContext(upgradeContext)
       const profileStore = useProfileStore()
-      const modStore = useModStore()
       const workspaceStore = useWorkspaceStore()
       if (settings.value.current_profile_id) {
         profileStore.currentProfileId = settings.value.current_profile_id
       }
-      const startupWorkshopMods = Array.from(modStore.allModsMap.values()).filter(mod => mod?.store === 'workshop')
-      const startupWorkshopChanges = workspaceStore.detectStartupWorkshopChanges(startupWorkshopMods)
+      await workspaceStore.fetchLibrariesMods()
+      const startupWorkshopChanges = workspaceStore.detectStartupWorkshopChanges()
       const startupWorkshopPaths = workspaceStore.takeStartupWorkshopChangesForScan().map(item => item.path)
       // 自动更新探测
       setPhase('startup_update_probe')
@@ -115,28 +113,16 @@ export const useStartupStore = defineStore('startup', () => {
         })
       } else if (startupWorkshopChanges.length) {
         window.setTimeout(async () => {
-          const changedNames = workspaceStore.formatStartupWorkshopChangeNames(startupWorkshopChanges)
-          const action = await confirmStore.confirmAction(
-            '检测到工坊模组变化',
-            `Steam 已同步以下工坊模组，建议刷新库存数据：\n${changedNames}`,
-            {
-              type: 'warning',
-              actionButtons: [
-                { label: '立即扫描', value: 'scan', kind: 'primary' },
-                { label: '查看详情', value: 'details', kind: 'secondary' },
-                { label: '稍后', value: 'close', kind: 'secondary' },
-              ],
-            }
-          )
-          if (action === 'scan') {
-            await requestModScan({
-              preserveListState: true,
-              sizeCheckPaths: startupWorkshopPaths,
-              startupWorkshopChanges,
-            })
-          } else if (action === 'details') {
-            await workspaceStore.openWorkspaceForStartupChanges(startupWorkshopChanges)
-          }
+          await workspaceStore.showStartupWorkshopChangesPrompt(startupWorkshopChanges, {
+            beforeScan: true,
+            scanAction: async () => {
+              await requestModScan({
+                preserveListState: true,
+                sizeCheckPaths: startupWorkshopPaths,
+                startupWorkshopChanges,
+              })
+            },
+          })
         }, 800)
       }
 
