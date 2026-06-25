@@ -195,19 +195,21 @@ const updateManagerPanelPosition = () => {
   if (!isManagerOpen.value) return
   if (typeof window === 'undefined' || !containerRef.value) return
   const rect = containerRef.value.getBoundingClientRect()
-  const panelWidth = 326
-  const panelHeight = Math.min(window.innerHeight * 0.78, 640)
-  const gap = 12
+  const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+  const margin = rootFontSize * 0.75
+  const gap = rootFontSize * 0.75
+  const panelWidth = Math.min(rootFontSize * 25, Math.max(rootFontSize * 12, window.innerWidth - margin * 2))
+  const panelHeight = Math.min(window.innerHeight * 0.76, window.innerHeight - margin * 2)
 
   let left = rect.left - panelWidth - gap
-  if (left < 12) {
+  if (left < margin) {
     left = rect.right + gap
   }
-  left = Math.min(Math.max(12, left), Math.max(12, window.innerWidth - panelWidth - 12))
+  left = Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - panelWidth - margin))
 
   let top = rect.top
-  if (top + panelHeight > window.innerHeight - 12) {
-    top = Math.max(12, window.innerHeight - panelHeight - 12)
+  if (top + panelHeight > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - panelHeight - margin)
   }
 
   managerPanelStyle.value = {

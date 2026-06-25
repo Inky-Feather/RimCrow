@@ -94,7 +94,7 @@
       <Transition name="submenu">
         <div v-if="hasVisibleChildren && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
           :data-menu-path="path"
-          class="context-menu-surface context-submenu-surface fixed z-[100011] min-w-fit rounded-xl border border-border-base/10 bg-glass-medium p-[1px] backdrop-blur-lg shadow-xl shadow-black/40"
+          class="context-menu-surface context-submenu-surface fixed z-[100011] max-h-[calc(100vh-1rem)] min-w-fit overflow-y-auto overscroll-contain rounded-xl border border-border-base/10 bg-glass-medium p-[1px] shadow-xl shadow-black/40 backdrop-blur-lg custom-scrollbar"
           :style="subMenuStyle"
           @mouseenter="handleSubMenuMouseEnter"
           @mouseleave="handleMouseLeave"

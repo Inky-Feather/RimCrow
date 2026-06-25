@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-left">
-      <div v-if="appStore.uiState.showProfileDrawer" class="fixed inset-y-8 top-18 left-0 w-100 z-100 flex flex-col" >
+      <div v-if="appStore.uiState.showProfileDrawer" class="fixed inset-y-8 top-18 left-0 z-100 flex w-100 max-w-[calc(100vw-1rem)] flex-col" >
         <!-- 1. 上方内凹边角 (对称自 ListDiffView) -->
         <div class="absolute -top-[1.1rem] left-0 w-5 h-5 z-10 ">
           <div class="w-full h-full bg-bg-elevated/90 backdrop-blur-xl mask-[radial-gradient(circle_at_100%_0,transparent_1.25rem,black_1rem)]"></div>
@@ -145,14 +145,14 @@
 
   <!-- 4. 编辑/创建 模态框 (标准 RulePanel 风格) -->
   <Transition name="fade">
-    <div v-if="showModal" class="fixed inset-0 z-150 flex items-center justify-center bg-bg-deep/40 backdrop-blur-md">
-      <div class="modal-surface w-full max-w-[70%] overflow-hidden rounded-2xl bg-bg-highlight/90 animate-scale-in">
+    <div v-if="showModal" class="fixed inset-0 z-150 flex items-center justify-center bg-bg-deep/40 p-4 backdrop-blur-md">
+      <div class="modal-surface flex max-h-[calc(100vh-2rem)] w-[min(52rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-bg-highlight/90 animate-scale-in">
         <header class="modal-header flex items-center justify-between px-6 py-4">
           <h3 class="text-lg font-bold text-text-main">{{ isEditing ? '编辑环境属性' : '创建新环境快照' }}</h3>
           <button @click="showModal = false" class="text-text-dim hover:text-text-main"><X class="size-5" /></button>
         </header>
 
-        <div class="p-6 space-y-3">
+        <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 custom-scrollbar">
           <CommonInput label="显示名称" v-model="form.name" placeholder="例如: 1.5 中世纪" />
           <CommonInput label="环境描述" v-model="form.description" placeholder="这里可以写一些关于这个环境的说明..." />
           <CommonPathInput label="游戏执行目录" v-model="form.game_install_path" @browse="browsePath('game_install_path')"

@@ -189,14 +189,14 @@ watch(() => hoverStore.isHovering, (hovering) => {
 const containerClasses = computed(() => {
   if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
-    return 'px-2 py-1.5 max-w-[30dvw] rounded-md break-all text-pretty whitespace-normal bg-glass-heavy backdrop-blur-sm border border-border-base/18 shadow-lg'
+    return 'max-h-[calc(100vh-2rem)] max-w-[30dvw] overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-all whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
   }
   // 让组件自己决定长什么样
   if (hoverStore.type === 'component') {
     return 'shadow-2xl' // 可能只留个阴影，或者连阴影都不要，完全由组件内部控制
   }
   // Preview 样式：宽大、有背景、圆角大
-  return 'w-[340px] max-h-[240px] rounded-xl shadow-2xl overflow-visible'
+  return 'w-[21.25rem] max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
 })
 // --- 2. 窗口尺寸监听 ---
 const winWidth = ref(window.innerWidth)
@@ -210,8 +210,12 @@ onUnmounted(() => window.removeEventListener('resize', updateSize))
 
 // --- 3. 动态位置计算 (边界检测) ---
 const panelRef = ref(null)
-const realWidth = ref(320) // 默认值
-const realHeight = ref(200) // 默认值
+const getRootFontSize = () => {
+  if (typeof window === 'undefined') return 16
+  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
+const realWidth = ref(getRootFontSize() * 20) // 默认值
+const realHeight = ref(getRootFontSize() * 12.5) // 默认值
 // 更新尺寸的方法
 const updateDimensions = () => {
   if (panelRef.value?.$el) { // motion-v 组件通常通过 $el 访问 DOM
@@ -250,25 +254,27 @@ watch(() => shouldRender.value, (render) => {
 
 
 // --- 智能坐标计算 (核心算法) ---
-const GAP = 16 // 鼠标与面板的间距
+const getGap = () => getRootFontSize() // 鼠标与面板的间距
 
 const safeX = computed(() => {
   if (!hoverStore.isHovering) return lastX.value
   const x = hoverStore.targetX
   const w = winWidth.value
   const pW = realWidth.value // 使用真实宽度
+  const gap = getGap()
+  const margin = gap * 0.625
 
   // 策略：如果鼠标在屏幕右半边，面板就显示在鼠标左侧 (靠右基准)
-  const isRightSide = x > w - pW - GAP
+  const isRightSide = x > w - pW - gap
 
   if (isRightSide) {
     // 锚点在右侧：鼠标位置 - 面板宽度 - 间距
     // 同时也做一下左侧防溢出 (防止屏幕太窄时出界)
-    lastX.value = Math.round(isRightSide ? Math.max(10, x - pW - GAP) : x + GAP)
+    lastX.value = Math.round(isRightSide ? Math.max(margin, x - pW - gap) : x + gap)
     return lastX.value
   } else {
     // 锚点在左侧：鼠标位置 + 间距
-    lastX.value = x + GAP
+    lastX.value = x + gap
     return lastX.value
   }
 })
@@ -278,18 +284,20 @@ const safeY = computed(() => {
   const y = hoverStore.targetY
   const h = winHeight.value
   const pH = realHeight.value // 使用真实高度
+  const gap = getGap()
+  const margin = gap * 0.625
 
   // 策略：如果鼠标在屏幕下半边，面板就显示在鼠标上方 (底部基准)
-  const isBottomSide = y > h - pH - GAP
+  const isBottomSide = y > h - pH - gap
 
   if (isBottomSide) {
     // 锚点在底部：鼠标位置 - 面板高度 - 间距
     // 这样当 pH 变大时，Y 值变小，面板视觉上是"向上生长"
-    lastY.value = Math.round(isBottomSide ? Math.max(10, y - pH - GAP) : y + GAP)
+    lastY.value = Math.round(isBottomSide ? Math.max(margin, y - pH - gap) : y + gap)
     return lastY.value
   } else {
     // 锚点在顶部
-    lastY.value = y + GAP
+    lastY.value = y + gap
     return lastY.value
   }
 })

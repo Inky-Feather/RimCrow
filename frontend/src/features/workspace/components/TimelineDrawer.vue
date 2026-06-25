@@ -2,7 +2,7 @@
 <template>
   <Teleport to="body">
     <Transition name="slide-right">
-      <div v-if="isOpen" ref="drawerRef" class="fixed top-18 bottom-0 right-0 w-96 bg-glass-heavy backdrop-blur-3xl border-l border-border-base/10 shadow-[-10px_0_30px_var(--shadow-color)] z-300 flex flex-col">
+      <div v-if="isOpen" ref="drawerRef" class="fixed top-18 right-0 bottom-0 z-300 flex w-96 max-w-[calc(100vw-1rem)] flex-col border-l border-border-base/10 bg-glass-heavy shadow-[-10px_0_30px_var(--shadow-color)] backdrop-blur-3xl">
         
         <!-- Header -->
         <div class="toolbar-surface flex items-start justify-between px-6 py-5">

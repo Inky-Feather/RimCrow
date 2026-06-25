@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-  <div class="fixed z-140 flex max-h-[76vh] w-100 flex-col overflow-hidden rounded-xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
+  <div class="fixed z-140 flex max-h-[76vh] w-100 max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
     :style="panelStyle">
     <div class="absolute -left-12 -top-16 size-36 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-16 -right-10 size-32 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>

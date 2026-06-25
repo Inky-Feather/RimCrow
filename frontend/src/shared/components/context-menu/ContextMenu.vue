@@ -3,7 +3,7 @@
   <Teleport to="body">
     <Transition name="scale">
       <div v-if="menuStore.show" ref="menuRef"
-        class="context-menu-surface fixed z-9999 min-w-[160px] py-[4px] rounded-xl border border-border-base/10 bg-glass-medium shadow-2xl backdrop-blur-xl ring-1 ring-border-base/5 shadow-black/40"
+        class="context-menu-surface fixed z-9999 max-h-[calc(100vh-1rem)] min-w-[160px] overflow-y-auto overscroll-contain rounded-xl border border-border-base/10 bg-glass-medium py-[4px] shadow-2xl shadow-black/40 ring-1 ring-border-base/5 backdrop-blur-xl custom-scrollbar"
         :class="[enableTransition ? 'transition-[top,left] duration-300 cubic-bezier(0.16, 1, 0.3, 1)' : '']"
         :style="menuStyle" @contextmenu.prevent
       >
