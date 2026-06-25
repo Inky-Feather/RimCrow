@@ -1470,6 +1470,7 @@ export const useModStore = defineStore('mods', () => {
 
     // 列表读取与基础写入
     setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    isLanguagePackMod,
     // 来源提示与列表选择
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeDeletedModsFromLocalData, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,

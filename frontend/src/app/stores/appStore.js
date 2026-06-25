@@ -362,6 +362,7 @@ export const useAppStore = defineStore('app', () => {
     show_coexistence_message: true,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
+    skip_language_pack_alias_generation: true, // 批量生成别名备注时是否跳过语言包
     regular_mods_follow_dependencies: false, // 普通模组是否贴紧其最后一个依赖目标
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
 
@@ -675,6 +676,28 @@ export const useAppStore = defineStore('app', () => {
     return applyModsPayload(payload, { isInit, historyLabel })
   }
 
+  const refreshRuleData = async () => {
+    const ruleStore = useRuleStore()
+    await ruleStore.fetchRules()
+  }
+
+  const refreshBackupData = () => {
+    const orderStore = useOrderStore()
+    void orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+  }
+
+  const refreshWorkspaceLibraryData = () => {
+    const workspaceStore = useWorkspaceStore()
+    // 扫描只会改变本地三库模组事实，不需要顺带刷新 GitHub/合集列表。
+    void workspaceStore.refreshLoadedData({ librariesOnly: true })
+  }
+
+  const refreshModsRelatedData = async (options = {}) => {
+    if (options?.refreshRules !== false) await refreshRuleData()
+    if (options?.refreshBackups !== false) refreshBackupData()
+    if (options?.refreshWorkspaceLibraries !== false) refreshWorkspaceLibraryData()
+  }
+
   // 扫描完成后只同步与模组相关的数据，避免再次触发整套工作区/集合/GitHub 初始化。
   const refreshModsData = async (historyLabel = '扫描后同步模组数据', options = {}) => {
     if (!window.pywebview) return false
@@ -688,14 +711,7 @@ export const useAppStore = defineStore('app', () => {
       })
       if (!applied) return false
 
-      const ruleStore = useRuleStore()
-      ruleStore.fetchRules()
-      const orderStore = useOrderStore()
-      orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
-
-      const workspaceStore = useWorkspaceStore()
-      // 扫描只会改变本地三库模组事实，不需要顺带刷新 GitHub/合集列表。
-      void workspaceStore.refreshLoadedData({ librariesOnly: true })
+      await refreshModsRelatedData(options)
       return true
     } catch (e) {
       toast.error(`同步模组数据失败: \n${e.message}`)

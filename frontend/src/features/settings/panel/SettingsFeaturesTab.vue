@@ -29,6 +29,7 @@
                       <CommonSwitch class="col-span-1" label="关键动作前必要检查" v-model="formData.enable_action_prechecks" description="开启后，保存、运行、自动排序前会检查未安装项和未启用项；关闭后将直接执行，不再弹出检查窗口。" />
                       <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
                       <CommonSwitch class="col-span-1" label="检查语言支持" v-model="formData.check_language_support" description="开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。" />
+                      <CommonSwitch class="col-span-1" label="跳过语言包生成别名备注" v-model="formData.skip_language_pack_alias_generation" description="开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。" />
                       <CommonSwitch class="col-span-1" label="使用辅助工具模组" v-model="formData.enable_tool_mods" description="开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。" />
                     </div>
                   </div>

@@ -454,8 +454,38 @@ const generateAliasNotes = async () => {
     return
   }
 
+  const shouldSkipLanguagePacks = appStore.settings.skip_language_pack_alias_generation !== false
+  const targetMods = shouldSkipLanguagePacks
+    ? selectedMods.filter(mod => !modStore.isLanguagePackMod(mod))
+    : selectedMods
+  const skippedCount = selectedMods.length - targetMods.length
+  if (targetMods.length === 0) {
+    toast.info('已跳过语言包，没有需要批量生成别名备注的模组')
+    return
+  }
+  if (skippedCount > 0) {
+    toast.info(`已跳过 ${skippedCount} 个语言包模组`)
+  }
+  if (targetMods.length === 1) {
+    const mod = targetMods[0]
+    const packageId = normalizePackageId(mod?.package_id)
+    if (!packageId) return
+    const result = await aiStore.requestSingleModAliasGenerationResult({
+      packageId,
+      name: mod?.name || '',
+      description: mod?.description || '',
+      ownerType: 'mod_list',
+    })
+    if (!result) return
+    await modStore.updateModUserData(result.package_id, {
+      alias_name: String(result.alias_name || ''),
+      notes: String(result.notes || ''),
+    })
+    return
+  }
+
   await aiStore.startModAliasGenerationTask({
-    mods: selectedMods,
+    mods: targetMods,
     ownerType: 'mod_list',
     needsReview: true,
   })

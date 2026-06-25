@@ -210,6 +210,12 @@ const closeModal = () => {
   appStore.uiState.showModAliasReviewModal = false
 }
 
+const closeWhenEmpty = () => {
+  if (reviewTasks.value.length === 0 || totalPendingItems.value === 0) {
+    closeModal()
+  }
+}
+
 const removeTaskGroup = async (taskId) => {
   /** 从待审池中移除整组任务结果。 */
   const group = aiStore.getModAliasReviewTask(taskId)
@@ -220,9 +226,7 @@ const removeTaskGroup = async (taskId) => {
   )
   if (!ok) return
   aiStore.removeModAliasReviewTask(taskId)
-  if (reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  closeWhenEmpty()
 }
 
 const removeItem = (taskId, index) => {
@@ -232,9 +236,7 @@ const removeItem = (taskId, index) => {
   const item = group.items[index]
   if (!item?.package_id) return
   aiStore.removeModAliasReviewTaskItem(taskId, item.package_id)
-  if (reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  closeWhenEmpty()
 }
 
 const regenerateItem = async (taskId, item) => {
@@ -288,11 +290,9 @@ const saveTaskGroup = async (taskId) => {
     return
   }
   const success = await modStore.batchUpdateModsUserData(updates)
-  if (success && reviewTasks.value.length === 0) {
-    closeModal()
-  }
   if (success) {
     aiStore.removeModAliasReviewTask(taskId)
+    closeWhenEmpty()
   }
 }
 
@@ -318,9 +318,7 @@ const applyAll = async () => {
       aiStore.removeModAliasReviewTask(taskId)
     }
   }
-  if (appliedCount > 0 && reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  if (appliedCount > 0) closeWhenEmpty()
 }
 
 const clearAll = async () => {

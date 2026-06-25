@@ -64,7 +64,8 @@ export const useRuleStore = defineStore('rules', () => {
   const currentId = ref(null)
   const isLoading = ref(false)
   const refreshRuleState = async () => {
-    await appStore.refreshModsData('规则变更后同步规则数据', { preserveListState: true })
+    await fetchRules()
+    await appStore.refreshModsData('规则变更后同步模组状态', { preserveListState: true, refreshRules: false })
   }
 
   // 当前正在检视的目标 Mod ID
