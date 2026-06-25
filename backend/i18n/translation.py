@@ -138,6 +138,21 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "import_check.report.unknown_item": "未知导入项",
         "import_check.report.wid_only_missing": "仅提供了 Workshop ID，当前环境未发现对应安装项",
         
+        # scanner
+        "scanner.title": "模组扫描",
+        "scanner.scan_in_progress": "扫描已在进行中",
+        "scanner.preparing_scan_task": "准备扫描任务...",
+        "scanner.no_valid_path": "没有有效路径",
+        "scanner.indexing_files": "正在索引文件...",
+        "scanner.cannot_access_path": "无法访问路径 {path}: {error}",
+        "scanner.analyzing_mod": "分析中: {name}",
+        "scanner.processing_conflicts": "正在处理冲突与运行态收敛...",
+        "scanner.batch_insert_failed": "批量入库失败: {error}",
+        "scanner.scan_completed": "扫描完成",
+        "scanner.scan_failed": "扫描失败: {error}",
+        "scanner.scan_cancelled_by_user": "扫描已由用户中止",
+        "scanner.scan_cancelled_by_user_desc": "扫描已由用户中止，未对数据库进行任何修改。",
+        
         # workshop/bridge
         "workshop.error.missing_url": "未提供目标工坊页面地址",
         "workshop.error.steam_only": "当前仅代理 Steam 创意工坊相关页面",
@@ -280,6 +295,21 @@ MESSAGES: Dict[str, Dict[str, str]] = {
         "import_check.report.core_skip": "Official core package is excluded from missing download check",
         "import_check.report.unknown_item": "Unknown import item",
         "import_check.report.wid_only_missing": "Only Workshop ID was provided, not found in current environment",
+        
+        # scanner
+        "scanner.title": "Mod Scan",
+        "scanner.scan_in_progress": "Scan is already in progress",
+        "scanner.preparing_scan_task": "Preparing scan task...",
+        "scanner.no_valid_path": "No valid search paths found",
+        "scanner.indexing_files": "Indexing files...",
+        "scanner.cannot_access_path": "Cannot access path {path}: {error}",
+        "scanner.analyzing_mod": "Analyzing: {name}",
+        "scanner.processing_conflicts": "Processing conflicts and runtime convergence...",
+        "scanner.batch_insert_failed": "Batch insert failed: {error}",
+        "scanner.scan_completed": "Scan completed",
+        "scanner.scan_failed": "Scan failed: {error}",
+        "scanner.scan_cancelled_by_user": "Scan cancelled by user",
+        "scanner.scan_cancelled_by_user_desc": "Scan cancelled by user; no changes were made to the database.",
         
         # workshop/bridge
         "workshop.error.missing_url": "No target workshop page URL provided",

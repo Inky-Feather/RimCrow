@@ -11,6 +11,7 @@ from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.tools import generate_path_hash, get_folder_size
 from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
+from backend.i18n.translation import t
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -88,7 +89,7 @@ class ModScanner:
         异步扫描入口。立即返回，任务在后台运行。
         """
         EventBus.resume()   # 恢复事件总线
-        if self._is_scanning: return {'status': 'busy', 'message': '扫描已在进行中'}
+        if self._is_scanning: return {'status': 'busy', 'message': t("scanner.scan_in_progress")}
         
         self._is_scanning = True
         self._stop_requested = False  # 启动前重置标志
@@ -100,8 +101,8 @@ class ModScanner:
                 "scan",
                 status="pending",
                 progress=0,
-                message="准备扫描任务...",
-                metrics={ "title": "模组扫描", "forced_update": forced_update, "size_check_override": size_check_override },
+                message=t("scanner.preparing_scan_task"),
+                metrics={ "title": t("scanner.title"), "forced_update": forced_update, "size_check_override": size_check_override },
             )
         # 提交到线程池
         self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, emit_events, residue_active_tokens, residue_scan_enabled )
@@ -136,8 +137,8 @@ class ModScanner:
             valid_paths = [p for p in search_paths if p and os.path.exists(p)]
             if not valid_paths:
                 if emit_events:
-                    EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message="没有有效路径", metrics={"title": "模组扫描"})
-                self._finish_scan({'error': '没有有效路径', 'task_id': task_id}, task_id, emit_events=emit_events)
+                    EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=t("scanner.no_valid_path"), metrics={"title": t("scanner.title")})
+                self._finish_scan({'error': t("scanner.no_valid_path"), 'task_id': task_id}, task_id, emit_events=emit_events)
                 return
             # 初始化 DLC Parser
             dlc_parser = DLCParser(self.context.game_dlc_path)
@@ -149,8 +150,8 @@ class ModScanner:
                     "scan",
                     status="running",
                     progress=0,
-                    message='正在索引文件...',
-                    metrics={'stage': 'indexing', 'current': 0, 'total': 0, 'title': '模组扫描'},
+                    message=t("scanner.indexing_files"),
+                    metrics={'stage': 'indexing', 'current': 0, 'total': 0, 'title': t("scanner.title")},
                 )
             mod_folders = [] # [(folder_path, is_dlc), ...]
             for base_path in valid_paths:
@@ -188,12 +189,12 @@ class ModScanner:
                             "scan",
                             status="running",
                             progress=percent,
-                            message=f"分析中: {os.path.basename(mod_path)}",
+                            message=t("scanner.analyzing_mod", name=os.path.basename(mod_path)),
                             metrics={
                                 'stage': 'scanning',
                                 'current': (idx + 1),
                                 'total': total_count,
-                                'title': '模组扫描',
+                                'title': t("scanner.title"),
                             },
                         )
                 # 处理单个 Mod
@@ -223,8 +224,8 @@ class ModScanner:
                     "scan",
                     status="running",
                     progress=99 if total_count else 90,
-                    message='正在处理冲突与运行态收敛...',
-                    metrics={'stage': 'analyzing', 'current': total_count, 'total': total_count, 'title': '模组扫描'},
+                    message=t("scanner.processing_conflicts"),
+                    metrics={'stage': 'analyzing', 'current': total_count, 'total': total_count, 'title': t("scanner.title")},
                 )
             
             mods_to_upsert = []
@@ -307,7 +308,7 @@ class ModScanner:
                     "scan",
                     status="success",
                     progress=100,
-                    message='扫描完成',
+                    message=t("scanner.scan_completed"),
                     metrics={
                         'stage': 'finished',
                         'current': total_count,
@@ -317,7 +318,7 @@ class ModScanner:
                         'coexistence_count': len(final_coexistences),
                         'residue_count': residue_count,
                         'runtime_sync_message': runtime_sync_msg,
-                        'title': '模组扫描',
+                        'title': t("scanner.title"),
                     },
                 )
             
@@ -341,7 +342,7 @@ class ModScanner:
             traceback.print_exc()
             logger.error("Scan task failed", exc_info=True)
             if emit_events:
-                EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=f"扫描失败: {e}", metrics={'title': '模组扫描'})
+                EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=t("scanner.scan_failed", error=str(e)), metrics={'title': t("scanner.title")})
             self._finish_scan({'status': 'error', 'message': str(e), 'task_id': task_id}, task_id, emit_events=emit_events)
         finally:
             self._is_scanning = False
@@ -354,10 +355,10 @@ class ModScanner:
         """处理中断后的清理和通知"""
         self._is_scanning = False
         if emit_events:
-            EventBus.emit_progress(task_id, "scan", status="cancelled", progress=0, message="扫描已由用户中止", metrics={'title': '模组扫描'})
+            EventBus.emit_progress(task_id, "scan", status="cancelled", progress=0, message=t("scanner.scan_cancelled_by_user"), metrics={'title': t("scanner.title")})
         self._finish_scan({
             'status': 'cancelled',
-            'message': '扫描已由用户中止，未对数据库进行任何修改。',
+            'message': t("scanner.scan_cancelled_by_user_desc"),
         }, task_id, emit_events=emit_events)
         logger.info("Scan cancelled safely.")
 
@@ -377,7 +378,7 @@ class ModScanner:
         payload.setdefault('type', 'scan')
         payload.setdefault('id', payload.get('task_id', ''))
         payload.setdefault('progress', 100 if normalized_status == 'success' else 0)
-        payload.setdefault('message', '扫描完成' if normalized_status == 'success' else '')
+        payload.setdefault('message', t("scanner.scan_completed") if normalized_status == 'success' else '')
         payload.setdefault('metrics', {})
         if emit_events:
             EventBus.emit('scan-complete', payload)
