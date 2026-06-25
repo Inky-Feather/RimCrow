@@ -54,7 +54,7 @@ from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MIS
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.dao_ext import ExtDAO
 from backend.database.models_ext import WorkshopOnlineCache, ext_db
-from backend.database.runtime import close_db, clear_db, init_db
+from backend.database.runtime import close_db, clear_db, ensure_minimum_startup_data, init_db
 from backend.database.repair import (
     _cleanup_database_sidecars,
     _cleanup_repair_artifacts,
@@ -1353,8 +1353,6 @@ class API:
         """
         重置数据库：强制关闭连接，删除文件，重建。
         """
-        from backend.database.models import SystemInfo
-        
         if not self._db_maintenance_lock.acquire(blocking=False):
             return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
@@ -1385,8 +1383,8 @@ class API:
             self.is_first_db_init = True
             init_ok = init_db(db_path)
             if not init_ok: return ApiResponse.error("重置失败，数据库无法重新创建。")
-            # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
-            SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
+            # 物理删库和逻辑清库都走同一套最小启动数据补齐，避免两条路径重置结果不一致。
+            ensure_minimum_startup_data(db.connection())
             # 重置会清空所有环境记录，当前进程必须立即回退到 default 并重建上下文，
             # 否则内存里仍可能挂着已被删除的旧 profile manager / context。
             self._bootstrap_context('default')

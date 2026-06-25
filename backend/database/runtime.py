@@ -27,11 +27,6 @@ def _is_database_corruption_message(message: str) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
-# SystemInfo 是系统元信息表，重置业务数据时不应依赖 all_models 的注册顺序去“跳过第一个”；
-# 这里显式列出可清空/可重建的业务表，避免后续模型顺序调整时把逻辑带偏。
-NON_SYSTEM_MODELS = [model for model in all_models if model is not SystemInfo]
-
-
 def ensure_minimum_startup_data(conn: sqlite3.Connection):
     """
     补齐数据库最小可启动数据。
@@ -148,7 +143,7 @@ def close_db():
 def clear_db():
     """
     清空数据库。
-    为了防止数据残留或锁死，采用：关闭外键 -> Drop -> Vacuum -> Create 的流程。
+    重置语义必须等价于新库：清掉所有旧表，再补回最小启动数据。
     """
     try:
         if db.is_closed():
@@ -156,11 +151,11 @@ def clear_db():
 
         db.execute_sql('PRAGMA foreign_keys = OFF;')
         with db.atomic():
-            db.drop_tables(NON_SYSTEM_MODELS)
+            db.drop_tables(all_models, safe=True)
 
         db.execute_sql('VACUUM;')
         with db.atomic():
-            db.create_tables(NON_SYSTEM_MODELS, safe=True)
+            db.create_tables(all_models, safe=True)
 
         # 重置后需要把系统最小启动数据补回去，保证后续初始化和环境装载稳定。
         ensure_minimum_startup_data(db.connection())
@@ -170,6 +165,12 @@ def clear_db():
     except Exception as e:
         logger.error(f"清空数据库时出错: {e}", exc_info=True)
         return False
+    finally:
+        try:
+            if not db.is_closed():
+                db.execute_sql('PRAGMA foreign_keys = ON;')
+        except Exception:
+            logger.warning("清空数据库后恢复外键状态失败", exc_info=True)
 
 
 def validate_database_file(db_path, require_tables=True):

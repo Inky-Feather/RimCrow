@@ -67,7 +67,7 @@ def _remove_file_with_retry(file_path, retries=10, delay=0.3):
 
 def _cleanup_database_sidecars(db_path):
     """清理 SQLite 的 WAL/SHM 附属文件。"""
-    for ext in ['-wal', '-shm']:
+    for ext in ['-wal', '-shm', '-journal']:
         _remove_file_with_retry(db_path + ext, retries=5, delay=0.1)
 
 
