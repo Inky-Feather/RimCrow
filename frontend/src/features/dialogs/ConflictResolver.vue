@@ -777,7 +777,7 @@ const submit = async () => {
         })
       }
 
-      await modStore.scanMods()
+      await appStore.requestModScan()
       return
     }
 

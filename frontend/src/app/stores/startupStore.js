@@ -35,7 +35,7 @@ export const useStartupStore = defineStore('startup', () => {
     console[method]('[RMM][maintenance-check]', { event, ...payload })
   }
 
-  // 升级上下文由后端在启动时生成；这里把它转成前端动作，例如提示用户和强制刷新扫描。
+  // 升级上下文由后端在启动时生成；这里把它转成前端动作，例如提示用户和强制扫描。
   const handleUpgradeContext = (upgradeContext) => {
     let scanForce = false
     const context = upgradeContext?.value || {}

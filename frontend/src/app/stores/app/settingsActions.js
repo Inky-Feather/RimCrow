@@ -1,5 +1,4 @@
 import { toast, checkResult } from '../../../shared/lib/common'
-import { useModStore } from '../../../features/mod/stores/modStore'
 import { useProfileStore } from '../../../features/profiles/profileStore'
 
 const SETTING_KEYS_REQUIRING_LIST_SCAN = [
@@ -36,6 +35,7 @@ export const useSettingsActions = ({
   applyCurrentTheme,
   syncRemoteImageCache,
   refreshData,
+  requestModScan,
 } = {}) => {
   // 打开/关闭设置页面
   const openSettingsPanel = () => { uiState.showSettingsPanel = true }
@@ -131,9 +131,8 @@ export const useSettingsActions = ({
           return
         }
 
-        if (settings.value.enable_auto_scan && nextContext?.is_healthy) {
-          const modStore = useModStore()
-          await modStore.scanMods(null, false)
+        if (settings.value.enable_auto_scan && nextContext?.is_healthy && requestModScan) {
+          await requestModScan()
         } else{
           await refreshData()
         }

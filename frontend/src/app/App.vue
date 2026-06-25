@@ -80,10 +80,10 @@
                 <!-- 底部按钮组 -->
                 <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-glass-medium shadow-2xl backdrop-blur-md border-t border-border-base/5" data-tour="base-button-group">
 
-                  <!-- 刷新按钮 -->
+                  <!-- 扫描按钮 -->
                   <div role="button" :aria-disabled="isBaseActionDisabled('scan')"
-                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'rmm-action-disabled' : '']" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
-                    data-tour="refresh-button"
+                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'rmm-action-disabled' : '']" v-tooltip="'扫描文件变动，并同步当前环境的 Mod 列表'"
+                    data-tour="scan-button"
                     class="col-span-1 py-1 rounded-lg bg-bg-overlay/5 border border-border-base/5 group
                           text-sm text-text-soft font-bold uppercase tracking-wider relative cursor-pointer
                           hover:bg-bg-overlay/10 hover:text-text-main hover:border-border-base/18
@@ -91,15 +91,15 @@
                     @click="runBaseScan(false)"
                   >
                     <!-- 这里保留注释位，必要时可恢复独立图标 -->
-                    <span >{{ appStore.isScanRunning ? '扫描中...' : '刷新' }}</span>
+                    <span >{{ appStore.isScanRunning ? '扫描中...' : '扫描' }}</span>
 
-                    <button v-show="!appStore.isScanRunning" v-tooltip="'强制刷新，会扫描所有文件，包括未变动的文件，比较耗时'"
+                    <button v-show="!appStore.isScanRunning" v-tooltip="'重新检查所有文件，包括未变动的文件，比较耗时'"
                       :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'rmm-action-disabled' : ''"
                       class="absolute bottom-full py-1 px-2 mb-1.5 rounded-lg bg-accent-secondary/50 border border-border-base/10 transition-all duration-500
                           text-sm text-text-dim font-bold uppercase tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
                           hover:bg-accent-secondary/80 hover:text-text-main hover:border-border-base/18"
                           @click.stop="runBaseScan(true)">
-                      {{ baseActionPending === 'force-scan' ? '刷新中...' : '强制刷新' }}
+                      {{ baseActionPending === 'force-scan' ? '扫描中...' : '强制扫描' }}
                     </button>
 
                   </div>
@@ -397,7 +397,7 @@ const runBaseAction = async (action, runner, taskTypes = null) => {
 }
 const runBaseScan = async (forced = false) => {
   const action = forced ? 'force-scan' : 'scan'
-  await runBaseAction(action, () => modStore.scanMods(null, forced), 'scan')
+  await runBaseAction(action, () => appStore.requestModScan({ forcedUpdate: forced }), 'scan')
 }
 
 const closeThemeEditor = () => {

@@ -207,7 +207,7 @@ const taskExtra = (task) => {
   return parts.join(' ')
 }
 
-const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 刷新后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
+const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
 </script>
 
 <style scoped>

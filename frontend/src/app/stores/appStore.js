@@ -401,7 +401,10 @@ export const useAppStore = defineStore('app', () => {
     autoDetectPaths, getDefaultExternalPaths, checkPath, checkPaths,
     // 打开、选择与删除
     openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
-  } = usePathActions({ settings })
+  } = usePathActions({
+    settings,
+    requestModScan: (...args) => requestModScan(...args),
+  })
 
   const {
     // 设置面板
@@ -416,6 +419,7 @@ export const useAppStore = defineStore('app', () => {
     applyCurrentTheme,
     syncRemoteImageCache: (...args) => syncRemoteImageCache(...args),
     refreshData: (...args) => refreshData(...args),
+    requestModScan: (...args) => requestModScan(...args),
   })
 
   const {

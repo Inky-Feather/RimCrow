@@ -95,10 +95,10 @@ export const mainGuideSteps = [
 
 export const workflowGuideSteps = [
   {
-    element: '[data-tour="refresh-button"]',
+    element: '[data-tour="scan-button"]',
     popover: {
-      title: "第一步：刷新",
-      description: "先刷新模组清单。普通刷新走增量扫描；悬停后还能触发更彻底的强制刷新。",
+      title: "第一步：扫描",
+      description: "先扫描模组清单。普通扫描只处理文件变动；悬停后还能触发更彻底的强制扫描。",
       side: "top",
     },
   },

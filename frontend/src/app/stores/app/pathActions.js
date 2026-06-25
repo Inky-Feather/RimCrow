@@ -1,9 +1,8 @@
 import { toast, checkResult } from '../../../shared/lib/common'
-import { useModStore } from '../../../features/mod/stores/modStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../bridge/runtimeBridge'
 
-export const usePathActions = ({ settings } = {}) => {
+export const usePathActions = ({ settings, requestModScan } = {}) => {
   // 自动检测路径
   const autoDetectPaths = async (updateStore = false) => {
     if(!window.pywebview) return
@@ -112,8 +111,7 @@ export const usePathActions = ({ settings } = {}) => {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
       if(reScan){
         // 刷新Mod列表
-        const modStore = useModStore()
-        modStore.scanMods()
+        await requestModScan?.()
       }
       return true
     }
@@ -156,8 +154,7 @@ export const usePathActions = ({ settings } = {}) => {
     }
     if (reScan) {
       // 刷新Mod列表
-      const modStore = useModStore()
-      modStore.scanMods()
+      await requestModScan?.()
     }
     return true
   }
