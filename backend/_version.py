@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.22.6"  # 主版本.次版本.补丁
+__version__ = "0.23.0"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,68 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.23.0",
+        "date": "2026-06-26",
+        "entries": [
+            {
+                "title": "版本更新与联机支持强化",
+                "changes": [
+                    { "type": "feature", "text": "新增更新源支持，引入 GitHub 作为更新渠道并支持多源自动回退" },
+                    { "type": "feature", "text": "更新日志支持 Markdown 及 HTML 格式渲染" },
+                    { "type": "fix", "text": "修复更新检查在部分源失败时的异常提示问题" },
+                    { "type": "feature", "text": "改进 Git 推荐清单同步机制，支持手动刷新、内容签名比对和静默自动更新" },
+                    { "type": "feature", "text": "新增联机兼容性检测功能，支持解析模组联机等级及修正补丁" },
+                    { "type": "feature", "text": "新增联机兼容性数据库，支持状态筛选与标签展示" },
+                    { "type": "optimize", "text": "统一全链路日志格式，引入结构化错误上下文与用户友好的错误提示" },
+                    { "type": "optimize", "text": "优化 AI 请求重试策略与错误诊断逻辑" }
+                ]
+            },
+            {
+                "title": "工坊、翻译与模组管理增强",
+                "changes": [
+                    { "type": "feature", "text": "模组推荐导出功能支持包含版本信息、语言包及动图处理" },
+                    { "type": "feature", "text": "增强 Steam 工坊能力，支持通过客户端和 Web API 获取详情、作者与合集信息" },
+                    { "type": "feature", "text": "新增通用翻译服务架构，支持工坊内容自动翻译、译文标题展示及长按重新翻译" },
+                    { "type": "feature", "text": "新增模组设置管理能力，支持状态筛选、关键词搜索和模组文件状态标签展示" },
+                    { "type": "optimize", "text": "优化模组候选匹配与语言注册逻辑，支持按工坊 ID、文件夹别名和 Steam 语言标准化结果识别内容" }
+                ]
+            },
+            {
+                "title": "工作区同步与状态管理",
+                "changes": [
+                    { "type": "feature", "text": "新增模组“已删除”状态检测，完善缺失与失效记录判定" },
+                    { "type": "feature", "text": "支持模组共存版本同步与增量更新" },
+                    { "type": "feature", "text": "新增启动时工坊模组变更检测与提醒" },
+                    { "type": "feature", "text": "支持模组分割组批量展开与折叠" },
+                    { "type": "optimize", "text": "改进工作区显示术语与交互提示" },
+                    { "type": "optimize", "text": "优化标签与分组的排序及交互逻辑" }
+                ]
+            },
+            {
+                "title": "自动化任务与安全配置",
+                "changes": [
+                    { "type": "feature", "text": "引入系统级 API Key 安全存储机制" },
+                    { "type": "feature", "text": "新增异步任务追踪与轮询机制" },
+                    { "type": "feature", "text": "备份列表支持另外导出为 ModList/RML 格式及生成分享码" },
+                    { "type": "feature", "text": "改进部分通用右键菜单，支持信息复制、文件提取、图片另存和格式转换" },
+                    { "type": "feature", "text": "支持模组“严格禁用”模式与自动恢复" },
+                    { "type": "feature", "text": "增加模组依赖排序功能" }
+                ]
+            },
+            {
+                "title": "架构迁移与基础体验优化",
+                "changes": [
+                    { "type": "feature", "text": "实现全量路径规范化迁移，支持管理器安装目录迁移、配置路径自动更新和 Steam 安装路径自动检测" },
+                    { "type": "feature", "text": "集成 Steamworks 运行环境，优化工坊项目下载与详情查询" },
+                    { "type": "feature", "text": "支持 ZSTD 压缩格式输出" },
+                    { "type": "optimize", "text": "重构数据库清理与重建逻辑，确保重置后自动补齐启动数据并恢复外键约束" },
+                    { "type": "optimize", "text": "优化缩略图生成与远程缓存机制" },
+                    { "type": "optimize", "text": "重构搜索引擎、扫描入口和弹窗自适应布局，统一“扫描”术语并提升交互稳定性" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.22.6",
         "date": "2026-06-10",
