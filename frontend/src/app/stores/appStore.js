@@ -1032,6 +1032,7 @@ export const useAppStore = defineStore('app', () => {
         }
       }
       if (task.type === 'update' && task.status === 'failed') {
+        if (task.metrics?.has_fallback_source) return
         toast.error(toUserMessage(task.metrics?.error || task.message, '下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。'))
       }
       if (task.type === 'mod-export' && task.status === 'success') {

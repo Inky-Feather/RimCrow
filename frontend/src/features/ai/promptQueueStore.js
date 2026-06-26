@@ -15,6 +15,7 @@ const normalizePromptItem = (item = {}) => ({
   id: String(item.id || item.key || '').trim(),
   title: String(item.title || item.name || '').trim(),
   description: String(item.description || item.message || '').trim(),
+  descriptionFormat: String(item.descriptionFormat || item.description_format || 'text').trim().toLowerCase(),
   meta: Array.isArray(item.meta) ? item.meta.map(value => String(value || '').trim()).filter(Boolean) : [],
   status: 'pending',
   statusMessage: '',

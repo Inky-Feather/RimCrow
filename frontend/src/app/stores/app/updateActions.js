@@ -2,6 +2,43 @@ import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { usePromptQueueStore } from '../../../features/ai/promptQueueStore'
 
+const getUpdateDescriptionFormat = (sourceName = '') => {
+  const normalized = String(sourceName || '').trim().toLowerCase()
+  if (normalized.includes('github')) return 'markdown'
+  if (normalized.includes('蓝奏') || normalized.includes('lanzou')) return 'html'
+  return 'text'
+}
+
+const getUpdateSources = (info = {}) => {
+  const sources = Array.isArray(info.sources) && info.sources.length ? info.sources : [info]
+  return sources.filter(source => String(source?.version || info.version || '') === String(info.version || ''))
+}
+
+const buildUpdatePromptItems = (info = {}, manual = true) => {
+  const sources = getUpdateSources(info)
+  return sources.map((source, index) => {
+    const sourceName = source.source_name || '未知来源'
+    const meta = [
+      `来源: ${sourceName}`,
+      `文件大小: ${source.file_size || '未知'}`,
+      source.local_status === 'ready' ? '已下载' : '',
+    ].filter(Boolean)
+
+    return {
+      id: `${info.version || 'app-update'}:${sourceName}:${index}`,
+      title: `${sourceName} · RimModManager v${source.version || info.version}`,
+      description: source.changelog || info.changelog || '发现可用更新。',
+      descriptionFormat: getUpdateDescriptionFormat(sourceName),
+      meta,
+      raw: { ...info, ...source, sources: info.sources },
+      actions: index === 0 ? [
+        { id: 'update', label: source.local_status === 'ready' ? '立即安装' : '立即更新', kind: 'primary' },
+        { id: manual ? 'skip' : 'ignore', label: manual ? '以后再说' : '忽略此版本', kind: 'secondary' },
+      ] : [],
+    }
+  })
+}
+
 export const useUpdateActions = ({
   updateState,
   upgradeContext,
@@ -21,25 +58,18 @@ export const useUpdateActions = ({
         if (info.has_update) {
           updateState.hasUpdate = true
           updateState.info = info
+          const sources = getUpdateSources(info)
+          const sourceNames = sources.map(source => source.source_name || '未知来源').join('、')
           const promptQueue = usePromptQueueStore()
           await promptQueue.enqueue({
             category: 'startup-app-update',
             title: `发现新版本 v${info.version}`,
-            message: `来源: ${info.source_name || '未知'}。文件大小: ${info.file_size || '未知'}。`,
+            message: sources.length > 1 ? `检测到多个同版本来源: ${sourceNames}。将优先使用第一个来源，失败后自动尝试候补来源。` : `来源: ${sourceNames || '未知来源'}。文件大小: ${info.file_size || '未知'}。`,
             type: 'success',
             priority: manual ? 20 : 50,
-            items: [{
-              id: info.version || 'app-update',
-              title: `RimModManager v${info.version}`,
-              description: info.changelog || '发现可用更新。',
-              raw: info,
-              actions: [
-                { id: 'update', label: '立即更新', kind: 'primary' },
-                { id: manual ? 'skip' : 'ignore', label: manual ? '以后再说' : '忽略此版本', kind: 'secondary' },
-              ],
-            }],
+            items: buildUpdatePromptItems(info, manual),
             bulkActions: [
-              { id: 'update_all', label: '立即更新', kind: 'primary' },
+              { id: 'update_all', label: info.local_status === 'ready' ? '立即安装' : '立即更新', kind: 'primary' },
               { id: manual ? 'skip_all' : 'ignore_all', label: manual ? '以后再说' : '忽略此版本', kind: 'secondary' },
             ],
             onItemAction: async (_item, actionId) => {
@@ -58,7 +88,11 @@ export const useUpdateActions = ({
             },
           })
         } else if (manual) {
-          toast.success("当前已是最新版本")
+          if (info.check_status === 'partial') {
+            toast.warning("部分更新源暂时不可用，当前可用来源未发现新版本。")
+          } else {
+            toast.success("当前已是最新版本")
+          }
         }
       } else {
         logMaintenanceCheck('api_result', { id: 'app-update', name: '软件更新', manual, status: res?.status || 'error', message: res?.message || '' }, 'warn')
