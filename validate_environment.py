@@ -2,12 +2,34 @@ import mimetypes
 import os
 import socket
 import sys
-import winreg
 import ctypes
 import webbrowser # 这个库用来打开浏览器
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 from backend.settings import HOME_DIR, BASE_RESOURCE_DIR
+
+if sys.platform == "win32":
+    import winreg
+else:
+    winreg = None
+
+
+def _is_windows():
+    return sys.platform == "win32"
+
+
+def _path_from_file_uri(uri: str) -> Path:
+    parsed = urlparse(uri)
+    if parsed.scheme != "file":
+        return Path(uri)
+
+    path = unquote(parsed.path)
+    if _is_windows():
+        if parsed.netloc:
+            path = f"//{parsed.netloc}{path}"
+        elif len(path) >= 3 and path[0] == "/" and path[2] == ":":
+            path = path[1:]
+    return Path(path)
 
 
 def is_port_available(host: str = "localhost", port: int = 5173, timeout: float = 0.5) -> bool:
@@ -95,6 +117,9 @@ def get_webview2_version():
     
     :return: 版本号字符串 (如 '119.0.2151.58')，如果未安装则返回 None
     """
+    if not _is_windows() or winreg is None:
+        return None
+
     # 定义需要检查的注册表位置
     # WebView2 运行时（Evergreen Bootstrapper）通常安装在以下位置
     reg_keys = [
@@ -124,6 +149,9 @@ def check_webview2_runtime():
     """
     包装函数，返回 bool
     """
+    if not _is_windows():
+        return True
+
     version = get_webview2_version()
     if version:
         # 在这里打印版本号用于调试
@@ -133,10 +161,14 @@ def check_webview2_runtime():
 
 def show_native_error(title, message):
     """
-    使用 Windows 原生 MessageBox 弹出错误，不依赖任何 GUI 库
+    显示启动错误；Windows 用原生 MessageBox，其它系统回退到终端输出。
     """
-    # 0x10 是错误图标 + 确定按钮
-    ctypes.windll.user32.MessageBoxW(0, message, title, 0x10 | 0x0)
+    if _is_windows() and hasattr(ctypes, "windll"):
+        # 0x10 是错误图标 + 确定按钮
+        ctypes.windll.user32.MessageBoxW(0, message, title, 0x10 | 0x0)
+        return
+
+    print(f"{title}\n{message}", file=sys.stderr)
     
 
 def show_webview2_missing_dialog():
@@ -151,6 +183,9 @@ def show_webview2_missing_dialog():
         "安装完成后请重新启动程序。\n\n"
         f"下载地址：{url}"
     )
+    if not _is_windows() or not hasattr(ctypes, "windll"):
+        show_native_error(title, message)
+        return
     
     # 0x10 (错误图标) | 0x4 (是/否按钮) | 0x10000 (置顶)
     # IDYES = 6, IDNO = 7
@@ -164,8 +199,8 @@ def validate_environment(on_error=None, require_webview2=True):
     启动前的环境全校验
     """
     # 1. 检测组件
-    wv2_version = get_webview2_version()
-    if require_webview2 and not wv2_version:
+    wv2_version = get_webview2_version() if _is_windows() else None
+    if require_webview2 and _is_windows() and not wv2_version:
         if on_error:
             on_error()
         show_webview2_missing_dialog()
@@ -175,11 +210,7 @@ def validate_environment(on_error=None, require_webview2=True):
     # 这里假设之前的 get_entrypoint 逻辑
     entry = get_entrypoint()
     if not entry.startswith('http'):
-        # 先移除 URI scheme，然后使用 unquote 将所有百分号编码（包括中文和空格）解码为普通字符串
-        # 'file:///C:/...' -> 'C:/...'
-        path_str = unquote(entry.replace('file:///', '', 1))
-        # 将解码后的、操作系统可识别的路径字符串转换为 Path 对象
-        p = Path(path_str)
+        p = _path_from_file_uri(entry)
         if not p.exists():
             if on_error:
                 on_error()

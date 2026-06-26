@@ -36,7 +36,13 @@ export const useModIssues = ({
       const mod = takeModById(id)
       if (!mod) return
       // 忽略检查
-      if (mod.ignored_issues && mod.ignored_issues.includes(type)) return
+      const ignoredIssues = mod.ignored_issues || []
+      const isMultiplayerIssue = [
+        ISSUE_TYPE.ERROR_MULTIPLAYER_INCOMPATIBLE,
+        ISSUE_TYPE.WARN_MULTIPLAYER_BARELY_COMPATIBLE,
+        ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN,
+      ].includes(type)
+      if (ignoredIssues.includes(type) || (isMultiplayerIssue && ignoredIssues.includes(ISSUE_TYPE.WARN_MULTIPLAYER_COMPATIBILITY))) return
       if (!issuesMap.has(id)) issuesMap.set(id, [])
       issuesMap.get(id).push({ type, level, message, targetId })
     }
@@ -141,19 +147,21 @@ export const useModIssues = ({
       const mod = takeModById(activeIds.value[i])
       if (!mod || mod.isMissing) continue // X. 文件缺失已在全局检查中处理，这里简单跳过
       const mpCompat = mod.multiplayer_compat || {}
-      if (multiplayerActive && mpCompat.enabled && mpCompat.effective_status > 0 && mpCompat.effective_status < 4) {
+      if (multiplayerActive && mpCompat.enabled) {
+        const status = Number(mpCompat.effective_status ?? 0)
         const hasPatch = !!mpCompat.has_mp_compat_patch
         const patchEffective = !!mpCompat.mp_compat_effective || (hasPatch && mpCompatActive)
-        if (!patchEffective) {
+        if ((status === 1 || status === 2) && !patchEffective) {
           const label = mpCompat.effective_label || '未知'
-          const level = mpCompat.effective_status === 1 ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
+          const type = status === 1 ? ISSUE_TYPE.ERROR_MULTIPLAYER_INCOMPATIBLE : ISSUE_TYPE.WARN_MULTIPLAYER_BARELY_COMPATIBLE
+          const level = status === 1 ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
           const fixText = hasPatch ? '；可启用 Multiplayer Compatibility 辅助修正' : ''
-          _add(currentToken, ISSUE_TYPE.WARN_MULTIPLAYER_COMPATIBILITY, level,
-            `^^联机兼容性^^：Multiplayer 官方兼容等级为 [[${label}]]${fixText}`)
+          _add(currentToken, type, level,
+            `${status === 1 ? '!!' : '^^'}${ISSUE_TITLE_MAP[type]}${status === 1 ? '!!' : '^^'}：Multiplayer 兼容等级为 [[${label}]]${fixText}`)
+        } else if (status === 0) {
+          _add(currentToken, ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN, ISSUE_LEVEL.INFO,
+            `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN]}__：Multiplayer 暂无明确兼容等级`)
         }
-      } else if (multiplayerActive && mpCompat.enabled && mpCompat.has_mp_compat_patch && !mpCompatActive) {
-        _add(currentToken, ISSUE_TYPE.WARN_MULTIPLAYER_COMPATIBILITY, ISSUE_LEVEL.INFO,
-          '联机兼容性：该模组存在 Multiplayer Compatibility 对应修正，启用辅助模组后可生效')
       }
       if(!mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
 
@@ -569,11 +577,17 @@ export const useModIssues = ({
     targetIds.forEach(id => {
       const issues = modIssues.value.get(normalizeListToken(id))
       if (!issues || issues.length === 0) return
-      // result.count += issues.length // 累加总问题数
-      result.count++  // 累加出问题的Mod数
-      // 统计严重程度 (只要有一个 error 就算 error 级)
-      if (issues.some(i => i.level === 'error')) result.errorCount++
-      else result.warnCount++
+      const hasError = issues.some(i => i.level === 'error')
+      const hasWarn = issues.some(i => i.level === 'warn')
+      const hasInfo = issues.some(i => i.level === 'info')
+      // 纯提示不算“问题 Mod”，避免未知联机兼容性抬高列表问题总数。
+      if (hasError || hasWarn) {
+        result.count++  // 累加出问题的 Mod 数
+        if (hasError) result.errorCount++
+        else result.warnCount++
+      } else if (hasInfo) {
+        result.infoCount++
+      }
       // 按类型聚合 Mod 名称，统计所有出现的错误类型
       issues.forEach(issue => {
         const typeKey = issue.type

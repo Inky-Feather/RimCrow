@@ -61,7 +61,10 @@ export const ISSUE_TYPE = {
   WARN_INACTIVE_LANGUAGE_PACK: 'warn_inactive_language_pack', // 语言包未启用
   WARN_UNKNOWN_TARGET: 'warn_unknown_target',       // 未知指向对象
   WARN_INACTIVE_TARGET: 'warn_inactive_target',     // 指向对象未启用
-  WARN_MULTIPLAYER_COMPATIBILITY: 'warn_multiplayer_compatibility', // Multiplayer 联机兼容性
+  WARN_MULTIPLAYER_COMPATIBILITY: 'warn_multiplayer_compatibility', // 旧版联机兼容性类型，保留用于兼容历史忽略记录
+  ERROR_MULTIPLAYER_INCOMPATIBLE: 'multiplayer_incompatible',       // 不兼容联机
+  WARN_MULTIPLAYER_BARELY_COMPATIBLE: 'multiplayer_barely_compatible', // 勉强兼容联机
+  INFO_MULTIPLAYER_UNKNOWN: 'multiplayer_unknown',                  // 联机兼容性未知
 
   INFO_ALTERNATIVE_USED: 'info_alternative_used',   // 依赖替代
 
@@ -84,6 +87,9 @@ export const ISSUE_TITLE_MAP = {
   'warn_unknown_target': '语言包指向未知',
   'warn_inactive_target': '语言包指向未启用',
   'warn_multiplayer_compatibility': '联机兼容性',
+  'multiplayer_incompatible': '不兼容联机',
+  'multiplayer_barely_compatible': '勉强兼容联机',
+  'multiplayer_unknown': '联机兼容性未知',
 
   'default': '其他问题'
 

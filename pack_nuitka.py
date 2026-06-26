@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -19,8 +20,60 @@ def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
     env["PYTHONPATH"] = os.pathsep.join([*extra_paths, *existing_paths])
 
 
-def _find_upx_binary(upx_dir: str = r"D:\Environment\upx-5.0.0-win64") -> str:
-    upx_path = Path(upx_dir) / "upx.exe"
+def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
+    source_dir = project_root / "submodules" / "SteamworksPy"
+    if not (source_dir / "steamworks" / "__init__.py").exists():
+        raise FileNotFoundError(f"未找到 SteamworksPy 源码目录: {source_dir}")
+    return source_dir
+
+
+def _run_command_with_log(cmd: list[str], log_path: Path, env: dict[str, str] | None = None) -> int:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="")
+            log_file.write(line)
+        return process.wait()
+
+
+def _npm_command() -> str:
+    if sys.platform == "win32":
+        return shutil.which("npm.cmd") or "npm.cmd"
+    return shutil.which("npm") or "npm"
+
+
+def _platform_tag() -> str:
+    if sys.platform.startswith(("win32", "cygwin", "msys")):
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in sys.platform).strip("-") or "unknown"
+
+
+def _release_zip_name(app_name: str, version: str) -> str:
+    version_text = str(version or "0.0.0").strip().lstrip("vV") or "0.0.0"
+    return f"{app_name}-v{version_text}-{_platform_tag()}.zip"
+
+
+def _find_upx_binary(upx_dir: str = "") -> str:
+    raw_path = os.environ.get("UPX_DIR") or upx_dir
+    if not raw_path:
+        return ""
+    upx_path = Path(raw_path)
+    if upx_path.is_dir():
+        upx_path = upx_path / "upx.exe"
     return str(upx_path) if upx_path.exists() else ""
 
 
@@ -52,8 +105,10 @@ def _build_nuitka_args(
     version: str,
     company: str,
     mode: str,
+    upx_dir: str = "",
 ) -> list[str]:
     project_root = Path(__file__).resolve().parent
+    _resolve_steamworkspy_source_dir(project_root)
     normalized_version = _normal_version(version)
     mode = mode if mode in {"onefile", "standalone"} else "onefile"
 
@@ -61,7 +116,6 @@ def _build_nuitka_args(
         "uv", "run", "python", "-m", "nuitka",
         f"--mode={mode}",
         "--assume-yes-for-downloads",
-        "--windows-console-mode=disable",
         "--show-progress",
         "--remove-output",
         "--deployment",
@@ -77,6 +131,7 @@ def _build_nuitka_args(
         "--include-package=tiktoken",
         "--include-package=tiktoken_ext",
         "--include-module=tiktoken_ext.openai_public",
+        "--include-package=litellm.litellm_core_utils.llm_response_utils",
         "--include-package-data=tiktoken",
         "--include-package-data=litellm",
         "--noinclude-data-files=litellm/proxy/_experimental/**",
@@ -86,20 +141,23 @@ def _build_nuitka_args(
         "--noinclude-setuptools-mode=nofollow",
         "--noinclude-pytest-mode=nofollow",
         "--noinclude-unittest-mode=nofollow",
-
-        # Windows 版本信息。
-        f"--company-name={company}",
-        f"--product-name={name}",
-        f"--file-version={normalized_version}",
-        f"--product-version={normalized_version}",
-        f"--file-description={name} 模组管理器",
-        f"--copyright=Copyright (C) {company}",
     ]
 
     if sys.platform == "win32":
         # Nuitka 官方建议优先使用 Visual Studio 2022+；需要 MinGW 时可改回 --mingw64。
-        cmd.append("--msvc=latest")
-        upx_binary = _find_upx_binary()
+        cmd.extend([
+            "--windows-console-mode=disable",
+            "--msvc=latest",
+
+            # Windows 版本信息。
+            f"--company-name={company}",
+            f"--product-name={name}",
+            f"--file-version={normalized_version}",
+            f"--product-version={normalized_version}",
+            f"--file-description={name} 模组管理器",
+            f"--copyright=Copyright (C) {company}",
+        ])
+        upx_binary = _find_upx_binary(upx_dir)
         if upx_binary:
             cmd.extend(["--enable-plugins=upx", f"--upx-binary={upx_binary}"])
         else:
@@ -110,12 +168,13 @@ def _build_nuitka_args(
     if mode == "onefile" and frontend_dist.exists():
         cmd.append("--include-data-files-external=frontend/dist/**")
 
-    if mode == "onefile" and splash_path and Path(splash_path).exists():
-        cmd.append(f"--onefile-windows-splash-screen-image={Path(splash_path).as_posix()}")
-    if icon_path and Path(icon_path).exists():
-        cmd.append(f"--windows-icon-from-ico={Path(icon_path).as_posix()}")
-    elif icon_path:
-        print(f"警告: 图标文件不存在，已跳过 {icon_path}")
+    if sys.platform == "win32":
+        if mode == "onefile" and splash_path and Path(splash_path).exists():
+            cmd.append(f"--onefile-windows-splash-screen-image={Path(splash_path).as_posix()}")
+        if icon_path and Path(icon_path).exists():
+            cmd.append(f"--windows-icon-from-ico={Path(icon_path).as_posix()}")
+        elif icon_path:
+            print(f"警告: 图标文件不存在，已跳过 {icon_path}")
 
     cmd.append(f"--main={main_file}")
     return cmd
@@ -129,6 +188,7 @@ def packApplication(
     version: str = "1.0.0",
     company: str = "",
     mode: str = "onefile",
+    upx_dir: str = "",
 ) -> bool:
     """
     使用 Nuitka 打包应用程序。
@@ -137,23 +197,27 @@ def packApplication(
         if not os.path.exists(main_file):
             raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
 
-        cmd = _build_nuitka_args(main_file, icon_path, name, splash_path, version, company, mode)
+        cmd = _build_nuitka_args(main_file, icon_path, name, splash_path, version, company, mode, upx_dir=upx_dir)
         env = os.environ.copy()
-        _append_pythonpath(env, Path("submodules") / "SteamworksPy")
+        _append_pythonpath(env, _resolve_steamworkspy_source_dir(Path(__file__).resolve().parent))
 
         print(f"执行命令: {' '.join(cmd)}")
-        result = subprocess.run(cmd, text=True, encoding="utf-8", env=env)
-        if result.returncode == 0:
+        build_log_path = Path("dist") / "nuitka-build.log"
+        returncode = _run_command_with_log(cmd, build_log_path, env=env)
+        if returncode == 0:
             print("\n" + "=" * 30)
             print("★ 打包成功！")
             print(f"★ 输出目录: {Path('dist').resolve()}")
+            print(f"★ 构建日志: {build_log_path.resolve()}")
             print("=" * 30 + "\n")
             return True
 
         print("打包失败！")
-        if result.stderr:
-            print("错误信息：")
-            print(result.stderr)
+        print(f"Nuitka 退出码: {returncode}")
+        print(f"构建日志: {build_log_path.resolve()}")
+        report_path = Path("dist") / "nuitka-compilation-report.xml"
+        if report_path.exists():
+            print(f"编译报告: {report_path.resolve()}")
         return False
     except Exception as e:
         print(f"打包过程中出错: {str(e)}")
@@ -175,16 +239,25 @@ def _iter_toolmods_files(toolmods_dir: Path):
             yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
 
 
+def _should_include_steamcmd_file(relative_path: Path) -> bool:
+    if sys.platform == "win32":
+        return relative_path.name.lower() == "steamcmd.exe"
+    return relative_path.name == "steamcmd.sh"
+
+
 def _iter_tools_files(tools_dir: Path):
-    """遍历 tools 发布文件，仅保留 steamcmd.exe，其它目录按现有内容发布。"""
+    """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
     if not tools_dir.exists():
         return
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
     for file_path in tools_dir.rglob("*"):
         if not file_path.is_file():
             continue
         relative_path = file_path.relative_to(tools_dir)
         normalized_parts = [part.lower() for part in relative_path.parts]
-        if normalized_parts and normalized_parts[0] == "steamcmd" and relative_path.name.lower() != "steamcmd.exe":
+        if normalized_parts and normalized_parts[0] not in allowed_tool_dirs:
+            continue
+        if normalized_parts and normalized_parts[0] == "steamcmd" and not _should_include_steamcmd_file(relative_path):
             continue
         yield file_path, Path("tools") / relative_path
 
@@ -235,7 +308,7 @@ def create_release_zip(app_name: str, version: str, mode: str = "onefile"):
     """基于 Nuitka 产物生成发布压缩包，并附带运行所需的外部资源。"""
     project_root = Path(__file__).resolve().parent
     dist_dir = project_root / "dist"
-    zip_path = dist_dir / f"{app_name} v{version}.zip"
+    zip_path = dist_dir / _release_zip_name(app_name, version)
     archive_root = Path(app_name)
 
     release_items = list(_iter_nuitka_output_files(dist_dir, app_name, mode))
@@ -263,7 +336,7 @@ def buildFrontend(start_path: str = "frontend"):
     """
     构建前端项目。
     """
-    subprocess.run(["npm", "run", "build"], cwd=start_path, check=True, text=True, encoding="utf-8", shell=True)
+    subprocess.run([_npm_command(), "run", "build"], cwd=start_path, check=True, text=True, encoding="utf-8")
 
 
 def get_gitignore_spec(root_path: str):
@@ -342,6 +415,7 @@ if __name__ == "__main__":
     ICON_PATH = "icon.ico"
     SPLASH_PATH = "splash.png"
     NUITKA_MODE = "onefile"  # 可改为 "standalone" 便于排查 Nuitka 输出目录问题。
+    DEFAULT_UPX_DIR = r"D:\Environment\upx-5.0.0-win64"
 
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
 
@@ -356,10 +430,11 @@ if __name__ == "__main__":
         version=APP_VERSION,
         company=APP_COMPANY,
         mode=NUITKA_MODE,
+        upx_dir=DEFAULT_UPX_DIR,
     )
 
     if packed and pack_zip:
-        print(f"=== 生成发布压缩包 {APP_NAME} v{APP_VERSION}.zip ===")
+        print(f"=== 生成发布压缩包 {_release_zip_name(APP_NAME, APP_VERSION)} ===")
         create_release_zip(APP_NAME, APP_VERSION, mode=NUITKA_MODE)
 
     print("\n=== 生成项目目录树 ===")

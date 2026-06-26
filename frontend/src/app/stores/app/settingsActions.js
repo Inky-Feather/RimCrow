@@ -122,7 +122,9 @@ export const useSettingsActions = ({
         Object.assign(settings.value, nextSettings)
         applyCurrentTheme()
         syncRemoteImageCache(res.data.remote_image_cache)
+        profileStore.currentProfileId = nextContext?.profile_id || nextSettings.current_profile_id || profileStore.currentProfileId
         profileStore.activeContext = nextContext
+        await profileStore.fetchProfiles()
 
         closeSettingsPanel()
 

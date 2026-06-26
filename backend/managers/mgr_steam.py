@@ -39,7 +39,7 @@ if __name__ == "__main__":
 # 注意：不要在文件顶层 import steamworks，防止主进程意外加载
 # 只在 run_steam_worker 函数内部 import
 from backend.utils.logger import logger
-from backend.settings import BASE_RESOURCE_DIR, HOME_DIR, TOOLS_DIR, settings
+from backend.settings import BASE_RESOURCE_DIR, CACHE_DIR, HOME_DIR, TOOLS_DIR, settings
 from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
@@ -631,7 +631,7 @@ def run_steam_worker(action: str, payload: str):
         print(f"STEAM_WORKSHOP_DETAILS_JSON:{json.dumps(result, ensure_ascii=False)}")
         return
 
-    # 这里的 cwd 已经被主进程设置为了 tools/steam_agent
+    # 这里的 cwd 已经被主进程设置为了 cache/steamworks_runtime
     # 所以直接初始化即可读取到旁边的 steam_appid.txt 和 DLL
     try:
         steam = STEAMWORKS()
@@ -714,11 +714,11 @@ class SteamManager:
         # SteamCMD 路径
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
-        # Steam Agent 路径 (隔离环境)
-        self.agent_dir = str(TOOLS_DIR / "steam_agent")
+        # Steamworks 运行隔离目录，会自动重建，不作为发布资源打包。
+        self.steamworks_runtime_dir = str(CACHE_DIR / "steamworks_runtime")
         # 确保目录存在
         os.makedirs(self.steamcmd_dir, exist_ok=True)
-        os.makedirs(self.agent_dir, exist_ok=True)
+        os.makedirs(self.steamworks_runtime_dir, exist_ok=True)
         # 状态
         self.steamcmd_ready = os.path.exists(self.steamcmd_exe)
         # 文件修改时间记录，减少磁盘 IO
@@ -748,8 +748,8 @@ class SteamManager:
             "checked_at": 0,
             "detail": "",
         }
-        # 准备环境 (只复制 DLL 和 txt，不再生成 py 脚本)
-        self._ensure_agent_environment()
+        # 准备 Steamworks 运行环境，只复制运行库和 appid 文件。
+        self._ensure_steamworks_runtime_environment()
 
     def _get_steamcmd_exe_path(self):
         system = platform.system()
@@ -790,23 +790,23 @@ class SteamManager:
     #  1. 环境准备
     # =========================================================
 
-    def _ensure_agent_environment(self):
+    def _ensure_steamworks_runtime_environment(self):
         """
-        初始化 Agent 环境：
+        初始化 Steamworks 运行环境：
         1. 写入 steam_appid.txt
         2. 复制 SteamworksPy 和 steam_api 运行库
         """
         # 1. 创建 steam_appid.txt
-        appid_path = os.path.join(self.agent_dir, "steam_appid.txt")
+        appid_path = os.path.join(self.steamworks_runtime_dir, "steam_appid.txt")
         if not os.path.exists(appid_path):
             with open(appid_path, "w") as f:
                 f.write(RIMWORLD_STEAM_APP_ID_STR)
 
         target_dll, target_api = _steamworks_library_names()
-        logger.info("正在初始化 Steam Agent 运行库...")
-        self._copy_dlls_to_agent(target_dll, target_api)
+        logger.info("正在初始化 Steamworks 运行库...")
+        self._copy_steamworks_runtime_libraries(target_dll, target_api)
 
-    def _copy_dlls_to_agent(self, dll_name, api_name):
+    def _copy_steamworks_runtime_libraries(self, dll_name, api_name):
         """
         从项目运行时目录、submodule redist 或打包资源中复制 Steamworks 运行库。
         """
@@ -814,8 +814,8 @@ class SteamManager:
         search_dirs: list[str] = []
 
         for base in [TOOLS_DIR / "steamworks", HOME_DIR / "tools" / "steamworks", BASE_RESOURCE_DIR / "tools" / "steamworks"]:
-            search_dirs.append(str(base / platform_dir))
             search_dirs.append(str(base))
+            search_dirs.append(str(base / platform_dir))
 
         for source_dir in STEAMWORKS_PY_SUBMODULE_DIRS:
             search_dirs.extend([
@@ -844,7 +844,7 @@ class SteamManager:
 
         for name in [dll_name, api_name]:
             found = False
-            dst = os.path.join(self.agent_dir, name)
+            dst = os.path.join(self.steamworks_runtime_dir, name)
             for directory in deduped_dirs:
                 src = os.path.join(directory, name)
                 if os.path.exists(src):
@@ -860,9 +860,9 @@ class SteamManager:
                 if os.path.exists(dst):
                     try:
                         os.remove(dst)
-                        logger.warning(f"未找到匹配的新 Steam 运行库 {name}，已移除旧 agent 残留文件: {dst}")
+                        logger.warning(f"未找到匹配的新 Steam 运行库 {name}，已移除旧运行库残留文件: {dst}")
                     except Exception as e:
-                        logger.warning(f"未找到匹配的新 Steam 运行库 {name}，且旧 agent 残留文件移除失败: {dst}, {e}")
+                        logger.warning(f"未找到匹配的新 Steam 运行库 {name}，且旧运行库残留文件移除失败: {dst}, {e}")
                 else:
                     logger.warning(f"在搜索路径中找不到 {name}：{deduped_dirs}")
 
@@ -1215,7 +1215,7 @@ class SteamManager:
 
         return subprocess.run(
             cmd,
-            cwd=self.agent_dir,
+            cwd=self.steamworks_runtime_dir,
             capture_output=True,
             text=True,
             startupinfo=startupinfo,
@@ -1768,10 +1768,10 @@ class SteamManager:
             try:
                 result = self._run_steam_worker(action, payload, timeout_seconds=20.0)
                 if "SUCCESS" not in result.stdout:
-                    logger.error(f"Steam Agent 返回错误：{result.stdout}")
+                    logger.error(f"Steamworks worker 返回错误：{result.stdout}")
                     all_success = False
             except Exception as e:
-                logger.error(f"运行 Steam Agent 失败：{e}")
+                logger.error(f"运行 Steamworks worker 失败：{e}")
                 all_success = False
 
         return all_success

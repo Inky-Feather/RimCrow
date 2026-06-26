@@ -94,16 +94,15 @@ uv run python scripts/setup_steamworks_runtime.py
 脚本会把文件归拢到：
 
 ```text
-tools/steamworks/windows/
-tools/steamworks/linux/
-tools/steamworks/darwin/
+tools/steamworks/
 ```
 
-当前 Windows 可直接复制 `submodules/SteamworksPy/redist/windows/SteamworksPy64.dll`。Linux 和 macOS 的 `SteamworksPy.so` / `SteamworksPy.dylib` 需要在对应平台用 Steamworks SDK 编译后放入同名目录。
+当前 Windows 可直接复制 `submodules/SteamworksPy/redist/windows/SteamworksPy64.dll`。Linux 和 macOS 的 `SteamworksPy.so` / `SteamworksPy.dylib` 需要在对应平台用 Steamworks SDK 编译后放入 `tools/steamworks/`。
 
 说明：
 
 - `tools/` 是本地运行目录，默认不提交到 git。
+- `tools/steamworks/` 只存放 Steamworks 运行库；程序会在 `cache/steamworks_runtime` 自动重建可写运行环境。
 - `SteamworksPy64.dll` 与 `steam_api64.dll` 最好来自同一 Steamworks SDK 版本的编译/redistributable 组合。
 
 ## 启动方式

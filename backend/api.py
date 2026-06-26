@@ -121,7 +121,6 @@ from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
-from backend.ai.ai_service import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 # from backend.managers.mgr_workshop_db_old import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
@@ -341,6 +340,25 @@ class LaunchWarningAction(Enum):
     CANCEL = "cancel"
 
 
+class _LazyAIManager:
+    """延迟创建 AIManager，避免启动时导入 LiteLLM/OpenAI 全家桶。"""
+
+    def __init__(self):
+        self._instance = None
+        self._lock = threading.Lock()
+
+    def _get(self):
+        if self._instance is None:
+            with self._lock:
+                if self._instance is None:
+                    from backend.ai.ai_service import AIManager
+                    self._instance = AIManager()
+        return self._instance
+
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)
+
+
 class API:
     """
     暴露给 pywebview 前端的统一接口类。
@@ -416,7 +434,7 @@ class API:
         self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
-        self.ai_mgr = AIManager()
+        self.ai_mgr = _LazyAIManager()
         self.translation_mgr = TranslationManager(self.ai_mgr)
         self.data_bundle_mgr = DataBundleManager(
             self.profile_mgr,

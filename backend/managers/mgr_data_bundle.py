@@ -6,10 +6,9 @@ import zipfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from backend._version import __version__
-from backend.ai.ai_service import AIManager
 from backend.database.dao import CollectionDAO
 from backend.database.models import GameProfile, GithubModRecord, db
 from backend.utils.bundle_io import (
@@ -26,6 +25,9 @@ from backend.managers.mgr_profile import ProfileManager
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import DATA_DIR, settings
 from backend.utils.tools import normalize_path_for_compare, normalize_path_for_storage
+
+if TYPE_CHECKING:
+    from backend.ai.ai_service import AIManager
 
 
 class DataBundleManager:
@@ -127,7 +129,7 @@ class DataBundleManager:
     def __init__(
         self,
         profile_mgr: ProfileManager,
-        ai_mgr: AIManager,
+        ai_mgr: "AIManager",
         rule_mgr_provider: Callable[[], Any],
     ):
         self.profile_mgr = profile_mgr

@@ -70,15 +70,14 @@ def resolve_sdk_path(raw_path: str) -> Path:
 
 def extract_sdk_files(sdk_path: Path, runtime_dir: Path) -> list[Path]:
     copied: list[Path] = []
+    runtime_dir.mkdir(parents=True, exist_ok=True)
     with ZipFile(sdk_path) as archive:
         names = set(archive.namelist())
-        for platform_name, files in SDK_FILES.items():
-            target_dir = runtime_dir / platform_name
-            target_dir.mkdir(parents=True, exist_ok=True)
+        for files in SDK_FILES.values():
             for source_name, target_name in files.items():
                 if source_name not in names:
                     raise FileNotFoundError(f"SDK zip 缺少必要文件: {source_name}")
-                target_path = target_dir / target_name
+                target_path = runtime_dir / target_name
                 with archive.open(source_name) as source, target_path.open("wb") as target:
                     shutil.copyfileobj(source, target)
                 copied.append(target_path)
@@ -88,15 +87,14 @@ def extract_sdk_files(sdk_path: Path, runtime_dir: Path) -> list[Path]:
 def copy_steamworkspy_files(runtime_dir: Path) -> tuple[list[Path], list[str]]:
     copied: list[Path] = []
     missing: list[str] = []
+    runtime_dir.mkdir(parents=True, exist_ok=True)
     for platform_name, files in STEAMWORKSPY_FILES.items():
-        target_dir = runtime_dir / platform_name
-        target_dir.mkdir(parents=True, exist_ok=True)
         for target_name, candidates in files.items():
             source_path = next((path for path in candidates if path.is_file()), None)
             if not source_path:
                 missing.append(f"{platform_name}/{target_name}")
                 continue
-            target_path = target_dir / target_name
+            target_path = runtime_dir / target_name
             shutil.copy2(source_path, target_path)
             copied.append(target_path)
     return copied, missing
