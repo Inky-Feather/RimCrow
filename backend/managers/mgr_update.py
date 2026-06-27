@@ -1,11 +1,9 @@
 # backend/managers/mgr_update.py
 import glob
 import json
-import platform
 import shutil
 import sys
 import os
-import re
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional, List
 from abc import ABC, abstractmethod
@@ -16,10 +14,11 @@ from backend._version import __version__
 from backend.utils.lanzou_parser import LanzouParser
 from backend.utils.logger import logger
 from backend.utils.restart import PYINSTALLER_ENV_VARS_TO_CLEAR, launch_new_application
-from backend.settings import settings, UPDATE_DIR, backup_config_for_update
+from backend.settings import BASE_RESOURCE_DIR, HOME_DIR, settings, UPDATE_DIR, backup_config_for_update
 from backend.managers.mgr_download import DownloadManager, DownloadTask
 from backend.managers.mgr_github import GithubApiError, GithubManager
 from backend.utils.event_bus import EventBus
+from backend.utils.tools import get_current_package_platform_keywords, get_package_platform_match, has_supported_update_package_name
 
 # 确保缓存目录存在
 os.makedirs(UPDATE_DIR, exist_ok=True)
@@ -135,7 +134,7 @@ class LanzouSource(UpdateSource):
         data = self.parser.get_all_files(self.url, self.pwd)
         if not data:
             raise UpdateSourceError("蓝奏云更新源未返回有效数据")
-        if 'latest' not in data: return None
+        if not data.get('latest'): return None
         
         latest = data['latest']
         remote_v = latest['version']
@@ -157,12 +156,6 @@ class LanzouSource(UpdateSource):
 
 # --- GitHub 源实现 (预留) ---
 class GithubSource(UpdateSource):
-    PLATFORM_ASSET_KEYWORDS = {
-        "windows": ("windows", "win", "win32", "win64"),
-        "darwin": ("macos", "mac", "darwin", "osx"),
-        "linux": ("linux", "ubuntu", "debian", "appimage"),
-    }
-
     def __init__(self, repo: str):
         self.repo = repo
         self.github_mgr = GithubManager()
@@ -209,7 +202,7 @@ class GithubSource(UpdateSource):
     def _select_asset(self, assets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         candidates: List[tuple[int, Dict[str, Any]]] = []
         repo_name = self.repo.rsplit("/", 1)[-1].lower()
-        current_platform, all_platforms = self._asset_platform_keywords()
+        current_platform, _ = self._asset_platform_keywords()
         for asset in assets:
             name = str(asset.get("name") or "").strip()
             download_url = str(asset.get("browser_download_url") or "").strip()
@@ -217,8 +210,8 @@ class GithubSource(UpdateSource):
 
             lower_name = name.lower()
             if not lower_name.endswith(".zip"): continue
-            matches_current_platform = self._has_platform_keyword(lower_name, current_platform)
-            has_known_platform = self._has_platform_keyword(lower_name, all_platforms)
+            if not has_supported_update_package_name(lower_name): continue
+            matches_current_platform, has_known_platform = get_package_platform_match(lower_name)
             if current_platform and not matches_current_platform and has_known_platform: continue
 
             score = 0
@@ -233,17 +226,7 @@ class GithubSource(UpdateSource):
 
     @staticmethod
     def _asset_platform_keywords() -> tuple[tuple[str, ...], tuple[str, ...]]:
-        system = platform.system().strip().lower()
-        current = GithubSource.PLATFORM_ASSET_KEYWORDS.get(system, ())
-        all_keywords = tuple(keyword for values in GithubSource.PLATFORM_ASSET_KEYWORDS.values() for keyword in values)
-        return current, all_keywords
-
-    @staticmethod
-    def _has_platform_keyword(lower_name: str, keywords: tuple[str, ...]) -> bool:
-        for keyword in keywords:
-            if re.search(rf"(^|[-_.]){re.escape(keyword)}(64|32)?($|[-_.])", lower_name):
-                return True
-        return False
+        return get_current_package_platform_keywords()
 
     @staticmethod
     def _normalize_version(raw_version: str) -> str:
@@ -274,6 +257,68 @@ class GithubSource(UpdateSource):
             return f"{size / 1024:.1f} KB"
         return f"{size} B"
 
+
+def _project_meta_candidate_paths() -> List[str]:
+    return [
+        os.path.join(HOME_DIR, "frontend", "public", "project-meta.json"),
+        os.path.join(HOME_DIR, "frontend", "dist", "project-meta.json"),
+        os.path.join(str(BASE_RESOURCE_DIR), "project-meta.json"),
+        os.path.join(str(BASE_RESOURCE_DIR), "frontend", "dist", "project-meta.json"),
+    ]
+
+
+def _load_project_meta() -> Dict[str, Any]:
+    for path in _project_meta_candidate_paths():
+        try:
+            if not os.path.exists(path): continue
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+            logger.warning(f"项目元数据格式无效，已忽略: path={path}")
+        except Exception as e:
+            logger.warning(f"读取项目元数据失败，已忽略: path={path}, error={e}")
+    return {}
+
+
+def _create_configured_update_source(config: Dict[str, Any], default_github_repo: str = "") -> Optional[UpdateSource]:
+    source_type = str(config.get("type") or "").strip().lower()
+    if source_type == "lanzou":
+        folder_url = str(config.get("url") or "").strip()
+        if not folder_url:
+            logger.warning("项目元数据中的蓝奏云更新源缺少 url，已跳过")
+            return None
+        return LanzouSource(folder_url, str(config.get("password") or "").strip())
+    if source_type == "github":
+        repo = str(config.get("repo") or default_github_repo or "").strip()
+        if not repo:
+            logger.warning("项目元数据中的 GitHub 更新源缺少 repo，已跳过")
+            return None
+        return GithubSource(repo)
+    if source_type:
+        logger.warning(f"项目元数据中的更新源类型不支持，已跳过: type={source_type}")
+    return None
+
+
+def _build_configured_update_sources(project_meta: Optional[Dict[str, Any]] = None) -> List[UpdateSource]:
+    meta = project_meta if isinstance(project_meta, dict) else _load_project_meta()
+    project_repo = str((meta.get("project") or {}).get("github_repo") or "").strip()
+    remote_sources: List[UpdateSource] = []
+    for config in (meta.get("update") or {}).get("sources") or []:
+        if not isinstance(config, dict): continue
+        source = _create_configured_update_source(config, project_repo)
+        if source:
+            remote_sources.append(source)
+
+    if not remote_sources:
+        fallback_repo = project_repo or "Inky-Feather/RimCrow"
+        remote_sources = [
+            LanzouSource("https://wwbns.lanzouu.com/b00mq4tqgf", "aite"),
+            GithubSource(fallback_repo),
+        ]
+
+    return [LocalSource(), *remote_sources]
+
 # --- 更新总管 ---
 class UpdateManager:
     _instance = None
@@ -287,12 +332,8 @@ class UpdateManager:
         if self._initialized:
             return
         self._initialized = True
-        self.sources: List[UpdateSource] = [
-            # 优先级：本地文件最先，蓝奏云优先（国内快），GitHub 兜底
-            LocalSource(),
-            LanzouSource("https://wwbns.lanzouu.com/b00mq4tqgf", "aite"),
-            GithubSource("Ink-Feather-362/RimModManager"),
-        ]
+        # 优先级：本地缓存最先；远程源顺序由项目元数据控制，默认仍保持蓝奏云优先、GitHub 兜底。
+        self.sources: List[UpdateSource] = _build_configured_update_sources()
         self.download_mgr = DownloadManager()
         # 内存中暂存当前的更新信息，避免反复 Check
         self.current_update_info: Optional[UpdateInfo] = None
@@ -397,7 +438,7 @@ class UpdateManager:
             except: pass
         
         # 方案 B: 盲猜文件名
-        potential_names = [f"update_v{version_str}.zip", f"RimModManager_v{version_str}.zip"]
+        potential_names = [f"update_v{version_str}.zip", f"RimCrow_v{version_str}.zip", f"RimModManager_v{version_str}.zip"]
         for name in potential_names:
             p = os.path.join(UPDATE_DIR, name)
             if os.path.exists(p): return p

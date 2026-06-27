@@ -1,8 +1,11 @@
 import requests
 import re
 from packaging import version
+from backend.utils.tools import get_package_platform_match, get_current_package_platform_keywords, has_supported_update_package_name
 
 class LanzouParser:
+    UPDATE_FILENAME_PATTERN = re.compile(r"(?<!\d)v?(\d+\.\d+\.\d+)(?!\d)", re.I)
+
     def __init__(self):
         self.session = requests.Session()
         self.session.trust_env = False  # 禁用环境变量代理
@@ -73,28 +76,18 @@ class LanzouParser:
             # 3. 处理并格式化文件列表
             all_files = []
             for f in list_json['text']:
-                # 从文件名提取版本号 vX.X.X
-                name = f['name_all']
-                v_match = re.search(r"v(\d+\.\d+\.\d+)", name)
-                
-                file_info = {
-                    "id": f['id'],
-                    "filename": name,
-                    "size": f['size'],
-                    "time": f['time'],
-                    "version": v_match.group(1) if v_match else "0.0.0",
-                    # "raw_data": f # 保留原始数据备用
-                }
-                all_files.append(file_info)
+                all_files.append(self._build_file_info(f))
 
             if not all_files:
                 self.last_error = "文件夹内无文件"
                 return None
 
-            # 4. 识别最新版本 (Latest)
-            # 使用 version.parse 进行语义化版本排序
-            all_files.sort(key=lambda x: version.parse(x['version']), reverse=True)
-            latest_file = all_files[0]
+            # 4. 识别当前系统可用的最新版本。新版包名带系统标识，旧版包名不带系统标识，两者都兼容。
+            all_files.sort(key=self._file_sort_key, reverse=True)
+            latest_file = self._select_latest_update_file(all_files)
+            if not latest_file:
+                self.last_error = "未找到适合当前系统的更新包"
+                return {"files": all_files, "latest": None}
 
             # 5. 对最新版进行“深度解析”获取直链和更新日志
             self.log_step("LATEST", f"发现最新版本: v{latest_file['version']}，正在解析详情...")
@@ -115,6 +108,61 @@ class LanzouParser:
         except Exception as e:
             self.last_error = f"获取版本列表失败: {str(e)}"
             return None
+
+    def _build_file_info(self, raw_file):
+        name = str(raw_file.get('name_all') or '').strip()
+        package_info = self._parse_update_filename(name)
+        return {
+            "id": raw_file.get('id'),
+            "filename": name,
+            "size": raw_file.get('size'),
+            "time": raw_file.get('time'),
+            "version": package_info["version"] if package_info else "0.0.0",
+            "is_update_package": bool(package_info),
+            "platform_compatible": package_info["platform_compatible"] if package_info else False,
+            "platform_matched": package_info["platform_matched"] if package_info else False,
+        }
+
+    def _parse_update_filename(self, filename):
+        lower_name = str(filename or "").strip().lower()
+        if not lower_name.endswith(".zip"):
+            return None
+        if not has_supported_update_package_name(lower_name):
+            return None
+
+        version_match = self.UPDATE_FILENAME_PATTERN.search(lower_name)
+        if not version_match:
+            return None
+        version_text = version_match.group(1)
+        try:
+            version.parse(version_text)
+        except Exception:
+            return None
+
+        current_keywords, _ = get_current_package_platform_keywords()
+        matches_current_platform, has_known_platform = get_package_platform_match(lower_name)
+        if current_keywords and has_known_platform and not matches_current_platform:
+            return None
+
+        return {
+            "version": version_text,
+            "platform_compatible": True,
+            "platform_matched": matches_current_platform,
+        }
+
+    def _select_latest_update_file(self, all_files):
+        candidates = [item for item in all_files if item.get("is_update_package") and item.get("platform_compatible")]
+        if not candidates:
+            return None
+        return max(candidates, key=self._file_sort_key)
+
+    @staticmethod
+    def _file_sort_key(file_info):
+        try:
+            parsed_version = version.parse(str(file_info.get("version") or "0.0.0"))
+        except Exception:
+            parsed_version = version.parse("0.0.0")
+        return (parsed_version, 1 if file_info.get("platform_matched") else 0)
 
     def get_file(self, url):
         """

@@ -95,6 +95,7 @@
               />
               <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
+              <SettingsAboutTab v-if="currentTab === 'about'" :form-data="formData" />
 
             </div>
           </div>
@@ -114,7 +115,7 @@
 
 <script setup>
 import { ref, watch, h, computed } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard, Info } from 'lucide-vue-next'
 import { shakeComponent } from '../../shared/lib/domEffects'
 import { toast } from '../../shared/lib/common'
 import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
@@ -129,6 +130,7 @@ import SettingsExternalTab from './panel/SettingsExternalTab.vue'
 import SettingsNetworkTab from './panel/SettingsNetworkTab.vue'
 import SettingsAiTab from './panel/SettingsAiTab.vue'
 import SettingsDevTab from './panel/SettingsDevTab.vue'
+import SettingsAboutTab from './panel/SettingsAboutTab.vue'
 import { DEFAULT_THEME_ID, applyTheme } from './theme/themeManager'
 import { useAppStore } from '../../app/stores/appStore'
 import { useProfileStore } from '../profiles/profileStore'
@@ -167,6 +169,7 @@ const tabs = [
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
+  { id: 'about', label: '关于项目', icon: Info },
 ]
 const SECRET_FIELD_PATHS = {
   'ai.api_key': 'ai.api_key',

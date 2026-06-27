@@ -1,4 +1,5 @@
 import os
+import platform
 import re
 import shutil
 import time
@@ -41,6 +42,43 @@ def normalize_text(value: Any, default: str = "") -> str:
 def normalize_string_list(values: list[Any] | tuple[Any, ...] | None) -> list[str]:
     normalized = [normalize_text(value) for value in values or []]
     return _dedupe_preserve_order([value for value in normalized if value])
+
+
+PACKAGE_PLATFORM_KEYWORDS = {
+    "windows": ("windows", "win", "win32", "win64"),
+    "darwin": ("macos", "mac", "darwin", "osx"),
+    "linux": ("linux", "ubuntu", "debian", "appimage"),
+}
+SUPPORTED_UPDATE_PACKAGE_NAMES = ("rimcrow", "rimmodmanager")
+
+
+def get_current_package_platform_keywords(system_name: str | None = None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """返回当前系统包名关键字，以及所有已知系统关键字。"""
+    normalized_system = str(system_name or platform.system() or "").strip().lower()
+    current = PACKAGE_PLATFORM_KEYWORDS.get(normalized_system, ())
+    all_keywords = tuple(keyword for values in PACKAGE_PLATFORM_KEYWORDS.values() for keyword in values)
+    return current, all_keywords
+
+
+def has_package_platform_keyword(filename: Any, keywords: tuple[str, ...]) -> bool:
+    """按文件名分隔符匹配系统标识，避免 `mac` 误命中普通单词内部。"""
+    lower_name = str(filename or "").strip().lower()
+    for keyword in keywords:
+        if re.search(rf"(^|[-_.\s]){re.escape(keyword)}(64|32)?($|[-_.\s])", lower_name):
+            return True
+    return False
+
+
+def get_package_platform_match(filename: Any, system_name: str | None = None) -> tuple[bool, bool]:
+    """返回 `(是否匹配当前系统, 是否带有已知系统标识)`。"""
+    current_keywords, all_keywords = get_current_package_platform_keywords(system_name)
+    return has_package_platform_keyword(filename, current_keywords), has_package_platform_keyword(filename, all_keywords)
+
+
+def has_supported_update_package_name(filename: Any) -> bool:
+    """识别当前更新包名，兼容旧版 RimModManager 包名。"""
+    normalized_name = re.sub(r"[^a-z0-9]+", "", str(filename or "").strip().lower())
+    return any(package_name in normalized_name for package_name in SUPPORTED_UPDATE_PACKAGE_NAMES)
 
 
 def normalize_path_for_storage(path: Any) -> str:

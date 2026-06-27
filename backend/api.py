@@ -4290,6 +4290,15 @@ class API:
         return ApiResponse.success()
 
     @log_api_call
+    def open_external_url(self, url=''):
+        """强制在系统默认浏览器中打开链接。"""
+        target_url = str(url or "").strip()
+        if not target_url:
+            return ApiResponse.error("没有可打开的网址。")
+        webbrowser.open(target_url)
+        return ApiResponse.success({"url": target_url})
+
+    @log_api_call
     def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
         normalized_action = str(action or "").strip().lower()
         normalized_workshop_id = str(workshop_id or "").strip()

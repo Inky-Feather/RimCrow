@@ -53,3 +53,4 @@ temp*.vue
 build/
 temp/
 .gitnexus
+frontend/src/shared/branding/private-assets/
