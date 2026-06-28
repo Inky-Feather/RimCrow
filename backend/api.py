@@ -77,6 +77,7 @@ from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
+from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.browser_runtime import build_sub_browser_target_url
@@ -246,6 +247,11 @@ class API:
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
         self.ai_mgr = AIManager()
+        self.data_bundle_mgr = DataBundleManager(
+            self.profile_mgr,
+            self.ai_mgr,
+            rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
+        )
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
@@ -1098,6 +1104,95 @@ class API:
         except Exception as e:
             logger.error(f"Save all settings failed: {str(e)}", exc_info=True)
             return ApiResponse.error(f"保存所有设置失败：{str(e)}")
+
+    @log_api_call
+    def data_bundle_get_schema(self):
+        """获取统一导入导出模块定义与环境清单。"""
+        try:
+            return ApiResponse.success(self.data_bundle_mgr.get_schema())
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def data_bundle_inspect(self, bundle_path: str):
+        """读取数据包摘要，供前端在导入前展示确认信息。"""
+        try:
+            return ApiResponse.success(self.data_bundle_mgr.inspect_bundle(bundle_path))
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def data_bundle_export(self, payload: dict | None = None):
+        """导出统一软件数据包。"""
+        payload = payload or {}
+        try:
+            module_keys = list(payload.get("module_keys") or [])
+            profile_ids = list(payload.get("profile_ids") or [])
+            preset = str(payload.get("preset") or "custom").strip() or "custom"
+            dynamic_rule_ids = payload.get("dynamic_rule_ids")
+            suggested_name = str(payload.get("filename") or "").strip()
+            if not suggested_name:
+                if preset == "rules":
+                    suggested_name = f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
+                else:
+                    suggested_name = f"RimModManager_Data_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
+            if not suggested_name.lower().endswith(DataBundleManager.FILE_EXTENSION):
+                suggested_name = f"{suggested_name}{DataBundleManager.FILE_EXTENSION}"
+
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=str(DATA_DIR),
+                default_filename=suggested_name,
+                file_types=(
+                    f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION})',
+                    'ZIP Files (*.zip)',
+                    'All Files (*.*)',
+                ),
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+
+            export_result = self.data_bundle_mgr.write_bundle(
+                target_path=target_path,
+                module_keys=module_keys,
+                profile_ids=profile_ids,
+                preset=preset,
+                dynamic_rule_ids=dynamic_rule_ids,
+            )
+            return ApiResponse.success(export_result, message="导出成功")
+        except Exception as e:
+            logger.error(f"Data bundle export failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def data_bundle_import(self, bundle_path: str, payload: dict | None = None):
+        """导入统一软件数据包。"""
+        payload = payload or {}
+        try:
+            module_keys = payload.get("module_keys")
+            default_profile_mode = str(payload.get("default_profile_mode") or "clone").strip().lower() or "clone"
+            import_result = self.data_bundle_mgr.import_bundle(
+                bundle_path,
+                module_keys=module_keys,
+                default_profile_mode=default_profile_mode,
+            )
+
+            network_mgr.apply()
+            if any(profile.get("mode") == "overwrite-default" for profile in import_result.get("profiles", [])):
+                if settings.config.current_profile_id == "default":
+                    self._bootstrap_context("default")
+
+            response_data = {
+                "result": import_result,
+                "settings": asdict(settings.config),
+                "active_context": self.active_context,
+            }
+            message = "导入成功"
+            if import_result.get("warnings"):
+                message = f'导入完成，附带 {len(import_result["warnings"])} 条提示'
+            return ApiResponse.success(response_data, message=message)
+        except Exception as e:
+            logger.error(f"Data bundle import failed: {e}", exc_info=True)
+            return ApiResponse.error(f"导入失败: {e}")
     
     @log_api_call
     def guide_mark_as_done(self, guide_key: str):
@@ -2685,49 +2780,37 @@ class API:
     @log_api_call
     def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = ''):
         """
-        弹出对话框并导出
-        file_types 在前端调用时也可以不传，这里给默认值
+        规则中心导出入口。
+        界面保持不变，底层改为统一数据包的规则预设。
         """
-        if not self.sorter or not self.sorter.rule_mgr:
-            return ApiResponse.error("规则引擎未初始化")
-        try:
-            bundle = self.sorter.rule_mgr.create_export_bundle(dynamic_rule_ids)
-            if not initial_dir: initial_dir = str(RULES_DIR)
-            # 使用时间戳作为默认文件名
-            default_name = f"RimOrder_Rules_{datetime.now().strftime('%Y%m%d')}.json"
-            # 注意: file_types 参数格式需要符合 pywebview 的要求
-            path = file_mgr.save_file_dialog(
-                initial_dir=initial_dir, 
-                default_filename=default_name, 
-                file_types=('JSON Files (*.json)', 'All Files (*.*)')
-            )
-            
-            if path:
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump(bundle, f, indent=4, ensure_ascii=False)
-                return ApiResponse.success(message="导出成功")
-            return ApiResponse.warning("已取消")
-        except Exception as e:
-            logger.error(f"Export failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+        return self.data_bundle_export({
+            "preset": "rules",
+            "module_keys": list(DataBundleManager.RULE_PRESET),
+            "dynamic_rule_ids": list(dynamic_rule_ids or []),
+            "filename": f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}",
+        })
 
     @log_api_call
     def rule_import_bundle(self):
-        """弹出对话框并导入"""
-        if not self.sorter or not self.sorter.rule_mgr:
-            return ApiResponse.error("规则引擎未初始化")
+        """规则中心导入入口，同时兼容旧版 JSON 规则包。"""
         try:
-            path = file_mgr.select_file_dialog(file_types=('JSON Files (*.json)',))
+            path = file_mgr.select_file_dialog(file_types=(
+                f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION};*.json;*.zip)',
+                'JSON Files (*.json)',
+                'ZIP Files (*.zip)',
+                'All Files (*.*)',
+            ))
             if path:
-                with open(path, 'r', encoding='utf-8') as f:
-                    bundle = json.load(f)
-                
-                result = self.sorter.rule_mgr.process_import_bundle(bundle) or {}
-                warnings = result.get("warnings", [])
+                import_result = self.data_bundle_mgr.import_bundle(
+                    path,
+                    module_keys=list(DataBundleManager.RULE_PRESET),
+                    default_profile_mode="clone",
+                )
+                warnings = import_result.get("warnings", [])
                 message = "规则包导入成功"
                 if warnings:
-                    message = f"规则包导入成功，已校正 {len(warnings)} 条动态规则异常。"
-                return ApiResponse.success(data=result, message=message)
+                    message = f"规则包导入成功，附带 {len(warnings)} 条提示。"
+                return ApiResponse.success(data=import_result, message=message)
             return ApiResponse.warning("已取消")
         except Exception as e:
             logger.error(f"Import failed: {e}", exc_info=True)

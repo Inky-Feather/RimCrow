@@ -39,6 +39,8 @@ def run_app_upgrade_migrations(last_version: str, current_version: str, ai_mgr=N
 
     if LooseVersion(last_version) < LooseVersion("0.19.8"):
         _migrate_legacy_default_profile_user_data_path()
+
+    if LooseVersion(last_version) < LooseVersion("0.19.21"):
         _migrate_legacy_launch_preference_to_default_profile()
 
     result.pending_actions.append("show_update_news")
@@ -79,16 +81,15 @@ def _migrate_legacy_default_profile_user_data_path():
 
 def _migrate_legacy_launch_preference_to_default_profile():
     """
-    将旧版全局 prefer_steam_launch 迁移到默认环境字段。
+    将 0.19.21 之前版本的默认环境 prefer_steam_launch 统一修正为 True。
     这里不再额外写入数据库标记，原因是：
-    1. 该迁移只会在应用版本从 < 0.19.8 升级时进入；
+    1. 该迁移只会在应用版本从 < 0.19.21 升级时进入；
     2. 升级完成后 app_version 会被持久化，新版本重复启动不会再次走到这里；
     3. 因此版本门槛本身已经足够表达“一次性迁移”语义，避免再维护冗余状态。
     """
-    legacy_value = getattr(settings, '_legacy_prefer_steam_launch', None)
     default_profile = GameProfile.get_or_none(GameProfile.id == 'default')
     if default_profile:
-        target_value = bool(legacy_value) if legacy_value is not None else True
+        target_value = True
         if bool(getattr(default_profile, 'prefer_steam_launch', False)) != target_value:
             default_profile.prefer_steam_launch = target_value
             default_profile.save()

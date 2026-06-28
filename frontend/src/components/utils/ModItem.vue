@@ -492,7 +492,7 @@ const handleContextMenu = async (event) => {
     const _selectedCountStr2 = workshop_ids.length>1?` (${workshop_ids.length}项)`:''
     singleMenuItems.push(
       { label: '缺失处理', icon: CircleFadingPlus, children:[
-        { label: '移除缺失项'+ _selectedCountStr, icon: Eraser, action: () => modStore.runListHistoryTransaction({ type: 'remove-missing-items', label: `移除 ${package_ids.length} 个缺失项`, trackedModIds: package_ids }, async () => modStore.removeIdsOnAllList(package_ids)) },
+        { label: '移除缺失项'+ _selectedCountStr, icon: Eraser, action: () => modStore.runListHistoryTransaction({ type: 'remove-missing-items', label: `移除 ${package_ids.length} 个缺失项`, trackedModIds: package_ids }, async () => modStore.removeUnavailableIdsCompletely(package_ids)) },
         { label: '订阅缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
         { label: '下载缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
       ]}

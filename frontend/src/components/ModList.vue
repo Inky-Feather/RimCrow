@@ -183,7 +183,7 @@
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2"
           :data-tour="listId=='active'?'list-quick-actions':null">
-          <button v-if="props.listId === 'active' && (missingInstallSummary.installableTotal > 0 || missingInstallSummary.optionalInstallTotal > 0)" @click="openMissingInstallDialog()"
+          <button v-if="props.listId === 'active' && (missingInstallSummary.requiredInstallTotal > 0 || missingInstallSummary.optionalInstallTotal > 0 || missingInstallSummary.unknownTotal > 0)" @click="openMissingInstallDialog()"
             v-tooltip="missingInstallTooltip"
             class="px-1 py-1 rounded-md transition-all"
             :class="missingInstallButtonClass" >
@@ -385,24 +385,20 @@ const searchHelpText = computed(() => {
 })
 
 const missingInstallSummary = ref({
-  missingTotal: 0,
-  installableTotal: 0,
+  requiredInstallTotal: 0,
   unknownTotal: 0,
   optionalInstallTotal: 0,
   actionableTotal: 0,
-  alreadyInstalledReplacementTotal: 0,
 })
 let missingInstallSummarySeq = 0
 const refreshMissingInstallSummary = async () => {
   const seq = ++missingInstallSummarySeq
   if (props.listId !== 'active') {
     missingInstallSummary.value = {
-      missingTotal: 0,
-      installableTotal: 0,
+      requiredInstallTotal: 0,
       unknownTotal: 0,
       optionalInstallTotal: 0,
       actionableTotal: 0,
-      alreadyInstalledReplacementTotal: 0,
     }
     return
   }
@@ -416,35 +412,41 @@ watch(
   { immediate: true }
 )
 const missingInstallTooltip = computed(() => {
-  if ((missingInstallSummary.value.installableTotal || 0) + (missingInstallSummary.value.optionalInstallTotal || 0) === 0) {
+  if ((missingInstallSummary.value.requiredInstallTotal || 0) + (missingInstallSummary.value.optionalInstallTotal || 0) + (missingInstallSummary.value.unknownTotal || 0) === 0) {
     return '当前没有可处理的安装项'
   }
   const lines = []
-  if (missingInstallSummary.value.installableTotal > 0) {
-    lines.push(`[[缺失安装 ${missingInstallSummary.value.installableTotal} 项]]`)
+  if (missingInstallSummary.value.requiredInstallTotal > 0) {
+    lines.push(`[[直接可装 ${missingInstallSummary.value.requiredInstallTotal} 项]]`)
+  } else if (missingInstallSummary.value.unknownTotal > 0) {
+    lines.push(`!!未知来源 ${missingInstallSummary.value.unknownTotal} 项!!`)
   } else if (missingInstallSummary.value.optionalInstallTotal > 0) {
     lines.push(`^^仅可选安装 ${missingInstallSummary.value.optionalInstallTotal} 项^^`)
   }
-  if (missingInstallSummary.value.installableTotal > 0) {
-    lines.push(`• 可安装: ${missingInstallSummary.value.installableTotal}`)
+  if (missingInstallSummary.value.requiredInstallTotal > 0) {
+    lines.push(`• 直接可装: ${missingInstallSummary.value.requiredInstallTotal}`)
   }
   if (missingInstallSummary.value.optionalInstallTotal > 0) {
     lines.push(`• 可选安装: ${missingInstallSummary.value.optionalInstallTotal}`)
   }
-  if (missingInstallSummary.value.alreadyInstalledReplacementTotal > 0) {
-    lines.push(`• 已装替代: ${missingInstallSummary.value.alreadyInstalledReplacementTotal}`)
+  if (missingInstallSummary.value.unknownTotal > 0) {
+    lines.push(`• 未知来源: ${missingInstallSummary.value.unknownTotal}`)
   }
   lines.push('')
   lines.push('__[[(点击打开安装处理窗口)]]__')
   return lines.join('\n')
 })
 const missingInstallButtonClass = computed(() => {
+  if (missingInstallSummary.value.requiredInstallTotal > 0 || missingInstallSummary.value.unknownTotal > 0) {
+    return 'bg-accent-danger/80 text-text-main/60 hover:bg-accent-danger hover:text-text-main'
+  }
   const hasOnlyOptionalInstall = missingInstallSummary.value.optionalInstallTotal > 0
-    && missingInstallSummary.value.installableTotal === 0
+    && missingInstallSummary.value.requiredInstallTotal === 0
+    && missingInstallSummary.value.unknownTotal === 0
   if (hasOnlyOptionalInstall) {
     return 'bg-accent-warn/80 text-text-main/60 hover:bg-accent-warn hover:text-text-main'
   }
-  return 'bg-accent-danger/80 text-text-main/60 hover:bg-accent-danger hover:text-text-main'
+  return 'bg-accent-primary/80 text-text-main/60 hover:bg-accent-primary hover:text-text-main'
 })
 const supplementSummary = computed(() => {
   if (props.listId !== 'active') return { groups: [], count: 0, requiredCount: 0, optionalCount: 0, urgency: 'none' }
@@ -966,7 +968,7 @@ const openSupplementDialog = async () => {
   if (props.listId !== 'active') return
   await supplementStore.openForActiveList({
     activeIds: props.modelValue,
-    message: '你可以按组多选、全选后启用选中项。未确认前不会修改当前序列。',
+    message: '选择要启用的模组。',
   })
 }
 const dispatchSyntheticDragEnd = () => {
@@ -1121,7 +1123,7 @@ const removeInvalidMod = async () => {
     label: `移除 ${invalidMods.length} 个无效 Mod`,
     trackedModIds: invalidMods
   }, async () => {
-    modStore.removeIdsOnAllList(invalidMods)
+    modStore.removeUnavailableIdsCompletely(invalidMods)
   })
   await nextTick()
   // 通过翻转排序两次，实现软重绘

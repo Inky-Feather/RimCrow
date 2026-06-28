@@ -463,6 +463,30 @@
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" :min="0" :max="365" />
                   </div>
+                  <div class="p-4 rounded-2xl bg-accent-primary/5 border border-accent-primary/20">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="min-w-0">
+                        <h4 class="text-sm font-bold text-text-main">软件数据迁移</h4>
+                        <p class="text-xs text-text-dim/80 leading-relaxed mt-1">
+                          导入现有数据包，或打开导出面板选择要打包的软件数据。环境数据会包含对应环境的完整目录。
+                        </p>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <button
+                          @click="handleImportDataBundle"
+                          class="px-3 py-1.5 rounded-lg bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-xs font-bold transition-all"
+                        >
+                          直接导入
+                        </button>
+                        <button
+                          @click="openDataBundleModal"
+                          class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-black text-xs font-black shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all"
+                        >
+                          导出软件数据
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
                     <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
                     <p class="text-xs text-accent-danger/60 leading-relaxed">修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。</p>
@@ -502,11 +526,132 @@
       </div>
     </div>
   </transition>
+
+  <Teleport to="body">
+    <transition name="panel-fade">
+      <div
+        v-if="showDataBundleModal && appStore.uiState.showSettingsPanel"
+        class="fixed inset-0 z-[120] flex items-center justify-center bg-bg-deep/70 backdrop-blur-md"
+        @click.self="closeDataBundleModal"
+      >
+        <div class="relative w-[min(920px,92vw)] max-h-[84vh] flex flex-col overflow-hidden rounded-4xl border border-accent-primary/20 bg-bg-deep/95 shadow-[0_0_50px_rgba(0,0,0,0.65)]">
+          <div class="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-accent-primary/10 blur-[90px] pointer-events-none"></div>
+          <div class="absolute -bottom-20 -right-16 w-56 h-56 rounded-full bg-accent-special/10 blur-[90px] pointer-events-none"></div>
+
+          <header class="relative z-10 flex items-center justify-between gap-4 px-5 py-4 border-b border-text-main/8">
+            <div class="min-w-0">
+              <h3 class="text-lg font-black text-text-main">导出软件数据</h3>
+              <p class="text-xs text-text-dim/80 leading-relaxed mt-1">
+                勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。
+              </p>
+            </div>
+            <button
+              @click="closeDataBundleModal"
+              class="shrink-0 flex items-center justify-center size-9 rounded-full bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-text-dim hover:text-text-main transition-all"
+              aria-label="关闭导出面板"
+            >
+              <X class="size-4" />
+            </button>
+          </header>
+
+          <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
+            <div class="grid grid-cols-3 gap-3">
+              <label
+                v-for="module in bundleModuleDefs"
+                :key="module.key"
+                class="rounded-xl border px-3 py-2.5 transition-all"
+                :class="dataBundleModuleSelection[module.key] ? 'border-accent-primary/40 bg-accent-primary/10' : 'border-text-main/10 bg-black/20 hover:border-text-main/20'"
+              >
+                <div class="flex items-center gap-2">
+                  <input
+                    :checked="!!dataBundleModuleSelection[module.key]"
+                    type="checkbox"
+                    class="accent-accent-primary"
+                    @change="toggleDataBundleModule(module.key, $event.target.checked)"
+                  >
+                  <span class="text-sm font-bold text-text-main">{{ module.label }}</span>
+                  <button
+                    v-if="buildBundleModuleTooltip(module)"
+                    type="button"
+                    class="ml-auto size-5 rounded-full border border-text-main/10 text-[11px] font-bold text-text-dim hover:text-text-main hover:border-text-main/20 transition-all"
+                    v-tooltip="buildBundleModuleTooltip(module)"
+                    @click.prevent
+                  >
+                    ?
+                  </button>
+                </div>
+              </label>
+            </div>
+
+            <div v-if="isBundleProfileModuleSelected" class="mt-4 rounded-2xl bg-black/18">
+              <button
+                @click="showBundleProfilePicker = !showBundleProfilePicker"
+                class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+              >
+                <div>
+                  <div class="text-sm font-bold text-text-main">环境数据</div>
+                  <div class="text-xs text-text-dim/75 mt-1">选择要打包的环境。</div>
+                </div>
+                <span class="text-xs font-bold text-accent-primary">
+                  {{ showBundleProfilePicker ? '收起' : '展开' }}
+                </span>
+              </button>
+
+              <div v-if="showBundleProfilePicker" class="px-4 pb-4">
+                <div class="grid grid-cols-2 gap-3">
+                  <label
+                    v-for="profile in bundleProfileDefs"
+                    :key="profile.id"
+                    class="rounded-xl border p-3 transition-all"
+                    :class="profile.has_user_data ? 'border-text-main/10 bg-black/15 hover:border-text-main/20' : 'border-accent-danger/20 bg-accent-danger/8 opacity-60'"
+                  >
+                    <div class="flex items-start gap-3">
+                      <input
+                        v-model="dataBundleProfileSelection"
+                        :disabled="!profile.has_user_data"
+                        :value="profile.id"
+                        type="checkbox"
+                        class="mt-0.5 accent-accent-primary"
+                      >
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-sm font-bold text-text-main">{{ profile.name }}</span>
+                          <span v-if="profile.is_default" class="text-[10px] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight">默认</span>
+                          <span v-if="profile.game_version" class="text-[10px] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary">{{ profile.game_version }}</span>
+                        </div>
+                        <p class="text-xs text-text-dim/80 mt-1">
+                          {{ profile.has_user_data ? (profile.description || '将打包整个环境目录') : '未检测到可打包的用户数据目录' }}
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="relative z-10 flex items-center justify-between gap-4 px-5 py-4 border-t border-text-main/8 bg-black/15">
+            <p class="text-xs leading-relaxed text-text-dim/85">
+              <span class="text-accent-primary font-bold">环境数据</span> 会打包整个环境目录；
+              <span class="text-accent-tip font-bold">路径绑定、敏感信息、当前激活环境 ID</span> 不会导出。
+              <span class="text-accent-warn font-bold">默认环境</span> 导入时会先询问覆盖还是另存。
+            </p>
+            <button
+              @click="handleExportDataBundle"
+              class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-black text-sm font-black shadow-[0_0_18px_rgba(6,182,212,0.24)] transition-all"
+            >
+              导出当前选择
+            </button>
+          </footer>
+        </div>
+      </div>
+    </transition>
+  </Teleport>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle, X } from 'lucide-vue-next'
 import { createToastInterface } from 'vue-toastification'
 import { flashComponent, shakeComponent } from '../utils/uiHelper'
 import { VueDraggable } from 'vue-draggable-plus'
@@ -568,6 +713,98 @@ const downloadState = ref({
 })
 const currentAiProviders = ref([])  // AI厂商或代理协议列表
 const currentAiModels = ref([])     // 当前AI的模型列表
+const dataBundleSchema = ref({
+  modules: [],
+  profiles: [],
+  presets: {},
+  file_extension: '.rmmdata',
+})
+const showDataBundleModal = ref(false)
+const showBundleProfilePicker = ref(false)
+const dataBundleModuleSelection = ref({})
+const dataBundleProfileSelection = ref([])
+
+const bundleModuleDefs = computed(() => dataBundleSchema.value?.modules || [])
+const bundleProfileDefs = computed(() => dataBundleSchema.value?.profiles || [])
+const selectedBundleModuleKeys = computed(() => (
+  bundleModuleDefs.value
+    .filter(module => !!dataBundleModuleSelection.value?.[module.key])
+    .map(module => module.key)
+))
+const isBundleProfileModuleSelected = computed(() => !!dataBundleModuleSelection.value?.profiles)
+
+const resetDataBundleSelections = () => {
+  dataBundleModuleSelection.value = Object.fromEntries(
+    bundleModuleDefs.value.map(module => [module.key, false])
+  )
+  dataBundleProfileSelection.value = []
+}
+
+const ensureModuleEnabled = (moduleKey, selection) => {
+  const target = bundleModuleDefs.value.find(module => module.key === moduleKey)
+  if (!target) return
+  selection[moduleKey] = true
+  for (const dependencyKey of target.dependencies || []) {
+    ensureModuleEnabled(dependencyKey, selection)
+  }
+}
+
+const disableModuleAndDependents = (moduleKey, selection) => {
+  selection[moduleKey] = false
+  const dependentKeys = bundleModuleDefs.value
+    .filter(module => (module.dependencies || []).includes(moduleKey))
+    .map(module => module.key)
+  for (const dependentKey of dependentKeys) {
+    disableModuleAndDependents(dependentKey, selection)
+  }
+}
+
+const toggleDataBundleModule = (moduleKey, enabled) => {
+  const nextSelection = { ...(dataBundleModuleSelection.value || {}) }
+  if (enabled) {
+    ensureModuleEnabled(moduleKey, nextSelection)
+  } else {
+    disableModuleAndDependents(moduleKey, nextSelection)
+  }
+  dataBundleModuleSelection.value = nextSelection
+  if (!nextSelection.profiles) {
+    dataBundleProfileSelection.value = []
+    showBundleProfilePicker.value = false
+  } else if (moduleKey === 'profiles' && enabled) {
+    showBundleProfilePicker.value = true
+  }
+}
+
+const loadDataBundleSchema = async () => {
+  const schema = await appStore.getDataBundleSchema()
+  if (!schema) return
+  dataBundleSchema.value = schema
+  resetDataBundleSelections()
+}
+
+const openDataBundleModal = async () => {
+  if (!bundleModuleDefs.value.length) {
+    await loadDataBundleSchema()
+  }
+  showDataBundleModal.value = true
+}
+
+const closeDataBundleModal = () => {
+  showDataBundleModal.value = false
+}
+
+const buildBundleModuleTooltip = (module) => {
+  const lines = []
+  if (module?.description) {
+    lines.push(module.description)
+  }
+  const dependencyLabels = (module?.dependencies || [])
+    .map(key => bundleModuleDefs.value.find(item => item.key === key)?.label || key)
+  if (dependencyLabels.length) {
+    lines.push(`依赖：${dependencyLabels.join('、')}`)
+  }
+  return lines.join('\n')
+}
 
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
@@ -590,6 +827,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       }
       // 检测所有路径是否有效
       await checkPaths()
+      await loadDataBundleSchema()
       // 如果 AI 已启用，且面板刚打开，加载初始的厂商和模型列表
       if (formData.value.ai) {
         await loadAiProviders()
@@ -598,6 +836,9 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
         }
       }
     })
+  } else {
+    showDataBundleModal.value = false
+    showBundleProfilePicker.value = false
   }
 })
 
@@ -765,6 +1006,90 @@ const handleCheckExternalData = async () => {
 
 const handleCheckSteamcmdMods = async () => {
   await appStore.checkSteamcmdModUpdates({ manual: true, prompt: true })
+}
+
+const handleExportDataBundle = async () => {
+  const moduleKeys = selectedBundleModuleKeys.value
+  if (moduleKeys.length === 0) {
+    toast.warning('请至少勾选一个要导出的数据模块')
+    return
+  }
+  if (moduleKeys.includes('profiles') && dataBundleProfileSelection.value.length === 0) {
+    toast.warning('已勾选环境数据，请至少选择一个环境')
+    return
+  }
+
+  const exported = await appStore.exportDataBundle({
+    preset: 'custom',
+    module_keys: moduleKeys,
+    profile_ids: dataBundleProfileSelection.value,
+  })
+  if (exported) {
+    closeDataBundleModal()
+  }
+}
+
+const buildBundleInspectMessage = (inspect) => {
+  const moduleLines = (inspect?.modules || []).map(module => `• ${module.label || module.key}`)
+  const profileLines = (inspect?.profiles || []).map(profile => {
+    const gameVersion = profile.game_version ? ` [${profile.game_version}]` : ''
+    const defaultTag = profile.original_profile_id === 'default' ? '（默认环境）' : ''
+    return `• ${profile.name || profile.original_profile_id}${gameVersion}${defaultTag}`
+  })
+
+  const lines = [
+    `格式：${inspect?.legacy_rule_bundle ? '旧版规则包' : '统一数据包'}`,
+    inspect?.exported_at ? `导出时间：${inspect.exported_at}` : '',
+    '',
+    '包含模块：',
+    ...(moduleLines.length ? moduleLines : ['- 无']),
+  ]
+  if (profileLines.length > 0) {
+    lines.push('', '包含环境：', ...profileLines)
+  }
+  lines.push('', '确认继续导入吗？')
+  return lines.filter(Boolean).join('<br>')
+}
+
+const handleImportDataBundle = async () => {
+  const bundlePath = await appStore.getFilePath('', [
+    `RMM Data Package (*${dataBundleSchema.value?.file_extension || '.rmmdata'};*.json;*.zip)`,
+    'All Files (*.*)',
+  ])
+  if (!bundlePath) return
+
+  const inspect = await appStore.inspectDataBundle(bundlePath)
+  if (!inspect) return
+
+  const summaryMessage = buildBundleInspectMessage(inspect)
+  let defaultProfileMode = 'clone'
+
+  if (inspect.has_default_profile) {
+    const choice = await confirmStore.open({
+      title: '检测到默认环境数据',
+      message: `${summaryMessage}<br><br>导入默认环境时，是否覆盖当前默认环境？`,
+      mode: 'confirm',
+      type: 'warning',
+      isHtml: true,
+      actionButtons: [
+        { label: '默认环境另存为新环境', value: 'clone', kind: 'primary' },
+        { label: '覆盖当前默认环境', value: 'overwrite', kind: 'danger' },
+        { label: '取消', value: 'cancel', kind: 'secondary' },
+      ],
+    })
+    if (!choice || choice === 'cancel') return
+    defaultProfileMode = choice
+  } else {
+    const ok = await confirmStore.confirmAction('确认导入软件数据', summaryMessage, { type: 'warning', isHtml: true })
+    if (!ok) return
+  }
+
+  const imported = await appStore.importDataBundle(bundlePath, {
+    default_profile_mode: defaultProfileMode,
+  })
+  if (imported) {
+    closeDataBundleModal()
+  }
 }
 
 // ====== 数据处理 ======

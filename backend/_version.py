@@ -1,11 +1,20 @@
 # backend/_version.py
-__version__ = "0.19.21"  # 主版本.次版本.补丁
+__version__ = "0.19.22"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.19.22",
+        "date": "2026-04-29",
+        "changes": [
+            { "type": "feature", "text": "支持软件数据导出导入，支持设置、提示词、规则及环境数据的模块化打包，并向下兼容旧版规则数据格式。" },
+            { "type": "feature", "text": "增强缺失组件的识别与引导能力，支持展示未知来源项列表并细化安装统计口径。修正了上个版本特殊情况下无法继续操作的问题。" },
+            { "type": "optimize", "text": "完善模组清理机制，并优化交互弹窗的操作方式与处理流程。" },
+        ]
+    },
     {
         "version": "0.19.21",
         "date": "2026-04-28",
