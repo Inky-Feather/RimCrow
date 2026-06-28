@@ -33,6 +33,16 @@
         <Images class="size-6" />
       </button>
 
+      <button data-tour="file-search-entry" @click="appStore.toggleUiState('showFileSearchWorkbench')" v-tooltip="`文件内容搜索`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+        <FileSearch2 class="size-6" />
+      </button>
+
+      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+      </button>
+
       <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showAiReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !appStore.aiBatchResultCount}"
         class="p-2 rounded-full relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent cursor-pointer">
         <BotMessageSquare class="size-6" />
@@ -40,6 +50,7 @@
           {{ appStore.aiBatchResultCount }}
         </span>
       </button>
+
 
       <div v-tooltip="`加载序列`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <ClipboardList class="size-6" />
@@ -87,10 +98,6 @@
         </div>
       </div>
 
-      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
-        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
-        <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-      </button>
 
       <button data-tour="rulePanel-btn" @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="`规则页面`" 
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
@@ -112,7 +119,7 @@
 <script setup>
 import { useAppStore } from '../stores/appStore'
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
-import { BotMessageSquare, ClipboardList, CloudCog, Images } from 'lucide-vue-next';
+import { BotMessageSquare, ClipboardList, CloudCog, FileSearch2, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
 import { useOrderStore } from '../stores/orderStore';
 

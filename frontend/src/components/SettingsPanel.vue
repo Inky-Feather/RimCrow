@@ -265,6 +265,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                       <CommonPathInput class="col-span-2" label="SteamCMD 目录" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" :description="'管理器下载和更新工坊模组使用的 SteamCMD 目录。'" />
+                      <CommonPathInput class="col-span-2" label="ripgrep 目录" v-model="formData.ripgrep_path" @browse="handleBrowse('ripgrep_path')" @blur="checkPath('ripgrep_path', formData.ripgrep_path)" :check="formData.check_info?.ripgrep_path" :description="'文件内容搜索优先使用的 ripgrep 工具目录，应选择包含 rg.exe 的文件夹。'" />
                       <CommonPathInput class="col-span-2" label="贴图工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, 'texture_tools_path')" @blur="checkPath('texture_tools_path', formData.texture_opt.texture_tools_path)" :check="formData.check_info?.texture_tools_path" :description="'贴图优化使用的 todds 工具目录，应选择包含 todds.exe 的文件夹。'" />
                       <CommonSwitch class="col-span-1" label="自动检查外部工具" v-model="formData.enable_auto_tool_check" description="按设定间隔检查 SteamCMD、todds 等外部工具是否缺失或未就绪。" />
                       <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.tool_check_interval_days" :step="1" :min="1" :max="365" />

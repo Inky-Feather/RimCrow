@@ -5,7 +5,6 @@ import zipfile
 import hashlib
 from pathlib import Path
 from typing import Any
-from send2trash import send2trash
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
     """对字符串列表做保序去重。"""
@@ -139,6 +138,9 @@ def delete_fs_path(path: str, force: bool = False) -> bool:
         else:
             Path(abs_path).unlink()
     else:
+        # 回收站依赖只在真正删除时才需要，避免普通工具模块导入被这个可选依赖拖重。
+        from send2trash import send2trash
+
         send2trash(abs_path)
 
     return True

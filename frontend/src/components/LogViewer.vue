@@ -14,8 +14,7 @@
               
               <!-- 模式切换 Tabs -->
               <div data-tour="log-viewer-tabs" class="flex p-1 bg-black/20 rounded-lg border border-text-main/5">
-                <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
-                  :data-tour="`log-tab-${tab.id}`"
+                <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id" :data-tour="`log-tab-${tab.id}`"
                   class="px-4 py-1 rounded-md text-sm font-bold transition-all duration-300 flex items-center gap-2 relative overflow-hidden"
                   :class="currentTab === tab.id ? 'text-text-main shadow-lg bg-text-main/10' : 'text-text-dim hover:text-text-main hover:bg-text-main/5'">
                   <div v-if="currentTab === tab.id" class="absolute bottom-0 left-0 w-full h-0.5 bg-accent-primary shadow-[0_0_8px_var(--color-accent-primary)]"></div>
@@ -30,15 +29,13 @@
                 <template v-if="currentTab === 'game' || appStore.settings.debug_mode">
                   <CommonSwitch class="col-span-1" label="使用辅助工具模组" v-model="enable_tool_mods" mini description="开启后，将在保存或自动排序时自动启用辅助工具模组，提供为软件提供更加详细的游戏日志获取功能。" />
                   <!-- 一键分析 -->
-                  <button data-tour="log-viewer-auto-analyze" @click="autoAnalyzeGlobalErrors"
-                          class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border bg-accent-danger/10 border-accent-danger/30 text-accent-danger hover:bg-accent-danger hover:text-white shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                  <button data-tour="log-viewer-auto-analyze" @click="autoAnalyzeGlobalErrors" class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border bg-accent-danger/10 border-accent-danger/30 text-accent-danger hover:bg-accent-danger hover:text-white shadow-[0_0_10px_rgba(239,68,68,0.1)]">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     <span class="font-bold">一键分析</span>
                   </button>
                   
                   <!-- 手动开关 AI 侧边栏按钮 -->
-                  <button data-tour="log-viewer-ai-toggle" @click="showAiSidebar = !showAiSidebar"
-                          class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border"
+                  <button data-tour="log-viewer-ai-toggle" @click="showAiSidebar = !showAiSidebar" class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border"
                           :class="showAiSidebar ? 'bg-accent-special/20 border-accent-special/50 text-accent-special shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'bg-black/20 border-text-main/10 text-text-dim hover:text-accent-special'">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                     <span class="font-bold">{{ showAiSidebar ? '隐藏 AI 助手' : '打开 AI 助手' }}</span>
@@ -53,9 +50,7 @@
           <!-- 2. 日志内容区 (Log Stream) -->
           <div data-tour="log-viewer-stream" class="flex-1 min-h-0 bg-black/20 font-mono text-sm relative">
             <KeepAlive>
-              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" ref="logPanelRef"
-                @update:selected-logs="handleSelectedLogsUpdate"
-              />
+              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" ref="logPanelRef" @update:selected-logs="handleSelectedLogsUpdate"/>
             </KeepAlive>
 
             <!-- 悬浮操作条 (Floating Action Bar) -->
@@ -101,14 +96,9 @@
 
         <!-- ================= 右侧：AI 诊断侧边栏 ================= -->
         <!-- 使用我们新创建的组件，并通过 v-model 控制显隐 -->
-        <AiDiagnosticSidebar 
-          v-model="showAiSidebar"
-          :pending-logs="selectedLogs"
-          :token-info="tokenInfo"
-          :auto-start-request="autoDiagnosisRequest"
-          :source-type="currentTab"
-          :filename="logPanelRef?.selectedFile || ''"
-          @clear-selection="clearLogSelection"
+        <AiDiagnosticSidebar  v-model="showAiSidebar" :pending-logs="selectedLogs" :token-info="tokenInfo"
+          :auto-start-request="autoDiagnosisRequest" :source-type="currentTab" 
+          :filename="logPanelRef?.selectedFile || ''" @clear-selection="clearLogSelection"
         />
 
       </div>
@@ -130,10 +120,10 @@ import CommonSwitch from './common/input/CommonSwitch.vue';
 const appStore = useAppStore()
 const toast = useToast()
 // --- 状态数据 ---
-const currentTab = ref('app') // 'app' | 'game'
+const currentTab = ref('game') // 'app' | 'game'
 const tabs = [
-  { id: 'app', label: '系统日志', icon: Terminal },
-  { id: 'game', label: '游戏日志', icon: Gamepad2 }
+  { id: 'game', label: '游戏日志', icon: Gamepad2 },
+  { id: 'app', label: '系统日志', icon: Terminal }
 ]
 
 // AI 相关状态

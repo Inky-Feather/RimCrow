@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+import platform
 from typing import Any
 
 from backend.managers.mgr_github import GithubManager
@@ -12,6 +13,7 @@ from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
+from backend.text_search.tooling import get_ripgrep_status
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
@@ -102,6 +104,25 @@ class MaintenanceManager:
                 "state": "ready" if todds_status.get("available") else "missing",
                 "message": str(todds_status.get("message") or ""),
                 "latest_version": str(todds_release.get("tag_name") or ""),
+            }
+        )
+
+        ripgrep_status = get_ripgrep_status(getattr(settings.config, "ripgrep_path", ""))
+        ripgrep_release = self.github_mgr.fetch_release("BurntSushi", "ripgrep", missing_ok=True) or {}
+        ripgrep_can_install = platform.system() == "Windows" and Path(str(getattr(settings.config, "ripgrep_path", "") or "")).suffix.lower() != ".exe"
+        items.append(
+            {
+                "tool_id": "ripgrep",
+                "name": "ripgrep 搜索工具",
+                "installed": bool(ripgrep_status.available),
+                "ready": bool(ripgrep_status.available),
+                "can_install": ripgrep_can_install,
+                "action": "ripgrep_install",
+                "resolved_path": str(ripgrep_status.resolved_path or ""),
+                "state": "ready" if ripgrep_status.available else "missing",
+                "message": str(ripgrep_status.message or ""),
+                "current_version": str(ripgrep_status.current_version or ""),
+                "latest_version": str(ripgrep_release.get("tag_name") or ""),
             }
         )
 

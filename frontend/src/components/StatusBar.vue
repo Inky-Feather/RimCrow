@@ -121,7 +121,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Bot, Download, Image, LoaderCircle, Radar, X, Flag, FlagOff, ScanSearch, Box } from 'lucide-vue-next'
+import { Bot, Download, Image, LoaderCircle, Radar, X, Flag, FlagOff, ScanSearch, Box, Search } from 'lucide-vue-next'
 import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../stores/profileStore'
@@ -147,6 +147,7 @@ const taskTypeMeta = {
   'ai-batch': { title: 'AI 批量处理', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
   localize: { title: '本地化模组', icon: Box, text: 'text-emerald-400', bar: 'bg-emerald-500', border: 'border-emerald-400/30' },
   'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-orange-400', bar: 'bg-orange-500', border: 'border-orange-400/30' },
+  'file-search': { title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-sky-500', border: 'border-sky-400/30' },
 }
 
 const resolveTaskMeta = (task) => taskTypeMeta[task?.type] || taskTypeMeta.download

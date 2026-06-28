@@ -212,7 +212,7 @@ const form = reactive({
   description: '',
   game_install_path: '',
   user_data_path: '',
-  prefer_steam_launch: false,
+  prefer_steam_launch: true,
   use_workshop_mods: false,
   use_self_mods: false,
   copy_current_data: false,
@@ -231,7 +231,7 @@ const openCreate = () => {
   form.description = ''
   form.game_install_path = appStore.settings.game_install_path
   form.user_data_path = ''
-  form.prefer_steam_launch = false
+  form.prefer_steam_launch = true
   form.use_workshop_mods = false
   form.use_self_mods = false
   form.copy_current_data = false

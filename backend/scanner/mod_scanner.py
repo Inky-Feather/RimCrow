@@ -248,7 +248,7 @@ class ModScanner:
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
             runtime_analysis = ModDAO.get_profile_conflict_analysis(
                 self.context,
-                include_workshop=not bool(getattr(self.context, 'prefer_steam_launch', False)),
+                include_workshop=not bool(getattr(self.context, 'prefer_steam_launch', True)),
             )
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']

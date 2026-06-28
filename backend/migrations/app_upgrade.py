@@ -90,7 +90,7 @@ def _migrate_legacy_launch_preference_to_default_profile():
     default_profile = GameProfile.get_or_none(GameProfile.id == 'default')
     if default_profile:
         target_value = True
-        if bool(getattr(default_profile, 'prefer_steam_launch', False)) != target_value:
+        if bool(getattr(default_profile, 'prefer_steam_launch', True)) != target_value:
             default_profile.prefer_steam_launch = target_value
             default_profile.save()
 

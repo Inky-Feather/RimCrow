@@ -251,7 +251,8 @@ class LoadOrderManager:
                         continue
                     visible_map[package_id] = {
                         "package_id_raw": mod.get("package_id_raw") or mod.get("package_id") or package_id,
-                        "name": mod.get("alias_name") or mod.get("display_name") or mod.get("name") or package_id,
+                        "name": mod.get("name") or package_id,
+                        "alias_name": mod.get("alias_name") or mod.get("display_name") or mod.get("name") or package_id,
                         "workshop_id": self._normalize_workshop_id(mod.get("workshop_id")),
                         "source_url": self._normalize_source_url(mod.get("url")),
                     }

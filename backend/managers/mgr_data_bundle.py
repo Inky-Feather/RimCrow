@@ -308,18 +308,18 @@ class DataBundleManager:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path, "r") as bundle:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
-                included_modules = [
-                    item.get("key")
+                included_modules: list[str] = [
+                    str(item.get("key"))
                     for item in manifest.get("modules", [])
-                    if isinstance(item, dict) and item.get("key")
+                    if isinstance(item, dict) and str(item.get("key") or "").strip()
                 ]
-                active_modules = included_modules if not selected_modules else [
+                active_modules: list[str] = included_modules if not selected_modules else [
                     module_key for module_key in included_modules if module_key in selected_modules
                 ]
                 if not active_modules:
                     raise ValueError("导入包中没有可处理的数据模块")
 
-                module_payloads = {
+                module_payloads: dict[str, Any] = {
                     module_key: self._read_json_from_zip(bundle, f"modules/{module_key}.json", {})
                     for module_key in active_modules
                     if module_key != "profiles"
@@ -663,10 +663,10 @@ class DataBundleManager:
 
         resolved_install_path = self._resolve_game_install_path(profile_meta.get("game_version"))
         default_profile.name = str(profile_meta.get("name") or default_profile.name)
-        default_profile.description = profile_meta.get("description")
+        default_profile.description = profile_meta.get("description",'')
         default_profile.game_install_path = resolved_install_path
         default_profile.game_version = GameManager.get_game_version(resolved_install_path) if resolved_install_path else str(profile_meta.get("game_version") or "")
-        default_profile.prefer_steam_launch = bool(profile_meta.get("prefer_steam_launch", False))
+        default_profile.prefer_steam_launch = bool(profile_meta.get("prefer_steam_launch", True))
         default_profile.use_workshop_mods = True
         default_profile.use_self_mods = bool(profile_meta.get("use_self_mods", False))
         default_profile.run_commands = list(profile_meta.get("run_commands") or [])
@@ -700,7 +700,7 @@ class DataBundleManager:
                 user_data_path=str(target_root),
                 game_install_path=resolved_install_path,
                 game_version=game_version,
-                prefer_steam_launch=bool(profile_meta.get("prefer_steam_launch", False)),
+                prefer_steam_launch=bool(profile_meta.get("prefer_steam_launch", True)),
                 use_workshop_mods=bool(profile_meta.get("use_workshop_mods", False)),
                 use_self_mods=bool(profile_meta.get("use_self_mods", False)),
                 is_steam=bool(resolved_install_path and os.path.normpath(resolved_install_path).lower().find(os.path.join("steamapps", "common")) != -1),

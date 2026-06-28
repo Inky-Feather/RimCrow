@@ -9,6 +9,24 @@ export default defineConfig({
     vue(),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (
+            id.includes('vue-codemirror6')
+            || id.includes('/codemirror/')
+            || id.includes('/@codemirror/')
+            || id.includes('/@lezer/')
+            || id.includes('/@replit/codemirror-lang-csharp/')
+          ) {
+            return 'codemirror'
+          }
+        },
+      },
+    },
+  },
   server: {
     // proxy: {
     //   '/api': {
