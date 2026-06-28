@@ -83,15 +83,15 @@ export function generateHtmlHelp(engine) {
   // 2. 样式常量 (Tailwind)
   const C = {
     box: 'text-xs text-gray-300 font-sans overflow-hidden',
-    header: 'bg-white/5 py-1 px-2 border-b border-white/10 flex items-center justify-between',
+    header: 'bg-text-main/5 py-1 px-2 border-b border-text-main/10 flex items-center justify-between',
     sectionTitle: 'text-[0.65rem] uppercase tracking-wider opacity-40 font-bold mt-2 mb-1 px-1',
     syntaxGrid: 'grid grid-cols-4 gap-1 px-1',
-    syntaxItem: 'bg-white/5 rounded px-0.5 py-0.5 flex flex-col items-center justify-center text-center border border-white/5',
+    syntaxItem: 'bg-text-main/5 rounded px-0.5 py-0.5 flex flex-col items-center justify-center text-center border border-text-main/5',
     fieldGrid: 'grid grid-cols-2 gap-x-2 gap-y-1 px-1 pb-2', // 双栏布局
-    fieldRow: 'flex items-center border-l-2 border-white/15 pl-1 group',
+    fieldRow: 'flex items-center border-l-2 border-text-main/15 pl-1 group',
     keyBadge: 'font-mono font-bold text-accent-primary bg-accent-primary/10 px-1.5 rounded text-xs min-w-[20px] text-center border border-accent-primary/20 group-hover:bg-accent-primary/20 transition-colors',
     label: 'text-gray-400 text-xs text-end truncate flex-1',
-    footer: 'bg-white/5 px-3 py-2 text-[0.65rem] text-gray-500 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1'
+    footer: 'bg-text-main/5 px-3 py-2 text-[0.65rem] text-gray-500 border-t border-text-main/5 flex flex-wrap gap-x-4 gap-y-1'
   };
   // 是否是默认搜索字段
   const defaultMarker = '<span class="text-accent-highlight ml-1" title="默认包含在模糊搜索中">•</span>';
@@ -101,7 +101,7 @@ export function generateHtmlHelp(engine) {
 
   // === 顶部：标题 + 状态 ===
   html += `<div class="${C.header}">
-      <span class="font-bold text-white">搜索说明</span>
+      <span class="font-bold text-text-main">搜索说明</span>
       <span class="text-[0.65rem] bg-accent-highlight/20 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">搜索指令速查</span>
     </div>`;
 
@@ -110,19 +110,19 @@ export function generateHtmlHelp(engine) {
   html += `<div class="${C.syntaxGrid}">
     <div class="${C.syntaxItem}">
       <span class="opacity-60">直接搜索${defaultMarker}</span>
-      <span class="font-mono bg-white/15 px-1.5 rounded text-text-main">关键词</span>
+      <span class="font-mono bg-text-main/15 px-1.5 rounded text-text-main">关键词</span>
     </div>
     <div class="${C.syntaxItem}">
       <span class="opacity-60">类别搜索</span>
-      <span class="font-mono bg-white/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:关键词</span>
+      <span class="font-mono bg-text-main/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:关键词</span>
     </div>
     <div class="${C.syntaxItem}">
       <span class="opacity-60">排除搜索</span>
-      <span class="font-mono bg-white/15 px-1.5 rounded text-accent-danger">-<span class="text-accent-primary">类别</span><span class="text-text-main">:关键词</span></span>
+      <span class="font-mono bg-text-main/15 px-1.5 rounded text-accent-danger">-<span class="text-accent-primary">类别</span><span class="text-text-main">:关键词</span></span>
     </div>
     <div class="${C.syntaxItem}">
       <span class="opacity-60">判断搜索</span>
-      <span class="font-mono bg-white/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span></span>
+      <span class="font-mono bg-text-main/15 px-1.5 rounded"><span class="text-accent-primary">类别</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span></span>
     </div>
   </div>`;
 

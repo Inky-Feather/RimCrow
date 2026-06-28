@@ -3,7 +3,7 @@
     <!-- 统一过渡容器 -->
     <Transition :name="isMini ? 'mini-zoom' : 'modal-fade'">
       <div v-if="confirmStore.isVisible" 
-        class="fixed inset-0 z-9999 font-sans text-text-main selection:bg-white/20"
+        class="fixed inset-0 z-9999 font-sans text-text-main selection:bg-text-main/20"
         :class="isMini ? 'pointer-events-none' : 'flex items-center justify-center'"
         @keydown.esc="handleCancel"
         @keydown.enter="handleEnterKey"
@@ -17,7 +17,7 @@
           class="relative flex flex-col overflow-hidden transition-all pointer-events-auto box-border"
           :class="[
             // 核心质感：极深色玻璃 + 顶部高光边框 + 强阴影
-            'bg-bg-deep/85 backdrop-blur-2xl shadow-2xl ring-1 ring-white/10',
+            'bg-bg-deep/85 backdrop-blur-2xl shadow-2xl ring-1 ring-text-main/10',
             // 模式区分
             isMini 
               ? 'rounded-xl w-80 absolute shadow-[0_20px_30px_rgba(0,0,0,0.5)]' 
@@ -53,12 +53,13 @@
 
             <!-- 右侧：文本与交互 -->
             <div class="flex-1 min-w-0 flex flex-col justify-center">
-              <h3 class="text-base font-bold text-white tracking-wide leading-snug mb-1.5 flex items-center gap-2">
+              <h3 class="text-base font-bold text-text-main tracking-wide leading-snug mb-1.5 flex items-center gap-2">
                 {{ confirmStore.state.title }}
               </h3>
               
               <div v-if="confirmStore.state.message" class="text-xs text-text-dim/90 leading-relaxed text-pretty font-medium">
-                <span>{{ confirmStore.state.message }}</span>
+                <span v-if="confirmStore.state.isHtml" v-html="confirmStore.state.message"></span>
+                <span v-else>{{ confirmStore.state.message }}</span>
               </div>
             </div>
           </div>
@@ -70,23 +71,23 @@
               <input v-model="confirmStore.state.inputValue"
                 ref="inputRef" type="text" spellcheck="false"
                 :placeholder="confirmStore.state.placeholder"
-                class="block w-full bg-black/40 border border-white/10 rounded-lg py-1 px-2 text-sm text-white font-mono placeholder:text-white/20 
-                        focus:outline-none focus:border-white/30 focus:bg-black/60 focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]
+                class="block w-full bg-black/40 border border-text-main/10 rounded-lg py-1 px-2 text-sm text-text-main font-mono placeholder:text-text-main/20 
+                        focus:outline-none focus:border-text-main/30 focus:bg-black/60 focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]
                         transition-all duration-200"
               />
               <!-- 输入框角落装饰 -->
-              <div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white/20 rounded-br-lg pointer-events-none group-focus-within:border-white/50 transition-colors"></div>
+              <div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-text-main/20 rounded-br-lg pointer-events-none group-focus-within:border-text-main/50 transition-colors"></div>
             </div>
           </div>
 
           <!-- D. 底部操作栏 (玻璃分割线) -->
-          <div class=" flex items-center justify-end gap-3 border-t border-white/5 bg-white/1"
+          <div class=" flex items-center justify-end gap-3 border-t border-text-main/5 bg-text-main/1"
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
             
             <!-- Cancel Button -->
             <button v-if="confirmStore.state.mode !== 'alert'" 
               @click="handleCancel"
-              class=" rounded-lg text-xs font-bold text-text-dim hover:text-white hover:bg-white/10 border border-transparent hover:border-white/5 transition-all duration-200"
+              class=" rounded-lg text-xs font-bold text-text-dim hover:text-text-main hover:bg-text-main/10 border border-transparent hover:border-text-main/5 transition-all duration-200"
               :class="isMini ? 'px-2 py-1' : 'px-4 py-1.5'">
               {{ confirmStore.state.cancelText }}
             </button>
@@ -98,7 +99,7 @@
               :class="[theme.btnBg, isMini ? 'px-3 py-1' : 'px-6 py-1.5']"
             >
               <!-- 按钮内部高光扫描动画 -->
-              <div class="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-linear-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
+              <div class="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-linear-to-r from-transparent via-text-main/40 to-transparent skew-x-12"></div>
               
               <div class="relative flex items-center gap-1.5">
                 <span>{{ confirmStore.state.confirmText }}</span>

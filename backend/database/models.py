@@ -188,8 +188,18 @@ def init_db(db_path):
         return False
     
 def close_db():
-    if not db.is_closed():
+    if db.is_closed(): 
+        logger.info("数据库已关闭")
+        return
+    try:
+        # 强制执行检查点，将 WAL 内容写回磁盘并截断日志
+        db.execute_sql('PRAGMA wal_checkpoint(TRUNCATE);')
+        # 将模式切换回 DELETE 模式，这会物理删除 wal 和 shm 文件
+        db.execute_sql('PRAGMA journal_mode=DELETE;')
         db.close()
+        logger.info("数据库已安全关闭并清理临时文件")
+    except Exception as e:
+        logger.error(f"关闭数据库时发生异常: {e}")
     
 def clear_db():
     """
@@ -220,6 +230,14 @@ def clear_db():
         # 5. 重新创建表
         with db.atomic():
             db.create_tables([ModAsset, GameProfile, UserModData, GroupData, GroupMod])
+            from backend.settings import settings
+            GameProfile.create(
+                id='default',
+                name='Default Profile',
+                game_version=settings.config.game_version or "", # 防止 None 报错
+                game_install_path=settings.config.game_install_path or "", # 防止 None 报错
+                user_data_path=settings.config.user_data_path or "",
+            )
             
         # 6. 恢复外键约束
         db.execute_sql('PRAGMA foreign_keys = ON;')

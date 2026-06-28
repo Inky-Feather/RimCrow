@@ -46,7 +46,7 @@ class OrderSorter:
         # 1. 获取所有 Mod 的联锁数据
         # 注意：为了性能，我们一次性查出所有涉及到的 Mod 数据
         # 即使有的 Mod 不在 active_ids 里，只要它被联锁引用了，也要查
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         active_set = set(id.lower() for id in active_ids)
         visited = set()
@@ -122,7 +122,7 @@ class OrderSorter:
         # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
         mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
         # if pkg_id == 'optimizer.zh':
-        #     print(f"optimizer.zh 权重: {mod_type},{mod_data.get('mod_type', 'Unknown')}, mod_data: {mod_data}")
+        #     logger.info(f"optimizer.zh 权重: {mod_type},{mod_data.get('mod_type', 'Unknown')}, mod_data: {mod_data}")
         if mod_type == 'LanguagePack':
             return 900  # 汉化包置底
         if mod_type == 'Texture':
@@ -205,7 +205,7 @@ class OrderSorter:
         """
         【常态化提示核心】不排序，仅检查当前顺序是否违背任何规则
         """
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         id_to_idx = {mid.lower(): i for i, mid in enumerate(active_ids)}
         active_set = set(id_to_idx.keys())
@@ -243,7 +243,19 @@ class OrderSorter:
     # =========================================================================
     # 加权图构建与循环消解
     # =========================================================================
-
+    def get_rule_weight(self, source_type: str) -> int:
+        """
+        根据配置动态计算权重。
+        配置列表越靠前 -> 索引越小 -> 权重越大
+        """
+        idx = self.rule_mgr.get_source_priority(source_type)
+        # 基础权重 100，每高一级增加 1000。
+        # 假设列表长度 4。Idx 0 (User) -> (5-0)*1000 = 5000
+        # Idx 3 (Dynamic) -> (5-3)*1000 = 2000
+        # 未知来源 -> 100
+        if idx == 999: return 100
+        return (10 - idx) * 1000 
+    
     def _build_weighted_graph(self, groups: List[AtomicGroup], mod_map: Dict[str, dict], mod_to_group: Dict[str, AtomicGroup]):
         """
         构建带权重的依赖图
@@ -257,13 +269,19 @@ class OrderSorter:
         for g in groups:
             gid = id(g)
             for mid in g.mod_ids:
-                constraints = self._get_all_constraints(mid, mod_map.get(mid, {}))
-                for target_id, r_type, source in constraints:
+                effective_rules = self.rule_mgr.get_effective_mod_rules(mid, mod_map.get(mid, {}))
+                # 将 effective_rules 展平为 (target, type, source_str, detail)
+                flat_rules = []
+                for r in effective_rules['load_after']:
+                    flat_rules.append((r['target'], 'after', r['source'], r['detail']))
+                for r in effective_rules['load_before']:
+                    flat_rules.append((r['target'], 'before', r['source'], r['detail']))
+                    
+                for target_id, r_type, source_str, detail in flat_rules:
                     if target_id not in mod_to_group: continue
                     target_group = mod_to_group[target_id]
                     target_gid = id(target_group)
-                    
-                    if target_gid == gid: continue # 忽略组内约束
+                    if target_gid == gid: continue  # 忽略组内约束
 
                     # 确定方向：u -> v 表示 u 必须在 v 之前
                     # load_after: target -> self
@@ -272,19 +290,17 @@ class OrderSorter:
                         u, v = target_gid, gid
                     elif r_type == 'before':
                         u, v = gid, target_gid
-                    else:
-                        continue # incompatible 不参与拓扑排序构图
+                    else: continue # incompatible 不参与拓扑排序构图
 
-                    # 计算权重
-                    rule_type = source.get('type', 'unknown')
-                    weight = self.RULE_PRIORITIES.get(rule_type, 1)
+                    # 动态计算权重
+                    weight = self.get_rule_weight(source_str)
 
                     # 记录边信息 (可能有多条规则指向同一条边)
                     edge_key = (u, v)
                     edge_details[edge_key].append({
                         "source_mod": mid,
                         "target_mod": target_id,
-                        "rule_source": source,
+                        "rule_source": {"name": source_str, "type": source_str, "detail": detail}, # 构造兼容的结构
                         "weight": weight
                     })
 
@@ -391,7 +407,7 @@ class OrderSorter:
         logger.info(f"Starting sort for {len(active_ids)} mods...")
         # 1. 初始化
         groups = self.build_atomic_groups(active_ids)
-        all_mods_data = ModDAO.get_all_mods_with_user_data()
+        all_mods_data = ModDAO.get_profile_mods()
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
         mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
         group_ids = [id(g) for g in groups]

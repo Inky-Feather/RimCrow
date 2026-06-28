@@ -20,6 +20,8 @@ export const vTooltip = {
 
     // 定义处理函数
     const handleEnter = (e) => {
+      // 记录当前触发指令的元素，方便 unmounted 时判断
+      el._isHovering = true 
       // binding.value 就是你传给指令的数据 (例如: modData)
       hoverStore.show(el._tipValue, e)
     }
@@ -29,6 +31,7 @@ export const vTooltip = {
     }
     
     const handleLeave = () => {
+      el._isHovering = false
       hoverStore.hide()
     }
 
@@ -46,6 +49,14 @@ export const vTooltip = {
    updated(el, binding) {
     // 更新元素上存储的值，供下次 enter 使用
     el._tipValue = binding.value
+    
+    // 检查元素是否变得不可见了
+    const isVisible = !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    if (!isVisible && el._isHovering) {
+      const hoverStore = useHoverStore()
+      el._isHovering = false
+      hoverStore.hide(el)
+    }
 
     // 实时响应：如果值变了，且当前 Tooltip 正在显示这个元素的内容
     if (binding.value !== binding.oldValue) {
@@ -63,6 +74,11 @@ export const vTooltip = {
     }
   },
   unmounted(el) {
+    const hoverStore = useHoverStore()
+    // 如果该元素被卸载时鼠标正悬停在上面（或者它开启了计时器）,需要强制关闭悬浮窗
+    if (el._isHovering) {
+      hoverStore.hide(el)
+    }
     if (el._vTooltipHandlers) {
       el.removeEventListener('mouseenter', el._vTooltipHandlers.enter)
       el.removeEventListener('mousemove', el._vTooltipHandlers.move)

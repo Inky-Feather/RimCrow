@@ -40,15 +40,24 @@ class ModScanner:
         # 线程池 (扫描通常是 IO 密集型，但 XML 解析是 CPU 密集型，默认 worker 数即可)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         self._is_scanning = False
+        self._stop_requested = False  # 中断请求标志
 
+    def stop_scan(self):
+        """外部调用：请求中断扫描"""
+        if self._is_scanning:
+            self._stop_requested = True
+            logger.warning("Scan interruption requested by user.")
+            
     def scan_paths_async(self, search_paths, thumbnail_mgr: FileManager, forced_update=False):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
+        EventBus.resume()   # 恢复事件总线
         if self._is_scanning:
             return {'status': 'busy', 'message': '扫描已在进行中'}
         
         self._is_scanning = True
+        self._stop_requested = False  # 启动前重置标志
         # 提交到线程池
         self.executor.submit(self._scan_paths_task, search_paths, thumbnail_mgr, forced_update)
         return {'status': 'started'}
@@ -107,6 +116,11 @@ class ModScanner:
             start_time = time.time()
 
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
+                # 【关键检查点】：每一条 Mod 解析前检查中断标志
+                if self._stop_requested:
+                    logger.info("Scan stopped during parsing stage.")
+                    self._handle_interruption()
+                    return # 直接结束任务，不进入写库阶段
                 # 进度报告
                 if (idx + 1) % report_interval == 0:
                     percent = int(((idx + 1) / total_count) * 100)
@@ -117,7 +131,6 @@ class ModScanner:
                         'percent': percent,
                         'message': f"分析中: {os.path.basename(mod_path)}"
                     })
-
                 # 处理单个 Mod
                 mod_data = self._process_single_mod(
                     mod_path, is_dlc, existing_mtimes, 
@@ -139,7 +152,12 @@ class ModScanner:
                         stats['added'] += 1
                     else:
                         stats['updated'] += 1
-
+                        
+            # 【关键检查点】：解析完成后检查中断标志
+            if self._stop_requested:
+                logger.info("Scan stopped during parsing stage.")
+                self._handle_interruption()
+                return # 直接结束任务，不进入写库阶段
             # --- 3. 冲突仲裁与入库决策 ---
             EventBus.emit('scan-progress', {'stage': 'analyzing', 'message': '正在处理冲突与部署...'})
             
@@ -162,6 +180,11 @@ class ModScanner:
                 workshop_mods_root = os.path.normpath(workshop_mods_root).lower()
 
             for pid, entries in temp_registry.items():
+                # 【关键检查点】：每一条 Mod 解析前检查中断标志
+                if self._stop_requested:
+                    logger.info("Scan stopped during parsing stage.")
+                    self._handle_interruption()
+                    return # 直接结束任务
                 
                 # 情况 A: 只有一个实例 -> 直接入库
                 if len(entries) == 1:
@@ -229,17 +252,20 @@ class ModScanner:
                                               local_mod_ids_for_deploy, workshop_paths_for_deploy)
 
             # --- 4. 批量入库 ---
-            if mods_to_upsert:
-                ModDAO.batch_upsert_mods(mods_to_upsert)
-
-            # --- 5. 清理失效数据 ---
-            # 扫描缺失的 Mod (物理文件没了)
-            deletion_result = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
-            stats['removed'] = len(deletion_result['deleted_mods'])
-            logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
-            # 清理失效的 Shadow Paths
-            ModDAO.clean_invalid_shadow_paths()
-
+            # 这是数据安全最关键的一步
+            with db.atomic() as txn:
+                try:
+                    if mods_to_upsert: ModDAO.batch_upsert_mods(mods_to_upsert)
+                    # --- 5. 清理失效数据 ---
+                    # 扫描缺失的 Mod (物理文件没了)
+                    deletion_result = ModDAO.find_missing_mods(settings.config.delete_missing_mods_data)
+                    stats['removed'] = len(deletion_result['deleted_mods'])
+                    logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
+                    # 清理失效的 Shadow Paths
+                    ModDAO.clean_invalid_shadow_paths()
+                except Exception as e:
+                    txn.rollback() # 万一出错，回滚所有改动
+                    raise e
             
             deploy_msg = "Skipped deployment"
             logger.debug(f"Skip deployment: {settings.config.use_workshop_mods}, current_profile {settings.config.current_profile_id != 'default'}")
@@ -294,12 +320,20 @@ class ModScanner:
             self._finish_scan({'status': 'error', 'message': str(e)})
         finally:
             self._is_scanning = False
-            if not db.is_closed():
-                db.close() # 线程结束关闭连接，防止泄露
+            self._stop_requested = False # 清理状态
+
+    def _handle_interruption(self):
+        """处理中断后的清理和通知"""
+        self._is_scanning = False
+        EventBus.emit('scan-complete', {
+            'status': 'cancelled',
+            'message': '扫描已由用户中止，未对数据库进行任何修改。'
+        })
+        logger.info("Scan cancelled safely.")
 
     def _finish_scan(self, result):
         """扫描结束，通知前端并发送最终统计"""
-        print(f"Scan finished: {result['stats']}")
+        logger.info(f"Scan finished: {result['stats']}")
         # 获取最新全量数据，或者让前端自己再调一次 get_all_mods
         # 建议直接通知前端 "scan-complete"，让前端决定是否刷新列表
         

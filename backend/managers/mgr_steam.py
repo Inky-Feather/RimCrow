@@ -227,6 +227,7 @@ class SteamManager:
     #  2. SteamCMD 功能
     # =========================================================
     def download_workshop_items(self, mod_ids: list):
+        EventBus.resume()   # 恢复事件总线
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
         

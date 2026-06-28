@@ -138,7 +138,7 @@
           <CommonInput label="显示名称" v-model="form.name" placeholder="例如: 1.5 中世纪" />
           <CommonInput label="环境描述" v-model="form.description" placeholder="这里可以写一些关于这个环境的说明..." />
           <CommonPathInput label="游戏执行目录" v-model="form.game_install_path" @browse="browsePath('game_install_path')" @blur="checkGamePath" :description="gameInfo" />
-          <CommonPathInput label="用户数据目录" v-model="form.user_data_path" @browse="browsePath('user_data_path')" placeholder="可空，默认在软件 data/profiles 目录下自动生成" />
+          <CommonPathInput label="用户数据目录" v-model="form.user_data_path" @browse="browsePath('user_data_path')" :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
           <CommonSwitch v-if="form.id!='default' && appStore.settings.workshop_mods_path" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod" />
           <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
 
@@ -233,6 +233,10 @@ const submitForm = async () => {
   }
   if (!form.game_install_path) {
     toast.warning('请选择游戏执行目录')
+    return
+  }
+  if (!form.user_data_path && isEditing.value) {
+    toast.warning('请输入用户数据目录')
     return
   }
   if (isEditing.value) {

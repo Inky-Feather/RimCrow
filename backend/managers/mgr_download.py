@@ -3,12 +3,14 @@ import os
 import re
 import time
 import uuid
-import requests
+import hashlib
+import shutil
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import requests
+from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, Any
 from urllib.parse import urlparse, unquote
 
 from backend.utils.logger import logger
@@ -19,6 +21,7 @@ class TaskStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
     PAUSED = "paused"
+    VERIFYING = "verifying"  # 校验中状态
     COMPLETED = "completed"
     ERROR = "error"
     CANCELLED = "cancelled"
@@ -35,12 +38,19 @@ class DownloadTask:
     error_msg: str = ""
     created_at: float = field(default_factory=time.time)
     speed: str = "0 B/s"
+    # 校验相关
+    expected_hash: Optional[str] = None
+    hash_algorithm: str = "md5"
+    # 回调函数 (接收 Task 对象)
+    on_complete: Optional[Callable[['DownloadTask'], Any]] = None
+    on_error: Optional[Callable[['DownloadTask'], Any]] = None
     # 内部控制
     _cancel_event: threading.Event = field(default_factory=threading.Event)
-    _completion_event: threading.Event = field(default_factory=threading.Event)
+    _future: Optional[Future] = None  # 存储线程池的 Future 对象
 
 class DownloadManager:
     _instance = None
+    _lock = threading.Lock() # -线程锁
     
     def __new__(cls):
         if cls._instance is None:
@@ -70,48 +80,77 @@ class DownloadManager:
             return new_url
         return url
 
-    def add_task(self, url: str, dest_path: str, filename=None) -> str:
+    def add_task(self, 
+                 url: str, 
+                 dest_dir: str, 
+                 filename: Optional[str] = None,
+                 expected_hash: Optional[str] = None,
+                 hash_algorithm: str = "md5",
+                 on_complete: Optional[Callable[[DownloadTask], Any]] = None,
+                 on_error: Optional[Callable[[DownloadTask], Any]] = None
+                 ) -> str:
+        """
+        添加下载任务
+        :param url: 下载地址
+        :param dest_dir: 目标文件夹 (注意：现在要求传入目录，文件名自动探测或指定)
+        :param filename: 强制指定文件名 (可选)
+        :param expected_hash: 期望的 Hash 值 (可选，若提供则会自动校验)
+        :param hash_algorithm: Hash 算法 (md5, sha1, sha256)
+        :param on_complete: 完成后的回调函数 (在子线程执行，请勿操作 GUI)
+        :param on_error: 失败后的回调函数
+        """
         real_url = self._sanitize_url(url)
+        EventBus.resume()   # 恢复事件总线，确保下载任务能够正常执行
         
-        # 1. 预处理路径：如果是完整文件路径，直接提取文件名
-        if not os.path.isdir(dest_path):
-            final_path = dest_path
-            filename = os.path.basename(final_path)
-        else:
-            # 2. 如果是文件夹，开始多级文件名探测
-            if not filename:
-                filename = self._resolve_filename(real_url)
-            final_path = os.path.join(dest_path, filename)
+        # 确保目标目录存在
+        os.makedirs(dest_dir, exist_ok=True)
 
-        task = DownloadTask(url=real_url, dest_path=final_path, filename=filename)
-        self.tasks[task.task_id] = task
+        # 文件名解析逻辑
+        if not filename:
+            filename = self._resolve_filename(real_url)
         
-        logger.info(f"添加下载任务: {filename} (ID: {task.task_id})")
-        self.executor.submit(self._download_worker, task)
+        final_path = os.path.join(dest_dir, filename)
+
+        # 创建任务对象
+        task = DownloadTask(
+            url=real_url, 
+            dest_path=final_path, 
+            filename=filename,
+            expected_hash=expected_hash,
+            hash_algorithm=hash_algorithm,
+            on_complete=on_complete,
+            on_error=on_error
+        )
+        with self._lock:
+            self.tasks[task.task_id] = task
+        
+        logger.info(f"Task added: {filename} (ID: {task.task_id}) [HashCheck: {bool(expected_hash)}]")
+        
+        # 提交到线程池并保存 future
+        task._future = self.executor.submit(self._download_worker, task)
         return task.task_id
 
     def _resolve_filename(self, url: str) -> str:
         """
         全能型文件名解析器
         """
-        # --- 策略 A: 从 URL 路径中提取并解码 ---
-        parsed = urlparse(url)
-        # unquote 处理 URL 编码的中文，如 %E6%B5%8B%E8%AF%95 -> 测试
-        path_filename = unquote(os.path.basename(parsed.path))
-        
-        # --- 策略 B: 从查询参数中寻找常见关键字 (针对网盘/CDN) ---
-        # 匹配 ?file=xxx, ?name=xxx, ?fileName=xxx 等
-        query_params = ['filename', 'file_name', 'file', 'name']
-        from urllib.parse import parse_qs
-        qs = parse_qs(parsed.query)
-        for param in query_params:
-            for k in qs.keys():
-                if k.lower() == param:
-                    return self._clean_filename(unquote(qs[k][0]))
-
-        # --- 策略 C: 预检 HTTP Headers (最专业的方法) ---
-        # 注意：这会发起一次同步请求，如果对响应速度要求极高，可以跳过此步
         try:
+            # --- 策略 A: 从 URL 路径中提取并解码 ---
+            parsed = urlparse(url)
+            # unquote 处理 URL 编码的中文，如 %E6%B5%8B%E8%AF%95 -> 测试
+            path_filename = unquote(os.path.basename(parsed.path))
+            
+            # --- 策略 B: 从查询参数中寻找常见关键字 (针对网盘/CDN) ---
+            # 匹配 ?file=xxx, ?name=xxx, ?fileName=xxx 等
+            from urllib.parse import parse_qs
+            qs = parse_qs(parsed.query)
+            for param in ['filename', 'file_name', 'file', 'name']:
+                for k in qs.keys():
+                    if k.lower() == param:
+                        return self._clean_filename(unquote(qs[k][0]))
+
+            # --- 策略 C: 预检 HTTP Headers (最专业的方法) ---
+            # 注意：这会发起一次同步请求，如果对响应速度要求极高，可以跳过此步
             # 使用 HEAD 请求只读取 Header，不下载内容，速度极快
             # allow_redirects=True 必须开启，因为很多下载是 302 跳转
             with requests.head(url, timeout=3, allow_redirects=True) as r:
@@ -140,14 +179,12 @@ class DownloadManager:
     def _clean_filename(self, filename: str) -> str:
         """清理文件名中的非法字符，防止系统报错"""
         # 移除 Windows 下非法的路径字符 \ / : * ? " < > |
-        filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
-        # 去掉首尾空格
-        return filename.strip()
+        return re.sub(r'[\\/:*?"<>|]', '_', filename).strip()
 
     def cancel_task(self, task_id: str):
-        if task_id in self.tasks:
-            task = self.tasks[task_id]
-            if task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]:
+        with self._lock:
+            task = self.tasks.get(task_id)
+            if task and task.status in [TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.VERIFYING]:
                 task._cancel_event.set()
                 task.status = TaskStatus.CANCELLED
                 self._emit_progress(task)
@@ -173,7 +210,8 @@ class DownloadManager:
         # 初始状态发送
         self._emit_progress(task)
         
-        temp_path = task.dest_path + ".tmp"
+        # 使用临时文件：filename.downloading
+        temp_path = task.dest_path + ".downloading"
         start_time = time.time()
         last_emit_time = 0
         
@@ -191,70 +229,106 @@ class DownloadManager:
             
             # 2. 发起请求 (Stream模式)
             # with session.get(task.url, stream=True, proxies=proxies, timeout=15) as response:
-            with session.get(task.url, stream=True, timeout=15) as response:
+            # 模拟浏览器 Header，防止某些 CDN 拦截
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            with session.get(task.url, stream=True, timeout=20, headers=headers) as response:
                 response.raise_for_status()
                 # 获取文件大小
                 total_length = response.headers.get('content-length')
                 task.total_size = int(total_length) if total_length else 0
                 
                 # 增大 chunk_size 减少循环次数，降低 CPU 占用
-                chunk_size = 32 * 1024 
+                chunk_size = 64 * 1024 # 64KB
                 # 3. 写入文件
                 with open(temp_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=chunk_size):
                         # 检查取消信号
                         if task._cancel_event.is_set():
-                            raise InterruptedError("Task cancelled")
+                            raise InterruptedError("Task cancelled by user")
                         
                         if chunk:
                             f.write(chunk)
                             task.downloaded_size += len(chunk)
                             
                             # 计算速度与回调 (限制频率: 每 0.1s 更新一次)
-                            current_time = time.time()
+                            curr_time = time.time()
                             # 【优化】降低节流阈值到 0.1s，保证 UI 流畅度
-                            if current_time - last_emit_time > 0.1:
-                                elapsed = current_time - start_time
+                            if curr_time - last_emit_time > 0.1:
+                                elapsed = curr_time - start_time
                                 if elapsed > 0:
                                     # 简单平均速度
                                     task.speed = self._fmt_speed(task.downloaded_size / elapsed)
                                 self._emit_progress(task)
-                                last_emit_time = current_time
+                                last_emit_time = curr_time
             
             # 【关键】循环结束后，强制发送一次“下载完成，正在处理”的状态
             # 确保前端收到 downloaded_size == total_size
             if task.total_size > 0:
                 task.downloaded_size = task.total_size # 修正可能的字节偏差
-            task.speed = "Processing..."
-            self._emit_progress(task) 
-
-            # 文件重命名操作
+            # --- 校验阶段 ---
+            if task.expected_hash:
+                task.status = TaskStatus.VERIFYING
+                task.speed = "Verifying..."
+                self._emit_progress(task)
+                
+                logger.debug(f"Verifying hash for {task.filename}...")
+                if not self._verify_hash(temp_path, task.expected_hash, task.hash_algorithm):
+                    raise ValueError("File hash mismatch! The file may be corrupted.")
+            
+            # --- 文件移动 ---
             if os.path.exists(task.dest_path):
                 os.remove(task.dest_path) # 覆盖旧文件
-            os.rename(temp_path, task.dest_path)
+            shutil.move(temp_path, task.dest_path)
             
-            # 【关键】最后发送 COMPLETED，确保 100%
+            # 最后发送 COMPLETED，确保 100%
             task.status = TaskStatus.COMPLETED
             task.speed = "Done"
             self._emit_progress(task)
-            logger.info(f"Download completed: {task.dest_path}")
+            logger.info(f"Download success: {task.dest_path}")
             
+            # 执行回调
+            if task.on_complete:
+                try:
+                    task.on_complete(task)
+                except Exception as cb_e:
+                    logger.error(f"Callback error in task {task.task_id}: {cb_e}")
         except InterruptedError:
             # 取消时不视为错误
             task.status = TaskStatus.CANCELLED
-            self._cleanup_temp(temp_path)
+            self._cleanup(temp_path)
             self._emit_progress(task)
         except Exception as e:
             task.status = TaskStatus.ERROR
             task.error_msg = str(e)
-            self._cleanup_temp(temp_path)
+            self._cleanup(temp_path)
             self._emit_progress(task)
             logger.error(f"Download failed [{task.url}]: {e}")
-        finally:
-            # 无论成功失败，触发完成信号
-            task._completion_event.set()
+            # 执行失败回调
+            if task.on_error:
+                try:
+                    task.on_error(task)
+                except: pass
 
-    def _cleanup_temp(self, path):
+    def _verify_hash(self, file_path: str, expected: str, algo: str = "md5") -> bool:
+        """校验文件 Hash"""
+        try:
+            h = hashlib.new(algo)
+            with open(file_path, 'rb') as f:
+                while chunk := f.read(8192):
+                    h.update(chunk)
+            calculated = h.hexdigest().lower()
+            expected = expected.lower()
+            
+            if calculated != expected:
+                logger.warning(f"Hash mismatch: calculated={calculated}, expected={expected}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Hash check failed: {e}")
+            return False
+    def _cleanup(self, path):
         if os.path.exists(path):
             try: os.remove(path)
             except: pass
@@ -276,12 +350,9 @@ class DownloadManager:
 
     def _calc_percent(self, task) -> int:
         # 如果是完成状态，强制返回 100
-        if task.status == TaskStatus.COMPLETED:
-            return 100
-        if task.total_size <= 0: 
-            return 0
-        p = int((task.downloaded_size / task.total_size) * 100)
-        return min(p, 100) # 封顶 100
+        if task.status == TaskStatus.COMPLETED: return 100
+        if task.total_size <= 0: return 0
+        return min(int((task.downloaded_size / task.total_size) * 100), 100) # 封顶 100
 
     def _fmt_speed(self, bytes_per_sec: float) -> str:
         if bytes_per_sec > 1024 * 1024:
@@ -291,19 +362,7 @@ class DownloadManager:
         return f"{int(bytes_per_sec)} B/s"
     
     # 同步等待方法
-    def wait_for_task(self, task_id: str, timeout: int = 60) -> bool:
-        """
-        阻塞直到任务完成或超时
-        :return: True if success, False if failed/timeout
-        """
-        if task_id not in self.tasks:
-            return False
-        
-        task = self.tasks[task_id]
-        # 阻塞等待信号
-        is_set = task._completion_event.wait(timeout)
-        
-        if not is_set:
-            return False # 超时
-        
-        return task.status == TaskStatus.COMPLETED
+    def get_task_future(self, task_id: str) -> Optional[Future]:
+        """获取任务的 Future 对象，用于同步等待"""
+        task = self.tasks.get(task_id)
+        return task._future if task else None

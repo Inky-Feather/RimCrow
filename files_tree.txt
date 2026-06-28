@@ -1,146 +1,158 @@
-·[.]
-├──·[Downloads]
-│  ├── 414bebd85119f267475dd88ffaf1e66c.zip
-│  └── RimModManager v0.15.4.zip
-│     
-├──·[backend]
-│  ├──·[database]
-│  │  ├── dao.py
-│  │  └── models.py
-│  │     
-│  ├──·[managers]
-│  │  ├── mgr_ai.py
-│  │  ├── mgr_download.py
-│  │  ├── mgr_files.py
-│  │  ├── mgr_game.py
-│  │  ├── mgr_game_logs.py
-│  │  ├── mgr_mods_config.py
-│  │  ├── mgr_network.py
-│  │  ├── mgr_rules.py
-│  │  ├── mgr_sorter.py
-│  │  ├── mgr_steam.py
-│  │  ├── mgr_steam_history.py
-│  │  ├── mgr_sub_browser.py
-│  │  ├── mgr_update.py
-│  │  └── mgr_workshop_db.py
-│  │     
-│  ├──·[scanner]
-│  │  ├── analyzer.py
-│  │  ├── mod_scanner.py
-│  │  ├── parser_dlc.py
-│  │  └── parser_xml.py
-│  │     
-│  ├──·[utils]
-│  │  ├── constants.py
-│  │  ├── event_bus.py
-│  │  ├── lanzou_parser.py
-│  │  └── logger.py
-│  │     
-│  ├── _version.py
-│  ├── api.py
-│  ├── settings.py
-│  └── static_page.py
-│     
-├──·[frontend]
-│  ├──·[src]
-│  │  ├──·[components]
-│  │  │  ├──·[common]
-│  │  │  │  ├──·[ContextMenu]
-│  │  │  │  │  ├── ContextMenu.vue
-│  │  │  │  │  └── ContextMenuItem.vue
-│  │  │  │  │     
-│  │  │  │  ├──·[TagsSearch]
-│  │  │  │  │  ├── Tag.vue
-│  │  │  │  │  └── TagsSearch.vue
-│  │  │  │  │     
-│  │  │  │  ├──·[input]
-│  │  │  │  │  ├── CommonInput.vue
-│  │  │  │  │  ├── CommonKVEditor.vue
-│  │  │  │  │  ├── CommonNumber.vue
-│  │  │  │  │  ├── CommonPathInput.vue
-│  │  │  │  │  ├── CommonSelect.vue
-│  │  │  │  │  ├── CommonSwitch.vue
-│  │  │  │  │  └── CommonTagInput.vue
-│  │  │  │  │     
-│  │  │  │  ├── Confirm.vue
-│  │  │  │  └── HoverPanel.vue
-│  │  │  │     
-│  │  │  ├──·[utils]
-│  │  │  │  ├── AppLogPanel.vue
-│  │  │  │  ├── DependencyGraph.vue
-│  │  │  │  ├── FocusTabs.vue
-│  │  │  │  ├── GameLogPanel.vue
-│  │  │  │  ├── GroupItem.vue
-│  │  │  │  ├── ImageCloud.vue
-│  │  │  │  ├── LampEffect.vue
-│  │  │  │  ├── LuxBreatheIcon.vue
-│  │  │  │  ├── ModItem.vue
-│  │  │  │  └── SegmentedTabs.vue
-│  │  │  │     
-│  │  │  ├── BackupList.vue
-│  │  │  ├── ConflictResolver.vue
-│  │  │  ├── DebugPanel.vue
-│  │  │  ├── GroupList.vue
-│  │  │  ├── ListDiffView.vue
-│  │  │  ├── LogViewer.vue
-│  │  │  ├── ModDetails.vue
-│  │  │  ├── ModList.vue
-│  │  │  ├── ModRuleEditor.vue
-│  │  │  ├── RimHeader.vue
-│  │  │  ├── RulePanel.vue
-│  │  │  ├── SettingsPanel.vue
-│  │  │  └── StatusBar.vue
-│  │  │     
-│  │  ├──·[directives]
-│  │  │  ├── dragScroll.js
-│  │  │  ├── vPreview.js
-│  │  │  ├── vSelection.js
-│  │  │  └── vTooltip.js
-│  │  │     
-│  │  ├──·[modules]
-│  │  │  └──·[search]
-│  │  │     
-│  │  │     ├── QueryParser.js
-│  │  │     ├── SearchEngine.js
-│  │  │     ├── SearchHelp.js
-│  │  │     └── SearchTypes.js
-│  │  │        
-│  │  ├──·[stores]
-│  │  │  ├── appStore.js
-│  │  │  ├── confirmStore.js
-│  │  │  ├── contextMenuStore.js
-│  │  │  ├── groupStore.js
-│  │  │  ├── hoverStore.js
-│  │  │  ├── modStore.js
-│  │  │  ├── orderStore.js
-│  │  │  ├── ruleStore.js
-│  │  │  └── searchStore.js
-│  │  │     
-│  │  ├──·[utils]
-│  │  │  ├── colorDeal.js
-│  │  │  ├── constants.js
-│  │  │  └── unityTextParser.js
-│  │  │     
-│  │  ├── style.css
-│  │  ├── main.js
-│  │  ├── toast.scss
-│  │  └── App.vue
-│  │     
-│  ├── index.html
-│  ├── vite.config.js
-│  ├── package-lock.json
-│  ├── package.json
-│  └── README.md
-│     
-├── icon.ico
-├── uv.lock
-├── README.md
-├── main.py
-├── pack_nuitka.py
-├── pack_pyinstaller.py
-├── RimModManager.spec
-├── icon.svg
-├── pyproject.toml
-├── files_tree.txt
-└── nuitka-crash-report.xml
-   
+·[RimModManager]
+├── ·[.history]
+├── ·[backend]
+│   ├── ·[database]
+│   │   ├──  __init__.py
+│   │   ├──  dao.py
+│   │   ├──  migrator.py
+│   │   └──  models.py
+│   │   
+│   ├── ·[managers]
+│   │   ├──  __init__.py
+│   │   ├──  mgr_ai.py
+│   │   ├──  mgr_download.py
+│   │   ├──  mgr_files.py
+│   │   ├──  mgr_game.py
+│   │   ├──  mgr_game_logs.py
+│   │   ├──  mgr_game_monitor.py
+│   │   ├──  mgr_mods_config.py
+│   │   ├──  mgr_network.py
+│   │   ├──  mgr_profile.py
+│   │   ├──  mgr_rules.py
+│   │   ├──  mgr_sorter.py
+│   │   ├──  mgr_steam.py
+│   │   ├──  mgr_sub_browser.py
+│   │   └──  mgr_update.py
+│   │   
+│   ├── ·[scanner]
+│   │   ├──  __init__.py
+│   │   ├──  analyzer.py
+│   │   ├──  mod_scanner.py
+│   │   ├──  parser_dlc.py
+│   │   └──  parser_xml.py
+│   │   
+│   ├── ·[utils]
+│   │   ├──  __init__.py
+│   │   ├──  constants.py
+│   │   ├──  event_bus.py
+│   │   ├──  lanzou_parser.py
+│   │   ├──  logger.py
+│   │   └──  tools.py
+│   │   
+│   ├──  _version.py
+│   ├──  api.py
+│   ├──  settings.py
+│   └──  static_page.py
+│   
+├── ·[data]
+├── ·[frontend]
+│   ├── ·[public]
+│   │   └──  vite.svg
+│   │   
+│   ├── ·[src]
+│   │   ├── ·[assets]
+│   │   │   └──  vue.svg
+│   │   │   
+│   │   ├── ·[components]
+│   │   │   ├── ·[common]
+│   │   │   │   ├── ·[ContextMenu]
+│   │   │   │   ├── ·[input]
+│   │   │   │   ├── ·[TagsSearch]
+│   │   │   │   ├──  Confirm.vue
+│   │   │   │   └──  HoverPanel.vue
+│   │   │   │   
+│   │   │   ├── ·[utils]
+│   │   │   │   ├──  AppLogPanel.vue
+│   │   │   │   ├──  DependencyGraph.vue
+│   │   │   │   ├──  FocusTabs.vue
+│   │   │   │   ├──  GameLogPanel.vue
+│   │   │   │   ├──  GroupItem.vue
+│   │   │   │   ├──  ImageCloud.vue
+│   │   │   │   ├──  LampEffect.vue
+│   │   │   │   ├──  LuxBreatheIcon.vue
+│   │   │   │   ├──  ModItem.vue
+│   │   │   │   ├──  ProfileSwitcher.vue
+│   │   │   │   └──  SegmentedTabs.vue
+│   │   │   │   
+│   │   │   ├──  BackupList.vue
+│   │   │   ├──  ConflictResolver.vue
+│   │   │   ├──  DebugPanel.vue
+│   │   │   ├──  GroupList.vue
+│   │   │   ├──  ListDiffView.vue
+│   │   │   ├──  LogViewer.vue
+│   │   │   ├──  ModDetails.vue
+│   │   │   ├──  ModList.vue
+│   │   │   ├──  ModRuleEditor.vue
+│   │   │   ├──  ProfileDrawer.vue
+│   │   │   ├──  RimHeader.vue
+│   │   │   ├──  RulePanel.vue
+│   │   │   ├──  SettingsPanel.vue
+│   │   │   └──  StatusBar.vue
+│   │   │   
+│   │   ├── ·[directives]
+│   │   │   ├──  dragScroll.js
+│   │   │   ├──  vPreview.js
+│   │   │   ├──  vSelection.js
+│   │   │   └──  vTooltip.js
+│   │   │   
+│   │   ├── ·[modules]
+│   │   │   └── ·[search]
+│   │   │   
+│   │   │       ├──  QueryParser.js
+│   │   │       ├──  SearchEngine.js
+│   │   │       ├──  SearchHelp.js
+│   │   │       └──  SearchTypes.js
+│   │   │       
+│   │   ├── ·[stores]
+│   │   │   ├──  appStore.js
+│   │   │   ├──  confirmStore.js
+│   │   │   ├──  contextMenuStore.js
+│   │   │   ├──  groupStore.js
+│   │   │   ├──  hoverStore.js
+│   │   │   ├──  modStore.js
+│   │   │   ├──  orderStore.js
+│   │   │   ├──  profileStore.js
+│   │   │   ├──  ruleStore.js
+│   │   │   └──  searchStore.js
+│   │   │   
+│   │   ├── ·[utils]
+│   │   │   ├──  colorDeal.js
+│   │   │   ├──  constants.js
+│   │   │   ├──  uiHelper.js
+│   │   │   └──  unityTextParser.js
+│   │   │   
+│   │   ├──  App.vue
+│   │   ├──  main.js
+│   │   ├──  style.css
+│   │   └──  toast.scss
+│   │   
+│   ├──  .gitignore
+│   ├──  index.html
+│   ├──  package-lock.json
+│   ├──  package.json
+│   ├──  README.md
+│   └──  vite.config.js
+│   
+├── ·[test]
+├── ·[tools]
+│   ├── ·[steam_agent]
+│   │   ├──  steam_api64.dll
+│   │   ├──  steam_appid.txt
+│   │   ├──  steam_worker.py
+│   │   └──  SteamworksPy64.dll
+│   │   
+│   └── ·[steamcmd]
+│   
+│       └──  steamcmd.exe
+│       
+├──  .gitignore
+├──  .python-version
+├──  files_tree.txt
+├──  icon.ico
+├──  icon.svg
+├──  main.py
+├──  pack_nuitka.py
+├──  pack_pyinstaller.py
+├──  pyproject.toml
+├──  README.md
+└──  uv.lock

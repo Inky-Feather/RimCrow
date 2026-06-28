@@ -102,7 +102,11 @@ class LanzouParser:
             
             if depth_info:
                 latest_file.update(depth_info)
-
+                self.log_step("LATEST", f"最新版本描述: {depth_info['note']}")
+                self.log_step("LATEST", f"最新版本下载直链: {depth_info['download_url']}")
+            else:
+                self.log_step("LATEST", f"最新版本详情解析失败: {self.last_error}")
+                
             return {
                 "files": all_files,
                 "latest": latest_file
@@ -113,7 +117,13 @@ class LanzouParser:
             return None
 
     def get_file(self, url):
-        """深度解析：访问文件详情页，获取 fid、Changelog 并换取直链"""
+        """
+        深度解析：访问文件详情页，获取 fid、Changelog 并换取直链
+        return: {
+            'note': str,  # 文件描述 (Changelog)
+            'download_url': str  # 下载直链
+        }
+        """
         try:
             domain = url.split('/')[2]
             res = self.session.get(url)

@@ -5,18 +5,18 @@
       @click.self="appStore.uiState.showLogDrawer = false">
       
       <div class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999" @click.self="appStore.uiState.showLogDrawer = false">
-        <div class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl relative group">
+        <div class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-md rounded-2xl overflow-hidden border border-text-main/10 shadow-2xl relative group">
           
           <!-- ================= 1. 顶部控制台 (Header & Toolbar) ================= -->
-          <div class="shrink-0 bg-bg-deep/50 border-b border-white/5 backdrop-blur-xl z-20">
+          <div class="shrink-0 bg-bg-deep/50 border-b border-text-main/5 backdrop-blur-xl z-20">
             
             <!-- A. 顶栏：标签页与统计 -->
             <div class="flex items-center justify-between px-4 h-12">
               <!-- 模式切换 Tabs -->
-              <div class="flex p-1 bg-black/20 rounded-lg border border-white/5">
+              <div class="flex p-1 bg-black/20 rounded-lg border border-text-main/5">
                 <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
                   class="px-4 py-1 rounded-md text-sm font-bold transition-all duration-300 flex items-center gap-2 relative overflow-hidden"
-                  :class="currentTab === tab.id ? 'text-white shadow-lg bg-white/10' : 'text-text-dim hover:text-white hover:bg-white/5'">
+                  :class="currentTab === tab.id ? 'text-text-main shadow-lg bg-text-main/10' : 'text-text-dim hover:text-text-main hover:bg-text-main/5'">
                   <!-- 激活时的底部光条 -->
                   <div v-if="currentTab === tab.id" class="absolute bottom-0 left-0 w-full h-0.5 bg-accent-primary shadow-[0_0_8px_var(--color-accent-primary)]"></div>
                   <component :is="tab.icon" class="w-3.5 h-3.5" />
@@ -43,7 +43,7 @@
           </div>
 
           <!-- ================= 2. 日志内容区 (Log Stream) ================= -->
-          <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm selection:bg-accent-primary/30 selection:text-white">
+          <div class="flex-1 min-h-0 bg-black/20 font-mono text-sm selection:bg-accent-primary/30 selection:text-text-main">
             
             <KeepAlive>
               <component :is="currentTabComponent" />
@@ -54,17 +54,17 @@
           </div>
 
           <!-- ================= 3. AI 智能辅助栏 (Footer) ================= -->
-          <div v-if="false" class="bg-bg-deep/80 border-t border-white/10 p-3 backdrop-blur-xl z-30">
+          <div v-if="false" class="bg-bg-deep/80 border-t border-text-main/10 p-3 backdrop-blur-xl z-30">
             <div class="flex items-center gap-2">
               <!-- AI 图标 -->
               <div class="w-8 h-8 rounded-lg bg-linear-to-br from-accent-special to-accent-highlight p-0.5 shadow-lg shadow-accent-special/20 animate-pulse-slow">
                 <div class="w-full h-full bg-bg-deep rounded-md flex items-center justify-center">
-                  <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  <svg class="w-4 h-4 text-text-main" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
               </div>
 
               <div class="flex-1">
-                <h3 class="text-sm font-bold text-white mb-0.5">AI 智能诊断</h3>
+                <h3 class="text-sm font-bold text-text-main mb-0.5">AI 智能诊断</h3>
                 <p class="text-xs text-text-dim">
                   当前选中 <span class="text-accent-primary font-bold">{{ selectedLogCount }}</span> 条日志。
                   <span v-if="selectedLogCount > 0" class="text-accent-success cursor-pointer hover:underline" @click="analyzeLogs">点击开始分析</span>
@@ -73,7 +73,7 @@
               </div>
 
               <button @click="analyzeLogs" :disabled="selectedLogCount === 0"
-                class="px-4 py-2 bg-white/5 hover:bg-accent-special hover:text-white border border-white/10 rounded-lg text-sm font-bold text-text-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                class="px-4 py-2 bg-text-main/5 hover:bg-accent-special hover:text-text-main border border-text-main/10 rounded-lg text-sm font-bold text-text-dim transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                 <span>分析原因</span>
                 <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
               </button>

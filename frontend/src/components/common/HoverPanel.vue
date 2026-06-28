@@ -34,7 +34,7 @@
         <!-- 悬浮装饰：分组标签 (破格设计，浮在卡片上方) -->
         <div v-if="modGroups.length" class="absolute bottom-full -mb-1 right-4 flex gap-0.5 z-0 opacity-80 ">
           <div v-for="g in modGroups" :key="g.group_id" 
-               class="px-1 py-0.5 rounded-t-md text-xs font-bold shadow-lg flex items-center gap-1 border-t border-x border-white/10"
+               class="px-1 py-0.5 rounded-t-md text-xs font-bold shadow-lg flex items-center gap-1 border-t border-x border-text-main/10"
                :style="{ backgroundColor: g.color, color: getContrastColor(g.color) }">
              {{ g.name }}
           </div>
@@ -58,12 +58,12 @@
         <div class="relative z-10 p-4 flex flex-col gap-1 h-full">
           
           <!-- 第一行：元数据 (ID & Ver & Type) -->
-          <div class="flex items-center justify-between text-xs font-mono text-text-main/80 border-b border-white/5 pb-1">
+          <div class="flex items-center justify-between text-xs font-mono text-text-main/80 border-b border-text-main/5 pb-1">
             <span class="truncate opacity-70 tracking-tighter">{{ hoverStore.data.package_id }}</span>
             <div class="flex items-center gap-2 shrink-0">
               <span v-if="hoverStore.data.version" class="text-accent-primary">v{{ hoverStore.data.version }}</span>
               <!-- Mod类型徽章 -->
-              <span class="px-1.5 rounded-sm bg-white/5 border border-white/10 text-white/80">
+              <span class="px-1.5 rounded-sm bg-text-main/5 border border-text-main/10 text-text-main/80">
                 {{ MOD_TYPE_MAP[modStore.displayModType(hoverStore.data)] || 'MOD' }}
               </span>
             </div>
@@ -115,9 +115,9 @@
           </div>
 
           <!-- 第五行：Tags 流 -->
-          <div v-if="hoverStore.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-white/5">
+          <div v-if="hoverStore.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-text-main/5">
             <span v-for="tag in hoverStore.data.tags.slice(0, 7)" :key="tag" 
-                  class="text-[0.65rem] px-1.5 py-px rounded-full bg-white/5 text-white/70 border border-white/5 whitespace-nowrap">
+                  class="text-[0.65rem] px-1.5 py-px rounded-full bg-text-main/5 text-text-main/70 border border-text-main/5 whitespace-nowrap">
               #{{ tag }}
             </span>
             <span v-if="hoverStore.data.tags.length > 7" class="text-[0.65rem] text-text-dim px-1">...</span>
@@ -127,7 +127,7 @@
 
       </div>
       <!-- 模式 B: 纯文本 Tooltip (data 是字符串) -->
-      <div v-else-if="hoverStore.type === 'text'" class="text-sm font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
+      <div v-else-if="hoverStore.type === 'text'" class="text-sm font-medium text-text-main text-pretty wrap-break-word whitespace-pre-wrap">
         <!-- {{ parseMarkup(hoverStore.) }} -->
         <div v-html="parseMarkup(hoverStore.data)"></div>
       </div>
@@ -188,7 +188,7 @@ watch(() => hoverStore.isHovering, (hovering) => {
 const containerClasses = computed(() => {
   if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
-    return 'px-2 py-1.5 max-w-[30dvw] rounded-md break-all text-pretty whitespace-normal bg-black/50 backdrop-blur-sm border border-white/20 shadow-lg'
+    return 'px-2 py-1.5 max-w-[30dvw] rounded-md break-all text-pretty whitespace-normal bg-black/50 backdrop-blur-sm border border-text-main/20 shadow-lg'
   }
   // 让组件自己决定长什么样
   if (hoverStore.type === 'component') {
@@ -355,7 +355,7 @@ const parseMarkup = (text) => {
     // [Bold] **text** -> font-bold
     { 
       regex: /\*\*(.*?)\*\*/g, 
-      repl: '<span class="font-bold text-white text-sm">$1</span>' 
+      repl: '<span class="font-bold text-text-main text-base">$1</span>' 
     },
     // [Italic] __text__ -> italic opacity-80
     { 
@@ -380,7 +380,7 @@ const parseMarkup = (text) => {
     // [Code/Mono] `text` -> bg-black/30 font-mono
     { 
       regex: /··(.*?)··/g, 
-      repl: '<span class="font-mono text-xs bg-white/10 px-1 rounded mx-0.5 text-text-main">$1</span>' 
+      repl: '<span class="font-mono text-xs bg-text-main/10 px-1 rounded mx-0.5 text-text-main">$1</span>' 
     }
   ]
 
@@ -407,7 +407,7 @@ const saveBreakingColor = computed(() => {
   const v = saveBreakingVal.value
   if (v === 1) return 'text-accent-success border-accent-success/30 bg-accent-success/10' // 安全
   if (v === -1) return 'text-accent-danger border-accent-danger/30 bg-accent-danger/10' // 危险
-  return 'text-text-dim border-white/5' // 未知
+  return 'text-text-dim border-text-main/5' // 未知
 })
 
 const saveBreakingText = computed(() => {

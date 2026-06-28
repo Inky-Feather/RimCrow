@@ -10,7 +10,7 @@
 @source inline('{hover:,focus:,}{bg}-accent-{primary,danger,highlight,special,cool,success,tip,warn,secondary,warning}/{10,20,30,40,50,60}');
 @source inline('{hover:,focus:,}{border,text}-accent-{primary,danger,highlight,special,cool,success,tip,warn,secondary,warning}/{10,20,30,40,50}');
 
-/* 这里定义我们的 RimWorld 主题颜色 */
+/* 这里定义主题颜色 */
 @theme {
   /* 基础背景色 - 深邃的蓝黑 */
   --color-bg-deep: #0f172a; 
@@ -346,12 +346,91 @@ button:focus-visible {
 @layer components {
   /* 统一的输入框玻璃质感 */
   .input-glass {
-    @apply bg-black/30 border border-white/10 rounded-lg transition-all duration-200;
+    @apply bg-black/30 border border-text-main/10 rounded-lg transition-all duration-200;
   }
   .input-glass:hover {
-    @apply border-white/20 bg-black/60;
+    @apply border-text-main/20 bg-black/60;
   }
   .input-glass:focus-within {
     @apply border-accent-primary/50 ring-1 ring-accent-primary/20 shadow-[0_0_15px_rgba(6,182,212,0.1)];
   }
+}
+
+:root {
+  --highlight-color: 234,179,8; 
+}
+
+/* 1. 剧烈颤抖 (Shake) - 适合错误或强提醒 */
+@keyframes highlight-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* 2. Q弹摇摆 (Wobble) - 适合引导操作 */
+@keyframes highlight-wobble {
+  0% { transform: translateX(0%); }
+  15% { transform: translateX(-15%) rotate(-5deg); }
+  30% { transform: translateX(10%) rotate(3deg); }
+  45% { transform: translateX(-10%) rotate(-3deg); }
+  60% { transform: translateX(5%) rotate(2deg); }
+  75% { transform: translateX(-5%) rotate(-1deg); }
+  100% { transform: translateX(0%); }
+}
+
+/* 3. 爆裂闪烁 (Flash) - 适合高亮位置 */
+@keyframes highlight-flash {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.5; }
+}
+
+/* 4. 呼吸扩散 (Pulse) - 原版柔和效果 */
+@keyframes highlight-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--highlight-color), 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(var(--highlight-color), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--highlight-color), 0); }
+}
+
+/* ================= 激活类 ================= */
+
+/* 基础样式 */
+.highlight-base {
+  position: relative;
+  z-index: 9999;
+  /* 强制硬件加速，防止动画卡顿 */
+  will-change: transform, box-shadow; 
+}
+
+/* 模式 A: 颤抖 (Shake) */
+.highlight-effect-shake {
+  animation: highlight-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+  outline: 2px solid rgba(var(--highlight-color), 1);
+  border-radius: 5px;
+  padding: 2px 3px;
+  color: rgba(var(--highlight-color), 1);
+  box-shadow: 0 0 15px rgba(var(--highlight-color), 0.6);
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  -ms-border-radius: 5px;
+  -o-border-radius: 5px;
+}
+
+/* 模式 B: 摇摆 (Wobble) */
+.highlight-effect-wobble {
+  animation: highlight-wobble 1s ease-in-out both;
+  outline: 2px dashed rgba(var(--highlight-color), 1);
+  outline-offset: 4px;
+}
+
+/* 模式 C: 闪烁 (Flash) */
+.highlight-effect-flash {
+  animation: highlight-flash 0.5s ease-in-out infinite;
+  outline: 4px solid rgba(var(--highlight-color), 0.8);
+  outline-offset: 2px;
+}
+
+/* 模式 D: 呼吸 (Pulse - 默认) */
+.highlight-effect-pulse {
+  animation: highlight-pulse 2s infinite;
+  border-radius: 4px;
 }

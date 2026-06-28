@@ -5,14 +5,14 @@
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
     </label>
     <div class="flex items-center input-glass overflow-hidden h-9">
-      <button @click="change(-1)" class="w-[20%] h-full hover:bg-white/5 text-text-dim hover:text-white transition-colors border-r border-white/5">-</button>
+      <button @click="change(-1)" class="w-[20%] h-full hover:bg-text-main/5 text-text-dim hover:text-text-main transition-colors border-r border-text-main/5">-</button>
       
-      <input type="number" :value="modelValue"
+      <input type="number" :value="modelValue" :min="min" :max="max" :step="step"
         @input="$emit('update:modelValue', Number($event.target.value))"
-        class="flex-1 bg-transparent min-w-0 text-center text-sm text-white font-mono focus:outline-none [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        class="flex-1 bg-transparent min-w-0 text-center text-sm text-text-main font-mono focus:outline-none [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       
-      <button @click="change(1)" class="w-[20%] h-full hover:bg-white/5 text-text-dim hover:text-white transition-colors border-l border-white/5">+</button>
+      <button @click="change(1)" class="w-[20%] h-full hover:bg-text-main/5 text-text-dim hover:text-text-main transition-colors border-l border-text-main/5">+</button>
     </div>
   </div>
 </template>
@@ -29,8 +29,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const change = (dir) => {
-  if (props.modelValue + (dir * props.step) > props.max) return
-  if (props.modelValue + (dir * props.step) < props.min) return
-  emit('update:modelValue', props.modelValue + (dir * props.step))
+  let newValue = props.modelValue + (dir * props.step)
+  if (newValue > props.max) newValue = props.max
+  if (newValue < props.min) newValue = props.min
+
+  emit('update:modelValue', newValue)
 }
 </script>

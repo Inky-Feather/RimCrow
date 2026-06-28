@@ -8,12 +8,12 @@
 
     <!-- 面板主体 -->
     <div v-if="isOpen" 
-      class="w-[400px] h-[600px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl flex flex-col overflow-hidden">
+      class="w-[400px] h-[600px] bg-[#1e1e1e] border border-text-main/10 rounded-lg shadow-2xl flex flex-col overflow-hidden">
       
       <!-- 顶部信息 -->
-      <div class="p-2 border-b border-white/10 bg-white/5 flex justify-between">
+      <div class="p-2 border-b border-text-main/10 bg-text-main/5 flex justify-between">
         <span class="text-green-400">Store 快照</span>
-        <button @click="refresh" class="hover:text-white">刷新</button>
+        <button @click="refresh" class="hover:text-text-main">刷新</button>
       </div>
 
       <!-- JSON 视图 -->

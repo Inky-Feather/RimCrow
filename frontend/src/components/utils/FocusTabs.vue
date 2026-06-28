@@ -1,6 +1,6 @@
 <template>
   <div ref="containerRef" class="relative flex p-0.5 rounded-lg backdrop-blur-[5px]"
-    :class="{'bg-white/5 border border-white/10 ': showBorder}"
+    :class="{'bg-text-main/5 border border-text-main/10 ': showBorder}"
     >
     <button
       v-for="(tab, index) in tabs"

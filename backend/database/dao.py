@@ -78,6 +78,24 @@ class ModDAO:
                  .where(combined_cond) # 组合 OR 条件
                  .dicts())
 
+        # 预加载分组映射 (Preload Group Mapping)，建立 { package_id: ["分组A", "分组B"] } 的映射
+        group_map = {}
+        try:
+            # 联查 GroupMod 和 GroupData，只取必要的字段
+            # SELECT gm.mod_id, g.name FROM groupmod gm JOIN groupdata g ON gm.group_id = g.group_id
+            g_query = (GroupMod.select(GroupMod.mod_id, GroupData.name)
+                       .join(GroupData, on=(GroupMod.group_id == GroupData.group_id))
+                       .dicts())
+            
+            for row in g_query:
+                mid = row['mod_id'].lower()
+                gname = row['name']
+                if mid not in group_map:
+                    group_map[mid] = []
+                group_map[mid].append(gname)
+        except Exception as e:
+            logger.error(f"Failed to load group map: {e}")
+        
         # 3. 内存处理 (Python Logic)
         # 实现 "Local Trumps Workshop" (本地优先于工坊)
         
@@ -89,12 +107,14 @@ class ModDAO:
             mod_path = os.path.normpath(mod['path']).lower()
             pkg_id = mod['package_id'] # 注意：数据库里已经是小写了
             
+            # 注入分组名称列表
+            mod['groups'] = group_map.get(pkg_id, [])
+            
             # 判定来源类型
             is_local_mod = False
             if local_root and local_root in mod_path:
                 is_local_mod = True
                 mod['is_local'] = True # 标记供前端展示文件夹图标
-            
             # 判定是否是 DLC (Data 目录下的)
             # 也可以简单判断：source == 'dlc' 或 'core'
             is_dlc = mod.get('source') in ['core', 'dlc']
@@ -501,7 +521,7 @@ class GroupDAO:
     """
 
     @staticmethod
-    def get_all_groups_structured_old():
+    def get_all_groups_structured():
         """
         【关键方法】获取完整的分组数据结构，供前端渲染。
         返回格式:
@@ -542,7 +562,7 @@ class GroupDAO:
         return groups
     
     @staticmethod
-    def get_all_groups_structured(allowed_ids: List[str]):
+    def get_groups_structured_by_mod_ids(allowed_ids: List[str]):
         """
         获取结构化分组数据，并根据给定的 ID 集合过滤内容。
         :param allowed_ids: 当前环境下可见的模组 package_id 集合 (Set 提高查找效率)

@@ -3,14 +3,14 @@
   <div :aria-disabled="disabled" class="flex items-center justify-between py-2 px-3 aria-disabled:pointer-events-none aria-disabled:opacity-50" 
     :class="[mini?'':'input-glass']">
     <div class="flex flex-col">
-      <span class="text-sm font-bold text-white tracking-wide">{{ label }}
+      <span class="text-sm font-bold text-text-main tracking-wide">{{ label }}
         <label v-if="description && mini" v-tooltip="description" class="text-text-dim ml-1 italic cursor-help underline hover:text-text-main">?</label>
       </span>
       <span v-if="description && !mini" class="text-[0.7rem] text-text-dim mt-0.5">{{ description }}</span>
     </div>
 
     <button @click="$emit('update:modelValue', !modelValue)"
-      class="relative shrink-0 rounded-full transition-all duration-300 overflow-hidden border border-white/10"
+      class="relative shrink-0 rounded-full transition-all duration-300 overflow-hidden border border-text-main/10"
       :class="[modelValue ? 'bg-accent-primary/20 border-accent-primary/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'bg-black/40',
         mini?'w-9.5 h-5':'w-10 h-6'
       ]"

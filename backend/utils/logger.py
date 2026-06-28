@@ -7,8 +7,6 @@ import datetime
 import colorlog  # 引入 colorlog
 from logging.handlers import TimedRotatingFileHandler
 from icecream import ic
-from backend.settings import settings
-from backend.utils.event_bus import EventBus
 
 # 定义日志格式
 class JSONFormatter(logging.Formatter):
@@ -37,6 +35,10 @@ class WebviewHandler(logging.Handler):
     将日志实时推送到前端的 Handler
     """
     def emit(self, record):
+        from backend.utils.event_bus import EventBus
+        # 如果 EventBus 没有窗口引用，直接跳过，防止报错
+        # 这里的 _window 是在 EventBus 中定义的类变量
+        if not getattr(EventBus, '_window', None): return 
         try:
             # 格式化为字典对象直接发给前端，不需要再次 JSON 序列化
             log_entry = {
@@ -85,9 +87,9 @@ class LoggerManager:
         return cls._instance
 
     def __init__(self):
+        from backend.settings import settings
         # 1. 防止重复初始化 (单例模式下 __init__ 会被多次调用)
-        if getattr(self, '_initialized', False):
-            return
+        if getattr(self, '_initialized', False): return
         self._initialized = True
 
         # 1. 创建 Logger
@@ -160,13 +162,12 @@ class LoggerManager:
         self._logger.addHandler(webview_handler)
 
         # 6. 集成 Icecream (关键步骤)
-        self._configure_icecream()
-
+        self._configure_icecream(settings.config.debug_mode)
         self._logger.info("Logger system initialized with Colorlog.")
 
-    def _configure_icecream(self):
+    def _configure_icecream(self, debug_mode: bool):
         """ 配置 icecream 的行为 """
-        if settings.config.debug_mode:
+        if debug_mode:
             ic.enable()
             # 【核心】将 ic 的输出重定向到 logger.debug
             # 这样 ic() 打印的内容既会在控制台高亮显示（ic自带），也会被写入 log 文件

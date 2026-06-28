@@ -11,6 +11,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     mode: 'alert',     // 'alert' | 'confirm' | 'prompt'
     title: '',
     message: '',
+    isHtml: false,     // 是否允许 HTML 内容
     inputValue: '',    // Prompt 模式下的输入值
     placeholder: '',
     confirmText: '确定',

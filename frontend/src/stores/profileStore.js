@@ -51,25 +51,21 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 切换环境 (核心逻辑)
   const switchProfile = async (profileId) => {
-    if (profileId === currentProfileId.value) return
+    // if (profileId === currentProfileId.value) return
     appStore.isLoading = true
     isLoading.value = true
     try {
       const res = await window.pywebview.api.activate_profile(profileId)
       if (appStore.checkResult(res, '切换环境')) {
         currentProfileId.value = profileId
-        
         // 【关键逻辑】环境切换后，重置并刷新所有数据
         const modStore = useModStore()
         const groupStore = useGroupStore()
-        
         // 1. 清空当前前端的缓存，防止数据交叉
         modStore.reset()
         groupStore.reset()
-        
         // 2. 重新从后端拉取新环境的上下文数据 (Mods, Groups, Settings)
         await modStore.scanMods()
-        
         toast.success(`已切换至环境: ${currentProfile.value?.name || profileId}`)
       }
     } finally {

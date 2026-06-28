@@ -1,7 +1,7 @@
 <template>
   <div v-if="selectedMod" class="flex flex-col h-full p-1 bg-bg-surface/50 select-text">
     <!-- 1. 顶部大图与标题区 (保持原有设计风格但优化) -->
-    <div class="w-full aspect-video opacity-90 backdrop-blur-sm bg-black/40 rounded-xl overflow-hidden relative border border-white/10 shadow-lg group">
+    <div class="w-full aspect-video opacity-90 backdrop-blur-sm bg-black/40 rounded-xl overflow-hidden relative border border-text-main/10 shadow-lg group">
       
       <!-- 图片 (优先显示大图，没有大图时回退显示 store 中的缩略图，防止留白) -->
       <Transition name="fade">
@@ -17,7 +17,7 @@
         </div>
       </Transition>
       <!-- Mod版本 -->
-      <div v-tooltip="'Mod版本'" class="absolute top-1.5 left-2 px-1 py-0.5 rounded text-xs text-text-main font-bold text-shadow-lg bg-bg-surface/20 border border-white/5">
+      <div v-tooltip="'Mod版本'" class="absolute top-1.5 left-2 px-1 py-0.5 rounded text-xs text-text-main font-bold text-shadow-lg bg-bg-surface/20 border border-text-main/5">
         v {{ selectedMod.version ? selectedMod.version : '未知版本' }}
       </div>
       <!-- 支持版本标签 -->
@@ -40,7 +40,7 @@
     <div class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-3 space-y-4">
       
       <!-- 包ID -->
-      <div class="px-2 text-xs flex items-center gap-1 text-text-dim tracking-wider border-b border-white/5 pb-1" v-tooltip="selectedMod.package_id">
+      <div class="px-2 text-xs flex items-center gap-1 text-text-dim tracking-wider border-b border-text-main/5 pb-1" v-tooltip="selectedMod.package_id">
         <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M44 14L24 4L4 14V34L24 44L44 34V14Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M4 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 44V24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 9L14 19" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span class="truncate flex-1 min-w-0">{{ selectedMod.package_id }}</span>
       </div>
@@ -48,7 +48,7 @@
       <!-- 作者信息与路径 -->
       <div v-if="appStore.settings.ui.show_mod_details_author_info" class="grid grid-flow-row-dense p-1 grid-cols-2 gap-1.5">
         <!-- 作者 -->
-        <div class="col-span-2 flex items-center gap-1 bg-white/5 rounded-lg p-1.5 border border-white/5 space-y-1">
+        <div class="col-span-2 flex items-center gap-1 bg-text-main/5 rounded-lg p-1.5 border border-text-main/5 space-y-1">
           <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24 20C27.866 20 31 16.866 31 13C31 9.13401 27.866 6 24 6C20.134 6 17 9.13401 17 13C17 16.866 20.134 20 24 20Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40.8V42H42V40.8C42 36.3196 42 34.0794 41.1281 32.3681C40.3611 30.8628 39.1372 29.6389 37.6319 28.8719C35.9206 28 33.6804 28 29.2 28H18.8C14.3196 28 12.0794 28 10.3681 28.8719C8.86278 29.6389 7.63893 30.8628 6.87195 32.3681C6 34.0794 6 36.3196 6 40.8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0 space-y-1">
             <div class="text-xs text-text-dim uppercase">作者</div>
@@ -64,7 +64,7 @@
           </div>
         </div>
         <!-- 支持语言 -->
-        <div class="col-span-2 flex items-center gap-1 bg-white/5 rounded-lg p-1.5 border border-white/5">
+        <div class="col-span-2 flex items-center gap-1 bg-text-main/5 rounded-lg p-1.5 border border-text-main/5">
           <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0 space-y-1">
             <div class="text-xs text-text-dim uppercase">支持语言</div>
@@ -80,8 +80,8 @@
           </div>
         </div>
         <!-- Url显示 -->
-        <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 " 
-          :class="[selectedMod.source === 'local' || !selectedMod.url ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-white/10']" 
+        <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-text-main/5 rounded-lg p-1.5 border border-text-main/5 " 
+          :class="[selectedMod.source === 'local' || !selectedMod.url ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-text-main/10']" 
           @click="openUrl(selectedMod.url)">
           <svg v-if="selectedMod.source==='workshop'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M568 320C568 457 456.8 568 319.6 568C205.8 568 110 491.7 80.6 387.6L175.8 426.9C182.2 459 210.7 483.3 244.7 483.3C283.9 483.3 316.6 450.9 314.9 409.8L399.4 349.6C451.5 350.9 495.2 308.7 495.2 256.1C495.2 204.5 453.2 162.6 401.5 162.6C349.8 162.6 307.8 204.6 307.8 256.1L307.8 257.3L248.6 343C233.1 342.1 217.9 346.4 205.1 355.1L72 300.1C82.2 172.4 189.1 72 319.6 72C456.8 72 568 183 568 320zM227.7 448.3L197.2 435.7C202.8 447.3 212.5 456.5 224.4 461.5C251.3 472.7 282.2 459.9 293.4 433.1C298.8 420.1 298.9 405.8 293.5 392.8C288.1 379.8 278 369.6 265 364.2C252.1 358.8 238.3 359 226.1 363.6L257.6 376.6C277.4 384.8 286.8 407.5 278.5 427.3C270.2 447.2 247.5 456.5 227.7 448.3zM401.5 193.8C435.9 193.8 463.8 221.7 463.8 256.1C463.8 290.5 435.9 318.4 401.5 318.4C367.1 318.4 339.2 290.5 339.2 256.1C339.2 221.7 367.1 193.8 401.5 193.8zM401.6 302.8C427.4 302.8 448.4 281.8 448.4 256C448.4 230.2 427.4 209.2 401.6 209.2C375.8 209.2 354.8 230.2 354.8 256C354.8 281.8 375.8 302.8 401.6 302.8z"/></svg>
           <svg v-else-if="selectedMod.source==='github'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M237.9 461.4C237.9 463.4 235.6 465 232.7 465C229.4 465.3 227.1 463.7 227.1 461.4C227.1 459.4 229.4 457.8 232.3 457.8C235.3 457.5 237.9 459.1 237.9 461.4zM206.8 456.9C206.1 458.9 208.1 461.2 211.1 461.8C213.7 462.8 216.7 461.8 217.3 459.8C217.9 457.8 216 455.5 213 454.6C210.4 453.9 207.5 454.9 206.8 456.9zM251 455.2C248.1 455.9 246.1 457.8 246.4 460.1C246.7 462.1 249.3 463.4 252.3 462.7C255.2 462 257.2 460.1 256.9 458.1C256.6 456.2 253.9 454.9 251 455.2zM316.8 72C178.1 72 72 177.3 72 316C72 426.9 141.8 521.8 241.5 555.2C254.3 557.5 258.8 549.6 258.8 543.1C258.8 536.9 258.5 502.7 258.5 481.7C258.5 481.7 188.5 496.7 173.8 451.9C173.8 451.9 162.4 422.8 146 415.3C146 415.3 123.1 399.6 147.6 399.9C147.6 399.9 172.5 401.9 186.2 425.7C208.1 464.3 244.8 453.2 259.1 446.6C261.4 430.6 267.9 419.5 275.1 412.9C219.2 406.7 162.8 398.6 162.8 302.4C162.8 274.9 170.4 261.1 186.4 243.5C183.8 237 175.3 210.2 189 175.6C209.9 169.1 258 202.6 258 202.6C278 197 299.5 194.1 320.8 194.1C342.1 194.1 363.6 197 383.6 202.6C383.6 202.6 431.7 169 452.6 175.6C466.3 210.3 457.8 237 455.2 243.5C471.2 261.2 481 275 481 302.4C481 398.9 422.1 406.6 366.2 412.9C375.4 420.8 383.2 435.8 383.2 459.3C383.2 493 382.9 534.7 382.9 542.9C382.9 549.4 387.5 557.3 400.2 555C500.2 521.8 568 426.9 568 316C568 177.3 455.5 72 316.8 72zM169.2 416.9C167.9 417.9 168.2 420.2 169.9 422.1C171.5 423.7 173.8 424.4 175.1 423.1C176.4 422.1 176.1 419.8 174.4 417.9C172.8 416.3 170.5 415.6 169.2 416.9zM158.4 408.8C157.7 410.1 158.7 411.7 160.7 412.7C162.3 413.7 164.3 413.4 165 412C165.7 410.7 164.7 409.1 162.7 408.1C160.7 407.5 159.1 407.8 158.4 408.8zM190.8 444.4C189.2 445.7 189.8 448.7 192.1 450.6C194.4 452.9 197.3 453.2 198.6 451.6C199.9 450.3 199.3 447.3 197.3 445.4C195.1 443.1 192.1 442.8 190.8 444.4zM179.4 429.7C177.8 430.7 177.8 433.3 179.4 435.6C181 437.9 183.7 438.9 185 437.9C186.6 436.6 186.6 434 185 431.7C183.6 429.4 181 428.4 179.4 429.7z"/></svg>
@@ -97,8 +97,8 @@
           
         </div>
         <!-- 路径显示 -->
-        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-white/5 rounded-lg p-1.5 border border-white/5 " 
-          :class="[!selectedMod.path ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-white/10']" 
+        <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-text-main/5 rounded-lg p-1.5 border border-text-main/5 " 
+          :class="[!selectedMod.path ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-text-main/10']" 
           @click="openPath(selectedMod.path)">
           <svg class="size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="flex-1 min-w-0 m-0">
@@ -111,7 +111,7 @@
           
         </div>
         <!-- 已禁用路径 shadow_paths -->
-        <div v-if="selectedMod.shadow_paths?.length" class="col-span-2 flex items-center gap-1 bg-white/5 rounded-lg p-1.5 border border-white/5">
+        <div v-if="selectedMod.shadow_paths?.length" class="col-span-2 flex items-center gap-1 bg-text-main/5 rounded-lg p-1.5 border border-text-main/5">
           <svg class=" text-text-dim size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></svg>
           <div class="flex-1 min-w-0 m-0 space-y-1">
             <div class="text-xs text-text-dim uppercase">已禁用的包名重复Mod</div>
@@ -128,7 +128,7 @@
       
       <!-- 文件统计 -->
       <div v-if="selectedMod.file_stats && appStore.settings.ui.show_mod_details_files_info" class="p-1 space-y-2">
-        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">
+        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">
           文件统计
           <span v-tooltip="'注意：本统计仅涵盖通用文件，及 Mod 所支持的游戏最高版本对应的文件（不涉及其他游戏版本的文件）。'" class="text-text-dim/50 hover:text-text-main">⚠︎</span>
         </h3>
@@ -151,7 +151,7 @@
           <StatItem v-tooltip="'语言XML文件数量'" label="Langs" :value="selectedMod.file_stats.lang_xml || 0" >
             <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 44H38C39.1046 44 40 43.1046 40 42V14H30V4H10C8.89543 4 8 4.89543 8 6V42C8 43.1046 8.89543 44 10 44Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4L40 14" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 22V36" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22H24L30 22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </StatItem>
-          <div v-tooltip="tooltipModType" class="p-1 col-span-2 bg-white/5 rounded-lg border text-text-dim border-white/5 flex items-center justify-center">
+          <div v-tooltip="tooltipModType" class="p-1 col-span-2 bg-text-main/5 rounded-lg border text-text-dim border-text-main/5 flex items-center justify-center">
             <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="size-6 opacity-75" />
             <span v-if="modType" class="flex-1 truncate">{{ MOD_TYPE_MAP[modType] }}</span>
           </div>
@@ -159,21 +159,21 @@
       </div>
 
       <!-- 时间戳列表 及 其他信息 -->
-      <div v-if="!selectedMod.is_missing && appStore.settings.ui.show_mod_details_time_info" class="p-1 space-y-2">
-        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">其他信息</h3>
+      <div v-if="!!selectedMod.path && appStore.settings.ui.show_mod_details_time_info" class="p-1 space-y-2">
+        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">其他信息</h3>
         <div class="grid grid-flow-col grid-cols-4 grid-rows-2 gap-1.5">
-          <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-white/5 rounded-lg border border-white/5">
+          <div v-tooltip="selectedMod.icon_url ? '图标': '未能找到该Mod图标'" class="col-span-1 row-span-1 flex items-center justify-center bg-text-main/5 rounded-lg border border-text-main/5">
             <img v-if="selectedMod.icon_url" :src="selectedMod.icon_url" class="size-8 inline-block">
             <svg v-else class="text-text-dim size-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </div>
           <!-- 是否破坏存档 -->
-          <div v-tooltip="tooltipSaveBreaking" class="col-span-1 row-span-1 p-1.5 flex items-center justify-around text-sm text-text-dim bg-white/5 rounded-lg border border-white/5">
+          <div v-tooltip="tooltipSaveBreaking" class="col-span-1 row-span-1 p-1.5 flex items-center justify-around text-sm text-text-dim bg-text-main/5 rounded-lg border border-text-main/5">
             <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 13H8a1 1 0 0 0-1 1v7"/><path d="M14 8h1"/><path d="M17 21v-4"/><path d="m2 2 20 20"/><path d="M20.41 20.41A2 2 0 0 1 19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 .59-1.41"/><path d="M29.5 11.5s5 5 4 5"/><path d="M9 3h6.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V15"/></svg>
             <svg v-show="parseInt(selectedMod.save_breaking)===-1" class=" text-accent-danger size-5" xmlns="http://www.w3.org/2000/svg"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m14.5 9.5-5 5"/><path d="m9.5 9.5 5 5"/></svg>
             <svg v-show="parseInt(selectedMod.save_breaking)===0" class=" text-text-main size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
             <svg v-show="parseInt(selectedMod.save_breaking)===1" class=" text-accent-success size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
           </div>
-          <div class="row-span-2 col-span-3 p-2 pr-3 space-y-1 flex flex-col justify-center text-xs text-text-dim bg-white/5 rounded-lg border border-white/5">
+          <div class="row-span-2 col-span-3 p-2 pr-3 space-y-1 flex flex-col justify-center text-xs text-text-dim bg-text-main/5 rounded-lg border border-text-main/5">
             <div class="flex justify-between items-center">
               <span class="flex-1 font-bold truncate min-w-0">文件创建时间：</span>
               {{ selectedMod.file_create_time ? new Date(selectedMod.file_create_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
@@ -201,7 +201,7 @@
 
       <!-- 依赖与冲突 -->
       <div v-if="hasDependencies && appStore.settings.ui.show_mod_details_dependencies_info" class="p-1 space-y-3">
-        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">模组关系</h3>
+        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">模组关系</h3>
         
         <!-- 依赖 -->
         <div v-if="selectedMod.dependencies_mods?.length" class="space-y-1">
@@ -214,7 +214,7 @@
             <span v-preview="modStore.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(dep.package_id).is_missing" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
+              <span v-if="!!modStore.takeModById(dep.package_id).path" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
               <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
@@ -226,7 +226,7 @@
           <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
           <button v-if="selectedMod.dependencies_mods.length > 5"
             @click="showAllDependencies = !showAllDependencies"
-            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-400 hover:text-accent-highlight transition-all group"
+            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-text-main/5 hover:bg-text-main/10 text-xs text-gray-400 hover:text-accent-highlight transition-all group"
           >
             {{ showAllDependencies ? '收起' : `查看全部(${selectedMod.dependencies_mods.length})` }}
             <svg :class="{'rotate-180': showAllDependencies}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -244,7 +244,7 @@
             <span v-preview="modStore.takeModById(inc)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(inc).is_missing" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+              <span v-if="!!modStore.takeModById(inc).path" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -252,7 +252,7 @@
           <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
           <button v-if="selectedMod.incompatible_mods.length > 5"
             @click="showAllIncompatible = !showAllIncompatible"
-            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-400 hover:text-accent-danger transition-all group"
+            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-text-main/5 hover:bg-text-main/10 text-xs text-gray-400 hover:text-accent-danger transition-all group"
           >
             {{ showAllIncompatible ? '收起' : `展开全部 (${selectedMod.incompatible_mods.length})` }}
             <svg :class="{'rotate-180': showAllIncompatible}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -270,7 +270,7 @@
             <span v-preview="modStore.takeModById(aft)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(aft).is_missing" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+              <span v-if="!!modStore.takeModById(aft).path" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -278,7 +278,7 @@
           <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
           <button v-if="selectedMod.load_after_mods.length > 5"
             @click="showAllLoadAfter = !showAllLoadAfter"
-            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-400 hover:text-accent-warn transition-all group"
+            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-text-main/5 hover:bg-text-main/10 text-xs text-gray-400 hover:text-accent-warn transition-all group"
           >
             {{ showAllLoadAfter ? '收起' : `展开全部 (${selectedMod.load_after_mods.length})` }}
             <svg :class="{'rotate-180': showAllLoadAfter}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -296,7 +296,7 @@
             <span v-preview="modStore.takeModById(bef)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!modStore.takeModById(bef).is_missing" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+              <span v-if="!!modStore.takeModById(bef).path" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
                 <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -304,7 +304,7 @@
           <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
           <button v-if="selectedMod.load_before_mods.length > 5"
             @click="showAllLoadBefore = !showAllLoadBefore"
-            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-white/5 hover:bg-white/10 text-xs text-gray-400 hover:text-accent-primary transition-all group"
+            class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-text-main/5 hover:bg-text-main/10 text-xs text-gray-400 hover:text-accent-primary transition-all group"
           >
             {{ showAllLoadBefore ? '收起' : `展开全部 (${selectedMod.load_before_mods.length})` }}
             <svg :class="{'rotate-180': showAllLoadBefore}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -316,7 +316,7 @@
       </div>
 
       <!-- 用户自定义属性 (标签 & 颜色 & 备注) -->
-      <div v-if="!selectedMod.is_missing && appStore.settings.ui.show_mod_details_user_info" class="rounded-xl p-3 border border-white/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
+      <div v-if="!!selectedMod.path && appStore.settings.ui.show_mod_details_user_info" class="rounded-xl p-3 border border-text-main/10 backdrop-blur-sm space-y-3" :style="{'backgroundColor': hexToRgba(selectedMod.sign_color, 0.1)}">
         
         <!-- 标签管理 -->
         <div>
@@ -327,7 +327,7 @@
               <span v-for="tag in userTags" :key="tag" 
                 class="px-1 py-0.5 rounded truncate text-shadow-lg/20 bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group animate-in">
                 {{ tag }}
-                <button @click="removeTag(tag)" v-tooltip="'移除标签'" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-white transition-colors opacity-50 group-hover:opacity-100">
+                <button @click="removeTag(tag)" v-tooltip="'移除标签'" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </span>
@@ -338,11 +338,11 @@
               <input type="text" v-model="tagInput" @focus="showTagSuggest = true" placeholder="+" 
                 @keydown.enter.prevent="confirmAddTag" @keydown.up.prevent="navTag(-1)" @keydown.down.prevent="navTag(1)"
                 @keydown.esc="showTagSuggest = false" v-tooltip="'添加新标签'"
-                class="px-1 py-0.5 w-5 text-center rounded bg-black/20 border border-white/10 text-xs text-text-main placeholder-text-dim/50 focus:flex-1 focus:bg-black/40 focus:border-accent-primary focus:outline-none focus:w-24 transition-all"
+                class="px-1 py-0.5 w-5 text-center rounded bg-black/20 border border-text-main/10 text-xs text-text-main placeholder-text-dim/50 focus:flex-1 focus:bg-black/40 focus:border-accent-primary focus:outline-none focus:w-24 transition-all"
               />
               <!-- 标签建议下拉框 -->
               <div v-if="showTagSuggest && filteredKnownTags.length > 0" 
-                  class="absolute left-0 bottom-full mb-1 w-32 max-h-40 overflow-y-auto bg-bg-surface border border-white/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+                  class="absolute left-0 bottom-full mb-1 w-32 max-h-40 overflow-y-auto bg-bg-surface border border-text-main/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
                 <button v-for="(t, idx) in filteredKnownTags" :key="t"  @click="addTag(t)"
                   class="text-left px-2 py-1 text-xs rounded hover:bg-accent-primary/20 hover:text-accent-primary transition-colors truncate"
                   :class="{'bg-accent-primary/10 text-accent-primary': idx === tagNavIndex}">
@@ -361,7 +361,7 @@
             <!-- 现有分组列表 -->
             <TransitionGroup name="list">
               <span v-for="group in userGroups" :key="group.group_id" 
-                class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-white/5 flex items-center gap-1 group hover:border-white/20 transition-colors"
+                class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-text-main/5 flex items-center gap-1 group hover:border-text-main/20 transition-colors"
                 :style="{'backgroundColor': hexToRgba(group.color, 0.15), 'color': group.color}">
                 {{ group.name }}
                 <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="'从分组移出'"
@@ -373,17 +373,17 @@
 
             <!-- 添加分组按钮 (Dropdown) -->
             <div class="relative" ref="groupDropRef" v-tooltip="'添加新分组'">
-              <button @click="toggleGroupDrop" class="px-1 py-1 rounded bg-black/20 border border-white/10 text-xs text-text-dim hover:text-white hover:border-white/30 hover:bg-black/40 transition-all flex items-center gap-1">
+              <button @click="toggleGroupDrop" class="px-1 py-1 rounded bg-black/20 border border-text-main/10 text-xs text-text-dim hover:text-text-main hover:border-text-main/30 hover:bg-black/40 transition-all flex items-center gap-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
               </button>
               <!-- 分组选择下拉框 -->
-              <div v-if="showGroupDrop" class="absolute left-0 bottom-full mb-1 w-40 max-h-48 overflow-y-auto bg-bg-surface border border-white/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+              <div v-if="showGroupDrop" class="absolute left-0 bottom-full mb-1 w-40 max-h-48 overflow-y-auto bg-bg-surface border border-text-main/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
                 <!-- 搜索过滤 -->
                 <input v-model="groupSearch" ref="groupSearchRef" placeholder="搜索分组..." 
-                  class="mb-1 px-2 py-1 text-xs bg-black/20 rounded border border-white/5 focus:outline-none focus:border-accent-primary" />
+                  class="mb-1 px-2 py-1 text-xs bg-black/20 rounded border border-text-main/5 focus:outline-none focus:border-accent-primary" />
                 <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-dim/50 text-center">无可用分组</div>
                 <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
-                  class="text-left px-2 py-1 text-xs rounded hover:bg-white/10 transition-colors truncate flex items-center gap-2">
+                  class="text-left px-2 py-1 text-xs rounded hover:bg-text-main/10 transition-colors truncate flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
                   {{ g.name }}
                 </button>
@@ -397,12 +397,12 @@
           <label v-tooltip="'可自定义颜色标识'" class="flex-none text-xs uppercase text-text-dim font-bold tracking-wider">颜色标记*</label>
           <div v-tooltip="'点击可选择合适的标记颜色'" class="flex-1 flex ml-2 min-w-20 gap-1.5 items-center justify-end">
             <button v-for="c in presetColors" :key="c" @click="updateColor(c)"
-              :class="['w-4 h-4 min-w-1 rounded-full border border-white/10 transition-transform hover:scale-125', 
-                      selectedMod.sign_color === c ? 'ring-2 ring-white scale-110' : '']"
+              :class="['w-4 h-4 min-w-1 rounded-full border border-text-main/10 transition-transform hover:scale-125', 
+                      selectedMod.sign_color === c ? 'ring-2 ring-text-main scale-110' : '']"
               :style="{backgroundColor: c}">
             </button>
             <button @click="updateColor(null)" v-tooltip="'清除颜色标记'" 
-              class="w-4 h-4 rounded-full border border-white/10 bg-transparent text-xm flex items-center justify-center text-gray-500 hover:text-white">
+              class="w-4 h-4 rounded-full border border-text-main/10 bg-transparent text-xm flex items-center justify-center text-gray-500 hover:text-text-main">
               ×
             </button>
           </div>
@@ -411,10 +411,10 @@
         <!-- 别名 -->
         <div class="mb-2 flex flex-row items-center justify-around">
           <input v-model="userAliasName" @blur="saveUserData" placeholder="在此添加自定义别名"
-              class="flex-1 w-full bg-black/20 border border-white/10 rounded p-2 text-sm text-white focus:border-accent-primary focus:outline-none"/>
+              class="flex-1 w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-text-main focus:border-accent-primary focus:outline-none"/>
           <!-- 翻译按钮 -->
           <button @click="translateModInfo" v-tooltip="'通过AI生成Mod别名及备注，需要配置AI'" :disabled="isUsingAI"
-            class="min-w-8 h-6 px-1.5 ml-1 flex items-center justify-center text-sm rounded-sm bg-text-dim/50 hover:bg-accent-primary hover:text-white transition-colors active:bg-accent-cool">
+            class="min-w-8 h-6 px-1.5 ml-1 flex items-center justify-center text-sm rounded-sm bg-text-dim/50 hover:bg-accent-primary hover:text-text-main transition-colors active:bg-accent-cool">
             <span v-if="!isUsingAI">AI生成</span>
             <svg v-else class="animate-spin size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
           </button>
@@ -422,15 +422,21 @@
 
         <!-- 备注 -->
         <div>
-            <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注"
-              class="w-full bg-black/20 border border-white/10 rounded p-2 text-sm text-gray-300 focus:border-accent-primary focus:outline-none h-20 resize-none custom-scrollbar"></textarea>
+            <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注" :class="[expandTextarea?'min-h-100':'']"
+              class="w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-gray-300 
+              focus:border-accent-primary focus:outline-none min-h-20 resize-none custom-scrollbar">
+            </textarea>
+            <button @click="expandTextarea=!expandTextarea" v-tooltip="'展开/收起'" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-text-main/10 transition-colors">
+              <ChevronUp v-if="expandTextarea" class="size-5"/>
+              <ChevronDown v-else class="size-5"/>
+            </button>
         </div>
         
       </div>
 
       <!-- 描述 (HTML) -->
       <div v-if="appStore.settings.ui.show_mod_details_description" class="p-1 space-y-2">
-        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-white/5 pb-1">描述</h3>
+        <h3 class="text-xs font-bold text-text-dim uppercase tracking-wider border-b border-text-main/5 pb-1">描述</h3>
         <div class="prose prose-invert prose-sm max-w-none text-gray-300 leading-relaxed wrap-break-word" v-html="formattedDescription"></div>
       </div>
 
@@ -497,7 +503,7 @@ import { hexToRgba, hexToRgb } from '../utils/colorDeal'
 import ImageCloud from './utils/ImageCloud.vue';
 import LampEffect from './utils/LampEffect.vue';
 import LuxBreatheIcon from './utils/LuxBreatheIcon.vue'
-import { Copy } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Copy } from 'lucide-vue-next'
 
 // 随机选30个Mod的图标URL
 const imageUrls = computed(() => Array.from(modStore.allModsMap.values())
@@ -511,7 +517,7 @@ const StatItem = {
   props: ['label', 'value', 'highlight'],
   template: `
     <!-- 外层改为 flex-row 横向排列，加 gap 控制图标与内容间距 -->
-    <div class="bg-white/5 rounded-lg p-1 flex items-center border border-white/5 gap-0">
+    <div class="bg-text-main/5 rounded-lg p-1 flex items-center border border-text-main/5 gap-0">
       <!-- 图标插槽：flex-shrink-0 防止图标被压缩，可选插槽（无图标时不占空间） -->
       <slot />
       
@@ -548,6 +554,7 @@ const showAllDependencies = ref(false);
 const showAllIncompatible = ref(false);
 const showAllLoadBefore = ref(false);
 const showAllLoadAfter = ref(false);
+const expandTextarea = ref(false)
 
 // 1. 获取原始数据
 const rawSelectedMod = computed(() => modStore.lastSelectedMod)

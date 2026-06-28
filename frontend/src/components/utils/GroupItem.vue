@@ -3,7 +3,7 @@
     :class="isHighlight ? 'ring-2 ring-accent-highlight rounded-lg' : ''">
     <!-- 标题区 -->
     <div @click="toggle" :class="['list-none select-none px-1.5 flex text-text-dim hover:text-text-main items-center justify-between gap-0.5 rounded-lg font-medium',
-      'bg-[rgba(var(--rgb-components),0.4)] hover:bg-[rgba(var(--rgb-components),0.6)] border border-white/5']">
+      'bg-[rgba(var(--rgb-components),0.4)] hover:bg-[rgba(var(--rgb-components),0.6)] border border-text-main/5']">
       <!-- 抓取图标 -->
       <div v-tooltip="`移动`" class="drag-handle cursor-move p-1 text-text-dim hover:text-text-main hover:scale-130 transition-all">
         <svg class="size-5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -26,7 +26,7 @@
 
       <!-- 标题 - 根据编辑状态显示输入框或文本 -->
       <span v-tooltip="groupData.name" :class="`flex-1 flex min-w-0 text-sm px-1 mx-1 text-text-main font-bold tracking-wider items-center gap-2`">
-        <input class="flex-1 px-0 py-0.5 min-w-0 rounded bg-bg-deep/70 border border-white/10 text-white focus:border-accent-primary focus:outline-none" 
+        <input class="flex-1 px-0 py-0.5 min-w-0 rounded bg-bg-deep/70 border border-text-main/10 text-text-main focus:border-accent-primary focus:outline-none" 
           v-show="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="handleInputBlur" ref="nameInputRef"/>
         <span v-show="!isEditingName" class="min-w-0 truncate">{{ groupData.name }}</span>
       </span>
@@ -62,49 +62,59 @@
         </button>
       </span>
     </div>
+    <Transition
+      enter-active-class="grid transition-[grid-template-rows] duration-200 ease-out"
+      enter-from-class="grid-rows-[0fr]"
+      enter-to-class="grid-rows-[1fr]"
+      leave-active-class="grid transition-[grid-template-rows] duration-200 ease-in"
+      leave-from-class="grid-rows-[1fr]"
+      leave-to-class="grid-rows-[0fr]"
+    >
+      <!-- 内容区 -->
+      <div v-show="expanded" >
+        <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
+        <div class="min-h-0 overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
+          <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-text-main/5 border-x-text-main/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
+            <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
+              可拖拽模组到此
+              <!-- 点阵背景 -->
+              <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+            </div>
 
-    <!-- 内容区 -->
-    <div class="grid transition-[grid-template-rows] duration-200 "
-      :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
-      <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
-      <div class="max-h-[50vh] overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
-        <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-white/5 border-x-white/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
-          <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
-            可拖拽模组到此
-            <!-- 点阵背景 -->
-            <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
+            <VirtualList v-model="internalModList" dataKey="id" :keeps="50" class="max-h-[45vh] min-h-15 transition-all duration-200" ref="vListRef"
+              placeholderClass="ghost" wrapClass="mb-5" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }" :delay="appStore.settings.ui.drag_delay"
+              :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150" :size="itemHeight" handle=".drag-handle"
+              @drop="updateChildren" @drag="startDrag"
+              v-selectable-list="{ data: groupData.mod_ids, clickClass: 'select-trigger', swipeClass: 'swipe-trigger'}">
+              <template v-slot:item="{ record, index, dataKey }">
+
+                <div class="relative group">
+                  <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
+                          :is-selected="modStore.selectedIds.includes(dataKey)" 
+                          :show-index="appStore.settings.ui.show_group_index"  
+                          :show-icon="appStore.settings.ui.show_group_icon"
+                          :simple="true">
+                  </ModItem>
+                  
+                  <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
+                  <button @click.stop="removeItem(dataKey)" @mousedown.stop v-tooltip="`移除`"
+                    class="absolute top-1 right-1 w-3 h-3 bg-accent-danger text-text-main rounded-full 
+                          opacity-0 group-hover:opacity-80 transition-opacity duration-200
+                          flex items-center justify-center text-xs z-10 hover:scale-110">×
+                  </button>
+                </div>
+
+              </template>
+            </VirtualList>
           </div>
-
-          <VirtualList v-model="internalModList" dataKey="id" :keeps="50" class="max-h-[45vh] min-h-15" ref="vListRef"
-            placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
-            :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150"
-            @drop="updateChildren" @drag="startDrag"
-            v-selectable-list="{ data: groupData.mod_ids, clickClass: 'select-trigger',}">
-            <template v-slot:item="{ record, index, dataKey }">
-
-              <div class="relative group">
-                <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-                        :is-selected="modStore.selectedIds.includes(dataKey)" :show-index="false" :simple="true">
-                </ModItem>
-                
-                <!-- 右上角移除按钮（阻止冒泡，避免触发选择） -->
-                <button @click.stop="removeItem(dataKey)" @mousedown.stop v-tooltip="`移除`"
-                  class="absolute top-1 right-1 w-3 h-3 bg-accent-danger text-text-main rounded-full 
-                        opacity-0 group-hover:opacity-80 transition-opacity duration-200
-                        flex items-center justify-center text-xs z-10 hover:scale-110">×
-                </button>
-              </div>
-
-            </template>
-          </VirtualList>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { watch, ref, nextTick } from 'vue' // 引入 ref
+import { watch, ref, nextTick, computed } from 'vue' // 引入 ref
 import VirtualList from 'vue-virtual-sortable';
 import ModItem from './ModItem.vue'
 import { useDebounceFn } from '@vueuse/core'
@@ -112,6 +122,8 @@ import { ColorPicker } from "vue3-colorpicker";
 import "vue3-colorpicker/style.css";
 import { useModStore } from '../../stores/modStore';
 import { useGroupStore } from '../../stores/groupStore';
+import { useAppStore } from '../../stores/appStore';
+import { createToastInterface } from 'vue-toastification';
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -123,12 +135,16 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false } // 用于外部控制样式
 })
 
+const toast = createToastInterface()
 const modStore = useModStore()
+const appStore = useAppStore()
 const groupStore = useGroupStore()
 const internalModList = ref([])
 const vListRef = ref(null)
 const emit = defineEmits(['toggle', 'delete-group', 'remove-item', 'update-group', 'update-children'])
 
+
+const itemHeight = computed(() => appStore.scalePx(30)+4 )
 // 计算属性computed无法直接修改props.groupData.mod_ids，因为它是只读的。
 // 监听 props 变化，同步到本地 (单向数据流：父 -> 子)
 watch(
@@ -163,7 +179,16 @@ const updateGroup = (data = props.groupData) => {
 // 保存分组名称
 const saveGroupName = () => {
   if (!isEditingName.value) return  // 确保在编辑状态下调用
-  const newName = editingGroupName.value.trim()
+  let newName = editingGroupName.value.trim()
+  if(groupStore.allGroupNames.includes(newName)) {
+    // 名称冲突，添加序号
+    let index = 1
+    while (groupStore.allGroupNames.includes(`${newName}-${index}`)) {
+      index++
+    }
+    newName = `${newName}-${index}`
+    toast.warning(`分组名称已存在，已添加序号 ${index}`)
+  }
   if (newName && newName !== props.groupData.name) {
     emit('update-group', props.id, { name: newName })
   }

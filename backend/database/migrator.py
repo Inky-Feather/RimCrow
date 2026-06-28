@@ -41,8 +41,9 @@ def _2to3(old_version):
         # 第一步：在内存中提取并转换数据
         # ---------------------------------------------------------
 
-        # 1.2 提取 UserModData
-        old_user_data = []
+        # 1.1 提取旧 UserModData (并构建字典以便去重和查找)
+        # 结构: { 'package_id': {data_dict} }
+        user_data_map = {} 
         try:
             cursor = db.execute_sql("SELECT * FROM usermoddata;")
             # 注意：需要根据旧表的列顺序读取，假设旧表: mod_id(FK), alias_name, notes, tags, sign_color...
@@ -51,40 +52,78 @@ def _2to3(old_version):
             for row in cursor.fetchall():
                 item = dict(zip(columns, row))
                 # 旧版外键在数据库里通常存为 mod_id_id (Peewee 默认)
-                # 我们将其转换回新版 CharField 格式的 mod_id (存 package_id)
+                # 将其转换回新版 CharField 格式的 mod_id (存 package_id)
                 pkg_id = item.get('mod_id_id') or item.get('mod_id')
                 if pkg_id:
-                    item['mod_id'] = pkg_id.lower()
-                    # 移除旧版可能存在的、新版模型没有的干扰键
-                    item.pop('mod_id_id', None)
-                    old_user_data.append(item)
+                    pkg_id = pkg_id.lower()
+                    item['mod_id'] = pkg_id # 修正键名为新版主键名
+                    item.pop('mod_id_id', None) # 清理旧键
+                    user_data_map[pkg_id] = item
         except Exception as e:
             logger.warning(f"读取旧 UserModData 失败: {e}")
 
-        # 1.3 提取分组数据
+        # 1.2 提取旧 GroupData
         old_groups = []
+        valid_group_ids = set()
         try:
             cursor = db.execute_sql("SELECT * FROM groupdata;")
             columns = [description[0] for description in cursor.description]
             for row in cursor.fetchall():
-                old_groups.append(dict(zip(columns, row)))
+                item = dict(zip(columns, row))
+                old_groups.append(item)
+                if item.get('group_id'):
+                    valid_group_ids.add(item['group_id'])
         except Exception as e:
             logger.warning(f"读取旧 GroupData 失败: {e}")
 
-        # 1.4 提取分组与 Mod 的关系
+        # 1.3 提取旧 GroupMod
         old_group_mods = []
+        # 用于记录那些在分组里出现，但还没在 user_data_map 里的 mod_id
+        missing_user_data_ids = set()
         try:
             cursor = db.execute_sql("SELECT * FROM groupmod;")
             columns = [description[0] for description in cursor.description]
             for row in cursor.fetchall():
                 item = dict(zip(columns, row))
                 pkg_id = item.get('mod_id_id') or item.get('mod_id')
-                if pkg_id:
-                    item['mod_id'] = pkg_id.lower()
-                    item.pop('mod_id_id', None)
-                    old_group_mods.append(item)
+                group_id = item.get('group_id') or item.get('group_id_id') # 防御性编程
+                
+                if pkg_id and group_id:
+                    pkg_id = pkg_id.lower()
+                    
+                    # 仅当分组本身有效时才保留关系
+                    if group_id in valid_group_ids:
+                        item['mod_id'] = pkg_id
+                        item['group_id'] = group_id
+                        
+                        # 清理旧键
+                        item.pop('mod_id_id', None)
+                        item.pop('group_id_id', None)
+                        
+                        old_group_mods.append(item)
+                        
+                        # 【关键修复】：如果这个Mod在分组里，但不在UserModData里，我们需要标记它
+                        if pkg_id not in user_data_map:
+                            missing_user_data_ids.add(pkg_id)
         except Exception as e:
             logger.warning(f"读取旧 GroupMod 失败: {e}")
+
+        # ---------------------------------------------------------
+        # 第二步：数据补全 (修复“幽灵Mod”问题)
+        # ---------------------------------------------------------
+        
+        if missing_user_data_ids:
+            logger.info(f"发现 {len(missing_user_data_ids)} 个Mod存在于分组中但无用户数据，正在自动补全...")
+            for missing_id in missing_user_data_ids:
+                # 创建一个默认的空 UserModData 对象
+                user_data_map[missing_id] = {
+                    'mod_id': missing_id,
+                    'alias_name': None,
+                    'notes': None,
+                    'tags': [],
+                    'sign_color': None,
+                    # 其他字段依靠数据库默认值，或者在这里显式补全
+                }
 
         # ---------------------------------------------------------
         # 第二步：重建表结构
@@ -98,7 +137,7 @@ def _2to3(old_version):
             # 注意：新模型中表名已经变了 (ModAsset)，所以删除旧的 mod 表
             db.execute_sql('DROP TABLE IF EXISTS groupmod;')
             db.execute_sql('DROP TABLE IF EXISTS usermoddata;')
-            db.execute_sql('DROP TABLE IF EXISTS mod;')
+            db.execute_sql('DROP TABLE IF EXISTS mod;') # 旧版 Mod 表数据直接丢弃，依靠重新扫描
             db.execute_sql('DROP TABLE IF EXISTS groupdata;')
 
             # 2.3 创建新表
@@ -112,64 +151,42 @@ def _2to3(old_version):
                 GameProfile.create(
                     id='default',
                     name='Default Profile',
-                    game_install_path=settings.config.game_install_path, # 留给后续扫描补全
-                    user_data_path=settings.config.user_data_path,
+                    game_install_path=settings.config.game_install_path or "", # 防止 None 报错
+                    user_data_path=settings.config.user_data_path or "",
                 )
 
             # ---------------------------------------------------------
-            # 第三步：注入转换后的数据
+            # 第四步：注入数据
             # ---------------------------------------------------------
-            
-            # 用于记录实际插入成功的 ID，用于过滤脏数据
-            valid_mod_ids = set()
-            valid_group_ids = set()
 
-            # 3.1 注入 UserModData
-            if old_user_data:
-                unique_user_data = []
-                seen_ids = set()
-                for d in old_user_data:
-                    # 确保 mod_id 存在且不重复
-                    if d['mod_id'] and d['mod_id'] not in seen_ids:
-                        unique_user_data.append(d)
-                        seen_ids.add(d['mod_id'])
-                        valid_mod_ids.add(d['mod_id']) # 记录有效ID
-                
-                if unique_user_data:
-                    # 分批插入防止 SQL 语句过长
-                    for i in range(0, len(unique_user_data), 100):
-                        UserModData.insert_many(unique_user_data[i:i+100]).execute()
+            # 4.1 注入 UserModData (包含原本的 + 为分组补全的)
+            if user_data_map:
+                data_list = list(user_data_map.values())
+                # 分批插入
+                for i in range(0, len(data_list), 100):
+                    UserModData.insert_many(data_list[i:i+100]).execute()
+                logger.info(f"成功迁移 {len(data_list)} 条 UserModData 记录")
 
-            # 3.2 注入 GroupData
+            # 4.2 注入 GroupData
             if old_groups:
-                for g in old_groups:
-                    # 记录有效的 Group ID (注意：GroupData主键是 group_id)
-                    if g.get('group_id'):
-                        valid_group_ids.add(g['group_id'])
                 GroupData.insert_many(old_groups).execute()
+                logger.info(f"成功迁移 {len(old_groups)} 个分组")
 
-            # 3.3 注入 GroupMod (关键修复点)
+            # 4.3 注入 GroupMod
+            # 此时所有的 mod_id 都在 UserModData 里了，所以外键是安全的
             if old_group_mods:
-                clean_group_mods = []
-                skipped_count = 0
-                
+                # 去重保护：防止旧数据里有重复的主键
+                unique_gms = []
+                seen_gms = set()
                 for gm in old_group_mods:
-                    mod_id = gm.get('mod_id')
-                    group_id = gm.get('group_id')
-                    
-                    # 【核心修复】：只有当 mod_id 和 group_id 都存在于刚才插入的新表中时，才保留这条关系
-                    if mod_id in valid_mod_ids and group_id in valid_group_ids:
-                        clean_group_mods.append(gm)
-                    else:
-                        skipped_count += 1
-                
-                if skipped_count > 0:
-                    logger.warning(f"迁移过程中清理了 {skipped_count} 条无效的分组关联记录(脏数据)。")
+                    key = (gm['group_id'], gm['mod_id'])
+                    if key not in seen_gms:
+                        unique_gms.append(gm)
+                        seen_gms.add(key)
 
-                if clean_group_mods:
-                    # 同样建议分批插入
-                    for i in range(0, len(clean_group_mods), 100):
-                        GroupMod.insert_many(clean_group_mods[i:i+100]).execute()
+                for i in range(0, len(unique_gms), 100):
+                    GroupMod.insert_many(unique_gms[i:i+100]).execute()
+                logger.info(f"成功迁移 {len(unique_gms)} 条分组关联记录")
 
             # 恢复外键
             db.execute_sql('PRAGMA foreign_keys = ON;')
@@ -179,4 +196,8 @@ def _2to3(old_version):
     except Exception as e:
         import traceback
         logger.error(f"迁移失败: {traceback.format_exc()}")
+        # 尽量不要在这里 raise，否则可能会导致外层 init_db 崩溃，导致程序无法启动。
+        # 最好是记录错误，让程序以空库或半迁移状态启动，或者回滚 .bak
         raise e
+    
+    

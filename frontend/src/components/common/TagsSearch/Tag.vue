@@ -65,7 +65,7 @@ const tagStyle = computed(() => {
     }
 
     if (props.tag.exclude) return 'bg-red-500/10 border-red-500/20 text-red-400'
-    if (!props.tag.key) return 'bg-white/5 border-white/10 text-gray-300'
+    if (!props.tag.key) return 'bg-text-main/5 border-text-main/10 text-gray-300'
     
     const index = hashString(props.tag.key) % colorPalette.length
     const theme = colorPalette[index]

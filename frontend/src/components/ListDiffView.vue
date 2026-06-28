@@ -1,9 +1,9 @@
 <template>
 
-  <div class="flex flex-col h-full bg-bg-surface/80 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+  <div class="flex flex-col h-full bg-bg-surface/80 rounded-xl overflow-hidden border border-text-main/10 shadow-2xl">
     
     <!-- 1. 顶部工具栏 -->
-    <div class="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/5 z-20 shrink-0">
+    <div class="flex items-center justify-between px-3 py-2 bg-text-main/5 border-b border-text-main/5 z-20 shrink-0">
       <!-- 图例 -->
       <div class="flex items-center gap-3 text-xs font-bold uppercase tracking-wider">
         <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-danger"></span>缺失{{ stats.removed }}</div>
@@ -17,14 +17,14 @@
       <div class="flex items-center gap-4">
         <div class="relative flex flex-wrap items-center gap-1">
           <input v-model="colorfulBlocks" type="checkbox" value="" id="b01" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
-          <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+          <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-text-main transition-colors">
             多彩区块
           </label>
         </div>
 
         <div class="relative flex flex-wrap items-center gap-1">
           <input v-model="hideIdentical" type="checkbox" value="" id="b02" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
-          <label v-tooltip="'折叠一致区块'" for="b02" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+          <label v-tooltip="'折叠一致区块'" for="b02" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-text-main transition-colors">
             折叠长区块
           </label>
         </div>
@@ -33,8 +33,8 @@
     </div>
 
     <!-- 2. 标题栏 -->
-    <div class="flex items-center border-b border-white/5 bg-black/20 text-xs font-bold text-text-dim py-1 z-20 shrink-0">
-      <div class="flex-1 px-2 text-center text-accent-success border-r border-white/5 truncate">{{ titleA }} ({{ listA.length }})</div>
+    <div class="flex items-center border-b border-text-main/5 bg-black/20 text-xs font-bold text-text-dim py-1 z-20 shrink-0">
+      <div class="flex-1 px-2 text-center text-accent-success border-r border-text-main/5 truncate">{{ titleA }} ({{ listA.length }})</div>
       
       <div class="flex-1 px-2 text-center truncate">{{ titleB }} ({{ listB.length }})</div>
     </div>
@@ -49,7 +49,7 @@
             
             <!-- 普通项 -->
             <div v-if="!item.isPlaceholder" :data-id="item.id" @click="targetItem(item.id)"
-                 class="flex items-center h-7 px-2 border-b border-x border-white/5 transition-colors relative cursor-pointer"
+                 class="flex items-center h-7 px-2 border-b border-x border-text-main/5 transition-colors relative cursor-pointer"
                  :style="{ backgroundColor: getBgColor(item) }"
             >
               <!-- 指示条 (仅在有色时显示) -->
@@ -69,7 +69,7 @@
             </div>
 
             <!-- 折叠项 -->
-            <div v-else class="h-7 flex items-center justify-center border-b border-x border-white/5 select-none relative"
+            <div v-else class="h-7 flex items-center justify-center border-b border-x border-text-main/5 select-none relative"
               :style="{ backgroundColor: getBgColor(item) }">
               <span class="absolute left-4 text-xl text-text-dim" style="writing-mode: vertical-rl;">···</span>
               <!-- 指示条也继承 -->
@@ -110,7 +110,7 @@
         <div class="flex-1 flex flex-col min-w-0" ref="listBRef">
           <template v-for="item in displayListB" :key="item.uiKey">
             
-            <div v-if="!item.isPlaceholder" :data-id="item.id" class="flex items-center h-7 px-2 border-b border-x border-white/5 transition-colors relative"
+            <div v-if="!item.isPlaceholder" :data-id="item.id" class="flex items-center h-7 px-2 border-b border-x border-text-main/5 transition-colors relative"
                 :style="{ backgroundColor: getBgColor(item) }">
               <div v-if="shouldShowIndicator(item)" 
                    class="absolute left-0 top-0 bottom-0 w-0.5" 
@@ -126,7 +126,7 @@
               </div>
             </div>
 
-            <div v-else class="h-7 flex items-center justify-center border-b border-x border-white/5 select-none relative"
+            <div v-else class="h-7 flex items-center justify-center border-b border-x border-text-main/5 select-none relative"
               :style="{ backgroundColor: getBgColor(item) }">
               <span class="absolute left-4 text-xl text-text-dim" style="writing-mode: vertical-rl;">···</span>
               <!-- 指示条也继承 -->

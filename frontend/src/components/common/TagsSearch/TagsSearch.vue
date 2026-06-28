@@ -72,7 +72,7 @@
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
           <!-- 展开/收起按钮 -->
-          <button @click="isExpanded = !isExpanded" v-tooltip="'可展开输入的关键词标签'" class="p-1 text-text-dim hover:text-white transition-transform" :class="isExpanded ? 'rotate-180' : ''">
+          <button @click="isExpanded = !isExpanded" v-tooltip="'可展开输入的关键词标签'" class="p-1 text-text-dim hover:text-text-main transition-transform" :class="isExpanded ? 'rotate-180' : ''">
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
         </div>
@@ -81,17 +81,17 @@
       <!-- 自动补全下拉菜单 -->
       <Transition name="fade-drop">
         <div v-if="showSuggestions && suggestionList.length > 0" ref="suggestionContainer"
-          class="absolute top-full mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden bg-bg-surface/70 border border-white/10 backdrop-blur-md rounded-lg shadow-2xl z-100"
+          class="absolute top-full mt-1 max-h-60 w-full overflow-y-auto overflow-x-hidden bg-bg-surface/70 border border-text-main/10 backdrop-blur-md rounded-lg shadow-2xl z-100"
         >
           <div v-for="(item, index) in suggestionList" :key="index"
             class="pl-1 pr-3 py-1.5 text-xs cursor-pointer flex items-center justify-between group transition-colors"
-            :class="[highlightIndex === index ? 'bg-accent-primary/20 text-white' : 'text-text-dim hover:bg-white/5']"
+            :class="[highlightIndex === index ? 'bg-accent-primary/20 text-text-main' : 'text-text-dim hover:bg-text-main/5']"
             @mousedown.prevent="applySuggestion(item)"
             @mouseover="highlightIndex = index" v-tooltip="tagTooltip(item)"
           >
             <div class="flex items-center gap-1">
               <!-- 图标/类型指示 -->
-              <span class="text-xs w-8 h-4 flex items-center justify-center rounded bg-white/5 font-mono"
+              <span class="text-xs w-8 h-4 flex items-center justify-center rounded bg-text-main/5 font-mono"
                  :class="item.type === 'key' ? 'text-[rgb(var(--accent-rgb))]' : 'text-green-400'">
                 {{ item.type === 'key' ? 'KEY' : 'VAL' }}
               </span>
@@ -104,7 +104,7 @@
                       ({{ item.meta.matchInfo }})
                   </span> -->
                 </span>
-                <span :class="highlightIndex === index ? 'text-white' : 'text-gray-300'">
+                <span :class="highlightIndex === index ? 'text-text-main' : 'text-gray-300'">
                   {{ item.type === 'value' ? item.label : '' }}
                 </span>
               </span>
@@ -118,7 +118,7 @@
       <!-- 标签面板 -->
       <TransitionGroup tag="div" v-if="isExpanded" name="tag-list"
         class="absolute flex flex-wrap p-1.5 gap-1 left-0 right-0 top-full mt-1 ransition-all duration-200 
-        overflow-y-auto overflow-x-hidden bg-bg-deep/70 border border-white/10 backdrop-blur-md rounded-lg shadow-2xl z-99"
+        overflow-y-auto overflow-x-hidden bg-bg-deep/70 border border-text-main/10 backdrop-blur-md rounded-lg shadow-2xl z-99"
       >
         <Tag v-for="(tag, index) in modelValue" :key="tag.id || index" :tag="tag" 
             :is-editing="editingIndex===index"

@@ -2,14 +2,16 @@
 
 import json
 import os
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 from typing import Dict, Any, List
+
 
 # 配置文件路径
 HOME_DIR = Path(os.getcwd())
 CONFIG_DIR = HOME_DIR / "data"
 CONFIG_FILE = CONFIG_DIR / "config.json"
+UPDATE_CACHE_DIR = HOME_DIR / "updates"
 
 # 定义缩略图缓存目录
 CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
@@ -62,8 +64,10 @@ class SteamConfig:
 class UIConfig:
     theme: str = "system"       # light, dark, system
     font_size: int = 16
+    drag_delay: int = 30            # 拖动判定延迟 (毫秒)
     tooltip_hover_time: int = 1000  # 鼠标悬停显示提示时间 (毫秒)
     show_mod_hover_panel: bool = True  # 是否显示 Mod 悬停面板
+    double_click_active_mod: bool = True  # 是否双击启用/停用 Mod
     
     show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
     show_icons_cloud: bool = True  # 是否显示动态图标云
@@ -79,6 +83,9 @@ class UIConfig:
     show_list_icon: bool = True  # 是否显示 Mod 图标
     show_list_mod_icon: bool = True  # 是否显示 Mod 图标
     show_list_modtype_icon: bool = True  # 是否显示 Mod 类型图标
+    
+    show_group_index: bool = True  # 是否显示分组索引列
+    show_group_icon: bool = True  # 是否显示分组图标
     
 
 @dataclass
@@ -157,7 +164,7 @@ class SettingsManager:
             return
         
         self._ensure_config_dir()
-        self.config: AppConfig = self._load()
+        self.config: AppConfig = self._load() # 加载配置
         self._initialized = True
 
     def _ensure_config_dir(self):
@@ -169,44 +176,70 @@ class SettingsManager:
         if not log_dir.exists():
             log_dir.mkdir(parents=True)
             
+    def _recursive_update(self, target_obj, source_dict: Dict[str, Any]):
+        """
+        递归更新 dataclass 对象。
+        :param target_obj: 初始化的 dataclass 对象 (包含默认值)
+        :param source_dict: 从 JSON 加载的字典
+        """
+        # 获取目标对象的所有字段定义
+        target_fields = {f.name: f for f in fields(target_obj)}
+        
+        for key, value in source_dict.items():
+            # 1. 忽略未知字段 (配置文件里有，但代码里没有定义的)
+            if key not in target_fields:
+                continue
+            
+            # 获取当前对象上的属性值
+            current_attr = getattr(target_obj, key)
+            
+            # 2. 判断是否需要递归
+            # 如果当前属性是 dataclass 实例，且来源值是字典，则递归更新
+            if is_dataclass(current_attr) and isinstance(value, dict):
+                self._recursive_update(current_attr, value)
+            
+            # 3. 普通赋值
+            else:
+                # 这里可以加一些简单的类型保护，比如防止把 str 赋给 int
+                # 但 Python 鸭子类型通常允许直接赋值，除非为了极高的健壮性
+                setattr(target_obj, key, value)
 
     def _load(self) -> AppConfig:
+        """
+        加载配置逻辑：
+        1. 创建全默认值的 AppConfig 对象
+        2. 读取 JSON
+        3. 递归将 JSON 的值覆盖到 AppConfig 对象上
+        """
+        # 1. 如果文件不存在，直接返回全默认配置
         if not CONFIG_FILE.exists():
             return AppConfig()
 
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            # 创建默认对象
-            cfg = AppConfig()
-            # 递归更新逻辑
-            # 1. 更新顶层字段
-            for k, v in data.items():
-                if hasattr(cfg, k) and k != 'network':
-                    setattr(cfg, k, v)
-            # 2. 显式处理 network 嵌套
-            if 'network' in data:
-                net_data = data['network']
-                # 处理 proxy
-                if 'proxy' in net_data:
-                    # 使用解包语法更新 ProxyConfig
-                    # 注意过滤掉未知的字段，防止报错
-                    valid_keys = ProxyConfig.__dataclass_fields__.keys()
-                    clean_proxy_data = {k: v for k, v in net_data['proxy'].items() if k in valid_keys}
-                    cfg.network.proxy = ProxyConfig(**clean_proxy_data)
-                
-                # 处理 hosts
-                if 'hosts' in net_data:
-                    cfg.network.hosts = net_data['hosts']
+            
+            # 2. 实例化默认配置 (这里已经包含了所有定义的默认值)
+            config = AppConfig()
+            
+            # 3. 递归更新 (核心逻辑)
+            self._recursive_update(config, data)
                 
 # ================================临时变更修复 (记得以后删除)===========================================================
-                if (not cfg.user_data_path and data.get('game_data_path')):
-                    cfg.user_data_path = net_data['game_data_path']
+            if (not config.user_data_path and data.get('game_data_path')):
+                config.user_data_path = data['game_data_path']
 
-            return cfg
+            # 检查旧版配置位置
+            legacy_game_data = data.get('network', {}).get('game_data_path')
+            if not config.user_data_path and legacy_game_data:
+                config.user_data_path = legacy_game_data
+
+            return config
 
         except Exception as e:
+            # 使用 logging.getLogger 避免循环导入
             print(f"Config load error: {e}")
+            # 出错时返回默认配置，保证程序能跑
             return AppConfig()
 
     def save(self):
@@ -236,12 +269,12 @@ class SettingsManager:
         支持: settings.set('language', 'en')
         """
         if hasattr(self.config, key):
-            # 类型校验（可选，简单的做一下防止 int 变 str）
+            # 类型校验（简单的做一下防止 int 变 str）
             target_type = type(getattr(self.config, key))
             if target_type != type(value) and target_type != str: # str比较宽松
-                 # 尝试转换，或者打印警告
-                 # value = target_type(value)
-                 pass
+                # 尝试转换，或者打印警告
+                # value = target_type(value)
+                pass
             
             setattr(self.config, key, value)
             self.save()

@@ -1,8 +1,7 @@
 <template>
   <transition name="fade">
-    <div v-if="visible" class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div
-        class="w-5/7 max-h-9/10 flex flex-col bg-bg-deep border border-accent-danger/30 rounded-xl shadow-2xl overflow-hidden">
+    <div v-if="visible" class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm" >
+      <div class="w-3/4 max-h-9/10 flex flex-col bg-bg-deep border border-accent-danger/30 rounded-xl shadow-2xl overflow-hidden">
 
         <!-- Header -->
         <div class="px-6 py-4 bg-accent-danger/10 border-b border-accent-danger/20 flex items-center justify-between shrink-0">
@@ -11,15 +10,21 @@
               <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>
             </div>
             <div>
-              <h2 class="text-lg font-bold text-white">发现模组冲突</h2>
+              <h2 class="text-lg font-bold text-text-main">发现模组冲突</h2>
               <p class="text-sm text-text-dim">检测到 {{ localConflicts.length }} 组重复的包ID。请为每一组选择一个<span
                   class="text-accent-success font-bold">保留版本</span>。</p>
             </div>
           </div>
-          <common-switch v-model="appStore.settings.show_coexistence_message" @click="appStore.saveSetting('show_coexistence_message', appStore.settings.show_coexistence_message)"
-            label="显示共存问题" mini description="关闭后，仅显示冲突的包ID，不显示版本共存问题"
-            class="w-45 text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors"
-          />
+          <div class="flex items-center gap-3">
+            <common-switch v-model="appStore.settings.show_coexistence_message" @click="appStore.saveSetting('show_coexistence_message', appStore.settings.show_coexistence_message)"
+              label="显示共存问题" mini description="关闭后，仅显示冲突的包ID，不显示版本共存问题"
+              class="w-45 text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-text-main transition-colors"
+            />
+            <button v-tooltip="'我管你这的那的，下次再说！'" class="text-sm text-text-dim hover:text-accent-danger transition-colors" @click="visible = false">
+              <x-circle></x-circle>
+            </button>
+          </div>
+          
         </div>
 
         <!-- 滚动列表区 -->
@@ -27,10 +32,10 @@
 
           <!-- 循环每一组冲突：key 改为 package_id -->
           <div v-for="group in localConflicts" :key="group.package_id"
-            class="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+            class="bg-text-main/5 rounded-xl border border-text-main/10 overflow-hidden">
 
             <!-- 组标题 -->
-            <div class="flex-1 bg-black/20 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+            <div class="flex-1 bg-black/20 px-4 py-2 border-b border-text-main/5 flex justify-between items-center">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="font-mono text-sm font-bold text-accent-highlight truncate">{{ group.package_id }}</span>
                 <!-- 增加类型标签提示 -->
@@ -45,57 +50,69 @@
             <!-- 版本选项列表 -->
             <div class="p-3 grid gap-2 grid-cols-1">
               <!-- key 改为 mod.path，选中判断改为 selections[group.package_id] -->
-              <div v-for="mod in group.items" :key="mod.path" @click="selectVersion(group.package_id, mod.path)"
-                class="relative flex items-center p-3 rounded-lg border transition-all cursor-pointer group/item"
-                :class="selections[group.package_id] === mod.path
-                  ? 'bg-accent-success/10 border-accent-success ring-1 ring-accent-success/50'
-                  : 'bg-black/20 border-white/5 opacity-70 hover:opacity-100 hover:border-white/20'">
-                <!-- 选中标记 -->
-                <div class="w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors"
-                  :class="selections[group.package_id] === mod.path ? 'border-accent-success bg-accent-success text-black' : 'border-white/30'">
-                  <svg v-if="selections[group.package_id] === mod.path" class="size-4" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="4">
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                </div>
-
-                <!-- Mod 信息 -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold text-sm text-white truncate">{{ mod.name }}</span>
-                    <span class="px-1.5 py-0.5 rounded bg-white/10 text-xs font-mono text-accent-primary">
-                      v{{ mod.version || '?' }}</span>
-                    <!-- 来源高亮 -->
-                    <span class="text-xs px-1 rounded"
-                      :class="mod.source === 'local' ? 'text-accent-success border border-accent-success/30' : (mod.source === 'workshop' ? 'text-accent-primary border border-accent-primary/10' : 'text-text-dim border border-text-dim/10')">
-                      {{ mod.source }}</span>
+              <div v-for="mod in group.items" :key="mod.path" class="flex items-center">
+                
+                <div @click="selectVersion(group.package_id, mod.path)"
+                  class="relative flex-1 flex items-center p-3 rounded-lg border transition-all cursor-pointer group/item"
+                  :class="selections[group.package_id] === mod.path
+                    ? 'bg-accent-success/10 border-accent-success ring-1 ring-accent-success/50'
+                    : 'bg-black/20 border-text-main/5 opacity-70 hover:opacity-100 hover:border-text-main/20'">
+                  <!-- 选中标记 -->
+                  <div class="w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors"
+                    :class="selections[group.package_id] === mod.path ? 'border-accent-success bg-accent-success text-black' : 'border-text-main/30'">
+                    <svg v-if="selections[group.package_id] === mod.path" class="size-4" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="4">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
                   </div>
-                  <div class="text-xs text-text-dim mt-1 truncate font-mono" :title="mod.path">{{ mod.path }}</div>
+
+                  <!-- Mod 信息 -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-sm text-text-main truncate">{{ mod.name }}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-text-main/10 text-xs font-mono text-accent-primary cursor-help" v-tooltip="`版本：${mod.version || '?'}`">
+                        v{{ mod.version || '?' }}</span>
+                      <span class="px-1.5 py-0.5 rounded bg-text-main/10 text-xs font-mono text-accent-success cursor-help" v-tooltip="`支持游戏版本：${mod.supported_versions?.join(', ') || '?'}`">
+                        {{ mod.supported_versions?.at(-1) || '?' }}</span>
+                      <!-- 来源高亮 -->
+                      <span class="text-xs px-1 rounded"
+                        :class="mod.source === 'local' ? 'text-accent-success border border-accent-success/30' : (mod.source === 'workshop' ? 'text-accent-primary border border-accent-primary/10' : 'text-text-dim border border-text-dim/10')">
+                        {{ mod.source }}</span>
+                    </div>
+                    <div class="text-xs text-text-dim mt-1 truncate font-mono" v-tooltip="mod.path">{{ mod.path }}</div>
+                  </div>
+
+                  <!-- 未选中时的操作配置 (禁用/删除) -->
+                  <!-- 只有当此项未被选中时才显示 -->
+                  <div v-if="selections[group.package_id] !== mod.path" @click.stop
+                    class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-text-main/5">
+                    <span class="text-xs text-text-dim">处理方式:</span>
+                    <!-- radio 的 name 使用 mod.path 保证唯一性 -->
+                    <label class="flex items-center gap-1 cursor-pointer hover:text-text-main transition-colors">
+                      <input type="radio" :name="`act-${mod.path}`" value="disable" v-model="actionMap[mod.path]"
+                        class="accent-accent-primary w-3 h-3">
+                      <span class="text-xs">禁用</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer hover:text-accent-danger transition-colors">
+                      <input type="radio" :name="`act-${mod.path}`" value="delete" v-model="actionMap[mod.path]"
+                        class="accent-accent-danger w-3 h-3">
+                      <span class="text-xs">删除</span>
+                    </label>
+                  </div>
+
+                  <!-- 选中状态文字 -->
+                  <div v-else
+                    class="ml-4 px-3 py-1.5 rounded bg-accent-success/20 text-accent-success text-xs font-bold border border-accent-success/20">
+                    将保留并使用
+                  </div>
+
                 </div>
 
-                <!-- 未选中时的操作配置 (禁用/删除) -->
-                <!-- 只有当此项未被选中时才显示 -->
-                <div v-if="selections[group.package_id] !== mod.path" @click.stop
-                  class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-white/5">
-                  <span class="text-xs text-text-dim">处理方式:</span>
-                  <!-- radio 的 name 使用 mod.path 保证唯一性 -->
-                  <label class="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
-                    <input type="radio" :name="`act-${mod.path}`" value="disable" v-model="actionMap[mod.path]"
-                      class="accent-accent-primary w-3 h-3">
-                    <span class="text-xs">禁用</span>
-                  </label>
-                  <label class="flex items-center gap-1 cursor-pointer hover:text-accent-danger transition-colors">
-                    <input type="radio" :name="`act-${mod.path}`" value="delete" v-model="actionMap[mod.path]"
-                      class="accent-accent-danger w-3 h-3">
-                    <span class="text-xs">删除</span>
-                  </label>
-                </div>
-
-                <!-- 选中状态文字 -->
-                <div v-else
-                  class="ml-4 px-3 py-1.5 rounded bg-accent-success/20 text-accent-success text-xs font-bold border border-accent-success/20">
-                  将保留并使用
-                </div>
+                <button v-tooltip="'打开文件路径'" class="m-2 text-text-dim hover:text-accent-cool transition-colors"
+                  @click="appStore.openPath(mod.path)">
+                  <Folder class="size-7"></Folder>
+                </button>
+              
 
               </div>
             </div>
@@ -104,15 +121,15 @@
         </div>
 
         <!-- Footer -->
-        <div class="py-4 px-6 bg-black/20 border-t border-white/5 flex justify-between items-center shrink-0">
+        <div class="py-4 px-6 bg-black/20 border-t border-text-main/5 flex justify-between items-center shrink-0">
           <div class="text-sm text-text-dim">
             <span class="text-accent-warn">注意：</span> 选择删除将直接移除文件至回收站，操作不可逆。<br>禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。
           </div>
           <div class="flex gap-3">
-            <div @click.stop class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-white/5">
+            <div @click.stop class="ml-4 flex items-center gap-3 px-3 py-1.5 rounded bg-black/40 border border-text-main/5">
               <span class="text-xs text-text-dim">一键批量:</span>
               <!-- radio 的 name 使用 mod.path 保证唯一性 -->
-              <label class="flex items-center gap-1 cursor-pointer hover:text-white transition-colors">
+              <label class="flex items-center gap-1 cursor-pointer hover:text-text-main transition-colors">
                 <input type="radio" name="allActionState" value="disable" v-model="allActionState"
                   class="accent-accent-primary w-3 h-3">
                 <span class="text-xs">禁用</span>
@@ -142,6 +159,7 @@ import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification"
 import CommonSwitch from './common/input/CommonSwitch.vue'
+import { Folder, XCircle } from 'lucide-vue-next'
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -281,7 +299,7 @@ const submit = async () => {
   }
   try {
     const res = await window.pywebview.api.resolve_scan_conflicts(operations)
-    if (res.status === 'success') {
+    if (appStore.checkResult(res, '处理冲突')) {
       toast.success("冲突已解决，正在刷新列表...")
       // 关键：先清理 Store 中的状态，防止弹窗逻辑因异步扫描再次触发
       modStore.conflictList = []

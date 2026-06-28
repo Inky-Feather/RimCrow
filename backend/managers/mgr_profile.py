@@ -253,9 +253,9 @@ class ProfileManager:
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
                 
-            # print(f"Profile synced to disk: {json_path}")
+            # logger.info(f"Profile synced to disk: {json_path}")
         except Exception as e:
-            print(f"Failed to sync profile to disk: {e}")
+            logger.error(f"Failed to sync profile to disk: {e}")
             
             
     def scan_orphaned_profiles(self):

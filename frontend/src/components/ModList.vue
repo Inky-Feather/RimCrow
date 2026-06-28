@@ -2,7 +2,7 @@
   <div class="flex flex-col relative h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
        :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
-    <div :class="`px-3 h-8 border-b rounded-t-2xl border-white/5 flex justify-between items-center bg-accent-${listColor}/10`">
+    <div :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
       <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-1`">
         <div :class="`w-1.5 h-1.5 mr-1 rounded-full bg-accent-${listColor} shadow-lg shadow-accent-primary`"></div>
         <span class="mr-1">{{ title }}</span>
@@ -144,8 +144,8 @@
         </div>
         <!-- 列表 -->
           <!-- :size="isSimpleView ? 34 : 54" -->
-        <virtual-list v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
-          :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="50"
+        <VirtualList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
+          :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="appStore.settings.ui.drag_delay"
           :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
           :size="itemHeight"
           @drop="updateChildren" @drag="startDrag"
@@ -165,7 +165,7 @@
               :search-match="currentTargetId === dataKey">
             </ModItem>
           </template>
-        </virtual-list>
+        </VirtualList>
 
         <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
           <!-- 添加未启用的依赖项 -->
@@ -495,12 +495,8 @@ const executeSearch = (next = true) => {
     searchResults.value = results
     currentSearchIndex.value = -1
   }
-
-
   if (results.length === 0) return
-
   var index = currentSearchIndex.value
-
   if (next) {
     index++
     if (index >= results.length) {
@@ -515,7 +511,6 @@ const executeSearch = (next = true) => {
   if (results.includes(targetId)) {
     modStore.currentTargetId = targetId
   }
-  
 }
 
 // 开始拖拽时，清空反选集合

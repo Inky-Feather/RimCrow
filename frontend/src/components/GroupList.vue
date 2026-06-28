@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
     :class="`border-2 rounded-2xl border-accent-${listColor}/20`">
     <!-- 标题栏 -->
-    <div :class="`px-3 h-8 border-b rounded-t-2xl border-white/5 flex justify-between items-center bg-accent-${listColor}/10`">
+    <div :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
       <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
@@ -15,8 +15,8 @@
     <div class="px-2 py-1 shadow-xl" >
       <div class="w-full inline-flex items-center gap-1">
         <input type="text" placeholder="搜索模组名称..." v-model="searchText"
-          :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-white/10 text-sm 
-          text-white placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
+          :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-text-main/10 text-sm 
+          text-text-main placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
         <!-- 定位按钮 -->
         <button @click="executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
           :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
@@ -26,17 +26,23 @@
         </button>
       </div>
       <!-- 操作按钮 -->
-      <div class="mt-1 pointer-events-auto flex gap-1.5">
-        <button @click="expandAll" v-tooltip="`展开全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`" >
-          <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9L42 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 19L42 19" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 26L24 40L42 26" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <button @click="collapseAll" v-tooltip="`收拢全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
-          <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 10L42 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20L42 20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40L24 26L42 40" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <button @click="createGroup" v-tooltip="`新建分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
-          <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.0605 10L24.0239 38" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 24L38 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
+      <div class="mt-1 flex items-center justify-between">
+
+        <div class="pointer-events-auto flex gap-1.5">
+          <button @click="expandAll" v-tooltip="`展开全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`" >
+            <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9L42 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 19L42 19" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 26L24 40L42 26" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button @click="collapseAll" v-tooltip="`收拢全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
+            <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 10L42 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 20L42 20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40L24 26L42 40" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button @click="createGroup" v-tooltip="`新建分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`">
+            <svg class="size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.0605 10L24.0239 38" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 24L38 24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <!-- 帮助按钮 -->
+        <CircleQuestionMarkIcon v-tooltip="groupHelpTooltip" :class="`size-5 text-text-dim hover:text-accent-${listColor} cursor-help transition-all`" />
       </div>
+
     </div>
 
     <!-- 列表区 -->
@@ -53,7 +59,7 @@
         </div>
 
         <VirtualList v-model="groupList" dataKey="group_id" :keeps="50" class="h-full p-1" 
-          placeholderClass="ghost" wrapClass="space-y-1.5 min-h-full " ref="vListRef"
+          placeholderClass="ghost" wrapClass="space-y-2 min-h-full " ref="vListRef" :delay="appStore.settings.ui.drag_delay"
 	        :appendToBody="true" :fallbackOnBody="true" :scrollSpeed="{ x: 0, y: 10 }" handle=".drag-handle"
           :group="{ name: 'groups', pull:'clone', put: true, revertDrag: true }" :animation="150"
           @drop="groupReorder" @drag="stratDrag">
@@ -94,6 +100,8 @@ import { useModStore } from '../stores/modStore'
 import { useGroupStore } from '../stores/groupStore'
 import VirtualList from 'vue-virtual-sortable';
 import GroupItem from './utils/GroupItem.vue'
+import { CircleQuestionMarkIcon } from 'lucide-vue-next';
+import { useAppStore } from '../stores/appStore';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -102,6 +110,7 @@ const props = defineProps({
   listColor: { type: String, default: 'primary' } // danger/highlight/special/cool/primary/success/tip/warn/secondary/warning
 })
 
+const appStore = useAppStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
 
@@ -130,6 +139,24 @@ const groupList = computed({
         // emit('update:modelValue', val)
     }
 })
+
+// 分组帮助提示
+const groupHelpTooltip = computed(() => {
+  return `**分组管理说明：**
+支持直接将 Mod 从列表中拖拽至任意分组。
+在列表上点击右键，可通过菜单快速将 Mod 移入或移出已有分组。
+在 Mod 详情页面，可统一管理该 Mod 所属的所有分组。
+
+分组功能类似剪贴板，移入、移出分组均为[[复制]]操作：
+ - 无法通过^^移出^^分组来移除 Mod ；
+ - 不能在分组之间!!直接移动!! Mod，分组间拖拽 Mod 也只会执行[[复制]]。
+
+分组支持整体拖拽操作：
+ - 将分组整体拖入启用列表，可一次性启用该分组下所有 Mod；
+ - 将分组整体拖入停用列表，可一次性停用该分组下所有 Mod。`
+})
+
+
 
 const executeSearch = (forward: boolean) => {
   if (!searchText.value) return

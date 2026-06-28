@@ -14,13 +14,13 @@
           :value="key"
           @change="updateKey(key, $event.target.value)"
           placeholder="域名"
-          class="flex-1 bg-black/30 border border-white/5 rounded-l-md px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-accent-primary/40"
+          class="flex-1 bg-black/30 border border-text-main/5 rounded-l-md px-3 py-1.5 text-sm text-text-main font-mono focus:outline-none focus:border-accent-primary/40"
         />
         <input 
           :value="val"
           @input="updateValue(key, $event.target.value)"
           placeholder="IP"
-          class="flex-1 bg-black/30 border border-white/5 rounded-r-md px-3 py-1.5 text-sm text-accent-primary font-mono focus:outline-none focus:border-accent-primary/40"
+          class="flex-1 bg-black/30 border border-text-main/5 rounded-r-md px-3 py-1.5 text-sm text-accent-primary font-mono focus:outline-none focus:border-accent-primary/40"
         />
         <button @click="remove(key)" class="px-2 text-text-dim hover:text-accent-danger transition-colors opacity-0 group-hover:opacity-100">
           <Trash2 class="size-3.5" />

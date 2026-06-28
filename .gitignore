@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 *.spec
 nuitka-*
+updates/
 
 # App Data (忽略运行时生成的数据)
 data/

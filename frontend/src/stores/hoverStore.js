@@ -17,6 +17,7 @@ export const useHoverStore = defineStore('hover', () => {
   // 存组件和它的 props
   const customComponent = ref(null)
   const componentProps = ref({})
+  const activeTarget = ref(null) // 新增：记录当前触发源
 
   // 内部计时器
   let timer = null
@@ -36,6 +37,8 @@ export const useHoverStore = defineStore('hover', () => {
     // 防止传入空数据报错
     if (!content) return
     // console.log('show', content, event)
+    // 记录触发源 (可以是 DOM 元素或者一个唯一标识)
+    activeTarget.value = event?.currentTarget || true 
     // 延迟显示，避免立即显示导致的闪烁
     timer = setTimeout(() => {
       // 重置 html 标记
@@ -74,13 +77,17 @@ export const useHoverStore = defineStore('hover', () => {
   }
 
   // 隐藏请求
-  const hide = () => {
+  const hide = (target = null) => {
+    // 如果传入了 target，只有当 target 匹配当前活跃源时才关闭
+    // 这能防止：元素 A 消失触发 hide，但鼠标其实已经瞬间移动到元素 B 上了
+    if (target && activeTarget.value !== target) return
     // 清除任何正在等待显示的计时器 (防止移出后，之前的计时器还在跑，导致突然弹出来)s
     if (timer) {
       clearTimeout(timer)
       timer = null // 建议置空
     }
     isHovering.value = false
+    activeTarget.value = null
     // 不清空 data，防止淡出动画时内容突然消失
   }
 

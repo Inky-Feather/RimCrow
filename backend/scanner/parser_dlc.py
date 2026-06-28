@@ -2,6 +2,7 @@ import os
 import tarfile
 import json
 import glob
+from backend.utils.logger import logger
 import xml.etree.ElementTree as ET  # <-- 使用标准库
 
 # --- 模块测试准备 ---
@@ -143,7 +144,7 @@ class DLCParser:
                     loaded = json.load(f)
                     cache_data = loaded
             except Exception:
-                print("[DLCParser] Cache corrupted, rebuilding all.")
+                logger.info("[DLCParser] Cache corrupted, rebuilding all.")
 
         current_trans = cache_data.get('translations', {})
         current_meta = cache_data.get('meta', {}) # 记录文件名对应的时间戳
@@ -171,7 +172,7 @@ class DLCParser:
                (abs(current_meta[filename] - mtime) > 1.0) or \
                (lang_code not in current_trans):
                 
-                print(f"[DLCParser] Updating cache for: {filename}")
+                logger.info(f"[DLCParser] Updating cache for: {filename}")
                 # 解析该文件
                 trans_map = self._extract_translations_from_tar(tar_path)
                 
@@ -186,7 +187,7 @@ class DLCParser:
         existing_filenames_in_meta = list(current_meta.keys())
         for fname in existing_filenames_in_meta:
             if fname not in found_filenames:
-                print(f"[DLCParser] Removing stale cache: {fname}")
+                logger.info(f"[DLCParser] Removing stale cache: {fname}")
                 del current_meta[fname]
                 # 尝试移除对应的翻译数据 (可能比较困难，因为 key 转换了)
                 # 简单做法：如果是清理，因为这一步比较少见，不处理 trans 里的残留脏数据也不会崩，
@@ -206,7 +207,7 @@ class DLCParser:
             with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False)
         except Exception as e:
-            print(f"[DLCParser] Failed to save cache: {e}")
+            logger.error(f"[DLCParser] Failed to save cache: {e}")
 
     # =========================================================================
     #  辅助工具方法
@@ -263,8 +264,7 @@ class DLCParser:
                         'description': node.findtext('description')
                     }
         except Exception: 
-            print(f"[DLCParser] Failed to parse {xml_path}")
-            pass
+            logger.error(f"[DLCParser] Failed to parse {xml_path}")
         return defs
 
     def _extract_translations_from_tar(self, tar_path):
@@ -282,11 +282,11 @@ class DLCParser:
                         if f:
                             self._parse_translation_xml(f.read(), trans_map)
         except Exception as e:
-            print(f"[DLCParser] Error extracting {tar_path}: {e}")
+            logger.error(f"[DLCParser] Error extracting {tar_path}: {e}")
         return trans_map
 
     def _parse_translation_xml(self, xml_bytes, trans_map):
-        # print(f"[DLCParser] Parsing XML with {len(xml_bytes)} bytes")
+        # logger.info(f"[DLCParser] Parsing XML with {len(xml_bytes)} bytes")
         try:
             if isinstance(xml_bytes, bytes):
                 # 尝试检测编码，或者默认 utf-8
@@ -303,9 +303,9 @@ class DLCParser:
                 def_name, prop = tag.split('.', 1)
                 if def_name not in trans_map: trans_map[def_name] = {}
                 trans_map[def_name][prop] = text.strip().replace('\\n', '\n')
-            # print(f"[DLCParser] Parsed trans_map: {trans_map}")
+            logger.debug(f"[DLCParser] Parsed trans_map: {trans_map}")
         except Exception as e:
-            print(f"[DLCParser] Error parsing XML: {e}")
+            logger.error(f"[DLCParser] Error parsing XML: {e}")
             pass
 if __name__ == '__main__':
     dlc_parser = DLCParser(r'E:\SteamLibrary\steamapps\common\RimWorld\Data')

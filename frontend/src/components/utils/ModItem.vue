@@ -1,7 +1,7 @@
 <!-- ModItem.vue -->
 <template>
   <div class="py-[2px] flex items-center gap-1 select-none relative" :data-id="item_id"
-    @contextmenu="handleContextMenu">
+    @contextmenu="handleContextMenu" @dblclick="handleDoubleClick" @click.left="handleClick">
     <!-- 序号（通过位数计算动态调整字体大小） -->
     <!-- :style="{ fontSize: 18-(index+1).toString().length*3 + 'px' }" -->
     <div v-if="showIndex" class="swipe-trigger w-6 h-6 p-3 flex items-center justify-center rounded"
@@ -21,10 +21,10 @@
         <div v-if="simple" class="flex items-center gap-1">
 
           <div v-if="showModIcon">
-            <img v-if="!modData.is_missing && modData.thumb_url" :src="modData.thumb_url"
+            <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
               :class="`size-6 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
-            <div v-else-if="modData.is_missing" :class="`size-6 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30`">!</div>
-            <div v-else :class="`size-6 rounded border-2 border-dashed border-white/10 flex items-center justify-center`">
+            <div v-else-if="!modData.path" :class="`size-6 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30`">!</div>
+            <div v-else :class="`size-6 rounded border-2 border-dashed border-text-main/10 flex items-center justify-center`">
               <svg :class="`size-5 opacity-20`" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
             </div>
           </div>
@@ -32,11 +32,11 @@
           <!-- 图标 -->
           <div v-if="showTypeIcon" class="flex items-center justify-center -mr-1">
             <!-- 类型图标 -->
-            <span class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`来源：${modData.source}`">
+            <span class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`类型：${MOD_TYPE_MAP[modType] || modType || '未知'}`">
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
             </span>
             <!-- 来源图标 -->
-            <span  class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`来源：${modData.source}`">
+            <span  class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`来源：${SOURCE_TYPE_MAP[modData.source] || modData.source || '未知'}`">
               <svg v-if="modData.source==='workshop'" class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M261.6 373.1C280.2 380.8 288.9 402 281.2 420.5C273.5 439 252.2 447.7 233.6 439.9L205.1 428.1C210.1 438.7 218.9 447.5 230.5 452.3C255.7 462.8 284.6 450.9 295.1 425.8C300.2 413.7 300.2 400.3 295.2 388.1C290.1 376 280.7 366.5 268.5 361.4C256.4 356.4 243.5 356.6 232.1 360.9L261.6 373.1zM544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 304.7L212.6 352.8C224.6 344.6 238.8 340.7 253.3 341.5L308.7 261.3L308.7 260.2C308.7 212 348 172.7 396.3 172.7C444.6 172.7 483.9 212 483.9 260.2C483.9 309.4 443 348.9 394.3 347.7L315.3 404C316.9 442.5 286.2 472.8 249.6 472.8C217.8 472.8 191.1 450.1 185.1 420.1L96 383.2L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM337.9 260.2C337.9 292.5 364 318.6 396.3 318.6C428.6 318.6 454.7 292.5 454.7 260.2C454.7 227.9 428.6 201.8 396.3 201.8C364 201.8 337.9 227.9 337.9 260.2zM440.3 260.1C440.3 284.3 420.6 304 396.4 304C372.2 304 352.5 284.3 352.5 260.1C352.5 235.9 372.2 216.2 396.4 216.2C420.6 216.2 440.3 235.9 440.3 260.1z"/></svg>
               <svg v-else-if="modData.source==='github'"class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM361.8 471.7C361.8 469.9 361.8 465.7 361.9 460.1C362 448.7 362 431.3 362 416.4C362 400.8 356.8 390.9 350.7 385.7C387.7 381.6 426.7 376.5 426.7 312.6C426.7 294.4 420.2 285.3 409.6 273.6C411.3 269.3 417 251.6 407.9 228.6C394 224.3 362.2 246.5 362.2 246.5C335.6 239 305.6 239 279 246.5C279 246.5 247.2 224.3 233.3 228.6C224.2 251.5 229.8 269.2 231.6 273.6C221 285.3 216 294.4 216 312.6C216 376.2 253.3 381.6 290.3 385.7C285.5 390 281.2 397.4 279.7 408C270.2 412.3 245.9 419.7 231.4 394.1C222.3 378.3 205.9 377 205.9 377C189.7 376.8 204.8 387.2 204.8 387.2C215.6 392.2 223.2 411.4 223.2 411.4C232.9 441.1 279.3 431.1 279.3 431.1C279.3 440.1 279.4 452.8 279.4 461.7C279.4 466.5 279.5 470.3 279.5 471.7C279.5 476 276.5 481.2 268 479.7C202 457.6 155.8 394.8 155.8 321.4C155.8 229.6 226 159.9 317.8 159.9C409.6 159.9 484 229.6 484 321.4C484.1 394.8 439.3 457.7 373.3 479.7C364.9 481.2 361.8 476 361.8 471.7zM271.3 416.9C271.1 415.4 272.4 414.1 274.3 413.7C276.2 413.5 278 414.3 278.2 415.6C278.5 416.9 277.2 418.2 275.2 418.6C273.3 419 271.5 418.2 271.3 416.9zM262.2 420.1C260 420.3 258.5 419.2 258.5 417.7C258.5 416.4 260 415.3 262 415.3C263.9 415.1 265.7 416.2 265.7 417.7C265.7 419 264.2 420.1 262.2 420.1zM247.9 417.9C246 417.5 244.7 416 245.1 414.7C245.5 413.4 247.5 412.8 249.2 413.2C251.2 413.8 252.5 415.3 252 416.6C251.6 417.9 249.6 418.5 247.9 417.9zM235.4 410.6C233.9 409.3 233.5 407.4 234.5 406.5C235.4 405.4 237.3 405.6 238.8 407.1C240.1 408.4 240.6 410.4 239.7 411.2C238.8 412.3 236.9 412.1 235.4 410.6zM226.9 400.6C225.8 399.1 225.8 397.4 226.9 396.7C228 395.8 229.7 396.5 230.6 398C231.7 399.5 231.7 401.3 230.6 402.1C229.7 402.7 228 402.1 226.9 400.6zM220.6 391.8C219.5 390.5 219.3 389 220.2 388.3C221.1 387.4 222.6 387.9 223.7 388.9C224.8 390.2 225 391.7 224.1 392.4C223.2 393.3 221.7 392.8 220.6 391.8zM214.6 385.4C213.3 384.8 212.7 383.7 213.1 382.8C213.5 382.2 214.6 381.9 215.9 382.4C217.2 383.1 217.8 384.2 217.4 385C217 385.9 215.7 386.1 214.6 385.4z"/></svg>
               <svg v-else-if="['core','dlc'].includes(modData.source)" class="fill-current size-3.5" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="90" fill="currentColor" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="70" fill="#000" /><polygon points="100,48 118.27,74.85 149.46,83.93 129.57,109.61 130.57,142.07 100,131.09 69.43,142.07 70.43,109.61 50.54,83.93 81.73,74.85" fill="currentColor" stroke="currentColor" stroke-width="5"/><circle cx="100" cy="48" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="149.46" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="130.57" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="69.43" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="50.54" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/></svg>
@@ -47,10 +47,10 @@
         </div>
         <!-- 缩略图 -->
         <div v-else class="relative">
-          <img v-if="!modData.is_missing && modData.thumb_url" :src="modData.thumb_url"
+          <img v-if="!!modData.path && modData.thumb_url" :src="modData.thumb_url"
             :class="`w-10 h-8 rounded object-cover border border-accent-${listColor}/30 pointer-events-none`">
-          <div v-else-if="modData.is_missing" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
-          <div v-else class="w-10 h-10 rounded border-2 border-dashed border-white/10 flex items-center justify-center">
+          <div v-else-if="!modData.path" class="w-8 h-8 rounded flex items-center justify-center text-red-500 font-bold text-lg bg-red-900/50 border border-red-500/30">!</div>
+          <div v-else class="w-10 h-10 rounded border-2 border-dashed border-text-main/10 flex items-center justify-center">
             <svg class="w-6 h-6 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>
           
@@ -112,7 +112,7 @@
       <div class="w-1.5 -m-1 h-[-webkit-fill-available] relative">
         <div v-if="modGroups.length" class="w-full absolute right-0 inset-y-0 flex flex-col scale-95 opacity-60">
           <div v-for="(g, index) in modGroups" :key="g.id" @click.prevent.stop=""
-            :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-white`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
+            :class="[`w-full flex-1 hover:scale-120 transition-all hover:border hover:border-text-main`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']" 
             :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}`"
             v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}">
           </div><!-- 悬浮显示分组信息 -->
@@ -135,7 +135,7 @@
 
 <script setup>
 import { computed, h, nextTick  } from 'vue'
-import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP } from '../../utils/constants'
+import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../utils/constants'
 import { useAppStore } from '../../stores/appStore'
 import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore'
@@ -143,7 +143,7 @@ import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { hexToRgba, hexToRgb } from '../../utils/colorDeal'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Trash2, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig } from 'lucide-vue-next';
 import GroupItem from './GroupItem.vue'
 
 const props = defineProps({
@@ -175,6 +175,9 @@ const confirmStore = useConfirmStore()
 const modData = computed(() => modStore.takeModById(props.item_id))
 const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
 // const modIcon = computed(() => modStore.getIconUrl(props.id))
+
+// 是否启用
+const isActive = computed(() => modStore.activeIds.includes(props.item_id))
 
 const modType = computed(() => modStore.displayModType(modData.value))
 
@@ -209,7 +212,7 @@ const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
     if (issueState.value === 'warn') return `${select} border-accent-warn/40 border bg-accent-warn/10 hover:bg-accent-warn/20`
-    return `${select} bg-bg-surface/20 border-white/10 hover:border-white/20 hover:bg-text-dim/20` // 原有的选中样式
+    return `${select} bg-bg-surface/20 border-text-main/10 hover:border-text-main/20 hover:bg-text-dim/20` // 原有的选中样式
 })
 
 const getCardStyle = (id) => {
@@ -224,6 +227,28 @@ const getCardStyle = (id) => {
   base['color'] = color
   return base
 }
+
+// 双击启用/停用 Mod
+const handleDoubleClick = () => {
+  if (appStore.settings.ui.double_click_active_mod) {
+    modStore.changeModsActive([props.item_id], !isActive.value)
+  }
+}
+const handleClick = (e) => {
+  if (e.altKey) { //  alt 键点击触发
+    ruleStore.currentId = props.item_id
+    return
+  }
+  if (e.ctrlKey) { //  ctrl 键点击触发
+    return
+  }
+  if (e.shiftKey) { //  shift 键点击触发
+    return
+  }
+  if (e.button === 0) { // 左键点击
+    return
+  }
+}
 // 删除选中项文件
 const deleteMod = async () => {
   appStore.deletePath(modData.value.path)
@@ -233,6 +258,7 @@ const deleteModFiles = async () => {
   const paths = modStore.selectedMods.map(m => m.path)
   appStore.deletePaths(paths)
 }
+
 // 取消订阅模组
 const unsubscribeMod = async (delete_file = false) => {
   const res = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
@@ -280,6 +306,9 @@ const handleContextMenu = async (event) => {
         icon: MOD_TYPE_ICON_MAP[key],
         label: value, action: () => modStore.setModsType(selectedIds, key)
       })),{ label: '恢复默认', level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
+    },
+    { label: isActive.value?'停用':'启用', icon: isActive.value? CircleSlash2:CircleCheckBig, 
+      action: () => modStore.changeModsActive(selectedIds, !isActive.value) 
     },
   ]
   // 文件处理菜单

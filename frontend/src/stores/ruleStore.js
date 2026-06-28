@@ -6,10 +6,11 @@ import { createToastInterface } from 'vue-toastification'
 
 // 动态规则支持属性映射
 const DYNAMIC_RULE_PROPS = {
-  'package_id': '包 ID',
+  'package_id': '包名',
   'name': '名称',
   'author': '作者',
   'tags': '标签',
+  'groups': '分组', 
   'user_mod_type': '类型'
 }
 // 动态规则动作映射
@@ -42,9 +43,18 @@ export const useRuleStore = defineStore('rules', () => {
 
   // --- State ---
   const communityModRules = ref({}) // { pkg_id: { loadAfter: ... } }
+  const communityRulesUpdateTime = ref(0)
   const userModRules = ref({})   // { pkg_id: { loadAfter: ... } }
   const userDynamicRules = ref([])
-  const settings = ref({})
+  const settings = ref({
+    community_mod_rules_enabled: true,    // 全局社区规则总开关
+    user_mod_rules_enabled: true,         // 全局用户单项规则总开关
+    dynamic_rules_enabled: true,          // 全局动态规则总开关
+    excluded_community_mods: [],          // 被禁用的社区 Mod ID 列表 (黑名单)
+    excluded_user_mods: [],               // 被禁用的用户 Mod ID 列表 (黑名单)
+    // 规则优先级配置：索引越小，优先级越高 (默认: 用户 > 原生 > 社区 > 动态)
+    rule_source_priority: ["user", "native", "community", "dynamic"]
+  })
 
   const currentId = ref(null)
   
@@ -60,6 +70,7 @@ export const useRuleStore = defineStore('rules', () => {
       const res = await window.pywebview.api.get_all_rules()
       if (appStore.checkResult(res, '获取规则')) {
         communityModRules.value = res.data.community_rules
+        communityRulesUpdateTime.value = res.data.community_rules_update_time
         userModRules.value = res.data.user_mod_rules
         userDynamicRules.value = res.data.user_dynamic_rules
         settings.value = res.data.settings
@@ -127,21 +138,16 @@ export const useRuleStore = defineStore('rules', () => {
     if (!targetModId || !otherModId) return
     const pid = targetModId.toLowerCase()
     const other = otherModId.toLowerCase()
-    
     // 获取或初始化当前规则对象
     // 注意：我们需要深拷贝，不能直接改 ref
     const rule = JSON.parse(JSON.stringify(userModRules.value[pid] || {}))
-    
     // 初始化子对象
     if (!rule[type]) rule[type] = {}
-    
     // 如果已存在，跳过
     if (rule[type][other]) return
-
     // 写入
     const otherMod = modStore.takeModById(other)
     rule[type][other] = {name: [otherMod.name||''], comment:[] }
-
     // 乐观更新本地 State
     if (!userModRules.value[pid]) userModRules.value[pid] = {}
     if (!userModRules.value[pid][type]) userModRules.value[pid][type] = {}
@@ -149,12 +155,11 @@ export const useRuleStore = defineStore('rules', () => {
 
     // 发送后端
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (res.status !== 'success') {
+    if (!appStore.checkResult(res, '添加用户规则')) {
       toast.error(res.message)
       fetchRules() // 回滚
     } else {
-      // 成功后触发健康检查 (因为规则变了)
-      // modStore.checkHealth() // 需在组件侧或这里调用
+      modStore.scanMods()
     }
   }
   // 移除单项规则中的mod
@@ -177,7 +182,8 @@ export const useRuleStore = defineStore('rules', () => {
         return
     }
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (res.status !== 'success') fetchRules()
+    if (!appStore.checkResult(res, '移除用户规则')) fetchRules()
+    modStore.scanMods()
   }
   // 修改单项规则说明
    const updateComment = async (targetModId, type, otherModId, comment) => {
@@ -190,13 +196,28 @@ export const useRuleStore = defineStore('rules', () => {
     // 乐观更新
     userModRules.value[pid][type][other] = rule[type][other]
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (res.status !== 'success') fetchRules()
+    if (!appStore.checkResult(res, '更新用户规则说明')) fetchRules()
+    modStore.scanMods()
   }
   // 删除用户单项规则
   const deleteUserModRule = async (id) => {
     if (!window.pywebview) return
-    await window.pywebview.api.rule_delete_user_mod(id)
-    fetchRules()
+    const res = await window.pywebview.api.rule_delete_user_mod(id)
+    if (appStore.checkResult(res, '删除用户规则', true)) {
+      fetchRules()
+      modStore.scanMods()
+    }
+  }
+  // 改变规则来源的优先级
+  const changeRuleSourcePriority = async (rules_sources) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.change_rule_source_priority(rules_sources)
+    if (appStore.checkResult(res, '改变规则优先级', true)) {
+      fetchRules()
+      modStore.scanMods()
+      return true
+    }
+    return false
   }
   // 设置全局规则开关
   const setGlobalEnable = async (key, enabled) => {
@@ -209,7 +230,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     settings.value[type[key]] = enabled
     const res = await window.pywebview.api.rule_global_enable(type[key], enabled)
-    if (res.status !== 'success') fetchRules()
+    if (!appStore.checkResult(res, '全局规则开关')) fetchRules()
   }
   // 切换社区规则排除开关
   const toggleCommunityModRule = async (package_id) => {
@@ -222,7 +243,7 @@ export const useRuleStore = defineStore('rules', () => {
     // 转回数组赋值（保持数据结构一致）
     settings.value.excluded_community_mods = Array.from(excludedSet);
     const res = await window.pywebview.api.rule_toggle_community_mod(pid, excludedSet.has(pid))
-    if (res.status !== 'success') fetchRules()
+    if (!appStore.checkResult(res, '社区规则开关')) fetchRules()
   }
   // 切换用户规则开关
   const toggleUserModRule = async (package_id) => {
@@ -235,7 +256,7 @@ export const useRuleStore = defineStore('rules', () => {
     // 转回数组赋值（保持数据结构一致）
     settings.value.excluded_user_mods = Array.from(excludedSet);
     const res = await window.pywebview.api.rule_toggle_user_mod(pid, excludedSet.has(pid))
-    if (res.status !== 'success') fetchRules()
+    if (!appStore.checkResult(res, '用户规则开关')) fetchRules()
   }
 
   // --- 动态规则操作 ---
@@ -244,22 +265,27 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     // 乐观更新 UI
     rule.enabled = !rule.enabled
-    await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, rule.enabled)
+    const res = await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, rule.enabled)
+    if(!appStore.checkResult(res, '切换规则')) {
+      fetchRules()
+    }
   }
   // 保存动态规则
   const saveDynamicRules = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_update_dynamic(rule)
     if (appStore.checkResult(res, '保存规则',true)) {
-        fetchRules()
-        return true
+      fetchRules()
+      return true
     }
   }
   // 删除动态规则
   const deleteDynamicRule = async (rule) => {
     if (!window.pywebview) return
-    await window.pywebview.api.rule_delete_dynamic(rule.rule_id)
-    fetchRules()
+    const res = await window.pywebview.api.rule_delete_dynamic(rule.rule_id)
+    if(appStore.checkResult(res, '删除规则', true)) {
+      fetchRules()
+    }
   }
   // --- 导入导出 ---
   // 更新社区库
@@ -267,9 +293,11 @@ export const useRuleStore = defineStore('rules', () => {
     try {
         // 调用 API
         const res = await window.pywebview.api.rule_update_community()
-        if (appStore.checkResult(res, '更新社区库', true)) {
-            // 重新获取规则数据 (此时后端内存已是最新)
-            await fetchRules() 
+        if (appStore.checkResult(res, '更新社区库')) {
+          const task_id = res.data.task_id
+          const filePath = await appStore.waitForDownload(task_id)
+          // 重新获取规则数据 (此时后端内存已是最新)
+          await fetchRules() 
         }
     } catch (error) {
         toast.error("更新社区库失败: " + error.message)
@@ -278,20 +306,26 @@ export const useRuleStore = defineStore('rules', () => {
   // 导出规则
   const handleExport = async () => {
     const ids = userDynamicRules.value.map(r => r.rule_id)
-    await window.pywebview.api.rule_export_bundle(ids)
+    const res = await window.pywebview.api.rule_export_bundle(ids)
+    if(!appStore.checkResult(res, '导出规则', true)) {
+      return
+    }
   }
   // 导入规则
   const handleImport = async () => {
-    await window.pywebview.api.rule_import_bundle()
-    fetchRules()
+    const res = await window.pywebview.api.rule_import_bundle()
+    if(appStore.checkResult(res, '导入规则', true)) {
+      fetchRules()
+      modStore.scanMods()
+    }
   }
   
   return {
-    communityModRules, userModRules, userDynamicRules, currentId,
+    communityModRules, communityRulesUpdateTime, userModRules, userDynamicRules, currentId,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
-    saveDynamicRules, 
+    saveDynamicRules, changeRuleSourcePriority,
     setGlobalEnable, toggleCommunityModRule, toggleUserModRule,
   }
 })

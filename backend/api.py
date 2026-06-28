@@ -4,11 +4,9 @@ from enum import Enum
 import gc
 import json
 import os
-import re
 import threading
 import time
 import functools
-import shutil
 import uuid
 import webview
 from dataclasses import dataclass, asdict
@@ -20,6 +18,7 @@ from playhouse.shortcuts import model_to_dict
 
 # 1. 引入配置管理
 from backend.settings import settings, RULES_DIR
+from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 from backend._version import __version__, __build__
 from backend.utils.tools import current_ms
@@ -37,11 +36,12 @@ from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_network import NetworkManager
-from backend.managers.mgr_download import DownloadManager
+from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.managers.mgr_ai import AIManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
+from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileManager
 
 
@@ -59,6 +59,7 @@ def log_api_call(func):
         safe_args = [str(a)[:50] + '...' if len(str(a)) > 50 else a for a in args]
         
         try:
+            EventBus.resume() # 在执行操作前恢复事件总线
             # 执行原函数
             result = func(self, *args, **kwargs)
             
@@ -136,7 +137,6 @@ class ApiResponse:
         return obj
 
 
-
 class API:
     """
     暴露给 pywebview 前端的统一接口类。
@@ -151,11 +151,14 @@ class API:
         db_path = os.path.join(os.getcwd(), 'data', 'mod_manager.db')
         self.is_first_db_init = not os.path.exists(db_path) # 标记是否首次初始化数据库
         init_db(db_path)
-        
+        # 当 pywebview 试图序列化 API 给 JS 用时，会试图深入序列化，
+        # 公开属性会导致陷入无限递归（Window -> API -> Window -> ...），最终导致堆栈溢出崩溃
+        self._window = None  # 私有属性
         # 2. 实例化各个管理器
         self.dlc_parser = None # 延迟初始化
         self.file_mgr = FileManager()    # 实例化 FileManager (它会自动启动 Server 线程)
         self.game_mgr = GameManager()
+        self.game_monitor = GameMonitor(self)
         self.profile_mgr = ProfileManager()
         self.game_log_mgr = GameLogManager()
         self.load_order_mgr = LoadOrderManager() # 内部会自动从 settings 读取路径
@@ -177,9 +180,34 @@ class API:
                 # 这里初始化会自动处理全量缓存和增量更新
                 self.dlc_parser = DLCParser(dlc_dir)
     def cleanup(self):
+        # 停止后台扫描任务 (如果有)
+        if hasattr(self, 'scanner'): self.scanner.stop_scan() 
+        # 停止游戏监控
+        if self.game_monitor: self.game_monitor.running = False
+        # 暂停所有事件发送
+        EventBus.pause()
+            
         from backend.database.models import close_db
         logger.info("Closing database connection...")
         close_db()
+    
+    def set_window(self, window: webview.Window):
+        """设置主窗口"""
+        self._window  = window
+        # 绑定 loaded 事件，确保窗口完全就绪后再启动监视器
+        window.events.loaded += self._on_app_loaded
+    
+    def get_window(self):
+        """获取主窗口"""
+        return self._window
+    
+    def _on_app_loaded(self):
+        """主窗口加载完毕回调"""
+        # 确保只启动一次
+        if not self.game_monitor.running:
+            logger.info("UI已就绪，启动游戏监视器...")
+            self.game_monitor.start()
+    
     
     # =========================================================================
     #  1. 初始化与全局数据 (Initialization)
@@ -196,16 +224,16 @@ class API:
             paths_valid = self.game_mgr.detect_executable(settings.config.game_install_path) is not None
         self._ensure_dlc_parser()   # 确保 DLC Parser 初始化
         # 初始化profile检查
-        # if settings.config.current_profile_id=='default' and not self.profile_mgr.get_current_profile().game_install_path:
-        #     # 初始化默认profile
-        #     self.profile_mgr.update_profile('default',{
-        #         'name': 'Default',
-        #         'description': 'Default profile',
-        #         'game_version': game_version,
-        #         'game_install_path': settings.config.game_install_path,
-        #         'user_data_path': settings.config.user_data_path,
-        #         'use_workshop_mods': "steamlibrary" in settings.config.game_install_path.lower(),
-        #     })
+        if settings.config.current_profile_id=='default' and not self.profile_mgr.get_current_profile().game_install_path:
+            # 初始化默认profile
+            self.profile_mgr.update_profile('default',{
+                'name': 'Default',
+                'description': 'Default profile',
+                'game_version': settings.config.game_version,
+                'game_install_path': settings.config.game_install_path,
+                'user_data_path': settings.config.user_data_path,
+                'use_workshop_mods': "steamlibrary" in settings.config.game_install_path.lower(),
+            })
         
         # 2. 获取当前环境的 Mod 数据 (包含用户自定义数据), 并排除缺失的 Mod
         # 传入 None 让 DAO 自动读取 settings.current_profile_id
@@ -217,7 +245,7 @@ class API:
         # 3. 获取所有分组数据 (结构化)
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
-        all_groups = GroupDAO.get_all_groups_structured(current_assets_ids)
+        all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
         # 4. 获取当前激活的加载顺序
         active_load_order = self.load_order_mgr.read_active_mods()
         
@@ -227,7 +255,10 @@ class API:
             if self.dlc_parser:
                 # 传入当前语言，Parser 内部会查找缓存
                 self.dlc_parser.translate_record(mod, settings.config.language)
-
+                
+            # 注入清洗后的规则集
+            mod['rules'] = self.sorter.rule_mgr.get_effective_mod_rules(mod['package_id'], mod)
+            
             # 图片 URL 注入
             pkg_id = mod['package_id']
             # 优先使用物理路径（Source Path），即使它是被链接的 Workshop Mod
@@ -583,7 +614,7 @@ class API:
                     mod.shadow_paths = current_paths
                     mod.save()
         except Exception as e:
-            print(f"Error updating shadow paths: {e}")
+            logger.error(f"Error updating shadow paths: {e}")
     
     @log_api_call
     def perform_database_cleanup(self):
@@ -601,12 +632,14 @@ class API:
     #  4. 分组管理 (Groups) - 即时保存
     # =========================================================================
 
+    @log_api_call
     def get_groups(self):
         context_mods = ModDAO.get_profile_mods() 
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
-        return ApiResponse.success(GroupDAO.get_all_groups_structured(current_assets_ids))
+        return ApiResponse.success(GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids))
 
+    @log_api_call
     def create_group(self, name: str, color: str):
         try:
             # 后端生成 UUID 并入库
@@ -626,31 +659,38 @@ class API:
         except Exception as e:
             return ApiResponse.error(str(e))
 
+    @log_api_call
     def delete_group(self, group_id: str):
         return ApiResponse.success(GroupDAO.delete_group(group_id))
 
+    @log_api_call
     def update_group(self, group_id: str, updates: dict):
         """更新分组属性 (重命名、改色、折叠)"""
         # print(f"更新分组 {group_id} 为 {updates}")
         return ApiResponse.success(GroupDAO.update_group_info(group_id, **updates))
 
+    @log_api_call
     def group_add_mods(self, group_id: str, mod_ids: List[str]):
         """拖拽 Mod 进分组"""
         return ApiResponse.success(GroupDAO.add_mods_to_group(group_id, mod_ids))
 
+    @log_api_call
     def group_remove_mods(self, group_id: str, mod_ids: List[str]):
         """从分组移除 Mod"""
         return ApiResponse.success(GroupDAO.remove_mods_from_group(group_id, mod_ids))
     
+    @log_api_call
     def update_all_expansion_state(self, is_expanded: bool):
         """一次性展开或折叠所有分组"""
         GroupDAO.update_all_expansion_state(is_expanded)
         return ApiResponse.success()
-
+    
+    @log_api_call
     def group_reorder(self, group_id_list: List[str]):
         """分组排序"""
         return ApiResponse.success(GroupDAO.reorder_groups(group_id_list))
-
+    
+    @log_api_call
     def group_content_reorder(self, group_id: str, mod_id_list: List[str]):
         """分组内 Mod 排序"""
         return ApiResponse.success(GroupDAO.reorder_mods_in_group(group_id, mod_id_list))
@@ -678,6 +718,7 @@ class API:
             "modify_time": res.get('modify_time', 0)
         })
     
+    @log_api_call
     def open_load_order_file(self, mods_config_file_path: str|None = None):
         """
         打开 ModsConfig.xml 文件
@@ -705,6 +746,7 @@ class API:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)
     
+    @log_api_call
     def save_load_order(self, active_ids: List[str]):
         """
         保存当前激活列表到 ModsConfig.xml
@@ -717,6 +759,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
+    @log_api_call
     def export_load_order(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True):
         """
         导出当前加载顺序到 ModsConfig.xml
@@ -731,6 +774,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
+    @log_api_call
     def launch_game(self, profile_id: str):
         """启动游戏"""
         try:
@@ -748,6 +792,7 @@ class API:
             logger.error(f"Launch Game Error: {e}")
             return ApiResponse.error(f"启动游戏时出错: {e}")
     
+    @log_api_call
     def get_game_info(self, install_path: str):
         """获取游戏信息"""
         if not install_path:
@@ -768,15 +813,17 @@ class API:
     #  6. 文件与资源操作 (Files & Assets)
     # =========================================================================
 
+    @log_api_call
     def open_path(self, path: str):
         try:
             self.file_mgr.open_in_explorer(path)
-            print(f"打开路径: {path}")
+            logger.info(f"打开路径: {path}")
             return ApiResponse.success()
         except Exception as e:
-            print(f"打开路径时出错: {e}")
+            logger.error(f"打开路径时出错: {e}")
             return ApiResponse.error(f"打开路径时出错: {e}")
     
+    @log_api_call
     def delete_path(self, path: str):
         """删除文件/文件夹"""
         try:
@@ -785,7 +832,8 @@ class API:
             return ApiResponse.warning("路径不存在或无法删除")
         except Exception as e:
             return ApiResponse.error(f"删除路径时出错: {e}")
-        
+    
+    @log_api_call
     def delete_paths(self, paths: List[str]):
         """批量删除文件/文件夹"""
         try:
@@ -796,6 +844,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"批量删除路径时出错: {e}")
     
+    @log_api_call
     def get_all_backups(self):
         """获取所有备份文件路径"""
         try:
@@ -804,6 +853,7 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"获取备份文件时出错: {e}")
     
+    @log_api_call
     def select_folder_dialog(self, initial_dir: str = ''):
         """
         打开系统原生的文件夹选择框
@@ -816,6 +866,7 @@ class API:
             return ApiResponse.error(f"选择文件夹时出错: {e}")
         return ApiResponse.warning("未选择文件夹")
     
+    @log_api_call
     def select_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件选择框
@@ -828,6 +879,7 @@ class API:
             return ApiResponse.error(f"选择文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
 
+    @log_api_call
     def save_file_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
         """
         打开系统原生的文件保存框
@@ -839,8 +891,6 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
-    
-    
     
     @log_api_call
     def localize_workshop_mods(self, mod_ids: List[str]):
@@ -913,6 +963,7 @@ class API:
         """
         return ApiResponse.success({
             "community_rules": self.sorter.rule_mgr.community_rules, # 返回完整字典
+            "community_rules_update_time": self.sorter.rule_mgr.community_rules_update_time,
             "user_mod_rules": self.sorter.rule_mgr.user_mod_rules,
             "user_dynamic_rules": self.sorter.rule_mgr.user_dynamic_rules,
             "settings": self.sorter.rule_mgr.settings,
@@ -941,6 +992,17 @@ class API:
         """获取规则系统的全局设置 (开关状态、黑名单等)"""
         return ApiResponse.success(self.sorter.rule_mgr.settings)
 
+    def change_rule_source_priority(self, rules_sources: List[str]):
+        """
+        改变规则来源的优先级
+        rules_sources: 按优先级排序的规则来源列表
+        """
+        try:
+            success = self.sorter.rule_mgr.change_rule_source_priority(rules_sources)
+            return ApiResponse.success() if success else ApiResponse.error("设置失败")
+        except Exception as e:
+            return ApiResponse.error(f"设置失败: {str(e)}")
+    
     @log_api_call
     def rule_global_enable(self, key: str, enabled: bool):
         """
@@ -1005,33 +1067,43 @@ class API:
     @log_api_call
     def rule_update_community(self):
         """
-        更新社区规则库 (同步阻塞模式)
+        更新社区规则库
         """
         try:
-            file_folder: str = os.path.dirname(settings.config.community_rules_path)
-            file_name: str = os.path.basename(settings.config.community_rules_path)
+            # 1. 路径准备
+            # 注意：settings.config.community_rules_path 是完整文件路径 (例如 .../rules/community.json)
+            full_path = settings.config.community_rules_path
+            file_folder = os.path.dirname(full_path)
+            file_name = os.path.basename(full_path)
             url = settings.config.community_rules_url
+            
             if not os.path.exists(file_folder):
-                os.makedirs(file_folder)
-            # print(f"Downloading community rules to: {file_folder}\\{file_name}\nfrom: {url}")
-            # 2. 添加任务 (复用 DownloadManager，这样前端状态栏会有进度条！)
-            task_id = self.download_mgr.add_task(url, file_folder, file_name)
-            # 3. 【关键】阻塞等待下载完成 (最长等待 60秒)
-            logger.info(f"Waiting for community rules download... task_id={task_id}")
-            success = self.download_mgr.wait_for_task(task_id, timeout=60)
-            if not success:
-                # 检查是超时还是下载报错
-                task = self.download_mgr.tasks.get(task_id)
-                error_msg = task.error_msg if task else "Timeout"
-                return ApiResponse.error(f"下载失败: {error_msg}")
-            # 4. 【关键】下载完成后，通知 RuleManager 重新加载磁盘文件
-            self.sorter.rule_mgr.load_all() 
+                os.makedirs(file_folder, exist_ok=True)
 
-            return ApiResponse.success(message="社区规则库更新完成")
+            logger.info(f"Start updating community rules from: {url}")
+            # 定义回调函数：下载完了自动加载规则
+            def on_rules_ready(task):
+                logger.info("Rules ready, reloading...")
+                self.sorter.rule_mgr.load_all()
+                EventBus.send_toast("社区规则库更新完毕！", type="success")
+            
+            def on_rules_error(task):
+                logger.error(f"Rules download failed: {task.error_msg}")
+                EventBus.send_toast("社区规则库更新失败！", type="error")
+
+            task_id = self.download_mgr.add_task(
+                url=url, 
+                dest_dir=file_folder, 
+                filename=file_name,
+                on_complete=on_rules_ready,
+                on_error=on_rules_error
+            )
+
+            return ApiResponse.success(data={"task_id": task_id}, message="社区规则库开始更新")
             
         except Exception as e:
             logger.error(f"Update community rules failed: {e}")
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(f"系统错误: {str(e)}")
 
     @log_api_call
     def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = ''):
@@ -1129,20 +1201,81 @@ class API:
         task_id = self.download_mgr.add_task(url, target_dir, filename)
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
+    @log_api_call
     def cancel_download(self, task_id: str):
         self.download_mgr.cancel_task(task_id)
         return ApiResponse.success(message="尝试取消任务")
 
+    @log_api_call
     def get_active_downloads(self):
         """获取所有任务状态 (用于 UI 恢复)"""
         return ApiResponse.success(self.download_mgr.get_tasks_info())
     
+    @log_api_call
     def open_sub_browser(self, url='', title = 'RimModManager'):
         """打开或更新 浏览器子窗口"""
         if not self.browser_window: 
             self.browser_window = SubBrowserManager(self)
         self.browser_window.open(url, title)
 
+    # ==========================================
+    #  更新管理 (Updates)
+    # ==========================================
+    @log_api_call
+    def check_update(self, manual=True):
+        """
+        检查版本更新
+        :param manual: 是否为用户手动触发
+        """
+        try:
+            # 1. 让管理器去聚合检查（含本地缓存检查）
+            info = self.update_mgr.check_all()
+            # 记录检查时间
+            settings.set('last_update_check_time', current_ms())
+            # 2. 自动忽略逻辑
+            # 如果不是手动检查，且版本是被用户标记忽略的，且本地没有已经下载好的包
+            # (如果本地已经下好了，即使是忽略版本也应该提示安装，避免浪费空间)
+            ignored_ver = settings.config.ignored_update_version
+            if not manual and info.version == ignored_ver and info.local_status != 'ready':
+                return ApiResponse.success({ "has_update": False })
+            # 3. 返回给前端
+            # info.to_dict() 包含了 local_status ('remote'|'downloading'|'ready')
+            return ApiResponse.success(info.to_dict())
+        except Exception as e:
+            logger.error(f"Check update failed: {e}")
+            return ApiResponse.error(f"检查更新失败: {str(e)}")
+
+    @log_api_call
+    def trigger_update_action(self):
+        """
+        [统一入口] 触发更新操作
+        根据当前状态，自动决定是 '开始下载' 还是 '直接安装'
+        """
+        try:
+            # 获取当前缓存的更新信息
+            info = self.update_mgr.current_update_info
+            if not info or not info.has_update:
+                return ApiResponse.error("当前没有可用的更新信息，请先检查更新")
+            # A. 如果本地已就绪 -> 执行安装
+            if info.local_status == "ready":
+                self.update_mgr.execute_hot_swap() # 这会重启程序
+                return ApiResponse.success(message="正在重启进行安装...")
+            # B. 否则 -> 开始下载
+            else:
+                result = self.update_mgr.perform_update_download()
+                # result 格式: {"status": "downloading", "task_id": "..."}
+                return ApiResponse.success(result, message="开始下载更新包")
+                
+        except Exception as e:
+            logger.error(f"Update action failed: {e}")
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ignore_version(self, version_str):
+        """跳过当前版本"""
+        settings.set('ignored_update_version', version_str)
+        return ApiResponse.success()
+    
     
     # =========================================================================
     #  12. Steam 集成 (Steam Integration)
@@ -1317,45 +1450,6 @@ class API:
             return ApiResponse.error(str(e))
     
     
-    # ==========================================
-    #  更新管理 (Updates)
-    # ==========================================
-    def check_update(self, manual=True):
-        """
-        检查版本更新
-        :param manual: 是否为用户手动触发（手动触发不检查跳过版本）
-        """
-        try:
-            info = self.update_mgr.check_all()
-            # 如果是非手动检查，且版本是被跳过的，则返回无更新
-            if not manual and info.version == settings.config.ignored_update_version:
-                return ApiResponse.success({ "has_update": False })
-            settings.set('last_update_check_time', time.time())
-            # 将 dataclass 转为字典传给前端
-            return ApiResponse.success(asdict(info))
-        except Exception as e:
-            return ApiResponse.error(f"检查更新失败: {str(e)}")
-
-    def install_update(self, temp_exe_path):
-        """
-        启动热更新脚本并关闭主程序
-        :param temp_exe_path: 已经下载好的新版本临时文件路径
-        """
-        try:
-            if not os.path.exists(temp_exe_path):
-                return ApiResponse.error("更新包文件不存在")
-            
-            # 调用管理器执行热交换
-            self.update_mgr.execute_hot_swap(temp_exe_path)
-            return ApiResponse.success(message="更新脚本已启动")
-        except Exception as e:
-            return ApiResponse.error(str(e))
-
-    def ignore_version(self, version_str):
-        """跳过当前版本"""
-        settings.set('ignored_update_version', version_str)
-        return ApiResponse.success()
-    
     
     # ==========================================
     #  用户配置环境管理 (Profiles)
@@ -1427,8 +1521,6 @@ class API:
             return ApiResponse.success(message=msg)
         else:
             return ApiResponse.error(msg)
-        
-        
         
         
         

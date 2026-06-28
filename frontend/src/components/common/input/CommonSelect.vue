@@ -10,7 +10,7 @@
     <!-- 主输入区域 -->
     <div class="relative group">
       <input ref="inputRef" type="text" :value="displayLabel" :placeholder="placeholder" :readonly="!editable"
-        :class="[ 'input-glass bg-white/5 border border-white/10 rounded-lg text-sm text-white transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-white/20 placeholder:italic',
+        :class="[ 'input-glass bg-text-main/5 border border-text-main/10 rounded-lg text-sm text-text-main transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-text-main/20 placeholder:italic',
           mini ? 'py-1 px-2 text-xs' : 'w-full h-9 px-3',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
         ]"
@@ -34,7 +34,7 @@
     <!-- 下拉面板 -->
     <Transition name="dropdown">
       <div v-show="isOpen"
-        class="absolute z-50 left-0 right-0 p-1 bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5"
+        class="absolute z-50 left-0 right-0 p-1 bg-[#1a1a1a]/95 backdrop-blur-xl border border-text-main/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5"
         :class="[showBottom ? 'mt-2 top-full' : 'mb-2 bottom-full origin-bottom']"
         @mousedown.prevent 
       >
@@ -44,9 +44,9 @@
             class="w-full flex items-center px-3 py-1 rounded-lg text-xs text-left transition-all duration-150"
             :class="[
               // 1. 选中状态
-              isActive(opt.value) ? 'bg-accent-primary/20 text-accent-primary font-medium' : 'text-gray-300 hover:bg-white/10 hover:text-white',
+              isActive(opt.value) ? 'bg-accent-primary/20 text-accent-primary font-medium' : 'text-gray-300 hover:bg-text-main/10 hover:text-text-main',
               // 2. 键盘导航高亮
-              { 'bg-white/5 ring-1 ring-white/10': index === highlightedIndex },
+              { 'bg-text-main/5 ring-1 ring-text-main/10': index === highlightedIndex },
               // 3. 【新增】搜索匹配视觉区分：不匹配的项降低透明度
               isMatch(opt) ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-80 hover:grayscale-0'
             ]"
@@ -59,7 +59,7 @@
             <span class="truncate flex-1">{{ opt.label }}</span>
             
             <!-- 如果有额外描述可以放在这里 -->
-            <span v-if="opt.desc" class="text-xs text-white/30 ml-2">{{ opt.desc }}</span>
+            <span v-if="opt.desc" class="text-xs text-text-main/30 ml-2">{{ opt.desc }}</span>
           </button>
         </template>
 

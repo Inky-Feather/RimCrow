@@ -1,19 +1,19 @@
 <!-- frontend/src/components/StatusBar.vue -->
 <template>
   <!-- 底部固定状态栏 -->
-  <div class="h-6 w-full flex items-center px-3 justify-between text-xs text-text-dim select-none relative z-40 bg-bg-deep border-t border-white/5">
+  <div class="h-6 w-full flex items-center px-3 justify-between text-xs text-text-dim select-none relative z-40 bg-bg-deep border-t border-text-main/5">
     
     <!-- 左侧：常规状态 -->
     <div class="flex items-center gap-4">
       <!-- 状态指示灯 -->
-      <div class="flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
+      <div class="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-yellow-500' : 'bg-green-500']"></div>
         <span>{{ modStore.isDirty ? '未保存更改' : '就绪' }}</span>
       </div>
       
       <!-- 基础统计 -->
       <div>
-        模组总数: <span class="text-white">{{ modStore.allModsMap.size }}</span>
+        模组总数: <span class="text-text-main">{{ modStore.allModsMap.size }}</span>
       </div>
       
       <div>
@@ -43,7 +43,7 @@
         </template>
 
         <!-- 进度条背景 -->
-        <div class="w-48 h-2 bg-white/10 rounded-full relative overflow-hidden">
+        <div class="w-48 h-2 bg-text-main/10 rounded-full relative overflow-hidden">
           <div class="h-full transition-all duration-300 ease-out rounded-full"
                :class="taskType === 'scan' ? 'bg-accent-primary' : 'bg-blue-500'"
                :style="{ width: taskPercent + '%' }"></div>
@@ -58,7 +58,7 @@
             {{ taskMessage }}
           </span>
           <!-- 下载专属：速度 -->
-          <span v-if="taskType === 'download'" class="text-white/50 scale-90">
+          <span v-if="taskType === 'download'" class="text-text-main/50 scale-90">
              {{ activeTask.speed }}
           </span>
         </div>
@@ -66,7 +66,7 @@
     </transition>
 
     <!-- 右侧：版本 -->
-    <div class="flex items-center gap-2 hover:text-white" >
+    <div class="flex items-center gap-2 hover:text-text-main" >
        <span>RimWorld {{ appStore.settings.game_version || '未知版本' }}</span>
     </div>
 

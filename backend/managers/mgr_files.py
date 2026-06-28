@@ -327,6 +327,7 @@ class FileManager:
         :param folder_name_type: 文件夹命名类型，可选 'alias_name', 'name', 'package_id', 'workshop_id'
         """
         tasks = []
+        EventBus.resume()   # 恢复事件总线
         for mod_data in query:
             # 核心退回逻辑：alias_name > name > package_id > workshop_id
             display_name = mod_data.get('workshop_id')
