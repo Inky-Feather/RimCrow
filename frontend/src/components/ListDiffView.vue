@@ -63,7 +63,7 @@
             </div>
 
             <!-- 3. 核心对比区 -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar relative w-full" ref="scrollContainer">
+            <div class="flex-1 overflow-y-auto custom-scrollbar relative w-full" ref="scrollContainer" @click.self="clearDiffHighlight">
               <div class="flex min-h-full relative w-full">
                 
                 <!-- 左侧列表 (List A) -->
@@ -71,26 +71,26 @@
                   <template v-for="item in displayListA" :key="item.uiKey">
                     
                     <!-- 普通项 -->
-                    <div v-if="!item.isPlaceholder" :data-id="item.id" @click="targetItem(item.id)" :style="{ backgroundColor: getBgColor(item) }"
+                    <div v-if="!item.isPlaceholder" :data-id="item.id" @click="targetItem(item.id)" :style="getRowStyle(item, 'a')"
                       class="flex items-center h-7 px-2 border-b border-x border-text-main/5 transition-colors relative cursor-pointer">
                       <!-- 指示条 (仅在有色时显示) -->
-                      <div v-if="shouldShowIndicator(item)" class="absolute right-0 top-0 bottom-0 w-0.5" :style="{ backgroundColor: getRenderColor(item) }"></div>
+                      <div v-if="shouldShowIndicator(item, 'a')" class="absolute right-0 top-0 bottom-0 w-0.5 transition-all duration-200" :style="getIndicatorStyle(item, 'a')"></div>
                       <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
                       
                       <!-- 文字颜色逻辑 -->
-                      <div class="flex-1 truncate text-sm font-medium" :class="getTextClass(item)" v-tooltip="displayNameById(item.id, 'a')">
+                      <div class="flex-1 truncate text-sm font-medium transition-colors" :class="getTextClass(item, 'a')" v-tooltip="displayNameById(item.id, 'a')">
                         {{ displayNameById(item.id, 'a') }}
                       </div>
                     </div>
 
                     <!-- 折叠项 -->
                     <div v-else class="h-7 flex items-center justify-center border-b border-x border-text-main/5 select-none relative"
-                      :style="{ backgroundColor: getBgColor(item) }">
+                      :style="getRowStyle(item, 'a')">
                       <span class="absolute left-4 text-xl text-text-dim" style="writing-mode: vertical-rl;">···</span>
                       <!-- 指示条也继承 -->
-                      <div v-if="shouldShowIndicator(item)" class="absolute right-0 w-0.5 h-full" :style="{ backgroundColor: getRenderColor(item) }"></div>
+                      <div v-if="shouldShowIndicator(item, 'a')" class="absolute right-0 w-0.5 h-full transition-all duration-200" :style="getIndicatorStyle(item, 'a')"></div>
                       <span class="text-xs text-text-dim/60 tracking-widest scale-90">
-                        ··· 已折叠{{ item.count }}项 ···
+                        ··· 已折叠{{ item.hiddenCount ?? item.count }}项 ···
                       </span>
                     </div>
 
@@ -104,8 +104,11 @@
                     <path v-for="block in renderBlocks" :key="block.id"
                       :d="block.path"
                       :fill="block.renderColor"
-                      fill-opacity="0.15" 
-                      stroke="none"
+                      :fill-opacity="block.fillOpacity"
+                      :stroke="block.strokeColor"
+                      :stroke-width="block.strokeWidth"
+                      :stroke-opacity="block.strokeOpacity"
+                      :style="{ filter: block.filter }"
                       class="transition-all duration-300"
                     />
                     <!-- 绘制线条 (stroke) -->
@@ -113,8 +116,11 @@
                       :d="line.path"
                       fill="none"
                       :stroke="line.renderColor"
-                      stroke-width="1.5"
-                      stroke-opacity="0.5"
+                      :stroke-width="line.strokeWidth"
+                      :stroke-opacity="line.strokeOpacity"
+                      :style="{ filter: line.filter }"
+                      stroke-linecap="round"
+                      class="transition-all duration-300"
                     />
                   </svg>
                 </div>
@@ -122,14 +128,14 @@
                 <!-- 右侧列表 (List B) -->
                 <div class="flex-1 flex flex-col min-w-0" ref="listBRef">
                   <template v-for="item in displayListB" :key="item.uiKey">
-                    <div v-if="!item.isPlaceholder" :data-id="item.id" @click="targetItem(item.id)"
+                    <div v-if="!item.isPlaceholder" :data-id="item.id" @click="highlightListBItem(item)"
                         class="group/import flex items-center h-7 px-2 border-b border-x border-text-main/5 transition-colors relative cursor-pointer"
-                        :style="{ backgroundColor: getBgColor(item) }">
-                      <div v-if="shouldShowIndicator(item)" class="absolute left-0 top-0 bottom-0 w-0.5" :style="{ backgroundColor: getRenderColor(item) }"></div>
+                        :style="getRowStyle(item, 'b')">
+                      <div v-if="shouldShowIndicator(item, 'b')" class="absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-200" :style="getIndicatorStyle(item, 'b')"></div>
                       <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
 
                       <div class="min-w-0 flex-1 pr-22">
-                        <div class="truncate text-sm font-medium" :class="getTextClass(item)" v-tooltip="getImportTooltip(item.id) || displayNameById(item.id, 'b')">
+                        <div class="truncate text-sm font-medium transition-colors" :class="getTextClass(item, 'b')" v-tooltip="getImportTooltip(item.id) || displayNameById(item.id, 'b')">
                           {{ displayNameById(item.id, 'b') }}
                         </div>
                       </div>
@@ -172,15 +178,15 @@
                       </div>
                     </div>
 
-                    <div v-else class="h-7 flex items-center justify-center border-b border-x border-text-main/5 select-none relative"
-                      :style="{ backgroundColor: getBgColor(item) }">
+                    <div v-else @click="highlightListBItem(item)" class="h-7 flex items-center justify-center border-b border-x border-text-main/5 select-none relative cursor-pointer transition-colors"
+                      :style="getRowStyle(item, 'b')">
                       <span class="absolute left-4 text-xl text-text-dim" style="writing-mode: vertical-rl;">···</span>
                       <!-- 指示条也继承 -->
-                      <div v-if="shouldShowIndicator(item)" class="absolute left-0 w-0.5 h-full" 
-                          :style="{ backgroundColor: getRenderColor(item) }">
+                      <div v-if="shouldShowIndicator(item, 'b')" class="absolute left-0 w-0.5 h-full transition-all duration-200" 
+                          :style="getIndicatorStyle(item, 'b')">
                       </div>
                       <span class="text-xs text-text-dim/60 tracking-widest scale-90">
-                        ··· 已折叠{{ item.count }}项 ···
+                        ··· 已折叠{{ item.hiddenCount ?? item.count }}项 ···
                       </span>
                     </div>
 
@@ -277,6 +283,8 @@ const colorfulBlocks = ref(false) // 开关多彩区块
 const listARef = ref(null)    // 左侧列表 (List A)
 const listBRef = ref(null)    // 右侧列表 (List B)
 const scrollContainer = ref(null) // 滚动容器，用于同步滚动
+const highlightedBlockId = ref('')
+const highlightedListBItemKey = ref('')
 
 const renderBlocks = ref([])  // 绘制区块
 const renderLines = ref([])    // 绘制线条
@@ -292,6 +300,7 @@ const COLOR_REMOVED = getTailwindColorHex('accent-danger')
 const COLOR_ADDED = getTailwindColorHex('accent-success')   
 const COLOR_MOVED = getTailwindColorHex('accent-warn') 
 const COLOR_MOVED_GRAY = getTailwindColorHex('text-dim')
+const COLOR_HIGHLIGHT = getTailwindColorHex('accent-primary')
 
 const IMPORT_STATUS_META = {
   replacement: { label: '替代', badgeClass: 'border-accent-cool/30 bg-accent-cool/10 text-accent-cool' },
@@ -539,21 +548,78 @@ const getBgColor = (item) => {
   }
   return hexToRgba(color, 0.2) // 统一 10% 透明度
 }
+const getHighlightColor = (itemOrBlock) => {
+  const color = getRenderColor(itemOrBlock)
+  return color === 'transparent' ? COLOR_HIGHLIGHT : color
+}
+const getListBItemKey = (item) => {
+  if (!item) return ''
+  if (item.isPlaceholder) return `b:${item.uiKey}`
+  return `b:${item.id}:${item.originalIndex ?? item.uiKey}`
+}
+const isHighlightedItem = (item, side = 'a') => {
+  if (!item) return false
+  if (item.blockId) return item.blockId === highlightedBlockId.value
+  return side === 'b' && getListBItemKey(item) === highlightedListBItemKey.value
+}
+const getRowStyle = (item, side = 'a') => {
+  const isHighlighted = isHighlightedItem(item, side)
+  const baseColor = isHighlighted ? getHighlightColor(item) : getRenderColor(item)
+  return {
+    backgroundColor: isHighlighted
+      ? hexToRgba(baseColor, item.type === 'same' ? 0.14 : 0.28)
+      : getBgColor(item),
+    borderColor: isHighlighted ? hexToRgba(baseColor, 0.4) : '',
+    boxShadow: isHighlighted
+      ? `inset 0 0 0 1px ${hexToRgba(baseColor, 0.7)}, inset 0 0 18px ${hexToRgba(baseColor, 0.18)}`
+      : 'none',
+    zIndex: isHighlighted ? 1 : 0,
+  }
+}
 // 计算文字样式类
-const getTextClass = (item) => {
+const getTextClass = (item, side = 'a') => {
+  const isHighlighted = isHighlightedItem(item, side)
   if (item.type === 'removed') return 'text-accent-danger font-bold'
   if (item.type === 'added') return 'text-accent-success font-bold'
-  if (item.type === 'same') return 'text-text-dim' // 灰色
+  if (item.type === 'same') return isHighlighted ? 'text-text-main font-semibold' : 'text-text-dim' // 灰色
   
   if (item.type === 'moved') {
     if (item.count === 1) return 'text-accent-warn font-bold' // 单移：橙色
-    return 'text-yellow-100/70' // 整移：白黄色
+    return isHighlighted ? 'text-yellow-100 font-semibold' : 'text-yellow-100/70' // 整移：白黄色
   }
   return 'text-text-dim'
 }
 // 计算侧边指示条样式类
-const shouldShowIndicator = (item) => {
-  return item.type !== 'same' // 只有非 same 项显示左侧彩条
+const shouldShowIndicator = (item, side = 'a') => {
+  return item.type !== 'same' || isHighlightedItem(item, side)
+}
+const getIndicatorStyle = (item, side = 'a') => {
+  const isHighlighted = isHighlightedItem(item, side)
+  const color = isHighlighted ? getHighlightColor(item) : getRenderColor(item)
+  return {
+    backgroundColor: color,
+    width: isHighlighted ? '4px' : '2px',
+    opacity: isHighlighted ? 1 : 0.9,
+    boxShadow: isHighlighted ? `0 0 12px ${hexToRgba(color, 0.75)}` : 'none',
+  }
+}
+const clearDiffHighlight = () => {
+  highlightedBlockId.value = ''
+  highlightedListBItemKey.value = ''
+}
+const highlightListBItem = (item) => {
+  const nextBlockId = item?.blockId || ''
+  const nextItemKey = getListBItemKey(item)
+  const isSameSelection = highlightedBlockId.value === nextBlockId && highlightedListBItemKey.value === nextItemKey
+
+  modStore.currentTargetId = ''
+  if (isSameSelection) {
+    clearDiffHighlight()
+    return
+  }
+
+  highlightedBlockId.value = nextBlockId
+  highlightedListBItemKey.value = nextItemKey
 }
 
 // --- 3. 折叠逻辑 ---
@@ -576,8 +642,9 @@ const foldList = (list) => {
       // 占位符继承属性以便正确染色
       result.push({ 
         isPlaceholder: true, 
-        count: blockItems.length - 2,
+        hiddenCount: blockItems.length - 2,
         uiKey: `ph-${firstItem.blockId}`,
+        blockId: firstItem.blockId,
         // 继承用于颜色计算的关键属性
         type: firstItem.type,
         cyclicColor: firstItem.cyclicColor,
@@ -633,8 +700,9 @@ const draw = () => {
   const svgWidth = 48 
 
   analysis.value.blocks.forEach(blk => {
-    // 只有移动的块需要画线/块，same 的不画（要求：不用染色）
-    if (!blk.isMoved) return 
+    const isHighlighted = blk.id === highlightedBlockId.value
+    // 默认只绘制移动块；当某个组被右侧选中时，临时补出这组的映射关系。
+    if (!blk.isMoved && !isHighlighted) return 
 
     // 获取坐标 (逻辑同前)
     const startIdA = analysis.value.resA[blk.startIndexA].id
@@ -650,7 +718,8 @@ const draw = () => {
     if (!coordsStartA || !coordsEndA || !coordsStartB || !coordsEndB) return
 
     // 实时计算最终颜色
-    const finalColor = getRenderColor(blk)
+    const finalColor = isHighlighted ? getHighlightColor(blk) : getRenderColor(blk)
+    const filter = isHighlighted ? `drop-shadow(0 0 6px ${hexToRgba(finalColor, 0.55)})` : 'none'
 
     // 控制点
     const cp1x = svgWidth * 0.4
@@ -663,7 +732,10 @@ const draw = () => {
       lines.push({
         id: blk.id,
         path: `M 0 ${amid} C ${cp1x} ${amid}, ${cp2x} ${bmid}, ${svgWidth} ${bmid}`,
-        renderColor: finalColor
+        renderColor: finalColor,
+        strokeWidth: isHighlighted ? 3 : 1.5,
+        strokeOpacity: isHighlighted ? 0.95 : 0.5,
+        filter,
       })
     } 
     // 整体移动 (Count > 1) -> 画块
@@ -683,7 +755,12 @@ const draw = () => {
       blocks.push({
         id: blk.id,
         path,
-        renderColor: finalColor
+        renderColor: finalColor,
+        fillOpacity: isHighlighted ? (blk.isMoved ? 0.34 : 0.22) : 0.15,
+        strokeColor: isHighlighted ? finalColor : 'none',
+        strokeOpacity: isHighlighted ? 0.8 : 0,
+        strokeWidth: isHighlighted ? 1.2 : 0,
+        filter,
       })
     }
   })
@@ -692,10 +769,16 @@ const draw = () => {
   renderLines.value = lines
 }
 const debouncedDraw = useDebounceFn(draw, 50) // 50ms 延迟，避免频繁重绘
-// 监听开关，触发重绘
-watch([() => props.listA, () => props.listB, hideIdentical, colorfulBlocks], () => {
+watch([() => props.listA, () => props.listB], () => {
+  clearDiffHighlight()
+}, { deep: true })
+// 监听开关和选中态，触发重绘
+watch([() => props.listA, () => props.listB, hideIdentical, colorfulBlocks, highlightedBlockId], () => {
   nextTick(debouncedDraw)
 }, { deep: true, immediate: true })
+watch(() => appStore.uiState.showDiffDrawer, (visible) => {
+  if (!visible) clearDiffHighlight()
+})
 
 let resizeObserver = null
 onMounted(() => {

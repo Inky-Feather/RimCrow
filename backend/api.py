@@ -1655,8 +1655,12 @@ class API:
                 with open(path, 'r', encoding='utf-8') as f:
                     bundle = json.load(f)
                 
-                self.sorter.rule_mgr.process_import_bundle(bundle)
-                return ApiResponse.success(message="规则包导入成功")
+                result = self.sorter.rule_mgr.process_import_bundle(bundle) or {}
+                warnings = result.get("warnings", [])
+                message = "规则包导入成功"
+                if warnings:
+                    message = f"规则包导入成功，已校正 {len(warnings)} 条动态规则异常。"
+                return ApiResponse.success(data=result, message=message)
             return ApiResponse.warning("已取消")
         except Exception as e:
             logger.error(f"Import failed: {e}", exc_info=True)

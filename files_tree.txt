@@ -1,5 +1,11 @@
 ·[RimModManager]
 ├── ·[.history]
+├── ·[.pytest_cache]
+│   ├── ·[v]
+│   ├──  .gitignore
+│   ├──  CACHEDIR.TAG
+│   └──  README.md
+│   
 ├── ·[backend]
 │   ├── ·[ai]
 │   │   ├──  __init__.py
@@ -183,6 +189,7 @@
 │   ├──  test_import_check.py
 │   ├──  test_load_order_parsers.py
 │   ├──  test_profile_and_scanner.py
+│   ├──  test_rule_manager_dynamic_weights.py
 │   ├──  test_sorter_strategies.py
 │   └──  test_workshop_selection.py
 │   

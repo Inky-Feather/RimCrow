@@ -381,9 +381,16 @@
                     <!-- 根据动作类型显示输入框 -->
                     <div v-if="editingRule.action.type.includes('weight')" class="flex items-center gap-2 flex-1">
                       <!-- <input type="number" v-model.number="editingRule.action.value" class="bg-bg-deep border border-text-main/10 rounded-lg px-3 py-2 text-sm w-32 text-text-main outline-none focus:border-accent-primary" /> -->
-                      <CommonNumber v-model.number="editingRule.action.value" :step=1 :min="editingRule.action.type === 'weight_shift' ? -1000 : 0" :max="1000" />
+                      <CommonNumber
+                        v-model.number="editingRule.action.value"
+                        :step="1"
+                        :min="editingRule.action.type === 'weight_shift' ? DYNAMIC_SHIFT_MIN : DYNAMIC_WEIGHT_MIN"
+                        :max="editingRule.action.type === 'weight_shift' ? DYNAMIC_SHIFT_MAX : DYNAMIC_WEIGHT_MAX"
+                      />
                       <span class="text-sm text-text-dim">
-                        {{ editingRule.action.type === 'weight_shift' ? '(负数向前，正数向后)' : '(0-1000，越小越靠前)' }}
+                        {{ editingRule.action.type === 'weight_shift'
+                          ? `(${DYNAMIC_SHIFT_MIN} 到 ${DYNAMIC_SHIFT_MAX}；负数向前，正数向后，最终结果仍会限制在 ${DYNAMIC_WEIGHT_MIN}-${DYNAMIC_WEIGHT_MAX})`
+                          : `(${DYNAMIC_WEIGHT_MIN}-${DYNAMIC_WEIGHT_MAX}，越小越靠前)` }}
                       </span>
                       <label class="text-sm text-text-dim italic hover:text-text-main cursor-help" v-tooltip="weightTooltip">?</label>
                     </div>
@@ -572,14 +579,47 @@ const formatTooltip = (targetId, info) => {
   if (info.comment) text += `\n\n说明:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
   return text
 }
+
+const DYNAMIC_WEIGHT_MIN = 1
+const DYNAMIC_WEIGHT_MAX = 9999
+const DYNAMIC_SHIFT_MIN = -9999
+const DYNAMIC_SHIFT_MAX = 9999
+
+const clampInt = (value, min, max, fallback = min) => {
+  const parsed = Number.parseInt(value, 10)
+  const safeValue = Number.isFinite(parsed) ? parsed : fallback
+  return Math.max(min, Math.min(max, safeValue))
+}
+
+const normalizeDynamicRuleAction = (rule) => {
+  if (!rule?.action || typeof rule.action !== 'object') return false
+  if (rule.action.type === 'weight_set') {
+    const clamped = clampInt(rule.action.value, DYNAMIC_WEIGHT_MIN, DYNAMIC_WEIGHT_MAX, 500)
+    const changed = clamped !== rule.action.value
+    rule.action.value = clamped
+    return changed
+  }
+  if (rule.action.type === 'weight_shift') {
+    const clamped = clampInt(rule.action.value, DYNAMIC_SHIFT_MIN, DYNAMIC_SHIFT_MAX, 0)
+    const changed = clamped !== rule.action.value
+    rule.action.value = clamped
+    return changed
+  }
+  return false
+}
+
 // 权重说明
 const weightTooltip = `**MOD权重设置规则**
-权重取值范围为 0-1000，数值越低，加载优先级越高（越靠前） 。其中，普通 MOD 的默认权重为 500，若设置权重偏移，将以当前已设定的权重为基准进行偏移调整。
+动态规则中的强制权重只允许 ${DYNAMIC_WEIGHT_MIN}-${DYNAMIC_WEIGHT_MAX}，数值越低，加载优先级越高（越靠前）。
+动态规则中的权重偏移允许 ${DYNAMIC_SHIFT_MIN} 到 ${DYNAMIC_SHIFT_MAX}，但后端会把最终生效结果限制在 ${DYNAMIC_WEIGHT_MIN}-${DYNAMIC_WEIGHT_MAX}。
+如果需要真正的列表最前或最后，请使用“置顶 / 置底”动作，而不是把动态权重调到极值。
+
+普通 MOD 的默认权重为 500，若设置权重偏移，将以当前已设定的权重为基准进行偏移调整。
 
 建议按照以下权重区间对 MOD 进行分类设置，具体如下：
 
 [[权重区间]]		[[类别描述]]						[[典型例子]]
-0 - 50			绝对底层框架				Harmony, Prepatcher
+1 - 50			绝对底层框架				Harmony 附近的前段框架权重
 51 - 100		官方内容						Core, Royalty, Ideology, Anomaly
 101 - 200		通用基础库					Vanilla Expanded Framework
 201 - 700		普通功能/内容模组		大多数内容 Mod (物品、种族、派系)
@@ -620,6 +660,10 @@ const saveDynamicRule = async () => {
   // 如果是新建，生成正式ID
   if (editingRule.value.rule_id.startsWith('new_')) {
     editingRule.value.rule_id = 'dyn_' + Date.now()
+  }
+  const wasAdjusted = normalizeDynamicRuleAction(editingRule.value)
+  if (wasAdjusted) {
+    toast.info(`动态权重已自动限制到允许范围内（权重 ${DYNAMIC_WEIGHT_MIN}-${DYNAMIC_WEIGHT_MAX}，偏移 ${DYNAMIC_SHIFT_MIN} 到 ${DYNAMIC_SHIFT_MAX}）。`)
   }
   const res = await ruleStore.saveDynamicRules(editingRule.value)
   if (res) { editingRule.value = null }

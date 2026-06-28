@@ -28,7 +28,7 @@ class ImportCheckItem:
     status 约定：
     - exact_match: 包名和工坊 ID 都能与当前环境精确匹配
     - package_match: 包名能匹配，但导入项没有有效工坊 ID，无法进一步判定版本差异
-    - replacement: 导入项和当前安装项不是同一 WID，但命中了替代关系
+    - replacement: 导入项和当前安装项不是同一 WID，但对应了已安装模组的替代版本
     - other_version: 包名一致，但导入项与当前安装项是不同版本/不同工坊条目
     - missing: 当前环境没有这个包名，但可以定位到目标 WID，可执行订阅/下载
     - unknown: 当前环境没有这个包名，同时也无法补出可操作的 WID
@@ -132,7 +132,7 @@ def _build_reason_text(
     elif status == "package_match":
         lines.append("当前环境存在同包名模组，但导入项没有有效 Workshop ID，无法继续区分具体版本。")
     elif status == "replacement":
-        lines.append("该导入项命中了替代关系。")
+        lines.append("该导入项对应了已安装模组的替代版本。")
         if installed_via_replacement:
             lines.append("当前环境已经安装了替代版本。")
     elif status == "other_version":
@@ -250,7 +250,7 @@ def build_import_check_report(
                 if import_workshop_id in installed_workshop_ids:
                     status = "exact_match"
                     if normalized_package_id not in {candidate.package_id for candidate in installed_candidates if candidate.package_id}:
-                        warning = "已通过 Workshop ID 精确命中当前安装项，但包名与导入记录不一致"
+                        warning = "已通过 Workshop ID 对应了已安装项，但包名与导入记录不一致"
                 elif not installed_workshop_ids:
                     # 当前环境的这个包没有可用 workshop_id，无法证明是“其它版本”。
                     status = "package_match"
@@ -296,12 +296,12 @@ def build_import_check_report(
                     warning = "当前环境安装的是替代版本"
                 else:
                     status = "exact_match"
-                    warning = "已通过补全后的 Workshop ID 命中当前安装项"
+                    warning = "已通过补全后的 Workshop ID 对应到了安装项"
             elif resolved_workshop_id:
                 status = "missing"
             else:
                 status = "unknown"
-                warning = "无法从导入项、本地缓存或外置数据库补全有效的 Workshop ID"
+                warning = "无法查找到对应 Workshop ID，无法进行订阅或下载"
 
         # 对“纯包名导入”优先保留技术标识的可读性，用尖括号提示这是包名而不是展示名。
         display_name = (

@@ -1,8 +1,9 @@
+import copy
 import json
 import re
 import datetime
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import uuid
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
@@ -39,6 +40,12 @@ class RuleActionType:
     LOAD_BEFORE = "load_before"     # 必须在某ID前
     TOP = "top"                     # 置顶 (权重设为0)
     BOTTOM = "bottom"               # 置底 (权重设为10000)
+
+
+DYNAMIC_WEIGHT_MIN = 1
+DYNAMIC_WEIGHT_MAX = 9999
+DYNAMIC_WEIGHT_SHIFT_MIN = -9999
+DYNAMIC_WEIGHT_SHIFT_MAX = 9999
     
 class RuleManager:
     def __init__(self, context: ProfileContext):
@@ -84,7 +91,13 @@ class RuleManager:
                 with open(user_file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.user_mod_rules = data.get("mod_rules", {})
-                    self.user_dynamic_rules = data.get("dynamic_rules", [])
+                    sanitized_dynamic_rules, sanitize_warnings, _ = self._sanitize_dynamic_rules(
+                        data.get("dynamic_rules", []),
+                        origin="加载动态规则"
+                    )
+                    self.user_dynamic_rules = sanitized_dynamic_rules
+                    for warning in sanitize_warnings:
+                        logger.warning(warning)
                     # 加载设置
                     self.settings.update(data.get("settings", {}))
                     if set(self.settings["rule_source_priority"]) != set(RULE_SOURCES):
@@ -99,6 +112,13 @@ class RuleManager:
     def save_user_rules(self):
         """持久化用户规则"""
         try:
+            sanitized_dynamic_rules, sanitize_warnings, _ = self._sanitize_dynamic_rules(
+                self.user_dynamic_rules,
+                origin="保存动态规则"
+            )
+            self.user_dynamic_rules = sanitized_dynamic_rules
+            for warning in sanitize_warnings:
+                logger.warning(warning)
             data = {
                 "settings": self.settings, # 保存设置
                 "mod_rules": self.user_mod_rules,
@@ -245,6 +265,79 @@ class RuleManager:
         short_ver = current_ver[:3] # 取前三位 "1.5"
         # logger.debug(f"Current game version: {current_ver}, short version: {short_ver}, requirements: {requirements}")
         return short_ver in requirements
+
+    def _clamp_int(self, value: Any, default: int, min_value: int, max_value: int) -> Tuple[int, bool, Any]:
+        """将输入值规整为 int，并按区间夹紧。"""
+        raw_value = value
+        parse_failed = False
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+            parse_failed = True
+        clamped = max(min_value, min(max_value, parsed))
+        changed = parse_failed or clamped != parsed
+        return clamped, changed, raw_value
+
+    def _clamp_dynamic_weight(self, value: Any, default: int = 500) -> Tuple[int, bool, Any]:
+        return self._clamp_int(value, default, DYNAMIC_WEIGHT_MIN, DYNAMIC_WEIGHT_MAX)
+
+    def _clamp_dynamic_shift(self, value: Any, default: int = 0) -> Tuple[int, bool, Any]:
+        return self._clamp_int(value, default, DYNAMIC_WEIGHT_SHIFT_MIN, DYNAMIC_WEIGHT_SHIFT_MAX)
+
+    def _clamp_dynamic_effective_weight(self, value: int) -> int:
+        return max(DYNAMIC_WEIGHT_MIN, min(DYNAMIC_WEIGHT_MAX, int(value)))
+
+    def _sanitize_dynamic_rule(self, rule_obj: dict, origin: str = "动态规则") -> Tuple[dict, List[str], bool]:
+        """清洗动态规则中的数值动作，避免越界权重污染排序。"""
+        clean_rule = copy.deepcopy(rule_obj) if isinstance(rule_obj, dict) else {}
+        warnings = []
+        changed = not isinstance(rule_obj, dict)
+
+        if not clean_rule:
+            warnings.append(f"{origin} 格式无效，已重置为空规则。")
+            clean_rule = {"rule_id": f"dynamic_{uuid.uuid4().hex[:8]}", "enabled": True}
+            return clean_rule, warnings, True
+
+        if not clean_rule.get("rule_id"):
+            clean_rule["rule_id"] = f"dynamic_{uuid.uuid4().hex[:8]}"
+            warnings.append(f"{origin} 缺少 rule_id，已自动补全。")
+            changed = True
+
+        action = clean_rule.get("action")
+        if not isinstance(action, dict):
+            return clean_rule, warnings, changed
+
+        act_type = action.get("type")
+        if act_type == RuleActionType.WEIGHT_SET:
+            clamped, value_changed, raw_value = self._clamp_dynamic_weight(action.get("value", 500), default=500)
+            action["value"] = clamped
+            if value_changed:
+                warnings.append(f"{origin} 的强制权重 {raw_value!r} 无效或超出允许范围，已限制为 {clamped}。")
+                changed = True
+        elif act_type == RuleActionType.WEIGHT_SHIFT:
+            clamped, value_changed, raw_value = self._clamp_dynamic_shift(action.get("value", 0), default=0)
+            action["value"] = clamped
+            if value_changed:
+                warnings.append(f"{origin} 的权重偏移 {raw_value!r} 无效或超出允许范围，已限制为 {clamped}。")
+                changed = True
+
+        return clean_rule, warnings, changed
+
+    def _sanitize_dynamic_rules(self, rules: Any, origin: str = "动态规则") -> Tuple[List[dict], List[str], bool]:
+        """批量清洗动态规则列表。"""
+        if not isinstance(rules, list):
+            return [], [f"{origin} 列表格式无效，已重置为空。"], True
+
+        sanitized_rules = []
+        warnings = []
+        changed = False
+        for idx, rule in enumerate(rules, start=1):
+            clean_rule, rule_warnings, rule_changed = self._sanitize_dynamic_rule(rule, f"{origin} #{idx}")
+            sanitized_rules.append(clean_rule)
+            warnings.extend(rule_warnings)
+            changed = changed or rule_changed
+        return sanitized_rules, warnings, changed
     
     # =========================================================================
     # 1. 规则 CRUD (核心逻辑)
@@ -295,14 +388,18 @@ class RuleManager:
 
     def upsert_dynamic_rule(self, rule_obj: dict):
         """新增或更新动态规则"""
-        rid = rule_obj.get('rule_id')
+        clean_rule, sanitize_warnings, _ = self._sanitize_dynamic_rule(rule_obj, origin="保存动态规则")
+        for warning in sanitize_warnings:
+            logger.warning(warning)
+
+        rid = clean_rule.get('rule_id')
         if not rid: return False
         # 查找是否存在
         idx = next((i for i, r in enumerate(self.user_dynamic_rules) if r['rule_id'] == rid), -1)
         if idx > -1:
-            self.user_dynamic_rules[idx] = rule_obj
+            self.user_dynamic_rules[idx] = clean_rule
         else:
-            self.user_dynamic_rules.append(rule_obj)
+            self.user_dynamic_rules.append(clean_rule)
         self.save_user_rules()
         return True
 
@@ -441,6 +538,7 @@ class RuleManager:
         # 预先计算基础权重与偏移量
         base_weight = self.calculate_mod_base_weight(mod_full_data)
         weight_shift = 0
+        dynamic_weight_touched = False
         
         # 辅助函数：处理置顶/置底优先级覆盖
         def _apply_weight_override(w_type: str, source_type: str, detail: Any = None):
@@ -568,9 +666,13 @@ class RuleManager:
                     _merge_rule("load_before", act.get("value"), "dynamic", rule_name)
                 # [新增] 集中处理动态规则的权重干预，并利用已有的 _apply_weight_override 参与优先级竞争
                 elif act_type == "weight_shift":
-                    weight_shift += act.get("value", 0)
+                    shift_value, _, _ = self._clamp_dynamic_shift(act.get("value", 0), default=0)
+                    weight_shift += shift_value
+                    dynamic_weight_touched = True
                 elif act_type == "weight_set":
-                    base_weight = act.get("value", base_weight)
+                    set_value, _, _ = self._clamp_dynamic_weight(act.get("value", base_weight), default=base_weight)
+                    base_weight = set_value
+                    dynamic_weight_touched = True
                 elif act_type == "top":
                     _apply_weight_override("top", "dynamic", rule_name)
                 elif act_type == "bottom":
@@ -640,6 +742,8 @@ class RuleManager:
             final_weight = 0
         elif abs_type == "bottom":
             final_weight = 10000
+        elif dynamic_weight_touched:
+            final_weight = self._clamp_dynamic_effective_weight(final_weight)
         
         final_result["weight_info"] = {
             "base_weight": base_weight,
@@ -721,6 +825,7 @@ class RuleManager:
 
         rules = bundle.get("user_rules", {})
         env = bundle.get("environment", {})
+        import_warnings = []
         
         try:
             # 开启大事务，极大提升写入速度
@@ -731,12 +836,22 @@ class RuleManager:
                 self.user_mod_rules.update(rules.get("mod_rules", {}))
                 # 动态规则去重合并
                 existing_ids = {r['rule_id'] for r in self.user_dynamic_rules}
-                for r in rules.get("dynamic_rules", []):
+                imported_dynamic_rules, sanitize_warnings, _ = self._sanitize_dynamic_rules(
+                    rules.get("dynamic_rules", []),
+                    origin="导入动态规则"
+                )
+                import_warnings.extend(sanitize_warnings)
+                for r in imported_dynamic_rules:
                     if r['rule_id'] in existing_ids:
                         # 冲突ID自动重命名
-                        r['rule_id'] = f"{r['rule_id']}_imp_{int(datetime.datetime.now().timestamp())}"
-                        r['name'] += " (Imported)"
+                        old_rule_id = r['rule_id']
+                        r['rule_id'] = f"{r['rule_id']}_imp_{uuid.uuid4().hex[:8]}"
+                        r['name'] = f"{r.get('name', old_rule_id)} (Imported)"
+                        import_warnings.append(
+                            f"导入动态规则 ID {old_rule_id} 与现有规则重复，已自动重命名为 {r['rule_id']}。"
+                        )
                     self.user_dynamic_rules.append(r)
+                    existing_ids.add(r['rule_id'])
                 
                 # =================================================
                 # 2. UserModData 批量导入 (备注、标签等)
@@ -868,7 +983,9 @@ class RuleManager:
             # 事务结束，保存文件
             self.save_user_rules()
             logger.info("Import bundle processed successfully.")
-            return True
+            for warning in import_warnings:
+                logger.warning(warning)
+            return {"warnings": import_warnings}
 
         except Exception as e:
             logger.error(f"Failed to process import bundle: {e}", exc_info=True)

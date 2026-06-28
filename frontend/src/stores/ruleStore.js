@@ -373,6 +373,9 @@ export const useRuleStore = defineStore('rules', () => {
   const handleImport = async () => {
     const res = await window.pywebview.api.rule_import_bundle()
     if(appStore.checkResult(res, '导入规则', true)) {
+      if (res.data?.warnings?.length) {
+        toast.warning(res.data.warnings.join('\n'), { timeout: 8000 })
+      }
       fetchRules()
       modStore.scanMods()
     }

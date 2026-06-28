@@ -179,6 +179,63 @@ class TestOrderSorterStrategies(unittest.TestCase):
         )
         self.assertEqual(result["sorted_ids"], ["mod.bottom.long", "mod.y", "mod.z", "mod.bottom.short", "mod.x"])
 
+    def test_edge_push_keeps_non_edge_nodes_close_to_classic_order(self):
+        group_alpha = AtomicGroup(["mod.alpha"])
+        group_zeta = AtomicGroup(["mod.zeta"])
+        group_c = AtomicGroup(["mod.c"])
+        group_e = AtomicGroup(["mod.e"])
+        groups = [group_alpha, group_zeta, group_c, group_e]
+        adj = {
+            id(group_alpha): {id(group_c): 1},
+            id(group_zeta): {id(group_e): 1},
+        }
+        mods_data = [
+            {"package_id": "mod.alpha", "name": "Alpha"},
+            {"package_id": "mod.zeta", "name": "Zeta"},
+            {"package_id": "mod.c", "name": "C"},
+            {"package_id": "mod.e", "name": "E"},
+        ]
+        rules_map = {
+            "mod.alpha": {"weight_info": {"final_weight": 900, "absolute_type": None}},
+            "mod.zeta": {"weight_info": {"final_weight": 700, "absolute_type": None}},
+            "mod.c": {"weight_info": {"final_weight": 500, "absolute_type": None}},
+            "mod.e": {"weight_info": {"final_weight": 500, "absolute_type": None}},
+        }
+
+        classic_result = self._run_sort("classic_sort_logic", mods_data, rules_map, groups, adj)
+        edge_result = self._run_sort("edge_enhanced_sort_logic", mods_data, rules_map, groups, adj)
+
+        self.assertEqual(classic_result["sorted_ids"], ["mod.alpha", "mod.c", "mod.zeta", "mod.e"])
+        self.assertEqual(edge_result["sorted_ids"], classic_result["sorted_ids"])
+
+    def test_edge_push_overlap_node_keeps_normal_weight_and_warns(self):
+        group_bottom = AtomicGroup(["mod.bottom"])
+        group_shared = AtomicGroup(["mod.shared"])
+        group_top = AtomicGroup(["mod.top"])
+        groups = [group_bottom, group_shared, group_top]
+        adj = {
+            id(group_bottom): {id(group_shared): 1},
+            id(group_shared): {id(group_top): 1},
+        }
+        result = self._run_sort(
+            "edge_enhanced_sort_logic",
+            [
+                {"package_id": "mod.bottom", "name": "Bottom"},
+                {"package_id": "mod.shared", "name": "Shared"},
+                {"package_id": "mod.top", "name": "Top"},
+            ],
+            {
+                "mod.bottom": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.shared": {"weight_info": {"final_weight": 500, "absolute_type": None}},
+                "mod.top": {"weight_info": {"final_weight": 0, "absolute_type": "top"}},
+            },
+            groups,
+            adj,
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.bottom", "mod.shared", "mod.top"])
+        self.assertTrue(any(w["type"] == "edge_closure_conflict" for w in result["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -161,7 +161,7 @@ class AppConfig:
     enable_file_size_scan: bool = True         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
-    auto_sort_strategy: str = "classic_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
+    auto_sort_strategy: str = "edge_enhanced_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
     auto_activate_dependencies: bool = False   # 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
