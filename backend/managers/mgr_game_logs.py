@@ -179,6 +179,46 @@ class GameLogManager(BaseLogReader): # 继承基类
         player_candidates = GameManager.get_default_player_log_paths('Player.log')
         return os.path.dirname(player_candidates[0]) if player_candidates else ""
 
+    def get_log_files_for_root(self, user_data_root: str = "", *, player_only: bool = False):
+        """
+        按指定用户数据根目录解析日志文件。
+        主前端仍使用当前活动环境；静默页会把运行环境根目录显式传进来。
+        """
+        result = []
+        normalized_root = str(user_data_root or "").strip()
+        for filename in self._GAME_LOG_FILENAMES:
+            if player_only and not filename.startswith("Player"):
+                continue
+            if filename.startswith("RMM_Realtime") and normalized_root:
+                filepath = os.path.join(normalized_root, filename)
+            else:
+                filepath = self.resolve_log_file_path(filename)
+            if filepath and os.path.exists(filepath):
+                stat = os.stat(filepath)
+                result.append({
+                    'name': filename,
+                    'path': filepath,
+                    'size': stat.st_size,
+                    'mtime': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                })
+        result.sort(key=lambda x: x['mtime'], reverse=True)
+        return result
+
+    def read_log_page_for_root(self, filename, user_data_root: str = "", page=1, page_size=1000):
+        normalized_name = os.path.basename(str(filename or "").strip())
+        if normalized_name.startswith('RMM_Realtime') and str(user_data_root or "").strip():
+            filepath = os.path.join(str(user_data_root).strip(), normalized_name)
+        else:
+            filepath = self.resolve_log_file_path(normalized_name)
+        if not filepath or not os.path.exists(filepath):
+            return {'error': '文件不存在'}
+
+        blocks = self._ensure_cache(filepath, self._parse_file_to_blocks)
+        result = self.get_paged_data(blocks, page, page_size)
+        if result['status'] == 'success':
+            self._analyze_page(result['blocks'], normalized_name)
+        return result
+
 
     # 启动/停止实时监视器
     def start_realtime_monitor(self):

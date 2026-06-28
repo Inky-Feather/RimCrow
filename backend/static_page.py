@@ -659,7 +659,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 
         async function loadFiles() {{
             const api = await waitForApi();
-            const res = await api.get_log_files('game');
+            const res = await api.get_log_files('game', 'runtime');
             if (!res || res.status !== 'success') {{
                 throw new Error(res?.message || '获取日志文件失败');
             }}
@@ -686,7 +686,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             if (!state.selectedFile) return;
             if (forceStatus) setStatus('正在读取日志...');
             const api = await waitForApi();
-            const res = await api.read_log_page('game', state.selectedFile, 1, 500);
+            const res = await api.read_log_page('game', state.selectedFile, 1, 500, 'runtime');
             if (!res || res.status !== 'success') {{
                 throw new Error(res?.message || '读取日志失败');
             }}

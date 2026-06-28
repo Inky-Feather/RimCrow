@@ -6,10 +6,12 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from PIL import Image
 
+import backend.managers.mgr_texture_opt as texture_opt_module
 from backend.managers.mgr_texture_opt import _ToolProcessRunner, ToddsEncoder, TextureOptimizationManager, TextureTask
 
 
@@ -118,9 +120,9 @@ class TestTextureOptimizationManager(unittest.TestCase):
 
         self.assertEqual(result["orphan_deleted"], 1)
         self.assertFalse(managed_dds.exists())
-        self.assertTrue(result["refresh_after_analyze"])
+        self.assertFalse(result["refresh_after_analyze"])
 
-    def test_clean_generated_with_source_deletes_external_outputs_and_refreshes_snapshot(self):
+    def test_clean_generated_with_source_deletes_external_outputs_and_invalidates_snapshot(self):
         source = self._write_png("Textures/source.png")
         external_dds = source.with_suffix(".dds")
         external_dds.write_bytes(b"dds")
@@ -149,7 +151,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
 
         self.assertEqual(result["orphan_deleted"], 1)
         self.assertFalse(external_dds.exists())
-        self.assertTrue(result["refresh_after_analyze"])
+        self.assertFalse(result["refresh_after_analyze"])
         self.assertIsNone(refreshed)
 
     def test_clean_generated_keeps_cached_snapshot_when_no_files_changed(self):
@@ -199,39 +201,21 @@ class TestTextureOptimizationManager(unittest.TestCase):
         result = self.manager._clean_generated(task)
 
         self.assertEqual(result["orphan_deleted"], 1)
-        self.assertTrue(result["refresh_after_analyze"])
+        self.assertFalse(result["refresh_after_analyze"])
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], options))
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root), str(other_mod_root)], options))
 
     def test_invalidate_scan_cache_removes_overlapping_snapshots(self):
         first_options = self.manager._build_options(self.options)
         second_options = self.manager._build_options({**self.options, "scale_factor": 0.25})
-        first_snapshot = {
-            "id": "snap-1",
-            "schema_version": 2,
-            "cache_key": self.manager._build_scan_cache_key([str(self.mod_root)], first_options),
-            "signature": self.manager._build_signature(first_options),
-            "generated_at": 1,
-            "mod_paths": [str(self.mod_root)],
-            "summary": self.manager._create_empty_stat(include_mod_count=True, mod_count=1),
-            "mods": [],
-        }
-        second_snapshot = {
-            "id": "snap-2",
-            "schema_version": 2,
-            "cache_key": self.manager._build_scan_cache_key([str(self.mod_root)], second_options),
-            "signature": self.manager._build_signature(second_options),
-            "generated_at": 2,
-            "mod_paths": [str(self.mod_root)],
-            "summary": self.manager._create_empty_stat(include_mod_count=True, mod_count=1),
-            "mods": [],
-        }
+        first_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], first_options)
+        second_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], second_options)
         self.manager._store_scan_snapshot(first_snapshot)
         self.manager._store_scan_snapshot(second_snapshot)
 
         removed = self.manager._invalidate_scan_cache([str(self.mod_root)])
 
-        self.assertEqual(removed, 2)
+        self.assertEqual(removed, 1)
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], first_options))
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], second_options))
 
@@ -258,6 +242,26 @@ class TestTextureOptimizationManager(unittest.TestCase):
 
         self.assertEqual(skip_existing["process_mode"], "all_skip_existing")
         self.assertEqual(all_overwrite["process_mode"], "all_overwrite")
+
+    def test_build_encode_batches_splits_large_groups(self):
+        total = texture_opt_module.TEXTURE_ENCODE_BATCH_SIZE + 1
+        entries = [
+            {
+                "needs_action": True,
+                "output_exists": False,
+                "scale_percent": 50,
+                "source_path": f"source-{index}.png",
+            }
+            for index in range(total)
+        ]
+
+        batches = self.manager._build_encode_batches(entries)
+
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(len(batches[0]["entries"]), texture_opt_module.TEXTURE_ENCODE_BATCH_SIZE)
+        self.assertEqual(len(batches[1]["entries"]), 1)
+        self.assertEqual(len(batches[0]["source_paths"]), texture_opt_module.TEXTURE_ENCODE_BATCH_SIZE)
+        self.assertEqual(len(batches[1]["source_paths"]), 1)
 
     def test_iter_texture_output_paths_only_returns_dds_outputs(self):
         self._write_png("Textures/source.png")
@@ -432,6 +436,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             scale_percent=None,
             max_size=None,
             use_fix_size=None,
+            output_callback=None,
         ):
             self.assertEqual(source_paths, [str(source)])
             self.assertIsNone(scale_percent)
@@ -461,7 +466,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0},
             status="running",
         )
-        original_scan = self.manager._scan_single_mod_snapshot
+        original_build = self.manager._build_mod_base_index
 
         def fake_encode_mod(
             _cancel_event,
@@ -470,16 +475,95 @@ class TestTextureOptimizationManager(unittest.TestCase):
             scale_percent=None,
             max_size=None,
             use_fix_size=None,
+            output_callback=None,
         ):
             self.assertEqual(source_paths, [str(source)])
             source.with_suffix(".dds").write_bytes(b"dds")
 
-        with patch.object(self.manager, "_scan_single_mod_snapshot", wraps=original_scan) as scan_mock, \
+        with patch.object(self.manager, "_build_mod_base_index", wraps=original_build) as build_mock, \
              patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
             result = self.manager._optimize(task)
 
-        self.assertEqual(scan_mock.call_count, 1)
+        self.assertEqual(build_mock.call_count, 1)
         self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 0)
+
+    def test_optimize_prepare_uses_threaded_plan_builder(self):
+        other_mod_root = self.temp_root / "OtherMod"
+        (other_mod_root / "Textures").mkdir(parents=True)
+        task = TextureTask(
+            id="threaded-plan",
+            action="optimize",
+            mod_paths=[str(self.mod_root), str(other_mod_root)],
+            options={**self.options, "process_mode": "all_overwrite"},
+            status="running",
+        )
+        seen_threads: list[str] = []
+        lock = threading.Lock()
+
+        def fake_scan_single_target(target, _options, **_kwargs):
+            mod_path = str(target.get("mod_path") or "")
+            with lock:
+                seen_threads.append(threading.current_thread().name)
+            return {
+                "mod_path": mod_path,
+                "mod_name": Path(mod_path).name,
+                "entries": [],
+                "stat": self.manager._create_empty_stat(mod_path=mod_path, mod_name=Path(mod_path).name),
+            }
+
+        with patch.object(self.manager, "_resolve_scan_workers", return_value=2), \
+             patch.object(self.manager, "_scan_single_target", side_effect=fake_scan_single_target):
+            results = self.manager._scan_targets_for_optimize(task, task.options)
+
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(name.startswith("TexturePlan") for name in seen_threads))
+
+    def test_optimize_reuses_recent_analysis_cache_without_revalidating_signature(self):
+        source = self._write_png("Textures/reuse.png", size=(128, 128))
+        source.with_suffix(".dds").write_bytes(b"dds")
+        options = {**self.options, "process_mode": "all_skip_existing"}
+        self.manager._scan_mods([str(self.mod_root)], options, None)
+        task = TextureTask(
+            id="reuse-analysis-cache",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options=options,
+            status="running",
+        )
+
+        with patch.object(self.manager, "_scan_single_target", side_effect=AssertionError("should use analysis plan cache")):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 0)
+        self.assertEqual(result["failed"], 0)
+
+    def test_optimize_rebuilds_base_scan_after_cache_ttl_expires(self):
+        source = self._write_png("Textures/expired.png", size=(128, 128))
+        source.with_suffix(".dds").write_bytes(b"dds")
+        options = {**self.options, "process_mode": "all_skip_existing"}
+        self.manager._scan_mods([str(self.mod_root)], options, None)
+        cache_key = texture_opt_module.generate_path_hash(str(self.mod_root))
+        self.manager._base_scan_cache[cache_key]["generated_at"] = (
+            texture_opt_module.current_ms() - texture_opt_module.TEXTURE_BASE_SCAN_CACHE_TTL_MS - 1
+        )
+        for cached_plan in self.manager._projected_plan_cache.values():
+            cached_plan["generated_at"] = (
+                texture_opt_module.current_ms() - texture_opt_module.TEXTURE_BASE_SCAN_CACHE_TTL_MS - 1
+            )
+        task = TextureTask(
+            id="expired-analysis-cache",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options=options,
+            status="running",
+        )
+
+        with patch.object(self.manager, "_build_mod_base_index", wraps=self.manager._build_mod_base_index) as build_mock:
+            result = self.manager._optimize(task)
+
+        self.assertEqual(build_mock.call_count, 1)
+        self.assertEqual(result["optimized"], 0)
         self.assertEqual(result["failed"], 0)
 
     def test_optimize_no_jobs_still_returns_final_snapshot_data(self):
@@ -592,6 +676,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             scale_percent=None,
             max_size=None,
             use_fix_size=None,
+            output_callback=None,
         ):
             calls.append((overwrite_existing, list(source_paths or [])))
             self.assertIsNone(scale_percent)
@@ -673,6 +758,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             scale_percent=None,
             max_size=None,
             use_fix_size=None,
+            output_callback=None,
         ):
             calls.append(
                 {
@@ -712,6 +798,42 @@ class TestTextureOptimizationManager(unittest.TestCase):
                 },
             ],
         )
+
+    def test_optimize_streams_todds_progress_with_callback(self):
+        source = self._write_png("Textures/progress.png", size=(128, 128))
+        task = TextureTask(
+            id="stream-progress",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0},
+            status="running",
+        )
+        emitted: list[dict[str, Any]] = []
+
+        def fake_encode_mod(
+            _cancel_event,
+            overwrite_existing=None,
+            source_paths=None,
+            scale_percent=None,
+            max_size=None,
+            use_fix_size=None,
+            output_callback=None,
+        ):
+            self.assertTrue(callable(output_callback))
+            output_callback("Progress: 1 / 1")
+            for source_path in source_paths or []:
+                Path(source_path).with_suffix(".dds").write_bytes(b"dds")
+
+        def capture_progress(_task_id, _task_type, **payload):
+            emitted.append(payload)
+
+        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod), \
+             patch("backend.managers.mgr_texture_opt.EventBus.emit_progress", side_effect=capture_progress):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertTrue(source.with_suffix(".dds").exists())
+        self.assertTrue(any(item.get("metrics", {}).get("current_batch_done") == 1 for item in emitted))
 
     def test_scan_summary_reports_scale_breakdown(self):
         self._write_png("Textures/scaled.png", size=(256, 256))
@@ -791,6 +913,102 @@ class TestTextureOptimizationManager(unittest.TestCase):
         tail = _ToolProcessRunner.read_process_log(log_path, limit=16)
 
         self.assertEqual(tail, "aaaaaaaaTAIL-END")
+
+
+class TestTextureOptimizationPersistence(unittest.TestCase):
+    def setUp(self):
+        self.temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.temp_root, ignore_errors=True)
+        self.results_dir = self.temp_root / "results"
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.exclusions_path = self.temp_root / "texture_opt_exclusions.json"
+        self.results_patcher = patch.object(texture_opt_module, "TEXTURE_RESULTS_DIR", self.results_dir)
+        self.exclusions_patcher = patch.object(texture_opt_module, "TEXTURE_EXCLUSIONS_PATH", self.exclusions_path)
+        self.results_patcher.start()
+        self.exclusions_patcher.start()
+        self.addCleanup(self.results_patcher.stop)
+        self.addCleanup(self.exclusions_patcher.stop)
+
+        self.mod_root = self.temp_root / "ExampleMod"
+        (self.mod_root / "Textures").mkdir(parents=True, exist_ok=True)
+        self.manager = TextureOptimizationManager()
+        self.options = {
+            "texture_tools_path": str(self.temp_root / "tools"),
+            "process_mode": "all_overwrite",
+            "generate_mipmaps": True,
+            "overwrite_existing": True,
+            "skip_small_textures": False,
+            "min_dimension": 1,
+            "max_source_dimension": 4096,
+            "scale_factor": 1.0,
+            "max_size": 128,
+        }
+
+    def _write_png(self, relative_path: str, size=(128, 128)) -> Path:
+        path = self.mod_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGBA", size, (255, 0, 0, 128)).save(path)
+        return path
+
+    def test_mod_exclusion_removes_entries_from_generation_plan(self):
+        self._write_png("Textures/excluded.png")
+        self.manager.set_mod_exclusion("Example.Mod", True)
+
+        projected = self.manager._scan_single_target(
+            {
+                "mod_path": str(self.mod_root),
+                "mod_name": "ExampleMod",
+                "package_id": "example.mod",
+            },
+            self.options,
+            apply_exclusions=True,
+        )
+
+        self.assertEqual(projected["stat"]["package_id"], "example.mod")
+        self.assertEqual(projected["stat"]["excluded_count"], 1)
+        self.assertEqual(projected["stat"]["generate_required_count"], 0)
+        self.assertEqual(projected["entries"][0]["action_status"], "excluded")
+        self.assertTrue(projected["entries"][0]["excluded"])
+        self.assertEqual(self.manager._build_encode_batches(projected["entries"]), [])
+
+    def test_file_exclusion_removes_single_entry_from_generation_plan(self):
+        self._write_png("Textures/keep.png")
+        self._write_png("Textures/skip.png")
+        self.manager.set_file_exclusion(str(self.mod_root), "Textures/skip.png", True)
+
+        projected = self.manager._scan_single_mod(str(self.mod_root), self.options)
+        entries = {entry["rel_path"]: entry for entry in projected["entries"]}
+
+        self.assertEqual(projected["stat"]["excluded_count"], 1)
+        self.assertEqual(projected["stat"]["generate_required_count"], 1)
+        self.assertEqual(entries["Textures/skip.png"]["action_status"], "excluded")
+        self.assertEqual(entries["Textures/keep.png"]["action_status"], "pending")
+
+    def test_result_history_keeps_latest_three_files(self):
+        for index in range(4):
+            task = TextureTask(
+                id=f"task-{index}",
+                action="optimize",
+                mod_paths=[str(self.mod_root)],
+                options=dict(self.options),
+                status="running",
+                created_at=1000 + index,
+                updated_at=1000 + index,
+            )
+            self.manager._write_task_result_file(
+                task,
+                self.options,
+                self.manager._create_empty_stat(include_mod_count=True, mod_count=1),
+                [],
+                [],
+            )
+            time.sleep(0.01)
+
+        history = self.manager.list_result_history(10)
+
+        self.assertEqual([item["task_id"] for item in history], ["task-3", "task-2", "task-1"])
+        self.assertEqual(len(list(self.results_dir.glob("*.json"))), 3)
+        self.assertTrue(all(Path(item["result_path"]).exists() for item in history))
 
 
 class TestToddsEncoder(unittest.TestCase):

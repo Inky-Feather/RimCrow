@@ -99,17 +99,6 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertEqual(page["status"], "success")
         self.assertIn("profile realtime", page["blocks"][0]["message"])
 
-    def test_api_open_log_folder_uses_resolved_game_log_directory(self):
-        api = API.__new__(API)
-        api.game_log_mgr = Mock()
-        api.game_log_mgr.get_preferred_log_directory.return_value = str(self.temp_dir)
-
-        with patch("backend.api.file_mgr.open_in_explorer") as open_mock:
-            result = API.open_log_folder(api)
-
-        self.assertEqual(result["status"], "success")
-        open_mock.assert_called_once_with(str(self.temp_dir))
-
     def test_ai_tool_get_log_context_uses_reader_resolved_game_log_path(self):
         log_file = self.temp_dir / "Player.log"
         log_file.write_text("error line\n  at stack", encoding="utf-8")

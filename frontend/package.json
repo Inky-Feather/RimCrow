@@ -26,6 +26,7 @@
     "vue": "^3.5.24",
     "vue-codemirror6": "^1.5.2",
     "vue-draggable-plus": "^0.6.1",
+    "vue-i18n": "^11.4.2",
     "vue-toastification": "^2.0.0-rc.5",
     "vue-virtual-scroller": "^2.0.0-beta.8",
     "vue-virtual-sortable": "^3.0.3",

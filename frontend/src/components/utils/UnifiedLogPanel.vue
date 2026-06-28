@@ -83,6 +83,15 @@
 
     </div>
 
+    <div v-if="showRuntimeProfileSwitch" class="flex items-center justify-between gap-3 px-3 py-2 border-b border-accent-primary/15 bg-accent-primary/8" >
+      <div class="text-xs text-accent-primary">
+        当前运行的游戏环境是 <span class="font-bold">{{ runtimeProfileName }}</span> ，点击切换到当前实际运行的游戏环境，获取实时日志。
+      </div>
+      <button @click="switchToRuntimeProfile" class="px-2 py-1 rounded-lg text-[0.7rem] font-bold bg-accent-primary/15 text-accent-primary hover:bg-accent-primary hover:text-black transition-colors" >
+        切换到当前运行的游戏环境
+      </button>
+    </div>
+
     <!-- ================= 2. 日志内容区 ================= -->
     <div class="flex-1 relative min-h-0 bg-[#0a0a0a]" ref="scrollContainer">
       
@@ -207,6 +216,7 @@ import {  ref, computed, onMounted, onUnmounted, nextTick, onActivated, onDeacti
 import { useToast } from 'vue-toastification'
 import { useAppStore } from '../../stores/appStore'
 import { useLogStore } from '../../stores/logStore'
+import { useProfileStore } from '../../stores/profileStore'
 import { formatFileSize } from '../../utils/format'
 import { Copy } from 'lucide-vue-next'
 import { checkResult } from '../../utils/common'
@@ -218,6 +228,7 @@ const emit = defineEmits(['selection-change'])
 
 const appStore = useAppStore()
 const logStore = useLogStore()
+const profileStore = useProfileStore()
 const toast = useToast()
 
 // 数据状态
@@ -248,6 +259,23 @@ const selectedFile = computed({
     logStore.setSelectedFile(props.sourceType, value)
   }
 })
+
+const runtimeProfileId = computed(() => String(appStore.runtimeSession?.profile_id || '').trim())
+const runtimeProfileName = computed(() => {
+  const runtimeProfile = (profileStore.profiles || []).find(item => item.id === runtimeProfileId.value)
+  return runtimeProfile?.name || runtimeProfileId.value || 'default'
+})
+const showRuntimeProfileSwitch = computed(() => {
+  if (props.sourceType !== 'game') return false
+  if (appStore.runtimeSession?.state !== 'running') return false
+  if (!runtimeProfileId.value) return false
+  return runtimeProfileId.value !== String(profileStore.currentProfileId || '').trim()
+})
+
+async function switchToRuntimeProfile() {
+  if (!runtimeProfileId.value) return
+  await profileStore.switchProfile(runtimeProfileId.value)
+}
 
 const selectedIds = computed({
   get: () => logStore.getSourceState(props.sourceType).selectedIds,
@@ -434,6 +462,20 @@ watch(() => props.sourceType, async (newVal) => {
     await initPanel()
   }
 })
+
+watch(() => profileStore.currentProfileId, async (_newProfileId, oldProfileId) => {
+  if (!isComponentActive || props.sourceType !== 'game') return
+  const previousProfileId = String(oldProfileId || '').trim()
+  const currentProfileId = String(profileStore.currentProfileId || '').trim()
+  if (!currentProfileId || currentProfileId === previousProfileId) return
+
+  // 游戏日志面板跟随当前活动环境。
+  // 只要活动环境切换了，就立刻重载文件列表和内容，避免按钮切过去后仍停留在旧环境日志。
+  cleanupPanel()
+  files.value = []
+  allLoadedLogs.value = []
+  await initPanel()
+})
 // 初始化流程封装
 async function initPanel() {
   loadingFile.value = true;
@@ -459,7 +501,7 @@ function cleanupPanel() {
 async function fetchFiles() {
   if (!window.pywebview) return;
   try {
-    const res = await window.pywebview.api.get_log_files(String(props.sourceType));
+    const res = await window.pywebview.api.get_log_files(String(props.sourceType), 'active');
     if (checkResult(res, '获取日志文件', false)) {
       files.value = res.data || [];
     }
@@ -530,7 +572,7 @@ async function fetchPage(page, isScrollUp = false, isInitial = false) {
   if (!window.pywebview || !selectedFile.value) return;
   
   try {
-    const res = await window.pywebview.api.read_log_page(String(props.sourceType), String(selectedFile.value), Number(page), 500);
+    const res = await window.pywebview.api.read_log_page(String(props.sourceType), String(selectedFile.value), Number(page), 500, 'active');
     
     if (res && res.status === 'success') {
       const newBlocks = res.data.blocks.map(b => normalizeBlock(b));

@@ -234,6 +234,7 @@ class AppConfig:
     backup_retention_days: int = 30           # 备份保留天数
     bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
     enable_auto_scan: bool = True             # 启动时自动扫描
+    enable_launch_profile_quick_scan: bool = True  # 环境列表直启前是否执行检查同步
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接

@@ -1,4 +1,5 @@
 import shutil
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,59 +44,61 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
             status="running",
         )
 
-    def test_optimize_recovers_single_file_failure_after_batch_error(self):
+    def test_optimize_retries_group_once_after_batch_error(self):
         good = self._write_png("Textures/good.png")
         bad = self._write_png("Textures/bad.png")
         task = self._make_task()
         calls: list[list[str]] = []
+        first_batch = True
 
-        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, output_callback=None):
+        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, max_size=None, output_callback=None):
+            nonlocal first_batch
             paths = list(source_paths or [])
             calls.append(paths)
-            if len(paths) > 1:
+            if first_batch:
+                first_batch = False
                 raise TextureOptError("todds 执行失败: batch contains invalid source")
-            target = Path(paths[0])
-            if target == bad:
-                raise TextureOptError("todds 执行失败: invalid png payload")
-            target.with_suffix(".dds").write_bytes(b"dds")
+            for source_path in paths:
+                Path(source_path).with_suffix(".dds").write_bytes(b"dds")
 
         with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
-        self.assertEqual(result["optimized"], 1)
-        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["optimized"], 2)
+        self.assertEqual(result["failed"], 0)
         self.assertTrue(good.with_suffix(".dds").exists())
-        self.assertFalse(bad.with_suffix(".dds").exists())
-        self.assertEqual(result["final_summary"]["current_output_count"], 1)
-        self.assertEqual(result["final_summary"]["generate_required_count"], 1)
-        self.assertEqual(result["failed_items"][0]["rel_path"], "Textures/bad.png")
+        self.assertTrue(bad.with_suffix(".dds").exists())
+        self.assertEqual(result["final_summary"]["current_output_count"], 2)
+        self.assertEqual(result["final_summary"]["generate_required_count"], 0)
+        self.assertEqual(result["failed_items"], [])
         self.assertTrue(any(len(item) > 1 for item in calls))
-        self.assertIn([str(good)], calls)
-        self.assertIn([str(bad)], calls)
+        self.assertEqual([sorted(item) for item in calls], [[str(bad), str(good)], [str(bad), str(good)]])
 
-    def test_run_task_keeps_partial_failure_as_success(self):
+    def test_run_task_marks_group_retry_success_as_success(self):
         good = self._write_png("Textures/good.png")
         bad = self._write_png("Textures/bad.png")
         task = self._make_task()
+        first_batch = True
 
-        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, output_callback=None):
+        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, max_size=None, output_callback=None):
+            nonlocal first_batch
             paths = list(source_paths or [])
-            if len(paths) > 1:
+            if first_batch:
+                first_batch = False
                 raise TextureOptError("todds 执行失败: batch contains invalid source")
-            target = Path(paths[0])
-            if target == bad:
-                raise TextureOptError("todds 执行失败: invalid png payload")
-            target.with_suffix(".dds").write_bytes(b"dds")
+            for source_path in paths:
+                Path(source_path).with_suffix(".dds").write_bytes(b"dds")
 
         with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             self.manager._run_task(task)
 
         self.assertEqual(task.status, "success")
-        self.assertEqual(task.metrics["optimized"], 1)
-        self.assertEqual(task.metrics["failed"], 1)
-        self.assertEqual(task.metrics["failed_items"][0]["rel_path"], "Textures/bad.png")
-        self.assertIn("失败 1 张", task.message)
+        self.assertEqual(task.metrics["optimized"], 2)
+        self.assertEqual(task.metrics["failed"], 0)
+        self.assertNotIn("failed_items", task.metrics)
+        self.assertNotIn("失败", task.message)
         self.assertTrue(good.with_suffix(".dds").exists())
+        self.assertTrue(bad.with_suffix(".dds").exists())
 
     def test_optimize_keeps_nonrecoverable_errors_fatal(self):
         self._write_png("Textures/good.png")

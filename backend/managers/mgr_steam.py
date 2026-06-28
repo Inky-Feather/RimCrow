@@ -1,4 +1,6 @@
 # backend/managers/mgr_steam.py
+import base64
+import ctypes
 import json
 import os
 import re
@@ -54,6 +56,73 @@ STEAMCMD_DOWNLOAD_IDLE_TIMEOUT_SECONDS = 180
 # =========================================================
 #  独立 Worker 函数 (由 main.py 在子进程调用)
 # =========================================================
+def _decode_steam_api_probe_payload(payload: str) -> dict[str, str]:
+    raw_payload = str(payload or "").strip()
+    padding = "=" * (-len(raw_payload) % 4)
+    decoded = base64.urlsafe_b64decode(raw_payload + padding)
+    data = json.loads(decoded.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("probe payload must be a JSON object")
+    return {str(key): str(value or "") for key, value in data.items()}
+
+
+def _run_steam_api_probe(payload: str) -> str:
+    """
+    在 worker 子进程内探测游戏目录中的 steam_api。
+
+    该逻辑不能走 steamworks-py：目标是加载游戏自带的 steam_api DLL/SO/DYLIB，
+    用假 appid 区分官方 API 与常见模拟器。
+    """
+    try:
+        data = _decode_steam_api_probe_payload(payload)
+        install_path = str(data.get("install_path") or "")
+        steam_api_path = str(data.get("steam_api_path") or "")
+        if not install_path or not steam_api_path:
+            return "missing"
+        install_root = Path(install_path)
+        lib_path = Path(steam_api_path)
+        appid_path = Path(data.get("steam_appid_path") or "") if data.get("steam_appid_path") else install_root / "steam_appid.txt"
+        if not lib_path.is_file():
+            return "missing"
+
+        old_cwd = Path.cwd()
+        old_text = ""
+        had_appid = appid_path.exists()
+        try:
+            if had_appid:
+                old_text = appid_path.read_text(encoding="utf-8", errors="ignore")
+            else:
+                appid_path.parent.mkdir(parents=True, exist_ok=True)
+            appid_path.write_text("999999999", encoding="utf-8")
+            os.chdir(install_root)
+            loader = ctypes.CDLL(str(lib_path))
+            fn = loader.SteamAPI_Init
+            fn.restype = ctypes.c_bool
+            result = bool(fn())
+            shutdown = getattr(loader, "SteamAPI_Shutdown", None)
+            if shutdown:
+                try:
+                    shutdown()
+                except Exception:
+                    pass
+            return "emulator" if result else "official"
+        finally:
+            try:
+                os.chdir(old_cwd)
+            except Exception:
+                pass
+            if had_appid:
+                appid_path.write_text(old_text, encoding="utf-8")
+            else:
+                try:
+                    appid_path.unlink()
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.debug(f"Steam API 校验 worker 失败: {exc}")
+        return "probe_error"
+
+
 def run_steam_worker(action: str, payload: str):
     """
     独立进程运行的 Steam API 代理。
@@ -61,6 +130,11 @@ def run_steam_worker(action: str, payload: str):
     1. 订阅/取消订阅：payload 为单个 ID 或逗号分隔的批量 ID。
     2. 状态探测：action=probe_status，只短暂附着到 Steam 读取一次状态。
     """
+    if action == "steam-api-probe":
+        result = _run_steam_api_probe(payload)
+        print(f"STEAM_API_PROBE_RESULT:{result}")
+        return
+
     try:
         # 在这里才导入库，确保主进程干净
         from steamworks.steamworks import STEAMWORKS

@@ -40,10 +40,7 @@
                 <div class="min-w-0 text-accent-warning/80">
                   待生成 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.generate_required_count || 0 }}</span>
                 </div>
-                <div class="min-w-0 text-text-dim">
-                  超范围 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_small_count || 0 }}</span>
-                </div>
-                <div class="min-w-0 flex items-center gap-4 col-span-2">
+                <div class="col-span-3 min-w-0 flex items-center gap-4">
                   <span class="shrink-0 text-accent-tip/80">
                     缩放 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.scaled_count || 0 }}</span>
                   </span>
@@ -53,9 +50,15 @@
                   <span class="shrink-0 text-text-dim">
                     原尺寸 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.keep_original_count || 0 }}</span>
                   </span>
+                  <div class="min-w-0 text-text-dim">
+                    超范围 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_small_count || 0 }}</span>
+                  </div>
                   <span v-if="summary.unsupported_source_count" class="shrink-0 cursor-help text-accent-warning" v-tooltip="unsupportedSummaryTooltip">
                     无效 PNG <span class="ml-1 font-mono font-bold text-text-main">{{ summary.unsupported_source_count }}</span>
                   </span>
+                  <div class="min-w-0 text-accent-danger/80">
+                    已排除 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.excluded_count || 0 }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -69,15 +72,22 @@
           </div>
         </header>
 
-        <div class="flex flex-1 min-h-0">
+        <div class="relative flex flex-1 min-h-0">
           <section class="flex min-w-0 flex-1 flex-col border-r border-text-main/5">
             <div data-tour="texture-opt-list-toolbar" class="shrink-0 border-b border-text-main/5 bg-black/20 px-6 py-3">
               <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-center gap-1 rounded-lg bg-text-main/5 p-1">
-                  <button v-for="mode in ['ALL', 'PNG', 'DDS']" :key="mode" @click="textureStore.viewMode = mode" class="px-3 py-1 rounded-md text-xs font-bold transition-all"
-                    :class="textureStore.viewMode === mode ? 'bg-text-main/15 text-text-main shadow-sm' : 'text-text-dim hover:text-text-main'" >
-                    {{ mode === 'ALL' ? '综合视图' : (mode === 'PNG' ? '仅看 PNG' : '仅看 DDS') }}
+                <div class="flex items-center gap-5">
+                  <div class="flex items-center gap-1 rounded-lg bg-text-main/5 p-1">
+                    <button v-for="mode in ['ALL', 'PNG', 'DDS']" :key="mode" @click="textureStore.viewMode = mode" class="px-3 py-1 rounded-md text-xs font-bold transition-all"
+                      :class="textureStore.viewMode === mode ? 'bg-text-main/15 text-text-main shadow-sm' : 'text-text-dim hover:text-text-main'" >
+                      {{ mode === 'ALL' ? '综合视图' : (mode === 'PNG' ? '仅看 PNG' : '仅看 DDS') }}
+                    </button>
+                  </div>
+                  <button class="rounded-lg border border-text-main/10 bg-text-main/5 px-3 py-2 text-xs font-bold text-text-dim transition-colors hover:text-text-main"
+                    @click="textureStore.isResultDrawerOpen = !textureStore.isResultDrawerOpen" >
+                    {{ textureStore.isResultDrawerOpen ? '隐藏结果面板' : '显示结果面板' }}
                   </button>
+
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3">
@@ -98,11 +108,17 @@
                 <p>暂无数据，请先扫描统计或直接开始生成。</p>
               </div>
 
-              <DynamicScroller v-else :items="displayRows" :min-item-size="textureListMinItemSize" key-field="mod_path"
+              <DynamicScroller v-else :items="displayRows" :min-item-size="textureListMinItemSize" key-field="mod_instance_key"
                 class="h-full min-h-0 custom-scrollbar px-3 py-2" v-slot="{ item, index, active }" >
                 <DynamicScrollerItem :item="item" :active="active" :data-index="index" :size-dependencies="getRowSizeDependencies(item)" >
-                  <div class="pb-1">
-                    <TextureModCard :mod="item" :view-mode="textureStore.viewMode" :max-bytes="maxBytesInCurrentView" />
+                    <div class="pb-1">
+                    <TextureModCard
+                      :mod="item"
+                      :view-mode="textureStore.viewMode"
+                      :max-bytes="maxBytesInCurrentView"
+                      :is-excluded="textureStore.isModExcluded(item.package_id)"
+                      @toggle-mod-exclusion="handleToggleModExclusion"
+                    />
                   </div>
                 </DynamicScrollerItem>
               </DynamicScroller>
@@ -234,6 +250,151 @@
               </div>
             </div>
           </aside>
+
+          <transition name="panel-slide">
+            <aside
+              v-if="textureStore.isResultDrawerOpen"
+              class="absolute inset-y-0 right-0 z-20 flex w-[28rem] flex-col border-l border-text-main/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(15,23,42,0.98))] shadow-2xl"
+            >
+              <div class="flex items-center justify-between border-b border-text-main/10 px-4 py-3">
+                <div>
+                  <div class="text-sm font-black tracking-wider text-text-main">结果面板</div>
+                  <div class="text-xs text-text-dim">当前任务、最近 3 次生成历史和排除规则</div>
+                </div>
+                <button class="rounded-lg p-1.5 text-text-dim hover:bg-text-main/10 hover:text-text-main" @click="textureStore.isResultDrawerOpen = false">
+                  <X class="w-4 h-4" />
+                </button>
+              </div>
+
+              <div class="flex-1 space-y-4 overflow-y-auto custom-scrollbar p-4 text-xs">
+                <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/20 p-3">
+                  <h3 class="font-black uppercase tracking-widest text-text-main">当前状态</h3>
+                  <div class="text-text-dim">{{ progressFullMessage }}</div>
+                  <div class="flex items-center gap-3 text-text-dim">
+                    <span>{{ progressCountLabel || '暂无任务进度' }}</span>
+                    <span>{{ progressElapsedLabel }}</span>
+                  </div>
+                </section>
+
+                <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/20 p-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-black uppercase tracking-widest text-text-main">最近结果</h3>
+                    <button class="text-text-dim hover:text-text-main" @click="textureStore.loadResultHistory()">刷新</button>
+                  </div>
+                  <div v-if="resultHistory.length === 0" class="text-text-dim">暂无历史结果</div>
+                  <button v-for="item in resultHistory" :key="item.result_path" class="w-full rounded-lg border px-3 py-2 text-left transition-colors"
+                    :class="textureStore.selectedResultPath === item.result_path ? 'border-accent-primary/30 bg-accent-primary/10 text-text-main' : 'border-text-main/10 bg-text-main/5 text-text-dim hover:text-text-main'"
+                    @click="textureStore.selectedResultPath = item.result_path" >
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="font-bold">{{ item.action === 'clean_generated' ? '清理任务' : '生成任务' }}</span>
+                      <span class="font-mono">{{ formatDateTime(item.updated_at) }}</span>
+                    </div>
+                    <div class="mt-1 text-[11px] opacity-80">
+                      成功 {{ item.summary?.current_output_count || 0 }} / 失败 {{ item.failed_items?.length || 0 }}
+                    </div>
+                  </button>
+                </section>
+
+                <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/20 p-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-black uppercase tracking-widest text-text-main">失败项</h3>
+                    <input v-model.trim="failedSearchQuery" type="text" placeholder="筛选失败项"
+                      class="w-40 rounded-lg border border-text-main/10 bg-black/20 px-2 py-1 text-xs text-text-main outline-none" >
+                  </div>
+                  <div v-if="filteredFailedItems.length === 0" class="text-text-dim">当前结果没有失败项</div>
+                  <div v-for="item in filteredFailedItems" :key="`${item.mod_path}-${item.rel_path}-${item.error}`" class="rounded-lg border border-text-main/10 bg-black/20 p-2">
+                    <div class="font-bold text-text-main">{{ item.mod_name || item.package_id || '未知模组' }}</div>
+                    <div class="mt-1 break-all font-mono text-text-dim">{{ item.rel_path }}</div>
+                    <div class="mt-1 text-accent-warning">{{ item.error }}</div>
+                    <div class="mt-2 flex justify-end gap-2">
+                      <button class="rounded-lg border border-text-main/10 bg-text-main/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
+                        @click="handleOpenTextureFile(item)" v-tooltip="'打开文件'" >
+                        <FileText class="w-4 h-4" />
+                      </button>
+                      <button class="rounded-lg border border-text-main/10 bg-text-main/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
+                        @click="handleOpenTextureFolder(item)" v-tooltip="'打开所在目录'" >
+                        <FolderOpen class="w-4 h-4" />
+                      </button>
+                      <button v-if="getFailedItemLogPath(item)" v-tooltip="'打开 todds 日志'"
+                        class="rounded-lg border border-text-main/10 bg-text-main/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
+                        @click="handleOpenToddsLog(item)" >
+                        <ScrollText class="w-4 h-4" />
+                      </button>
+                      <button class="inline-flex items-center gap-1 rounded-lg border border-accent-warning/20 bg-accent-warning/10 px-2 py-1 font-bold text-accent-warning transition-colors hover:bg-accent-warning/20"
+                        @click="handleAddFailedItemExclusion(item)" v-tooltip="'添加文件到排除列表'" >
+                        <Plus class="w-3.5 h-3.5" />
+                        排除文件
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/20 p-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-black uppercase tracking-widest text-text-main">模组排除</h3>
+                    <input v-model.trim="excludeModQuery" type="text" placeholder="筛选已排除"
+                      class="w-40 rounded-lg border border-text-main/10 bg-black/20 px-2 py-1 text-xs text-text-main outline-none" >
+                  </div>
+                  <div v-if="filteredExcludedModRows.length === 0" class="text-text-dim">
+                    {{ excludedModRows.length === 0 ? '暂无模组排除' : '没有匹配的已排除模组' }}
+                  </div>
+                  <div class="max-h-48 space-y-2 overflow-y-auto custom-scrollbar">
+                    <div v-for="item in filteredExcludedModRows" :key="item.package_id"
+                      class="flex items-center justify-between gap-3 rounded-lg border border-text-main/10 bg-black/20 px-2 py-2" >
+                      <div class="min-w-0">
+                        <div class="truncate font-bold text-text-main">{{ item.mod_name }}</div>
+                        <div class="truncate font-mono text-text-dim">{{ item.package_id }}</div>
+                        <div v-if="item.mod_path" class="truncate text-[11px] text-text-dim/70">{{ item.mod_path }}</div>
+                      </div>
+                      <button class="shrink-0 rounded-lg border border-accent-danger/20 bg-accent-danger/10 p-1.5 text-accent-danger transition-colors hover:bg-accent-danger/20"
+                        @click="handleRemoveModExclusion(item)" v-tooltip="'移除模组排除'" >
+                        <Trash2 class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/20 p-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="font-black uppercase tracking-widest text-text-main">文件排除</h3>
+                    <input v-model.trim="excludeFileQuery" type="text" placeholder="筛选已排除"
+                      class="w-40 rounded-lg border border-text-main/10 bg-black/20 px-2 py-1 text-xs text-text-main outline-none" >
+                  </div>
+                  <div class="flex gap-2">
+                    <textarea v-model.trim="pathExclusionInput" rows="2" placeholder="粘贴完整文件路径，可多行"
+                      class="min-h-12 flex-1 resize-none rounded-lg border border-text-main/10 bg-black/20 px-2 py-1 text-xs text-text-main outline-none" >
+                    </textarea>
+                    <button class="inline-flex items-center gap-1 rounded-lg border border-text-main/10 bg-text-main/5 px-3 py-1 font-bold text-text-dim hover:text-text-main" @click="handleAddPathExclusion">
+                      <Plus class="w-3.5 h-3.5" />
+                      识别
+                    </button>
+                  </div>
+                  <div v-if="filteredFileExclusionRows.length === 0" class="text-text-dim">
+                    {{ fileExclusionRows.length === 0 ? '暂无文件排除' : '没有匹配的已排除文件' }}
+                  </div>
+                  <div v-for="item in filteredFileExclusionRows" :key="`${item.mod_path}:${item.rel_path}`" class="rounded-lg border border-text-main/10 bg-black/20 p-2">
+                    <div class="font-bold text-text-main">{{ item.mod_name }}</div>
+                    <div class="mt-1 break-all font-mono text-text-main">{{ item.rel_path }}</div>
+                    <div class="mt-1 break-all text-text-dim">{{ item.mod_path }}</div>
+                    <div class="mt-2 flex justify-end gap-2">
+                      <button class="rounded-lg border border-text-main/10 bg-text-main/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
+                        @click="handleOpenTextureFile(item)" v-tooltip="'打开文件'" >
+                        <FileText class="w-4 h-4" />
+                      </button>
+                      <button class="rounded-lg border border-text-main/10 bg-text-main/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
+                        @click="handleOpenTextureFolder(item)" v-tooltip="'打开所在目录'" >
+                        <FolderOpen class="w-4 h-4" />
+                      </button>
+                      <button class="rounded-lg border border-accent-danger/20 bg-accent-danger/10 p-1.5 text-accent-danger transition-colors hover:bg-accent-danger/20"
+                        @click="handleRemoveFileExclusion(item)" v-tooltip="'移除文件排除'" >
+                        <Trash2 class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </aside>
+          </transition>
         </div>
       </div>
     </div>
@@ -244,7 +405,7 @@
 import { computed, ref, watch } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import { useNow } from '@vueuse/core'
-import { Ban, BrushCleaning, CheckCircle2, Cpu, Images, Inbox, Loader2, Rocket, ScanSearch, Search, X } from 'lucide-vue-next'
+import { Ban, BrushCleaning, CheckCircle2, Cpu, FileText, FolderOpen, Images, Inbox, Loader2, Plus, Rocket, ScanSearch, ScrollText, Search, Trash2, X } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useTextureStore } from '../stores/textureStore'
 import { useModStore } from '../stores/modStore'
@@ -252,6 +413,7 @@ import CommonSwitch from './common/input/CommonSwitch.vue'
 import CommonSelect from './common/input/CommonSelect.vue'
 import TextureModCard from './utils/TextureModCard.vue'
 import { formatFileSize } from '../utils/format'
+import { toast } from '../utils/common'
 
 const appStore = useAppStore()
 const textureStore = useTextureStore()
@@ -262,10 +424,16 @@ const summary = computed(() => textureStore.globalSummary || {})
 const progressState = computed(() => textureStore.progressState)
 const toolStatus = computed(() => textureStore.toolStatus)
 const isBusy = computed(() => textureStore.isAnalyzing || textureStore.isOptimizing)
+const resultHistory = computed(() => textureStore.resultHistory)
+const textureExclusions = computed(() => textureStore.textureExclusions)
 const now = useNow({ interval: 1000 })
 const targetScope = ref('active')
 const searchQuery = ref('')
 const sortMetric = ref('impact')
+const failedSearchQuery = ref('')
+const excludeModQuery = ref('')
+const excludeFileQuery = ref('')
+const pathExclusionInput = ref('')
 const textureOptHelpText = '把 PNG贴图提前转换成更适合游戏读取的 DDS 格式。通常能减少显存压力、加快加载，以及大型模组环境下更少的卡顿和爆显存风险；但会占据更多磁盘空间，生成需要一定时间。'+'\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助'
 const textureListMinItemSize = computed(() => Math.max(88, Math.round(Number(appStore.settings.ui.font_size || 14) * 7.2)))
 
@@ -276,20 +444,16 @@ const sortOptions = [
   { label: '按名称', value: 'name' },
 ]
 
-const displayRows = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  const rows = textureStore.modsData
-    .map(item => ({
-      ...item,
-      mod_name: resolveModName(item),
-      mod_path: item.mod_path || '',
-      vram_saved: Math.max(0, Number(item.source_vram_bytes_est || 0) - Number(item.output_vram_bytes_est || 0)),
-    }))
-    .filter(item => {
-      if (!query) return true
-      return item.mod_name.toLowerCase().includes(query) || item.mod_path.toLowerCase().includes(query)
-    })
+const resolvedRows = computed(() => (
+  textureStore.modsData.map(item => ({
+    ...item,
+    mod_name: resolveModName(item),
+    mod_path: item.mod_path || '',
+    vram_saved: Math.max(0, Number(item.source_vram_bytes_est || 0) - Number(item.output_vram_bytes_est || 0)),
+  }))
+))
 
+const sortRows = (rows) => {
   rows.sort((a, b) => {
     if (sortMetric.value === 'name') {
       return a.mod_name.localeCompare(b.mod_name, 'zh-Hans-CN')
@@ -317,8 +481,17 @@ const displayRows = computed(() => {
       || Number(b.generate_required_count || 0) - Number(a.generate_required_count || 0)
       || Number(b.unsupported_source_count || 0) - Number(a.unsupported_source_count || 0)
   })
-
   return rows
+}
+
+const displayRows = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  const rows = resolvedRows.value.filter(item => {
+    if (!query) return true
+    return item.mod_name.toLowerCase().includes(query) || item.mod_path.toLowerCase().includes(query)
+  })
+
+  return sortRows(rows)
 })
 
 const maxBytesInCurrentView = computed(() => {
@@ -389,7 +562,7 @@ const showProgressBlock = computed(() => isBusy.value || showFinishedProgress.va
 const progressDisplayPercent = computed(() => {
   if (showFinishedProgress.value) return 100
   const details = progressState.value.details || {}
-  return Number((details.phase_percent ?? progressState.value.percent) || 0)
+  return Number((progressState.value.percent ?? details.phase_percent) || 0)
 })
 const progressStatusIcon = computed(() => (showFinishedProgress.value ? CheckCircle2 : Loader2))
 const progressStatusIconClass = computed(() => (showFinishedProgress.value ? 'text-accent-success' : 'text-accent-primary animate-spin'))
@@ -413,6 +586,159 @@ const showFinishedProgress = computed(() => {
   return ['success', 'failed', 'cancelled'].includes(status)
 })
 
+const selectedHistoryResult = computed(() => (
+  resultHistory.value.find(item => item.result_path === textureStore.selectedResultPath) || resultHistory.value[0] || null
+))
+
+const currentFailedItems = computed(() => {
+  const liveItems = Array.isArray(progressState.value.details?.failed_items) ? progressState.value.details.failed_items : []
+  if (isBusy.value) return liveItems
+  if (selectedHistoryResult.value) return selectedHistoryResult.value.failed_items || []
+  return liveItems
+})
+
+const filteredFailedItems = computed(() => {
+  const query = failedSearchQuery.value.trim().toLowerCase()
+  return currentFailedItems.value.filter(item => {
+    if (!query) return true
+    return (
+      String(item.mod_name || '').toLowerCase().includes(query)
+      || String(item.rel_path || '').toLowerCase().includes(query)
+      || String(item.error || '').toLowerCase().includes(query)
+    )
+  })
+})
+
+const normalizePackageKey = (value) => String(value || '').trim().toLowerCase()
+const normalizePathKey = (value) => String(value || '').trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+const stripPathQuotes = (value) => String(value || '').trim().replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, '')
+const getInstalledMods = () => Array.from(modStore.allModsMap instanceof Map ? modStore.allModsMap.values() : [])
+
+const resolvedRowByPackageId = computed(() => {
+  const map = new Map()
+  for (const row of resolvedRows.value) {
+    const key = normalizePackageKey(row.package_id)
+    if (key && !map.has(key)) map.set(key, row)
+  }
+  return map
+})
+
+const resolvedRowByModPath = computed(() => {
+  const map = new Map()
+  for (const row of resolvedRows.value) {
+    const key = normalizePathKey(row.mod_path)
+    if (key && !map.has(key)) map.set(key, row)
+  }
+  return map
+})
+
+const installedModByPackageId = computed(() => {
+  const map = new Map()
+  for (const mod of getInstalledMods()) {
+    const key = normalizePackageKey(mod?.package_id)
+    if (key && !map.has(key)) map.set(key, mod)
+  }
+  return map
+})
+
+const installedModByPath = computed(() => {
+  const map = new Map()
+  for (const mod of getInstalledMods()) {
+    const key = normalizePathKey(mod?.path)
+    if (key && !map.has(key)) map.set(key, mod)
+  }
+  return map
+})
+
+const pathExclusionCandidates = computed(() => {
+  const rows = []
+  const seen = new Set()
+  const pushCandidate = (item) => {
+    const modPath = String(item?.mod_path || item?.path || '').trim()
+    const key = normalizePathKey(modPath)
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    rows.push({
+      mod_path: modPath,
+      package_id: item?.package_id || '',
+      mod_name: item?.mod_name || item?.alias_name || item?.display_name || item?.name || item?.package_id || '未知模组',
+    })
+  }
+  resolvedRows.value.forEach(pushCandidate)
+  getInstalledMods().forEach(pushCandidate)
+  return rows.sort((left, right) => normalizePathKey(right.mod_path).length - normalizePathKey(left.mod_path).length)
+})
+
+const excludedModRows = computed(() => {
+  const rows = []
+  const seen = new Set()
+  for (const item of textureExclusions.value.mods || []) {
+    const packageId = String(item?.package_id || '').trim()
+    const key = normalizePackageKey(packageId)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    const statsRow = resolvedRowByPackageId.value.get(key)
+    const installedMod = installedModByPackageId.value.get(key)
+    rows.push({
+      ...item,
+      package_id: packageId,
+      mod_name: statsRow?.mod_name || installedMod?.alias_name || installedMod?.display_name || installedMod?.name || packageId,
+      mod_path: statsRow?.mod_path || installedMod?.path || '',
+    })
+  }
+  return rows.sort((left, right) => String(left.mod_name || '').localeCompare(String(right.mod_name || ''), 'zh-Hans-CN'))
+})
+
+const filteredExcludedModRows = computed(() => {
+  const query = excludeModQuery.value.trim().toLowerCase()
+  return excludedModRows.value.filter(item => {
+    if (!query) return true
+    return (
+      String(item.mod_name || '').toLowerCase().includes(query)
+      || String(item.package_id || '').toLowerCase().includes(query)
+      || String(item.mod_path || '').toLowerCase().includes(query)
+    )
+  })
+})
+
+const fileExclusionRows = computed(() => {
+  const rows = []
+  const seen = new Set()
+  for (const item of textureExclusions.value.files || []) {
+    const modPath = String(item?.mod_path || '').trim()
+    const relPath = String(item?.rel_path || '').trim().replace(/\\/g, '/').replace(/^\/+/, '')
+    const key = `${normalizePathKey(modPath)}:${relPath.toLowerCase()}`
+    if (!modPath || !relPath || seen.has(key)) continue
+    seen.add(key)
+    const modKey = normalizePathKey(modPath)
+    const statsRow = resolvedRowByModPath.value.get(modKey)
+    const installedMod = installedModByPath.value.get(modKey)
+    rows.push({
+      ...item,
+      mod_path: modPath,
+      rel_path: relPath,
+      file_path: buildTextureFilePath(modPath, relPath),
+      mod_name: statsRow?.mod_name || installedMod?.alias_name || installedMod?.display_name || installedMod?.name || installedMod?.package_id || '未知模组',
+    })
+  }
+  return rows.sort((left, right) => (
+    String(left.mod_name || '').localeCompare(String(right.mod_name || ''), 'zh-Hans-CN')
+    || String(left.rel_path || '').localeCompare(String(right.rel_path || ''), 'zh-Hans-CN')
+  ))
+})
+
+const filteredFileExclusionRows = computed(() => {
+  const query = excludeFileQuery.value.trim().toLowerCase()
+  return fileExclusionRows.value.filter(item => {
+    if (!query) return true
+    return (
+      String(item.mod_name || '').toLowerCase().includes(query)
+      || String(item.rel_path || '').toLowerCase().includes(query)
+      || String(item.mod_path || '').toLowerCase().includes(query)
+    )
+  })
+})
+
 const closeModal = () => {
   appStore.uiState.showTextureOptModal = false
 }
@@ -433,17 +759,17 @@ const getTargetIds = () => {
 
 const handleAnalyze = async () => {
   const ids = getTargetIds()
-  await textureStore.startAnalysis(ids)
+  await textureStore.startAnalysis(ids, targetScope.value)
 }
 
 const handleOptimize = async () => {
   const ids = getTargetIds()
-  await textureStore.startOptimization(ids, 'optimize')
+  await textureStore.startOptimization(ids, 'optimize', targetScope.value)
 }
 
 const handleCleanGenerated = async () => {
   const ids = getTargetIds()
-  await textureStore.startOptimization(ids, 'clean_generated')
+  await textureStore.startOptimization(ids, 'clean_generated', targetScope.value)
 }
 
 const handleCancel = async () => {
@@ -453,12 +779,114 @@ const handleCancel = async () => {
 watch(() => appStore.uiState.showTextureOptModal, (visible) => {
   if (visible) {
     textureStore.checkToolStatus()
+    textureStore.loadResultHistory()
+    textureStore.loadExclusions()
   }
 })
+
+const handleToggleModExclusion = async (item) => {
+  if (!item?.package_id) return
+  await textureStore.toggleModExclusion(item.package_id, !textureStore.isModExcluded(item.package_id))
+}
+
+const handleRemoveModExclusion = async (item) => {
+  if (!item?.package_id) return
+  await textureStore.toggleModExclusion(item.package_id, false)
+}
+
+const handleAddFailedItemExclusion = async (item) => {
+  if (!item?.mod_path || !item?.rel_path) return
+  await textureStore.toggleFileExclusion(item.mod_path, item.rel_path, true)
+}
+
+const handleRemoveFileExclusion = async (item) => {
+  if (!item?.mod_path || !item?.rel_path) return
+  await textureStore.toggleFileExclusion(item.mod_path, item.rel_path, false)
+}
+
+const handleOpenTextureFile = async (item) => {
+  const filePath = item?.file_path || buildTextureFilePath(item?.mod_path, item?.rel_path)
+  if (!filePath) return
+  await appStore.openFile(filePath)
+}
+
+const handleOpenTextureFolder = async (item) => {
+  const filePath = item?.file_path || buildTextureFilePath(item?.mod_path, item?.rel_path)
+  if (!filePath) return
+  await appStore.openPath(filePath)
+}
+
+const handleOpenToddsLog = async (item) => {
+  const logPath = getFailedItemLogPath(item)
+  if (!logPath) return
+  await appStore.openFile(logPath)
+}
+
+const handleAddPathExclusion = async () => {
+  const rawPaths = String(pathExclusionInput.value || '')
+    .split(/\r?\n/)
+    .map(stripPathQuotes)
+    .filter(Boolean)
+  if (rawPaths.length === 0) return
+
+  let addedCount = 0
+  let unmatchedCount = 0
+  for (const rawPath of rawPaths) {
+    const matched = resolvePastedTexturePath(rawPath)
+    if (!matched) {
+      unmatchedCount += 1
+      continue
+    }
+    const ok = await textureStore.toggleFileExclusion(matched.mod_path, matched.rel_path, true)
+    if (ok) addedCount += 1
+  }
+
+  if (addedCount > 0) {
+    pathExclusionInput.value = ''
+  }
+  if (unmatchedCount > 0) {
+    toast.warning(`有 ${unmatchedCount} 条路径无法匹配到已安装模组目录`)
+  }
+}
+
+function getFailedItemLogPath(item) {
+  return String(
+    item?.todds_log_path
+    || progressState.value.details?.todds_log_path
+    || selectedHistoryResult.value?.todds_log_path
+    || ''
+  ).trim()
+}
 
 function resolveModName(item) {
   const match = Array.from(modStore.allModsMap.values()).find(mod => mod?.path === item.mod_path)
   return match?.alias_name || match?.display_name || match?.name || item.mod_name || '未知模组'
+}
+
+function buildTextureFilePath(modPath, relPath) {
+  const root = String(modPath || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  const rel = String(relPath || '').trim().replace(/\\/g, '/').replace(/^\/+/, '')
+  if (!root) return rel
+  if (!rel) return root
+  return `${root}/${rel}`
+}
+
+function resolvePastedTexturePath(rawPath) {
+  const normalizedPath = normalizePathKey(rawPath)
+  const matchedMod = pathExclusionCandidates.value.find(item => {
+    const root = normalizePathKey(item.mod_path)
+    return root && (normalizedPath === root || normalizedPath.startsWith(`${root}/`))
+  })
+  if (!matchedMod?.mod_path) return null
+
+  const normalizedRoot = String(matchedMod.mod_path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  const normalizedRaw = String(rawPath || '').trim().replace(/\\/g, '/')
+  const relPath = normalizedRaw.slice(normalizedRoot.length).replace(/^\/+/, '')
+  if (!relPath) return null
+  return {
+    mod_path: matchedMod.mod_path,
+    rel_path: relPath,
+  }
 }
 
 
@@ -468,6 +896,12 @@ function formatDuration(ms) {
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function formatDateTime(value) {
+  const ts = Number(value || 0)
+  if (!ts) return '--'
+  return new Date(ts).toLocaleString()
 }
 
 </script>
@@ -481,6 +915,17 @@ function formatDuration(ms) {
 .panel-fade-enter-from,
 .panel-fade-leave-to {
   opacity: 0;
+}
+
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

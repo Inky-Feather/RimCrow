@@ -1,24 +1,44 @@
 import os
 import time
 import threading
-import psutil
+from dataclasses import asdict, dataclass
+
 import ctypes
+import psutil
 from backend.settings import DATA_DIR
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
-from backend.utils.tools import current_ms
-
 from backend.static_page import build_idle_home_html, build_idle_logs_html
 
 
+@dataclass
+class RuntimeSession:
+    """记录当前游戏运行态，供前后端共享最小事实。"""
+
+    profile_id: str = ""
+    state: str = "idle"
+    source: str = "manager"
+    launch_mode: str = "unknown"
+    requested_at: int | None = None
+    deadline_at: int | None = None
+    started_at: int | None = None
+    failure_reason: str = ""
+    message: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 class GameMonitor:
+    LAUNCH_TIMEOUT_SECONDS = 60
+
     def __init__(self, api):
         self.api = api
         self.running = False
         self.game_process_name = "RimWorldWin64.exe" 
         self.is_game_running = False
-        self.launch_profile_id = ""
+        self.runtime_session = RuntimeSession()
         self.resume_url = None
         # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
         self.manual_override_idle = False 
@@ -73,6 +93,96 @@ class GameMonitor:
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    def get_runtime_session(self) -> RuntimeSession:
+        return self.runtime_session
+
+    def get_runtime_session_data(self) -> dict:
+        return self.runtime_session.to_dict()
+
+    def begin_launch(self, profile_id: str, launch_mode: str, *, message: str = "") -> RuntimeSession:
+        now_ms = int(time.time() * 1000)
+        self.runtime_session = RuntimeSession(
+            profile_id=str(profile_id or "").strip(),
+            state="launching",
+            source="manager",
+            launch_mode=str(launch_mode or "unknown").strip() or "unknown",
+            requested_at=now_ms,
+            deadline_at=now_ms + self.LAUNCH_TIMEOUT_SECONDS * 1000,
+            message=message,
+        )
+        return self.runtime_session
+
+    def mark_launch_failed(self, reason: str, message: str = "") -> RuntimeSession:
+        self.runtime_session = RuntimeSession(
+            state="idle",
+            failure_reason=str(reason or "").strip(),
+            message=message,
+        )
+        return self.runtime_session
+
+    def expire_launch_if_needed(self, now_ms: int | None = None) -> RuntimeSession | None:
+        session = self.runtime_session
+        if session.state != "launching" or not session.deadline_at:
+            return None
+
+        current = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        if current < int(session.deadline_at):
+            return None
+
+        return self.mark_launch_failed("launch_timeout", "启动超时，未检测到游戏进程。")
+
+    def _mark_running_from_launch(self) -> tuple[RuntimeSession, dict]:
+        session = self.runtime_session
+        now_ms = int(time.time() * 1000)
+        profile_id = str(session.profile_id or "").strip()
+        self.runtime_session = RuntimeSession(
+            profile_id=profile_id,
+            state="running",
+            source="manager",
+            launch_mode=session.launch_mode,
+            requested_at=session.requested_at,
+            deadline_at=session.deadline_at,
+            started_at=now_ms,
+            message=session.message,
+        )
+        if profile_id:
+            self.api.profile_mgr.update_profile(profile_id, {"last_played_time": now_ms})
+        return self.runtime_session, {
+            "running": True,
+            "profile_id": profile_id,
+            "last_played_time": now_ms,
+            "source": "manager",
+            "runtime_session": self.runtime_session.to_dict(),
+        }
+
+    def _attach_external_runtime(self) -> tuple[RuntimeSession, dict]:
+        now_ms = int(time.time() * 1000)
+        self.runtime_session = RuntimeSession(
+            profile_id="default",
+            state="running",
+            source="external",
+            launch_mode="unknown",
+            started_at=now_ms,
+            message="外部启动，已按 default 接管",
+        )
+        return self.runtime_session, {
+            "running": True,
+            "profile_id": "default",
+            "source": "external",
+            "message": self.runtime_session.message,
+            "runtime_session": self.runtime_session.to_dict(),
+        }
+
+    def mark_running(self) -> tuple[RuntimeSession, dict]:
+        session = self.runtime_session
+        if session.state == "launching" and session.source == "manager" and str(session.profile_id or "").strip():
+            return self._mark_running_from_launch()
+        return self._attach_external_runtime()
+
+    def mark_stopped(self) -> tuple[RuntimeSession, dict]:
+        self.runtime_session = RuntimeSession()
+        return self.runtime_session, {"running": False, "runtime_session": self.runtime_session.to_dict()}
+
     def start(self):
         self.running = True
         EventBus.resume()   # 恢复事件总线
@@ -82,6 +192,18 @@ class GameMonitor:
     def _monitor_loop(self):
         while self.running:
             try:
+                expired_session = self.expire_launch_if_needed()
+                if expired_session:
+                    EventBus.emit(
+                        'game-status-changed',
+                        {
+                            'running': False,
+                            'runtime_session': expired_session.to_dict(),
+                            'failure_reason': expired_session.failure_reason,
+                            'message': expired_session.message,
+                        },
+                    )
+
                 game_found = False
                 # 优化：使用 process_iter 的过滤器减少性能消耗
                 for proc in psutil.process_iter(['name']):
@@ -95,12 +217,7 @@ class GameMonitor:
                     # 通知前端游戏开始了（无论是否静默，前端都需要知道这个状态）
                     payload: dict[str, object] = {'running': True}
                     try:
-                        tracked_profile_id = str(self.launch_profile_id or '').strip()
-                        if tracked_profile_id:
-                            last_played_time = current_ms()
-                            self.api.profile_mgr.update_profile(tracked_profile_id, {"last_played_time": last_played_time})
-                            payload["profile_id"] = tracked_profile_id
-                            payload["last_played_time"] = last_played_time
+                        session, payload = self.mark_running()
                     except Exception as e:
                         logger.warning(f"[Monitor] 记录游戏启动时间失败: {e}", exc_info=True)
                     EventBus.emit('game-status-changed', payload)
@@ -109,8 +226,8 @@ class GameMonitor:
                         
                 elif not game_found and self.is_game_running:
                     self.is_game_running = False
-                    self.launch_profile_id = ""
-                    EventBus.emit('game-status-changed', {'running': False})
+                    session, payload = self.mark_stopped()
+                    EventBus.emit('game-status-changed', payload)
                     
                     # 【核心修复1】：如果用户已经手动唤醒了，不要再去强刷页面！
                     if self.manual_override_idle:
@@ -166,7 +283,7 @@ class GameMonitor:
             try:
                 EventBus.resume()
                 EventBus.emit('app-resuming')
-                EventBus.emit('game-status-changed', {'running': self.is_game_running})
+                EventBus.emit('game-status-changed', {'running': self.is_game_running, 'runtime_session': self.get_runtime_session_data()})
                 logger.info("[Monitor] 浏览器模式已恢复主界面")
             except Exception as e:
                 logger.error(f"[Monitor] Browser resume failed: {e}")

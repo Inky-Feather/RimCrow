@@ -3,17 +3,15 @@
     <div class="flex min-w-0 items-center justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-2">
         <span class="truncate text-sm font-bold text-text-main">{{ mod.mod_name }}</span>
+        <span v-if="storeLabel" class="shrink-0 rounded border border-text-main/10 bg-text-main/5 px-1.5 py-0.5 text-[11px] font-bold text-text-dim">
+          {{ storeLabel }}
+        </span>
         <span v-if="mod.unsupported_source_count > 0" v-tooltip="unsupportedTooltip"
           class="shrink-0 rounded border border-accent-warning/20 bg-accent-warning/10 px-1.5 py-0.5 text-xs font-bold text-accent-warning">
           无效 PNG {{ mod.unsupported_source_count }}
         </span>
-        <span
-          v-for="tag in scaleTags"
-          :key="`${tag.kind}-${tag.label}`"
-          v-tooltip="tag.tooltip"
-          class="shrink-0 rounded border px-1.5 py-0.5 text-xs font-bold"
-          :class="tag.className"
-        >
+        <span v-for="tag in scaleTags" :key="`${tag.kind}-${tag.label}`" v-tooltip="tag.tooltip"
+          class="shrink-0 rounded border px-1.5 py-0.5 text-xs font-bold" :class="tag.className" >
           {{ tag.text }}
         </span>
       </div>
@@ -24,11 +22,13 @@
           <span class="mx-2 opacity-40">|</span>
           <span>现有 DDS {{ mod.output_total_count || 0 }}</span>
         </div>
-        <button
-          class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-text-main/10 hover:text-text-main"
-          v-tooltip="mod.mod_path || '打开模组路径'"
-          @click.stop="openModPath"
-        >
+        <button v-if="mod.package_id" class="rounded-lg border px-1 py-0.5 text-xs font-bold transition-colors"
+          :class="isExcluded ? 'border-accent-danger/30 bg-accent-danger/10 text-accent-danger' : 'border-text-main/10 bg-text-main/5 text-text-dim hover:text-text-main'"
+          @click.stop="emit('toggle-mod-exclusion', mod)" >
+          {{ isExcluded ? '已排除' : '排除模组' }}
+        </button>
+        <button class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-text-main/10 hover:text-text-main"
+          @click.stop="openModPath" v-tooltip="mod.mod_path || '打开模组路径'" >
           <FolderOpen class="w-4 h-4" />
         </button>
       </div>
@@ -58,8 +58,8 @@
       <div class="truncate"><span class="font-bold text-text-main">DDS</span> {{ formatBytes(mod.output_total_bytes) }} / {{ mod.output_total_count || 0 }}张</div>
       <div class="truncate"><span class="font-bold text-text-main">综合体积占比</span> {{ formatPercent(mod.combined_bytes_share_pct || 0) }}</div>
       <div class="truncate"><span class="font-bold text-text-main">显存预估</span> {{ formatBytes(mod.source_vram_bytes_est) }} → {{ formatBytes(mod.output_vram_bytes_est) }}</div>
-    
     </div>
+    <div class="truncate text-[11px] text-text-dim/70">{{ mod.mod_path }}</div>
   </div>
 </template>
 
@@ -71,8 +71,11 @@ import { useAppStore } from '../../stores/appStore'
 const props = defineProps({
   mod: { type: Object, required: true },
   viewMode: { type: String, default: 'ALL' },
-  maxBytes: { type: Number, default: 1 }
+  maxBytes: { type: Number, default: 1 },
+  isExcluded: { type: Boolean, default: false },
 })
+
+const emit = defineEmits(['toggle-mod-exclusion'])
 
 const appStore = useAppStore()
 
@@ -85,6 +88,14 @@ const unsupportedTooltip = computed(() => {
     '以下伪装 PNG 已自动跳过：',
     ...preview.map(item => `${item.rel_path}${item.reason ? ` - ${item.reason}` : ''}`),
   ].join('\n')
+})
+
+const storeLabel = computed(() => {
+  const store = String(props.mod?.store || '').trim().toLowerCase()
+  if (store === 'workshop') return 'Steam'
+  if (store === 'local') return 'Local'
+  if (store === 'self') return 'Manager'
+  return store ? store : ''
 })
 
 const scaleTags = computed(() => {

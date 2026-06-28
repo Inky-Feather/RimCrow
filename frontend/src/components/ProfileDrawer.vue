@@ -66,12 +66,14 @@
                     </div>
                     <!-- 操作组 -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button @click.stop="openExportDialog(p)" v-tooltip="'导出环境模组包'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-special hover:bg-accent-special/15"><Package class="size-3.5" /></button>
-                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15" :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
+                      <button @click.stop="openExportDialog(p)" v-tooltip="'导出环境模组包'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-special hover:bg-accent-special/15" 
+                        :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'"><Package class="size-3.5" /></button>
+                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15" 
+                        :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
                       <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="'删除环境'" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
                       <button @click.stop="handleEdit(p)" v-tooltip="'编辑环境'" class="p-1.5 rounded-lg hover:bg-text-main/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
                       <button @click.stop="handlePlay(p)" v-tooltip="'运行环境'" class="p-1.5 rounded-lg text-text-dim  transition-all hover:text-accent-success hover:bg-accent-success/20"
-                        :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none'"><Play class="size-3.5" />
+                        :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'"><Play class="size-3.5" />
                       </button>
                     </div>
                   </div>
@@ -83,6 +85,7 @@
                     <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="'当前环境会使用创意工坊模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">工坊模组</span>
                     <span v-if="p.use_self_mods" v-tooltip="'当前环境会使用管理器模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-text-dim/10 ">管理器模组</span>
                     <span v-if="p.id === 'default'" v-tooltip="'默认环境'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-text-dim/10 ">默认</span>
+                    <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" v-tooltip="runtimeProfileLabel" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/15 text-accent-primary border border-text-dim/10 ">运行中</span>
                   </div>
                   
                   <!-- 路径 -->
@@ -240,6 +243,13 @@ const canUseSteamLaunch = computed(() => detectedIsSteam.value)
 const showWorkshopSwitch = computed(() => !!appStore.settings.workshop_mods_path)
 
 const showSteamVersionBadge = (profile) => !!profile?.is_steam
+const runtimeProfileId = computed(() => String(appStore.runtimeSession?.profile_id || '').trim())
+const runtimeProfileLabel = computed(() => {
+  if (appStore.runtimeSession?.source === 'external') {
+    return '当前游戏由外部启动，后端已按 default 环境接管。'
+  }
+  return '当前游戏正在按这个环境运行。'
+})
 const showWorkshopRuntimeBadge = (profile) => {
   const caps = profile?.runtime_capabilities || {}
   // 这里的徽标语义不是“字段是否勾选”，而是“当前运行时 Workshop 会不会真正参与”：

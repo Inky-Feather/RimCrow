@@ -46,7 +46,7 @@
               <span class="font-bold shrink-0" :class="taskAccentText(activeTask)">{{ taskPercent(activeTask) }}%</span>
               <span class="shrink-0 text-text-main/75">{{ taskTitle(activeTask) }}</span>
               <span class="truncate max-w-90 text-text-dim" :title="taskMessage(activeTask)">{{ taskMessage(activeTask) }}</span>
-              <span v-if="taskExtra(activeTask)" class="shrink-0 text-text-main/50 text-[0.62rem]">{{ taskExtra(activeTask) }}</span>
+              <span v-if="taskExtra(activeTask)" class=" text-text-main/50 text-[0.62rem]">{{ taskExtra(activeTask) }}</span>
             </div>
 
             <div v-if="taskStore.tasks.length > 1" class="shrink-0 rounded-full px-1.5 py-0.5 bg-text-main/8 text-xs text-text-main/70 font-bold">
