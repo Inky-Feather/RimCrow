@@ -651,6 +651,7 @@ const buildOperations = () => {
       operations.push({
         action: actionMap[item.path] || 'disable',
         target_path: item.path,
+        target_path_hash: item.path_hash,
         keep_id: group.package_id,
         keep_path_hash: winner.path_hash,
       })
@@ -750,7 +751,7 @@ const handleUnsubscribe = async (mod) => {
     { type: 'warning', confirmText: '确认取消订阅' }
   )
   if (!ok) return
-  await appStore.unsubscribeMod([mod.workshop_id])
+  await appStore.unsubscribeWorkshopIds([mod.workshop_id])
 }
 </script>
 

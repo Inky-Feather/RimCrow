@@ -125,6 +125,28 @@ export const useOrderStore = defineStore('order', () => {
     modStore.fetchAndCacheGhostMods(modStore.activeIds)
     toast.success("已应用Mod序列")
   }
+  // 保存停用列表顺序
+  const saveInactiveOrder = async () => {
+    const modStore = useModStore()
+    if (!window.pywebview) return false
+    appStore.isLoading = true
+    try {
+      // Temp 列表如果有关闭软件前未处理的，归入 Inactive 末尾保存
+      const finalInactive = [...modStore.inactiveIds, ...modStore.tempIds]
+      // 过滤掉已经在 Active 里的防止出错
+      const activeSet = new Set(modStore.activeIds.map(id=>id.toLowerCase()))
+      const cleanInactive = finalInactive.filter(id => !activeSet.has(id.toLowerCase()))
+      const res = await window.pywebview.api.load_order_inactive_save(cleanInactive)
+      if (checkResult(res, "保存停用列表顺序")) {
+        modStore.savedInactiveIds = [...cleanInactive] || []
+        modStore.updateInactiveIds()
+        return true
+      }
+    } finally {
+      appStore.isLoading = false
+    }
+    return false
+  }
   // 保存Mod加载顺序
   const saveLoadOrder = async () => {
     const modStore = useModStore()
@@ -141,15 +163,13 @@ export const useOrderStore = defineStore('order', () => {
       const res = await window.pywebview.api.load_order_save(modStore.activeIds, modStore.isDirty)
       if (checkResult(res, "保存Mod加载顺序", true)) {
         modStore.savedActiveIds = [...modStore.activeIds] || []
+        await saveInactiveOrder()
         modStore.updateInactiveIds()
         // 保存始终写当前环境；这里仅刷新当前正在查看的备份列表，不强行切换筛选环境。
         getBackups(backupProfileId.value || appStore.settings.current_profile_id || null)
         modStore.updateModTime() // 更新Mod最后操作时间
         return true
       }
-    } catch (e) {
-      console.error("保存Mod序列异常:", e)
-      toast.error(`保存Mod序列异常: \n${e.message}`)
     } finally {
       appStore.isLoading = false
     }
@@ -207,7 +227,7 @@ export const useOrderStore = defineStore('order', () => {
       return false
     }
 
-    return await appStore.subscribeMod(finalWorkshopIds)
+    return await appStore.subscribeWorkshopIds(finalWorkshopIds)
   }
   // 打开备份目录
   const openBackupPath = async () => {
@@ -223,6 +243,7 @@ export const useOrderStore = defineStore('order', () => {
         today: payload.today || [],
         earlier: payload.earlier || [],
         other: payload.other || [],
+        last_backup: payload.last_backup || [],
       }
       // 更新本地 store
       backups.value = files
@@ -242,7 +263,7 @@ export const useOrderStore = defineStore('order', () => {
   return {
     backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId,
     backupNameMap, missingBackupMods, missingBackupWorkshopIds, missingBackupPackageIds, missingBackupSubscribableCount,
-    getLoadOrder, getBackupOrder, applyBackup, saveLoadOrder, exportLoadOrder,
+    getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
     getFileOrder, subscribeMissingBackupMods, setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups,
   }
 })

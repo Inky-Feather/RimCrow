@@ -404,11 +404,11 @@ const openWebUrl = (url, on_steam=true) => {
 }
 // 订阅模组
 const handleSubscribe = (workshop_ids) => {
-  appStore.subscribeMod(workshop_ids)
+  appStore.subscribeWorkshopIds(workshop_ids)
 }
 // 取消订阅
 const handleUnsubscribe = (workshop_ids) => {
-  appStore.unsubscribeMod(workshop_ids)
+  appStore.unsubscribeWorkshopIds(workshop_ids)
 }
 // 下载模组
 const handleDownload = (workshop_ids) => {

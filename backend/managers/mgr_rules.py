@@ -3,16 +3,25 @@ import json
 import re
 import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
+import uuid
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 from backend.database.dao import ModDAO, GroupDAO
-from backend.database.models_ext import WorkshopMeta 
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms
 from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
+
+BUILTIN_RULES = {
+    "rmm.companion": {
+        "loadTop": {"value": True, "comment": "管理器伴生工具，必须极早期加载"},
+        "loadAfter": {
+            "brrainz.harmony": {"name": ["Harmony"], "comment": "必须在 Harmony 之后加载"}
+        }
+    },
+}
 
 SPECIAL_WEIGHTS = {
     'brrainz.harmony': 0,
@@ -30,11 +39,12 @@ class RuleActionType:
     LOAD_AFTER = "load_after"       # 必须在某ID后
     LOAD_BEFORE = "load_before"     # 必须在某ID前
     TOP = "top"                     # 置顶 (权重设为0)
-    BOTTOM = "bottom"               # 置底 (权重设为1000)
+    BOTTOM = "bottom"               # 置底 (权重设为10000)
     
 class RuleManager:
     def __init__(self, context: ProfileContext):
         # 内存中的规则缓存
+        self.builtin_rules = BUILTIN_RULES # 挂载内置规则
         self.community_rules: Dict[str, Any] = {}
         self.community_rules_update_time: int = 0
         self.user_mod_rules: Dict[str, Any] = {}
@@ -396,6 +406,7 @@ class RuleManager:
     
     def get_source_priority(self, source_type: str) -> int:
         """获取来源的优先级索引 (越小越优先)"""
+        if source_type == "builtin":  return -1  # 内置规则 -1 永远比列表中的索引 (0, 1, 2...) 小，绝对优先！
         order = self.settings.get("rule_source_priority", ["user", "native", "community", "dynamic"])
         try:
             return order.index(source_type)
@@ -582,6 +593,23 @@ class RuleManager:
                     source_type="workshop",
                     source_name=source_name,
                 )
+        
+        # 6. Builtin Rules (内置规则)
+        builtin = self.builtin_rules.get(mid_l)
+        if builtin:
+            for t, info in builtin.get("loadAfter", {}).items():
+                _merge_rule("load_after", t, "builtin", "系统内置规则", detail=info)
+            for t, info in builtin.get("loadBefore", {}).items():
+                _merge_rule("load_before", t, "builtin", "系统内置规则", detail=info)
+            for t, info in builtin.get("incompatibleWith", {}).items():
+                _merge_rule("incompatible", t, "builtin", "系统内置规则", detail=info)
+            
+            isTop = builtin.get("loadTop", {}).get("value") 
+            isBottom = builtin.get("loadBottom", {}).get("value") 
+            if isTop:
+                _apply_weight_override("top", "builtin", builtin.get("loadTop", {}).get("comment"))
+            elif isBottom:
+                _apply_weight_override("bottom", "builtin", builtin.get("loadBottom", {}).get("comment"))
 
         # 5. 格式化输出
         final_result = {
@@ -603,12 +631,22 @@ class RuleManager:
         # else:
         #     final_result["weight_override"] = []
         
+        
         # [修改] 封装统一的 weight_info 供 Sorter 无脑读取
         abs_override = rules_map["weight_override"]
+        # 统一计算 final_weight
+        final_weight = base_weight + weight_shift
+        abs_type = abs_override["type"] if abs_override else None
+        if abs_type == "top":
+            final_weight = 0
+        elif abs_type == "bottom":
+            final_weight = 10000
+        
         final_result["weight_info"] = {
             "base_weight": base_weight,
             "weight_shift": weight_shift,
-            "absolute_type": abs_override["type"] if abs_override else None,
+            "final_weight": final_weight,
+            "absolute_type": abs_type,
             "absolute_source": abs_override["source"]["type"] if abs_override else None
         }
         
@@ -651,13 +689,15 @@ class RuleManager:
 
     def create_export_bundle(self, dynamic_rule_ids: List[str]):
         """生成规则包"""
+        from backend.database.models import ModInterlock
         # 1. 过滤要导出的动态规则，如果 ids 为空列表，则不导出任何动态规则？
         # 或者定义：如果 ids 为 None，导出所有启用规则
         if dynamic_rule_ids is None:
             export_dynamic = [r for r in self.user_dynamic_rules if r.get('enabled', True)]
         else:
             export_dynamic = [r for r in self.user_dynamic_rules if r['rule_id'] in dynamic_rule_ids]
-            
+        # 获取所有的联锁组
+        all_interlocks = list(ModInterlock.select().dicts())
         # 2. 这里的策略是全量导出 UserModData 和 Groups，因为规则可能依赖这些环境
         return {
             "version": __version__,
@@ -669,13 +709,14 @@ class RuleManager:
             },
             "environment": {
                 "user_mod_data": ModDAO.get_all_user_data(),
-                "groups": GroupDAO.get_all_groups_structured()
+                "groups": GroupDAO.get_all_groups_structured(),
+                "interlocks": all_interlocks
             }
         }
 
     def process_import_bundle(self, bundle: dict):
         """导入规则包"""
-        from backend.database.models import db, UserModData, GroupData, GroupMod, ModAsset
+        from backend.database.models import db, UserModData, GroupData, GroupMod, ModAsset, ModInterlock
         # 引入 chunked 用于分批处理大量数据
         from peewee import chunked
 
@@ -689,7 +730,6 @@ class RuleManager:
                 # 1. 规则合并 (内存操作)
                 # =================================================
                 self.user_mod_rules.update(rules.get("mod_rules", {}))
-                
                 # 动态规则去重合并
                 existing_ids = {r['rule_id'] for r in self.user_dynamic_rules}
                 for r in rules.get("dynamic_rules", []):
@@ -698,7 +738,7 @@ class RuleManager:
                         r['rule_id'] = f"{r['rule_id']}_imp_{int(datetime.datetime.now().timestamp())}"
                         r['name'] += " (Imported)"
                     self.user_dynamic_rules.append(r)
-
+                
                 # =================================================
                 # 2. UserModData 批量导入 (备注、标签等)
                 # =================================================
@@ -707,12 +747,24 @@ class RuleManager:
                     # 准备批量数据
                     batch_data = []
                     valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
+                    # ==== 旧链表兼容池 ====
+                    legacy_locks = {} # { mod_id: { prev: xxx, next: yyy } }
                     for item in user_data_list:
                         # 清洗数据，只保留有效字段
                         clean_item={}
                         for k in list(item.keys()):
                             if k in valid_field_names:
                                 clean_item[k] = item[k]
+                        # 拦截旧版链表数据
+                        pid = item.get('mod_id', '').lower()
+                        if pid and ('lock_previous_mod' in item or 'lock_next_mod' in item):
+                            prev_id = item.get('lock_previous_mod')
+                            next_id = item.get('lock_next_mod')
+                            if prev_id or next_id:
+                                legacy_locks[pid] = {
+                                    'prev': prev_id.lower() if prev_id else None,
+                                    'next': next_id.lower() if next_id else None
+                                }
                         # 移除 None 值，防止覆盖本地已有数据（实现 Merge 逻辑）
                         # 但 batch_upsert 通常是全量覆盖或忽略，为了实现“仅更新非空值”比较复杂
                         # 这里采用策略：直接 Upsert。导入包通常代表“我想恢复成这样”。
@@ -723,23 +775,60 @@ class RuleManager:
                     # 注意：ModDAO.batch_upsert_user_data 需要支持部分字段更新
                     if batch_data:
                         ModDAO.batch_upsert_user_data(batch_data)
+                
+                    # ==== 将收集到的旧链表转换为新数组 ====
+                    if legacy_locks:
+                        visited = set()
+                        chains_to_create = []
+                        for mid in list(legacy_locks.keys()):
+                            if mid in visited: continue
+                            # 回溯找头
+                            curr = mid
+                            path_visited = set()
+                            while legacy_locks.get(curr) and legacy_locks[curr]['prev']:
+                                prev_id = legacy_locks[curr]['prev']
+                                if prev_id in path_visited: break
+                                path_visited.add(prev_id)
+                                curr = prev_id
+                                
+                            head = curr
+                            chain = []
+                            curr = head
+                            path_visited = set()
+                            while curr:
+                                if curr in path_visited: break
+                                path_visited.add(curr)
+                                chain.append(curr)
+                                visited.add(curr)
+                                curr = legacy_locks.get(curr, {}).get('next')
+                                
+                            if len(chain) > 1:
+                                chains_to_create.append(chain)
+                        
+                        # 写入新表并为 batch_data 注入 interlock_id
+                        for chain in chains_to_create:
+                            new_id = uuid.uuid4().hex
+                            ModInterlock.create(id=new_id, chain=chain)
+                            # 给准备 upsert 的 batch_data 打上标记
+                            for cd in batch_data:
+                                if cd['mod_id'].lower() in chain:
+                                    cd['interlock_id'] = new_id
+                    
+                    # 调用 DAO 写入
+                    if batch_data:
+                        ModDAO.batch_upsert_user_data(batch_data)
 
                 # =================================================
                 # 3. 分组数据导入 (直接 DB 操作)
                 # =================================================
                 imported_groups = env.get("groups", [])
-                
                 # 3.1 建立本地分组名称映射 {name: group_id}
                 local_group_map = {g.name: g.group_id for g in GroupData.select()}
-                
                 group_mods_to_insert = [] # 待插入的关联关系
-                
                 for g in imported_groups:
                     g_name = g.get('name')
                     mod_ids = g.get('mod_ids', [])
-                    
                     if not g_name: continue
-
                     # 确定 Group ID (存在则复用，不存在则创建)
                     if g_name in local_group_map:
                         target_gid = local_group_map[g_name]
@@ -748,39 +837,42 @@ class RuleManager:
                         new_group = GroupDAO.create_group(g_name, g.get('color', '#ffffff')) # type: ignore
                         target_gid = new_group.group_id
                         local_group_map[g_name] = target_gid # 更新映射
-
                     # 收集该组的 Mod 关联
                     for mid in mod_ids:
                         group_mods_to_insert.append({
                             'group_id': target_gid,
                             'mod_id': mid
                         })
-
                 # 3.2 批量插入分组关联
                 if group_mods_to_insert:
                     # 【关键步骤】确保 UserModData 存在
                     # 因为 GroupMod 有外键指向 UserModData
                     # 如果导入包里的分组包含了一些 UserModData 里没有的 Mod (比如没备注也没标签的纯分组Mod)
                     # 直接插入 GroupMod 会报错。所以先插入“存根(Stub)”。
-                    
                     stubs = [{'mod_id': item['mod_id']} for item in group_mods_to_insert]
                     # 批量插入存根，忽略已存在的
                     for batch in chunked(stubs, 500):
                         UserModData.insert_many(batch).on_conflict_ignore().execute()
-
                     # 3.3 插入 GroupMod 关联 (使用 Ignore 避免重复添加报错)
                     for batch in chunked(group_mods_to_insert, 500):
                         GroupMod.insert_many(batch).on_conflict_ignore().execute()
 
+                # =================================================
+                # 4. 联锁组导入
+                # =================================================
+                imported_interlocks = env.get("interlocks", [])
+                if imported_interlocks:
+                    # 使用 insert_many().on_conflict_replace()，如果 ID 重复直接覆盖
+                    for batch in chunked(imported_interlocks, 100):
+                        ModInterlock.insert_many(batch).on_conflict_replace().execute()
+                
             # 事务结束，保存文件
             self.save_user_rules()
             logger.info("Import bundle processed successfully.")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to process import bundle: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Failed to process import bundle: {e}", exc_info=True)
             # 抛出异常让上层 API 捕获并返回错误信息给前端
             raise Exception(f"Import Error: {str(e)}")
     

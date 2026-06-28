@@ -125,14 +125,23 @@
           <div class="h-px flex-1 bg-accent-warn/20"></div>
         </div>
         <div class="space-y-1">
-          <BackupItem 
-            v-for="item in parsedData.import" 
-            :key="item.path"
-            :item="item"
+          <BackupItem v-for="item in parsedData.import" 
+            :key="item.path" :item="item"
             :is-selected="selectedPath === item.path"
-            @select="selectItem"
-            @load="handleLoad"
-            @remove="handleRemove"
+            @select="selectItem" @load="handleLoad" @remove="handleRemove"
+          />
+        </div>
+      </section>
+
+      <section v-if="parsedData.last_backup.length > 0">
+        <div class="px-2 mb-2 text-xs font-bold text-accent-warn uppercase opacity-80 flex items-center gap-2">
+          <span>最新备份</span>
+          <div class="h-px flex-1 bg-accent-warn/20"></div>
+        </div>
+        <div class="space-y-1">
+          <BackupItem :key="parsedData.last_backup[0]?.path" :item="parsedData.last_backup[0]"
+            :is-selected="selectedPath === parsedData.last_backup[0]?.path"
+            @select="selectItem" @load="handleLoad" @remove="handleRemove"
           />
         </div>
       </section>
@@ -315,7 +324,7 @@ const selectedBackupProfileId = computed({
 const backupProfileOptions = computed(() => {
   const profiles = profileStore.profiles || []
   return profiles.map(profile => ({
-    label: profile.id === currentProfileId.value ? `${profile.name} · 当前` : profile.name,
+    label: profile.id === currentProfileId.value ? `* ${profile.name}` : profile.name,
     value: profile.id,
     desc: profile.msg || profile.description || profile.user_data_path || profile.id,
   }))
@@ -438,7 +447,8 @@ const parsedData = computed(() => {
     today: process(rawData.value.today || [], 'today'),
     earlier: process(rawData.value.earlier || [], 'earlier'),
     other: process(rawData.value.other || [], 'other'),
-    import: process(rawData.value.import || [], 'import')
+    import: process(rawData.value.import || [], 'import'),
+    last_backup: process(rawData.value.last_backup || [], 'last_backup'),
   }
 })
 // 检查所有备份列表是否为空

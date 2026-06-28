@@ -12,6 +12,7 @@
 │   ├── ·[managers]
 │   │   ├──  __init__.py
 │   │   ├──  mgr_ai.py
+│   │   ├──  mgr_ai_tools.py
 │   │   ├──  mgr_download.py
 │   │   ├──  mgr_files.py
 │   │   ├──  mgr_game.py
@@ -71,6 +72,7 @@
 │   │   │   │   └──  HoverPanel.vue
 │   │   │   │   
 │   │   │   ├── ·[utils]
+│   │   │   │   ├──  AiDiagnosticSidebar.vue
 │   │   │   │   ├──  AppLogPanel.vue
 │   │   │   │   ├──  DependencyGraph.vue
 │   │   │   │   ├──  FocusTabs.vue
@@ -81,10 +83,12 @@
 │   │   │   │   ├──  LuxBreatheIcon.vue
 │   │   │   │   ├──  ModItem.vue
 │   │   │   │   ├──  ProfileSwitcher.vue
-│   │   │   │   └──  SegmentedTabs.vue
+│   │   │   │   ├──  SegmentedTabs.vue
+│   │   │   │   └──  UnifiedLogPanel.vue
 │   │   │   │   
 │   │   │   ├── ·[workspace]
 │   │   │   │   ├── ·[components]
+│   │   │   │   ├── ·[utils]
 │   │   │   │   ├── ·[views]
 │   │   │   │   └──  WorkspaceOverlay.vue
 │   │   │   │   
@@ -159,6 +163,7 @@
 │   
 ├── ·[mods]
 ├── ·[test]
+├── ·[toolmods]
 ├── ·[tools]
 │   ├── ·[steam_agent]
 │   └── ·[steamcmd]

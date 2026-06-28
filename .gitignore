@@ -16,12 +16,13 @@ downloads/
 backups/
 logs/
 test/
-*.db
-*.db-*
-*.log
 steamcmd/
 steam_agent/
 mods/
+toolmods/
+*.db
+*.db-*
+*.log
 
 # IDE & System
 .vscode/

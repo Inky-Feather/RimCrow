@@ -291,7 +291,6 @@ const distributeEvenly = () => {
   const totalW = containerRef.value.clientWidth
   const count = visibleColumns.value.length
   if (count === 0) return
-  
   const avg = totalW / count
   colWidths.value = new Array(count).fill(avg)
 }
@@ -336,14 +335,11 @@ const startResize = (index, e) => {
 // 拖动中
 const onMouseMove = (e) => {
   if (!resizeState.isDragging) return
-  
   const idx = resizeState.activeIndex
   const delta = e.clientX - resizeState.startX
-  
   // 理论新宽度
   let newLeft = resizeState.startLeftW + delta
   let newRight = resizeState.startRightW - delta
-  
   // 约束检查
   if (newLeft < MIN_WIDTH) {
     const diff = MIN_WIDTH - newLeft
@@ -356,7 +352,6 @@ const onMouseMove = (e) => {
     newRight = MIN_WIDTH
     newLeft -= diff
   }
-  
   // 更新数组
   colWidths.value[idx] = newLeft
   colWidths.value[idx + 1] = newRight
@@ -370,7 +365,6 @@ const stopResize = () => {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
-
 // 处理更新弹窗
 function handleUpdate(changelog) {
   // updateModal.value.show(changelog); // 注意要加 .value
@@ -390,7 +384,6 @@ onMounted(() => {
   }
   // 确保数据初始化
   appStore.initialize()
-
   // 监听后端传递过来的升级上下文
   watch(() => appStore.upgradeContext, (ctx) => {
     if (ctx && ctx.version_changed) {
@@ -410,7 +403,6 @@ onMounted(() => {
         const newTotalWidth = entry.contentRect.width
         // 计算当前记录的总宽
         const currentTotalWidth = colWidths.value.reduce((a, b) => a + b, 0)
-        
         // 如果是首次加载或者误差过大，或者列数对不上，重置
         if (currentTotalWidth === 0 || colWidths.value.length !== visibleColumns.value.length) {
           distributeEvenly()
@@ -428,6 +420,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  orderStore.saveInactiveOrder();  // 退出前先保存停用列表顺序
   if (resizeObserver) resizeObserver.disconnect()
   stopResize()
 })

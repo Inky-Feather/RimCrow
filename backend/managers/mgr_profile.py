@@ -25,6 +25,7 @@ class ProfileContext:
     user_data_path: str
     use_workshop_mods: bool
     use_self_mods: bool
+    inactive_mods_order: list = field(default_factory=list)
     
     is_healthy: bool = True
     health_report: dict = field(default_factory=dict) 
@@ -97,6 +98,7 @@ class ProfileManager:
         'use_workshop_mods', 
         'use_self_mods', 
         'run_commands',
+        'inactive_mods_order',
         'last_played_time'
     }
     
