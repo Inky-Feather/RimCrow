@@ -1,135 +1,128 @@
 <template>
   <div class="relative h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
     <RimHeader/>
-    <!-- 主工作区 (flex-1) -->
+    
+    <!-- 主工作区 -->
     <div class="flex-1 flex flex-col min-h-0 relative">
-      <!-- 容器：深色背景，添加内边距 制造悬浮感 -->
-      <div ref="containerRef" class="flex flex-1 w-full overflow-hidden relative ">
+      <!-- 容器 -->
+      <div ref="containerRef" class="flex flex-1 w-full overflow-hidden relative">
         
-        <!-- ================= COLUMN 1: 详情 (Details) ================= -->
-        <div class="h-full p-1 relative transition-opacity min-w-[230px]"
-            :style="{ width: colWidths[0] + 'px' }">
-            <div class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
+        <!-- 遍历 visibleColumns，同时根据 index 获取 colWidths -->
+        <template v-for="(col, index) in visibleColumns" :key="col.id">
+          
+          <!-- 列容器 -->
+          <div class="h-full p-1 transition-opacity relative" :style="{ width: (colWidths[index] || 0) + 'px' }" >
+            <!-- 1. 详情 (Details) -->
+            <div v-if="col.type === 'details'" class="h-full rounded-2xl overflow-hidden bg-bg-surface/40 backdrop-blur-sm border border-white/5 shadow-2xl">
               <ModDetails />
             </div>
-        </div>
 
-        <!-- 分割线 1 -->
-        <Resizer :active="resizeState.activeIndex === 0" 
-                @mousedown="startResize(0, $event)" />
+            <!-- 2. 待选库 (Library) -->
+            <div v-else-if="col.type === 'library'" class="h-full">
+               <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
+            </div>
 
+            <!-- 3. 启用/排序 (Active) - 包含规则编辑器逻辑 -->
+            <div v-else-if="col.type === 'active'" class="h-full">
+               <ModList v-model="modStore.activeIds" title="启用" :hasSidebar="true" listColor="success" listId="active" />
+            </div>
 
-        <!-- ================= COLUMN 2: 待选库 (Library) ================= -->
-        <div class="h-full p-1 transition-opacity" :style="{ width: colWidths[1] + 'px' }">
-            <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
-        </div>
+            <!-- 4. 辅助/分组 (Sidebar Tabs) -->
+            <div v-else-if="col.type === 'sidebar'" class="h-full">
+               <!-- 这里保留原有的逻辑：如果有规则ID，显示编辑器，否则显示列表 -->
+               <ModRuleEditor v-if="ruleStore.currentId" title="规则" listColor="warn" />
+              <div v-else class="h-full flex flex-col relative">
+                <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
+                  <Transition
+                    enter-active-class="transition-opacity duration-300 ease-out"
+                    enter-from-class="opacity-0"
+                    enter-to-class="opacity-100"
+                    leave-active-class="transition-opacity duration-300 ease-in"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0">
+                    <KeepAlive>
+                      <ModList v-if="activeTab === tabs[0]" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                      <GroupList v-else-if="activeTab === tabs[1]" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                      <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                    </KeepAlive>
+                  </Transition>
+                </div>
+                
+                <!-- 标签页切换 -->
+                <div class="absolute left-5.5 top-0.5 p-0.5 h-8 flex text-sm font-bold">
+                  <!-- <FocusTabs v-model="activeTab" :tabs="tabs" :blurAmount="3" borderColor="#059669" class="top-0 opacity-100"/> -->
+                  <SegmentedTabs v-model="activeTab" :options="tabs" />
+                </div>
 
-        <!-- 分割线 2 -->
-        <Resizer :active="resizeState.activeIndex === 1" 
-                @mousedown="startResize(1, $event)" />
+                <!-- 底部按钮组 -->
+                <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
+            
+                  <!-- 刷新按钮 -->
+                  <button :class="{'scan': appStore.scanProgress.scanning}"
+                    class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
+                          text-sm text-gray-300 font-bold uppercase tracking-wider
+                          hover:bg-white/10 hover:text-white hover:border-white/20
+                          active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
+                    @click="modStore.scanMods()"
+                    :disabled="appStore.scanProgress.scanning"
+                  >
+                    <!-- <svg v-if="appStore.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
+                    <span >{{ appStore.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
+                  </button>
+                  <!-- 自动排序按钮 -->
+                  <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
+                          flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
+                          @click="modStore.autoSortMods()"
+                  >
+                    <span >自动排序</span>
+                  </button>
 
-        <!-- ================= COLUMN 3: 启用/排序 (Active) ================= -->
-        <div class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
-              <ModList v-model="modStore.activeIds" title="启用" :hasSidebar=true listColor="success" listId="active" />
-        </div>
+                  <!-- 保存按钮 (Dirty 状态提示) -->
+                  <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
+                          flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
+                    :class="[modStore.isDirty 
+                        ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
+                        : 'bg-accent-primary/60 text-black hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
+                    ]"
+                    @click="orderStore.saveLoadOrder()"
+                  >
+                    <!-- Dirty 状态下的流光效果 -->
+                    <div v-if="modStore.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
+                    
+                    <svg v-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+                    <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    
+                    <span>{{ modStore.isDirty ? '保存变动' : '保存' }}</span>
+                  </button>
 
-        <!-- 分割线 3 -->
-        <Resizer :active="resizeState.activeIndex === 2" 
-                @mousedown="startResize(2, $event)" />
-        <div v-if="ruleStore.currentId" class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
-          <ModRuleEditor title="Rule" listColor="warn" />
-        </div>
+                  <!-- 启动游戏 -->
+                  <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
+                          shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
+                          transition-all duration-200 uppercase tracking-widest
+                          hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+                    @click="appStore.launchGame()"
+                  >
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
+                    启动游戏
+                  </button>
+
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 动态分割线 -->
+          <Resizer 
+            v-if="index < visibleColumns.length - 1" 
+            :active="resizeState.activeIndex === index" 
+            @mousedown="startResize(index, $event)" 
+          />
+
+        </template>
         
-
-        <!-- ================= COLUMN 4: 辅助/分组 (Tabs) ================= -->
-        <div v-else class="h-full p-1 flex flex-col transition-opacity relative" :style="{ width: colWidths[3] + 'px' }">
-          <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
-            <Transition
-              enter-active-class="transition-opacity duration-300 ease-out"
-              enter-from-class="opacity-0"
-              enter-to-class="opacity-100"
-              leave-active-class="transition-opacity duration-300 ease-in"
-              leave-from-class="opacity-100"
-              leave-to-class="opacity-0">
-              <KeepAlive>
-
-                <ModList v-if="activeTab === tabs[0]" v-model="modStore.tempIds" title="Temp" listColor="warning" listId="temp"
-                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                <GroupList v-else-if="activeTab === tabs[1]" v-model="groupStore.groupList" title="Groups" listColor="special" 
-                  class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-
-                
-                
-              </KeepAlive>
-            </Transition>
-          </div>
-
-          <!-- 标签页切换 -->
-          <div class="absolute left-7 top-2.5 flex text-sm font-bold ">
-            <FocusTabs v-model="activeTab" :tabs="tabs" 
-            :blurAmount="3" borderColor="#059669" class=" top-0 opacity-100"
-            />
-          </div>
-          
-          <!-- 按钮组 -->
-          <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
-            
-            <!-- 刷新按钮 -->
-            <button :class="{'scan': appStore.scanProgress.scanning}"
-              class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
-                    text-sm text-gray-300 font-bold uppercase tracking-wider
-                    hover:bg-white/10 hover:text-white hover:border-white/20
-                    active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
-              @click="modStore.scanMods()"
-              :disabled="appStore.scanProgress.scanning"
-            >
-              <!-- <svg v-if="appStore.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
-              <span >{{ appStore.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
-            </button>
-            
-            <!-- 自动排序按钮 -->
-            <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
-                    flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                    @click="modStore.autoSortMods()"
-            >
-              <span >自动排序</span>
-            </button>
-
-            <!-- 保存按钮 (Dirty 状态提示) -->
-            <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
-                    flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-              :class="[modStore.isDirty 
-                  ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
-                  : 'bg-accent-primary/60 text-black hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
-              ]"
-              @click="orderStore.saveLoadOrder()"
-            >
-              <!-- Dirty 状态下的流光效果 -->
-              <div v-if="modStore.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
-              
-              <svg v-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-              <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              
-              <span>{{ modStore.isDirty ? '保存变动' : '保存' }}</span>
-            </button>
-
-            <!-- 启动游戏 -->
-            <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-white text-mdfont-bold 
-                    shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
-                    transition-all duration-200 uppercase tracking-widest
-                    hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-              @click="appStore.launchGame()"
-            >
-              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
-              启动游戏
-            </button>
-          </div>
-
-        </div>
-
       </div>
-
     </div>
 
     <!-- 列表对比抽屉 -->
@@ -145,11 +138,6 @@
         <div v-if="appStore.uiState.showDiffDrawer" 
           class="fixed inset-y-8 top-18 left-0 w-[50vw] z-100 flex flex-col"
         >
-          <!-- 
-            核心修改区域：
-            为了方便定位附属的边角，我们将原有的样式拆分。
-            外层 div 负责定位和尺寸，内层 div 负责样式（模糊、边框、背景）。
-          -->
 
           <!-- 1. 上方内凹边角 -->
           <div class="absolute -top-4.5 left-0 w-5 h-5 z-10">
@@ -203,14 +191,14 @@
       </Transition>
     </Teleport>
 
-    <!-- 日志 --><!-- translate-x-1/2  -->
+    <!-- 日志 -->
     <div v-show="appStore.uiState.showLogDrawer" @click.self="appStore.uiState.showLogDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999">
       <LogViewer />
     </div>
 
     <!-- 测试 -->
     <div v-if="appStore.settings.debug_mode">
-      <Test class="fixed bottom-4 left-4 " v-show="appStore.uiState.showTestDrawer" />
+      <TestPage class="fixed bottom-4 left-4 " v-show="appStore.uiState.showTestDrawer" />
       <DebugPanel />
     </div>
     <!-- 重复包名冲突弹窗 -->
@@ -238,7 +226,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, h, provide } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent, h } from 'vue'
 import { useModStore } from './stores/modStore'
 import { useAppStore } from './stores/appStore'
 import { useRuleStore } from './stores/ruleStore'
@@ -262,7 +250,7 @@ import RulePanel from './components/RulePanel.vue'
 import ModRuleEditor from './components/ModRuleEditor.vue'
 import Confirm from './components/common/Confirm.vue'
 import Test from './components/temp/test.vue'
-
+import SegmentedTabs from './components/utils/SegmentedTabs.vue'
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -275,38 +263,85 @@ const activeTab = ref(tabs[0])
 
 // --- 拖拽调整宽度逻辑 ---
 const containerRef = ref(null)
-const MIN_WIDTH = 200 // 每一列的最小宽度
-// 核心状态：4个列的宽度
-// 初始值给0，mounted时会立刻计算
-const colWidths = reactive([0, 0, 0, 0])
 
+
+// 列配置定义
+// id: 唯一标识
+// show: 返回 boolean，决定是否显示
+// type: 用于在模板中区分渲染哪个组件
+const columnConfig = [
+  { 
+    id: 'details', 
+    type: 'details',
+    show: () => appStore.settings.ui.show_mod_details_panel 
+  },
+  { 
+    id: 'library', 
+    type: 'library',
+    show: () => true // 假设库常驻，也可以改为配置
+  },
+  { 
+    id: 'active', 
+    type: 'active',
+    show: () => true 
+  },
+  { 
+    id: 'sidebar', 
+    type: 'sidebar',
+    show: () => true // 同样可以绑定设置
+  }
+]
+
+// 计算当前可见的列
+const visibleColumns = computed(() => {
+  return columnConfig.filter(col => col.show())
+})
+
+// 动态宽度管理
+const MIN_WIDTH = 200
+const colWidths = ref([]) // 变成了 ref 数组，长度动态变化
+
+// 初始化或重置宽度（平均分配）
+const distributeEvenly = () => {
+  if (!containerRef.value) return
+  const totalW = containerRef.value.clientWidth
+  const count = visibleColumns.value.length
+  if (count === 0) return
+  
+  const avg = totalW / count
+  colWidths.value = new Array(count).fill(avg)
+}
+
+// 监听可见列数量变化
+// 当用户切换设置显示/隐藏列时，重新计算布局
+watch(
+  () => visibleColumns.value.length,
+  () => {
+    // 这是一个简单策略：列数变动时重置为平分
+    // 如果想要更高级的（保留其他列宽度），逻辑会复杂很多，平分是最稳健的
+    nextTick(() => distributeEvenly())
+  },
+  { flush: 'post' } // 确保 DOM 更新后执行
+)
+
+// 拖拽调整逻辑
 const resizeState = reactive({
   isDragging: false,
-  activeIndex: -1,
+  activeIndex: -1, // 指向分割线左侧的列索引
   startX: 0,
   startLeftW: 0,
   startRightW: 0
 })
 
-// --- 拖拽逻辑 ---
-// 1. 初始化：平均分配宽度
-const distributeEvenly = () => {
-  if (!containerRef.value) return
-  const totalW = containerRef.value.clientWidth
-  const avg = totalW / 4
-  // 填充数组
-  for (let i = 0; i < 4; i++) colWidths[i] = avg
-}
-// 2. 开始拖动
 const startResize = (index, e) => {
   e.preventDefault()
   resizeState.isDragging = true
-  resizeState.activeIndex = index // 0, 1, 2
+  resizeState.activeIndex = index
   resizeState.startX = e.clientX
   
-  // 记录当前受影响的两列（左侧列 和 右侧列）的初始宽度
-  resizeState.startLeftW = colWidths[index]
-  resizeState.startRightW = colWidths[index + 1]
+  // 记录受影响的两个列：index 和 index+1
+  resizeState.startLeftW = colWidths.value[index]
+  resizeState.startRightW = colWidths.value[index + 1]
 
   // 全局监听
   document.addEventListener('mousemove', onMouseMove)
@@ -314,7 +349,7 @@ const startResize = (index, e) => {
   document.body.style.cursor = 'col-resize' // 强制光标
   document.body.style.userSelect = 'none'   // 防止选中文字
 }
-// 3. 拖动中
+// 拖动中
 const onMouseMove = (e) => {
   if (!resizeState.isDragging) return
   
@@ -325,25 +360,24 @@ const onMouseMove = (e) => {
   let newLeft = resizeState.startLeftW + delta
   let newRight = resizeState.startRightW - delta
   
-  // 限制逻辑 (Constraint Logic)
-  // 如果左边太小
+  // 约束检查
   if (newLeft < MIN_WIDTH) {
     const diff = MIN_WIDTH - newLeft
     newLeft = MIN_WIDTH
-    newRight -= diff // 右边吐出来
+    newRight -= diff
   }
   // 如果右边太小
   if (newRight < MIN_WIDTH) {
     const diff = MIN_WIDTH - newRight
     newRight = MIN_WIDTH
-    newLeft -= diff // 左边吐出来
+    newLeft -= diff
   }
   
-  // 赋值
-  colWidths[idx] = newLeft
-  colWidths[idx + 1] = newRight
+  // 更新数组
+  colWidths.value[idx] = newLeft
+  colWidths.value[idx + 1] = newRight
 }
-// 4. 停止拖动
+// 停止拖动
 const stopResize = () => {
   resizeState.isDragging = false
   resizeState.activeIndex = -1
@@ -352,15 +386,14 @@ const stopResize = () => {
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
 }
-// 5. 窗口缩放自适应 (高级功能)
-// 当用户缩放浏览器时，我们希望按当前比例重新缩放所有列，而不是写死像素导致溢出
+
+// 生命周期与自适应
 let resizeObserver = null
 
-// 渲染时初始化
 onMounted(() => {
   console.log("应用已启动，正在初始化存储……")
   appStore.initialize()  // 初始化存储（加载数据）
-
+  
   // === 动态尺寸调整 ===
   distributeEvenly()  // 初始平均分配宽度
   // 监听容器尺寸变化
@@ -368,38 +401,35 @@ onMounted(() => {
     resizeObserver = new ResizeObserver((entries) => {
       for (let entry of entries) {
         const newTotalWidth = entry.contentRect.width
-        // 计算当前总宽度（可能和新宽度不一致）
-        const currentTotalWidth = colWidths.reduce((a, b) => a + b, 0)
+        // 计算当前记录的总宽
+        const currentTotalWidth = colWidths.value.reduce((a, b) => a + b, 0)
         
-        if (currentTotalWidth === 0) return distributeEvenly()
-        
-        // 按比例缩放每一列
-        const scale = newTotalWidth / currentTotalWidth
-        for (let i = 0; i < 4; i++) {
-          colWidths[i] = colWidths[i] * scale
+        // 如果是首次加载或者误差过大，或者列数对不上，重置
+        if (currentTotalWidth === 0 || colWidths.value.length !== visibleColumns.value.length) {
+          distributeEvenly()
+          return
         }
+
+        // 按比例缩放所有列
+        const scale = newTotalWidth / currentTotalWidth
+        // 避免除以0或无效缩放
+        if (!isFinite(scale) || scale === 0) return 
+
+        colWidths.value = colWidths.value.map(w => w * scale)
       }
     })
     resizeObserver.observe(containerRef.value)
   }
 })
 
-// 卸载时清理
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect()
-  stopResize() // 保险起见清理事件
+  stopResize()
 })
 </script>
 
 <script>
-/**
- * ============================================================
- * 高级调节线组件 (Functional Component)
- * 特点：
- * 1. 视觉上很细致，但感应区域大 (w-4 + -mx-2)
- * 2. 带有高亮状态和 Hover 动画
- * ============================================================
- */
+// 调节线组件
 const Resizer = (props, { emit }) => {
   return h('div', {
     // 容器：透明，宽热区，z-index高，负margin抵消宽度以保持布局紧凑
@@ -411,19 +441,35 @@ const Resizer = (props, { emit }) => {
   }, [
     // 视觉线：平时是细线，Active/Hover 时变色
     h('div', {
-      class: [
-        'w-[1px] rounded-full transition-all duration-200 ease-out pointer-events-none',
+      class: ['w-px rounded-full transition-all duration-200 ease-out pointer-events-none',
         // 高度变化：平时短一点显得优雅，交互时变全高
         props.active ? 'h-9/10' : 'h-2/5 group-hover:h-8/10',
         // 颜色与发光变化
         props.active 
-          ? 'bg-accent-special w-[2px] shadow-[0_0_10px_rgba(var(--color-accent-special),0.8)]' 
+          ? 'bg-accent-special w-2 shadow-[0_0_10px_rgba(var(--color-accent-special),0.8)]' 
           : 'bg-white/10 group-hover:bg-accent-special/50'
       ]
     })
   ])
 }
-
+// 定义异步组件
+const TestPage = defineAsyncComponent({
+  // 加载函数：利用 Vite 的环境变量模式
+  loader: () => {
+    // 只有在开发模式下才尝试加载，生产模式直接返回一个空组件
+    if (import.meta.env.DEV) {
+      return import('./components/temp/test.vue').catch(() => {
+        // console.warn('测试组件加载失败，可能文件已被删除。')
+        return { render: () => null } // 加载失败时返回一个什么都不渲染的组件
+      })
+    }
+    return Promise.resolve({ render: () => null }) // 生产环境逻辑
+  },
+  // 加载失败时使用的组件 (可选)
+  errorComponent: { render: () => null },
+  // 如果加载时间超过此值，则显示加载中组件 (可选)
+  timeout: 3000
+})
 </script>
 
 <style scoped>

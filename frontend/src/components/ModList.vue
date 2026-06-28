@@ -8,23 +8,25 @@
         <span class="mr-1">{{ title }}</span>
         <!-- 状态提示 -->
         <span v-if="isFiltered" v-tooltip="filterTooltip" @click="clearFilter"
-          class="text-[10px] text-text-main/80 bg-accent-highlight/30 px-1 rounded-full ring-1 ring-accent-special/70 cursor-pointer hover:bg-accent-highlight/60 hover:text-text-main active:scale-95 transition-all">
+          class="text-xs text-text-main/80 bg-accent-highlight/30 px-1 rounded-full ring-1 ring-accent-special/70 cursor-pointer hover:bg-accent-highlight/60 hover:text-text-main active:scale-95 transition-all">
           已筛选
         </span>
-        <span v-if="sortMode !== 'default' || !isSortAsc" v-tooltip="sortTooltip" class="text-[10px] text-text-main/80 bg-accent-highlight/30 px-1 rounded-full">已排序</span>
+        <span v-if="sortMode !== 'default' || !isSortAsc" v-tooltip="sortTooltip" class="text-xs text-text-main/80 bg-accent-highlight/30 px-1 rounded-full">
+          已排序
+        </span>
       </span>
 
       <span class="flex items-center gap-1">
         <!-- 错误指示器 (仅当有错误时显示) -->
         <button v-if="issuesSummary.count > 0" v-tooltip="issueTooltip"
           @click="toggleIssueFilter"
-          class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all border cursor-pointer hover:scale-105 active:scale-95"
+          class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold transition-all border cursor-pointer hover:scale-105 active:scale-95"
           :class="[issuesSummary.errorCount > 0 ? 'bg-accent-danger/20 text-accent-danger border-accent-danger/30' 
               : 'bg-accent-warn/20 text-accent-warn border-accent-warn/30',
             isFilterByIssue ? 'ring-2 ring-accent-special/70' : '']"
         >
           <!-- 图标 -->
-          <svg width="16" height="16" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-triangle-alert-icon lucide-triangle-alert">
+          <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" >
             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>
           </svg>
           
@@ -33,10 +35,10 @@
         </button>
 
         <!-- 列表总数 / 筛选数 -->
-        <span v-if="isFiltered" :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
+        <span v-if="isFiltered" :class="`text-xs bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">
           {{ displayList.length }} / {{ modelValue.length }}
         </span>
-        <span v-else :class="`text-[10px] bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">{{ modelValue.length }}</span>
+        <span v-else :class="`text-xs bg-black/30 px-2 py-0.5 rounded text-accent-${listColor}`">{{ modelValue.length }}</span>
       </span>
 
     </div>
@@ -53,7 +55,7 @@
               :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
               text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
               transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
-              <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[8px] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
+              <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[0.55rem] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
             </button>
           </template>
         </TagsSearch>
@@ -61,14 +63,14 @@
         <label v-tooltip="{content: searchHelpText, html:true}" class="absolute -top-1.5 -right-2.5 size-4 rounded-md text-sm text-center text-text-dim hover:text-text-main cursor-help">?</label>
         
         <!-- 视图切换按钮 -->
-        <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+        <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
           :initial="{ rotateX: 0, opacity: 1 }"
           :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
           :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
           @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'"
         >
-          <svg v-if="!isSimpleView" width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-list-icon lucide-layout-list"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
-          <svg v-else width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-list-icon lucide-list"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
+          <svg v-if="!isSimpleView" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
+          <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
         </Motion>
       </div>
         
@@ -82,24 +84,27 @@
 
           <template #right>
               <!-- 排序切换按钮 -->
-              <button @click="cycleSort" v-tooltip="sortMode"
+              <button @click="isSortChange = !isSortChange" @blur="isSortChange = false" v-tooltip="sortTooltip"
                 :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-                transition-all`">
+                transition-all relative`">
                 {{ sortIcon }}
+                <div v-show="isSortChange" class="absolute min-w-20 h-auto p-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-text-main/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
+                  <div v-for="(icon, mode) in SORT_MODE_MAP" :key="mode" @click="sortMode = mode" class="w-full rounded-md hover:bg-text-dim/30 hover:text-text-main">{{ icon }}</div>
+                </div>
               </button>
           </template>
         </TagsSearch>
         <!-- 排序切换按钮 -->
-        <Motion :class="`p-1 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+        <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
           :initial="{ rotateX: 0, opacity: 1 }"
           :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
           :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
           @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'"
         >
-          <svg v-if="isSortAsc" width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-narrow-wide-icon lucide-arrow-down-narrow-wide"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
+          <svg v-if="isSortAsc" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
           <span v-else class="rotate-x-180">
-            <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-narrow-wide-icon lucide-arrow-up-narrow-wide"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+            <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
           </span>
         </Motion>
       </div>
@@ -112,12 +117,11 @@
 	      @click.self="modStore.clearSelection()">
       
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
-      <div v-if="hasSidebar" class="w-14 h-full flex-none"
+      <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" class="w-[55px] h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
-        <DependencyGraph 
-          v-if="allowSort || filterByLine" 
+        <DependencyGraph v-if="allowSort || filterByLine" 
           :listIds="lineData" :isFilter="filterByLine.length>0"
-          :itemHeight="isSimpleView ? 34 : 54" 
+          :itemHeight="isSimpleView ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4" 
           :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />
@@ -132,9 +136,11 @@
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
         </div>
         <!-- 列表 -->
+          <!-- :size="isSimpleView ? 34 : 54" -->
         <virtual-list v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
           :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="50"
-          :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" :size="isSimpleView ? 34 : 54"
+          :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
+          :size="isSimpleView ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4"
           @drop="updateChildren" @drag="startDrag"
           v-selectable-list="{ 
              data: displayList, 
@@ -143,8 +149,12 @@
           }">
           <template v-slot:item="{ record, index, dataKey }">
             <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-              :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView" 
-              :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0"
+              :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView"
+              :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
+              :show-icon="appStore.settings.ui.show_list_icon" 
+              :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
+              :show-modtype-icon="appStore.settings.ui.show_list_modtype_icon"
+              :show-index="appStore.settings.ui.show_list_index"
               :search-match="currentTargetId === dataKey">
             </ModItem>
           </template>
@@ -162,6 +172,7 @@ import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import VirtualList from 'vue-virtual-sortable';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
+import { useAppStore } from '../stores/appStore';
 import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
 import { generateHtmlHelp } from '../modules/search/SearchHelp'
@@ -180,6 +191,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const appStore = useAppStore()
 const modStore = useModStore()
 const searchStore = useSearchStore()
 const toast = useToast();
@@ -191,7 +203,7 @@ const listKey = ref(0)
 // 状态
 const isSimpleView = ref(true) // 是否简单视图
 const isSortAsc = ref(true)   // 是否升序排序
-const sortMode = ref<'default' | 'name' | 'author'>('default')  // 排序模式
+const sortMode = ref('default')  // 排序模式
 
 const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
@@ -204,6 +216,8 @@ const filterQuery = ref([]) // 存储标签数组
 const filterLogic = ref('AND') // 存储逻辑关系
 const filterByLine = ref([])  // 存储筛选线路数组
 const isFilterByIssue = ref(false)  // 是否筛选问题项
+
+const isSortChange = ref(false) // 是否排序切换
 
 // 获取 Engine 实例 (computed 确保响应式)
 const engine = computed(() => searchStore.engine)
@@ -282,15 +296,9 @@ const issueTooltip = computed(() => {
 })
 // 排序提示
 const sortTooltip = computed(() => {
-  let text = ''
-  if (sortMode.value === 'default') {
-    text = '默认排序'
-  } else if (sortMode.value === 'name') {
-    text = '按名称排序'
-  } else if (sortMode.value === 'author') {
-    text = '按作者排序'
-  }
+  let text = `按${SORT_MODE_MAP[sortMode.value]}排序`
   text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
+  text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
   return text
 })
 // 筛选提示
@@ -306,6 +314,7 @@ const filterTooltip = computed(() => {
     text += `\n已筛选依赖组`
   }
   text = text.trim()
+  text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
   text += `\n\n__[[(点击清除所有筛选)]]__`
   return text
 })
@@ -359,7 +368,13 @@ const displayList = computed(() => {
       const mA = modStore.takeModById(a)
       const mB = modStore.takeModById(b)
       if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
-      if (sortMode.value === 'author') return (mA?.author || '').localeCompare(mB?.author || '')
+      if (sortMode.value === 'author') return (mA?.author?.[0] || '').localeCompare(mB?.author?.[0] || '')
+      if (sortMode.value === 'package_id') return (mA?.package_id || a).localeCompare(mB?.package_id || b)
+      if (sortMode.value === 'last_active_time') return (mA?.last_active_time || 0) - (mB?.last_active_time || 0)
+      if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
+      if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
+      if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
+
       return 0
     })
   }
@@ -379,18 +394,19 @@ const internalListProxy = computed({
 })
 
 // ===== 排序模式切换 =====
-const sortIcon = computed(() => {
-    switch(sortMode.value) {
-        case 'name': return 'A-Z'
-        case 'author': return 'User'
-        default: return 'Def'
-    }
-})
-const cycleSort = () => {
-    if (sortMode.value === 'default') sortMode.value = 'name'
-    else if (sortMode.value === 'name') sortMode.value = 'author'
-    else sortMode.value = 'default'
+const SORT_MODE_MAP = {
+  'default': '默认',
+  'name': '名称',
+  'package_id': '包名',
+  'author': '作者',
+  'last_active_time': '启用时间',
+  'last_moved_time': '移动时间',
+  'file_create_time': '创建时间',
+  'file_modify_time': '修改时间',
 }
+const sortIcon = computed(() => {
+  return SORT_MODE_MAP[sortMode.value] || '默认'
+})
 
 // ===== 显示效果处理 =====
 // 监听 currentTargetId 变化

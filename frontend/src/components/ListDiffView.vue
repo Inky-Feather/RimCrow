@@ -4,7 +4,7 @@
     <!-- 1. 顶部工具栏 -->
     <div class="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/5 z-20 shrink-0">
       <!-- 图例 -->
-      <div class="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider">
+      <div class="flex items-center gap-3 text-xs font-bold uppercase tracking-wider">
         <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-danger"></span>缺失{{ stats.removed }}</div>
         <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-success"></span>新增{{ stats.added }}</div>
         <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-warn"></span>移动{{ stats.moved }}</div>
@@ -16,14 +16,14 @@
       <div class="flex items-center gap-4">
         <div class="relative flex flex-wrap items-center gap-1">
           <input v-model="colorfulBlocks" type="checkbox" value="" id="b01" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
-          <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-[10px] text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+          <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
             多彩区块
           </label>
         </div>
 
         <div class="relative flex flex-wrap items-center gap-1">
           <input v-model="hideIdentical" type="checkbox" value="" id="b02" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
-          <label v-tooltip="'折叠一致区块'" for="b02" class="cursor-pointer text-[10px] text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
+          <label v-tooltip="'折叠一致区块'" for="b02" class="cursor-pointer text-xs text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
             折叠长区块
           </label>
         </div>
@@ -32,7 +32,7 @@
     </div>
 
     <!-- 2. 标题栏 -->
-    <div class="flex items-center border-b border-white/5 bg-black/20 text-[10px] font-bold text-text-dim py-1 z-20 shrink-0">
+    <div class="flex items-center border-b border-white/5 bg-black/20 text-xs font-bold text-text-dim py-1 z-20 shrink-0">
       <div class="flex-1 px-2 text-center text-accent-success border-r border-white/5 truncate">{{ titleA }} ({{ listA.length }})</div>
       
       <div class="flex-1 px-2 text-center truncate">{{ titleB }} ({{ listB.length }})</div>
@@ -57,10 +57,10 @@
                    :style="{ backgroundColor: getRenderColor(item) }">
               </div>
 
-              <span class="w-6 text-[9px] font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
+              <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
               
               <!-- 文字颜色逻辑 -->
-              <div class="flex-1 truncate text-[11px] font-medium" 
+              <div class="flex-1 truncate text-sm font-medium" 
                    :class="getTextClass(item)"
                    v-tooltip="displayNameById(item.id)">
                 {{ displayNameById(item.id) }}
@@ -75,7 +75,7 @@
               <div v-if="shouldShowIndicator(item)" class="absolute right-0 w-0.5 h-full" 
                    :style="{ backgroundColor: getRenderColor(item) }">
               </div>
-              <span class="text-[9px] text-text-dim/60 tracking-widest scale-90">
+              <span class="text-xs text-text-dim/60 tracking-widest scale-90">
                 ··· 已折叠{{ item.count }}项 ···
               </span>
             </div>
@@ -116,9 +116,9 @@
                    :style="{ backgroundColor: getRenderColor(item) }">
               </div>
 
-              <span class="w-6 text-[9px] font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
+              <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
               
-              <div class="flex-1 truncate text-[11px] font-medium"
+              <div class="flex-1 truncate text-sm font-medium"
                    :class="getTextClass(item)"
                    v-tooltip="displayNameById(item.id)">
                  {{ displayNameById(item.id) }}
@@ -132,7 +132,7 @@
               <div v-if="shouldShowIndicator(item)" class="absolute left-0 w-0.5 h-full" 
                    :style="{ backgroundColor: getRenderColor(item) }">
               </div>
-              <span class="text-[9px] text-text-dim/60 tracking-widest scale-90">
+              <span class="text-xs text-text-dim/60 tracking-widest scale-90">
                 ··· 已折叠{{ item.count }}项 ···
               </span>
             </div>

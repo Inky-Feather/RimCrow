@@ -57,6 +57,28 @@ class SteamConfig:
     steam_appid: int = 294100      # RimWorld AppID
 
 @dataclass
+class UIConfig:
+    theme: str = "system"       # light, dark, system
+    font_size: int = 16
+    tooltip_hover_time: int = 1000  # 鼠标悬停显示提示时间 (毫秒)
+    
+    show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
+    show_icons_cloud: bool = True  # 是否显示动态图标云
+    show_mod_details_author_info: bool = True  # 是否显示 Mod 详情面板作者信息
+    show_mod_details_files_info: bool = True  # 是否显示 Mod 详情面板文件信息
+    show_mod_details_time_info: bool = True  # 是否显示 Mod 详情面板时间信息
+    show_mod_details_dependencies_info: bool = True  # 是否显示 Mod 详情面板依赖信息
+    show_mod_details_user_info: bool = True  # 是否显示 Mod 详情面板自定义信息
+    show_mod_details_description: bool = True  # 是否显示 Mod 详情面板描述
+
+    show_dependency_graph: bool = True  # 是否显示依赖关系图
+    show_list_index: bool = True  # 是否显示列表索引列
+    show_list_icon: bool = True  # 是否显示 Mod 图标
+    show_list_mod_icon: bool = True  # 是否显示 Mod 图标
+    show_list_modtype_icon: bool = True  # 是否显示 Mod 类型图标
+    
+
+@dataclass
 class AppConfig:
     """
     配置数据结构定义。
@@ -78,27 +100,23 @@ class AppConfig:
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言
-    theme: str = "system"       # light, dark, system
     window_width: int = 1400
     window_height: int = 900
-    font_size: int = 14
-    open_url_on_system: bool = False  # 是否在系统默认浏览器打开链接
+    ui: UIConfig = field(default_factory=UIConfig)
     
     # --- 高级设置 ---
-    backup_retention_days: int = 30  # 备份保留天数
-    enable_auto_scan: bool = True    # 启动时自动扫描
+    backup_retention_days: int = 30           # 备份保留天数
+    enable_auto_scan: bool = True             # 启动时自动扫描
     delete_missing_mods_data: bool = False    # 是否删除数据库中缺失的 Mod 数据
+    open_url_on_system: bool = False           # 是否在系统默认浏览器打开链接
     
-    # --- 缓存忽略列表 (示例) ---
-    ignored_paths: list = field(default_factory=lambda: [".git", "__pycache__"])
-    
-    # --- 网络设置 ---
+    # --- 功能设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)
     steam: SteamConfig = field(default_factory=SteamConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     
     # --- 开发与调试设置 ---
-    debug_mode: bool = True  # 开发模式开关
+    debug_mode: bool = False  # 开发模式开关
     log_retention_days: int = 7  # 日志保留天数
     log_level: str = "INFO"  # 默认日志等级 DEBUG, INFO, WARNING, ERROR
     

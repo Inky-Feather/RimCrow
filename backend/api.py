@@ -204,7 +204,7 @@ class API:
             "active_load_modify_time": active_load_order.get('modify_time', 0),
             "is_first_db_init": self.is_first_db_init
         }
-        self.is_first_db_init = False   # 标记数据库已初始化
+        if(paths_valid and all_mods): self.is_first_db_init = False   # 标记数据库已初始化
         return ApiResponse.success(result)
     @log_api_call
     def reset_database(self):
@@ -996,7 +996,6 @@ class API:
             
         return ApiResponse.success({
             "steamcmd_ready": self.steam_mgr.steamcmd_ready,
-            "steamworks_ready": self.steam_mgr._is_steam_initialized,
             "pending_tasks": tasks
         })
 

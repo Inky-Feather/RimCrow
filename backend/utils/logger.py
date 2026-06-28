@@ -109,28 +109,51 @@ class LoggerManager:
         self._logger.addHandler(file_handler)
 
         # 4. Handler: 控制台输出 (Colorlog 美化)
-        console_handler = logging.StreamHandler(sys.stdout)
+        # 解决 Windows GBK 编码崩溃问题
         
-        # 使用我们自定义的 CustomColoredFormatter
-        color_formatter = CustomColoredFormatter(
-            fmt='%(log_color)s%(asctime)s | %(levelname)-8s | %(name)s:%(module)s:%(lineno)d - %(message)s',
-            datefmt='%H:%M:%S',
-            reset=True,
-            log_colors={
-                'DEBUG':    'cyan',
-                'INFO':     'white',
-                'WARNING':  'yellow',
-                'ERROR':    'red',
-                'CRITICAL': 'red,bg_white',
-            },
-            secondary_log_colors={},
-            style='%'
-        )
+        # 1. 尝试强制重配置 stdout/stderr 为 UTF-8
+        if sys.platform.startswith('win'):
+            try:
+                # Python 3.7+ 支持直接 reconfigure
+                if hasattr(sys.stdout, 'reconfigure'):
+                    sys.stdout.reconfigure(encoding='utf-8') # type: ignore
+                if hasattr(sys.stderr, 'reconfigure'):
+                    sys.stderr.reconfigure(encoding='utf-8') # type: ignore
+            except Exception:
+                # 如果处于某些特殊无控制台环境 (pythonw.exe)，sys.stdout 可能是 None
+                pass
+        # 2. 安全地添加控制台 Handler
+        # 只有当 sys.stdout 存在（不是 None）时才添加，避免 --noconsole 模式下报错
+        if sys.stdout is not None:
+            try:
+                console_handler = logging.StreamHandler(sys.stdout)
         
-        console_handler.setFormatter(color_formatter)
-        console_handler.setLevel(logging.DEBUG if settings.config.debug_mode else logging.INFO)
-        self._logger.addHandler(console_handler)
-
+                # 使用我们自定义的 CustomColoredFormatter
+                color_formatter = CustomColoredFormatter(
+                    fmt='%(log_color)s%(asctime)s | %(levelname)-8s | %(name)s:%(module)s:%(lineno)d - %(message)s',
+                    datefmt='%H:%M:%S',
+                    reset=True,
+                    log_colors={
+                        'DEBUG':    'cyan',
+                        'INFO':     'white',
+                        'WARNING':  'yellow',
+                        'ERROR':    'red',
+                        'CRITICAL': 'red,bg_white',
+                    },
+                    secondary_log_colors={},
+                    style='%'
+                )
+                
+                console_handler.setFormatter(color_formatter)
+                console_handler.setLevel(logging.DEBUG if settings.config.debug_mode else logging.INFO)
+                self._logger.addHandler(console_handler)
+            except Exception as e:
+                # 如果控制台初始化还是失败，记录错误但不让程序崩溃
+                # 这里只能用文件记录了，因为控制台坏了
+                file_handler.emit(logging.LogRecord(
+                    "Logger", logging.ERROR, "", 0, f"Console handler init failed: {e}", (), None
+                ))
+                
         # 5. Handler: Webview 推送 (前端 UI 显示)
         webview_handler = WebviewHandler()
         webview_handler.setLevel(logging.DEBUG)

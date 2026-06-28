@@ -11,7 +11,7 @@ class SubBrowserManager:
         self.main_api = main_api  # 引用主 API 以便调用通用逻辑
         self.window = None
         
-    def open(self, url='', title = 'RimModManager'):
+    def open(self, url='', title = '正在加载...'):
         """打开窗口或跳转 URL"""
         if self.window:
             try:
@@ -53,6 +53,7 @@ class SubBrowserManager:
         if not self.window: return
         try:
             url = self.window.get_current_url() or ""
+            self.window.set_title(url)
             # 仅在 steamcommunity.com 域名下注入
             if 'steamcommunity.com/sharedfiles/filedetails' in url:
                 self.window.evaluate_js(self._get_injection_js())

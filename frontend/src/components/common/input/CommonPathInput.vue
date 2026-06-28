@@ -1,0 +1,88 @@
+<!-- components/common/input/CommonPathInput.vue -->
+<template>
+  <div class="space-y-1.5 w-full max-w-full overflow-hidden">
+    <div class="flex justify-between items-center px-1">
+      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
+      <button v-if="modelValue" @click="openInExplorer" 
+        class="text-xs text-accent-primary/60 hover:text-accent-primary transition-colors hover:underline"
+      >
+        在资源管理器中打开
+      </button>
+    </div>
+    
+    <div class="flex items-center gap-1.5 group w-full">
+      <!-- 路径显示区 -->
+      <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0"
+        v-tooltip="modelValue || '未配置路径'"
+      >
+        <!-- 固定前缀标签 -->
+        <div class="shrink-0 mr-2 text-text-dim/40 italic text-xs font-mono uppercase select-none">Path</div>
+        
+        <!-- 手动输入框 -->
+        <input 
+          type="text"
+          :value="modelValue"
+          @input="$emit('update:modelValue', $event.target.value)"
+          placeholder="请输入或粘贴路径..."
+          class="flex-1 bg-transparent text-sm text-white/90 font-mono outline-none min-w-0 "
+          :class="{ 'direction-rtl': !isFocused }"
+          @focus="isFocused = true"
+          @blur="isFocused = false"
+        />
+
+        <!-- 路径状态指示灯 -->
+        <div 
+          class="shrink-0 size-1 rounded-full ml-2 transition-all duration-500"
+          :class="[
+            modelValue ? 'bg-accent-success shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-accent-danger shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+            modelValue ? 'opacity-100' : 'opacity-40 animate-pulse'
+          ]"
+          v-tooltip="modelValue ? '已填写路径' : '路径为空，可能导致功能失效'"
+        ></div>
+      </div>
+
+      <!-- 浏览按钮 -->
+      <button @click="$emit('browse')"
+        class="shrink-0 h-9 w-9 flex items-center justify-center bg-accent-primary/10 border border-accent-primary/30 rounded-lg text-accent-primary hover:bg-accent-primary hover:text-black transition-all duration-300 active:scale-90 shadow-lg"
+        v-tooltip="'通过文件浏览器选择'"
+      >
+        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useAppStore } from '../../../stores/appStore'
+
+const props = defineProps({
+  label: String,
+  modelValue: String
+})
+
+defineEmits(['browse', 'update:modelValue'])
+const appStore = useAppStore()
+
+// 焦点状态管理
+const isFocused = ref(false)
+const openInExplorer = () => {
+  if (props.modelValue) {
+    appStore.openPath(props.modelValue)
+  }
+}
+</script>
+
+<style scoped>
+/* 
+  非聚焦状态下从右往左显示（看到文件夹深层）
+  聚焦状态下恢复标准显示，方便光标定位修改起始处 
+*/
+.direction-rtl {
+  direction: rtl;
+  unicode-bidi: plaintext;
+  text-align: left; /* 保持左对齐文字，但从末尾截断 */
+}
+</style>

@@ -20,8 +20,8 @@
             'bg-bg-deep/85 backdrop-blur-2xl shadow-2xl ring-1 ring-white/10',
             // 模式区分
             isMini 
-              ? 'rounded-xl w-[300px] absolute shadow-[0_20px_30px_rgba(0,0,0,0.5)]' 
-              : 'rounded-2xl w-[440px] max-w-[90vw] shadow-[0_20px_50px_rgba(0,0,0,0.6)]',
+              ? 'rounded-xl w-80 absolute shadow-[0_20px_30px_rgba(0,0,0,0.5)]' 
+              : 'rounded-2xl w-140 max-w-[90vw] shadow-[0_20px_50px_rgba(0,0,0,0.6)]',
             // 抖动动画类
             shake ? 'animate-shake' : ''
           ]"

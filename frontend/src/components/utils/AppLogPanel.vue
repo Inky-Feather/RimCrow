@@ -3,11 +3,11 @@
     <!-- B. 工具栏：筛选与搜索 -->
       <div class="px-4 py-2 flex items-center gap-3 border-b border-white/5">
         
-        <!-- 文件选择 (模拟) -->
+        <!-- 文件选择 -->
         <div class="relative group/file">
           <button class="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-text-main transition-colors">
             <svg class="w-3.5 h-3.5 text-accent-cool" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <span class="max-w-[150px] truncate">{{ activeFileName }}</span>
+            <span class="max-w-100 truncate">{{ activeFileName }}</span>
             <svg class="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
           </button>
           <!-- 下拉菜单预留位 -->
@@ -81,7 +81,7 @@
                 </span>
               </div>
               <!-- 详情折叠区 (如果有 details) -->
-              <div v-if="log.details" class="mt-1 ml-1 pl-2 border-l border-white/10 text-text-dim/70 text-[11px] whitespace-pre-wrap font-mono bg-black/20 rounded p-1">
+              <div v-if="log.details" class="mt-1 ml-1 pl-2 border-l border-white/10 text-text-dim/70 text-xs whitespace-pre-wrap font-mono bg-black/20 rounded p-1">
                 {{ log.details }}
               </div>
             </div>
@@ -103,7 +103,7 @@ const FilterToggle = {
   emits: ['update:modelValue'],
   template: `
     <button @click="$emit('update:modelValue', !modelValue)"
-      class="px-2 py-0.5 rounded text-[10px] font-bold border transition-all duration-200 select-none"
+      class="px-2 py-0.5 rounded text-xs font-bold border transition-all duration-200 select-none"
       :class="modelValue ? [color, 'bg-white/10 border-white/10 shadow-sm'] : 'text-text-dim opacity-50 border-transparent hover:opacity-80'">
       {{ label }}
     </button>

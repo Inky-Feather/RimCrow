@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useModStore } from './modStore'
+import { useAppStore } from './appStore'
 import { createToastInterface } from 'vue-toastification'
 
 // 动态规则支持属性映射
@@ -20,9 +21,23 @@ const DYNAMIC_RULE_ACTIONS = {
   'top': '强制置顶',
   'bottom': '强制置底',
 }
+// 动态规则支持运算符映射
+const DYNAMIC_RULE_OPERATORS = {
+  'equals': '等于',
+  'not_equals': '不等于',
+  'contains': '包含',
+  'not_contains': '不包含',
+  'starts_with': '以...开头',
+  'ends_with': '以...结尾',
+  'regex': '正则匹配',
+}
+
+
 
 export const useRuleStore = defineStore('rules', () => {
   const modStore = useModStore()
+  const appStore = useAppStore()
+
   const toast = createToastInterface()
 
   // --- State ---
@@ -43,7 +58,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.get_all_rules()
-      if (res.status === 'success') {
+      if (appStore.checkResult(res, '获取规则')) {
         communityModRules.value = res.data.community_rules
         userModRules.value = res.data.user_mod_rules
         userDynamicRules.value = res.data.user_dynamic_rules
@@ -235,12 +250,9 @@ export const useRuleStore = defineStore('rules', () => {
   const saveDynamicRules = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_update_dynamic(rule)
-    if (res.status === 'success') {
-        toast.success("规则保存成功")
+    if (appStore.checkResult(res, '保存规则',true)) {
         fetchRules()
         return true
-    } else {
-        toast.error("保存失败: " + res.message)
     }
   }
   // 删除动态规则
@@ -255,13 +267,9 @@ export const useRuleStore = defineStore('rules', () => {
     try {
         // 调用 API
         const res = await window.pywebview.api.rule_update_community()
-        
-        if (res.status === 'success') {
-            toast.success("社区库已更新")
+        if (appStore.checkResult(res, '更新社区库', true)) {
             // 重新获取规则数据 (此时后端内存已是最新)
             await fetchRules() 
-        } else {
-            throw new Error(res.message)
         }
     } catch (error) {
         toast.error("更新社区库失败: " + error.message)
@@ -280,7 +288,7 @@ export const useRuleStore = defineStore('rules', () => {
   
   return {
     communityModRules, userModRules, userDynamicRules, currentId,
-    targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, 
+    targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,
     toggleDynamicRule, deleteDynamicRule, updateCommunity, handleExport, handleImport,
     saveDynamicRules, 

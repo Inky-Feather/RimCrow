@@ -3,6 +3,8 @@ __pycache__/
 *.py[oc]
 *.egg-info
 .venv/
+*.spec
+nuitka-*
 
 # App Data (忽略运行时生成的数据)
 data/

@@ -1,378 +1,336 @@
-<!-- components/SettingsPanel.vue -->
 <template>
-  <!-- 遮罩层 (点击背景关闭) -->
-  <transition name="fade">
-    <div v-if="appStore.uiState.showSettingsPanel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" @click.self="appStore.closeSettingsPanel()">
+  <transition name="panel-fade">
+    <div v-show="appStore.uiState.showSettingsPanel" 
+      class="fixed inset-0 z-100 flex items-center justify-center bg-bg-deep/60 backdrop-blur-md"
+      @click.self="appStore.closeSettingsPanel()">
       
-      <!-- 卡片主体 -->
-      <transition name="scale">
-        <div class="w-[800px] h-[600px] flex bg-bg-deep/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative" @click.stop>
-          
-          <!-- 左侧导航栏 -->
-          <div class="w-48 bg-black/20 border-r border-white/5 flex flex-col p-4 gap-2">
-            <div class="text-xl font-bold text-white mb-6 px-2 flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-accent-primary shadow-[0_0_10px_var(--color-accent-primary)]"></div>
-              设置
-            </div>
-            
-            <button v-for="tab in tabs" :key="tab.id"
-              @click="currentTab = tab.id"
-              :class="[
-                'w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200',
-                currentTab === tab.id 
-                  ? 'bg-accent-primary text-white shadow-lg shadow-accent-primary/20' 
-                  : 'text-text-dim hover:bg-white/5 hover:text-white'
-              ]"
-            >
-              {{ tab.label }}
-            </button>
+      <!-- 主容器 -->
+      <div class="relative w-[75%] h-[80%] flex bg-bg-deep/95 border border-text-dim/20 rounded-4xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden animate-in zoom-in-95 duration-300">
+        
+        <!-- A. 装饰光效 -->
+        <div class="absolute -top-24 -left-24 w-64 h-64 bg-accent-primary/10 blur-[80px] rounded-full pointer-events-none"></div>
+        <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-accent-special/10 blur-[80px] rounded-full pointer-events-none"></div>
+
+        <!-- B. 左侧导航栏 -->
+        <aside class="w-45 border-r border-text-main/5 flex flex-col p-6 relative z-10">
+          <div class="mb-10 px-2">
+            <h2 class="text-xl font-black text-white tracking-tighter italic">系统 <span class="text-accent-primary">设置</span></h2>
           </div>
 
-          <!-- 右侧内容区 -->
-          <div class="flex-1 flex flex-col min-w-0">
-            <!-- 标题 -->
-            <div class="h-16 border-b border-white/5 flex items-center px-8 text-lg font-bold text-white">
-              {{ tabs.find(t => t.id === currentTab)?.label }}
-            </div>
+          <!-- 动态 Glider 导航 -->
+          <nav class="flex flex-col relative space-y-1" :style="{ '--total-tabs': tabs.length }">
+            <button v-for="(tab, index) in tabs" :key="tab.id"
+              @click="currentTab = tab.id"
+              class="relative z-10 flex items-center gap-3 px-4 py-3 text-md font-bold transition-all duration-300 group"
+              :class="currentTab === tab.id ? 'text-accent-primary' : 'text-text-dim hover:text-white/70'"
+            >
+              <component :is="tab.icon" class="size-4" />
+              <span>{{ tab.label }}</span>
+            </button>
 
-            <!-- 滚动内容 -->
-            <div class="flex-1 overflow-y-auto p-8 space-y-6">
-              
-              <!-- 1. 路径设置页 -->
-              <div v-if="currentTab === 'paths'" class="space-y-6">
-                <!-- 自动检测按钮 -->
-                <div class="p-4 rounded-xl bg-accent-primary/10 border border-accent-primary/20 flex items-center justify-between">
-                  <div class="text-sm text-accent-primary">
-                    <div class="font-bold mb-1">自动配置</div>
-                    <div class="opacity-80 text-xs">尝试检测注册表自动获取默认路径</div>
-                  </div>
-                  <button @click="autoDetect" 
-                    class="px-4 py-2 bg-accent-primary/70 hover:bg-accent-primary text-white rounded-lg text-sm font-bold shadow-lg shadow-accent-primary/20 transition-transform active:scale-95 flex items-center gap-2">
-                    <span v-if="detecting" class="animate-spin">⟳</span>
-                    自动检测
+            <!-- 物理 Glider 滑块 -->
+            <div class="glider-container absolute left-0 top-0 w-full h-full pointer-events-none">
+              <div class="glider absolute -left-6 w-1 h-11 bg-accent-primary shadow-[0_0_15px_#06b6d4] transition-transform duration-500 cubic-bezier"
+                :style="{ transform: `translateY(${tabs.findIndex(t => t.id === currentTab) * 2.85}rem)` }">
+                <!-- 侧边发光层 -->
+                <div class="absolute left-0 top-0 w-40 h-full bg-linear-to-r from-accent-primary/10 to-transparent"></div>
+              </div>
+            </div>
+          </nav>
+
+          <!-- 底部版本号 -->
+          <div class="mt-auto px-4 py-2 border-t border-white/5 opacity-30">
+             <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion }}</p>
+          </div>
+        </aside>
+
+        <!-- C. 右侧主内容区 -->
+        <main class="flex-1 flex flex-col min-w-0 bg-black/20 relative z-10">
+          <!-- 顶部状态条 -->
+          <header class="h-14 flex items-center justify-between px-8 border-b border-text-main/5">
+            <span class="text-xs font-mono text-text-dim/60 uppercase tracking-[0.3em]">
+              / root / {{ currentTab }}
+            </span>
+            <div class="flex gap-1.5 text-text-dim/20 relative">
+              <Settings class="absolute size-23 -top-16 -right-13" />
+            </div>
+          </header>
+
+          <!-- 内容滚动容器 -->
+          <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <div class=" mx-auto space-y-10">
+
+              <!-- 1. 路径设置 (Paths) -->
+              <section v-if="currentTab === 'paths'" class="animate-in fade-in slide-in-from-right-4">
+                <div class="flex items-center justify-between mb-6">
+                  <h3 class="text-lg font-bold text-white">路径配置</h3>
+                  <button @click="autoDetect" v-tooltip="'尝试通过注册表自动搜索路径'" class="px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
+                    自动搜索路径
                   </button>
                 </div>
-
-                <div class="space-y-4">
-                  <InputGroup label="游戏安装目录" v-model="formData.game_install_path" @browse="handleBrowse('game_install_path')" :is-path="true"  placeholder="例如: D:\Steam\steamapps\common\RimWorld" />
-                  <InputGroup label="配置文件夹 (Config)" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" :is-path="true"  placeholder="自动检测通常能找到 LocalLow 下的路径" />
-                  <InputGroup label="创意工坊模组目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" :is-path="true"  placeholder="Steam Workshop content 目录" />
-                  <InputGroup label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" :is-path="true"  placeholder="游戏目录下的 Mods 文件夹" />
+                <div class="grid gap-6">
+                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleBrowse('game_install_path')" />
+                  <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" />
+                  <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
+                  <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" />
+                  <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
+                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
+                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
                 </div>
-              </div>
+              </section>
 
-              <!-- 2. 常规/界面设置页 -->
-              <div v-if="currentTab === 'general'" class="space-y-6">
-                 <div class="grid grid-cols-2 gap-6">
-                    <InputGroup label="窗口宽度" type="number" v-model.number="formData.window_width" />
-                    <InputGroup label="窗口高度" type="number" v-model.number="formData.window_height" />
-                 </div>
-                 <div>
-                  <InputGroup label="语言" v-model="formData.language" />
-                  <InputGroup label="主题" v-model="formData.theme" />
-                  <InputGroup label="备份保留时间" type="number" v-model.number="formData.backup_retention_days" />
-                 </div>
-                 
-                 <div class="space-y-2">
-                    <label class="text-xs text-text-dim uppercase tracking-wider font-bold ml-1">主题色</label>
-                    <div class="flex gap-3">
-                        <div v-for="color in colors" :key="color" 
-                            @click="formData.primary_color = color"
-                            class="w-8 h-8 rounded-full cursor-pointer ring-2 ring-offset-2 ring-offset-[#1a1a1a] transition-all"
-                            :class="formData.primary_color === color ? 'ring-white scale-110' : 'ring-transparent hover:scale-110'"
-                            :style="{ backgroundColor: color }">
-                        </div>
+              <!-- 2. 常规设置 (General) -->
+              <section v-if="currentTab === 'general'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">界面与环境</h3>
+                <div class="space-y-6">
+                  <div class="grid grid-cols-2 gap-6 aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="true">
+                    <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'ZH-cn'}, {label:'English', value:'EN'}]" />
+                    <CommonSelect label="配色方案" v-model="formData.theme" :options="[{label:'自动同步系统', value:'system'}, {label:'黑曜石', value:'dark'}]" />
+                  </div>
+                  <!-- <div class="grid grid-cols-2 gap-6">
+                    <CommonNumber label="窗口宽度" v-model="formData.window_width" :step="10" />
+                    <CommonNumber label="窗口高度" v-model="formData.window_height" :step="10" />
+                  </div> -->
+                  <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
+                  <div class="grid grid-cols-2 gap-6">
+                    <CommonNumber label="字体大小" v-model="formData.ui.font_size" :step="1" />
+                    <CommonNumber label="提示悬停时间" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="作者及来源" v-model="formData.ui.show_mod_details_author_info" description="控制详情页中 Mod 作者及来源板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="文件统计" v-model="formData.ui.show_mod_details_files_info" description="控制详情页中 Mod 文件统计板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="其它信息" v-model="formData.ui.show_mod_details_time_info" description="控制详情页中 Mod 其它信息板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="依赖信息" v-model="formData.ui.show_mod_details_dependencies_info" description="控制详情页中 Mod 依赖板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="自定义信息" v-model="formData.ui.show_mod_details_user_info" description="控制详情页中 Mod 自定义信息板块的显示。" />
+                      <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="Mod描述" v-model="formData.ui.show_mod_details_description" description="控制详情页中 Mod 说明板块的显示。" />
                     </div>
-                 </div>
+                    <CommonSwitch label="依赖关系图" v-model="formData.ui.show_dependency_graph" description="控制启用列表中依赖关系图的显示。" />
+                    <CommonSwitch label="列表索引" v-model="formData.ui.show_list_index" description="控制列表中索引列的显示。" />
+                    <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
+                      <CommonSwitch class="col-span-2" label="列表图标" v-model="formData.ui.show_list_icon" description="控制列表中的所有图标显示，包括简单视图和详细视图。" mini />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 图标" v-model="formData.ui.show_list_mod_icon" description="控制列表中 Mod 图标显示，不影响详细视图。" />
+                      <CommonSwitch :disabled="!formData.ui.show_list_icon" label="列表 Mod 类型图标" v-model="formData.ui.show_list_modtype_icon" description="控制列表中 Mod 类型图标显示，不影响详细视图。" />
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-                 <div class="p-4 rounded-xl bg-white/5 border border-white/5">
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <span class="text-sm text-white font-medium">启动时自动扫描</span>
-                        <input type="checkbox" v-model="formData.enable_auto_scan" class="accent-accent-primary w-5 h-5 rounded bg-black/50 border-white/20">
-                    </label>
-                    <label class="flex items-center justify-between cursor-pointer">
-                        <span class="text-sm text-white font-medium">自动清理缺失的Mod信息</span>
-                        <input type="checkbox" v-model="formData.delete_missing_mods_data" class="accent-accent-primary w-5 h-5 rounded bg-black/50 border-white/20">
-                    </label>
-                 </div>
+              <!-- 3. Steam 设置 -->
+              <section v-if="currentTab === 'steam'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">Steam 接口组件</h3>
+                <div class="space-y-6">
+                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
+                  <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" />
+                </div>
+              </section>
 
-                  <!-- 危险操作区 -->
-                  <div class="pt-6 border-t border-white/10">
-                    <h3 class="text-sm font-bold text-red-400 mb-4 uppercase tracking-wider">危险区域</h3>
-                    
-                    <div class="flex items-center justify-between p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-                      <div>
-                        <div class="text-sm font-bold text-red-200">重置数据库</div>
-                        <div class="text-xs text-red-200/60 mt-1">
-                          清除所有缓存的 Mod 信息、分组、标签和备注。<br>
-                          不会删除本地 Mod 文件。
+              <!-- 4. 网络设置 (Network) -->
+              <section v-if="currentTab === 'network'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">网络协议与代理</h3>
+                <div class="space-y-8">
+                   <div class="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-6">
+                      <CommonSwitch label="启用代理服务" v-model="formData.network.proxy.enabled" />
+                      <div v-if="formData.network.proxy.enabled" class="grid grid-cols-6 gap-3 animate-in zoom-in-95">
+                        <CommonSelect class="col-span-2" label="协议" v-model="formData.network.proxy.type" :options="[{label:'HTTP', value:'http'},{label:'SOCKS5', value:'socks5'}]" />
+                        <CommonInput class="col-span-3" label="主机地址" v-model="formData.network.proxy.host" placeholder="127.0.0.1" />
+                        <CommonNumber class="col-span-1" label="端口" v-model="formData.network.proxy.port" />
+                        <CommonInput class="col-span-3" label="用户名" v-model="formData.network.proxy.username" />
+                        <CommonInput class="col-span-3" label="密码" v-model="formData.network.proxy.password" is-password />
+                        <div class="col-span-6">
+                           <CommonTagInput label="不走代理的域名 (Bypass)" v-model="formData.network.proxy.bypass_list" />
                         </div>
                       </div>
-                      <button 
-                        @click="handleReset"
-                        class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-red-900/50 transition-all active:scale-95"
-                      >
-                        立即重置
-                      </button>
+                   </div>
+                   <CommonKVEditor label="自定义 Hosts 映射" v-model="formData.network.hosts" />
+                </div>
+              </section>
+
+              <!-- 5. AI 设置 (AI) -->
+              <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
+                <div class="flex items-center gap-3 mb-6">
+                  <h3 class="text-lg font-bold text-white">人工智能</h3>
+                  <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black uppercase">实验性</span>
+                </div>
+                <div class="space-y-6">
+                  <CommonSwitch label="启用 AI 辅助" v-model="formData.ai.enabled" description="用于日志分析、概述模组等功能" />
+                  <div v-if="formData.ai.enabled" class="space-y-6 animate-in slide-in-from-top-2">
+                    <CommonSelect label="请求类型" v-model="formData.ai.provider" :options="[{label:'OpenAI', value:'openai'},{label:'Anthropic', value:'anthropic'},{label:'Gemini', value:'gemini'}]" />
+                    <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
+                    <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
+                    <div class="grid grid-cols-2 gap-6">
+                      <CommonSelect label="选择模型" v-model="formData.ai.model" :options="currentAiModels" />
+                      <button class="btn btn-primary" @click="fetchAiModels">刷新模型列表</button>
+                      <button class="btn btn-primary" @click="testModel">测试模型</button>
+                      <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
                     </div>
                   </div>
+                </div>
+              </section>
 
-              </div>
-              <!-- 网络设置页 -->
-              <div v-if="currentTab === 'network'" class="space-y-6">
-                  
-                  <!-- 代理开关 -->
-                  <div class="p-4 rounded-xl bg-white/5 border border-white/10">
-                    <div class="relative flex flex-wrap items-center gap-1">
-                      <input v-model="formData.network.proxy.enabled" type="checkbox" value="" id="b01" class="relative w-6 h-3 scale-80 transition-colors rounded-lg appearance-none cursor-pointer hover:bg-slate-400 after:hover:bg-slate-600 checked:hover:bg-emerald-300 checked:after:hover:bg-emerald-600 focus:outline-none checked:focus:bg-emerald-400 checked:after:focus:bg-emerald-700 focus-visible:outline-none peer bg-slate-300 after:absolute after:-top-0.5 after:-left-1.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-500 after:transition-all checked:bg-emerald-200 checked:after:left-3 checked:after:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:after:bg-slate-300"/>
-                      <label v-tooltip="'为不同的区块使用不同颜色便于区分'" for="b01" class="cursor-pointer text-[10px] text-text-dim peer-disabled:cursor-not-allowed hover:text-white transition-colors">
-                        启用代理
-                      </label>
-                    </div>
-                    <div v-if="formData.network.proxy.enabled" class="grid grid-cols-2 gap-4">
-                        <div class="col-span-2">
-                            <label class="text-xs text-text-dim">代理类型</label>
-                            <select v-model="formData.network.proxy.type" class="...">
-                                <option value="http">HTTP</option>
-                                <option value="socks5">SOCKS5</option>
-                            </select>
-                        </div>
-                        
-                        <InputGroup label="主机 (Host)" v-model="formData.network.proxy.host" placeholder="127.0.0.1" />
-                        <InputGroup label="端口 (Port)" type="number" v-model.number="formData.network.proxy.port" />
-                        
-                        <!-- 排除列表 -->
-                        <div class="col-span-2">
-                            <label class="text-xs text-text-dim">排除列表 (逗号分隔)</label>
-                            <textarea 
-                                v-model="bypassString" 
-                                @input="updateBypassList"
-                                class="..."
-                                rows="2"
-                            ></textarea>
-                        </div>
-                    </div>
+              <!-- 6. 开发与调试 -->
+              <section v-if="currentTab === 'dev'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">开发与调试</h3>
+                <div class="space-y-6">
+                  <div class="grid grid-cols-2 gap-6">
+                    <CommonSwitch class="col-span-1" label="调试模式" v-model="formData.debug_mode" />
+                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" />
+                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" />
+                    <CommonNumber class="col-span-1" label="自动备份保留天数" v-model="formData.backup_retention_days" :step="1" />
+                    <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
+                    <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
                   </div>
-
-                  <!-- Hosts 配置 -->
-                  <div class="p-4 rounded-xl bg-white/5 border border-white/10">
-                      <h3 class="font-bold text-white mb-2">自定义 Hosts (仅后端生效)</h3>
-                      <!-- 简单的 Key-Value 编辑器列表 -->
-                      <div v-for="(ip, domain) in formData.network.hosts" :key="domain" class="flex gap-2 mb-2">
-                          <input :value="domain" readonly class="..." />
-                          <input v-model="formData.network.hosts[domain]" class="..." />
-                          <button @click="deleteHost(domain)">删除</button>
-                      </div>
-                      <!-- 添加新 Host 的输入框 -->
-                      <div class="flex gap-2 mt-2">
-                          <input v-model="newHostDomain" placeholder="域名" class="..." />
-                          <input v-model="newHostIp" placeholder="IP" class="..." />
-                          <button @click="addHost">添加</button>
-                      </div>
+                  <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
+                    <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
+                    <p class="text-xs text-accent-danger/60 leading-relaxed">重置操作将清空所有本地数据库缓存、分组信息和自定义备注。该操作不可撤销，请确保已备份您的 Mod 列表。</p>
+                    <button @click="handleReset" class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-white border border-accent-danger/30 rounded-lg text-xs font-bold transition-all">
+                      立即重置本地数据库
+                    </button>
                   </div>
-                  
-                  <div class="text-xs text-yellow-500 mt-2">
-                      注意：修改代理设置后，需要重启软件才能对界面完全生效。
-                  </div>
-              </div>
+                </div>
+              </section>
 
-            </div>
-
-            <!-- 底部按钮 -->
-            <div class="h-20 border-t border-white/5 flex items-center justify-end px-8 gap-4 bg-black/20">
-              <button @click="appStore.closeSettingsPanel()" class="px-6 py-2 rounded-lg text-text-dim hover:text-white hover:bg-white/5 transition-colors text-sm font-bold">
-                取消
-              </button>
-              <button @click="save" class="px-8 py-2 rounded-lg bg-accent-primary hover:brightness-110 text-white shadow-lg shadow-accent-primary/20 text-sm font-bold transition-all active:scale-95">
-                保存并应用
-              </button>
             </div>
           </div>
 
-        </div>
-      </transition>
+          <!-- D. 底部操作栏 -->
+          <footer class="h-20 flex items-center justify-end px-10 gap-4 border-t border-white/5 bg-white/2">
+             <button @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-white transition-colors">放弃修改</button>
+             <button @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-black font-black text-sm shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95 transition-all group">
+                <div class="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
+                应用并保存配置
+             </button>
+          </footer>
+        </main>
+
+      </div>
     </div>
   </transition>
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, nextTick, h } from 'vue'
+import { 
+  FolderTree, AppWindow, Globe, Cpu, Terminal, 
+  Search, ShieldAlert, Settings
+} from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
 
-// 简单的输入框子组件
-const InputGroup = {
-  props: ['label', 'modelValue', 'placeholder', 'type', 'isPath'],
-  emits: ['update:modelValue'],
-  template: `
-    <div class="space-y-1.5">
-      <label class="text-xs text-text-dim uppercase tracking-wider font-bold ml-1">{{ label }}</label>
-      <div class="relative group flex items-center gap-2">
-        <div class="relative flex-1 ">
-          <input :type="type || 'text'" :value="modelValue" 
-            @input="$emit('update:modelValue', $event.target.value)"
-            :placeholder="placeholder"
-            class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-accent-primary focus:bg-black/40 transition-all font-mono"
-          />
-          <div class="absolute inset-0 rounded-lg ring-1 ring-white/0 group-hover:ring-white/10 pointer-events-none transition-all"></div>
-          
-        </div>
-
-        <!-- 浏览按钮 (仅当 is-path 为 true 时显示) -->
-        <button v-if="isPath"
-            @click="$emit('browse')"
-            class="px-3 py-2.5 bg-white/5 hover:bg-accent-primary hover:text-white text-text-dim border border-white/10 rounded-lg transition-all active:scale-95"
-            v-tooltip="\`浏览文件夹\`">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-            </svg>
-        </button>
-
-      </div>
-
-    </div>
-  `
-}
+// 导入你的 Common UI
+import CommonPathInput from './common/input/CommonPathInput.vue'
+import CommonSwitch from './common/input/CommonSwitch.vue'
+import CommonInput from './common/input/CommonInput.vue'
+import CommonNumber from './common/input/CommonNumber.vue'
+import CommonSelect from './common/input/CommonSelect.vue'
+import CommonTagInput from './common/input/CommonTagInput.vue'
+import CommonKVEditor from './common/input/CommonKVEditor.vue'
 
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 
 const currentTab = ref('paths')
-const detecting = ref(false)
-
-
-const tabs = [
-  { id: 'paths', label: '路径配置' },
-  { id: 'general', label: '界面与常规' },
-  { id: 'network', label: '网络设置' },
-]
-
-// 1. 代理排除列表 (Bypass List) 的字符串代理
-const bypassString = ref('')
-
-// 2. 添加新 Host 的临时变量
-const newHostDomain = ref('')
-const newHostIp = ref('')
-
-
-// 预设颜色
-const colors = ['#06b6d4', '#8b5cf6', '#f43f5e', '#10b981', '#f59e0b']
-
-// 本地表单数据 (复制一份 Store 数据，避免直接修改 Store)
 const formData = ref({})
 
-// 当弹窗打开时，从 Store 同步数据
+const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
+  [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
+)
+
+const tabs = [
+  { id: 'paths', label: '路径配置', icon: FolderTree },
+  { id: 'general', label: '界面设置', icon: AppWindow },
+  { id: 'steam', label: 'STEAM', icon: Steam },
+  { id: 'network', label: '网络连接', icon: Globe },
+  { id: 'ai', label: 'AI 集成', icon: Cpu },
+  { id: 'dev', label: '开发调试', icon: Terminal },
+]
+
+const currentAiModels = ref([])
+
+// 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
-    // 深拷贝 settings 防止污染
-    formData.value = JSON.parse(JSON.stringify(appStore.settings))
+    // 利用 requestAnimationFrame 或 setTimeout
+    // 让浏览器先渲染出弹窗的“背景”和“动画第一帧”，然后再去塞数据
+    requestAnimationFrame(() => {
+      // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)
+      // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
+      try {
+        formData.value = structuredClone(appStore.settings)
+      } catch (e) {
+        // 降级兼容
+        formData.value = JSON.parse(JSON.stringify(appStore.settings))
+      }
+    })
   }
 })
-// 当弹窗打开或 formData 加载完成后，将数组转为字符串显示
-watch(() => formData.value.network?.proxy?.bypass_list, (list) => {
-    if (list && Array.isArray(list)) {
-        bypassString.value = list.join(', ')
-    } else {
-        bypassString.value = ''
-    }
-}, { immediate: true })
 
-
-// 自动检测路径
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
-  if (paths) {
-    // 只更新表单，不直接保存，让用户确认
-    Object.assign(formData.value, paths)
-  } else {
-    // 可以加个 Toast 提示失败
-    toast.warning('未能自动找到所有路径，请手动填写。')
+  if (paths) Object.assign(formData.value, paths)
+}
+
+const handleBrowse = async (pathKey) => {
+  // 处理嵌套路径 (如 'steam.steamcmd_path')
+  const keys = pathKey.split('.')
+  let current = formData.value
+  for (let i = 0; i < keys.length - 1; i++) {
+    current = current[keys[i]]
   }
+  const lastKey = keys[keys.length - 1]
+  
+  const res = await appStore.getFolderPath(current[lastKey])
+  if (res) current[lastKey] = res
+}
+
+// 测试模型
+const testModel = async () => {
+  const res = await appStore.chatWithAI("介绍一下自己")
+  if (res) {
+    console.log("模型测试结果:", res)
+    // toast.success("模型测试成功")
+  }
+}
+
+const fetchAiModels = async () => {
+  const models = await appStore.fetchAiModels(formData.value.ai)
+  if (models) currentAiModels.value = models.map(model => ({
+    value: model,
+    label: model
+  }))
 }
 
 const handleReset = async () => {
-    const res = await confirmStore.confirmAction('警告','确定要清空数据库吗？这会导致所有分组和自定义备注丢失！',{type:'error'})
-    if(res) appStore.resetDatabase()
+  const ok = await confirmStore.confirmAction('确认重置', '这将抹除所有本地缓存数据，确定继续？', { type: 'error' })
+  if (ok) appStore.resetDatabase()
 }
 
-// 保存
 const save = () => {
-    appStore.applySettings(formData.value)
+  appStore.applySettings(formData.value)
 }
-
-// 打开Mod路径
-const openPath = (path) => {
-  if(path) appStore.openPath(path)
-}
-
-// 打开Url
-const openUrl = (url) => {
-  if(url) window.open(url, '_blank')
-}
-
-// 浏览文件夹
-const handleBrowse = async (fieldKey) => {
-    if(!window.pywebview) return
-    
-    // 调用后端 API
-    const path = await appStore.getFolderPath(formData.value[fieldKey])
-    
-    // 如果用户选了路径（没点取消），则更新数据
-    if (path) {
-        formData.value[fieldKey] = path
-    }
-}
-
-
-// 1. 更新 Bypass List (Textarea -> Array)
-const updateBypassList = () => {
-    if (!formData.value.network) return
-    
-    // 分割字符串，去空，去空格
-    const list = bypassString.value
-        .split(/[,;\n]/) // 支持逗号、分号、换行符分隔
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-        
-    formData.value.network.proxy.bypass_list = list
-}
-
-// 2. 添加 Host
-const addHost = () => {
-    const domain = newHostDomain.value.trim()
-    const ip = newHostIp.value.trim()
-    
-    if (!domain || !ip) {
-        // 可以加个简单的提示
-        return
-    }
-    
-    // 初始化 hosts 对象（如果为空）
-    if (!formData.value.network) formData.value.network = {}
-    if (!formData.value.network.hosts) formData.value.network.hosts = {}
-    
-    // 写入
-    formData.value.network.hosts[domain] = ip
-    
-    // 清空输入框
-    newHostDomain.value = ''
-    newHostIp.value = ''
-}
-
-// 3. 删除 Host
-const deleteHost = (domain) => {
-    if (formData.value.network?.hosts) {
-        delete formData.value.network.hosts[domain]
-    }
-}
-
 </script>
 
 <style scoped>
-/* 动画效果 */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.cubic-bezier {
+  transition-timing-function: cubic-bezier(0.37, 1.95, 0.66, 0.56);
+}
 
-.scale-enter-active, .scale-leave-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.scale-enter-from, .scale-leave-to { transform: scale(0.95); opacity: 0; }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-primary);
+}
+
+/* 页面切换动画 */
+.panel-fade-enter-active, .panel-fade-leave-active { transition: opacity 0.4s ease; }
+.panel-fade-enter-from, .panel-fade-leave-to { opacity: 0; }
+
+/* 简单的类名修复，如果 Tailwind 不支持 */
+.direction-rtl { direction: rtl; }
 </style>

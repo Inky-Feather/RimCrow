@@ -176,8 +176,6 @@ export const useModStore = defineStore('mods', () => {
     activeIds.value = (data.active_load_order || []).map(id => id.toLowerCase())
     savedActiveIds.value = [...data.active_load_order] || []  // 保存原始顺序，用于判定排序变动
     activeLoadModifyTime.value = data.active_load_modify_time  // 排序文件修改时间（更新时间）
-    // 重新计算 Inactive列表 (排除 Active 和 Temp)（本质上 Temp列表 与 Inactive列表 一样，但在前端分出差异方便整理）
-    updateInactiveIds()
     
     // 直接重建 Map，确保删除的 Mod 能被移除，新增的能被加入
     const tempMap = new Map()
@@ -193,6 +191,8 @@ export const useModStore = defineStore('mods', () => {
       tempMap.set(mod.package_id.toLowerCase(), mod)
     })
     allModsMap.value = tempMap
+    // 重新计算 Inactive列表 (排除 Active 和 Temp)（本质上 Temp列表 与 Inactive列表 一样，但在前端分出差异方便整理）
+    updateInactiveIds()
     dataVersion.value++    // 更新数据版本号（刷新标记）
   }
   // 重置 Mod 数据
@@ -319,9 +319,7 @@ export const useModStore = defineStore('mods', () => {
         console.error("启动扫描失败:", res)
         toast.error(`扫描启动失败: \n${res.message}`)
         return
-      }
-      // 扫描结束后，主动拉取一次最新数据刷新界面
-      appStore.refreshData()
+      } 
     } catch (e) {
       console.error("扫描请求异常:", e)
       toast.error(`扫描请求异常: \n${e.message}`)
@@ -338,6 +336,8 @@ export const useModStore = defineStore('mods', () => {
     } else {
       toast.success(`扫描完成，共计扫描${detail.total}个模组，新增${detail.stats.added}个，\n更新${detail.stats.updated}个，删除${detail.stats.removed}个，已知${detail.stats.skipped}个。`,{position: "top-center",timeout: 5000})
     }
+    // 扫描结束后，主动拉取一次最新数据刷新界面
+    appStore.refreshData()
     console.log("扫描统计:", detail)
   }
   // 自动排序 Mod

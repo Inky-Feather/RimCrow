@@ -1,7 +1,7 @@
 // stores/appStore.js
 
 import { defineStore } from 'pinia'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { createToastInterface } from 'vue-toastification'
 import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
@@ -36,15 +36,87 @@ export const useAppStore = defineStore('app', () => {
   const downloadTasks = ref(new Map()) // 使用 Map 存储 {id: taskObject}
   // 全局设置
   const settings = ref({
+    // --- 路径 (Paths) ---
     game_install_path: '',
+    game_data_path: '',
+    game_config_path: '',
     workshop_mods_path: '',
     local_mods_path: '',
-    game_config_path: '',
     home_path: '',
-    game_version: '',
-    enable_auto_scan: true,
+    community_rules_url: '',
+    community_rules_path: '',
+    user_rules_path: '',
+
+    // --- 系统 ---
+    language: 'ZH-cn',
     window_width: 1400,
     window_height: 900,
+    open_url_on_system: false,
+
+    // --- 界面（UI） ---
+    ui: {
+      theme: 'system',
+      font_size: 14,
+      tooltip_hover_time: 1000,  // 鼠标悬停显示提示时间 (毫秒)
+
+      show_mod_details_panel: true,  // 是否显示 Mod 详情面板
+      show_icons_cloud: true,  // 是否显示动态图标云
+      show_mod_details_author_info: true,  // 是否显示 Mod 详情面板作者信息
+      show_mod_details_files_info: true,  // 是否显示 Mod 详情面板文件信息
+      show_mod_details_time_info: true,  // 是否显示 Mod 详情面板时间信息
+      show_mod_details_dependencies_info: true,  // 是否显示 Mod 详情面板依赖信息
+      show_mod_details_user_info: true,  // 是否显示 Mod 详情面板自定义信息
+      show_mod_details_description: true,  // 是否显示 Mod 详情面板描述
+
+      show_dependency_graph: true,  // 是否显示依赖关系图
+      show_list_index: true,  // 是否显示列表索引列
+      show_list_icon: true,       // 是否显示 Mod 图标
+      show_list_mod_icon: true,       // 是否显示 Mod 图标
+      show_list_modtype_icon: true,  // 是否显示 Mod 类型图标
+    },
+
+
+    // --- 网络 (Network) - 深度嵌套 ---
+    network: {
+      proxy: {
+        enabled: false,
+        type: 'http',
+        host: '',
+        port: 0,
+        username: '',
+        password: '',
+        bypass_list: ['127.0.0.1', 'localhost']
+      },
+      hosts: {} // Object: { 'domain': 'ip' }
+    },
+
+    // --- Steam ---
+    steam: {
+      steamcmd_path: '',
+      use_steam_client: true,
+      steam_appid: 294100
+    },
+
+    // --- AI ---
+    ai: {
+      enabled: false,
+      provider: 'openai',
+      base_url: 'https://api.openai.com/v1',
+      api_key: '',
+      model: 'gpt-3.5-turbo',
+      temperature: 0.7,
+      max_tokens: 2000
+    },
+    
+    // --- 高级 (Advanced) ---
+    backup_retention_days: 30,
+    enable_auto_scan: true,
+    delete_missing_mods_data: false,
+
+    // --- 调试 (Debug) ---
+    debug_mode: true,
+    log_retention_days: 7,
+    log_level: 'INFO'
   })
 
 
@@ -65,6 +137,20 @@ export const useAppStore = defineStore('app', () => {
            null
   })
 
+  // 监听字体大小变化，实时更新根字号
+  watch(() => settings.value.ui.font_size, (newSize) => {
+    // 将根字号设置为用户定义的数值
+    // 默认 14px，用户调大到 16px，所有使用 rem 的组件都会等比例变大
+    document.documentElement.style.fontSize = `${newSize}px`;
+  }, { immediate: true });
+  // 像素值缩放函数
+  const scalePx = (basePx, defaultFontSize = 16) => {
+    if (!settings.value.ui.font_size) return basePx;
+    // 核心公式
+    const scaled = basePx * (settings.value.ui.font_size / defaultFontSize);
+    // 返回四舍五入后的整数，防止某些库对浮点数支持不佳导致抖动
+    return Math.round(scaled);
+  };
 
   // === Utils ===
   // 等待后端就绪
@@ -98,16 +184,13 @@ export const useAppStore = defineStore('app', () => {
       await waitForBackend()
       // 注册事件监听
       setupEventListeners()
-      
-      // 级联初始化其他 Store
-      const modStore = useModStore()
-      
       // 获取初始数据 (这里包含 settings, version 等)
       await refreshData(true) 
       // 界面渲染完毕后，根据设置决定是否启动后台扫描
-      if (settings.value.enable_auto_scan !== false) {
+      if (settings.value.enable_auto_scan !== false && settings.value.game_install_path) {
         console.log("启动自动扫描...")
         toast.info("自动扫描已启动...")
+        const modStore = useModStore()
         modStore.scanMods()
       }
       // 检查 Steam 工具
@@ -135,7 +218,8 @@ export const useAppStore = defineStore('app', () => {
         if (isInit && res.data.settings) {
           settings.value = res.data.settings
         }
-        if (res.data.is_first_db_init) {
+        // console.log('allmods', res.data.is_first_db_init , res.data.paths_configured , !res.data.all_mods||res.data.all_mods?.length==0)
+        if (res.data.is_first_db_init && res.data.paths_configured && (!res.data.all_mods||res.data.all_mods?.length==0)) {
           toast.warning("数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。",{position: "top-center",timeout: 10000})
         }
         // 更新 Groups (防止分组内的 Mod 被删了但分组里还有 ID)
@@ -148,8 +232,10 @@ export const useAppStore = defineStore('app', () => {
         appVersion.value = res.data.app_version || 'Unknown'  // 版本
         buildMode.value = res.data.build_mode || ''           // 构建模式
         // 检查路径 (主要路径无效则打开设置)
-        if (!res.data.paths_configured) uiState.showSettingsPanel = true
-        console.log("刷新数据成功:", res)
+        if (!res.data.paths_configured) {
+          toast.warning("未配置游戏路径，请先配置游戏路径。",{position: "top-center",timeout: 5000})
+          uiState.showSettingsPanel = true
+        }
       }
     } catch (e) {
       toast.error(`刷新数据失败: \n${e.message}`)
@@ -194,7 +280,8 @@ export const useAppStore = defineStore('app', () => {
         toast.success(`下载完成: ${d.filename}`)
       }
       if (d.status === 'error') {
-        toast.error(`下载失败: ${d.filename}\n${d.error}`)
+        toast.error(`下载失败: ${d.filename}\n请尝试更换网络环境后重新下载`)
+        console.error(`下载失败: ${d.filename}\n${d.error}`)
       }
     })
   }
@@ -229,10 +316,17 @@ export const useAppStore = defineStore('app', () => {
       if (checkResult(res, "应用设置")) {
         // 更新本地 store
         Object.assign(settings.value, newSettings)
-        // 如果路径变了，可能需要重新扫描，这里简单起见先关闭弹窗
+        // 如果路径变了，可能需要重新扫描
         closeSettingsPanel()
-        // 可以在这里触发一次重新初始化或扫描
-        await initialize() 
+        // 如果启用了自动扫描且路径有变化，触发扫描
+        if (newSettings.game_install_path && settings.value.enable_auto_scan) {
+          // const modStore = useModStore()
+          // modStore.scanMods()
+          await initialize()
+        }else{
+          await refreshData()
+        }
+
       }
     } catch (e) {
       console.error("应用设置异常:", e)
@@ -336,7 +430,6 @@ export const useAppStore = defineStore('app', () => {
         return res.data
     } else{
         console.error("获取文件夹路径异常:", res.message)
-        toast.error(`获取文件夹路径异常: \n${res.message}`)
         return
     }
   }
@@ -378,10 +471,7 @@ export const useAppStore = defineStore('app', () => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.check_steam_tools()
     if (checkResult(res, "检查Steam工具")) {
-      toast.success(`检查Steam工具成功！`)
-    } else {
-      console.error("检查Steam工具异常:", res.message)
-      toast.error(`检查Steam工具异常: \n${res.message}`)
+      
     }
   }
   // 打开Steam创意工坊
@@ -398,11 +488,9 @@ export const useAppStore = defineStore('app', () => {
     const workshop_id = modStore.takeModById(mod_id).workshop_id
     if(!workshop_id) return
     const res = await window.pywebview.api.steam_subscribe(workshop_id)
-    if (checkResult(res, "订阅模组")) {
-      toast.success(`订阅模组 ${mod_id} 成功！`)
+    if (checkResult(res, `订阅模组 ${modStore.displayNameById(mod_id)}`)) {
     } else {
       console.error("订阅模组异常:", res.message)
-      toast.error(`订阅模组 ${mod_id} 异常: \n${res.message}`)
     }
   }
   // 取消订阅模组
@@ -412,11 +500,10 @@ export const useAppStore = defineStore('app', () => {
     const workshop_id = modStore.takeModById(mod_id).workshop_id
     if(!workshop_id) return
     const res = await window.pywebview.api.steam_unsubscribe(workshop_id)
-    if (checkResult(res, "取消订阅模组")) {
-      toast.success(`取消订阅模组 ${mod_id} 成功！`)
+    if (checkResult(res, `取消订阅模组 ${modStore.displayNameById(mod_id)}`)) {
+      
     } else {
       console.error("取消订阅模组异常:", res.message)
-      toast.error(`取消订阅模组 ${mod_id} 异常: \n${res.message}`)
     }
   }
 
@@ -428,8 +515,6 @@ export const useAppStore = defineStore('app', () => {
     if (checkResult(res, "获取AI配置")) {
       res.data.config
       res.data.prompts
-    } else {
-      console.error("获取AI配置异常:", res.message)
     }
   }
   // 保存AI设置
@@ -438,27 +523,43 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.ai_save_config(config_data)
     if (checkResult(res, "保存AI配置",true)) {
       return true
-    } else {
-      console.error("保存AI配置异常:", res.message)
+    }
+  }
+  // 获取AI模型 temp_config: {provider, base_url, api_key}
+  const fetchAiModels = async (temp_config) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.ai_fetch_models(temp_config)
+    if (checkResult(res, "获取AI模型")) {
+      return res.data
+    }
+  }
+  // 与AI聊天
+  const chatWithAI = async (prompt) => {
+    if (!window.pywebview) return
+    const res = await window.pywebview.api.ai_chat(prompt)
+    if (checkResult(res, "与AI聊天")) {
+      return res.data
     }
   }
   // 使用AI功能
   const useAI = async (task_key, params) => {
     if (!window.pywebview) return
+    if (!settings.value.ai.enabled) {
+      toast.warning("AI功能未启用！")
+      return
+    }
     const res = await window.pywebview.api.ai_execute_task(task_key, params)
     if (checkResult(res, `使用AI ${task_key}`)) {
       return JSON.parse(res.data)
-    } else {
-      console.error(`使用AI ${task_key} 异常:"`, res.message)
     }
   }
 
   return {
     appVersion, buildMode, uiState, scanProgress, settings, isLoading, isDownloading, downloadTasks, activeDownloadTask, 
-    initialize, checkResult, refreshData, toggleUiState,
+    initialize, checkResult, refreshData, toggleUiState, scalePx,
     launchGame, autoDetectPaths, openPath, getFilePath, getFolderPath, deletePath, openUrl, startDownload, 
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, 
     checkSteamTools, openSteamWorkshopUrl, unsubscribeMod, subscribeMod,
-    getAiConfig, saveAIConfig, useAI
+    getAiConfig, saveAIConfig, useAI, fetchAiModels, chatWithAI
   }
 })
