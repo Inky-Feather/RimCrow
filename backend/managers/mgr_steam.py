@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import platform
-import winreg
 import subprocess
 import threading
 import time
@@ -17,6 +16,11 @@ from dateutil import parser
 from typing import Any, cast
 from json_repair import repair_json
 from pathlib import Path
+
+try:
+    import winreg
+except ImportError:  # pragma: no cover - 仅在非 Windows 平台触发
+    winreg = None
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -514,7 +518,8 @@ class SteamManager:
             "running": False,
             "logged_in": False,
         }
-        if platform.system() != "Windows": return result
+        if platform.system() != "Windows" or winreg is None:
+            return result
 
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\ActiveProcess")
@@ -697,32 +702,43 @@ class SteamManager:
 
         return status
 
-    def start_steam(self) -> bool:
-        """尝试启动 Steam 客户端"""
-        if self.is_steam_running(): return True
-            
+    def start_steam(self) -> dict:
+        """尝试启动 Steam 客户端，优先本体，失败时再回退协议唤醒。"""
+        if self.is_steam_running():
+            return {
+                "ok": True,
+                "method": "already_running",
+                "used_url_fallback": False,
+            }
+
         steam_exe = str(self.steam_exe) if self.steam_exe else None
-        
-        # 找不到执行文件时的兜底策略：使用系统协议唤醒
-        if not steam_exe or not os.path.exists(steam_exe):
+        if steam_exe and os.path.exists(steam_exe):
             try:
-                if platform.system() == "Windows":
-                    os.startfile("steam://open/main")
-                    return True
-            except:
-                pass
-            return False
-            
-        try:
-            # 独立进程启动，绝不阻塞当前程序的运行
-            if platform.system() == "Windows":
                 subprocess.Popen([steam_exe])
-            else:
-                subprocess.Popen([steam_exe])
-            return True
-        except Exception as e:
-            logger.error(f"Failed to start Steam: {e}")
-            return False
+                return {
+                    "ok": True,
+                    "method": "steam_exe",
+                    "used_url_fallback": False,
+                }
+            except Exception as e:
+                logger.warning(f"Failed to start Steam via executable: {e}", exc_info=True)
+
+        if platform.system() == "Windows":
+            try:
+                os.startfile("steam://open/main")
+                return {
+                    "ok": True,
+                    "method": "steam_url",
+                    "used_url_fallback": True,
+                }
+            except Exception as e:
+                logger.error(f"Failed to start Steam via URL protocol: {e}", exc_info=True)
+
+        return {
+            "ok": False,
+            "method": "failed",
+            "used_url_fallback": False,
+        }
     
     
     # =========================================================
@@ -1467,19 +1483,25 @@ class SteamManager:
     
     def get_steam_path(self, with_exe=False):
         """从注册表获取 Steam 安装路径"""
-        try:
-            # 尝试读取 64位 注册表
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam")
-            path, _ = winreg.QueryValueEx(key, "InstallPath")
-            return os.path.join(path, "steam.exe") if with_exe else path
-        except:
+        if platform.system() != "Windows" or winreg is None:
+            return None
+
+        key_paths = [
+            r"SOFTWARE\WOW6432Node\Valve\Steam",
+            r"SOFTWARE\Valve\Steam",
+        ]
+
+        # 这里只查 Windows 注册表安装位；其它平台的 Steam 路径发现不应复用这个入口。
+        for key_path in key_paths:
             try:
-                # 尝试读取 32位 注册表
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam")
-                path, _ = winreg.QueryValueEx(key, "InstallPath")
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                    path, _ = winreg.QueryValueEx(key, "InstallPath")
                 return os.path.join(path, "steam.exe") if with_exe else path
-            except:
-                return None
+            except OSError:
+                continue
+
+        logger.debug("Steam registry InstallPath not found.")
+        return None
 
     def launch_via_steam_cmd(self, app_id=RIMWORLD_APP_ID, extra_args=None):
         steam_exe = str(self.steam_exe) if self.steam_exe else None

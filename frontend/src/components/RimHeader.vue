@@ -38,6 +38,11 @@
         <FileSearch2 class="size-6" />
       </button>
 
+      <button @click="appStore.toggleUiState('showModConfigManager')" v-tooltip="`查看模组配置`"
+        class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+        <FileSliders class="size-6" />
+      </button>
+
       <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
@@ -93,7 +98,7 @@
           <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏安装目录</button>
           <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏DLC目录</button>
           <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >本地Mod目录</button>
-          <button @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
+          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
           <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">管理器Mod目录</button>
         </div>
       </div>
@@ -117,18 +122,21 @@
 </template>
 
 <script setup>
+defineOptions({ inheritAttrs: false })
+
+import { useAttrs } from 'vue'
 import { useAppStore } from '../stores/appStore'
 import { useAiStore } from '../stores/aiStore'
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
-import { BotMessageSquare, ClipboardList, CloudCog, FileSearch2, Images } from 'lucide-vue-next';
+import { BotMessageSquare, ClipboardList, FileSearch2, FileSliders, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
 import { useOrderStore } from '../stores/orderStore';
-
 
 const appStore = useAppStore()
 const aiStore = useAiStore()
 const orderStore = useOrderStore()
 const profileStore = useProfileStore()
+const attrs = useAttrs()
 
 
 // 从导入列表加载

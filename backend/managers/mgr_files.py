@@ -634,7 +634,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview folder dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开文件夹选择框失败: {e}") from e
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askdirectory(initialdir=path or os.getcwd()) or None
         )
@@ -677,7 +677,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview open dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开文件选择框失败: {e}") from e
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askopenfilename(
@@ -718,7 +718,7 @@ class FileManager:
                 return None
             except Exception as e:
                 logger.warning(f"Webview save dialog failed: {e}")
-                return None
+                raise RuntimeError(f"打开保存对话框失败: {e}") from e
 
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(
@@ -797,7 +797,7 @@ class FileManager:
     def build_profile_shortcut_spec(
         profile: Any,
         extra_args: list[str] | None = None,
-        prefer_steam_launch: bool = True,
+        prefer_steam_launch: bool = False,
         steam_exe_path: str | None = None,
         destination_dir: str | None = None,
         steam_app_id: str = "294100",
@@ -851,7 +851,7 @@ class FileManager:
     def create_profile_desktop_shortcut(
         profile: Any,
         extra_args: list[str] | None = None,
-        prefer_steam_launch: bool = True,
+        prefer_steam_launch: bool = False,
         steam_exe_path: str | None = None,
         steam_app_id: str = "294100",
     ) -> Dict[str, Any]:
@@ -1524,10 +1524,15 @@ class PathChecker:
         # 2. 检查版本
         version = GameManager.get_game_version(str(path))
         res['data']["game_version"] = version if version else "未知"
-        # 3. Steam 判定 (优化判定逻辑)
-        is_steam = "steamapps" in path.parts and "common" in path.parts
-        res['data']["is_steam"] = is_steam
-        res['msg'] = f"游戏本体：{exe}\n游戏版本：{version}\n{'是' if is_steam else '非'}Steam版"
+        # 3. Steam 判定
+        from backend.managers.mgr_game_install import GameInstallInspector
+
+        install_facts = GameInstallInspector().quick_inspect(str(path))
+        res['data']["is_steam"] = bool(install_facts.is_steam)
+        res['data']["is_steam_managed"] = bool(install_facts.is_steam_managed)
+        steam_text = "Steam 版" if install_facts.is_steam else "非 Steam 版"
+        managed_text = "受 Steam 管理主版本" if install_facts.is_steam_managed else "非 Steam 管理主版本"
+        res['msg'] = f"游戏本体：{exe}\n游戏版本：{version}\n{steam_text}\n{managed_text}"
         
         return res
     
@@ -1584,7 +1589,10 @@ class PathChecker:
     @classmethod
     def check_workshop_path(cls, path_str: str) -> Dict:
         """
-        检查 Workshop 路径是否有效
+        检查 Workshop 路径是否有效。
+
+        这里不再只看 `steamapps/workshop`，而是要求命中 RimWorld 对应的
+        `steamapps/workshop/content/294100`，避免把其它游戏或中间目录误判为有效。
         返回：{
             'pass': True,
             'data': {},
@@ -1594,10 +1602,14 @@ class PathChecker:
         """
         if not path_str or not Path(path_str).exists():
             return cls._format_res(False, msg="Workshop 路径不存在")
-        
-        is_valid = "steamapps" in Path(path_str).parts and "workshop" in Path(path_str).parts
+
+        normalized_parts = [part.lower() for part in Path(os.path.normpath(path_str)).parts]
+        is_valid = any(
+            normalized_parts[index:index + 4] == ["steamapps", "workshop", "content", "294100"]
+            for index in range(max(0, len(normalized_parts) - 3))
+        )
         return cls._format_res(is_valid, data=path_str, 
-                               msg=f"Workshop 路径：{path_str}" if is_valid else "路径不在 Steam 库中",
+                               msg=f"Workshop 路径：{path_str}" if is_valid else "路径不在 Steam Workshop 294100 目录中",
                                msg_type="success" if is_valid else "warn")
         
     @classmethod

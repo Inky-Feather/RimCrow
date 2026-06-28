@@ -39,6 +39,7 @@ mgr_rules_module = importlib.import_module("backend.managers.mgr_rules")
 RuleActionType = mgr_rules_module.RuleActionType
 RuleManager = mgr_rules_module.RuleManager
 RULE_SOURCES = mgr_rules_module.RULE_SOURCES
+resolve_import_group_mod_ids = mgr_rules_module._resolve_import_group_mod_ids
 
 
 class DummyAtomic:
@@ -205,6 +206,13 @@ class TestRuleManagerDynamicWeights(unittest.TestCase):
 
         self.assertEqual(manager.user_dynamic_rules[0]["action"]["value"], 1)
         self.assertTrue(result["warnings"])
+
+    def test_resolve_import_group_mod_ids_drops_path_hash_like_values(self):
+        resolved = resolve_import_group_mod_ids(
+            ["deadbeefdeadbeefdeadbeefdeadbeef", "mod.alpha", "DEADBEEFDEADBEEFDEADBEEFDEADBEEF", " ", None],
+        )
+
+        self.assertEqual(resolved, ["mod.alpha"])
 
     def test_load_all_allows_community_rules_without_timestamp_and_still_loads_user_rules(self):
         manager = self._make_manager([], mock_save=False)

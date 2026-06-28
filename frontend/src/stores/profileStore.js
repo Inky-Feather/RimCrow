@@ -24,9 +24,12 @@ export const useProfileStore = defineStore('profile', () => {
     game_install_path: '',
     user_data_path: '',
     game_version: '',
-    prefer_steam_launch: true,
-    use_workshop_mods: true,
+    prefer_steam_launch: false,
+    use_workshop_mods: false,
     use_self_mods: false,
+    is_steam: false,
+    is_steam_managed: false,
+    runtime_capabilities: {},
     run_commands: [],
 
     local_mods_path: '',
@@ -46,6 +49,15 @@ export const useProfileStore = defineStore('profile', () => {
     profiles.value.find(p => p.id === currentProfileId.value) || null
   )
 
+  const applyLastPlayedTime = (profileId, lastPlayedTime) => {
+    const normalizedProfileId = String(profileId || '').trim()
+    const normalizedPlayedTime = Number(lastPlayedTime || 0)
+    if (!normalizedProfileId || !normalizedPlayedTime) return
+
+    const profile = profiles.value.find(item => item.id === normalizedProfileId)
+    if (profile) profile.last_played_time = normalizedPlayedTime
+  }
+
   // === Actions ===
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
 
@@ -56,14 +68,6 @@ export const useProfileStore = defineStore('profile', () => {
     ].join('<br>')
   )
 
-  const isSteamVdfShortcutFlow = (profile) => {
-    if (!profile || profile.id === 'default') return false
-    if (!profile.prefer_steam_launch) return false
-    const defaultProfile = profiles.value.find(item => item.id === 'default')
-    if (!defaultProfile?.game_install_path || !profile.game_install_path) return false
-    return String(defaultProfile.game_install_path).trim().toLowerCase() !== String(profile.game_install_path).trim().toLowerCase()
-  }
-  
   // 获取环境列表
   const fetchProfiles = async () => {
     if (!window.pywebview) return
@@ -107,8 +111,10 @@ export const useProfileStore = defineStore('profile', () => {
         groupStore.reset()
         // 2. 先立即拉取一次新环境上下文，确保停用列表等持久化状态即时恢复
         await appStore.refreshData()
-        // 3. 再后台触发一次扫描，补齐该环境的 DLC / Local / Workshop 实际磁盘状态
-        await modStore.scanMods()
+        // 3. 当前环境链接已由后端即时收敛；仅在开启自动扫描时再补磁盘事实
+        if (appStore.settings.enable_auto_scan !== false && activeContext.value?.is_healthy !== false) {
+          await appStore.requestModScan()
+        }
         toast.success(`已切换至环境: ${currentProfile.value?.name || profileId}`)
       }
     } finally {
@@ -123,7 +129,7 @@ export const useProfileStore = defineStore('profile', () => {
     if (checkResult(res, `更新环境 "${profileId}"`, true)) {
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
-        switchProfile(profileId)
+        await appStore.refreshData()
       }
     }
   }
@@ -144,11 +150,11 @@ export const useProfileStore = defineStore('profile', () => {
   // 创建环境桌面快捷方式
   const createDesktopShortcut = async (profileId) => {
     const profile = profiles.value.find(item => item.id === profileId)
-    if (isSteamVdfShortcutFlow(profile)) {
+    const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
+    if (res?.status === 'warning' && res?.data?.shortcut_kind === 'steam_vdf_flow_required') {
+      if (!profile) return null
       return await createSteamVdfDesktopShortcut(profile)
     }
-
-    const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
     if (checkResult(res, '创建环境桌面快捷方式', true)) {
       return res.data
     }
@@ -264,6 +270,7 @@ export const useProfileStore = defineStore('profile', () => {
   return {
     profiles, currentProfileId, orphanedProfiles, currentProfile, isLoading, activeContext,
     fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile, createDesktopShortcut,
+    applyLastPlayedTime,
     scanOrphans, importOrphan
   }
 })

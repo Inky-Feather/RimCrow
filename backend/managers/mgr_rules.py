@@ -12,7 +12,7 @@ from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 from backend.database.dao import ModDAO, GroupDAO
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
-from backend.utils.tools import current_ms
+from backend.utils.tools import current_ms, normalize_package_id
 from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
@@ -49,6 +49,31 @@ DYNAMIC_WEIGHT_MIN = 1
 DYNAMIC_WEIGHT_MAX = 9999
 DYNAMIC_WEIGHT_SHIFT_MIN = -9999
 DYNAMIC_WEIGHT_SHIFT_MAX = 9999
+
+
+def _normalize_import_group_name(raw_name: Any) -> str:
+    return str(raw_name or "").strip()
+
+
+def _looks_like_path_hash(token: str) -> bool:
+    return bool(re.fullmatch(r"[0-9a-f]{32}", str(token or "").strip().lower()))
+
+
+def _resolve_import_group_mod_ids(raw_mod_ids: list[Any]) -> list[str]:
+    resolved_ids: list[str] = []
+    seen_ids: set[str] = set()
+
+    for raw_mod_id in raw_mod_ids or []:
+        token = str(raw_mod_id or "").strip()
+        if not token or _looks_like_path_hash(token):
+            continue
+        resolved_id = normalize_package_id(token)
+        if not resolved_id or resolved_id in seen_ids:
+            continue
+        seen_ids.add(resolved_id)
+        resolved_ids.append(resolved_id)
+
+    return resolved_ids
     
 class RuleManager:
     def __init__(self, context: ProfileContext):
@@ -1039,7 +1064,7 @@ class RuleManager:
 
     def process_import_bundle(self, bundle: dict):
         """导入规则包"""
-        from backend.database.models import db, UserModData, GroupData, GroupMod, ModAsset, ModInterlock
+        from backend.database.models import db, UserModData, GroupData, GroupMod, ModInterlock
         # 引入 chunked 用于分批处理大量数据
         from peewee import chunked
 
@@ -1157,11 +1182,15 @@ class RuleManager:
                 # =================================================
                 imported_groups = env.get("groups", [])
                 # 3.1 建立本地分组名称映射 {name: group_id}
-                local_group_map = {g.name: g.group_id for g in GroupData.select()}
+                local_group_map = {
+                    _normalize_import_group_name(g.name): g.group_id
+                    for g in GroupData.select()
+                    if _normalize_import_group_name(g.name)
+                }
                 group_mods_to_insert = [] # 待插入的关联关系
                 for g in imported_groups:
-                    g_name = g.get('name')
-                    mod_ids = g.get('mod_ids', [])
+                    g_name = _normalize_import_group_name(g.get('name'))
+                    mod_ids = _resolve_import_group_mod_ids(list(g.get('mod_ids', []) or []))
                     if not g_name: continue
                     # 确定 Group ID (存在则复用，不存在则创建)
                     if g_name in local_group_map:

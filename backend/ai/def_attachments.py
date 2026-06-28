@@ -344,7 +344,7 @@ class AttachmentResolver:
                     from backend.managers.mgr_game_logs import LogCondenser
 
                     if source_type == "game":
-                        filepath = os.path.join(active_context.user_data_path, filename) if active_context else ""
+                        filepath = reader.resolve_log_file_path(filename) if hasattr(reader, "resolve_log_file_path") else ""
                     else:
                         filepath = os.path.join(DATA_DIR, "logs", filename)
                     if filepath and os.path.exists(filepath):

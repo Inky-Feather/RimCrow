@@ -219,6 +219,12 @@
     <!-- 贴图优化功能面板 -->
     <TextureOptModal />
 
+    <!-- 模组配置弹窗 -->
+    <ModConfigManagerModal
+      :visible="appStore.uiState.showModConfigManager"
+      @close="appStore.uiState.showModConfigManager = false"
+    />
+
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
 
@@ -230,6 +236,9 @@
     
     <!-- 设置弹窗 -->
     <SettingsModal />
+
+    <!-- 模组包/数据包传输弹窗 -->
+    <PackageTransferDialog />
 
     <!-- 规则面板 -->
     <RulePanel />
@@ -290,8 +299,10 @@ import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'
 import GuideCenter from './components/GuideCenter.vue'
 import TextureOptModal from './components/TextureOptModal.vue'
+import ModConfigManagerModal from './components/ModConfigManagerModal.vue'
 import SupplementSelectionDialog from './components/SupplementSelectionDialog.vue'
 import MissingInstallDialog from './components/MissingInstallDialog.vue'
+import PackageTransferDialog from './components/PackageTransferDialog.vue'
 
 const updateModal = ref(null);
 

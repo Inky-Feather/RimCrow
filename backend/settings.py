@@ -232,6 +232,7 @@ class AppConfig:
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
+    bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
     enable_auto_scan: bool = True             # 启动时自动扫描
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
@@ -307,7 +308,6 @@ class SettingsManager:
         if self._initialized: return
         self._ensure_config_dir()
         self._save_lock = threading.Lock()
-        self._legacy_prefer_steam_launch = None
         # self.config: AppConfig = self._load() # 加载配置
         
         # 1. 先初始化一个空的配置对象，防止加载过程中访问 self.config 崩溃
@@ -409,7 +409,7 @@ class SettingsManager:
             merged[key] = value
         return merged
 
-    def _parse_config_fragment(self, data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[bool]]:
+    def _parse_config_fragment(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         从原始 JSON 对象中提取当前版本仍可识别的配置片段。
         这里故意采用“宽进严出”策略：
@@ -417,37 +417,28 @@ class SettingsManager:
         2. 识别不到的字段直接忽略，不因为局部损坏把整份配置判死刑。
         """
         compatible = self._extract_compatible_config_values(data, AppConfig())
-        legacy_prefer_steam_launch = None
-        if 'prefer_steam_launch' in data:
-            legacy_prefer_steam_launch = bool(data.get('prefer_steam_launch'))
+        return compatible or None
 
-        if compatible or legacy_prefer_steam_launch is not None:
-            return compatible, legacy_prefer_steam_launch
-        return None, None
-
-    def _read_config_fragment(self, path: Path, source_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[bool]]:
+    def _read_config_fragment(self, path: Path, source_name: str) -> Optional[Dict[str, Any]]:
         """
         尝试宽松读取一个配置源。
-        返回值：
-        1. 兼容字段片段，用于后续恢复；
-        2. 旧版 prefer_steam_launch 兼容值（若存在）。
         """
-        if not path.exists(): return None, None
+        if not path.exists(): return None
 
         try:
             data = self._load_raw_config(path)
         except Exception as e:
             print(f"Config read error [{source_name}]: {e}")
-            return None, None
+            return None
 
-        compatible, legacy_prefer_steam_launch = self._parse_config_fragment(data)
-        if compatible or legacy_prefer_steam_launch is not None:
-            return compatible, legacy_prefer_steam_launch
+        compatible = self._parse_config_fragment(data)
+        if compatible:
+            return compatible
 
         print(f"Config parse warning [{source_name}]: no compatible fields found")
-        return None, None
+        return None
 
-    def _apply_config_fragment(self, data: Dict[str, Any], legacy_prefer_steam_launch: Optional[bool] = None):
+    def _apply_config_fragment(self, data: Dict[str, Any]):
         """
         将“已筛选过的兼容字段”应用到默认配置骨架上。
         实现原理：
@@ -456,8 +447,6 @@ class SettingsManager:
         - 最后统一做归一化与衍生路径同步。
         """
         self.config = AppConfig()
-        if legacy_prefer_steam_launch is not None:
-            self._legacy_prefer_steam_launch = legacy_prefer_steam_launch
         self._recursive_update(self.config, data)
         self._normalize_config()
         self._sync_derived_paths()
@@ -468,21 +457,19 @@ class SettingsManager:
         """
         将磁盘配置加载到现有的 self.config 中
         """
-        current_fragment, current_legacy_prefer = self._read_config_fragment(CONFIG_PATH, "current")
-        backup_fragment, backup_legacy_prefer = self._read_config_fragment(CONFIG_UPDATE_BACKUP_PATH, "update-backup")
+        current_fragment = self._read_config_fragment(CONFIG_PATH, "current")
+        backup_fragment = self._read_config_fragment(CONFIG_UPDATE_BACKUP_PATH, "update-backup")
 
-        if current_fragment is None and current_legacy_prefer is None and \
-           backup_fragment is None and backup_legacy_prefer is None:
+        if current_fragment is None and backup_fragment is None:
             self._normalize_config()
             self._sync_derived_paths()
             return
 
         try:
             effective_fragment = current_fragment or {}
-            effective_legacy_prefer = current_legacy_prefer
             recovered_from_backup = False
 
-            if backup_fragment is not None or backup_legacy_prefer is not None:
+            if backup_fragment is not None:
                 # 只要更新备份还在，就把它当作“缺失字段补丁源”参与合并：
                 # 1. 当前配置完全损坏/丢失时，可直接由备份兜底；
                 # 2. 当前配置只能解析出一部分字段时，可从备份补齐剩余可识别字段；
@@ -490,11 +477,8 @@ class SettingsManager:
                 merged_fragment = self._merge_config_dicts(backup_fragment or {}, effective_fragment)
                 recovered_from_backup = merged_fragment != effective_fragment
                 effective_fragment = merged_fragment
-                if effective_legacy_prefer is None:
-                    effective_legacy_prefer = backup_legacy_prefer
-                    recovered_from_backup = recovered_from_backup or backup_legacy_prefer is not None
 
-            self._apply_config_fragment(effective_fragment, effective_legacy_prefer)
+            self._apply_config_fragment(effective_fragment)
 
             # 只有备份确实补进了缺失字段时才回写，避免“备份一直存在时每次启动都重写配置”。
             if recovered_from_backup:
@@ -523,6 +507,10 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        try:
+            self.config.bundle_compress_level = max(0, min(9, int(self.config.bundle_compress_level or 0)))
+        except (TypeError, ValueError):
+            self.config.bundle_compress_level = 6
         ai_cfg = self.config.ai
         if isinstance(ai_cfg, AIConfig):
             try:

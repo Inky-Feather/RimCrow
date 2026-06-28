@@ -16,6 +16,7 @@ import webview
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
+from types import SimpleNamespace
 from typing import Any, Dict, List
 from peewee import Model, JOIN
 from playhouse.shortcuts import model_to_dict
@@ -60,6 +61,7 @@ from backend.database.repair import (
 from backend.scanner.parser_dlc import DLCParser
 from backend.scanner.mod_scanner import ModScanner
 from backend.managers.mgr_game import GameManager
+from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_files import FileManager, file_mgr, PathChecker
 from backend.managers.mgr_game_logs import GameLogManager, LogCondenser
@@ -73,19 +75,40 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
+from backend.managers.mgr_mod_config import ModConfigManager
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
+from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
-from backend.migrations.app_upgrade import run_app_upgrade_migrations
+from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
 from backend.text_search.manager import FileSearchManager
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
+
+
+def _ensure_bundle_filename_extension(filename: str, preferred_extension: str, accepted_extensions: list[str] | tuple[str, ...]) -> str:
+    normalized = str(filename or "").strip()
+    lowered = normalized.lower()
+    for extension in accepted_extensions:
+        if lowered.endswith(str(extension or "").lower()):
+            return normalized
+    return f"{normalized}{preferred_extension}"
+
+
+def _build_dialog_file_type_label(label: str, extensions: list[str] | tuple[str, ...]) -> str:
+    normalized_extensions = [
+        f"*{str(extension or '').strip()}"
+        for extension in extensions
+        if str(extension or "").strip()
+    ]
+    return f"{label} ({';'.join(normalized_extensions)})" if normalized_extensions else f"{label} (*.*)"
 
 
 def log_api_call(func):
@@ -233,12 +256,21 @@ class API:
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
+        self._runtime_link_sync_state: dict[str, dict[str, Any]] = {}
+        self._last_runtime_link_sync_result: dict[str, Any] = {}
         # 桌面模式首屏阶段只允许触发一次后台预热，避免 loaded / ready 多次回调时重复导入大缓存文件。
         self._startup_warmup_started = False
         # 应用层升级迁移必须早于外置缓存库管理器初始化。
         # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
         # 会在 Windows 上撞到已打开文件句柄导致无法删除。
         self._handle_app_version_upgrade()
+        renamed_groups = normalize_duplicate_group_names_on_load()
+        if renamed_groups:
+            self._upgrade_context["messages"].append(f"检测到重名分组，已自动重命名 {len(renamed_groups)} 项。")
+            logger.warning(
+                "Duplicate group names normalized on load: %s",
+                ", ".join(f"{old_name!r}->{new_name!r}" for _, old_name, new_name in renamed_groups),
+            )
         # 2. 实例化各个管理器
         self.workshop_db_mgr = WorkshopDBManager()
         self.game_mgr = GameManager()
@@ -259,6 +291,12 @@ class API:
         self.data_bundle_mgr = DataBundleManager(
             self.profile_mgr,
             self.ai_mgr,
+            rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
+        )
+        self.mod_package_mgr = ModPackageManager(
+            self.profile_mgr,
+            data_bundle_mgr=self.data_bundle_mgr,
+            load_order_mgr_provider=lambda: self.load_order_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
         )
         self.browser_window = SubBrowserManager(self)
@@ -310,12 +348,47 @@ class API:
             'force': bool(force),
             'paths': normalized_paths,
         }
+
+    def _resolve_profile_runtime_caps_from_profile(self, profile) -> dict[str, Any]:
+        # API 经常只拿到数据库 Profile，而不是完整 ProfileContext。
+        # 这里单独补一层轻量解析，把持久化的 `is_steam` 和动态的
+        # `is_steam_managed` 拼成统一事实，再交给运行能力解析层。
+        install_facts = GameInstallInspector().quick_inspect(getattr(profile, 'game_install_path', ''))
+        profile_state = SimpleNamespace(
+            is_steam=bool(getattr(profile, 'is_steam', False)),
+            is_steam_managed=bool(getattr(profile, 'is_steam_managed', install_facts.is_steam_managed)),
+            prefer_steam_launch=getattr(profile, 'prefer_steam_launch', False),
+            use_workshop_mods=getattr(profile, 'use_workshop_mods', False),
+        )
+        return resolve_profile_runtime_capabilities(profile_state)
+
+    @staticmethod
+    def _collect_overwritten_profile_ids(import_result: dict[str, Any] | None) -> set[str]:
+        return {
+            str(profile.get("profile_id") or "").strip()
+            for profile in ((import_result or {}).get("profiles") or [])
+            if str(profile.get("mode") or "").strip().lower() == "overwrite"
+        }
+
+    def _reload_current_profile_after_import(self, import_result: dict[str, Any] | None) -> bool:
+        current_profile_id = str(settings.config.current_profile_id or "").strip()
+        if not current_profile_id:
+            return False
+        if current_profile_id not in self._collect_overwritten_profile_ids(import_result):
+            return False
+        self._bootstrap_context(current_profile_id)
+        return True
     
     
     def _bootstrap_context(self, profile_id: str):
         """装载当前环境，并重建所有业务引擎"""
         # 在重建前，先停止旧的监视器
         if self.game_log_mgr: self.game_log_mgr.stop_realtime_monitor()
+        old_scanner = getattr(self, 'scanner', None)
+        if old_scanner:
+            old_scanner.stop_scan()
+            if not old_scanner.wait_until_idle(timeout=2.0):
+                logger.warning("旧扫描器未在切换环境前及时退出，继续重建上下文。")
         
         try:
             # 获取上下文
@@ -342,7 +415,10 @@ class API:
             logger.warning("self_mods_path 为空，跳过管理器 Mod 目录创建。")
         
         # 依赖注入：将上下文发给所有的 Manager
-        self.scanner = ModScanner(self.active_context)
+        self.scanner = ModScanner(
+            self.active_context,
+            runtime_link_sync_handler=self._sync_runtime_links_after_scan,
+        )
         self.load_order_mgr = LoadOrderManager(self.active_context)
         self.game_log_mgr = GameLogManager(self.active_context)
         self.sorter = OrderSorter(self.active_context)
@@ -1328,15 +1404,20 @@ class API:
                     suggested_name = f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
                 else:
                     suggested_name = f"RimModManager_Data_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
-            if not suggested_name.lower().endswith(DataBundleManager.FILE_EXTENSION):
-                suggested_name = f"{suggested_name}{DataBundleManager.FILE_EXTENSION}"
+            suggested_name = _ensure_bundle_filename_extension(
+                suggested_name,
+                DataBundleManager.FILE_EXTENSION,
+                [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+            )
 
             target_path = file_mgr.save_file_dialog(
                 initial_dir=str(DATA_DIR),
                 default_filename=suggested_name,
                 file_types=(
-                    f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION})',
-                    'ZIP Files (*.zip)',
+                    _build_dialog_file_type_label(
+                        'RMM Data Package',
+                        [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+                    ),
                     'All Files (*.*)',
                 ),
             )
@@ -1361,16 +1442,16 @@ class API:
         try:
             module_keys = payload.get("module_keys")
             default_profile_mode = str(payload.get("default_profile_mode") or "clone").strip().lower() or "clone"
+            profile_import_plan = payload.get("profile_import_plan")
             import_result = self.data_bundle_mgr.import_bundle(
                 bundle_path,
                 module_keys=module_keys,
                 default_profile_mode=default_profile_mode,
+                profile_import_plan=profile_import_plan,
             )
 
             network_mgr.apply()
-            if any(profile.get("mode") == "overwrite-default" for profile in import_result.get("profiles", [])):
-                if settings.config.current_profile_id == "default":
-                    self._bootstrap_context("default")
+            self._reload_current_profile_after_import(import_result)
 
             response_data = {
                 "result": import_result,
@@ -1383,6 +1464,73 @@ class API:
             return ApiResponse.success(response_data, message=message)
         except Exception as e:
             logger.error(f"Data bundle import failed: {e}", exc_info=True)
+            return ApiResponse.error(f"导入失败: {e}")
+
+    @log_api_call
+    def mod_package_get_schema(self):
+        """获取环境/模组打包所需的导入导出基础配置。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.get_schema())
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_prepare_import(self, bundle_path: str, payload: dict | None = None):
+        """预检模组包导入冲突。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.prepare_import(bundle_path, payload or {}))
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_export(self, payload: dict | None = None):
+        """导出模组实体包。"""
+        payload = payload or {}
+        try:
+            suggested_name = str(payload.get("filename") or "").strip() or f"RimModManager_Mods_{datetime.now().strftime('%Y%m%d')}{self.mod_package_mgr.FILE_EXTENSION}"
+            suggested_name = _ensure_bundle_filename_extension(
+                suggested_name,
+                self.mod_package_mgr.FILE_EXTENSION,
+                [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+            )
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=str(DATA_DIR),
+                default_filename=suggested_name,
+                file_types=(
+                    _build_dialog_file_type_label(
+                        'RMM Mod Package',
+                        [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+                    ),
+                    'All Files (*.*)',
+                ),
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+            task_id = self.mod_package_mgr.start_export_task(target_path, payload)
+            return ApiResponse.success({"task_id": task_id, "target_path": target_path}, message="导出任务已启动")
+        except Exception as e:
+            logger.error(f"Mod package export failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_get_profile_summary(self, profile_id: str):
+        """读取指定环境的导出统计。"""
+        try:
+            return ApiResponse.success(self.mod_package_mgr.get_profile_export_summary(profile_id))
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def mod_package_import(self, bundle_path: str, payload: dict | None = None):
+        """启动模组包导入任务。"""
+        try:
+            normalized_payload = dict(payload or {})
+            normalized_payload["current_profile_id"] = str(settings.config.current_profile_id or "").strip()
+            normalized_payload["current_local_mods_path"] = getattr(self.active_context, "local_mods_path", "") if self.active_context else ""
+            task_id = self.mod_package_mgr.start_import_task(bundle_path, normalized_payload)
+            return ApiResponse.success({"task_id": task_id}, message="导入任务已启动")
+        except Exception as e:
+            logger.error(f"Mod package import failed: {e}", exc_info=True)
             return ApiResponse.error(f"导入失败: {e}")
     
     @log_api_call
@@ -1417,7 +1565,7 @@ class API:
     def scan_mods(self, specific_paths: List[str]|None = None, forced_update: bool = False):
         """
         触发后台模组扫描。
-        扫描完成后，Scanner 会自动根据当前 Profile 配置执行链接部署。
+        扫描完成后，Scanner 会回调当前环境的运行态收敛入口。
         立即返回状态，前端通过统一任务流和 `scan-complete` 事件获取更新。
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
         :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
@@ -1457,8 +1605,7 @@ class API:
             # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
             # 1. 扫描所有路径入库
             # 2. 识别 Local vs Workshop 冲突
-            # 3. 读取 local_mods_path 和 workshop_mods_path
-            # 4. 执行 FileManager.clear_links 部署软链接
+            # 3. 触发当前环境的运行态收敛回调（若仍是当前环境）
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
             result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
         except Exception as e:
@@ -1802,7 +1949,40 @@ class API:
             "import_check": res.get('import_check', {"summary": {}, "items": []}),
             "version_token": res.get('version_token', {}),
         })
-    
+
+    @log_api_call
+    def mod_config_get_overview(self):
+        """读取当前环境下官方 ModSettings 配置文件总览。"""
+        if not self.active_context:
+            return ApiResponse.error("当前环境未初始化")
+        active_tokens = []
+        if self.load_order_mgr:
+            active_tokens = list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
+        try:
+            overview = ModConfigManager.get_overview(self.active_context, active_tokens)
+            return ApiResponse.success(overview)
+        except Exception as e:
+            return ApiResponse.error(f"读取模组配置总览失败: {e}")
+
+    @log_api_call
+    def mod_config_sync(self, source_path: str, target_path: str):
+        """在同一 package_id 分组内手动覆盖同步配置文件。"""
+        if not self.active_context:
+            return ApiResponse.error("当前环境未初始化")
+        active_tokens = []
+        if self.load_order_mgr:
+            active_tokens = list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
+        try:
+            result = ModConfigManager.sync_group_instance(
+                self.active_context,
+                active_tokens,
+                source_path,
+                target_path,
+            )
+            return ApiResponse.success(result, message="已完成配置覆盖")
+        except Exception as e:
+            return ApiResponse.error(f"覆盖配置失败: {e}")
+
     @log_api_call
     def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
         """
@@ -2057,8 +2237,11 @@ class API:
             if not profile_id: profile_id = self.profile_mgr.current_profile.id
             if not profile_id: return ApiResponse.error("未指定 Profile ID")
             profile = self.profile_mgr.get_profile(profile_id)
-            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
+            is_steam_managed = bool(runtime_caps.get('is_steam_managed'))
+            # 检查 Steam 路径是否有效，无效则尝试重新获取
             if prefer_steam_launch and not settings.config.steam_path:
                 settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
             steam_path_valid = bool(
@@ -2069,7 +2252,7 @@ class API:
             steam_running = bool(steam_status.get("running"))
             steam_ready = bool(steam_status.get("ready"))
             logger.debug(
-                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s",
+                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s, is_steam_managed=%s",
                 profile_id,
                 prefer_steam_launch,
                 steam_path_valid,
@@ -2078,18 +2261,62 @@ class API:
                 steam_status.get("source"),
                 steam_status.get("detail"),
                 profile.is_steam,
+                is_steam_managed,
             )
 
-            if prefer_steam_launch and steam_path_valid:
-                # Steam 启动前仍需先收敛本地 Mods 目录，保留 Self/Tool 链接并移除额外的 Workshop 链接。
-                self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
-                self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
-                return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
-            if prefer_steam_launch and not steam_path_valid:
-                if profile.is_steam and profile.id == 'default':
-                    os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
-                    return ApiResponse.warning(message="未找到 Steam.exe，请检查 Steam 安装路径是否正确，已回退到 URL 协议启动，如果仍然失败，可关闭“优先Steam启动”选项。")
-            if steam_running:
+            if prefer_steam_launch:
+                if is_steam_managed:
+                    # Steam 管理主版本可以走 Steam 官方入口。
+                    # 进入 Steam 前先清掉额外 Workshop 链接，避免“Steam 自动挂载 + 本地链接部署”重复参与。
+                    self._ensure_runtime_links_for_launch(profile_id, include_workshop=False)
+
+                    if steam_path_valid:
+                        game_monitor = getattr(self, "game_monitor", None)
+                        if game_monitor:
+                            game_monitor.launch_profile_id = profile_id
+                        self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+                        return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+
+                    if profile.id == 'default':
+                        try:
+                            game_monitor = getattr(self, "game_monitor", None)
+                            if game_monitor:
+                                game_monitor.launch_profile_id = profile_id
+                            os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
+                            return ApiResponse.warning(
+                                message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Launch Steam game via URL failed: {e}", exc_info=True)
+
+                    return self._build_direct_launch_confirmation(
+                        profile_id=profile_id,
+                        steam_running=bool(steam_running),
+                        reason="steam_path_invalid",
+                        message="当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径，无法安全自动启动。您可以继续改为游戏本体直启，或先修复 Steam 路径后重试。",
+                        requires_fallback_confirm=True,
+                        steam_status=self._attach_steam_user_hint(steam_status),
+                    )
+                # 非 Steam 管理主版本的 Steam 正版副本：
+                # 不适合再假装它是“官方 AppID 安装”，但仍然可以通过
+                # “先等 Steam 就绪，再直启游戏本体”的方式进入 Steam 运行态。
+                ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=45)
+                if ok:
+                    self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=False)
+                    return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
+
+                # Steam 客户端未进入可用状态，提示用户确认
+                return self._build_direct_launch_confirmation(
+                    profile_id=profile_id,
+                    steam_running=bool((ensured_status or {}).get("running")),
+                    reason=str((ensured_status or {}).get("reason") or "steam_not_ready"),
+                    message=message or "Steam 未能进入可用状态。您可以继续改为游戏本体直启，或稍后重试。",
+                    requires_fallback_confirm=True,
+                    steam_status=ensured_status,
+                )
+
+            # 不使用Steam启动，且Steam 已在运行，提示用户确认
+            if steam_running and bool(runtime_caps.get('is_steam')):
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
                     steam_running=True,
@@ -2097,18 +2324,42 @@ class API:
                     message="检测到 Steam 已在运行，当前环境若继续以游戏本体直启，Steam 可能会接管本次启动并同时加载工坊内容。",
                     steam_status=steam_status,
                 )
-            self._launch_profile_with_runtime_links(
-                profile_id,
-                profile.game_install_path,
-                extra_args,
-                include_workshop=True,
-            )
+
+            # 不使用Steam启动，且Steam 未在运行，直接启动游戏本体
+            self._launch_profile_with_runtime_links( profile_id, profile.game_install_path, extra_args, include_workshop=True )
+
+            # 使用Steam启动，且Steam路径无效，提示用户
             if prefer_steam_launch and not steam_path_valid:
                 return ApiResponse.warning(message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。")
             return ApiResponse.success(message="直接启动游戏成功，祝你游玩愉快！")
         except Exception as e:
             logger.error(f"Launch Game Error: {e}", exc_info=True)
             return ApiResponse.error(f"启动游戏时出错: {e}")
+
+    @staticmethod
+    def _build_runtime_link_sync_fingerprint(
+        profile_id: str,
+        local_mods_root: str,
+        include_workshop: bool,
+        runtime_caps: dict[str, Any],
+        deploy_paths: list[str] | tuple[str, ...],
+    ) -> dict[str, Any]:
+        normalized_root = os.path.normpath(str(local_mods_root or "")).lower()
+        normalized_deploy_paths = tuple(
+            sorted(
+                os.path.normpath(str(path)).lower()
+                for path in (deploy_paths or [])
+                if str(path or "").strip()
+            )
+        )
+        return {
+            "profile_id": str(profile_id or "").strip(),
+            "local_mods_root": normalized_root,
+            "include_workshop": bool(include_workshop),
+            "workshop_detection_enabled": bool(runtime_caps.get('workshop_detection_enabled')),
+            "workshop_deploy_enabled": bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
+            "deploy_paths": normalized_deploy_paths,
+        }
 
     def _sync_runtime_links_for_profile(self, profile_id: str, include_workshop: bool):
         """
@@ -2117,25 +2368,119 @@ class API:
         """
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
-        if not local_mods_root or not os.path.exists(local_mods_root): return False
+        runtime_link_sync_state = getattr(self, "_runtime_link_sync_state", {})
+        normalized_profile_id = str(profile_id or "").strip()
+        if not local_mods_root or not os.path.exists(local_mods_root):
+            runtime_link_sync_state.pop(normalized_profile_id, None)
+            self._runtime_link_sync_state = runtime_link_sync_state
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "missing_root"}
+            return False
+        runtime_caps = resolve_profile_runtime_capabilities(context)
         runtime_analysis = ModDAO.get_profile_conflict_analysis(
             context,
-            include_workshop_in_detection=bool(
-                getattr(context, 'prefer_steam_launch', False)
-                or getattr(context, 'use_workshop_mods', False)
-            ),
-            include_workshop_in_deploy=bool(
-                include_workshop
-                and (not getattr(context, 'prefer_steam_launch', False))
-                and getattr(context, 'use_workshop_mods', False)
-            ),
+            include_workshop_in_detection=bool(runtime_caps.get('workshop_detection_enabled')),
+            include_workshop_in_deploy=bool(include_workshop and runtime_caps.get('workshop_deploy_enabled')),
         )
-        return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
+        deploy_paths = runtime_analysis.get('deploy_paths', [])
+        sync_fingerprint = self._build_runtime_link_sync_fingerprint(
+            normalized_profile_id,
+            local_mods_root,
+            include_workshop,
+            runtime_caps,
+            deploy_paths,
+        )
+        if runtime_link_sync_state.get(normalized_profile_id) == sync_fingerprint:
+            logger.debug("Runtime links already up to date for profile %s", normalized_profile_id)
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
+            return True
 
-    def _start_profile_game(self, profile_id: str, game_install_path: str, extra_args: list[str] | None = None):
-        """启动指定环境的游戏本体并记录游玩时间。"""
-        self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
-        self.profile_mgr.update_profile(profile_id, {"last_played_time": current_ms()})
+        success = self.file_mgr.sync_managed_links(local_mods_root, deploy_paths)
+        if success:
+            runtime_link_sync_state[normalized_profile_id] = sync_fingerprint
+            self._runtime_link_sync_state = runtime_link_sync_state
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "deployed"}
+        else:
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "failed"}
+        return success
+
+    def _sync_runtime_links_after_scan(self, scanned_profile_id: str) -> str:
+        """
+        扫描写库后的统一部署入口。
+        只允许当前激活环境执行，避免旧扫描任务把新环境链接回滚。
+        """
+        active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+        target_profile_id = str(scanned_profile_id or '').strip()
+        if not active_profile_id or active_profile_id != target_profile_id:
+            return "Skipped runtime link sync for stale profile"
+
+        success = self._sync_runtime_links_for_profile(target_profile_id, include_workshop=True)
+        sync_status = str(getattr(self, "_last_runtime_link_sync_result", {}).get("status", "") or "").strip()
+        if success and sync_status == "deployed":
+            return "Deployed runtime links"
+        return "Runtime links already up to date" if success and sync_status == "noop" else "Runtime link sync skipped"
+
+    def _ensure_runtime_links_for_launch(self, profile_id: str, include_workshop: bool) -> bool:
+        """
+        启动前兜底检查。
+        如果当前进程里已经对同一激活环境收敛到相同运行模式，则直接跳过；
+        只有缺少收敛记录、目标环境不是当前激活环境，或启动模式发生变化时才真正执行收敛。
+        """
+        normalized_profile_id = str(profile_id or "").strip()
+        active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+        current_state = getattr(self, "_runtime_link_sync_state", {}).get(normalized_profile_id)
+        if (
+            current_state
+            and active_profile_id == normalized_profile_id
+            and bool(current_state.get("include_workshop")) == bool(include_workshop)
+        ):
+            logger.debug(
+                "Launch runtime link check reused in-memory sync state for profile %s (include_workshop=%s)",
+                normalized_profile_id,
+                include_workshop,
+            )
+            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "noop"}
+            return True
+        return self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
+
+    @staticmethod
+    def _profile_update_requires_rebootstrap(data: Dict[str, Any] | None) -> bool:
+        changed_keys = {
+            str(key or "").strip()
+            for key in ((data or {}).keys())
+            if str(key or "").strip()
+        }
+        return bool(changed_keys & {"game_install_path", "user_data_path"})
+
+    def _refresh_active_profile_context_after_update(self, profile_id: str, data: Dict[str, Any] | None = None) -> str:
+        """
+        当前激活环境更新后的后端收口。
+
+        - 路径类变更：继续走完整 `_bootstrap_context()`，因为 scanner / load order / 日志路径都可能变化；
+        - 运行态/元数据变更：只刷新当前 ProfileContext 与相关 manager 的 context，避免重建整套对象。
+        """
+        normalized_profile_id = str(profile_id or "").strip()
+        if not normalized_profile_id:
+            return "noop"
+
+        if self._profile_update_requires_rebootstrap(data):
+            self._bootstrap_context(normalized_profile_id)
+            return "rebootstrap"
+
+        refreshed_context = self.profile_mgr.activate_profile(normalized_profile_id)
+        self.active_context = refreshed_context
+
+        if self.scanner:
+            self.scanner.context = refreshed_context
+        if self.load_order_mgr:
+            self.load_order_mgr.context = refreshed_context
+        if self.game_log_mgr:
+            self.game_log_mgr.context = refreshed_context
+        if self.sorter:
+            self.sorter.context = refreshed_context
+            if getattr(self.sorter, "rule_mgr", None):
+                self.sorter.rule_mgr.context = refreshed_context
+
+        return "light"
 
     def _launch_profile_with_runtime_links(
         self,
@@ -2148,11 +2493,14 @@ class API:
         直启相关分支的统一入口。
         作用：
         1. 先把本地 Mods 链接收敛到当前环境需要的状态。
-        2. 再启动游戏并记录游玩时间。
+        2. 再启动游戏，并由游戏监视器在确认进程出现后记录最后启动时间。
         这样可以避免多个启动分支重复维护同一段流程。
         """
-        self._sync_runtime_links_for_profile(profile_id, include_workshop=include_workshop)
-        self._start_profile_game(profile_id, game_install_path, extra_args)
+        self._ensure_runtime_links_for_launch(profile_id, include_workshop=include_workshop)
+        game_monitor = getattr(self, "game_monitor", None)
+        if game_monitor:
+            game_monitor.launch_profile_id = profile_id
+        self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
 
     def _build_direct_launch_confirmation(
         self,
@@ -2193,24 +2541,42 @@ class API:
         try:
             steam_status = self.steam_mgr.get_steam_client_status()
             if steam_status.get("ready"):
-                return True, self._attach_steam_user_hint(steam_status), ""
+                ready_status = self._attach_steam_user_hint(steam_status)
+                ready_status["reason"] = "ready"
+                return True, ready_status, ""
 
-            started = self.steam_mgr.start_steam()
-            if not started:
-                return False, self._attach_steam_user_hint(steam_status), "无法自动启动 Steam，请检查 Steam 路径配置。"
+            start_result = self.steam_mgr.start_steam()
+            if not start_result.get("ok"):
+                failed_status = self._attach_steam_user_hint(steam_status)
+                failed_status["reason"] = "steam_start_failed"
+                failed_status["start_result"] = start_result
+                return False, failed_status, "无法自动启动 Steam 客户端，请检查 Steam 路径配置或系统协议关联。"
 
             deadline = time.time() + max(1.0, float(timeout_seconds or 0))
             while time.time() < deadline:
                 steam_status = self.steam_mgr.get_steam_client_status()
                 if steam_status.get("ready"):
-                    return True, self._attach_steam_user_hint(steam_status), ""
+                    ready_status = self._attach_steam_user_hint(steam_status)
+                    ready_status["reason"] = "ready"
+                    ready_status["start_result"] = start_result
+                    return True, ready_status, ""
                 time.sleep(1.0)
 
             steam_status = self.steam_mgr.get_steam_client_status()
-            return False, self._attach_steam_user_hint(steam_status, waiting=True), "Steam 未能在限定时间内进入已登录可用状态，请确认已完成登录。"
+            timeout_status = self._attach_steam_user_hint(steam_status, waiting=True)
+            timeout_status["reason"] = "steam_ready_timeout"
+            timeout_status["start_result"] = start_result
+            return False, timeout_status, "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。您可以继续改为游戏本体直启，或先确认 Steam 已登录后重试。"
         except Exception as e:
             logger.error(f"Ensure Steam ready failed: {e}", exc_info=True)
-            return False, {}, f"检测 Steam 状态失败: {e}"
+            failed_status = {
+                "running": False,
+                "logged_in": False,
+                "ready": False,
+                "reason": "steam_status_probe_failed",
+                "detail": str(e),
+            }
+            return False, self._attach_steam_user_hint(failed_status), f"检测 Steam 状态失败: {e}。您可以继续改为游戏本体直启，或稍后重试。"
 
     @staticmethod
     def _describe_steam_status(steam_status: dict | None, waiting: bool = False) -> dict:
@@ -2272,7 +2638,7 @@ class API:
                 return ApiResponse.warning("已取消启动")
 
             profile = self.profile_mgr.get_profile(profile_id)
-            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+            extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
 
             if normalized_action == LaunchWarningAction.WAIT_STEAM_EXIT.value:
                 steam_running = self.steam_mgr.is_steam_running()
@@ -2355,7 +2721,8 @@ class API:
                 msg = f"{check_install.get('msg', '')}\n{check_data.get('msg', '')}".strip()
                 return ApiResponse.error(msg or "环境路径无效，无法创建快捷方式")
 
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             default_profile = self.profile_mgr.get_profile('default')
             same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
             steam_path_valid = bool(
@@ -2364,8 +2731,8 @@ class API:
             )
             effective_steam_shortcut = bool(prefer_steam_launch and steam_path_valid)
             if effective_steam_shortcut:
-                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
-                if same_install_as_default:
+                extra_args = self.profile_mgr.get_launch_args(profile_id, include_executable=False)
+                if same_install_as_default and bool(runtime_caps.get('is_steam_managed')):
                     shortcut = self.file_mgr.create_profile_desktop_shortcut(
                         profile=profile,
                         extra_args=extra_args,
@@ -2399,7 +2766,7 @@ class API:
 
             shortcut = self.file_mgr.create_profile_desktop_shortcut(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
                 prefer_steam_launch=False,
                 steam_exe_path=self.steam_mgr.steam_exe,
                 steam_app_id=RIMWORLD_APP_ID,
@@ -2434,22 +2801,23 @@ class API:
                 return ApiResponse.error("未指定 Profile ID")
 
             profile = self.profile_mgr.get_profile(profile_id)
-            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
+            prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             if not prefer_steam_launch:
                 return ApiResponse.error("当前环境未启用 Steam 启动，无需注册 Steam 快捷方式")
 
             default_profile = self.profile_mgr.get_profile('default')
             same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
-            if same_install_as_default:
+            if same_install_as_default and bool(runtime_caps.get('is_steam_managed')):
                 return ApiResponse.error("当前环境与默认环境使用同一游戏本体，无需注册 Steam 非 Steam 快捷方式")
 
             log_probe = self.steam_mgr.get_shortcut_log_probe(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
             )
             result = self.steam_mgr.register_profile_non_steam_shortcut(
                 profile=profile,
-                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
             )
             result["log_probe"] = log_probe
             return ApiResponse.success(result, message="已写入 Steam 快捷方式配置")
@@ -3011,9 +3379,10 @@ class API:
         """规则中心导入入口，同时兼容旧版 JSON 规则包。"""
         try:
             path = file_mgr.select_file_dialog(file_types=(
-                f'RMM Data Package (*{DataBundleManager.FILE_EXTENSION};*.json;*.zip)',
-                'JSON Files (*.json)',
-                'ZIP Files (*.zip)',
+                _build_dialog_file_type_label(
+                    'RMM Data Package',
+                    [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS, '.json'],
+                ),
                 'All Files (*.*)',
             ))
             if path:
@@ -3074,7 +3443,7 @@ class API:
     @log_api_call
     def open_log_folder(self):
         """ 打开日志所在文件夹 """
-        path = self.active_context.user_data_path if self.active_context else None
+        path = self.game_log_mgr.get_preferred_log_directory() if self.game_log_mgr else None
         if path and os.path.exists(path):
             file_mgr.open_in_explorer(path)
             return ApiResponse.success()
@@ -3157,6 +3526,18 @@ class API:
                 return ApiResponse.error("缺少任务 ID")
             ok = self.ai_mgr.cancel_task(normalized_task_id)
             return ApiResponse.success(message="已请求取消 AI 任务") if ok else ApiResponse.error("当前没有可取消的 AI 任务")
+
+        if normalized_type == "mod-export":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.mod_package_mgr.cancel_export_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消模组导出任务") if ok else ApiResponse.error("当前没有可取消的模组导出任务")
+
+        if normalized_type == "mod-import":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.mod_package_mgr.cancel_import_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消模组导入任务") if ok else ApiResponse.error("当前没有可取消的模组导入任务")
 
         return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
 
@@ -3787,7 +4168,7 @@ class API:
         if not reader: return ApiResponse.error("日志读取器未初始化")
         
         if source_type == 'game':
-            filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
+            filepath = self.game_log_mgr.resolve_log_file_path(filename) if self.game_log_mgr else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
@@ -3886,7 +4267,7 @@ class API:
         import os
         from backend.settings import DATA_DIR
         if source_type == 'game':
-            filepath = os.path.join(self.active_context.user_data_path, filename) if self.active_context else ""
+            filepath = self.game_log_mgr.resolve_log_file_path(filename) if self.game_log_mgr else ""
         else:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         if not os.path.exists(filepath):
@@ -4008,7 +4389,14 @@ class API:
         try:
             self.profile_mgr.update_profile(pid, data)
             if pid == settings.config.current_profile_id:
-                self.profile_activate(pid)
+                refresh_mode = self._refresh_active_profile_context_after_update(pid, data)
+                active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+                if active_profile_id:
+                    self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
+                return ApiResponse.success(
+                    message="配置已更新",
+                    data={"refresh_mode": refresh_mode},
+                )
             return ApiResponse.success(message="配置已更新")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -4029,6 +4417,9 @@ class API:
         """
         try:
             self._bootstrap_context(pid)
+            active_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
+            if active_profile_id:
+                self._sync_runtime_links_for_profile(active_profile_id, include_workshop=True)
             # 切换成功后，前端通常会调用 get_initial_data 刷新全界面，所以这里只需返回成功
             res = {
                 "profile": self.profile_mgr.get_current_profile().__dict__,

@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 import concurrent.futures
+from typing import Any
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.tools import generate_path_hash, get_folder_size
@@ -29,6 +30,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_codes
@@ -36,8 +38,9 @@ from backend.utils.logger import logger # 引入日志
 from backend.utils.event_bus import EventBus # 引入事件总线
 
 class ModScanner:
-    def __init__(self, context: ProfileContext):
+    def __init__(self, context: ProfileContext, runtime_link_sync_handler=None):
         self.context = context
+        self.runtime_link_sync_handler = runtime_link_sync_handler
         # DLCParser 不在 init 初始化，因为要看扫描路径里有没有 DLC 目录
         self.dlc_parser = None
         self.xml_parser = ModXMLParser()
@@ -207,7 +210,7 @@ class ModScanner:
                 "scan",
                 status="running",
                 progress=99 if total_count else 90,
-                message='正在处理冲突与部署...',
+                message='正在处理冲突与运行态收敛...',
                 metrics={'stage': 'analyzing', 'current': total_count, 'total': total_count, 'title': '模组扫描'},
             )
             
@@ -244,35 +247,19 @@ class ModScanner:
                 # txn.rollback() # 万一出错，回滚所有改动
                 logger.error(f"批量入库失败: {e}", exc_info=True)
                 raise e
-            # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
+            # 入库完成后，再按当前 Profile 的启用域统一分析冲突与运行态收敛依据。
+            runtime_caps = resolve_profile_runtime_capabilities(self.context)
             runtime_analysis = ModDAO.get_profile_conflict_analysis(
                 self.context,
-                include_workshop_in_detection=bool(
-                    getattr(self.context, 'prefer_steam_launch', False)
-                    or getattr(self.context, 'use_workshop_mods', False)
-                ),
-                include_workshop_in_deploy=bool(
-                    (not getattr(self.context, 'prefer_steam_launch', False))
-                    and getattr(self.context, 'use_workshop_mods', False)
-                ),
+                include_workshop_in_detection=bool(runtime_caps.get('workshop_detection_enabled')),
+                include_workshop_in_deploy=bool(runtime_caps.get('workshop_deploy_enabled')),
             )
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']
-            final_links_to_create = runtime_analysis['deploy_paths']
-
-            # --- 6. 自动部署链接 (Deployment) ---
-            deploy_msg = "跳过链接部署"
-            local_mods_root = self.context.local_mods_path
-            if local_mods_root:
-                local_mods_root = os.path.normpath(local_mods_root).lower()
-            
-            # 调用 FileManager 执行部署
-            # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
-            # 增量模式只处理变化项；全量模式则删除全部旧链接后重建。
-            if local_mods_root and os.path.exists(local_mods_root):
-                success = FileManager.sync_managed_links(local_mods_root, final_links_to_create)
-                if final_links_to_create:
-                    deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
+            # --- 6. 扫描后通知运行态收敛 ---
+            runtime_sync_msg = "Runtime link sync not configured"
+            if callable(self.runtime_link_sync_handler):
+                runtime_sync_msg = self.runtime_link_sync_handler(self.context.profile_id)
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
@@ -290,7 +277,7 @@ class ModScanner:
                     'stats': stats,
                     'conflict_count': len(final_conflicts),
                     'coexistence_count': len(final_coexistences),
-                    'deploy_message': deploy_msg,
+                    'runtime_sync_message': runtime_sync_msg,
                     'title': '模组扫描',
                 },
             )
@@ -302,12 +289,12 @@ class ModScanner:
                 'stats': stats,
                 'conflicts': final_conflicts,
                 'coexistences': final_coexistences,
-                'deploy_message': deploy_msg
+                'runtime_sync_message': runtime_sync_msg,
             }
             self._finish_scan(result, task_id)
 
             duration = time.time() - start_time
-            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {deploy_msg}")
+            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {runtime_sync_msg}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -325,20 +312,31 @@ class ModScanner:
         """处理中断后的清理和通知"""
         self._is_scanning = False
         EventBus.emit_progress(task_id, "scan", status="cancelled", progress=0, message="扫描已由用户中止", metrics={'title': '模组扫描'})
-        EventBus.emit('scan-complete', {
-            'task_id': task_id,
+        self._finish_scan({
             'status': 'cancelled',
-            'message': '扫描已由用户中止，未对数据库进行任何修改。'
-        })
+            'message': '扫描已由用户中止，未对数据库进行任何修改。',
+        }, task_id)
         logger.info("Scan cancelled safely.")
 
     def _finish_scan(self, result, task_id: str | None = None):
         """扫描结束，通知前端并发送最终统计"""
         # 获取最新全量数据，或者让前端自己再调一次 get_all_mods
         # 建议直接通知前端 "scan-complete"，让前端决定是否刷新列表
-        if task_id and isinstance(result, dict):
-            result.setdefault('task_id', task_id)
-        EventBus.emit('scan-complete', result)
+        payload: dict[str, Any] = dict(result or {}) if isinstance(result, dict) else {'message': str(result or '')}
+        normalized_status = str(payload.get('status') or '').strip().lower()
+        if normalized_status == 'error':
+            normalized_status = 'failed'
+        if normalized_status not in {'success', 'failed', 'cancelled'}:
+            normalized_status = 'success'
+        if task_id:
+            payload.setdefault('task_id', task_id)
+        payload['status'] = normalized_status
+        payload.setdefault('type', 'scan')
+        payload.setdefault('id', payload.get('task_id', ''))
+        payload.setdefault('progress', 100 if normalized_status == 'success' else 0)
+        payload.setdefault('message', '扫描完成' if normalized_status == 'success' else '')
+        payload.setdefault('metrics', {})
+        EventBus.emit('scan-complete', payload)
 
     def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False):
         """

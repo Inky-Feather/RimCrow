@@ -90,6 +90,17 @@
                     :description="'创意工坊目录即创意工坊下载的模组所在的目录，该设置所有环境通用'" 
                     @blur="checkPath('workshop_mods_path', formData.workshop_mods_path)"/>
                   <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
+                  <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
+                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
+                    <CommonPathInput label="Steam程序路径" :check="formData.check_info?.steam_path"
+                      :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
+                      v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
+                    />
+                    <div class="grid grid-cols-2 gap-2">
+                      <CommonSwitch label="优先使用 Steam 启动" :disabled="steamLaunchDisabled" v-model="formData.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。" />
+                      <CommonSwitch label="使用创意工坊 Mod" :disabled="workshopModsDisabled" v-model="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。" />
+                    </div>
+                  </div>
                   <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
                     <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">管理器模组</h3>
                     <CommonPathInput class=" col-span-2" label="管理器下载模组路径" :check="formData.check_info?.self_mods_path"
@@ -104,23 +115,14 @@
                       <button @click="handleCheckSteamcmdMods" class="px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all"> 检查更新 </button>
                     </div>
                   </div>
-                  <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
-                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
-                    <CommonSwitch class="-mx-1.5" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" mini description="开启后将优先使用Steam启动Steam版游戏。开启后，会先确保 Steam 运行，再启动当前环境绑定的游戏本体。" />
-                    <CommonPathInput :class="{' pointer-events-none opacity-50':!formData.prefer_steam_launch}" label="Steam程序路径" 
-                      :check="formData.check_info?.steam_path"
-                      :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
-                      v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
-                    />
-                  </div>
                   <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
-                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">导入/导出 起始目录配置</h3>
+                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">排序导入/导出 起始选择窗口配置</h3>
                     <CommonSelect class="col-span-1" label="导入起始目录" v-model="formData.load_order_import_dir_mode"
-                      :description="'控制“导入加载序列”文件选择器的初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
+                      :description="'控制“导入加载序列”文件选择器的选择窗口初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
                       :options="LOAD_ORDER_DIR_MODE_OPTIONS"
                     />
                     <CommonSelect class="col-span-1" label="导出起始目录" v-model="formData.load_order_export_dir_mode"
-                      :description="'控制“导出加载序列”文件选择器的初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
+                      :description="'控制“导出加载序列”文件选择器的选择窗口初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
                       :options="LOAD_ORDER_DIR_MODE_OPTIONS"
                     />
                     <CommonPathInput v-if="formData.load_order_import_dir_mode === 'custom'" class="col-span-2" label="自定义导入起始目录" v-model="formData.load_order_import_custom_path"
@@ -419,26 +421,28 @@
                     </div>
 
                     <!-- 3. 测试与高级参数区 -->
-                    <div data-tour="settings-ai-advanced" class="grid grid-cols-2 gap-4">
-                      <CommonNumber label="最大并发数" v-model="formData.ai.max_concurrency" :step="1" :min="1" :max="100" description="同时发出的请求数量。大多数情况下设为 3 到 5 就够了。" />
-                      <CommonNumber label="输出随机性" v-model="formData.ai.temperature" :step="0.1" :min="0" :max="2.0" description="值越低越稳定，值越高越发散。一般用 0.7 左右即可。" />
-                      <CommonNumber label="上下文窗口" v-model="formData.ai.context_window_tokens" :step="1024" :min="0"
-                        description="模型总上下文窗口。0 表示按模型名自动预设；本地模型如果服务端限制了上下文，建议填实际值。" />
-                      <CommonNumber label="最大输入预算" v-model="formData.ai.max_input_tokens" :step="1024" :min="0"
-                        description="日志、附件、批量任务最多喂给模型的输入预算。0 表示自动按上下文窗口扣除输出预算。" />
-                      <CommonNumber label="最大输出预算" v-model="formData.ai.max_output_tokens" :step="512" :min="0"
-                        description="单次回复的输出保护阀。0 表示按模型预设自动控制；只有排查成本、延迟或长回复截断时才需要手动设置。" />
-                      <CommonSelect v-if="formData.ai.provider === 'openai_compatible'"
-                        label="接口模式" v-model="formData.ai.endpoint_mode"
-                        description="用于指定 OpenAI-compatible 接口应走哪一类 endpoint。`Auto` 会根据模型能力和请求结构自动选择更稳妥的路径；只有在排查特定中转服务或本地运行时兼容问题时，才建议手动切换。"
-                        :options="[
-                          { label: 'Auto', value: 'auto' },
-                          { label: 'Chat Completions API', value: 'chat_completions' },
-                          { label: 'Responses API', value: 'responses' }
-                        ]" />
+                    <div data-tour="settings-ai-advanced" class="">
+                      <div class="grid grid-cols-3 gap-2">
+                        <CommonNumber label="最大并发数" v-model="formData.ai.max_concurrency" :step="1" :min="1" :max="100" description="同时发出的请求数量。大多数情况下设为 3 到 5 就够了。" />
+                        <CommonNumber label="输出随机性" v-model="formData.ai.temperature" :step="0.1" :min="0" :max="2.0" description="值越低越稳定，值越高越发散。一般用 0.7 左右即可。" />
+                        <CommonNumber label="上下文窗口" v-model="formData.ai.context_window_tokens" :step="1024" :min="0"
+                          description="模型总上下文窗口。0 表示按模型名自动预设；本地模型如果服务端限制了上下文，建议填实际值。" />
+                        <CommonNumber label="最大输入预算" v-model="formData.ai.max_input_tokens" :step="1024" :min="0"
+                          description="日志、附件、批量任务最多喂给模型的输入预算。0 表示自动按上下文窗口扣除输出预算。" />
+                        <CommonNumber label="最大输出预算" v-model="formData.ai.max_output_tokens" :step="512" :min="0"
+                          description="单次回复的输出保护阀。0 表示按模型预设自动控制；只有排查成本、延迟或长回复截断时才需要手动设置。" />
+                        <CommonSelect v-if="formData.ai.provider === 'openai_compatible'"
+                          label="接口模式" v-model="formData.ai.endpoint_mode"
+                          description="用于指定 OpenAI-compatible 接口应走哪一类 endpoint。`Auto` 会根据模型能力和请求结构自动选择更稳妥的路径；只有在排查特定中转服务或本地运行时兼容问题时，才建议手动切换。"
+                          :options="[
+                            { label: 'Auto', value: 'auto' },
+                            { label: 'Chat Completions API', value: 'chat_completions' },
+                            { label: 'Responses API', value: 'responses' }
+                          ]" />
+                      </div>
 
                       <!-- 测试区 -->
-                      <div data-tour="settings-ai-test" class="col-span-2 pt-2 border-t border-text-main/5 flex gap-3">
+                      <div data-tour="settings-ai-test" class="pt-4 border-t border-text-main/5 flex gap-3">
                         <CommonInput label="测试内容" class="flex-1" v-model="testPrompt" placeholder="输入一句简单的话测试连接，例如：你好" @keydown.enter="testModel"></CommonInput>
                         <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
                           :class="[aiStore.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
@@ -447,7 +451,8 @@
                           发起测试
                         </button>
                       </div>
-                      <div v-if="testResponse" class="col-span-2 p-4 rounded-xl text-text-main/80 bg-accent-special/10 border border-text-main/10 relative">
+
+                      <div v-if="testResponse" class="p-4 rounded-xl text-text-main/80 bg-accent-special/10 border border-text-main/10 relative">
                         <button @click="clearTestResult" class="absolute top-2 right-2 text-text-dim hover:text-text-main">×</button>
                         <div class="text-xs text-text-dim mb-1 font-bold">AI 响应结果：</div>
                         <div class="text-sm whitespace-pre-wrap leading-relaxed">{{ testResponse }}</div>
@@ -456,6 +461,7 @@
                           <pre class="mt-2 whitespace-pre-wrap break-all rounded-lg border border-white/5 bg-black/30 p-3 text-xs text-text-main">{{ prettyTestRawResponse }}</pre>
                         </details>
                       </div>
+
                     </div>
                   </div>
                 </div>
@@ -468,21 +474,20 @@
                   <div class="grid grid-cols-2 gap-4">
                     <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
                     <CommonSwitch class="col-span-2" label="浏览器模式启动" v-model="formData.browser_mode" description="默认仍使用内置 WebView。开启后，无启动参数时将改为在本机浏览器中启动；关闭浏览器主页面后程序会自动退出。" />
-                    <div class="col-span-2 p-4 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-3">
-                      <div class="col-span-2">
-                        <h4 class="text-sm font-bold text-text-main">静默模式</h4>
-                        <p class="mt-1 text-xs leading-relaxed text-text-dim/80">
+                    <div class="col-span-2 p-2 rounded-2xl bg-text-main/2 border border-text-main/5">
+                      <CommonSwitch class="-ml-2" label="自动进入静默模式" v-model="formData.auto_enter_silent_mode" mini description="开启后，检测到 RimWorld 运行时会自动切换到静默模式；关闭后仅保留手动进入能力。" />
+                      <div class="grid grid-cols-2 items-center">
+                        <p class="text-xs ml-1 leading-relaxed text-text-dim/80">
                           游戏运行时可切到更轻量的界面，减少资源占用，并可直接查看游戏日志。
                         </p>
+                        <CommonSelect class="col-span-1" label="静默模式默认页面" mini v-model="formData.silent_mode_default_view"
+                          :options="[
+                            { label: '静默主页', value: 'home' },
+                            { label: '游戏日志', value: 'logs' }
+                          ]"
+                          description="控制自动进入静默模式时，默认先显示主页还是直接进入日志页。"
+                        />
                       </div>
-                      <CommonSwitch class="col-span-1" label="自动进入静默模式" v-model="formData.auto_enter_silent_mode" description="开启后，检测到 RimWorld 运行时会自动切换到静默模式；关闭后仅保留手动进入能力。" />
-                      <CommonSelect class="col-span-1" label="静默模式默认页面" v-model="formData.silent_mode_default_view"
-                        :options="[
-                          { label: '静默主页', value: 'home' },
-                          { label: '游戏日志', value: 'logs' }
-                        ]"
-                        description="控制自动进入静默模式时，默认先显示主页还是直接进入日志页。"
-                      />
                     </div>
                     <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
                     <!-- 手动检查按钮 -->
@@ -540,10 +545,10 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button @click="handleImportDataBundle"
+                        <button @click="openDataBundleImportDialog"
                           class="px-3 py-1.5 rounded-lg bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-xs font-bold transition-all"
                         >
-                          直接导入
+                          导入数据包
                         </button>
                         <button @click="openDataBundleModal"
                           class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-black text-xs font-black shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all"
@@ -551,6 +556,37 @@
                           导出软件数据
                         </button>
                       </div>
+                    </div>
+                  </div>
+                  <div class="p-4 rounded-2xl bg-accent-special/5 border border-accent-special/20">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="min-w-0">
+                        <h4 class="text-sm font-bold text-text-main">环境与模组打包</h4>
+                        <p class="text-xs text-text-dim/80 leading-relaxed mt-1">
+                          导入导出模组实体包。支持当前环境有效模组、当前启用模组导出，也支持附带环境数据的模组包导入。
+                        </p>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <button @click="openModPackageImportDialog"
+                          class="px-3 py-1.5 rounded-lg bg-text-main/5 hover:bg-text-main/10 border border-text-main/10 text-xs font-bold transition-all"
+                        >
+                          导入模组包
+                        </button>
+                        <button @click="openCurrentProfileExportDialog"
+                          class="px-4 py-1.5 rounded-lg bg-accent-special hover:bg-accent-special/85 text-black text-xs font-black shadow-[0_0_15px_rgba(14,165,233,0.2)] transition-all"
+                        >
+                          导出环境模组
+                        </button>
+                      </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4 items-center">
+                      <div class="text-xs text-text-dim/75">
+                        当前环境：<span class="font-bold text-text-main">{{ profileStore.currentProfile?.name || '未激活' }}</span>
+                      </div>
+                      <CommonNumber class="col-span-1" label="打包压缩级别" v-model="formData.bundle_compress_level"
+                        description="0 最快，9 最省空间。默认 6。压缩级别越高，导出越慢，但包体通常更小。"
+                        :step="1" :min="0" :max="9" mini
+                      />
                     </div>
                   </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
@@ -670,7 +706,7 @@
             <p class="text-xs leading-relaxed text-text-dim/85">
               <span class="text-accent-primary font-bold">环境数据</span> 会打包整个环境目录；
               <span class="text-accent-tip font-bold">路径绑定、敏感信息、当前激活环境 ID</span> 不会导出。
-              <span class="text-accent-warn font-bold">默认环境</span> 导入时会先询问覆盖还是另存。
+              <span class="text-accent-warn font-bold">环境导入冲突</span> 会在导入面板统一处理新建/覆盖。
             </p>
             <button @click="handleExportDataBundle"
               class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-black text-sm font-black shadow-[0_0_18px_rgba(6,182,212,0.24)] transition-all"
@@ -707,6 +743,7 @@ import { useAppStore } from '../stores/appStore'
 import { useAiStore } from '../stores/aiStore'
 import { useConfirmStore } from '../stores/confirmStore'
 import { useProfileStore } from '../stores/profileStore'
+import { useModStore } from '../stores/modStore'
 import { useGuideStore } from '../stores/guideStore'
 
 const appStore = useAppStore()
@@ -714,10 +751,24 @@ const aiStore = useAiStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 const profileStore = useProfileStore()
+const modStore = useModStore()
 const guideStore = useGuideStore()
 
 const currentTab = ref('paths')
 const formData = ref({})
+const detectedIsSteam = computed(() => {
+  const checkedInstall = formData.value?.check_info?.game_install_path
+  if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
+    if (checkedInstall.data && Object.prototype.hasOwnProperty.call(checkedInstall.data, 'is_steam')) {
+      return !!checkedInstall.data.is_steam
+    }
+    return false
+  }
+  return !!formData.value?.is_steam
+})
+const steamLaunchDisabled = computed(() => !detectedIsSteam.value)
+const hasWorkshopPath = computed(() => !!String(formData.value?.workshop_mods_path || '').trim())
+const workshopModsDisabled = computed(() => steamLaunchDisabled.value || !!formData.value?.prefer_steam_launch || !hasWorkshopPath.value)
 
 const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
   [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
@@ -754,7 +805,7 @@ const dataBundleSchema = ref({
   modules: [],
   profiles: [],
   presets: {},
-  file_extension: '.rmmdata',
+  file_extension: '.rmmdata.zip',
 })
 const showDataBundleModal = ref(false)
 const showBundleProfilePicker = ref(false)
@@ -882,6 +933,21 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   } else {
     showDataBundleModal.value = false
     showBundleProfilePicker.value = false
+  }
+})
+watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
+  if (enabled && formData.value) {
+    formData.value.use_workshop_mods = false
+  }
+})
+watch(detectedIsSteam, (isSteam) => {
+  if (!isSteam && formData.value?.prefer_steam_launch) {
+    formData.value.prefer_steam_launch = false
+  }
+})
+watch(hasWorkshopPath, (available) => {
+  if (!available && formData.value?.use_workshop_mods) {
+    formData.value.use_workshop_mods = false
   }
 })
 
@@ -1155,67 +1221,76 @@ const handleExportDataBundle = async () => {
   }
 }
 
-const buildBundleInspectMessage = (inspect) => {
-  const moduleLines = (inspect?.modules || []).map(module => `• ${module.label || module.key}`)
-  const profileLines = (inspect?.profiles || []).map(profile => {
-    const gameVersion = profile.game_version ? ` [${profile.game_version}]` : ''
-    const defaultTag = profile.original_profile_id === 'default' ? '（默认环境）' : ''
-    return `• ${profile.name || profile.original_profile_id}${gameVersion}${defaultTag}`
-  })
+const openDataBundleImportDialog = async () => {
+  const schema = await appStore.getDataBundleSchema()
+  if (!schema) return
 
-  const lines = [
-    `格式：${inspect?.legacy_rule_bundle ? '旧版规则包' : '统一数据包'}`,
-    inspect?.exported_at ? `导出时间：${inspect.exported_at}` : '',
-    '',
-    '包含模块：',
-    ...(moduleLines.length ? moduleLines : ['- 无']),
+  const extensions = [
+    schema.file_extension || '.rmmdata.zip',
+    ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata']),
   ]
-  if (profileLines.length > 0) {
-    lines.push('', '包含环境：', ...profileLines)
-  }
-  lines.push('', '确认继续导入吗？')
-  return lines.filter(Boolean).join('<br>')
-}
-
-const handleImportDataBundle = async () => {
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
   const bundlePath = await appStore.getFilePath('', [
-    `RMM Data Package (*${dataBundleSchema.value?.file_extension || '.rmmdata'};*.json;*.zip)`,
+    `RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`,
     'All Files (*.*)',
   ])
   if (!bundlePath) return
 
-  const inspect = await appStore.inspectDataBundle(bundlePath)
-  if (!inspect) return
+  const inspectData = await appStore.inspectDataBundle(bundlePath)
+  if (!inspectData) return
 
-  const summaryMessage = buildBundleInspectMessage(inspect)
-  let defaultProfileMode = 'clone'
-
-  if (inspect.has_default_profile) {
-    const choice = await confirmStore.open({
-      title: '检测到默认环境数据',
-      message: `${summaryMessage}<br><br>导入默认环境时，是否覆盖当前默认环境？`,
-      mode: 'confirm',
-      type: 'warning',
-      isHtml: true,
-      actionButtons: [
-        { label: '默认环境另存为新环境', value: 'clone', kind: 'primary' },
-        { label: '覆盖当前默认环境', value: 'overwrite', kind: 'danger' },
-        { label: '取消', value: 'cancel', kind: 'secondary' },
-      ],
-    })
-    if (!choice || choice === 'cancel') return
-    defaultProfileMode = choice
-  } else {
-    const ok = await confirmStore.confirmAction('确认导入软件数据', summaryMessage, { type: 'warning', isHtml: true })
-    if (!ok) return
-  }
-
-  const imported = await appStore.importDataBundle(bundlePath, {
-    default_profile_mode: defaultProfileMode,
+  appStore.openPackageTransferDialog('data-import', {
+    title: '导入软件数据包',
+    bundlePath,
+    inspectData,
+    dataBundleSchema: schema,
   })
-  if (imported) {
-    closeDataBundleModal()
-  }
+}
+
+const openModPackageImportDialog = async () => {
+  const schema = await appStore.getModPackageSchema()
+  if (!schema) return
+
+  const bundlePath = await appStore.getFilePath('', [
+    `RMM Mod Package (*${schema.file_extension || '.rmmmods.zip'})`,
+    'All Files (*.*)',
+  ])
+  if (!bundlePath) return
+
+  const availableInstalls = Array.isArray(schema.available_installs) ? schema.available_installs : []
+  const targetKind = availableInstalls.length > 0 ? 'game_install' : 'self_mods'
+  const gameInstallPath = String(availableInstalls[0]?.install_path || '')
+  const inspectData = await appStore.prepareModPackageImport(bundlePath, {
+    target_kind: targetKind,
+    game_install_path: gameInstallPath,
+  })
+  if (!inspectData) return
+
+  appStore.openPackageTransferDialog('mod-import', {
+    title: '导入模组包',
+    bundlePath,
+    inspectData,
+    modPackageSchema: schema,
+    targetKind,
+    gameInstallPath,
+  })
+}
+
+const openCurrentProfileExportDialog = () => {
+  const currentProfile = profileStore.currentProfile || {}
+  appStore.openPackageTransferDialog('mod-export', {
+    title: '导出当前环境模组',
+    description: '可在导出前选择当前环境有效模组或当前启用模组，并按需附带环境数据。',
+    sourceProfile: true,
+    profileId: currentProfile.id || appStore.settings.current_profile_id || 'default',
+    profileName: currentProfile.name || '当前环境',
+    scopeOptions: [
+      { value: 'profile-effective', label: `当前环境有效模组（${modStore.exportableVisibleCount}）`, description: '导出当前环境里能正常使用的模组。' },
+      { value: 'profile-active', label: `当前环境启用模组（${modStore.exportableActiveCount}）`, description: '只导出当前环境里已经启用的模组。' },
+    ],
+    export_scope: 'profile-effective',
+  })
 }
 
 // ====== 数据处理 ======

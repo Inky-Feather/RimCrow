@@ -20,6 +20,7 @@ from backend.database.models import (
     UserModData,
     db,
 )
+from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
@@ -69,15 +70,11 @@ def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
 
 
 def _should_include_workshop_in_runtime_detection(context: ProfileContext | None) -> bool:
-    if not context:
-        return False
-    return bool(getattr(context, "prefer_steam_launch", False) or getattr(context, "use_workshop_mods", False))
+    return bool(resolve_profile_runtime_capabilities(context).get("workshop_detection_enabled", False))
 
 
 def _should_include_workshop_in_runtime_deploy(context: ProfileContext | None) -> bool:
-    if not context:
-        return False
-    return bool((not getattr(context, "prefer_steam_launch", False)) and getattr(context, "use_workshop_mods", False))
+    return bool(resolve_profile_runtime_capabilities(context).get("workshop_deploy_enabled", False))
 
 
 def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
@@ -278,6 +275,13 @@ def _build_group_structures(allowed_ids: set[str] | None = None) -> list[dict[st
     `get_all_groups_structured()` 和 `get_groups_structured_by_mod_ids()` 的唯一区别，
     只是是否需要按当前可见 Mod 集合过滤成员，因此用一个内部函数收口。
     """
+    if getattr(db, "deferred", False):
+        # 单测会用假的 DAO / Models 预注入来隔离排序逻辑。
+        # 一旦其它测试先导入了真实 DAO，这里就可能在“数据库尚未初始化”时被调用。
+        # 对这类预初始化场景，分组信息本来就只是可选增强数据，直接回退为空更安全，
+        # 也能避免排序、预览等纯内存逻辑被数据库初始化顺序绑死。
+        return []
+
     groups = list(
         GroupData.select()
         .order_by(GroupData.sort_index, GroupData.group_id)
@@ -290,17 +294,78 @@ def _build_group_structures(allowed_ids: set[str] | None = None) -> list[dict[st
     )
 
     group_map = {group["group_id"]: [] for group in groups}
+    seen_mod_ids_by_group = {group["group_id"]: set() for group in groups}
     for group_mod in group_mods:
         group_id = group_mod["group_id"]
         mod_id = normalize_package_id(group_mod.get("mod_id"))
         if allowed_ids is not None and mod_id not in allowed_ids:
             continue
-        if group_id in group_map and mod_id:
+        if group_id in group_map and mod_id and mod_id not in seen_mod_ids_by_group[group_id]:
+            seen_mod_ids_by_group[group_id].add(mod_id)
             group_map[group_id].append(mod_id)
 
     for group in groups:
         group["mod_ids"] = group_map.get(group["group_id"], [])
     return groups
+
+
+def _normalize_and_validate_group_name(
+    name: Any,
+    error_prefix: str,
+    exclude_group_id: str | None = None,
+) -> str:
+    normalized_name = str(name or "").strip()
+    if not normalized_name:
+        raise ValueError(f"{error_prefix}：分组名称不能为空。")
+    for group in GroupData.select(GroupData.group_id, GroupData.name):
+        if exclude_group_id and group.group_id == exclude_group_id:
+            continue
+        if str(group.name or "").strip() == normalized_name:
+            raise ValueError(f"{error_prefix}：分组名称已存在。")
+    return normalized_name
+
+
+def _require_existing_group(group_id: str, error_prefix: str) -> str:
+    normalized_group_id = str(group_id or "").strip()
+    if not normalized_group_id or not GroupData.get_or_none(GroupData.group_id == normalized_group_id):
+        raise ValueError(f"{error_prefix}：目标分组不存在。")
+    return normalized_group_id
+
+
+def _normalize_group_mod_ids(
+    mod_ids: Iterable[Any] | None,
+    *,
+    reject_duplicates: bool = False,
+    duplicate_error_prefix: str = "分组处理失败",
+) -> list[str]:
+    normalized_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for raw_mod_id in mod_ids or []:
+        mod_id = normalize_package_id(raw_mod_id)
+        if not mod_id:
+            continue
+        if mod_id in seen_ids:
+            if reject_duplicates:
+                raise ValueError(f"{duplicate_error_prefix}：提交的成员列表存在重复项。")
+            continue
+        seen_ids.add(mod_id)
+        normalized_ids.append(mod_id)
+    return normalized_ids
+
+
+def _assert_mod_assets_exist(mod_ids: Iterable[str], error_prefix: str) -> None:
+    normalized_ids = _normalize_group_mod_ids(mod_ids)
+    if not normalized_ids:
+        return
+    valid_ids = {
+        normalize_package_id(asset.package_id)
+        for asset in ModAsset.select(ModAsset.package_id).where(
+            cast(Any, ModAsset.package_id).in_(normalized_ids)
+        )
+    }
+    invalid_ids = [mod_id for mod_id in normalized_ids if mod_id not in valid_ids]
+    if invalid_ids:
+        raise ValueError(f"{error_prefix}：提交的成员列表包含无效成员。")
 
 
 class ModDAO:
@@ -347,7 +412,7 @@ class ModDAO:
         group_map = _load_group_names_by_mod_id()
         grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-        for asset in query.dicts():
+        for asset in query:
             _normalize_language_fields(asset)
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:
@@ -675,17 +740,9 @@ class ModDAO:
 
         for payload in mods_data_list:
             path_hash = str(payload.get("path_hash") or "").strip()
-            if not path_hash:
-                continue
-            signature = tuple(
-                sorted(
-                    key
-                    for key in payload.keys()
-                    if key != "path_hash" and key in field_map
-                )
-            )
-            if not signature:
-                continue
+            if not path_hash: continue
+            signature = tuple( sorted( key for key in payload.keys() if key != "path_hash" and key in field_map ) )
+            if not signature: continue
             batches_by_signature.setdefault(signature, []).append({"path_hash": path_hash, **payload})
 
         with db.atomic():
@@ -1148,24 +1205,27 @@ class GroupDAO:
     @staticmethod
     def create_group(name: str, color: str = "#ffffff"):
         """创建新分组，默认追加到当前列表末尾。"""
+        normalized_name = _normalize_and_validate_group_name(name, "创建分组失败")
         new_id = uuid.uuid4().hex
-        max_idx = GroupData.select(fn.MAX(GroupData.sort_index)).scalar() or 0
+        max_idx = GroupData.select(fn.MAX(GroupData.sort_index)).scalar()
         return GroupData.create(
             group_id=new_id,
-            name=name,
+            name=normalized_name,
             color=normalize_hex_color(color),
-            sort_index=max_idx + 1,
+            sort_index=0 if max_idx is None else int(max_idx) + 1,
             is_expanded=True,
         )
 
     @staticmethod
     def delete_group(group_id: str):
         """删除分组。GroupMod 会由级联约束一起删除。"""
-        return GroupData.delete().where(GroupData.group_id == group_id).execute()
+        normalized_group_id = _require_existing_group(group_id, "删除分组失败")
+        return GroupData.delete().where(GroupData.group_id == normalized_group_id).execute()
 
     @staticmethod
     def update_group_info(group_id: str, **kwargs):
         """更新分组名称、颜色或折叠状态。"""
+        normalized_group_id = _require_existing_group(group_id, "更新分组失败")
         allowed_fields = {"name", "color", "is_expanded"}
         clean_updates = {
             key: value
@@ -1175,41 +1235,61 @@ class GroupDAO:
         if not clean_updates:
             raise ValueError("更新分组失败：未提供有效字段。")
         if "name" in clean_updates:
-            clean_updates["name"] = str(clean_updates["name"] or "").strip()
-            if not clean_updates["name"]:
-                raise ValueError("更新分组失败：分组名称不能为空。")
+            clean_updates["name"] = _normalize_and_validate_group_name(
+                clean_updates["name"],
+                "更新分组失败",
+                exclude_group_id=normalized_group_id,
+            )
         if "color" in clean_updates:
             clean_updates["color"] = normalize_hex_color(clean_updates["color"])
         if "is_expanded" in clean_updates:
             clean_updates["is_expanded"] = bool(clean_updates["is_expanded"])
-        return GroupData.update(**clean_updates).where(GroupData.group_id == group_id).execute()
+        return GroupData.update(**clean_updates).where(GroupData.group_id == normalized_group_id).execute()
 
     @staticmethod
     def add_mods_to_group(group_id: str, mod_ids: List[str]):
-        """向分组批量添加 Mod，并自动忽略重复关系。"""
-        normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids: return
+        """向分组批量添加 Mod。只会追加当前尚未在组内且资产有效的成员。"""
+        normalized_group_id = _require_existing_group(group_id, "分组添加失败")
+        normalized_ids = _normalize_group_mod_ids(mod_ids)
+        if not normalized_ids:
+            return 0
 
         with db.atomic():
-            _ensure_user_data_rows(normalized_ids)
-            max_idx = GroupMod.select(fn.MAX(GroupMod.sort_index)).where(GroupMod.group_id == group_id).scalar() or 0
+            existing_ids = set(_normalize_group_mod_ids(
+                row.get("mod_id")
+                for row in GroupMod.select(GroupMod.mod_id)
+                .where(GroupMod.group_id == normalized_group_id)
+                .order_by(GroupMod.sort_index, GroupMod.mod_id)
+                .dicts()
+            ))
+            new_ids = [mod_id for mod_id in normalized_ids if mod_id not in existing_ids]
+            if not new_ids:
+                return 0
+
+            _assert_mod_assets_exist(new_ids, "分组添加失败")
+            _ensure_user_data_rows(new_ids)
+            max_idx = GroupMod.select(fn.MAX(GroupMod.sort_index)).where(GroupMod.group_id == normalized_group_id).scalar()
             data_source = [
                 {
-                    "group_id": group_id,
+                    "group_id": normalized_group_id,
                     "mod_id": mod_id,
-                    "sort_index": max_idx + 1 + index,
+                    "sort_index": (0 if max_idx is None else int(max_idx) + 1) + index,
                 }
-                for index, mod_id in enumerate(normalized_ids)
+                for index, mod_id in enumerate(new_ids)
             ]
-            GroupMod.insert_many(data_source).on_conflict_ignore().execute()
+            for batch in chunked(data_source, 500):
+                GroupMod.insert_many(batch).execute()
+            return len(new_ids)
 
     @staticmethod
     def remove_mods_from_group(group_id: str, mod_ids: List[str]):
         """从分组移除一批 Mod。"""
-        normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids: return 0
+        normalized_group_id = _require_existing_group(group_id, "分组移除失败")
+        normalized_ids = _normalize_group_mod_ids(mod_ids)
+        if not normalized_ids:
+            return 0
         return GroupMod.delete().where(
-            (GroupMod.group_id == group_id)
+            (GroupMod.group_id == normalized_group_id)
             & (cast(Any, GroupMod.mod_id).in_(normalized_ids))
         ).execute()
 
@@ -1249,51 +1329,43 @@ class GroupDAO:
         正确做法是：
         1. 校验提交列表不能有重复
         2. 允许列表中带有“当前尚未在组内，但在 ModAsset 中有效”的新增成员
-        3. 按提交顺序重排当前可见成员与新增成员
-        4. 保留其余不可见成员，并把它们稳定地续接在后面
+        3. 以提交顺序作为最终结果的前缀
+        4. 将当前组里“这次没出现在提交列表中的成员”按原顺序去重后统一续到末尾
         """
-        normalized_ids = normalize_package_ids(mod_id_list)
+        normalized_group_id = _require_existing_group(group_id, "分组内排序失败")
+        normalized_ids = _normalize_group_mod_ids(
+            mod_id_list,
+            reject_duplicates=True,
+            duplicate_error_prefix="分组内排序失败",
+        )
         if not normalized_ids:
             raise ValueError("分组内排序失败：提交的成员列表为空。")
 
         with db.atomic():
             existing_rows = list(
                 GroupMod.select(GroupMod.mod_id, GroupMod.sort_index)
-                .where(GroupMod.group_id == group_id)
+                .where(GroupMod.group_id == normalized_group_id)
                 .order_by(GroupMod.sort_index, GroupMod.mod_id)
                 .dicts()
             )
-            if not existing_rows:
-                raise ValueError("分组内排序失败：目标分组不存在或没有成员。")
-
-            existing_ids = [normalize_package_id(row.get("mod_id")) for row in existing_rows]
+            existing_ids = _normalize_group_mod_ids(row.get("mod_id") for row in existing_rows)
             existing_id_set = set(existing_ids)
-            if len(normalized_ids) != len(set(normalized_ids)):
-                raise ValueError("分组内排序失败：提交的成员列表存在重复项。")
 
             new_member_ids = [mod_id for mod_id in normalized_ids if mod_id not in existing_id_set]
-            if new_member_ids:
-                valid_new_ids = {
-                    normalize_package_id(asset.package_id)
-                    for asset in ModAsset.select(ModAsset.package_id).where(
-                        cast(Any, ModAsset.package_id).in_(new_member_ids)
-                    )
-                }
-                invalid_new_ids = [mod_id for mod_id in new_member_ids if mod_id not in valid_new_ids]
-                if invalid_new_ids:
-                    raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
+            _assert_mod_assets_exist(new_member_ids, "分组内排序失败")
 
-            submitted_existing_set = {mod_id for mod_id in normalized_ids if mod_id in existing_id_set}
-            hidden_existing_ids = [
-                mod_id for mod_id in existing_ids
-                if mod_id not in submitted_existing_set
-            ]
-            merged_ids = normalized_ids + hidden_existing_ids
+            merged_ids = list(normalized_ids)
+            appended_ids = set(normalized_ids)
+            for mod_id in existing_ids:
+                if mod_id in appended_ids:
+                    continue
+                appended_ids.add(mod_id)
+                merged_ids.append(mod_id)
 
             _ensure_user_data_rows(merged_ids)
-            GroupMod.delete().where(GroupMod.group_id == group_id).execute()
+            GroupMod.delete().where(GroupMod.group_id == normalized_group_id).execute()
             data_source = [
-                {"group_id": group_id, "mod_id": mod_id, "sort_index": index}
+                {"group_id": normalized_group_id, "mod_id": mod_id, "sort_index": index}
                 for index, mod_id in enumerate(merged_ids)
             ]
             for batch in chunked(data_source, 500):

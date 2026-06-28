@@ -26,7 +26,10 @@
 ├── ·[.ruff_cache]
 │   ├── ·[0.9.6]
 │   │   ├──  12228878442278937604
+│   │   ├──  12350152229933616243
 │   │   ├──  12597327884289657622
+│   │   ├──  14152611443496745280
+│   │   ├──  15664606002408002217
 │   │   ├──  16606532305242249928
 │   │   ├──  3498731509232515300
 │   │   ├──  4941758101431761949
@@ -69,6 +72,7 @@
 │   │   ├──  import_check.py
 │   │   ├──  language_pack_ownership.py
 │   │   ├──  models.py
+│   │   ├──  package_tokens.py
 │   │   ├──  parsers.py
 │   │   └──  share_code.py
 │   │   
@@ -78,11 +82,14 @@
 │   │   ├──  mgr_download.py
 │   │   ├──  mgr_files.py
 │   │   ├──  mgr_game.py
+│   │   ├──  mgr_game_install.py
 │   │   ├──  mgr_game_logs.py
 │   │   ├──  mgr_game_monitor.py
 │   │   ├──  mgr_github.py
 │   │   ├──  mgr_load_order.py
 │   │   ├──  mgr_maintenance.py
+│   │   ├──  mgr_mod_config.py
+│   │   ├──  mgr_mod_package.py
 │   │   ├──  mgr_network.py
 │   │   ├──  mgr_profile.py
 │   │   ├──  mgr_rules.py
@@ -115,10 +122,12 @@
 │   │   
 │   ├── ·[utils]
 │   │   ├──  __init__.py
+│   │   ├──  bundle_io.py
 │   │   ├──  constants.py
 │   │   ├──  event_bus.py
 │   │   ├──  lanzou_parser.py
 │   │   ├──  logger.py
+│   │   ├──  profile_runtime.py
 │   │   ├──  restart.py
 │   │   ├──  shortcuts.py
 │   │   ├──  text_decode.py
@@ -133,10 +142,12 @@
 │   
 ├── ·[data]
 ├── ·[frontend]
+│   ├── ·[localization]
 │   ├── ·[public]
 │   │   ├──  icon.svg
 │   │   └──  vite.svg
 │   │   
+│   ├── ·[scripts]
 │   ├── ·[src]
 │   │   ├── ·[assets]
 │   │   │   └──  vue.svg
@@ -154,6 +165,10 @@
 │   │   │   │   ├──  Confirm.vue
 │   │   │   │   ├──  FixedPopover.vue
 │   │   │   │   └──  HoverPanel.vue
+│   │   │   │   
+│   │   │   ├── ·[packageTransfer]
+│   │   │   │   ├──  ModConflictPlanEditor.vue
+│   │   │   │   └──  ProfileConflictPlanEditor.vue
 │   │   │   │   
 │   │   │   ├── ·[utils]
 │   │   │   │   ├──  AppLogPanel.vue
@@ -189,9 +204,11 @@
 │   │   │   ├──  LogViewer.vue
 │   │   │   ├──  MissingInstallDialog.vue
 │   │   │   ├──  ModAliasReviewModal.vue
+│   │   │   ├──  ModConfigManagerModal.vue
 │   │   │   ├──  ModDetails.vue
 │   │   │   ├──  ModList.vue
 │   │   │   ├──  ModRuleEditor.vue
+│   │   │   ├──  PackageTransferDialog.vue
 │   │   │   ├──  ProfileDrawer.vue
 │   │   │   ├──  RimHeader.vue
 │   │   │   ├──  RulePanel.vue
@@ -206,6 +223,9 @@
 │   │   │   ├──  vPreview.js
 │   │   │   ├──  vSelection.js
 │   │   │   └──  vTooltip.js
+│   │   │   
+│   │   ├── ·[i18n]
+│   │   │   └── ·[messages]
 │   │   │   
 │   │   ├── ·[modules]
 │   │   │   ├── ·[guide]
@@ -279,8 +299,10 @@
 │   ├──  test_ai_attachment_resolver.py
 │   ├──  test_ai_gateway_request_compat.py
 │   ├──  test_ai_service_helpers.py
+│   ├──  test_bundle_managers.py
 │   ├──  test_download_manager.py
 │   ├──  test_file_search.py
+│   ├──  test_game_log_paths.py
 │   ├──  test_github_manager.py
 │   ├──  test_group_dao.py
 │   ├──  test_import_check.py
@@ -288,11 +310,14 @@
 │   ├──  test_load_order_manager_import_check.py
 │   ├──  test_load_order_parsers.py
 │   ├──  test_load_order_share_code.py
+│   ├──  test_mod_config_manager.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_rule_manager_dynamic_weights.py
 │   ├──  test_shortcuts.py
 │   ├──  test_sorter_strategies.py
+│   ├──  test_texture_opt_batch_recovery.py
 │   ├──  test_texture_opt_manager.py
+│   ├──  test_workshop_db_manager.py
 │   └──  test_workshop_selection.py
 │   
 ├── ·[toolmods]

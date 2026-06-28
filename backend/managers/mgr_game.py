@@ -1,12 +1,81 @@
 import os
-import winreg
 import subprocess
 import platform
+
+try:
+    import winreg
+except ImportError:  # pragma: no cover - 仅在非 Windows 平台触发
+    winreg = None
 
 class GameManager:
     """
     游戏管理：路径检测、启动游戏
     """
+
+    @staticmethod
+    def _unique_paths(candidates: list[str]) -> list[str]:
+        """按顺序去重并规范化路径。"""
+        result: list[str] = []
+        seen: set[str] = set()
+        for raw_path in candidates:
+            path = str(raw_path or "").strip()
+            if not path: continue
+            normalized = os.path.normpath(path)
+            key = normalized.lower() if platform.system() == 'Windows' else normalized
+            if key in seen: continue
+            seen.add(key)
+            result.append(normalized)
+        return result
+
+    @classmethod
+    def get_default_user_data_paths(cls) -> list[str]:
+        """返回与 Profile 环境无关的默认用户数据目录候选。"""
+        system_name = platform.system()
+
+        if system_name == 'Windows':
+            user_profile = os.getenv('USERPROFILE') or os.path.expanduser('~')
+            return cls._unique_paths([
+                os.path.join(user_profile, 'AppData', 'LocalLow', 'Ludeon Studios', 'RimWorld by Ludeon Studios')
+            ])
+
+        home = os.path.expanduser('~')
+        if system_name == 'Darwin':
+            return cls._unique_paths([
+                os.path.join(home, 'Library', 'Application Support', 'RimWorld'),
+            ])
+
+        return cls._unique_paths([
+            os.path.join(home, '.config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios'),
+            os.path.join(home, '.var', 'app', 'com.valvesoftware.Steam', 'config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios'),
+        ])
+
+    @classmethod
+    def get_default_player_log_paths(cls, filename: str = "Player.log") -> list[str]:
+        """返回各平台默认 Player 日志文件候选位置。"""
+        target_name = os.path.basename(str(filename or "").strip()) or "Player.log"
+        system_name = platform.system()
+
+        if system_name == 'Darwin':
+            home = os.path.expanduser('~')
+            return cls._unique_paths([
+                os.path.join(home, 'Library', 'Logs', 'Ludeon Studios', 'RimWorld by Ludeon Studios', target_name),
+                os.path.join(home, 'Library', 'Logs', 'Unity', target_name),
+            ])
+
+        return cls._unique_paths([
+            os.path.join(root, target_name)
+            for root in cls.get_default_user_data_paths()
+        ])
+
+    @classmethod
+    def resolve_default_user_data_path(cls) -> str:
+        """优先返回存在的默认用户数据目录，否则返回首选候选。"""
+        candidates = cls.get_default_user_data_paths()
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return candidates[0] if candidates else ""
+
     @classmethod
     def auto_detect_paths(cls):
         """
@@ -31,7 +100,9 @@ class GameManager:
         paths['user_data_path'] = cls._detect_userdata_path()
         paths['game_config_path'] = os.path.join(paths['user_data_path'], 'Config') if paths['user_data_path'] else ''
 
-        # 2. 检测 安装路径 (主要针对 Windows Steam)
+        # 2. 检测安装路径。
+        # 这里只覆盖“当前平台最常见的 Steam 默认安装位”，
+        # 找不到时仍允许用户手动配置，不把自动探测做成唯一入口。
         install_loc = cls._detect_steam_install_path()
         
         # 3. 检测 安装路径
@@ -132,43 +203,52 @@ class GameManager:
     @staticmethod
     def _detect_userdata_path():
         """检测 Config 文件夹位置"""
-        #  (%USERPROFILE%\Appdata\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios)
-        if platform.system() == 'Windows':
-            user_profile = os.getenv('USERPROFILE')
-            # 这里的 APPDATA 环境变量通常指向 Roaming，但 RimWorld 在 LocalLow
-            # 所以最好手动拼 LocalLow
-            if user_profile:
-                base = os.path.join(user_profile, 'AppData', 'LocalLow')
-                path = os.path.join(base, 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-                if os.path.exists(path): return path
-        elif platform.system() == 'Darwin':
-            home = os.path.expanduser('~')
-            path = os.path.join(home, 'Library', 'Application Support', 'RimWorld')
-            if os.path.exists(path): return path
-        else: # Linux
-            home = os.path.expanduser('~')
-            path = os.path.join(home, '.config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-            if os.path.exists(path): return path
-        return ''
+        return GameManager.resolve_default_user_data_path()
     
     @staticmethod
     def _detect_steam_install_path():
-        """通过 Windows 注册表查找 Steam 安装路径"""
-        if platform.system() != 'Windows': return None
-            
-        # 常见注册表位置
-        keys = [
-            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100",
-            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100"
-        ]
-        
-        for key_path in keys:
-            try:
-                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
-                    install_loc, _ = winreg.QueryValueEx(key, "InstallLocation")
-                    if install_loc: return install_loc
-            except OSError:
-                continue
+        """
+        检测各平台常见的 Steam 版 RimWorld 安装路径。
+
+        注意这里只收口最常见默认位置，不递归扫描磁盘：
+        - Windows 走 Steam App 注册表；
+        - macOS / Linux 走 Steam 默认库目录；
+        - 多 Steam Library / 自定义磁盘库仍交给用户手动指定。
+        """
+        system_name = platform.system()
+        candidate_paths = []
+
+        if system_name == 'Windows':
+            if winreg is None:
+                return None
+            keys = [
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100",
+                r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 294100"
+            ]
+            for key_path in keys:
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                        install_loc, _ = winreg.QueryValueEx(key, "InstallLocation")
+                        if install_loc:
+                            candidate_paths.append(install_loc)
+                except OSError:
+                    continue
+        elif system_name == 'Darwin':
+            home = os.path.expanduser('~')
+            candidate_paths.extend([
+                os.path.join(home, 'Library', 'Application Support', 'Steam', 'steamapps', 'common', 'RimWorld'),
+            ])
+        else:
+            home = os.path.expanduser('~')
+            candidate_paths.extend([
+                os.path.join(home, '.steam', 'steam', 'steamapps', 'common', 'RimWorld'),
+                os.path.join(home, '.local', 'share', 'Steam', 'steamapps', 'common', 'RimWorld'),
+                os.path.join(home, 'snap', 'steam', 'common', '.local', 'share', 'Steam', 'steamapps', 'common', 'RimWorld'),
+            ])
+
+        for install_loc in candidate_paths:
+            if install_loc and os.path.exists(install_loc):
+                return install_loc
         return None
 
 

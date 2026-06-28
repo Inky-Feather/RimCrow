@@ -8,6 +8,7 @@ import threading
 import time
 
 from backend.load_order.package_tokens import parse_package_token
+from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.event_bus import EventBus
@@ -116,6 +117,8 @@ class LogAnalyzer:
 
 
 class GameLogManager(BaseLogReader): # 继承基类
+    _GAME_LOG_FILENAMES = ('RMM_Realtime.log', 'RMM_Realtime-prev.log', 'Player.log', 'Player-prev.log')
+
     def __init__(self, context: ProfileContext):
         # 游戏日志通常较长，这里限制为最近 2 万条结构化 Block，避免长时间运行后占用过多内存
         super().__init__(max_blocks=20000) # 初始化 BaseLogReader 的缓存和内存限制
@@ -124,12 +127,57 @@ class GameLogManager(BaseLogReader): # 继承基类
         # 实时监视器相关状态
         self._realtime_thread = None
         self._stop_event = threading.Event()
-        self.realtime_log_file = os.path.join(self.context.user_data_path, 'RMM_Realtime.log')
+        self.realtime_log_file = self.resolve_log_file_path('RMM_Realtime.log', must_exist=False)
         
         self._patterns = {
             'error': re.compile(r'error|exception|crash|fail', re.IGNORECASE),
             'warning': re.compile(r'warning', re.IGNORECASE)
         }
+
+    def _build_realtime_log_paths(self, filename: str) -> list[str]:
+        candidates = []
+        context_root = str(getattr(self.context, "user_data_path", "") or "").strip()
+        if context_root:
+            candidates.append(os.path.join(context_root, filename))
+        candidates.extend(
+            os.path.join(root, filename)
+            for root in GameManager.get_default_user_data_paths()
+        )
+        return list(dict.fromkeys(candidates))
+
+    def _build_log_path_candidates(self, filename: str) -> list[str]:
+        normalized_name = os.path.basename(str(filename or "").strip())
+        if not normalized_name:
+            return []
+        if normalized_name.startswith('Player'):
+            return GameManager.get_default_player_log_paths(normalized_name)
+        if normalized_name.startswith('RMM_Realtime'):
+            return self._build_realtime_log_paths(normalized_name)
+        return []
+
+    def resolve_log_file_path(self, filename: str, *, must_exist: bool = True) -> str:
+        """解析游戏日志路径：Player 固定默认目录，RMM_Realtime 跟随当前环境。"""
+        for filepath in self._build_log_path_candidates(filename):
+            if not must_exist or os.path.exists(filepath):
+                return filepath
+        return ""
+
+    def get_preferred_log_directory(self) -> str:
+        for filename in ('RMM_Realtime.log', 'RMM_Realtime-prev.log', 'Player.log', 'Player-prev.log'):
+            filepath = self.resolve_log_file_path(filename)
+            if filepath:
+                return os.path.dirname(filepath)
+
+        context_root = str(getattr(self.context, "user_data_path", "") or "").strip()
+        if context_root:
+            return context_root
+
+        fallback_roots = GameManager.get_default_user_data_paths()
+        if fallback_roots:
+            return fallback_roots[0]
+
+        player_candidates = GameManager.get_default_player_log_paths('Player.log')
+        return os.path.dirname(player_candidates[0]) if player_candidates else ""
 
 
     # 启动/停止实时监视器
@@ -182,20 +230,16 @@ class GameLogManager(BaseLogReader): # 继承基类
     def get_log_files(self):
         """获取日志文件列表，支持 app(软件日志) 和 game(游戏日志)"""
         result =[]
-        # 游戏日志
-        base_path = self.context.user_data_path
-        if base_path and os.path.exists(base_path):
-            candidates = ['RMM_Realtime.log', 'RMM_Realtime-prev.log', 'Player.log', 'Player-prev.log']
-            for filename in candidates:
-                filepath = os.path.join(base_path, filename)
-                if os.path.exists(filepath):
-                    stat = os.stat(filepath)
-                    result.append({
-                        'name': filename,
-                        'path': filepath,
-                        'size': stat.st_size,
-                        'mtime': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                    })
+        for filename in self._GAME_LOG_FILENAMES:
+            filepath = self.resolve_log_file_path(filename)
+            if filepath and os.path.exists(filepath):
+                stat = os.stat(filepath)
+                result.append({
+                    'name': filename,
+                    'path': filepath,
+                    'size': stat.st_size,
+                    'mtime': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                })
                         
         # 按修改时间倒序排列
         result.sort(key=lambda x: x['mtime'], reverse=True)
@@ -207,7 +251,7 @@ class GameLogManager(BaseLogReader): # 继承基类
         page=1 代表最新的一页（文件末尾）。page 越大，读取的数据越旧（越靠前）。
         """
         # 1. 确定文件路径
-        filepath = os.path.join(self.context.user_data_path, filename)
+        filepath = self.resolve_log_file_path(filename)
             
         if not os.path.exists(filepath): return {'error': '文件不存在'}
 
