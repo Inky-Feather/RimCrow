@@ -5,9 +5,12 @@
   <header class="m-1 h-14 bg-bg-surface/60 rounded-2xl flex items-center px-3 justify-between border border-border-base/5 shadow-lg shrink-0 z-50">
     <!-- 标题 -->
     <div class="flex items-center gap-4 mx-1 ">
-      <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-text-main to-text-dim bg-clip-text text-transparent">
-        <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
-      </h1>
+      <div class="flex items-center gap-2">
+        <IconSelfOriginal class="size-7 shrink-0" />
+        <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-text-main to-text-dim bg-clip-text text-transparent">
+          <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
+        </h1>
+      </div>
       <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion }}</span>
       <!-- 环境切换器 -->
       <div data-tour="profile-switcher">
@@ -140,6 +143,7 @@ import { useAppStore } from '../stores/appStore.js'
 import { useAiStore } from '../../features/ai/aiStore.js'
 import ProfileSwitcher from '../../features/profiles/ProfileSwitcher.vue';
 import { BotMessageSquare, ClipboardList, FileSearch2, FileSliders, BrushCleaning, Images, LoaderCircle } from 'lucide-vue-next';
+import { IconSelfOriginal } from '../../shared/lib/constants'
 import { useProfileStore } from '../../features/profiles/profileStore.js';
 import { useOrderStore } from '../../features/load-order/orderStore.js';
 import { useModResidueStore } from '../../features/mod-residue/modResidueStore.js';

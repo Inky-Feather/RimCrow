@@ -1,6 +1,7 @@
 // src/utils/constants.js
 
 import { h, markRaw } from 'vue'
+import defaultLogoUrl from '../../../../icon.svg'
 
 export const RIMWORLD_STEAM_APP_ID = 294100
 
@@ -190,8 +191,31 @@ export const RUN_COMMAND_TAGS = [
   { value: '-popupwindow', label: '无边框窗口模式' },
   { value: '-quicktest', label: '快速测试' },
 ]
-export const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
-  [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
-)
-// 改成相对路径后，既能兼容 Vite 构建产物，也能兼容本地文件入口。
-export const IconSelf = h('svg', { viewBox: "0 0 96 96", fill: "currentColor" }, [ h('use', { href: "./icon.svg" }) ])
+const STEAM_ICON_PATH = 'M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z'
+export const IconSteam = markRaw({
+  name: 'IconSteam',
+  inheritAttrs: false,
+  render() {
+    return h('svg', { ...this.$attrs, viewBox: '0 0 448 512', fill: 'currentColor' }, [
+      h('path', { d: STEAM_ICON_PATH }),
+    ])
+  },
+})
+export const IconSelf = markRaw({
+  name: 'IconSelf',
+  inheritAttrs: false,
+  render() {
+    return h('svg', { ...this.$attrs, viewBox: '18 15 60 66', fill: 'currentColor', 'aria-hidden': 'true' }, [
+      h('path', { opacity: '0.95', d: 'M48 16 76.3 31 48 45.9 19.7 31 48 16Z' }),
+      h('path', { opacity: '0.72', d: 'M48 45.9 76.3 31v33.4c0 .5-.3 1-.8 1.3L48 80V45.9Z' }),
+      h('path', { opacity: '0.5', d: 'M19.7 31 48 45.9V80L20.5 65.7c-.5-.3-.8-.8-.8-1.3V31Z' }),
+    ])
+  },
+})
+export const IconSelfOriginal = markRaw({
+  name: 'IconSelfOriginal',
+  inheritAttrs: false,
+  render() {
+    return h('img', { ...this.$attrs, src: defaultLogoUrl, alt: '', draggable: false, 'aria-hidden': 'true' })
+  },
+})

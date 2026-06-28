@@ -2609,6 +2609,37 @@ class TestSettingsPathNormalization(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertEqual(settings.config.workshop_mods_path, normalize_path_for_storage(raw_workshop_path))
 
+    def test_update_from_dict_normalizes_multiplayer_data_paths(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        official_path = temp_root / "Data" / "multiplayerCompatibility.json"
+        package_ids_path = temp_root / "Data" / "mpCompatPackageIds.json"
+        official_path.parent.mkdir(parents=True, exist_ok=True)
+
+        original_official = settings.config.multiplayer_compatibility_path
+        original_package_ids = settings.config.mp_compat_package_ids_path
+        self.addCleanup(setattr, settings.config, "multiplayer_compatibility_path", original_official)
+        self.addCleanup(setattr, settings.config, "mp_compat_package_ids_path", original_package_ids)
+
+        raw_official_path = str(official_path).replace(os.sep, "/")
+        raw_package_ids_path = str(package_ids_path).replace(os.sep, "/")
+        with patch.object(settings, "save"):
+            warnings = settings.update_from_dict({
+                "multiplayer_compatibility_path": raw_official_path,
+                "mp_compat_package_ids_path": raw_package_ids_path,
+            })
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(
+            settings.config.multiplayer_compatibility_path,
+            normalize_path_for_storage(raw_official_path),
+        )
+        self.assertEqual(
+            settings.config.mp_compat_package_ids_path,
+            normalize_path_for_storage(raw_package_ids_path),
+        )
+
     def test_update_from_dict_resets_self_mods_path_when_equal_to_workshop(self):
         temp_root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)

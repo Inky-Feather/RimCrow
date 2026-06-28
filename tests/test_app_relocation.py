@@ -18,6 +18,8 @@ class ConfigStub:
     steamcmd_path: str
     ripgrep_path: str
     community_workshop_db_path: str
+    multiplayer_compatibility_path: str
+    mp_compat_package_ids_path: str
     user_rules_path: str
     workshop_mods_path: str
     steam_path: str
@@ -39,6 +41,8 @@ class TestAppRelocation(unittest.TestCase):
             steamcmd_path=str(old_home / "tools" / "steamcmd"),
             ripgrep_path=str(old_home / "tools" / "ripgrep"),
             community_workshop_db_path=str(old_home / "data" / "steamDB.json"),
+            multiplayer_compatibility_path=str(old_home / "data" / "multiplayerCompatibility.json"),
+            mp_compat_package_ids_path=str(old_home / "data" / "mpCompatPackageIds.json"),
             user_rules_path=str(old_home / "data" / "rules" / "user_rules.json"),
             workshop_mods_path=str(external_root / "workshop"),
             steam_path=str(external_root / "Steam"),
@@ -53,6 +57,8 @@ class TestAppRelocation(unittest.TestCase):
         self.assertEqual(config.steamcmd_path, str(new_home / "tools" / "steamcmd"))
         self.assertEqual(config.ripgrep_path, str(new_home / "tools" / "ripgrep"))
         self.assertEqual(config.community_workshop_db_path, str(new_home / "data" / "steamDB.json"))
+        self.assertEqual(config.multiplayer_compatibility_path, str(new_home / "data" / "multiplayerCompatibility.json"))
+        self.assertEqual(config.mp_compat_package_ids_path, str(new_home / "data" / "mpCompatPackageIds.json"))
         self.assertEqual(config.user_rules_path, str(new_home / "data" / "rules" / "user_rules.json"))
         self.assertEqual(config.texture_opt.texture_tools_path, str(new_home / "tools" / "texture_tools"))
         self.assertEqual(config.workshop_mods_path, str(external_root / "workshop"))
@@ -67,6 +73,8 @@ class TestAppRelocation(unittest.TestCase):
             steamcmd_path=str(home / "tools" / "steamcmd"),
             ripgrep_path=str(home / "tools" / "ripgrep"),
             community_workshop_db_path=str(home / "data" / "steamDB.json"),
+            multiplayer_compatibility_path=str(home / "data" / "multiplayerCompatibility.json"),
+            mp_compat_package_ids_path=str(home / "data" / "mpCompatPackageIds.json"),
             user_rules_path=str(home / "data" / "rules" / "user_rules.json"),
             workshop_mods_path="",
             steam_path="",
@@ -89,6 +97,8 @@ class TestAppRelocation(unittest.TestCase):
             steamcmd_path="tools/steamcmd",
             ripgrep_path="tools/ripgrep",
             community_workshop_db_path="data/steamDB.json",
+            multiplayer_compatibility_path="data/multiplayerCompatibility.json",
+            mp_compat_package_ids_path="data/mpCompatPackageIds.json",
             user_rules_path="data/rules/user_rules.json",
             workshop_mods_path="",
             steam_path="",
@@ -100,6 +110,8 @@ class TestAppRelocation(unittest.TestCase):
         self.assertTrue(result.moved)
         self.assertEqual(config.self_mods_path, str(new_home / "mods"))
         self.assertEqual(config.steamcmd_path, str(new_home / "tools" / "steamcmd"))
+        self.assertEqual(config.multiplayer_compatibility_path, str(new_home / "data" / "multiplayerCompatibility.json"))
+        self.assertEqual(config.mp_compat_package_ids_path, str(new_home / "data" / "mpCompatPackageIds.json"))
         self.assertEqual(config.texture_opt.texture_tools_path, str(new_home / "tools" / "texture_tools"))
 
 
