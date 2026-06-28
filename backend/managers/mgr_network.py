@@ -116,7 +116,7 @@ class NetworkManager:
         custom_block = "".join(block_lines)
         try:
             # 1. 先读取现有内容
-            with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
+            with open(self.sys_hosts_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             # 2. 清理掉旧的的标记块
             content = self._remove_custom_block(content)
@@ -125,7 +125,7 @@ class NetworkManager:
                 content += '\n'
             content += custom_block
             # 4. 写回文件
-            with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
+            with open(self.sys_hosts_path, 'w', encoding='utf-8', errors='ignore') as f:
                 f.write(content)
             return True
 
@@ -139,11 +139,11 @@ class NetworkManager:
     def restore_system_hosts(self):
         """恢复系统 Hosts（退出时自动调用）"""
         try:
-            with open(self.sys_hosts_path, 'r', encoding='utf-8') as f:
+            with open(self.sys_hosts_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             if self.marker_start in content:
                 clean_content = self._remove_custom_block(content)
-                with open(self.sys_hosts_path, 'w', encoding='utf-8') as f:
+                with open(self.sys_hosts_path, 'w', encoding='utf-8', errors='ignore') as f:
                     f.write(clean_content)
         except PermissionError:
             pass # 没权限就算了，说明一开始也没写进去

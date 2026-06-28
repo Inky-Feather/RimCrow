@@ -1,11 +1,44 @@
 # backend/_version.py
-__version__ = "0.18.10"  # 主版本.次版本.补丁
+__version__ = "0.18.18"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"      # dev, alpha, beta, stable, release
 
 # 结构化更新日志：按版本从新到旧排列
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.18.18",
+        "date": "2026-03-25",
+        "changes": [
+            { "type": "feature", "text": "引入 Agentic 智能诊断工作流，支持多轮 AI 工具调用与深度日志浓缩分析" },
+            { "type": "feature", "text": "新增 AI 诊断侧边栏，支持流式响应、过程可视化展示及 Markdown 代码高亮渲染" },
+            { "type": "feature", "text": "支持全局日志结构化扫描与物理行号精准反查，实现超大日志的高效检索" },
+            { "type": "feature", "text": "集成 AI 工具权限配置与死锁检测机制，提升自动化诊断的安全性与稳定性" },
+            { "type": "feature", "text": "新增 AI 回复内容分格式复制及实时 Token 消耗统计展示" },
+            { "type": "feature", "text": "支持基于 RMM_Companion 的游戏日志实时监视与错误自动分类功能" },
+            { "type": "optimize", "text": "优化日志指纹算法，通过特征抹除技术显著提升错误聚类的精确度" },
+            { "type": "optimize", "text": "引入日志随机读取机制，实现大规模日志详情的秒级回溯与加载" },
+            { "type": "optimize", "text": "统一软件与游戏日志的数据结构，增强日志查看器的虚拟滚动与多维过滤性能" },
+            { "type": "fix", "text": "修复异步请求中的竞态覆盖问题，确保 Token 预检与状态同步的准确性" },
+            { "type": "fix", "text": "修复多环境下游戏启动的参数错误" }
+        ]
+    },
+    {
+        "version": "0.18.15",
+        "date": "2026-03-20",
+        "changes": [
+            { "type": "feature", "text": "优化“幽灵模组”缓存补全机制，支持在本地缺失时自动补全模组信息" },
+            { "type": "feature", "text": "支持按环境（Profile）切换备份列表，并提供跨环境备份查看与导出功能" },
+            { "type": "feature", "text": "增强加载顺序管理，支持 ModList.xml 格式导出及缺失模组的一键补全订阅" },
+            { "type": "feature", "text": "新增跨库同项检测与冲突识别功能，通过状态角标直观展示模组关联性" },
+            { "type": "feature", "text": "完善冲突处理功能，支持批量规则应用、本地化处理及详细执行统计" },
+            { "type": "feature", "text": "支持将本地模组快速转移至创意工坊库，并提供便捷的更新与定位功能" },
+            { "type": "optimize", "text": "优化配置文件读取逻辑，增强对不同编码格式的容错处理能力" },
+            { "type": "optimize", "text": "重构规则编辑与选择逻辑，解决交互组件冲突并提升 UI 响应灵敏度" },
+            { "type": "fix", "text": "新增数据库损坏自动备份重置逻辑，提升系统极端情况下的自愈能力" },
+            { "type": "fix", "text": "修正环境健康度校验逻辑，防止在只读模式下意外创建冗余物理目录" }
+        ]
+    },
     {
         "version": "0.18.10",
         "date": "2026-03-09",

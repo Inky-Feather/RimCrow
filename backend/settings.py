@@ -257,12 +257,18 @@ class SettingsManager:
         """
         if not CONFIG_PATH.exists(): return
         try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            # 使用递归更新现有的 self.config
-            self._recursive_update(self.config, data)
-            # 加载完成后，手动同步一次衍生路径
-            self._sync_derived_paths()
+            # 使用 utf-8-sig 兼容带 BOM 的文件，使用 errors='replace' 防止崩溃
+            with open(CONFIG_PATH, 'r', encoding='utf-8-sig', errors='replace') as f:
+                content = f.read()
+                # 尝试修复损坏的 JSON (比如末尾被截断)
+                from json_repair import repair_json
+                data = repair_json(content, return_objects=True)
+                
+            if isinstance(data, dict):
+                # 使用递归更新现有的 self.config
+                self._recursive_update(self.config, data)
+                # 加载完成后，手动同步一次衍生路径
+                self._sync_derived_paths()
             
         except Exception as e:
             print(f"Config load error: {e}")

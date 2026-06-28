@@ -32,25 +32,21 @@ class ModDAO:
         """
         # 1. 解析环境上下文 (Context Resolution)
         if not context: return [] # 空上下文直接返回空列表
-
         # 获取环境配置
         local_root = context.local_mods_path
         dlc_root = context.game_dlc_path
         use_workshop_mods = context.use_workshop_mods
         use_self_mods = context.use_self_mods
-            
+        
         workshop_root = settings.config.workshop_mods_path
         self_mods_root = settings.config.self_mods_path
-
         # 路径标准化 (用于 Python 端比对，统一转小写)
         # 标准化路径用于严格匹配 (增加结尾分隔符确保匹配精确)
         def norm(p): return os.path.normpath(p).lower() + os.sep if p else ""
-        
         L_PATH = norm(local_root)
         D_PATH = norm(dlc_root)
         W_PATH = norm(workshop_root)
         S_PATH = norm(self_mods_root)
-
         # 2. 构造查询条件 (只拉取当前环境涉及到的物理路径)
         conditions = []
         # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
@@ -67,7 +63,6 @@ class ModDAO:
         if self_mods_root: self_mods_root = os.path.normpath(self_mods_root).lower()
             
         if not conditions: return [] # 没有任何有效路径配置
-
         # 使用 reduce 和 operator.or_ 替代 fn.OR
         # 这会生成标准的 (condition1 OR condition2 OR ...) 结构
         combined_cond = reduce(operator.or_, conditions)
@@ -78,8 +73,8 @@ class ModDAO:
                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
                 .where(combined_cond & active_cond) # 组合 OR 条件
                 .dicts())
-         # 3. 核心仲裁逻辑：实现 Local > Self > Workshop
-        # 我们先对查询结果按优先级排序，这样后处理时高优先级的自然会覆盖低优先级的
+        # 3. 核心仲裁逻辑：实现 Local > Self > Workshop
+        # 先对查询结果按优先级排序，这样后处理时高优先级的自然会覆盖低优先级的
         def get_priority(mod):
             m_path = norm(mod['path'])
             if D_PATH and m_path.startswith(D_PATH): return 0 # 最高优先级
@@ -96,8 +91,7 @@ class ModDAO:
             # 联查 GroupMod 和 GroupData，只取必要的字段
             # SELECT gm.mod_id, g.name FROM groupmod gm JOIN groupdata g ON gm.group_id = g.group_id
             g_query = (GroupMod.select(GroupMod.mod_id, GroupData.name)
-                    .join(GroupData, on=(GroupMod.group_id == GroupData.group_id))
-                    .dicts())
+                    .join(GroupData, on=(GroupMod.group_id == GroupData.group_id)).dicts())
             for row in g_query:
                 mid = row['mod_id'].lower()
                 gname = row['name']
@@ -113,18 +107,8 @@ class ModDAO:
         for mod in sorted_mods:
             pkg_id = mod['package_id'].lower()
             had_existing = pkg_id in merged_map
-            # 标记来源供 UI 显示图标
-            # m_path = norm(mod['path'])
-            # if (L_PATH and m_path.startswith(L_PATH)) or (D_PATH and m_path.startswith(D_PATH)):
-            #     mod['store'] = 'local'
-            # elif S_PATH and m_path.startswith(S_PATH):
-            #     mod['store'] = 'self'
-            # elif W_PATH and m_path.startswith(W_PATH):
-            #     mod['store'] = 'workshop'
-            # else:
-            #     mod['store'] = 'unknown'
+            mod['groups'] = group_map.get(pkg_id, [])   # 注入分组信息
             merged_map[pkg_id] = mod
-            
             # 记录遮蔽信息 (覆盖策略：高优先级在后)
             if had_existing:
                 # 记录被遮蔽的记录
@@ -132,9 +116,26 @@ class ModDAO:
                 # 可以在这里给被选中的那个 Mod 增加一个属性，告诉前端它遮蔽了谁
                 merged_map[pkg_id]['_has_shadow_version'] = True
                 
-            
-
         return list(merged_map.values())
+
+    @staticmethod
+    def get_visible_profile_mod(context: ProfileContext | None, package_id: str):
+        """
+        高效地从数据库中获取当前环境中单个可见的 Mod。
+        '可见' 意味着它属于当前 profile 的扫描路径之一，并且没有被更高优先级的同名 Mod 遮蔽。
+        """
+        pid = str(package_id or '').strip().lower()
+        if not context or not pid: return None
+        # 1. 直接用 get_profile_mods 获取已过滤和遮蔽的 Mod 列表
+        # 这个方法已经包含了所有复杂的环境过滤逻辑，是获取“可见性”的唯一真实来源。
+        visible_mods = ModDAO.get_profile_mods(context)
+        # 2. 在内存中快速查找
+        # 对于几千个 Mod，这比构造一个极其复杂的 SQL 查询更简单、更可维护，且性能足够好。
+        for mod in visible_mods:
+            if str(mod.get('package_id') or '').strip().lower() == pid:
+                return mod
+        
+        return None
 
     @staticmethod
     def get_triple_domain_assets(context: ProfileContext|None):
@@ -160,29 +161,7 @@ class ModDAO:
         dlc_root = dlc_root.lower()
 
         for asset in all_assets:
-            path = os.path.normpath(asset['path']).lower()
-            # 1. 尝试获取已生成的缩略图路径 (物理路径)
-            # thumb_path = file_mgr.get_thumbnail_path(asset['package_id'])
-            # # 2. 决定列表图标 (优先用缩略图，没有则用原图)
-            # list_thumb_path = thumb_path if thumb_path else asset['preview_path']
-            # # 3. 转换为 HTTP URL
-            # asset['thumb_url'] = file_mgr.get_asset_url(list_thumb_path) if list_thumb_path else None
-            
-            # asset['thumb_url'] = file_mgr.get_asset_url(asset['preview_path']) # 直接把原图发过去，提高效率
-            # # 4. 详情页大图 URL
-            # asset['preview_url'] = file_mgr.get_asset_url(asset['preview_path']) if asset['preview_path'] else None
-            # # 5. 图标 URL
-            # asset['icon_url'] = file_mgr.get_asset_url(asset['icon_path']) if asset['icon_path'] else None
-            
-            # # 分流逻辑
-            # if workshop_root and workshop_root in path:
-            #     result['workshop'].append(asset)
-            # elif manager_root and manager_root in path:
-            #     result['self'].append(asset)
-            # elif local_root and local_root in path or dlc_root and dlc_root in path:
-            #     # 剩下的默认为 local (当前环境或其他环境的 Mods 目录)
-            #     result['local'].append(asset)
-            
+            path = os.path.normpath(asset['path']).lower()            
             store = asset['store']
             if store == 'workshop':
                 result['workshop'].append(asset)

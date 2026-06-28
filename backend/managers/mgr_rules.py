@@ -63,7 +63,7 @@ class RuleManager:
             # 加载社区规则
             community_file_path = Path(settings.config.community_rules_path)
             if community_file_path.exists():
-                with open(community_file_path, 'r', encoding='utf-8') as f:
+                with open(community_file_path, 'r', encoding='utf-8', errors='replace') as f:
                     data = json.load(f)
                     # 兼容不同格式，有些可能是 { "rules": {...} }，有些直接是 {...}
                     self.community_rules = data.get("rules", data)
