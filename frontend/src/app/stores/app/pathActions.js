@@ -26,10 +26,10 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
   }
 
   // 检测路径信息
-  const checkPath = async (path_type, path) => {
+  const checkPath = async (path_type, path, options = {}) => {
     if(!path_type || !path) return
     if(!window.pywebview) return
-    const res = await window.pywebview.api.path_check(path_type, path)
+    const res = await window.pywebview.api.path_check(path_type, path, !!options.force)
     if (checkResult(res, "检测路径信息")) {
       return res.data
     }

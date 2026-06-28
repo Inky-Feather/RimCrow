@@ -38,10 +38,12 @@
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
                     />
                     <div class="grid grid-cols-2 gap-2">
-                      <CommonSwitch label="优先使用 Steam 启动" :disabled="steamLaunchDisabled"
+                      <CommonSwitch label="优先使用 Steam 启动" :disabled="isPending('steam-launch-check')"
                         :model-value="formData.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。"
                         @update:modelValue="handlePreferSteamLaunchUpdate" />
-                      <CommonSwitch label="使用创意工坊 Mod" :disabled="workshopModsDisabled" v-model="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。" />
+                      <CommonSwitch label="使用创意工坊 Mod" :disabled="isPending('workshop-mods-check') || !!formData.prefer_steam_launch"
+                        :model-value="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。"
+                        @update:modelValue="handleWorkshopModsUpdate" />
                     </div>
                   </div>
                   <div class="modal-section grid grid-cols-2 gap-2 p-3">
@@ -100,9 +102,9 @@ import { useProfileStore } from '../../profiles/profileStore'
 
 const props = defineProps({
   formData: { type: Object, required: true },
-  steamLaunchDisabled: Boolean,
-  workshopModsDisabled: Boolean,
   markSteamLaunchTouched: Function,
+  validateSteamLaunchEnable: Function,
+  validateWorkshopModsEnable: Function,
   autoDetect: { type: Function, required: true },
   handleBrowse: { type: Function, required: true },
   checkPath: { type: Function, required: true },
@@ -126,9 +128,27 @@ const handleGameBrowse = async () => {
   await props.checkPath('game_install_path', props.formData.game_install_path)
 }
 
-const handlePreferSteamLaunchUpdate = (value) => {
+const handlePreferSteamLaunchUpdate = async (value) => {
   props.markSteamLaunchTouched?.()
-  props.formData.prefer_steam_launch = !!value
+  if (!value) {
+    props.formData.prefer_steam_launch = false
+    return
+  }
+  await runPendingAction('steam-launch-check', async () => {
+    const ok = await props.validateSteamLaunchEnable?.()
+    props.formData.prefer_steam_launch = !!ok
+  })
+}
+
+const handleWorkshopModsUpdate = async (value) => {
+  if (!value) {
+    props.formData.use_workshop_mods = false
+    return
+  }
+  await runPendingAction('workshop-mods-check', async () => {
+    const ok = await props.validateWorkshopModsEnable?.()
+    props.formData.use_workshop_mods = !!ok
+  })
 }
 const isPending = (action) => pendingAction.value === action
 const runPendingAction = async (action, runner) => {

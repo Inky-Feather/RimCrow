@@ -62,9 +62,9 @@
               <SettingsPathsTab
                 v-if="currentTab === 'paths'"
                 :form-data="formData"
-                :steam-launch-disabled="steamLaunchDisabled"
-                :workshop-mods-disabled="workshopModsDisabled"
                 :mark-steam-launch-touched="markSteamLaunchTouched"
+                :validate-steam-launch-enable="validateSteamLaunchEnable"
+                :validate-workshop-mods-enable="validateWorkshopModsEnable"
                 :auto-detect="autoDetect"
                 :handle-browse="handleBrowse"
                 :check-path="checkPath"
@@ -142,20 +142,6 @@ const currentTab = ref('paths')
 const formData = ref({})
 const steamLaunchTouched = ref(false)
 const saving = ref(false)
-const detectedIsSteam = computed(() => {
-  const checkedInstall = formData.value?.check_info?.game_install_path
-  if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
-    if (checkedInstall.data && Object.prototype.hasOwnProperty.call(checkedInstall.data, 'is_steam')) {
-      return !!checkedInstall.data.is_steam
-    }
-    return false
-  }
-  return !!formData.value?.is_steam
-})
-const steamLaunchDisabled = computed(() => !detectedIsSteam.value)
-const hasWorkshopPath = computed(() => !!String(formData.value?.workshop_mods_path || '').trim())
-const workshopModsDisabled = computed(() => steamLaunchDisabled.value || !!formData.value?.prefer_steam_launch || !hasWorkshopPath.value)
-
 const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
   [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
 )
@@ -244,16 +230,6 @@ watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
     formData.value.use_workshop_mods = false
   }
 })
-watch(detectedIsSteam, (isSteam) => {
-  if (!isSteam && formData.value?.prefer_steam_launch) {
-    formData.value.prefer_steam_launch = false
-  }
-})
-watch(hasWorkshopPath, (available) => {
-  if (!available && formData.value?.use_workshop_mods) {
-    formData.value.use_workshop_mods = false
-  }
-})
 
 // 监听当前页面切换
 const changeTab = (tab) => {
@@ -283,6 +259,67 @@ const markSteamLaunchTouched = () => {
   steamLaunchTouched.value = true
 }
 
+const getSteamLaunchProblem = (installCheck, steamCheck) => {
+  if (!installCheck?.pass) return `游戏安装目录无效：${installCheck?.msg || '请重新选择游戏安装目录'}`
+  if (!installCheck?.data?.is_steam) return `当前游戏本体未识别为 Steam 版，无法使用 Steam 启动。
+${installCheck?.msg || '请确认游戏文件完整，或重新选择 Steam 版游戏目录。'}`
+  if (!steamCheck?.pass) return `Steam 程序路径无效：${steamCheck?.msg || '请重新选择 Steam.exe 所在目录'}`
+  return ''
+}
+
+const validateSteamLaunchEnable = async () => {
+  const installPath = String(formData.value?.game_install_path || '').trim()
+  const steamPath = String(formData.value?.steam_path || '').trim()
+  if (!installPath) {
+    toast.warning('请先填写游戏安装目录')
+    return false
+  }
+  if (!steamPath) {
+    toast.warning('请先填写 Steam 程序路径')
+    return false
+  }
+  const installCheck = await checkPath('game_install_path', installPath, { force: true })
+  const steamCheck = await checkPath('steam_path', steamPath)
+  const problem = getSteamLaunchProblem(installCheck, steamCheck)
+  if (problem) {
+    toast.warning(problem)
+    return false
+  }
+  return true
+}
+
+const validateWorkshopModsEnable = async () => {
+  const workshopPath = String(formData.value?.workshop_mods_path || '').trim()
+  if (!workshopPath) {
+    toast.warning('请先填写创意工坊目录')
+    return false
+  }
+  const workshopCheck = await checkPath('workshop_mods_path', workshopPath)
+  if (!workshopCheck?.pass) {
+    toast.warning(`创意工坊目录无效：${workshopCheck?.msg || '请重新选择创意工坊目录'}`)
+    return false
+  }
+  return true
+}
+
+const validateEnabledLaunchOptions = async () => {
+  if (formData.value?.prefer_steam_launch) {
+    const ok = await validateSteamLaunchEnable()
+    if (!ok) {
+      formData.value.prefer_steam_launch = false
+      return false
+    }
+  }
+  if (formData.value?.use_workshop_mods) {
+    const ok = await validateWorkshopModsEnable()
+    if (!ok) {
+      formData.value.use_workshop_mods = false
+      return false
+    }
+  }
+  return true
+}
+
 // 自动检测路径
 const autoDetect = async (checkAfterDetect = true) => {
   const paths = await appStore.autoDetectPaths(false)
@@ -293,20 +330,21 @@ const autoDetect = async (checkAfterDetect = true) => {
 }
 
 // 检查游戏路径是否有效
-const checkPath = async (type, path) => {
+const checkPath = async (type, path, options = {}) => {
   console.debug('检查单项路径:', type, path)
   if (!formData.value['check_info']) {
     formData.value['check_info'] = {};
   }
   if (!String(path || '').trim()) {
-    formData.value['check_info'][type] = {
+    const result = {
       pass: false,
       type: 'warn',
       msg: '未填写路径',
     }
-    return
+    formData.value['check_info'][type] = result
+    return result
   }
-  const res = await appStore.checkPath(type, path)
+  const res = await appStore.checkPath(type, path, options)
   formData.value['check_info'][type] = res
   if (res?.pass && res?.data && type === 'ripgrep_path') {
     formData.value.ripgrep_path = res.data
@@ -314,6 +352,7 @@ const checkPath = async (type, path) => {
   if (['game_install_path', 'steam_path'].includes(type)) {
     applySteamLaunchDefault()
   }
+  return res
 }
 // 检查全部路径
 const checkPaths = async () => {
@@ -416,17 +455,18 @@ const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
 
 const save = async () => {
   if (saving.value) return
-  // 校验拦截
-  // const hasError = Object.values(formData.value.check_info || {}).some(info => info && !info.pass)
-  // if (hasError) {
-  //   toast.error("存在无效路径，请修正后再保存！")
-  //   return
-  // }
-  if (formData.value?.ui) {
-    formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
-  }
   saving.value = true
   try {
+    if (!(await validateEnabledLaunchOptions())) return
+    // 校验拦截
+    // const hasError = Object.values(formData.value.check_info || {}).some(info => info && !info.pass)
+    // if (hasError) {
+    //   toast.error("存在无效路径，请修正后再保存！")
+    //   return
+    // }
+    if (formData.value?.ui) {
+      formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
+    }
     await appStore.applySettings(formData.value)
   } finally {
     saving.value = false

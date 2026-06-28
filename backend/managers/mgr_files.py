@@ -1614,7 +1614,7 @@ class PathChecker:
         return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
     
     @classmethod
-    def check_install_path(cls, path_str: str) -> Dict:
+    def check_install_path(cls, path_str: str, *, force_steam_inspect: bool = False) -> Dict:
         """
         检查游戏安装路径是否有效
         返回：{
@@ -1642,7 +1642,8 @@ class PathChecker:
         # 3. Steam 判定
         from backend.managers.mgr_game_install import GameInstallInspector
 
-        install_facts = GameInstallInspector().quick_inspect(str(path))
+        inspector = GameInstallInspector()
+        install_facts = inspector.inspect(str(path), force=True) if force_steam_inspect else inspector.quick_inspect(str(path))
         res['data']["is_steam"] = bool(install_facts.is_steam)
         res['data']["is_steam_managed"] = bool(install_facts.is_steam_managed)
         steam_text = "Steam 版" if install_facts.is_steam else "非 Steam 版"

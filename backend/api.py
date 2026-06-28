@@ -3575,7 +3575,7 @@ class API:
     # =========================================================================
 
     @log_api_call
-    def path_check(self, path_type, path):
+    def path_check(self, path_type, path, force: bool = False):
         """
         检查指定路径类型是否正确
         :param path_type: 路径类型（game_install_path, game_config_path, workshop_mods_path, steam_path）
@@ -3586,7 +3586,7 @@ class API:
         try:
             path = normalize_path_for_storage(path)
             if path_type == "game_install_path":
-                res = PathChecker.check_install_path(path)
+                res = PathChecker.check_install_path(path, force_steam_inspect=bool(force))
             elif path_type == "game_config_path":
                 res = PathChecker.check_mods_config(path)
             elif path_type == "workshop_mods_path":
