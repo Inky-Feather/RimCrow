@@ -104,15 +104,15 @@ class TestRuleManagerDynamicWeights(unittest.TestCase):
 
         self.assertEqual(result["weight_info"]["final_weight"], 1)
 
-    def test_dynamic_weight_shift_is_clamped_and_effective_result_stays_below_10000(self):
+    def test_dynamic_weight_shift_is_clamped_and_effective_result_stays_below_bottom_anchor(self):
         manager = self._make_manager([
             {"name": "ClampHighShift", "action": {"type": RuleActionType.WEIGHT_SHIFT, "value": 20000}}
         ])
 
         result = manager.get_effective_mod_rules("mod.test", {"package_id": "mod.test", "mod_type": "Unknown"})
 
-        self.assertEqual(result["weight_info"]["weight_shift"], 9999)
-        self.assertEqual(result["weight_info"]["final_weight"], 9999)
+        self.assertEqual(result["weight_info"]["weight_shift"], 999)
+        self.assertEqual(result["weight_info"]["final_weight"], 999)
 
     def test_non_dynamic_special_weight_zero_is_preserved(self):
         manager = self._make_manager([])
@@ -123,6 +123,26 @@ class TestRuleManagerDynamicWeights(unittest.TestCase):
         )
 
         self.assertEqual(result["weight_info"]["final_weight"], 0)
+
+    def test_dynamic_bottom_uses_position_bottom_anchor(self):
+        manager = self._make_manager([
+            {"name": "Bottom", "action": {"type": RuleActionType.BOTTOM}}
+        ])
+
+        result = manager.get_effective_mod_rules("mod.test", {"package_id": "mod.test", "mod_type": "Unknown"})
+
+        self.assertEqual(result["weight_info"]["final_weight"], 1000)
+        self.assertEqual(result["weight_info"]["absolute_type"], "bottom")
+
+    def test_false_absolute_position_value_is_ignored(self):
+        manager = self._make_manager([])
+        manager.settings["community_mod_rules_enabled"] = True
+        manager.community_rules = {"mod.test": {"loadTop": {"value": False}}}
+
+        result = manager.get_effective_mod_rules("mod.test", {"package_id": "mod.test", "mod_type": "Unknown"})
+
+        self.assertEqual(result["weight_info"]["final_weight"], 500)
+        self.assertIsNone(result["weight_info"]["absolute_type"])
 
     def test_upsert_dynamic_rule_sanitizes_out_of_range_values_before_save(self):
         manager = self._make_manager([])

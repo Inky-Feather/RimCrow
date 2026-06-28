@@ -26,15 +26,17 @@ class BaseLogReader:
         self._cache = {}
         self.max_blocks = max_blocks
 
-    def _ensure_cache(self, filepath, loader):
+    def _ensure_cache(self, filepath, loader, cache_key=None):
         """统一的缓存入口，避免不同读取路径重复拼装缓存逻辑。"""
+        cache_key = cache_key or filepath
         stat = os.stat(filepath)
-        if filepath not in self._cache or self._cache[filepath]['mtime'] != stat.st_mtime:
-            self._cache[filepath] = {
+        if cache_key not in self._cache or self._cache[cache_key]['mtime'] != stat.st_mtime:
+            self._cache[cache_key] = {
                 'mtime': stat.st_mtime,
+                'filepath': filepath,
                 'blocks': loader(filepath)
             }
-        return self._cache[filepath]['blocks']
+        return self._cache[cache_key]['blocks']
 
     def _add_or_merge_block(self, blocks, new_block, lookback_limit=20):
         """通用去重合并逻辑：如果短时间内出现重复日志，则累加 count 并推至末尾"""
@@ -93,6 +95,11 @@ class BaseLogReader:
         #    如果 filename 未指定，需要遍历所有缓存文件，但通常前端会知道当前是哪个文件
         #    这里我们简化为：假设所有 ID 来自最新的缓存文件
         cache_key = next(iter(self._cache)) if self._cache and not filename else filename
+        if cache_key not in self._cache:
+            cache_key = next(
+                (key for key, entry in self._cache.items() if entry.get('filepath') == filename),
+                None
+            )
         if not cache_key or cache_key not in self._cache: return []
 
         # 2. 使用 Set 加速查找
@@ -130,7 +137,7 @@ class BaseLogReader:
         # linecache.clearcache() 视情况决定是否调用
         return raw_logs
 
-    def _parse_file_base(self, filepath, line_processor_cb=None, keep_all=False):
+    def _parse_file_base(self, filepath, line_processor_cb=None, keep_all=False, max_keep_blocks=None):
         """
         【新增】底层通用文件读取与解析器
         处理流式读取、行号注入、基础 JSON 解析与去重。
@@ -140,8 +147,6 @@ class BaseLogReader:
         filename = os.path.basename(filepath)
         is_json = filepath.endswith('.json') or 'RMM_Realtime' in filename or 'app.log' in filename
         
-        # 防御性截断，全局扫描最多解析文件末尾的 80000 行
-        MAX_GLOBAL_LINES = 80000 
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 if is_json:
@@ -164,9 +169,8 @@ class BaseLogReader:
                             if data:
                                 self._add_or_merge_block(blocks, data)
                         except Exception: continue
-                        if keep_all and len(blocks) > MAX_GLOBAL_LINES:
-                            # 为了不过度消耗内存，直接清理掉老旧的上古日志，只抓重点
-                            blocks.pop(0) 
+                        if keep_all and max_keep_blocks and len(blocks) > max_keep_blocks:
+                            blocks.pop(0)
                 else:
                     # 纯文本读取(向下兼容 Player.log)
                     current_block = None
@@ -436,20 +440,24 @@ class AppLogReader(BaseLogReader):
         filepath = os.path.join(self.log_dir, filename)
         if not os.path.exists(filepath): return {'error': '文件不存在'}
 
-        blocks = self._ensure_cache(filepath, self._parse_file)
+        blocks = self._ensure_cache(
+            filepath,
+            lambda path: self._parse_file(path, keep_all=True),
+            cache_key=f"{filepath}::browse"
+        )
         return self.get_paged_data(blocks, page, page_size)
 
     def get_all_blocks(self, filepath, full_scan=False):
         """返回当前文件的完整结构化日志块，供 AI 全局扫描复用。"""
         if not os.path.exists(filepath): return []
         # 全局扫描时走一次完整解析，避免被前端分页缓存的块数上限截断。
-        blocks = self._parse_file(filepath, keep_all=True) if full_scan else self._ensure_cache(filepath, self._parse_file)
+        blocks = self._parse_file(filepath, keep_all=True, max_keep_blocks=80000) if full_scan else self._ensure_cache(filepath, self._parse_file)
         logger.debug(
             f"[App日志] 读取日志块 filepath={filepath} block_count={len(blocks)} full_scan={full_scan}"
         )
         return copy.deepcopy(blocks)
 
-    def _parse_file(self, filepath, keep_all=False):
+    def _parse_file(self, filepath, keep_all=False, max_keep_blocks=None):
         """利用基类重构 App 日志读取"""
         def _app_processor(data, is_json):
             # App 专属上下文规范化
@@ -462,7 +470,12 @@ class AppLogReader(BaseLogReader):
                 }
             return data
             
-        return self._parse_file_base(filepath, line_processor_cb=_app_processor, keep_all=keep_all)
+        return self._parse_file_base(
+            filepath,
+            line_processor_cb=_app_processor,
+            keep_all=keep_all,
+            max_keep_blocks=max_keep_blocks
+        )
 
 
 # 暴露单例供 API 路由使用

@@ -6,6 +6,7 @@ from enum import Enum
 import gc
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -39,9 +40,10 @@ from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
-from backend.utils.tools import normalize_package_id
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.logger import logger, app_log_reader
+from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
@@ -75,7 +77,8 @@ from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
-from backend.managers.mgr_mod_config import ModConfigManager
+from backend.managers.mgr_mod_config import ModSettingsManager
+from backend.managers.mgr_mod_residue import ModResidueManager
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
@@ -83,6 +86,7 @@ from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
+from backend.managers.mgr_recommendation_export import RecommendationExportManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
@@ -298,6 +302,8 @@ class API:
             load_order_mgr_provider=lambda: self.load_order_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
         )
+        # 推荐导出只负责生成分享内容，和模组包导出保持独立，避免两类导出互相影响。
+        self.recommendation_export_mgr = RecommendationExportManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
@@ -516,6 +522,51 @@ class API:
         context = self.profile_mgr.build_profile_context(target_profile_id)
         profile = self.profile_mgr.get_profile(target_profile_id)
         return context, profile
+
+    @staticmethod
+    def _path_inside(root: Path, path: Path) -> bool:
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _build_unique_copy_path(target_dir: Path, filename: str) -> Path:
+        candidate = target_dir / filename
+        if not candidate.exists():
+            return candidate
+
+        stem = candidate.stem
+        suffix = candidate.suffix
+        index = 1
+        while True:
+            next_candidate = target_dir / f"{stem}-{index}{suffix}"
+            if not next_candidate.exists():
+                return next_candidate
+            index += 1
+
+    @staticmethod
+    def _sanitize_backup_filename(name: str) -> tuple[str, bool]:
+        normalized = str(name or '').strip()
+        invalid_chars = set('\\/:*?"<>|')
+        sanitized = ''.join('_' if char in invalid_chars else char for char in normalized)
+        sanitized = sanitized.strip().strip('.')
+        return sanitized, sanitized != normalized
+
+    def _resolve_profile_backup_file(self, path: str, profile_id: str | None = None) -> tuple[Path, Path, ProfileContext]:
+        context, _ = self._resolve_load_order_scope(profile_id)
+        source_path = Path(path or '').resolve()
+        backup_root = Path(context.backup_dir).resolve()
+
+        if not source_path.is_file():
+            raise FileNotFoundError(f"备份文件不存在：{path}")
+        if not self._path_inside(backup_root, source_path):
+            raise ValueError("只能操作当前环境的备份文件")
+        if source_path.suffix.lower() not in {'.xml', '.rml'}:
+            raise ValueError("仅支持处理 XML 或 RML 备份文件")
+
+        return source_path, backup_root, context
 
     def _handle_app_version_upgrade(self):
         """实例初始化时运行的升级逻辑"""
@@ -764,6 +815,16 @@ class API:
             return self._ensure_directory(str(Path(self.active_context.backup_dir) / "other"))
         return ""
 
+    def _get_default_backup_save_as_dir(self) -> str:
+        """
+        备份文件“另存为”的默认入口使用桌面，更符合把文件拿出去使用的预期。
+        """
+        try:
+            return self._normalize_existing_dir(get_desktop_directory())
+        except Exception:
+            logger.warning("无法解析桌面目录，将交给系统选择窗口决定初始位置", exc_info=True)
+            return ""
+
     def _resolve_dialog_initial_dir(
         self,
         default_dir: str,
@@ -987,6 +1048,7 @@ class API:
             "context_healthy": False, 
             "health_report": {},
             "all_mods": [],  # 返回过滤后的列表
+            "disabled_mods": [],
             "groups": [],
             "active_load_order": [],
             "active_load_modify_time": 0,
@@ -1006,6 +1068,7 @@ class API:
         #   - 过滤掉未启用 Workshop 环境下的 Workshop Mod
         #   - 执行 "Local 覆盖 Workshop" 的遮蔽策略
         context_mods = ModDAO.get_profile_mods(self.active_context)
+        disabled_mods = ModDAO.get_profile_disabled_mods(self.active_context)
         # 3. 获取所有分组数据 (结构化)
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
@@ -1013,6 +1076,7 @@ class API:
         # 4. 获取当前激活的加载顺序
         active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {'active_mods': [], 'modify_time': 0}
         inactive_mods_order = self.active_context.inactive_mods_order if getattr(self.active_context, 'inactive_mods_order', []) else []
+        temp_mods_order = self.active_context.temp_mods_order if getattr(self.active_context, 'temp_mods_order', []) else []
         
         replacements = self.workshop_db_mgr.get_replacements()
         replacements_map = {r['old_workshop_id']: r for r in replacements}
@@ -1054,14 +1118,23 @@ class API:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
                 mod['replacement'] = None
+        for mod in disabled_mods:
+            if dlc_parser:
+                dlc_parser.translate_record(mod, settings.config.language)
+            if mod['workshop_id'] and mod['workshop_id'] in replacements_map:
+                mod['replacement'] = replacements_map[mod['workshop_id']]
+            else:
+                mod['replacement'] = None
         
         
         result.update({
             "all_mods": context_mods,  # 返回过滤后的列表
+            "disabled_mods": disabled_mods,
             "groups": all_groups,
             "interlocks": interlock_map,
             "active_load_order": active_load_order.get('active_mods', []),
             "inactive_load_order": inactive_mods_order,
+            "temp_load_order": temp_mods_order,
             "active_load_modify_time": active_load_order.get('modify_time', 0),
             "active_load_version_token": active_load_order.get('version_token', {}),
         })
@@ -1686,7 +1759,12 @@ class API:
             # 2. 识别 Local vs Workshop 冲突
             # 3. 触发当前环境的运行态收敛回调（若仍是当前环境）
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
-            result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
+            result = self.scanner.scan_paths_async(
+                paths_to_scan,
+                forced_update=forced_update,
+                residue_active_tokens=self._read_active_mod_tokens(),
+                residue_scan_enabled=bool(getattr(settings.config, "enable_mod_residue_scan", True)),
+            )
         except Exception as e:
             logger.error(f"Scan mods failed: {str(e)}", exc_info=True)
             return ApiResponse.error(f"扫描模组失败：{str(e)}")
@@ -1765,15 +1843,20 @@ class API:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
     @log_api_call
-    def mods_delete(self, path_hashes: List[str]|str, force: bool = False):
+    def mods_delete(self, path_hashes: List[str]|str, force: bool = False, delete_files: bool = True):
         """
-        批量物理删除 Mod 并抹除数据库记录
+        批量删除 Mod 库存记录；默认同时删除物理文件。
         :param paths: 绝对路径列表
         """
         try:
             normalized_hashes = self._normalize_str_items(path_hashes)
-            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes, force=force)
+            res = (
+                ModMaintenanceDAO.delete_mods_physically(normalized_hashes, force=force)
+                if delete_files
+                else ModMaintenanceDAO.delete_mod_records(normalized_hashes)
+            )
             res['force'] = bool(force)
+            res['delete_files'] = bool(delete_files)
             return self._build_delete_response("Mod", len(normalized_hashes), res)
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
@@ -1782,17 +1865,43 @@ class API:
     def mods_disable(self, path_hashes: List[str], disabled: bool = True):
         """
         禁用或启用指定 Mod。
-        :param package_id: Mod 的 package_id
+        :param path_hashes: Mod 的 path_hash 列表
         :param disabled: 是否禁用 (True) 或启用 (False)
         """
         try:
+            success_items = []
+            failed_items = []
             for path_hash in path_hashes:
                 # 1. 校验 path_hash 是否存在
                 mod = ModAsset.get_or_none(ModAsset.path_hash == path_hash)
-                if not mod: continue
+                if not mod:
+                    failed_items.append({"path_hash": path_hash, "message": "未找到 Mod 记录"})
+                    continue
                 # 2. 执行禁用/启用操作
-                ModMaintenanceDAO.set_mod_disabled_status(mod.path, disabled)
-            return ApiResponse.success(message=f"Mod {'已禁用' if disabled else '已启用'}")
+                success, message = ModMaintenanceDAO.set_mod_disabled_status(mod.path, disabled)
+                item = {
+                    "path_hash": path_hash,
+                    "package_id": mod.package_id,
+                    "name": mod.name,
+                    "message": message,
+                }
+                if success:
+                    success_items.append(item)
+                else:
+                    failed_items.append(item)
+            action_text = "禁用" if disabled else "启用"
+            if not success_items and failed_items:
+                return ApiResponse.error(f"Mod {action_text}失败: {failed_items[0].get('message')}", {
+                    "success_count": 0,
+                    "error_count": len(failed_items),
+                    "errors": failed_items,
+                })
+            return ApiResponse.success({
+                "success_count": len(success_items),
+                "error_count": len(failed_items),
+                "success_items": success_items,
+                "errors": failed_items,
+            }, message=f"Mod 已{action_text} {len(success_items)} 项" + (f"，失败 {len(failed_items)} 项" if failed_items else ""))
         except Exception as e:
             return ApiResponse.error(str(e))
     
@@ -2034,11 +2143,8 @@ class API:
         """读取当前环境下官方 ModSettings 配置文件总览。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
-        active_tokens = []
-        if self.load_order_mgr:
-            active_tokens = list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
         try:
-            overview = ModConfigManager.get_overview(self.active_context, active_tokens)
+            overview = ModSettingsManager.get_overview(self.active_context, self._read_active_mod_tokens())
             return ApiResponse.success(overview)
         except Exception as e:
             return ApiResponse.error(f"读取模组配置总览失败: {e}")
@@ -2048,19 +2154,72 @@ class API:
         """在同一 package_id 分组内手动覆盖同步配置文件。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
-        active_tokens = []
-        if self.load_order_mgr:
-            active_tokens = list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
         try:
-            result = ModConfigManager.sync_group_instance(
+            result = ModSettingsManager.sync_group_instance(
                 self.active_context,
-                active_tokens,
+                self._read_active_mod_tokens(),
                 source_path,
                 target_path,
             )
             return ApiResponse.success(result, message="已完成配置覆盖")
         except Exception as e:
             return ApiResponse.error(f"覆盖配置失败: {e}")
+
+    def _read_active_mod_tokens(self) -> list[str]:
+        """读取当前启用列表 token；配置文件识别只需要这个轻量输入。"""
+        if not getattr(self, "load_order_mgr", None):
+            return []
+        return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
+
+    @log_api_call
+    def mod_config_workshop_details(self, workshop_ids: List[str]):
+        """批量补全模组配置残留文件里猜测出的工坊信息。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.get_workshop_details(workshop_ids or [], trace_label="mod-config"))
+        except Exception as e:
+            logger.warning("Mod config workshop detail fetch failed: %s", e, exc_info=True)
+            return ApiResponse.error(f"获取工坊信息失败: {e}")
+
+    @log_api_call
+    def mod_residue_get_overview(self):
+        """读取当前扫描范围内的卸载残留目录与关联设置文件。"""
+        if not self.active_context:
+            return ApiResponse.error("当前环境未初始化")
+        try:
+            paths_to_scan = self._build_scan_paths_for_profile(self.active_context)
+            overview = ModResidueManager.get_overview(paths_to_scan, self.active_context, self._read_active_mod_tokens())
+            return ApiResponse.success(overview)
+        except Exception as e:
+            logger.warning("读取卸载残留总览失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"读取卸载残留列表失败: {e}")
+
+    @log_api_call
+    def mod_residue_whitelist_add(self, paths: List[str] | str):
+        """把残留路径加入白名单，之后扫描直接跳过。"""
+        if not self.active_context:
+            return ApiResponse.error("当前环境未初始化")
+        try:
+            result = ModResidueManager.add_whitelist_paths(paths)
+            paths_to_scan = self._build_scan_paths_for_profile(self.active_context)
+            result["overview"] = ModResidueManager.get_overview(paths_to_scan, self.active_context, self._read_active_mod_tokens())
+            return ApiResponse.success(result, message="已加入白名单，之后扫描会跳过它")
+        except Exception as e:
+            logger.warning("加入卸载残留清理白名单失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"加入白名单失败: {e}")
+
+    @log_api_call
+    def mod_residue_whitelist_remove(self, paths: List[str] | str):
+        """从白名单移除残留路径。"""
+        if not self.active_context:
+            return ApiResponse.error("当前环境未初始化")
+        try:
+            result = ModResidueManager.remove_whitelist_paths(paths)
+            paths_to_scan = self._build_scan_paths_for_profile(self.active_context)
+            result["overview"] = ModResidueManager.get_overview(paths_to_scan, self.active_context, self._read_active_mod_tokens())
+            return ApiResponse.success(result, message="已移出白名单，之后扫描会再次提示它")
+        except Exception as e:
+            logger.warning("移出卸载残留清理白名单失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"移出白名单失败: {e}")
 
     @log_api_call
     def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
@@ -2139,14 +2298,21 @@ class API:
         return ApiResponse.success(result)
     
     @log_api_call
-    def load_order_inactive_save(self, inactive_ids: List[str]):
+    def load_order_inactive_save(self, inactive_ids: List[str], temp_ids: List[str] | None = None):
         """
-        保存用户自定义的停用列表顺序 (包含清空后的 Temp 列表)
+        保存用户自定义的停用列表顺序，按设置决定是否单独保存临时列表。
         """
         if not self.active_context: return ApiResponse.error("环境配置上下文缺失")
         try:
-            result = self.profile_mgr.update_profile( self.active_context.profile_id, {"inactive_mods_order": inactive_ids})
-            if result: return ApiResponse.success()
+            payload = {"inactive_mods_order": inactive_ids}
+            if temp_ids is not None:
+                payload["temp_mods_order"] = temp_ids
+            result = self.profile_mgr.update_profile(self.active_context.profile_id, payload)
+            if result:
+                object.__setattr__(self.active_context, "inactive_mods_order", list(inactive_ids or []))
+                if temp_ids is not None:
+                    object.__setattr__(self.active_context, "temp_mods_order", list(temp_ids or []))
+                return ApiResponse.success()
             return ApiResponse.error("更新配置失败")
         except Exception as e:
             return ApiResponse.error(f"保存停用列表顺序时出错: {e}")
@@ -2308,6 +2474,88 @@ class API:
             })
         except Exception as e:
             return ApiResponse.error(f"获取备份文件时出错: {e}")
+
+    @log_api_call
+    def backup_file_save_as_pick_dir(self):
+        """选择备份另存为目录，默认走桌面，非默认模式跟随导出起始目录设置。"""
+        try:
+            initial_dir = self._resolve_dialog_initial_dir(
+                self._get_default_backup_save_as_dir(),
+                settings.config.load_order_export_dir_mode,
+                settings.config.load_order_export_custom_path,
+                settings.config.load_order_export_last_path,
+            )
+            selected = FileManager.select_folder_dialog(initial_dir)
+            if not selected:
+                return ApiResponse.warning("未选择保存目录")
+            return ApiResponse.success({"path": selected})
+        except Exception as e:
+            return ApiResponse.error(f"选择保存目录时出错: {e}")
+
+    @log_api_call
+    def backup_file_save_as(self, path: str, target_dir: str, profile_id: str | None = None):
+        """把指定备份另存到用户选择的目录。"""
+        try:
+            source_path, _, context = self._resolve_profile_backup_file(path, profile_id)
+            export_dir = Path(target_dir or '').resolve()
+            if not export_dir.is_dir():
+                return ApiResponse.error("请选择有效的保存目录")
+
+            target_path = self._build_unique_copy_path(export_dir, source_path.name)
+            shutil.copy2(source_path, target_path)
+            self._remember_load_order_dialog_dir("export", str(target_path))
+            return ApiResponse.success({
+                "path": str(target_path),
+                "source_path": str(source_path),
+                "profile_id": context.profile_id,
+            })
+        except Exception as e:
+            logger.error(f"另存备份时出错: {e}", exc_info=True)
+            return ApiResponse.error(f"另存备份时出错: {e}")
+
+    @log_api_call
+    def backup_manual_rename(self, path: str, new_name: str, profile_id: str | None = None):
+        """重命名手动备份；自动备份由轮换规则管理，不允许改名。"""
+        try:
+            source_path, backup_root, context = self._resolve_profile_backup_file(path, profile_id)
+            manual_dir = (backup_root / "other").resolve()
+            if source_path.parent.resolve() != manual_dir:
+                return ApiResponse.error("只有手动备份可以重命名")
+
+            sanitized_name, sanitized = self._sanitize_backup_filename(new_name)
+            if not sanitized_name:
+                return ApiResponse.error("请输入新的备份名称")
+
+            source_suffix = source_path.suffix
+            requested_path = Path(sanitized_name)
+            next_name = requested_path.name
+            if Path(next_name).suffix.lower() != source_suffix.lower():
+                next_name = f"{Path(next_name).stem}{source_suffix}"
+
+            target_path = (manual_dir / next_name).resolve()
+            if target_path == source_path:
+                return ApiResponse.success({
+                    "path": str(source_path),
+                    "name": source_path.name,
+                    "sanitized": sanitized,
+                    "profile_id": context.profile_id,
+                })
+            if not self._path_inside(manual_dir, target_path):
+                return ApiResponse.error("备份名称无效")
+            if target_path.exists():
+                return ApiResponse.error("已有同名备份，请换一个名称")
+
+            source_path.rename(target_path)
+            return ApiResponse.success({
+                "path": str(target_path),
+                "old_path": str(source_path),
+                "name": target_path.name,
+                "sanitized": sanitized,
+                "profile_id": context.profile_id,
+            })
+        except Exception as e:
+            logger.error(f"重命名备份时出错: {e}", exc_info=True)
+            return ApiResponse.error(f"重命名备份时出错: {e}")
     
     @log_api_call
     def game_launch(self, profile_id: str):
@@ -2541,7 +2789,7 @@ class API:
                 return { "ok": False, "message": "目标环境没有可用于启动前检查同步的模组路径。", "mode": "missing-scan-paths" }
             try:
                 # 直启前检查同步要强制刷新目录事实，但不做目录体积统计，避免把启动准备拖慢。
-                temp_scanner._scan_paths_task("launch-prepare", scan_paths, forced_update=True, size_check_override=False, emit_events=False)
+                temp_scanner._scan_paths_task("launch-prepare", scan_paths, forced_update=True, size_check_override=False, emit_events=False, residue_scan_enabled=False)
             finally:
                 try:
                     temp_scanner.executor.shutdown(wait=False, cancel_futures=False)
@@ -3165,6 +3413,42 @@ class API:
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
+
+    @log_api_call
+    def recommendation_export(self, payload: dict | None = None):
+        """导出选中模组推荐介绍。"""
+        payload = payload or {}
+        try:
+            export_format = str(payload.get("format") or "txt").strip().lower()
+            if export_format in {"clipboard"}:
+                # 剪贴板内容返回给前端写入，避免后端直接操作系统剪贴板带来权限差异。
+                return ApiResponse.success(self.recommendation_export_mgr.export(payload), message="已生成推荐文本")
+
+            if export_format in {"markdown", "image"}:
+                # Markdown 需要同级 img 目录，纯图片会生成多个文件，所以这里选择目标文件夹。
+                target_dir = file_mgr.select_folder_dialog(self._get_default_export_dir())
+                if not target_dir:
+                    return ApiResponse.warning("已取消")
+                result = self.recommendation_export_mgr.export(payload, target_dir=target_dir)
+                return ApiResponse.success(result, message="导出成功")
+
+            # TXT/DOCX/PDF 都是单文件导出，先用后端生成默认文件名和文件类型过滤器。
+            default_filename = self.recommendation_export_mgr.default_filename(payload)
+            file_types = self.recommendation_export_mgr.file_types_for_format(export_format)
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=self._get_default_export_dir(),
+                default_filename=default_filename,
+                file_types=file_types,
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+            # 保存对话框可能被用户手动删掉扩展名，导出前统一补齐，避免生成未知类型文件。
+            target_path = self.recommendation_export_mgr.ensure_extension(target_path, export_format)
+            result = self.recommendation_export_mgr.export(payload, target_path=target_path)
+            return ApiResponse.success(result, message="导出成功")
+        except Exception as e:
+            logger.error("推荐导出失败: %s", e, exc_info=True)
+            return ApiResponse.error(f"推荐导出失败: {e}")
     
     @log_api_call
     def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):
@@ -3339,6 +3623,7 @@ class API:
             "community_rules": self.sorter.rule_mgr.community_rules, # 返回完整字典
             "community_rules_update_time": self.sorter.rule_mgr.community_rules_update_time,
             "workshop_rules": self.sorter.rule_mgr.get_workshop_rules(),
+            "workshop_rules_update_time": self.workshop_db_mgr.get_workshopdb_update_time() if self.workshop_db_mgr else 0,
             "user_mod_rules": self.sorter.rule_mgr.user_mod_rules,
             "user_dynamic_rules": self.sorter.rule_mgr.user_dynamic_rules,
             "settings": self.sorter.rule_mgr.settings,
@@ -3918,9 +4203,13 @@ class API:
             ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
             if not ok:
                 return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
-            success = self.steam_mgr.unsubscribe_items(workshop_ids)
-            if success:
-                return ApiResponse.success(message="已发送取消订阅请求")
+            task_id = self.steam_mgr.unsubscribe_items(workshop_ids)
+            if task_id:
+                normalized_ids = [str(workshop_ids)] if isinstance(workshop_ids, (int, str)) else [str(i) for i in workshop_ids]
+                return ApiResponse.success({
+                    "task_id": task_id,
+                    "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
+                }, message="已向 Steam 提交取消订阅")
             else:
                 return ApiResponse.error("操作失败：SteamAPI 未就绪")
         except Exception as e:
@@ -4973,14 +5262,63 @@ class API:
             for r in self.workshop_db_mgr.get_replacements()
             if r.get('old_workshop_id')
         }
+        github_download_map = {}
+        if matrix.get('self'):
+            github_records = list(GithubModRecord.select(
+                GithubModRecord.repo_url,
+                GithubModRecord.local_folder,
+                GithubModRecord.installed_version,
+            ).where(GithubModRecord.local_folder.is_null(False)).dicts())
+            github_urls = [str(record.get("repo_url") or "").strip() for record in github_records if str(record.get("repo_url") or "").strip()]
+            latest_success_time = {}
+            if github_urls:
+                success_logs = (
+                    GithubTimeline
+                    .select(GithubTimeline.repo_url, GithubTimeline.time)
+                    .where((GithubTimeline.repo_url.in_(github_urls)) & (GithubTimeline.action == "success"))
+                    .order_by(GithubTimeline.repo_url, GithubTimeline.time.desc())
+                )
+                for log in success_logs:
+                    latest_success_time.setdefault(str(log.repo_url), int(log.time or 0))
+
+            def normalize_folder(value: str = "") -> str:
+                return str(value or "").strip().replace("\\", "/").strip("/").lower()
+
+            github_download_map = {
+                normalize_folder(record.get("local_folder")): {
+                    "repo_url": str(record.get("repo_url") or "").strip(),
+                    "download_time": latest_success_time.get(str(record.get("repo_url") or "").strip(), 0),
+                    "source": "github_timeline_success",
+                    "installed_version": str(record.get("installed_version") or "").strip(),
+                }
+                for record in github_records
+                if normalize_folder(record.get("local_folder")) and latest_success_time.get(str(record.get("repo_url") or "").strip(), 0)
+            }
         
         known_workshop_ids = set()
         # install_self_ids = set()
         
+        def build_steam_download_status(steam_status: dict | None):
+            status = steam_status or {}
+            try:
+                download_time = int(status.get("time_last_sync") or 0)
+            except (TypeError, ValueError):
+                download_time = 0
+            if download_time <= 0: return None
+            return {"download_time": download_time, "source": "steam_sync_log"}
+
         def inject_workspace_fields(mod: dict, steam_map: dict | None = None):
             wid = str(mod.get('workshop_id') or '')
             if steam_map and wid and wid in steam_map:
                 mod['steam_status'] = steam_map[wid]
+                download_status = build_steam_download_status(mod['steam_status'])
+                if download_status:
+                    mod['download_status'] = download_status
+            if str(mod.get('source') or '').strip().lower() == 'github':
+                folder = str(mod.get('path') or '').replace("\\", "/").strip("/").split("/")[-1].lower()
+                download_status = github_download_map.get(folder)
+                if download_status:
+                    mod['download_status'] = download_status
             mod['replacement'] = replacements_map.get(wid)
             state = str(mod.get('state') or MOD_ASSET_STATE_PRESENT).strip().lower()
             is_missing = state == MOD_ASSET_STATE_MISSING or not str(mod.get('path') or '').strip()
@@ -5658,13 +5996,24 @@ class API:
         """
         request_options = dict(options or {})
         target_scope = str(request_options.get("target_scope") or "active").strip().lower()
-        targets = self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
+        residue_clean_only = action == "clean_generated" and bool(request_options.get("clean_uninstalled_residue_only"))
+        targets = (
+            self.texture_mgr.resolve_clean_targets(
+                package_ids,
+                target_scope,
+                residue_only=residue_clean_only,
+                active_context=self.active_context,
+            )
+            if action == "clean_generated"
+            else self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
+        )
         if not targets:
-            return ApiResponse.error("未能找到指定模组的有效物理路径")
+            message = "未找到包含 DDS 的卸载残留模组目录" if residue_clean_only else "未能找到指定模组的有效物理路径"
+            return ApiResponse.error(message)
 
         try:
             res = self.texture_mgr.start_task(targets, action=action, options=request_options)
-            msg = "清理已生成 DDS" if action == "clean_generated" else "贴图优化"
+            msg = "清理卸载残留 DDS" if residue_clean_only else ("清理已生成 DDS" if action == "clean_generated" else "贴图优化")
             return ApiResponse.success(res, message=f"{msg}任务已加入队列")
         except Exception as e:
             logger.error("贴图优化任务启动失败", exc_info=True)

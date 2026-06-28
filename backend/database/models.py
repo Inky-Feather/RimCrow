@@ -61,6 +61,7 @@ class GameProfile(BaseModel):
     use_self_mods = cast(bool, BooleanField(default=False))
     is_steam = cast(bool, BooleanField(default=False))
     inactive_mods_order = cast(list[str], UTF8JSONField(default=list))
+    temp_mods_order = cast(list[str], UTF8JSONField(default=list))
     last_played_time = cast(int, BigIntegerField(default=0))
     created_time = cast(int, BigIntegerField(default=current_ms))
 

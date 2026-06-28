@@ -266,6 +266,26 @@ class WorkshopDBManager:
         record = SystemInfo.get_or_none(SystemInfo.key == "steamdb_version")
         return record.value if record else ""
 
+    def get_workshopdb_update_time(self) -> int:
+        """获取工坊数据库内记录的更新时间，供规则中心展示。"""
+        state = self._get_dataset_state("workshop_db")
+        raw_version = state.source_version if state and state.source_version else self.get_workshopdb_version()
+
+        if not raw_version:
+            path = self._resolve_existing_dataset_path(Path(settings.config.community_workshop_db_path))
+            if path.exists():
+                try:
+                    raw_version = self._read_dataset_payload(path).get("version", "")
+                except Exception as e:
+                    logger.warning(f"读取工坊数据库版本时间失败: {e}")
+                    return 0
+
+        try:
+            version_time = int(raw_version) # type: ignore
+        except (TypeError, ValueError):
+            return 0
+        return version_time if version_time >= 10**11 else version_time * 1000
+
     def get_insteaddb_version(self):
         """获取当前替代规则库版本。"""
         record = SystemInfo.get_or_none(SystemInfo.key == "instead_version")

@@ -556,6 +556,7 @@ class DataBundleManager:
             "use_self_mods": bool(profile.use_self_mods),
             "run_commands": list(profile.run_commands or []),
             "inactive_mods_order": list(profile.inactive_mods_order or []),
+            "temp_mods_order": list(getattr(profile, "temp_mods_order", []) or []),
             "last_played_time": int(profile.last_played_time or 0),
             "is_default": profile.id == "default",
         }
@@ -831,6 +832,7 @@ class DataBundleManager:
                     is_steam=runtime_flags["is_steam"],
                     run_commands=list(profile_meta.get("run_commands") or []),
                     inactive_mods_order=list(profile_meta.get("inactive_mods_order") or []),
+                    temp_mods_order=list(profile_meta.get("temp_mods_order") or []),
                     last_played_time=int(profile_meta.get("last_played_time") or 0),
                 )
         except Exception:

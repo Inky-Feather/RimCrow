@@ -25,6 +25,7 @@ from backend.managers.mgr_network import build_retry_session, merge_headers, net
 from backend.settings import settings
 from backend.utils.constants import to_steam_webapi_language_code
 from backend.utils.logger import logger
+from backend.utils.tools import normalize_package_id, normalize_workshop_id
 
 
 class SteamWebAPI:
@@ -507,6 +508,54 @@ class SteamWebAPI:
             logger.debug(f"{trace_prefix}Steam 详情请求：在线拉取完成 {len(fetched_details)} 条，已写入缓存")
 
         return results, ids_to_fetch
+
+    @classmethod
+    def get_workshop_details(cls, workshop_ids: list, trace_label: str = "") -> dict[str, dict[str, Any]]:
+        normalized_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for raw_id in workshop_ids or []:
+            workshop_id = normalize_workshop_id(raw_id, digits_only=True, min_length=6, max_length=20)
+            if not workshop_id or workshop_id in seen_ids:
+                continue
+            seen_ids.add(workshop_id)
+            normalized_ids.append(workshop_id)
+        if not normalized_ids:
+            return {}
+
+        cached_details = {}
+        online_details = {}
+        try:
+            cached_details = ExtDAO.get_workshop_details_by_workshop_ids(normalized_ids) or {}
+        except Exception as exc:
+            logger.debug("Workshop local detail lookup failed: %s", exc, exc_info=True)
+        try:
+            online_details, _ = cls.fetch_item_details(normalized_ids, trace_label=trace_label)
+        except Exception as exc:
+            logger.debug("Workshop online detail lookup failed: %s", exc, exc_info=True)
+
+        result: dict[str, dict[str, Any]] = {}
+        for workshop_id in normalized_ids:
+            cached = cached_details.get(workshop_id) or {}
+            online = online_details.get(workshop_id) or {}
+            cached_package_id = normalize_package_id(cached.get("package_id"))
+            title = str(online.get("title") or cached.get("name") or "").strip()
+            preview_url = online.get("preview_url") or cached.get("preview_url") or ""
+            time_updated = int(online.get("time_updated") or cached.get("time_updated") or 0)
+            has_online_detail = bool(str(online.get("title") or "").strip() or online.get("preview_url") or online.get("time_updated"))
+            has_cached_detail = bool(str(cached.get("name") or "").strip() or cached.get("preview_url") or cached_package_id)
+            result[workshop_id] = {
+                "workshop_id": workshop_id,
+                "package_id": cached_package_id,
+                "title": title,
+                "name": str(cached.get("name") or "").strip(),
+                "author": cached.get("author") or [],
+                "preview_url": preview_url,
+                "url": cached.get("url") or cls.WORKSHOP_ITEM_URL.format(workshop_id=workshop_id),
+                "time_updated": time_updated,
+                "detail_source": "online" if has_online_detail else ("database" if has_cached_detail else "unavailable"),
+                "available": bool(has_online_detail or has_cached_detail),
+            }
+        return result
 
     @classmethod
     def search_workshop_online(

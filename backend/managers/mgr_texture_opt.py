@@ -23,7 +23,6 @@ from backend.load_order.package_tokens import parse_package_token
 from backend.settings import DATA_DIR, TOOLS_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
-from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.utils.tools import current_ms, generate_path_hash, normalize_package_id
 
 TEXTURE_TASK_TYPE = "texture-opt"
@@ -95,64 +94,141 @@ class TextureTargetResolver:
             "store": str(mod.get("store") or default_store or "").strip().lower(),
         }
 
-    def collect_scope_roots(self) -> list[tuple[str, str]]:
-        runtime_caps = resolve_profile_runtime_capabilities(self.active_context)
+    def collect_inventory_roots(self) -> list[tuple[str, str]]:
         roots: list[tuple[str, str]] = []
         if self.active_context:
             local_root = str(getattr(self.active_context, "local_mods_path", "") or "").strip()
             if local_root:
                 roots.append(("local", local_root))
-            if bool(getattr(self.active_context, "use_self_mods", False)):
-                self_root = str(settings.config.self_mods_path or "").strip()
-                if self_root:
-                    roots.append(("self", self_root))
-        if runtime_caps.get("workshop_detection_enabled"):
-            workshop_root = str(settings.config.workshop_mods_path or "").strip()
-            if workshop_root:
-                roots.append(("workshop", workshop_root))
-        return roots
+        self_root = str(settings.config.self_mods_path or "").strip()
+        if self_root:
+            roots.append(("self", self_root))
+        workshop_root = str(settings.config.workshop_mods_path or "").strip()
+        if workshop_root:
+            roots.append(("workshop", workshop_root))
+
+        normalized: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for store, root in roots:
+            root_key = self._path_key(root)
+            if not root_key or root_key in seen or not os.path.isdir(root):
+                continue
+            seen.add(root_key)
+            normalized.append((store, root))
+        return normalized
 
     def collect_all_targets(self) -> list[dict[str, Any]]:
+        return self.collect_installed_targets(include_disabled=True)
+
+    def collect_installed_targets(self, *, include_disabled: bool) -> list[dict[str, Any]]:
         from backend.database.dao import ModDAO
 
-        asset_by_path: dict[str, dict[str, Any]] = {}
-        for asset in ModDAO.get_all_mods_with_user_data(ignore_missing=True):
-            target = self.build_target_from_asset(asset, default_store=str(asset.get("store") or ""))
-            if target:
-                asset_by_path[target["mod_path"].lower()] = target
-
+        assets: list[dict[str, Any]] = []
+        for asset in ModDAO.get_profile_mods(self.active_context):
+            assets.append(asset)
+            coexist_variant = asset.get("coexist_workshop_variant")
+            if isinstance(coexist_variant, dict):
+                assets.append(coexist_variant)
+        if include_disabled:
+            assets.extend(ModDAO.get_profile_disabled_mods(self.active_context))
         targets: list[dict[str, Any]] = []
         seen_paths: set[str] = set()
-        for store, root in self.collect_scope_roots():
+        for asset in assets:
+            target = self.build_target_from_asset(asset, default_store=str(asset.get("store") or ""))
+            if not target:
+                continue
+            path_key = self._path_key(str(target.get("mod_path") or ""))
+            if not path_key or path_key in seen_paths:
+                continue
+            seen_paths.add(path_key)
+            targets.append(target)
+        return targets
+
+    def collect_residue_targets(self, installed_path_keys: set[str] | None = None) -> list[dict[str, Any]]:
+        roots = self.collect_inventory_roots()
+        if not roots:
+            return []
+        installed_keys = installed_path_keys if installed_path_keys is not None else self._path_keys_from_targets(
+            self.collect_installed_targets(include_disabled=True)
+        )
+        targets: list[dict[str, Any]] = []
+        seen_paths: set[str] = set()
+        for store, root in roots:
             if not root or not os.path.isdir(root):
                 continue
             try:
                 with os.scandir(root) as iterator:
                     for entry in iterator:
-                        if not entry.is_dir():
+                        try:
+                            if not entry.is_dir():
+                                continue
+                        except OSError:
                             continue
                         mod_path = os.path.abspath(entry.path)
-                        path_key = mod_path.lower()
-                        if path_key in seen_paths:
+                        path_key = self._path_key(mod_path)
+                        if not path_key or path_key in seen_paths:
                             continue
                         seen_paths.add(path_key)
-                        target = dict(asset_by_path.get(path_key) or {})
-                        if not target:
-                            path_hash = generate_path_hash(mod_path)
-                            target = {
-                                "mod_path": mod_path,
-                                "mod_name": entry.name,
-                                "package_id": "",
-                                "path_hash": path_hash,
-                                "mod_instance_key": path_hash,
-                                "store": store,
-                            }
-                        else:
-                            target["store"] = str(target.get("store") or store).strip().lower()
-                        targets.append(target)
-            except OSError:
-                continue
+                        if path_key in installed_keys:
+                            continue
+                        if not self._has_texture_dds(mod_path):
+                            continue
+                        path_hash = generate_path_hash(mod_path)
+                        targets.append({
+                            "mod_path": mod_path,
+                            "mod_name": entry.name,
+                            "package_id": "",
+                            "path_hash": path_hash,
+                            "mod_instance_key": path_hash,
+                            "store": store,
+                            "residue": True,
+                            "requires_png_source": False,
+                        })
+            except OSError as exc:
+                logger.warning("Texture residue target scan failed: root=%s error=%s", root, exc)
         return targets
+
+    def resolve_clean_targets(self, package_ids: list[str], target_scope: str, *, residue_only: bool) -> list[dict[str, Any]]:
+        scope = str(target_scope or "active").strip().lower()
+        if scope != "all" and not residue_only:
+            installed_targets = self.resolve(package_ids, "active")
+            for target in installed_targets:
+                target["residue"] = False
+                target["requires_png_source"] = True
+            return installed_targets
+
+        all_installed_targets = self.collect_installed_targets(include_disabled=True)
+        if residue_only:
+            return self.collect_residue_targets(self._path_keys_from_targets(all_installed_targets))
+
+        installed_targets = all_installed_targets
+        for target in installed_targets:
+            target["residue"] = False
+            target["requires_png_source"] = True
+        installed_path_keys = self._path_keys_from_targets(all_installed_targets)
+        return [*installed_targets, *self.collect_residue_targets(installed_path_keys)]
+
+    def _path_keys_from_targets(self, targets: list[dict[str, Any]]) -> set[str]:
+        path_keys: set[str] = set()
+        for target in targets:
+            path_key = self._path_key(str(target.get("mod_path") or ""))
+            if path_key:
+                path_keys.add(path_key)
+        return path_keys
+
+    @staticmethod
+    def _path_key(path: str) -> str:
+        value = str(path or "").strip()
+        return os.path.normcase(os.path.abspath(value)) if value else ""
+
+    @staticmethod
+    def _has_texture_dds(mod_path: str) -> bool:
+        for texture_root in TextureOptimizationManager._iter_texture_root_dirs(mod_path):
+            for _current_root, _dirs, files in os.walk(texture_root):
+                for name in files:
+                    if name.lower().endswith(".dds"):
+                        return True
+        return False
 
     def resolve(self, package_ids: list[str], target_scope: str = "active") -> list[dict[str, Any]]:
         if str(target_scope or "").strip().lower() == "all":
@@ -512,26 +588,6 @@ class TextureOptimizationManager:
         TEXTURE_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def _manifest_path(mod_path: str) -> Path:
-        return Path(mod_path) / ".rmm_texture_manifest.json"
-
-    def _load_manifest(self, mod_path: str) -> dict[str, Any]:
-        payload = _safe_json_load(self._manifest_path(mod_path), {"version": 2, "files": {}})
-        if not isinstance(payload, dict):
-            return {"version": 2, "files": {}}
-        files = payload.get("files")
-        payload["version"] = 2
-        payload["files"] = files if isinstance(files, dict) else {}
-        return payload
-
-    def _write_manifest(self, mod_path: str, payload: dict[str, Any]) -> None:
-        manifest = dict(payload or {})
-        manifest["version"] = 2
-        files = manifest.get("files")
-        manifest["files"] = files if isinstance(files, dict) else {}
-        _safe_json_dump(manifest, self._manifest_path(mod_path))
-
-    @staticmethod
     def _normalize_rel_path(path_value: str) -> str:
         return str(path_value or "").replace("\\", "/").strip("/")
 
@@ -590,6 +646,10 @@ class TextureOptimizationManager:
                 "mod_instance_key": str(item.get("mod_instance_key") or path_hash or target["mod_path"].lower()).strip() or target["mod_path"].lower(),
             }
         )
+        if "requires_png_source" in item:
+            target["requires_png_source"] = cls._normalize_bool(item.get("requires_png_source"), True)
+        if "residue" in item:
+            target["residue"] = cls._normalize_bool(item.get("residue"), False)
         return target
 
     @staticmethod
@@ -764,7 +824,6 @@ class TextureOptimizationManager:
             "scale_percent",
             "action_status",
             "is_mask_source",
-            "manifest_tracked",
             "excluded",
             "last_error",
             "overwrite_existing",
@@ -984,6 +1043,16 @@ class TextureOptimizationManager:
 
     def resolve_targets(self, package_ids: list[str], target_scope: str = "active", active_context: Any | None = None) -> list[dict[str, Any]]:
         return TextureTargetResolver(active_context).resolve(package_ids, target_scope)
+
+    def resolve_clean_targets(
+        self,
+        package_ids: list[str],
+        target_scope: str = "active",
+        *,
+        residue_only: bool = False,
+        active_context: Any | None = None,
+    ) -> list[dict[str, Any]]:
+        return TextureTargetResolver(active_context).resolve_clean_targets(package_ids, target_scope, residue_only=residue_only)
 
     def start_analysis_task(self, mod_targets: list[dict[str, Any]] | list[str], options: dict[str, Any] | None = None) -> dict[str, str]:
         normalized_targets = self._normalize_mod_targets(mod_targets)
@@ -1269,7 +1338,6 @@ class TextureOptimizationManager:
         successful_mod_paths: set[str] = set()
         failed_items: list[dict[str, Any]] = []
         retry_candidates: list[dict[str, Any]] = []
-        manifests_by_mod: dict[str, dict[str, Any]] = {}
 
         def is_recoverable_encode_error(exc: Exception) -> bool:
             if not isinstance(exc, TextureOptError):
@@ -1445,9 +1513,7 @@ class TextureOptimizationManager:
                 )
                 self._apply_batch_results(
                     batch["entries"],
-                    manifests_by_mod=manifests_by_mod,
                     output_stats_by_mod=output_stats_by_mod_path,
-                    write_manifests=False,
                 )
                 optimized += len(batch["entries"])
                 successful_entries.extend(batch["entries"])
@@ -1535,9 +1601,7 @@ class TextureOptimizationManager:
                     else:
                         self._apply_batch_results(
                             chunk,
-                            manifests_by_mod=manifests_by_mod,
                             output_stats_by_mod=output_stats_by_mod_path,
-                            write_manifests=False,
                         )
                         optimized += len(chunk)
                         retry_done += len(chunk)
@@ -1573,7 +1637,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=96,
-                message="写入生成记录",
+                message="更新生成状态",
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1589,8 +1653,6 @@ class TextureOptimizationManager:
                     "refresh_after_analyze": False,
                 },
             )
-            for mod_path, manifest in manifests_by_mod.items():
-                self._write_manifest(mod_path, manifest)
             self._emit_progress(
                 task,
                 status="running",
@@ -1634,11 +1696,8 @@ class TextureOptimizationManager:
         self,
         entries: list[dict[str, Any]],
         *,
-        manifests_by_mod: dict[str, dict[str, Any]] | None = None,
         output_stats_by_mod: dict[str, dict[str, dict[str, Any]]] | None = None,
-        write_manifests: bool = True,
     ) -> None:
-        manifests = manifests_by_mod if manifests_by_mod is not None else {}
         for entry in entries:
             entry["output_exists"] = True
             output_path = Path(str(entry.get("output_path") or ""))
@@ -1652,10 +1711,8 @@ class TextureOptimizationManager:
             entry["output_size"] = output_size
             entry["needs_action"] = False
             entry["action_status"] = "up_to_date"
-            entry["manifest_tracked"] = True
             mod_path = str(entry.get("mod_path") or "")
-            rel_path = str(entry.get("rel_path") or "")
-            if not mod_path or not rel_path:
+            if not mod_path:
                 continue
             output_rel_path = str(entry.get("output_rel_path") or "")
             if output_stats_by_mod is not None and output_rel_path:
@@ -1664,19 +1721,6 @@ class TextureOptimizationManager:
                     "size": output_size,
                     "mtime_ns": output_mtime_ns,
                 }
-            manifest = manifests.setdefault(mod_path, self._load_manifest(mod_path))
-            files_map = manifest.setdefault("files", {})
-            manifest["preset_signature"] = str(entry.get("preset_signature") or manifest.get("preset_signature") or "")
-            files_map[rel_path] = {
-                "output_rel_path": output_rel_path,
-                "source_size": int(entry.get("source_size", 0) or 0),
-                "source_mtime_ns": int(entry.get("source_mtime_ns", 0) or 0),
-                "output_size": output_size,
-                "preset_signature": str(entry.get("preset_signature") or ""),
-            }
-        if write_manifests:
-            for mod_path, manifest in manifests.items():
-                self._write_manifest(mod_path, manifest)
 
     def _scan_targets_for_optimize(self, task: TextureTask, options: dict[str, Any]) -> list[dict[str, Any]]:
         cached_results = self._take_projected_plan_cache(task.mod_targets, options)
@@ -1832,11 +1876,12 @@ class TextureOptimizationManager:
     def _clean_generated(self, task: TextureTask) -> dict[str, Any]:
         options = self._build_options(task.options)
         task.options = options
+        residue_only = bool(options.get("clean_uninstalled_residue_only", False))
+        clean_target_label = "卸载残留 DDS" if residue_only else "DDS"
         deleted = 0
         checked = 0
         delete_failed = 0
         changed_mod_paths: set[str] = set()
-        clean_managed_only = bool(options.get("clean_generated_only", True))
         total_mods = max(1, len(task.mod_targets))
         last_emit_at = 0.0
 
@@ -1851,7 +1896,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=max(1, min(99, phase_percent)),
-                message=f"清理 DDS: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+                message=f"清理{clean_target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
                 metrics={
                     "checked_outputs": checked,
                     "orphan_deleted": deleted,
@@ -1864,7 +1909,7 @@ class TextureOptimizationManager:
                     "phase_done": checked,
                     "phase_total": 0,
                     "phase_unit": "个",
-                    "clean_generated_only": clean_managed_only,
+                    "clean_uninstalled_residue_only": residue_only,
                     "refresh_after_analyze": False,
                 },
             )
@@ -1873,7 +1918,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=1,
-            message="开始清理 DDS",
+            message=f"开始清理{clean_target_label}",
             metrics={
                 "checked_outputs": 0,
                 "orphan_deleted": 0,
@@ -1886,7 +1931,7 @@ class TextureOptimizationManager:
                 "phase_done": 0,
                 "phase_total": 0,
                 "phase_unit": "个",
-                "clean_generated_only": clean_managed_only,
+                "clean_uninstalled_residue_only": residue_only,
                 "refresh_after_analyze": False,
             },
         )
@@ -1896,17 +1941,12 @@ class TextureOptimizationManager:
             mod_name = str(mod_target.get("mod_name") or Path(mod_path).name)
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
-            manifest = self._load_manifest(mod_path)
-            manifest_files = manifest.get("files", {}) if isinstance(manifest.get("files"), dict) else {}
             emit_clean_progress(index, mod_name, force=True)
-            if clean_managed_only:
-                targets = (
-                    Path(mod_path) / str(payload.get("output_rel_path") or "")
-                    for payload in manifest_files.values()
-                    if str(payload.get("output_rel_path") or "").strip()
-                )
-            else:
-                targets = self._iter_texture_output_paths_with_source(mod_path, cancel_event=task._cancel_event)
+            targets = (
+                self._iter_texture_output_paths_with_source(mod_path, cancel_event=task._cancel_event)
+                if bool(mod_target.get("requires_png_source", True))
+                else self._iter_texture_output_paths(mod_path)
+            )
             mod_changed = False
             for output_path in targets:
                 if task._cancel_event.is_set():
@@ -1925,8 +1965,6 @@ class TextureOptimizationManager:
                 emit_clean_progress(index, mod_name)
             if mod_changed:
                 changed_mod_paths.add(mod_path)
-                manifest["files"] = {}
-                self._write_manifest(mod_path, manifest)
         if changed_mod_paths:
             self._invalidate_scan_cache(list(changed_mod_paths))
         self._emit_progress(
@@ -1946,7 +1984,7 @@ class TextureOptimizationManager:
                 "phase_done": checked,
                 "phase_total": 0,
                 "phase_unit": "个",
-                "clean_generated_only": clean_managed_only,
+                "clean_uninstalled_residue_only": residue_only,
                 "refresh_after_analyze": False,
             },
         )
@@ -1960,7 +1998,7 @@ class TextureOptimizationManager:
             "delete_failed": delete_failed,
             "total_jobs": 0,
             "refresh_after_analyze": False,
-            "message": "DDS 清理完成",
+            "message": f"{clean_target_label} 清理完成",
         }
 
     def _scan_mods(
@@ -2182,9 +2220,6 @@ class TextureOptimizationManager:
         mod_path = str(base_index.get("mod_path") or "")
         mod_name = str(base_index.get("mod_name") or Path(mod_path).name)
         output_stats = self._collect_output_stats(mod_path)
-        manifest = self._load_manifest(mod_path)
-        manifest_files = manifest.get("files", {}) if isinstance(manifest.get("files"), dict) else {}
-        options_signature = self._build_signature(options)
         process_mode = str(options.get("process_mode", "scaled_only_overwrite"))
         preferred_scale = self._get_scale_factor_percent(options)
         min_output_size = self._get_scale_target_size(options) if preferred_scale is not None else 0
@@ -2210,9 +2245,6 @@ class TextureOptimizationManager:
             entry["scale_percent"] = None
             entry["action_status"] = "unreadable"
             entry["is_mask_source"] = str(entry.get("rel_path") or "").lower().endswith("_m.png")
-            manifest_record = manifest_files.get(str(entry.get("rel_path") or "")) if isinstance(manifest_files, dict) else None
-            entry["manifest_tracked"] = isinstance(manifest_record, dict) and str(manifest_record.get("output_rel_path") or "") == output_rel
-            entry["preset_signature"] = options_signature
             entry["package_id"] = package_id
             entry["excluded"] = False
 
@@ -2456,12 +2488,6 @@ class TextureOptimizationManager:
             if bool(entry.get("output_exists")):
                 stat["current_output_count"] += 1
                 stat["current_output_bytes"] += output_size
-                if bool(entry.get("manifest_tracked")):
-                    stat["managed_output_count"] += 1
-                    stat["managed_output_bytes"] += output_size
-                else:
-                    stat["external_output_count"] += 1
-                    stat["external_output_bytes"] += output_size
             if bool(entry.get("needs_action")):
                 stat["generate_required_count"] += 1
                 stat["action_required_count"] += 1
@@ -2666,24 +2692,6 @@ class TextureOptimizationManager:
                 return updated
         raise TextureOptError("未找到对应的源图条目")
 
-    def _cleanup_orphaned_outputs(self, mod_path: str, tracked_files: dict[str, Any], current_keys: set[str]) -> int:
-        deleted = 0
-        for source_rel, payload in (tracked_files or {}).items():
-            if source_rel in current_keys:
-                continue
-            output_rel = str((payload or {}).get("output_rel_path") or "").strip()
-            if not output_rel:
-                continue
-            output_path = Path(mod_path) / output_rel
-            if not output_path.exists():
-                continue
-            try:
-                output_path.unlink()
-                deleted += 1
-            except OSError:
-                continue
-        return deleted
-
     @staticmethod
     def _iter_texture_root_dirs(mod_path: str):
         mod_root = Path(mod_path)
@@ -2886,7 +2894,7 @@ class TextureOptimizationManager:
         merged["min_dimension"] = int(merged.get("min_dimension", 128) or 128)
         merged["max_source_dimension"] = int(merged.get("max_source_dimension", 2048) or 2048)
         merged["skip_small_textures"] = TextureOptimizationManager._normalize_bool(merged.get("skip_small_textures", True), True)
-        merged["clean_generated_only"] = TextureOptimizationManager._normalize_bool(merged.get("clean_generated_only", True), True)
+        merged["clean_uninstalled_residue_only"] = TextureOptimizationManager._normalize_bool(merged.get("clean_uninstalled_residue_only", False), False)
         merged["texture_tools_path"] = str(resolve_texture_tools_path(merged))
         return merged
 
@@ -2996,10 +3004,6 @@ class TextureOptimizationManager:
             "output_total_bytes": 0,
             "current_output_count": 0,
             "current_output_bytes": 0,
-            "managed_output_count": 0,
-            "managed_output_bytes": 0,
-            "external_output_count": 0,
-            "external_output_bytes": 0,
             "external_orphan_output_count": 0,
             "external_orphan_output_bytes": 0,
             "generate_required_count": 0,

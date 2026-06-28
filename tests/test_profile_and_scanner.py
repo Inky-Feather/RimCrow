@@ -52,7 +52,7 @@ class TestProfileManager(unittest.TestCase):
 
         mock_settings_set.assert_called_once_with("current_profile_id", "default")
 
-    def test_build_profile_context_keeps_inactive_order(self):
+    def test_build_profile_context_keeps_inactive_and_temp_order(self):
         manager = ProfileManager.__new__(ProfileManager)
         manager.get_profile = Mock(
             return_value=SimpleNamespace(
@@ -63,6 +63,7 @@ class TestProfileManager(unittest.TestCase):
                 use_workshop_mods=True,
                 use_self_mods=False,
                 inactive_mods_order=["mod.b", "mod.a"],
+                temp_mods_order=["mod.temp"],
             )
         )
 
@@ -71,6 +72,26 @@ class TestProfileManager(unittest.TestCase):
 
         self.assertEqual(context.profile_id, "profile-a")
         self.assertEqual(context.inactive_mods_order, ["mod.b", "mod.a"])
+        self.assertEqual(context.temp_mods_order, ["mod.temp"])
+
+    def test_load_order_inactive_save_persists_temp_order_when_provided(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api.profile_mgr = Mock()
+        api.profile_mgr.update_profile.return_value = True
+
+        result = API.load_order_inactive_save(api, ["mod.a"], ["mod.temp"])
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(api.active_context.inactive_mods_order, ["mod.a"])
+        self.assertEqual(api.active_context.temp_mods_order, ["mod.temp"])
+        api.profile_mgr.update_profile.assert_called_once_with(
+            "profile-a",
+            {
+                "inactive_mods_order": ["mod.a"],
+                "temp_mods_order": ["mod.temp"],
+            },
+        )
 
     def test_build_profile_context_allows_empty_paths(self):
         manager = ProfileManager.__new__(ProfileManager)
@@ -1375,12 +1396,14 @@ class TestApiScanMods(unittest.TestCase):
             profile_id="profile-a",
         )
         api.scanner = Mock()
+        api.load_order_mgr = None
         api.scanner.scan_paths_async.return_value = {"status": "started", "task_id": "task-1"}
 
         config = SimpleNamespace(
             self_mods_path="D:/RMM/SelfMods",
             workshop_mods_path="D:/Steam/workshop/content/294100",
             enable_tool_mods=False,
+            enable_mod_residue_scan=True,
         )
 
         with patch("backend.api.settings.config", config), \
@@ -1396,6 +1419,8 @@ class TestApiScanMods(unittest.TestCase):
                 "D:/Steam/workshop/content/294100",
             ],
             forced_update=False,
+            residue_active_tokens=[],
+            residue_scan_enabled=True,
         )
 
     def test_scan_mods_skips_self_when_current_local_matches_self(self):
@@ -1408,12 +1433,14 @@ class TestApiScanMods(unittest.TestCase):
             profile_id="profile-a",
         )
         api.scanner = Mock()
+        api.load_order_mgr = None
         api.scanner.scan_paths_async.return_value = {"status": "started", "task_id": "task-1"}
 
         config = SimpleNamespace(
             self_mods_path="C:/Games/RimWorld/Mods",
             workshop_mods_path="D:/Steam/workshop/content/294100",
             enable_tool_mods=False,
+            enable_mod_residue_scan=True,
         )
 
         with patch("backend.api.settings.config", config), \
@@ -1428,6 +1455,8 @@ class TestApiScanMods(unittest.TestCase):
                 "D:/Steam/workshop/content/294100",
             ],
             forced_update=False,
+            residue_active_tokens=[],
+            residue_scan_enabled=True,
         )
 
     def test_workspace_classification_treats_current_local_self_path_as_local_only(self):

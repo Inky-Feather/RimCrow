@@ -49,6 +49,10 @@ class _DummyDao:
     def get_profile_mods(*args, **kwargs):
         return []
 
+    @staticmethod
+    def get_profile_disabled_mods(*args, **kwargs):
+        return []
+
 
 _stub_module("backend.managers.mgr_steamcmd_core", SteamCMDController=_Dummy)
 _stub_module("backend.managers.mgr_network", network_mgr=_Dummy())
@@ -60,6 +64,8 @@ _stub_module(
     GithubModRecord=_Dummy,
     GithubTimeline=_Dummy,
     db=_Dummy(),
+    MOD_ASSET_STATE_MISSING="missing",
+    MOD_ASSET_STATE_PRESENT="present",
 )
 _stub_module(
     "backend.database.dao",
@@ -95,7 +101,7 @@ _stub_module("backend.managers.mgr_workshop_db", WorkshopDBManager=_Dummy)
 _stub_module("backend.managers.mgr_update", UpdateManager=_Dummy, UpdateInfo=_Dummy)
 _stub_module("backend.managers.mgr_game_monitor", GameMonitor=_Dummy)
 _stub_module("backend.managers.mgr_profile", ProfileContext=_Dummy, ProfileManager=_Dummy)
-_stub_module("backend.managers.mgr_mod_config", ModConfigManager=_Dummy)
+_stub_module("backend.managers.mgr_mod_config", ModSettingsManager=_Dummy)
 _stub_module("backend.managers.mgr_steam_api", SteamWebAPI=_Dummy)
 _stub_module("backend.managers.mgr_github", GithubManager=_Dummy)
 _stub_module("backend.managers.mgr_maintenance", MaintenanceManager=_Dummy)
@@ -137,27 +143,36 @@ class TestTextureOptApiHelpers(unittest.TestCase):
         self.api = API.__new__(API)
         self.api.active_context = self.active_context
 
-    def test_texture_target_resolver_scans_direct_children_and_keeps_instance_metadata(self):
+    def test_texture_target_resolver_uses_installed_inventory_data(self):
         local_path = os.path.normcase(os.path.abspath(str(self.local_root / "LocalA")))
+        disabled_path = os.path.normcase(os.path.abspath(str(self.self_root / "SelfA")))
         workshop_path = os.path.normcase(os.path.abspath(str(self.workshop_root / "WorkshopA")))
 
         with patch.object(settings.config, "self_mods_path", str(self.self_root)), \
              patch.object(settings.config, "workshop_mods_path", str(self.workshop_root)), \
-             patch("backend.managers.mgr_texture_opt.resolve_profile_runtime_capabilities", return_value={"workshop_detection_enabled": True}), \
-             patch("backend.database.dao.ModDAO.get_all_mods_with_user_data", return_value=[
+             patch("backend.database.dao.ModDAO.get_profile_mods", return_value=[
                  {
                      "path": local_path,
                      "package_id": "Local.Mod",
                      "display_name": "Local A",
                      "path_hash": "local-hash",
                      "store": "local",
-                 },
+                     "coexist_workshop_variant": {
+                         "path": workshop_path,
+                         "package_id": "Workshop.Mod",
+                         "display_name": "Workshop A",
+                         "path_hash": "workshop-hash",
+                         "store": "workshop",
+                     },
+                 }
+             ]), \
+             patch("backend.database.dao.ModDAO.get_profile_disabled_mods", return_value=[
                  {
-                     "path": workshop_path,
-                     "package_id": "Workshop.Mod",
-                     "display_name": "Workshop A",
-                     "path_hash": "workshop-hash",
-                     "store": "workshop",
+                     "path": disabled_path,
+                     "package_id": "Disabled.Mod",
+                     "display_name": "Disabled A",
+                     "path_hash": "disabled-hash",
+                     "store": "self",
                  },
              ]):
             targets = TextureTargetResolver(self.active_context).collect_all_targets()
@@ -165,7 +180,7 @@ class TestTextureOptApiHelpers(unittest.TestCase):
         by_path = {os.path.normcase(os.path.abspath(item["mod_path"])): item for item in targets}
         self.assertEqual(set(by_path), {
             local_path,
-            os.path.normcase(os.path.abspath(str(self.self_root / "SelfA"))),
+            disabled_path,
             workshop_path,
         })
         self.assertEqual(by_path[local_path]["package_id"], "local.mod")
@@ -173,6 +188,50 @@ class TestTextureOptApiHelpers(unittest.TestCase):
         self.assertEqual(by_path[local_path]["mod_instance_key"], "local-hash")
         self.assertEqual(by_path[workshop_path]["package_id"], "workshop.mod")
         self.assertEqual(by_path[workshop_path]["store"], "workshop")
+        self.assertEqual(by_path[disabled_path]["package_id"], "disabled.mod")
+
+    def test_resolve_clean_targets_handles_installed_and_residue_scopes(self):
+        enabled_path = self.local_root / "Enabled"
+        disabled_path = self.self_root / "Disabled"
+        residue_path = self.workshop_root / "2978572782"
+        for path in [enabled_path, disabled_path, residue_path]:
+            (path / "Textures" / "Things").mkdir(parents=True, exist_ok=True)
+        (residue_path / "Textures" / "Things" / "LadderDown_m.dds").write_bytes(b"dds")
+
+        enabled_asset = {
+            "path": str(enabled_path),
+            "package_id": "Enabled.Mod",
+            "display_name": "Enabled",
+            "path_hash": "enabled-hash",
+            "store": "local",
+        }
+        disabled_asset = {
+            "path": str(disabled_path),
+            "package_id": "Disabled.Mod",
+            "display_name": "Disabled",
+            "path_hash": "disabled-hash",
+            "store": "self",
+        }
+
+        with patch.object(settings.config, "self_mods_path", str(self.self_root)), \
+             patch.object(settings.config, "workshop_mods_path", str(self.workshop_root)), \
+             patch("backend.database.dao.ModDAO.get_profile_mods", return_value=[enabled_asset]), \
+             patch("backend.database.dao.ModDAO.get_profile_disabled_mods", return_value=[disabled_asset]):
+            resolver = TextureTargetResolver(self.active_context)
+            active_targets = resolver.resolve_clean_targets(["Enabled.Mod"], "active", residue_only=False)
+            all_targets = resolver.resolve_clean_targets([], "all", residue_only=False)
+            residue_targets = resolver.resolve_clean_targets([], "all", residue_only=True)
+
+        active_paths = {os.path.normcase(os.path.abspath(item["mod_path"])) for item in active_targets}
+        all_by_name = {Path(item["mod_path"]).name: item for item in all_targets}
+        residue_names = [Path(item["mod_path"]).name for item in residue_targets]
+
+        self.assertEqual(active_paths, {os.path.normcase(os.path.abspath(str(enabled_path)))})
+        self.assertTrue(all_by_name["Enabled"]["requires_png_source"])
+        self.assertTrue(all_by_name["Disabled"]["requires_png_source"])
+        self.assertFalse(all_by_name["2978572782"]["requires_png_source"])
+        self.assertEqual(residue_names, ["2978572782"])
+        self.assertFalse(residue_targets[0]["requires_png_source"])
 
     def test_texture_analyze_mods_all_scope_allows_empty_package_list(self):
         api = API.__new__(API)

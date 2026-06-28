@@ -37,18 +37,33 @@ SPECIAL_WEIGHTS = {
 }
 
 class RuleActionType:
-    WEIGHT_SET = "weight_set"       # 强制设置权重 (0-1000)
+    WEIGHT_SET = "weight_set"       # 设置普通位置权重 (1-999)
     WEIGHT_SHIFT = "weight_shift"   # 权重偏移 (如 -50)
     LOAD_AFTER = "load_after"       # 必须在某ID后
     LOAD_BEFORE = "load_before"     # 必须在某ID前
-    TOP = "top"                     # 置顶 (权重设为0)
-    BOTTOM = "bottom"               # 置底 (权重设为10000)
+    TOP = "top"                     # 置顶 (位置权重设为0)
+    BOTTOM = "bottom"               # 置底 (位置权重设为1000)
 
 
-DYNAMIC_WEIGHT_MIN = 1
-DYNAMIC_WEIGHT_MAX = 9999
-DYNAMIC_WEIGHT_SHIFT_MIN = -9999
-DYNAMIC_WEIGHT_SHIFT_MAX = 9999
+# Mod 位置权重域：只决定同一批可入队 Mod 的先后倾向。
+# 规则冲突破环使用 sorter 里的 constraint edge weight，不能和这里的数值混用。
+POSITION_WEIGHT_TOP = 0
+POSITION_WEIGHT_MIN = 1
+POSITION_WEIGHT_DEFAULT = 500
+POSITION_WEIGHT_MAX = 999
+POSITION_WEIGHT_BOTTOM = 1000
+
+# 动态规则只能写入普通位置权重；真正两端请用 top/bottom 动作。
+DYNAMIC_POSITION_WEIGHT_MIN = POSITION_WEIGHT_MIN
+DYNAMIC_POSITION_WEIGHT_MAX = POSITION_WEIGHT_MAX
+DYNAMIC_POSITION_SHIFT_MIN = -POSITION_WEIGHT_MAX
+DYNAMIC_POSITION_SHIFT_MAX = POSITION_WEIGHT_MAX
+
+# 旧常量名保留给内部/外部兼容，实际语义是动态位置权重。
+DYNAMIC_WEIGHT_MIN = DYNAMIC_POSITION_WEIGHT_MIN
+DYNAMIC_WEIGHT_MAX = DYNAMIC_POSITION_WEIGHT_MAX
+DYNAMIC_WEIGHT_SHIFT_MIN = DYNAMIC_POSITION_SHIFT_MIN
+DYNAMIC_WEIGHT_SHIFT_MAX = DYNAMIC_POSITION_SHIFT_MAX
 
 
 def _normalize_import_group_name(raw_name: Any) -> str:
@@ -418,13 +433,13 @@ class RuleManager:
         return clamped, changed, raw_value
 
     def _clamp_dynamic_weight(self, value: Any, default: int = 500) -> Tuple[int, bool, Any]:
-        return self._clamp_int(value, default, DYNAMIC_WEIGHT_MIN, DYNAMIC_WEIGHT_MAX)
+        return self._clamp_int(value, default, DYNAMIC_POSITION_WEIGHT_MIN, DYNAMIC_POSITION_WEIGHT_MAX)
 
     def _clamp_dynamic_shift(self, value: Any, default: int = 0) -> Tuple[int, bool, Any]:
-        return self._clamp_int(value, default, DYNAMIC_WEIGHT_SHIFT_MIN, DYNAMIC_WEIGHT_SHIFT_MAX)
+        return self._clamp_int(value, default, DYNAMIC_POSITION_SHIFT_MIN, DYNAMIC_POSITION_SHIFT_MAX)
 
     def _clamp_dynamic_effective_weight(self, value: int) -> int:
-        return max(DYNAMIC_WEIGHT_MIN, min(DYNAMIC_WEIGHT_MAX, int(value)))
+        return max(DYNAMIC_POSITION_WEIGHT_MIN, min(DYNAMIC_POSITION_WEIGHT_MAX, int(value)))
 
     def _sanitize_dynamic_rule(self, rule_obj: dict, origin: str = "动态规则") -> Tuple[dict, List[str], bool]:
         """清洗动态规则中的数值动作，避免越界权重污染排序。"""
@@ -798,9 +813,11 @@ class RuleManager:
                     "source": {"type": source_type, "detail": detail},
                     "priority_idx": new_p_idx
                 }
+        def _is_rule_value_enabled(value: Any) -> bool:
+            return value is True or str(value).strip().lower() == "true"
         def _merge_rule(category: str, target_id: str, source_type: str, source_name: str, 
                         is_force: bool = False, alternatives: list = [], detail: Any = None):
-            target_id = target_id.lower()
+            target_id = str(target_id or "").strip().lower()
             if not target_id: return
             
             new_p_idx = self.get_source_priority(source_type)
@@ -871,9 +888,9 @@ class RuleManager:
             # 格式例如: "loadBottom": {"value": True, "comment": "必须置底"}
             isTop = comm.get("loadTop", {}).get("value") 
             isBottom = comm.get("loadBottom", {}).get("value") 
-            if isTop is not None and (isTop is True or isTop.lower() == "true"):
+            if _is_rule_value_enabled(isTop):
                 _apply_weight_override("top", "community", comm.get("loadTop", {}).get("comment"))
-            elif isBottom is not None and (isBottom is True or isBottom.lower() == "true"):
+            elif _is_rule_value_enabled(isBottom):
                 _apply_weight_override("bottom", "community", comm.get("loadBottom", {}).get("comment"))
 
         # 3. User Rules - Priority 2
@@ -893,9 +910,9 @@ class RuleManager:
                 # 格式例如: "loadBottom": {"value": True, "comment": "必须置底"}
                 isTop = user.get("loadTop", {}).get("value") 
                 isBottom = user.get("loadBottom", {}).get("value") 
-                if isTop is not None and (isTop is True or isTop.lower() == "true"):
+                if _is_rule_value_enabled(isTop):
                     _apply_weight_override("top", "user", user.get("loadTop", {}).get("comment"))
-                elif isBottom is not None and (isBottom is True or isBottom.lower() == "true"):
+                elif _is_rule_value_enabled(isBottom):
                     _apply_weight_override("bottom", "user", user.get("loadBottom", {}).get("comment"))
 
         # 4. Dynamic Rules - Priority 1
@@ -953,9 +970,9 @@ class RuleManager:
             
             isTop = builtin.get("loadTop", {}).get("value") 
             isBottom = builtin.get("loadBottom", {}).get("value") 
-            if isTop:
+            if _is_rule_value_enabled(isTop):
                 _apply_weight_override("top", "builtin", builtin.get("loadTop", {}).get("comment"))
-            elif isBottom:
+            elif _is_rule_value_enabled(isBottom):
                 _apply_weight_override("bottom", "builtin", builtin.get("loadBottom", {}).get("comment"))
 
         # 5. 格式化输出
@@ -985,9 +1002,9 @@ class RuleManager:
         final_weight = base_weight + weight_shift
         abs_type = abs_override["type"] if abs_override else None
         if abs_type == "top":
-            final_weight = 0
+            final_weight = POSITION_WEIGHT_TOP
         elif abs_type == "bottom":
-            final_weight = 10000
+            final_weight = POSITION_WEIGHT_BOTTOM
         elif dynamic_weight_touched:
             final_weight = self._clamp_dynamic_effective_weight(final_weight)
         

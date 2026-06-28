@@ -480,11 +480,23 @@ class FileManager:
 
     @staticmethod
     def open_in_explorer(path):
-        """在资源管理器中打开"""
+        """打开目录；如果传入文件，则尽量在文件管理器中定位到该文件。"""
         if not path or not os.path.exists(path):
             raise FileNotFoundError(f"路径不存在：{path}")
 
         if os.path.isfile(path):
+            system_name = platform.system()
+            try:
+                # Windows 和 macOS 支持直接选中文件；Linux 桌面环境差异较大，退回打开父目录更稳定。
+                if system_name == 'Windows':
+                    subprocess.Popen(['explorer.exe', f'/select,{path}'])
+                    return None
+                if system_name == 'Darwin':
+                    subprocess.call(['open', '-R', path])
+                    return None
+            except Exception as e:
+                raise Exception(f"打开所在目录时出错: {e}")
+
             path = os.path.dirname(path)
 
         return FileManager._open_with_system(path, "打开路径")

@@ -31,6 +31,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
+from backend.managers.mgr_mod_residue import ModResidueManager
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
@@ -82,7 +83,7 @@ class ModScanner:
             time.sleep(max(0.01, poll_interval))
         return not self._is_scanning
 
-    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True ):
+    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
@@ -103,10 +104,10 @@ class ModScanner:
                 metrics={ "title": "模组扫描", "forced_update": forced_update, "size_check_override": size_check_override },
             )
         # 提交到线程池
-        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, emit_events )
+        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, emit_events, residue_active_tokens, residue_scan_enabled )
         return {'status': 'started', 'task_id': task_id}
 
-    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True ):
+    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
         """
         后台执行的扫描主逻辑
         """
@@ -290,8 +291,17 @@ class ModScanner:
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
+            residue_cleanup = None
+            should_scan_residue = bool(getattr(settings.config, "enable_mod_residue_scan", True)) if residue_scan_enabled is None else bool(residue_scan_enabled)
+            if should_scan_residue:
+                residue_cleanup = {"summary": {"group_count": 0, "item_count": 0}, "groups": [], "whitelist": [], "scan_roots": valid_paths}
+                try:
+                    residue_cleanup = ModResidueManager.get_overview(valid_paths, self.context, residue_active_tokens or [])
+                except Exception as residue_error:
+                    logger.warning("Mod residue scan failed: %s", residue_error, exc_info=True)
             
             if emit_events:
+                residue_count = int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0)
                 EventBus.emit_progress(
                     task_id,
                     "scan",
@@ -305,6 +315,7 @@ class ModScanner:
                         'stats': stats,
                         'conflict_count': len(final_conflicts),
                         'coexistence_count': len(final_coexistences),
+                        'residue_count': residue_count,
                         'runtime_sync_message': runtime_sync_msg,
                         'title': '模组扫描',
                     },
@@ -319,6 +330,8 @@ class ModScanner:
                 'coexistences': final_coexistences,
                 'runtime_sync_message': runtime_sync_msg,
             }
+            if residue_cleanup is not None:
+                result['residue_cleanup'] = residue_cleanup
             self._finish_scan(result, task_id, emit_events=emit_events)
 
             duration = time.time() - start_time

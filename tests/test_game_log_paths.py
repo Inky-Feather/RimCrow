@@ -11,6 +11,7 @@ from backend.ai.def_attachments import AttachmentResolver, get_attachment_defini
 from backend.api import API
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_logs import GameLogManager
+from backend.utils.logger import AppLogReader
 
 
 class _DefinitionManagerStub:
@@ -98,6 +99,44 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertEqual(filepath, str(profile_root / "RMM_Realtime.log"))
         self.assertEqual(page["status"], "success")
         self.assertIn("profile realtime", page["blocks"][0]["message"])
+
+    def test_game_log_page_can_reach_older_blocks_beyond_cache_limit(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        log_file = profile_root / "RMM_Realtime.log"
+        log_file.write_text(
+            "\n".join(f'{{"level":"INFO","message":"game line {idx}"}}' for idx in range(20005)) + "\n",
+            encoding="utf-8",
+        )
+
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+        with patch("backend.managers.mgr_game_logs.GameManager.get_default_user_data_paths", return_value=[]), \
+             patch("backend.managers.mgr_game_logs.LoadOrderManager") as load_order_manager_cls:
+            load_order_manager_cls.return_value.read_active_mods.return_value = {"active_mods": []}
+            page = manager.read_log_page("RMM_Realtime.log", page=41, page_size=500)
+
+        self.assertEqual(page["status"], "success")
+        self.assertFalse(page["has_more"])
+        self.assertEqual(page["total_pages"], 41)
+        self.assertEqual(page["blocks"][0]["message"], "game line 0")
+
+    def test_app_log_page_can_reach_older_blocks_beyond_cache_limit(self):
+        log_dir = self.temp_dir / "logs"
+        log_dir.mkdir(parents=True)
+        log_file = log_dir / "app.log"
+        log_file.write_text(
+            "\n".join(f'{{"level":"INFO","message":"app line {idx}"}}' for idx in range(20005)) + "\n",
+            encoding="utf-8",
+        )
+
+        reader = AppLogReader()
+        reader.log_dir = log_dir
+        page = reader.read_log_page("app.log", page=41, page_size=500)
+
+        self.assertEqual(page["status"], "success")
+        self.assertFalse(page["has_more"])
+        self.assertEqual(page["total_pages"], 41)
+        self.assertEqual(page["blocks"][0]["message"], "app line 0")
 
     def test_ai_tool_get_log_context_uses_reader_resolved_game_log_path(self):
         log_file = self.temp_dir / "Player.log"

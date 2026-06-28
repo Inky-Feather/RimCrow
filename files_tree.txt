@@ -2,7 +2,6 @@
 ├── ·[.claude]
 ├── ·[.codegraph]
 ├── ·[.cursor]
-├── ·[.docs]
 ├── ·[.history]
 ├── ·[.pytest_cache]
 ├── ·[.ruff_cache]
@@ -59,8 +58,10 @@
 │   │   ├──  mgr_maintenance.py
 │   │   ├──  mgr_mod_config.py
 │   │   ├──  mgr_mod_package.py
+│   │   ├──  mgr_mod_residue.py
 │   │   ├──  mgr_network.py
 │   │   ├──  mgr_profile.py
+│   │   ├──  mgr_recommendation_export.py
 │   │   ├──  mgr_rules.py
 │   │   ├──  mgr_sorter.py
 │   │   ├──  mgr_steam.py
@@ -125,159 +126,177 @@
 │   │   └──  vite.svg
 │   │   
 │   ├── ·[src]
-│   │   ├── ·[assets]
-│   │   │   └──  vue.svg
+│   │   ├── ·[app]
+│   │   │   ├── ·[bridge]
+│   │   │   │   ├──  pywebviewBridge.js
+│   │   │   │   └──  runtimeBridge.js
+│   │   │   │   
+│   │   │   ├── ·[commands]
+│   │   │   │   ├──  builtinCommands.js
+│   │   │   │   └──  modListActions.js
+│   │   │   │   
+│   │   │   ├── ·[shell]
+│   │   │   │   ├──  RimHeader.vue
+│   │   │   │   └──  StatusBar.vue
+│   │   │   │   
+│   │   │   ├── ·[stores]
+│   │   │   │   ├── ·[app]
+│   │   │   │   ├──  appStore.js
+│   │   │   │   ├──  startupStore.js
+│   │   │   │   └──  taskStore.js
+│   │   │   │   
+│   │   │   ├── ·[styles]
+│   │   │   │   ├──  builtinThemes.json
+│   │   │   │   ├──  style.css
+│   │   │   │   └──  toast.scss
+│   │   │   │   
+│   │   │   ├──  App.vue
+│   │   │   └──  main.js
 │   │   │   
-│   │   ├── ·[components]
+│   │   ├── ·[dev]
+│   │   │   └──  DebugPanel.vue
+│   │   │   
+│   │   ├── ·[features]
 │   │   │   ├── ·[ai]
+│   │   │   │   ├── ·[ai-store]
 │   │   │   │   ├──  AiActionCard.vue
 │   │   │   │   ├──  AiAssistantPanel.vue
-│   │   │   │   └──  AiDiagnosticSidebar.vue
+│   │   │   │   ├──  AIDefinitionManager.vue
+│   │   │   │   ├──  AiDiagnosticSidebar.vue
+│   │   │   │   ├──  AiSessionTraceModal.vue
+│   │   │   │   ├──  aiStore.js
+│   │   │   │   ├──  aiUsageTooltips.js
+│   │   │   │   ├──  ModAliasReviewModal.vue
+│   │   │   │   └──  promptQueueStore.js
 │   │   │   │   
-│   │   │   ├── ·[backup]
-│   │   │   │   └──  BackupItem.vue
-│   │   │   │   
-│   │   │   ├── ·[common]
-│   │   │   │   ├── ·[ContextMenu]
-│   │   │   │   ├── ·[input]
-│   │   │   │   ├── ·[TagsSearch]
-│   │   │   │   ├──  CommonModalShell.vue
-│   │   │   │   ├──  Confirm.vue
-│   │   │   │   ├──  FixedPopover.vue
-│   │   │   │   ├──  GlobalColorPicker.vue
-│   │   │   │   ├──  HoverPanel.vue
-│   │   │   │   ├──  SimpleDropList.vue
-│   │   │   │   ├──  StatItem.vue
-│   │   │   │   └──  VirtualDragList.vue
-│   │   │   │   
-│   │   │   ├── ·[mod-rule]
-│   │   │   │   └──  RuleRelationSection.vue
-│   │   │   │   
-│   │   │   ├── ·[packageTransfer]
-│   │   │   │   ├──  ModConflictPlanEditor.vue
-│   │   │   │   └──  ProfileConflictPlanEditor.vue
-│   │   │   │   
-│   │   │   ├── ·[settings]
-│   │   │   │   ├──  ThemeEditorModal.vue
-│   │   │   │   ├──  ThemeSelect.vue
-│   │   │   │   └──  ThemeSwatches.vue
-│   │   │   │   
-│   │   │   ├── ·[utils]
-│   │   │   │   ├──  AppLogPanel.vue
-│   │   │   │   ├──  DependencyGraph.vue
-│   │   │   │   ├──  FileSearchPreviewEditor.vue
-│   │   │   │   ├──  FocusTabs.vue
-│   │   │   │   ├──  GroupItem.vue
-│   │   │   │   ├──  GroupModRow.vue
-│   │   │   │   ├──  ImageCloud.vue
-│   │   │   │   ├──  LampEffect.vue
-│   │   │   │   ├──  LuxBreatheIcon.vue
-│   │   │   │   ├──  ModItem.vue
-│   │   │   │   ├──  ProfileSwitcher.vue
-│   │   │   │   ├──  SegmentedTabs.vue
-│   │   │   │   ├──  TextureModCard.vue
+│   │   │   ├── ·[app-log]
+│   │   │   │   ├──  logStore.js
+│   │   │   │   ├──  LogViewer.vue
 │   │   │   │   └──  UnifiedLogPanel.vue
 │   │   │   │   
-│   │   │   ├── ·[workspace]
-│   │   │   │   ├── ·[components]
-│   │   │   │   ├── ·[utils]
-│   │   │   │   ├── ·[views]
-│   │   │   │   └──  WorkspaceOverlay.vue
+│   │   │   ├── ·[dialogs]
+│   │   │   │   ├──  ConflictResolver.vue
+│   │   │   │   └──  UpdateModal.vue
 │   │   │   │   
-│   │   │   ├──  AIDefinitionManager.vue
-│   │   │   ├──  AiSessionTraceModal.vue
-│   │   │   ├──  BackupList.vue
-│   │   │   ├──  ConflictResolver.vue
-│   │   │   ├──  DebugPanel.vue
-│   │   │   ├──  FileSearchWorkbench.vue
-│   │   │   ├──  GroupList.vue
-│   │   │   ├──  GuideCenter.vue
-│   │   │   ├──  ListDiffView.vue
-│   │   │   ├──  LogViewer.vue
-│   │   │   ├──  MissingInstallDialog.vue
-│   │   │   ├──  ModAliasReviewModal.vue
-│   │   │   ├──  ModConfigManagerModal.vue
-│   │   │   ├──  ModDetails.vue
-│   │   │   ├──  ModList.vue
-│   │   │   ├──  ModRuleEditor.vue
-│   │   │   ├──  PackageTransferDialog.vue
-│   │   │   ├──  ProfileDrawer.vue
-│   │   │   ├──  RimHeader.vue
-│   │   │   ├──  RulePanel.vue
-│   │   │   ├──  SettingsPanel.vue
-│   │   │   ├──  StatusBar.vue
-│   │   │   ├──  SupplementSelectionDialog.vue
-│   │   │   ├──  TextureOptModal.vue
-│   │   │   └──  UpdateModal.vue
-│   │   │   
-│   │   ├── ·[directives]
-│   │   │   ├──  dragScroll.js
-│   │   │   ├──  vPreview.js
-│   │   │   ├──  vSelection.js
-│   │   │   └──  vTooltip.js
-│   │   │   
-│   │   ├── ·[modules]
+│   │   │   ├── ·[file-search]
+│   │   │   │   ├──  FileSearchPreviewEditor.vue
+│   │   │   │   ├──  fileSearchStore.js
+│   │   │   │   └──  FileSearchWorkbench.vue
+│   │   │   │   
 │   │   │   ├── ·[guide]
-│   │   │   │   └──  guideConfig.js
+│   │   │   │   ├──  GuideCenter.vue
+│   │   │   │   ├──  guideConfig.js
+│   │   │   │   └──  guideStore.js
 │   │   │   │   
-│   │   │   ├── ·[search]
-│   │   │   │   ├──  QueryParser.js
-│   │   │   │   ├──  SearchEngine.js
-│   │   │   │   ├──  SearchHelp.js
-│   │   │   │   └──  SearchTypes.js
+│   │   │   ├── ·[load-order]
+│   │   │   │   ├──  BackupItem.vue
+│   │   │   │   ├──  BackupList.vue
+│   │   │   │   ├──  ListDiffView.vue
+│   │   │   │   └──  orderStore.js
 │   │   │   │   
-│   │   │   └── ·[theme]
+│   │   │   ├── ·[mod]
+│   │   │   │   ├── ·[lib]
+│   │   │   │   ├── ·[list]
+│   │   │   │   ├── ·[search]
+│   │   │   │   ├── ·[stores]
+│   │   │   │   ├──  DependencyGraph.vue
+│   │   │   │   ├──  DisabledModList.vue
+│   │   │   │   ├──  GroupItem.vue
+│   │   │   │   ├──  GroupList.vue
+│   │   │   │   ├──  GroupModRow.vue
+│   │   │   │   ├──  ModDetails.vue
+│   │   │   │   ├──  ModItem.vue
+│   │   │   │   ├──  ModSettingsManagerModal.vue
+│   │   │   │   └──  RecommendationExportModal.vue
+│   │   │   │   
+│   │   │   ├── ·[mod-residue]
+│   │   │   │   ├──  ModResidueCleanupModal.vue
+│   │   │   │   └──  modResidueStore.js
+│   │   │   │   
+│   │   │   ├── ·[package-transfer]
+│   │   │   │   ├──  ModConflictPlanEditor.vue
+│   │   │   │   ├──  PackageTransferDialog.vue
+│   │   │   │   └──  ProfileConflictPlanEditor.vue
+│   │   │   │   
+│   │   │   ├── ·[profiles]
+│   │   │   │   ├──  ProfileDrawer.vue
+│   │   │   │   ├──  profileStore.js
+│   │   │   │   └──  ProfileSwitcher.vue
+│   │   │   │   
+│   │   │   ├── ·[rules]
+│   │   │   │   ├──  ModRuleEditor.vue
+│   │   │   │   ├──  RulePanel.vue
+│   │   │   │   ├──  RuleRelationSection.vue
+│   │   │   │   └──  ruleStore.js
+│   │   │   │   
+│   │   │   ├── ·[settings]
+│   │   │   │   ├── ·[panel]
+│   │   │   │   ├── ·[theme]
+│   │   │   │   └──  SettingsPanel.vue
+│   │   │   │   
+│   │   │   ├── ·[supplement]
+│   │   │   │   ├──  MissingInstallDialog.vue
+│   │   │   │   ├──  missingInstallStore.js
+│   │   │   │   ├──  SupplementSelectionDialog.vue
+│   │   │   │   └──  supplementStore.js
+│   │   │   │   
+│   │   │   ├── ·[texture-opt]
+│   │   │   │   ├──  TextureModCard.vue
+│   │   │   │   ├──  TextureOptModal.vue
+│   │   │   │   └──  textureStore.js
+│   │   │   │   
+│   │   │   └── ·[workspace]
 │   │   │   
-│   │   │       ├──  builtinThemes.json
-│   │   │       └──  themeManager.js
+│   │   │       ├── ·[components]
+│   │   │       ├── ·[lib]
+│   │   │       ├── ·[views]
+│   │   │       ├──  WorkspaceOverlay.vue
+│   │   │       └──  workspaceStore.js
 │   │   │       
-│   │   ├── ·[runtime]
-│   │   │   ├──  aiActionRuntime.js
-│   │   │   ├──  aiAttachmentRuntime.js
-│   │   │   ├──  aiUsageTooltips.js
-│   │   │   ├──  pywebviewBridge.js
-│   │   │   └──  runtimeBridge.js
-│   │   │   
-│   │   ├── ·[stores]
-│   │   │   ├──  aiStore.js
-│   │   │   ├──  appStore.js
-│   │   │   ├──  confirmStore.js
-│   │   │   ├──  contextMenuStore.js
-│   │   │   ├──  fileSearchStore.js
-│   │   │   ├──  groupStore.js
-│   │   │   ├──  guideStore.js
-│   │   │   ├──  hoverStore.js
-│   │   │   ├──  logStore.js
-│   │   │   ├──  missingInstallStore.js
-│   │   │   ├──  modStore.js
-│   │   │   ├──  orderStore.js
-│   │   │   ├──  profileStore.js
-│   │   │   ├──  promptQueueStore.js
-│   │   │   ├──  ruleStore.js
-│   │   │   ├──  searchStore.js
-│   │   │   ├──  startupStore.js
-│   │   │   ├──  supplementStore.js
-│   │   │   ├──  taskStore.js
-│   │   │   ├──  textureStore.js
-│   │   │   └──  workspaceStore.js
-│   │   │   
-│   │   ├── ·[utils]
-│   │   │   ├──  color.js
-│   │   │   ├──  common.js
-│   │   │   ├──  constants.js
-│   │   │   ├──  domEffects.js
-│   │   │   ├──  format.js
-│   │   │   ├──  markdown.js
-│   │   │   ├──  modIdentity.js
-│   │   │   ├──  packageScope.js
-│   │   │   ├──  text.js
-│   │   │   └──  versioning.js
-│   │   │   
-│   │   ├──  App.vue
-│   │   ├──  main.js
-│   │   ├──  style.css
-│   │   └──  toast.scss
+│   │   └── ·[shared]
 │   │   
+│   │       ├── ·[assets]
+│   │       │   └──  vue.svg
+│   │       │   
+│   │       ├── ·[commands]
+│   │       │   ├──  commandRegistry.js
+│   │       │   ├──  commandStore.js
+│   │       │   ├──  keybindingConflicts.js
+│   │       │   ├──  keybindingParser.js
+│   │       │   ├──  keybindingRuntime.js
+│   │       │   └──  keyScopeStore.js
+│   │       │   
+│   │       ├── ·[components]
+│   │       │   ├── ·[context-menu]
+│   │       │   ├── ·[input]
+│   │       │   ├── ·[list]
+│   │       │   ├── ·[modal]
+│   │       │   ├── ·[popover]
+│   │       │   ├── ·[tabs]
+│   │       │   ├──  GlobalColorPicker.vue
+│   │       │   └──  StatItem.vue
+│   │       │   
+│   │       ├── ·[decorations]
+│   │       │   ├──  ImageCloud.vue
+│   │       │   ├──  LampEffect.vue
+│   │       │   └──  LuxBreatheIcon.vue
+│   │       │   
+│   │       ├── ·[directives]
+│   │       │   ├──  dragScroll.js
+│   │       │   ├──  vPreview.js
+│   │       │   ├──  vSelection.js
+│   │       │   └──  vTooltip.js
+│   │       │   
+│   │       └── ·[lib]
+│   │       
+│   │           ├──  color.js
+│   │           ├──  common.js
+│   │           ├──  constants.js
+│   │           ├──  domEffects.js
+│   │           ├──  format.js
+│   │           ├──  markdown.js
+│   │           └──  text.js
+│   │           
 │   ├──  .gitignore
 │   ├──  index.html
 │   ├──  package-lock.json
@@ -302,6 +321,7 @@
 │   ├──  test_github_manager.py
 │   ├──  test_group_dao.py
 │   ├──  test_import_check.py
+│   ├──  test_keybinding_settings.py
 │   ├──  test_language_pack_ownership.py
 │   ├──  test_load_order_manager_import_check.py
 │   ├──  test_load_order_manager_save.py
@@ -310,17 +330,21 @@
 │   ├──  test_maintenance_manager.py
 │   ├──  test_mod_asset_missing_state.py
 │   ├──  test_mod_config_manager.py
+│   ├──  test_mod_residue_manager.py
 │   ├──  test_profile_and_scanner.py
+│   ├──  test_recommendation_export_manager.py
 │   ├──  test_rule_manager_dynamic_weights.py
 │   ├──  test_shortcuts.py
 │   ├──  test_sorter_strategies.py
 │   ├──  test_startup_coordinator.py
+│   ├──  test_steam_actions.py
 │   ├──  test_texture_opt_api.py
 │   ├──  test_texture_opt_batch_recovery.py
 │   ├──  test_texture_opt_manager.py
 │   ├──  test_user_data_root.py
 │   ├──  test_workshop_db_manager.py
-│   └──  test_workshop_selection.py
+│   ├──  test_workshop_selection.py
+│   └──  test_workspace_matrix_times.py
 │   
 ├── ·[toolmods]
 ├── ·[tools]

@@ -3,6 +3,8 @@ import sys
 import shutil
 import subprocess
 import tempfile
+import zipfile
+from pathlib import Path
 from typing import List
 
 # 尝试导入 pathspec 用于 gitignore 匹配
@@ -170,12 +172,15 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             print("★ 打包成功！")
             print(f"★ 输出文件: dist/{name}.exe")
             print("="*30 + "\n")
+            return True
         else:
             print("打包失败！")
             print("错误信息：")
             print(result.stderr)
+            return False
     except Exception as e:
         print(f"打包过程中出错: {str(e)}")
+        return False
     finally:
         # 清理临时版本文件
         if version_file_path and os.path.exists(version_file_path):
@@ -184,6 +189,76 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         if hook_dir_path and os.path.exists(hook_dir_path):
             try: shutil.rmtree(hook_dir_path)
             except: pass
+
+def _iter_toolmods_files(toolmods_dir: Path):
+    """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
+    if not toolmods_dir.exists():
+        return
+    for current_root, dirnames, filenames in os.walk(toolmods_dir, followlinks=True):
+        current_path = Path(current_root)
+        relative_dir = current_path.relative_to(toolmods_dir)
+        dirnames[:] = [name for name in dirnames if not name.startswith("Source")]
+        if any(part.startswith("Source") for part in relative_dir.parts):
+            continue
+        for filename in filenames:
+            file_path = current_path / filename
+            yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
+
+def _iter_tools_files(tools_dir: Path):
+    """遍历 tools 发布文件，仅保留 steamcmd.exe，其它目录按现有内容发布。"""
+    if not tools_dir.exists():
+        return
+    for file_path in tools_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        relative_path = file_path.relative_to(tools_dir)
+        normalized_parts = [part.lower() for part in relative_path.parts]
+        if normalized_parts and normalized_parts[0] == "steamcmd" and relative_path.name.lower() != "steamcmd.exe":
+            continue
+        yield file_path, Path("tools") / relative_path
+
+def _iter_data_files(data_dir: Path):
+    """遍历 data 发布文件，仅保留发布包运行所需的固定数据文件。"""
+    required_files = [
+        Path("rules") / "communityRules.json",
+        Path("steamDB.json"),
+        Path("replacements.json.gz"),
+    ]
+    for relative_path in required_files:
+        file_path = data_dir / relative_path
+        if file_path.exists() and file_path.is_file():
+            yield file_path, Path("data") / relative_path
+        else:
+            print(f"警告: 发布数据文件缺失，已跳过 {file_path}")
+
+def create_release_zip(app_name: str, version: str):
+    """基于 dist 中的 exe 生成发布压缩包，并附带运行所需的外部资源。"""
+    project_root = Path(__file__).resolve().parent
+    dist_dir = project_root / "dist"
+    exe_path = dist_dir / f"{app_name}.exe"
+    zip_path = dist_dir / f"{app_name} v{version}.zip"
+    archive_root = Path(app_name)
+
+    if not exe_path.exists():
+        raise FileNotFoundError(f"未找到打包产物: {exe_path}")
+
+    release_items = [(exe_path, Path(exe_path.name))]
+    release_items.extend(_iter_toolmods_files(project_root / "toolmods") or [])
+    release_items.extend(_iter_tools_files(project_root / "tools") or [])
+    release_items.extend(_iter_data_files(project_root / "data") or [])
+
+    if zip_path.exists():
+        zip_path.unlink()
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for source_path, archive_path in release_items:
+            archive.write(source_path, arcname=(archive_root / archive_path).as_posix())
+
+    print("\n" + "="*30)
+    print("★ 发布压缩包已生成！")
+    print(f"★ 输出文件: {zip_path}")
+    print("="*30 + "\n")
+    return zip_path
 
 def buildFrontend(start_path: str = 'frontend'):
     """
@@ -264,6 +339,7 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] = [], max_depth: i
 
 if __name__ == "__main__":
     from backend._version import __version__
+    pack_zip = True
     # 配置
     APP_MAIN = 'main.py'
     APP_NAME = 'RimModManager'
@@ -272,12 +348,17 @@ if __name__ == "__main__":
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
+    
     # 0. 构建前端项目
     buildFrontend(start_path='frontend')
     
     # 1. 执行打包
     print(f'=== 开始打包 {APP_NAME} v{APP_VERSION} ===')
-    packApplication(main_file=APP_MAIN, icon_path=ICON_PATH, name=APP_NAME, splash_path=SPLASH_PATH, version=APP_VERSION, company=APP_COMPANY)
+    packed = packApplication(main_file=APP_MAIN, icon_path=ICON_PATH, name=APP_NAME, splash_path=SPLASH_PATH, version=APP_VERSION, company=APP_COMPANY)
+    
+    if packed and pack_zip:
+        print(f'=== 生成发布压缩包 {APP_NAME} v{APP_VERSION}.zip ===')
+        create_release_zip(APP_NAME, APP_VERSION)
     
     # 2. 生成目录树
     print('\n=== 生成项目目录树 ===')

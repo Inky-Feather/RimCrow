@@ -33,7 +33,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             "max_source_dimension": 2048,
             "scale_factor": 0.5,
             "max_size": 128,
-            "clean_generated_only": True,
+            "clean_uninstalled_residue_only": False,
         }
 
     def _write_png(self, relative_path: str, size=(32, 32), alpha=False, fully_transparent=False):
@@ -82,45 +82,52 @@ class TestTextureOptimizationManager(unittest.TestCase):
         info = self.manager._inspect_source_image(source)
         self.assertTrue(info["has_alpha"])
 
-    def test_cleanup_orphaned_outputs_only_deletes_manifest_tracked_files(self):
+    def test_clean_generated_deletes_dds_with_png_source(self):
         source = self._write_png("Textures/source.png")
-        tracked_dds = source.with_suffix(".dds")
-        tracked_dds.write_bytes(b"dds")
-        unmanaged_dds = self.mod_root / "Textures" / "unmanaged.dds"
-        unmanaged_dds.write_bytes(b"dds")
+        generated_dds = source.with_suffix(".dds")
+        generated_dds.write_bytes(b"dds")
+        standalone_dds = self.mod_root / "Textures" / "standalone.dds"
+        standalone_dds.write_bytes(b"dds")
 
-        deleted = self.manager._cleanup_orphaned_outputs(
-            str(self.mod_root),
-            {"Textures/missing.png": {"output_rel_path": "Textures/source.dds"}},
-            current_keys=set(),
-        )
-
-        self.assertEqual(deleted, 1)
-        self.assertFalse(tracked_dds.exists())
-        self.assertTrue(unmanaged_dds.exists())
-
-    def test_clean_generated_managed_only_deletes_manifest_outputs(self):
-        source = self._write_png("Textures/source.png")
-        managed_dds = source.with_suffix(".dds")
-        managed_dds.write_bytes(b"dds")
-
-        self.manager._write_manifest(
-            str(self.mod_root),
-            {"version": 2, "files": {"Textures/source.png": {"output_rel_path": "Textures/source.dds"}}},
-        )
         task = TextureTask(
-            id="clean-managed",
+            id="clean-with-source",
             action="clean_generated",
             mod_paths=[str(self.mod_root)],
-            options={**self.options, "clean_generated_only": True},
+            options=self.options,
             status="running",
         )
 
         result = self.manager._clean_generated(task)
 
         self.assertEqual(result["orphan_deleted"], 1)
-        self.assertFalse(managed_dds.exists())
+        self.assertFalse(generated_dds.exists())
+        self.assertTrue(standalone_dds.exists())
         self.assertFalse(result["refresh_after_analyze"])
+
+    def test_clean_generated_residue_target_deletes_dds_without_png_after_normalize(self):
+        residue_root = self.temp_root / "2978572782"
+        dds_path = residue_root / "Textures" / "Things" / "Building" / "SubMap" / "LadderDown_m.dds"
+        dds_path.parent.mkdir(parents=True, exist_ok=True)
+        dds_path.write_bytes(b"dds")
+        normalized_targets = self.manager._normalize_mod_targets([{
+            "mod_path": str(residue_root),
+            "mod_name": "2978572782",
+            "residue": True,
+            "requires_png_source": False,
+        }])
+        task = TextureTask(
+            id="clean-residue-without-png",
+            action="clean_generated",
+            mod_paths=[str(residue_root)],
+            mod_targets=normalized_targets,
+            options={**self.options, "clean_uninstalled_residue_only": True},
+            status="running",
+        )
+
+        result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["orphan_deleted"], 1)
+        self.assertFalse(dds_path.exists())
 
     def test_clean_generated_with_source_deletes_external_outputs_and_invalidates_snapshot(self):
         source = self._write_png("Textures/source.png")
@@ -142,7 +149,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             id="clean-with-source",
             action="clean_generated",
             mod_paths=[str(self.mod_root)],
-            options={**self.options, "clean_generated_only": False},
+            options=self.options,
             status="running",
         )
 
@@ -161,7 +168,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             id="clean-no-change",
             action="clean_generated",
             mod_paths=[str(self.mod_root)],
-            options={**self.options, "clean_generated_only": True},
+            options=self.options,
             status="running",
         )
 
@@ -181,7 +188,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source_b = other_mod_root / "Textures" / "b.png"
         Image.new("RGB", (32, 32), (0, 255, 0)).save(source_b)
         source_a.with_suffix(".dds").write_bytes(b"dds-a")
-        source_b.with_suffix(".dds").write_bytes(b"dds-b")
 
         options = self.manager._build_options(self.options)
         snapshot = self.manager._scan_mods_snapshot([str(self.mod_root), str(other_mod_root)], options)
@@ -190,12 +196,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
             id="clean-partial-refresh",
             action="clean_generated",
             mod_paths=[str(self.mod_root), str(other_mod_root)],
-            options={**self.options, "clean_generated_only": True},
+            options=self.options,
             status="running",
-        )
-        self.manager._write_manifest(
-            str(self.mod_root),
-            {"version": 2, "files": {"Textures/a.png": {"output_rel_path": "Textures/a.dds"}}},
         )
 
         result = self.manager._clean_generated(task)
@@ -229,12 +231,12 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(self.manager._calc_progress(1, 25245), 1)
         self.assertEqual(self.manager._calc_progress(252, 25245), 1)
 
-    def test_build_options_normalizes_clean_generated_only_to_bool(self):
-        options_true = self.manager._build_options({**self.options, "clean_generated_only": "true"})
-        options_false = self.manager._build_options({**self.options, "clean_generated_only": "false"})
+    def test_build_options_normalizes_clean_uninstalled_residue_only_to_bool(self):
+        options_true = self.manager._build_options({**self.options, "clean_uninstalled_residue_only": "true"})
+        options_false = self.manager._build_options({**self.options, "clean_uninstalled_residue_only": "false"})
 
-        self.assertIs(options_true["clean_generated_only"], True)
-        self.assertIs(options_false["clean_generated_only"], False)
+        self.assertIs(options_true["clean_uninstalled_residue_only"], True)
+        self.assertIs(options_false["clean_uninstalled_residue_only"], False)
 
     def test_build_options_derives_process_mode_flags(self):
         skip_existing = self.manager._build_options({**self.options, "process_mode": "all_skip_existing"})
@@ -284,29 +286,12 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(row["external_orphan_output_count"], 1)
         self.assertEqual(summary["output_total_count"], 1)
 
-    def test_scan_summary_tracks_managed_outputs_and_action_required_separately(self):
+    def test_scan_summary_tracks_current_outputs_and_action_required_separately(self):
         source = self._write_png("Textures/source.png", size=(128, 128))
         output = source.with_suffix(".dds")
         output.write_bytes(b"dds")
         source_stat = source.stat()
         os.utime(output, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
-        signature = self.manager._build_signature(self.options)
-        self.manager._write_manifest(
-            str(self.mod_root),
-            {
-                "version": 2,
-                "preset_signature": signature,
-                "files": {
-                    "Textures/source.png": {
-                        "output_rel_path": "Textures/source.dds",
-                        "source_size": source.stat().st_size,
-                        "source_mtime_ns": source.stat().st_mtime_ns,
-                        "output_size": output.stat().st_size,
-                        "preset_signature": signature,
-                    }
-                },
-            },
-        )
 
         current_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
         current_row = current_snapshot["mods"][0]["stat"]
@@ -316,9 +301,9 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         regenerate_row = regenerate_snapshot["mods"][0]["stat"]
 
-        self.assertEqual(current_row["managed_output_count"], 1)
+        self.assertEqual(current_row["current_output_count"], 1)
         self.assertEqual(current_row["action_required_count"], 0)
-        self.assertEqual(regenerate_row["managed_output_count"], 1)
+        self.assertEqual(regenerate_row["current_output_count"], 1)
         self.assertEqual(regenerate_row["action_required_count"], 1)
 
     def test_scan_marks_fake_png_payload_as_engine_unsupported(self):
@@ -419,7 +404,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             ["Textures/keep.png", "Textures/mask_m.png", "Textures/fake.png"],
         )
 
-    def test_optimize_uses_todds_fast_path_and_updates_manifest(self):
+    def test_optimize_uses_todds_fast_path_and_updates_output_stats(self):
         source = self._write_png("Textures/fast.png", size=(128, 128))
         task = TextureTask(
             id="todds-fast",
@@ -447,15 +432,12 @@ class TestTextureOptimizationManager(unittest.TestCase):
         with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
             result = self.manager._optimize(task)
 
-        manifest = self.manager._load_manifest(str(self.mod_root))
         self.assertEqual(result["optimized"], 1)
         self.assertEqual(result["failed"], 0)
         self.assertFalse(result["refresh_after_analyze"])
-        self.assertEqual(result["final_summary"]["managed_output_count"], 1)
-        self.assertEqual(result["final_summary"]["external_output_count"], 0)
-        self.assertEqual(result["final_mods"][0]["managed_output_count"], 1)
+        self.assertEqual(result["final_summary"]["current_output_count"], 1)
+        self.assertEqual(result["final_mods"][0]["current_output_count"], 1)
         self.assertTrue(source.with_suffix(".dds").exists())
-        self.assertIn("Textures/fast.png", manifest["files"])
 
     def test_optimize_only_scans_each_mod_once(self):
         source = self._write_png("Textures/once.png", size=(128, 128))
@@ -569,23 +551,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_optimize_no_jobs_still_returns_final_snapshot_data(self):
         source = self._write_png("Textures/current.png", size=(32, 32))
         source.with_suffix(".dds").write_bytes(b"dds")
-        signature = self.manager._build_signature(self.options)
-        self.manager._write_manifest(
-            str(self.mod_root),
-            {
-                "version": 2,
-                "preset_signature": signature,
-                "files": {
-                    "Textures/current.png": {
-                        "output_rel_path": "Textures/current.dds",
-                        "source_size": source.stat().st_size,
-                        "source_mtime_ns": source.stat().st_mtime_ns,
-                        "output_size": source.with_suffix(".dds").stat().st_size,
-                        "preset_signature": signature,
-                    }
-                },
-            },
-        )
         snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
         self.manager._store_scan_snapshot(snapshot)
 
@@ -605,10 +570,10 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(result["final_summary"]["mod_count"], 1)
         self.assertEqual(len(result["final_mods"]), 1)
 
-    def test_optimize_keeps_external_current_dds_unmanaged_when_not_overwriting(self):
+    def test_optimize_skip_existing_current_dds_is_cleaned_when_source_exists(self):
         source = self._write_png("Textures/external.png", size=(128, 128))
-        external_dds = source.with_suffix(".dds")
-        external_dds.write_bytes(b"external-dds")
+        current_dds = source.with_suffix(".dds")
+        current_dds.write_bytes(b"current-dds")
         task = TextureTask(
             id="external-current",
             action="optimize",
@@ -620,48 +585,30 @@ class TestTextureOptimizationManager(unittest.TestCase):
         with patch.object(ToddsEncoder, "encode_mod", side_effect=AssertionError("should not re-encode external current DDS")):
             result = self.manager._optimize(task)
 
-        manifest = self.manager._load_manifest(str(self.mod_root))
+        self.assertEqual(result["optimized"], 0)
+        self.assertEqual(result["failed"], 0)
+        self.assertTrue(current_dds.exists())
+
         clean_task = TextureTask(
             id="external-current-clean",
             action="clean_generated",
             mod_paths=[str(self.mod_root)],
-            options={**self.options, "clean_generated_only": True},
+            options=self.options,
             status="running",
         )
         clean_result = self.manager._clean_generated(clean_task)
 
-        self.assertEqual(result["optimized"], 0)
-        self.assertEqual(result["failed"], 0)
-        self.assertNotIn("Textures/external.png", manifest["files"])
-        self.assertTrue(external_dds.exists())
-        self.assertEqual(clean_result["orphan_deleted"], 0)
-        self.assertTrue(external_dds.exists())
+        self.assertEqual(clean_result["orphan_deleted"], 1)
+        self.assertFalse(current_dds.exists())
 
-    def test_optimize_force_overwrites_only_managed_signature_mismatch(self):
-        source = self._write_png("Textures/managed.png", size=(128, 128))
+    def test_optimize_force_overwrites_existing_output(self):
+        source = self._write_png("Textures/overwrite.png", size=(128, 128))
         output = source.with_suffix(".dds")
         output.write_bytes(b"old")
         source_stat = source.stat()
         os.utime(output, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
-        old_signature = self.manager._build_signature({**self.options, "scale_factor": 0.5})
-        self.manager._write_manifest(
-            str(self.mod_root),
-            {
-                "version": 2,
-                "preset_signature": old_signature,
-                "files": {
-                    "Textures/managed.png": {
-                        "output_rel_path": "Textures/managed.dds",
-                        "source_size": source.stat().st_size,
-                        "source_mtime_ns": source.stat().st_mtime_ns,
-                        "output_size": output.stat().st_size,
-                        "preset_signature": old_signature,
-                    }
-                },
-            },
-        )
         task = TextureTask(
-            id="managed-mismatch",
+            id="force-overwrite",
             action="optimize",
             mod_paths=[str(self.mod_root)],
             options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0},

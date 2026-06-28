@@ -34,6 +34,7 @@ class ProfileContext:
     use_workshop_mods: bool
     use_self_mods: bool
     inactive_mods_order: list = field(default_factory=list)
+    temp_mods_order: list = field(default_factory=list)
     is_steam: bool = False
     is_steam_managed: bool = False
     runtime_capabilities: dict = field(default_factory=dict)
@@ -130,6 +131,7 @@ class ProfileManager:
         'use_self_mods', 
         'run_commands',
         'inactive_mods_order',
+        'temp_mods_order',
         'last_played_time'
     }
     
@@ -403,6 +405,7 @@ class ProfileManager:
             use_workshop_mods=runtime_flags['use_workshop_mods'],
             use_self_mods=profile.use_self_mods,
             inactive_mods_order=list(profile.inactive_mods_order or []),
+            temp_mods_order=list(getattr(profile, 'temp_mods_order', []) or []),
             is_steam=runtime_flags['is_steam'],
             is_steam_managed=install_facts.is_steam_managed,
         )

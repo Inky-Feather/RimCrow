@@ -213,7 +213,11 @@ class GameLogManager(BaseLogReader): # 继承基类
         if not filepath or not os.path.exists(filepath):
             return {'error': '文件不存在'}
 
-        blocks = self._ensure_cache(filepath, self._parse_file_to_blocks)
+        blocks = self._ensure_cache(
+            filepath,
+            lambda path: self._parse_file_to_blocks(path, keep_all=True),
+            cache_key=f"{filepath}::browse"
+        )
         result = self.get_paged_data(blocks, page, page_size)
         if result['status'] == 'success':
             self._analyze_page(result['blocks'], normalized_name)
@@ -296,7 +300,11 @@ class GameLogManager(BaseLogReader): # 继承基类
         if not os.path.exists(filepath): return {'error': '文件不存在'}
 
         # 使用统一缓存入口，避免全局扫描和分页读取走出两套状态。
-        blocks = self._ensure_cache(filepath, self._parse_file_to_blocks)
+        blocks = self._ensure_cache(
+            filepath,
+            lambda path: self._parse_file_to_blocks(path, keep_all=True),
+            cache_key=f"{filepath}::browse"
+        )
         # 3. 计算分页切片 (倒序分页算法)
         result = self.get_paged_data(blocks, page, page_size)
         
@@ -328,7 +336,7 @@ class GameLogManager(BaseLogReader): # 继承基类
         if not os.path.exists(filepath): return []
 
         # 全局扫描时单独走完整解析，避免被常规缓存上限截断较早的错误块。
-        blocks = self._parse_file_to_blocks(filepath, keep_all=True) if full_scan else self._ensure_cache(filepath, self._parse_file_to_blocks)
+        blocks = self._parse_file_to_blocks(filepath, keep_all=True, max_keep_blocks=80000) if full_scan else self._ensure_cache(filepath, self._parse_file_to_blocks)
         self._analyze_page(blocks, os.path.basename(filepath))
         logger.debug(
             f"[游戏日志] 读取日志块 filepath={filepath} block_count={len(blocks)} full_scan={full_scan}"
@@ -355,7 +363,7 @@ class GameLogManager(BaseLogReader): # 继承基类
             if 'context' not in block or 'inferredType' not in block.get('context', {}):
                 self.analyzer.analyze(block, is_realtime_json=is_json_log, active_mods=active_mods_set)
 
-    def _parse_file_to_blocks(self, filepath, keep_all=False):
+    def _parse_file_to_blocks(self, filepath, keep_all=False, max_keep_blocks=None):
         """重写：使用基类方法处理 JSON，保留纯文本特化逻辑"""
         filename = os.path.basename(filepath)
         is_json = filename.endswith('.json') or filename.startswith('RMM_Realtime')
@@ -363,7 +371,7 @@ class GameLogManager(BaseLogReader): # 继承基类
         # 如果是 JSON，直接复用基类的高效解析
         if is_json:
             # 注意：分析逻辑交给了 read_log_page 里的 _analyze_page，所以这里不传回调直接返回
-            return self._parse_file_base(filepath, keep_all=keep_all)
+            return self._parse_file_base(filepath, keep_all=keep_all, max_keep_blocks=max_keep_blocks)
             
         # --- 下面保留原有的纯文本流式读取逻辑 (Player.log) ---
         blocks = []

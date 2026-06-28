@@ -481,6 +481,55 @@ class ModDAO:
         return visible_mods
 
     @staticmethod
+    def get_profile_disabled_mods(context: ProfileContext | None):
+        """
+        获取当前环境路径范围内的物理禁用 Mod。
+
+        禁用列表是资产视角，不参与加载顺序仲裁；但它仍必须限定在当前环境相关路径内，
+        避免把其它环境扫描过的禁用项混进来。
+        """
+        if not context: return []
+
+        scope = _ProfilePathScope.from_context(context)
+        conditions: list[Any] = []
+        if scope.local_root:
+            conditions.append(ModAsset.path.startswith(scope.local_root))
+        if scope.dlc_root:
+            conditions.append(ModAsset.path.startswith(scope.dlc_root))
+        if scope.workshop_root:
+            conditions.append(ModAsset.path.startswith(scope.workshop_root))
+        if scope.self_root:
+            conditions.append(ModAsset.path.startswith(scope.self_root))
+        if scope.use_tool_mods and scope.tool_root:
+            conditions.append(ModAsset.path.startswith(scope.tool_root))
+        if not conditions: return []
+
+        combined_condition = reduce(operator.or_, conditions)
+        disabled_condition = (
+            (ModAsset.disabled == True)  # type: ignore
+            & _present_asset_condition()
+        )
+        query = (
+            ModAsset.select(ModAsset, UserModData)
+            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+            .where(combined_condition & disabled_condition)
+            .order_by(ModAsset.file_modify_time.desc(), ModAsset.name, ModAsset.package_id)
+            .dicts()
+        )
+
+        group_map = _load_group_names_by_mod_id()
+        disabled_mods: list[dict[str, Any]] = []
+        for asset in query:
+            _normalize_language_fields(asset)
+            package_id = normalize_package_id(asset.get("package_id"))
+            if not package_id:
+                continue
+            asset["groups"] = group_map.get(package_id, [])
+            asset["runtime_domain"] = scope.domain_for_path(asset.get("path"))
+            disabled_mods.append(asset)
+        return disabled_mods
+
+    @staticmethod
     def get_visible_profile_mod(context: ProfileContext | None, package_id: str):
         """
         获取当前 Profile 中一个包名对应的最终可见模组。
@@ -1135,6 +1184,29 @@ class ModMaintenanceDAO:
                 errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
 
         return {"success_count": success_count, "errors": errors}
+
+    @staticmethod
+    def delete_mod_records(path_hashes: List[str] | str):
+        """只删除库存数据库记录，不触碰物理文件；用于取消订阅后清理本地库存显示。"""
+        normalized_hashes = _normalize_path_hashes(path_hashes)
+        if not normalized_hashes: return {"success_count": 0, "errors": []}
+
+        existing_hashes = [
+            row["path_hash"]
+            for row in ModAsset.select(ModAsset.path_hash)
+                .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
+                .dicts()
+        ]
+        if not existing_hashes: return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
+
+        try:
+            with db.atomic():
+                deleted_count = ModAsset.delete().where(ModAsset.path_hash << existing_hashes).execute()  # type: ignore
+        except Exception as exc:
+            logger.error(f"Database record deletion failed: {exc}")
+            return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
+
+        return {"success_count": int(deleted_count or 0), "errors": []}
 
     @staticmethod
     def add_shadow_path(keep_path_hash: str, shadow_path: str):

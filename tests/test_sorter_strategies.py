@@ -71,7 +71,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 {"package_id": "mod.normal", "name": "Normal"},
             ],
             {
-                "mod.bottom": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.framework": {"weight_info": {"final_weight": 150, "absolute_type": None}},
                 "mod.normal": {"weight_info": {"final_weight": 500, "absolute_type": None}},
             },
@@ -90,7 +90,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 {"package_id": "mod.normal", "name": "Normal"},
             ],
             {
-                "mod.bottom": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.framework": {"weight_info": {"final_weight": 150, "absolute_type": None}},
                 "mod.normal": {"weight_info": {"final_weight": 500, "absolute_type": None}},
             },
@@ -177,9 +177,9 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 {"package_id": "mod.z", "name": "Z"},
             ],
             {
-                "mod.bottom.short": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom.short": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.x": {"weight_info": {"final_weight": 500, "absolute_type": None}},
-                "mod.bottom.long": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom.long": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.y": {"weight_info": {"final_weight": 500, "absolute_type": None}},
                 "mod.z": {"weight_info": {"final_weight": 500, "absolute_type": None}},
             },
@@ -234,7 +234,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 {"package_id": "mod.top", "name": "Top"},
             ],
             {
-                "mod.bottom": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.shared": {"weight_info": {"final_weight": 500, "absolute_type": None}},
                 "mod.top": {"weight_info": {"final_weight": 0, "absolute_type": "top"}},
             },
@@ -261,7 +261,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
             ],
             {
                 "mod.top.anchor": {"weight_info": {"final_weight": 0, "absolute_type": "top"}},
-                "mod.bottom.anchor": {"weight_info": {"final_weight": 10000, "absolute_type": "bottom"}},
+                "mod.bottom.anchor": {"weight_info": {"final_weight": 1000, "absolute_type": "bottom"}},
                 "mod.top.only": {"weight_info": {"final_weight": 0, "absolute_type": "top"}},
             },
             groups,

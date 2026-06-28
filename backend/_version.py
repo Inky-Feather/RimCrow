@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.22.0"  # 主版本.次版本.补丁
+__version__ = "0.22.6"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,51 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.22.6",
+        "date": "2026-06-10",
+        "entries": [
+            {
+                "title": "导出功能与模组时间轴增强",
+                "changes": [
+                    { "type": "feature", "text": "新增模组推荐导出功能，支持 TXT、Markdown、DOCX、PDF 及图片格式，并提供导出选项配置与预览。" },
+                    { "type": "feature", "text": "优化模组时间轴的动态展示与多维度时间数据归一化，优化模组变更时间判定逻辑与有效时间识别逻辑。" }
+                ]
+            },
+            {
+                "title": "界面交互与性能优化",
+                "changes": [
+                    { "type": "optimize", "text": "优化规则面板渲染性能，引入虚拟滚动以支持大数据量显示。" },
+                    { "type": "feature", "text": "模组详情页集成图片预览功能，并优化搜索结果显示。" },
+                    { "type": "optimize", "text": "优化日志读取缓存逻辑与内存限制策略，支持自定义日志保留块数。" },
+                    { "type": "optimize", "text": "支持清理已卸载模组残留的 DDS 贴图文件，优化空间占用。" }
+                ]
+            },
+            {
+                "title": "模组残留管理与禁用功能",
+                "changes": [
+                    { "type": "feature", "text": "新增模组卸载残留扫描与清理功能，支持自动识别残留文件夹与设置文件。" },
+                    { "type": "feature", "text": "新增已禁用模组列表组件，支持批量禁用操作及更直观的状态管理。" }
+                ]
+            },
+            {
+                "title": "快捷键系统与操作体验升级",
+                "changes": [
+                    { "type": "feature", "text": "引入全新命令系统与快捷键运行时，支持自定义全局快捷键及冲突检测。" },
+                    { "type": "feature", "text": "右键菜单集成命令系统，支持自动填充动作与菜单项显示优化。" },
+                    { "type": "feature", "text": "新增平滑滚动配置与模组列表分组移动、折叠功能。" }
+                ]
+            },
+            {
+                "title": "数据管理与安全保障",
+                "changes": [
+                    { "type": "feature", "text": "优化模组删除与取消订阅流程，支持仅删除库存记录而不移除物理文件。" },
+                    { "type": "feature", "text": "新增临时模组列表持久化功能，支持备份文件重命名及另存为操作。" },
+                    { "type": "feature", "text": "为关键操作（如清空分组、取消订阅等）添加二次确认弹窗，防止误操作。" }
+                ]
+            }
+        ],
+    },
     {
         "version": "0.22.0",
         "date": "2026-06-01",

@@ -6,7 +6,12 @@ from backend.database.models import ModInterlock
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 from backend.settings import settings
-from backend.managers.mgr_rules import RuleManager
+from backend.managers.mgr_rules import (
+    POSITION_WEIGHT_BOTTOM,
+    POSITION_WEIGHT_DEFAULT,
+    POSITION_WEIGHT_TOP,
+    RuleManager,
+)
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 
 
@@ -36,16 +41,10 @@ class OrderSorter:
     }
     DEFAULT_SORT_STRATEGY = "classic_sort_logic"
 
-    # 定义规则权重：权重越高越难被打破
-    # 级差设置大一些，防止多条低级规则累积压倒高级规则
-    # 新版已经采用动态权重，这里保留旧版的权重定义，供参考
-    # RULE_PRIORITIES = {
-    #     'native': 10000,
-    #     'community': 1000,
-    #     'user': 100,
-    #     'user_dynamic': 10,
-    #     'unknown': 1
-    # }
+    CONSTRAINT_EDGE_UNKNOWN_WEIGHT = 100
+    CONSTRAINT_EDGE_PRIORITY_STEP = 1000
+    CONSTRAINT_EDGE_FORCE_BONUS = 1000000
+
     def __init__(self, context: ProfileContext):
         self.context = context  # 环境上下文
         self.effective_rules_cache = {} # 缓存每个 Mod 的生效规则
@@ -124,24 +123,20 @@ class OrderSorter:
     # =========================================================================
     # 加权图构建与循环消解
     # =========================================================================
-    def get_rule_weight(self, source_type: str) -> int:
+    def get_constraint_edge_weight(self, source_type: str) -> int:
         """
-        根据配置动态计算权重。
-        配置列表越靠前 -> 索引越小 -> 权重越大
+        根据来源优先级计算约束边权重。
+        这只用于循环消解时判断哪条规则更难被打破，不是 Mod 的位置权重。
         """
         idx = self.rule_mgr.get_source_priority(source_type)
-        # 基础权重 100，每高一级增加 1000。
-        # 假设列表长度 4。Idx 0 (User) -> (5-0)*1000 = 5000
-        # Idx 3 (Dynamic) -> (5-3)*1000 = 2000
-        # 未知来源 -> 100
-        if idx == 999: return 100
-        return (10 - idx) * 1000 
+        if idx == 999: return self.CONSTRAINT_EDGE_UNKNOWN_WEIGHT
+        return (10 - idx) * self.CONSTRAINT_EDGE_PRIORITY_STEP
     
     def _build_weighted_graph(self, groups: List[AtomicGroup], mod_map: Dict[str, dict], mod_to_group: Dict[str, AtomicGroup]):
         """
         构建带权重的依赖图，支持 Alternatives 备选连线和 is_force 绝对优先权
         返回: 
-          adj: Dict[int, Dict[int, int]]  adj[u][v] = weight (表示 u 必须在 v 之前，权重 weight)
+          adj: Dict[int, Dict[int, int]]  adj[u][v] = constraint_edge_weight (表示 u 必须在 v 之前)
           edge_info: Dict[tuple, list] 记录每条边是由哪些具体规则生成的，用于报错
         """
         adj = defaultdict(dict)
@@ -183,11 +178,11 @@ class OrderSorter:
                     elif r_type == 'before': u, v = gid, target_gid
                     else: continue # incompatible 不参与拓扑排序构图
 
-                    # 动态计算权重
+                    # 约束边权重只服务于破环，和 Mod 位置权重是两套数值域。
                     source_type = source_info.get('type', 'unknown')
-                    weight = self.get_rule_weight(source_type)
+                    weight = self.get_constraint_edge_weight(source_type)
                     # 如果是 is_force，提高权重，使该边在破环时几乎不可能被切断
-                    if is_force:  weight += 1000000 
+                    if is_force:  weight += self.CONSTRAINT_EDGE_FORCE_BONUS
 
                     # 记录边信息 (可能有多条规则指向同一条边)
                     edge_key = (u, v)
@@ -444,7 +439,7 @@ class OrderSorter:
                 continue
 
             if is_top_anchor:
-                effective_weights[gid] = 0
+                effective_weights[gid] = POSITION_WEIGHT_TOP
                 promoted_top_ids.add(gid)
                 if in_bottom_chain:
                     group_name = groups_map[gid].mod_ids[0]
@@ -456,7 +451,7 @@ class OrderSorter:
                 continue
 
             if is_bottom_anchor:
-                effective_weights[gid] = 10000
+                effective_weights[gid] = POSITION_WEIGHT_BOTTOM
                 promoted_bottom_ids.add(gid)
                 if in_top_chain:
                     group_name = groups_map[gid].mod_ids[0]
@@ -468,10 +463,10 @@ class OrderSorter:
                 continue
 
             if in_top_chain and not in_bottom_chain:
-                effective_weights[gid] = 0
+                effective_weights[gid] = POSITION_WEIGHT_TOP
                 promoted_top_ids.add(gid)
             elif in_bottom_chain and not in_top_chain:
-                effective_weights[gid] = 10000
+                effective_weights[gid] = POSITION_WEIGHT_BOTTOM
                 promoted_bottom_ids.add(gid)
             elif in_top_chain and in_bottom_chain:
                 group_name = groups_map[gid].mod_ids[0]
@@ -715,20 +710,20 @@ class OrderSorter:
                 if not isinstance(weight_info, dict): weight_info = {}
                 w = weight_info.get("final_weight")
                 # 纯粹的算术应用，完全不关心业务逻辑
-                if w is None: w = weight_info.get("base_weight", 500) + weight_info.get("weight_shift", 0)
+                if w is None: w = weight_info.get("base_weight", POSITION_WEIGHT_DEFAULT) + weight_info.get("weight_shift", 0)
                 # 处理决定性的绝对位置
                 abs_type = weight_info.get("absolute_type")
                 if abs_type == "top": is_top = True  # 标记组内有置顶成员
                 elif abs_type == "bottom": is_bottom = True  # 标记组内有置底成员
                 w = int(w)
-                if w <= 0:
+                if w <= POSITION_WEIGHT_TOP:
                     is_top = True
-                if w >= 10000:
+                if w >= POSITION_WEIGHT_BOTTOM:
                     is_bottom = True
                 weights.append(w)
 
             # 旧版基线始终只取组内最靠前的一个成员作为整组权重。
-            classic_group_base_weights[id(g)] = min(weights) if weights else 500
+            classic_group_base_weights[id(g)] = min(weights) if weights else POSITION_WEIGHT_DEFAULT
             group_anchor_flags[id(g)] = {
                 "top": is_top,
                 "bottom": is_bottom,
@@ -908,7 +903,7 @@ class OrderSorter:
             if not rules:
                 rules = self.rule_mgr.get_effective_mod_rules(tid, target_data)
                 self.effective_rules_cache[tid] = rules
-            weight = rules.get("weight_info", {}).get("final_weight", 500)
+            weight = rules.get("weight_info", {}).get("final_weight", POSITION_WEIGHT_DEFAULT)
             to_insert.append({"id": tid, "weight": weight, "rules": rules})
             # [FIX] 移除无效的 existing_in_list.add(tid)
         if not to_insert: return new_list
@@ -956,10 +951,10 @@ class OrderSorter:
                 insert_pos = min_idx
             else:
                 inserted = False
-                if weight <= 0:
+                if weight <= POSITION_WEIGHT_TOP:
                     insert_pos = min_idx # 绝对置顶
                     inserted = True
-                elif weight >= 10000:
+                elif weight >= POSITION_WEIGHT_BOTTOM:
                     insert_pos = max_idx # 绝对置底
                     inserted = True
                 else:
@@ -967,7 +962,7 @@ class OrderSorter:
                     for i in range(min_idx, max_idx):
                         comp_id = current_lower[i]
                         comp_rules = self.effective_rules_cache.get(comp_id, {})
-                        comp_w = comp_rules.get("weight_info", {}).get("final_weight", 500)
+                        comp_w = comp_rules.get("weight_info", {}).get("final_weight", POSITION_WEIGHT_DEFAULT)
                         
                         if comp_w > weight:
                             # 找到了比我重的（例如 500 遇到了 850材质包），插在它前面
