@@ -737,6 +737,7 @@ export const useAppStore = defineStore('app', () => {
   // 获取文件夹路径
   const getFolderPath = async (home_path) => {
     if(!window.pywebview) return
+    if(!home_path) home_path=''
     // 调用后端 API
     const res = await window.pywebview.api.folder_select_dialog(home_path)
     if (checkResult(res, "获取文件夹路径")) {

@@ -27,7 +27,7 @@
       <!-- 标题 - 根据编辑状态显示输入框或文本 -->
       <span v-tooltip="groupData.name" :class="`flex-1 flex min-w-0 text-sm px-1 mx-1 text-text-main font-bold tracking-wider items-center gap-2`">
         <input class="flex-1 px-0 py-0.5 min-w-0 rounded bg-bg-deep/70 border border-text-main/10 text-text-main focus:border-accent-primary focus:outline-none" 
-          v-show="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="handleInputBlur" ref="nameInputRef"/>
+          v-show="isEditingName" v-model="editingGroupName" @click.stop @keyup.enter="saveGroupName" @blur="saveGroupName" ref="nameInputRef"/>
         <span v-show="!isEditingName" class="min-w-0 truncate">{{ groupData.name }}</span>
       </span>
 
@@ -187,21 +187,63 @@ const removeItem = (itemId: string) => {
 const updateGroup = (data = props.groupData) => {
   emit('update-group', props.id, data)
 }
+// 生成唯一分组名
+const resolveUniqueGroupName = (rawName: string) => {
+  const trimmedName = String(rawName ?? '').trim()
+  const currentName = String(props.groupData.name ?? '').trim()
+  if (!trimmedName) {
+    return { name: currentName, renamed: false, index: null, valid: false }
+  }
+  // 判重时排除当前分组自身，避免“未改名保存”也被追加序号
+  const takenNames = groupStore.allGroupNames
+    .map(name => String(name ?? '').trim())
+    .filter(name => name && name !== currentName)
+  if (!takenNames.includes(trimmedName)) {
+    return { name: trimmedName, renamed: false, index: null, valid: true }
+  }
+  let index = 1
+  while (takenNames.includes(`${trimmedName}-${index}`)) {
+    index++
+  }
+  return { name: `${trimmedName}-${index}`, renamed: true, index, valid: true }
+}
+// 解析本次真正需要拖入分组的 Mod 列表
+const resolveDraggedModIds = (selectedIds: Array<string>, draggedId: string) => {
+  const normalizedDraggedId = String(draggedId ?? '').trim()
+  const normalizedSelectedIds = [...new Set(
+    selectedIds.map(id => String(id ?? '').trim()).filter(Boolean)
+  )]
+  if (!normalizedDraggedId) return normalizedSelectedIds
+  // 若当前拖拽项不在选中集中，说明是“直接拖未选中项”，此时只处理当前拖拽项
+  if (!normalizedSelectedIds.includes(normalizedDraggedId)) {
+    return [normalizedDraggedId]
+  }
+  return normalizedSelectedIds
+}
+// 构建拖入分组后的新顺序
+const buildDroppedGroupModIds = (newIds: Array<string>, selectedIds: Array<string>, draggedId: string, newIndex: number) => {
+  const movingIds = resolveDraggedModIds(selectedIds, draggedId)
+  if (!draggedId || movingIds.length === 0) return newIds
+  // 保留拖拽落点占位，再移除其余重复项
+  const dedupedIds = newIds.filter((id, index) => {
+    if (index === newIndex && id === draggedId) return true
+    return !movingIds.includes(id)
+  })
+  const insertIndex = dedupedIds.indexOf(draggedId)
+  if (insertIndex === -1) return dedupedIds
+  // 用真实拖拽集合替换掉占位项，保持插入位置不变
+  dedupedIds.splice(insertIndex, 1, ...movingIds)
+  return dedupedIds
+}
 // 保存分组名称
 const saveGroupName = () => {
   if (!isEditingName.value) return  // 确保在编辑状态下调用
-  let newName = editingGroupName.value.trim()
-  if(groupStore.allGroupNames.includes(newName)) {
-    // 名称冲突，添加序号
-    let index = 1
-    while (groupStore.allGroupNames.includes(`${newName}-${index}`)) {
-      index++
-    }
-    newName = `${newName}-${index}`
-    toast.warning(`分组名称已存在，已添加序号 ${index}`)
+  const result = resolveUniqueGroupName(editingGroupName.value)
+  if (result.renamed) {
+    toast.warning(`分组名称已存在，已添加序号 ${result.index}`)
   }
-  if (newName && newName !== props.groupData.name) {
-    emit('update-group', props.id, { name: newName })
+  if (result.valid && result.name !== props.groupData.name) {
+    emit('update-group', props.id, { name: result.name })
   }
   isEditingName.value = false
 }
@@ -238,18 +280,9 @@ const updateChildren = (e) => {
   }
 
   console.log(props.groupData.name, "插入结束:", e)
-  // 去除重复, 保持拖动项的位置（保留除已选项外的其他项，已选择的项后续插入）
-  const uniqueIds = newIds.filter((id, index) => {
-    // 检测是否是拖动项（值和索引都匹配），是则保留（用于标记位置）
-    if (index === e.newIndex && id === e.item.id) return true
-    // 排除已选择的项（过滤重复）
-    if (tempSelectedIds.includes(id)) return false
-    // 其他未选择项，保留
-    return true
-  })
-  const newIndex = uniqueIds.indexOf(e.item.id)
-  // 根据拖动项，插入选中项（因选中项包含拖动项，所以插入时需要移除拖动项）
-  uniqueIds.splice(newIndex, 1, ...tempSelectedIds)
+  // 优先取事件里的拖拽项 ID，异常情况下再回退到落点位置的脏数据
+  const draggedId = e.item?.id || newIds[e.newIndex]
+  const uniqueIds = buildDroppedGroupModIds(newIds, tempSelectedIds, draggedId, e.newIndex)
   // （修复漏洞：如果拖入相同项到相邻位置，去重后实际列表顺序不变，但组件会渲染拖入的相同项，所以目前必须强制更新）
   internalModList.value = uniqueIds.map(id => ({ id: id }))
   console.log("排序前:", oldIds)

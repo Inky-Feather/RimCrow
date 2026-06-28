@@ -1,6 +1,6 @@
 <template>
   <transition name="guide-fade">
-    <div v-if="hasUncompletedGuides" class="fixed top-19 right-4 z-1000 flex flex-col items-end group pointer-events-none">
+    <div v-if="hasGuides" class="fixed top-19 right-4 z-1000 flex flex-col items-end group pointer-events-none">
 
       <!-- 1. 收起状态 (默认胶囊条) -->
       <div class="guide-capsule relative px-4 py-1 w-max whitespace-nowrap flex items-center gap-2 rounded-full cursor-pointer transition-all duration-300 pointer-events-auto">
@@ -12,7 +12,7 @@
         </span>
         <!-- 给文字加上跳动类 -->
         <span class="guide-text text-sm font-black text-black z-10 uppercase tracking-tight">
-          新手指引 ({{ uncompletedCount }})
+          {{ uncompletedCount > 0 ? `新手指引 (${uncompletedCount})` : '教程中心' }}
         </span>
       </div>
 
@@ -103,7 +103,7 @@ const isGuideCompleted = (guideKey) => {
 const uncompletedGuides = computed(() => allGuides.filter(g => !isGuideCompleted(g.key)))
 const completedGuides = computed(() => allGuides.filter(g => isGuideCompleted(g.key)))
 
-const hasUncompletedGuides = computed(() => uncompletedGuides.value.length > 0)
+const hasGuides = computed(() => uncompletedGuides.value.length > 0)
 const uncompletedCount = computed(() => uncompletedGuides.value.length)
 
 

@@ -416,14 +416,10 @@ class UpdateManager:
     
     def execute_hot_swap(self, zip_path: str = ''):
         """
-        执行热更新：
-        1. 解压 Zip 到临时目录
-        2. 生成 Bat 脚本
-        3. 启动 Bat 并退出当前进程
+        纯 Python 优雅热更新（防杀软误报方案）
         """
         debug = settings.config.debug_mode or False
         if not zip_path:
-            # 如果没传路径，尝试使用当前就绪的
             if self.current_update_info and self.current_update_info.local_file_path and self.current_update_info.local_status == "ready":
                 zip_path = self.current_update_info.local_file_path
             else:
@@ -432,12 +428,10 @@ class UpdateManager:
         if not os.path.exists(zip_path):
             raise FileNotFoundError(f"Update package not found: {zip_path}")
 
-        # 获取环境信息
         current_exe = os.path.abspath(sys.executable)
         exe_name = os.path.basename(current_exe)
         install_root = os.path.dirname(current_exe)
         
-        # 临时解压目录
         extract_path = os.path.join(install_root, "update_tmp_dir")
         if os.path.exists(extract_path):
             shutil.rmtree(extract_path, ignore_errors=True)
@@ -445,29 +439,23 @@ class UpdateManager:
 
         try:
             logger.info("Extracting update package...")
-            # 解压逻辑 (处理编码，防止中文乱码)
+            # 1. 解压 Zip
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 for member in zf.infolist():
-                    # 关键：手动处理编码转换
                     try:
-                        # 修正 Zip 乱码 尝试将文件名从 cp437 转回原始字节，再按 gbk 解码
                         filename = member.filename.encode('cp437').decode('gbk')
                     except:
-                        filename = member.filename # 兜底使用原始
+                        filename = member.filename
                     
-                    # 构造目标路径
                     target_path = os.path.join(extract_path, filename)
-                    
-                    # 如果是目录
                     if member.is_dir():
                         os.makedirs(target_path, exist_ok=True)
                     else:
-                        # 确保父目录存在
                         os.makedirs(os.path.dirname(target_path), exist_ok=True)
                         with zf.open(member) as source, open(target_path, "wb") as target:
                             shutil.copyfileobj(source, target)
 
-            # 4. 定位新版本 Payload
+            # 2. 定位新版本 Payload
             payload_dir = None
             for root, dirs, files in os.walk(extract_path):
                 if exe_name in files:
@@ -475,114 +463,67 @@ class UpdateManager:
                     break
             
             if not payload_dir:
-                # 尝试根目录
                 if os.path.exists(os.path.join(extract_path, exe_name)):
                     payload_dir = extract_path
                 else:
                     raise Exception("无法在更新包中找到主程序文件")
 
-            # 5. 生成高兼容性批处理
-            bat_path = os.path.join(install_root, "_finish_update.bat")
+            logger.info("Performing Pure Python Hot Swap...")
             
-            # --- 【调试修改点 1】: 根据 debug 模式调整 BAT 内容 ---
-            if debug:
-                # 调试模式：显示回显，不自删除，暂停查看结果
-                echo_cmd = "@echo on"
-                pause_cmd = "pause"
-                del_self_cmd = ":: Debug mode - script kept"
-                exit_cmd = ":: exit skipped for debug"
-            else:
-                # 生产模式：关闭回显，自删除，退出
-                echo_cmd = "@echo off"
-                pause_cmd = ""
-                del_self_cmd = '(goto) 2>nul & del "%~f0"'
-                exit_cmd = "exit"
-            env_cleanup_cmds = _build_env_cleanup_commands()
-            # 1. chcp 65001 -> 处理 UTF-8 (Python 写入的文件)
-            # 2. set "_MEIPASS=" -> 极其重要！清除单文件模式的临时路径变量，防止 DLL 加载错误
-            # 3. taskkill -> 确保进程彻底杀掉
-            bat_content = f"""{echo_cmd}
-chcp 65001 > nul
-setlocal
-title RimModManager Updater
+            # --- 核心黑科技开始 ---
+            
+            # 3. 处理旧的残余文件
+            old_exe_path = current_exe + ".old"
+            if os.path.exists(old_exe_path):
+                try:
+                    os.remove(old_exe_path)
+                except:
+                    pass
 
-echo [DEBUG] Current PID: %PID% 
-echo [DEBUG] Install Root: "{install_root}" 
-echo [DEBUG] Payload Dir: "{payload_dir}" 
+            # 4. 【神之一手】将当前正在运行的 exe 重命名为 .old
+            # Windows 允许重命名正在运行的执行文件！这样就把原本的文件名空出来了
+            try:
+                os.rename(current_exe, old_exe_path)
+            except Exception as e:
+                raise Exception(f"无法重命名正在运行的文件 (可能被杀毒软件硬锁定): {e}")
 
-echo Waiting for the main program to exit... 
-timeout /t 2 /nobreak > nul
-:kill_process
-taskkill /f /im "{exe_name}" >nul 2>&1
-timeout /t 1 /nobreak > nul
+            # 5. 把新版本的文件全部复制过来 (覆盖旧数据)
+            for item in os.listdir(payload_dir):
+                s_path = os.path.join(payload_dir, item)
+                d_path = os.path.join(install_root, item)
+                if os.path.isdir(s_path):
+                    shutil.copytree(s_path, d_path, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(s_path, d_path)
 
-:retry_move
-echo Replacing the file...
-:: Using robocopy can better handle file occupation and permissions. 
-robocopy "{payload_dir}" "{install_root}" /E /IS /IT /MOVE /R:5 /W:2 /XF "{os.path.basename(bat_path)}"
+            # 6. 清理临时解压目录
+            try:
+                shutil.rmtree(extract_path, ignore_errors=True)
+            except:
+                pass
 
-:: A Robocopy exit code < 8 indicates success 
-if %ERRORLEVEL% GEQ 8 (
-    echo [ERROR] Robocopy failed with code %ERRORLEVEL% 
-    timeout /t 3
-    goto retry_move
-)
-
-echo Cleaning up temporary files... 
-:: Before starting the program, delete the directory 
-if exist "{extract_path}" (
-    rd /s /q "{extract_path}"
-)
-:: If deletion fails, try waiting a moment (in case robocopy handles are not released) 
-if exist "{extract_path}" (
-    timeout /t 1 /nobreak > nul
-    rd /s /q "{extract_path}"
-)
-
-echo Update successful, cleaning up environment and restarting... 
-
-:: Clear PyInstaller onefile runtime remnants and force a fresh top-level restart
-{env_cleanup_cmds}
-
-echo [DEBUG] Attempting to start: "{install_root}\\{exe_name}" 
-echo [DEBUG] Working Directory: "{install_root}" 
-
-:: Launch a new program 
-start "" /d "{install_root}" "{install_root}\\{exe_name}" 
-
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Failed to restart application! 
-    echo Please manually start: {exe_name} 
-)
-
-:: Ensure that the script deletes itself after exiting. 
-{del_self_cmd}
-{pause_cmd}
-{exit_cmd}
-"""
+            # 7. 准备干净的环境变量并拉起新版本
             clean_env = _build_restart_environment()
-            # 写入批处理（注意编码）
-            with open(bat_path, "w", encoding="utf-8-sig") as f:
-                f.write(bat_content)
-                
-            cmd_arg = "/k" if debug else "/c"
-            
-            # 6. 运行脚本
             _reset_windows_dll_directory()
-            subprocess.Popen(
-                ["cmd.exe", cmd_arg, bat_path],
+
+            logger.info("Launching new version...")
+            # 0x00000008 = DETACHED_PROCESS，让新进程完全脱离当前进程的控制树，避免被连带关闭
+            subprocess.Popen([current_exe],  # 此时 current_exe 路径上的文件已经是新复制过来的 v2.0 版本了
                 cwd=install_root,
-                shell=False,
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-                env=clean_env  # 传入清理后的干净环境变量
+                env=clean_env,
+                creationflags=0x00000008 
             )
-            
-            # 立即彻底结束 Python 进程
-            logger.info("Exiting application for update.")
+
+            # 8. 当前旧进程功成身退，立即退出
+            logger.info("Exiting old application instance.")
             os._exit(0)
 
         except Exception as e:
-            logger.error(f"Failed to prepare update: {e}")
+            logger.error(f"Failed to prepare update: {e}", exc_info=True)
+            # 如果中途失败了（比如复制了一半），尽量把名字改回来防止软件损坏
+            if os.path.exists(current_exe + ".old") and not os.path.exists(current_exe):
+                try: os.rename(current_exe + ".old", current_exe)
+                except: pass
             raise e
         
         

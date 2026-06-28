@@ -1,8 +1,8 @@
 <template>
-  <div class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
+  <div data-tour="group-list-panel" class="flex flex-col h-full bg-bg-surface/40 backdrop-blur-sm shadow-2xl"
     :class="`border-2 rounded-2xl border-accent-${listColor}/20`">
     <!-- 标题栏 -->
-    <div :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
+    <div data-tour="group-list-header" :class="`px-3 h-8 border-b rounded-t-2xl border-text-main/5 flex justify-between items-center bg-accent-${listColor}/10`">
       <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
@@ -13,7 +13,7 @@
     </div>
     <!-- 搜索栏 -->
     <div class="px-2 py-1 shadow-xl" >
-      <div class="w-full inline-flex items-center gap-1">
+      <div data-tour="group-list-search" class="w-full inline-flex items-center gap-1">
         <input type="text" placeholder="搜索模组名称..." v-model="searchText"
           :class="`flex-1 px-2 py-1 rounded-lg transition-all bg-bg-deep/30 border border-text-main/10 text-sm 
           text-text-main placeholder:text-text-dim focus:border-accent-${listColor} focus:outline-none focus:bg-bg-deep/90 min-w-0`" />
@@ -26,7 +26,7 @@
         </button>
       </div>
       <!-- 操作按钮 -->
-      <div class="mt-1 flex items-center justify-between">
+      <div data-tour="group-list-actions" class="mt-1 flex items-center justify-between">
 
         <div class="pointer-events-auto flex gap-1.5">
           <button @click="expandAll" v-tooltip="`展开全部分组`" :class="`px-1 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all`" >
@@ -40,13 +40,13 @@
           </button>
         </div>
         <!-- 帮助按钮 -->
-        <CircleQuestionMarkIcon v-tooltip="groupHelpTooltip" :class="`size-5 text-text-dim hover:text-accent-${listColor} cursor-help transition-all`" />
+        <CircleQuestionMarkIcon data-tour="group-list-help" v-tooltip="groupHelpTooltip" :class="`size-5 text-text-dim hover:text-accent-${listColor} cursor-help transition-all`" />
       </div>
 
     </div>
 
     <!-- 列表区 -->
-    <div class="overflow-y-auto flex-1 pb-0.5 after:pointer-events-none 
+    <div data-tour="group-list-body" class="overflow-y-auto flex-1 pb-0.5 after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent">
 
@@ -125,6 +125,19 @@ const currentSearchGroupId = ref('')
 
 const highlightTimer = ref<number>()
 
+// 获取下一个搜索结果索引
+const getNextSearchIndex = (currentIndex: number, resultCount: number, forward: boolean) => {
+  if (!Number.isInteger(resultCount) || resultCount <= 0) return -1
+  const safeCurrentIndex = Number.isInteger(currentIndex) ? currentIndex : -1
+  if (forward) {
+    return (safeCurrentIndex + 1 + resultCount) % resultCount
+  }
+  if (safeCurrentIndex < 0) {
+    return resultCount - 1
+  }
+  return (safeCurrentIndex - 1 + resultCount) % resultCount
+}
+
 
 // 用 Set 存储所有被展开的 ID
 const expandedIds = computed(() => new Set(groupList.value.filter(item => item.is_expanded).map(item => item.group_id)))
@@ -164,12 +177,16 @@ const executeSearch = (forward: boolean) => {
   if (searchText.value !== oldSearchText.value) {
     // console.log(groupList.value)
     searchResults.value = groupList.value.filter(item => item.name.includes(searchText.value))
+    currentSearchIndex.value = -1
   }
-  if (forward) {
-    currentSearchIndex.value = (currentSearchIndex.value + 1) % searchResults.value.length
-  } else {
-    currentSearchIndex.value = (currentSearchIndex.value - 1 + searchResults.value.length) % searchResults.value.length
+  // 搜索无结果时直接退出，避免出现 NaN 索引
+  if (searchResults.value.length === 0) {
+    currentSearchIndex.value = -1
+    currentSearchGroupId.value = ''
+    oldSearchText.value = searchText.value
+    return
   }
+  currentSearchIndex.value = getNextSearchIndex(currentSearchIndex.value, searchResults.value.length, forward)
   // 确保索引有效
   if (currentSearchIndex.value === -1) return
   // 更新当前搜索的分组 ID
@@ -242,6 +259,8 @@ const groupReorder = (e) => {
   console.log("分组排序:", e)
   if (e.newIndex === -1 || e.event.target.dataKey) {
     console.log("分组排序错误")
+    // 提前返回时也要复位拖拽状态，避免内部列表交互被持续禁用
+    groupStore.isDraggingGroup = false
     return
   }
   groupStore.groupReorder();

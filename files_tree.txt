@@ -9,6 +9,12 @@
 │   │   ├──  models.py
 │   │   └──  models_ext.py
 │   │   
+│   ├── ·[load_order]
+│   │   ├──  __init__.py
+│   │   ├──  detector.py
+│   │   ├──  models.py
+│   │   └──  parsers.py
+│   │   
 │   ├── ·[managers]
 │   │   ├──  __init__.py
 │   │   ├──  mgr_ai.py
@@ -156,6 +162,7 @@
 │   │   ├──  style.css
 │   │   └──  toast.scss
 │   │   
+│   ├── ·[tests]
 │   ├──  .gitignore
 │   ├──  index.html
 │   ├──  package-lock.json
@@ -164,7 +171,13 @@
 │   └──  vite.config.js
 │   
 ├── ·[mods]
+├── ·[packaging_hooks]
 ├── ·[test]
+├── ·[tests]
+│   ├──  __init__.py
+│   ├──  test_load_order_parsers.py
+│   └──  test_profile_and_scanner.py
+│   
 ├── ·[toolmods]
 ├── ·[tools]
 │   ├── ·[steam_agent]

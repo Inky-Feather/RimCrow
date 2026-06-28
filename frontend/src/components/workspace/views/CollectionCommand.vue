@@ -6,7 +6,7 @@
     <div class="w-[45%] flex flex-col bg-black/40 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl relative">
       <div v-if="wsStore.collections.activeDetails" class="flex flex-col h-full">
         <!-- 列表表头 -->
-        <div class="p-4 bg-accent-warn/10 border-b border-accent-warn/20 flex flex-col gap-3 z-10 relative">
+        <div class="p-4 bg-accent-warn/10 border-b border-accent-warn/20 flex flex-col gap-3 z-10 relative" data-tour="workspace-collection-actions">
           <!-- 信息区 -->
           <div class="flex items-center gap-3">
             <div class="size-12 shrink-0 rounded-lg bg-accent-warn/20 flex items-center justify-center overflow-hidden border border-accent-warn/30">
@@ -95,10 +95,10 @@
 
 
     <!-- ==================== 右侧：合集 (55%) ==================== -->
-    <div class="w-[55%] flex flex-col gap-4">
+    <div class="w-[55%] flex flex-col gap-4" data-tour="workspace-collection-browser">
       
       <!-- 搜索/添加栏 -->
-      <div class="bg-black/40 p-3 rounded-2xl border border-text-main/10 flex items-center gap-3 shadow-lg">
+      <div class="bg-black/40 p-3 rounded-2xl border border-text-main/10 flex items-center gap-3 shadow-lg" data-tour="workspace-collection-input">
         <div class="flex-1 relative">
           <Plus class="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-text-dim" />
           <input v-model="newCollectionInput" @keydown.enter="submitAddCollection"
@@ -115,7 +115,7 @@
       <!-- 合集卡片网格 -->
       <div class="flex-1 relative overflow-hidden">
         <!-- 列表容器 -->
-        <div class="h-full overflow-y-auto custom-scrollbar grid grid-cols-2 gap-4 content-start pb-6 pr-2">
+        <div class="h-full overflow-y-auto custom-scrollbar grid grid-cols-2 gap-4 content-start pb-6 pr-2" data-tour="workspace-collection-list">
           <div v-for="coll in wsStore.collections.savedList" :key="coll.id"
             @click="wsStore.selectCollection(coll)"
             class="group relative aspect-16/8 rounded-2xl overflow-hidden border transition-all cursor-pointer shadow-xl flex flex-col"

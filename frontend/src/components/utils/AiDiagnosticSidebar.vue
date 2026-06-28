@@ -1,7 +1,7 @@
 <!-- frontend/src/components/utils/AiDiagnosticSidebar.vue -->
 <template>
   <transition name="slide-right">
-    <div v-if="modelValue" class="w-[450px] shrink-0 bg-bg-surface/90 backdrop-blur-xl border-l border-text-main/10 flex flex-col h-full z-40 relative shadow-2xl">
+    <div v-if="modelValue" data-tour="log-ai-sidebar" class="w-[450px] shrink-0 bg-bg-surface/90 backdrop-blur-xl border-l border-text-main/10 flex flex-col h-full z-40 relative shadow-2xl">
       
       <!-- 1. 标题栏 (增加 Token 监控仪) -->
       <div class="h-14 border-b border-white/5 flex items-center justify-between px-4 shrink-0 bg-black/40">
@@ -22,7 +22,7 @@
         <div class="flex items-center gap-1.5">
           <!-- 工具配置下拉菜单 -->
           <div class="relative group/tools">
-            <button @click="showToolSelector = !showToolSelector" 
+            <button data-tour="log-ai-tool-selector" @click="showToolSelector = !showToolSelector" 
                     class="p-1.5 transition-all rounded-md relative"
                     :class="enabledTools.length === 0 ? 'text-accent-warn hover:bg-accent-warn/10' : 'text-text-dim hover:text-accent-special hover:bg-white/5'" 
                     v-tooltip="enabledTools.length === 0 ? '纯分析模式 (不调用工具)' : '配置 AI 工具权限'">
@@ -75,7 +75,7 @@
       </div>
 
       <!-- 2. 聊天消息流 -->
-      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-5 custom-scrollbar" ref="chatContainer">
+        <div data-tour="log-ai-chat" class="flex-1 overflow-y-auto p-4 flex flex-col gap-5 custom-scrollbar" ref="chatContainer">
         
         <!-- 欢迎/引导消息 -->
         <div v-if="chatHistory.length === 0" class="flex flex-col items-center justify-center h-full text-center opacity-80 mt-10">
@@ -213,7 +213,7 @@
       </div>
 
       <!-- 3. 输入区 -->
-      <div class="p-3 bg-black/60 backdrop-blur-xl border-t border-white/5 shrink-0 z-50">
+        <div data-tour="log-ai-input" class="p-3 bg-black/60 backdrop-blur-xl border-t border-white/5 shrink-0 z-50">
         
         <div class="relative bg-white/5 border border-white/10 rounded-xl transition-all duration-300 focus-within:border-accent-special/50 focus-within:bg-black/50 flex flex-col shadow-inner">
           
@@ -251,7 +251,7 @@
               >
               <Square class="w-4 h-4 fill-current" />
             </button>
-            <button v-else @click="sendMessage" :disabled="isSendDisabled"
+            <button v-else data-tour="log-ai-send" @click="sendMessage" :disabled="isSendDisabled"
               class="p-1.5 rounded-lg transition-all duration-300 flex items-center justify-center"
               :class="isSendDisabled ? 'text-text-dim/30 bg-transparent' : 'bg-linear-to-b from-accent-special to-accent-primary text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.5)]'"
             >

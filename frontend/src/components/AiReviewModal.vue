@@ -4,13 +4,13 @@
     <div v-if="appStore.uiState.showAiReviewModal" class="fixed inset-0 z-120 flex items-center justify-center bg-bg-deep/80 backdrop-blur-md">
       
       <!-- 主容器 -->
-      <div class="w-[85%] max-w-6xl h-[85vh] flex flex-col bg-bg-surface/90 border border-accent-special/30 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden relative">
+      <div data-tour="ai-review-modal" class="w-[85%] max-w-6xl h-[85vh] flex flex-col bg-bg-surface/90 border border-accent-special/30 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.6)] overflow-hidden relative">
         
         <!-- 背景光效 -->
         <div class="absolute -top-32 -left-32 w-96 h-96 bg-accent-special/10 blur-[100px] rounded-full pointer-events-none"></div>
 
         <!-- Header -->
-        <div class="px-6 py-4 bg-black/40 border-b border-text-main/10 flex items-center justify-between shrink-0 relative z-10">
+        <div data-tour="ai-review-summary" class="px-6 py-4 bg-black/40 border-b border-text-main/10 flex items-center justify-between shrink-0 relative z-10">
           <div class="flex items-center gap-4">
             <div class="relative p-2.5 rounded-xl bg-accent-special/20 text-accent-special border border-accent-special/30 shadow-[0_0_15px_rgba(var(--color-accent-special),0.2)]">
               <Cpu class="size-6" :class="{'animate-pulse': appStore.aiState.isLoading}" />
@@ -37,7 +37,7 @@
         </div>
 
         <!-- 列表内容区 -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar relative z-10">
+        <div data-tour="ai-review-list" class="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar relative z-10">
           
           <!-- 正在加载动画 (首批数据未到达时显示) -->
           <div v-if="appStore.aiState.isLoading && appStore.aiBatchResults.length === 0" class="flex flex-col items-center justify-center h-full opacity-60">
@@ -47,7 +47,7 @@
 
           <transition-group name="list">
             <!-- 单个 Mod 卡片 -->
-            <div v-for="(item, index) in appStore.aiBatchResults" :key="item.package_id"
+            <div v-for="(item, index) in appStore.aiBatchResults" :key="item.package_id" data-tour="ai-review-card"
                 class="group rounded-xl border overflow-hidden hover:shadow-[0_4px_20px_rgba(var(--color-accent-special),0.1)] transition-all flex flex-col relative"
                 :class="(!item.alias_name || !item.notes) ? 'bg-accent-warn/5 border-accent-warn/50 shadow-[0_0_15px_rgba(var(--color-accent-warn),0.15)]' : 'bg-black/30 border-text-main/10 hover:border-accent-special/50'">
               
@@ -129,7 +129,7 @@
         </div>
 
         <!-- Footer -->
-        <div class="py-4 px-6 bg-text-main/5 border-t border-text-main/10 flex justify-between items-center shrink-0 relative z-10">
+        <div data-tour="ai-review-footer" class="py-4 px-6 bg-text-main/5 border-t border-text-main/10 flex justify-between items-center shrink-0 relative z-10">
           <div class="flex flex-col">
             <div class="flex items-center gap-2">
               <span class="relative flex h-2 w-2">
@@ -150,7 +150,7 @@
             <button @click="appStore.uiState.showAiReviewModal = false" class="px-6 py-2 rounded-lg text-sm text-text-dim hover:text-text-main hover:bg-text-main/10 transition-colors">
               稍后处理
             </button>
-            <button @click="saveAll" :disabled="appStore.aiBatchResults.length === 0"
+            <button data-tour="ai-review-save" @click="saveAll" :disabled="appStore.aiBatchResults.length === 0"
               class="relative overflow-hidden px-8 py-2 rounded-lg bg-accent-special hover:bg-accent-special/80 text-black text-sm font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(var(--color-accent-special),0.3)] group">
               <div class="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
               确认保存 ({{ appStore.aiBatchResults.length }})

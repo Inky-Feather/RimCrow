@@ -59,6 +59,7 @@
             
                   <!-- 刷新按钮 -->
                   <div :class="{'scan': appStore.scanProgress.scanning}" v-tooltip="'默认增量扫描文件，只扫描存在变动的文件'"
+                    data-tour="refresh-button"
                     class="col-span-1 py-1 rounded-lg bg-text-main/5 border border-text-main/5 group
                           text-sm text-gray-300 font-bold uppercase tracking-wider relative cursor-pointer
                           hover:bg-text-main/10 hover:text-text-main hover:border-text-main/20
@@ -79,7 +80,7 @@
 
                   </div>
                   <!-- 自动排序按钮 -->
-                  <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
+                  <button data-tour="autosort-button" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                           @click="modStore.autoSortMods()"
                   >
@@ -87,7 +88,7 @@
                   </button>
 
                   <!-- 保存按钮 (Dirty 状态提示) -->
-                  <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
+                  <button data-tour="save-button" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                     :class="[modStore.isDirty 
                         ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
@@ -105,7 +106,7 @@
                   </button>
 
                   <!-- 启动游戏 -->
-                  <button class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-text-main text-mdfont-bold 
+                  <button data-tour="launch-button" class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-text-main text-mdfont-bold 
                           shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
                           transition-all duration-200 uppercase tracking-widest
                           hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"

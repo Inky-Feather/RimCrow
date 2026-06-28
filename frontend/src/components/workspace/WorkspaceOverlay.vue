@@ -16,7 +16,7 @@
 
           <!-- 中间：水平发光标签页 -->
           <div class="absolute left-1/2 -translate-x-1/2 flex items-center bg-black/40 p-1 rounded-xl border border-text-main/10 shadow-inner" data-tour="workspace-tabs">
-            <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+            <button v-for="tab in tabs" :key="tab.id" :data-tour="`workspace-tab-${tab.id}`" @click="currentTab = tab.id"
               class="relative px-3 py-1.5 text-sm font-bold rounded-lg transition-all duration-300 z-10"
               :class="currentTab === tab.id ? 'text-text-main text-shadow-md' : 'text-text-dim hover:text-text-main/80'">
               

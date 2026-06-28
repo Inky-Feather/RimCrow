@@ -3,7 +3,7 @@
   <div class="h-full flex gap-4 p-4 overflow-hidden">
     
     <!-- 左侧：已订阅仓库阵列 (40%) -->
-    <div class="w-[40%] flex flex-col bg-black/40 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl">
+    <div class="w-[40%] flex flex-col bg-black/40 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl" data-tour="workspace-github-list">
       <div class="px-4 py-3 bg-text-main/10 border-b border-text-main/10 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Github class="size-4 text-text-main" />
@@ -47,10 +47,10 @@
     </div>
 
     <!-- 右侧：链接解析操作面板 (60%) -->
-    <div class="w-[60%] flex flex-col gap-4">
+    <div class="w-[60%] flex flex-col gap-4" data-tour="workspace-github-workspace">
       
       <!-- 顶部：新增仓库解析器 -->
-      <div class="bg-black/40 p-3 rounded-2xl border border-text-main/10 flex items-center gap-3 shadow-lg">
+      <div class="bg-black/40 p-3 rounded-2xl border border-text-main/10 flex items-center gap-3 shadow-lg" data-tour="workspace-github-input">
         <div class="flex-1 relative">
           <Link class="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-text-dim" />
           <input v-model="newRepoUrl" @keydown.enter="parseNewRepo"
@@ -64,7 +64,7 @@
       </div>
 
       <!-- 解析结果区 (如果正在解析新仓库) -->
-      <div v-if="workspaceStore.github.previewInfo" class="p-6 bg-accent-primary/10 border border-accent-primary/30 rounded-2xl animate-in zoom-in-95">
+      <div v-if="workspaceStore.github.previewInfo" data-tour="workspace-github-preview" class="p-6 bg-accent-primary/10 border border-accent-primary/30 rounded-2xl animate-in zoom-in-95">
         <h3 class="text-lg font-black text-text-main mb-2">{{ workspaceStore.github.previewInfo.repo }}</h3>
         <p class="text-sm text-text-dim mb-4">作者: {{ workspaceStore.github.previewInfo.owner }} | 默认分支: {{ workspaceStore.github.previewInfo.default_branch }}</p>
         
@@ -89,7 +89,7 @@
       </div>
 
       <!-- 选中仓库的操作面板与日志轴 -->
-      <div v-else-if="workspaceStore.github.activeRepo" class="flex-1 flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-xl">
+      <div v-else-if="workspaceStore.github.activeRepo" data-tour="workspace-github-panel" class="flex-1 flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-xl">
         
         <!-- 操作头部 -->
         <div class="p-6 bg-text-main/5 border-b border-text-main/10 flex justify-between items-start">

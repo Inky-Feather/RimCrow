@@ -17,9 +17,10 @@
         </span>
       </span>
 
-      <span class="flex items-center gap-1">
+      <span class="flex items-center gap-1" :data-tour="listId=='active'?'list-status-summary':null">
         <!-- 错误指示器 (仅当有错误时显示) -->
         <button v-if="issuesSummary.count > 0" v-tooltip="issueTooltip"
+          :data-tour="listId=='active'?'list-issues':null"
           @click="toggleIssueFilter" @contextmenu="issueContextMenu"
           class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold transition-all border cursor-pointer hover:scale-105 active:scale-95"
           :class="[issuesSummary.errorCount > 0 ? 'bg-accent-danger/20 text-accent-danger border-accent-danger/30' 
@@ -177,7 +178,8 @@
           </template>
         </VirtualList>
 
-        <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
+        <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2"
+          :data-tour="listId=='active'?'list-quick-actions':null">
           <!-- 一键订阅缺失的模组 -->
           <div v-if="missingModIds.length > 0" @click.stop="appStore.subscribePackageIds(missingModIds)" 
             v-tooltip="`[[一键订阅共计 ${missingModIds.length} 个缺失的模组]]\n^^注意：部分创意工坊已经下架或者离线数据库无法查找到的模组将自动忽略！^^`"

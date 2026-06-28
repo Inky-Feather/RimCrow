@@ -18,8 +18,8 @@
               <p class="text-sm text-text-dim mt-2">管理排序逻辑与约束</p>
             </div>
 
-            <nav class="flex-1 px-2 space-y-1">
-              <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
+            <nav class="flex-1 px-2 space-y-1" data-tour="rule-tabs">
+              <button v-for="tab in tabs" :key="tab.id" :data-tour="`rule-tab-${tab.id}`" @click="currentTab = tab.id"
                 class="w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-bold transition-all duration-200 group"
                 :class="currentTab === tab.id ? 'bg-accent-primary/10 text-accent-primary border border-accent-primary/20' : 'text-text-dim hover:bg-text-main/5 border border-transparent'">
                 <div class="flex items-center gap-2">
@@ -31,7 +31,7 @@
             </nav>
 
             <!-- ================= 优先级排序 (侧边栏) ================= -->
-            <div class="px-4 py-4 bg-bg-highlight/25 border-text-main/5">
+            <div class="px-4 py-4 bg-bg-highlight/25 border-text-main/5" data-tour="rule-priority">
               <div class="flex items-center justify-between mb-3 px-2">
                 <span class="text-xs font-bold text-text-dim uppercase tracking-widest">
                   生效优先级
@@ -73,7 +73,7 @@
               </p>
             </div>
 
-            <div class="p-4 border-t border-text-main/5 space-y-2">
+            <div class="p-4 border-t border-text-main/5 space-y-2" data-tour="rule-import-export">
               <button @click="ruleStore.handleImport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-text-main/5 hover:bg-text-main/10 text-sm text-text-dim transition-all border border-text-main/5">
                 <Download class="w-3 h-3" /> 导入配置包
               </button>
@@ -89,14 +89,14 @@
             <!-- 顶部工具栏 -->
             <header class="h-16 border-b border-text-main/5 flex items-center justify-between px-6 bg-black/10">
               <!-- 搜索 -->
-              <div class="relative w-72 group">
+              <div class="relative w-72 group" data-tour="rule-search">
                 <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim group-focus-within:text-accent-primary transition-colors" />
                 <input v-model="searchQuery" placeholder="搜索规则、Mod名称或ID..." 
                   class="w-full bg-black/20 border border-text-main/10 rounded-full pl-9 pr-4 py-1.5 text-sm text-text-main focus:border-accent-primary focus:bg-black/40 outline-none transition-all" />
               </div>
 
               <!-- 全局开关与操作 -->
-              <div class="flex items-center gap-4">
+              <div class="flex items-center gap-4" data-tour="rule-actions">
                 
                 <label v-if="currentTab == 'workshop'" class="flex items-center gap-2 cursor-pointer select-none">
                   <div class="relative">
@@ -114,7 +114,7 @@
                   <span class="text-sm text-text-dim font-bold">仅显示已安装</span>
                 </label>
 
-                <button v-if="currentTab === 'dynamic'" @click="createDynamicRule"
+                <button v-if="currentTab === 'dynamic'" data-tour="rule-create" @click="createDynamicRule"
                   class="flex items-center gap-2 px-4 py-2 bg-accent-primary hover:bg-accent-primary/80 text-black text-sm font-bold rounded-lg shadow-lg shadow-accent-primary/20 transition-all active:scale-95">
                   <Plus class="w-4 h-4" /> 新建规则
                 </button>
@@ -129,7 +129,7 @@
             </header>
 
             <!-- 内容列表 -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar" data-tour="rule-list">
               
               <!-- 1. 动态规则列表 -->
               <template v-if="currentTab === 'dynamic'">

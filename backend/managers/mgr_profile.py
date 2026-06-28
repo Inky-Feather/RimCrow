@@ -152,7 +152,10 @@ class ProfileManager:
         
         # 如果需要继承数据
         if copy_current_data:
-            self._clone_user_data(self.current_profile.game_config_path, data_dir)
+            current_user_data_path = getattr(self.current_profile, 'user_data_path', '') if self.current_profile else ''
+            current_config_dir = os.path.join(current_user_data_path, "Config") if current_user_data_path else ''
+            if current_config_dir and os.path.exists(current_config_dir):
+                self._clone_user_data(current_config_dir, data_dir)
         
         with db.atomic():
             profile = GameProfile.create(
@@ -267,7 +270,8 @@ class ProfileManager:
             game_install_path=profile.game_install_path,
             user_data_path=profile.user_data_path,
             use_workshop_mods=profile.use_workshop_mods,
-            use_self_mods=profile.use_self_mods
+            use_self_mods=profile.use_self_mods,
+            inactive_mods_order=list(profile.inactive_mods_order or []),
         )
         context.validate_health()
         return context

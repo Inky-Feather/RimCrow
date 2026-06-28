@@ -3,8 +3,8 @@
   <div class="h-full flex gap-4 p-4 overflow-hidden">
     
     <!-- 左侧：列表 -->
-    <div class="w-[35%] flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl">
-      <div class="p-4 bg-accent-primary/5 border-b border-text-main/10 space-y-3 relative z-10 shrink-0">
+    <div class="w-[35%] flex flex-col bg-black/30 border border-text-main/10 rounded-2xl overflow-hidden shadow-2xl" data-tour="workspace-workshop-results">
+      <div class="p-4 bg-accent-primary/5 border-b border-text-main/10 space-y-3 relative z-10 shrink-0" data-tour="workspace-workshop-search">
         <div class="flex justify-between items-center">
           <h3 class="text-sm font-black tracking-widest text-accent-primary flex items-center gap-2 uppercase">
             <Globe class="size-4" /> 缓存工坊浏览
@@ -87,7 +87,7 @@
     </div>
 
     <!-- 右侧：详情展示 -->
-    <div class="flex-1 bg-black/40 border border-text-main/10 rounded-2xl overflow-hidden flex flex-col relative shadow-2xl">
+    <div class="flex-1 bg-black/40 border border-text-main/10 rounded-2xl overflow-hidden flex flex-col relative shadow-2xl" data-tour="workspace-workshop-detail">
       
       <template v-if="selectedMod && !workspaceStore.workshopSearch.isDetailLoading">
         <!-- 顶部导航面包屑/后退栏 -->
@@ -160,7 +160,7 @@
             </div>
             
             <!-- 动作按钮 -->
-            <div class="flex flex-col gap-2 z-10 shrink-0">
+            <div class="flex flex-col gap-2 z-10 shrink-0" data-tour="workspace-workshop-actions">
               <button v-if="!isSubscribed([selectedId])" @click="handleSubscribe([selectedId])" class="w-36 py-2 rounded-xl bg-accent-primary/20 text-accent-primary text-sm border border-accent-primary/40 font-bold hover:scale-105 hover:bg-accent-primary active:scale-95 transition-all hover:text-black flex items-center justify-center gap-2">
                 <CloudDownload class="size-4" /> 订阅
               </button>
@@ -182,7 +182,7 @@
         <!-- 内容区 (使用 Tailwind Typography) -->
         <div class="flex-1 overflow-y-auto p-5 custom-scrollbar bg-text-main/2">
           <!-- 依赖提示框 (如果是解析得到的) -->
-          <div v-if="selectedMod?.dependencies_mods && dependencies_ids.length > 0" 
+          <div v-if="selectedMod?.dependencies_mods && dependencies_ids.length > 0" data-tour="workspace-workshop-dependencies"
             class="mb-6 p-3 rounded-xl bg-accent-warn/10 border border-accent-warn/30">
             <div class="flex justify-between items-center mb-2">
               <h4 class="text-xs font-bold text-accent-warn uppercase tracking-widest flex items-center gap-1">

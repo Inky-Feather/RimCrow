@@ -5,6 +5,7 @@ try:
 except ImportError:
     pass
 
+import glob
 import sys
 import ctypes
 
@@ -38,6 +39,7 @@ import builtins
 # builtins.print = ic  # 重定向 print 到 logger.debug
 # from icecream.builtins import install as ic_install
 # ic_install()    # 全局启用 icecream，利用 Python 的动态特性实现“一次安装，到处运行”。
+
 
 
 # 强制切换工作目录到 exe 所在文件夹
@@ -89,10 +91,24 @@ def on_main_window_closed():
     settings.set('last_version', __version__)
     settings.save()  # 保存配置
 
+def cleanup_update_remnants():
+    """清理热更新遗留的 .old 文件"""
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        # 查找当前目录下所有的 .old 文件
+        for old_file in glob.glob(os.path.join(exe_dir, "*.old")):
+            try:
+                os.remove(old_file)
+                # logger.info(f"Cleaned up old update file: {old_file}")
+            except Exception:
+                pass # 如果删不掉说明刚启动还被系统短暂占用，下次启动再删即可
+
 
 def main():
     # 1. Windows 打包后的多进程支持 (必须放在最前面)
     multiprocessing.freeze_support()
+    # 2. 清理热更新遗留的 .old 文件
+    cleanup_update_remnants()
 
     # 加载启动屏
     try:

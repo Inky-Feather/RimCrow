@@ -21,6 +21,7 @@
           <nav class="flex flex-col relative space-y-1" :style="{ '--total-tabs': tabs.length }">
             <button v-for="(tab, index) in tabs" :key="tab.id"
               @click="changeTab(tab.id)"
+              :data-tour="`settings-tab-${tab.id}`"
               class="relative z-10 flex items-center gap-3 px-4 py-3 text-md font-bold transition-all duration-300 group"
               :class="currentTab === tab.id ? 'text-accent-primary' : 'text-text-dim hover:text-text-main/70'"
             >
@@ -271,7 +272,7 @@
               </section>
 
               <!-- AI 设置 (AI) -->
-              <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
+              <section v-if="currentTab === 'ai'" data-tour="settings-ai-section" class="animate-in fade-in slide-in-from-right-4">
                 <div class="mb-6 flex items-center justify-between">
                   <h3 class="text-lg font-bold text-text-main flex items-center gap-2">
                     人工智能
@@ -284,14 +285,16 @@
                   </button>
                 </div>
                 <div class="space-y-6">
-                  <CommonSwitch label="启用 AI 辅助" v-model="formData.ai.enabled" description="用于日志分析、概述模组等功能" />
+                  <div data-tour="settings-ai-enable">
+                    <CommonSwitch label="启用 AI 辅助" v-model="formData.ai.enabled" description="用于日志分析、概述模组等功能" />
+                  </div>
                   <div v-if="formData.ai.enabled" class="space-y-6 animate-in slide-in-from-top-2">
                       
                     <!-- 2. 动态表单区 -->
-                    <div class="p-4 rounded-xl bg-text-main/5 border border-text-main/10 space-y-5">
+                    <div data-tour="settings-ai-connection" class="p-4 rounded-xl bg-text-main/5 border border-text-main/10 space-y-5">
                       <div class="grid grid-cols-2 gap-3">
                         <!-- 厂商/协议选择 -->
-                        <CommonSelect label="接口协议标准" 
+                        <CommonSelect label="接口协议标准" description="大部分中转站、以及国产模型一般用OpenAI协议即可"
                           v-model="formData.ai.provider" :options="currentAiProviders" @change="handleProviderChange"/>
                         <!-- 模型选择 (带刷新动作) -->
                         <div class="relative flex items-end gap-2">
@@ -321,7 +324,7 @@
                     </div>
 
                     <!-- 3. 测试与高级参数区 -->
-                    <div class="grid grid-cols-2 gap-4">
+                    <div data-tour="settings-ai-advanced" class="grid grid-cols-2 gap-4">
                       <CommonNumber label="最大 Token 限制" v-model="formData.ai.max_tokens" :step="100" :min="500" />
                       <CommonNumber label="最大并发限制" v-model="formData.ai.max_concurrency" :step="1" :min="1" :max="100" description="同时处理的请求数，建议根据 API 限制设为 3-5 之间。" />
                       <CommonNumber label="输出随机性" v-model="formData.ai.temperature" :step="0.1" :min="0" :max="2.0" description="值 (Temperature) 越高创造性越强，越低越严谨。推荐0.7左右。" />
@@ -335,7 +338,7 @@
                         ]" />
                       
                       <!-- 测试区 -->
-                      <div class="col-span-2 pt-2 border-t border-text-main/5 flex gap-3">
+                      <div data-tour="settings-ai-test" class="col-span-2 pt-2 border-t border-text-main/5 flex gap-3">
                         <CommonInput label="测试输入" class="flex-1" v-model="testPrompt" placeholder="简单输入一句话测试连接 (如：是谁？)" @keydown.enter="testModel"></CommonInput>
                         <button class="mt-[1.3rem] flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-text-main text-text-dim px-6 py-2 rounded-lg font-bold transition-all" 
                           :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
@@ -405,7 +408,7 @@
           <!-- D. 底部操作栏 -->
           <footer class="h-20 flex items-center justify-end px-10 gap-4 border-t border-text-main/5 bg-text-main/2">
             <button id="btn-cancel" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
-            <button @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-black font-black text-sm shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95 transition-all group">
+            <button data-tour="settings-save-button" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-black font-black text-sm shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95 transition-all group">
               <div class="absolute inset-0 bg-text-main/20 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
               应用并保存配置
             </button>

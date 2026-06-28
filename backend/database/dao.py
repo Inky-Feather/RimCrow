@@ -650,12 +650,22 @@ class ModDAO:
         :param path_hashes: 路径哈希列表 (ModAsset 的主键)
         :return: {'success_count': int, 'errors': List[str]}
         """
-        if not path_hashes:
+        if isinstance(path_hashes, str):
+            normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
+        else:
+            normalized_hashes = []
+            for path_hash in path_hashes:
+                value = str(path_hash or '').strip()
+                if value:
+                    normalized_hashes.append(value)
+            normalized_hashes = list(dict.fromkeys(normalized_hashes))
+
+        if not normalized_hashes:
             return {'success_count': 0, 'errors': []}
         # 1. 预先查出所有待删除记录的物理路径
         # 必须在删除记录前获取，否则后面找不到文件
         assets = list(ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
-                    .where(ModAsset.path_hash << path_hashes).dicts()) # type: ignore
+                    .where(ModAsset.path_hash.in_(normalized_hashes)).dicts()) # type: ignore
         if not assets:
             return {'success_count': 0, 'errors': ["未找到有效的模组记录"]}
         # 整理数据

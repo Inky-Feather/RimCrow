@@ -683,7 +683,7 @@ class API:
             # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
             # 1. 扫描所有路径入库
             # 2. 识别 Local vs Workshop 冲突
-            # 3. 读取 settings.config.local_mods_path 和 workshop_mods_path
+            # 3. 读取 local_mods_path 和 workshop_mods_path
             # 4. 执行 FileManager.clear_links 部署软链接
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
             result = self.scanner.scan_paths_async(paths_to_scan, forced_update=forced_update)
@@ -704,16 +704,17 @@ class API:
         """
         results = []
         try:
-            # 开启事务，保证数据库操作的一致性
-            with db.atomic():
-                for op in operations:
-                    action = op.get('action')
-                    path = op.get('target_path')
-                    path_hash = op.get('target_path_hash','')
-                    keep_hash = op.get('keep_path_hash')
-                    if not path: continue
-                    success = False
-                    msg = ""
+            for op in operations:
+                action = op.get('action')
+                path = op.get('target_path')
+                path_hash = str(op.get('target_path_hash') or '').strip()
+                keep_hash = op.get('keep_path_hash')
+                if not path:
+                    continue
+
+                success = False
+                msg = ""
+                try:
                     if action == 'disable':
                         # 1. 执行物理与数据库禁用
                         success, msg = ModDAO.set_mod_disabled_status(path, disable=True)
@@ -721,18 +722,24 @@ class API:
                         if success and keep_hash:
                             ModDAO.add_shadow_path(keep_hash, path)
                     elif action == 'delete':
-                        # 执行物理删除
-                        res = ModDAO.delete_mods_physically(path_hash)
-                        success = res['success_count']>0
-                        msg = res['errors'][0] if res['errors'] else "删除成功"
+                        if not path_hash:
+                            msg = "缺少 target_path_hash，无法删除该副本"
+                        else:
+                            res = ModDAO.delete_mods_physically([path_hash])
+                            success = res['success_count'] > 0
+                            if not success:
+                                msg = res['errors'][0] if res['errors'] else "未找到可删除的模组记录"
                     else:
                         msg = f"不支持的操作类型: {action}"
-                    results.append({
-                        'path': path,
-                        'action': action,
-                        'status': 'success' if success else 'error',
-                        'msg': msg if not success else ''
-                    })
+                except Exception as op_error:
+                    msg = str(op_error)
+
+                results.append({
+                    'path': path,
+                    'action': action,
+                    'status': 'success' if success else 'error',
+                    'msg': msg if not success else ''
+                })
 
             success_count = sum(1 for item in results if item['status'] == 'success')
             error_items = [item for item in results if item['status'] != 'success']
@@ -763,9 +770,13 @@ class API:
         :param paths: 绝对路径列表
         """
         try:
-            res = ModDAO.delete_mods_physically(path_hashes)
-            if res['success_count'] != len(path_hashes):
-                return ApiResponse.warning(f"部分Mod删除失败：{len(path_hashes)-res['success_count']} 项未成功删除", data=res)
+            if isinstance(path_hashes, str):
+                normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
+            else:
+                normalized_hashes = [str(item or '').strip() for item in path_hashes if str(item or '').strip()]
+            res = ModDAO.delete_mods_physically(normalized_hashes)
+            if res['success_count'] != len(normalized_hashes):
+                return ApiResponse.warning(f"部分Mod删除失败：{len(normalized_hashes)-res['success_count']} 项未成功删除", data=res)
             if res['errors']:
                 msg = "\n".join(res['errors'])
                 return ApiResponse.error(msg, data=res)
@@ -997,7 +1008,7 @@ class API:
     def load_order_get(self):
         """
         获取当前的加载顺序
-        :param mods_config_file_path: ModsConfig.xml 文件路径
+        :param mods_config_file_path: 排序文件路径
         :return: [package_id, package_id, ...]
         """
         try:
@@ -1017,27 +1028,38 @@ class API:
             "list_name": res.get('list_name', ''),
             "mods": res.get('mods', []),
             "mod_names": res.get('mod_names', []),
-            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', [])
+            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
+            "workshop_ids": res.get('workshop_ids', []),
+            "warnings": res.get('warnings', []),
+            "errors": res.get('errors', []),
         })
     
     @log_api_call
     def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
         """
-        打开 ModsConfig.xml 文件
+        打开任意支持的排序文件
         """
+        from backend.managers.mgr_load_order import LOAD_ORDER_OPEN_FILE_TYPES
         load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
         source_profile_id = str(profile_id or "").strip()
         file = ''
         # 默认路径为 ModsConfig.xml 所在目录
         if not mods_config_file_path:
             mods_config_file_path = context.mods_config_file if context else ""
-        # 检查路径是否合法，且是否为xml文件
-        if os.path.isfile(mods_config_file_path) and (mods_config_file_path.endswith('.xml') or mods_config_file_path.endswith('.rws')):
+        # 解析逻辑已经支持 xml / json / txt / rws 等多种格式。
+        # 这里不再按扩展名硬编码拦截，只要是实际存在的文件就允许继续解析。
+        if os.path.isfile(mods_config_file_path):
             file = mods_config_file_path
         elif os.path.isdir(mods_config_file_path) :
-            file = file_mgr.select_file_dialog(initial_dir=mods_config_file_path)
+            file = file_mgr.select_file_dialog(
+                initial_dir=mods_config_file_path,
+                file_types=LOAD_ORDER_OPEN_FILE_TYPES,
+            )
         else:
-            file = file_mgr.select_file_dialog(initial_dir=context.game_config_path if context else "")
+            file = file_mgr.select_file_dialog(
+                initial_dir=context.game_config_path if context else "",
+                file_types=LOAD_ORDER_OPEN_FILE_TYPES,
+            )
         if not file:
             return ApiResponse.warning("未选择文件")
         res = load_order_mgr.read_active_mods(file) if load_order_mgr else {}
@@ -1051,10 +1073,14 @@ class API:
             "mods": res.get('mods', []),
             "mod_names": res.get('mod_names', []),
             "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
+            "workshop_ids": res.get('workshop_ids', []),
+            "warnings": res.get('warnings', []),
+            "errors": res.get('errors', []),
             "source_profile_id": source_profile_id,
             "source_profile_name": profile.name if source_profile_id else '',
         }
-        if not result["active_ids"]:
+        # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
+        if not result["active_ids"] and not result["workshop_ids"]:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)
     
@@ -1261,7 +1287,14 @@ class API:
         return ApiResponse.warning("未选择文件夹")
     
     @log_api_call
-    def file_select_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def file_select_dialog(
+        self,
+        initial_dir: str = '',
+        file_types = (
+            'Load Order Files (*.xml;*.rws;*.rml;*.json;*.txt;*.list)',
+            'All Files (*.*)',
+        ),
+    ):
         """
         打开系统原生的文件选择框
         """
@@ -1274,12 +1307,17 @@ class API:
         return ApiResponse.warning("未选择文件")
 
     @log_api_call
-    def file_save_dialog(self, initial_dir: str = '', file_types = ('XML Files (*.xml;*.rws)', 'All Files (*.*)')):
+    def file_save_dialog(
+        self,
+        initial_dir: str = '',
+        default_filename: str = 'output.xml',
+        file_types = ('XML Files (*.xml)', 'RML Files (*.rml)', 'All Files (*.*)'),
+    ):
         """
         打开系统原生的文件保存框
         """
         try:
-            file = file_mgr.save_file_dialog(initial_dir, file_types)
+            file = file_mgr.save_file_dialog(initial_dir, default_filename, file_types)
             if file:
                 return ApiResponse.success(file)
         except Exception as e:
