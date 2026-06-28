@@ -67,7 +67,7 @@ from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
 from backend.managers.mgr_steam import RIMWORLD_APP_ID, SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
-from backend.ai.service import AIManager
+from backend.ai.ai_service import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 # from backend.managers.mgr_workshop_db_old import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
@@ -79,6 +79,7 @@ from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import run_app_upgrade_migrations
@@ -146,8 +147,7 @@ class ApiResponse:
 
     @classmethod
     def serialize_data(cls, obj):
-        if obj is None:
-            return None
+        if obj is None: return None
         """递归将模型和日期转换为 JSON 可接受的类型"""
         # 1. 检查对象是否自带 to_dict 方法 (这会覆盖 dataclass 的默认行为)
         if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
@@ -235,6 +235,10 @@ class API:
         self._github_subs_refresh_started_at = 0
         # 桌面模式首屏阶段只允许触发一次后台预热，避免 loaded / ready 多次回调时重复导入大缓存文件。
         self._startup_warmup_started = False
+        # 应用层升级迁移必须早于外置缓存库管理器初始化。
+        # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
+        # 会在 Windows 上撞到已打开文件句柄导致无法删除。
+        self._handle_app_version_upgrade()
         # 2. 实例化各个管理器
         self.workshop_db_mgr = WorkshopDBManager()
         self.game_mgr = GameManager()
@@ -274,9 +278,7 @@ class API:
         # 打包版每次启动都校验 Browser mode 快捷方式，缺失或过期就自动修复。
         if self._runtime_mode == "desktop" and os.name == "nt":
             self._ensure_browser_mode_shortcut()
-        
-        # 执行升级检查
-        self._handle_app_version_upgrade()
+
         logger.info("API Layer Ready.")
         
     @staticmethod
@@ -351,8 +353,7 @@ class API:
         """仅在打包桌面模式下确保 Browser mode 快捷方式存在。"""
         try:
             import sys
-            if not getattr(sys, 'frozen', False):
-                return
+            if not getattr(sys, 'frozen', False): return
 
             result = FileManager.ensure_browser_mode_shortcut(sys.executable)
             action = "已创建" if result.get('changed') else "已存在"
@@ -390,8 +391,7 @@ class API:
             return
 
         last_version = str(last_ver_record.value or '').strip() or current_version
-        if last_version == current_version:
-            return
+        if last_version == current_version: return
 
         # 标记版本已变动
         self._upgrade_context["version_changed"] = True
@@ -403,7 +403,6 @@ class API:
             migration_result = run_app_upgrade_migrations(
                 last_version=last_version,
                 current_version=current_version,
-                ai_mgr=self.ai_mgr,
             )
             self._upgrade_context["pending_actions"].extend(migration_result.pending_actions)
             self._upgrade_context["messages"].extend(migration_result.messages)
@@ -521,9 +520,62 @@ class API:
                 disk_result,
             ),
             "editing_order": {
-                "active_ids": [str(package_id or "").strip().lower() for package_id in (editing_ids or []) if str(package_id or "").strip()],
+                "active_ids": self._normalize_load_order_tokens(editing_ids),
             },
         }
+
+    @staticmethod
+    def _normalize_load_order_token(package_id: str) -> str:
+        token_info = parse_package_token(package_id)
+        if not token_info.canonical_package_id:
+            return ""
+        return token_info.normalized_token if token_info.source_preference == "steam" else token_info.canonical_package_id
+
+    @classmethod
+    def _normalize_load_order_tokens(cls, package_ids: list[str] | None) -> list[str]:
+        normalized_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for package_id in package_ids or []:
+            normalized = cls._normalize_load_order_token(str(package_id or ""))
+            if not normalized or normalized in seen_ids:
+                continue
+            seen_ids.add(normalized)
+            normalized_ids.append(normalized)
+        return normalized_ids
+
+    @classmethod
+    def _canonicalize_load_order_ids(cls, package_ids: list[str] | None):
+        canonical_ids: list[str] = []
+        preferred_tokens: dict[str, str] = {}
+        seen_ids: set[str] = set()
+        for package_id in package_ids or []:
+            token_info = parse_package_token(package_id)
+            canonical = token_info.canonical_package_id
+            if not canonical:
+                continue
+            normalized_token = cls._normalize_load_order_token(str(package_id or ""))
+            preferred_tokens[canonical] = normalized_token or canonical
+            if canonical in seen_ids:
+                continue
+            seen_ids.add(canonical)
+            canonical_ids.append(canonical)
+        return canonical_ids, preferred_tokens
+
+    @staticmethod
+    def _restore_load_order_tokens(package_ids: list[str], preferred_tokens: dict[str, str] | None = None) -> list[str]:
+        result: list[str] = []
+        seen_ids: set[str] = set()
+        token_map = preferred_tokens or {}
+        for package_id in package_ids or []:
+            canonical = normalize_package_id(package_id)
+            if not canonical:
+                continue
+            restored = str(token_map.get(canonical) or canonical).strip().lower()
+            if not restored or restored in seen_ids:
+                continue
+            seen_ids.add(restored)
+            result.append(restored)
+        return result
 
     @staticmethod
     def _normalize_existing_dir(path_value: str | None) -> str:
@@ -533,8 +585,7 @@ class API:
         - 不存在的路径返回空串，让上层继续走回退链
         """
         value = str(path_value or "").strip()
-        if not value:
-            return ""
+        if not value: return ""
         candidate = Path(value)
         # 保存对话框返回的目标文件在成功写入前通常还不存在，这里根据后缀推断父目录。
         if candidate.is_file() or candidate.suffix:
@@ -548,8 +599,7 @@ class API:
         若创建失败则返回空串，由上层继续走兜底逻辑。
         """
         value = str(path_value or "").strip()
-        if not value:
-            return ""
+        if not value: return ""
         try:
             candidate = Path(value)
             candidate.mkdir(parents=True, exist_ok=True)
@@ -563,8 +613,7 @@ class API:
         默认导入目录固定指向当前环境用户数据下的 ModLists。
         该目录是用户显式要求的导入入口，目录缺失时自动创建。
         """
-        if not context:
-            return ""
+        if not context: return ""
         base_dir = str(Path(context.user_data_path) / "ModLists")
         return self._ensure_directory(base_dir)
 
@@ -609,8 +658,7 @@ class API:
         仅在通过文件选择器且操作成功后调用，更新对应的全局“上次目录”。
         """
         normalized_dir = self._normalize_existing_dir(path_value)
-        if not normalized_dir:
-            return
+        if not normalized_dir: return
         if kind == "import":
             settings.set("load_order_import_last_path", normalized_dir)
             return
@@ -638,8 +686,7 @@ class API:
         - 社区工坊库 / 替代库缓存重建属于“有则更好”的能力，不应拖住桌面首屏；
         - 因此把它后移到窗口完成首轮加载后再后台执行，用户至少能先看到主界面。
         """
-        if self._startup_warmup_started:
-            return
+        if self._startup_warmup_started: return
 
         self._startup_warmup_started = True
 
@@ -670,16 +717,14 @@ class API:
     def _normalize_native_drop_selector(self, selector: str | None = None) -> str:
         """把前端传入的 id / selector 统一成 pywebview 可直接查询的 CSS 选择器。"""
         normalized = str(selector or self._native_drop_selector or '').strip() or '#backup-drop-zone'
-        if normalized.startswith(('#', '.', '[')):
-            return normalized
+        if normalized.startswith(('#', '.', '[')): return normalized
         return f'#{normalized}'
 
     def _bind_native_drag_drop(self, selector: str | None = None):
         """
         把原生 drop 事件只绑定到备份面板本体，减少整页级别监听带来的额外事件噪音。
         """
-        if not self._window:
-            return False
+        if not self._window: return False
 
         normalized_selector = self._normalize_native_drop_selector(selector)
 
@@ -695,8 +740,7 @@ class API:
                 self._native_drop_bound and
                 normalized_selector == self._native_drop_selector and
                 self._native_drop_element == element
-            ):
-                return True
+            ): return True
 
             if self._native_drop_element and self._native_drop_handler:
                 try:
@@ -722,8 +766,7 @@ class API:
         """
         直接把文件路径送回前端的全局处理器，避免再经过事件总线序列化一层。
         """
-        if not self._window or not full_paths:
-            return
+        if not self._window or not full_paths: return
 
         try:
             payload = json.dumps(full_paths, ensure_ascii=False)
@@ -747,8 +790,7 @@ class API:
                 full_path = str(file_info.get('pywebviewFullPath') or '').strip()
                 if full_path:
                     full_paths.append(full_path)
-            if not full_paths:
-                return
+            if not full_paths: return
             threading.Thread(target=self._dispatch_native_drop_paths, args=(full_paths,), daemon=True).start()
         except Exception as e:
             logger.warning(f"处理原生拖放事件失败: {e}")
@@ -825,6 +867,7 @@ class API:
             "runtime_mode": self._runtime_mode,
             "settings": asdict(settings.config), # 转为字典发给前端
             "asset_port": self.file_mgr.get_port(),
+            "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             "context_healthy": False, 
             "health_report": {},
             "all_mods": [],  # 返回过滤后的列表
@@ -1050,8 +1093,7 @@ class API:
             return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
             ready, reason = self._prepare_database_maintenance()
-            if not ready:
-                return ApiResponse.warning(reason)
+            if not ready: return ApiResponse.warning(reason)
             self._close_database_for_maintenance()
 
             # 清理修复残留，避免重置后下次启动又应用旧的修复候选库。
@@ -1069,16 +1111,14 @@ class API:
 
             if os.path.exists(db_path):
                 result = clear_db()
-                if not result:
-                    return ApiResponse.error("重置失败，请关闭相关操作后重试。")
+                if not result: return ApiResponse.error("重置失败，请关闭相关操作后重试。")
                 self._close_database_for_maintenance()
             elif delete_error:
                 logger.warning("主库已删除，但删除阶段存在告警: %s", delete_error)
 
             self.is_first_db_init = True
             init_ok = init_db(db_path)
-            if not init_ok:
-                return ApiResponse.error("重置失败，数据库无法重新创建。")
+            if not init_ok: return ApiResponse.error("重置失败，数据库无法重新创建。")
             # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
             SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
             # 重置会清空所有环境记录，当前进程必须立即回退到 default 并重建上下文，
@@ -1103,12 +1143,10 @@ class API:
             return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
             ready, reason = self._prepare_database_maintenance()
-            if not ready:
-                return ApiResponse.warning(reason)
+            if not ready: return ApiResponse.warning(reason)
             db_path = str(DATA_DIR / 'mod_manager.db')
             result = prepare_manual_database_repair(db_path)
-            if not result:
-                return ApiResponse.error("修复失败，请稍后重试。")
+            if not result: return ApiResponse.error("修复失败，请稍后重试。")
             if result.get("initialized"):
                 self.is_first_db_init = True
                 return ApiResponse.success({
@@ -1237,11 +1275,27 @@ class API:
             return ApiResponse.success({
                 "settings": asdict(settings.config),
                 "active_context": self.active_context # 这里的 serialize_data 会自动调用 to_dict
+                ,
+                "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             }, message="配置保存成功")
             
         except Exception as e:
             logger.error(f"Save all settings failed: {str(e)}", exc_info=True)
             return ApiResponse.error(f"保存所有设置失败：{str(e)}")
+
+    @log_api_call
+    def get_remote_image_cache_stats(self):
+        """获取网络图片缓存统计。"""
+        return ApiResponse.success(self.file_mgr.get_remote_cache_stats())
+
+    @log_api_call
+    def clear_remote_image_cache(self):
+        """清空网络图片缓存。"""
+        cleared_stats = self.file_mgr.clear_remote_cache()
+        return ApiResponse.success({
+            "cleared": cleared_stats,
+            "current": self.file_mgr.get_remote_cache_stats(),
+        }, message="网络图片缓存已清空")
 
     @log_api_call
     def data_bundle_get_schema(self):
@@ -1286,8 +1340,7 @@ class API:
                     'All Files (*.*)',
                 ),
             )
-            if not target_path:
-                return ApiResponse.warning("已取消")
+            if not target_path: return ApiResponse.warning("已取消")
 
             export_result = self.data_bundle_mgr.write_bundle(
                 target_path=target_path,
@@ -1399,8 +1452,7 @@ class API:
                         paths_to_scan.append(str(TOOL_MODS_DIR))
                 else:
                     return ApiResponse.error("当前 环境 未激活，无法扫描 Mods")
-            if not paths_to_scan:
-                return ApiResponse.error("没有配置有效的扫描路径")
+            if not paths_to_scan: return ApiResponse.error("没有配置有效的扫描路径")
             # 调用异步扫描
             # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
             # 1. 扫描所有路径入库
@@ -1790,8 +1842,7 @@ class API:
                 ),
                 file_types=LOAD_ORDER_OPEN_FILE_TYPES,
             )
-        if not file:
-            return ApiResponse.warning("未选择文件")
+        if not file: return ApiResponse.warning("未选择文件")
         res = self.load_order_mgr.read_active_mods(file) if self.load_order_mgr else {}
         result = self._build_load_order_result(
             file,
@@ -2008,6 +2059,8 @@ class API:
             profile = self.profile_mgr.get_profile(profile_id)
             extra_args = self.profile_mgr.get_launch_args_only(profile_id)
             prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', True))
+            if prefer_steam_launch and not settings.config.steam_path:
+                settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
             steam_path_valid = bool(
                 settings.config.steam_path
                 and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
@@ -2032,7 +2085,10 @@ class API:
                 self._sync_runtime_links_for_profile(profile_id, include_workshop=False)
                 self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
                 return ApiResponse.success(message="通过 Steam 启动游戏成功，祝你游玩愉快！")
-
+            if prefer_steam_launch and not steam_path_valid:
+                if profile.is_steam and profile.id == 'default':
+                    os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
+                    return ApiResponse.warning(message="未找到 Steam.exe，请检查 Steam 安装路径是否正确，已回退到 URL 协议启动，如果仍然失败，可关闭“优先Steam启动”选项。")
             if steam_running:
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
@@ -2061,9 +2117,19 @@ class API:
         """
         context = self.profile_mgr.build_profile_context(profile_id)
         local_mods_root = context.local_mods_path
-        if not local_mods_root or not os.path.exists(local_mods_root):
-            return False
-        runtime_analysis = ModDAO.get_profile_conflict_analysis(context, include_workshop=include_workshop)
+        if not local_mods_root or not os.path.exists(local_mods_root): return False
+        runtime_analysis = ModDAO.get_profile_conflict_analysis(
+            context,
+            include_workshop_in_detection=bool(
+                getattr(context, 'prefer_steam_launch', False)
+                or getattr(context, 'use_workshop_mods', False)
+            ),
+            include_workshop_in_deploy=bool(
+                include_workshop
+                and (not getattr(context, 'prefer_steam_launch', False))
+                and getattr(context, 'use_workshop_mods', False)
+            ),
+        )
         return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
 
     def _start_profile_game(self, profile_id: str, game_install_path: str, extra_args: list[str] | None = None):
@@ -2280,8 +2346,7 @@ class API:
     def profile_create_desktop_shortcut(self, profile_id: str):
         """为指定环境创建桌面快捷方式。"""
         try:
-            if not profile_id:
-                return ApiResponse.error("未指定 Profile ID")
+            if not profile_id: return ApiResponse.error("未指定 Profile ID")
 
             profile = self.profile_mgr.get_profile(profile_id)
             check_install = PathChecker.check_install_path(profile.game_install_path)
@@ -2566,8 +2631,7 @@ class API:
         """
         try:
             folder = file_mgr.select_folder_dialog(initial_dir)
-            if folder:
-                return ApiResponse.success(folder)
+            if folder: return ApiResponse.success(folder)
         except Exception as e:
             return ApiResponse.error(f"选择文件夹时出错: {e}")
         return ApiResponse.warning("未选择文件夹")
@@ -2586,8 +2650,7 @@ class API:
         """
         try:
             file = file_mgr.select_file_dialog(initial_dir, file_types)
-            if file:
-                return ApiResponse.success(file)
+            if file: return ApiResponse.success(file)
         except Exception as e:
             return ApiResponse.error(f"选择文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
@@ -2604,8 +2667,7 @@ class API:
         """
         try:
             file = file_mgr.save_file_dialog(initial_dir, default_filename, file_types)
-            if file:
-                return ApiResponse.success(file)
+            if file: return ApiResponse.success(file)
         except Exception as e:
             return ApiResponse.error(f"保存文件时出错: {e}")
         return ApiResponse.warning("未选择文件")
@@ -2622,20 +2684,24 @@ class API:
             return ApiResponse.error(f"启动文件搜索失败: {e}")
     
     @log_api_call
-    def localize_workshop_mods(self, mod_ids: List[str], store: str = 'workshop'):
+    def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):
         """
-        将工坊模组转为本地模组，并推送实时进度
+        将指定副本转为本地模组，并推送实时进度。
+        这里使用 path_hash 精确定位副本，避免共存场景下 workshop_id/package_id 指向不唯一。
         """
         cfg = settings.config
         local_root = self.active_context.local_mods_path if self.active_context else ""
-        if not local_root:
-            return ApiResponse.error("未指定本地模组路径")
-        
+        if not local_root: return ApiResponse.error("未指定本地模组路径")
+
+        normalized_hashes = [str(item or "").strip() for item in path_hashes if str(item or "").strip()]
+        if not normalized_hashes:
+            return ApiResponse.warning(f"没有可转换的{store}模组")
+
         # 1. 准备任务 (使用 JOIN 一次性查出所有需要的数据)
-        # 这里的退回顺序逻辑直接在 Python 循环中处理，清晰易维护
+        # 使用 path_hash 锁定当前副本，避免共存副本间串改。
         query = (ModAsset.select(ModAsset, UserModData.alias_name)
             .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-            .where(ModAsset.package_id << [mid.lower() for mid in mod_ids], ModAsset.store == store) # type: ignore
+            .where(ModAsset.path_hash << normalized_hashes, ModAsset.store == store) # type: ignore
             .dicts())
         try:
             # 2. 执行任务
@@ -2654,8 +2720,7 @@ class API:
         :param target_store: 'local' 或 'self'
         :param mode: 'copy' 或 'move'
         """
-        if not self.active_context: 
-            return ApiResponse.error("未指定环境")
+        if not self.active_context: return ApiResponse.error("未指定环境")
         # 1. 拦截非法目标
         # if target_store == 'workshop':
         #     return ApiResponse.error("为了保证 Steam 同步机制不被破坏，禁止手动向创意工坊目录导入文件。")
@@ -2743,8 +2808,11 @@ class API:
         前端点击“自动排序”时调用
         """
         try:
-            result = self.sorter.sort(active_ids) if self.sorter else {}
+            canonical_active_ids, preferred_tokens = self._canonicalize_load_order_ids(active_ids)
+            result = self.sorter.sort(canonical_active_ids) if self.sorter else {}
             if not result: return ApiResponse.error("排序失败, 排序引擎未初始化")
+            result["sorted_ids"] = self._restore_load_order_tokens(result.get("sorted_ids", []), preferred_tokens)
+            result["auto_activated"] = self._restore_load_order_tokens(result.get("auto_activated", []), preferred_tokens)
             # result 包含: sorted_ids, auto_activated, warnings
             msg = "排序完成"
             if result.get('auto_activated'):
@@ -2766,9 +2834,12 @@ class API:
         if not self.sorter:
             return ApiResponse.error("规则引擎未初始化")
         try:
+            canonical_target_ids, target_token_map = self._canonicalize_load_order_ids(package_ids)
+            canonical_current_ids, current_token_map = self._canonicalize_load_order_ids(current_active_ids)
             context_mods = ModDAO.get_profile_mods(self.active_context)
             mod_map = {m['package_id'].lower(): m for m in context_mods}
-            final_ids = self.sorter.smart_insert_mods(package_ids, current_active_ids, mod_map)
+            final_ids = self.sorter.smart_insert_mods(canonical_target_ids, canonical_current_ids, mod_map)
+            final_ids = self._restore_load_order_tokens(final_ids, {**current_token_map, **target_token_map})
             return ApiResponse.success(data=final_ids) if final_ids else ApiResponse.error("插入失败")
         except Exception as e:
             return ApiResponse.error(f"插入失败: {str(e)}")
@@ -2977,8 +3048,7 @@ class API:
             if log_type == 'app':
                 files = app_log_reader.get_log_files()
             else:
-                if not self.game_log_mgr: 
-                    return ApiResponse.warning("游戏环境未就绪，无法获取游戏日志")
+                if not self.game_log_mgr: return ApiResponse.warning("游戏环境未就绪，无法获取游戏日志")
                 files = self.game_log_mgr.get_log_files()
                 
             return ApiResponse.success(files)
@@ -2992,12 +3062,10 @@ class API:
             if log_type == 'app':
                 result = app_log_reader.read_log_page(filename, page, page_size)
             else:
-                if not self.game_log_mgr: 
-                    return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
+                if not self.game_log_mgr: return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
                 result = self.game_log_mgr.read_log_page(filename, page, page_size)
                 
-            if 'error' in result:
-                return ApiResponse.error(result['error'])
+            if 'error' in result: return ApiResponse.error(result['error'])
             return ApiResponse.success(result)
         except Exception as e:
             logger.error(f"Read log page failed: {e}", exc_info=True)
@@ -3084,11 +3152,11 @@ class API:
             ok = self.file_search_mgr.cancel_task(normalized_task_id) if self.file_search_mgr else False
             return ApiResponse.success(message="已请求取消文件搜索任务") if ok else ApiResponse.error("当前没有可取消的文件搜索任务")
 
-        if normalized_type == "ai-batch":
+        if normalized_type == "ai-task":
             if not normalized_task_id:
                 return ApiResponse.error("缺少任务 ID")
-            ok = self.ai_mgr.cancel_batch_task(normalized_task_id)
-            return ApiResponse.success(message="已请求取消 AI 批量任务") if ok else ApiResponse.error("当前没有可取消的 AI 批量任务")
+            ok = self.ai_mgr.cancel_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 AI 任务") if ok else ApiResponse.error("当前没有可取消的 AI 任务")
 
         return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
 
@@ -3376,26 +3444,52 @@ class API:
     
     @log_api_call
     def ai_get_config(self):
-        """获取当前 AI 配置和 Prompt 列表"""
+        """获取当前 AI 配置和模板列表"""
         from backend.settings import AIConfig
         ai_cfg = settings.config.ai
         # 如果是字典，先转成对象，方便统一调用 asdict
         if isinstance(ai_cfg, dict):
             ai_cfg = AIConfig(**ai_cfg)
+        config_payload = asdict(ai_cfg)
+        config_payload["resolved_token_budget"] = {
+            "profile": ai_cfg.model_token_budget(),
+            "context_window_tokens": ai_cfg.resolved_context_window_tokens(),
+            "max_input_tokens": ai_cfg.resolved_max_input_tokens(),
+            "max_output_tokens": ai_cfg.resolved_max_output_tokens(),
+        }
         return ApiResponse.success({
-            "config": asdict(ai_cfg),
-            "prompts": self.ai_mgr.prompts # 返回 prompt 定义，供前端生成动态表单
+            "config": config_payload,
+            "prompts": self.ai_mgr.prompts,
+            "assistants": self.ai_mgr.assistants,
+            "tasks": self.ai_mgr.tasks,
+            "definition_editor_meta": self.ai_mgr.definition_editor_meta,
+            "providers": self.ai_mgr.get_providers(),
+            "model_capability_meta": self.ai_mgr.get_model_capability_meta(),
         })
 
     @log_api_call
     def ai_save_config(self, config_data: dict):
         """保存 AI 配置"""
         try:
-            # 增量更新设置
             current_ai = settings.config.ai
-            for k, v in config_data.items():
-                if hasattr(current_ai, k):
-                    setattr(current_ai, k, v)
+            editable_keys = {
+                "enabled",
+                "provider",
+                "endpoint_mode",
+                "base_url",
+                "api_key",
+                "model",
+                "temperature",
+                "max_output_tokens",
+                "max_input_tokens",
+                "context_window_tokens",
+                "max_concurrency",
+            }
+            for k, v in (config_data or {}).items():
+                if k not in editable_keys or not hasattr(current_ai, k):
+                    continue
+                setattr(current_ai, k, v)
+
             settings.save()
             return ApiResponse.success(message="AI 配置已保存")
         except Exception as e:
@@ -3424,16 +3518,10 @@ class API:
         if not ai_cfg.enabled:
             return ApiResponse.error("AI 功能未启用，请前往设置开启。")
 
-        provider = (ai_cfg.provider or "").strip()
-        base_url = (ai_cfg.base_url or "").strip()
-        model = (ai_cfg.model or "").strip()
-        api_key = (ai_cfg.api_key or "").strip()
-
-        if not provider or not base_url or not model:
-            return ApiResponse.error("AI 配置不完整，请检查配置")
-
-        if provider in ("anthropic", "gemini") and not api_key:
-            return ApiResponse.error("当前协议要求填写 API Key。")
+        from backend.ai.ai_gateway import validate_ai_connection_config
+        ok, message = validate_ai_connection_config(ai_cfg)
+        if not ok:
+            return ApiResponse.error(message)
 
         return ApiResponse.success()
 
@@ -3460,6 +3548,15 @@ class API:
             return ApiResponse.error(f"获取模型列表失败: {str(e)}")
 
     @log_api_call
+    def ai_get_model_capabilities(self, temp_config: dict):
+        """获取当前临时 AI 配置对应的模型能力摘要。"""
+        try:
+            capabilities = self.ai_mgr.get_model_capabilities(temp_config or {})
+            return ApiResponse.success(capabilities)
+        except Exception as e:
+            return ApiResponse.error(f"获取模型能力失败: {str(e)}")
+
+    @log_api_call
     def ai_chat(self, message: str, config_data: dict={}):
         """测试对话"""
         result = self._ai_check_enable_with_config(config_data)
@@ -3469,91 +3566,212 @@ class API:
             return ApiResponse.success(result)
         except Exception as e:
             return ApiResponse.error(str(e))
-        
+
     @log_api_call
-    def cancel_ai_diagnostic(self, session_id: str):
-        """取消 AI 日志分析任务"""
-        ok = self.ai_mgr.cancel_diagnostic_request(session_id)
+    def cancel_ai_session(self, session_id: str):
+        """取消 AI 助手会话"""
+        ok = self.ai_mgr.cancel_assistant_request(session_id)
         return ApiResponse.success() if ok else ApiResponse.error("取消失败，可能请求已完成或不存在")
+
+    def _resolve_assistant_log_request(self, assistant_context: dict, request_payload: dict) -> tuple[str, str]:
+        """解析助手会话中的日志来源信息。
+
+        运行时唯一可信来源应当是 assistant_context.request_payload；
+        如果调用方只给了 diagnosis_context 附件，则从附件 source 中兜底提取。
+        """
+
+        source_type = str(
+            request_payload.get("source_type")
+            or request_payload.get("log_source_type")
+            or ""
+        ).strip()
+        filename = str(request_payload.get("filename") or "").strip()
+
+        attachments = request_payload.get("attachments", []) or []
+        if isinstance(attachments, list):
+            for attachment in attachments:
+                if not isinstance(attachment, dict):
+                    continue
+                if str(attachment.get("kind") or "").strip() != "diagnosis_context":
+                    continue
+                source = dict(attachment.get("source") or {})
+                source_type = source_type or str(source.get("source_type") or "").strip()
+                filename = filename or str(source.get("filename") or "").strip()
+                if source_type and filename:
+                    break
+
+        return source_type, filename
+
+    def _normalize_assistant_session_payload(self, payload: dict) -> dict:
+        """把前端 canonical assistant 请求整理成后端统一执行载荷。"""
+
+        normalized_payload = dict(payload or {})
+        assistant_context = dict(normalized_payload.get("assistant_context") or {})
+        if not assistant_context:
+            raise ValueError("assistant_context is required")
+
+        request_payload = dict(assistant_context.get("request_payload") or {})
+        question = str(
+            assistant_context.get("question")
+            or request_payload.get("question")
+            or normalized_payload.get("question")
+            or ""
+        ).strip()
+        attachments = list(request_payload.get("attachments", []) or normalized_payload.get("attachments", []) or [])
+        enabled_tools = list(request_payload.get("enabled_tools", []) or normalized_payload.get("enabled_tools", []) or [])
+        override_config = dict(
+            request_payload.get("ai_override_config")
+            or assistant_context.get("override_config")
+            or normalized_payload.get("ai_override_config")
+            or {}
+        )
+        source_type, filename = self._resolve_assistant_log_request(assistant_context, request_payload)
+
+        request_payload.update({
+            "question": question,
+            "attachments": attachments,
+            "enabled_tools": enabled_tools,
+            "ai_override_config": override_config,
+        })
+        if source_type:
+            request_payload["source_type"] = source_type
+            request_payload["log_source_type"] = source_type
+        if filename:
+            request_payload["filename"] = filename
+
+        assistant_context.update({
+            "question": question,
+            "override_config": override_config,
+            "request_payload": request_payload,
+        })
+
+        normalized_payload.update({
+            "assistant_context": assistant_context,
+            "question": question,
+            "attachments": attachments,
+            "enabled_tools": enabled_tools,
+            "ai_override_config": override_config,
+        })
+        if source_type:
+            normalized_payload["log_source_type"] = source_type
+        if filename:
+            normalized_payload["filename"] = filename
+        return normalized_payload
+
+    def _resolve_assistant_request_runtime(self, payload: dict) -> tuple[dict, dict, dict, str, str, Any]:
+        """统一解析助手请求执行所需的运行时上下文。"""
+        normalized_payload = self._normalize_assistant_session_payload(payload)
+        assistant_context = dict(normalized_payload.get("assistant_context") or {})
+        request_payload = dict(assistant_context.get("request_payload") or {})
+        source_type, filename = self._resolve_assistant_log_request(assistant_context, request_payload)
+        reader = None
+        if source_type:
+            if source_type == 'app' and not settings.config.debug_mode:
+                raise ValueError("软件日志分析仅在 Debug 模式下可用。")
+            reader = self.game_log_mgr if source_type == 'game' else app_log_reader
+            if not reader:
+                raise ValueError("日志读取器未初始化")
+        return normalized_payload, assistant_context, request_payload, source_type, filename, reader
     
     @log_api_call
-    def ai_execute_task(self, task_key: str, params: dict):
-        """
-        执行特定任务 (翻译、日志分析等)
-        前端调用示例: ai_execute_task('translation', {content: 'About RimWorld', target_lang: 'Chinese'})
-        """
+    def ai_start_task(self, task_key: str, payload: dict | None = None):
+        """统一启动异步 AI 任务。"""
         result = self.ai_check_enable()
         if not result['status'] == 'success': return result
-        try:
-            result = self.ai_mgr.execute_task(task_key, params)
-            return ApiResponse.success(result)
-        except Exception as e:
-            return ApiResponse.error(str(e))
-    
-    @log_api_call
-    def ai_execute_batch_task(self, task_key: str, items: list, variables: dict = {}):
-        """
-        发起异步批量 AI 任务。
-        前端调用此接口后会立即返回 task_id，随后通过 EventBus 监听进度。
-        """
-        result = self.ai_check_enable()
-        if not result['status'] == 'success': return result
-        if not variables: variables = {}
-        # 1. 生成唯一的任务 ID，供前端监听特定频道
-        task_event_id = str(uuid.uuid4())
-        # 2. 定义后台运行的工作线程
+        payload = dict(payload or {})
+        task_id = str(uuid.uuid4())
+        task_definition = (self.ai_mgr.tasks or {}).get(task_key) if hasattr(self.ai_mgr, "tasks") else {}
+        task_title = str((task_definition or {}).get("name") or "AI 任务").strip() or "AI 任务"
+
         def background_worker():
-            # 为这个新线程创建一个全新的事件循环
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                # 运行写好的批量调度引擎
                 results = loop.run_until_complete(
-                    self.ai_mgr.execute_batch_task_async(task_key, items, variables, task_event_id)
+                    self.ai_mgr.execute_task_async(task_key, payload, task_id)
                 )
-                # 任务彻底完成后，发送 complete 事件
-                EventBus.emit(f'ai-batch-complete', {
-                    'task_event_id': task_event_id,
+                EventBus.emit("ai-task-complete", {
+                    'task_id': task_id,
                     'status': 'cancelled' if results.get('cancelled') else 'success', 
                     'data': results
                 })
-                # 可选：可以直接在这里调用 ModDAO 批量入库
-                # if results:
-                #     self._save_ai_results_to_db(results)
             except Exception as e:
                 logger.error(f"Background AI task failed: {e}", exc_info=True)
                 EventBus.emit_progress(
-                    task_event_id,
-                    "ai-batch",
+                    task_id,
+                    "ai-task",
                     status="failed",
                     progress=0,
                     message=f"AI 任务异常: {e}",
-                    metrics={"task_key": task_key, "total": len(items), "title": "AI 批量处理"},
+                    metrics={
+                        "task_id": task_id,
+                        "task_key": task_key,
+                        "title": task_title,
+                        "error": str(e),
+                    },
                 )
-                EventBus.emit(f'ai-batch-complete', {
-                    'task_event_id': task_event_id,
+                EventBus.emit("ai-task-complete", {
+                    'task_id': task_id,
                     'status': 'error', 
                     'message': str(e)
                 })
             finally:
+                try:
+                    pending_tasks = [
+                        task for task in asyncio.all_tasks(loop)
+                        if not task.done()
+                    ]
+                    for pending_task in pending_tasks:
+                        pending_task.cancel()
+                    if pending_tasks:
+                        loop.run_until_complete(
+                            asyncio.gather(*pending_tasks, return_exceptions=True)
+                        )
+                except Exception as cleanup_error:
+                    logger.warning(
+                        f"Background AI task pending cleanup failed: {cleanup_error}",
+                        exc_info=True,
+                    )
+                try:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception as cleanup_error:
+                    logger.warning(
+                        f"Background AI task asyncgen cleanup failed: {cleanup_error}",
+                        exc_info=True,
+                    )
+                try:
+                    loop.run_until_complete(loop.shutdown_default_executor())
+                except Exception as cleanup_error:
+                    logger.warning(
+                        f"Background AI task executor cleanup failed: {cleanup_error}",
+                        exc_info=True,
+                    )
+                try:
+                    asyncio.set_event_loop(None)
+                except Exception:
+                    pass
                 loop.close()
 
-        # 3. 启动守护线程（不阻塞当前 pywebview 的请求）
         EventBus.emit_progress(
-            task_event_id,
-            "ai-batch",
+            task_id,
+            "ai-task",
             status="pending",
             progress=0,
             message="任务已加入后台队列",
-            metrics={"task_key": task_key, "total": len(items), "title": "AI 批量处理"},
+            metrics={
+                "task_id": task_id,
+                "task_key": task_key,
+                "title": task_title,
+            },
         )
         threading.Thread(target=background_worker, daemon=True).start()
-
-        # 4. 立即返回响应给前端，让前端开始监听
         return ApiResponse.success({
-            "task_event_id": task_event_id,
-            "total_items": len(items)
-        }, message="批量任务已在后台启动")
+            "task_id": task_id,
+            "task_type": "ai-task",
+            "task_key": task_key,
+            "accepted": True,
+            "status": "pending",
+        }, message="AI 任务已在后台启动")
     
     @log_api_call
     def ai_prepare_diagnosis(self, payload: dict):
@@ -3575,7 +3793,7 @@ class API:
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
         if not full_logs:
             return ApiResponse.error("无法读取指定的日志内容，文件可能已被清理。")
-        token_limit = settings.config.ai.max_tokens
+        token_limit = settings.config.ai.resolved_max_input_tokens()
         from backend.managers.mgr_game_logs import LogCondenser
         condensed_data = LogCondenser.condense_for_ai( full_logs, token_limit=token_limit, stack_preview_lines=2 )
         from litellm import token_counter
@@ -3596,43 +3814,60 @@ class API:
 
 
     @log_api_call
-    def ai_diagnostic_chat(self, payload: dict):
-        """
-        处理前端的日志诊断请求，直接接收浓缩后的数据
-        payload 结构: { "history": [], "diagnosis_context": {...}, "question": "..." }
-        """
+    def ai_execute_assistant_session(self, payload: dict):
+        """处理前端的通用助手会话请求。"""
         result = self.ai_check_enable()
         if not result['status'] == 'success': return result
-        source_type = payload.get("log_source_type", "game")
-        if source_type == 'app' and not settings.config.debug_mode:
-            return ApiResponse.error("软件日志分析仅在 Debug 模式下可用。")
-            
         try:
-            source_type = payload.get("log_source_type", "game")
-            session_id = payload.get("session_id", "")
-            reader = self.game_log_mgr if source_type == 'game' else app_log_reader
-            if not reader: return ApiResponse.error("日志读取器未初始化")
+            normalized_payload, assistant_context, request_payload, source_type, filename, reader = self._resolve_assistant_request_runtime(payload)
+            session_id = str(normalized_payload.get("session_id") or "").strip()
+            assistant_id = str(assistant_context.get("assistant_id") or "").strip()
 
             logger.debug(
-                f"[AI诊断API] 收到请求 session_id={session_id} source={source_type} "
-                f"filename={payload.get('filename', '')} history={len(payload.get('history', []))} "
-                f"has_context={bool(payload.get('diagnosis_context'))}"
+                f"[AI会话API] 收到请求 session_id={session_id} "
+                f"assistant_id={assistant_id} "
+                f"source_type={source_type or '<empty>'} "
+                f"filename={filename or '<empty>'} "
+                f"history={len(request_payload.get('history', []) or [])} "
+                f"attachments={len(request_payload.get('attachments', []) or [])}"
             )
             
-            # 直接使用传入的浓缩数据，不再自己计算
-            result = self.ai_mgr.ai_diagnostic_chat(payload, self.active_context, reader=reader)
+            result = self.ai_mgr.run_assistant_session(normalized_payload, self.active_context, reader=reader)
             logger.debug(
-                f"[AI诊断API] 请求完成 session_id={session_id} "
+                f"[AI会话API] 请求完成 session_id={session_id} "
                 f"analysis_chars={len(result.get('analysis', '')) if isinstance(result, dict) else 0} "
                 f"total_tokens≈{result.get('token_usage', {}).get('estimated_total_tokens', 0) if isinstance(result, dict) else 0}"
             )
             return ApiResponse.success(result)
         except Exception as e:
             # 增加异常堆栈打印，方便调试
-            logger.error(f"智能诊断异常: {str(e)}", exc_info=True)
-            return ApiResponse.error(f"智能诊断异常: {str(e)}")
-        
-    
+            logger.error(f"智能会话异常: {str(e)}", exc_info=True)
+            return ApiResponse.error(f"智能会话异常: {str(e)}")
+
+    @log_api_call
+    def ai_estimate_assistant_session_request(self, payload: dict):
+        """按真实助手请求结构预估本轮主对话输入消耗。"""
+        result = self.ai_check_enable()
+        if not result['status'] == 'success': return result
+        try:
+            normalized_payload, assistant_context, request_payload, source_type, filename, reader = self._resolve_assistant_request_runtime(payload)
+
+            logger.debug(
+                f"[AI会话预估] session_id={normalized_payload.get('session_id', '')} "
+                f"assistant_id={assistant_context.get('assistant_id', '')} "
+                f"source_type={source_type or '<empty>'} "
+                f"filename={filename or '<empty>'}"
+            )
+            result = self.ai_mgr.estimate_assistant_session_request(
+                normalized_payload,
+                self.active_context,
+                reader=reader,
+            )
+            return ApiResponse.success(result)
+        except Exception as e:
+            logger.error(f"助手请求预估异常: {str(e)}", exc_info=True)
+            return ApiResponse.error(f"助手请求预估异常: {str(e)}")
+
     # 供“一键排错”使用的全局扫描接口
     @log_api_call
     def ai_scan_global_errors(self, payload: dict):
@@ -3668,7 +3903,7 @@ class API:
             return ApiResponse.warning("当前日志文件中没有可分析的内容。")
         # 全局扫描默认额外保留 2 行堆栈预览，并使用更保守的预算比例，
         # 这样前端能更快看到结果，也能让后续 AI 调用留出足够余量。
-        token_limit = settings.config.ai.max_tokens
+        token_limit = settings.config.ai.resolved_max_input_tokens()
         diagnosis_context = LogCondenser.condense_for_ai( raw_logs, token_limit=token_limit, char_budget_ratio=0.65, stack_preview_lines=2)
         # 压缩完成后再计算实际 Token 占用，前端顶部记忆计数直接使用这个结果。
         text_to_estimate = json.dumps(diagnosis_context, ensure_ascii=False)
@@ -3692,15 +3927,10 @@ class API:
             "is_over_limit": estimated_tokens > token_limit,
             "estimated_tokens": estimated_tokens,
             "token_limit": token_limit,
-            "diagnosis_context": diagnosis_context,
+            "condensed_data": diagnosis_context,
             "compression_notice": compression_notice
         })
     
-    @log_api_call
-    def ai_get_prompts(self):
-        """获取所有提示词"""
-        return ApiResponse.success(self.ai_mgr.prompts)
-
     @log_api_call
     def ai_save_prompt(self, prompt_id: str, prompt_data: dict):
         """保存提示词"""
@@ -3720,11 +3950,34 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def ai_reset_prompts(self):
-        """恢复默认提示词"""
+    def ai_save_assistant(self, assistant_id: str, assistant_data: dict):
+        """保存助手定义"""
         try:
-            res = self.ai_mgr.reset_system_prompts()
+            res = self.ai_mgr.save_assistant(assistant_id, assistant_data)
             return ApiResponse.success(res)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ai_save_task(self, task_id: str, task_data: dict):
+        """保存任务定义"""
+        try:
+            res = self.ai_mgr.save_task(task_id, task_data)
+            return ApiResponse.success(res)
+        except Exception as e:
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def ai_get_trace_records(self, session_id: str = ""):
+        """获取运行期 AI 请求链记录。
+
+        当前返回的是“按会话归档”的链路数据：
+        - 不传 `session_id` 时返回所有会话摘要
+        - 传入后返回单个会话的完整链路
+        """
+        try:
+            normalized_session_id = str(session_id or "").strip()
+            return ApiResponse.success(self.ai_mgr.get_trace_records(normalized_session_id or None))
         except Exception as e:
             return ApiResponse.error(str(e))
     
@@ -3908,44 +4161,100 @@ class API:
     @log_api_call
     def lifecycle_check_updates(self):
         """
-        生命周期核心：精准识别【工坊目录】与【管理器目录】各自的更新状态
+        生命周期核心：同时检查 workshop 域与 self 域的已安装模组更新状态。
+
+        - workshop 域：优先使用 Steamworks 试验适配层读取 Steam 客户端本机状态；
+        - self 域：继续使用 Steam Web API 在线时间与本地安装时间做比对。
         """
-        # 1. 分别获取两个来源的本地状态 (来自 SteamManager 的解析结果)
-        # workshop_merged_data 内部解析的是 Steam 客户端的 ACF/LOG
         workshop_local_data = self.steam_mgr.workshop_merged_data()
-        # steamcmd_merged_data 内部解析的是 管理器目录下的 ACF/LOG (SteamCMD专用)
         manager_local_data = self.steam_mgr.steamcmd_merged_data()
-        # 2. 收集所有需要查询的工坊 ID (去重)
-        all_wids = set(workshop_local_data.keys()) | set(manager_local_data.keys())
-        if not all_wids: return ApiResponse.success({"updates": []})
-        # 3. 一次性从缓存/网络获取所有涉及 ID 的云端最新时间
-        online_details, ids_to_fetch = SteamWebAPI.fetch_item_details(list(all_wids))
+
+        workshop_installed_wids = {
+            str(item.get("workshop_id") or "").strip()
+            for item in workshop_local_data.values()
+            if item.get("is_installed") and str(item.get("workshop_id") or "").strip().isdigit()
+        }
+        self_installed_wids = {
+            str(item.get("workshop_id") or "").strip()
+            for item in manager_local_data.values()
+            if item.get("is_installed") and str(item.get("workshop_id") or "").strip().isdigit()
+        }
+
+        logger.debug(
+            "生命周期更新检查：workshop 合并数据 %s 条，已安装 %s 条；self 合并数据 %s 条，已安装 %s 条",
+            len(workshop_local_data),
+            len(workshop_installed_wids),
+            len(manager_local_data),
+            len(self_installed_wids),
+        )
+
         updates_available = []
-        # 4. 定义内部比对逻辑
-        def compare_and_add(local_item, source_label):
-            wid = local_item['workshop_id']
-            online_info = online_details.get(wid)
-            if not online_info: return
-            # 本地时间取：ACF 记录时间 或 日志下载时间
-            local_time = local_item.get('time_downloaded') or local_item.get('installed_version_time') or 0
-            online_time = online_info.get('time_updated', 0)
-            # 容差 1 小时。如果云端时间 > 本地时间，则标记
-            if online_time > local_time + 3600 * 1000:
+
+        if workshop_installed_wids:
+            steam_running = bool(self.steam_mgr.is_steam_running())
+            if not steam_running:
+                logger.debug(
+                    "生命周期更新检查[workshop]：Steam 未运行，跳过 Steamworks 检查（待检 %s 条）",
+                    len(workshop_installed_wids),
+                )
+            else:
+                workshop_state_result = self.steam_mgr.query_workshop_item_states(
+                    list(workshop_installed_wids),
+                    timeout_seconds=12.0,
+                )
+                workshop_states = workshop_state_result.get("states") if isinstance(workshop_state_result, dict) else {}
+                workshop_states = workshop_states if isinstance(workshop_states, dict) else {}
+                logger.debug(
+                    "生命周期更新检查[workshop]：Steamworks 可用 %s，ready %s，检查 %s 条，命中状态 %s 条，detail=%s",
+                    bool(workshop_state_result.get("available")) if isinstance(workshop_state_result, dict) else False,
+                    bool(workshop_state_result.get("ready")) if isinstance(workshop_state_result, dict) else False,
+                    len(workshop_installed_wids),
+                    len(workshop_states),
+                    str((workshop_state_result or {}).get("detail") or ""),
+                )
+                for local_item in workshop_local_data.values():
+                    if not local_item.get("is_installed"):
+                        continue
+                    wid = str(local_item.get("workshop_id") or "").strip()
+                    state_info = workshop_states.get(wid) or {}
+                    if not state_info or not state_info.get("needs_update"):
+                        continue
+                    updates_available.append({
+                        "workshop_id": wid,
+                        "title": wid,
+                        "source": "workshop",
+                        "local_time": int(local_item.get("time_downloaded") or local_item.get("installed_version_time") or 0),
+                        "online_time": int(local_item.get("latest_version_time") or 0),
+                        "preview_url": "",
+                    })
+
+        if self_installed_wids:
+            online_details, _ = SteamWebAPI.fetch_item_details(
+                list(self_installed_wids),
+                trace_label="lifecycle_check_updates:self",
+            )
+            for local_item in manager_local_data.values():
+                if not local_item.get('is_installed'):
+                    continue
+                wid = str(local_item.get('workshop_id') or '').strip()
+                online_info = online_details.get(wid)
+                if not online_info:
+                    continue
+                local_time = int(local_item.get('time_downloaded') or local_item.get('installed_version_time') or 0)
+                online_time = int(online_info.get('time_updated') or 0)
+                if online_time <= local_time + 3600 * 1000:
+                    continue
                 updates_available.append({
                     "workshop_id": wid,
-                    "title": online_info["title"],
-                    "source": source_label, # 告诉前端是 'workshop' 还是 'manager' 需更新
+                    "title": online_info.get("title") or wid,
+                    "source": "self",
                     "local_time": local_time,
                     "online_time": online_time,
-                    "preview_url": online_info["preview_url"]
+                    "preview_url": online_info.get("preview_url") or "",
                 })
-        # 5. 执行两次独立比对
-        for m in workshop_local_data.values():
-            if m.get('is_installed'):
-                compare_and_add(m, 'workshop')
-        for m in manager_local_data.values():
-            if m.get('is_installed'):
-                compare_and_add(m, 'self')
+        else:
+            logger.debug("生命周期更新检查[self]：没有可检查的已安装 self 模组")
+
         return ApiResponse.success({"updates": updates_available})
 
     @log_api_call
@@ -4162,9 +4471,20 @@ class API:
             "local": matrix['local']
         }
         
-        # 6. 后台触发在线比对，标记可更新状态
-        # 获取所有涉及的 WID
-        all_wids = list({str(wid) for wid in list(ws_map.keys()) + list(mg_map.keys()) if wid})
+        # 6. 后台触发在线比对，统一只针对 self / SteamCMD 域做在线状态预热与更新标记。
+        all_wids = list({
+            str(item.get("workshop_id") or "").strip()
+            for item in mg_map.values()
+            if item.get("is_installed") and str(item.get("workshop_id") or "").strip().isdigit()
+        })
+        logger.debug(
+            "工作区在线预热[self]：workshop 总数 %s / 已安装 %s，steamcmd 总数 %s / 已安装 %s，实际预热 %s",
+            len(ws_map),
+            sum(1 for item in ws_map.values() if item.get("is_installed")),
+            len(mg_map),
+            sum(1 for item in mg_map.values() if item.get("is_installed")),
+            len(all_wids),
+        )
         if all_wids:
             import threading
             threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
@@ -4173,7 +4493,16 @@ class API:
     
     def _bg_check_online_updates(self, all_wids: list):
         """后台静默检测，完成后通过 EventBus 推送"""
-        online_info, ids_to_fetch = SteamWebAPI.fetch_item_details(all_wids, only_cache=True)
+        online_info, ids_to_fetch = SteamWebAPI.fetch_item_details(
+            all_wids,
+            only_cache=True,
+            trace_label="workspace_preheat:self",
+        )
+        logger.debug(
+            "工作区在线预热[self]：缓存预热完成，命中 %s 条，待联网 %s 条（本阶段不发起在线请求）",
+            len(online_info),
+            len(ids_to_fetch),
+        )
         # 把算好的 online_info 推给前端，前端进行响应式合并
         from backend.utils.event_bus import EventBus
         EventBus.emit('workspace-online-update', online_info)
@@ -4198,15 +4527,32 @@ class API:
         """
         第二阶段：异步网络请求，通过 EventBus 分批推送最新状态
         """
+        normalized_ids = []
+        seen_ids = set()
+        for workshop_id in workshop_ids or []:
+            normalized_id = str(workshop_id or "").strip()
+            if not normalized_id or not normalized_id.isdigit() or normalized_id in seen_ids:
+                continue
+            seen_ids.add(normalized_id)
+            normalized_ids.append(normalized_id)
+
+        logger.debug("工作区强制在线刷新：收到 %s 个请求 ID，规范化后 %s 个", len(workshop_ids or []), len(normalized_ids))
+        if not normalized_ids:
+            return ApiResponse.success(message="没有可刷新的工坊项目")
+
         def worker():
             from backend.managers.mgr_steam_api import SteamWebAPI
             from backend.utils.event_bus import EventBus
             
             # 100 个一组分批请求，防止 URL 过长或单次请求过久
-            for i in range(0, len(workshop_ids), 100):
-                batch = workshop_ids[i:i+100]
+            for i in range(0, len(normalized_ids), 100):
+                batch = normalized_ids[i:i+100]
                 # 这里调用真实的联网请求
-                online_data = SteamWebAPI.fetch_item_details(batch, force_refresh=True)
+                online_data, _ = SteamWebAPI.fetch_item_details(
+                    batch,
+                    force_refresh=True,
+                    trace_label="workspace_force_refresh:self",
+                )
                 
                 # 每完成一批，立即推送
                 EventBus.emit('workspace-online-update', online_data)
@@ -4241,6 +4587,17 @@ class API:
                     item['time_updated'] = online_info[wid].get('time_updated', item.get('time_updated'))
 
         return ApiResponse.success(data)
+
+    @log_api_call
+    def workshop_search_online(self, query: str, cursor: str = "*", page_size: int = 25, sort: str = "relevance"):
+        """使用 Steam Web API 在线搜索工坊条目。"""
+        try:
+            data = SteamWebAPI.search_workshop_online(query, cursor=cursor, page_size=page_size, sort=sort)
+            return ApiResponse.success(data)
+        except ValueError as exc:
+            return ApiResponse.warning(str(exc))
+        except Exception as exc:
+            return ApiResponse.error(f"在线工坊搜索失败: {exc}")
 
     @log_api_call
     def workshop_get_details(self, workshop_id: str):
@@ -4323,8 +4680,7 @@ class API:
                 seen_wids.add(wid_str)
                 normalized_wids.append(wid_str)
 
-        if not normalized_wids:
-            return {}
+        if not normalized_wids: return {}
 
         resolved_map: dict[str, str] = {}
         manifest_map = ExtDAO.get_manifests_by_workshop_ids(normalized_wids)
@@ -4493,8 +4849,7 @@ class API:
 
     def _schedule_github_subs_refresh(self, records: list) -> bool:
         """给 GitHub 订阅刷新加最短触发间隔，避免页面频繁打开时重复打满 API。"""
-        if not records:
-            return False
+        if not records: return False
 
         now = current_ms()
         with self._github_subs_refresh_lock:
@@ -4508,8 +4863,7 @@ class API:
             self._github_subs_refresh_started_at = now
 
         started = self._start_tracked_main_db_task("github-subs-refresh", self._bg_refresh_github_subs, records)
-        if started:
-            return True
+        if started: return True
 
         with self._github_subs_refresh_lock:
             self._github_subs_refresh_running = False
@@ -4520,8 +4874,7 @@ class API:
         后台多线程并发刷新 GitHub 数据
         """
         try:
-            if not records:
-                return
+            if not records: return
             
             updated_records = {}
             # 使用线程池并发请求 GitHub API，避免串行卡顿
@@ -4546,8 +4899,7 @@ class API:
                         logger.error(f"后台刷新 GitHub Repo 失败: {e}", exc_info=True)
 
             # 如果没有成功获取到任何数据，直接结束
-            if not updated_records:
-                return
+            if not updated_records: return
             # 批量更新数据库的缓存
             from backend.database.models import db, GithubModRecord
             import time
@@ -4602,17 +4954,29 @@ class API:
     
     def _resolve_mod_paths(self, package_ids: List[str]) -> List[str]:
         """内部辅助方法：将前端传来的 package_id 列表转换为当前环境下绝对物理路径列表"""
-        target_ids = {normalize_package_id(pid) for pid in package_ids if pid}
-        if not target_ids:
-            return []
+        target_tokens = [parse_package_token(pid) for pid in (package_ids or []) if pid]
+        if not target_tokens: return []
         
         # 使用当前 Profile 上下文，确保获取的是正在使用的正确 Mod 路径 (解决软冲突路径)
         context_mods = ModDAO.get_profile_mods(self.active_context)
-        paths =[]
-        for m in context_mods:
-            pid = normalize_package_id(m.get('package_id', ''))
-            if pid in target_ids and m.get('path'):
-                paths.append(m['path'])
+        mod_map = {
+            normalize_package_id(m.get('package_id', '')): m
+            for m in context_mods
+            if normalize_package_id(m.get('package_id', ''))
+        }
+        paths = []
+        seen_paths: set[str] = set()
+        for token_info in target_tokens:
+            mod = mod_map.get(token_info.canonical_package_id)
+            if not mod:
+                continue
+            target_mod = mod
+            if token_info.source_preference == "steam":
+                target_mod = mod.get("coexist_workshop_variant") or mod
+            path = str(target_mod.get('path') or '').strip()
+            if path and path not in seen_paths:
+                seen_paths.add(path)
+                paths.append(path)
         return paths
 
     @log_api_call

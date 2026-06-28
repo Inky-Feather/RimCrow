@@ -20,6 +20,7 @@ from backend.load_order import (
     parse_load_order_file,
     parse_share_code,
 )
+from backend.load_order.package_tokens import parse_package_token
 from backend.database.models_ext import ModReplacement
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
@@ -108,6 +109,7 @@ class LoadOrderManager:
     def _build_mod_entries(
         self,
         mod_ids: list[str],
+        package_tokens: list[str] | None = None,
         mod_names: list[str] | None = None,
         mod_workshop_ids: list[str] | None = None,
         mod_source_urls: list[str] | None = None,
@@ -117,15 +119,22 @@ class LoadOrderManager:
         构建排序文件 Mod 元数据，包括可见 Mod 数据和原始包名大小写。
         """
         # 把 modIds / modNames / workshopIds 三组平行数组整理成统一结构。
+        package_tokens = package_tokens or []
         mod_names = mod_names or []
         mod_workshop_ids = mod_workshop_ids or []
         mod_source_urls = mod_source_urls or []
         entries = []
         for index, raw_package_id in enumerate(mod_ids):
+            package_token_raw = str(
+                package_tokens[index]
+                if index < len(package_tokens) and package_tokens[index]
+                else raw_package_id
+            ).strip()
+            token_info = parse_package_token(package_token_raw or raw_package_id)
             package_id_raw = str(raw_package_id or "").strip()
-            if not package_id_raw:
+            package_id = token_info.canonical_package_id or normalize_package_id(package_id_raw)
+            if not package_id:
                 continue
-            package_id = normalize_package_id(package_id_raw)
             name = str(mod_names[index]).strip() if index < len(mod_names) and mod_names[index] else ""
             workshop_id_raw = str(mod_workshop_ids[index]).strip() if index < len(mod_workshop_ids) and mod_workshop_ids[index] else ""
             source_url_raw = str(mod_source_urls[index]).strip() if index < len(mod_source_urls) and mod_source_urls[index] else ""
@@ -133,6 +142,13 @@ class LoadOrderManager:
                 "index": index,
                 "package_id": package_id,
                 "package_id_raw": package_id_raw,
+                # `_local` 只做兼容读取，不继续向前端和保存流程传播。
+                "package_token": (
+                    token_info.normalized_token
+                    if token_info.source_preference == "steam"
+                    else package_id
+                ),
+                "package_token_raw": package_token_raw or package_id_raw or package_id,
                 "name": name,
                 "workshop_id": self._normalize_workshop_id(workshop_id_raw),
                 "workshop_id_raw": workshop_id_raw,
@@ -149,8 +165,7 @@ class LoadOrderManager:
         这样后续更容易补测试。
         """
         valid_ids = [wid for wid in (self._normalize_workshop_id(wid) for wid in workshop_ids) if wid]
-        if not valid_ids:
-            return {}
+        if not valid_ids: return {}
         try:
             query = (
                 ModReplacement
@@ -186,8 +201,7 @@ class LoadOrderManager:
 
         导入检查、缺失安装判断都必须以这个集合为准，否则会把“数据库里存在但当前环境无效”的条目误判成已安装。
         """
-        if not self.context:
-            return []
+        if not self.context: return []
         return ModDAO.get_profile_mods(self.context)
 
     def _build_import_check(self, parsed: ParsedLoadOrderData):
@@ -197,8 +211,7 @@ class LoadOrderManager:
         注意这里依赖当前环境上下文，因为“缺失 / 替代 / 其它版本”都必须以
         “当前环境实际可见的安装项”为参考。
         """
-        if not self.context:
-            return {"summary": {}, "items": []}
+        if not self.context: return {"summary": {}, "items": []}
 
         try:
             installed_mods = self._get_visible_installed_mods()
@@ -255,6 +268,8 @@ class LoadOrderManager:
                         "alias_name": mod.get("alias_name") or mod.get("display_name") or mod.get("name") or package_id,
                         "workshop_id": self._normalize_workshop_id(mod.get("workshop_id")),
                         "source_url": self._normalize_source_url(mod.get("url")),
+                        # 仅当当前环境里仍然存在可切换的 workshop 共存副本时，才继续保留 `_steam` token。
+                        "has_coexist_workshop_variant": bool(mod.get("coexist_workshop_variant")),
                     }
         except Exception as e:
             logger.warning(f"补全排序文件 Mod 可见元数据失败: {e}")
@@ -341,6 +356,12 @@ class LoadOrderManager:
             )
             entry["source_url_raw"] = entry.get("source_url_raw") or ""
 
+            token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or entry.get("package_id"))
+            if token_info.source_preference == "steam" and not visible_meta.get("has_coexist_workshop_variant"):
+                # stale `_steam` 只在 workshop 共存副本实际可用时才保留；
+                # 否则回落到裸包名，避免前端显示本地版但保存时仍写回 `_steam`。
+                entry["package_token"] = entry.get("package_id") or token_info.canonical_package_id or ""
+
         return entries
 
     def _build_entries_from_parsed(self, parsed: ParsedLoadOrderData):
@@ -351,13 +372,20 @@ class LoadOrderManager:
         这里才是“结合本项目上下文补全信息”的地方。
         """
         mods = self._enrich_mod_entries(
-            self._build_mod_entries(parsed.package_ids, parsed.mod_names, parsed.workshop_ids, parsed.source_urls)
+            self._build_mod_entries(
+                parsed.package_ids,
+                parsed.package_tokens,
+                parsed.mod_names,
+                parsed.workshop_ids,
+                parsed.source_urls,
+            )
         )
         return {
             "format": parsed.format,
             "list_name": parsed.list_name,
             "mods": mods,
-            "active_mods": [entry["package_id"] for entry in mods],
+            # active list 需要保留来源 token，便于前端继续持久化 workshop 版本选择。
+            "active_mods": [entry.get("package_token") or entry["package_id"] for entry in mods],
             "mod_names": [entry.get("name") or entry.get("package_id_raw") or entry.get("package_id") for entry in mods],
             "mod_steam_workshop_ids": [entry.get("workshop_id") or "0" for entry in mods],
             "source_urls": [entry.get("source_url") or "" for entry in mods],
@@ -390,23 +418,32 @@ class LoadOrderManager:
             'version_token': self._build_version_token(source_path, parsed_result.get('active_mods', []), modify_time=modify_time),
         }
 
-    def _build_export_entries(self, active_ids):
+    def _build_export_entries(self, active_ids, export_format: str = EXPORT_FORMAT_MODSCONFIG):
         # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
         normalized_ids = []
-        for package_id in active_ids or []:
-            normalized = normalize_package_id(package_id)
-            if normalized:
-                normalized_ids.append(normalized)
+        normalized_tokens = []
+        for package_token in active_ids or []:
+            token_info = parse_package_token(package_token)
+            if not token_info.canonical_package_id:
+                continue
+            normalized_ids.append(token_info.canonical_package_id)
+            normalized_tokens.append(token_info.normalized_token or token_info.canonical_package_id)
 
-        entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids))
+        entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids, normalized_tokens))
         for entry in entries:
-            # 游戏原生读写与本工具内部持久化一律使用规范化小写包名。
+            # 除 ModsConfig.xml 外，其它导出都统一回落到裸 package_id。
             entry["package_id_raw"] = entry["package_id"]
+            if export_format != EXPORT_FORMAT_MODSCONFIG:
+                entry["package_token"] = entry["package_id"]
+                entry["package_token_raw"] = entry["package_id"]
         return entries
 
     def _build_active_ids_hash(self, active_ids: list[str] | None = None) -> str:
-        normalized_ids = [normalize_package_id(package_id) for package_id in (active_ids or [])]
-        normalized_ids = [package_id for package_id in normalized_ids if package_id]
+        normalized_ids = []
+        for package_id in (active_ids or []):
+            token_info = parse_package_token(package_id)
+            if token_info.normalized_token:
+                normalized_ids.append(token_info.normalized_token)
         joined = "\n".join(normalized_ids)
         return hashlib.sha1(joined.encode("utf-8")).hexdigest()
 
@@ -443,8 +480,7 @@ class LoadOrderManager:
     def is_version_token_stale(self, base_version_token: dict | None = None, mods_config_file_path: str | None = None):
         expected = dict(base_version_token or {})
         current = self.get_current_version_token(mods_config_file_path)
-        if not expected:
-            return False, current
+        if not expected: return False, current
         return current != expected, current
 
     def export_share_code(self, active_ids, list_name: str | None = None) -> str:
@@ -615,8 +651,13 @@ class LoadOrderManager:
         if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST, EXPORT_FORMAT_RML}:
             raise ValueError(f"不支持的导出格式: {export_format}")
         # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
-        entries = self._build_export_entries(active_ids)
-        final_ids = [entry.get("package_id") or "" for entry in entries]
+        entries = self._build_export_entries(active_ids, export_format=export_format)
+        final_ids = [
+            (entry.get("package_token") or entry.get("package_id") or "")
+            if export_format == EXPORT_FORMAT_MODSCONFIG
+            else (entry.get("package_id") or "")
+            for entry in entries
+        ]
         default_name = self._default_export_name(export_format)
         # 1. 确定最终写入路径
         write_path = self.context.mods_config_file if export_format == EXPORT_FORMAT_MODSCONFIG else ''

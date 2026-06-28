@@ -12,11 +12,9 @@ def extract_major_game_version(version: str) -> str:
     - 1 -> 1
     """
     text = str(version or "").strip()
-    if not text:
-        return ""
+    if not text: return ""
     match = re.search(r"(\d+)(?:\.(\d+))?", text)
-    if not match:
-        return ""
+    if not match: return ""
     major = match.group(1)
     minor = match.group(2)
     return f"{major}.{minor}" if minor is not None else major
@@ -25,15 +23,13 @@ def extract_major_game_version(version: str) -> str:
 def matches_major_game_version(current_version: str, candidate_version: str) -> bool:
     current_major = extract_major_game_version(current_version)
     candidate_major = extract_major_game_version(candidate_version)
-    if not current_major or not candidate_major:
-        return False
+    if not current_major or not candidate_major: return False
     return current_major == candidate_major
 
 
 def _version_tuple(version: str) -> tuple[int, int]:
     major = extract_major_game_version(version)
-    if not major:
-        return (-1, -1)
+    if not major: return (-1, -1)
     parts = major.split(".")
     head = int(parts[0]) if parts and parts[0].isdigit() else -1
     tail = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
@@ -52,8 +48,7 @@ def version_preference_key(current_version: str, candidate_versions: Iterable[st
     """
     values = [extract_major_game_version(str(v or "").strip()) for v in (candidate_versions or [])]
     values = [value for value in values if value]
-    if not values:
-        return (1, -1, -1, 0)
+    if not values: return (1, -1, -1, 0)
 
     unique_values = sorted({_version_tuple(value) for value in values})
     current_tuple = _version_tuple(current_version)
@@ -74,6 +69,5 @@ def score_version_support(current_version: str, candidate_versions: Iterable[str
     - 0: 明确存在版本列表，但没有匹配
     """
     values = [str(v or "").strip() for v in (candidate_versions or []) if str(v or "").strip()]
-    if not values:
-        return 1
+    if not values: return 1
     return 2 if any(matches_major_game_version(current_version, value) for value in values) else 0

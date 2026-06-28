@@ -144,7 +144,7 @@ const taskTypeMeta = {
   'steam-unsubscribe': { title: 'Steam 取消订阅', icon: FlagOff, text: 'text-rose-400', bar: 'bg-rose-500', border: 'border-rose-400/30' },
   'texture-opt': { title: '贴图优化', icon: Image, text: 'text-amber-400', bar: 'bg-amber-500', border: 'border-amber-400/30' },
   'texture-opt-analyze': { title: '贴图分析', icon: ScanSearch, text: 'text-amber-400', bar: 'bg-amber-500', border: 'border-amber-400/30' },
-  'ai-batch': { title: 'AI 批量处理', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  'ai-task': { title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
   localize: { title: '本地化模组', icon: Box, text: 'text-emerald-400', bar: 'bg-emerald-500', border: 'border-emerald-400/30' },
   'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-orange-400', bar: 'bg-orange-500', border: 'border-orange-400/30' },
   'file-search': { title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-sky-500', border: 'border-sky-400/30' },

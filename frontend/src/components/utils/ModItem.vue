@@ -18,7 +18,6 @@
     </button>
     
     <!-- 内容区域 -->
-      <!-- :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', getCardClass, simple ? 'h-[30px]' : 'h-[50px]']"  -->
     <div class="select-trigger drag-handle flex-1 flex items-center min-w-0 gap-1.5 p-1 rounded-lg border hover:opacity-90 backdrop-blur-sm group shadow-sm text-text-main/80"
       :class="[searchMatch ? 'ring-2 ring-accent-highlight scale-[1.02] z-20' : '', cardClass]" 
       :style="getCardStyle(item_id)"
@@ -43,7 +42,7 @@
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
             </span>
             <!-- 来源图标 -->
-            <span  class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`储存位置：${SOURCE_TYPE_MAP[modData.store] || modData.store || '未知'}`">
+            <button type="button" class="relative flex items-center justify-center hover:scale-120 transition-transform duration-200" :class="canToggleCoexistSource ? 'cursor-pointer' : 'cursor-default'" tabindex="0" v-tooltip="sourceToggleTooltip" @click.stop="handleSourceToggle">
               <svg v-if="modData.store==='workshop'" class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M261.6 373.1C280.2 380.8 288.9 402 281.2 420.5C273.5 439 252.2 447.7 233.6 439.9L205.1 428.1C210.1 438.7 218.9 447.5 230.5 452.3C255.7 462.8 284.6 450.9 295.1 425.8C300.2 413.7 300.2 400.3 295.2 388.1C290.1 376 280.7 366.5 268.5 361.4C256.4 356.4 243.5 356.6 232.1 360.9L261.6 373.1zM544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 304.7L212.6 352.8C224.6 344.6 238.8 340.7 253.3 341.5L308.7 261.3L308.7 260.2C308.7 212 348 172.7 396.3 172.7C444.6 172.7 483.9 212 483.9 260.2C483.9 309.4 443 348.9 394.3 347.7L315.3 404C316.9 442.5 286.2 472.8 249.6 472.8C217.8 472.8 191.1 450.1 185.1 420.1L96 383.2L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM337.9 260.2C337.9 292.5 364 318.6 396.3 318.6C428.6 318.6 454.7 292.5 454.7 260.2C454.7 227.9 428.6 201.8 396.3 201.8C364 201.8 337.9 227.9 337.9 260.2zM440.3 260.1C440.3 284.3 420.6 304 396.4 304C372.2 304 352.5 284.3 352.5 260.1C352.5 235.9 372.2 216.2 396.4 216.2C420.6 216.2 440.3 235.9 440.3 260.1z"/></svg>
               <!-- <svg v-else-if="modData.source==='github'"class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM361.8 471.7C361.8 469.9 361.8 465.7 361.9 460.1C362 448.7 362 431.3 362 416.4C362 400.8 356.8 390.9 350.7 385.7C387.7 381.6 426.7 376.5 426.7 312.6C426.7 294.4 420.2 285.3 409.6 273.6C411.3 269.3 417 251.6 407.9 228.6C394 224.3 362.2 246.5 362.2 246.5C335.6 239 305.6 239 279 246.5C279 246.5 247.2 224.3 233.3 228.6C224.2 251.5 229.8 269.2 231.6 273.6C221 285.3 216 294.4 216 312.6C216 376.2 253.3 381.6 290.3 385.7C285.5 390 281.2 397.4 279.7 408C270.2 412.3 245.9 419.7 231.4 394.1C222.3 378.3 205.9 377 205.9 377C189.7 376.8 204.8 387.2 204.8 387.2C215.6 392.2 223.2 411.4 223.2 411.4C232.9 441.1 279.3 431.1 279.3 431.1C279.3 440.1 279.4 452.8 279.4 461.7C279.4 466.5 279.5 470.3 279.5 471.7C279.5 476 276.5 481.2 268 479.7C202 457.6 155.8 394.8 155.8 321.4C155.8 229.6 226 159.9 317.8 159.9C409.6 159.9 484 229.6 484 321.4C484.1 394.8 439.3 457.7 373.3 479.7C364.9 481.2 361.8 476 361.8 471.7zM271.3 416.9C271.1 415.4 272.4 414.1 274.3 413.7C276.2 413.5 278 414.3 278.2 415.6C278.5 416.9 277.2 418.2 275.2 418.6C273.3 419 271.5 418.2 271.3 416.9zM262.2 420.1C260 420.3 258.5 419.2 258.5 417.7C258.5 416.4 260 415.3 262 415.3C263.9 415.1 265.7 416.2 265.7 417.7C265.7 419 264.2 420.1 262.2 420.1zM247.9 417.9C246 417.5 244.7 416 245.1 414.7C245.5 413.4 247.5 412.8 249.2 413.2C251.2 413.8 252.5 415.3 252 416.6C251.6 417.9 249.6 418.5 247.9 417.9zM235.4 410.6C233.9 409.3 233.5 407.4 234.5 406.5C235.4 405.4 237.3 405.6 238.8 407.1C240.1 408.4 240.6 410.4 239.7 411.2C238.8 412.3 236.9 412.1 235.4 410.6zM226.9 400.6C225.8 399.1 225.8 397.4 226.9 396.7C228 395.8 229.7 396.5 230.6 398C231.7 399.5 231.7 401.3 230.6 402.1C229.7 402.7 228 402.1 226.9 400.6zM220.6 391.8C219.5 390.5 219.3 389 220.2 388.3C221.1 387.4 222.6 387.9 223.7 388.9C224.8 390.2 225 391.7 224.1 392.4C223.2 393.3 221.7 392.8 220.6 391.8zM214.6 385.4C213.3 384.8 212.7 383.7 213.1 382.8C213.5 382.2 214.6 381.9 215.9 382.4C217.2 383.1 217.8 384.2 217.4 385C217 385.9 215.7 386.1 214.6 385.4z"/></svg> -->
               <svg v-else-if="['core','dlc'].includes(modData.source)" class="fill-current size-3.5" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="90" fill="currentColor" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="70" fill="#000" /><polygon points="100,48 118.27,74.85 149.46,83.93 129.57,109.61 130.57,142.07 100,131.09 69.43,142.07 70.43,109.61 50.54,83.93 81.73,74.85" fill="currentColor" stroke="currentColor" stroke-width="5"/><circle cx="100" cy="48" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="149.46" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="130.57" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="69.43" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="50.54" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/></svg>
@@ -51,7 +50,8 @@
               <!-- <svg viewBox="0 0 96 96" ></svg> -->
               <IconSelf v-else-if="modData.store==='self'" class=" size-4 grayscale-20" />
               <svg v-else class="fill-current -m-0.5 size-4.5" viewBox="100 -20 420 640" xmlns="http://www.w3.org/2000/svg"><path d="M512 512L128 512C92.7 512 64 483.3 64 448L64 160C64 124.7 92.7 96 128 96L266.7 96C280.5 96 294 100.5 305.1 108.8L343.5 137.6C349 141.8 355.8 144 362.7 144L512 144C547.3 144 576 172.7 576 208L576 448C576 483.3 547.3 512 512 512zM248 304C234.7 304 224 314.7 224 328C224 341.3 234.7 352 248 352L392 352C405.3 352 416 341.3 416 328C416 314.7 405.3 304 392 304L248 304z"/></svg>
-            </span>
+              <span v-if="canToggleCoexistSource" class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-accent-primary shadow-sm shadow-accent-primary/60"></span>
+            </button>
               
             </div>
         </div>
@@ -70,7 +70,7 @@
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
             </span>
             <!-- 来源图标 -->
-            <span class="flex items-center justify-center bg-glass-medium/70 rounded-sm hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`储存位置：${SOURCE_TYPE_MAP[modData.store] || modData.store || '未知'}`">
+            <button type="button" class="relative flex items-center justify-center bg-glass-medium/70 rounded-sm hover:scale-120 transition-transform duration-200" :class="canToggleCoexistSource ? 'cursor-pointer' : 'cursor-default'" tabindex="0" v-tooltip="sourceToggleTooltip" @click.stop="handleSourceToggle">
               <svg v-if="modData.store==='workshop'" class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M261.6 373.1C280.2 380.8 288.9 402 281.2 420.5C273.5 439 252.2 447.7 233.6 439.9L205.1 428.1C210.1 438.7 218.9 447.5 230.5 452.3C255.7 462.8 284.6 450.9 295.1 425.8C300.2 413.7 300.2 400.3 295.2 388.1C290.1 376 280.7 366.5 268.5 361.4C256.4 356.4 243.5 356.6 232.1 360.9L261.6 373.1zM544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 304.7L212.6 352.8C224.6 344.6 238.8 340.7 253.3 341.5L308.7 261.3L308.7 260.2C308.7 212 348 172.7 396.3 172.7C444.6 172.7 483.9 212 483.9 260.2C483.9 309.4 443 348.9 394.3 347.7L315.3 404C316.9 442.5 286.2 472.8 249.6 472.8C217.8 472.8 191.1 450.1 185.1 420.1L96 383.2L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM337.9 260.2C337.9 292.5 364 318.6 396.3 318.6C428.6 318.6 454.7 292.5 454.7 260.2C454.7 227.9 428.6 201.8 396.3 201.8C364 201.8 337.9 227.9 337.9 260.2zM440.3 260.1C440.3 284.3 420.6 304 396.4 304C372.2 304 352.5 284.3 352.5 260.1C352.5 235.9 372.2 216.2 396.4 216.2C420.6 216.2 440.3 235.9 440.3 260.1z"/></svg>
               <!-- <svg v-else-if="modData.source==='github'" class="fill-current -m-0.5 size-4.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM361.8 471.7C361.8 469.9 361.8 465.7 361.9 460.1C362 448.7 362 431.3 362 416.4C362 400.8 356.8 390.9 350.7 385.7C387.7 381.6 426.7 376.5 426.7 312.6C426.7 294.4 420.2 285.3 409.6 273.6C411.3 269.3 417 251.6 407.9 228.6C394 224.3 362.2 246.5 362.2 246.5C335.6 239 305.6 239 279 246.5C279 246.5 247.2 224.3 233.3 228.6C224.2 251.5 229.8 269.2 231.6 273.6C221 285.3 216 294.4 216 312.6C216 376.2 253.3 381.6 290.3 385.7C285.5 390 281.2 397.4 279.7 408C270.2 412.3 245.9 419.7 231.4 394.1C222.3 378.3 205.9 377 205.9 377C189.7 376.8 204.8 387.2 204.8 387.2C215.6 392.2 223.2 411.4 223.2 411.4C232.9 441.1 279.3 431.1 279.3 431.1C279.3 440.1 279.4 452.8 279.4 461.7C279.4 466.5 279.5 470.3 279.5 471.7C279.5 476 276.5 481.2 268 479.7C202 457.6 155.8 394.8 155.8 321.4C155.8 229.6 226 159.9 317.8 159.9C409.6 159.9 484 229.6 484 321.4C484.1 394.8 439.3 457.7 373.3 479.7C364.9 481.2 361.8 476 361.8 471.7zM271.3 416.9C271.1 415.4 272.4 414.1 274.3 413.7C276.2 413.5 278 414.3 278.2 415.6C278.5 416.9 277.2 418.2 275.2 418.6C273.3 419 271.5 418.2 271.3 416.9zM262.2 420.1C260 420.3 258.5 419.2 258.5 417.7C258.5 416.4 260 415.3 262 415.3C263.9 415.1 265.7 416.2 265.7 417.7C265.7 419 264.2 420.1 262.2 420.1zM247.9 417.9C246 417.5 244.7 416 245.1 414.7C245.5 413.4 247.5 412.8 249.2 413.2C251.2 413.8 252.5 415.3 252 416.6C251.6 417.9 249.6 418.5 247.9 417.9zM235.4 410.6C233.9 409.3 233.5 407.4 234.5 406.5C235.4 405.4 237.3 405.6 238.8 407.1C240.1 408.4 240.6 410.4 239.7 411.2C238.8 412.3 236.9 412.1 235.4 410.6zM226.9 400.6C225.8 399.1 225.8 397.4 226.9 396.7C228 395.8 229.7 396.5 230.6 398C231.7 399.5 231.7 401.3 230.6 402.1C229.7 402.7 228 402.1 226.9 400.6zM220.6 391.8C219.5 390.5 219.3 389 220.2 388.3C221.1 387.4 222.6 387.9 223.7 388.9C224.8 390.2 225 391.7 224.1 392.4C223.2 393.3 221.7 392.8 220.6 391.8zM214.6 385.4C213.3 384.8 212.7 383.7 213.1 382.8C213.5 382.2 214.6 381.9 215.9 382.4C217.2 383.1 217.8 384.2 217.4 385C217 385.9 215.7 386.1 214.6 385.4z"/></svg> -->
               <svg v-else-if="['core','dlc'].includes(modData.source)" class="fill-current size-4" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="90" fill="currentColor" stroke="currentColor" stroke-width="2"/><circle cx="100" cy="100" r="70" fill="#000" /><polygon points="100,48 118.27,74.85 149.46,83.93 129.57,109.61 130.57,142.07 100,131.09 69.43,142.07 70.43,109.61 50.54,83.93 81.73,74.85" fill="currentColor" stroke="currentColor" stroke-width="5"/><circle cx="100" cy="48" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="149.46" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="130.57" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="69.43" cy="142.07" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/><circle cx="50.54" cy="83.93" r="10" fill="currentColor" stroke="currentColor" stroke-width="3"/></svg>
@@ -78,7 +78,8 @@
               <!-- <svg v-else-if="modData.store==='self'" class=" size-4 grayscale-20" viewBox="0 0 96 96" > <use href="/icon.svg"></use></svg> -->
               <IconSelf v-else-if="modData.store==='self'" class=" size-4 grayscale-20" />
               <svg v-else class="fill-current -m-0.5 size-4.5" viewBox="100 -20 420 640" xmlns="http://www.w3.org/2000/svg"><path d="M512 512L128 512C92.7 512 64 483.3 64 448L64 160C64 124.7 92.7 96 128 96L266.7 96C280.5 96 294 100.5 305.1 108.8L343.5 137.6C349 141.8 355.8 144 362.7 144L512 144C547.3 144 576 172.7 576 208L576 448C576 483.3 547.3 512 512 512zM248 304C234.7 304 224 314.7 224 328C224 341.3 234.7 352 248 352L392 352C405.3 352 416 341.3 416 328C416 314.7 405.3 304 392 304L248 304z"/></svg>
-            </span>
+              <span v-if="canToggleCoexistSource" class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-accent-primary shadow-sm shadow-accent-primary/60"></span>
+            </button>
             <Copy v-if="modData.is_coexistence" class="size-3.5 ml-1 text-accent-primary  hover:scale-120 transition-transform duration-200" v-tooltip="'该Mod为共存状态，在创意工坊目录同样存在'" />
           </div>
 
@@ -112,9 +113,9 @@
           <!-- 标签 -->
           <div class="overflow-hidden" style="box-shadow: inset 8px 0 10px -8px rgba(0, 0, 0, 0.3), inset -8px 0 10px -8px rgba(0, 0, 0, 0.3);">
             <div v-if="modData?.tags && modData.tags.length && !simple" class="flex gap-0.5 w-full overflow-y-hidden overflow-x-scroll custom-scrollbar mt-0.5 outline-none ">
-                <span v-for="tag in modData.tags" :key="tag" class="min-w-fit font-mono px-0.5 py-0 my-0 rounded-md bg-accent-primary/10 text-accent-primary text-[0.7rem] font-bold border border-accent-primary/10 drop-shadow-xl/25">
-                  {{ tag }}
-                </span>
+              <span v-for="tag in modData.tags" :key="tag" class="min-w-fit font-mono px-0.5 py-0 my-0 rounded-md bg-accent-primary/10 text-accent-primary text-[0.7rem] font-bold border border-accent-primary/10 drop-shadow-xl/25">
+                {{ tag }}
+              </span>
             </div>
           </div>
         </template>
@@ -181,6 +182,7 @@ import { computed, h, nextTick, watch  } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP, IconSteam, IconSelf } from '../../utils/constants'
 import { useAppStore } from '../../stores/appStore'
+import { useAiStore } from '../../stores/aiStore'
 import { useModStore } from '../../stores/modStore'
 import { useGroupStore } from '../../stores/groupStore'
 import { useRuleStore } from '../../stores/ruleStore'
@@ -188,7 +190,8 @@ import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../utils/color'
 import { isSectionHeaderTitle } from '../../utils/common'
-import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen } from 'lucide-vue-next';
+import { normalizePackageId, normalizePackageToken } from '../../utils/modIdentity'
+import { X, FolderInput, Tag, Group, Palette, ChessPawn, Goal, Download, Eraser, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, LockOpen, SquaresExclude } from 'lucide-vue-next';
 
 
 const props = defineProps({
@@ -215,6 +218,7 @@ const props = defineProps({
 const emit = defineEmits(['contextmenu', 'toggle-section', 'expand-selected-sections', 'collapse-selected-sections'])
 
 const appStore = useAppStore()
+const aiStore = useAiStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
 const menuStore = useContextMenuStore()
@@ -230,6 +234,8 @@ const modData = computed(() => modStore.takeModById(props.item_id))
 const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
 // const modIcon = computed(() => modStore.getIconUrl(props.id))
 const displayName = computed(() => modData.value?.alias_name ? modData.value.alias_name : (modData.value?.name ? modData.value.name : props.item_id))
+const normalizePackageKey = (value = '') => String(value || '').trim().toLowerCase().replace(/_(steam|local)$/, '')
+const currentCanonicalId = computed(() => normalizePackageKey(modData.value?.canonical_package_id || modData.value?.package_id || props.item_id))
 // ModItem 自己也需要识别“哪些选中项属于标题分组”，这样右键菜单才能按批量分组操作显示。
 const isSectionHeaderName = (value) => isSectionHeaderTitle(value)
 const isSectionHeaderId = (id) => {
@@ -243,7 +249,7 @@ const selectedSectionHeaderIds = computed(() => {
 })
 
 // 是否启用
-const isActive = computed(() => modStore.activeIds.includes(props.item_id))
+const isActive = computed(() => modStore.activeIds.some(id => normalizePackageId(id) === currentCanonicalId.value))
 
 const modType = computed(() => modStore.displayModType(modData.value))
 
@@ -260,10 +266,25 @@ const replacementTooltip = computed(() => {
     }
     return `存在可替换版本：##${modData.value.replacement.new_name}##（${modData.value.replacement.new_workshop_id}）\n可在右键菜单中订阅`
 })
+const canToggleCoexistSource = computed(() => !props.sectionHeader && modStore.canSwitchCoexistenceSource(props.item_id))
+const isWorkshopCoexistSource = computed(() => modData.value?.source_preference === 'steam' || props.item_id.endsWith('_steam'))
+const sourceToggleTooltip = computed(() => {
+  const sourceLabel = SOURCE_TYPE_MAP[modData.value?.store] || modData.value?.store || '未知'
+  if (!canToggleCoexistSource.value) {
+    return `储存位置：${sourceLabel}`
+  }
+  return isWorkshopCoexistSource.value
+    ? `储存位置：${sourceLabel}\n点击切换到本地版`
+    : `储存位置：${sourceLabel}\n点击切换到工坊版`
+})
+const handleSourceToggle = async () => {
+  if (!canToggleCoexistSource.value) return
+  await modStore.toggleCoexistenceSource(props.item_id)
+}
 
 // 错误提示
 const issueState = computed(() => modStore.getModIssueState(props.item_id))
-const issues = computed(() => modStore.modIssues.get(props.item_id.toLowerCase()))
+const issues = computed(() => modStore.modIssues.get(normalizePackageToken(props.item_id)))
 const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
@@ -291,27 +312,27 @@ const hasLockPrevious = computed(() => {
   if (!modData.value?.interlock_id) return false
   const chain = modStore.interlocksMap[modData.value.interlock_id]
   if (!chain) return false
-  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  const myIdx = chain.findIndex(id => normalizePackageKey(id) === currentCanonicalId.value)
   return myIdx > 0 // 只要不是第一个，就应该有向上的链接头
 })
 const hasLockNext = computed(() => {
   if (!modData.value?.interlock_id) return false
   const chain = modStore.interlocksMap[modData.value.interlock_id]
   if (!chain) return false
-  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
+  const myIdx = chain.findIndex(id => normalizePackageKey(id) === currentCanonicalId.value)
   return myIdx !== -1 && myIdx < chain.length - 1 // 只要不是最后一个，就应该有向下的链接头
 })
 const expectedPrevId = computed(() => {
   if (!hasLockPrevious.value) return null
   const chain = modStore.interlocksMap[modData.value.interlock_id]
-  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
-  return chain[myIdx - 1].toLowerCase()
+  const myIdx = chain.findIndex(id => normalizePackageKey(id) === currentCanonicalId.value)
+  return normalizePackageKey(chain[myIdx - 1])
 })
 const expectedNextId = computed(() => {
   if (!hasLockNext.value) return null
   const chain = modStore.interlocksMap[modData.value.interlock_id]
-  const myIdx = chain.findIndex(id => id.toLowerCase() === props.item_id.toLowerCase())
-  return chain[myIdx + 1].toLowerCase()
+  const myIdx = chain.findIndex(id => normalizePackageKey(id) === currentCanonicalId.value)
+  return normalizePackageKey(chain[myIdx + 1])
 })
 const linkWarn = computed(() => {
   if (!issues.value) return [false, false]
@@ -320,9 +341,9 @@ const linkWarn = computed(() => {
   for (const issue of issues.value) {
     if (issue.type === ISSUE_TYPE.WARN_LINK_WRONG_ORDER || issue.type === ISSUE_TYPE.WARN_LINK_MOD_MISSING) {
       // 这里的 targetId 是在 modStore 里我们传入的“期待断裂点”的 ID
-      if (expectedPrevId.value && issue.targetId === expectedPrevId.value) {
+      if (expectedPrevId.value && normalizePackageKey(issue.targetId) === expectedPrevId.value) {
         lockPrev = true
-      } else if (expectedNextId.value && issue.targetId === expectedNextId.value) {
+      } else if (expectedNextId.value && normalizePackageKey(issue.targetId) === expectedNextId.value) {
         lockNext = true
       }
     }
@@ -390,10 +411,32 @@ const deleteModFiles = async () => {
 }
 // 批量生成别名备注
 const generateAliasNotes = async () => {
-  const res = await appStore.startAiBatchTask('batch_alias_generation', modStore.selectedMods)
-  if (res) {
-    console.log('批量生成别名备注',res)
+  const selectedMods = Array.isArray(modStore.selectedMods) ? modStore.selectedMods : []
+  if (selectedMods.length === 0) return
+
+  if (selectedMods.length === 1) {
+    const mod = selectedMods[0]
+    const packageId = normalizePackageId(mod?.package_id)
+    if (!packageId) return
+    const result = await aiStore.requestSingleModAliasGenerationResult({
+      packageId,
+      name: mod?.name || '',
+      description: mod?.description || '',
+      ownerType: 'mod_list',
+    })
+    if (!result) return
+    await modStore.updateModUserData(result.package_id, {
+      alias_name: String(result.alias_name || ''),
+      notes: String(result.notes || ''),
+    })
+    return
   }
+
+  await aiStore.startModAliasGenerationTask({
+    mods: selectedMods,
+    ownerType: 'mod_list',
+    needsReview: true,
+  })
 }
 // 取消订阅模组
 const unsubscribeWorkshopIds = async (delete_file = false) => {
@@ -411,13 +454,10 @@ const unsubscribeWorkshopIds = async (delete_file = false) => {
   });
   const check = await confirmStore.confirmAction('警告',`确定要取消订阅选中项${delete_file?'并删除文件':''}（${workshop_ids.length} 项）吗？${delete_file?'软件将主动删除Mod文件':'Steam 会自动删除已取消订阅的文件！'}`,{type:'error'})
   if(check) {
-    const res = await appStore.unsubscribeWorkshopIds(workshop_ids)
+    const res = await appStore.unsubscribeWorkshopIds(workshop_ids, delete_file ? path_hashes : null)
     if (res && delete_file) {
-      const deleteRes = await modStore.deleteMods(path_hashes, false)
-      if(deleteRes) {
-        modStore.selectMods([])
-        modStore.removeIdsOnAllList(selectedIds)
-      }
+      modStore.selectMods([])
+      modStore.removeIdsOnAllList(selectedIds)
     }
   }
 }
@@ -432,6 +472,8 @@ const handleContextMenu = async (event) => {
   }
   const selectedIds = modStore.selectedIds; 
   const selectedCountStr = selectedIds.length>1?` (${selectedIds.length}项)`:''
+  const coexistSelectedIds = selectedIds.filter(id => modStore.canSwitchCoexistenceSource(id))
+  const coexistSelectedCountStr = coexistSelectedIds.length>1?` (${coexistSelectedIds.length}项)`:''
   modStore.lastSelectedMod=modStore.takeModById(props.item_id)  // 记录最后选中的模组
   // 获取统计信息
   const stats = modStore.selectedStats
@@ -482,6 +524,16 @@ const handleContextMenu = async (event) => {
     },
     { label: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteModFiles() },
   ]
+  if (coexistSelectedIds.length > 0) {
+    fileMenuItems.push({
+      label: '切换共存版本',
+      icon: SquaresExclude,
+      children: [
+        { label: '切换为工坊版' + coexistSelectedCountStr, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
+        { label: '切换为本地版' + coexistSelectedCountStr, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
+      ]
+    })
+  }
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
@@ -490,7 +542,7 @@ const handleContextMenu = async (event) => {
     { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
     { label: 'Steam操作', icon: IconSteam, disabled: !modData.value.workshop_id, children: [
       { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.workshop_id) },
-      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([props.item_id]) },
+      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
       { label: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeWorkshopIds() },
       { label: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2, level: 'danger', action: () => unsubscribeWorkshopIds(true) },
     ]},
@@ -555,7 +607,7 @@ const handleContextMenu = async (event) => {
     }
   }
   // 1. 获取所有选中 Mod 的当前问题并集
-  const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);
+  const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(normalizePackageToken(id)) || []);
   // 2. 提取唯一的错误类型 (Type Unique Set)
   const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))];
 

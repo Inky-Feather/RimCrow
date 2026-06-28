@@ -115,7 +115,7 @@
               <div class="flex justify-between"><span class="opacity-60">替代项:</span> <span>{{ replacementTargets.length || '无' }}</span></div>
             </div>
 
-          <div v-if="mod.path" class="mt-2 p-2 bg-black/40 rounded-lg border border-text-main/5 text-[10px] text-text-dim break-all cursor-text select-text">
+          <div v-if="mod.path" class="mt-2 p-2 bg-black/40 rounded-lg border border-text-main/5 text-[0.7rem] text-text-dim break-all cursor-text select-text">
             {{ mod.path }}
           </div>
           

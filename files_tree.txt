@@ -1,16 +1,21 @@
 ·[RimModManager]
 ├── ·[.claude]
-│   └── ·[skills]
+│   ├── ·[skills]
+│   │   └── ·[gitnexus]
+│   │   
+│   │       ├── ·[gitnexus-cli]
+│   │       ├── ·[gitnexus-debugging]
+│   │       ├── ·[gitnexus-exploring]
+│   │       ├── ·[gitnexus-guide]
+│   │       ├── ·[gitnexus-impact-analysis]
+│   │       └── ·[gitnexus-refactoring]
+│   │       
+│   └── ·[worktrees]
 │   
-│       └── ·[gitnexus]
+│       ├── ·[festive-mahavira-4166a2]
+│       ├── ·[funny-turing-4aa078]
+│       └── ·[loving-lamarr-d7e11b]
 │       
-│           ├── ·[gitnexus-cli]
-│           ├── ·[gitnexus-debugging]
-│           ├── ·[gitnexus-exploring]
-│           ├── ·[gitnexus-guide]
-│           ├── ·[gitnexus-impact-analysis]
-│           └── ·[gitnexus-refactoring]
-│           
 ├── ·[.history]
 ├── ·[.pytest_cache]
 │   ├── ·[v]
@@ -18,13 +23,34 @@
 │   ├──  CACHEDIR.TAG
 │   └──  README.md
 │   
+├── ·[.ruff_cache]
+│   ├── ·[0.9.6]
+│   │   ├──  12228878442278937604
+│   │   ├──  12597327884289657622
+│   │   ├──  16606532305242249928
+│   │   ├──  3498731509232515300
+│   │   ├──  4941758101431761949
+│   │   └──  7229181939580559217
+│   │   
+│   ├──  .gitignore
+│   └──  CACHEDIR.TAG
+│   
 ├── ·[backend]
 │   ├── ·[ai]
 │   │   ├──  __init__.py
-│   │   ├──  llm_gateway.py
-│   │   ├──  prompts.py
-│   │   ├──  service.py
-│   │   └──  tools.py
+│   │   ├──  ai_contracts.py
+│   │   ├──  ai_definitions.py
+│   │   ├──  ai_gateway.py
+│   │   ├──  ai_service.py
+│   │   ├──  ai_tools.py
+│   │   ├──  assistant_runtime.py
+│   │   ├──  assistant_trace.py
+│   │   ├──  attachment_resolver.py
+│   │   ├──  def_actions.py
+│   │   ├──  def_attachments.py
+│   │   ├──  def_entries.py
+│   │   ├──  def_model_capabilities.py
+│   │   └──  def_output_contracts.py
 │   │   
 │   ├── ·[database]
 │   │   ├──  __init__.py
@@ -106,7 +132,6 @@
 │   └──  static_page.py
 │   
 ├── ·[data]
-├── ·[docs]
 ├── ·[frontend]
 │   ├── ·[public]
 │   │   ├──  icon.svg
@@ -117,6 +142,11 @@
 │   │   │   └──  vue.svg
 │   │   │   
 │   │   ├── ·[components]
+│   │   │   ├── ·[ai]
+│   │   │   │   ├──  AiActionCard.vue
+│   │   │   │   ├──  AiAssistantPanel.vue
+│   │   │   │   └──  AiDiagnosticSidebar.vue
+│   │   │   │   
 │   │   │   ├── ·[common]
 │   │   │   │   ├── ·[ContextMenu]
 │   │   │   │   ├── ·[input]
@@ -125,9 +155,7 @@
 │   │   │   │   ├──  FixedPopover.vue
 │   │   │   │   └──  HoverPanel.vue
 │   │   │   │   
-│   │   │   ├── ·[supplement]
 │   │   │   ├── ·[utils]
-│   │   │   │   ├──  AiDiagnosticSidebar.vue
 │   │   │   │   ├──  AppLogPanel.vue
 │   │   │   │   ├──  DependencyGraph.vue
 │   │   │   │   ├──  FileSearchPreviewEditor.vue
@@ -149,7 +177,8 @@
 │   │   │   │   ├── ·[views]
 │   │   │   │   └──  WorkspaceOverlay.vue
 │   │   │   │   
-│   │   │   ├──  AiReviewModal.vue
+│   │   │   ├──  AIDefinitionManager.vue
+│   │   │   ├──  AiSessionTraceModal.vue
 │   │   │   ├──  BackupList.vue
 │   │   │   ├──  ConflictResolver.vue
 │   │   │   ├──  DebugPanel.vue
@@ -159,11 +188,11 @@
 │   │   │   ├──  ListDiffView.vue
 │   │   │   ├──  LogViewer.vue
 │   │   │   ├──  MissingInstallDialog.vue
+│   │   │   ├──  ModAliasReviewModal.vue
 │   │   │   ├──  ModDetails.vue
 │   │   │   ├──  ModList.vue
 │   │   │   ├──  ModRuleEditor.vue
 │   │   │   ├──  ProfileDrawer.vue
-│   │   │   ├──  PromptManager.vue
 │   │   │   ├──  RimHeader.vue
 │   │   │   ├──  RulePanel.vue
 │   │   │   ├──  SettingsPanel.vue
@@ -190,10 +219,14 @@
 │   │   │       └──  SearchTypes.js
 │   │   │       
 │   │   ├── ·[runtime]
+│   │   │   ├──  aiActionRuntime.js
+│   │   │   ├──  aiAttachmentRuntime.js
+│   │   │   ├──  aiUsageTooltips.js
 │   │   │   ├──  pywebviewBridge.js
 │   │   │   └──  runtimeBridge.js
 │   │   │   
 │   │   ├── ·[stores]
+│   │   │   ├──  aiStore.js
 │   │   │   ├──  appStore.js
 │   │   │   ├──  confirmStore.js
 │   │   │   ├──  contextMenuStore.js
@@ -201,6 +234,7 @@
 │   │   │   ├──  groupStore.js
 │   │   │   ├──  guideStore.js
 │   │   │   ├──  hoverStore.js
+│   │   │   ├──  logStore.js
 │   │   │   ├──  missingInstallStore.js
 │   │   │   ├──  modStore.js
 │   │   │   ├──  orderStore.js
@@ -237,16 +271,18 @@
 │   └──  vite.config.js
 │   
 ├── ·[mods]
-├── ·[packaging_hooks]
-├── ·[scripts]
 ├── ·[test]
 ├── ·[tests]
 │   ├──  __init__.py
 │   ├──  analyze_language_packs.py
+│   ├──  test_ai_assistant_runtime.py
+│   ├──  test_ai_attachment_resolver.py
+│   ├──  test_ai_gateway_request_compat.py
 │   ├──  test_ai_service_helpers.py
 │   ├──  test_download_manager.py
 │   ├──  test_file_search.py
 │   ├──  test_github_manager.py
+│   ├──  test_group_dao.py
 │   ├──  test_import_check.py
 │   ├──  test_language_pack_ownership.py
 │   ├──  test_load_order_manager_import_check.py

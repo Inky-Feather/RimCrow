@@ -1,21 +1,24 @@
 
 import os
 import re
+import ipaddress
 import uuid
 import shutil
 import hashlib
+import mimetypes
 import tempfile
 import threading
 import subprocess
 import platform
+import time
 from PIL import Image
 from pathlib import Path
 from typing import Any, Dict
-import requests
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import webview # 引入 webview 库
 from backend.managers.mgr_game import GameManager
+from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
@@ -38,6 +41,19 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
     2. /thumb?id=...&path=... -> 动态生成并返回缩略图
     3. /remote?url=... -> 代理下载缓存网络图片
     """
+    REMOTE_ALLOWED_SCHEMES = {"http", "https"}
+    REMOTE_IMAGE_CONTENT_TYPES = {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+        "image/bmp",
+        "image/x-ms-bmp",
+    }
+    REMOTE_MAX_FILE_SIZE = 15 * 1024 * 1024
+    REMOTE_FAILURE_COOLDOWN_SECONDS = 300
+    _remote_failure_cache: dict[str, float] = {}
+    _remote_failure_lock = threading.Lock()
     
     def do_GET(self):
         try:
@@ -80,31 +96,21 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 return
             # --- 路由 3：代理缓存网络图片 (完美降级) ---
             elif parsed.path == '/remote':
-                remote_url = urllib.parse.unquote(qs.get('url', [''])[0])
+                remote_url = self._normalize_remote_url(urllib.parse.unquote(qs.get('url', [''])[0]))
                 if not remote_url:
                     self.send_error(400, "Missing URL")
                     return
-                # MD5 生成缓存文件名
-                url_hash = hashlib.md5(remote_url.encode('utf-8')).hexdigest()
-                ext = ".png" if ".png" in remote_url.lower() else ".jpg"
-                cache_path = os.path.join(GALLERY_CACHE_DIR, f"{url_hash}{ext}")
-                # 如果没有缓存，则尝试下载
-                if not os.path.exists(cache_path):
-                    try:
-                        # 加上超时限制，避免阻塞线程
-                        resp = requests.get(remote_url, timeout=5)
-                        if resp.status_code == 200:
-                            # 写入缓存
-                            with open(cache_path, 'wb') as f:
-                                f.write(resp.content)
-                        else:
-                            self._fallback_to_browser(remote_url)
-                            return
-                    except Exception as e:
-                        logger.debug(f"Proxy download failed, fallback to original URL: {e}")
-                        self._fallback_to_browser(remote_url)
-                        return
-                self._serve_local_file(cache_path)
+                cache_path = self._resolve_remote_cache_path(remote_url)
+                if cache_path and os.path.exists(cache_path):
+                    self._serve_local_file(cache_path)
+                    return
+
+                downloaded_cache_path = self._download_remote_to_cache(remote_url, cache_path)
+                if downloaded_cache_path and os.path.exists(downloaded_cache_path):
+                    self._serve_local_file(downloaded_cache_path)
+                    return
+
+                self._fallback_to_browser(remote_url)
                 return
             else:
                 self.send_error(404, "Invalid route")
@@ -122,6 +128,165 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         self.send_header('Location', original_url)
         self.end_headers()
 
+    def _normalize_remote_host(self, remote_url: str) -> str:
+        parsed = urllib.parse.urlparse(remote_url)
+        return str(parsed.hostname or "").strip().lower()
+
+    def _normalize_remote_url(self, remote_url: str) -> str:
+        """
+        统一整理远程图片地址，确保白名单判断与缓存键都基于稳定格式。
+        """
+        normalized_url = str(remote_url or "").strip()
+        if not normalized_url: return ""
+        # 富文本中常见协议后带空格的脏链接，如 `https: //host/path`。
+        normalized_url = re.sub(r'^(https?):\s*//', r'\1://', normalized_url, flags=re.IGNORECASE)
+        # 去掉零宽字符，避免同一链接因隐藏字符产生不同缓存键。
+        normalized_url = re.sub(r'[\u200b\u200c\u200d\ufeff]+', '', normalized_url)
+        return normalized_url
+
+    def _is_allowed_remote_url(self, remote_url: str) -> bool:
+        """过滤明显危险或无效的目标，其他公网图片地址统一允许走缓存。"""
+        try:
+            parsed = urllib.parse.urlparse(remote_url)
+        except Exception:
+            return False
+
+        if str(parsed.scheme or "").strip().lower() not in self.REMOTE_ALLOWED_SCHEMES:
+            return False
+
+        host = self._normalize_remote_host(remote_url)
+        if not host:
+            return False
+
+        # 只阻止字面量本机/私网地址，域名统一交给后续请求层处理，避免维护白名单。
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            return host not in {"localhost"}
+
+        return not any([
+            ip.is_private,
+            ip.is_loopback,
+            ip.is_link_local,
+            ip.is_multicast,
+            ip.is_reserved,
+            ip.is_unspecified,
+        ])
+
+    def _is_remote_failure_cooled_down(self, remote_url: str) -> bool:
+        """短时间内重复失败的地址直接跳过下载，避免坏链持续打远端。"""
+        current_time = time.time()
+        with self._remote_failure_lock:
+            last_failed_at = self._remote_failure_cache.get(remote_url)
+            if last_failed_at is None: return False
+            if current_time - last_failed_at < self.REMOTE_FAILURE_COOLDOWN_SECONDS: return True
+            self._remote_failure_cache.pop(remote_url, None)
+            return False
+
+    def _mark_remote_failure(self, remote_url: str) -> None:
+        with self._remote_failure_lock:
+            self._remote_failure_cache[remote_url] = time.time()
+
+    def _resolve_remote_cache_path(self, remote_url: str) -> str:
+        """
+        按 URL 哈希定位缓存文件。
+
+        网络图片默认按“内容基本不会在同一链接下变化”处理，
+        因此直接长期复用本地缓存，不再引入额外 TTL。
+        """
+        url_hash = hashlib.md5(remote_url.encode('utf-8')).hexdigest()
+        existing_candidates = sorted(Path(GALLERY_CACHE_DIR).glob(f"{url_hash}.*"))
+        if existing_candidates: return str(existing_candidates[0])
+
+        guessed_ext = self._guess_remote_extension(remote_url, content_type="")
+        return os.path.join(GALLERY_CACHE_DIR, f"{url_hash}{guessed_ext}")
+
+    def _guess_remote_extension(self, remote_url: str, content_type: str = "") -> str:
+        """优先根据响应类型判断扩展名，缺失时再回退到 URL 后缀。"""
+        normalized_content_type = str(content_type or "").split(";")[0].strip().lower()
+        if normalized_content_type:
+            guessed_from_type = mimetypes.guess_extension(normalized_content_type, strict=False)
+            if guessed_from_type: return ".jpg" if guessed_from_type == ".jpe" else guessed_from_type
+
+        parsed = urllib.parse.urlparse(remote_url)
+        suffix = Path(parsed.path).suffix.lower()
+        if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+            return ".jpg" if suffix == ".jpeg" else suffix
+        return ".img"
+
+    def _download_remote_to_cache(self, remote_url: str, cache_path: str) -> str | None:
+        """
+        下载远程图片到缓存目录。
+
+        下载失败时不抛出异常，交给调用方决定是否回退到原始链接。
+        """
+        if not self._is_allowed_remote_url(remote_url):
+            logger.debug(f"Rejected remote image by safety policy: {remote_url}")
+            return None
+        if self._is_remote_failure_cooled_down(remote_url): return None
+
+        try:
+            with build_retry_session(total=2, connect=2, read=2, allowed_methods=("GET", "HEAD")) as session:
+                request_kwargs = {
+                    "headers": merge_headers({"Accept": "image/*"}),
+                    "timeout": (5, 12),
+                    "stream": True,
+                }
+                proxy_url = network_mgr.get_proxy_url()
+                if proxy_url:
+                    request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
+
+                response = session.get(remote_url, **request_kwargs)
+                if response.status_code != 200:
+                    logger.debug(f"Remote image download failed with status {response.status_code}: {remote_url}")
+                    self._mark_remote_failure(remote_url)
+                    return None
+
+                content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                if content_type and content_type not in self.REMOTE_IMAGE_CONTENT_TYPES:
+                    logger.debug(f"Remote image content-type rejected: {content_type} ({remote_url})")
+                    self._mark_remote_failure(remote_url)
+                    return None
+
+                declared_length = int(response.headers.get("Content-Length") or 0)
+                if declared_length > self.REMOTE_MAX_FILE_SIZE:
+                    logger.debug(f"Remote image too large by content-length: {declared_length} ({remote_url})")
+                    self._mark_remote_failure(remote_url)
+                    return None
+
+                final_cache_path = cache_path
+                expected_ext = self._guess_remote_extension(remote_url, content_type)
+                current_ext = Path(cache_path).suffix.lower()
+                if expected_ext and current_ext != expected_ext:
+                    final_cache_path = str(Path(cache_path).with_suffix(expected_ext))
+
+                temp_path = f"{final_cache_path}.{uuid.uuid4().hex}.tmp"
+                total_bytes = 0
+                with open(temp_path, 'wb') as handle:
+                    for chunk in response.iter_content(chunk_size=64 * 1024):
+                        if not chunk:
+                            continue
+                        total_bytes += len(chunk)
+                        if total_bytes > self.REMOTE_MAX_FILE_SIZE:
+                            handle.close()
+                            delete_fs_path(temp_path)
+                            logger.debug(f"Remote image exceeded size limit while streaming: {remote_url}")
+                            self._mark_remote_failure(remote_url)
+                            return None
+                        handle.write(chunk)
+
+                if total_bytes <= 0:
+                    delete_fs_path(temp_path)
+                    self._mark_remote_failure(remote_url)
+                    return None
+
+                os.replace(temp_path, final_cache_path)
+                return final_cache_path
+        except Exception as e:
+            logger.debug(f"Proxy download failed, fallback to original URL: {e}")
+            self._mark_remote_failure(remote_url)
+            return None
+
     def _serve_local_file(self, file_path):
         """发送本地文件流并设置强缓存"""
         ext = os.path.splitext(file_path)[1].lower()
@@ -130,7 +295,8 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         elif ext in ['.jpg', '.jpeg']: ctype = 'image/jpeg'
         elif ext == '.webp': ctype = 'image/webp'
         elif ext == '.gif': ctype = 'image/gif'
-        
+        elif ext == '.bmp': ctype = 'image/bmp'
+
         self.send_response(200)
         self.send_header('Content-type', ctype)
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -212,6 +378,33 @@ class FileManager:
     def get_port(self):
         """返回当前 HTTP 服务器端口"""
         return self._port
+
+    def get_remote_cache_stats(self) -> dict[str, int]:
+        """统计网络图片缓存数量与总占用。"""
+        total_files = 0
+        total_bytes = 0
+        for entry in Path(GALLERY_CACHE_DIR).iterdir():
+            if not entry.is_file():
+                continue
+            try:
+                total_files += 1
+                total_bytes += entry.stat().st_size
+            except OSError:
+                continue
+        return {
+            "file_count": total_files,
+            "total_bytes": total_bytes,
+        }
+
+    def clear_remote_cache(self) -> dict[str, int]:
+        """清空网络图片缓存，并返回清理前统计。"""
+        cleared_stats = self.get_remote_cache_stats()
+        for entry in Path(GALLERY_CACHE_DIR).iterdir():
+            if entry.is_file():
+                delete_fs_path(str(entry))
+        with LocalAssetHandler._remote_failure_lock:
+            LocalAssetHandler._remote_failure_cache.clear()
+        return cleared_stats
     
     def get_asset_url(self, local_path):
         """
@@ -239,8 +432,7 @@ class FileManager:
         如果不存在返回 None。
         """
         target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
-        if os.path.exists(target_path):
-            return target_path
+        if os.path.exists(target_path): return target_path
         return None
 
     def ensure_thumbnail(self, package_id, original_path, max_size=64):
@@ -438,8 +630,7 @@ class FileManager:
                     allow_multiple=False
                 )
                 # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
-                if result and len(result) > 0:
-                    return result[0]
+                if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
                 logger.warning(f"Webview folder dialog failed: {e}")
@@ -482,8 +673,7 @@ class FileManager:
                     file_types=file_types
                 )
                 # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
-                if result and len(result) > 0:
-                    return result[0]
+                if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
                 logger.warning(f"Webview open dialog failed: {e}")
@@ -524,8 +714,7 @@ class FileManager:
                 )
                 logger.info(f"用户选择保存路径: {result}")
                 # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
-                if result and len(result) > 0:
-                    return result[0]
+                if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
                 logger.warning(f"Webview save dialog failed: {e}")
@@ -844,12 +1033,10 @@ class FileManager:
     def cancel_localize_task(task_id: str) -> bool:
         """请求取消本地化复制任务。"""
         normalized_task_id = str(task_id or '').strip()
-        if not normalized_task_id:
-            return False
+        if not normalized_task_id: return False
         with FileManager._localize_lock:
             cancel_event = FileManager._localize_cancel_events.get(normalized_task_id)
-        if not cancel_event:
-            return False
+        if not cancel_event: return False
         cancel_event.set()
         return True
     
@@ -907,8 +1094,7 @@ class FileManager:
     @staticmethod
     def sanitize_filename(name):
         """清理文件名，确保路径合法"""
-        if not name:
-            return "Unknown_Mod"
+        if not name: return "Unknown_Mod"
         # 1. 替换 Windows/Linux 非法字符为下划线
         name = re.sub(r'[\\/:*?"<>|]', '_', str(name))
         # 2. 移除不可见字符
@@ -1000,8 +1186,7 @@ class FileManager:
     @staticmethod
     def sync_links_full(local_mods_path, workshop_mod_paths: list):
         """全量重建链接：删除所有旧链接后重新创建目标集合"""
-        if not local_mods_path or not os.path.exists(local_mods_path):
-            return False
+        if not local_mods_path or not os.path.exists(local_mods_path): return False
 
         # 1. 准备目标清单 (统一转小写进行防呆匹配)
         target_map = {}
@@ -1393,8 +1578,7 @@ class PathChecker:
         }
         """
         path = Path(path_str) / "ModsConfig.xml"
-        if path.exists():
-            return cls._format_res(True, data=str(path), msg=f"Mods 配置文件：{path}")
+        if path.exists(): return cls._format_res(True, data=str(path), msg=f"Mods 配置文件：{path}")
         return cls._format_res(False, msg="未找到 ModsConfig.xml", msg_type="warn")
 
     @classmethod
@@ -1429,8 +1613,7 @@ class PathChecker:
         """
         if not path_str: return cls._format_res(False, msg="未指定 Steam 路径")
         exe_path = Path(path_str) / "steam.exe"
-        if exe_path.exists():
-            return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{exe_path}")
+        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{exe_path}")
         return cls._format_res(False, msg="路径下未找到 steam.exe", msg_type="warn")
     
     @classmethod
@@ -1451,8 +1634,7 @@ class PathChecker:
         if result: return cls._format_res(False, msg="SteamCMD 路径不能包含中文")
         
         exe_path = Path(path_str) / "steamcmd.exe"
-        if exe_path.exists():
-            return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
+        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
         return cls._format_res(False, msg="路径下未找到 steamcmd.exe", msg_type="warn")
 
     @classmethod

@@ -114,8 +114,7 @@ class ModXMLParser:
 
     def _extract_version_from_tag(self, tag_name) -> str:
         """从 <v1.5> 这种标签中提取版本号 1.5"""
-        if tag_name.startswith("v"):
-            return tag_name[1:]
+        if tag_name.startswith("v"): return tag_name[1:]
         return tag_name
 
     # --- 核心：统一合并逻辑 ---

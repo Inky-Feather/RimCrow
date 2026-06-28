@@ -107,8 +107,7 @@ class RuleManager:
         self.community_rules = {}
         self.community_rules_update_time = 0
         community_file_path = Path(settings.config.community_rules_path)
-        if not community_file_path.exists():
-            return
+        if not community_file_path.exists(): return
 
         with open(community_file_path, 'r', encoding='utf-8', errors='replace') as f:
             data = json.load(f)
@@ -128,8 +127,7 @@ class RuleManager:
         self.settings = self._build_default_settings()
 
         user_file_path = self._get_user_rules_path()
-        if not user_file_path.exists():
-            return
+        if not user_file_path.exists(): return
 
         with open(user_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -369,14 +367,12 @@ class RuleManager:
         """
         if requirements is None: return False
         # 如果包含 'all'，或者列表为空（默认兼容），直接通过
-        if isinstance(requirements, list) and ('all' in requirements or not requirements):
-            return True
+        if isinstance(requirements, list) and ('all' in requirements or not requirements): return True
         
         # 获取当前游戏版本 (例如 "1.5.4100" -> "1.5")
         # 注意：settings.config.game_version 可能为空，需兜底
         current_ver = self.context.game_version
-        if not current_ver:
-            return True # 无法确定版本时，默认放行，或者可以选择严格模式 return False
+        if not current_ver: return True # 无法确定版本时，默认放行，或者可以选择严格模式 return False
             
         short_ver = current_ver[:3] # 取前三位 "1.5"
         # logger.debug(f"Current game version: {current_ver}, short version: {short_ver}, requirements: {requirements}")
@@ -445,8 +441,7 @@ class RuleManager:
                     changed = True
 
         action = clean_rule.get("action")
-        if not isinstance(action, dict):
-            return clean_rule, warnings, changed
+        if not isinstance(action, dict): return clean_rule, warnings, changed
 
         act_type = action.get("type")
         if act_type == RuleActionType.WEIGHT_SET:
@@ -466,8 +461,7 @@ class RuleManager:
 
     def _sanitize_dynamic_rules(self, rules: Any, origin: str = "动态规则") -> Tuple[List[dict], List[str], bool]:
         """批量清洗动态规则列表。"""
-        if not isinstance(rules, list):
-            return [], [f"{origin} 列表格式无效，已重置为空。"], True
+        if not isinstance(rules, list): return [], [f"{origin} 列表格式无效，已重置为空。"], True
 
         sanitized_rules = []
         warnings = []
@@ -492,10 +486,8 @@ class RuleManager:
         def _resolve_path(data, path: str):
             current = data
             for part in path.split('.'):
-                if isinstance(current, dict):
-                    current = current.get(part)
-                else:
-                    return None
+                if isinstance(current, dict): current = current.get(part)
+                else: return None
             return current
 
         candidate_fields = field_aliases.get(field, [field])
@@ -517,8 +509,7 @@ class RuleManager:
             seen = set()
             for item in collected_values:
                 key = str(item).strip().lower()
-                if not key or key in seen:
-                    continue
+                if not key or key in seen: continue
                 seen.add(key)
                 unique_values.append(item)
             return unique_values or None
@@ -552,8 +543,7 @@ class RuleManager:
         seen = set()
         for owner_id in owner_ids or []:
             normalized_id = str(owner_id or "").strip().lower()
-            if not normalized_id or normalized_id in seen:
-                continue
+            if not normalized_id or normalized_id in seen: continue
             seen.add(normalized_id)
             normalized_owner_ids.append(normalized_id)
 
@@ -663,8 +653,7 @@ class RuleManager:
         """
         pkg_id = mod_data.get('package_id', '').lower().strip()
         # 1. 检查特殊硬编码 ID
-        if pkg_id in SPECIAL_WEIGHTS:
-            return SPECIAL_WEIGHTS[pkg_id]
+        if pkg_id in SPECIAL_WEIGHTS: return SPECIAL_WEIGHTS[pkg_id]
         # 2. 根据作者判定 (官方作者)
         authors = mod_data.get('author', [])
         if 'Ludeon Studios' in authors: return 60

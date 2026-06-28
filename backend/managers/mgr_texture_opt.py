@@ -130,8 +130,7 @@ class _ToolProcessRunner:
 
                 def consume_output() -> None:
                     nonlocal reader_error
-                    if not process or not process.stdout:
-                        return
+                    if not process or not process.stdout: return
                     try:
                         for line in process.stdout:
                             log_file.write(line)
@@ -196,31 +195,25 @@ class _ToolProcessRunner:
 
     @staticmethod
     def read_process_log(log_path: Path | None, limit: int = 2000) -> str:
-        if not log_path or not log_path.exists():
-            return ""
+        if not log_path or not log_path.exists(): return ""
         try:
             with log_path.open("rb") as handle:
                 handle.seek(0, os.SEEK_END)
                 size = handle.tell()
                 handle.seek(max(0, size - max(1, int(limit))), os.SEEK_SET)
                 data = handle.read()
-        except OSError:
-            return ""
+        except OSError: return ""
         return data.decode("utf-8", errors="replace").strip() if data else ""
 
     @staticmethod
     def cleanup_log_file(log_path: Path | None) -> None:
-        if not log_path:
-            return
-        try:
-            log_path.unlink()
-        except OSError:
-            pass
+        if not log_path: return
+        try: log_path.unlink()
+        except OSError: pass
 
     @staticmethod
     def preserve_process_log(log_path: Path | None, tool_name: str) -> str:
-        if not log_path or not log_path.exists():
-            return ""
+        if not log_path or not log_path.exists(): return ""
         preserved_path = log_path.with_name(f"{tool_name}_{log_path.stem}.log")
         try:
             if preserved_path.exists():
@@ -250,8 +243,7 @@ class ToddsEncoder:
             shutil.which("todds.exe") or "",
         ]
         for candidate in candidates:
-            if candidate and Path(candidate).exists():
-                return Path(candidate)
+            if candidate and Path(candidate).exists(): return Path(candidate)
         raise TextureOptError("未找到 todds.exe。请在贴图优化中心下载 todds。")
 
     def encode_batch(
@@ -264,8 +256,7 @@ class ToddsEncoder:
         output_callback: Callable[[str], None] | None = None,
     ) -> None:
         normalized_sources = [str(Path(path)) for path in source_paths if path]
-        if not normalized_sources:
-            return
+        if not normalized_sources: return
 
         command = [
             str(self.resolve_executable()),
@@ -287,7 +278,7 @@ class ToddsEncoder:
         else:
             command.extend(["-sc", str(int(scale_percent))])
 
-        timeout_seconds = max(300, int(self.options.get("encode_batch_timeout_seconds", 480) or 480))
+        timeout_seconds = max(300, int(self.options.get("encode_batch_timeout_seconds", 600) or 600))
         file_list = None
         try:
             with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", delete=False, suffix=".txt") as handle:
@@ -337,8 +328,7 @@ class TextureOptimizationManager:
         deadline = time.time() + max(0.0, timeout)
         while time.time() < deadline:
             with self._lock:
-                if not self._analysis_tasks:
-                    return True
+                if not self._analysis_tasks: return True
             time.sleep(max(0.01, poll_interval))
         with self._lock:
             return not self._analysis_tasks
@@ -411,8 +401,7 @@ class TextureOptimizationManager:
 
         merged_options = self._build_options(options)
         status = self.get_backend_status(merged_options)
-        if status["available"]:
-            return {"already_ready": True}
+        if status["available"]: return {"already_ready": True}
 
         from backend.managers.mgr_github import (
             GITHUB_ARTIFACT_RELEASE_ASSET,
@@ -498,6 +487,7 @@ class TextureOptimizationManager:
             self._set_task_state(task, status="running", message="正在执行贴图队列...")
             summary = self._clean_outputs(task) if task.action == "clean_generated" else self._optimize(task)
             success_message = str(summary.pop("message", "贴图优化任务完成"))
+            final_status = str(summary.pop("final_status", "success") or "success")
             final_summary = summary.pop("final_summary", None)
             final_mods = summary.pop("final_mods", None)
             refresh_after_analyze = bool(summary.pop("refresh_after_analyze", True))
@@ -507,11 +497,14 @@ class TextureOptimizationManager:
                 metrics["summary"] = final_summary
             if isinstance(final_mods, list):
                 metrics["final_mods"] = final_mods
+            failed_items = summary.get("failed_items")
+            if isinstance(failed_items, list) and failed_items:
+                metrics["failed_items"] = failed_items
             metrics["refresh_after_analyze"] = refresh_after_analyze
             metrics["elapsed_ms"] = elapsed_ms
             self._set_task_state(
                 task,
-                status="success",
+                status=final_status,
                 progress=100,
                 message=f"{success_message}，用时 {self._format_elapsed_ms(elapsed_ms)}",
                 summary=summary,
@@ -552,12 +545,15 @@ class TextureOptimizationManager:
         optimized = 0
         skipped = 0
         failed = 0
+        failed_items: list[dict[str, Any]] = []
         scan_results = self._scan_mods_for_optimize(task, options)
         all_entries: list[dict[str, Any]] = []
+        entries_by_mod_path: dict[str, list[dict[str, Any]]] = {}
         for result in scan_results:
             mod_path = str(result["mod_path"])
             entries = list(result["entries"])
             all_entries.extend(entries)
+            entries_by_mod_path[mod_path] = entries
             skipped += self._count_skipped_entries(entries, options)
             final_mods_by_path[mod_path] = dict(result["stat"])
 
@@ -566,6 +562,37 @@ class TextureOptimizationManager:
         total_sources = len(all_entries)
         total_pending = sum(len(batch["entries"]) for batch in batches)
         phase_plan_total = total_pending
+
+        def is_recoverable_encode_error(exc: Exception) -> bool:
+            if not isinstance(exc, TextureOptError):
+                return False
+            message = str(exc or "")
+            return message.startswith("todds 执行失败") or message.startswith("todds 执行超时")
+
+        def remember_failed_entry(entry: dict[str, Any], exc: Exception) -> None:
+            error_text = str(exc or "未知错误")
+            entry["last_error"] = error_text
+            if len(failed_items) >= 20:
+                return
+            failed_items.append(
+                {
+                    "mod_name": str(entry.get("mod_name") or ""),
+                    "rel_path": str(entry.get("rel_path") or ""),
+                    "error": error_text,
+                }
+            )
+
+        def refresh_mod_stats(mod_paths: set[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+            for mod_path in mod_paths:
+                entries = entries_by_mod_path.get(mod_path) or []
+                mod_name = str(entries[0].get("mod_name") or Path(mod_path).name) if entries else Path(mod_path).name
+                final_mods_by_path[mod_path] = self._build_mod_stat(
+                    mod_path,
+                    mod_name,
+                    entries,
+                    self._collect_output_stats(mod_path),
+                )
+            return self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
         self._emit_progress(
             task,
@@ -597,30 +624,33 @@ class TextureOptimizationManager:
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("DDS 生成任务已取消")
             batch_size = len(batch["entries"])
-            batch_completed_base = optimized
+            batch_completed_base = optimized + failed
             last_batch_progress = 0
             batch_total_hint = batch_size
             scale_percent = batch.get("scale_percent")
             scale_label = f"{int(scale_percent)}%" if scale_percent is not None else "原尺寸"
             last_live_emit_at = 0.0
+            affected_mod_paths = {
+                str(entry.get("mod_path") or "")
+                for entry in batch["entries"]
+                if str(entry.get("mod_path") or "")
+            }
 
             def handle_todds_output(line: str) -> None:
                 nonlocal last_batch_progress, batch_total_hint, last_live_emit_at
                 match = TODDS_PROGRESS_PATTERN.search(str(line or ""))
-                if not match:
-                    return
+                if not match: return
                 current = max(0, int(match.group(1)))
                 total = max(1, int(match.group(2)))
                 batch_total_hint = total
                 current = min(current, batch_size)
-                if current <= last_batch_progress:
-                    return
+                if current <= last_batch_progress: return
                 now = time.monotonic()
-                if current < batch_size and (now - last_live_emit_at) < 0.2:
-                    return
+                if current < batch_size and (now - last_live_emit_at) < 0.2: return
                 last_batch_progress = current
                 last_live_emit_at = now
                 cumulative_done = batch_completed_base + current
+                optimized_live = optimized + current
                 encode_progress_live = 25 + int((cumulative_done / max(1, total_pending)) * 65)
                 self._emit_progress(
                     task,
@@ -630,7 +660,7 @@ class TextureOptimizationManager:
                     metrics={
                         "done": cumulative_done,
                         "total": total_pending,
-                        "optimized": cumulative_done,
+                        "optimized": optimized_live,
                         "skipped": skipped,
                         "failed": failed,
                         "phase": "encode",
@@ -658,29 +688,149 @@ class TextureOptimizationManager:
                 )
             except TextureOptCancelled:
                 raise
-            except Exception:
-                failed += len(batch["entries"])
-                raise
+            except Exception as exc:
+                if not is_recoverable_encode_error(exc):
+                    raise
+                if batch_size == 1:
+                    failed += 1
+                    remember_failed_entry(batch["entries"][0], exc)
+                    final_summary, final_mods = refresh_mod_stats(affected_mod_paths)
+                    processed_done = optimized + failed
+                    encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
+                    self._emit_progress(
+                        task,
+                        status="running",
+                        progress=min(90, max(25, encode_progress)),
+                        message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})，单张失败已跳过",
+                        metrics={
+                            "done": processed_done,
+                            "total": total_pending,
+                            "optimized": optimized,
+                            "skipped": skipped,
+                            "failed": failed,
+                            "phase": "encode",
+                            "phase_label": "生成阶段",
+                            "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                            "phase_done": processed_done,
+                            "phase_total": phase_plan_total,
+                            "phase_unit": "张",
+                            "current_batch_index": batch_index,
+                            "current_batch_total": len(batches),
+                            "current_batch_size": batch_size,
+                            "current_batch_scale": scale_percent,
+                            "current_batch_done": 1,
+                            "current_batch_progress_total": 1,
+                            "summary": final_summary,
+                            "final_mods": final_mods,
+                            "refresh_after_analyze": False,
+                        },
+                    )
+                    continue
+
+                self._emit_progress(
+                    task,
+                    status="running",
+                    progress=max(25, task.progress),
+                    message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label}) 失败，正在逐张重试",
+                    metrics={
+                        "done": optimized + failed,
+                        "total": total_pending,
+                        "optimized": optimized,
+                        "skipped": skipped,
+                        "failed": failed,
+                        "phase": "encode",
+                        "phase_label": "生成阶段",
+                        "phase_percent": int(((optimized + failed) / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                        "phase_done": optimized + failed,
+                        "phase_total": phase_plan_total,
+                        "phase_unit": "张",
+                        "current_batch_index": batch_index,
+                        "current_batch_total": len(batches),
+                        "current_batch_size": batch_size,
+                        "current_batch_scale": scale_percent,
+                        "current_batch_done": 0,
+                        "current_batch_progress_total": batch_size,
+                        "refresh_after_analyze": False,
+                    },
+                )
+
+                batch_completed = 0
+                for entry in batch["entries"]:
+                    if task._cancel_event.is_set():
+                        raise TextureOptCancelled("DDS 生成任务已取消")
+                    single_mod_path = str(entry.get("mod_path") or "")
+                    try:
+                        encoder.encode_batch(
+                            task._cancel_event,
+                            source_paths=[str(entry.get("source_path") or "")],
+                            overwrite_existing=bool(batch["overwrite_existing"]),
+                            scale_percent=batch["scale_percent"],
+                        )
+                    except TextureOptCancelled:
+                        raise
+                    except Exception as single_exc:
+                        if not is_recoverable_encode_error(single_exc):
+                            raise
+                        failed += 1
+                        remember_failed_entry(entry, single_exc)
+                    else:
+                        optimized += 1
+                        self._apply_batch_results([entry])
+
+                    batch_completed += 1
+                    final_summary, final_mods = refresh_mod_stats({single_mod_path} if single_mod_path else set())
+                    processed_done = optimized + failed
+                    encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
+                    self._emit_progress(
+                        task,
+                        status="running",
+                        progress=min(90, max(25, encode_progress)),
+                        message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})，逐张重试中",
+                        metrics={
+                            "done": processed_done,
+                            "total": total_pending,
+                            "optimized": optimized,
+                            "skipped": skipped,
+                            "failed": failed,
+                            "phase": "encode",
+                            "phase_label": "生成阶段",
+                            "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                            "phase_done": processed_done,
+                            "phase_total": phase_plan_total,
+                            "phase_unit": "张",
+                            "current_batch_index": batch_index,
+                            "current_batch_total": len(batches),
+                            "current_batch_size": batch_size,
+                            "current_batch_scale": scale_percent,
+                            "current_batch_done": batch_completed,
+                            "current_batch_progress_total": batch_size,
+                            "summary": final_summary,
+                            "final_mods": final_mods,
+                            "refresh_after_analyze": False,
+                        },
+                    )
+                continue
 
             optimized += batch_size
             self._apply_batch_results(batch["entries"])
-            encode_progress = 25 + int((optimized / max(1, total_pending)) * 65)
-            final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
+            final_summary, final_mods = refresh_mod_stats(affected_mod_paths)
+            processed_done = optimized + failed
+            encode_progress = 25 + int((processed_done / max(1, total_pending)) * 65)
             self._emit_progress(
                 task,
                 status="running",
                 progress=min(90, max(25, encode_progress)),
                 message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
                 metrics={
-                    "done": optimized,
+                    "done": processed_done,
                     "total": total_pending,
                     "optimized": optimized,
                     "skipped": skipped,
                     "failed": failed,
                     "phase": "encode",
                     "phase_label": "生成阶段",
-                    "phase_percent": int((optimized / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
-                    "phase_done": optimized,
+                    "phase_percent": int((processed_done / max(1, phase_plan_total)) * 100) if phase_plan_total else 100,
+                    "phase_done": processed_done,
                     "phase_total": phase_plan_total,
                     "phase_unit": "张",
                     "current_batch_index": batch_index,
@@ -698,17 +848,21 @@ class TextureOptimizationManager:
         final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
 
         scale_summary_text = self._format_scale_counts(final_summary)
+        failure_summary_text = f"失败 {failed} 张" if failed > 0 else ""
+        message_parts = [part for part in [scale_summary_text, failure_summary_text] if part]
         return {
             "optimized": optimized,
             "skipped": skipped,
             "failed": failed,
+            "failed_items": failed_items,
+            "final_status": "failed" if failed > 0 and optimized == 0 and total_pending > 0 else "success",
             "preexisting_dds": int(final_summary.get("current_output_count", 0)),
             "orphan_deleted": 0,
             "total_jobs": len(task.mod_paths),
             "final_summary": final_summary,
             "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": f"DDS 生成完成{f'，{scale_summary_text}' if scale_summary_text else ''}",
+            "message": f"DDS 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
         }
 
     def _apply_batch_results(self, entries: list[dict[str, Any]]) -> None:
@@ -1274,8 +1428,7 @@ class TextureOptimizationManager:
     @staticmethod
     def _get_scale_factor_percent(options: dict[str, Any]) -> int | None:
         scale_factor = float(options.get("scale_factor", 1.0) or 1.0)
-        if scale_factor <= 0 or abs(scale_factor - 1.0) <= 1e-6:
-            return None
+        if scale_factor <= 0 or abs(scale_factor - 1.0) <= 1e-6: return None
         scale_percent = int(round(scale_factor * 100))
         return scale_percent if scale_percent in SCALE_STEP_SEQUENCE else None
 
@@ -1287,8 +1440,7 @@ class TextureOptimizationManager:
     @staticmethod
     def _iter_scale_step_candidates(options: dict[str, Any]) -> tuple[int, ...]:
         preferred = TextureOptimizationManager._get_scale_factor_percent(options)
-        if preferred not in SCALE_STEP_SEQUENCE:
-            return tuple()
+        if preferred not in SCALE_STEP_SEQUENCE: return tuple()
         start_index = SCALE_STEP_SEQUENCE.index(preferred)
         return SCALE_STEP_SEQUENCE[start_index:]
 
@@ -1335,8 +1487,7 @@ class TextureOptimizationManager:
     @staticmethod
     def _iter_texture_root_dirs(mod_path: str):
         mod_root = Path(mod_path)
-        if not mod_root.exists():
-            return
+        if not mod_root.exists(): return
         for current_root, dirs, _files in os.walk(mod_root):
             current_path = Path(current_root)
             if current_path.name.lower() == "textures":
@@ -1347,8 +1498,7 @@ class TextureOptimizationManager:
     def _inspect_source_image(path: Path, *, precise_alpha: bool = True) -> dict[str, Any]:
         if not precise_alpha and path.suffix.lower() == ".png":
             fast_info = TextureOptimizationManager._inspect_png_header(path)
-            if fast_info is not None:
-                return fast_info
+            if fast_info is not None: return fast_info
         try:
             with Image.open(path) as image:
                 width, height = image.size
@@ -1373,8 +1523,7 @@ class TextureOptimizationManager:
         except Exception:
             if path.suffix.lower() == ".png":
                 fallback = TextureOptimizationManager._inspect_png_header(path)
-                if fallback is not None:
-                    return fallback
+                if fallback is not None: return fallback
             raise
 
     @staticmethod
@@ -1382,45 +1531,37 @@ class TextureOptimizationManager:
         try:
             with path.open("rb") as handle:
                 signature = handle.read(8)
-                if signature != b"\x89PNG\r\n\x1a\n":
-                    return None
+                if signature != b"\x89PNG\r\n\x1a\n": return None
                 has_trns = False
                 width = 0
                 height = 0
                 color_type = None
                 while True:
                     length_bytes = handle.read(4)
-                    if len(length_bytes) < 4:
-                        return None
+                    if len(length_bytes) < 4: return None
                     chunk_length = struct.unpack(">I", length_bytes)[0]
                     chunk_type = handle.read(4)
-                    if len(chunk_type) < 4:
-                        return None
+                    if len(chunk_type) < 4: return None
                     chunk_data = handle.read(chunk_length)
-                    if len(chunk_data) < chunk_length:
-                        return None
+                    if len(chunk_data) < chunk_length: return None
                     crc = handle.read(4)
-                    if len(crc) < 4:
-                        return None
+                    if len(crc) < 4: return None
                     if chunk_type == b"IHDR":
-                        if len(chunk_data) < 13:
-                            return None
+                        if len(chunk_data) < 13: return None
                         width = struct.unpack(">I", chunk_data[0:4])[0]
                         height = struct.unpack(">I", chunk_data[4:8])[0]
                         color_type = chunk_data[9]
                     if chunk_type == b"tRNS":
                         has_trns = True
                     if chunk_type == b"IDAT":
-                        if not width or not height or color_type is None:
-                            return None
+                        if not width or not height or color_type is None: return None
                         return {
                             "width": width,
                             "height": height,
                             "has_alpha": color_type in {4, 6} or has_trns,
                             "image_format": "PNG",
                         }
-                    if chunk_type == b"IEND":
-                        return None
+                    if chunk_type == b"IEND": return None
         except OSError:
             return None
 
@@ -1439,10 +1580,8 @@ class TextureOptimizationManager:
     @staticmethod
     def _get_todds_unsupported_reason(source: Path, image_info: dict[str, Any] | None) -> str:
         image_format = str((image_info or {}).get("image_format") or "").upper()
-        if image_format == "PNG":
-            return ""
-        if source.suffix.lower() == ".png":
-            return "文件扩展名为 PNG，但实际内容不是 PNG"
+        if image_format == "PNG": return ""
+        if source.suffix.lower() == ".png": return "文件扩展名为 PNG，但实际内容不是 PNG"
         return ""
 
     @staticmethod
@@ -1485,8 +1624,7 @@ class TextureOptimizationManager:
             return path
         for ext in SOURCE_IMAGE_EXTENSIONS:
             candidate = path.with_name(stem + ext)
-            if candidate.exists():
-                return candidate
+            if candidate.exists(): return candidate
         return path.with_name(stem + SOURCE_IMAGE_EXTENSIONS[0])
 
     @staticmethod
@@ -1511,8 +1649,7 @@ class TextureOptimizationManager:
     @staticmethod
     def _resolve_scan_workers(total_mods: int, options: dict[str, Any]) -> int:
         configured_workers = int(options.get("scan_workers", 0) or 0)
-        if configured_workers > 0:
-            return max(1, min(total_mods, configured_workers))
+        if configured_workers > 0: return max(1, min(total_mods, configured_workers))
         cpu_count = os.cpu_count() or 4
         return max(1, min(total_mods, min(8, cpu_count)))
 
@@ -1552,12 +1689,9 @@ class TextureOptimizationManager:
 
     @staticmethod
     def _calc_progress(current: int, total: int) -> int:
-        if total <= 0:
-            return 0
-        if current <= 0:
-            return 0
-        if current >= total:
-            return 99
+        if total <= 0: return 0
+        if current <= 0: return 0
+        if current >= total: return 99
         return min(99, max(1, int((current / total) * 100)))
 
     @staticmethod
@@ -1767,6 +1901,5 @@ class TextureOptimizationManager:
         total_seconds = max(0, elapsed_ms // 1000)
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
-        if hours > 0:
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        if hours > 0: return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{minutes:02d}:{seconds:02d}"

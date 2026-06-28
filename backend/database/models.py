@@ -40,8 +40,7 @@ class UTF8JSONField(Field):
             return value
 
     def db_value(self, value):
-        if value is None:
-            return None
+        if value is None: return None
         return json.dumps(value, ensure_ascii=False)
 
 

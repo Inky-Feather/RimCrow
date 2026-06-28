@@ -53,12 +53,24 @@ def _merge_manifest_with_online(manifest: dict[str, Any] | None, online: dict[st
         "name": manifest.get("name"),
         "title": online.get("title") or manifest.get("name"),
         "author": manifest.get("author"),
+        "author_steam_id": online.get("author_steam_id"),
         "game_versions": manifest.get("game_versions") or [],
         "dependencies_mods": manifest.get("dependencies_mods") or {},
+        "short_description": online.get("short_description"),
         "description": online.get("description"),
         "preview_url": online.get("preview_url"),
+        "tags": online.get("tags") or [],
+        "children": online.get("children") or [],
         "screenshots": online.get("screenshots") or [],
+        "time_created": int(online.get("time_created") or 0),
         "time_updated": int(online.get("time_updated") or 0),
+        "subscriptions": int(online.get("subscriptions") or 0),
+        "favorited": int(online.get("favorited") or 0),
+        "lifetime_subscriptions": int(online.get("lifetime_subscriptions") or 0),
+        "lifetime_favorited": int(online.get("lifetime_favorited") or 0),
+        "views": int(online.get("views") or 0),
+        "summary_last_sync_time": int(online.get("summary_last_sync_time") or 0),
+        "detail_last_sync_time": int(online.get("detail_last_sync_time") or 0),
         "last_sync_time": int(online.get("last_sync_time") or 0),
     }
 
@@ -79,17 +91,28 @@ def _normalize_workshop_ids(workshop_ids: list[str]) -> list[str]:
 def _get_online_cache_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]]:
     """按 workshop_id 批量读取在线缓存，避免逐条查询。"""
     normalized_ids = _normalize_workshop_ids(workshop_ids)
-    if not normalized_ids:
-        return {}
+    if not normalized_ids: return {}
 
     rows = (
         WorkshopOnlineCache.select(
             WorkshopOnlineCache.workshop_id,
             WorkshopOnlineCache.title,
+            WorkshopOnlineCache.short_description,
             WorkshopOnlineCache.description,
+            WorkshopOnlineCache.author_steam_id,
             WorkshopOnlineCache.preview_url,
+            WorkshopOnlineCache.tags,
+            WorkshopOnlineCache.children,
             WorkshopOnlineCache.screenshots,
+            WorkshopOnlineCache.time_created,
             WorkshopOnlineCache.time_updated,
+            WorkshopOnlineCache.subscriptions,
+            WorkshopOnlineCache.favorited,
+            WorkshopOnlineCache.lifetime_subscriptions,
+            WorkshopOnlineCache.lifetime_favorited,
+            WorkshopOnlineCache.views,
+            WorkshopOnlineCache.summary_last_sync_time,
+            WorkshopOnlineCache.detail_last_sync_time,
             WorkshopOnlineCache.last_sync_time,
         )
         .where(WorkshopOnlineCache.workshop_id.in_(normalized_ids))
@@ -100,8 +123,7 @@ def _get_online_cache_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]]:
 
 def _merge_manifest_rows(manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """批量为 manifest 行补齐在线缓存字段，统一返回结构。"""
-    if not manifests:
-        return []
+    if not manifests: return []
     online_map = _get_online_cache_map([str(row.get("workshop_id") or "") for row in manifests])
     return [
         _merge_manifest_with_online(manifest, online_map.get(str(manifest.get("workshop_id") or "").strip()))
@@ -164,8 +186,7 @@ def _load_replacement_candidates_by_package_ids(normalized_package_ids: list[str
 def _load_workshop_meta_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]]:
     """按 workshop_id 批量加载合并后的元数据，供 replacement 补全和详情查询复用。"""
     normalized_ids = _normalize_workshop_ids(workshop_ids)
-    if not normalized_ids:
-        return {}
+    if not normalized_ids: return {}
 
     manifests = (
         WorkshopManifest.select(
@@ -188,6 +209,7 @@ def _build_workshop_summary_items(manifests: list[dict[str, Any]]) -> list[dict[
         {
             "workshop_id": str(item.get("workshop_id") or ""),
             "name": item.get("title") or item.get("name"),
+            "title": item.get("title") or item.get("name"),
             "preview_url": item.get("preview_url"),
         }
         for item in _merge_manifest_rows(manifests)
@@ -292,8 +314,7 @@ class WorkshopCacheDAO:
         """返回文件快照层记录，供依赖判断等稳定语义使用。"""
         _require_database_dependencies()
         normalized_id = normalize_cached_workshop_id(workshop_id)
-        if not normalized_id:
-            return None
+        if not normalized_id: return None
         return WorkshopManifest.get_or_none(WorkshopManifest.workshop_id == normalized_id)
 
     @staticmethod
@@ -301,8 +322,7 @@ class WorkshopCacheDAO:
         """批量返回文件快照层记录，供依赖判断和包名映射复用。"""
         _require_database_dependencies()
         normalized_ids = _normalize_workshop_ids(workshop_ids)
-        if not normalized_ids:
-            return {}
+        if not normalized_ids: return {}
         manifests = (
             WorkshopManifest.select()
             .where(WorkshopManifest.workshop_id.in_(normalized_ids))
@@ -314,12 +334,10 @@ class WorkshopCacheDAO:
         """返回按 workshop_id 合并后的元数据。"""
         _require_database_dependencies()
         normalized_id = normalize_cached_workshop_id(workshop_id)
-        if not normalized_id:
-            return None
+        if not normalized_id: return None
         manifest = WorkshopManifest.get_or_none(WorkshopManifest.workshop_id == normalized_id)
         online = WorkshopOnlineCache.get_or_none(WorkshopOnlineCache.workshop_id == normalized_id)
-        if not manifest and not online:
-            return None
+        if not manifest and not online: return None
         return _merge_manifest_with_online(
             model_to_dict(manifest) if manifest else None,
             model_to_dict(online) if online else None,
@@ -404,8 +422,7 @@ class WorkshopCacheDAO:
         _require_database_dependencies()
         normalized_id = str(workshop_id)
         meta = WorkshopCacheDAO.get_merged_meta_by_workshop_id(normalized_id)
-        if not meta:
-            return None
+        if not meta: return None
 
         replacement = ModReplacement.get_or_none(ModReplacement.old_workshop_id == normalized_id)
         same_author_mods = []
@@ -462,8 +479,7 @@ class WorkshopCacheDAO:
         """
         _require_database_dependencies()
         normalized_package_ids = normalize_package_ids(package_ids)
-        if not normalized_package_ids:
-            return {}
+        if not normalized_package_ids: return {}
 
         meta_map = _load_manifest_candidates_by_package_ids(normalized_package_ids)
         replacement_map = _load_replacement_candidates_by_package_ids(normalized_package_ids)
@@ -503,8 +519,7 @@ class WorkshopCacheDAO:
         """
         _require_database_dependencies()
         normalized_package_ids = normalize_package_ids(package_ids)
-        if not normalized_package_ids:
-            return {}
+        if not normalized_package_ids: return {}
 
         asset_map = _load_asset_source_candidates_by_package_ids(normalized_package_ids)
         meta_map = _load_manifest_candidates_by_package_ids(normalized_package_ids)
@@ -610,8 +625,7 @@ class WorkshopCacheDAO:
         """批量按 workshop_id 读取缓存详情，主要用于幽灵项和导入补全。"""
         _require_database_dependencies()
         normalized_ids = _normalize_workshop_ids(workshop_ids)
-        if not normalized_ids:
-            return {}
+        if not normalized_ids: return {}
 
         meta_map = _load_workshop_meta_map(normalized_ids)
         return {

@@ -226,8 +226,7 @@ class ProfileManager:
         """检查环境游戏版本是否与当前游戏版本匹配"""
         if not self.current_profile: return False
         new_version = GameManager.get_game_version(self.current_profile.game_install_path)
-        if self.current_profile.game_version == new_version:
-            return False
+        if self.current_profile.game_version == new_version: return False
         self.current_profile.game_version = new_version
         self.current_profile.save()
         return True
@@ -393,8 +392,7 @@ class ProfileManager:
         """
         # 1. 如果没有自定义隔离路径（例如使用系统默认路径的 Default 环境），则不写入
         # 防止污染用户的 AppData
-        if not profile.user_data_path or not os.path.exists(profile.user_data_path):
-            return
+        if not profile.user_data_path or not os.path.exists(profile.user_data_path): return
 
         json_path = os.path.join(profile.user_data_path, "profile.json")
         
@@ -421,8 +419,7 @@ class ProfileManager:
         返回: List[Dict] (可以直接用于展示给用户确认导入)
         """
         profiles_root = DATA_DIR / "profiles"
-        if not profiles_root.exists():
-            return []
+        if not profiles_root.exists(): return []
 
         orphans = []
         
@@ -473,15 +470,13 @@ class ProfileManager:
             profile_data.pop('_folder_path', None)
 
             # 确保 ID 存在
-            if 'id' not in profile_data:
-                return False, "Profile data missing ID"
+            if 'id' not in profile_data: return False, "Profile data missing ID"
 
             with db.atomic():
                 # 使用 upsert 防止并发冲突
                 GameProfile.insert(**profile_data).on_conflict_replace().execute()
             
             return True, "导入成功"
-        except Exception as e:
-            return False, str(e)
+        except Exception as e: return False, str(e)
             
 

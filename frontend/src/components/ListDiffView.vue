@@ -135,7 +135,7 @@
                       <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
 
 
-                      <div v-if="getImportStatusMeta(item.id)" v-tooltip="getImportTooltip(item.id)" class="mr-1 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                      <div v-if="getImportStatusMeta(item.id)" v-tooltip="getImportTooltip(item.id)" class="mr-1 shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] font-bold"
                         :class="getImportStatusMeta(item.id).badgeClass">
                         {{ getImportStatusMeta(item.id).label }}
                       </div>
@@ -238,7 +238,7 @@
         </div>
 
         <!-- 3. 下方内凹边角 -->
-        <div class="absolute -bottom-[19px] left-0 w-5 h-5 z-10">
+        <div class="absolute -bottom-4.5 left-0 w-5 h-5 z-10">
           <!-- 模糊与背景层 -->
           <div class="w-full h-full bg-transparent backdrop-blur-xl mask-[radial-gradient(circle_at_100%_100%,transparent_1.25rem,black_1.3rem)]">
           </div>

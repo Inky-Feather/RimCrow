@@ -45,8 +45,7 @@ def resolve_ripgrep_root(raw_path: str | None = None) -> Path:
         candidate = Path(configured)
         return candidate.parent if candidate.is_file() else candidate
     fallback = str(getattr(settings.config, "ripgrep_path", "") or "").strip()
-    if fallback:
-        return resolve_ripgrep_root(fallback)
+    if fallback: return resolve_ripgrep_root(fallback)
     return RIPGREP_TOOL_DIR
 
 
@@ -64,15 +63,11 @@ def resolve_ripgrep_executable_with_version(
     seen: set[str] = set()
 
     def add_candidate(path_like: str | Path | None):
-        if not path_like:
-            return
-        try:
-            path = Path(path_like)
-        except TypeError:
-            return
+        if not path_like: return
+        try: path = Path(path_like)
+        except TypeError: return
         normalized = str(path).lower()
-        if normalized in seen:
-            return
+        if normalized in seen: return
         seen.add(normalized)
         candidates.append(path)
 
@@ -117,8 +112,7 @@ def resolve_ripgrep_executable_with_version(
             resolved_seen.add(normalized)
             resolved_files.append(nested_path.resolve())
 
-    if not resolved_files:
-        return None, ""
+    if not resolved_files: return None, ""
 
     runnable_candidates: list[tuple[tuple[int, ...], int, Path, str]] = []
     for path in resolved_files:
@@ -142,8 +136,7 @@ def resolve_ripgrep_executable_with_version(
 
 
 def probe_ripgrep_version(executable: str | Path | None) -> str:
-    if not executable:
-        return ""
+    if not executable: return ""
     creationflags = 0
     startupinfo = None
     if platform.system() == "Windows" and hasattr(subprocess, "CREATE_NO_WINDOW"):
@@ -162,8 +155,7 @@ def probe_ripgrep_version(executable: str | Path | None) -> str:
             creationflags=creationflags,
             startupinfo=startupinfo,
         )
-    except Exception:
-        return ""
+    except Exception: return ""
 
     first_line = str(result.stdout or "").splitlines()[0] if result.stdout else ""
     match = RIPGREP_VERSION_PATTERN.search(first_line.strip())
@@ -200,8 +192,7 @@ def prepare_ripgrep_download(download_mgr, raw_path: str | None = None) -> dict[
         raise RuntimeError("当前自动下载 ripgrep 仅支持 Windows 平台。")
 
     status = get_ripgrep_status(raw_path)
-    if status.available:
-        return {"already_ready": True}
+    if status.available: return {"already_ready": True}
 
     install_dir = resolve_ripgrep_root(raw_path)
     install_dir.mkdir(parents=True, exist_ok=True)

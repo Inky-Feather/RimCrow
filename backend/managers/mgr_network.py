@@ -91,8 +91,7 @@ class NetworkManager:
     # ====================== Hosts 配置 =======================
     def patch_socket_for_hosts(self):
         """Python 运行时 Socket 劫持（动态读取最新配置，无死循环风险）"""
-        if self._is_socket_patched:
-            return  # 已经劫持过了，不需要重新包一层
+        if self._is_socket_patched: return  # 已经劫持过了，不需要重新包一层
 
         def new_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
             # 【关键修改】：每次发请求时，实时去 settings 里面拿最新的 hosts 配置

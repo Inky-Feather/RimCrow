@@ -41,7 +41,7 @@ class DLCParser:
         self.official_defs = self._load_official_defs()
         
         # 2. 同步并加载翻译缓存 (核心逻辑)
-        # self.translations 结构: { 'zh-cn': {'Royalty': {...}}, 'fr': {...} }
+# self.translations 结构: { 'zh-CN': {'Royalty': {...}}, 'fr': {...} }
         self.translations = self._sync_cache()
         self._translate_cache = {}
 
@@ -54,8 +54,7 @@ class DLCParser:
         cached_trans = self._translate_cache.get(pkg_id)
         if cached_trans: return cached_trans
         
-        if mod_record.get('source') != 'dlc' and 'ludeon.rimworld' not in pkg_id:
-            return mod_record
+        if mod_record.get('source') != 'dlc' and 'ludeon.rimworld' not in pkg_id: return mod_record
 
         # 确定 DLC Key (Core, Royalty, Ideology...)
         def_key = None
@@ -73,7 +72,7 @@ class DLCParser:
             mod_record['description'] = official.get('description', mod_record['description'])
 
         # 2. 再应用目标语言翻译 (覆盖)
-        # 归一化语言代码 (zh-cn -> zh-cn, ChineseSimplified -> zh-cn)
+        # 归一化语言代码 (zh-CN / ChineseSimplified -> zh-CN)
         lang_key = self._resolve_lang_key(target_lang_code)
         
         if lang_key in self.translations:
@@ -139,8 +138,7 @@ class DLCParser:
         """
         检查所有 tar 文件，增量更新缓存。
         """
-        if not os.path.exists(self.languages_dir):
-            return {}
+        if not os.path.exists(self.languages_dir): return {}
 
         # 1. 读取旧缓存
         cache_data = {'translations': {}, 'meta': {}}
@@ -235,7 +233,7 @@ class DLCParser:
     def _filename_to_lang_code(self, filename):
         """
         从文件名映射到 ISO 语言代码。
-        ChineseSimplified.tar -> zh-cn
+        ChineseSimplified.tar -> zh-CN
         French (Fr).tar -> fr
         """
         # 去掉 .tar
@@ -247,7 +245,7 @@ class DLCParser:
 
     def _resolve_lang_key(self, input_code):
         """
-        将输入的 code (可能是 zh-cn, 也可能是 ChineseSimplified) 统一为缓存里的 key
+        将输入的 code (可能是 zh-CN，也可能是 ChineseSimplified) 统一为缓存里的 key
         """
         return normalize_language_code(input_code)
 
@@ -320,5 +318,5 @@ if __name__ == '__main__':
         'source': 'dlc',
         'name': 'RimWorld 基础扩展',
         'description': 'RimWorld 基础扩展的描述'
-    },target_lang_code='zh-cn')
+    },target_lang_code='zh-CN')
     print(data)

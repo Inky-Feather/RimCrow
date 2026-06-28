@@ -6,7 +6,7 @@ import { useAppStore } from './appStore'
 import { useConfirmStore } from './confirmStore'
 import { useMissingInstallStore } from './missingInstallStore'
 import { useSupplementStore } from './supplementStore'
-import { normalizeInstallSource } from '../utils/modIdentity'
+import { normalizeInstallSource, normalizePackageId, normalizePackageToken } from '../utils/modIdentity'
 
 export const useOrderStore = defineStore('order', () => {
   const appStore = useAppStore()
@@ -35,7 +35,7 @@ export const useOrderStore = defineStore('order', () => {
     // 记录“包名 -> 导入文件中的显示名称”，供差异视图在本地缺失时兜底显示。
     return Object.fromEntries(
       backupMods.value
-        .map(mod => [String(mod.package_id || '').toLowerCase(), mod.name || mod.package_id])
+        .map(mod => [normalizePackageId(mod.package_id), mod.name || mod.package_id])
         .filter(([packageId]) => packageId)
     )
   })
@@ -50,7 +50,7 @@ export const useOrderStore = defineStore('order', () => {
   }))
   const importCheckMap = computed(() => {
     return new Map(
-      importCheckItems.value.map(item => [String(item.row_key || item.package_id || '').trim().toLowerCase(), item])
+      importCheckItems.value.map(item => [normalizePackageToken(item.row_key || item.package_id), item])
     )
   })
   const problemImportItems = computed(() =>
@@ -146,7 +146,7 @@ export const useOrderStore = defineStore('order', () => {
   }
   const buildEditingMods = (ids = []) => (
     (ids || []).map(id => {
-      const normalizedId = String(id || '').toLowerCase()
+      const normalizedId = normalizePackageToken(id)
       return {
         package_id: normalizedId,
         name: modStore.displayModName(normalizedId),
@@ -335,8 +335,8 @@ export const useOrderStore = defineStore('order', () => {
       // Temp 列表如果有关闭软件前未处理的，归入 Inactive 末尾保存
       const finalInactive = [...modStore.inactiveIds, ...modStore.tempIds]
       // 过滤掉已经在 Active 里的防止出错
-      const activeSet = new Set(modStore.activeIds.map(id=>id.toLowerCase()))
-      const cleanInactive = finalInactive.filter(id => !activeSet.has(id.toLowerCase()))
+      const activeSet = new Set(modStore.activeIds.map(id => normalizePackageId(id)))
+      const cleanInactive = finalInactive.filter(id => !activeSet.has(normalizePackageId(id)))
       const res = await window.pywebview.api.load_order_inactive_save(cleanInactive)
       if (checkResult(res, "保存停用列表顺序")) {
         modStore.savedInactiveIds = [...cleanInactive] || []
@@ -571,7 +571,7 @@ export const useOrderStore = defineStore('order', () => {
     return order
   }
   const getImportCheckItem = (rowKeyOrPackageId) => {
-    const key = String(rowKeyOrPackageId || '').trim().toLowerCase()
+    const key = normalizePackageToken(rowKeyOrPackageId)
     if (!key) return null
     return importCheckMap.value.get(key) || importCheckMap.value.get(`wid:${key}`) || null
   }
@@ -600,9 +600,9 @@ export const useOrderStore = defineStore('order', () => {
   }
   const takeImportCheckItems = (statuses = [], rowKeys = []) => {
     const statusSet = new Set((statuses || []).map(status => String(status || '').trim()))
-    const rowKeySet = new Set((rowKeys || []).map(key => String(key || '').trim().toLowerCase()))
+    const rowKeySet = new Set((rowKeys || []).map(key => normalizePackageToken(key)))
     return importCheckItems.value.filter(item => {
-      const rowKey = String(item.row_key || '').trim().toLowerCase()
+      const rowKey = normalizePackageToken(item.row_key)
       if (rowKeySet.size > 0 && !rowKeySet.has(rowKey)) return false
       if (statusSet.size > 0 && !statusSet.has(item.status)) return false
       return true
@@ -662,10 +662,10 @@ export const useOrderStore = defineStore('order', () => {
     const items = takeImportCheckItems(statuses, rowKeys)
     if (items.length === 0) return false
 
-    const rowKeySet = new Set(items.map(item => String(item.row_key || '').trim().toLowerCase()))
+    const rowKeySet = new Set(items.map(item => normalizePackageToken(item.row_key)))
     const packageIdSet = new Set(
       items
-        .map(item => String(item.package_id || '').trim().toLowerCase())
+        .map(item => normalizePackageId(item.package_id))
         .filter(Boolean)
     )
     const workshopOnlyRowSet = new Set(
@@ -674,12 +674,12 @@ export const useOrderStore = defineStore('order', () => {
         .map(item => String(item.import_workshop_id || '').trim())
     )
 
-    backupIds.value = backupIds.value.filter(id => !packageIdSet.has(String(id || '').toLowerCase()))
-    backupMods.value = backupMods.value.filter(mod => !packageIdSet.has(String(mod.package_id || '').toLowerCase()))
+    backupIds.value = backupIds.value.filter(id => !packageIdSet.has(normalizePackageId(id)))
+    backupMods.value = backupMods.value.filter(mod => !packageIdSet.has(normalizePackageId(mod.package_id)))
     currentBackupWorkshopIds.value = currentBackupWorkshopIds.value.filter(wid => !workshopOnlyRowSet.has(String(wid || '').trim()))
 
     const nextItems = importCheckItems.value.filter(item => {
-      const rowKey = String(item.row_key || '').trim().toLowerCase()
+      const rowKey = normalizePackageToken(item.row_key)
       return !rowKeySet.has(rowKey)
     })
     currentImportCheck.value = {

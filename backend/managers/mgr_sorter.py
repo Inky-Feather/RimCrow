@@ -321,8 +321,7 @@ class OrderSorter:
         tail_size_cache = {}
 
         def get_tail_size(start_node_id):
-            if start_node_id in tail_size_cache:
-                return tail_size_cache[start_node_id]
+            if start_node_id in tail_size_cache: return tail_size_cache[start_node_id]
             q = deque([start_node_id])
             visited = {start_node_id}
             count = 0
@@ -352,8 +351,7 @@ class OrderSorter:
         head_size_cache = {}
 
         def get_head_size(start_node_id):
-            if start_node_id in head_size_cache:
-                return head_size_cache[start_node_id]
+            if start_node_id in head_size_cache: return head_size_cache[start_node_id]
             q = deque([start_node_id])
             visited = {start_node_id}
             count = 0
@@ -494,13 +492,11 @@ class OrderSorter:
 
     def _is_language_pack_group(self, group: AtomicGroup, mod_map: Dict[str, dict]) -> bool:
         """判断一个原子组是否整体属于语言包。"""
-        if not group.mod_ids:
-            return False
+        if not group.mod_ids: return False
         for mid in group.mod_ids:
             mod_data = mod_map.get(mid, {})
             mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type') or '').strip()
-            if mod_type != 'LanguagePack':
-                return False
+            if mod_type != 'LanguagePack': return False
         return True
 
     def _get_group_target_predecessors(self, group: AtomicGroup, mod_to_group: Dict[str, AtomicGroup]) -> set[int]:
@@ -549,8 +545,7 @@ class OrderSorter:
         可选后处理：让语言包尽量贴在其最后一个前置/依赖模组后方。
         只在不破坏现有拓扑约束时移动。
         """
-        if not getattr(settings.config, "language_packs_follow_targets", False):
-            return sorted_groups, []
+        if not getattr(settings.config, "language_packs_follow_targets", False): return sorted_groups, []
 
         order = list(sorted_groups)
         warnings = []

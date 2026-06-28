@@ -65,7 +65,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, watch } from 'vue'
 import { useAppStore } from '../../stores/appStore'
-import { Library, FolderArchive, Globe, CloudDownload, Github } from 'lucide-vue-next'
+import { Library, FolderArchive, Globe, Github } from 'lucide-vue-next'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 
 const workspaceStore = useWorkspaceStore()
@@ -108,11 +108,30 @@ const handleKeydown = (e) => {
     appStore.uiState.showWorkspace = false
   }
 }
+// 工作区打开后只补当前标签数据，避免应用启动时提前触发整组工作区请求。
+const loadActiveWorkspaceTab = () => {
+  if (!appStore.uiState.showWorkspace) return
+  void workspaceStore.ensureWorkspaceTabLoaded(currentTab.value)
+}
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
-  workspaceStore.initData()
+  workspaceStore.setupListeners()
+  loadActiveWorkspaceTab()
 })
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
+
+// 切换标签后只补当前页面依赖的数据，避免未打开页面也参与启动期初始化。
+watch(currentTab, (tabId) => {
+  if (!appStore.uiState.showWorkspace) return
+  void workspaceStore.ensureWorkspaceTabLoaded(tabId)
+})
+
+// 重新打开工作区时保留上次标签，同时补齐该标签需要的缓存数据。
+watch(() => appStore.uiState.showWorkspace, (visible) => {
+  if (!visible) return
+  workspaceStore.setupListeners()
+  loadActiveWorkspaceTab()
+})
 </script>
 
 <style scoped>

@@ -165,7 +165,33 @@ class MaintenanceManager:
                 "count": 0,
             }
 
-        online_details, _ = SteamWebAPI.fetch_item_details(list(manager_local_data.keys()))
+        installed_ids: list[str] = []
+        for local_item in manager_local_data.values():
+            if not local_item.get("is_installed"):
+                continue
+            workshop_id = str(local_item.get("workshop_id") or "").strip()
+            if not workshop_id or not workshop_id.isdigit():
+                continue
+            installed_ids.append(workshop_id)
+
+        logger.debug(
+            "SteamCMD 更新检查[self]：合并数据 %s 条，已安装 %s 条，实际检查 %s 条",
+            len(manager_local_data),
+            len(installed_ids),
+            len(installed_ids),
+        )
+        if not installed_ids:
+            return {
+                "checked_at": checked_at,
+                "updates": [],
+                "count": 0,
+            }
+
+        # 合并表同时包含 ACF 记录和日志历史，只对当前仍安装在本地的项目做在线更新检查。
+        online_details, _ = SteamWebAPI.fetch_item_details(
+            installed_ids,
+            trace_label="maintenance_check_steamcmd_mod_updates:self",
+        )
         updates: list[dict[str, Any]] = []
         for local_item in manager_local_data.values():
             if not local_item.get("is_installed"):
@@ -346,10 +372,8 @@ class MaintenanceManager:
     @staticmethod
     def _parse_http_datetime_to_ms(value: Any) -> int:
         raw = str(value or "").strip()
-        if not raw:
-            return 0
+        if not raw: return 0
         try:
             parsed = datetime.strptime(raw, "%a, %d %b %Y %H:%M:%S %Z")
             return int(parsed.replace(tzinfo=timezone.utc).timestamp() * 1000)
-        except Exception:
-            return 0
+        except Exception: return 0

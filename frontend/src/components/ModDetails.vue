@@ -433,18 +433,18 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M12 5v14M5 12h14"/></svg>
                   </button>
                   <FixedPopover :is-open="showGroupDrop" :trigger-ref="groupDropRef">
-                      <!-- 分组选择下拉框 -->
-                      <div class="w-40 max-h-48 overflow-y-auto bg-bg-surface border border-text-main/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
-                        <!-- 搜索过滤 -->
-                        <input v-model="groupSearch" :ref="el => groupSearchRef = el" placeholder="搜索分组..." 
-                          class="mb-1 px-2 py-1 text-xs bg-black/20 rounded border border-text-main/5 focus:outline-none focus:border-accent-primary" />
-                        <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-dim/50 text-center">无可用分组</div>
-                        <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
-                          class="text-left px-2 py-1 text-xs rounded hover:bg-text-main/10 transition-colors truncate flex items-center gap-2">
-                          <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
-                          {{ g.name }}
-                        </button>
-                      </div>
+                    <!-- 分组选择下拉框 -->
+                    <div class="w-40 max-h-48 overflow-y-auto bg-bg-surface border border-text-main/10 rounded-lg shadow-xl z-50 flex flex-col p-1">
+                      <!-- 搜索过滤 -->
+                      <input v-model="groupSearch" :ref="el => groupSearchRef = el" placeholder="搜索分组..." 
+                        class="mb-1 px-2 py-1 text-xs bg-black/20 rounded border border-text-main/5 focus:outline-none focus:border-accent-primary" />
+                      <div v-if="availableGroups.length === 0" class="px-2 py-1 text-xs text-text-dim/50 text-center">无可用分组</div>
+                      <button v-for="g in availableGroups" :key="g.group_id" @click="addGroup(g.group_id)"
+                        class="text-left px-2 py-1 text-xs rounded hover:bg-text-main/10 transition-colors truncate flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full shrink-0" :style="{backgroundColor: g.color}"></span>
+                        {{ g.name }}
+                      </button>
+                    </div>
                   </FixedPopover>
                 </div>
               </div>
@@ -472,9 +472,9 @@
             <!-- 别名 -->
             <div class="mb-2 flex flex-row items-center justify-around">
               <input v-model="userAliasName" @blur="saveUserData" placeholder="在此添加自定义别名"
-                  class="flex-1 w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-text-main focus:border-accent-primary focus:outline-none"/>
+                class="flex-1 w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-text-main focus:border-accent-primary focus:outline-none"/>
               <!-- 翻译按钮 -->
-              <button @click="translateModInfo" v-tooltip="'通过AI生成Mod别名及备注，需要配置AI'" :disabled="isUsingAI"
+              <button @click="generateModAlias" v-tooltip="'通过AI生成Mod别名及备注，需要配置AI'" :disabled="isUsingAI"
                 class="min-w-8 h-6 px-1.5 ml-1 flex items-center justify-center text-sm rounded-sm bg-text-dim/50 hover:bg-accent-primary hover:text-text-main transition-colors active:bg-accent-cool">
                 <span v-if="!isUsingAI">AI生成</span>
                 <svg v-else class="animate-spin size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -483,14 +483,14 @@
 
             <!-- 备注 -->
             <div>
-                <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注" :class="[expandTextarea?'min-h-100':'']"
-                  class="w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-gray-300 
-                  focus:border-accent-primary focus:outline-none min-h-20 resize-none custom-scrollbar">
-                </textarea>
-                <button @click="expandTextarea=!expandTextarea" v-tooltip="'展开/收起'" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-text-main/10 transition-colors">
-                  <ChevronUp v-if="expandTextarea" class="size-5"/>
-                  <ChevronDown v-else class="size-5"/>
-                </button>
+              <textarea v-model="userNotes" @blur="saveUserData" placeholder="在此添加自定义备注" :class="[expandTextarea?'min-h-100':'']"
+                class="w-full bg-black/20 border border-text-main/10 rounded p-2 text-sm text-gray-300 
+                focus:border-accent-primary focus:outline-none min-h-20 resize-none custom-scrollbar">
+              </textarea>
+              <button @click="expandTextarea=!expandTextarea" v-tooltip="'展开/收起'" class="w-full -mb-2 flex justify-center items-center cursor-pointer rounded-md hover:bg-text-main/10 transition-colors">
+                <ChevronUp v-if="expandTextarea" class="size-5"/>
+                <ChevronDown v-else class="size-5"/>
+              </button>
             </div>
             
           </div>
@@ -547,6 +547,7 @@ import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // �
 import { MOD_SIGN_COLOR_MAP, MOD_TYPE_MAP, SOURCE_TYPE_MAP, MOD_TYPE_ICON_MAP } from '../utils/constants'
 import { useModStore } from '../stores/modStore'
 import { useAppStore } from '../stores/appStore'
+import { useAiStore } from '../stores/aiStore'
 import { useGroupStore } from '../stores/groupStore'
 import { parseUnityRichText } from '../utils/text'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../utils/color'
@@ -584,6 +585,7 @@ const StatItem = {
   `
 }
 const appStore = useAppStore()
+const aiStore = useAiStore()
 const modStore = useModStore()
 const groupStore = useGroupStore()
 const profileStore = useProfileStore()
@@ -660,7 +662,7 @@ const formattedDescription = computed(() => {
   if (!selectedMod.value?.description) return '该Mod未提供描述。'
   // console.log(parseUnityRichText(selectedMod.value.description, false))
   // 第二个参数 false 表示不移除图片，如果想移除则传 true
-  return parseUnityRichText(selectedMod.value.description, false)
+  return parseUnityRichText( selectedMod.value.description, false, (url) => appStore.getRemoteUrl(url))
 })
 // 辅助计算：是否有依赖项或冲突项
 const hasDependencies = computed(() => {
@@ -890,20 +892,36 @@ const targetItem = (mod_id) => {
   modStore.currentTargetId = mod_id
 }
 
-// 翻译Mod信息
-const translateModInfo = async () => {
+// 生成Mod别名备注
+const generateModAlias = async () => {
+  const modStore = useModStore()
   if (!selectedMod.value) return
+  const requestedPackageId = String(selectedMod.value.package_id || '').trim().toLowerCase()
+  if (!requestedPackageId) return
   isUsingAI.value = true
-  const res = await appStore.useAI('alias_generation',{
-    name: selectedMod.value.name,
-    description: selectedMod.value.description,
-  })
-  if (res) {
-    userAliasName.value = res.alias_name
-    userNotes.value = res.notes
-    saveUserData()
+  try {
+    const result = await aiStore.requestSingleModAliasGenerationResult({
+      packageId: requestedPackageId,
+      name: selectedMod.value.name,
+      description: selectedMod.value.description,
+      ownerType: 'mod_details',
+    })
+    if (!result) return
+
+    await modStore.updateModUserData(result.package_id, {
+      alias_name: String(result.alias_name || ''),
+      notes: String(result.notes || ''),
+    })
+
+    const currentPackageId = String(rawSelectedMod.value?.package_id || '').trim().toLowerCase()
+    // 仅当详情页仍停留在同一个模组时，才同步刷新本地输入框，避免用户切走后误覆盖当前编辑态。
+    if (currentPackageId && currentPackageId === requestedPackageId && currentPackageId === String(result.package_id || '').trim().toLowerCase()) {
+      userAliasName.value = result.alias_name || ''
+      userNotes.value = result.notes || ''
+    }
+  } finally {
+    isUsingAI.value = false
   }
-  isUsingAI.value = false
 }
 
 </script>

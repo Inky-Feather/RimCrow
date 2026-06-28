@@ -66,8 +66,7 @@ class ImportCheckReport:
 
 
 def _build_workshop_url(workshop_id: str) -> str:
-    if not workshop_id:
-        return ""
+    if not workshop_id: return ""
     return f"https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id}"
 
 
@@ -77,8 +76,7 @@ def _fallback_package_label(package_id: str) -> str:
 
 
 def _replacement_rule_matches(rule: dict[str, Any] | None, game_version: str) -> bool:
-    if not rule:
-        return False
+    if not rule: return False
     versions = rule.get("new_versions") or []
     return score_version_support(game_version, versions) > 0
 
@@ -116,8 +114,7 @@ def _build_summary(items: list[ImportCheckItem]) -> dict[str, int]:
 
 def _normalize_package_detail_lookup(detail: dict[str, Any] | None) -> dict[str, Any]:
     detail = detail or {}
-    if "direct" in detail or "replacement" in detail or "display" in detail:
-        return detail
+    if "direct" in detail or "replacement" in detail or "display" in detail: return detail
 
     normalized_direct = detail if detail.get("workshop_id") or detail.get("name") or detail.get("package_id") else {}
     return {
@@ -135,8 +132,7 @@ def _normalize_package_detail_lookup(detail: dict[str, Any] | None) -> dict[str,
 
 
 def _describe_source(source: dict[str, Any] | None) -> str:
-    if not source:
-        return ""
+    if not source: return ""
     if source.get("kind") == "workshop":
         workshop_id = normalize_workshop_id(source.get("workshop_id"))
         return f"Workshop {workshop_id}" if workshop_id else ""

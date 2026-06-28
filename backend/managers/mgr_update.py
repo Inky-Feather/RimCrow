@@ -45,8 +45,7 @@ class UpdateInfo:
     # 'ready': 本地已存在且校验通过，可安装
     local_status: str = "remote" 
     local_file_path: Optional[str] = None
-    def to_dict(self):
-        return asdict(self)
+    def to_dict(self): return asdict(self)
 class UpdateSource(ABC):
     @abstractmethod
     def check(self) -> Optional[UpdateInfo]:
@@ -59,8 +58,7 @@ class LocalSource(UpdateSource):
     用于离线更新或避免重复下载。
     """
     def check(self) -> Optional[UpdateInfo]:
-        if not os.path.exists(UPDATE_DIR):
-            return None
+        if not os.path.exists(UPDATE_DIR): return None
         
         # 扫描所有元数据文件
         json_files = glob.glob(os.path.join(UPDATE_DIR, "*.json"))
@@ -112,8 +110,7 @@ class LanzouSource(UpdateSource):
 
     def check(self):
         data = self.parser.get_all_files(self.url, self.pwd)
-        if not data or 'latest' not in data:
-            return None
+        if not data or 'latest' not in data: return None
         
         latest = data['latest']
         remote_v = latest['version']
@@ -181,8 +178,7 @@ class UpdateManager:
                 logger.error(f"Update Source {src.__class__.__name__} failed: {e}")
                 continue
         
-        if not best_remote:
-            return UpdateInfo(False, __version__, "", "", "None")
+        if not best_remote: return UpdateInfo(False, __version__, "", "", "None")
 
         # 2. 智能缓存匹配
         # 如果来源是远程的，检查一下本地是否其实已经有了
@@ -206,16 +202,14 @@ class UpdateManager:
                 with open(json_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     path = data.get('local_file_path')
-                    if path and os.path.exists(path):
-                        return path
+                    if path and os.path.exists(path): return path
             except: pass
         
         # 方案 B: 盲猜文件名
         potential_names = [f"update_v{version_str}.zip", f"RimModManager_v{version_str}.zip"]
         for name in potential_names:
             p = os.path.join(UPDATE_DIR, name)
-            if os.path.exists(p):
-                return p
+            if os.path.exists(p): return p
         return None
 
     

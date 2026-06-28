@@ -100,12 +100,10 @@ def persist_exit_state():
     """统一持久化退出状态"""
     settings.set('last_run_time', current_ms())
     settings.set('run_count', settings.get('run_count') + 1)
-    settings.set('last_version', __version__)
     settings.save()  # 保存配置
 
 def get_launch_mode():
-    if "--browser" in sys.argv:
-        return "browser"
+    if "--browser" in sys.argv: return "browser"
     return "browser" if bool(getattr(settings.config, "browser_mode", False)) else "desktop"
 
 def cleanup_update_remnants():
@@ -186,8 +184,7 @@ def main():
           杀软/显卡/代理导致的页面初始化问题；
         - 无论哪种情况，PyInstaller splash 都不能继续占着屏幕，必须先关闭，再把原因告诉用户。
         """
-        if desktop_startup_state['page_loaded'] or desktop_startup_state['timeout_reported']:
-            return
+        if desktop_startup_state['page_loaded'] or desktop_startup_state['timeout_reported']: return
 
         desktop_startup_state['timeout_reported'] = True
         close_startup_splash()

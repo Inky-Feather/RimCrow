@@ -11,8 +11,7 @@ SHARE_CODE_PREFIX = "RMM1"
 
 def _encode_mod_entry(package_id: str, workshop_id: str = "", name: str = ""):
     normalized_package_id = normalize_package_id(package_id)
-    if not normalized_package_id:
-        return None
+    if not normalized_package_id: return None
 
     normalized_workshop_id = normalize_workshop_id(workshop_id)
     clean_name = str(name or "").strip()
@@ -153,10 +152,8 @@ def parse_share_code(share_code: str) -> ParsedLoadOrderData:
 def describe_share_code(share_code: str) -> str:
     normalized_code = "".join(str(share_code or "").split())
     prefix, separator, rest = normalized_code.partition("-")
-    if prefix != SHARE_CODE_PREFIX or not separator:
-        return "share://invalid"
+    if prefix != SHARE_CODE_PREFIX or not separator: return "share://invalid"
 
     checksum, separator, _ = rest.partition("-")
-    if not checksum:
-        return "share://invalid"
+    if not checksum: return "share://invalid"
     return f"share://{SHARE_CODE_PREFIX}/{checksum.upper()}"

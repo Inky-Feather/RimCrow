@@ -6,10 +6,47 @@ const normalizeNullableText = (value = '') => {
     : ''
 }
 
+export const STEAM_PACKAGE_SUFFIX = '_steam'
+export const LOCAL_PACKAGE_SUFFIX = '_local'
+
 /**
  * 包 ID 全部转成小写比较，避免同一模组因为大小写不同被视为多个对象。
  */
-export const normalizePackageId = (value = '') => String(value || '').trim().toLowerCase()
+export const normalizePackageToken = (value = '') => String(value || '').trim().toLowerCase()
+
+export const stripPackageTokenSuffix = (value = '') => {
+  const normalizedToken = normalizePackageToken(value)
+  if (normalizedToken.endsWith(STEAM_PACKAGE_SUFFIX)) {
+    return normalizedToken.slice(0, -STEAM_PACKAGE_SUFFIX.length)
+  }
+  if (normalizedToken.endsWith(LOCAL_PACKAGE_SUFFIX)) {
+    return normalizedToken.slice(0, -LOCAL_PACKAGE_SUFFIX.length)
+  }
+  return normalizedToken
+}
+
+export const normalizePackageId = (value = '') => stripPackageTokenSuffix(value)
+
+export const isSteamPackageToken = (value = '') => normalizePackageToken(value).endsWith(STEAM_PACKAGE_SUFFIX)
+
+export const buildSteamPackageToken = (value = '') => {
+  const canonicalId = normalizePackageId(value)
+  return canonicalId ? `${canonicalId}${STEAM_PACKAGE_SUFFIX}` : ''
+}
+
+export const parsePackageToken = (value = '') => {
+  const normalizedToken = normalizePackageToken(value)
+  const canonicalPackageId = normalizePackageId(normalizedToken)
+  let sourcePreference = 'any'
+  if (normalizedToken.endsWith(STEAM_PACKAGE_SUFFIX)) sourcePreference = 'steam'
+  else if (normalizedToken.endsWith(LOCAL_PACKAGE_SUFFIX)) sourcePreference = 'local'
+  return {
+    rawToken: String(value || '').trim(),
+    normalizedToken,
+    canonicalPackageId,
+    sourcePreference,
+  }
+}
 
 export const normalizeWorkshopId = (value = '') => {
   // Steam 工坊 ID 允许保持原始数字字符串，不做大小写变换。

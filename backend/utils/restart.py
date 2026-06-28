@@ -92,8 +92,7 @@ def _reset_windows_dll_directory():
     原因：PyInstaller onefile 会临时改写 DLL 搜索目录，不重置的话，
     当前进程拉起的更新器或新实例可能继续引用已经失效的临时目录。
     """
-    if sys.platform != "win32":
-        return
+    if sys.platform != "win32": return
     try:
         import ctypes
         ctypes.windll.kernel32.SetDllDirectoryW(None)

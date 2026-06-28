@@ -50,7 +50,7 @@
           <!-- 2. 日志内容区 (Log Stream) -->
           <div data-tour="log-viewer-stream" class="flex-1 min-h-0 bg-black/20 font-mono text-sm relative">
             <KeepAlive>
-              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" ref="logPanelRef" @update:selected-logs="handleSelectedLogsUpdate"/>
+              <UnifiedLogPanel :key="currentTab" :source-type="currentTab" ref="logPanelRef" @selection-change="handleSelectedLogsUpdate" />
             </KeepAlive>
 
             <!-- 悬浮操作条 (Floating Action Bar) -->
@@ -96,10 +96,9 @@
 
         <!-- ================= 右侧：AI 诊断侧边栏 ================= -->
         <!-- 使用我们新创建的组件，并通过 v-model 控制显隐 -->
-        <AiDiagnosticSidebar  v-model="showAiSidebar" :pending-logs="selectedLogs" :token-info="tokenInfo"
-          :auto-start-request="autoDiagnosisRequest" :source-type="currentTab" 
-          :filename="logPanelRef?.selectedFile || ''" @clear-selection="clearLogSelection"
-        />
+        <AiDiagnosticSidebar  v-model="showAiSidebar" :assistant-id="currentAssistantId"
+          :auto-start-request="autoDiagnosisRequest" :source-type="currentTab" :filename="activeFilename">
+        </AiDiagnosticSidebar>
 
       </div>
     </div>
@@ -110,39 +109,49 @@
 import { ref, computed, watch } from 'vue'
 import { Terminal, Gamepad2, Copy } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
+import { useLogStore } from '../stores/logStore'
 import { useToast } from 'vue-toastification'
 import UnifiedLogPanel from './utils/UnifiedLogPanel.vue';
-import AiDiagnosticSidebar from './utils/AiDiagnosticSidebar.vue'
-import { checkResult } from '../utils/common';
+import AiDiagnosticSidebar from './ai/AiDiagnosticSidebar.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue';
 
 
+// -----------------------------------------------------------------
+// Store 依赖 (Stores)
+// -----------------------------------------------------------------
 const appStore = useAppStore()
+const logStore = useLogStore()
 const toast = useToast()
-// --- 状态数据 ---
+
+// -----------------------------------------------------------------
+// 状态定义 (State / Refs)
+// -----------------------------------------------------------------
 const currentTab = ref('game') // 'app' | 'game'
 const tabs = [
-  { id: 'game', label: '游戏日志', icon: Gamepad2 },
-  { id: 'app', label: '系统日志', icon: Terminal }
+  { id: 'game', label: '游戏日志', icon: Gamepad2, assistantId: 'assistant.log_game' },
+  { id: 'app', label: '系统日志', icon: Terminal, assistantId: 'assistant.log_app' }
 ]
+const currentAssistantId = computed(() => tabs.find(tab => tab.id === currentTab.value)?.assistantId || 'assistant.log_game')
 
-// AI 相关状态
-const showAiSidebar = ref(false)   // 控制 AI 侧栏的开关
-const selectedLogs = ref([]) 
+// AI 诊断侧栏和附件状态与当前日志来源强绑定。
+const showAiSidebar = computed({
+  get: () => logStore.showSidebar,
+  set: (value) => {
+    logStore.showSidebar = !!value
+  }
+})
+const selectedLogs = computed(() => logStore.selectedLogsBySource[currentTab.value] || [])
 const logPanelRef = ref(null)      // 引用当前的 UnifiedLogPanel 组件实例
 const autoDiagnosisRequest = ref(null)
 const isGlobalScanning = ref(false)
-// 【修复 5】引入请求序号，防抖并防止旧请求覆盖新请求
-let currentTokenRequestId = 0
-
-// 【核心新增】前置 Token 计算状态
-const tokenInfo = ref({
+const tokenInfo = computed(() => logStore.tokenInfoBySource[currentTab.value] || {
   isLoading: false,
   estimated: 0,
   limit: 32000,
   isOverLimit: false,
-  condensedData: null
+  condensedData: null,
 })
+const activeFilename = computed(() => logStore.getSourceState(currentTab.value)?.selectedFile || '')
 
 const enable_tool_mods = computed({
   get() {
@@ -153,7 +162,21 @@ const enable_tool_mods = computed({
   }
 })
 
+const resetAttachmentState = () => {
+  // 切文件、切标签或清空选择时，需要同时重置 token 估算和附件草稿，
+  // 否则 AI 会带着旧日志上下文继续对话。
+  clearTimeout(debounceTimer)
+  logStore.clearSelection(currentTab.value)
+  autoDiagnosisRequest.value = null
+  logStore.beginSelectionRequest(currentTab.value)
+}
+
+// -----------------------------------------------------------------
+// 工具方法 (Utils)
+// -----------------------------------------------------------------
+let debounceTimer = null
 const createEmptyTokenInfo = () => ({
+  /** 创建日志面板本地使用的默认 token 状态，占位时无需依赖 store 初始化顺序。 */
   isLoading: false,
   estimated: 0,
   limit: 32000,
@@ -161,79 +184,52 @@ const createEmptyTokenInfo = () => ({
   condensedData: null
 })
 
-const resetAttachmentState = () => {
-  clearTimeout(debounceTimer)
-  selectedLogs.value = []
-  tokenInfo.value = createEmptyTokenInfo()
-  autoDiagnosisRequest.value = null
-  currentTokenRequestId++
-}
-
-// 防抖计算器
-let debounceTimer = null
-// 接收子组件日志选中更新
+// -----------------------------------------------------------------
+// 业务方法 (Methods)
+// -----------------------------------------------------------------
 const handleSelectedLogsUpdate = (logs) => {
-  // 【关键修复】如果正在进行全局扫描/带有全局附件，忽略来自子组件框选的空事件更新
+  // 全局扫描模式下，底层面板会先触发一次“清空选择”事件；
+  // 这里必须忽略它，避免刚生成的全局摘要附件被误删。
   if (isGlobalScanning.value && logs.length === 0) return
-  selectedLogs.value = logs
   if (logs.length === 0) {
-    tokenInfo.value = createEmptyTokenInfo()
-    currentTokenRequestId++
+    logStore.clearSelection(currentTab.value)
+    logStore.beginSelectionRequest(currentTab.value)
     return
   }
 
-  tokenInfo.value.isLoading = true
+  logStore.replaceSelection({
+    sourceType: currentTab.value,
+    filename: activeFilename.value,
+    selectedLogs: logs,
+    syncAttachment: true,
+  })
+  logStore.setTokenInfo(currentTab.value, {
+    ...createEmptyTokenInfo(),
+    isLoading: true,
+  }, { syncAttachment: true })
+
   clearTimeout(debounceTimer)
-  
+  const requestSeq = logStore.beginSelectionRequest(currentTab.value)
   debounceTimer = setTimeout(async () => {
-    currentTokenRequestId++
-    const myRequestId = currentTokenRequestId
-    await fetchTokenEstimate(logs, myRequestId)
+    await fetchTokenEstimate(logs, requestSeq)
   }, 500)
 }
-// 调用后端的预检接口
-const fetchTokenEstimate = async (logs, requestId) => {
-  if (!window.pywebview) return
-  
-  const allRawLines = [...new Set(logs.flatMap(l => l.raw_lines || []))]
-  if (allRawLines.length === 0) {
-    if (requestId === currentTokenRequestId) tokenInfo.value.isLoading = false
-    return
-  }
-
-  const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
-  const currentFilename = panel?.selectedFile || ''
-
+// 估算结果只用于提示和请求预算判断，不作为后端硬限制依据。
+const fetchTokenEstimate = async (logs, requestSeq) => {
   try {
-    const res = await window.pywebview.api.ai_prepare_diagnosis({
-      raw_lines: allRawLines,
-      filename: currentFilename,
-      log_source_type: currentTab.value
+    await logStore.estimateSelectionTokenInfo({
+      sourceType: currentTab.value,
+      filename: activeFilename.value,
+      logs,
+      requestSeq,
     })
-    
-    // 如果序号匹配，才更新状态
-    if (requestId === currentTokenRequestId) {
-      if (checkResult(res,'Token检测')) {
-        tokenInfo.value = {
-          isLoading: false,
-          estimated: res.data.estimated_tokens,
-          limit: res.data.token_limit,
-          isOverLimit: res.data.is_over_limit,
-          condensedData: res.data.condensed_data
-        }
-      } else {
-        tokenInfo.value.isLoading = false
-        toast.error(res.message)
-      }
-    }
   } catch (e) {
-    console.error("Token 计算失败:", e)
-    if (requestId === currentTokenRequestId) tokenInfo.value.isLoading = false
+    console.error('Token 计算失败:', e)
   }
 }
 
-// 辅助方法：根据占比计算颜色
 const getTokenColor = (est, limit) => {
+  /** 根据 token 占用比例返回提示色，帮助用户快速判断是否接近模型上限。 */
   if (!limit || limit === 0) return 'text-text-main'
   const ratio = est / limit
   if (ratio > 0.9) return 'text-accent-danger'
@@ -241,21 +237,23 @@ const getTokenColor = (est, limit) => {
   return 'text-accent-success'
 }
 
-// 触发子组件复制
 const triggerCopy = () => {
+  /** 把复制动作透传给当前活动日志面板实例。 */
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
   if (panel && typeof panel.copySelection === 'function') {
     panel.copySelection()
   }
 }
-// 供自身悬浮条或子组件调用的清空方法
 const clearLogSelection = () => {
-  isGlobalScanning.value = false // 【关键修复】清空时解除锁
+  /**
+   * 清空当前日志选择，并同步重置附件与侧栏联动状态。
+   *
+   * 这里既会清理 store，也会驱动子组件清空框选视觉状态。
+   */
+  isGlobalScanning.value = false
   resetAttachmentState()
-  // 调用子组件 UnifiedLogPanel 暴露的 clearSelection 方法
   if (logPanelRef.value) {
-    // 处理 KeepAlive 下获取引用的兼容
-    // 有时 Vue3 ref 包装的组件是一个数组或代理对象
+    // KeepAlive 下组件 ref 可能被包装成数组代理，这里统一取首项兼容。
     const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value;
     if (panel && typeof panel.clearSelection === 'function') {
       panel.clearSelection()
@@ -263,12 +261,21 @@ const clearLogSelection = () => {
   }
 }
 
+// -----------------------------------------------------------------
+// 副作用监听 (Watchers)
+// -----------------------------------------------------------------
 watch(currentTab, () => {
-  resetAttachmentState()
+  isGlobalScanning.value = false
+  autoDiagnosisRequest.value = null
 })
 
-// 一键分析
 const autoAnalyzeGlobalErrors = async () => {
+  /**
+   * 发起“全局摘要分析”。
+   *
+   * 这条链路与普通框选不同：它会先请求后端压缩整份日志，再把压缩摘要
+   * 作为一条特殊 diagnosis_context 附件交给 AI 会话自动开聊。
+   */
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
   const currentFilename = panel?.selectedFile || ''
   if (!currentFilename || !window.pywebview) {
@@ -276,68 +283,40 @@ const autoAnalyzeGlobalErrors = async () => {
     return
   }
 
-  // UI 反馈，清空旧状态
   toast.info("正在扫描全部日志，请稍候...", { timeout: 3000 })
-  // 先锁定状态，再清空 UI 选择！
   isGlobalScanning.value = true
   
-  // 这会触发底层清空，但因为锁存在，上层的 handleSelectedLogsUpdate 忽略了空数据
   resetAttachmentState() 
   if (panel && typeof panel.clearSelection === 'function') {
     panel.clearSelection()
   }
-  // 先挂上一个全局附件占位，用户点击后一眼就能看到状态变化。
-  selectedLogs.value = [{ id: 'global_mock', raw_lines: [] }]
-  tokenInfo.value = {
-    ...createEmptyTokenInfo(),
-    isLoading: true
-  }
   autoDiagnosisRequest.value = null
   showAiSidebar.value = true
   
-  currentTokenRequestId++ // 阻断其他常规框选预检
-  const myRequestId = currentTokenRequestId
+  const requestSeq = logStore.beginSelectionRequest(currentTab.value)
 
   try {
-    // 调用全局扫描接口
-    const res = await window.pywebview.api.ai_scan_global_errors({
+    const scanResult = await logStore.scanGlobalErrorsSelection({
+      sourceType: currentTab.value,
       filename: currentFilename,
-      log_source_type: currentTab.value
+      requestSeq,
     })
-
-    if (myRequestId !== currentTokenRequestId) return
-
-    if (checkResult(res,"全局扫描")) {
-      const diagnosisContext = res.data.diagnosis_context || null
-      const stats = diagnosisContext?.stats || {}
-      const tocCount = stats.output_item_count || diagnosisContext?.error_table_of_contents?.length || 0
-      const repeatCount = stats.total_repeat_count || 0
-
-      tokenInfo.value = {
-        isLoading: false,
-        estimated: res.data.estimated_tokens,
-        limit: res.data.token_limit,
-        isOverLimit: res.data.is_over_limit,
-        condensedData: diagnosisContext
-      }
-
-      // 维持全局附件状态，让侧栏和顶部 Token 统计立刻反映压缩结果。
-      selectedLogs.value = [{ id: 'global_mock', raw_lines: [], count: repeatCount }]
-      const tokenText = `${(Number(res.data.estimated_tokens || 0) / 1000).toFixed(1)}k TK`
-      const notice = res.data?.compression_notice || `压缩完成：保留 ${tocCount} 条错误摘要，共覆盖 ${repeatCount} 次错误，当前占用约 ${tokenText}。`
-      toast.success(`${notice} 正在启动 AI 分析...`, { timeout: 5000 })
-      autoDiagnosisRequest.value = {
-        nonce: Date.now(),
-        question: '请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。'
-      }
-    } else {
-      clearLogSelection() // 失败时彻底清空并解锁
-      toast.warning(res.message)
+    if (!scanResult) {
+      clearLogSelection()
+      return
+    }
+    const diagnosisContext = scanResult.condensedData || null
+    const stats = diagnosisContext?.stats || {}
+    const tocCount = stats.output_item_count || diagnosisContext?.error_table_of_contents?.length || 0
+    const repeatCount = stats.total_repeat_count || 0
+    const tokenText = `${(Number(scanResult.tokenInfo?.estimated || 0) / 1000).toFixed(1)}k TK`
+    const notice = scanResult.notice || `压缩完成：保留 ${tocCount} 条错误摘要，共覆盖 ${repeatCount} 次错误，当前占用约 ${tokenText}。`
+    toast.success(`${notice} 正在启动 AI 分析...`, { timeout: 5000 })
+    autoDiagnosisRequest.value = {
+      nonce: Date.now(),
     }
   } catch (e) {
-    if (myRequestId === currentTokenRequestId) {
-      clearLogSelection()
-    }
+    clearLogSelection()
     toast.error("全局扫描失败: " + e.message)
   }
 }

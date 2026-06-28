@@ -34,6 +34,11 @@ export const useSearchStore = defineStore('search', () => {
     save_breaking: { type: FIELD_TYPES.BOOLEAN, label: '是否坏档' },
     shadow_paths: { type: FIELD_TYPES.BOOLEAN, label: '存在禁用包名' },
     replacement: { type: FIELD_TYPES.BOOLEAN, label: '存在替代版本' },
+    coexist_variant: {
+      type: FIELD_TYPES.BOOLEAN,
+      label: '存在共存版本',
+      getter: (mod) => !!mod.coexist_workshop_variant
+    },
     last_active: { 
       type: FIELD_TYPES.BOOLEAN, 
       label: '最近启用', 
@@ -87,7 +92,7 @@ export const useSearchStore = defineStore('search', () => {
         schema: searchSchema,
         
         // 2. 开启自动检测 (填充 name, author, version 等常规字段)
-        autoDetect: true,
+        autoDetect: false,
         
         // 3. [新增] 排除规则
         // 支持正则，彻底屏蔽不需要的字段

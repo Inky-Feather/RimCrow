@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import time
 import zipfile
@@ -22,8 +23,7 @@ def generate_path_hash(path: str) -> str:
     根据路径生成唯一的哈希值。
     统一使用规范化的绝对路径并转为小写，以处理 Windows 的大小写不敏感问题。
     """
-    if not path:
-        return ""
+    if not path: return ""
     normalized_path = os.path.abspath(path).lower()
     return hashlib.md5(normalized_path.encode('utf-8')).hexdigest()
 
@@ -31,6 +31,16 @@ def generate_path_hash(path: str) -> str:
 def current_ms():
     """获取当前的毫秒级时间戳"""
     return int(time.time() * 1000)
+
+
+def normalize_text(value: Any, default: str = "") -> str:
+    text = str(value or "").strip()
+    return text or default
+
+
+def normalize_string_list(values: list[Any] | tuple[Any, ...] | None) -> list[str]:
+    normalized = [normalize_text(value) for value in values or []]
+    return _dedupe_preserve_order([value for value in normalized if value])
 
 
 def get_folder_size(path: str) -> int:
@@ -61,7 +71,12 @@ def extract_zip(zip_path: str, target_dir: str) -> None:
 
 
 def normalize_package_id(package_id: Any) -> str:
-    return str(package_id or "").strip().lower()
+    normalized = normalize_text(package_id).lower()
+    if normalized.endswith("_steam"):
+        return normalized[:-6]
+    if normalized.endswith("_local"):
+        return normalized[:-6]
+    return normalized
 
 
 def normalize_package_ids(package_ids: list[Any]) -> list[str]:
@@ -78,8 +93,7 @@ def normalize_package_ids(package_ids: list[Any]) -> list[str]:
 def is_hex_color(color: Any) -> bool:
     """判断字符串是否是 `#RRGGBB` 形式的颜色值。"""
     text = str(color or "").strip()
-    if len(text) != 7 or not text.startswith("#"):
-        return False
+    if len(text) != 7 or not text.startswith("#"): return False
     return all(char in "0123456789abcdefABCDEF" for char in text[1:])
 
 
@@ -91,8 +105,7 @@ def normalize_hex_color(color: Any, default: str = "#ffffff") -> str:
     如果调用方需要严格校验，可以先调用 `is_hex_color()`。
     """
     text = str(color or "").strip()
-    if is_hex_color(text):
-        return text
+    if is_hex_color(text): return text
     return default
 
 
@@ -104,22 +117,31 @@ def normalize_workshop_id(
     max_length: int | None = None,
     zero_is_empty: bool = True,
 ) -> str:
-    value = str(workshop_id or "").strip()
-    if not value:
-        return ""
-    if digits_only and not value.isdigit():
-        return ""
+    value = normalize_text(workshop_id)
+    if not value: return ""
+    if digits_only and not value.isdigit(): return ""
     if zero_is_empty:
-        if value == "0":
-            return ""
-        if value.isdigit() and int(value) == 0:
-            return ""
-    if len(value) < min_length:
-        return ""
-    if max_length is not None and len(value) > max_length:
-        return ""
+        if value == "0": return ""
+        if value.isdigit() and int(value) == 0: return ""
+    if len(value) < min_length: return ""
+    if max_length is not None and len(value) > max_length: return ""
     return value
 
+
+def clean_rich_text_for_ai(text: Any, max_length: int = 500) -> str:
+    """将描述类富文本压缩成适合 AI 上下文的纯文本。"""
+    if not text: return ""
+    clean = str(text)
+    clean = re.sub(r"<[^>]+>", "", clean)
+    clean = re.sub(r"\[url=[^\]]*\]([^\[]+)\[/url\]", r"\1", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\[[^\]]+\]", "", clean)
+    clean = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", clean)
+    clean = re.sub(r"(https?|ftp):\/\/[^\s/$.?#].[^\s]*", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\s{2,}", " ", clean)
+    clean = re.sub(r"\n+", "\n", clean).strip()
+    if len(clean) > max_length:
+        clean = clean[:max_length] + "..."
+    return clean
 
 
 def delete_fs_path(path: str, force: bool = False) -> bool:
@@ -129,8 +151,7 @@ def delete_fs_path(path: str, force: bool = False) -> bool:
     When ``force`` is True, remove it permanently.
     """
     abs_path = os.path.abspath(path)
-    if not os.path.exists(abs_path):
-        return False
+    if not os.path.exists(abs_path): return False
 
     if force:
         if os.path.isdir(abs_path) and not os.path.islink(abs_path):

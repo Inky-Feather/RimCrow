@@ -60,8 +60,7 @@ class GameMonitor:
         避免页面已切走时回调函数丢失。
         """
         window = self.api.get_window()
-        if not window or not target_url:
-            return
+        if not window or not target_url: return
 
         def _worker():
             try:

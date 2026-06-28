@@ -133,7 +133,7 @@
               
               <div class="flex items-center gap-2">
                 <span class="text-xs font-mono text-text-dim/80">{{ formatDate(log.time) }}</span>
-                <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase" :class="getLogBgColor(log.type)">
+                <span class="px-1.5 py-0.5 rounded text-[0.7rem] font-black uppercase" :class="getLogBgColor(log.type)">
                   {{ log.title }}
                 </span>
               </div>
@@ -159,7 +159,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { Github, RefreshCw, Trash2, Link, CloudDownload, Activity } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import { useWorkspaceStore } from '../../../stores/workspaceStore'
@@ -171,10 +171,6 @@ const workspaceStore = useWorkspaceStore()
 const newRepoUrl = ref('')
 const isParsing = ref(false)
 const isChecking = ref(false)
-
-onMounted(() => {
-  workspaceStore.fetchGithubRepos()
-})
 
 onBeforeUnmount(() => {
   workspaceStore.stopGithubTimelinePolling()

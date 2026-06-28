@@ -17,8 +17,15 @@
               <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             </div>
             <div>
-              <h2 class="text-2xl font-black text-text-main tracking-wide">版本升级成功</h2>
-              <p class="text-sm text-text-dim mt-1">从 <span class="font-mono">{{ oldVersion }}</span> 跃升至 <span class="font-mono text-accent-primary font-bold">{{ currentVersion }}</span></p>
+              <h2 class="text-2xl font-black text-text-main tracking-wide">{{ modalTitle }}</h2>
+              <p class="text-sm text-text-dim mt-1">
+                <template v-if="isUpgradeView">
+                  从 <span class="font-mono">{{ oldVersion }}</span> 跃升至 <span class="font-mono text-accent-primary font-bold">{{ currentVersion }}</span>
+                </template>
+                <template v-else>
+                  查看当前版本线的完整变更记录
+                </template>
+              </p>
             </div>
           </div>
           
@@ -45,17 +52,30 @@
                   <span class="text-lg font-black font-mono text-text-main" :class="{'text-accent-primary drop-shadow-[0_0_5px_rgba(var(--color-accent-primary),0.8)]': idx === 0}">
                     v{{ log.version }}
                   </span>
-                  <span class="text-xs text-text-dim bg-text-main/10 px-2 py-0.5 rounded-full">{{ log.date }}</span>
+                  <span class="text-xs text-text-dim bg-text-main/10 px-2 py-0.5 rounded-full">{{ log.date || '开发中' }}</span>
                 </div>
-                <ul class="space-y-2.5">
-                  <li v-for="(change, cIdx) in log.changes" :key="cIdx" class="flex items-start gap-2 text-sm text-text-main/80">
-                    <span v-if="change.type === 'feature'" class="shrink-0 mt-0.5" ><CircleFadingPlus class="size-4 text-accent-tip"/></span>
-                    <span v-if="change.type === 'optimize'" class="shrink-0 mt-0.5" ><Zap class="size-4 text-accent-special"/></span>
-                    <span v-if="change.type === 'fix'" class="shrink-0 mt-0.5" ><Bug class="size-4 text-accent-warn"/></span>
-                    <span v-if="change.type === 'breaking'" class="shrink-0 mt-0.5" ><Dna class="size-4 text-accent-highlight"/></span>
-                    <span class="leading-relaxed">{{ change.text }}</span>
-                  </li>
-                </ul>
+                <div class="space-y-4">
+                  <section
+                    v-for="(entry, entryIdx) in log.entries || []"
+                    :key="`${log.version}-${entryIdx}-${entry.title || 'entry'}`"
+                    class="space-y-2.5"
+                    :class="{ 'border-t border-text-main/8 pt-4': entryIdx > 0 }"
+                  >
+                    <div v-if="entry.title" class="text-xs font-bold uppercase tracking-[0.18em] text-text-dim/80">
+                      {{ entry.title }}
+                    </div>
+                    <ul class="space-y-2.5">
+                      <li v-for="(change, cIdx) in entry.changes || []" :key="cIdx" class="flex items-start gap-2 text-sm text-text-main/80">
+                        <span v-if="change.type === 'feature'" class="shrink-0 mt-0.5" ><CircleFadingPlus class="size-4 text-accent-tip"/></span>
+                        <span v-else-if="change.type === 'optimize'" class="shrink-0 mt-0.5" ><Zap class="size-4 text-accent-special"/></span>
+                        <span v-else-if="change.type === 'fix'" class="shrink-0 mt-0.5" ><Bug class="size-4 text-accent-warn"/></span>
+                        <span v-else-if="change.type === 'breaking'" class="shrink-0 mt-0.5" ><Dna class="size-4 text-accent-highlight"/></span>
+                        <span v-else class="shrink-0 mt-0.5"><Zap class="size-4 text-text-dim"/></span>
+                        <span class="leading-relaxed">{{ change.text }}</span>
+                      </li>
+                    </ul>
+                  </section>
+                </div>
               </div>
 
             </div>
@@ -96,6 +116,8 @@ const context = computed(() => appStore.upgradeContext || {})
 const currentVersion = computed(() => context.value.new_version || '0.0.0')
 const oldVersion = computed(() => context.value.old_version || '0.0.0')
 const allLogs = computed(() => context.value.changelog || [])
+const isUpgradeView = computed(() => !!context.value.version_changed && currentVersion.value !== oldVersion.value)
+const modalTitle = computed(() => isUpgradeView.value ? '版本升级成功' : '更新日志')
 
 // 监听弹窗打开动作
 watch(() => appStore.uiState.showUpdateModal, (isOpen) => {
@@ -130,8 +152,12 @@ const displayedLogs = computed(() => {
   if (showFullHistory.value || allLogs.value.length <= 1) {
     return allLogs.value;
   }
-  // 增量模式：过滤掉版本号 <= oldVersion 的旧日志
-  const filtered = allLogs.value.filter(log => compareVersions(log.version, oldVersion.value) > 0);
+  // 增量模式：只显示已发布、且位于升级区间内的版本
+  const filtered = allLogs.value.filter(log => (
+    !!log.date
+    && compareVersions(log.version, oldVersion.value) > 0
+    && compareVersions(log.version, currentVersion.value) <= 0
+  ));
   // 兜底：如果增量过滤完啥都没了，还是显示全量吧
   return filtered.length > 0 ? filtered : allLogs.value;
 })

@@ -1,21 +1,18 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
-  <div class="relative" :class="{'flex items-center' : mini}" ref="target">
+  <div class="relative mx-0 p-0" :class="{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}" ref="target">
     <!-- Label：点击时联动聚焦 -->
-    <span v-if="label" 
-      class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
-      :class="[mini ? '' : 'mb-1']"  
-      @click="handleLabelClick" 
-    >
+    <span v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
+      :class="[mini ? '' : 'mb-1']" @click="handleLabelClick" >
       {{ label }}
-      <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+      <label v-if="description" v-tooltip="description" class="text-text-dim ml-0.5 cursor-help italic underline hover:text-text-main">?</label>
     </span>
     
     <!-- 主输入区域 -->
-    <div class="relative group">
+    <div class="relative group min-w-0 max-w-full flex items-center" :class="{ 'flex-1': mini }" >
       <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable"
-        :class="[ 'input-glass min-w-0 bg-text-main/5 border border-text-main/10 rounded-lg text-sm text-text-main transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-text-main/20 placeholder:italic',
-          mini ? 'py-1 px-2 text-xs' : 'w-full h-9 px-3',
+        :class="[ 'input-glass min-w-0 w-full bg-text-main/5 border truncate border-text-main/10 rounded-lg text-sm text-text-main transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-text-main/20 placeholder:italic',
+          mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
         ]"
         @click="openMenu"
@@ -77,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onBeforeUpdate, watch } from 'vue'
+import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import FixedPopover from '../FixedPopover.vue'
 

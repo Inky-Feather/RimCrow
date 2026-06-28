@@ -44,6 +44,87 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
             get_profile_mods_mock.assert_called_once_with(context)
             self.assertEqual(build_report_mock.call_args.kwargs["installed_mods"], visible_mods)
 
+    def test_build_entries_from_parsed_keeps_steam_token_and_collapses_local_suffix(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=False,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+            parsed = ParsedLoadOrderData(
+                format="modsconfig",
+                list_name="Demo",
+                package_ids=["author.steammod", "author.localmod"],
+                package_tokens=["author.steammod_steam", "author.localmod_local"],
+                mod_names=["Steam Mod", "Local Mod"],
+                workshop_ids=["123", "0"],
+            )
+
+            result = manager._build_entries_from_parsed(parsed)
+
+            self.assertEqual(result["active_mods"], ["author.steammod_steam", "author.localmod"])
+            self.assertEqual(result["mods"][0]["package_token"], "author.steammod_steam")
+            self.assertEqual(result["mods"][1]["package_token"], "author.localmod")
+
+    def test_build_entries_from_parsed_drops_stale_steam_token_when_no_coexist_workshop_variant(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=True,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+            parsed = ParsedLoadOrderData(
+                format="modsconfig",
+                list_name="Demo",
+                package_ids=["author.steammod"],
+                package_tokens=["author.steammod_steam"],
+                mod_names=["Steam Mod"],
+                workshop_ids=["123"],
+            )
+            visible_mods = [
+                {
+                    "package_id": "author.steammod",
+                    "package_id_raw": "Author.SteamMod",
+                    "name": "Local Winner",
+                    "display_name": "Local Winner",
+                    "workshop_id": "",
+                    "url": "",
+                }
+            ]
+
+            with patch.object(manager, "_get_visible_installed_mods", return_value=visible_mods), \
+                 patch("backend.database.models.ModAsset.select") as select_mock, \
+                 patch("backend.managers.mgr_load_order.ExtDAO.get_workshop_details_by_package_ids", return_value={}):
+                select_mock.return_value.where.return_value.dicts.return_value = []
+                result = manager._build_entries_from_parsed(parsed)
+
+            self.assertEqual(result["active_mods"], ["author.steammod"])
+            self.assertEqual(result["mods"][0]["package_token"], "author.steammod")
+
+    def test_build_export_entries_strips_suffixes_for_non_modsconfig_exports(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=False,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+
+            with patch.object(manager, "_enrich_mod_entries", side_effect=lambda entries: entries):
+                entries = manager._build_export_entries(
+                    ["author.steammod_steam", "author.localmod_local"],
+                    export_format="modlist",
+                )
+
+            self.assertEqual([entry["package_id"] for entry in entries], ["author.steammod", "author.localmod"])
+            self.assertEqual([entry["package_token"] for entry in entries], ["author.steammod", "author.localmod"])
+            self.assertEqual([entry["package_id_raw"] for entry in entries], ["author.steammod", "author.localmod"])
+
 
 if __name__ == "__main__":
     unittest.main()

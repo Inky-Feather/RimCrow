@@ -49,13 +49,11 @@ class ModScanner:
         self._current_task_id: str | None = None
 
     @property
-    def is_scanning(self) -> bool:
-        return self._is_scanning
+    def is_scanning(self) -> bool: return self._is_scanning
 
     def stop_scan(self, task_id: str | None = None) -> bool:
         """外部调用：请求中断扫描"""
-        if not self._is_scanning:
-            return False
+        if not self._is_scanning: return False
         if task_id and self._current_task_id and task_id != self._current_task_id:
             logger.warning("Ignored scan interruption for stale task: requested=%s active=%s", task_id, self._current_task_id)
             return False
@@ -67,8 +65,7 @@ class ModScanner:
         """等待扫描任务彻底结束并释放线程内连接。"""
         deadline = time.time() + max(0.0, timeout)
         while time.time() < deadline:
-            if not self._is_scanning:
-                return True
+            if not self._is_scanning: return True
             time.sleep(max(0.01, poll_interval))
         return not self._is_scanning
 
@@ -77,8 +74,7 @@ class ModScanner:
         异步扫描入口。立即返回，任务在后台运行。
         """
         EventBus.resume()   # 恢复事件总线
-        if self._is_scanning:
-            return {'status': 'busy', 'message': '扫描已在进行中'}
+        if self._is_scanning: return {'status': 'busy', 'message': '扫描已在进行中'}
         
         self._is_scanning = True
         self._stop_requested = False  # 启动前重置标志
@@ -241,6 +237,9 @@ class ModScanner:
                     ModDAO.batch_upsert_mods(mods_to_upsert)
                 if shadow_paths_map:
                     ModDAO.batch_update_shadow_paths(shadow_paths_map)
+                # 扫描完成后再基于本轮 self 域磁盘结果补齐 SteamCMD ACF，
+                # 让 ACF 记录集合与真实目录集合保持同步。
+                SteamManager().reconcile_steamcmd_acf(scan_mods=mods_to_upsert)
             except Exception as e:
                 # txn.rollback() # 万一出错，回滚所有改动
                 logger.error(f"批量入库失败: {e}", exc_info=True)
@@ -248,7 +247,14 @@ class ModScanner:
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
             runtime_analysis = ModDAO.get_profile_conflict_analysis(
                 self.context,
-                include_workshop=not bool(getattr(self.context, 'prefer_steam_launch', True)),
+                include_workshop_in_detection=bool(
+                    getattr(self.context, 'prefer_steam_launch', False)
+                    or getattr(self.context, 'use_workshop_mods', False)
+                ),
+                include_workshop_in_deploy=bool(
+                    (not getattr(self.context, 'prefer_steam_launch', False))
+                    and getattr(self.context, 'use_workshop_mods', False)
+                ),
             )
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']
@@ -346,8 +352,7 @@ class ModScanner:
             about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=False)
         about_file = about_state.resolved_path
         is_disabled = about_state.is_disabled
-        if not about_file and not is_dlc_dir:
-            return None # 既不是 DLC 也没有 About.xml，无效
+        if not about_file and not is_dlc_dir: return None # 既不是 DLC 也没有 About.xml，无效
         
         # 检查 mtime
         try:
@@ -523,8 +528,7 @@ class ModScanner:
         if keywords in norm_path:
             folder_name = os.path.basename(mod_path)
             # 只要是纯数字就认
-            if folder_name.isdigit():
-                return folder_name
+            if folder_name.isdigit(): return folder_name
             
         return None
 

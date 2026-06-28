@@ -1,5 +1,4 @@
-"""AI 模块导出入口。"""
+"""AI 模块入口。"""
 
-from backend.ai.service import AIManager
-
-__all__ = ["AIManager"]
+# 保持包初始化轻量，避免导入子模块时提前拉起 service / database 依赖。
+__all__: list[str] = []

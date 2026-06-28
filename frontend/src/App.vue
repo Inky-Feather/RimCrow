@@ -2,7 +2,7 @@
   <div v-if="appStore.isSuspended" class="relative h-[100vh] w-full overflow-hidden font-sans select-none bg-[#0f172a] text-slate-200">
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_28%),linear-gradient(160deg,#0f172a_0%,#111827_100%)]"></div>
     <div class="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-      <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/8 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-300">
+      <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/8 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.22em] text-cyan-300">
         <span class="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)] animate-pulse"></span>
         RimWorld Running
       </div>
@@ -205,11 +205,13 @@
     <ConflictResolver />
 
     <!-- AI 生成数据弹窗 -->
-    <AiReviewModal />
+    <ModAliasReviewModal />
+    <!-- AI 会话链路弹窗 -->
+    <AiSessionTraceModal />
     <!-- 文件搜索工作台 -->
     <FileSearchWorkbench />
-    <!-- 提示词管理器 -->
-    <PromptManager />
+    <!-- AI 定义管理器 -->
+    <AIDefinitionManager />
 
     <!-- 工坊更新管理中心 -->
     <WorkspaceOverlay />
@@ -280,9 +282,10 @@ import Confirm from './components/common/Confirm.vue'
 import SegmentedTabs from './components/utils/SegmentedTabs.vue'
 import ProfileDrawer from './components/ProfileDrawer.vue'
 import Test from './components/temp/test.vue'
-import AiReviewModal from './components/AiReviewModal.vue'
+import ModAliasReviewModal from './components/ModAliasReviewModal.vue'
+import AiSessionTraceModal from './components/AiSessionTraceModal.vue'
 import FileSearchWorkbench from './components/FileSearchWorkbench.vue'
-import PromptManager from './components/PromptManager.vue'
+import AIDefinitionManager from './components/AIDefinitionManager.vue'
 import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'
 import GuideCenter from './components/GuideCenter.vue'

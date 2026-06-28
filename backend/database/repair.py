@@ -51,8 +51,7 @@ def _remove_file_with_retry(file_path, retries=10, delay=0.3):
     last_error = None
     for attempt in range(1, retries + 1):
         try:
-            if not os.path.exists(file_path):
-                return True
+            if not os.path.exists(file_path): return True
             os.remove(file_path)
             return True
         except PermissionError as e:
@@ -202,8 +201,7 @@ def _resolve_field_default_for_repair(field):
         default_value = field.default() if callable(field.default) else field.default
         return field.db_value(default_value)
 
-    if field.null:
-        return None
+    if field.null: return None
 
     if isinstance(field, UTF8JSONField):
         return field.db_value([] if 'list' in field.name.lower() or field.name.endswith('s') else {})
@@ -324,8 +322,7 @@ def apply_pending_manual_repair(db_path):
     """
     paths = _get_repair_paths(db_path)
     marker_path = paths['marker_path']
-    if not os.path.exists(marker_path):
-        return {"applied": False}
+    if not os.path.exists(marker_path): return {"applied": False}
 
     try:
         with open(marker_path, 'r', encoding='utf-8') as f:
@@ -368,12 +365,10 @@ def prepare_database_for_startup(db_path):
     elif staged_result.get("error"):
         result["messages"].append("检测到未完成的修复结果，但无法使用，已自动跳过。")
 
-    if not os.path.exists(db_path):
-        return result
+    if not os.path.exists(db_path): return result
 
     valid, message = validate_database_file(db_path, require_tables=False)
-    if valid:
-        return result
+    if valid: return result
 
     logger.warning(f"启动前检测到数据库损坏，准备尝试自动修复: {message}")
     paths = _get_repair_paths(db_path)

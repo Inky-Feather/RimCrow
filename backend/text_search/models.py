@@ -33,16 +33,11 @@ def normalize_file_types(values: list[str] | tuple[str, ...] | None) -> tuple[st
     seen: set[str] = set()
     for value in values or DEFAULT_FILE_TYPES:
         ext = str(value or "").strip().lower()
-        if not ext:
-            continue
-        if ext in {".", "*", "*.*"}:
-            return (".",)
-        if ext.startswith("*"):
-            ext = ext.lstrip("*")
-        if not ext.startswith("."):
-            ext = f".{ext}"
-        if ext in seen:
-            continue
+        if not ext: continue
+        if ext in {".", "*", "*.*"}: return (".",)
+        if ext.startswith("*"): ext = ext.lstrip("*")
+        if not ext.startswith("."): ext = f".{ext}"
+        if ext in seen: continue
         seen.add(ext)
         normalized.append(ext)
     return tuple(normalized or DEFAULT_FILE_TYPES)
@@ -96,8 +91,7 @@ class SearchRequest:
 
     def compile_pattern(self) -> re.Pattern[str]:
         flags = 0 if self.case_sensitive else re.IGNORECASE
-        if self.use_regex:
-            return re.compile(self.query, flags)
+        if self.use_regex: return re.compile(self.query, flags)
         return re.compile(re.escape(self.query), flags)
 
 

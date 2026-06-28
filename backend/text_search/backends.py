@@ -95,8 +95,7 @@ class PythonStreamingSearchBackend(SearchBackend):
     ) -> Iterable[SearchResult]:
         with Path(candidate.file_path).open("r", encoding=encoding, errors="strict") as handle:
             for line_number, raw_line in enumerate(handle, start=1):
-                if cancel_event.is_set():
-                    return
+                if cancel_event.is_set(): return
                 matched_line = raw_line.rstrip("\r\n")
                 if not pattern.search(matched_line):
                     continue
@@ -163,8 +162,7 @@ class RipgrepSearchBackend(SearchBackend):
         cancel_event: threading.Event,
         debug_mode: bool,
     ) -> Iterable[SearchResult]:
-        if not search_roots:
-            return
+        if not search_roots: return
         command = self._build_command(executable, request, search_roots)
         if debug_mode:
             logger.debug(
@@ -222,8 +220,7 @@ class RipgrepSearchBackend(SearchBackend):
                 elapsed_ms,
                 stderr_text,
             )
-        if cancel_event.is_set():
-            return
+        if cancel_event.is_set(): return
         if return_code not in {0, 1}:
             raise RuntimeError(stderr_text or "ripgrep 搜索执行失败")
 
@@ -297,24 +294,18 @@ class RipgrepSearchBackend(SearchBackend):
         )
 
     def _parse_match_event(self, raw_line: str, root_resolver: list[SearchRoot]) -> SearchResult | None:
-        try:
-            payload = json.loads(raw_line)
-        except json.JSONDecodeError:
-            return None
-        if payload.get("type") != "match":
-            return None
+        try: payload = json.loads(raw_line)
+        except json.JSONDecodeError: return None
+        if payload.get("type") != "match": return None
 
         data = payload.get("data") or {}
         file_path = self._extract_text(data.get("path") or {})
-        if not file_path:
-            return None
+        if not file_path: return None
         line_number = int(data.get("line_number") or 0)
-        if line_number <= 0:
-            return None
+        if line_number <= 0: return None
         matched_line = self._extract_text(data.get("lines") or {}).rstrip("\r\n")
         owner = self._resolve_owner_root(file_path, root_resolver)
-        if owner is None:
-            return None
+        if owner is None: return None
         absolute_path = str(Path(file_path).resolve())
         return SearchResult(
             package_id=owner.package_id,
@@ -333,8 +324,7 @@ class RipgrepSearchBackend(SearchBackend):
         for search_root in root_resolver:
             root_path = str(Path(search_root.root_path).resolve()).lower()
             if search_root.root_kind == "file":
-                if normalized_file == root_path:
-                    return search_root
+                if normalized_file == root_path: return search_root
                 continue
             if normalized_file == root_path or normalized_file.startswith(f"{root_path}{os.sep}".lower()):
                 return search_root
@@ -342,11 +332,9 @@ class RipgrepSearchBackend(SearchBackend):
 
     @staticmethod
     def _extract_text(node: dict[str, object]) -> str:
-        if not isinstance(node, dict):
-            return ""
+        if not isinstance(node, dict): return ""
         text = node.get("text")
-        if isinstance(text, str):
-            return text
+        if isinstance(text, str): return text
         return ""
 
     @staticmethod

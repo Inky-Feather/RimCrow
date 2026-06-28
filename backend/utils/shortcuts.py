@@ -48,21 +48,18 @@ def normalize_shortcut_path(shortcut_path: str, shortcut_kind: str) -> str:
 
 def resolve_shortcut_kind(spec: Dict[str, Any], *, for_url: bool = False) -> str:
     kind = str(spec.get("shortcut_kind") or "").strip().lower()
-    if kind:
-        return kind
+    if kind: return kind
 
     shortcut_path = str(spec.get("shortcut_path") or "").strip()
     suffix = Path(shortcut_path).suffix.lower()
     for candidate_kind, candidate_suffix in SHORTCUT_SUFFIXES.items():
-        if suffix == candidate_suffix:
-            return candidate_kind
+        if suffix == candidate_suffix: return candidate_kind
     return get_platform_shortcut_kind(for_url=for_url)
 
 
 def format_shortcut_arguments(args: list[str]) -> str:
     values = [str(arg or "").strip() for arg in args if str(arg or "").strip()]
-    if not values:
-        return ""
+    if not values: return ""
     if platform.system() == "Windows":
         return subprocess.list2cmdline(values)
     return " ".join(shlex.quote(value) for value in values)
@@ -349,8 +346,7 @@ def create_shortcut(spec: Dict[str, Any]) -> Dict[str, Any]:
 def remove_shortcut_variants(shortcut_path: str):
     """删除同名不同后缀的快捷方式，避免保留旧入口。"""
     base_path = Path(os.path.abspath(str(shortcut_path or "").strip()))
-    if not base_path.name:
-        return
+    if not base_path.name: return
 
     for suffix in SHORTCUT_SUFFIXES.values():
         candidate = base_path.with_suffix(suffix)

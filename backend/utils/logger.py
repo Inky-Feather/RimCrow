@@ -72,8 +72,7 @@ class BaseLogReader:
         total_blocks = len(blocks)
         total_pages = math.ceil(total_blocks / page_size) if total_blocks > 0 else 1
         
-        if page > total_pages:
-            return {'status': 'success', 'blocks': [], 'has_more': False, 'total_pages': total_pages}
+        if page > total_pages: return {'status': 'success', 'blocks': [], 'has_more': False, 'total_pages': total_pages}
 
         end_idx = total_blocks - (page - 1) * page_size
         start_idx = max(0, total_blocks - page * page_size)
@@ -88,15 +87,13 @@ class BaseLogReader:
     
     def get_logs_by_ids(self, log_ids: list, filename: str = '') -> list:
         """根据 ID 列表高效获取日志对象"""
-        if not log_ids:
-            return []
+        if not log_ids: return []
         
         # 1. 确定从哪个文件缓存中查找
         #    如果 filename 未指定，需要遍历所有缓存文件，但通常前端会知道当前是哪个文件
         #    这里我们简化为：假设所有 ID 来自最新的缓存文件
         cache_key = next(iter(self._cache)) if self._cache and not filename else filename
-        if not cache_key or cache_key not in self._cache:
-            return []
+        if not cache_key or cache_key not in self._cache: return []
 
         # 2. 使用 Set 加速查找
         id_set = set(log_ids)
@@ -248,8 +245,7 @@ class WebviewHandler(logging.Handler):
         from backend.utils.event_bus import EventBus
         # 如果 EventBus 没有窗口引用，直接跳过，防止报错
         # 这里的 _window 是在 EventBus 中定义的类变量，只有在前端完全就绪时才推送日志
-        if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): 
-            return 
+        if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): return 
         try:
             timestamp = datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             msg = record.getMessage()
@@ -445,8 +441,7 @@ class AppLogReader(BaseLogReader):
 
     def get_all_blocks(self, filepath, full_scan=False):
         """返回当前文件的完整结构化日志块，供 AI 全局扫描复用。"""
-        if not os.path.exists(filepath):
-            return []
+        if not os.path.exists(filepath): return []
         # 全局扫描时走一次完整解析，避免被前端分页缓存的块数上限截断。
         blocks = self._parse_file(filepath, keep_all=True) if full_scan else self._ensure_cache(filepath, self._parse_file)
         logger.debug(

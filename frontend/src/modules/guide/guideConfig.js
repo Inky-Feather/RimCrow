@@ -716,7 +716,7 @@ export const aiReviewGuideSteps = [
     },
     onNextBefore: async () => {
       const appStore = useAppStore();
-      appStore.uiState.showAiReviewModal = true;
+      appStore.uiState.showModAliasReviewModal = true;
       await wait();
     },
   },

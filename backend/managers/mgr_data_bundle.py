@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from backend._version import __version__
-from backend.ai.service import AIManager
+from backend.ai.ai_service import AIManager
 from backend.database.dao import CollectionDAO
 from backend.database.models import GameProfile, GithubModRecord, db
 from backend.managers.mgr_game import GameManager
@@ -38,49 +38,49 @@ class DataBundleManager:
         {
             "key": "settings",
             "label": "软件设置",
-            "description": "界面、功能、网络、AI 与外部源等全局配置。导入时默认覆盖；目录路径、敏感信息与当前激活环境不会导出。",
+            "description": "导出软件的全局设置。不会包含目录路径、敏感信息和当前激活环境。",
             "dependencies": [],
             "supports_profiles": False,
         },
         {
-            "key": "prompts",
-            "label": "提示词",
-            "description": "AI 提示词模板。导入时默认覆盖同名配置。",
+            "key": "ai_definitions",
+            "label": "AI 定义",
+            "description": "包含 AI 模板、助手设置和任务设置。导入后会替换当前 AI 定义。",
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "rules",
             "label": "规则",
-            "description": "用户规则、动态规则与规则全局设置。依赖用户自定义信息和分组；导入时默认尽量合并。",
+            "description": "包含用户规则、动态规则和规则设置。导入时会尽量合并。",
             "dependencies": ["user_custom", "groups"],
             "supports_profiles": False,
         },
         {
             "key": "user_custom",
             "label": "用户自定义信息",
-            "description": "用户别名、备注、标签、颜色、自定义类型与联锁数据。导入时默认尽量合并。",
+            "description": "包含别名、备注、标签、颜色、自定义类型和联锁数据。导入时会尽量合并。",
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "groups",
             "label": "分组",
-            "description": "分组结构与分组成员关系。导入时默认尽量合并。",
+            "description": "包含分组本身和分组里的模组关系。导入时会尽量合并。",
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "profiles",
             "label": "环境数据",
-            "description": "按环境导出整个 user_data_path 目录，并附带环境元数据。",
+            "description": "按环境导出完整的用户数据目录，并附带环境基本信息。",
             "dependencies": [],
             "supports_profiles": True,
         },
         {
             "key": "subscriptions",
             "label": "订阅数据",
-            "description": "包含 GitHub 订阅记录与 Steam 合集记录；不包含 GitHub 时间线、在线缓存、刷新时间和已安装版本等运行态数据。",
+            "description": "包含 GitHub 订阅记录和 Steam 合集记录，不包含缓存和历史状态。",
             "dependencies": [],
             "supports_profiles": False,
         },
@@ -109,7 +109,6 @@ class DataBundleManager:
         "last_tool_check_time",
         "last_external_data_update_check_time",
         "last_steamcmd_mod_update_check_time",
-        "last_version",
         "last_run_time",
         "run_count",
     }
@@ -132,8 +131,7 @@ class DataBundleManager:
     @classmethod
     def get_module_definition(cls, key: str) -> dict[str, Any] | None:
         for item in cls.MODULE_DEFINITIONS:
-            if item["key"] == key:
-                return deepcopy(item)
+            if item["key"] == key: return deepcopy(item)
         return None
 
     @classmethod
@@ -151,8 +149,7 @@ class DataBundleManager:
         resolved: list[str] = []
 
         def _visit(target_key: str):
-            if target_key in resolved or target_key not in dependency_map:
-                return
+            if target_key in resolved or target_key not in dependency_map: return
             for dep_key in dependency_map[target_key]:
                 _visit(dep_key)
             resolved.append(target_key)
@@ -364,8 +361,8 @@ class DataBundleManager:
 
         if "settings" in module_keys:
             payloads["settings"] = self._collect_sanitized_settings()
-        if "prompts" in module_keys:
-            payloads["prompts"] = deepcopy(self.ai_mgr.prompts)
+        if "ai_definitions" in module_keys:
+            payloads["ai_definitions"] = self.ai_mgr.definition_manager.export_definition_store()
         if "rules" in module_keys:
             payloads["rules"] = {
                 "settings": deepcopy(rule_mgr.settings),  # type: ignore[union-attr]
@@ -494,9 +491,9 @@ class DataBundleManager:
         if isinstance(settings_payload, dict):
             settings.update_from_dict(settings_payload)
 
-        prompts_payload = module_payloads.get("prompts")
-        if isinstance(prompts_payload, dict):
-            self.ai_mgr.prompt_manager.save_all(prompts_payload)
+        ai_definitions_payload = module_payloads.get("ai_definitions")
+        if isinstance(ai_definitions_payload, dict):
+            self.ai_mgr.definition_manager.save_definition_store(ai_definitions_payload)
 
         if any(module_key in module_payloads for module_key in ("rules", "user_custom", "groups")):
             legacy_bundle = {
@@ -720,8 +717,7 @@ class DataBundleManager:
 
     def _resolve_game_install_path(self, expected_version: Any) -> str:
         version = str(expected_version or "").strip()
-        if not version:
-            return ""
+        if not version: return ""
 
         candidate_paths: list[str] = []
         seen_paths: set[str] = set()
@@ -737,13 +733,11 @@ class DataBundleManager:
             seen_paths.add(normalized)
             candidate_paths.append(install_path)
 
-        if len(candidate_paths) == 1:
-            return candidate_paths[0]
+        if len(candidate_paths) == 1: return candidate_paths[0]
 
         auto_detect = self.game_mgr.auto_detect_paths() or {}
         detected_path = str(auto_detect.get("game_install_path") or "").strip()
-        if detected_path and GameManager.get_game_version(detected_path) == version:
-            return detected_path
+        if detected_path and GameManager.get_game_version(detected_path) == version: return detected_path
         return ""
 
     def _replace_directory_contents(self, target_root: Path, source_root: Path) -> None:

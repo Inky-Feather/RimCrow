@@ -58,8 +58,7 @@ def _looks_like_workshop_value(value: str) -> bool:
 
 def _detect_json_export_format(text: str) -> str | None:
     stripped = str(text or "").lstrip()
-    if not stripped.startswith(("{", "[")):
-        return None
+    if not stripped.startswith(("{", "[")): return None
 
     try:
         data = json.loads(stripped)
@@ -89,14 +88,12 @@ def detect_load_order_format(file_path: str | Path) -> str:
 
     if suffix == ".json":
         json_format = _detect_json_export_format(text)
-        if json_format:
-            return json_format
+        if json_format: return json_format
         return FORMAT_RMM_JSON
 
     # RimSort 某些导出会把 JSON 内容写进带 .xml 的路径里，不能只靠后缀判断。
     json_format = _detect_json_export_format(text)
-    if json_format:
-        return json_format
+    if json_format: return json_format
 
     root = _parse_xml_root(path)
     if root is not None:

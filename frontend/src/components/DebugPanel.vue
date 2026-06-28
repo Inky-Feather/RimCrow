@@ -34,6 +34,7 @@ import { useGroupStore } from '../stores/groupStore'
 import { useHoverStore } from '../stores/hoverStore'
 import { useRuleStore } from '../stores/ruleStore'
 import { useTaskStore } from '../stores/taskStore'
+import { normalizePackageToken } from '../utils/modIdentity'
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -83,7 +84,7 @@ const sanitizedState = computed(() => {
       name: modStore.lastSelectedMod.name,
       tags: modStore.lastSelectedMod.tags,
       groups: groupStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
-      issues: modStore.modIssues.get(modStore.lastSelectedMod.package_id.toLowerCase())
+      issues: modStore.modIssues.get(normalizePackageToken(modStore.lastSelectedMod.active_package_token || modStore.lastSelectedMod.package_id))
     } : null,
 
     // 5. 进度

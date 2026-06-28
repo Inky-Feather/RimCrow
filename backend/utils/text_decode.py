@@ -29,8 +29,6 @@ def decode_text_bytes(raw: bytes, fallback_encoding: str = "utf-8") -> tuple[str
 
 
 def _should_probe_utf16(sample: bytes) -> bool:
-    if not sample:
-        return False
-    if sample.startswith((b"\xff\xfe", b"\xfe\xff")):
-        return True
+    if not sample: return False
+    if sample.startswith((b"\xff\xfe", b"\xfe\xff")): return True
     return b"\x00" in sample

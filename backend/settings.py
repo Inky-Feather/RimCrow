@@ -4,10 +4,11 @@ import json
 import os
 import shutil
 import threading
+from datetime import datetime
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from backend.utils.constants import normalize_language_code
 
 
@@ -83,8 +84,56 @@ class AIConfig:
     api_key: str = ""
     model: str = "gpt-3.5-turbo"
     temperature: Optional[float] = 0.7     # 温度参数（控制输出随机性）允许“不传”
-    max_tokens: int = 5000       # 最大令牌数（限制模型输出长度）
+    max_output_tokens: int = 0     # 单次请求最大输出 Token；0 表示按模型自动
+    max_input_tokens: int = 0      # 高级输入预算；0 表示自动按上下文窗口或输出预算推导
+    context_window_tokens: int = 0 # 模型上下文窗口；0 表示按模型预设
     max_concurrency: int = 3     # 最大并发请求数（避免被API封锁）
+
+    def model_token_budget(self) -> dict[str, Any]:
+        """返回当前模型的 token 预算预设。"""
+        from backend.ai.def_model_capabilities import resolve_model_token_budget
+
+        base_url = self.base_url
+        if not base_url and str(self.provider or "").strip().lower() == "ollama":
+            base_url = "http://127.0.0.1:11434"
+        return resolve_model_token_budget(self.model, base_url)
+
+    def resolved_context_window_tokens(self) -> int:
+        """解析模型上下文窗口，用户显式配置优先，否则走模型预设。"""
+        try:
+            explicit_context = int(self.context_window_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_context = 0
+        if explicit_context > 0:
+            return explicit_context
+        return int(self.model_token_budget().get("context_window_tokens") or 32768)
+
+    def resolved_max_output_tokens(self) -> int:
+        """解析单次请求输出上限，用户显式配置优先，否则走模型预设。"""
+        try:
+            explicit_output = int(self.max_output_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_output = 0
+        if explicit_output > 0:
+            return explicit_output
+        return int(self.model_token_budget().get("default_output_tokens") or 4096)
+
+    def resolved_max_input_tokens(self) -> int:
+        """解析输入预算，避免把输出上限误当上下文窗口。"""
+        try:
+            explicit_input = int(self.max_input_tokens or 0)
+        except (TypeError, ValueError):
+            explicit_input = 0
+        if explicit_input > 0:
+            return explicit_input
+
+        output_budget = self.resolved_max_output_tokens()
+        context_window = self.resolved_context_window_tokens()
+        if context_window > 0:
+            return max(1000, context_window - output_budget - 512)
+
+        from backend.ai.def_model_capabilities import DEFAULT_INPUT_TOKENS
+        return max(2000, min(DEFAULT_INPUT_TOKENS, output_budget * 2))
 
 @dataclass
 class UIConfig:
@@ -203,6 +252,7 @@ class AppConfig:
     community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
     community_rules_path: str = str(COMMUNITY_RULES_PATH)
     user_rules_path: str = str(USER_RULES_PATH)
+    steam_web_api_key: str = ""  # Steamworks Web API 鉴权密钥，仅供需要受限接口的后端请求使用
     
     # --- 开发与调试设置 ---
     browser_mode: bool = False            # 是否默认使用浏览器模式启动
@@ -227,12 +277,11 @@ class AppConfig:
     steamcmd_mod_update_check_interval_days: int = 1
     last_steamcmd_mod_update_check_time: float = 0
     
-    last_version: str = ""                 # 之前的版本号(用于判断是否更新过了)
     last_run_time: float = 0               # 上次运行时间（用于判断Mod是否存在变动）
     run_count: int = 0                     # 运行次数（用于判断是否需要重新扫描）
     
     # --- 界面设置 ---
-    language: str = "zh-cn"     # 默认语言
+    language: str = "zh-CN"     # 默认语言
     window_width: int = 1400
     window_height: int = 900
     completed_guides: Dict[str, str] = field(default_factory=dict) # 存储已完成的引导, e.g. {"main_v1.0": "done"}
@@ -311,15 +360,33 @@ class SettingsManager:
             raise ValueError("Config root is not an object")
         return data
 
-    def _is_raw_config_sane(self, data: Dict[str, Any]) -> bool:
-        expected_keys = {f.name for f in fields(AppConfig)}
-        present_keys = expected_keys.intersection(data.keys())
-        if len(present_keys) < 8:
-            return False
-        for nested_key in ("ui", "network", "ai", "texture_opt"):
-            if nested_key in data and not isinstance(data.get(nested_key), dict):
-                return False
-        return True
+    def _extract_compatible_config_values(self, raw_dict: Dict[str, Any], target_obj) -> Dict[str, Any]:
+        """
+        从原始配置中提取“当前版本仍然可识别”的字段。
+        设计原因：
+        1. 更新后字段结构可能变化，不能因为少数字段异常就整份判死刑。
+        2. 只要还能识别出一部分字段，就优先保留用户数据，其余部分交给默认值补齐。
+        """
+        compatible: Dict[str, Any] = {}
+        target_fields = {f.name: f for f in fields(target_obj)}
+
+        for key, value in raw_dict.items():
+            if key not in target_fields:
+                continue
+
+            current_attr = getattr(target_obj, key)
+            if is_dataclass(current_attr):
+                # 嵌套配置块必须仍是对象；若被写坏成字符串/数组，则忽略该块并保留默认值。
+                if not isinstance(value, dict):
+                    continue
+                nested_compatible = self._extract_compatible_config_values(value, current_attr)
+                if nested_compatible:
+                    compatible[key] = nested_compatible
+                continue
+
+            compatible[key] = value
+
+        return compatible
 
     def _is_config_valid(self) -> bool:
         return all([
@@ -329,61 +396,111 @@ class SettingsManager:
             str(self.config.current_profile_id or "").strip(),
         ])
 
-    def _restore_update_backup(self) -> bool:
-        if not CONFIG_UPDATE_BACKUP_PATH.exists():
-            return False
-        try:
-            shutil.copy2(CONFIG_UPDATE_BACKUP_PATH, CONFIG_PATH)
-            return True
-        except Exception as e:
-            print(f"Restore config backup error: {e}")
-            return False
+    def _merge_config_dicts(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        递归合并两个配置片段。
+        base 一般来自备份，override 一般来自当前配置，因此 override 优先级更高。
+        """
+        merged = dict(base)
+        for key, value in override.items():
+            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                merged[key] = self._merge_config_dicts(merged[key], value)
+                continue
+            merged[key] = value
+        return merged
 
-    def _cleanup_update_backup(self):
-        if CONFIG_UPDATE_BACKUP_PATH.exists():
-            try:
-                CONFIG_UPDATE_BACKUP_PATH.unlink()
-            except Exception as e:
-                print(f"Cleanup config backup error: {e}")
-
-    def _load_config_from_file(self, path: Path) -> bool:
-        data = self._load_raw_config(path)
-        if not self._is_raw_config_sane(data):
-            raise ValueError("Config content failed sanity check")
-
-        self.config = AppConfig()
+    def _parse_config_fragment(self, data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[bool]]:
+        """
+        从原始 JSON 对象中提取当前版本仍可识别的配置片段。
+        这里故意采用“宽进严出”策略：
+        1. 只要还能识别出一部分字段，就把它们留下；
+        2. 识别不到的字段直接忽略，不因为局部损坏把整份配置判死刑。
+        """
+        compatible = self._extract_compatible_config_values(data, AppConfig())
+        legacy_prefer_steam_launch = None
         if 'prefer_steam_launch' in data:
-            self._legacy_prefer_steam_launch = bool(data.get('prefer_steam_launch'))
+            legacy_prefer_steam_launch = bool(data.get('prefer_steam_launch'))
 
+        if compatible or legacy_prefer_steam_launch is not None:
+            return compatible, legacy_prefer_steam_launch
+        return None, None
+
+    def _read_config_fragment(self, path: Path, source_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[bool]]:
+        """
+        尝试宽松读取一个配置源。
+        返回值：
+        1. 兼容字段片段，用于后续恢复；
+        2. 旧版 prefer_steam_launch 兼容值（若存在）。
+        """
+        if not path.exists(): return None, None
+
+        try:
+            data = self._load_raw_config(path)
+        except Exception as e:
+            print(f"Config read error [{source_name}]: {e}")
+            return None, None
+
+        compatible, legacy_prefer_steam_launch = self._parse_config_fragment(data)
+        if compatible or legacy_prefer_steam_launch is not None:
+            return compatible, legacy_prefer_steam_launch
+
+        print(f"Config parse warning [{source_name}]: no compatible fields found")
+        return None, None
+
+    def _apply_config_fragment(self, data: Dict[str, Any], legacy_prefer_steam_launch: Optional[bool] = None):
+        """
+        将“已筛选过的兼容字段”应用到默认配置骨架上。
+        实现原理：
+        - 先构建完整默认值；
+        - 再把仍可识别的用户字段覆盖进去；
+        - 最后统一做归一化与衍生路径同步。
+        """
+        self.config = AppConfig()
+        if legacy_prefer_steam_launch is not None:
+            self._legacy_prefer_steam_launch = legacy_prefer_steam_launch
         self._recursive_update(self.config, data)
         self._normalize_config()
         self._sync_derived_paths()
         if not self._is_config_valid():
             raise ValueError("Config validation failed after normalization")
-        return True
 
     def _load_to_config(self):
         """
         将磁盘配置加载到现有的 self.config 中
         """
-        if not CONFIG_PATH.exists() and CONFIG_UPDATE_BACKUP_PATH.exists():
-            self._restore_update_backup()
-        if not CONFIG_PATH.exists():
+        current_fragment, current_legacy_prefer = self._read_config_fragment(CONFIG_PATH, "current")
+        backup_fragment, backup_legacy_prefer = self._read_config_fragment(CONFIG_UPDATE_BACKUP_PATH, "update-backup")
+
+        if current_fragment is None and current_legacy_prefer is None and \
+           backup_fragment is None and backup_legacy_prefer is None:
             self._normalize_config()
             self._sync_derived_paths()
             return
+
         try:
-            self._load_config_from_file(CONFIG_PATH)
-            self._cleanup_update_backup()
+            effective_fragment = current_fragment or {}
+            effective_legacy_prefer = current_legacy_prefer
+            recovered_from_backup = False
+
+            if backup_fragment is not None or backup_legacy_prefer is not None:
+                # 只要更新备份还在，就把它当作“缺失字段补丁源”参与合并：
+                # 1. 当前配置完全损坏/丢失时，可直接由备份兜底；
+                # 2. 当前配置只能解析出一部分字段时，可从备份补齐剩余可识别字段；
+                # 3. 当前配置中已经成功读取出的值始终优先，避免旧备份反向覆盖用户最新设置。
+                merged_fragment = self._merge_config_dicts(backup_fragment or {}, effective_fragment)
+                recovered_from_backup = merged_fragment != effective_fragment
+                effective_fragment = merged_fragment
+                if effective_legacy_prefer is None:
+                    effective_legacy_prefer = backup_legacy_prefer
+                    recovered_from_backup = recovered_from_backup or backup_legacy_prefer is not None
+
+            self._apply_config_fragment(effective_fragment, effective_legacy_prefer)
+
+            # 只有备份确实补进了缺失字段时才回写，避免“备份一直存在时每次启动都重写配置”。
+            if recovered_from_backup:
+                self.save()
         except Exception as e:
             print(f"Config load error: {e}")
-            if self._restore_update_backup():
-                try:
-                    self._load_config_from_file(CONFIG_PATH)
-                    self._cleanup_update_backup()
-                    return
-                except Exception as restore_error:
-                    print(f"Config restore error: {restore_error}")
             self.config = AppConfig()
             self._normalize_config()
             self._sync_derived_paths()
@@ -396,7 +513,7 @@ class SettingsManager:
         self.config.steamcmd_path = str(self.config.steamcmd_path or "").strip() or str(TOOLS_DIR / "steamcmd")
         self.config.self_mods_path = str(self.config.self_mods_path or "").strip() or str(MODS_DIR)
         self.config.ripgrep_path = str(self.config.ripgrep_path or "").strip() or str(TOOLS_DIR / "ripgrep")
-        self.config.language = normalize_language_code(self.config.language, default="zh-cn") or "zh-cn"
+        self.config.language = normalize_language_code(self.config.language, default="zh-CN") or "zh-CN"
         valid_modes = {"default", "remember", "custom"}
         if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
             self.config.load_order_import_dir_mode = "default"
@@ -406,6 +523,20 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        ai_cfg = self.config.ai
+        if isinstance(ai_cfg, AIConfig):
+            try:
+                ai_cfg.max_output_tokens = max(0, int(ai_cfg.max_output_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.max_output_tokens = 0
+            try:
+                ai_cfg.max_input_tokens = max(0, int(ai_cfg.max_input_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.max_input_tokens = 0
+            try:
+                ai_cfg.context_window_tokens = max(0, int(ai_cfg.context_window_tokens or 0))
+            except (TypeError, ValueError):
+                ai_cfg.context_window_tokens = 0
     
     def _sync_derived_paths(self):
         """
@@ -459,8 +590,7 @@ class SettingsManager:
         self._normalize_config()
         self._sync_derived_paths()
         after_state = asdict(self.config)
-        if after_state == before_state:
-            return
+        if after_state == before_state: return
         old_self_mods_path = before_state.get('self_mods_path', '')
         old_steamcmd_path = before_state.get('steamcmd_path', '')
         new_self_mods_path = after_state.get('self_mods_path', '')
@@ -511,8 +641,7 @@ class SettingsManager:
         self._normalize_config()
         self._sync_derived_paths()
         after_state = asdict(self.config)
-        if after_state == before_state:
-            return
+        if after_state == before_state: return
         old_self_mods_path = before_state.get('self_mods_path', '')
         old_steamcmd_path = before_state.get('steamcmd_path', '')
         new_self_mods_path = after_state.get('self_mods_path', '')
@@ -542,10 +671,14 @@ settings = SettingsManager()
 
 
 def backup_config_for_update() -> bool:
-    if not CONFIG_PATH.exists():
-        return False
+    if not CONFIG_PATH.exists(): return False
     try:
+        config_backup_dir = BACKUP_DIR / "config"
+        config_backup_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(CONFIG_PATH, CONFIG_UPDATE_BACKUP_PATH)
+        # 除了“更新中途可直接回滚”的固定备份，再保留一份时间戳快照，避免后续排查时只剩最后一次状态。
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        shutil.copy2(CONFIG_PATH, config_backup_dir / f"config-update-{timestamp}.json")
         return True
     except Exception as e:
         print(f"Backup config for update error: {e}")

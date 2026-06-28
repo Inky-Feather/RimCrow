@@ -74,8 +74,7 @@ def _extract_candidate_package_ids_from_mod(mod: dict[str, Any], category: str) 
 
 def _normalize_name(value: str) -> str:
     text = str(value or "").strip().lower()
-    if not text:
-        return ""
+    if not text: return ""
     text = re.sub(r"[_\-+/()[\]{}|.,:;!?]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -83,8 +82,7 @@ def _normalize_name(value: str) -> str:
 
 def _tokenize_name(value: str) -> list[str]:
     normalized = _normalize_name(value)
-    if not normalized:
-        return []
+    if not normalized: return []
     tokens = re.findall(r"[a-z0-9]+", normalized)
     return [token for token in tokens if token and token not in GENERIC_NAME_NOISE_TOKENS]
 
@@ -92,10 +90,8 @@ def _tokenize_name(value: str) -> list[str]:
 def _name_similarity(left: str, right: str) -> float:
     left_norm = _normalize_name(left)
     right_norm = _normalize_name(right)
-    if not left_norm or not right_norm:
-        return 0.0
-    if left_norm == right_norm:
-        return 1.0
+    if not left_norm or not right_norm: return 0.0
+    if left_norm == right_norm: return 1.0
 
     seq_score = SequenceMatcher(None, left_norm, right_norm).ratio()
     left_tokens = set(_tokenize_name(left_norm))
@@ -127,12 +123,10 @@ def _build_asset_index(mods: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def _get_user_rule_override(user_mod_rules: dict[str, Any] | None, package_id: str) -> tuple[list[str], bool]:
-    if not user_mod_rules:
-        return [], False
+    if not user_mod_rules: return [], False
     rule = user_mod_rules.get(package_id, {}) or {}
     raw_owner_ids = rule.get("languagePackOwners")
-    if not isinstance(raw_owner_ids, dict):
-        return [], False
+    if not isinstance(raw_owner_ids, dict): return [], False
 
     raw_replace = bool(raw_owner_ids.get("replace"))
     raw_owner_ids = raw_owner_ids.get("owners", [])
@@ -192,8 +186,7 @@ def _merge_unique_candidates(*candidate_groups: list[dict[str, Any]]) -> list[di
 
 
 def _pick_best_by_name_similarity(candidates: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    if not candidates:
-        return None, None
+    if not candidates: return None, None
     ordered = sorted(
         candidates,
         key=lambda item: item.get("name_similarity", 0),
@@ -207,12 +200,7 @@ def _pick_best_by_name_similarity(candidates: list[dict[str, Any]]) -> tuple[dic
 def _resolve_candidate_set(
     candidates: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], str, str]:
-    if len(candidates) == 1:
-        return (
-            [candidates[0]],
-            "single",
-            "high",
-        )
+    if len(candidates) == 1: return ( [candidates[0]], "single", "high" )
 
     dependency_candidates = [
         candidate for candidate in candidates
@@ -230,30 +218,14 @@ def _resolve_candidate_set(
             if candidate["package_id"] != primary["package_id"]
         ]
         if not competing or all(candidate["is_soft_noise"] for candidate in competing):
-            return (
-                [primary],
-                "single",
-                "high",
-            )
-        return (
-            [primary],
-            "single",
-            "medium",
-        )
+            return ( [primary], "single", "high" )
+        return ( [primary], "single", "medium" )
 
     if not dependency_candidates and len(load_after_candidates) == 1:
-        return (
-            [load_after_candidates[0]],
-            "single",
-            "high",
-        )
+        return ( [load_after_candidates[0]], "single", "high" )
 
     if len(dependency_candidates) > 1:
-        return (
-            dependency_candidates,
-            "multiple",
-            "medium",
-        )
+        return ( dependency_candidates, "multiple", "medium" )
 
     if len(load_after_candidates) > 1:
         if ENABLE_NAME_TIEBREAKER:
@@ -261,16 +233,8 @@ def _resolve_candidate_set(
             if best:
                 gap = best.get("name_similarity", 0) - (second.get("name_similarity", 0) if second else 0)
                 if best.get("name_similarity", 0) >= 0.55 and gap >= 0.12:
-                    return (
-                        [best],
-                        "single",
-                        "medium",
-                    )
-        return (
-            load_after_candidates,
-            "multiple",
-            "medium",
-        )
+                    return ( [best], "single", "medium" )
+        return ( load_after_candidates, "multiple", "medium" )
 
     return ([], "unknown", "unknown")
 
@@ -287,18 +251,8 @@ def _finalize_result(
     analyzed_relation_type = analyzed_relation_type if analyzed_relation_type is not None else relation_type
     analyzed_confidence = analyzed_confidence if analyzed_confidence is not None else confidence
     return {
-        "owners": [
-            {
-                "package_id": owner["package_id"],
-            }
-            for owner in owners
-        ],
-        "analyzed_owners": [
-            {
-                "package_id": owner["package_id"],
-            }
-            for owner in analyzed_owner_rows
-        ],
+        "owners": [ { "package_id": owner["package_id"] } for owner in owners ],
+        "analyzed_owners": [ { "package_id": owner["package_id"] }  for owner in analyzed_owner_rows ],
         "relation_type": relation_type,
         "summary_confidence": confidence,
         "analyzed_relation_type": analyzed_relation_type,
@@ -335,8 +289,7 @@ def resolve_language_pack_ownership_for_mod(
     for package_id in override_owner_ids:
         candidate_sources.setdefault(package_id, set()).add("user_override")
 
-    if not candidate_sources:
-        return _finalize_result([], "unknown", "unknown")
+    if not candidate_sources: return _finalize_result([], "unknown", "unknown")
 
     analyzed_candidates = [
         _build_candidate(package_id, source_flags, str(language_pack.get("name") or ""), asset_index)

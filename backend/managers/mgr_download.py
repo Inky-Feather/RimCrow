@@ -150,8 +150,7 @@ class DownloadManager:
             qs = parse_qs(parsed.query)
             for param in ['filename', 'file_name', 'file', 'name']:
                 for k in qs.keys():
-                    if k.lower() == param:
-                        return self._clean_filename(unquote(qs[k][0]))
+                    if k.lower() == param: return self._clean_filename(unquote(qs[k][0]))
 
             # --- 策略 C: 预检 HTTP Headers (最专业的方法) ---
             # 注意：这会发起一次同步请求，如果对响应速度要求极高，可以跳过此步
@@ -175,8 +174,7 @@ class DownloadManager:
             logger.warning(f"无法通过网络预检获取文件名: {e}")
 
         # --- 策略 D: 兜底逻辑 ---
-        if path_filename:
-            return self._clean_filename(path_filename)
+        if path_filename: return self._clean_filename(path_filename)
         
         return "downloaded_file_" + os.urandom(4).hex()
 
@@ -217,13 +215,11 @@ class DownloadManager:
         )
         for header_name in preferred_headers:
             size = cls._parse_size_header(headers.get(header_name))
-            if size > 0:
-                return size
+            if size > 0: return size
 
         if trust_content_length:
             size = cls._parse_size_header(headers.get('content-length'))
-            if size > 0:
-                return size
+            if size > 0: return size
         return 0
 
     @staticmethod

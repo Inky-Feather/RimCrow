@@ -55,8 +55,7 @@ class SteamCMDController:
 
     def _clean_corrupted_init(self):
         """清理失败的初始化残留文件 (仅保留 steamcmd.exe)"""
-        if not Path(self.steamcmd_exe).exists():
-            return
+        if not Path(self.steamcmd_exe).exists(): return
             
         for item in Path(self.steamcmd_dir).iterdir():
             if item.name.lower() != 'steamcmd.exe':
@@ -166,8 +165,7 @@ class SteamCMDController:
         """
         彻底杀死 SteamCMD 及其衍生的所有子进程 (如 steamerrorreporter.exe)
         """
-        if not self.current_process:
-            return
+        if not self.current_process: return
 
         pid = self.current_process.pid
         logger.warning(f"准备强制击杀 SteamCMD 进程树 PID: {pid}")

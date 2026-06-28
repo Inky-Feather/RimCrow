@@ -7,6 +7,7 @@ from datetime import datetime
 import threading
 import time
 
+from backend.load_order.package_tokens import parse_package_token
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.event_bus import EventBus
@@ -134,8 +135,7 @@ class GameLogManager(BaseLogReader): # 继承基类
     # 启动/停止实时监视器
     def start_realtime_monitor(self):
         """启动后台线程来实时监视 RMM_Realtime.log 文件"""
-        if self._realtime_thread and self._realtime_thread.is_alive():
-            return # 已经启动
+        if self._realtime_thread and self._realtime_thread.is_alive(): return # 已经启动
         # 确保日志文件存在
         if not os.path.exists(self.realtime_log_file):
             logger.warning(f"实时日志文件不存在，无法启动监视: {self.realtime_log_file}")
@@ -224,8 +224,7 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     def get_raw_logs_by_lines(self, filepath: str, target_lines: list) -> list:
         """按块反查游戏日志，兼容 JSON 与 Player.log 纯文本块。"""
-        if not os.path.exists(filepath) or not target_lines:
-            return []
+        if not os.path.exists(filepath) or not target_lines: return []
 
         blocks = self._ensure_cache(filepath, self._parse_file_to_blocks)
 
@@ -242,8 +241,7 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     def get_all_blocks(self, filepath: str, full_scan: bool = False) -> list:
         """返回完整结构化日志块，并补齐分析上下文，供 AI 全局扫描复用。"""
-        if not os.path.exists(filepath):
-            return []
+        if not os.path.exists(filepath): return []
 
         # 全局扫描时单独走完整解析，避免被常规缓存上限截断较早的错误块。
         blocks = self._parse_file_to_blocks(filepath, keep_all=True) if full_scan else self._ensure_cache(filepath, self._parse_file_to_blocks)
@@ -261,7 +259,12 @@ class GameLogManager(BaseLogReader): # 继承基类
         try:
             lo_mgr = LoadOrderManager(self.context)
             active_mods = lo_mgr.read_active_mods().get('active_mods', [])
-            active_mods_set = {m.lower() for m in active_mods}
+            active_mods_set = {
+                token_info.canonical_package_id
+                for mod_id in active_mods
+                for token_info in [parse_package_token(mod_id)]
+                if token_info.canonical_package_id
+            }
         except Exception: pass
 
         for block in page_blocks:
@@ -323,8 +326,7 @@ class LogCondenser:
     @classmethod
     def clean_stack_trace(cls, stack_trace: str, max_lines: int = 6) -> str:
         """清洗堆栈：剔除废话，仅保留触发点和源头"""
-        if not stack_trace:
-            return ""
+        if not stack_trace: return ""
         
         lines =[line.strip() for line in stack_trace.split('\n') if line.strip()]
         # 剔除垃圾堆栈，保留业务代码（如 RimWorld 源码、Mod 源码）
@@ -365,8 +367,7 @@ class LogCondenser:
     @classmethod
     def _extract_stack_preview(cls, details: str, preview_lines: int) -> str:
         """为目录项提取少量堆栈预览，便于 AI 先做快速判断。"""
-        if preview_lines <= 0 or not details:
-            return ""
+        if preview_lines <= 0 or not details: return ""
         cleaned = cls.clean_stack_trace(details, max_lines=max(preview_lines, 2))
         source_text = cleaned or details
         preview = [line.strip() for line in source_text.splitlines() if line.strip()]
@@ -408,6 +409,7 @@ class LogCondenser:
                     "level": str(log.get("level", "") or "").upper(),
                     "type": ctx.get("inferredType", "Unknown"),
                     "suspect_mods": suspect_mods,
+                    "related_files": [str(path).strip() for path in ctx.get("relatedFiles", []) if str(path).strip()],
                     "message_preview": str(log.get("message", "") or "").strip(),
                     "stack_preview": stack_preview
                 }
@@ -426,6 +428,8 @@ class LogCondenser:
 
             merged_mods = item.get("suspect_mods", []) + suspect_mods
             item["suspect_mods"] = list(dict.fromkeys(merged_mods))
+            merged_files = item.get("related_files", []) + [str(path).strip() for path in ctx.get("relatedFiles", []) if str(path).strip()]
+            item["related_files"] = list(dict.fromkeys(merged_files))
 
         # 3. 一键排错更关注“重复次数高 + 更像错误”的摘要，便于 AI 优先抓主因。
         level_rank = {"EXCEPTION": 0, "ERROR": 1, "WARNING": 2}
@@ -463,18 +467,10 @@ class LogCondenser:
         )
 
         return {
+            "errors": toc_list,
+            "total_repeat_count": total_repeat_count,
+            "selected_error_count": len(toc_list),
+            "truncated": len(toc_list) < len(grouped_list),
             "summary": compression_notice,
-            "instruction": "请先查看以下错误摘要。每条摘要默认已附带少量 stack_preview；只有证据不足时，才调用 get_log_context，并优先用 target_lines 批量回查 1-3 个候选 target_line。",
-            "compression_notice": compression_notice,
-            "stats": {
-                "input_block_count": len(raw_logs),
-                "error_block_count": len(error_logs),
-                "grouped_error_count": len(grouped_list),
-                "output_item_count": len(toc_list),
-                "total_repeat_count": total_repeat_count,
-                "char_budget_ratio": char_budget_ratio,
-                "stack_preview_lines": stack_preview_lines
-            },
-            "error_table_of_contents": toc_list
         }
     

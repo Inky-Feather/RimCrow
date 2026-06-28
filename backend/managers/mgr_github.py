@@ -156,8 +156,7 @@ class GithubManager:
     def parse_repo_url(self, url: str):
         """解析 GitHub URL 提取 owner 和 repo"""
         match = re.search(r"github\.com/([^/]+)/([^/]+)", url)
-        if not match:
-            return None, None
+        if not match: return None, None
         owner = match.group(1)
         repo = match.group(2).replace(".git", "")
         return owner, repo
@@ -188,13 +187,11 @@ class GithubManager:
         """读取某个文件路径最近一次提交，用于判断单文件更新时间。"""
         normalized_ref = str(ref or "").strip()
         normalized_path = str(remote_path or "").strip().lstrip("/")
-        if not normalized_path:
-            return None
+        if not normalized_path: return None
 
         cache_key = ("path_commit", owner.lower(), repo.lower(), normalized_ref or "latest", normalized_path)
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -217,13 +214,11 @@ class GithubManager:
         """读取 GitHub 单文件元数据，并尽量补齐最近更新时间。"""
         normalized_ref = str(ref or "").strip()
         normalized_path = str(remote_path or "").strip().lstrip("/")
-        if not normalized_path:
-            return None
+        if not normalized_path: return None
 
         cache_key = ("file_meta", owner.lower(), repo.lower(), normalized_ref or "latest", normalized_path)
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -265,8 +260,7 @@ class GithubManager:
         """
         cache_key = ("repo", owner.lower(), repo.lower())
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -291,8 +285,7 @@ class GithubManager:
         endpoint = "releases/latest" if not tag else f"releases/tags/{tag}"
         cache_key = ("release", owner.lower(), repo.lower(), tag or "latest")
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -318,8 +311,7 @@ class GithubManager:
         endpoint = f"commits/{normalized_ref}" if normalized_ref else "commits"
         cache_key = ("commit", owner.lower(), repo.lower(), normalized_ref or "latest")
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -348,8 +340,7 @@ class GithubManager:
         """
         cache_key = ("repo_page", owner.lower(), repo.lower())
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -372,8 +363,7 @@ class GithubManager:
         """
         cache_key = ("release_web", owner.lower(), repo.lower())
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -410,13 +400,11 @@ class GithubManager:
         if not resolved_tag:
             latest_release = self.fetch_release_web(owner, repo, timeout=timeout, missing_ok=missing_ok)
             resolved_tag = str((latest_release or {}).get("tag_name") or "").strip()
-        if not resolved_tag:
-            return None
+        if not resolved_tag: return None
 
         cache_key = ("release_assets_web", owner.lower(), repo.lower(), resolved_tag)
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -444,13 +432,11 @@ class GithubManager:
         Atom feed 是公开网页链路的一部分，通常比 REST API 更适合做限流时的补位信息源。
         """
         normalized_ref = str(ref or "").strip()
-        if not normalized_ref:
-            return None
+        if not normalized_ref: return None
 
         cache_key = ("commit_web", owner.lower(), repo.lower(), normalized_ref)
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
             response = session.get(
@@ -472,13 +458,11 @@ class GithubManager:
         优先使用 GitHub API；如果命中限流或 API 不可用，再退化到网页/直链/本地缓存。
         """
         owner, repo = self.parse_repo_url(url)
-        if not owner or not repo:
-            return {"error": "无效的 GitHub 链接"}
+        if not owner or not repo: return {"error": "无效的 GitHub 链接"}
         normalized_source_branch = str(source_branch or "").strip()
         cache_key = ("repo_info", owner.lower(), repo.lower(), normalized_source_branch or "_auto")
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss:
-            return cached
+        if cached is not self._cache_miss: return cached
 
         primary_error: Exception | None = None
         try:
@@ -719,8 +703,7 @@ class GithubManager:
                 tag=request.artifact.release_tag,
             )
             resolved = self._build_release_asset_from_payload(request, release)
-            if resolved:
-                return resolved
+            if resolved: return resolved
         except Exception as exc:
             try:
                 web_release = self.fetch_release_assets_web(
@@ -747,8 +730,7 @@ class GithubManager:
                     web_exc,
                 )
             fallback = self._build_release_fallback(request, exc)
-            if fallback:
-                return fallback
+            if fallback: return fallback
             raise
         raise ValueError("未找到符合条件的 GitHub Release 资产")
 
@@ -826,17 +808,14 @@ class GithubManager:
                 if str(asset.get("name") or "").lower().endswith(".zip")
                 and str(asset.get("browser_download_url") or "").strip()
             ]
-            if len(zip_assets) == 1:
-                return zip_assets[0]
+            if len(zip_assets) == 1: return zip_assets[0]
         return None
 
     def _build_release_asset_from_payload(self, request: GithubInstallRequest, release: dict[str, Any] | None) -> GithubResolvedArtifact | None:
-        if not release:
-            return None
+        if not release: return None
 
         asset = self._select_release_asset(release.get("assets", []), request.artifact)
-        if not asset:
-            return None
+        if not asset: return None
 
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
@@ -989,8 +968,7 @@ class GithubManager:
         """当 GitHub API 不可用时，允许调用方提供一个兜底直链。"""
         fallback_url = str(request.artifact.fallback_download_url or "").strip()
         fallback_filename = str(request.artifact.fallback_filename or "").strip()
-        if not fallback_url or not fallback_filename:
-            return None
+        if not fallback_url or not fallback_filename: return None
 
         logger.warning(
             "GitHub release resolve failed, fallback to direct download: repo=%s/%s error=%s",
@@ -1012,8 +990,7 @@ class GithubManager:
     def _fetch_repo_info_via_api(self, owner: str, repo: str, *, source_branch: str = "") -> dict[str, Any]:
         """使用 GitHub API 组装完整的仓库信息。"""
         repo_res = self.fetch_repo(owner, repo, missing_ok=True)
-        if not repo_res:
-            return {"error": "找不到该仓库"}
+        if not repo_res: return {"error": "找不到该仓库"}
 
         default_branch = str(repo_res.get("default_branch") or "main")
         resolved_source_branch = str(source_branch or default_branch).strip() or default_branch
@@ -1037,8 +1014,7 @@ class GithubManager:
         """
         try:
             repo_page = self.fetch_repo_page(owner, repo, missing_ok=True)
-            if repo_page is None:
-                return None
+            if repo_page is None: return None
             default_branch = self._parse_default_branch_from_html(repo_page) or "main"
             resolved_source_branch = str(source_branch or default_branch).strip() or default_branch
             release_info = self.fetch_release_web(owner, repo, missing_ok=True)
@@ -1063,8 +1039,7 @@ class GithubManager:
         这是最后一道兜底，主要服务于“已订阅仓库在离线或限流时仍可继续部署”。
         """
         record = GithubModRecord.get_or_none(repo_url=repo_url)
-        if not record:
-            return None
+        if not record: return None
 
         online_info = record.online_info_cache or {}
         default_branch = str(record.target_branch or online_info.get("default_branch") or source_branch or "main")
@@ -1123,22 +1098,19 @@ class GithubManager:
             repo_info = self.fetch_repo(owner, repo, missing_ok=True)
             if repo_info:
                 default_branch = str(repo_info.get("default_branch") or "").strip()
-                if default_branch:
-                    return default_branch
+                if default_branch: return default_branch
         except Exception as exc:
             logger.warning("Resolve default branch via API failed: repo=%s/%s error=%s", owner, repo, exc)
 
         web_info = self._fetch_repo_info_via_web(owner, repo)
         if web_info:
             default_branch = str(web_info.get("default_branch") or "").strip()
-            if default_branch:
-                return default_branch
+            if default_branch: return default_branch
 
         record_info = self._fetch_repo_info_from_record_cache(repo_url or f"{GITHUB_WEB_BASE}/{owner}/{repo}", owner, repo)
         if record_info:
             default_branch = str(record_info.get("default_branch") or "").strip()
-            if default_branch:
-                return default_branch
+            if default_branch: return default_branch
 
         return "main"
 
@@ -1156,16 +1128,14 @@ class GithubManager:
 
         try:
             source_commit = self.fetch_commit_web(owner, repo, ref=normalized_branch, missing_ok=True)
-            if source_commit:
-                return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
+            if source_commit: return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
         except Exception as exc:
             logger.warning("Resolve source commit via web failed: repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
 
         record_info = self._fetch_repo_info_from_record_cache(repo_url or f"{GITHUB_WEB_BASE}/{owner}/{repo}", owner, repo, source_branch=normalized_branch)
         if record_info:
             cached_version = str(record_info.get("latest_source_version") or "").strip()
-            if cached_version:
-                return cached_version
+            if cached_version: return cached_version
 
         return normalized_branch
 
@@ -1183,8 +1153,7 @@ class GithubManager:
         )
         for pattern in patterns:
             match = re.search(pattern, html)
-            if match:
-                return str(match.group(1) or "").strip()
+            if match: return str(match.group(1) or "").strip()
         return ""
 
     @staticmethod
@@ -1193,8 +1162,7 @@ class GithubManager:
         root = ET.fromstring(xml_text)
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         entry = root.find("atom:entry", ns)
-        if entry is None:
-            return None
+        if entry is None: return None
 
         updated = str(entry.findtext("atom:updated", default="", namespaces=ns) or "").strip()
         commit_id = str(entry.findtext("atom:id", default="", namespaces=ns) or "").strip()
@@ -1218,8 +1186,7 @@ class GithubManager:
     @staticmethod
     def _extract_commit_timestamp(commit_payload: dict[str, Any] | None) -> str:
         """从 GitHub commit 响应里提取稳定的 UTC 时间戳字符串。"""
-        if not commit_payload:
-            return ""
+        if not commit_payload: return ""
         commit_info = commit_payload.get("commit") if isinstance(commit_payload, dict) else {}
         author_info = commit_info.get("author", {}) if isinstance(commit_info, dict) else {}
         committer_info = commit_info.get("committer", {}) if isinstance(commit_info, dict) else {}
@@ -1240,16 +1207,14 @@ class GithubManager:
         """把源码分支部署版本编码成可读且可比较的稳定字符串。"""
         normalized_branch = str(branch_name or "").strip() or "source"
         normalized_time = str(commit_timestamp or "").strip()
-        if not normalized_time:
-            return normalized_branch
+        if not normalized_time: return normalized_branch
         return f"{normalized_branch}@{normalized_time}"
 
     def _resolve_install_source(self, temp_root: Path, plan: GithubInstallPlan) -> Path:
         """决定“解压后到底哪一层目录才是要安装的源目录”。"""
         if plan.source_subpath:
             candidate = temp_root / plan.source_subpath
-            if candidate.exists():
-                return candidate
+            if candidate.exists(): return candidate
             raise FileNotFoundError(f"未找到指定的压缩包内部路径: {plan.source_subpath}")
 
         if plan.source_resolver == GITHUB_RESOLVER_MOD_ROOT:
@@ -1265,11 +1230,9 @@ class GithubManager:
     def _find_archive_root(temp_root: Path) -> Path | None:
         """优先取 GitHub 常见的单一外层目录，避免把临时解压根目录误认为真实内容目录。"""
         entries = [entry for entry in temp_root.iterdir()]
-        if len(entries) == 1:
-            return entries[0]
+        if len(entries) == 1: return entries[0]
         directories = [entry for entry in entries if entry.is_dir()]
-        if len(directories) == 1:
-            return directories[0]
+        if len(directories) == 1: return directories[0]
         return None
 
     @staticmethod
@@ -1281,8 +1244,7 @@ class GithubManager:
         for root, dirs, _files in os.walk(temp_root):
             if "About" in dirs:
                 about_xml = Path(root) / "About" / "About.xml"
-                if about_xml.exists():
-                    return Path(root)
+                if about_xml.exists(): return Path(root)
         return None
 
     @staticmethod
@@ -1291,8 +1253,7 @@ class GithubManager:
 
         统一在这里做删除/阻止覆盖，避免不同安装动作各自实现一套。
         """
-        if not dest_path.exists():
-            return
+        if not dest_path.exists(): return
         if not overwrite_existing:
             raise FileExistsError(f"目标路径已存在: {dest_path}")
         if dest_path.is_dir():
@@ -1303,12 +1264,9 @@ class GithubManager:
     @staticmethod
     def _cleanup_archive(download_path: Path, plan: GithubInstallPlan) -> None:
         """按计划决定是否清理下载包。"""
-        if not plan.cleanup_archive:
-            return
-        try:
-            download_path.unlink()
-        except OSError:
-            pass
+        if not plan.cleanup_archive: return
+        try: download_path.unlink()
+        except OSError: pass
 
     @staticmethod
     def _update_mod_record(repo_url: str, version: str, local_folder: str) -> None:
@@ -1333,8 +1291,7 @@ class GithubManager:
 
     def _raise_for_github_status(self, response, request_label: str) -> None:
         """把 GitHub 的 HTTP 错误转换成更可读的异常。"""
-        if response.status_code < 400:
-            return
+        if response.status_code < 400: return
 
         if response.status_code == 404:
             raise GithubApiError(f"GitHub 资源不存在: {request_label}")
@@ -1365,14 +1322,12 @@ class GithubManager:
         这里用类级缓存，是因为项目里会临时 new 多个 GithubManager，需要让 todds 和 GitHub 页面共享结果。
         """
         cache_lock = GithubManager._cache_lock
-        if cache_lock is None:
-            return self._cache_miss
+        if cache_lock is None: return self._cache_miss
 
         now = time.time()
         with cache_lock:
             cached = GithubManager._response_cache.get(cache_key)
-            if not cached:
-                return self._cache_miss
+            if not cached: return self._cache_miss
             expires_at, payload = cached
             if expires_at < now:
                 GithubManager._response_cache.pop(cache_key, None)
@@ -1382,7 +1337,6 @@ class GithubManager:
     def _store_cached_payload(self, cache_key: tuple[str, ...], payload: Any, *, ttl_seconds: int = GITHUB_API_CACHE_TTL_SECONDS) -> None:
         """写入共享缓存。"""
         cache_lock = GithubManager._cache_lock
-        if cache_lock is None:
-            return
+        if cache_lock is None: return
         with cache_lock:
             GithubManager._response_cache[cache_key] = (time.time() + max(1, int(ttl_seconds)), payload)

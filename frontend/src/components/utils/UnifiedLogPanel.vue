@@ -28,7 +28,7 @@
         <!-- 显式的实时模式切换按钮：优先绑定到 app.log / RMM_Realtime.log -->
         <button v-if="liveFileName"
           @click="switchToLive"
-          class="px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all"
+          class="px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border transition-all"
           :class="isLiveView
             ? 'bg-accent-success/20 text-accent-success border-accent-success/40'
             : 'bg-black/10 text-text-dim border-text-main/10 hover:bg-accent-success/10 hover:text-accent-success'">
@@ -100,7 +100,7 @@
         <template v-slot="{ item, index, active }">
           <DynamicScrollerItem :item="item" :active="active" :data-index="index" :size-dependencies="getRowSizeDependencies(item)" >
             <!-- 行容器：绑定 data-id，增加选中高亮背景，增加 swipe-trigger 类名以支持拖拽滑动多选 -->
-            <div class="flex gap-2 group/row rounded-sm border-l-2 transition-colors text-[13px] wrap-break-word leading-relaxed hover:bg-text-main/5 mb-0.5"
+            <div class="flex gap-2 group/row rounded-sm border-l-2 transition-colors text-shadow-md wrap-break-word leading-relaxed hover:bg-text-main/5 mb-0.5"
                 :class="[ getBorderClass(item.level), selectedIds.includes(item.id) ? 'bg-accent-primary/10 border-accent-primary' : '' ]"
                 :data-id="item.id">
               
@@ -113,8 +113,8 @@
               </div>
               
               <!-- 时间戳与级别 (紧凑显示) -->
-              <div class="shrink-0 w-24 flex items-start text-text-dim/60 select-none pt-0.5 pl-1">
-                <span class="w-16">{{ formatTime(item.timestamp) }}</span>
+              <div class="shrink-0 w-fit flex items-start text-text-dim/60 select-none pt-0.5 pl-1">
+                <span >{{ formatTime(item.timestamp) }}</span>
               </div>
 
               <!-- 主体内容 -->
@@ -122,34 +122,34 @@
                 <!-- 诊断标签区 -->
                 <div v-if="item.context && (sourceType === 'game' || appStore.settings.debug_mode)" class="flex flex-wrap gap-1 mb-1 items-center">
                   <!-- App 模块标签 -->
-                  <span v-if="item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-[11px] font-bold border border-accent-cool/30">
+                  <span v-if="item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-xs font-bold border border-accent-cool/30">
                     {{ item.context.module }} <span v-if="item.context.func" class="opacity-60">:: {{ item.context.func }}</span>
                   </span>
                   <!-- App 源文件路径 -->
                   <span v-if="item.context.source === 'app' && item.context.path"
-                    class="px-1.5 py-0.5 rounded bg-black/40 text-text-dim text-[11px] border border-text-main/20 max-w-[18rem] truncate"
+                    class="px-1.5 py-0.5 rounded bg-black/40 text-text-dim text-xs border border-text-main/20 max-w-[18rem] truncate"
                     v-tooltip="item.context.path">
                     {{ item.context.path }}
                   </span>
                   <!-- 游戏 错误类型 -->
-                  <span v-if="item.context.inferredType" class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-[11px] font-bold border border-accent-danger/30">
+                  <span v-if="item.context.inferredType" class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30">
                     {{ item.context.inferredType }}
                   </span>
                   <!-- 关联文件 -->
                   <span v-for="file in (item.context.relatedFiles || []).slice(0,3)"
                     :key="file"
-                    class="px-1.5 py-0.5 rounded bg-accent-cool/10 text-accent-cool text-[11px] border border-accent-cool/30 max-w-56 truncate"
+                    class="px-1.5 py-0.5 rounded bg-accent-cool/10 text-accent-cool text-xs border border-accent-cool/30 max-w-56 truncate"
                     v-tooltip="file">
                     {{ file }}
                   </span>
                   <span v-if="item.context.relatedFiles && item.context.relatedFiles.length > 3"
-                    class="px-1 py-0.5 rounded text-[11px] text-text-dim">
+                    class="px-1 py-0.5 rounded text-xs text-text-dim">
                     +{{ item.context.relatedFiles.length - 3 }} 更多文件…
                   </span>
                   <!-- 嫌疑 Mod 点击跳转 -->
                   <button v-for="modId in (item.context.relatedModIds || [])" :key="modId"
                     @click="openMod(modId)"
-                    class="px-1.5 py-0.5 rounded bg-accent-primary/20 hover:bg-accent-primary/40 text-accent-primary text-[11px] cursor-pointer border border-accent-primary/30 transition-colors"
+                    class="px-1.5 py-0.5 rounded bg-accent-primary/20 hover:bg-accent-primary/40 text-accent-primary text-xs cursor-pointer border border-accent-primary/30 transition-colors"
                     v-tooltip="'点击查看 Mod 详情'">[Mod: {{ modId }}]
                   </button>
                 </div>
@@ -160,7 +160,7 @@
                 </div>
                 <button v-if="item._folded"
                   @click="item._folded = false"
-                  class="mt-0.5 text-[11px] text-accent-primary hover:text-accent-highlight">
+                  class="mt-0.5 text-xs text-accent-primary hover:text-accent-highlight">
                   展开完整日志
                 </button>
                 <!-- 展开详情 (堆栈) -->
@@ -170,7 +170,7 @@
                     <svg class="w-3 h-3 transition-transform" :class="item._expanded ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     <span>{{ item._expanded ? '收起堆栈详情' : '展开堆栈详情' }}</span>
                   </button>
-                  <div v-if="item._expanded" class="pl-2 border-l border-text-main/10 text-text-dim/70 text-[11px] bg-black/30 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
+                  <div v-if="item._expanded" class="pl-2 border-l border-text-main/10 text-text-dim/70 text-xs bg-black/30 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
                     {{ item.details }}
                   </div>
                 </div>
@@ -180,7 +180,7 @@
               <!-- 右侧重复计数 -->
               <div class="shrink-0 flex items-start pt-0.5 pr-1 gap-1">
                 <div v-if="item.count && item.count > 1"
-                  class="px-1.5 py-0.5 rounded-full bg-text-main/10 text-text-main text-[10px] font-bold">
+                  class="px-1.5 py-0.5 rounded-full bg-text-main/10 text-text-main text-[0.7rem] font-bold">
                   x{{ item.count }}
                 </div>
                 <!-- 复制按钮 -->
@@ -206,6 +206,7 @@
 import {  ref, computed, onMounted, onUnmounted, nextTick, onActivated, onDeactivated, watch } from 'vue'
 import { useToast } from 'vue-toastification'
 import { useAppStore } from '../../stores/appStore'
+import { useLogStore } from '../../stores/logStore'
 import { formatFileSize } from '../../utils/format'
 import { Copy } from 'lucide-vue-next'
 import { checkResult } from '../../utils/common'
@@ -213,18 +214,15 @@ import { checkResult } from '../../utils/common'
 const props = defineProps({
   sourceType: { type: String, default: 'app' } // 'app' or 'game'
 })
-// 向父组件暴露选中项，用于 AI 分析
-const emit = defineEmits(['update:selectedLogs'])
+const emit = defineEmits(['selection-change'])
 
 const appStore = useAppStore()
+const logStore = useLogStore()
 const toast = useToast()
 
 // 数据状态
 const files = ref([])
-const selectedFile = ref('')
 const allLoadedLogs = ref([]) // 本地缓存的日志数组
-
-const selectedIds = ref([])
 
 // 分页与懒加载状态
 const loadingFile = ref(false)
@@ -243,6 +241,27 @@ const timeFilter = ref({ start: '', end: '' })
 let isComponentActive = false; // KeepAlive 状态追踪
 // 【防 OOM 配置】前端最大保留的日志条数
 const MAX_FRONTEND_LOGS = 3000; // 内存保护
+
+const selectedFile = computed({
+  get: () => logStore.getSourceState(props.sourceType).selectedFile,
+  set: (value) => {
+    logStore.setSelectedFile(props.sourceType, value)
+  }
+})
+
+const selectedIds = computed({
+  get: () => logStore.getSourceState(props.sourceType).selectedIds,
+  set: (value) => {
+    logStore.replaceSelection({
+      sourceType: props.sourceType,
+      filename: selectedFile.value,
+      selectedIds: Array.isArray(value) ? value : [],
+      selectedLogs: allLoadedLogs.value.filter(log => (Array.isArray(value) ? value : []).includes(log.id)),
+      syncAttachment: true,
+      resetTokenInfoWhenEmpty: true,
+    })
+  }
+})
 
 // 判断一条日志是否需要折叠显示（多行长日志）
 function shouldFoldBlock(block) {
@@ -327,9 +346,11 @@ const copyLogContent = async (logsArray) => {
 
 // 暴露给父组件(LogViewer)使用的批量复制方法
 defineExpose({
-  clearSelection: () => { selectedIds.value = [] },
+  clearSelection: () => {
+    logStore.clearSelection(props.sourceType)
+  },
   copySelection: () => { 
-    const selectedObjects = allLoadedLogs.value.filter(log => selectedIds.value.includes(log.id));
+    const selectedObjects = logStore.getSelectedLogs(props.sourceType)
     copyLogContent(selectedObjects);
   },
   // 获取全局错误供一键排错使用
@@ -409,7 +430,6 @@ watch(() => props.sourceType, async (newVal) => {
   if (isComponentActive) {
     cleanupPanel()
     files.value = []
-    selectedFile.value = ''
     allLoadedLogs.value = []
     await initPanel()
   }
@@ -423,9 +443,10 @@ async function initPanel() {
     // 优先选择实时文件作为默认文件，其次才是最新的普通日志文件
     const liveCandidates = LIVE_FILES[props.sourceType] || [];
     const liveFile = files.value.find(f => liveCandidates.includes(f.name));
-    const targetName = liveFile ? liveFile.name : files.value[0].name;
+    const storedFilename = normalizeStoredFilename(files.value, selectedFile.value)
+    const targetName = storedFilename || (liveFile ? liveFile.name : files.value[0].name);
     // 关键：等待文件切换和首屏数据加载完成
-    await switchFile(targetName);
+    await switchFile(targetName, { preserveSelection: !!storedFilename && storedFilename === targetName });
   }
   loadingFile.value = false;
 }
@@ -447,6 +468,12 @@ async function fetchFiles() {
   }
 }
 
+function normalizeStoredFilename(filesList = [], filename = '') {
+  const normalizedFilename = String(filename || '').trim()
+  if (!normalizedFilename) return ''
+  return filesList.some(file => file?.name === normalizedFilename) ? normalizedFilename : ''
+}
+
 // 一键切换到实时文件（如果存在）
 function switchToLive() {
   if (!liveFileName.value) return;
@@ -457,10 +484,21 @@ function switchToLive() {
 // 切换文件，重置分页
 async function switchFile(filename) {
   if (!filename) return;
+  return switchFileWithOptions(filename, { preserveSelection: false })
+}
+
+async function switchFileWithOptions(filename, { preserveSelection = false } = {}) {
+  if (!filename) return;
   
   loadingFile.value = true;
   cleanupPanel(); // 清理旧的监听
-  selectedIds.value = []
+  if (!preserveSelection) {
+    logStore.clearSelection(props.sourceType, {
+      preserveFile: false,
+      removeAttachment: true,
+      resetTokenInfo: true,
+    })
+  }
 
   selectedFile.value = filename;
   currentPage.value = 1;
@@ -481,7 +519,7 @@ async function switchFile(filename) {
 // 强制重新读取（清空缓存）
 function reloadAll() {
   if (selectedFile.value) {
-    switchFile(selectedFile.value);
+    switchFileWithOptions(selectedFile.value, { preserveSelection: true });
   }
 }
 
@@ -500,6 +538,7 @@ async function fetchPage(page, isScrollUp = false, isInitial = false) {
 
       if (isInitial) {
         allLoadedLogs.value = newBlocks;
+        logStore.refreshSelectedSnapshotsFromLoadedLogs(props.sourceType, allLoadedLogs.value)
         if (autoScroll.value) {
           nextTick(() => scrollerRef.value?.scrollToBottom());
         }
@@ -510,6 +549,7 @@ async function fetchPage(page, isScrollUp = false, isInitial = false) {
         
         allLoadedLogs.value = [...newBlocks, ...allLoadedLogs.value];
         _enforceMemoryLimit();
+        logStore.refreshSelectedSnapshotsFromLoadedLogs(props.sourceType, allLoadedLogs.value)
 
         nextTick(() => {
           if (scroller) {
@@ -554,6 +594,7 @@ function handleRealtimeLog(e) {
     allLoadedLogs.value.push(normalizeBlock(entry));
     _enforceMemoryLimit();
   }
+  logStore.refreshSelectedSnapshotsFromLoadedLogs(props.sourceType, allLoadedLogs.value)
   
   if (autoScroll.value && isAtBottom) {
     nextTick(() => scrollerRef.value?.scrollToBottom());
@@ -632,12 +673,6 @@ const filteredLogIds = computed(() => {
   return filteredLogs.value.map(log => log.id)
 })
 
-// 监听选中项变化，向父组件 (LogViewer) 抛出具体的日志对象
-watch(selectedIds, (newIds) => {
-  const selectedLogObjects = allLoadedLogs.value.filter(log => newIds.includes(log.id))
-  emit('update:selectedLogs', selectedLogObjects)
-}, { deep: true })
-
 // v-selectable-list 指令的配置对象
 const selectionConfig = computed(() => ({
   data: filteredLogIds.value,     // 当前列表数据的全集 IDs
@@ -647,10 +682,20 @@ const selectionConfig = computed(() => ({
   clickMode: 'toggle',            // 日志勾选更接近复选框语义：点击默认切换多选
   idAttribute: 'data-id',         // DOM 绑定的 ID 属性
   onSelect: (newSelectedIds, anchorId) => {
-    selectedIds.value = newSelectedIds
+    const nextSelectedLogs = allLoadedLogs.value.filter(log => newSelectedIds.includes(log.id))
+    logStore.replaceSelection({
+      sourceType: props.sourceType,
+      filename: selectedFile.value,
+      selectedIds: newSelectedIds,
+      selectedLogs: nextSelectedLogs,
+      syncAttachment: true,
+      resetTokenInfoWhenEmpty: true,
+    })
+    emit('selection-change', nextSelectedLogs)
   },
   onClear: () => {
-    selectedIds.value =[]
+    logStore.clearSelection(props.sourceType)
+    emit('selection-change', [])
   }
 }))
 

@@ -43,11 +43,11 @@
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
       </button>
 
-      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showAiReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !appStore.aiBatchResultCount}"
+      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showModAliasReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !aiStore.modAliasReviewItemCount}"
         class="p-2 rounded-full relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent cursor-pointer">
         <BotMessageSquare class="size-6" />
-        <span v-show="appStore.aiBatchResultCount > 0" class="absolute top-0 right-0 p-0.5 leading-none text-xs text-text-main font-bold rounded-full bg-accent-secondary/70 animate-pulse">
-          {{ appStore.aiBatchResultCount }}
+        <span v-show="aiStore.modAliasReviewItemCount > 0" class="absolute top-0 right-0 p-0.5 leading-none text-xs text-text-main font-bold rounded-full bg-accent-secondary/70 animate-pulse">
+          {{ aiStore.modAliasReviewItemCount }}
         </span>
       </button>
 
@@ -118,6 +118,7 @@
 
 <script setup>
 import { useAppStore } from '../stores/appStore'
+import { useAiStore } from '../stores/aiStore'
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
 import { BotMessageSquare, ClipboardList, CloudCog, FileSearch2, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
@@ -125,6 +126,7 @@ import { useOrderStore } from '../stores/orderStore';
 
 
 const appStore = useAppStore()
+const aiStore = useAiStore()
 const orderStore = useOrderStore()
 const profileStore = useProfileStore()
 

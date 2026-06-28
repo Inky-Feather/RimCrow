@@ -185,16 +185,14 @@ def clear_db():
 
 def validate_database_file(db_path, require_tables=True):
     """使用原生 sqlite3 对数据库文件做基础有效性校验。"""
-    if not db_path or not os.path.exists(db_path):
-        return False, f"数据库文件不存在: {db_path}"
+    if not db_path or not os.path.exists(db_path): return False, f"数据库文件不存在: {db_path}"
 
     conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         row = cursor.execute('PRAGMA integrity_check(1);').fetchone()
-        if not row or str(row[0]).lower() != 'ok':
-            return False, f"integrity_check 失败: {row[0] if row else '无返回结果'}"
+        if not row or str(row[0]).lower() != 'ok': return False, f"integrity_check 失败: {row[0] if row else '无返回结果'}"
 
         if require_tables:
             existing_tables = {
@@ -203,15 +201,13 @@ def validate_database_file(db_path, require_tables=True):
             }
             required_tables = {m._meta.table_name.lower() for m in all_models}
             missing_tables = sorted(required_tables - existing_tables)
-            if missing_tables:
-                return False, f"缺少必要数据表: {', '.join(missing_tables)}"
+            if missing_tables: return False, f"缺少必要数据表: {', '.join(missing_tables)}"
 
         return True, "ok"
     except Exception as e:
         return False, str(e)
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 
 def auto_upgrade_schema(database, models):

@@ -32,8 +32,7 @@ class UTF8JSONField(Field):
     def db_value(self, value):
         # 写入时统一转成 JSON 文本，并保留中文原文，
         # 便于日志排查和人工查看数据库内容。
-        if value is None:
-            return None
+        if value is None: return None
         # ensure_ascii=False 允许 JSON 序列化非 ASCII 字符（如中文、日文、特殊符号等）
         return json.dumps(value, ensure_ascii=False)
 
@@ -73,10 +72,22 @@ class WorkshopOnlineCache(ExtBaseModel):
 
     workshop_id = CharField(primary_key=True)
     title = CharField(null=True)
+    short_description = TextField(null=True)
     description = TextField(null=True)
+    author_steam_id = CharField(null=True)
     preview_url = CharField(null=True)
+    tags = UTF8JSONField(default=list)
+    children = UTF8JSONField(default=list)
     screenshots = UTF8JSONField(default=list)
+    time_created = BigIntegerField(default=0)
     time_updated = BigIntegerField(default=0)
+    subscriptions = IntegerField(default=0)
+    favorited = IntegerField(default=0)
+    lifetime_subscriptions = IntegerField(default=0)
+    lifetime_favorited = IntegerField(default=0)
+    views = IntegerField(default=0)
+    summary_last_sync_time = BigIntegerField(default=0)
+    detail_last_sync_time = BigIntegerField(default=0)
     last_sync_time = BigIntegerField(default=0)
 
 

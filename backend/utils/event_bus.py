@@ -135,8 +135,7 @@ class EventBus:
             "paused": "pending",
         }
         normalized = mapping.get(value, value)
-        if normalized not in {"pending", "running", "success", "failed", "cancelled"}:
-            return "running"
+        if normalized not in {"pending", "running", "success", "failed", "cancelled"}: return "running"
         return normalized
     
     @classmethod

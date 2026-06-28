@@ -49,8 +49,7 @@ class SubBrowserManager:
             height=800,
             js_api=bridge,
         )
-        if not self.window:
-            return
+        if not self.window: return
 
         if is_workshop_page:
             threading.Thread(target=self._async_render_workshop, args=(normalized_url,), daemon=True).start()
@@ -62,8 +61,7 @@ class SubBrowserManager:
 
     def navigate_workshop(self, url=''):
         normalized_url = str(url or '').strip()
-        if not normalized_url:
-            return {"status": "error", "message": "未提供目标页面地址"}
+        if not normalized_url: return {"status": "error", "message": "未提供目标页面地址"}
         if not self.window:
             self.open(normalized_url, normalized_url)
             return {"status": "success"}
@@ -94,8 +92,7 @@ class SubBrowserManager:
             logger.debug(f"Sub browser workshop render skipped: {e}")
 
     def _delayed_load_url(self, url: str):
-        if not self.window:
-            return
+        if not self.window: return
         time.sleep(0.6)
         try:
             if self.window and self._mode == "external":
@@ -104,8 +101,7 @@ class SubBrowserManager:
             logger.debug(f"Sub browser delayed load skipped: {e}")
 
     def _on_loaded(self):
-        if not self.window:
-            return
+        if not self.window: return
         try:
             if self._mode == "external":
                 current_url = self.window.get_current_url() or self._current_url

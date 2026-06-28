@@ -20,6 +20,7 @@ dependencies = [
     "pillow>=12.0.0",
     "pip-system-certs>=5.3",
     "psutil>=7.2.2",
+    "pydantic>=2.12.5",
     "pyinstaller>=6.18.0",
     "python-dateutil>=2.9.0.post0",
     "pywebview>=6.1",

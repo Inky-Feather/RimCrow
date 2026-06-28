@@ -74,11 +74,9 @@ class GameManager:
         for exe in candidates:
             p = os.path.join(install_path, exe)
             # macOS 特殊处理: 如果是 .app 文件夹，用 open 命令
-            if system_name == 'Darwin' and exe.endswith('.app') and os.path.exists(p):
-                return p
+            if system_name == 'Darwin' and exe.endswith('.app') and os.path.exists(p): return p
             # 其他情况找文件
-            if os.path.isfile(p):
-                return p
+            if os.path.isfile(p): return p
         return None
     
     @classmethod
@@ -142,18 +140,15 @@ class GameManager:
             if user_profile:
                 base = os.path.join(user_profile, 'AppData', 'LocalLow')
                 path = os.path.join(base, 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-                if os.path.exists(path):
-                    return path
+                if os.path.exists(path): return path
         elif platform.system() == 'Darwin':
             home = os.path.expanduser('~')
             path = os.path.join(home, 'Library', 'Application Support', 'RimWorld')
-            if os.path.exists(path):
-                return path
+            if os.path.exists(path): return path
         else: # Linux
             home = os.path.expanduser('~')
             path = os.path.join(home, '.config', 'unity3d', 'Ludeon Studios', 'RimWorld by Ludeon Studios')
-            if os.path.exists(path):
-                return path
+            if os.path.exists(path): return path
         return ''
     
     @staticmethod
@@ -171,8 +166,7 @@ class GameManager:
             try:
                 with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
                     install_loc, _ = winreg.QueryValueEx(key, "InstallLocation")
-                    if install_loc:
-                        return install_loc
+                    if install_loc: return install_loc
             except OSError:
                 continue
         return None

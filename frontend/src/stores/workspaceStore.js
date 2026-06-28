@@ -16,6 +16,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const appStore = useAppStore()
   const confirmStore = useConfirmStore()
   const listenersReady = ref(false)
+  const loadState = reactive({
+    librariesLoaded: false,
+    githubLoaded: false,
+    collectionsLoaded: false,
+  })
 
   const storeSortOrder = {
     workshop: 0,
@@ -100,9 +105,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const workshopSearch = reactive({
     query: '',
     page: 1,
+    cursor: '*',
+    nextCursor: '',
     hasMore: true, // 是否还有下一页
     results: [],
     total: 0,
+    sourceMode: 'offline',
+    onlineSort: 'relevance',
     isLoading: false,       // 首次加载/搜索加载
     isLoadMore: false,      // 滚动到底部加载更多
     // --- 详情区状态 ---
@@ -316,6 +325,53 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return true
   }
 
+  const applyLifecycleUpdateState = (updates = []) => {
+    const normalizedUpdates = Array.isArray(updates) ? updates : []
+    const updateMap = new Map(
+      normalizedUpdates
+        .map(item => {
+          const wid = normalizeWorkshopId(item?.workshop_id)
+          return wid ? [wid, item] : null
+        })
+        .filter(Boolean)
+    )
+
+    const resetState = (modList) => {
+      modList.forEach(mod => {
+        mod.has_update = false
+        delete mod.update_info
+      })
+    }
+
+    const applyState = (modList, source) => {
+      modList.forEach(mod => {
+        const wid = normalizeWorkshopId(mod?.workshop_id)
+        if (!wid) return
+        const updateInfo = updateMap.get(wid)
+        if (!updateInfo || updateInfo.source !== source) return
+        mod.has_update = true
+        mod.update_info = updateInfo
+      })
+    }
+
+    resetState(librariesMods.workshop)
+    resetState(librariesMods.self)
+    applyState(librariesMods.workshop, 'workshop')
+    applyState(librariesMods.self, 'self')
+
+    console.log('[Workspace] 生命周期更新状态已合并:', normalizedUpdates.length, '条记录')
+  }
+
+  const refreshLifecycleUpdateStates = async () => {
+    if (!window.pywebview) return true
+    const res = await window.pywebview.api.lifecycle_check_updates()
+    if (checkResult(res, '检查库内模组更新状态')) {
+      applyLifecycleUpdateState(res.data?.updates || [])
+      return true
+    }
+    return false
+  }
+
   // 响应式计算 Mod 状态
   const activeChildrenWithStatus = computed(() => {
     return collections.activeChildren.map(child => {
@@ -338,46 +394,59 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   })
 
   // --- Actions ---
-  // 初始化数据
-  const initData = async () => {
-    console.log("初始化 Workspace 数据...")
-    setupListeners() // 必须先挂载监听器，防止后端推送太快漏接
-    // 并发拉取基础数据，让 UI 瞬间填满
-    await Promise.all([
-      fetchLibrariesMods(),
-      fetchGithubRepos(),
-      fetchSavedCollections() 
-    ])
+  const ensureLibrariesLoaded = async ({ force = false } = {}) => {
+    if (loadState.librariesLoaded && !force) return true
+    return await fetchLibrariesMods()
+  }
+  const ensureGithubLoaded = async ({ force = false } = {}) => {
+    if (loadState.githubLoaded && !force) return true
+    return await fetchGithubRepos()
+  }
+  const ensureCollectionsLoaded = async ({ force = false } = {}) => {
+    if (loadState.collectionsLoaded && !force) return true
+    return await fetchSavedCollections()
+  }
+  // 工作区按标签懒加载，避免应用启动时把所有工作区接口提前打满。
+  const ensureWorkspaceTabLoaded = async (tabId, options = {}) => {
+    const normalizedTabId = String(tabId || 'library').trim().toLowerCase()
+    if (normalizedTabId === 'library') return await ensureLibrariesLoaded(options)
+    if (normalizedTabId === 'github') return await ensureGithubLoaded(options)
+    if (normalizedTabId === 'collection') return await ensureCollectionsLoaded(options)
+    return true
+  }
+  // 仅刷新当前已经加载过的数据区，避免全局刷新时再次触发未打开页面的预热请求。
+  const refreshLoadedData = async ({ librariesOnly = false } = {}) => {
+    const jobs = []
+    if (loadState.librariesLoaded) jobs.push(fetchLibrariesMods())
+    if (!librariesOnly && loadState.githubLoaded) jobs.push(fetchGithubRepos())
+    if (!librariesOnly && loadState.collectionsLoaded) jobs.push(fetchSavedCollections())
+    if (jobs.length === 0) return true
+    await Promise.all(jobs)
+    return true
   }
   // 监听后端推送
   const setupListeners = () => {
     if (listenersReady.value) return
     listenersReady.value = true
 
-    // 【监听 A】: 三域列表的在线状态静默更新
+    // 【监听 A】: self 域在线状态静默更新
     // payload 格式: { "12345": { title: "...", time_updated: 17000000, preview_url: "..." }, ... }
     window.addEventListener('workspace-online-update', (e) => {
       const onlineMap = e.detail
-      console.log("[Workspace] 收到 Steam 在线状态批量推送:", Object.keys(onlineMap).length, "条记录")
-      // 定义合并逻辑：寻找对应 ID 的 Mod 并注入在线数据
+      console.log("[Workspace] 收到 Steam 在线状态批量推送[self]:", Object.keys(onlineMap).length, "条记录")
+      // 该事件当前只服务 self 预热，避免把 self 的在线时间误覆盖到 workshop 域。
       const mergeOnlineData = (modList) => {
         modList.forEach(mod => {
           const wid = String(mod.workshop_id)
           if (onlineMap[wid]) {
             const onlineInfo = onlineMap[wid]
-            // 将云端详情挂载到 mod 对象上
             mod.online_info = onlineInfo
-            // 实时计算更新标记 (核心逻辑)
-            // 获取本地的下载时间或安装时间
             const localTime = mod.steam_status?.time_downloaded || 
                               mod.steam_status?.installed_version_time || 0
-            // 如果云端更新时间 > 本地时间 + 1小时容差，标记为有更新
             mod.has_update = onlineInfo.time_updated > (localTime + 3600 * 1000)
           }
         })
       }
-      // 执行合并 (由于 librariesMods 是 reactive，修改内部对象会触发 Vue 重新渲染对应 DOM)
-      mergeOnlineData(librariesMods.workshop)
       mergeOnlineData(librariesMods.self)
     })
     // 【监听 B】: GitHub 在线状态静默更新
@@ -427,6 +496,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 拉取无遮蔽的三个库全量数据
   const fetchLibrariesMods = async () => {
     if (!window.pywebview) return
+    setupListeners()
     isFetching.value = true
     try {
       // 这个 API 现在只负责去读本地 SQLite 和内存缓存，响应时间应该 < 50ms
@@ -439,9 +509,47 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
         // 渲染完毕！如果后端在此接口中发现了需要触发的在线查询，
         // 后端会自己开启线程并发 `workspace-online-update` 事件。
+        await refreshLifecycleUpdateStates()
+        loadState.librariesLoaded = true
+        return true
       }
     } finally {
       isFetching.value = false
+    }
+    return false
+  }
+
+  const normalizeWorkshopSearchItem = (item = {}) => {
+    const tags = Array.isArray(item.tags) ? item.tags.filter(Boolean) : []
+    const gameVersions = Array.isArray(item.game_versions) ? item.game_versions.filter(Boolean) : []
+    const author = Array.isArray(item.author)
+      ? item.author.filter(Boolean).join(' / ')
+      : String(item.author || '').trim()
+    return {
+      ...item,
+      workshop_id: String(item.workshop_id || '').trim(),
+      title: String(item.title || item.name || '').trim(),
+      name: String(item.name || item.title || '未知模组').trim(),
+      package_id: String(item.package_id || '').trim(),
+      author,
+      author_steam_id: String(item.author_steam_id || '').trim(),
+      short_description: String(item.short_description || '').trim(),
+      description: String(item.description || item.short_description || '').trim(),
+      preview_url: String(item.preview_url || '').trim(),
+      game_versions: gameVersions,
+      tags,
+      // 关联项按照 Steam 返回的顺序号稳定排序，避免同一批数据每次展开顺序抖动。
+      children: Array.isArray(item.children)
+        ? [...item.children]
+            .filter(child => child && child.workshop_id)
+            .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0))
+        : [],
+      screenshots: Array.isArray(item.screenshots) ? item.screenshots : [],
+      subscriptions: Number(item.subscriptions || 0),
+      favorited: Number(item.favorited || 0),
+      time_created: Number(item.time_created || 0),
+      time_updated: Number(item.time_updated || 0),
+      source: String(item.source || '').trim(),
     }
   }
 
@@ -454,32 +562,67 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // 状态设置
     if (isAppend) {
       workshopSearch.isLoadMore = true
-      workshopSearch.page += 1
+      if (workshopSearch.sourceMode === 'offline') {
+        workshopSearch.page += 1
+      }
     } else {
       workshopSearch.isLoading = true
       workshopSearch.page = 1
+      workshopSearch.cursor = '*'
+      workshopSearch.nextCursor = ''
       workshopSearch.results = [] // 清空旧数据
     }
     workshopSearch.query = queryStr
     try {
-      const res = await window.pywebview.api.workshop_search(queryStr, workshopSearch.page)
+      const res = workshopSearch.sourceMode === 'online'
+        ? await window.pywebview.api.workshop_search_online(
+            queryStr,
+            isAppend ? workshopSearch.nextCursor || workshopSearch.cursor || '*' : '*',
+            25,
+            workshopSearch.onlineSort,
+          )
+        : await window.pywebview.api.workshop_search(queryStr, workshopSearch.page)
       if (checkResult(res, '工坊检索')) {
-        const newItems = res.data.items || []
+        const newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
         if (isAppend) {
-          // 核心修复：不要用 push！使用展开运算符创建新数组引用！
-          // workshopSearch.results.push(...newItems)
           workshopSearch.results = [...workshopSearch.results, ...newItems] 
         } else {
           workshopSearch.results = newItems
           workshopSearch.total = res.data.total
         }
-        // 判断是否还有下一页
-        workshopSearch.hasMore = workshopSearch.results.length < res.data.total
+        if (workshopSearch.sourceMode === 'online') {
+          workshopSearch.cursor = String(res.data.cursor || workshopSearch.cursor || '*')
+          workshopSearch.nextCursor = String(res.data.next_cursor || '')
+          workshopSearch.hasMore = !!res.data.has_more
+        } else {
+          workshopSearch.hasMore = workshopSearch.results.length < res.data.total
+        }
       }
     } finally {
       workshopSearch.isLoading = false
       workshopSearch.isLoadMore = false
     }
+  }
+
+  const setWorkshopSearchMode = async (mode) => {
+    const normalizedMode = mode === 'online' ? 'online' : 'offline'
+    if (workshopSearch.sourceMode === normalizedMode) return
+    // 在线模式依赖用户本地保存的 Key，没有 Key 时直接阻止切换，避免进入空状态。
+    if (normalizedMode === 'online' && !String(appStore.settings.steam_web_api_key || '').trim()) {
+      toast.warning('请先在设置中填写 Steam Web API Key')
+      return false
+    }
+    workshopSearch.sourceMode = normalizedMode
+    workshopSearch.page = 1
+    workshopSearch.cursor = '*'
+    workshopSearch.nextCursor = ''
+    workshopSearch.hasMore = true
+    workshopSearch.results = []
+    workshopSearch.total = 0
+    workshopSearch.selectedId = null
+    workshopSearch.detailData = null
+    await doWorkshopSearch(workshopSearch.query || '', false)
+    return true
   }
   // 获取云端详情 (包含网页抓取截图)
   // isNavigate: 是否是通过点击“推荐卡片”触发的内部跳转
@@ -497,7 +640,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       const res = await window.pywebview.api.workshop_get_details(workshop_id)
       if (checkResult(res, '获取云端详情')) {
-        workshopSearch.detailData = res.data
+        workshopSearch.detailData = normalizeWorkshopSearchItem(res.data)
       }
     } finally {
       workshopSearch.isDetailLoading = false
@@ -557,6 +700,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 拉取 GitHub 订阅列表，拉取所有订阅记录
   const fetchGithubRepos = async () => {
     if (!window.pywebview) return
+    setupListeners()
     github.isLoading = true
     try {
       const activeRepoUrl = github.activeRepo?.repo_url || ''
@@ -571,25 +715,32 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           stopGithubTimelinePolling()
           github.repoTimelines = []
         }
+        loadState.githubLoaded = true
+        return true
       }
     } finally {
       github.isLoading = false
     }
+    return false
   }
 
   // 初始化拉取本地数据库中的合集列表
   const fetchSavedCollections = async () => {
     if (!window.pywebview) return
+    setupListeners()
     collections.isLoading = true
     try {
       // 假设你后端新增了获取列表的 API
       const res = await window.pywebview.api.collection_get_all()
       if (checkResult(res, '获取合集记录')) {
         collections.savedList = res.data || []
+        loadState.collectionsLoaded = true
+        return true
       }
     } finally {
       collections.isLoading = false
     }
+    return false
   }
 
   // 接入(解析并保存)新合集
@@ -776,9 +927,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     librariesMods, isFetching, librariesSize, activeChildrenWithStatus,
     workshopSearch, timeline, subscribedWorkshopIds, installedAllIds, missingWorkshopIds, getModStatus, modTransfer,
     matrixFocusTarget, getMatrixSameItems, getMatrixConflictItems, jumpToMatrixItem,
-    fetchLibrariesMods, doWorkshopSearch, fetchWorkshopDetails, openTimeline, openTimelineGithub, setupListeners,
+    fetchLibrariesMods, refreshLifecycleUpdateStates, doWorkshopSearch, fetchWorkshopDetails, openTimeline, openTimelineGithub, setupListeners, setWorkshopSearchMode,
     github, fetchGithubRepos, fetchGithubTimeline, startGithubTimelinePolling, stopGithubTimelinePolling, selectGithubRepo, clearActiveGithubRepo,
-    getGithubOnlineVersion, githubRepoNeedsUpdate, initData, openSteamWorkshopUrl, getInstallSourcesByPackageIdsMap, getWorkshopIdsByPackageIdsMap, resolvePackageIdsToWorkshopIds, goBackWorkshopDetail,
+    getGithubOnlineVersion, githubRepoNeedsUpdate, ensureLibrariesLoaded, ensureGithubLoaded, ensureCollectionsLoaded, ensureWorkspaceTabLoaded, refreshLoadedData, openSteamWorkshopUrl, getInstallSourcesByPackageIdsMap, getWorkshopIdsByPackageIdsMap, resolvePackageIdsToWorkshopIds, goBackWorkshopDetail,
     collections, fetchSavedCollections, addCollection, removeCollection, selectCollection
   }
 })

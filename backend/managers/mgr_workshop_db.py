@@ -55,8 +55,7 @@ class WorkshopDBManager:
 
     def _get_dataset_file_stats(self, path: Path) -> tuple[int, int]:
         """统一读取文件大小和毫秒级修改时间，避免多处重复 stat。"""
-        if not path.exists():
-            return 0, 0
+        if not path.exists(): return 0, 0
         stat = path.stat()
         return int(stat.st_size), int(stat.st_mtime * 1000)
 
@@ -74,8 +73,7 @@ class WorkshopDBManager:
         - 启动阶段应优先降低 I/O 和解析成本；
         - 元数据未变化时可以在解析 JSON 之前直接复用旧结果。
         """
-        if not state:
-            return True
+        if not state: return True
         state_data: Any = state
 
         file_size, file_mtime = self._get_dataset_file_stats(path)
@@ -135,8 +133,7 @@ class WorkshopDBManager:
         3. 文件变化时整表替换，确保上游删除的条目也能正确同步消失。
         """
         path = self._resolve_existing_dataset_path(Path(settings.config.community_workshop_db_path))
-        if not path.exists():
-            return False
+        if not path.exists(): return False
         try:
             state = self._get_dataset_state("workshop_db")
             if not self._should_rebuild_dataset(
@@ -197,8 +194,7 @@ class WorkshopDBManager:
             Path(settings.config.community_instead_db_path),
             allow_gz_fallback=True,
         )
-        if not path.exists():
-            return False
+        if not path.exists(): return False
         try:
             state = self._get_dataset_state("instead_db")
             if not self._should_rebuild_dataset(
@@ -283,8 +279,7 @@ class WorkshopDBManager:
         - 规则判断应尽量稳定，不受 Steam API TTL 和可用性波动影响。
         """
         meta = WorkshopManifest.get_or_none(WorkshopManifest.workshop_id == str(workshop_id))
-        if not meta or not meta.dependencies_mods:
-            return []
+        if not meta or not meta.dependencies_mods: return []
 
         missing = []
         for dep_wid, dep_name in meta.dependencies_mods.items():

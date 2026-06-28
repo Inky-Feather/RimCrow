@@ -36,12 +36,10 @@ REMOTE_USER_AGENT = (
 
 def build_sub_browser_target_url(base_url: str, url: str = "", title: str = "RimModManager") -> str:
     normalized_url = str(url or "").strip()
-    if not normalized_url:
-        return ""
+    if not normalized_url: return ""
 
     normalized_base_url = str(base_url or "").rstrip("/")
-    if not normalized_base_url:
-        return normalized_url
+    if not normalized_base_url: return normalized_url
 
     parsed = urlparse(normalized_url)
     if parsed.scheme in {"http", "https"} and parsed.netloc.lower().endswith("steamcommunity.com"):
@@ -160,15 +158,13 @@ class WorkshopPageRenderer:
     @staticmethod
     def _rewrite_resource_attr(tag, attr_name: str, base_url: str):
         attr_value = str(tag.get(attr_name) or "").strip()
-        if not attr_value or attr_value.startswith(("data:", "javascript:", "#")):
-            return
+        if not attr_value or attr_value.startswith(("data:", "javascript:", "#")): return
         tag[attr_name] = urljoin(base_url, attr_value)
 
     @staticmethod
     def _rewrite_srcset(tag, attr_name: str, base_url: str):
         raw_value = str(tag.get(attr_name) or "").strip()
-        if not raw_value:
-            return
+        if not raw_value: return
         rewritten_parts = []
         for candidate in raw_value.split(","):
             token = candidate.strip()
@@ -396,8 +392,7 @@ class BrowserSessionManager:
         self._monitor_thread: threading.Thread | None = None
 
     def start(self):
-        if self._monitor_thread and self._monitor_thread.is_alive():
-            return
+        if self._monitor_thread and self._monitor_thread.is_alive(): return
         self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._monitor_thread.start()
 
@@ -419,8 +414,7 @@ class BrowserSessionManager:
     def heartbeat(self, session_id: str):
         with self._lock:
             session = self._sessions.get(session_id)
-            if not session:
-                return False
+            if not session: return False
             session["last_seen"] = time.time()
             return True
 
@@ -428,8 +422,7 @@ class BrowserSessionManager:
         should_schedule_shutdown = False
         with self._lock:
             session = self._sessions.pop(session_id, None)
-            if not session:
-                return False
+            if not session: return False
             if session_id == self._primary_session_id:
                 should_schedule_shutdown = True
                 self._shutdown_deadline = time.time() + PRIMARY_CLOSE_GRACE_SECONDS
@@ -440,8 +433,7 @@ class BrowserSessionManager:
     def register_stream(self, session_id: str, stream_queue: queue.Queue):
         with self._lock:
             session = self._sessions.get(session_id)
-            if not session:
-                return False
+            if not session: return False
             session["streams"].add(stream_queue)
             return True
 
@@ -505,8 +497,7 @@ class BrowserAppServer:
     def resolve_static_root():
         candidates = [Path(os.getcwd()) / "frontend" / "dist", Path(os.getcwd())]
         for root in candidates:
-            if (root / "index.html").exists():
-                return root
+            if (root / "index.html").exists(): return root
         return None
 
     @staticmethod
@@ -605,8 +596,7 @@ class BrowserAppServer:
                     return self._handle_api_call(method_name)
                 self.send_error(404, "Not Found")
 
-            def log_message(self, format, *args):
-                return
+            def log_message(self, format, *args): return
 
             def _handle_api_call(self, method_name: str):
                 if method_name not in outer.get_available_methods():
@@ -718,15 +708,11 @@ class BrowserAppServer:
 
             def _read_json_body(self):
                 content_length = int(self.headers.get("Content-Length", "0") or "0")
-                if content_length <= 0:
-                    return {}
+                if content_length <= 0: return {}
                 raw_body = self.rfile.read(content_length)
-                if not raw_body:
-                    return {}
-                try:
-                    return json.loads(raw_body.decode("utf-8"))
-                except Exception:
-                    return {}
+                if not raw_body: return {}
+                try: return json.loads(raw_body.decode("utf-8"))
+                except Exception: return {}
 
             def _send_common_headers(self, content_type="application/json; charset=utf-8"):
                 self.send_header("Content-Type", content_type)

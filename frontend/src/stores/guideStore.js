@@ -1,6 +1,13 @@
-// frontend/src/stores/guideStore.js
+// -----------------------------------------------------------------
+// 新手引导 Store
+// -----------------------------------------------------------------
+// 这里集中维护：
+// 1. 各教程入口的元数据
+// 2. 启动前的场景检查
+// 3. driver.js 的统一执行与完成标记
 import { defineStore } from 'pinia'
 import { useAppStore } from './appStore'
+import { useAiStore } from './aiStore'
 import { useModStore } from './modStore'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
@@ -25,7 +32,9 @@ import {
 } from '../modules/guide/guideConfig'
 import { useToast } from 'vue-toastification'
 
-// 1. 将所有可用的引导流程集中定义在这里，便于“引导中心”组件动态渲染
+// -----------------------------------------------------------------
+// 引导定义 (Guide Definitions)
+// -----------------------------------------------------------------
 export const allGuides = [
   { 
     key: 'main', 
@@ -96,9 +105,10 @@ export const allGuides = [
     steps: aiReviewGuideSteps,
     beforeStart: () => {
       const appStore = useAppStore();
-      const hasResults = appStore.aiBatchResultCount > 0;
+      const aiStore = useAiStore();
+      const hasResults = aiStore.modAliasReviewItemCount > 0;
       if (!hasResults) return false;
-      appStore.uiState.showAiReviewModal = false;
+      appStore.uiState.showModAliasReviewModal = false;
       return true;
     }
   },
@@ -110,10 +120,27 @@ export const allGuides = [
     beforeStart: () => {
       const appStore = useAppStore();
       const ai = appStore.settings.ai || {};
+      const provider = String(ai.provider || 'openai_compatible').trim().toLowerCase();
+      const baseUrl = String(ai.base_url || '').trim();
+      const apiKey = String(ai.api_key || '').trim();
+      const normalizedProvider = provider === 'openai' || provider === 'custom_openai'
+        ? 'openai_compatible'
+        : provider;
+      let baseHost = '';
+      try {
+        baseHost = new URL(baseUrl || 'https://api.openai.com/v1').hostname || '';
+      } catch {
+        baseHost = '';
+      }
+      const usesDefaultOpenAI = normalizedProvider === 'openai_compatible' && (
+        !baseUrl || /(^|\.)openai\.com$/i.test(baseHost)
+      );
+      const requiresApiKey = ['anthropic', 'gemini'].includes(normalizedProvider) || usesDefaultOpenAI;
       const hasMinimalAiConfig = !!(
         ai.enabled &&
         String(ai.model || '').trim() &&
-        (String(ai.api_key || '').trim() || String(ai.base_url || '').trim())
+        normalizedProvider &&
+        (!requiresApiKey || apiKey)
       );
       if (!hasMinimalAiConfig) {
         return {
@@ -183,10 +210,15 @@ export const allGuides = [
 
 export const useGuideStore = defineStore('guide', () => {
 
+  // -----------------------------------------------------------------
+  // Store 依赖 (Stores)
+  // -----------------------------------------------------------------
   const appStore = useAppStore();
   const toast = useToast();
 
-  // 内部标记完成的函数，可复用
+  // -----------------------------------------------------------------
+  // 内部工具 (Utils)
+  // -----------------------------------------------------------------
   const markAsDone = async (uniqueKey) => {
     if (window.pywebview && window.pywebview.api) {
       await window.pywebview.api.guide_mark_as_done(uniqueKey)
@@ -194,16 +226,14 @@ export const useGuideStore = defineStore('guide', () => {
     }
   }
 
-  // 通用执行引擎
+  // 所有教程最终都走同一执行器，保证“前置检查 -> 启动 -> 完成标记”的流程一致。
   const runGuide = async (guideKey, stepsConfig, force = false, beforeStartCallback = null) => {
     const uniqueKey  = `${guideKey}_${GUIDE_VERSION}`
-    // 从后端 settings 中读取状态
     const completedGuides = appStore.settings.completed_guides || {}
     
     if (!force && completedGuides[uniqueKey] === 'done') {
-      return // 已经看过了，跳过
+      return
     }
-    // 如果定义了前置动作，先执行
     if (beforeStartCallback) {
       const canStart = await beforeStartCallback()
       if (typeof canStart === 'string') {

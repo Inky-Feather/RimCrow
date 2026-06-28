@@ -40,7 +40,7 @@ class ModAnalyzer:
         :param mod_path: Mod 根目录绝对路径
         返回: {
             'mod_type': 'XML'|'Assembly'|'LanguagePack'|'Texture'|'Audio'|'Mixed'|'Unknown',
-            'supported_languages': ['zh-cn', 'en'],
+            'supported_languages': ['zh-CN', 'en'],
             'file_stats': {'code_dll': 0, 'game_xml': 0, 'patch_xml': 0, 'lang_xml': 0, 'image': 0, 'audio': 0},
             'has_defs': False
             'has_assemblies': False,
@@ -63,8 +63,7 @@ class ModAnalyzer:
             'has_tip': False
         }
 
-        if not os.path.exists(mod_path):
-            return self._finalize(info)
+        if not os.path.exists(mod_path): return self._finalize(info)
 
         # 1. 计算要忽略的路径 (黑名单)
         local_ignored_paths = [os.path.join(mod_path, name) for name in BASE_IGNORED_PATHS]
@@ -141,8 +140,7 @@ class ModAnalyzer:
         """将版本字符串解析为可排序的键，例如 v1.6 -> (1, 6)"""
         raw_tag = str(raw_tag or '').strip()
         match = self.version_pattern.match(raw_tag)
-        if not match:
-            return None
+        if not match: return None
         major, minor = match.group(1).split('.', 1)
         return int(major), int(minor)
 
@@ -216,8 +214,7 @@ class ModAnalyzer:
             if entries:
                 version_entries[version_key] = entries
 
-        if not version_entries:
-            return False, set(), []
+        if not version_entries: return False, set(), []
 
         selected_version = max(version_entries.keys())
         selected_entries = version_entries[selected_version]
@@ -288,8 +285,7 @@ class ModAnalyzer:
     def _normalize_loadfolders_path(self, raw_path: str | None) -> str:
         """规范化 LoadFolders.xml 里的路径文本。"""
         path = str(raw_path or '').strip().replace('\\', '/')
-        if path in ('', '.', './', '/'):
-            return ''
+        if path in ('', '.', './', '/'): return ''
         while '//' in path:
             path = path.replace('//', '/')
         path = path.lstrip('/').rstrip('/')

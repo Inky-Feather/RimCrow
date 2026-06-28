@@ -160,8 +160,7 @@ def file_tree(
         格式化的目录树字符串，若路径无效则返回错误信息
     """
     # 路径有效性检查
-    if not path or not os.path.isdir(path):
-        return "错误：无效的目录路径"
+    if not path or not os.path.isdir(path): return "错误：无效的目录路径"
     
     # 初始化参数默认值
     exclude = exclude or [] # 排除项默认空列表

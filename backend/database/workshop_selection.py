@@ -29,10 +29,8 @@ def normalize_cached_workshop_id(workshop_id: Any) -> str:
 
 def extract_workshop_id_from_url(value: Any) -> str:
     text = str(value or "").strip()
-    if not text:
-        return ""
-    if text.isdigit():
-        return normalize_cached_workshop_id(text)
+    if not text: return ""
+    if text.isdigit(): return normalize_cached_workshop_id(text)
     match = re.search(r"[?&]id=(\d{7,20})", text, re.IGNORECASE)
     return normalize_cached_workshop_id(match.group(1)) if match else ""
 
@@ -58,8 +56,7 @@ def _candidate_sort_key(current_game_version: str, candidate: dict[str, Any]) ->
 def _build_meta_candidate(meta: dict[str, Any]) -> dict[str, Any] | None:
     """将 WorkshopMeta 记录整理成统一的候选结构。"""
     workshop_id = normalize_cached_workshop_id(meta.get("workshop_id"))
-    if not workshop_id:
-        return None
+    if not workshop_id: return None
     return {
         "workshop_id": workshop_id,
         "package_id": normalize_package_id(meta.get("package_id")),
@@ -80,8 +77,7 @@ def _build_replacement_candidate(
 ) -> dict[str, Any] | None:
     """将 replacement 规则与可能存在的 replacement meta 合并为统一候选。"""
     workshop_id = normalize_cached_workshop_id(replacement.get("new_workshop_id"))
-    if not workshop_id:
-        return None
+    if not workshop_id: return None
 
     if replacement_meta:
         return {
@@ -159,8 +155,7 @@ def build_install_source(
             "is_replacement": is_replacement,
         }
 
-    if not raw_url:
-        return None
+    if not raw_url: return None
 
     return {
         "kind": "url",
@@ -206,8 +201,7 @@ def _select_best_candidate(
     current_game_version: str = "",
 ) -> dict[str, Any] | None:
     pool = list(candidates or [])
-    if not pool:
-        return None
+    if not pool: return None
     return max(pool, key=lambda candidate: _candidate_sort_key(current_game_version, candidate))
 
 

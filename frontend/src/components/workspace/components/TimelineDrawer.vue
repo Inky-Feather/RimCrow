@@ -11,8 +11,8 @@
               <History class="size-5 text-accent-primary" />
               变动<span class="text-accent-primary">时间线</span>
             </h3>
-            <p class="text-xs text-text-dim mt-1 max-w-[200px] truncate" v-tooltip="modName">{{ modName }}</p>
-            <p class="text-[10px] font-mono text-text-dim/50 mt-0.5">ID: {{ workshopId }}</p>
+            <p class="text-xs text-text-dim mt-1 max-w-50 truncate" v-tooltip="modName">{{ modName }}</p>
+            <p class="text-[0.7rem] font-mono text-text-dim/50 mt-0.5">ID: {{ workshopId }}</p>
           </div>
           <button @click="$emit('close')" class="p-2 bg-text-main/5 hover:bg-accent-danger/20 hover:text-accent-danger rounded-xl transition-colors">
             <X class="size-5"/>
@@ -51,7 +51,7 @@
                 <span class="text-xs font-mono font-bold" :class="getColorClass(log.color, 'text')">
                   {{ formatDate(log.time) }}
                 </span>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-text-main/5 border border-text-main/5"
+                <span class="px-2 py-0.5 rounded-full text-[0.7rem] font-black uppercase tracking-wider bg-text-main/5 border border-text-main/5"
                   :class="getColorClass(log.color, 'text')">
                   {{ log.title }}
                 </span>

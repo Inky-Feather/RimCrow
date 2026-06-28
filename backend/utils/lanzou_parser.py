@@ -216,8 +216,7 @@ class LanzouParser:
                 try:
                     # 模拟真实点击跳转
                     r = self.session.get(raw_url, allow_redirects=False, headers={'Referer': ifr_url})
-                    if r.status_code == 302:
-                        return r.headers.get('Location')
+                    if r.status_code == 302: return r.headers.get('Location')
                     return raw_url # 如果没重定向，这本身就是直链
                 except:
                     return raw_url

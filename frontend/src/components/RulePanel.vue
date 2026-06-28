@@ -62,13 +62,13 @@
                     <!-- 内部元素增加 pointer-events-none 防止干扰 dragenter -->
                     <GripVertical class="pointer-events-none w-3.5 h-3.5  group-hover:text-accent-primary transition-colors" :class="[(globalRulesEnableMap[source]||source=='native')?'text-accent-success':'text-text-dim']" />
                     <span class="pointer-events-none text-xs font-medium text-text-main/80 select-none">{{ sourceNames[source] }}</span>
-                    <span class="pointer-events-none ml-auto text-[10px] font-mono text-text-dim bg-black/40 w-4 h-4 flex items-center justify-center rounded">
+                    <span class="pointer-events-none ml-auto text-[0.7rem] font-mono text-text-dim bg-black/40 w-4 h-4 flex items-center justify-center rounded">
                       {{ idx + 1 }}
                     </span>
                   </div>
                 </TransitionGroup>
               </div>
-              <p class="text-[10px] text-text-dim/60 mt-2 px-2 leading-relaxed">
+              <p class="text-[0.7rem] text-text-dim/60 mt-2 px-2 leading-relaxed">
                 * 生效优先级：从上到下，优先级从高到低。
               </p>
             </div>

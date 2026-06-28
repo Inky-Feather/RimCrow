@@ -75,8 +75,7 @@ def get_entrypoint():
     # 4. 兜底回退：本地开发服务器
     from backend.utils.logger import logger 
     logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
-    if is_port_available("localhost", 5173):
-        return dev_server
+    if is_port_available("localhost", 5173): return dev_server
     return path_external.absolute().as_uri()
 
 def get_local_frontend_root():
@@ -86,8 +85,7 @@ def get_local_frontend_root():
         HOME_DIR,
     ]
     for root in candidates:
-        if (root / "index.html").exists():
-            return root
+        if (root / "index.html").exists(): return root
     return None
 
 def get_webview2_version():
@@ -114,8 +112,7 @@ def get_webview2_version():
             with winreg.OpenKey(hkey, path) as key:
                 # 读取 'pv' (Product Version) 值
                 version, type_ = winreg.QueryValueEx(key, "pv")
-                if version and version != "0.0.0.0":
-                    return version
+                if version and version != "0.0.0.0": return version
         except FileNotFoundError:
             continue
         except OSError:

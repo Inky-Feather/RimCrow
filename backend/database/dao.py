@@ -68,6 +68,18 @@ def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
     return asset
 
 
+def _should_include_workshop_in_runtime_detection(context: ProfileContext | None) -> bool:
+    if not context:
+        return False
+    return bool(getattr(context, "prefer_steam_launch", False) or getattr(context, "use_workshop_mods", False))
+
+
+def _should_include_workshop_in_runtime_deploy(context: ProfileContext | None) -> bool:
+    if not context:
+        return False
+    return bool((not getattr(context, "prefer_steam_launch", False)) and getattr(context, "use_workshop_mods", False))
+
+
 def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
     """
     确保 UserModData 中存在这些 mod_id 的占位记录。
@@ -76,8 +88,7 @@ def _ensure_user_data_rows(mod_ids: Iterable[str]) -> None:
     因此只要后续逻辑要写入这些关系，就必须先把父记录准备好。
     """
     stubs = [{"mod_id": mod_id} for mod_id in normalize_package_ids(list(mod_ids))]
-    if not stubs:
-        return
+    if not stubs: return
     UserModData.insert_many(stubs).on_conflict_ignore().execute()
 
 
@@ -88,8 +99,7 @@ def _mod_dir_exists(path: str) -> bool:
     这里不用简单的 os.path.exists(path)，而是检查 About.xml / About.xml.disabled，
     因为项目里“存在目录但已失去 Mod 结构”的情况也应视为失效。
     """
-    if not path:
-        return False
+    if not path: return False
     mod_path = Path(path)
     return ((mod_path / "About" / "About.xml").is_file() or (mod_path / "About" / "About.xml.disabled").is_file())
 
@@ -115,14 +125,12 @@ class _ProfilePathScope:
 
     @staticmethod
     def _normalize_root(path: str | None) -> str:
-        if not path:
-            return ""
+        if not path: return ""
         return os.path.normpath(path).lower() + os.sep
 
     @classmethod
     def from_context(cls, context: ProfileContext | None) -> "_ProfilePathScope":
-        if not context:
-            return cls()
+        if not context: return cls()
         return cls(
             local_root=cls._normalize_root(context.local_mods_path),
             dlc_root=cls._normalize_root(context.game_dlc_path),
@@ -134,7 +142,7 @@ class _ProfilePathScope:
             use_tool_mods=bool(settings.config.enable_tool_mods),
         )
 
-    def build_visibility_conditions(self, include_workshop: bool = True) -> list[Any]:
+    def build_visibility_conditions(self, include_workshop: bool = True, force_include_workshop: bool = False) -> list[Any]:
         """
         生成当前 Profile 下“哪些路径应被视为可见资产”的查询条件。
 
@@ -145,7 +153,7 @@ class _ProfilePathScope:
             conditions.append(ModAsset.path.startswith(self.local_root))
         if self.dlc_root:
             conditions.append(ModAsset.path.startswith(self.dlc_root))
-        if self.use_workshop_mods and self.workshop_root and include_workshop:
+        if self.workshop_root and include_workshop and (self.use_workshop_mods or force_include_workshop):
             conditions.append(ModAsset.path.startswith(self.workshop_root))
         if self.use_self_mods and self.self_root:
             conditions.append(ModAsset.path.startswith(self.self_root))
@@ -196,7 +204,7 @@ class _ProfilePathScope:
             return "tool"
         return "unknown"
 
-    def includes_runtime_path(self, path: str | None) -> bool:
+    def includes_runtime_path(self, path: str | None, include_workshop: bool | None = None) -> bool:
         """
         判断一个路径是否属于“当前 Profile 运行时会参与仲裁的域”。
 
@@ -208,7 +216,9 @@ class _ProfilePathScope:
         if domain == "self":
             return self.use_self_mods
         if domain == "workshop":
-            return self.use_workshop_mods
+            if include_workshop is None:
+                return self.use_workshop_mods
+            return bool(include_workshop and self.workshop_root)
         if domain == "tool":
             return self.use_tool_mods
         return False
@@ -268,8 +278,16 @@ def _build_group_structures(allowed_ids: set[str] | None = None) -> list[dict[st
     `get_all_groups_structured()` 和 `get_groups_structured_by_mod_ids()` 的唯一区别，
     只是是否需要按当前可见 Mod 集合过滤成员，因此用一个内部函数收口。
     """
-    groups = list(GroupData.select().order_by(GroupData.sort_index).dicts())
-    group_mods = list(GroupMod.select().order_by(GroupMod.sort_index).dicts())
+    groups = list(
+        GroupData.select()
+        .order_by(GroupData.sort_index, GroupData.group_id)
+        .dicts()
+    )
+    group_mods = list(
+        GroupMod.select()
+        .order_by(GroupMod.group_id, GroupMod.sort_index, GroupMod.mod_id)
+        .dicts()
+    )
 
     group_map = {group["group_id"]: [] for group in groups}
     for group_mod in group_mods:
@@ -307,13 +325,15 @@ class ModDAO:
         这个返回值是项目里“当前环境实际可见模组”的事实来源，
         AI、排序、导入检查、主界面都依赖它。
         """
-        if not context:
-            return []
+        if not context: return []
 
         scope = _ProfilePathScope.from_context(context)
-        conditions = scope.build_visibility_conditions()
-        if not conditions:
-            return []
+        include_workshop = _should_include_workshop_in_runtime_detection(context)
+        conditions = scope.build_visibility_conditions(
+            include_workshop=include_workshop,
+            force_include_workshop=include_workshop,
+        )
+        if not conditions: return []
 
         combined_condition = reduce(operator.or_, conditions)
         active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
@@ -325,22 +345,55 @@ class ModDAO:
         )
 
         group_map = _load_group_names_by_mod_id()
-        visible_by_package: dict[str, dict[str, Any]] = {}
-        sorted_assets = sorted(list(query), key=lambda asset: scope.priority_for_path(asset.get("path")), reverse=True)
+        grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-        for asset in sorted_assets:
+        for asset in query.dicts():
             _normalize_language_fields(asset)
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:
                 continue
-
-            had_shadowed_versions = package_id in visible_by_package
             asset["groups"] = group_map.get(package_id, [])
-            visible_by_package[package_id] = asset
-            if had_shadowed_versions:
-                visible_by_package[package_id]["_has_shadow_version"] = True
+            grouped_assets[package_id].append(asset)
 
-        return list(visible_by_package.values())
+        visible_mods: list[dict[str, Any]] = []
+        for package_id in sorted(grouped_assets.keys()):
+            group = sorted(
+                grouped_assets[package_id],
+                key=lambda asset: (
+                    scope.priority_for_path(asset.get("path")),
+                    os.path.dirname(str(asset.get("path") or "")).lower(),
+                    str(asset.get("path") or "").lower(),
+                ),
+            )
+            if not group:
+                continue
+
+            winner = dict(group[0])
+            if len(group) > 1:
+                winner["_has_shadow_version"] = True
+
+            by_parent: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for asset in group:
+                by_parent[os.path.dirname(str(asset.get("path") or "")).lower()].append(asset)
+            has_hard_conflict = any(len(items) > 1 for items in by_parent.values())
+            if has_hard_conflict:
+                winner["has_package_conflict"] = True
+
+            if not has_hard_conflict and scope.domain_for_path(winner.get("path")) in {"local", "self"}:
+                workshop_variants = [
+                    dict(asset)
+                    for asset in group[1:]
+                    if scope.domain_for_path(asset.get("path")) == "workshop"
+                ]
+                if workshop_variants:
+                    workshop_variant = workshop_variants[0]
+                    workshop_variant["groups"] = group_map.get(package_id, [])
+                    winner["is_coexistence"] = True
+                    winner["coexist_workshop_variant"] = workshop_variant
+
+            visible_mods.append(winner)
+
+        return visible_mods
 
     @staticmethod
     def get_visible_profile_mod(context: ProfileContext | None, package_id: str):
@@ -352,12 +405,10 @@ class ModDAO:
         但更容易和主列表的规则发生漂移。
         """
         normalized_package_id = normalize_package_id(package_id)
-        if not context or not normalized_package_id:
-            return None
+        if not context or not normalized_package_id: return None
 
         for mod in ModDAO.get_profile_mods(context):
-            if normalize_package_id(mod.get("package_id")) == normalized_package_id:
-                return mod
+            if normalize_package_id(mod.get("package_id")) == normalized_package_id: return mod
         return None
 
     @staticmethod
@@ -387,7 +438,9 @@ class ModDAO:
     def get_profile_conflict_analysis(
         context: ProfileContext | None = None,
         assets: Sequence[dict[str, Any]] | None = None,
-        include_workshop: bool = True,
+        include_workshop: bool | None = None,
+        include_workshop_in_detection: bool | None = None,
+        include_workshop_in_deploy: bool | None = None,
     ):
         """
         生成当前 Profile 的运行态分析结果。
@@ -400,16 +453,35 @@ class ModDAO:
         这样扫描、部署和后续可能的“切换 Profile 后即时重算”都能共用同一套规则。
         """
         empty_result = {"hard_conflicts": [], "coexistences": [], "deploy_paths": []}
-        if not context:
-            return empty_result
+        if not context: return empty_result
 
         scope = _ProfilePathScope.from_context(context)
+        detect_workshop = (
+            include_workshop_in_detection
+            if include_workshop_in_detection is not None
+            else (
+                include_workshop
+                if include_workshop is not None
+                else _should_include_workshop_in_runtime_detection(context)
+            )
+        )
+        deploy_workshop = (
+            include_workshop_in_deploy
+            if include_workshop_in_deploy is not None
+            else (
+                include_workshop
+                if include_workshop is not None
+                else _should_include_workshop_in_runtime_deploy(context)
+            )
+        )
         active_assets: list[dict[str, Any]] = []
 
         if assets is None:
-            conditions = scope.build_visibility_conditions(include_workshop=include_workshop)
-            if not conditions:
-                return empty_result
+            conditions = scope.build_visibility_conditions(
+                include_workshop=detect_workshop,
+                force_include_workshop=detect_workshop,
+            )
+            if not conditions: return empty_result
             combined_condition = reduce(operator.or_, conditions)
             active_condition = (ModAsset.disabled == False) | (ModAsset.disabled.is_null())  # type: ignore
             query = (
@@ -423,14 +495,14 @@ class ModDAO:
                 asset_dict = dict(asset)
                 if asset_dict.get("disabled"):
                     continue
-                if not scope.includes_runtime_path(asset_dict.get("path")):
+                if not scope.includes_runtime_path(asset_dict.get("path"), include_workshop=detect_workshop):
                     continue
                 active_assets.append(asset_dict)
 
         grouped_assets: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for asset in active_assets:
             path = str(asset.get("path") or "").strip()
-            if not path or not scope.includes_runtime_path(path):
+            if not path or not scope.includes_runtime_path(path, include_workshop=detect_workshop):
                 continue
             package_id = normalize_package_id(asset.get("package_id"))
             if not package_id:
@@ -455,33 +527,36 @@ class ModDAO:
             for asset in group:
                 by_parent[os.path.dirname(str(asset.get("path") or "")).lower()].append(asset)
 
-            group_has_hard_conflict = False
+            hard_conflict_paths: set[str] = set()
             for same_dir_items in by_parent.values():
                 if len(same_dir_items) > 1:
-                    group_has_hard_conflict = True
+                    for conflict_item in same_dir_items:
+                        hard_conflict_paths.add(str(conflict_item.get("path") or ""))
                     hard_conflicts.append({
                         "package_id": package_id,
                         "items": same_dir_items,
                         "type": "same_directory",
                     })
 
-            if group_has_hard_conflict:
-                # 同目录硬冲突仍然全部部署，让用户在冲突弹窗里自行决策。
-                for asset in group:
-                    conflict_domain = scope.domain_for_path(asset.get("path"))
-                    if conflict_domain in deploy_buckets:
-                        deploy_buckets[conflict_domain].append(str(asset["path"]))
-                continue
+            safe_candidates = [
+                asset for asset in group
+                if str(asset.get("path") or "") not in hard_conflict_paths
+            ]
 
-            if len(group) > 1:
+            if not hard_conflict_paths and len(group) > 1:
                 coexistences.append({
                     "package_id": package_id,
                     "items": group,
                     "type": "different_directory",
                 })
 
-            winner = group[0]
+            if not safe_candidates:
+                continue
+
+            winner = safe_candidates[0]
             winner_domain = scope.domain_for_path(winner.get("path"))
+            if winner_domain == "workshop" and not deploy_workshop:
+                continue
             if winner_domain in deploy_buckets:
                 deploy_buckets[winner_domain].append(str(winner["path"]))
 
@@ -566,8 +641,7 @@ class ModDAO:
         扫描结果是“资产快照”，天然适合做 upsert。这里会先过滤掉模型上不存在的键，
         再按 path_hash 冲突进行保留式更新，避免 UI 临时字段污染数据库写入。
         """
-        if not mods_data_list:
-            return
+        if not mods_data_list: return
 
         valid_field_names = set(ModAsset._meta.fields.keys())  # type: ignore
         preserve_fields = [
@@ -594,8 +668,7 @@ class ModDAO:
         这里按“字段集合”分批，是为了避免不同 payload 的字段不一致时，
         把某些实例上未提供的字段也一起写回数据库。
         """
-        if not mods_data_list:
-            return
+        if not mods_data_list: return
 
         field_map = ModAsset._meta.fields  # type: ignore
         batches_by_signature: dict[tuple[str, ...], list[dict[str, Any]]] = {}
@@ -629,8 +702,7 @@ class ModDAO:
         扫描器会重新计算每个“最终保留条目”背后有哪些被禁用副本，
         这里仅负责把结果落库，不参与任何业务推断。
         """
-        if not shadow_paths_map:
-            return
+        if not shadow_paths_map: return
 
         model_instances = [
             ModAsset(path_hash=path_hash, shadow_paths=paths)
@@ -650,8 +722,7 @@ class ModDAO:
         默认值处理和冲突策略都只有一套实现。
         """
         normalized_package_id = normalize_package_id(package_id)
-        if not normalized_package_id or not data_dict:
-            return True
+        if not normalized_package_id or not data_dict: return True
 
         payload = {"mod_id": normalized_package_id, **data_dict}
         ModDAO.batch_upsert_user_data([payload])
@@ -666,8 +737,7 @@ class ModDAO:
         - 传了哪些字段，就更新哪些字段
         - 没传的字段，不在这次写入里被覆盖
         """
-        if not user_data_list:
-            return
+        if not user_data_list: return
 
         valid_field_names = set(UserModData._meta.fields.keys())  # type: ignore
         input_keys = set().union(*(data.keys() for data in user_data_list))
@@ -697,16 +767,14 @@ class ModDAO:
     def set_user_mods_type(mod_ids: List[str], new_type: str):
         """批量设置用户自定义 Mod 类型。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids:
-            return
+        if not normalized_ids: return
         ModDAO.batch_upsert_user_data([{"mod_id": mod_id, "user_mod_type": new_type} for mod_id in normalized_ids])
 
     @staticmethod
     def set_mods_color(mod_ids: List[str], color_hex: str):
         """批量设置 UI 标记颜色。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids:
-            return
+        if not normalized_ids: return
         if color_hex and not is_hex_color(color_hex):
             raise ValueError("Invalid color format. Use #RRGGBB.")
         ModDAO.batch_upsert_user_data([{"mod_id": mod_id, "sign_color": color_hex} for mod_id in normalized_ids])
@@ -721,8 +789,7 @@ class ModDAO:
         """
         normalized_ids = normalize_package_ids(mod_ids)
         cleaned_tags = [str(tag).strip() for tag in new_tags if str(tag).strip()]
-        if not normalized_ids or not cleaned_tags:
-            return
+        if not normalized_ids or not cleaned_tags: return
 
         with db.atomic():
             existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(normalized_ids))
@@ -743,8 +810,7 @@ class ModDAO:
         """从指定 Mod 中批量移除标签。"""
         normalized_ids = normalize_package_ids(mod_ids)
         remove_set = {str(tag).strip() for tag in remove_tags if str(tag).strip()}
-        if not normalized_ids or not remove_set:
-            return
+        if not normalized_ids or not remove_set: return
 
         with db.atomic():
             existing_records = UserModData.select().where(cast(Any, UserModData.mod_id).in_(normalized_ids))
@@ -776,8 +842,7 @@ class ModInterlockDAO:
     def link_mods(mod_ids: List[str]):
         """创建新的联锁序列，并把涉及的 Mod 从旧联锁中安全摘出。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if len(normalized_ids) < 2:
-            return {"status": "error", "msg": "联锁至少需要 2 个模组"}
+        if len(normalized_ids) < 2: return {"status": "error", "msg": "联锁至少需要 2 个模组"}
 
         with db.atomic():
             existing_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << normalized_ids)  # type: ignore
@@ -804,8 +869,7 @@ class ModInterlockDAO:
     def unlink_mods(mod_ids: List[str]):
         """把指定 Mod 从其所属联锁中剥离。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids:
-            return True
+        if not normalized_ids: return True
 
         with db.atomic():
             target_mods = UserModData.select(UserModData.mod_id, UserModData.interlock_id).where(UserModData.mod_id << normalized_ids)  # type: ignore
@@ -834,8 +898,7 @@ class ModInterlockDAO:
         让剩余仍然存在的 Mod 继续保持顺序。
         """
         interlock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
-        if not interlock:
-            return None
+        if not interlock: return None
 
         with db.atomic():
             existing_assets = ModAsset.select(ModAsset.package_id).where(
@@ -865,8 +928,7 @@ class ModInterlockDAO:
         - shadowed: 物理存在，但当前 Profile 中不可见
         """
         interlock = ModInterlock.get_or_none(ModInterlock.id == interlock_id)
-        if not interlock:
-            return []
+        if not interlock: return []
 
         all_assets = (
             ModAsset.select(ModAsset.package_id, ModAsset.path, ModAsset.disabled, ModAsset.workshop_id)
@@ -950,16 +1012,14 @@ class ModMaintenanceDAO:
         如果物理删除失败，只记录错误，不回滚数据库，避免在损坏路径上反复死循环。
         """
         normalized_hashes = _normalize_path_hashes(path_hashes)
-        if not normalized_hashes:
-            return {"success_count": 0, "errors": []}
+        if not normalized_hashes: return {"success_count": 0, "errors": []}
 
         assets = list(
             ModAsset.select(ModAsset.path, ModAsset.path_hash, ModAsset.name)
             .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
             .dicts()
         )
-        if not assets:
-            return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
+        if not assets: return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
 
         target_paths = [asset["path"] for asset in assets if asset.get("path")]
         valid_hashes = [asset["path_hash"] for asset in assets]
@@ -987,12 +1047,10 @@ class ModMaintenanceDAO:
     def add_shadow_path(keep_path_hash: str, shadow_path: str):
         """为最终保留的 Mod 记录被遮蔽副本路径。"""
         mod = ModAsset.get_or_none(ModAsset.path_hash == keep_path_hash)
-        if not mod:
-            return False
+        if not mod: return False
 
         current_paths = list(mod.shadow_paths or [])
-        if shadow_path in current_paths:
-            return True
+        if shadow_path in current_paths: return True
 
         current_paths.append(shadow_path)
         mod.shadow_paths = current_paths
@@ -1047,8 +1105,7 @@ class ModMaintenanceDAO:
                 deleted_mods.append(asset["path_hash"])
 
         total_invalid_mods = missing_mods + deleted_mods
-        if not total_invalid_mods:
-            return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
+        if not total_invalid_mods: return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
 
         with db.atomic():
             if delete:
@@ -1109,16 +1166,29 @@ class GroupDAO:
     @staticmethod
     def update_group_info(group_id: str, **kwargs):
         """更新分组名称、颜色或折叠状态。"""
-        if "color" in kwargs:
-            kwargs["color"] = normalize_hex_color(kwargs["color"])
-        return GroupData.update(**kwargs).where(GroupData.group_id == group_id).execute()
+        allowed_fields = {"name", "color", "is_expanded"}
+        clean_updates = {
+            key: value
+            for key, value in kwargs.items()
+            if key in allowed_fields
+        }
+        if not clean_updates:
+            raise ValueError("更新分组失败：未提供有效字段。")
+        if "name" in clean_updates:
+            clean_updates["name"] = str(clean_updates["name"] or "").strip()
+            if not clean_updates["name"]:
+                raise ValueError("更新分组失败：分组名称不能为空。")
+        if "color" in clean_updates:
+            clean_updates["color"] = normalize_hex_color(clean_updates["color"])
+        if "is_expanded" in clean_updates:
+            clean_updates["is_expanded"] = bool(clean_updates["is_expanded"])
+        return GroupData.update(**clean_updates).where(GroupData.group_id == group_id).execute()
 
     @staticmethod
     def add_mods_to_group(group_id: str, mod_ids: List[str]):
         """向分组批量添加 Mod，并自动忽略重复关系。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids:
-            return
+        if not normalized_ids: return
 
         with db.atomic():
             _ensure_user_data_rows(normalized_ids)
@@ -1137,8 +1207,7 @@ class GroupDAO:
     def remove_mods_from_group(group_id: str, mod_ids: List[str]):
         """从分组移除一批 Mod。"""
         normalized_ids = normalize_package_ids(mod_ids)
-        if not normalized_ids:
-            return 0
+        if not normalized_ids: return 0
         return GroupMod.delete().where(
             (GroupMod.group_id == group_id)
             & (cast(Any, GroupMod.mod_id).in_(normalized_ids))
@@ -1152,8 +1221,19 @@ class GroupDAO:
     @staticmethod
     def reorder_groups(group_id_list: List[str]):
         """按前端传回的新顺序重排分组本身。"""
+        normalized_ids = [str(group_id or "").strip() for group_id in group_id_list if str(group_id or "").strip()]
+        existing_ids = [row.group_id for row in GroupData.select(GroupData.group_id).order_by(GroupData.sort_index, GroupData.group_id)]
+        if not existing_ids:
+            return
+        if len(normalized_ids) != len(existing_ids):
+            raise ValueError("分组排序失败：提交的分组数量与当前数据不一致。")
+        if len(set(normalized_ids)) != len(normalized_ids):
+            raise ValueError("分组排序失败：提交的分组列表存在重复项。")
+        if set(normalized_ids) != set(existing_ids):
+            raise ValueError("分组排序失败：提交的分组集合与当前数据不一致。")
+
         with db.atomic():
-            for index, group_id in enumerate(group_id_list):
+            for index, group_id in enumerate(normalized_ids):
                 GroupData.update(sort_index=index).where(GroupData.group_id == group_id).execute()
 
     @staticmethod
@@ -1161,20 +1241,60 @@ class GroupDAO:
         """
         重排分组内成员顺序。
 
-        这里直接“删旧关系 + 批量插入新顺序”，因为这比逐条 update 更简单，
-        而且分组内成员数量通常远小于全表规模。
+        前端当前拿到的是“当前上下文下可见成员”的子集，而且拖入分组时
+        还会把“新加入成员”一并放进这个顺序列表里。
+        因此这里不能再要求提交列表必须完全属于当前组内成员，否则会把
+        “拖拽新增成员”误判成非法数据。
+
+        正确做法是：
+        1. 校验提交列表不能有重复
+        2. 允许列表中带有“当前尚未在组内，但在 ModAsset 中有效”的新增成员
+        3. 按提交顺序重排当前可见成员与新增成员
+        4. 保留其余不可见成员，并把它们稳定地续接在后面
         """
         normalized_ids = normalize_package_ids(mod_id_list)
         if not normalized_ids:
-            GroupMod.delete().where(GroupMod.group_id == group_id).execute()
-            return
+            raise ValueError("分组内排序失败：提交的成员列表为空。")
 
         with db.atomic():
-            _ensure_user_data_rows(normalized_ids)
+            existing_rows = list(
+                GroupMod.select(GroupMod.mod_id, GroupMod.sort_index)
+                .where(GroupMod.group_id == group_id)
+                .order_by(GroupMod.sort_index, GroupMod.mod_id)
+                .dicts()
+            )
+            if not existing_rows:
+                raise ValueError("分组内排序失败：目标分组不存在或没有成员。")
+
+            existing_ids = [normalize_package_id(row.get("mod_id")) for row in existing_rows]
+            existing_id_set = set(existing_ids)
+            if len(normalized_ids) != len(set(normalized_ids)):
+                raise ValueError("分组内排序失败：提交的成员列表存在重复项。")
+
+            new_member_ids = [mod_id for mod_id in normalized_ids if mod_id not in existing_id_set]
+            if new_member_ids:
+                valid_new_ids = {
+                    normalize_package_id(asset.package_id)
+                    for asset in ModAsset.select(ModAsset.package_id).where(
+                        cast(Any, ModAsset.package_id).in_(new_member_ids)
+                    )
+                }
+                invalid_new_ids = [mod_id for mod_id in new_member_ids if mod_id not in valid_new_ids]
+                if invalid_new_ids:
+                    raise ValueError("分组内排序失败：提交的成员列表包含无效成员。")
+
+            submitted_existing_set = {mod_id for mod_id in normalized_ids if mod_id in existing_id_set}
+            hidden_existing_ids = [
+                mod_id for mod_id in existing_ids
+                if mod_id not in submitted_existing_set
+            ]
+            merged_ids = normalized_ids + hidden_existing_ids
+
+            _ensure_user_data_rows(merged_ids)
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()
             data_source = [
                 {"group_id": group_id, "mod_id": mod_id, "sort_index": index}
-                for index, mod_id in enumerate(normalized_ids)
+                for index, mod_id in enumerate(merged_ids)
             ]
             for batch in chunked(data_source, 500):
                 GroupMod.insert_many(batch).execute()

@@ -65,12 +65,10 @@ class FileSearchManager:
 
     def cancel_task(self, task_id: str) -> bool:
         normalized_task_id = str(task_id or "").strip()
-        if not normalized_task_id:
-            return False
+        if not normalized_task_id: return False
         with self._lock:
             cancel_event = self._task_events.get(normalized_task_id)
-        if not cancel_event:
-            return False
+        if not cancel_event: return False
         cancel_event.set()
         return True
 
@@ -266,8 +264,7 @@ class FileSearchManager:
         force: bool,
     ):
         now_ms = int(time.time() * 1000)
-        if not force and now_ms - int(progress_state.get("last_emit_ms", 0)) < self.PROGRESS_THROTTLE_MS:
-            return
+        if not force and now_ms - int(progress_state.get("last_emit_ms", 0)) < self.PROGRESS_THROTTLE_MS: return
         progress_state["last_emit_ms"] = now_ms
         scan_span = self.SCAN_STAGE_MAX_PROGRESS - self.SCAN_STAGE_START_PROGRESS
         progress = min(
@@ -305,8 +302,7 @@ class FileSearchManager:
         progress_state: dict[str, int],
     ):
         now_ms = int(time.time() * 1000)
-        if now_ms - int(progress_state.get("last_emit_ms", 0)) < self.PROGRESS_THROTTLE_MS and processed_mods < total_mods:
-            return
+        if now_ms - int(progress_state.get("last_emit_ms", 0)) < self.PROGRESS_THROTTLE_MS and processed_mods < total_mods: return
         progress_state["last_emit_ms"] = now_ms
         progress = min(self.BUILD_STAGE_MAX_PROGRESS, int(processed_mods * self.BUILD_STAGE_MAX_PROGRESS / max(total_mods, 1)))
         progress_state["current_progress"] = progress
@@ -365,8 +361,7 @@ class FileSearchManager:
         from .tooling import resolve_ripgrep_executable
 
         executable = resolve_ripgrep_executable()
-        if executable:
-            return RipgrepSearchBackend(executable)
+        if executable: return RipgrepSearchBackend(executable)
         return self.python_backend
 
     @staticmethod
@@ -378,6 +373,5 @@ class FileSearchManager:
         return "有效搜索根" if request.effective_only else "搜索模组目录"
 
     def _prepare_stage_message(self, request: SearchRequest) -> str:
-        if request.effective_only:
-            return "正在准备有效搜索根与缓存签名"
+        if request.effective_only: return "正在准备有效搜索根与缓存签名"
         return "正在准备搜索模组目录"

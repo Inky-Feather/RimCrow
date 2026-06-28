@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Iterable
 from xml.etree import ElementTree
 
 from backend.settings import CACHE_DIR
+from backend.load_order.package_tokens import parse_package_token, is_steam_package_token
 from backend.utils.tools import normalize_package_id
 
 from .models import CandidateFile, SearchRequest, SearchRoot, matches_all_file_types
@@ -74,11 +75,9 @@ def _is_mod_root(path: Path) -> bool:
 
 def _normalize_store(mod: dict[str, Any]) -> str:
     store = str(mod.get("store") or "").strip().lower()
-    if store:
-        return store
+    if store: return store
     source = str(mod.get("source") or "").strip().lower()
-    if source in {"core", "dlc"}:
-        return source
+    if source in {"core", "dlc"}: return source
     return "unknown"
 
 
@@ -93,17 +92,16 @@ def _normalize_mod_name(mod: dict[str, Any]) -> str:
 
 
 def _active_ids_for_context(context: ProfileContext | None, load_order_mgr) -> set[str]:
-    if not context or not load_order_mgr:
-        return set()
+    if not context or not load_order_mgr: return set()
     try:
         result = load_order_mgr.read_active_mods()
     except Exception:
         return set()
     active_ids = set()
     for package_id in result.get("active_mods", []) or []:
-        normalized = normalize_package_id(package_id)
-        if normalized:
-            active_ids.add(normalized)
+        token_info = parse_package_token(package_id)
+        if token_info.canonical_package_id:
+            active_ids.add(token_info.canonical_package_id)
     return active_ids
 
 
@@ -111,8 +109,8 @@ def _build_search_planning_context(context: ProfileContext | None, load_order_mg
     active_ids = _active_ids_for_context(context, load_order_mgr)
     active_tokens = set(active_ids)
     for package_id in list(active_ids):
-        if package_id.endswith("_steam"):
-            active_tokens.add(package_id.removesuffix("_steam"))
+        if is_steam_package_token(package_id):
+            active_tokens.add(parse_package_token(package_id).canonical_package_id)
         else:
             active_tokens.add(f"{package_id}_steam")
 
@@ -135,8 +133,7 @@ def _build_search_planning_context(context: ProfileContext | None, load_order_mg
 
 
 def _is_profile_self_mod(path: str, self_root: str) -> bool:
-    if not path or not self_root:
-        return False
+    if not path or not self_root: return False
     normalized = os.path.normpath(path).lower()
     return normalized.startswith(os.path.normpath(self_root).lower())
 
@@ -152,12 +149,11 @@ def resolve_scope_mods(
     from backend.database.dao import ModDAO
 
     mods = list(ModDAO.get_profile_mods(context) if context else [])
-    if not mods:
-        return []
+    if not mods: return []
 
     resolved_active_ids = active_ids if active_ids is not None else _active_ids_for_context(context, load_order_mgr)
 
-    if request.scope == "current-effective":
+    if request.scope == "current-effective": 
         return mods
 
     if request.scope == "current-active":
@@ -183,38 +179,31 @@ def resolve_scope_mods(
 
 def _normalize_version_key(raw_value: str | None) -> tuple[int, int] | None:
     value = str(raw_value or "").strip()
-    if not value:
-        return None
+    if not value: return None
     match = VERSION_PATTERN.match(value)
-    if not match:
-        return None
+    if not match: return None
     return int(match.group(1)), int(match.group(2))
 
 
 def _current_game_version_key(context: ProfileContext | None) -> tuple[int, int] | None:
     raw_version = str(getattr(context, "game_version", "") or "")
     match = re.search(r"(\d+)\.(\d+)", raw_version)
-    if not match:
-        return None
+    if not match: return None
     return int(match.group(1)), int(match.group(2))
 
 
 def _choose_best_version(available_versions: Iterable[tuple[int, int]], current_version: tuple[int, int] | None) -> tuple[int, int] | None:
     versions = sorted(set(available_versions))
-    if not versions:
-        return None
-    if current_version is None:
-        return versions[-1]
+    if not versions: return None
+    if current_version is None: return versions[-1]
     lower_or_equal = [version for version in versions if version <= current_version]
-    if lower_or_equal:
-        return lower_or_equal[-1]
+    if lower_or_equal: return lower_or_equal[-1]
     return versions[0]
 
 
 def _normalize_loadfolders_path(raw_path: str | None) -> str:
     path = str(raw_path or "").strip().replace("\\", "/")
-    if path in {"", ".", "./", "/"}:
-        return ""
+    if path in {"", ".", "./", "/"}: return ""
     while "//" in path:
         path = path.replace("//", "/")
     return path.lstrip("/").rstrip("/")
@@ -230,8 +219,7 @@ def _parse_condition_values(attr_value: str | None) -> list[str]:
 
 def _match_legacy_condition(attr_name: str, active_dlc_keys: set[str]) -> bool | None:
     name = str(attr_name or "").strip().lower()
-    if not name.startswith("if"):
-        return None
+    if not name.startswith("if"): return None
 
     expected_active = None
     token = ""
@@ -248,10 +236,8 @@ def _match_legacy_condition(attr_name: str, active_dlc_keys: set[str]) -> bool |
     if token.startswith("dlc"):
         token = token[3:]
     token = token.strip("-_ ").lower()
-    if not token or expected_active is None:
-        return None
-    if token not in KNOWN_DLC_KEYS and token not in {"core"}:
-        return None
+    if not token or expected_active is None: return None
+    if token not in KNOWN_DLC_KEYS and token not in {"core"}: return None
     return (token in active_dlc_keys) == expected_active
 
 
@@ -326,8 +312,7 @@ def _parse_loadfolders_versions(loadfolders_path: Path) -> dict[tuple[int, int],
 
 def _build_static_mod_root_cache_payload(mod: dict[str, Any]) -> dict[str, Any] | None:
     mod_path = Path(str(mod.get("path") or "")).resolve()
-    if not _is_mod_root(mod_path):
-        return None
+    if not _is_mod_root(mod_path): return None
 
     root_level_dirs: list[str] = []
     version_dir_map: dict[str, str] = {}
@@ -365,8 +350,7 @@ def _resolve_loadfolders_plan_from_cache(
     planning_context: _SearchPlanningContext,
 ) -> _LoadFoldersPlan | None:
     raw_versions = cache_payload.get("loadfolders_versions")
-    if not isinstance(raw_versions, dict) or not raw_versions:
-        return None
+    if not isinstance(raw_versions, dict) or not raw_versions: return None
 
     version_entries: dict[tuple[int, int], list[dict[str, Any]]] = {}
     for version_text, entries in raw_versions.items():
@@ -386,12 +370,10 @@ def _resolve_loadfolders_plan_from_cache(
         if normalized_entries:
             version_entries[version_key] = normalized_entries
 
-    if not version_entries:
-        return None
+    if not version_entries: return None
 
     selected_version = _choose_best_version(version_entries.keys(), _current_game_version_key(context))
-    if selected_version is None:
-        return None
+    if selected_version is None: return None
 
     included_paths: list[str] = []
     seen_included_paths: set[str] = set()
@@ -415,8 +397,7 @@ def _resolve_loadfolders_plan_from_cache(
 
 def _version_dir_names_from_cache(cache_payload: dict[str, Any]) -> dict[tuple[int, int], str]:
     raw_version_dirs = cache_payload.get("version_dirs")
-    if not isinstance(raw_version_dirs, dict):
-        return {}
+    if not isinstance(raw_version_dirs, dict): return {}
     result: dict[tuple[int, int], str] = {}
     for version_text, folder_name in raw_version_dirs.items():
         version_key = _normalize_version_key(version_text)
@@ -476,12 +457,9 @@ def _normalize_relative_key(relative_path: str | Path) -> str:
 
 def _should_skip_root_level_dir(dir_name: str) -> bool:
     lowered = str(dir_name or "").strip().lower()
-    if not lowered:
-        return True
-    if lowered in EXCLUDED_DIR_NAMES:
-        return True
-    if lowered.startswith(".") and lowered != ".git":
-        return True
+    if not lowered: return True
+    if lowered in EXCLUDED_DIR_NAMES: return True
+    if lowered.startswith(".") and lowered != ".git": return True
     return False
 
 
@@ -493,8 +471,7 @@ def _relative_top_level(relative_path: str) -> str:
 def _list_root_level_common_dirs(cache_payload: dict[str, Any], version_dir_names: set[str], cancel_event=None) -> list[str]:
     root_path = Path(str(cache_payload.get("root_path") or "")).resolve()
     raw_root_dirs = cache_payload.get("root_level_dirs")
-    if not isinstance(raw_root_dirs, list):
-        return []
+    if not isinstance(raw_root_dirs, list): return []
 
     common_dir_paths: list[str] = []
     for child_name_raw in raw_root_dirs:
@@ -522,11 +499,9 @@ def _resolve_directory_path(cache_payload: dict[str, Any], relative_path: str, e
         return _list_root_level_common_dirs(cache_payload, version_dir_names, cancel_event=cancel_event)
 
     absolute_path = (root_path / Path(relative_path)).resolve()
-    if not absolute_path.is_dir():
-        return []
+    if not absolute_path.is_dir(): return []
     top_level = _relative_top_level(relative_path)
-    if top_level and top_level in excluded_version_dirs:
-        return []
+    if top_level and top_level in excluded_version_dirs: return []
     return [str(absolute_path)]
 
 
@@ -740,8 +715,7 @@ def _build_direct_mod_roots(mods: list[dict[str, Any]], cancel_event=None) -> tu
 
 
 def _resolve_search_root_planning_workers(total_mods: int) -> int:
-    if total_mods <= 1:
-        return 1
+    if total_mods <= 1: return 1
     cpu_count = os.cpu_count() or 4
     suggested = max(2, min(MAX_SEARCH_ROOT_PLANNING_WORKERS, cpu_count))
     return max(1, min(total_mods, suggested))
@@ -759,8 +733,7 @@ def _plan_single_mod_roots(
     _check_cancelled(cancel_event)
     mod_name = _normalize_mod_name(mod)
     cache_payload = _build_static_mod_root_cache_payload(mod)
-    if cache_payload is None:
-        return index, mod_name, [], "skipped"
+    if cache_payload is None: return index, mod_name, [], "skipped"
 
     cache_key = build_mod_root_cache_key(mod)
     cached_payload = load_mod_root_cache(cache_key)
@@ -878,8 +851,7 @@ def build_search_roots(
                     timeout=0.1,
                     return_when=FIRST_COMPLETED,
                 )
-                if not done_futures:
-                    continue
+                if not done_futures: continue
                 for future in done_futures:
                     _check_cancelled(cancel_event)
                     index, mod_name, search_roots, cache_source = future.result()
@@ -910,8 +882,7 @@ def iter_root_candidate_files(search_root: SearchRoot, request: SearchRequest, c
     root_path = Path(search_root.root_path)
     if search_root.root_kind == "file":
         _check_cancelled(cancel_event)
-        if not root_path.is_file() or _should_skip_file(root_path, request):
-            return
+        if not root_path.is_file() or _should_skip_file(root_path, request): return
         yield CandidateFile(
             package_id=search_root.package_id,
             mod_name=search_root.mod_name,
@@ -921,8 +892,7 @@ def iter_root_candidate_files(search_root: SearchRoot, request: SearchRequest, c
         )
         return
 
-    if not root_path.exists():
-        return
+    if not root_path.exists(): return
 
     for current_root, dir_names, file_names in os.walk(root_path):
         _check_cancelled(cancel_event)
@@ -978,8 +948,7 @@ def build_candidate_files(
 
 
 def _deserialize_mod_root_cache(payload: dict[str, Any]) -> dict[str, Any] | None:
-    if int(payload.get("version") or 0) != MOD_ROOT_CACHE_SCHEMA_VERSION:
-        return None
+    if int(payload.get("version") or 0) != MOD_ROOT_CACHE_SCHEMA_VERSION: return None
     root_path = Path(str(payload.get("root_path") or "")).resolve()
     root_level_dirs = payload.get("root_level_dirs")
     version_dirs = payload.get("version_dirs")
@@ -989,8 +958,7 @@ def _deserialize_mod_root_cache(payload: dict[str, Any]) -> dict[str, Any] | Non
         or not isinstance(root_level_dirs, list)
         or not isinstance(version_dirs, dict)
         or not isinstance(loadfolders_versions, dict)
-    ):
-        return None
+    ): return None
     return {
         "version": MOD_ROOT_CACHE_SCHEMA_VERSION,
         "root_path": str(root_path),
@@ -1002,7 +970,7 @@ def _deserialize_mod_root_cache(payload: dict[str, Any]) -> dict[str, Any] | Non
 
 def load_mod_root_cache(cache_key: str) -> dict[str, Any] | None:
     cache_path = SEARCH_MOD_ROOT_CACHE_DIR / f"{cache_key}.json"
-    if not cache_path.is_file():
+    if not cache_path.is_file(): 
         return None
     try:
         with cache_path.open("r", encoding="utf-8") as handle:
@@ -1046,8 +1014,7 @@ def _schedule_mod_root_cache_prune(preferred_path: Path | None = None, *, force:
     global _last_mod_root_cache_prune_monotonic
     now = time.monotonic()
     with _MOD_ROOT_CACHE_LOCK:
-        if not force and (now - _last_mod_root_cache_prune_monotonic) < MOD_ROOT_CACHE_PRUNE_INTERVAL_SECONDS:
-            return
+        if not force and (now - _last_mod_root_cache_prune_monotonic) < MOD_ROOT_CACHE_PRUNE_INTERVAL_SECONDS: return
         _last_mod_root_cache_prune_monotonic = now
         _prune_mod_root_cache(preferred_path)
 
@@ -1057,8 +1024,7 @@ def _prune_mod_root_cache(preferred_path: Path | None = None) -> None:
         entries = [item for item in SEARCH_MOD_ROOT_CACHE_DIR.glob("*.json") if item.is_file()]
     except OSError:
         return
-    if len(entries) <= MAX_SEARCH_MOD_ROOT_CACHE_FILES:
-        return
+    if len(entries) <= MAX_SEARCH_MOD_ROOT_CACHE_FILES: return
 
     entries.sort(
         key=lambda item: (

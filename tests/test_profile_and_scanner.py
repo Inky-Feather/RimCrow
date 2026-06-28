@@ -353,7 +353,7 @@ class TestProfileConflictAnalysis(unittest.TestCase):
         )
         self.assertEqual(analysis["deploy_paths"], [str(self_path)])
 
-    def test_hard_conflict_still_deploys_all_enabled_copies(self):
+    def test_hard_conflict_defaults_to_no_deploy(self):
         temp_root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
 
@@ -398,7 +398,105 @@ class TestProfileConflictAnalysis(unittest.TestCase):
 
         self.assertEqual(len(analysis["hard_conflicts"]), 1)
         self.assertEqual(analysis["coexistences"], [])
-        self.assertEqual(analysis["deploy_paths"], [str(first_path), str(second_path)])
+        self.assertEqual(analysis["deploy_paths"], [])
+
+    def test_prefer_steam_launch_includes_workshop_in_detection_but_not_deploy(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_dir = temp_root / "install"
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_dir),
+            user_data_path=str(temp_root / "userdata"),
+            prefer_steam_launch=True,
+            use_workshop_mods=False,
+            use_self_mods=False,
+        )
+
+        local_root = install_dir / "Mods"
+        workshop_root = temp_root / "workshop"
+        local_path = local_root / "Author.Mod"
+        workshop_path = workshop_root / "123456"
+
+        assets = [
+            {
+                "package_id": "Author.Mod",
+                "path": str(local_path),
+                "name": "Local Copy",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(workshop_path),
+                "name": "Workshop Copy",
+                "disabled": False,
+            },
+        ]
+
+        config = SimpleNamespace(
+            workshop_mods_path=str(workshop_root),
+            self_mods_path=str(temp_root / "selfmods"),
+            enable_tool_mods=False,
+        )
+        with patch("backend.database.dao.settings.config", config):
+            analysis = ModDAO.get_profile_conflict_analysis(context, assets=assets)
+
+        self.assertEqual(analysis["hard_conflicts"], [])
+        self.assertEqual(len(analysis["coexistences"]), 1)
+        self.assertEqual(analysis["deploy_paths"], [])
+
+    def test_get_profile_mods_attaches_workshop_coexist_variant(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_dir = temp_root / "install"
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_dir),
+            user_data_path=str(temp_root / "userdata"),
+            prefer_steam_launch=False,
+            use_workshop_mods=True,
+            use_self_mods=False,
+        )
+
+        local_root = install_dir / "Mods"
+        workshop_root = temp_root / "workshop"
+        local_path = local_root / "Author.Mod"
+        workshop_path = workshop_root / "123456"
+
+        config = SimpleNamespace(
+            workshop_mods_path=str(workshop_root),
+            self_mods_path=str(temp_root / "selfmods"),
+            enable_tool_mods=False,
+        )
+        assets = [
+            {
+                "package_id": "Author.Mod",
+                "path": str(local_path),
+                "name": "Local Copy",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(workshop_path),
+                "name": "Workshop Copy",
+                "disabled": False,
+            },
+        ]
+
+        with patch("backend.database.dao.settings.config", config), \
+             patch("backend.database.dao._load_group_names_by_mod_id", return_value={}), \
+             patch("backend.database.dao.ModAsset.select") as select_mock:
+            select_mock.return_value.join.return_value.where.return_value.dicts.return_value = assets
+            mods = ModDAO.get_profile_mods(context)
+
+        self.assertEqual(len(mods), 1)
+        self.assertEqual(mods[0]["path"], str(local_path))
+        self.assertTrue(mods[0]["is_coexistence"])
+        self.assertEqual(mods[0]["coexist_workshop_variant"]["path"], str(workshop_path))
 
 
 class TestApiScanMods(unittest.TestCase):

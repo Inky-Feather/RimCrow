@@ -7,15 +7,23 @@
       <div class="p-4 bg-accent-primary/5 border-b border-text-main/10 space-y-3 relative z-10 shrink-0" data-tour="workspace-workshop-search">
         <div class="flex justify-between items-center">
           <h3 class="text-sm font-black tracking-widest text-accent-primary flex items-center gap-2 uppercase">
-            <Globe class="size-4" /> 缓存工坊浏览
+            <Globe class="size-4" /> {{ workspaceStore.workshopSearch.sourceMode === 'online' ? '在线工坊搜索' : '缓存工坊浏览' }}
           </h3>
-          <span class="text-[10px] text-text-dim font-mono">共 {{ workspaceStore.workshopSearch.total }} 项</span>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-[0.7rem] font-bold text-text-dim cursor-pointer select-none">
+              <input :checked="workspaceStore.workshopSearch.sourceMode === 'online'"
+                type="checkbox" class="accent-cyan-400" @change="toggleOnlineSearch"
+              />
+              在线搜索
+            </label>
+            <span class="text-[0.7rem] text-text-dim font-mono">共 {{ workspaceStore.workshopSearch.total }} 项</span>
+          </div>
         </div>
         
         <div class="relative">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-dim" />
           <!-- 添加了 clearable 交互 -->
-          <input v-model="localQuery" @input="debouncedSearch" placeholder="搜索模组名称、包名或工坊ID..." 
+          <input v-model="localQuery" @input="debouncedSearch" :placeholder="workspaceStore.workshopSearch.sourceMode === 'online' ? '搜索 Steam 工坊标题或工坊ID...' : '搜索模组名称、包名或工坊ID...'" 
             class="w-full bg-black/60 border border-text-main/10 rounded-xl pl-9 pr-8 py-2 text-sm text-text-main focus:border-accent-primary focus:bg-black/80 outline-none transition-all shadow-inner" />
           
           <button v-if="localQuery" @click="clearSearch" class="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-main">
@@ -34,33 +42,42 @@
         </div>
 
         <!-- 替换为 RecycleScroller -->
-        <RecycleScroller
-          v-if="workspaceStore.workshopSearch.results.length > 0"
-          ref="scrollerRef"
-          class="h-full custom-scrollbar"
-          :items="workspaceStore.workshopSearch.results"
-          :item-size="64" 
-          key-field="workshop_id"
+        <RecycleScroller v-if="workspaceStore.workshopSearch.results.length > 0"
+          ref="scrollerRef" class="h-full custom-scrollbar" :items="workspaceStore.workshopSearch.results" :item-size="72" key-field="workshop_id"
           @scroll="handleScroll"
         >
           <template v-slot="{ item }">
-            <div @click="selectMod(item)" 
-              class="h-16 px-4 py-2 border-b border-text-main/5 cursor-pointer transition-all hover:bg-accent-primary/10 group flex flex-col justify-center"
+            <div @click="selectMod(item)" v-tooltip="buildResultTooltip(item)"
+              class="h-18 px-3 py-2 border-b border-text-main/5 cursor-pointer transition-all hover:bg-accent-primary/10 group flex items-center gap-3"
               :class="workspaceStore.workshopSearch.selectedId === item.workshop_id ? 'bg-accent-primary/20 border-r-4 border-r-accent-primary shadow-[inset_2px_0_10px_rgba(59,130,246,0.1)]' : ''">
-              
-              <div class="text-sm font-bold truncate transition-colors" 
-                :class="workspaceStore.workshopSearch.selectedId === item.workshop_id ? 'text-text-main' : 'text-text-main/80 group-hover:text-accent-primary'">
-                {{ item.name || '未知模组' }}
-              </div>
-              <div class="flex justify-between items-center mt-1">
-                <div class="text-[10px] text-text-dim truncate font-mono opacity-80 max-w-[70%]">
-                  {{ item.package_id || 'N/A' }}
-                </div>
-                <div class="text-[10px] font-bold px-1 rounded bg-black/40 text-text-dim border border-text-main/10">
-                  {{ item.workshop_id }}
+              <div v-if="workspaceStore.workshopSearch.sourceMode === 'online'"
+                class="size-12 shrink-0 overflow-hidden rounded-lg border border-text-main/10 bg-black/50"
+              >
+                <img v-if="item.preview_url" class="h-full w-full object-cover" :src="appStore.getRemoteUrl(item.preview_url)" />
+                <div v-else class="flex h-full w-full items-center justify-center text-text-dim/40">
+                  <Image class="size-4" />
                 </div>
               </div>
 
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-bold truncate transition-colors" 
+                  :class="workspaceStore.workshopSearch.selectedId === item.workshop_id ? 'text-text-main' : 'text-text-main/80 group-hover:text-accent-primary'">
+                  {{ item.title || item.name || '未知模组' }}
+                </div>
+                <div class="flex justify-between items-center mt-1 gap-2">
+                  <div class="text-[0.7rem] text-text-dim truncate font-mono opacity-80 max-w-[70%]" :title="item.package_id || item.short_description || item.author_steam_id || ''">
+                    {{ item.package_id || item.short_description || item.author_steam_id || 'N/A' }}
+                  </div>
+                  <div class="flex items-center gap-1 text-[0.7rem] shrink-0">
+                    <span v-if="item.subscriptions" class="font-bold px-1 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
+                      {{ formatCount(item.subscriptions) }}
+                    </span>
+                    <div class="font-bold px-1 rounded bg-black/40 text-text-dim border border-text-main/10">
+                      {{ item.workshop_id }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </template>
 
@@ -91,7 +108,7 @@
       
       <template v-if="selectedMod && !workspaceStore.workshopSearch.isDetailLoading">
         <!-- 顶部导航面包屑/后退栏 -->
-        <div v-if="workspaceStore.workshopSearch.historyStack.length > 0" class="absolute top-4 left-4 z-20 flex items-center">
+        <div v-if="workspaceStore.workshopSearch.historyStack.length > 0" class="absolute top-0 left-0 z-20 flex items-center opacity-60">
           <button @click="workspaceStore.goBackWorkshopDetail" 
                   class="flex items-center gap-1 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-lg text-xs font-bold text-text-main hover:text-accent-primary border border-text-main/20 hover:border-accent-primary/50 transition-all shadow-lg">
             <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -134,25 +151,39 @@
                 <div class="flex flex-wrap gap-2 items-center">
                   <span class="px-2 py-1 rounded bg-black/60 text-text-main text-[0.65rem] font-bold border border-text-main/20 flex items-center gap-1.5 backdrop-blur-sm">
                     <UserRound class="size-3 text-accent-success" />
-                    {{ selectedMod?.author || '未知作者' }}
+                    {{ selectedMod?.author || selectedMod?.author_steam_id || '未知作者' }}
                   </span>
                   <span v-if="selectedMod?.time_updated" class="px-2 py-1 rounded bg-black/60 text-text-main text-[0.65rem] font-bold border border-text-main/20 flex items-center gap-1.5 backdrop-blur-sm">
                     <Calendar class="size-3 text-text-dim"/>
                     {{ formatDate(selectedMod?.time_updated) }}
+                  </span>
+                  <span v-if="selectedMod?.subscriptions" class="px-2 py-1 rounded bg-black/60 text-text-main text-[0.65rem] font-bold border border-text-main/20 flex items-center gap-1.5 backdrop-blur-sm">
+                    <CloudDownload class="size-3 text-accent-primary" />
+                    {{ formatCount(selectedMod?.subscriptions) }} 订阅
                   </span>
                 </div>
                 <!-- 第三行：适用游戏版本 (List) -->
                 <div v-if="selectedMod?.game_versions?.length" class="flex flex-wrap gap-1.5 items-center">
                   <div class="flex items-center gap-1 text-text-dim mr-1">
                     <Layers class="size-3" />
-                    <span class="text-[10px] font-bold uppercase tracking-tighter">适用版本:</span>
+                    <span class="text-[0.7rem] font-bold uppercase tracking-tighter">适用版本:</span>
                   </div>
                   <span v-for="version in selectedMod.game_versions" :key="version"
                     class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary text-[0.55rem] font-black border border-accent-primary/20">
                     {{ version }}
                   </span>
                 </div>
-                <div v-else class="text-[10px] text-text-dim/50 italic font-mono flex items-center gap-1">
+                <div v-else-if="selectedMod?.tags?.length" class="flex flex-wrap gap-1.5 items-center">
+                  <div class="flex items-center gap-1 text-text-dim mr-1">
+                    <Layers class="size-3" />
+                    <span class="text-[0.7rem] font-bold uppercase tracking-tighter">在线标签:</span>
+                  </div>
+                  <span v-for="tag in selectedMod.tags.slice(0, 8)" :key="tag"
+                    class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary text-[0.55rem] font-black border border-accent-primary/20">
+                    {{ tag }}
+                  </span>
+                </div>
+                <div v-else class="text-[0.7rem] text-text-dim/50 italic font-mono flex items-center gap-1">
                   <Layers class="size-3" /> 未标注适用版本
                 </div>
               </div>
@@ -207,10 +238,10 @@
                 >
                 {{ name }} <span class="opacity-50 text-[0.6rem]">({{ wid }})</span>
                 <div class="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex gap-0.5 justify-center items-center text-[0.6rem] transition-all">
-                  <button @click="openWebUrl(wid)" v-tooltip="'打开创意工坊页面'" class="p-1.5 cursor-pointer rounded-full bg-accent-special/80 hover:bg-accent-special scale-90 hover:scale-105 text-black transition-all"><Link class="size-3" /></button>
-                  <button v-if="isSubscribed([wid])" @click="handleUnsubscribe([wid])" v-tooltip="'取消订阅'" class="p-1.5 cursor-pointer rounded-full bg-accent-danger/80 hover:bg-accent-danger scale-90 hover:scale-105 text-black transition-all"><FlagOff class="size-3" /></button>
-                  <button v-else @click="handleSubscribe([wid])" v-tooltip="'Steam 订阅'" class="p-1.5 cursor-pointer rounded-full bg-accent-primary/80 hover:bg-accent-primary scale-90 text-black hover:scale-105 transition-all"><Flag class="size-3" /></button>
-                  <button @click="handleDownloadSingle([wid])" v-tooltip="'下载到管理器'" class="p-1.5 cursor-pointer rounded-full bg-accent-success/80 hover:bg-accent-success scale-90 text-black hover:scale-105 transition-all"><Download class="size-3" /></button>
+                  <button @click.stop="openWebUrl(wid)" v-tooltip="'打开创意工坊页面'" class="p-1.5 cursor-pointer rounded-full bg-accent-special/80 hover:bg-accent-special scale-90 hover:scale-105 text-black transition-all"><Link class="size-3" /></button>
+                  <button v-if="isSubscribed([wid])" @click.stop="handleUnsubscribe([wid])" v-tooltip="'取消订阅'" class="p-1.5 cursor-pointer rounded-full bg-accent-danger/80 hover:bg-accent-danger scale-90 hover:scale-105 text-black transition-all"><FlagOff class="size-3" /></button>
+                  <button v-else @click.stop="handleSubscribe([wid])" v-tooltip="'Steam 订阅'" class="p-1.5 cursor-pointer rounded-full bg-accent-primary/80 hover:bg-accent-primary scale-90 text-black hover:scale-105 transition-all"><Flag class="size-3" /></button>
+                  <button @click.stop="handleDownloadSingle([wid])" v-tooltip="'下载到管理器'" class="p-1.5 cursor-pointer rounded-full bg-accent-success/80 hover:bg-accent-success scale-90 text-black hover:scale-105 transition-all"><Download class="size-3" /></button>
                 </div>
               </span>
             </div>
@@ -223,16 +254,38 @@
             </h4>
             <!-- 使用 flex nowrap 和 overflow-x-auto 实现横向滚动 -->
             <div class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
-              <img v-for="(img, idx) in selectedMod.screenshots" :key="idx" 
-                  :src="appStore.getRemoteUrl(img)" 
-                  class="h-32 rounded-lg border border-text-main/10 object-cover snap-start hover:scale-[1.02] transition-transform cursor-zoom-in" />
+              <div v-for="(img, idx) in selectedMod.screenshots" :key="idx"
+                class="relative h-32 w-56 shrink-0 snap-start overflow-hidden rounded-lg border border-text-main/10 bg-black/40"
+              >
+                <div v-if="!loadedScreenshotMap[img]" class="absolute inset-0 flex items-center justify-center bg-black/50" >
+                  <svg viewBox="0 0 160 96" class="h-12 w-20 text-text-dim/45" fill="none" aria-hidden="true">
+                    <rect x="10" y="10" width="140" height="76" rx="10" stroke="currentColor" stroke-width="4" stroke-dasharray="6 6" />
+                    <circle cx="48" cy="38" r="10" fill="currentColor" class="opacity-60" />
+                    <path d="M24 72L58 48L80 66L106 42L136 72" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" class="opacity-70" />
+                  </svg>
+                </div>
+                <img class="h-full w-full object-cover transition-transform hover:scale-[1.02] cursor-zoom-in"
+                  :src="appStore.getRemoteUrl(img)" @load="markScreenshotLoaded(img)" @error="markScreenshotLoaded(img)" />
+              </div>
             </div>
           </div>
 
           <div class="prose prose-invert prose-sm md:prose-base max-w-none prose-img:rounded-xl prose-a:text-accent-primary select-text">
             <div v-if="parsedDescription" v-html="parsedDescription"></div>
-            <!-- <div v-if="workspaceStore.workshopSearch.detailData?.description">{{ workspaceStore.workshopSearch.detailData?.description }}</div> -->
             <div v-else class="text-text-dim italic">该模组没有提供详细描述。</div>
+          </div>
+
+          <div v-if="selectedMod?.children?.length > 0" class="space-y-2 border-t border-text-main/10 pt-4">
+            <h4 class="text-xs font-bold text-accent-tip uppercase tracking-widest flex items-center gap-1">
+              <Link class="size-3" /> 工坊关联项
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="child in selectedMod.children" :key="`${child.workshop_id}-${child.sort_order}`"
+                class="px-2 py-1 rounded bg-black/40 text-text-main/80 text-xs border border-text-main/10 hover:border-accent-primary/40 hover:text-accent-primary transition-colors"
+                @click="handleNavigateInside(child.workshop_id)" >
+                {{ child.workshop_id }}
+              </button>
+            </div>
           </div>
 
           <!-- 反向依赖推荐 (有谁依赖了我) -->
@@ -253,9 +306,7 @@
               <User class="size-3" /> 作者的其他作品
             </h4>
             <div class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
-              <MiniModCard v-for="mod in selectedMod.same_author_mods" :key="mod.workshop_id" 
-                :mod="mod" class="snap-start" 
-                @navigate="handleNavigateInside" />
+              <MiniModCard v-for="mod in selectedMod.same_author_mods" :key="mod.workshop_id" :mod="mod" class="snap-start" @navigate="handleNavigateInside" />
             </div>
           </div>
 
@@ -297,11 +348,12 @@ const localQuery = ref(workspaceStore.workshopSearch.query)
 let searchTimeout = null
 const scrollerRef = ref(null)
 const isLocalFetching = ref(false)  // 局部硬锁，绝对同步，防穿透
+const loadedScreenshotMap = ref({})
 
-// 初始加载：如果没数据，默认加载第一页全部
+// 仅在用户真正打开工坊页且当前没有任何结果时，才触发默认搜索。
 onMounted(() => {
   if (workspaceStore.workshopSearch.results.length === 0) {
-    workspaceStore.doWorkshopSearch('')
+    void workspaceStore.doWorkshopSearch('')
   }
 })
 
@@ -316,13 +368,31 @@ const selectedId = computed(() => {
   return workspaceStore.workshopSearch.selectedId
 })
 const dependencies_ids = computed(() => {
-  return Object.keys(workspaceStore.workshopSearch.detailData?.dependencies_mods)
+  return Object.keys(workspaceStore.workshopSearch.detailData?.dependencies_mods || {})
 })
 // 解析富文本描述
 const parsedDescription = computed(() => {
   if (!workspaceStore.workshopSearch.detailData?.description) return ''
-  return parseUnityRichText(workspaceStore.workshopSearch.detailData?.description, false)
+  return parseUnityRichText(
+    workspaceStore.workshopSearch.detailData?.description,
+    false,
+    (url) => appStore.getRemoteUrl(url),
+  )
 })
+
+const formatCount = (value) => {
+  const num = Number(value || 0)
+  if (!num) return '0'
+  if (num >= 10000) return `${(num / 10000).toFixed(1)}w`
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
+  return String(num)
+}
+
+const buildResultTooltip = (item = {}) => {
+  const summary = String(item.short_description || '').trim()
+  if (!summary) return ''
+  return summary
+}
 
 const isSubscribed = (workshop_ids) => {
   if (!workshop_ids.length) return false
@@ -350,8 +420,26 @@ const clearSearch = () => {
   debouncedSearch()
 }
 
+// 以图片地址为键记录加载完成状态，避免切换详情时旧状态串到新截图。
+const markScreenshotLoaded = (url) => {
+  if (!url) return
+  loadedScreenshotMap.value = {
+    ...loadedScreenshotMap.value,
+    [url]: true
+  }
+}
+
+const toggleOnlineSearch = async (event) => {
+  const enabled = !!event?.target?.checked
+  const switched = await workspaceStore.setWorkshopSearchMode(enabled ? 'online' : 'offline')
+  if (!switched && event?.target) {
+    event.target.checked = workspaceStore.workshopSearch.sourceMode === 'online'
+  }
+}
+
 // 选中查看详情, 点击左侧主列表 (会清空历史栈)
 const selectMod = (item) => {
+  loadedScreenshotMap.value = {}
   workspaceStore.fetchWorkshopDetails(item.workshop_id, false)
 }
 // 点击详情页内的推荐卡片 (会压入历史栈)
@@ -359,6 +447,7 @@ const handleNavigateInside = (workshop_id) => {
   // 滚动条回到顶部 (可选，提升体验)
   const scrollContainer = document.querySelector('.custom-scrollbar.bg-text-main\\/2')
   if (scrollContainer) scrollContainer.scrollTop = 0
+  loadedScreenshotMap.value = {}
   workspaceStore.fetchWorkshopDetails(workshop_id, true)
 }
 
@@ -413,6 +502,9 @@ const handleUnsubscribe = (workshop_ids) => {
 // 下载模组
 const handleDownload = (workshop_ids) => {
   appStore.downloadWorkshopItems(workshop_ids)
+}
+const handleDownloadSingle = (workshop_ids) => {
+  handleDownload(workshop_ids)
 }
 
 </script>
