@@ -109,11 +109,19 @@
         </Motion>
       </div>
     </div>
+    
+    <!-- 如果正在加载中，不渲染虚拟列表，防止 DOM 引擎崩溃 -->
+    <div v-if="appStore.isLoading" class="w-full h-full flex items-center justify-center bg-bg-deep/50 z-50">
+        <div class="animate-spin size-8 border-4 border-accent-primary border-t-transparent rounded-full"></div>
+    </div>
     <!-- (tabindex="0" @keydown.ctrl.a.prevent="selectAll") 非焦点容器需要 tabindex 才能响应键盘事件 -->
     <!-- 列表区（底部渐变隐藏） -->
-    <div class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
+    <div v-else class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent"
+        tabindex="0" @keydown.up.prevent="handleKeyNav(-1)"
+        @keydown.down.prevent="handleKeyNav(1)"
+        @click="focusContainer"
 	      @click.self="modStore.clearSelection()">
       
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
@@ -121,12 +129,11 @@
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
         <DependencyGraph v-if="allowSort || filterByLine" 
           :listIds="lineData" :isFilter="filterByLine.length>0"
-          :itemHeight="isSimpleView ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4" 
+          :itemHeight="itemHeight" 
           :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />
       </div>
-
       <!-- 列表主体部分 -->
       <div @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
         <!-- 列表为空时的提示 -->
@@ -140,7 +147,7 @@
         <virtual-list v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1" placeholderClass="ghost" wrapClass="" 
           :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{x:0, y:10}" handle=".drag-handle" :sortable="allowSort" :delay="50"
           :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
-          :size="isSimpleView ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4"
+          :size="itemHeight"
           @drop="updateChildren" @drag="startDrag"
           v-selectable-list="{ 
              data: displayList, 
@@ -153,12 +160,27 @@
               :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0" 
               :show-icon="appStore.settings.ui.show_list_icon" 
               :show-mod-icon="appStore.settings.ui.show_list_mod_icon" 
-              :show-modtype-icon="appStore.settings.ui.show_list_modtype_icon"
+              :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
               :show-index="appStore.settings.ui.show_list_index"
               :search-match="currentTargetId === dataKey">
             </ModItem>
           </template>
         </virtual-list>
+
+        <div class="absolute bottom-2 right-2 flex items-center justify-end gap-2">
+          <!-- 添加未启用的依赖项 -->
+          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length > 0" @click="addInactiveDependency" 
+            v-tooltip="`^^一键添加共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]?.length || 0} 个未启用的依赖项^^`"
+            class="px-1 py-1 bg-accent-secondary/80 text-text-main/50 rounded-md hover:bg-accent-secondary hover:text-text-main transition-all" >
+            <MessageSquarePlus />
+          </button>
+          <!-- 移除所有无效Mod -->
+          <button v-if="issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length > 0" @click="removeInvalidMod" 
+            v-tooltip="`^^一键移除共计 ${issuesSummary?.stats[ISSUE_TYPE.ERROR_MISSING_FILE]?.length || 0} 个无效Mod^^`"
+            class="px-1 py-1 bg-accent-danger/80 text-text-main/50 rounded-md hover:bg-accent-danger hover:text-text-main transition-all" >
+            <Trash2 />
+          </button>
+        </div>
 
       </div>
 
@@ -176,10 +198,11 @@ import { useAppStore } from '../stores/appStore';
 import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
 import { generateHtmlHelp } from '../modules/search/SearchHelp'
-import { ISSUE_TITLE_MAP } from '../utils/constants';
+import { ISSUE_TITLE_MAP, ISSUE_TYPE } from '../utils/constants';
 import ModItem from './utils/ModItem.vue';
 import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
+import { MessageSquarePlus, Trash2 } from 'lucide-vue-next';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -228,7 +251,7 @@ const engine = computed(() => searchStore.engine)
 const isFiltered = computed(() => filterQuery.value.length > 0 || isFilterByIssue.value || filterByLine.value?.length > 0)
 const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
 const allMods = computed(() => modStore.allModsMap ? Array.from(modStore.allModsMap.values()) : [])
-
+const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4 )
 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
@@ -530,8 +553,8 @@ const updateChildren = async (e) => {
   }
 
   // 2. 核心算法：计算“纯净插入点”
-  // 我们需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
-  // 这样我们就可以在剔除移动项后的 baseList 中找到正确的插入位置
+  // 需要知道在 e.newIndex 这个位置之前，有多少个“非移动项”
+  // 在剔除移动项后的 baseList 中找到正确的插入位置
   let validItemsAbove = 0
   for (let i = 0; i < e.newIndex; i++) {
     const idAtLoc = dirtyIds[i]
@@ -610,6 +633,108 @@ const updateChildren = async (e) => {
   isSortAsc.value=!isSortAsc.value
   await nextTick()
   isSortAsc.value=!isSortAsc.value
+}
+// 添加缺失的依赖项
+const addInactiveDependency = async () => {
+  const issuesMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]
+  // 筛选出所有缺失的依赖项
+  const inactiveDependencies = []
+  issuesMods.forEach(id => {
+    modStore.modIssues.get(id).forEach(issue => {
+      // 筛选出缺失的依赖项
+      if(issue.type === ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY) {
+        inactiveDependencies.push(issue.targetId)
+      }
+    })
+  })
+  const uniqueInactiveDependencies = [...new Set(inactiveDependencies)]
+  // console.log('添加缺失的依赖项:', uniqueInactiveDependencies)
+  const oldIds = [...props.modelValue]
+  modStore.removeIdsOnAllList(uniqueInactiveDependencies)
+  oldIds.push(...uniqueInactiveDependencies)
+  emit('update:modelValue', oldIds)
+  // 更新移动时间
+  modStore.takeModListByIds(uniqueInactiveDependencies).forEach(mod => {
+    mod.last_moved_time = Date.now()
+    mod.last_active_time = Date.now()
+  })
+  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+  await nextTick()
+  // 通过翻转排序两次，实现软重绘
+  isSortAsc.value=!isSortAsc.value
+  await nextTick()
+  isSortAsc.value=!isSortAsc.value
+}
+// 移除无效的mod
+const removeInvalidMod = async () => {
+  const invalidMods = issuesSummary.value.stats[ISSUE_TYPE.ERROR_MISSING_FILE]
+  // console.log('移除无效的Mod:', invalidMods)
+  modStore.removeIdsOnAllList(invalidMods)
+  // 强制重绘（连选拖拽第一项向下2倍选中范围内会导致排序异常，需要重绘）
+  await nextTick()
+  // 通过翻转排序两次，实现软重绘
+  isSortAsc.value=!isSortAsc.value
+  await nextTick()
+  isSortAsc.value=!isSortAsc.value
+}
+
+
+// 点击列表区域时自动获取焦点，确保按键生效
+const focusContainer = (e) => {
+  // e.currentTarget.focus()
+}
+/**
+ * 3. 键盘导航核心函数
+ * @param {number} direction -1 为向上，1 为向下
+ */
+const handleKeyNav = (direction) => {
+  const list = displayList.value // 当前经过筛选/排序后的 ID 数组
+  if (!list.length) return
+
+  // 确定当前选中的索引
+  const currentId = modStore.lastSelectedMod?.package_id
+  const currentIndex = list.indexOf(currentId)
+
+  // 计算下一个索引
+  let nextIndex = currentIndex + direction
+
+  // 边界保护：循环选择或停止
+  if (nextIndex < 0) nextIndex = 0
+  if (nextIndex >= list.length) nextIndex = list.length - 1
+
+  if (nextIndex === currentIndex) return
+
+  const nextId = list[nextIndex]
+
+  // 4. 更新 Store 选中状态
+  // 建议：键盘导航通常视为单选，所以传入 [nextId]
+  modStore.selectMods([nextId], nextId)
+
+  // 5. 同步滚动 (关键点)
+  const vList = vListRef.value
+  if (vList) {
+    const currentOffset = vList.getOffset()
+    const viewHeight = vList.$el.clientHeight // 视口高度
+    
+    // 计算目标项的像素区间
+    const itemTop = nextIndex * itemHeight.value
+    const itemBottom = itemTop + itemHeight.value
+
+    // 策略 A: 保持相对位置不变 (最丝滑)
+    // 逻辑：直接按位移滚动。如果向上移，offset 就减一个 itemHeight
+    vList.scrollToOffset(currentOffset + (direction * itemHeight.value))
+
+    // 策略 B: 只有当超出视口时才滚动 (标准做法)
+    /*
+    if (itemTop < currentOffset) {
+      // 超出顶部
+      vList.scrollToOffset(itemTop)
+    } else if (itemBottom > currentOffset + viewHeight) {
+      // 超出底部
+      vList.scrollToOffset(itemBottom - viewHeight)
+    }
+    */
+  }
 }
 
 </script>

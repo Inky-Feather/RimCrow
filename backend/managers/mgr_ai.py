@@ -343,5 +343,7 @@ class AIManager:
         return provider.chat(system_prompt, user_content)
 
     def fetch_available_models(self, config_dict: dict) -> List[str]:
+        '''获取可用模型列表'''
         provider = self.get_provider(override_config=config_dict)
         return provider.list_models()
+    

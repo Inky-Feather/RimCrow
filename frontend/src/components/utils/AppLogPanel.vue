@@ -65,7 +65,7 @@
               :class="getLevelBorderClass(log.level)">
             
             <!-- 时间戳 -->
-            <span class="shrink-0 text-text-dim/50 select-none w-[60px]">{{ formatTime(log.timestamp) }}</span>
+            <span class="shrink-0 text-text-dim/50 select-none w-15">{{ formatTime(log.timestamp) }}</span>
             
             <!-- 级别标记 -->
             <span class="shrink-0 w-12 font-bold" :class="getLevelColorClass(log.level)">

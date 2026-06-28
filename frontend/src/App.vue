@@ -1,6 +1,6 @@
 <template>
   <div class="relative h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
-    <RimHeader/>
+    <RimHeader class="z-100" />
     
     <!-- 主工作区 -->
     <div class="flex-1 flex flex-col min-h-0 relative">
@@ -114,11 +114,8 @@
           </div>
 
           <!-- 动态分割线 -->
-          <Resizer 
-            v-if="index < visibleColumns.length - 1" 
-            :active="resizeState.activeIndex === index" 
-            @mousedown="startResize(index, $event)" 
-          />
+          <Resizer v-if="index < visibleColumns.length - 1" :active="resizeState.activeIndex === index" 
+            @mousedown="startResize(index, $event)" />
 
         </template>
         
@@ -168,7 +165,7 @@
             <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-white/5">
               <h2 class="text-white/80 font-bold">Mod序列对比</h2>
               <div class="flex items-center gap-2">
-                <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">加载文件序列</button>
+                <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">应用文件序列</button>
                 <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
               </div>
             </div>
@@ -192,9 +189,7 @@
     </Teleport>
 
     <!-- 日志 -->
-    <div v-show="appStore.uiState.showLogDrawer" @click.self="appStore.uiState.showLogDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999">
-      <LogViewer />
-    </div>
+    <LogViewer />
 
     <!-- 测试 -->
     <div v-if="appStore.settings.debug_mode">
@@ -203,15 +198,15 @@
     </div>
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver />
+
+    <!-- 环境管理抽屉 -->
+    <ProfileDrawer /> 
     
     <!-- 设置弹窗 -->
     <SettingsModal />
 
     <!-- 规则面板 -->
-    <RulePanel v-if="appStore.uiState.showRuleDrawer" @close="appStore.uiState.showRuleDrawer = false" />
-
-    <!-- 状态条 -->
-    <StatusBar class="relative z-20 flex-none" />
+    <RulePanel />
 
     <!-- 确认弹窗 -->
     <Confirm />
@@ -222,6 +217,8 @@
     <!-- 悬浮面板 -->
     <HoverPanel />
 
+    <!-- 状态条 -->
+    <StatusBar class="relative z-20 flex-none" />
   </div>
 </template>
 
@@ -249,8 +246,11 @@ import DebugPanel from './components/DebugPanel.vue'
 import RulePanel from './components/RulePanel.vue'
 import ModRuleEditor from './components/ModRuleEditor.vue'
 import Confirm from './components/common/Confirm.vue'
-import Test from './components/temp/test.vue'
 import SegmentedTabs from './components/utils/SegmentedTabs.vue'
+import ProfileDrawer from './components/ProfileDrawer.vue'
+import Test from './components/temp/test.vue'
+
+
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -440,8 +440,7 @@ const Resizer = (props, { emit }) => {
     onMousedown: (e) => emit('mousedown', e)
   }, [
     // 视觉线：平时是细线，Active/Hover 时变色
-    h('div', {
-      class: ['w-px rounded-full transition-all duration-200 ease-out pointer-events-none',
+    h('div', { class: ['w-px rounded-full transition-all duration-200 ease-out pointer-events-none',
         // 高度变化：平时短一点显得优雅，交互时变全高
         props.active ? 'h-9/10' : 'h-2/5 group-hover:h-8/10',
         // 颜色与发光变化

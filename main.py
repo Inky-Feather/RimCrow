@@ -25,7 +25,7 @@ def main():
             mod_id = int(sys.argv[3])
             run_steam_worker(action, mod_id)
         except Exception as e:
-            print(f"Worker Error: {e}")
+            logger.error(f"Worker Error: {e}")
         
         # 干完活直接退出，不要启动 GUI
         sys.exit(0)
@@ -90,7 +90,7 @@ def main():
         if path_internal.exists():
             return str(path_internal)
         # 4. 兜底回退：本地开发服务器
-        print(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
+        logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
         return "http://localhost:5173"
 
         
@@ -140,9 +140,10 @@ def main():
         background_color='#0f172a', # 与前端背景色一致，防止白屏闪烁
         frameless=False, # 可以选择开启无边框模式来实现完全自定义标题栏
     )
-    print(get_entrypoint())
+    logger.info(f"Entrypoint: {get_entrypoint()}")
     if window: 
         window.events.resized += on_resized            # 窗口尺寸变化时触发
+        window.events.closed += api.cleanup
         window.events.closed += on_main_window_closed  # 窗口关闭时退出应用
     # 注册窗口到事件总线
     EventBus.set_window(window) # type: ignore

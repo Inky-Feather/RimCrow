@@ -1,14 +1,18 @@
 import datetime
+from functools import reduce
+import operator
 import os
 import re
 from typing import Any, Dict, List
 import uuid
 from peewee import chunked, fn, JOIN
-from backend.database.models import db, Mod, UserModData, GroupData, GroupMod
+from backend.database.models import GameProfile, db, ModAsset, UserModData, GroupData, GroupMod
+from backend.settings import settings
+from backend.utils.logger import logger
 
 
 # 定义不需要更新的字段名 (黑名单)
-exclude_names = {'package_id', 'file_create_time'}
+exclude_names = {'path_hash'}
 
 class ModDAO:
     """
@@ -17,16 +21,131 @@ class ModDAO:
     """
 
     @staticmethod
+    def get_profile_mods(profile_id: str = ''):
+        """
+        根据当前环境获取模组列表。
+        实现了 Context Filtering (环境过滤) 和 Shadowing Strategy (遮蔽策略)。
+        :param profile_id: 环境ID，为空则读取全局配置的当前环境
+        :return: List[Dict] 处理后的模组列表
+        """
+        # 1. 解析环境上下文 (Context Resolution)
+        if not profile_id:
+            profile_id = settings.config.current_profile_id
+
+        # 获取环境配置
+        # 兜底逻辑：如果 ID 是 default 或者 库里没查到，就用 settings 的全局配置
+        profile = GameProfile.get_or_none(GameProfile.id == profile_id)
+        
+        if profile:
+            local_root = profile.game_install_path
+            use_workshop_mods = profile.use_workshop_mods
+        else:
+            # Default 环境兜底
+            local_root = settings.config.game_install_path
+            use_workshop_mods = settings.config.use_workshop_mods
+            
+        workshop_root = settings.config.workshop_mods_path
+
+        # 路径标准化 (用于 Python 端比对，统一转小写)
+        if local_root: local_root = os.path.normpath(local_root).lower()
+        if workshop_root: workshop_root = os.path.normpath(workshop_root).lower()
+
+        # 2. 数据库查询 (SQL Filtering)
+        # 目的：只拉取属于当前 Local 目录的，或者属于公共 Workshop 的模组。
+        # 避免把其他 Profile 的 Local Mod 拉进来。
+        
+        # 构造 OR 查询条件
+        conditions = []
+        
+        # 条件 A: 路径包含 Local Root (使用 contains 或 startswith 模拟)
+        # 注意：SQLite 的 LIKE 不区分大小写(默认情况)，但为了保险最好在 Python 层再严谨校验一次
+        if local_root:
+            conditions.append(ModAsset.path.contains(local_root)) # 宽泛匹配，防止盘符差异
+        
+        # 条件 B: 路径包含 Workshop Root (仅当启用工坊时)
+        if use_workshop_mods and workshop_root:
+            conditions.append(ModAsset.path.contains(workshop_root))
+            
+        if not conditions:
+            return [] # 没有任何有效路径配置
+
+        # 使用 reduce 和 operator.or_ 替代 fn.OR
+        # 这会生成标准的 (condition1 OR condition2 OR ...) 结构
+        combined_cond = reduce(operator.or_, conditions)
+        # 执行查询：(Path A OR Path B) AND (Joined UserData)
+        query = (ModAsset.select(ModAsset, UserModData)
+                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                 .where(combined_cond) # 组合 OR 条件
+                 .dicts())
+
+        # 3. 内存处理 (Python Logic)
+        # 实现 "Local Trumps Workshop" (本地优先于工坊)
+        
+        merged_map = {} # { package_id: mod_data }
+
+        for mod in query:
+            # 路径清洗
+            if not mod['path']: continue
+            mod_path = os.path.normpath(mod['path']).lower()
+            pkg_id = mod['package_id'] # 注意：数据库里已经是小写了
+            
+            # 判定来源类型
+            is_local_mod = False
+            if local_root and local_root in mod_path:
+                is_local_mod = True
+                mod['is_local'] = True # 标记供前端展示文件夹图标
+            
+            # 判定是否是 DLC (Data 目录下的)
+            # 也可以简单判断：source == 'dlc' 或 'core'
+            is_dlc = mod.get('source') in ['core', 'dlc']
+
+            # 冲突仲裁逻辑：
+            # 1. 如果是 Local Mod 或 DLC -> 强制覆盖 (优先级最高)
+            # 2. 如果是 Workshop Mod -> 只有当 Dictionary 里还没这个 ID 时才加入
+            
+            if is_local_mod or is_dlc:
+                merged_map[pkg_id] = mod
+            else:
+                # 是 Workshop Mod
+                # 只有当不存在 同名 Local Mod 时才加入
+                if pkg_id not in merged_map:
+                    mod['is_local'] = False # 标记供前端展示 Steam 图标
+                    merged_map[pkg_id] = mod
+                else:
+                    # 可以在这里记录一下 "被遮蔽" 的信息
+                    merged_map[pkg_id]['_shadowed_workshop'] = True
+                    pass
+
+        return list(merged_map.values())
+
+    @staticmethod
+    def clean_orphaned_data():
+        """
+        清理孤立的 UserModData 和 GroupMod。
+        即：删除那些没有任何 ModAsset 关联的配置数据（彻底丢失的 Mod）。
+        """
+        # 清理 UserModData
+        # 删除 mod_id 不在 existing_ids 中的记录
+        with db.atomic():
+            deleted_user_data = UserModData.delete().where(UserModData.mod_id.not_in(ModAsset.package_id)).execute()
+            # 清理 GroupMod (分组关联)
+            # 这一步通常由数据库外键级联处理，但为了保险手动清理
+            deleted_group_mod = GroupMod.delete().where(GroupMod.mod_id.not_in(ModAsset.package_id)).execute()
+        return {
+            'deleted_user_configs': deleted_user_data,
+            'deleted_group_relations': deleted_group_mod
+        }
+    
+    @staticmethod
     def get_all_mods_with_user_data(ignore_missing: bool = False):
         """
         获取所有模组及其用户数据。
         如果 ignore_missing 为 True，则排除缺失的 Mod。
         返回字典列表，方便前端直接使用。
         """
-        query = (Mod
-                 .select(Mod, UserModData)
-                 .where(Mod.path.is_null(False) | (not ignore_missing))
-                 .join(UserModData, on=(Mod.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+        query = (ModAsset.select(ModAsset, UserModData)
+                 .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+                 .where(ModAsset.path.is_null(False) | (not ignore_missing))
                  .dicts())
         return list(query)
     
@@ -45,7 +164,7 @@ class ModDAO:
         获取所有 Mod 的修改时间戳，用于增量扫描对比。
         :return: {package_id: float}
         """
-        query = Mod.select(Mod.package_id, Mod.file_modify_time).dicts()
+        query = ModAsset.select(ModAsset.package_id, ModAsset.file_modify_time).dicts()
         return {row['package_id']: row['file_modify_time'] for row in query}
 
     @staticmethod
@@ -54,17 +173,16 @@ class ModDAO:
         批量插入或更新 Mod 数据 (核心扫描逻辑)。
         使用原子事务处理。
         """
-        if not mods_data_list:
-            return
+        if not mods_data_list: return
         # 1. 获取所有合法的数据库字段名
         # Mod._meta.fields 是一个字典 {field_name: FieldObject}
-        valid_field_names = set(Mod._meta.fields.keys()) # type: ignore
+        valid_field_names = set(ModAsset._meta.fields.keys()) # type: ignore
         
         # 2. 准备 upsert 时需要保留（更新）的字段列表
         # 这里排除掉主键和其他不想被覆盖的字段
         preserve_fields = [
             # _meta 属性是由 Peewee 的 元类（Metaclass）在运行时动态注入到 Mod 类中的，编辑器报错可以忽略
-            field for field in Mod._meta.sorted_fields  # type: ignore
+            field for field in ModAsset._meta.sorted_fields  # type: ignore
             if field.name not in exclude_names
         ]
         
@@ -85,8 +203,8 @@ class ModDAO:
                     }
                     clean_batch.append(clean_data)
                 
-                Mod.insert_many(clean_batch).on_conflict(
-                    conflict_target=[Mod.package_id],
+                ModAsset.insert_many(clean_batch).on_conflict(
+                    conflict_target=[ModAsset.path_hash],
                     preserve=preserve_fields # <--- 这里使用自动生成的列表
                 ).execute()
 
@@ -95,16 +213,15 @@ class ModDAO:
         """
         批量更新 Mod 的特定字段 (仅用于已存在的 Mod)。
         """
-        if not mods_data_list:
-            return
+        if not mods_data_list: return
         # 获取要更新的字段名 (假设所有字典的 key 是一样的，或者取并集)
         # 注意：bulk_update 需要模型对象列表，或者字典列表 + 字段列表
         update_fields = set(mods_data_list[0].keys()) - {'package_id'}
         # 将字典转换为模型实例 (Peewee bulk_update 需要实例)
-        model_instances = [Mod(**data) for data in mods_data_list]
+        model_instances = [ModAsset(**data) for data in mods_data_list]
         with db.atomic():
             # batch_size 自动处理分批
-            Mod.bulk_update(model_instances, fields=list(update_fields), batch_size=100)
+            ModAsset.bulk_update(model_instances, fields=list(update_fields), batch_size=100)
     
     @staticmethod
     def update_user_data(package_id: str, data_dict: Dict[str, Any]):
@@ -130,8 +247,7 @@ class ModDAO:
         批量插入或更新用户自定义数据 (Tags, Notes 等)。
         使用原子事务处理。
         """
-        if not user_data_list:
-            return
+        if not user_data_list: return
         # 1. 动态获取字段信息
         # 排除主键 mod_id (作为冲突检测目标) 和其他不应通过此接口更新的字段
         exclude_fields = {'mod_id'}
@@ -147,14 +263,18 @@ class ModDAO:
         with db.atomic():
             for batch in chunked(user_data_list, 100):
                 # 数据清洗：移除数据库模型中不存在的字段，防止报错
-                clean_batch = []
-                for user_data in batch:
-                    clean_data = {
-                        k: v for k, v in user_data.items() 
-                        if k in valid_field_names
-                    }
-                    clean_batch.append(clean_data)
-                if not clean_batch: continue
+                # clean_batch = []
+                # for user_data in batch:
+                #     clean_data = {
+                #         k: v for k, v in user_data.items() 
+                #         if k in valid_field_names
+                #     }
+                #     clean_batch.append(clean_data)
+                # if not clean_batch: continue
+                clean_batch = [
+                    {k: v for k, v in d.items() if k in UserModData._meta.fields} # type: ignore
+                    for d in batch
+                ]
                 # 执行 Upsert
                 # 如果记录不存在 -> Insert
                 # 如果记录存在 (mod_id冲突) -> Update preserve 列表中的字段
@@ -303,21 +423,19 @@ class ModDAO:
         deleted_mods = []   # 上次删除的 Mod
         
         # 1. 遍历检查文件是否存在 (这一步比较耗时，但必须做)
-        # 优化：只查询有 path 的记录，已经为 None 的不用查了
-        query = Mod.select(Mod.package_id, Mod.path).where(Mod.path.is_null(False)).dicts()
+        # 只查询有 path 的记录，已经为 None 的不用查了
+        query = ModAsset.select(ModAsset.path_hash, ModAsset.path).dicts()
         
-        for mod in query:
-            pkg_id = mod['package_id']
-            path = mod['path']
-            # 检查路径是否存在 (注意：path 可能是空字符串)
+        for asset in query:
+            path = asset['path']
             if not path:
-                missing_mods.append(pkg_id)
+                missing_mods.append(asset['path_hash'])
             elif not os.path.exists(path):
-                deleted_mods.append(pkg_id)
+                deleted_mods.append(asset['path_hash'])
         
         total_invalid_mods = missing_mods + deleted_mods
-        # 从 GroupMod 中删除这些 Mod 的关联
-        GroupMod.delete().where(GroupMod.mod_id.in_(total_invalid_mods)).execute()
+        # # 从 GroupMod 中删除这些 Mod 的关联
+        # GroupMod.delete().where(GroupMod.mod_id.in_(total_invalid_mods)).execute()
         
         if not total_invalid_mods:
             return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
@@ -327,10 +445,10 @@ class ModDAO:
             if delete:
                 # 如果要删除，直接删，不需要先 update
                 # chunked 并不是必须的，除非一次性删几万条，这里直接 in_ 即可
-                Mod.delete().where(Mod.package_id.in_(total_invalid_mods)).execute()
+                ModAsset.delete().where(ModAsset.path_hash.in_(total_invalid_mods)).execute()
             else:
                 # 如果不删除，只是标记为丢失 (path = '')
-                Mod.update(path='').where(Mod.package_id.in_(deleted_mods)).execute()
+                ModAsset.update(path='').where(ModAsset.path_hash.in_(deleted_mods)).execute()
         
         return {'missing_mods': missing_mods, 'deleted_mods': deleted_mods}
     
@@ -346,7 +464,7 @@ class ModDAO:
         # 1. 筛选出可能有 shadow_paths 的记录
         # 注意：SQLite 中 JSON 存为 TEXT，我们可以简单查不为空的
         # 或者直接查所有，Python处理（Mod数量通常几千个，全量遍历内存开销很小，逻辑更稳）
-        mods_with_shadows = Mod.select().where(Mod.shadow_paths.is_null(False))
+        mods_with_shadows = ModAsset.select().where(ModAsset.shadow_paths.is_null(False))
         
         with db.atomic():
             for mod in mods_with_shadows:
@@ -370,7 +488,7 @@ class ModDAO:
                     
                     mod.shadow_paths = valid_paths
                     mod.save()
-                    # print(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
+                    logger.info(f"Cleaned {removed_num} shadow paths for {mod.package_id}")
 
         return cleaned_count
     
@@ -383,7 +501,7 @@ class GroupDAO:
     """
 
     @staticmethod
-    def get_all_groups_structured():
+    def get_all_groups_structured_old():
         """
         【关键方法】获取完整的分组数据结构，供前端渲染。
         返回格式:
@@ -418,6 +536,38 @@ class GroupDAO:
                 group_map[g_id].append(p_id)
 
         # 4. 将 mod_ids 填回 groups 列表
+        for g in groups:
+            g['mod_ids'] = group_map.get(g['group_id'], [])
+            
+        return groups
+    
+    @staticmethod
+    def get_all_groups_structured(allowed_ids: List[str]):
+        """
+        获取结构化分组数据，并根据给定的 ID 集合过滤内容。
+        :param allowed_ids: 当前环境下可见的模组 package_id 集合 (Set 提高查找效率)
+        """
+        # 1. 获取所有分组
+        groups = list(GroupData.select().order_by(GroupData.sort_index).dicts())
+        
+        # 2. 获取所有分组关联
+        group_mods = list(GroupMod.select().order_by(GroupMod.sort_index).dicts())
+
+        # 3. 过滤逻辑
+        # 建立当前环境的 Set 提高查询速度
+        available_set = set(allowed_ids)
+        
+        group_map = {g['group_id']: [] for g in groups}
+        
+        for gm in group_mods:
+            g_id = gm['group_id']
+            p_id = gm['mod_id'] # 这里存的是 package_id
+            
+            # 【关键点】只有当该 Mod 在当前环境下“物理存在”时，才分发给前端展示
+            if p_id in available_set:
+                group_map[g_id].append(p_id)
+
+        # 4. 组装
         for g in groups:
             g['mod_ids'] = group_map.get(g['group_id'], [])
             
@@ -460,6 +610,10 @@ class GroupDAO:
         自动处理重复添加的情况（如果是联合主键，需要 try-except 或 ignore）。
         """
         if not mod_ids: return
+        with db.atomic():
+            # 先确保 UserModData 存在，否则外键约束会报错
+            stubs = [{'mod_id': mid} for mid in mod_ids]
+            UserModData.insert_many(stubs).on_conflict_ignore().execute()   # 批量插入忽略重复
 
         # 获取该组当前最大的 sort_index
         max_idx = GroupMod.select(fn.MAX(GroupMod.sort_index)).where(GroupMod.group_id == group_id).scalar() or 0
@@ -514,17 +668,22 @@ class GroupDAO:
             # 如果列表为空，说明清空了分组
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()
             return
-
-        data_source = []
-        for idx, pid in enumerate(mod_id_list):
-            data_source.append({
-                'group_id': group_id,
-                'mod_id': pid,
-                'sort_index': idx
-            })
-
+        # 确保 UserModData 中存在这些 ID，否则外键约束会报错
+        # 使用 insert_many + on_conflict_ignore 批量创建不存在的记录
+        user_data_stubs = [{'mod_id': mid.lower()} for mid in mod_id_list]
         with db.atomic():
-            # 1. 删除该组所有关联
+            # 先确保父表 (UserModData) 有这些 ID
+            UserModData.insert_many(user_data_stubs).on_conflict_ignore().execute()
+        
+            data_source = []
+            for idx, pid in enumerate(mod_id_list):
+                data_source.append({
+                    'group_id': group_id,
+                    'mod_id': pid,
+                    'sort_index': idx
+                })
+                
+            # 1. 删除该组所有旧关联
             GroupMod.delete().where(GroupMod.group_id == group_id).execute()
             
             # 2. 批量插入新顺序

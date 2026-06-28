@@ -9,11 +9,13 @@ import time
 import shutil
 import importlib.util
 from typing import Optional
+from backend.utils.logger import logger
 
 # 注意：不要在文件顶层 import steamworks，防止主进程意外加载
 # 只在 run_steam_worker 函数内部 import
 
 from backend.utils.logger import logger
+from backend.settings import settings
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
 
@@ -32,7 +34,7 @@ def run_steam_worker(action: str, mod_id: int):
         # 在这里才导入库，确保主进程干净
         from steamworks.steamworks import STEAMWORKS
     except ImportError:
-        print("ERROR: steamworks-py not found in bundle")
+        logger.error("ERROR: steamworks-py not found in bundle")
         return
 
     # 这里的 cwd 已经被主进程设置为了 tools/steam_agent
@@ -41,31 +43,31 @@ def run_steam_worker(action: str, mod_id: int):
         steam = STEAMWORKS()
         steam.initialize()
     except Exception as e:
-        print(f"ERROR: Steam init failed: {e}")
+        logger.error(f"ERROR: Steam init failed: {e}")
         return
 
     if not steam:
-        print("ERROR: Steam API not loaded")
+        logger.error("ERROR: Steam API not loaded")
         return
 
     # 定义回调
     def callback(res):
-        print(f"Callback: {res}")
+        logger.info(f"Callback: {res}")
 
     success = False
     try:
         if action == "subscribe":
             steam.Workshop.SubscribeItem(mod_id, callback)
             success = True
-            print("SUCCESS: Subscription request sent")
+            logger.info("SUCCESS: Subscription request sent")
         elif action == "unsubscribe":
             steam.Workshop.UnsubscribeItem(mod_id, callback)
             success = True
-            print("SUCCESS: Unsubscription request sent")
+            logger.info("SUCCESS: Unsubscription request sent")
         else:
-            print(f"ERROR: Unknown action {action}")
+            logger.error(f"ERROR: Unknown action {action}")
     except Exception as e:
-        print(f"ERROR: Action failed: {e}")
+        logger.error(f"ERROR: Action failed: {e}")
 
     # 给 Steam 客户端一点时间处理请求
     if success:
@@ -238,7 +240,7 @@ class SteamManager:
         return t
 
     def _run_steamcmd_process(self, commands, mod_ids):
-        fake_task_id = "steamcmd_batch_" + str(int(time.time()))
+        fake_task_id = "steamcmd_batch_" + str(time.time_ns() // 1000000)
         self._emit_progress(fake_task_id, "Connecting to Steam...", 0, TaskStatus.RUNNING)
 
         try:
@@ -363,5 +365,67 @@ class SteamManager:
     def unsubscribe_item(self, published_file_id: int):
         return self._run_agent("unsubscribe", published_file_id)
 
+    def _get_acf_path(self):
+        """获取 appworkshop_294100.acf 的路径"""
+        # 依赖 settings 中的 workshop_mods_path
+        # 典型路径: .../steamapps/workshop/content/294100
+        # ACF 路径: .../steamapps/workshop/appworkshop_294100.acf
+        ws_path = settings.config.workshop_mods_path
+        if not ws_path or not os.path.exists(ws_path):
+            return None
+        
+        try:
+            # 回退两级找到 workshop 目录
+            workshop_root = os.path.dirname(os.path.dirname(ws_path))
+            acf_file = os.path.join(workshop_root, f"appworkshop_{RIMWORLD_APP_ID}.acf")
+            if os.path.exists(acf_file):
+                return acf_file
+        except:
+            pass
+        return None
+
+    def get_installed_workshop_ids(self) -> set:
+        """
+        解析 ACF 文件，获取所有已安装的 Workshop Mod ID
+        返回: set(int)
+        """
+        acf_path = self._get_acf_path()
+        if not acf_path:
+            return set()
+
+        installed_ids = set()
+        try:
+            with open(acf_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+            # VDF 格式解析
+            # 结构: "WorkshopItemsInstalled" { "123" { ... } "456" { ... } }
+            # 我们只需要提取 "WorkshopItemsInstalled" 块里的 Key
+            
+            # 1. 找到 WorkshopItemsInstalled 块
+            # 使用简单的字符串查找或者正则
+            # 正则非贪婪匹配块内容
+            block_match = re.search(r'"WorkshopItemsInstalled"\s*\{(.*?)\}', content, re.DOTALL)
+            if block_match:
+                block_content = block_match.group(1)
+                # 2. 提取所有 ID (即块中的键)
+                # 格式: "ModID" { ... }
+                ids = re.findall(r'"(\d+)"\s*\{', block_content)
+                for i in ids:
+                    installed_ids.add(int(i))
+                    
+        except Exception as e:
+            logger.error(f"Failed to parse ACF for validation: {e}")
+            
+        return installed_ids
+
     def is_subscribed(self, published_file_id: int) -> bool:
-        return False
+        """
+        检查是否已订阅且已安装 (通过本地 ACF 文件验证)
+        这是最快且最准确的方法
+        """
+        # 注意：这里判断的是“本地已安装”，Steam 客户端认为“下载完”才算安装。
+        # 如果只是点了订阅但还没下载完，这里会返回 False。
+        # 这其实更符合用户的期望：只有下载完了才能用。
+        ids = self.get_installed_workshop_ids()
+        return int(published_file_id) in ids

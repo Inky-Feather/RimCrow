@@ -60,7 +60,7 @@
           <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div class=" mx-auto space-y-10">
 
-              <!-- 1. 路径设置 (Paths) -->
+              <!-- 路径设置 (Paths) -->
               <section v-if="currentTab === 'paths'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center justify-between mb-6">
                   <h3 class="text-lg font-bold text-white">路径配置</h3>
@@ -69,18 +69,15 @@
                   </button>
                 </div>
                 <div class="grid gap-6">
-                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleBrowse('game_install_path')" />
+                  <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse('game_install_path')" :description="formData.game_info" @blur="checkGamePath"/>
                   <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" />
                   <CommonPathInput label="创意工坊目录" v-model="formData.workshop_mods_path" @browse="handleBrowse('workshop_mods_path')" />
-                  <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" @browse="handleBrowse('local_mods_path')" />
+                  <CommonPathInput label="本地模组目录" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" description="根据游戏安装目录自动生成" />
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
-                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
-                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
-                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
                 </div>
               </section>
 
-              <!-- 2. 常规设置 (General) -->
+              <!-- 常规设置 (General) -->
               <section v-if="currentTab === 'general'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">界面与环境</h3>
                 <div class="space-y-6">
@@ -94,8 +91,9 @@
                   </div> -->
                   <CommonSwitch label="在系统浏览器中打开 URL" v-model="formData.open_url_on_system" description="关闭则使用内置科幻浏览器" />
                   <div class="grid grid-cols-2 gap-6">
-                    <CommonNumber label="字体大小" v-model="formData.ui.font_size" :step="1" />
-                    <CommonNumber label="提示悬停时间" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <CommonNumber label="字体大小" description="控制界面字体大小，影响所有控件的内容显示" v-model="formData.ui.font_size" :step="1" />
+                    <CommonNumber label="提示悬停时间" description="控制悬浮提示信息的等待时间，单位是毫秒" v-model="formData.ui.tooltip_hover_time" :step="100" />
+                    <CommonSwitch label="Mod 悬停面板" v-model="formData.ui.show_mod_hover_panel" description="控制 Mod 列表中悬停时的面板显示。" />
                     <div class="col-span-2 p-2 rounded-2xl bg-white/2 border border-white/5 grid grid-cols-2 gap-2">
                       <CommonSwitch class="col-span-2" mini label="Mod 详情面板" v-model="formData.ui.show_mod_details_panel" description="可关闭Mod详情栏。" />
                       <CommonSwitch :disabled="!formData.ui.show_mod_details_panel" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
@@ -117,16 +115,39 @@
                 </div>
               </section>
 
-              <!-- 3. Steam 设置 -->
-              <section v-if="currentTab === 'steam'" class="animate-in fade-in slide-in-from-right-4">
-                <h3 class="text-lg font-bold text-white mb-6">Steam 接口组件</h3>
+              <!-- 功能设置 -->
+              <section v-if="currentTab === 'features'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">功能设置</h3>
                 <div class="space-y-6">
-                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
-                  <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" />
+                  <div class="grid grid-cols-2 gap-6">
+                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
+                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
+                    <CommonSelect class="col-span-1" label="排序顺序" v-model="formData.sort_mods_by" showBottom
+                      description="影响自动排序时同档次的Mod顺序，处理优先级是 别名>原名>包名，所以即使Mod没有别名，也能按原名参与排序。" 
+                      :options="[{label:'按别名', value:'alias_name'},{label:'按原名', value:'name'},{label:'按包名', value:'id'}]" />
+                    <CommonSelect class="col-span-1" label="共存Mod文件夹生成方式" v-model="formData.coexist_mod_folder_name_type" showBottom
+                      description="影响创建共存Mod时的文件夹名称，处理优先级是 别名>原名>包名>工坊ID，所以即使Mod没有别名，也能按原名参与排序。" 
+                      :options="[{label:'按工坊ID', value:'workshop_id'},{label:'按包名', value:'package_id'},{label:'按原名', value:'name'},{label:'按别名', value:'alias_name'}]" />
+                    <CommonSwitch class="col-span-1" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" description="关闭后，将使用普通方式启动游戏。" />
+                    <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
+                    <CommonNumber class="col-span-1" label="自动备份保留天数" description="管理自动备份的最长保留时间，手动备份不受影响。" v-model="formData.backup_retention_days" :step="1" />
+                  </div>
                 </div>
               </section>
 
-              <!-- 4. 网络设置 (Network) -->
+              <!-- 社区设置 -->
+              <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
+                <h3 class="text-lg font-bold text-white mb-6">社区配置管理</h3>
+                <div class="space-y-6">
+                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steam.steamcmd_path" @browse="handleBrowse('steam.steamcmd_path')" />
+                  <!-- <CommonSwitch label="优先使用 Steam 客户端浏览工坊内容" v-model="formData.steam.use_steam_client" description="开启此项以通过本地 Steam 客户端浏览工坊内容" /> -->
+                  <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
+                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path')" />
+                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path')" />
+                </div>
+              </section>
+
+              <!-- 网络设置 (Network) -->
               <section v-if="currentTab === 'network'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">网络协议与代理</h3>
                 <div class="space-y-8">
@@ -147,7 +168,7 @@
                 </div>
               </section>
 
-              <!-- 5. AI 设置 (AI) -->
+              <!-- AI 设置 (AI) -->
               <section v-if="currentTab === 'ai'" class="animate-in fade-in slide-in-from-right-4">
                 <div class="flex items-center gap-3 mb-6">
                   <h3 class="text-lg font-bold text-white">人工智能</h3>
@@ -160,24 +181,51 @@
                     <CommonInput label="API Base URL" v-model="formData.ai.base_url" placeholder="https://api.openai.com/v1" />
                     <CommonInput label="API Key" v-model="formData.ai.api_key" is-password placeholder="sk-..." />
                     <div class="grid grid-cols-2 gap-6">
-                      <CommonSelect label="选择模型" v-model="formData.ai.model" :options="currentAiModels" />
-                      <button class="btn btn-primary" @click="fetchAiModels">刷新模型列表</button>
-                      <button class="btn btn-primary" @click="testModel">测试模型</button>
+                      <!-- <div @click="fetchAiModels"> -->
+                        <CommonSelect label="选择模型" editable v-model="formData.ai.model" :options="currentAiModels" placeholder="输入或选择模型"
+                          @visible-change="(val) => val && fetchAiModels()" @change="appStore.saveAIConfig(formData.ai)"/>
+                      <!-- </div> -->
                       <CommonNumber label="最大 Token 消耗" v-model="formData.ai.max_tokens" :step="100" />
+                      <CommonInput v-model="testPrompt" placeholder="随便输入一句话，简单测试一下请求是否成功..."></CommonInput>
+                      <button class="m-1 h-fit flex items-center justify-center bg-accent-special/70 hover:bg-accent-special hover:text-white text-text-dim px-4 py-1.5 w-fit rounded-md" 
+                        :class="[appStore.aiState.isLoading?'cursor-not-allowed pointer-events-none opacity-50':'cursor-pointer']"
+                        @click="testModel">
+                        <svg v-if="appStore.aiState.isLoading" class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        测试模型
+                      </button>
+                      <div v-if="testResponse" class="col-span-2 p-4 rounded-2xl text-text-main/80 bg-accent-special/10 border border-white/5">
+                        <div class="text-xs text-text-dim mb-2">响应结果：</div>
+                        {{ testResponse }}
+                      </div>
                     </div>
                   </div>
                 </div>
               </section>
 
-              <!-- 6. 开发与调试 -->
+              <!-- 开发与调试 -->
               <section v-if="currentTab === 'dev'" class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-white mb-6">开发与调试</h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-6">
-                    <CommonSwitch class="col-span-1" label="调试模式" v-model="formData.debug_mode" />
-                    <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" />
-                    <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" />
-                    <CommonNumber class="col-span-1" label="自动备份保留天数" v-model="formData.backup_retention_days" :step="1" />
+                    <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
+                    <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
+                    <!-- 手动检查按钮 -->
+                    <div class="flex items-center justify-between p-3 input-glass">
+                      <div class="flex flex-col">
+                        <span class="text-sm font-bold text-white">软件版本</span>
+                        <span class="text-xs text-text-dim">当前版本: v{{ appStore.appVersion }}</span>
+                      </div>
+                      <button 
+                        @click="appStore.checkUpdate(true)" 
+                        :disabled="appStore.updateState.isChecking"
+                        class="px-4 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold transition-all"
+                      >
+                        <span v-if="appStore.updateState.isChecking" class="flex items-center gap-2">
+                          <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24">...</svg>检查中
+                        </span>
+                        <span v-else>立即检查更新</span>
+                      </button>
+                    </div>
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" />
                   </div>
@@ -211,14 +259,12 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, h } from 'vue'
-import { 
-  FolderTree, AppWindow, Globe, Cpu, Terminal, 
-  Search, ShieldAlert, Settings
-} from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
+import { createToastInterface } from 'vue-toastification'
 
-// 导入你的 Common UI
+// 导入 Common UI
 import CommonPathInput from './common/input/CommonPathInput.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue'
 import CommonInput from './common/input/CommonInput.vue'
@@ -227,6 +273,7 @@ import CommonSelect from './common/input/CommonSelect.vue'
 import CommonTagInput from './common/input/CommonTagInput.vue'
 import CommonKVEditor from './common/input/CommonKVEditor.vue'
 
+const toast = createToastInterface()
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 
@@ -240,7 +287,8 @@ const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const tabs = [
   { id: 'paths', label: '路径配置', icon: FolderTree },
   { id: 'general', label: '界面设置', icon: AppWindow },
-  { id: 'steam', label: 'STEAM', icon: Steam },
+  { id: 'features', label: '功能设置', icon: Component },
+  { id: 'community', label: '社区配置', icon: Steam },
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
@@ -266,11 +314,35 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   }
 })
 
+
 const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
+  // 自动获取游戏信息
+  checkGamePath()
 }
 
+const checkGamePath = async () => {
+  const gameInfo = await appStore.getGameInfo(formData.value.game_install_path)
+  if (!gameInfo || !gameInfo.exe) {
+    // 游戏版本为空时
+    formData.value['game_info'] = `^^未找到游戏可执行文件，请检查路径是否正确！^^`
+    return
+  }
+  formData.value['local_mods_path'] = formData.value.game_install_path + '\\Mods'
+  formData.value['game_info'] = `游戏版本: ${gameInfo.version}\n游戏路径: ${gameInfo.exe}`
+}
+
+const handleGameBrowse = async () => {
+  let current = formData.value
+  const res = await appStore.getFolderPath(current['game_install_path'])
+  if (res) {
+    current['game_install_path'] = res
+    // 自动获取游戏信息
+    checkGamePath()
+  }
+
+}
 const handleBrowse = async (pathKey) => {
   // 处理嵌套路径 (如 'steam.steamcmd_path')
   const keys = pathKey.split('.')
@@ -281,13 +353,20 @@ const handleBrowse = async (pathKey) => {
   const lastKey = keys[keys.length - 1]
   
   const res = await appStore.getFolderPath(current[lastKey])
-  if (res) current[lastKey] = res
+  if (res) {
+    current[lastKey] = res
+  }
+
 }
 
+// 测试提示词
+const testPrompt = ref("介绍一下自己")
+const testResponse = ref("")
 // 测试模型
 const testModel = async () => {
-  const res = await appStore.chatWithAI("介绍一下自己")
+  const res = await appStore.chatWithAI(testPrompt.value, formData.value.ai)
   if (res) {
+    testResponse.value = res
     console.log("模型测试结果:", res)
     // toast.success("模型测试成功")
   }

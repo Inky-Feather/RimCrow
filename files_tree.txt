@@ -1,4 +1,8 @@
 ·[.]
+├──·[Downloads]
+│  ├── 414bebd85119f267475dd88ffaf1e66c.zip
+│  └── RimModManager v0.15.4.zip
+│     
 ├──·[backend]
 │  ├──·[database]
 │  │  ├── dao.py
@@ -15,7 +19,10 @@
 │  │  ├── mgr_rules.py
 │  │  ├── mgr_sorter.py
 │  │  ├── mgr_steam.py
-│  │  └── mgr_sub_browser.py
+│  │  ├── mgr_steam_history.py
+│  │  ├── mgr_sub_browser.py
+│  │  ├── mgr_update.py
+│  │  └── mgr_workshop_db.py
 │  │     
 │  ├──·[scanner]
 │  │  ├── analyzer.py
@@ -26,6 +33,7 @@
 │  ├──·[utils]
 │  │  ├── constants.py
 │  │  ├── event_bus.py
+│  │  ├── lanzou_parser.py
 │  │  └── logger.py
 │  │     
 │  ├── _version.py
@@ -66,7 +74,8 @@
 │  │  │  │  ├── ImageCloud.vue
 │  │  │  │  ├── LampEffect.vue
 │  │  │  │  ├── LuxBreatheIcon.vue
-│  │  │  │  └── ModItem.vue
+│  │  │  │  ├── ModItem.vue
+│  │  │  │  └── SegmentedTabs.vue
 │  │  │  │     
 │  │  │  ├── BackupList.vue
 │  │  │  ├── ConflictResolver.vue

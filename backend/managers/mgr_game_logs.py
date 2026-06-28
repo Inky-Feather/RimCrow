@@ -24,7 +24,7 @@ class GameLogManager:
         """
         获取可用的游戏日志文件列表
         """
-        base_path = settings.config.game_data_path
+        base_path = settings.config.user_data_path
         if not base_path or not os.path.exists(base_path):
             return []
 
@@ -48,7 +48,7 @@ class GameLogManager:
         读取并解析指定日志文件
         返回: { 'content': [...ParsedBlocks...], 'is_truncated': bool }
         """
-        base_path = settings.config.game_data_path
+        base_path = settings.config.user_data_path
         if not base_path:
             return {'error': '配置中未找到 LocalLow 路径'}
             

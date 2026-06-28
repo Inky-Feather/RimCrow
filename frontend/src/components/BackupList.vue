@@ -58,11 +58,11 @@
       </div> -->
       <button @click="loadOrder('0')" v-tooltip="'导入Mod加载序列'" 
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
-        <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v240h-80v-200H520v-200H240v640h360v80H240Zm638 15L760-183v89h-80v-226h226v80h-90l118 118-56 57Zm-638-95v-640 640Z"/></svg>
+        <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
       </button>
       <button @click="exportOrder()" v-tooltip="'导出Mod加载序列'" 
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
-        <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-480ZM202-65l-56-57 118-118h-90v-80h226v226h-80v-89L202-65Zm278-15v-80h240v-440H520v-200H240v400h-80v-400q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H480Z"/></svg>
+        <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
       </button>
       <!-- <button @click="refresh" v-tooltip="'备份设置'" 
         class="rounded-lg hover:bg-white/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center">
@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useOrderStore } from '../stores/orderStore'
 import { useAppStore } from '../stores/appStore'
 import { useConfirmStore } from '../stores/confirmStore'
@@ -187,7 +187,7 @@ const BackupItem = {
         
         <div class="flex items-center gap-2">
           <!-- 左侧图标 -->
-          <div v-if="!item.displayTitle" class="rounded-md px-1 py-0.5 w-17 flex items-center justify-center transition-colors text-[0.65rem] gap-0.5"
+          <div v-if="!item.displayTitle" class="rounded-md px-1 py-0.5 w-17 flex items-center justify-center transition-colors text-[0.6rem] gap-0.5"
             :class="isSelected ? 'bg-accent-primary/30 text-accent-primary' : 'bg-accent-primary/20 text-text-dim group-hover:text-white'">
             <svg v-if="item.type === 'today'" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             <svg v-else-if="item.type === 'earlier'" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
@@ -197,7 +197,7 @@ const BackupItem = {
           <!-- 具体时间 -->
           <div class="flex-1 text-[0.8rem] text-text-dim truncate font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
             <span v-if="item.displayTitle" v-tooltip="item.displayTitle" class="text-sm font-medium truncate flex items-center gap-1" :class="isSelected ? 'text-white' : 'text-text-main'">
-              <svg class="w-3 h-3 min-w-[15px] min-h-[15px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <svg class="w-3 h-3 min-w-4 min-h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
               {{ item.displayTitle }}
             </span>
             <span >{{ item.displayTime }}</span>
@@ -267,6 +267,10 @@ const selectedPath = computed(() => orderStore.currentBackupFile)
 // 原始数据
 const rawData = ref({ today: [], earlier: [], other: [], import: [] })
 
+// 监听备份列表变化，更新原始数据
+watch(() => orderStore.backups, (newVal) => {
+    Object.assign(rawData.value, newVal)
+})
 // 数据长度统计
 const dataCount = computed(() => {
     return {
@@ -360,15 +364,7 @@ const isEmpty = computed(() => {
 // 刷新备份列表
 const refresh = async () => {
   loading.value = true
-  try {
-    await orderStore.getBackups()
-    // 从 store 同步数据 (orderStore.backups 结构是 {today:[], ...})
-    if (orderStore.backups) {
-      Object.assign(rawData.value, orderStore.backups)
-    }
-  } finally {
-    // loading.value = false
-  }
+  await orderStore.getBackups()
 }
 // 选择备份项
 const selectItem = async (item) => {

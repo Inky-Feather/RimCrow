@@ -6,6 +6,10 @@ import { useModStore } from '../stores/modStore'
 class SelectionManager {
   constructor(el, binding) {
     this.el = el
+    // 确保容器是 relative 定位，以便 absolute 选框参考
+    if (getComputedStyle(this.el).position === 'static') {
+      this.el.style.position = 'relative'
+    }
     this.modStore = useModStore()
     
     // 配置
@@ -15,7 +19,7 @@ class SelectionManager {
       swipeClass: 'swipe-trigger',  // 触发滑动选择的类
       idAttribute: 'data-id',  // 存储ID的属性名
       // 可自定义选框样式，支持 Tailwind 类名
-      boxClass: 'fixed z-9999 rounded border-2 border-dashed border-accent-special bg-accent-special/20 pointer-events-none transition-none',
+      boxClass: 'absolute z-9999 rounded border-2 border-dashed border-accent-special bg-accent-special/20 pointer-events-none transition-none',
       disabled: false  // 特定情况下禁止选择
     }
     this.updateConfig(binding.value)
@@ -73,11 +77,10 @@ class SelectionManager {
   createSelectionBox() {
     if (this.selectionBoxEl) return
     this.selectionBoxEl = document.createElement('div')
-    // 应用配置的样式类
     this.selectionBoxEl.className = this.config.boxClass
-    // 初始隐藏，防止闪烁
     this.selectionBoxEl.style.display = 'none'
-    document.body.appendChild(this.selectionBoxEl)
+    // 修改点：挂载到列表容器内部
+    this.el.appendChild(this.selectionBoxEl)
   }
 
   updateSelectionBox(currentX, currentY) {
@@ -86,15 +89,23 @@ class SelectionManager {
     if (this.rafId) cancelAnimationFrame(this.rafId)
 
     this.rafId = requestAnimationFrame(() => {
-        const startX = this.startPos.x
-        const startY = this.startPos.y
+        // 获取容器当前的实时位置
+        const rect = this.el.getBoundingClientRect()
+        const scrollTop = this.el.scrollTop
+        const scrollLeft = this.el.scrollLeft
+
+        const startX = (this.startPos.x - rect.left) + this.startScrollLeft
+        const startY = (this.startPos.y - rect.top) + this.startScrollTop
+        
+        const curX = (currentX - rect.left) + scrollLeft
+        const curY = (currentY - rect.top) + scrollTop
 
         // 计算矩形几何属性
         // left/top 取最小坐标，width/height 取坐标差绝对值
-        const left = Math.min(startX, currentX)
-        const top = Math.min(startY, currentY)
-        const width = Math.abs(currentX - startX)
-        const height = Math.abs(currentY - startY)
+        const left = Math.min(startX, curX)
+        const top = Math.min(startY, curY)
+        const width = Math.abs(curX - startX)
+        const height = Math.abs(curY - startY)
 
         // 更新样式 (使用 transform 可能会更流畅，但 top/left 在选框场景下足够且不易出错)
         if (this.selectionBoxEl) {
@@ -112,8 +123,8 @@ class SelectionManager {
     if (this.rafId) cancelAnimationFrame(this.rafId) // 清理未执行的动画帧
     if (this.selectionBoxEl) {
       // 检查是否还在 DOM 中再移除
-      if (document.body.contains(this.selectionBoxEl)) {
-        document.body.removeChild(this.selectionBoxEl)
+      if (this.el.contains(this.selectionBoxEl)) {
+        this.el.removeChild(this.selectionBoxEl)
       }
       this.selectionBoxEl = null
     }
@@ -154,6 +165,9 @@ class SelectionManager {
     this.isMouseDown = true
     this.isDragging = false
     this.startPos = { x: e.clientX, y: e.clientY }
+    // 修改点：记录按下瞬间的滚动位置
+    this.startScrollTop = this.el.scrollTop
+    this.startScrollLeft = this.el.scrollLeft
 
     // 判断触发类型
     const isSwipeTarget = target.closest(`.${this.config.swipeClass}`)

@@ -1,4 +1,5 @@
 <template>
+
   <div class="flex flex-col h-full bg-bg-surface/80 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
     
     <!-- 1. 顶部工具栏 -->
@@ -84,7 +85,7 @@
         </div>
 
         <!-- 中间画布 (SVG) -->
-        <div class="w-12 shrink-0 relative z-10 bg-black/20">
+        <div class="w-[48px] shrink-0 relative z-10 bg-black/20">
           <svg class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible">
              <!-- 绘制区块 (fill) -->
              <path v-for="block in renderBlocks" :key="block.id"
@@ -143,6 +144,7 @@
       </div>
     </div>
   </div>
+  
 </template>
 
 <script setup>

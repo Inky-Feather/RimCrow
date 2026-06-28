@@ -1,8 +1,10 @@
 <!-- components/common/input/CommonTagInput.vue -->
 <template>
-  <div class="space-y-1.5 w-full">
-    <label class="text-xs text-text-dim uppercase font-bold tracking-widest px-1">{{ label }}</label>
-    <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-[42px] content-start focus-within:border-accent-primary/40">
+  <div class="w-full">
+    <label class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 mb-1">{{ label }}
+        <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+    </label>
+    <div class="input-glass p-1.5 flex flex-wrap gap-1.5 min-h-6 content-start focus-within:border-accent-primary/40">
       
       <!-- 已有 Tag -->
       <transition-group name="list">
@@ -29,7 +31,8 @@ import { ref } from 'vue'
 
 const props = defineProps({
   label: String,
-  modelValue: { type: Array, default: () => [] }
+  modelValue: { type: Array, default: () => [] },
+  description: String,
 })
 const emit = defineEmits(['update:modelValue'])
 

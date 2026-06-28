@@ -27,12 +27,12 @@ class DLCParser:
     自动扫描 Core/Languages 下所有 tar 包，维护一个全语言的翻译缓存。
     """
 
-    def __init__(self, game_data_path):
+    def __init__(self, game_dlc_path):
         """
         初始化时即完成缓存同步。
         """
-        self.data_path = game_data_path
-        self.core_path = os.path.join(game_data_path, 'Core')
+        self.data_path = game_dlc_path
+        self.core_path = os.path.join(game_dlc_path, 'Core')
         self.languages_dir = os.path.join(self.core_path, 'Languages')
         
         # 1. 加载官方基础定义 (英文)

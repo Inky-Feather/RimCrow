@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full bg-black/20">
+  <div class="flex flex-col h-full w-full bg-black/20">
     
     <!-- 1. 功能栏 -->
     <div class="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-white/2">

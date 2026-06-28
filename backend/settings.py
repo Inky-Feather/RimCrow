@@ -17,6 +17,8 @@ CACHE_DIR = HOME_DIR / "cache" / "thumbnails"
 RULES_DIR = HOME_DIR / "data" / "rules"
 USER_RULES_PATH = RULES_DIR / "user_rules.json"
 COMMUNITY_RULES_PATH = RULES_DIR / "communityRules.json"
+COMMUNITY_DB_PATH = RULES_DIR / "data" / "steamDB.json"
+COMMUNITY_INSTEAD_DB_PATH = RULES_DIR / "data" / "replacements.json"
 # 工具目录
 TOOLS_DIR = HOME_DIR / "tools"
 
@@ -61,6 +63,7 @@ class UIConfig:
     theme: str = "system"       # light, dark, system
     font_size: int = 16
     tooltip_hover_time: int = 1000  # 鼠标悬停显示提示时间 (毫秒)
+    show_mod_hover_panel: bool = True  # 是否显示 Mod 悬停面板
     
     show_mod_details_panel: bool = True  # 是否显示 Mod 详情面板
     show_icons_cloud: bool = True  # 是否显示动态图标云
@@ -86,17 +89,18 @@ class AppConfig:
     """
     # --- 路径设置 ---
     game_install_path: str = ""
-    game_data_path: str = ""  # RimWorld 数据文件夹 (Ludeon Studios...)
-    game_config_path: str = ""  # RimWorld 配置文件夹 (Ludeon Studios...)
-    workshop_mods_path: str = ""
+    user_data_path: str = ""    # 用户数据文件夹
+    game_config_path: str = ""  # RimWorld 配置文件夹
+    game_saves_path: str = ""   # RimWorld 存档文件夹
+    game_dlc_path: str = ""     # RimWorld DLC 文件夹
     local_mods_path: str = ""
+    workshop_mods_path: str = ""
+    use_workshop_mods: bool = True
     home_path: str = str(Path(os.getcwd())) # 本程序路径
-    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
-    community_rules_path: str = str(COMMUNITY_RULES_PATH)
-    user_rules_path: str = str(USER_RULES_PATH)
     
     # --- 游戏设置 ---
     game_version: str = ""
+    current_profile_id: str = "default"   # 当前激活的环境ID
     
     # --- 界面设置 ---
     language: str = "ZH-cn"     # 默认语言
@@ -107,18 +111,35 @@ class AppConfig:
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     enable_auto_scan: bool = True             # 启动时自动扫描
-    delete_missing_mods_data: bool = False    # 是否删除数据库中缺失的 Mod 数据
-    open_url_on_system: bool = False           # 是否在系统默认浏览器打开链接
+    delete_missing_mods_data: bool = True     # 是否删除数据库中缺失的 Mod 数据
+    open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
+    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
+    sort_mods_by: str = "name"                # 排序方式: name, id, alias
+    coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
+    show_coexistence_message: bool = True      # 是否显示共存Mod提示
+    
     
     # --- 功能设置 ---
     network: NetworkConfig = field(default_factory=NetworkConfig)
     steam: SteamConfig = field(default_factory=SteamConfig)
     ai: AIConfig = field(default_factory=AIConfig)
     
+    # --- 社区设置 ---
+    community_db_url: str = "https://github.com/RimSort/Steam-Workshop-Database/blob/main/steamDB.json"
+    community_db_path: str = str(COMMUNITY_DB_PATH)
+    community_rules_url: str = "https://github.com/RimSort/Community-Rules-Database/blob/main/communityRules.json"
+    community_rules_path: str = str(COMMUNITY_RULES_PATH)
+    community_instead_db_url: str = "https://github.com/emipa606/UseThisInstead/blob/main/replacements.json.gz"
+    community_instead_db_path: str = str(COMMUNITY_INSTEAD_DB_PATH)
+    user_rules_path: str = str(USER_RULES_PATH)
+    
     # --- 开发与调试设置 ---
     debug_mode: bool = False  # 开发模式开关
     log_retention_days: int = 7  # 日志保留天数
     log_level: str = "INFO"  # 默认日志等级 DEBUG, INFO, WARNING, ERROR
+    enable_auto_update_check: bool = True  # 自动检查更新开关
+    ignored_update_version: str = ""       # 跳过的版本号
+    last_update_check_time: float = 0      # 上次检查时间（用于限流）
     
 
 class SettingsManager:
@@ -177,6 +198,10 @@ class SettingsManager:
                 # 处理 hosts
                 if 'hosts' in net_data:
                     cfg.network.hosts = net_data['hosts']
+                
+# ================================临时变更修复 (记得以后删除)===========================================================
+                if (not cfg.user_data_path and data.get('game_data_path')):
+                    cfg.user_data_path = net_data['game_data_path']
 
             return cfg
 
@@ -235,7 +260,8 @@ class SettingsManager:
 
     def validate_paths(self) -> bool:
         """检查核心路径是否配置且有效"""
-        p1 = self.config.game_install_path
+        from backend.managers.mgr_game import GameManager
+        p1 = GameManager.detect_executable(self.config.game_install_path)
         p2 = self.config.game_config_path
         
         if p1 and os.path.exists(p1) and p2 and os.path.exists(p2):

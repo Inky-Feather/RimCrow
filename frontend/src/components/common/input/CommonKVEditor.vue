@@ -2,7 +2,9 @@
 <template>
   <div class="space-y-2">
     <div class="flex justify-between items-center px-1">
-      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}</label>
+      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
+        <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+      </label>
       <button @click="add" class="text-xs text-accent-primary hover:underline">+ 新增条目</button>
     </div>
 
@@ -33,7 +35,8 @@ import { Trash2 } from 'lucide-vue-next'
 
 const props = defineProps({
   label: String,
-  modelValue: { type: Object, default: () => ({}) }
+  modelValue: { type: Object, default: () => ({}) },
+  description: String,
 })
 const emit = defineEmits(['update:modelValue'])
 

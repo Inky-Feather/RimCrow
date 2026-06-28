@@ -116,6 +116,7 @@
 <script setup>
 import { computed, ref, nextTick, watch } from 'vue'
 import { useConfirmStore } from '../../stores/confirmStore'
+import { useAppStore } from '../../stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
 
@@ -127,6 +128,7 @@ const Icons = {
   success: CircleCheckBig
 }
 
+const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 const { width: winW, height: winH } = useWindowSize()
 
@@ -158,10 +160,11 @@ const containerStyle = computed(() => {
   if (!isMini.value) return {}
 
   const rect = confirmStore.state.targetRect
-  const GAP = 12
-  const MODAL_WIDTH = 300
+  const GAP = appStore.scalePx(12)
+  const X_MARGEN = appStore.scalePx(50)
+  const MODAL_WIDTH = appStore.scalePx(300)
   // 预估高度，如果内容多可能要调整，或者用 nextTick 动态获取
-  const ESTIMATED_HEIGHT = 180 
+  const ESTIMATED_HEIGHT = appStore.scalePx(180) 
 
   // 1. 垂直定位逻辑：优先下方，溢出则翻转到上方
   let top = rect.bottom + GAP
@@ -181,11 +184,11 @@ const containerStyle = computed(() => {
   let left = rect.left + (rect.width / 2) - (MODAL_WIDTH / 2)
   let transformOriginX = 'center'
 
-  if (left < 20) {
-    left = 20
+  if (left < X_MARGEN) {
+    left = X_MARGEN
     transformOriginX = 'left'
-  } else if (left + MODAL_WIDTH > winW.value - 20) {
-    left = winW.value - MODAL_WIDTH - 20
+  } else if (left + MODAL_WIDTH > winW.value - X_MARGEN) {
+    left = winW.value - MODAL_WIDTH - X_MARGEN
     transformOriginX = 'right'
   }
 

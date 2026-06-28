@@ -67,7 +67,7 @@
     <div class="grid transition-[grid-template-rows] duration-200 "
       :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
       <!-- pointer-events-none 确保分组本身被拖拽时禁用鼠标交互，进而禁止被意外拖入内部列表 -->
-      <div class="h-full overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
+      <div class="max-h-[50vh] overflow-hidden" :class="{ 'pointer-events-none': groupStore.isDraggingGroup }">
         <div class="p-1 mx-1 min-h-15 bg-[rgba(var(--rgb-components),0.2)] border border-b-white/5 border-x-white/5 border-t-transparent rounded-b-lg shadow-2xsl relative">
           <div v-show="groupData.mod_ids.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/30 select-none pointer-events-none">
             可拖拽模组到此
@@ -75,7 +75,7 @@
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
           </div>
 
-          <VirtualList v-model="internalModList" dataKey="id" :keeps="50" class="h-full min-h-15" ref="vListRef"
+          <VirtualList v-model="internalModList" dataKey="id" :keeps="50" class="max-h-[45vh] min-h-15" ref="vListRef"
             placeholderClass="ghost" wrapClass="" :fallbackOnBody="true" :appendToBody="true" :scrollSpeed="{ x: 0, y: 10 }"
             :group="{ name: 'mods', pull: 'clone', put:['mods'], revertDrag: true }" :animation="150"
             @drop="updateChildren" @drag="startDrag"

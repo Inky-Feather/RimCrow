@@ -10,8 +10,8 @@ export const useOrderStore = defineStore('order', () => {
   const checkResult = appStore.checkResult
   
   // === State ===
-  const backups = ref(null)           // 备份列表
-  const backupIds = ref([])           // 备份文件列表
+  const backups = ref(null)           // 备份文件列表
+  const backupIds = ref([])           // 当前备份的排序列表
   const currentBackupFile = ref('')   // 当前备份文件
   const backupLoadModifyTime = ref(0) // 备份加载顺序修改时间
 
@@ -51,7 +51,9 @@ export const useOrderStore = defineStore('order', () => {
   const saveLoadOrder = async () => {
     const modStore = useModStore()
     if (!modStore.isDirty) {
-      toast.info("Mod序列未修改")
+      setTimeout(() => {
+        toast.info("Mod序列未修改无须保存",{timeout: 1000})
+      }, 100);
       return true
     }
     if (!window.pywebview) return false

@@ -4,10 +4,12 @@ import { createToastInterface } from 'vue-toastification'
 import { useAppStore } from './appStore'
 import { useGroupStore } from './groupStore'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../utils/constants'
+import { useConfirmStore } from './confirmStore'
 
 export const useModStore = defineStore('mods', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
+  const confirmStore = useConfirmStore()
   const checkResult = appStore.checkResult
   
   // === State ===
@@ -22,6 +24,7 @@ export const useModStore = defineStore('mods', () => {
   const activeLoadModifyTime = ref(0) // 已激活列表最后修改时间戳
 
   const conflictList = ref([])        // 重复包名冲突列表
+  const coexistenceList = ref([])     // 共存Mod列表
   
   // 选择状态
   const selectedIds = ref([])         // 已选中的 Mod ID
@@ -185,9 +188,15 @@ export const useModStore = defineStore('mods', () => {
         mod.last_active_time = data.active_load_modify_time || Date.now()
       }
       // 强制保证列表字段存在且格式正确
-      if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
-      if (!Array.isArray(mod.tags)) mod.tags = []
       if (!Array.isArray(mod.author) && !mod.author) mod.author = ['Unknown'] 
+      if (!Array.isArray(mod.supported_versions)) mod.supported_versions = []
+      if (!Array.isArray(mod.supported_languages)) mod.supported_languages = []
+      if (!Array.isArray(mod.gallery_paths)) mod.gallery_paths = []
+      if (!Array.isArray(mod.load_after_mods)) mod.load_after_mods = []
+      if (!Array.isArray(mod.load_before_mods)) mod.load_before_mods = []
+      if (!Array.isArray(mod.incompatible_mods)) mod.incompatible_mods = []
+      if (!Array.isArray(mod.tags)) mod.tags = []
+      if (!Array.isArray(mod.ignored_issues)) mod.ignored_issues = []
       tempMap.set(mod.package_id.toLowerCase(), mod)
     })
     allModsMap.value = tempMap
@@ -327,18 +336,36 @@ export const useModStore = defineStore('mods', () => {
   }
   // 扫描完成事件处理
   const scanComplete = async (detail) => {
-    // 处理扫描结果，检测冲突提示
-    if (detail.conflicts && detail.conflicts.length > 0) {
+    let totalCount = 0
+    if (detail.coexistences && detail.coexistences.length > 0) {
+      coexistenceList.value = detail.coexistences
+      if (appStore.settings.show_coexistence_message){
+        console.warn("发现共存:", detail.coexistences)
+        totalCount += detail.coexistences.length
+      }
+    }
+    // 处理扫描结果，检测冲突提示 (包含可共存Mod)
+    if ((detail.conflicts && detail.conflicts.length > 0)) {
       console.warn("发现冲突:", detail.conflicts)
       conflictList.value = detail.conflicts
+      totalCount += detail.conflicts.length
+    }
+    if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning
-      toast.warning(`扫描完成，发现 ${detail.conflicts.length} 个包名重复冲突需要处理！`, {timeout: 10000})
+      toast.warning(`扫描完成，发现 ${totalCount} 个包名重复冲突需要处理！`, {timeout: 10000})
     } else {
       toast.success(`扫描完成，共计扫描${detail.total}个模组，新增${detail.stats.added}个，\n更新${detail.stats.updated}个，删除${detail.stats.removed}个，已知${detail.stats.skipped}个。`,{position: "top-center",timeout: 5000})
     }
     // 扫描结束后，主动拉取一次最新数据刷新界面
-    appStore.refreshData()
     console.log("扫描统计:", detail)
+    await appStore.refreshData()
+    // 状态注入
+    if (coexistenceList.value.length > 0){
+      // 处理可共存Mod，标记为 is_coexistence = true
+      coexistenceList.value.forEach(item => {
+        takeModById(item.package_id)['is_coexistence'] = true
+      })
+    }
   }
   // 自动排序 Mod
   const autoSortMods = async (mod_ids) => {
@@ -378,6 +405,31 @@ export const useModStore = defineStore('mods', () => {
     }
     return false
   }
+  // 创建本地共存
+  const localizeSelectedMods = async () => {
+    if (selectedIds.value.length === 0) return;
+    // 过滤出选中的工坊模组（如果是本地模组则没必要转换）
+    const workshopIds = selectedMods.value
+      .filter(m => m.source === 'workshop')
+      .map(m => m.package_id);
+    if (workshopIds.length === 0) {
+      toast.info("选中的模组中没有来自工坊的项");
+      return;
+    }
+    const confirm = await confirmStore.confirmAction(
+      '本地化确认',
+      `确定要将选中的 ${workshopIds.length} 个工坊模组复制到本地目录吗？\n复制后将独立占用磁盘空间，Steam 的更新将不再影响这些本地副本。`,
+      { type: 'info' }
+    );
+    if (confirm) {
+      appStore.isLoading = true;
+      const res = await window.pywebview.api.localize_workshop_mods(workshopIds);
+      if (appStore.checkResult(res, '模组本地化')) {
+        // 成功后会在完成时刷新数据
+      }
+      appStore.isLoading = false;
+    }
+  }
 
   // --- Mod数据操作 ---
   // 更新Mod用户数据
@@ -413,7 +465,7 @@ export const useModStore = defineStore('mods', () => {
       }));
       console.log("更新Mod最后操作时间:", {all_mods_time:all_mods})
       const res = await window.pywebview.api.update_mod_time(all_mods)
-      if (!checkResult(res, "更新Mod最后操作时间",true)) {
+      if (!checkResult(res, "更新Mod最后操作时间")) {
         await appStore.refreshData();
         return false
       }
@@ -590,6 +642,7 @@ export const useModStore = defineStore('mods', () => {
     }
   }
 
+
   // --- 实时问题分析 ---
   // 排序问题检测器
   const modIssues = computed(() => {
@@ -626,7 +679,7 @@ export const useModStore = defineStore('mods', () => {
         const gameVerMajor = appStore.settings.game_version.substring(0, 3) // 获取当前游戏主版本号（前三位）
         if (mod.supported_versions && !mod.supported_versions.includes(gameVerMajor)) {
            _addIssue(id, ISSUE_TYPE.WARN_VERSION_MISMATCH, ISSUE_LEVEL.WARN, 
-             `^^版本问题^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${mod.supported_versions.join('··, ··')}··)__`)
+             `^^版本问题^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${(mod.supported_versions || []).join('··, ··')}··)__`)
         }
       }
 
@@ -759,7 +812,7 @@ export const useModStore = defineStore('mods', () => {
 
     return issuesMap
   })
-  // 辅助：获取某个 Mod 的最高级别问题
+  // 辅助：获取某个 Mod 问题的最高级别
   const getModIssueState = (id) => {
     const issues = modIssues.value.get(id.toLowerCase())
     if (!issues || issues.length === 0) return null
@@ -899,7 +952,7 @@ export const useModStore = defineStore('mods', () => {
   return {
     // State
     allModsMap, dataVersion, inactiveIds, tempIds, activeIds, 
-    savedActiveIds, activeLoadModifyTime, conflictList, 
+    savedActiveIds, activeLoadModifyTime, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, 
 
     // Getters
@@ -908,7 +961,7 @@ export const useModStore = defineStore('mods', () => {
     // Actions
     setMods, reset, takeModById, takeModListByIds, displayModName, displayModType, displayModIcon, 
     updateInactiveIds, takeInactiveIds, removeIdsOnAllList, selectMods, clearSelection, 
-    scanMods, scanComplete, autoSortMods, 
+    scanMods, scanComplete, autoSortMods, localizeSelectedMods,
     updateModUserData, updateModTime, linkMods, unlinkMods, 
     setModsColor, setModsType, addModsTags, removeModsTags, selectModsTag, selectModsGroup, 
     getModIssueState, ignoreIssue, batchIgnoreIssues, getListIssues, 

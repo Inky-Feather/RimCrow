@@ -9,7 +9,7 @@ export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()
   
   // 1. 定义 Schema (你的“配置中心”)
-  // 这里实现了你想要的：统一配置、别名、来源、布尔值等
+  // 统一配置、别名、来源、布尔值等
   const searchSchema = {
     // === 基础信息 ===
     name: { type: FIELD_TYPES.STRING, defaultSearch: true, label: '名称' },
@@ -72,7 +72,7 @@ export const useSearchStore = defineStore('search', () => {
             /paths?$/i,       // 屏蔽所有以 path 结尾的 (install_path)
             /colors?$/i,      // 屏蔽所有以 color 结尾的 (color)
             'description','notes',    // 屏蔽描述 (太长，不适合 key:value 搜索，适合全文搜索)
-            'version','workshop_id','id','mod_id',
+            'version','workshop_id','id','mod_id', 'path_hash',
             // 'ignored_issues',
         ]
     })
