@@ -5,13 +5,10 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useProfileStore } from './profileStore'
-import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../utils/modIdentity'
+import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, normalizeWorkshopId, pushUnique } from '../utils/modIdentity'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../utils/versioning'
 
 const TOOL_MOD_IDS = ['rmm.companion']
-const LANGUAGE_PACK_EXCLUDED_OWNER_IDS = new Set([
-  'brrainz.harmony',
-])
 
 const CATEGORY_ORDER = [
   'core',
@@ -90,6 +87,20 @@ const mergeText = (...values) => [...new Set(
     .filter(Boolean)
 )].join('；')
 
+const getResolvedLanguagePackOwnerIds = (mod) => (
+  [...new Set(
+    (mod?.language_pack_owner_result?.owners || [])
+      .map(owner => normalizePackageId(owner?.package_id))
+      .filter(Boolean)
+  )]
+)
+const hasHighConfidenceLanguagePackOwners = (mod) => (
+  String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase() === 'high'
+)
+const isLanguagePackDeclaredForCurrentLanguage = (mod, targetLanguage) => (
+  (mod?.supported_languages || []).includes(String(targetLanguage || '').trim())
+)
+
 const listOwnerNames = (owners = [], modStore) => (
   mapUniqueDisplayNames(owners, ownerId => modStore.displayModName(ownerId))
 )
@@ -167,23 +178,28 @@ export const useSupplementStore = defineStore('supplement', () => {
     return getVersionInfoByVersions(currentGameVersion.value, versions)
   }
 
-  // 预构建“被翻译模组 -> 可用语言包”的查找表，减少递归过程中重复扫描全量模组。
+  // 统一复用后端的 language_pack_owner_result。
+  // strictTargetMap: 语言包明确声明支持当前语言
+  // fallbackTargetMap: 归属可信，但语言作者可能漏标 supported_languages
   const getLanguagePackTargetMap = () => {
-    const targetMap = new Map()
-    if (!currentLanguage.value) return targetMap
+    const strictTargetMap = new Map()
+    const fallbackTargetMap = new Map()
+    if (!appStore.settings.check_language_support || !currentLanguage.value) {
+      return { strictTargetMap, fallbackTargetMap }
+    }
     for (const mod of modStore.allModsMap.values()) {
       if (!mod || mod.isMissing || !mod.path || !isLanguagePackMod(mod)) continue
-      if (!modSupportsLanguage(mod, currentLanguage.value)) continue
-      const relatedTargets = new Set()
-      ;(mod.rules?.dependencies || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
-      ;(mod.rules?.load_after || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
+      if (!hasHighConfidenceLanguagePackOwners(mod)) continue
+      const relatedTargets = new Set(getResolvedLanguagePackOwnerIds(mod))
+      const supportsCurrentLanguage = isLanguagePackDeclaredForCurrentLanguage(mod, currentLanguage.value)
       relatedTargets.forEach(targetId => {
         if (!targetId) return
+        const targetMap = supportsCurrentLanguage ? strictTargetMap : fallbackTargetMap
         if (!targetMap.has(targetId)) targetMap.set(targetId, [])
         targetMap.get(targetId).push(mod)
       })
     }
-    return targetMap
+    return { strictTargetMap, fallbackTargetMap }
   }
 
   // ctx 是一次补缺计算共享的只读上下文，递归构图时都复用这一份派生数据。
@@ -192,7 +208,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     return {
       activeIds: normalizedActiveIds,
       activeSet: new Set(normalizedActiveIds),
-      languagePackTargetMap: getLanguagePackTargetMap(),
+      ...getLanguagePackTargetMap(),
     }
   }
 
@@ -203,20 +219,62 @@ export const useSupplementStore = defineStore('supplement', () => {
     return suffix ? `${joined}${suffix}` : joined
   }
 
-  // 这些通用前置不参与语言包补缺，避免把提示范围扩大到用户不关心的基础包。
-  const shouldSkipLanguageSupplementOwner = (ownerId = '') => {
-    const normalizedOwnerId = normalizePackageId(ownerId)
-    return isCoreId(normalizedOwnerId)
-      || isOfficialDlcId(normalizedOwnerId)
-      || isToolModId(normalizedOwnerId)
-      || LANGUAGE_PACK_EXCLUDED_OWNER_IDS.has(normalizedOwnerId)
+  const sortReplacementCandidates = (candidates = []) => (
+    [...candidates].sort((left, right) => {
+      const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
+      const rightVersion = getVersionInfo(right.package_id).tone === 'success' ? 0 : 1
+      if (leftVersion !== rightVersion) return leftVersion - rightVersion
+      return modStore.displayModName(left).localeCompare(modStore.displayModName(right))
+    })
+  )
+
+  const collectAuthoritativeReplacementCandidates = (missingMod, activeSet, trailSet = new Set()) => {
+    const missingPackageId = normalizePackageId(missingMod?.package_id)
+    if (!missingPackageId) return []
+
+    const candidateIds = []
+    const replacementPackageId = normalizePackageId(missingMod?.replacement?.new_package_id)
+    const replacementWorkshopId = normalizeWorkshopId(missingMod?.replacement?.new_workshop_id)
+
+    if (replacementPackageId) {
+      uniquePush(candidateIds, replacementPackageId)
+    }
+
+    if (replacementWorkshopId) {
+      Array.from(modStore.allModsMap.values()).forEach(candidate => {
+        const candidateId = normalizePackageId(candidate?.package_id)
+        if (!candidateId) return
+        if (normalizeWorkshopId(candidate?.workshop_id) !== replacementWorkshopId) return
+        uniquePush(candidateIds, candidateId)
+      })
+    }
+
+    return sortReplacementCandidates(
+      candidateIds
+        .map(candidateId => modStore.takeModById(candidateId))
+        .filter(candidate => {
+          const candidateId = normalizePackageId(candidate?.package_id)
+          return !!candidateId
+            && candidateId !== missingPackageId
+            && !candidate?.isMissing
+            && !!candidate?.path
+            && !activeSet.has(candidateId)
+            && !trailSet.has(candidateId)
+        })
+    )
   }
 
-  // 替代项限定在同一 workshop_id 且已安装的模组中查找，并优先兼容当前版本。
+  // 替代项优先使用权威 replacement 规则匹配；只有缺少规则信息时才回退旧 heuristic。
   const findReplacementCandidates = (missingMod, activeSet, trailSet = new Set()) => {
+    if (!missingMod?.isMissing) return []
+
+    const authoritativeCandidates = collectAuthoritativeReplacementCandidates(missingMod, activeSet, trailSet)
+    if (authoritativeCandidates.length > 0) return authoritativeCandidates
+
     const workshopId = String(missingMod?.workshop_id || '').trim()
-    if (!missingMod?.isMissing || !workshopId) return []
-    return Array.from(modStore.allModsMap.values())
+    if (!workshopId) return []
+
+    return sortReplacementCandidates(Array.from(modStore.allModsMap.values())
       .filter(candidate => {
         const candidateId = normalizePackageId(candidate?.package_id)
         return !!candidateId
@@ -227,12 +285,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           && String(candidate?.workshop_id || '').trim() === workshopId
           && candidateId !== normalizePackageId(missingMod?.package_id)
       })
-      .sort((left, right) => {
-        const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
-        const rightVersion = getVersionInfo(right.package_id).tone === 'success' ? 0 : 1
-        if (leftVersion !== rightVersion) return leftVersion - rightVersion
-        return modStore.displayModName(left).localeCompare(modStore.displayModName(right))
-      })
+    )
   }
 
   // 这里只收集“候选条目”，不直接决定是否显示或启用。
@@ -252,40 +305,59 @@ export const useSupplementStore = defineStore('supplement', () => {
         if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
 
         const installedOptionIds = optionIds.filter(optionId => modStore.hasRealModById(optionId))
-        if (installedOptionIds.length === 0) return
-
         const category = isCoreId(targetId)
           ? 'core'
           : isOfficialDlcId(targetId)
             ? 'official_dlc'
             : 'dependency'
 
-        const key = `dependency:${targetId}:${installedOptionIds.join('|')}`
+        const key = `dependency:${targetId}:${installedOptionIds.join('|') || 'missing'}`
         if (!entryMap.has(key)) {
-          const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
-          const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
-          entryMap.set(key, {
-            entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
-            key,
-            category,
-            severity: CATEGORY_META[category]?.severity || 'required',
-            title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
-            reason: '',
-            detail: '',
-            owners: [],
-            packageId: onlyOptionId,
-            removeIds: [],
-            relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
-            allowSkip: true,
-            defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
-            options: installedOptionIds.map(optionId => ({
-              packageId: optionId,
-              title: modStore.displayModName(optionId),
-              detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+          if (installedOptionIds.length === 0) {
+            entryMap.set(key, {
+              entryType: 'choice',
+              key,
+              category,
+              severity: CATEGORY_META[category]?.severity || 'required',
+              title: modStore.displayModName(targetId),
+              reason: '',
+              detail: '',
+              owners: [],
+              packageId: '',
               removeIds: [],
-              relationLabel: optionId === targetId ? '依赖' : '备选依赖',
-            })),
-          })
+              relationLabel: '缺失依赖',
+              allowSkip: true,
+              defaultOptionPackageId: '',
+              options: [],
+              hasAlternatives: alternativeIds.length > 0,
+            })
+          } else {
+            const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
+            const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
+            entryMap.set(key, {
+              entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
+              key,
+              category,
+              severity: CATEGORY_META[category]?.severity || 'required',
+              title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
+              reason: '',
+              detail: '',
+              owners: [],
+              packageId: onlyOptionId,
+              removeIds: [],
+              relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
+              allowSkip: true,
+              defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
+              options: installedOptionIds.map(optionId => ({
+                packageId: optionId,
+                title: modStore.displayModName(optionId),
+                detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+                removeIds: [],
+                relationLabel: optionId === targetId ? '依赖' : '备选依赖',
+              })),
+              hasAlternatives: alternativeIds.length > 0,
+            })
+          }
         }
         uniquePush(entryMap.get(key).owners, ownerId)
       })
@@ -294,6 +366,16 @@ export const useSupplementStore = defineStore('supplement', () => {
     return Array.from(entryMap.values()).map(entry => {
       const ownerCount = entry.owners.length
       const ownerDetail = buildOwnersDetail(entry.owners, ownerCount > 0 ? ' 的依赖' : '依赖')
+      if ((entry.options || []).length === 0) {
+        return {
+          ...entry,
+          reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖，但本地未安装可补齐项` : '当前序列缺少依赖项，且本地没有可直接启用的候选',
+          detail: mergeText(
+            ownerDetail,
+            entry.hasAlternatives ? '当前环境未安装原始依赖及任何备选模组' : '当前环境未安装该依赖'
+          ),
+        }
+      }
       return {
         ...entry,
         reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖` : '当前序列缺少依赖项',
@@ -302,19 +384,19 @@ export const useSupplementStore = defineStore('supplement', () => {
     })
   }
 
-  // 语言包候选会参与递归构图，因此“新补进来的依赖”也能继续带出自己的语言包。
+  // 语言包补缺与“问题提示”保持同一口径：
+  // 仅当原模组不支持当前语言、且当前路径上没有已满足的对应语言包时，才补出首个候选语言包。
   const collectLanguageEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
-    if (!currentLanguage.value) return []
+    if (!appStore.settings.check_language_support || !currentLanguage.value) return []
     const entryMap = new Map()
 
     ownerIds.forEach(ownerId => {
       const owner = modStore.takeModById(ownerId)
       if (!owner || isLanguagePackMod(owner)) return
-      if (shouldSkipLanguageSupplementOwner(ownerId)) return
       const supportedLanguages = owner.supported_languages || []
       if (supportedLanguages.length === 0) return
       if (supportedLanguages.includes(currentLanguage.value)) return
-      const candidates = (ctx.languagePackTargetMap.get(normalizePackageId(ownerId)) || [])
+      const strictCandidates = (ctx.strictTargetMap.get(normalizePackageId(ownerId)) || [])
         .filter(candidate => {
           const candidateId = normalizePackageId(candidate?.package_id)
           return !!candidateId
@@ -323,28 +405,38 @@ export const useSupplementStore = defineStore('supplement', () => {
             && !satisfiedSet.has(candidateId)
             && !trailSet.has(candidateId)
         })
-      if (candidates.length === 0) return
+      const fallbackCandidates = (ctx.fallbackTargetMap.get(normalizePackageId(ownerId)) || [])
+        .filter(candidate => {
+          const candidateId = normalizePackageId(candidate?.package_id)
+          return !!candidateId
+            && !candidate?.isMissing
+            && !!candidate?.path
+            && !satisfiedSet.has(candidateId)
+            && !trailSet.has(candidateId)
+        })
+      const candidate = strictCandidates[0] || fallbackCandidates[0]
+      if (!candidate) return
 
-      candidates.forEach(candidate => {
-        const candidateId = normalizePackageId(candidate.package_id)
-        const key = `language:${candidateId}`
-        if (!entryMap.has(key)) {
-          entryMap.set(key, {
-            entryType: 'toggle',
-            key,
-            category: 'language_pack',
-            severity: 'optional',
-            title: modStore.displayModName(candidate),
-            reason: '',
-            detail: '',
-            owners: [],
-            packageId: candidateId,
-            removeIds: [],
-            relationLabel: '语言包',
-          })
-        }
-        uniquePush(entryMap.get(key).owners, ownerId)
-      })
+      const candidateId = normalizePackageId(candidate.package_id)
+      const key = `language:${candidateId}`
+      if (!entryMap.has(key)) {
+        const isFallback = strictCandidates.length === 0
+        entryMap.set(key, {
+          entryType: 'toggle',
+          key,
+          category: 'language_pack',
+          severity: isFallback ? 'optional' : 'optional',
+          title: modStore.displayModName(candidate),
+          reason: '',
+          detail: '',
+          owners: [],
+          packageId: candidateId,
+          removeIds: [],
+          relationLabel: '语言包',
+          isLanguageFallback: isFallback,
+        })
+      }
+      uniquePush(entryMap.get(key).owners, ownerId)
     })
 
     return Array.from(entryMap.values()).map(entry => {
@@ -352,7 +444,9 @@ export const useSupplementStore = defineStore('supplement', () => {
       return {
         ...entry,
         reason: ownerCount > 1 ? `可为 ${ownerCount} 个模组提供当前语言支持` : '可补充当前语言包',
-        detail: buildOwnersDetail(entry.owners, ' 的语言包'),
+        detail: entry.isLanguageFallback
+          ? mergeText(buildOwnersDetail(entry.owners, ' 的可能相关语言包'), '该语言包未声明支持当前语言')
+          : buildOwnersDetail(entry.owners, ' 的语言包'),
       }
     })
   }

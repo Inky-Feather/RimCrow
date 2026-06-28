@@ -163,6 +163,7 @@ def _2to3(old_version):
                     name='Default Profile',
                     game_install_path=game_install_path, # 防止 None 报错
                     user_data_path=game_data_path,
+                    prefer_steam_launch=True,
                 )
 
             # ---------------------------------------------------------

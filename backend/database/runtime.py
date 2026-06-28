@@ -54,9 +54,9 @@ def ensure_minimum_startup_data(conn: sqlite3.Connection):
             """
             INSERT INTO gameprofile(
                 id, name, description, game_version, game_install_path, user_data_path,
-                run_commands, use_workshop_mods, use_self_mods, is_steam,
+                run_commands, prefer_steam_launch, use_workshop_mods, use_self_mods, is_steam,
                 inactive_mods_order, last_played_time, created_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 'default',
@@ -66,6 +66,7 @@ def ensure_minimum_startup_data(conn: sqlite3.Connection):
                 '',
                 '',
                 json.dumps([], ensure_ascii=False),
+                1,
                 1,
                 0,
                 0,

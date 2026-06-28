@@ -37,7 +37,7 @@ def extract_workshop_id_from_url(value: Any) -> str:
     return normalize_cached_workshop_id(match.group(1)) if match else ""
 
 
-def _candidate_sort_key(current_game_version: str, candidate: dict[str, Any]) -> tuple[int, int, int, int, int, str]:
+def _candidate_sort_key(current_game_version: str, candidate: dict[str, Any]) -> tuple[int, int, int, int, int, int, str]:
     """
     为候选工坊详情生成排序键。
 
@@ -51,7 +51,7 @@ def _candidate_sort_key(current_game_version: str, candidate: dict[str, Any]) ->
         *version_preference_key(current_game_version, candidate.get("game_versions")),
         int(candidate.get("time_updated") or 0),
         1 if candidate.get("author") else 0,
-        candidate.get("workshop_id") or "",
+        candidate.get("workshop_id", "") or "",
     )
 
 
@@ -173,12 +173,12 @@ def build_install_source(
     }
 
 
-def dedupe_install_sources(sources: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def dedupe_install_sources(sources) -> list[dict[str, Any]]:
     source_map: dict[str, dict[str, Any]] = {}
     for source in sources or []:
         normalized = build_install_source(
             source,
-            fallback_package_id=source.get("package_id") if isinstance(source, dict) else "",
+            fallback_package_id=source.get("package_id", "") if isinstance(source, dict) else "",
             source_origin=str(source.get("source_origin") or source.get("sourceOrigin") or "unknown") if isinstance(source, dict) else "unknown",
             is_replacement=bool(source.get("is_replacement")) if isinstance(source, dict) else False,
         )
@@ -192,7 +192,7 @@ def dedupe_install_sources(sources: list[dict[str, Any]] | None) -> list[dict[st
     return list(source_map.values())
 
 
-def install_source_sort_key(current_game_version: str, source: dict[str, Any]) -> tuple[int, int, int, int, int, str]:
+def install_source_sort_key(current_game_version: str, source: dict[str, Any]) -> tuple[int, int, int, int, int, int, str]:
     return (
         *version_preference_key(current_game_version, source.get("supported_versions") or []),
         1 if source.get("kind") == "workshop" else 0,

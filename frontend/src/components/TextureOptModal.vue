@@ -15,47 +15,48 @@
               <span v-tooltip="textureOptHelpText" class="inline-flex size-5 cursor-help items-center justify-center text-lg font-bold text-text-dim hover:text-text-main hover:border-text-main/30">?</span>
             </h2>
 
-            <div data-tour="texture-opt-summary" class="mx-5 grid grid-cols-4 items-center rounded-xl border border-text-main/6 bg-black/18 px-4 py-2 text-xs">
-              <div class=" text-accent-tip/80">
-                PNG <span class="ml-1 text-text-dim">{{ summary.source_total_count || 0 }} 张</span>
-                <span class="ml-1 font-mono font-bold text-accent-tip">{{ formatFileSize(summary.source_total_bytes || 0) }}</span>
-              </div>
-              <div class="col-span-2 grid grid-cols-3 gap-2">
-                <div class="shrink-0 text-text-dim">
-                  小图 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_small_count || 0 }}</span>
+            <div data-tour="texture-opt-summary" class="mx-5 min-w-0 flex-1 rounded-xl border border-text-main/6 bg-black/18 px-4 py-2 text-xs">
+              <div class="grid grid-cols-4 gap-x-4 gap-y-2">
+                <div class="min-w-0">
+                  <span class="text-accent-tip/80">PNG</span>
+                  <span class="ml-1 text-text-dim">{{ summary.source_total_count || 0 }} 张</span>
+                  <span class="ml-1 font-mono font-bold text-accent-tip">{{ formatFileSize(summary.source_total_bytes || 0) }}</span>
                 </div>
-                <div class="shrink-0 text-text-dim">
-                  忽略 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_mask_count || 0 }}</span>
+                <div class="min-w-0">
+                  <span class="text-accent-primary/80">DDS</span>
+                  <span class="ml-1 text-text-dim">{{ summary.output_total_count || 0 }} 张</span>
+                  <span class="ml-1 font-mono font-bold text-accent-primary">{{ formatFileSize(summary.output_total_bytes || 0) }}</span>
                 </div>
-                <div v-if="summary.unsupported_source_count" class="shrink-0 text-accent-warning cursor-help" v-tooltip="unsupportedSummaryTooltip" >
-                  无效PNG <span class="ml-1 font-mono font-bold text-text-main">{{ summary.unsupported_source_count }}</span>
+                <div class="min-w-0 truncate text-accent-highlight">
+                  显存占用预估
+                  <span class="ml-1 line-through opacity-50">{{ formatFileSize(summary.source_vram_bytes_est || 0) }}</span>
+                  <span class="mx-1">→</span>
+                  <span class="font-mono font-bold">{{ formatFileSize(summary.output_vram_bytes_est || 0) }}</span>
                 </div>
-              </div>
-              <div class=" text-accent-highlight">
-                显存占用预估
-                <span class="ml-1 line-through opacity-50">{{ formatFileSize(summary.source_vram_bytes_est || 0) }}</span>
-                <span class="mx-1">→</span>
-                <span class="font-mono font-bold">{{ formatFileSize(summary.output_vram_bytes_est || 0) }}</span>
-              </div>
+                <div class="min-w-0 text-text-dim">
+                  模组 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.mod_count || 0 }}</span>
+                </div>
 
-              <div class="shrink-0 text-accent-primary/80">
-                DDS
-                <span class="ml-1 text-text-dim">{{ summary.output_total_count || 0 }} 张</span>
-                <span class="ml-1 font-mono font-bold text-accent-primary">{{ formatFileSize(summary.output_total_bytes || 0) }}</span>
-              </div>
-              <div class="col-span-2 grid grid-cols-3 gap-2 ">
-                <div v-if="summary.external_orphan_output_count" class="shrink-0 text-text-dim" >
-                  无源 DDS <span class="ml-1 font-mono font-bold text-text-main">{{ summary.external_orphan_output_count }}</span>
-                </div>
-                <div class="shrink-0 text-accent-warning/80">
+                <div class="min-w-0 text-accent-warning/80">
                   待生成 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.generate_required_count || 0 }}</span>
                 </div>
-                <div class="shrink-0 text-accent-success/80">
-                  已生成 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.managed_output_count || 0 }}</span>
+                <div class="min-w-0 text-text-dim">
+                  超范围 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_small_count || 0 }}</span>
                 </div>
-              </div>
-              <div class="shrink-0 text-text-dim">
-                模组 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.mod_count || 0 }}</span>
+                <div class="min-w-0 flex items-center gap-4 col-span-2">
+                  <span class="shrink-0 text-accent-tip/80">
+                    缩放 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.scaled_count || 0 }}</span>
+                  </span>
+                  <span class="shrink-0 text-accent-secondary/80">
+                    回退 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.fallback_scaled_count || 0 }}</span>
+                  </span>
+                  <span class="shrink-0 text-text-dim">
+                    原尺寸 <span class="ml-1 font-mono font-bold text-text-main">{{ summary.keep_original_count || 0 }}</span>
+                  </span>
+                  <span v-if="summary.unsupported_source_count" class="shrink-0 cursor-help text-accent-warning" v-tooltip="unsupportedSummaryTooltip">
+                    无效 PNG <span class="ml-1 font-mono font-bold text-text-main">{{ summary.unsupported_source_count }}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -161,70 +162,73 @@
 
                 <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/12 p-3">
                   <h3 class="text-xs font-black uppercase tracking-widest text-text-main">生成选项</h3>
-                  <CommonSwitch label="全覆盖生成" description="开启后覆盖已有 DDS；关闭则只处理缺失或源图更新后的 PNG。"
-                    v-model="config.overwrite_existing" @change="saveConfig" mini />
-                  <CommonSwitch label="生成 Mipmap" description="缩放观察时更平滑，但会额外增加约 1/3 DDS 体积。" v-model="config.generate_mipmaps"
+                  <CommonSwitch label="生成 Mipmap" description="Mipmap 是给远距离显示准备的缩小层级。开启后远看更平滑、闪烁更少，但生成时间和文件体积会增加一些。" v-model="config.generate_mipmaps"
                     @change="saveConfig" mini />
-                  <CommonSwitch label="跳过小贴图" description="减少对图标、按钮等小尺寸 PNG 的无效处理。"
-                    v-model="config.skip_small_textures" @change="saveConfig" mini />
+                  <CommonSelect label="生成范围" v-model="config.process_mode" @change="saveConfig"
+                    description="决定这次是全量重做、只补缺失结果，还是只更新可缩放的图片。"
+                    :options="[
+                      { label: '完全覆盖生成', value: 'all_overwrite' },
+                      { label: '增量生成', value: 'all_skip_existing' },
+                      { label: '只生成压缩贴图（覆盖）', value: 'scaled_only_overwrite' }
+                    ]"
+                  />
                 </section>
 
                 <section class="space-y-3 rounded-xl border border-text-main/8 bg-black/12 p-3">
                   <h3 class="text-xs font-black uppercase tracking-widest text-text-main">缩放降显存</h3>
-                  <CommonSelect label="最大分辨率限制" v-model.number="config.max_size" @change="saveConfig"
-                    description="任何长或宽超过该限制的 PNG 都会被等比缩小。"
+                  <CommonSelect label="最小清晰度" v-model.number="config.max_size" @change="saveConfig"
+                    description="缩放时会尽量保证最短边不低于这个目标，避免图片被压得过小。"
                     :options="[
-                      { label: '不限制 (原尺寸)', value: 0 },
-                      { label: '2048 px', value: 2048 },
-                      { label: '1024 px', value: 1024 },
-                      { label: '512 px', value: 512 },
                       { label: '256 px', value: 256 },
                       { label: '128 px', value: 128 }
                     ]"
                   />
-                  <CommonSelect label="全局缩放倍率" v-model.number="config.scale_factor" @change="saveConfig"
-                    description="对贴图整体做额外缩放。通过修改此项可减少显存占用，倍率过低可能会导致贴图显示模糊。"
+                  <CommonSelect label="缩放比例" v-model.number="config.scale_factor" @change="saveConfig"
+                    description="优先按当前比例处理；如果某些图片不适合这个比例，会自动回退到更稳妥的比例，必要时保持原尺寸。"
                     :options="[
-                      { label: '1.0x (保持原样)', value: 1.0 },
-                      { label: '0.8x', value: 0.8 },
-                      { label: '0.75x', value: 0.75 },
-                      { label: '0.6x', value: 0.6 },
-                      { label: '0.5x', value: 0.5 },
-                      { label: '0.4x', value: 0.4 },
-                      { label: '0.25x', value: 0.25 },
-                      { label: '0.2x', value: 0.2 }
+                      { label: '100%', value: 1.0 },
+                      { label: '80%', value: 0.8 },
+                      { label: '75%', value: 0.75 },
+                      { label: '60%', value: 0.6 },
+                      { label: '50%', value: 0.5 },
+                      { label: '40%', value: 0.4 },
+                      { label: '25%', value: 0.25 },
+                      { label: '20%', value: 0.2 }
                     ]"
                   />
+                  <CommonSwitch label="超范围图片不参与缩放" description="太小或太大的图片仍会生成 DDS，但会保留原尺寸，不参与缩放比例计算。"
+                    v-model="config.skip_small_textures" @change="saveConfig" mini />
                 </section>
 
                 <section class="space-y-2 rounded-xl border border-text-main/8 bg-black/12 p-3">
-                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">清理规则</h3>
-                  <CommonSwitch label="自动清理失效 DDS" description="自动清理本程序生成的且源图已消失或变更的旧 DDS。"
-                    v-model="config.clean_orphaned_dds" @change="saveConfig" mini />
-                  <CommonSwitch label="仅清理本程序 DDS" description="开启后只删本程序生成并登记过的 DDS；关闭后会删除包括外部程序生成的DDS，即所有存在 PNG 源图的 DDS / DDS.ZSTD 都会被删除。"
-                    v-model="config.clean_generated_only" @change="saveConfig" mini />
+                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">清理说明</h3>
+                  <div class="rounded-lg border border-text-main/10 bg-black/20 px-3 py-2 text-xs text-text-dim">
+                    清理功能会删除当前选中范围内，存在同名 PNG 源图的 DDS 文件，即所有已生成的 DDS 文件，不清理独立DDS文件。
+                  </div>
                 </section>
               </div>
             </div>
 
             <div class="shrink-0 border-t border-text-main/5 bg-black/20 p-4">
               <div data-tour="texture-opt-actions" class="space-y-2">
-                <button data-tour="texture-opt-analyze" @click="handleAnalyze" :disabled="isBusy"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 py-2.5 font-bold text-accent-secondary transition-all disabled:cursor-not-allowed disabled:opacity-50">
-                  <ScanSearch class="w-4 h-4" /> 扫描统计
-                </button>
+                <div class="flex gap-2">
+                  <button data-tour="texture-opt-analyze" @click="handleAnalyze" :disabled="isBusy"
+                    class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 py-2.5 font-bold text-accent-secondary transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+                    <ScanSearch class="w-4 h-4" /> 扫描统计
+                  </button>
+                  <button data-tour="texture-opt-clean" @click="handleCleanGenerated" :disabled="!toolStatus.available || isBusy"
+                    class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-warning/30 bg-accent-warning/10 py-2.5 font-bold text-accent-warning transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+                    <BrushCleaning class="w-4 h-4" /> 清理已生成 DDS
+                  </button>
+                </div>
 
                 <button v-if="!isBusy" data-tour="texture-opt-generate" @click="handleOptimize" :disabled="!toolStatus.available"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary py-3 font-black text-black shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">
-                  <Rocket class="w-5 h-5" /> {{ config.overwrite_existing ? '全覆盖生成 DDS' : '增量生成 DDS' }}
+                  class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-primary py-3 font-black text-black shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all hover:scale-102 active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
+                  <Rocket class="w-5 h-5" /> {{ processModeLabel }}
                 </button>
 
-                <button v-if="!isBusy" data-tour="texture-opt-clean" @click="handleCleanGenerated" :disabled="!toolStatus.available"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-warning/30 bg-accent-warning/10 py-2.5 font-bold text-accent-warning transition-all disabled:cursor-not-allowed disabled:opacity-50">
-                  <BrushCleaning class="w-4 h-4" /> 清理已生成 DDS
-                </button>
 
-                <button v-else @click="handleCancel" class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-danger py-3 font-black text-white shadow-[0_0_15px_rgba(244,63,94,0.3)] transition-all active:scale-95">
+                <button v-else @click="handleCancel" class="flex w-full items-center justify-center gap-2 rounded-xl bg-accent-danger py-3 font-black text-white shadow-[0_0_15px_rgba(244,63,94,0.3)] transition-all hover:scale-102 active:scale-95 cursor-pointer">
                   <Ban class="w-5 h-5" /> 停止当前任务
                 </button>
               </div>
@@ -239,7 +243,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
-import { useDebounceFn, useNow } from '@vueuse/core'
+import { useNow } from '@vueuse/core'
 import { Ban, BrushCleaning, CheckCircle2, Cpu, Images, Inbox, Loader2, Rocket, ScanSearch, Search, X } from 'lucide-vue-next'
 import { useAppStore } from '../stores/appStore'
 import { useTextureStore } from '../stores/textureStore'
@@ -262,7 +266,7 @@ const now = useNow({ interval: 1000 })
 const targetScope = ref('active')
 const searchQuery = ref('')
 const sortMetric = ref('impact')
-const textureOptHelpText = '把真实 PNG 源图预先转换成 DDS 压缩贴图。代价是首次生成需要时间并额外占用磁盘；收益是更低显存压力、更快贴图载入，以及大型模组环境下更少的卡顿和爆显存风险。'
+const textureOptHelpText = '把 PNG贴图提前转换成更适合游戏读取的 DDS 格式。通常能减少显存压力、加快加载，以及大型模组环境下更少的卡顿和爆显存风险；但会占据更多磁盘空间，生成需要一定时间。'+'\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助'
 const textureListMinItemSize = computed(() => Math.max(88, Math.round(Number(appStore.settings.ui.font_size || 14) * 7.2)))
 
 const sortOptions = [
@@ -335,10 +339,8 @@ const getRowSizeDependencies = (item) => [
   textureStore.viewMode,
   String(item?.mod_name || ''),
   Number(item?.generate_required_count || 0),
-  Number(item?.managed_output_count || 0),
-  Number(item?.skip_mask_count || 0),
   Number(item?.unsupported_source_count || 0),
-  Number(item?.external_orphan_output_count || 0),
+  JSON.stringify(item?.scale_breakdown || []),
   Number(item?.source_total_count || 0),
   Number(item?.output_total_count || 0),
   Number(item?.source_total_bytes || 0),
@@ -346,7 +348,7 @@ const getRowSizeDependencies = (item) => [
 ]
 const unsupportedSummaryTooltip = computed(() => {
   const preview = Array.isArray(summary.value.engine_unsupported_preview) ? summary.value.engine_unsupported_preview : []
-  if (!preview.length) return '发现扩展名为 PNG、但文件内容并不是 PNG 的伪装源图，todds 无法处理。'
+  if (!preview.length) return '有些文件看起来像图片，其实不是正常图片，已经自动跳过。'
   return [
     '以下伪装 PNG 已从任务中自动排除：',
     ...preview.map(item => `${item.mod_name} / ${item.rel_path}${item.reason ? ` - ${item.reason}` : ''}`),
@@ -355,24 +357,40 @@ const unsupportedSummaryTooltip = computed(() => {
 
 const processedCount = computed(() => {
   const details = progressState.value.details || {}
-  return Number(details.done || details.processed_mods || 0)
+  return Number((details.phase_done ?? details.done ?? details.processed_mods) || 0)
 })
 
 const totalCount = computed(() => {
   const details = progressState.value.details || {}
-  return Number(details.total || details.total_mods || 0)
+  return Number((details.phase_total ?? details.total ?? details.total_mods) || 0)
+})
+
+const progressPhaseLabel = computed(() => {
+  const details = progressState.value.details || {}
+  return String(details.phase_label || '')
+})
+
+const processModeLabel = computed(() => {
+  if (config.value.process_mode === 'all_overwrite') return '完全覆盖生成'
+  if (config.value.process_mode === 'all_skip_existing') return '增量生成'
+  return '只生成压缩贴图'
 })
 
 const progressCountLabel = computed(() => {
   if (!totalCount.value) return ''
   const details = progressState.value.details || {}
-  const unit = details.total_mods != null || details.processed_mods != null ? '模组' : '项'
-  return `${processedCount.value}/${totalCount.value} ${unit}`
+  const unit = String(details.phase_unit || (details.total_mods != null || details.processed_mods != null ? '模组' : '项'))
+  const phase = progressPhaseLabel.value ? `${progressPhaseLabel.value} ` : ''
+  return `${phase}${processedCount.value}/${totalCount.value} ${unit}`
 })
 
 const progressFullMessage = computed(() => String(progressState.value.message || '处理中...'))
 const showProgressBlock = computed(() => isBusy.value || showFinishedProgress.value)
-const progressDisplayPercent = computed(() => (showFinishedProgress.value ? 100 : Number(progressState.value.percent || 0)))
+const progressDisplayPercent = computed(() => {
+  if (showFinishedProgress.value) return 100
+  const details = progressState.value.details || {}
+  return Number((details.phase_percent ?? progressState.value.percent) || 0)
+})
 const progressStatusIcon = computed(() => (showFinishedProgress.value ? CheckCircle2 : Loader2))
 const progressStatusIconClass = computed(() => (showFinishedProgress.value ? 'text-accent-success' : 'text-accent-primary animate-spin'))
 const progressBarClass = computed(() => (showFinishedProgress.value ? 'bg-accent-success' : 'bg-accent-primary'))
@@ -395,12 +413,6 @@ const showFinishedProgress = computed(() => {
   return ['success', 'failed', 'cancelled'].includes(status)
 })
 
-const debouncedAnalyze = useDebounceFn(() => {
-  if (textureStore.modsData.length > 0 && !isBusy.value) {
-    handleAnalyze()
-  }
-}, 400)
-
 const closeModal = () => {
   appStore.uiState.showTextureOptModal = false
 }
@@ -408,7 +420,6 @@ const closeModal = () => {
 const saveConfig = async () => {
   await appStore.saveSetting('texture_opt', config.value)
   await textureStore.checkToolStatus()
-  debouncedAnalyze()
 }
 
 const getTargetIds = () => {

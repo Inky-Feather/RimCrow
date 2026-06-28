@@ -111,14 +111,12 @@
 
 <script setup>
 import { useAppStore } from '../stores/appStore'
-import { useToast } from "vue-toastification";
 import ProfileSwitcher from './utils/ProfileSwitcher.vue';
 import { BotMessageSquare, ClipboardList, CloudCog, Images } from 'lucide-vue-next';
 import { useProfileStore } from '../stores/profileStore';
 import { useOrderStore } from '../stores/orderStore';
 
 
-const toast = useToast();
 const appStore = useAppStore()
 const orderStore = useOrderStore()
 const profileStore = useProfileStore()
@@ -126,10 +124,9 @@ const profileStore = useProfileStore()
 
 // 从导入列表加载
 const loadOrder = async (path=null) => {
-  // 调用后端加载接口
-  const data = await orderStore.getBackupOrder(path)
+  // 顶部入口属于外部导入，导入后需要登记为临时项并切换过去。
+  const data = await orderStore.importExternalOrder(path)
   if (data) {
-    // console.log(data)
     appStore.uiState.showDiffDrawer = true
   }
 }

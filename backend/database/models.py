@@ -54,6 +54,7 @@ class GameProfile(BaseModel):
     game_install_path = cast(str, CharField())
     user_data_path = cast(str, CharField())
     run_commands = cast(list[str], UTF8JSONField(default=list))
+    prefer_steam_launch = cast(bool, BooleanField(default=False))
     use_workshop_mods = cast(bool, BooleanField(default=False))
     use_self_mods = cast(bool, BooleanField(default=True))
     is_steam = cast(bool, BooleanField(default=False))

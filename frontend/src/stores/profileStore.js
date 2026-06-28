@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import { useAppStore } from './appStore'
 import { useModStore } from './modStore'
 import { useGroupStore } from './groupStore'
+import { useConfirmStore } from './confirmStore'
 import { createToastInterface } from 'vue-toastification'
 import { useOrderStore } from './orderStore'
 
@@ -24,6 +25,7 @@ export const useProfileStore = defineStore('profile', () => {
     game_install_path: '',
     user_data_path: '',
     game_version: '',
+    prefer_steam_launch: false,
     use_workshop_mods: false,
     use_self_mods: false,
     run_commands: [],
@@ -46,6 +48,22 @@ export const useProfileStore = defineStore('profile', () => {
   )
 
   // === Actions ===
+  const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+  const buildSteamShortcutProgressMessage = (steps) => (
+    [
+      'Steam 快捷方式创建步骤：',
+      ...steps.map(step => `${step.done ? '√' : step.active ? '&gt;' : '-'} ${step.label}`)
+    ].join('<br>')
+  )
+
+  const isSteamVdfShortcutFlow = (profile) => {
+    if (!profile || profile.id === 'default') return false
+    if (!profile.prefer_steam_launch) return false
+    const defaultProfile = profiles.value.find(item => item.id === 'default')
+    if (!defaultProfile?.game_install_path || !profile.game_install_path) return false
+    return String(defaultProfile.game_install_path).trim().toLowerCase() !== String(profile.game_install_path).trim().toLowerCase()
+  }
   
   // 获取环境列表
   const fetchProfiles = async () => {
@@ -112,8 +130,8 @@ export const useProfileStore = defineStore('profile', () => {
   }
 
   // 删除环境
-  const deleteProfile = async (profileId) => {
-    const res = await window.pywebview.api.profile_delete(profileId)
+  const deleteProfile = async (profileId, force = false) => {
+    const res = await window.pywebview.api.profile_delete(profileId, !!force)
     if (appStore.checkResult(res, '删除环境')) {
       await fetchProfiles()
       // 如果删的是当前的，后端会自动切回 default，前端需要同步
@@ -121,6 +139,108 @@ export const useProfileStore = defineStore('profile', () => {
         currentProfileId.value = 'default'
         switchProfile('default')
       }
+    }
+  }
+
+  // 创建环境桌面快捷方式
+  const createDesktopShortcut = async (profileId) => {
+    const profile = profiles.value.find(item => item.id === profileId)
+    if (isSteamVdfShortcutFlow(profile)) {
+      return await createSteamVdfDesktopShortcut(profile)
+    }
+
+    const res = await window.pywebview.api.profile_create_desktop_shortcut(profileId)
+    if (appStore.checkResult(res, '创建环境桌面快捷方式', true)) {
+      return res.data
+    }
+    return null
+  }
+
+  const createSteamVdfDesktopShortcut = async (profile) => {
+    const confirmStore = useConfirmStore()
+    const steps = [
+      { label: '等待手动关闭 Steam 进程', done: false, active: true },
+      { label: '写入 Steam 快捷方式配置', done: false, active: false },
+      { label: '启动 Steam 并等待登录完成', done: false, active: false },
+      { label: '确认稳定快捷方式 ID 并创建桌面快捷方式', done: false, active: false },
+    ]
+
+    const updateProgress = () => {
+      confirmStore.state.title = '创建 Steam 快捷方式'
+      confirmStore.state.message = buildSteamShortcutProgressMessage(steps)
+      confirmStore.state.isHtml = true
+      confirmStore.state.mode = 'confirm'
+      confirmStore.state.type = 'warning'
+      confirmStore.state.confirmText = '确定'
+      confirmStore.state.cancelText = '取消'
+      confirmStore.state.actionButtons = [{ label: '取消', value: 'cancel', kind: 'secondary' }]
+    }
+
+    const setActiveStep = (index) => {
+      steps.forEach((step, idx) => {
+        step.active = idx === index
+      })
+      updateProgress()
+    }
+
+    const completeStep = (index) => {
+      steps[index].done = true
+      steps[index].active = false
+      updateProgress()
+    }
+
+    let cancelled = false
+    confirmStore.open({
+      title: '创建 Steam 快捷方式',
+      message: buildSteamShortcutProgressMessage(steps),
+      isHtml: true,
+      mode: 'confirm',
+      type: 'warning',
+      actionButtons: [{ label: '取消', value: 'cancel', kind: 'secondary' }],
+    }).then(() => {
+      cancelled = true
+      return null
+    })
+
+    try {
+      setActiveStep(0)
+      while (!cancelled) {
+        const statusRes = await window.pywebview.api.steam_process_status()
+        if (statusRes?.status === 'success' && !statusRes?.data?.running) break
+        await sleep(1000)
+      }
+      if (cancelled) return null
+      completeStep(0)
+
+      setActiveStep(1)
+      const registerRes = await window.pywebview.api.profile_register_steam_shortcut(profile.id)
+      if (!appStore.checkResult(registerRes, '写入 Steam 快捷方式配置')) return null
+      const logProbe = registerRes?.data?.log_probe || null
+      completeStep(1)
+
+      setActiveStep(2)
+      const steamLaunchRes = await window.pywebview.api.steam_launch_client()
+      if (!appStore.checkResult(steamLaunchRes, '启动 Steam 客户端')) return null
+      completeStep(2)
+
+      setActiveStep(3)
+      const finalizeRes = await window.pywebview.api.profile_finalize_steam_shortcut(profile.id, logProbe)
+      if (cancelled) return null
+
+      if (finalizeRes?.status === 'success') {
+        completeStep(3)
+        confirmStore.closeSilently()
+        appStore.checkResult(finalizeRes, '创建环境桌面快捷方式', true)
+        return finalizeRes.data
+      }
+
+      confirmStore.closeSilently()
+      if (finalizeRes) {
+        appStore.checkResult(finalizeRes, '创建环境桌面快捷方式')
+      }
+      return null
+    } finally {
+      if (confirmStore.isVisible) confirmStore.closeSilently()
     }
   }
 
@@ -144,7 +264,7 @@ export const useProfileStore = defineStore('profile', () => {
 
   return {
     profiles, currentProfileId, orphanedProfiles, currentProfile, isLoading, activeContext,
-    fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile,
+    fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile, createDesktopShortcut,
     scanOrphans, importOrphan
   }
 })

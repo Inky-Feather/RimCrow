@@ -66,6 +66,7 @@
                     </div>
                     <!-- 操作组 -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15" :class="p.check ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
                       <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="'删除环境'" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
                       <button @click.stop="handleEdit(p)" v-tooltip="'编辑环境'" class="p-1.5 rounded-lg hover:bg-text-main/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
                       <button @click.stop="handlePlay(p)" v-tooltip="'运行环境'" class="p-1.5 rounded-lg text-text-dim  transition-all hover:text-accent-success hover:bg-accent-success/20"
@@ -158,6 +159,7 @@
             :check="form.check_info?.user_data_path" @blur="checkPath('user_data_path', form.user_data_path)"
             description="游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。"
             :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
+          <CommonSwitch label="优先使用 Steam 启动" v-model="form.prefer_steam_launch" description="开启后，默认环境会使用 Steam 官方入口；其它环境会先确保 Steam 运行，再启动当前环境绑定的游戏本体。" />
           <CommonSwitch v-if="form.id!='default' && appStore.settings.workshop_mods_path" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod，仅在非Steam启动时生效，Steam 运行时会自动加载创意工坊 Mod。" />
           <CommonSwitch v-if="appStore.settings.self_mods_path" label="使用管理器 Mod" v-model="form.use_self_mods" description="启用后将通过链接方式自动为游戏添加管理器 Mod。" />
           <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
@@ -183,7 +185,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import { Database, Plus, Trash2, Settings2, ZapOff, X, Play, AlertTriangle } from 'lucide-vue-next'
+import { Database, Plus, Trash2, Settings2, Link2, X, Play, AlertTriangle, SquareArrowOutUpRight } from 'lucide-vue-next'
 import { createToastInterface } from 'vue-toastification'
 import { useProfileStore } from '../stores/profileStore'
 import { useAppStore } from '../stores/appStore'
@@ -210,9 +212,12 @@ const form = reactive({
   description: '',
   game_install_path: '',
   user_data_path: '',
+  prefer_steam_launch: false,
   use_workshop_mods: false,
   use_self_mods: false,
-  copy_current_data: false
+  copy_current_data: false,
+  run_commands: [],
+  check_info: {}
 })
 
 // --- 逻辑 ---
@@ -226,10 +231,12 @@ const openCreate = () => {
   form.description = ''
   form.game_install_path = appStore.settings.game_install_path
   form.user_data_path = ''
+  form.prefer_steam_launch = false
   form.use_workshop_mods = false
   form.use_self_mods = false
   form.copy_current_data = false
   form.run_commands = []
+  form.check_info = {}
   isEditing.value = false
   showModal.value = true
 }
@@ -240,6 +247,7 @@ const handleEdit = async (p) => {
   form.description = p.description
   form.game_install_path = p.game_install_path
   form.user_data_path = p.user_data_path
+  form.prefer_steam_launch = !!p.prefer_steam_launch
   form.use_workshop_mods = p.use_workshop_mods
   form.use_self_mods = p.use_self_mods
   form.run_commands = p.run_commands
@@ -303,17 +311,37 @@ const checkPath = async (type, path) => {
 }
 
 const handleDelete = async (p) => {
-  const ok = await confirmStore.confirmAction('危险操作', `确定要删除环境 "${p.name}" 吗？此操作将永久抹除其隔离区的存档数据。`, { type: 'error' })
-  if (ok) {
+  const decision = await confirmStore.confirmDeleteAction(
+    '危险操作',
+    `确定要删除环境 "${p.name}" 吗？\n环境记录会被移除；其隔离区数据默认移入回收站，也可选择强制彻底删除。`,
+    {
+      trashOptionText: '移入回收站',
+      forceOptionText: '强制删除隔离区数据',
+    }
+  )
+  if (decision?.confirmed) {
     if (p.id === appStore.settings.current_profile_id) {
       profileStore.switchProfile('default')
     }
-    await profileStore.deleteProfile(p.id)
+    await profileStore.deleteProfile(p.id, !!decision.force)
   }
 }
 
 const handlePlay = (p) => {
   appStore.launchGame(p.id)
+}
+
+const handleCreateShortcut = async (p) => {
+  const ok = await confirmStore.confirmAction(
+    '创建桌面快捷方式',
+    `确定要为环境 "${p.name}" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。`,
+    {
+      confirmText: '创建',
+      cancelText: '取消',
+    }
+  )
+  if (!ok) return
+  await profileStore.createDesktopShortcut(p.id)
 }
 
 

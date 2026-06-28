@@ -50,7 +50,7 @@
           <!-- 顶部状态条 -->
           <header class="h-14 flex items-center justify-between px-8 border-b border-text-main/5">
             <span class="text-xs font-mono text-text-dim/60 uppercase tracking-[0.3em]">
-              / root / {{ currentTab }}
+              / root / {{ currentTabLabel }}
             </span>
             <div class="flex gap-1.5 text-text-dim/20 relative">
               <Settings class="absolute size-23 -top-16 -right-13" />
@@ -100,14 +100,38 @@
                     />
                     <CommonSwitch label="使用管理器模组" v-model="formData.use_self_mods" description="开启后将通过链接方式自动为游戏加载管理器Mod。" />
                     <CommonSwitch label="改变路径时移动模组" v-model="formData.move_old_self_mods" description="开启后，修改路径时会将原有模组移动到新路径；不开启则保留原有的文件结构。" />
+                    <CommonSwitch class="col-span-1" label="自动检查管理器模组更新" v-model="formData.enable_auto_steamcmd_mod_update_check" description="按设定间隔检查管理器模组目录中由 SteamCMD 下载的工坊模组更新。" />
+                    <div class="col-span-1 grid grid-cols-2 gap-3 items-end">
+                      <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.steamcmd_mod_update_check_interval_days" :step="1" :min="1" :max="365" />
+                      <button @click="handleCheckSteamcmdMods" class="px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all"> 检查更新 </button>
+                    </div>
                   </div>
                   <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
                   <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-1 gap-2">
-                    <CommonSwitch class="-mx-1.5" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" mini description="开启后将优先使用Steam启动Steam版游戏。该设置所有环境通用" />
+                    <CommonSwitch class="-mx-1.5" label="优先使用Steam启动游戏" v-model="formData.prefer_steam_launch" mini description="开启后将优先使用Steam启动Steam版游戏。开启后，会先确保 Steam 运行，再启动当前环境绑定的游戏本体。" />
                     <CommonPathInput :class="{' pointer-events-none opacity-50':!formData.prefer_steam_launch}" label="Steam程序路径" 
                       :check="formData.check_info?.steam_path"
                       :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
+                    />
+                  </div>
+                  <div class="p-3 rounded-2xl bg-text-main/2 border border-text-main/5 grid grid-cols-2 gap-2">
+                    <h3 class="col-span-2 text-sm font-bold ml-1 text-text-main">导入/导出 起始目录配置</h3>
+                    <CommonSelect class="col-span-1" label="导入起始目录" v-model="formData.load_order_import_dir_mode"
+                      :description="'控制“导入加载序列”文件选择器的初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。'"
+                      :options="LOAD_ORDER_DIR_MODE_OPTIONS"
+                    />
+                    <CommonSelect class="col-span-1" label="导出起始目录" v-model="formData.load_order_export_dir_mode"
+                      :description="'控制“导出加载序列”文件选择器的初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。'"
+                      :options="LOAD_ORDER_DIR_MODE_OPTIONS"
+                    />
+                    <CommonPathInput v-if="formData.load_order_import_dir_mode === 'custom'" class="col-span-2" label="自定义导入起始目录" v-model="formData.load_order_import_custom_path"
+                      :check="formData.check_info?.load_order_import_custom_path" :description="'仅在导入目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。'"
+                      @browse="handleBrowse('load_order_import_custom_path')" @blur="checkPath('load_order_import_custom_path', formData.load_order_import_custom_path)"
+                    />
+                    <CommonPathInput v-if="formData.load_order_export_dir_mode === 'custom'" class="col-span-2" label="自定义导出起始目录" v-model="formData.load_order_export_custom_path"
+                      :check="formData.check_info?.load_order_export_custom_path" :description="'仅在导出目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。'"
+                      @browse="handleBrowse('load_order_export_custom_path')" @blur="checkPath('load_order_export_custom_path', formData.load_order_export_custom_path)"
                     />
                   </div>
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
@@ -222,43 +246,70 @@
                 </div>
               </section>
 
-              <!-- 社区设置 -->
+              <!-- 外部依赖 -->
               <section v-if="currentTab === 'community'" class="animate-in fade-in slide-in-from-right-4">
-                <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">社区配置管理
+                <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">外部依赖
                   
-                  <button @click="resetToDefaultCommunityPaths" v-tooltip="'将社区配置相关路径重置为默认值'" class="px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
+                  <button @click="resetToDefaultExternalPaths" v-tooltip="'将外部依赖相关路径重置为默认值'" class="px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
                     重置为默认路径
                   </button>
                 </h3>
                 <div class="space-y-6">
-                  <CommonPathInput label="SteamCMD 路径" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" />
-                  <CommonPathInput label="贴图工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, false)" :description="'贴图优化使用的 todds 工具目录。可直接选择包含 todds.exe 的文件夹。'" />
-                  <div class="flex items-end gap-1.5" description="用于管理器下载模组的外置工具，路径中不能包含中文。">
-                    <CommonInput label="社区规则 URL" v-model="formData.community_rules_url" />
-                    <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
-                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                      <Download class="size-5" :class="{'animate-bounce': ruleStore.isLoading}" />
-                    </button>
+                  <div class="p-5 rounded-2xl bg-text-main/3 border border-text-main/8 space-y-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div> <h4 class="text-sm font-bold text-text-main">外部工具</h4><p class="text-xs text-text-dim mt-1">SteamCMD、贴图工具等由管理器调用的外部程序配置与状态检查。</p></div>
+                      <button @click="handleCheckTools" class="px-3 py-1.5 bg-accent-tip/10 hover:bg-accent-tip/25 border border-accent-tip/20 rounded-lg text-xs font-bold transition-all">
+                        检查外部工具
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                      <CommonPathInput class="col-span-2" label="SteamCMD 目录" v-model="formData.steamcmd_path" @browse="handleBrowse('steamcmd_path')" @blur="checkPath('steamcmd_path', formData.steamcmd_path)" :check="formData.check_info?.steamcmd_path" :description="'管理器下载和更新工坊模组使用的 SteamCMD 目录。'" />
+                      <CommonPathInput class="col-span-2" label="贴图工具目录" v-model="formData.texture_opt.texture_tools_path" @browse="handleBrowse('texture_opt.texture_tools_path', null, 'texture_tools_path')" @blur="checkPath('texture_tools_path', formData.texture_opt.texture_tools_path)" :check="formData.check_info?.texture_tools_path" :description="'贴图优化使用的 todds 工具目录，应选择包含 todds.exe 的文件夹。'" />
+                      <CommonSwitch class="col-span-1" label="自动检查外部工具" v-model="formData.enable_auto_tool_check" description="按设定间隔检查 SteamCMD、todds 等外部工具是否缺失或未就绪。" />
+                      <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.tool_check_interval_days" :step="1" :min="1" :max="365" />
+                    </div>
                   </div>
-                  <CommonPathInput label="社区规则路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_rules_path" />
-                  <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.user_rules_path" />
-                  <div class="py-2 pt-5 place-self-center w-[95%] border-b border-text-dim/20"></div>
-                  <div class="flex items-end gap-1.5">
-                    <CommonInput label="社区工坊数据库 URL" v-model="formData.community_workshop_db_url" />
-                    <button @click="updateExternalDB('workshop_db')" v-tooltip="'下载更新 社区工坊数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['workshop_db'] }"
-                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                      <Download class="size-5" :class="{'animate-bounce': downloadState['workshop_db']}" />
-                    </button>
+
+                  <div class="p-5 rounded-2xl bg-text-main/3 border border-text-main/8 space-y-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div> <h4 class="text-sm font-bold text-text-main">外部库与规则</h4><p class="text-xs text-text-dim mt-1">规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。</p></div>
+                      <button @click="handleCheckExternalData" class="px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
+                        检查外部库更新
+                      </button>
+                    </div>
+
+                    <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.user_rules_path" />
+                    <div class="flex items-end gap-1.5">
+                        <CommonInput label="社区规则库 URL" v-model="formData.community_rules_url" />
+                      <button @click="ruleStore.updateCommunity()" v-tooltip="'下载更新 社区规则'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' :ruleStore.isLoading }"
+                        class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                        <Download class="size-5" :class="{'animate-bounce': ruleStore.isLoading}" />
+                      </button>
+                    </div>
+                    <CommonPathInput label="社区规则库路径" v-model="formData.community_rules_path" @browse="handleBrowse('community_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_rules_path" />
+                    <div class="py-2 pt-2 place-self-center w-[95%] border-b border-text-dim/20"></div>
+                    <div class="flex items-end gap-1.5">
+                      <CommonInput label="工坊数据库 URL" v-model="formData.community_workshop_db_url" />
+                      <button @click="updateExternalDB('workshop_db')" v-tooltip="'下载更新 社区工坊数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['workshop_db'] }"
+                        class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                        <Download class="size-5" :class="{'animate-bounce': downloadState['workshop_db']}" />
+                      </button>
+                    </div>
+                    <CommonPathInput label="工坊数据库路径" v-model="formData.community_workshop_db_path" @browse="handleBrowse('community_workshop_db_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_workshop_db_path" />
+                    <div class="py-2 pt-2 place-self-center w-[95%] border-b border-text-dim/20"></div>
+                    <div class="flex items-end gap-1.5">
+                      <CommonInput label="替代 Mod 数据库 URL" v-model="formData.community_instead_db_url" />
+                      <button @click="updateExternalDB('instead_db')" v-tooltip="'下载更新 社区替代 Mod 数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['instead_db'] }"
+                        class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
+                        <Download class="size-5" :class="{'animate-bounce': downloadState['instead_db']}" />
+                      </button>
+                    </div>
+                    <CommonPathInput label="替代 Mod 数据库路径" v-model="formData.community_instead_db_path" @browse="handleBrowse('community_instead_db_path', ['JSON Files (*.json;*.gz)'])" :check="formData.check_info?.community_instead_db_path" />
+                    <div class="grid grid-cols-2 gap-4 pt-1">
+                      <CommonSwitch class="col-span-1" label="自动检查外部库更新" v-model="formData.enable_auto_external_data_update_check" description="按设定间隔检查社区规则库、工坊数据库、替代 Mod 数据库是否有新版本。" />
+                      <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.external_data_update_check_interval_days" :step="1" :min="1" :max="365" />
+                    </div>
                   </div>
-                  <CommonPathInput label="社区工坊数据库路径" v-model="formData.community_workshop_db_path" @browse="handleBrowse('community_workshop_db_path', ['JSON Files (*.json)'])" :check="formData.check_info?.community_workshop_db_path" />
-                  <div class="flex items-end gap-1.5">
-                    <CommonInput label="社区替代Mod数据库" v-model="formData.community_instead_db_url" />
-                    <button @click="updateExternalDB('instead_db')" v-tooltip="'下载更新 社区替代Mod数据库'" :class="{'opacity-50 cursor-not-allowed pointer-events-none' : downloadState['instead_db'] }"
-                      class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
-                      <Download class="size-5" :class="{'animate-bounce': downloadState['instead_db']}" />
-                    </button>
-                  </div>
-                  <CommonPathInput label="社区替代Mod数据库路径" v-model="formData.community_instead_db_path" @browse="handleBrowse('community_instead_db_path', ['JSON Files (*.json;*.gz)'])" :check="formData.check_info?.community_instead_db_path" />
                 </div>
               </section>
 
@@ -454,7 +505,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick, h } from 'vue'
+import { ref, watch, onMounted, nextTick, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Search, Component, Settings, Drama, Download, LoaderCircle } from 'lucide-vue-next'
 import { createToastInterface } from 'vue-toastification'
 import { flashComponent, shakeComponent } from '../utils/uiHelper'
@@ -494,10 +545,20 @@ const tabs = [
   { id: 'paths', label: '路径配置', icon: FolderTree },
   { id: 'general', label: '界面设置', icon: AppWindow },
   { id: 'features', label: '功能设置', icon: Component },
-  { id: 'community', label: '社区配置', icon: Steam },
+  { id: 'community', label: '外部依赖', icon: Steam },
   { id: 'network', label: '网络连接', icon: Globe },
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
+]
+
+const currentTabLabel = computed(() => (
+  tabs.find(item => item.id === currentTab.value)?.label || currentTab.value
+))
+
+const LOAD_ORDER_DIR_MODE_OPTIONS = [
+  { label: '默认', value: 'default' },
+  { label: '记忆', value: 'remember' },
+  { label: '自定义', value: 'custom' },
 ]
 
 
@@ -559,9 +620,17 @@ const autoDetect = async () => {
   const paths = await appStore.autoDetectPaths(false)
   if (paths) Object.assign(formData.value, paths)
 }
-const resetToDefaultCommunityPaths = async () => {
-  const paths = await appStore.getDefaultCommunityPaths()
-  if (paths) Object.assign(formData.value, paths)
+const resetToDefaultExternalPaths = async () => {
+  const paths = await appStore.getDefaultExternalPaths()
+  if (!paths) return
+  const { texture_opt, ...rest } = paths
+  Object.assign(formData.value, rest)
+  if (texture_opt && typeof texture_opt === 'object') {
+    formData.value.texture_opt = {
+      ...(formData.value.texture_opt || {}),
+      ...texture_opt,
+    }
+  }
 }
 
 // 检查游戏路径是否有效
@@ -580,6 +649,10 @@ const checkPaths = async () => {
     if (key.endsWith('_path')) {
       paths_data[key] = formData.value[key]
     }
+  }
+  const textureToolsPath = formData.value?.texture_opt?.texture_tools_path
+  if (textureToolsPath !== undefined) {
+    paths_data.texture_tools_path = textureToolsPath
   }
   // console.log('检查路径', paths_data)
   const res = await appStore.checkPaths(paths_data)
@@ -680,6 +753,18 @@ const updateExternalDB = async (dbType) => {
   downloadState.value[dbType] = true
   await appStore.updateExternalDB(dbType)
   downloadState.value[dbType] = false
+}
+
+const handleCheckTools = async () => {
+  await appStore.checkToolMaintenance({ manual: true, prompt: true })
+}
+
+const handleCheckExternalData = async () => {
+  await appStore.checkExternalDataUpdates({ manual: true, prompt: true })
+}
+
+const handleCheckSteamcmdMods = async () => {
+  await appStore.checkSteamcmdModUpdates({ manual: true, prompt: true })
 }
 
 // ====== 数据处理 ======

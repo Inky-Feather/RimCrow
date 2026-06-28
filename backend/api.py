@@ -6,6 +6,7 @@ from enum import Enum
 import gc
 import json
 import os
+import sys
 import threading
 import time
 import functools
@@ -16,7 +17,6 @@ import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Any, Dict, List
-from datetime import datetime
 from peewee import Model, JOIN
 from playhouse.shortcuts import model_to_dict
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
 # 1. 引入配置管理
 from backend.managers.mgr_steamcmd_core import SteamCMDController
-from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
+from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.tools import normalize_package_id
@@ -66,7 +66,7 @@ from backend.managers.mgr_files import FileManager, file_mgr, PathChecker
 from backend.managers.mgr_game_logs import GameLogManager, LogCondenser
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
-from backend.managers.mgr_steam import SteamManager
+from backend.managers.mgr_steam import RIMWORLD_APP_ID, SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
 from backend.ai.service import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
@@ -76,10 +76,12 @@ from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
+from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
+from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
-from playhouse.shortcuts import model_to_dict
+from backend.migrations.app_upgrade import run_app_upgrade_migrations
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
 
@@ -132,14 +134,15 @@ class ApiResponse:
 
     @classmethod
     def error(cls, message, data=None):
-        logger.error(f"API Error: {message}", exc_info=True)
+        has_exc = sys.exc_info()[0] is not None
+        logger.error( f"API Error: {message}", exc_info=has_exc, stacklevel=2)
         return asdict(cls(status="error", message=message, data=cls.serialize_data(data)))
     
     @classmethod
     def warning(cls, message, data=None):
-        logger.warning(f"API Warning: {message}")
+        logger.warning(f"API Warning: {message}", stacklevel=2)
         return asdict(cls(status="warning", message=message, data=cls.serialize_data(data)))
-    
+
     @classmethod
     def serialize_data(cls, obj):
         if obj is None:
@@ -178,6 +181,13 @@ class ApiResponse:
             return obj.value
         # 7. 基本类型 (int, float, str, bool, None) 直接返回
         return obj
+
+
+class LaunchWarningAction(Enum):
+    CONTINUE = "continue"
+    CLEAR_WORKSHOP = "clear_workshop"
+    WAIT_STEAM_EXIT = "wait_steam_exit"
+    CANCEL = "cancel"
 
 
 class API:
@@ -235,20 +245,58 @@ class API:
         self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
-        self.steamcmd_controller = SteamCMDController(self.steam_mgr.steamcmd_exe)
         self.ai_mgr = AIManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
+        self.maintenance_mgr = MaintenanceManager(
+            self.steam_mgr,
+            self.texture_mgr,
+            self.workshop_db_mgr,
+            rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
+        )
         
         # 每次启动 API 时，强制检查并修复 SteamCMD 的软链接！
         if settings.config.self_mods_path and settings.config.steamcmd_mods_path:
             FileManager.sync_steamcmd_root_link()
+        # 打包版每次启动都校验 Browser mode 快捷方式，缺失或过期就自动修复。
+        if self._runtime_mode == "desktop" and os.name == "nt":
+            self._ensure_browser_mode_shortcut()
         
         # 执行升级检查
         self._handle_app_version_upgrade()
         logger.info("API Layer Ready.")
         
+    @staticmethod
+    def _normalize_str_items(items: List[str] | str) -> list[str]:
+        if isinstance(items, str):
+            value = items.strip()
+            return [value] if value else []
+        return [str(item or '').strip() for item in items if str(item or '').strip()]
+
+    @staticmethod
+    def _build_delete_response(target_name: str, total: int, result: dict, success_message: str = ""):
+        success_count = int(result.get('success_count', 0) or 0)
+        errors = [str(item) for item in (result.get('errors') or []) if str(item).strip()]
+
+        if total <= 0:
+            return ApiResponse.warning(f"未提供需要删除的{target_name}", data=result)
+        if success_count <= 0 and errors:
+            return ApiResponse.error("\n".join(errors), data=result)
+        if success_count != total:
+            return ApiResponse.warning(f"部分{target_name}删除失败：{total-success_count} 项未成功删除", data=result)
+        return ApiResponse.success(data=result, message=success_message)
+
+    def _delete_paths(self, paths: List[str] | str, force: bool = False) -> dict:
+        normalized_paths = self._normalize_str_items(paths)
+        success_count, error_list = file_mgr.delete_paths(normalized_paths, force=force)
+        return {
+            'success_count': success_count,
+            'errors': error_list,
+            'force': bool(force),
+            'paths': normalized_paths,
+        }
+    
     
     def _bootstrap_context(self, profile_id: str):
         """装载当前环境，并重建所有业务引擎"""
@@ -282,6 +330,21 @@ class API:
         self.sorter = OrderSorter(self.active_context)
         # 启动新的实时监视器
         if self.game_log_mgr: self.game_log_mgr.start_realtime_monitor()
+
+    def _ensure_browser_mode_shortcut(self):
+        """仅在打包桌面模式下确保 Browser mode 快捷方式存在。"""
+        try:
+            import sys
+            if not getattr(sys, 'frozen', False):
+                return
+
+            result = FileManager.ensure_browser_mode_shortcut(sys.executable)
+            action = "已创建" if result.get('changed') else "已存在"
+            shortcut_path = result.get('shortcut', {}).get('shortcut_path', '')
+            logger.info(f"Browser mode 快捷方式{action}: {shortcut_path}")
+        except Exception as e:
+            # 快捷方式自修复失败不应阻塞主程序启动，只记录日志即可。
+            logger.warning(f"Browser mode 快捷方式校验失败: {e}", exc_info=True)
 
     def _resolve_load_order_scope(self, profile_id: str | None = None):
         """
@@ -321,17 +384,13 @@ class API:
 
         # --- 执行具体的升级任务 ---
         try:
-            from distutils.version import LooseVersion
-            # 这里不强制扫，而是给前端发一个信号
-            if LooseVersion(last_version) < LooseVersion("0.17.10"): 
-                self._upgrade_context["pending_actions"].append("recommend_scan")
-                self._upgrade_context["messages"].append("检测到核心解析引擎升级，建议执行全量扫描以获得更好的兼容性。")
-                self.ai_mgr.reset_system_prompts()  # 强制重置/同步 AI 提示词
-                settings.set('community_workshop_db_path',str(COMMUNITY_WORKSHOP_DB_PATH))
-                settings.set('community_instead_db_path',str(COMMUNITY_INSTEAD_DB_PATH))
-            
-            # 弹窗展示更新日志
-            self._upgrade_context["pending_actions"].append("show_update_news")
+            migration_result = run_app_upgrade_migrations(
+                last_version=last_version,
+                current_version=current_version,
+                ai_mgr=self.ai_mgr,
+            )
+            self._upgrade_context["pending_actions"].extend(migration_result.pending_actions)
+            self._upgrade_context["messages"].extend(migration_result.messages)
             # --- 升级任务执行完毕，持久化新版本号 ---
             SystemInfo.insert(key='app_version', value=current_version).on_conflict_replace().execute()
             logger.info(f"应用升级处理完成: {last_version} -> {current_version}")
@@ -362,11 +421,11 @@ class API:
         if self.game_monitor: self.game_monitor.running = False
         # 暂停所有事件发送
         EventBus.pause()
+        if self.steam_mgr:
+            self.steam_mgr.cleanup_runtime()
         logger.info("Closing database connection...")
         close_db()
-        # 强制杀死正在运行的 SteamCMD 进程
-        if hasattr(self, 'steamcmd_controller') and self.steamcmd_controller:
-            self.steamcmd_controller.kill_all()
+        # SteamCMD 的生命周期已统一收敛到 SteamManager 内部，避免旧控制器残留双重管理。
         
     
     def set_window(self, window: webview.Window):
@@ -449,6 +508,98 @@ class API:
                 "active_ids": [str(package_id or "").strip().lower() for package_id in (editing_ids or []) if str(package_id or "").strip()],
             },
         }
+
+    @staticmethod
+    def _normalize_existing_dir(path_value: str | None) -> str:
+        """
+        统一把候选目录规整成文件选择器可用的初始目录。
+        - 文件路径取其父目录
+        - 不存在的路径返回空串，让上层继续走回退链
+        """
+        value = str(path_value or "").strip()
+        if not value:
+            return ""
+        candidate = Path(value)
+        # 保存对话框返回的目标文件在成功写入前通常还不存在，这里根据后缀推断父目录。
+        if candidate.is_file() or candidate.suffix:
+            candidate = candidate.parent
+        return str(candidate) if candidate.exists() and candidate.is_dir() else ""
+
+    @staticmethod
+    def _ensure_directory(path_value: str | None) -> str:
+        """
+        确保目录存在并返回规范化后的目录字符串。
+        若创建失败则返回空串，由上层继续走兜底逻辑。
+        """
+        value = str(path_value or "").strip()
+        if not value:
+            return ""
+        try:
+            candidate = Path(value)
+            candidate.mkdir(parents=True, exist_ok=True)
+            return str(candidate) if candidate.exists() and candidate.is_dir() else ""
+        except Exception:
+            logger.warning(f"无法创建目录: {value}", exc_info=True)
+            return ""
+
+    def _get_default_import_dir(self, context: ProfileContext | None) -> str:
+        """
+        默认导入目录固定指向当前环境用户数据下的 ModLists。
+        该目录是用户显式要求的导入入口，目录缺失时自动创建。
+        """
+        if not context:
+            return ""
+        base_dir = str(Path(context.user_data_path) / "ModLists")
+        return self._ensure_directory(base_dir)
+
+    def _get_default_export_dir(self) -> str:
+        """
+        默认导出目录保持现有行为，继续使用当前环境备份区下的 other 目录。
+        """
+        if self.load_order_mgr and getattr(self.load_order_mgr, "other_dir", ""):
+            return self._ensure_directory(self.load_order_mgr.other_dir)
+        if self.active_context:
+            return self._ensure_directory(str(Path(self.active_context.backup_dir) / "other"))
+        return ""
+
+    def _resolve_dialog_initial_dir(
+        self,
+        default_dir: str,
+        mode: str,
+        custom_dir: str,
+        last_dir: str,
+    ) -> str:
+        """
+        解析文件选择器初始目录。
+        回退链：
+        1. 模式对应目录（custom / remember / default）
+        2. 默认目录
+        3. 上次记忆目录
+        4. 空串（交给系统对话框决定）
+        """
+        normalized_default = self._normalize_existing_dir(default_dir)
+        normalized_last = self._normalize_existing_dir(last_dir)
+        normalized_custom = self._normalize_existing_dir(custom_dir)
+        normalized_mode = str(mode or "default").strip().lower() or "default"
+
+        if normalized_mode == "custom":
+            return normalized_custom or normalized_default or normalized_last or ""
+        if normalized_mode == "remember":
+            return normalized_last or normalized_default or ""
+        return normalized_default or normalized_last or ""
+
+    def _remember_load_order_dialog_dir(self, kind: str, path_value: str | None):
+        """
+        仅在通过文件选择器且操作成功后调用，更新对应的全局“上次目录”。
+        """
+        normalized_dir = self._normalize_existing_dir(path_value)
+        if not normalized_dir:
+            return
+        if kind == "import":
+            settings.set("load_order_import_last_path", normalized_dir)
+            return
+        if kind == "export":
+            settings.set("load_order_export_last_path", normalized_dir)
 
     def _on_app_loaded(self):
         """主窗口加载完毕回调"""
@@ -641,7 +792,7 @@ class API:
         interlocks = list(ModInterlock.select().dicts())
         interlock_map = {i['id']: i['chain'] for i in interlocks}
         
-        # 5. 数据加工：注入翻译和图片 URL
+        # 5. 数据加工：先注入翻译和生效规则，再统一计算语言包归属
         for mod in context_mods:
             # 翻译注入, 传入当前语言，Parser 内部会查找缓存
             if dlc_parser: dlc_parser.translate_record(mod, settings.config.language)
@@ -650,6 +801,22 @@ class API:
                 mod['rules'] = rule_mgr.get_effective_mod_rules(mod['package_id'], mod)
             else:
                 mod['rules'] = {}
+        language_pack_owner_map = resolve_language_pack_ownership_for_mods(
+            context_mods,
+            user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
+        )
+        for mod in context_mods:
+            mod['language_pack_owner_result'] = language_pack_owner_map.get(
+                str(mod.get('package_id') or '').strip().lower(),
+                {
+                    "owners": [],
+                    "analyzed_owners": [],
+                    "relation_type": "unknown",
+                    "summary_confidence": "unknown",
+                    "analyzed_relation_type": "unknown",
+                    "analyzed_summary_confidence": "unknown",
+                }
+            )
             if mod['workshop_id'] and  mod['workshop_id'] in replacements_map:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
@@ -776,6 +943,9 @@ class API:
                 return ApiResponse.error("重置失败，数据库无法重新创建。")
             # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
             SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
+            # 重置会清空所有环境记录，当前进程必须立即回退到 default 并重建上下文，
+            # 否则内存里仍可能挂着已被删除的旧 profile manager / context。
+            self._bootstrap_context('default')
             
             return ApiResponse.success({"message": "数据库已重置。"})
         except Exception as e:
@@ -863,9 +1033,9 @@ class API:
         return ApiResponse.warning("仅检测到部分路径，请手动设置！",{"paths": result})
 
     @log_api_call
-    def get_default_community_paths(self):
-        """获取默认的社区路径"""
-        default_paths = settings.get_default_community_paths()
+    def get_default_external_paths(self):
+        """获取外部依赖页相关路径的默认值。"""
+        default_paths = settings.get_default_external_paths()
         return ApiResponse.success({"paths": default_paths})
 
     @log_api_call
@@ -1008,7 +1178,7 @@ class API:
         return ApiResponse.success({ "details": result },"后台扫描已启动")
     
     @log_api_call
-    def scan_conflicts_resolve(self, operations: List[Dict]):
+    def scan_conflicts_resolve(self, operations: List[Dict], force: bool = False):
         """
         处理扫描发现的冲突。
         operations: List[Dict]
@@ -1040,7 +1210,8 @@ class API:
                         if not path_hash:
                             msg = "缺少 target_path_hash，无法删除该副本"
                         else:
-                            res = ModMaintenanceDAO.delete_mods_physically([path_hash])
+                            op_force = bool(op.get('force_delete', force))
+                            res = ModMaintenanceDAO.delete_mods_physically([path_hash], force=op_force)
                             success = res['success_count'] > 0
                             if not success:
                                 msg = res['errors'][0] if res['errors'] else "未找到可删除的模组记录"
@@ -1079,24 +1250,16 @@ class API:
             return ApiResponse.error(f"处理出错: {str(e)}")
     
     @log_api_call
-    def mods_delete(self, path_hashes: List[str]|str):
+    def mods_delete(self, path_hashes: List[str]|str, force: bool = False):
         """
-        批量物理删除 Mod (移入回收站) 并抹除数据库记录
+        批量物理删除 Mod 并抹除数据库记录
         :param paths: 绝对路径列表
         """
         try:
-            if isinstance(path_hashes, str):
-                normalized_hashes = [path_hashes.strip()] if path_hashes.strip() else []
-            else:
-                normalized_hashes = [str(item or '').strip() for item in path_hashes if str(item or '').strip()]
-            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes)
-            if res['success_count'] != len(normalized_hashes):
-                return ApiResponse.warning(f"部分Mod删除失败：{len(normalized_hashes)-res['success_count']} 项未成功删除", data=res)
-            if res['errors']:
-                msg = "\n".join(res['errors'])
-                return ApiResponse.error(msg, data=res)
-            if res['success_count'] > 0:
-                return ApiResponse.success(data=res)
+            normalized_hashes = self._normalize_str_items(path_hashes)
+            res = ModMaintenanceDAO.delete_mods_physically(normalized_hashes, force=force)
+            res['force'] = bool(force)
+            return self._build_delete_response("Mod", len(normalized_hashes), res)
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
     
@@ -1360,21 +1523,34 @@ class API:
         context, profile = self._resolve_load_order_scope(profile_id)
         source_profile_id = str(profile_id or "").strip()
         file = ''
+        from_dialog = False
         # 默认路径为 ModsConfig.xml 所在目录
         if not mods_config_file_path:
-            mods_config_file_path = context.mods_config_file if context else ""
+            mods_config_file_path = self._resolve_dialog_initial_dir(
+                self._get_default_import_dir(context),
+                settings.config.load_order_import_dir_mode,
+                settings.config.load_order_import_custom_path,
+                settings.config.load_order_import_last_path,
+            )
         # 解析逻辑已经支持 xml / json / txt / rws 等多种格式。
         # 这里不再按扩展名硬编码拦截，只要是实际存在的文件就允许继续解析。
         if os.path.isfile(mods_config_file_path):
             file = mods_config_file_path
         elif os.path.isdir(mods_config_file_path) :
+            from_dialog = True
             file = file_mgr.select_file_dialog(
                 initial_dir=mods_config_file_path,
                 file_types=LOAD_ORDER_OPEN_FILE_TYPES,
             )
         else:
+            from_dialog = True
             file = file_mgr.select_file_dialog(
-                initial_dir=context.game_config_path if context else "",
+                initial_dir=self._resolve_dialog_initial_dir(
+                    self._get_default_import_dir(context),
+                    settings.config.load_order_import_dir_mode,
+                    settings.config.load_order_import_custom_path,
+                    settings.config.load_order_import_last_path,
+                ),
                 file_types=LOAD_ORDER_OPEN_FILE_TYPES,
             )
         if not file:
@@ -1389,6 +1565,8 @@ class API:
         # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
         if not result["active_ids"] and not result["workshop_ids"]:
             return ApiResponse.error("解析文件出错!")
+        if from_dialog:
+            self._remember_load_order_dialog_dir("import", file)
         return ApiResponse.success(result)
 
     @log_api_call
@@ -1465,7 +1643,7 @@ class API:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
     
     @log_api_call
-    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None):
+    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None, remember_dialog_dir: bool = False):
         """
         导出当前加载顺序到指定格式
         :param active_ids: 激活的 Mod 列表
@@ -1482,7 +1660,10 @@ class API:
                 export_format=export_format,
                 list_name=list_name
             ) if self.load_order_mgr else False
-            if success: return ApiResponse.success()
+            if success:
+                if remember_dialog_dir:
+                    self._remember_load_order_dialog_dir("export", target_path)
+                return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
@@ -1495,8 +1676,14 @@ class API:
             export_format = str(export_format or 'modsconfig').strip().lower() or 'modsconfig'
             default_name = self.load_order_mgr._default_export_name(export_format)
             file_types = self.load_order_mgr._get_save_file_types(export_format)
+            initial_dir = self._resolve_dialog_initial_dir(
+                self._get_default_export_dir(),
+                settings.config.load_order_export_dir_mode,
+                settings.config.load_order_export_custom_path,
+                settings.config.load_order_export_last_path,
+            )
             selected = FileManager.save_file_dialog(
-                initial_dir=self.load_order_mgr.other_dir,
+                initial_dir=initial_dir,
                 default_filename=default_name,
                 file_types=file_types,
             )
@@ -1583,30 +1770,478 @@ class API:
             if not profile_id: return ApiResponse.error("未指定 Profile ID")
             msg=''
             profile = self.profile_mgr.get_profile(profile_id)
-            logger.debug(f"launch_game: profile_id={profile_id}, prefer_steam={settings.config.prefer_steam_launch}, steam_path={settings.config.steam_path}, is_steam={profile.is_steam}")
-            # 检查 Steam 配置是否完整
-            
-            # 1. 获取当前 Profile 的启动参数（仅包含游戏相关参数）
             extra_args = self.profile_mgr.get_launch_args_only(profile_id)
-            if(settings.config.prefer_steam_launch and profile.is_steam):
-                logger.debug(f"launch_game_steam: extra_args={extra_args}")
-                # 2. 调用 Steam 管理器启动游戏
-                self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
-                msg='通过 Steam 启动游戏'
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            steam_path_valid = bool(
+                settings.config.steam_path
+                and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
+            )
+            steam_status = self.steam_mgr.get_steam_client_status()
+            steam_running = bool(steam_status.get("running"))
+            steam_ready = bool(steam_status.get("ready"))
+            logger.debug(
+                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s",
+                profile_id,
+                prefer_steam_launch,
+                steam_path_valid,
+                steam_running,
+                steam_ready,
+                steam_status.get("source"),
+                steam_status.get("detail"),
+                profile.is_steam,
+            )
+
+            if prefer_steam_launch:
+                if not steam_path_valid:
+                    return self._build_direct_launch_confirmation(
+                        profile_id=profile_id,
+                        steam_running=steam_running,
+                        reason="steam_path_invalid",
+                        message="未检测到有效的 Steam 程序路径。当前环境无法按 Steam 方式启动，可改为游戏本体直接启动。",
+                        requires_fallback_confirm=True,
+                    )
+                if profile_id == 'default':
+                    self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
+                    msg='通过 Steam 启动游戏'
+                else:
+                    ok, steam_status, ready_message = self._ensure_steam_ready(timeout_seconds=45)
+                    if not ok:
+                        return self._build_direct_launch_confirmation(
+                            profile_id=profile_id,
+                            steam_running=bool((steam_status or {}).get("running")),
+                            reason="steam_not_ready",
+                            message=f"{ready_message} 当前环境无法按 Steam 方式启动，可改为游戏本体直接启动。",
+                            requires_fallback_confirm=True,
+                            steam_status=steam_status,
+                        )
+                    self._launch_profile_with_runtime_links(
+                        profile_id,
+                        profile.game_install_path,
+                        extra_args,
+                        include_workshop=False,
+                    )
+                    msg='通过 Steam 挂载方式启动游戏'
             else:
-                logger.debug(f"launch_game: launch_args={extra_args}")
-                # 2. 调用游戏管理器启动游戏
-                self.game_mgr.launch_game(game_install_path=profile.game_install_path, custom_args=extra_args)
-                msg='直接启动游戏'
+                if steam_running:
+                    return self._build_direct_launch_confirmation(
+                        profile_id=profile_id,
+                        steam_running=True,
+                        reason="steam_running_conflict",
+                        message="检测到 Steam 已在运行，当前环境若继续以游戏本体直启，Steam 可能会接管本次启动并同时加载工坊内容。",
+                        steam_status=steam_status,
+                    )
+                self._launch_profile_with_runtime_links(
+                    profile_id,
+                    profile.game_install_path,
+                    extra_args,
+                    include_workshop=True,
+                )
+                return ApiResponse.success(message="直接启动游戏成功，祝你游玩愉快！")
             
-            # 3. 记录最后一次游玩时间到数据库
-            self.profile_mgr.update_profile(profile_id, {
-                "last_played_time": current_ms()
-            })
             return ApiResponse.success(message=f"{msg}成功，祝你游玩愉快！")
         except Exception as e:
             logger.error(f"Launch Game Error: {e}", exc_info=True)
             return ApiResponse.error(f"启动游戏时出错: {e}")
+
+    def _sync_runtime_links_for_profile(self, profile_id: str, include_workshop: bool):
+        """
+        按指定环境的运行方式收敛本地 Mods 链接。
+        include_workshop=False 时，相当于仅移除 Workshop 链接，同时保留 Self/Tool 的有效链接。
+        """
+        context = self.profile_mgr.build_profile_context(profile_id)
+        local_mods_root = context.local_mods_path
+        if not local_mods_root or not os.path.exists(local_mods_root):
+            return False
+        runtime_analysis = ModDAO.get_profile_conflict_analysis(context, include_workshop=include_workshop)
+        return self.file_mgr.sync_managed_links(local_mods_root, runtime_analysis.get('deploy_paths', []))
+
+    def _start_profile_game(self, profile_id: str, game_install_path: str, extra_args: list[str] | None = None):
+        """启动指定环境的游戏本体并记录游玩时间。"""
+        self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
+        self.profile_mgr.update_profile(profile_id, {"last_played_time": current_ms()})
+
+    def _launch_profile_with_runtime_links(
+        self,
+        profile_id: str,
+        game_install_path: str,
+        extra_args: list[str] | None = None,
+        include_workshop: bool = True,
+    ):
+        """
+        直启相关分支的统一入口。
+        作用：
+        1. 先把本地 Mods 链接收敛到当前环境需要的状态。
+        2. 再启动游戏并记录游玩时间。
+        这样可以避免多个启动分支重复维护同一段流程。
+        """
+        self._sync_runtime_links_for_profile(profile_id, include_workshop=include_workshop)
+        self._start_profile_game(profile_id, game_install_path, extra_args)
+
+    def _build_direct_launch_confirmation(
+        self,
+        profile_id: str,
+        steam_running: bool,
+        reason: str,
+        message: str,
+        requires_fallback_confirm: bool = False,
+        steam_status: dict | None = None,
+    ):
+        """统一构造“改为游戏本体直启”的确认响应。"""
+        return ApiResponse.warning(
+            message,
+            data={
+                "action": "confirm_direct_launch",
+                "profile_id": profile_id,
+                "steam_running": bool(steam_running),
+                "reason": str(reason or "").strip(),
+                "requires_fallback_confirm": bool(requires_fallback_confirm),
+                "steam_status": steam_status or {},
+            },
+        )
+
+    def _attach_steam_user_hint(self, steam_status: dict | None, waiting: bool = False) -> dict:
+        """
+        给 Steam 状态补上统一的人类可读提示。
+        多个 API 都会直接把这个结构透传给前端，因此统一在这里处理更易维护。
+        """
+        status = dict(steam_status or {})
+        status["user_hint"] = self._describe_steam_status(status, waiting=waiting)
+        return status
+
+    def _ensure_steam_ready(self, timeout_seconds: float = 45.0):
+        """
+        确保 Steam 已启动并进入已登录可用状态。
+        返回: (ok, status, message)
+        """
+        try:
+            steam_status = self.steam_mgr.get_steam_client_status()
+            if steam_status.get("ready"):
+                return True, self._attach_steam_user_hint(steam_status), ""
+
+            started = self.steam_mgr.start_steam()
+            if not started:
+                return False, self._attach_steam_user_hint(steam_status), "无法自动启动 Steam，请检查 Steam 路径配置。"
+
+            deadline = time.time() + max(1.0, float(timeout_seconds or 0))
+            while time.time() < deadline:
+                steam_status = self.steam_mgr.get_steam_client_status()
+                if steam_status.get("ready"):
+                    return True, self._attach_steam_user_hint(steam_status), ""
+                time.sleep(1.0)
+
+            steam_status = self.steam_mgr.get_steam_client_status()
+            return False, self._attach_steam_user_hint(steam_status, waiting=True), "Steam 未能在限定时间内进入已登录可用状态，请确认已完成登录。"
+        except Exception as e:
+            logger.error(f"Ensure Steam ready failed: {e}", exc_info=True)
+            return False, {}, f"检测 Steam 状态失败: {e}"
+
+    @staticmethod
+    def _describe_steam_status(steam_status: dict | None, waiting: bool = False) -> dict:
+        """
+        将 Steam 状态转换为统一的人类可读描述，供多个入口复用。
+        """
+        status = steam_status or {}
+        running = bool(status.get("running"))
+        logged_in = bool(status.get("logged_in"))
+        ready = bool(status.get("ready"))
+        detail = str(status.get("detail") or "")
+
+        if ready:
+            return {
+                "state": "ready",
+                "title": "Steam 已就绪",
+                "message": "Steam 客户端已启动并完成登录，可以继续执行当前操作。",
+            }
+
+        if not running or detail in {"steamworks_not_running", "process_only"}:
+            return {
+                "state": "not_running",
+                "title": "Steam 未运行",
+                "message": "未检测到 Steam 客户端运行，请检查 Steam 路径配置或手动启动 Steam。",
+            }
+
+        if running and not logged_in:
+            return {
+                "state": "not_logged_in",
+                "title": "Steam 未登录",
+                "message": "Steam 客户端已启动，但尚未完成登录。请先在 Steam 中登录账号后再继续。",
+            }
+
+        if waiting:
+            return {
+                "state": "waiting_ready",
+                "title": "等待 Steam 就绪",
+                "message": "Steam 已启动，正在等待客户端进入可用状态。若长时间无响应，请确认 Steam 是否卡在登录或初始化界面。",
+            }
+
+        return {
+            "state": "unknown",
+            "title": "Steam 状态未知",
+            "message": "Steam 当前状态无法准确判定，请稍后重试；若问题持续，可检查 Steam 登录状态和客户端完整性。",
+        }
+
+    @log_api_call
+    def game_launch_resolve_warning(self, profile_id: str, action: str):
+        """
+        处理“直接启动且 Steam 已运行”时的用户决策。
+        """
+        try:
+            if not profile_id:
+                return ApiResponse.error("未指定 Profile ID")
+            normalized_action = str(action or '').strip().lower()
+            if normalized_action not in {item.value for item in LaunchWarningAction}:
+                return ApiResponse.error("无效的启动确认动作")
+            if normalized_action == LaunchWarningAction.CANCEL.value:
+                return ApiResponse.warning("已取消启动")
+
+            profile = self.profile_mgr.get_profile(profile_id)
+            extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+
+            if normalized_action == LaunchWarningAction.WAIT_STEAM_EXIT.value:
+                steam_running = self.steam_mgr.is_steam_running()
+                if steam_running:
+                    return ApiResponse.warning(
+                        "Steam 仍在运行，继续等待其退出。",
+                        data={
+                            "action": LaunchWarningAction.WAIT_STEAM_EXIT.value,
+                            "profile_id": profile_id,
+                            "steam_running": True,
+                        },
+                    )
+                self._launch_profile_with_runtime_links(
+                    profile_id,
+                    profile.game_install_path,
+                    extra_args,
+                    include_workshop=True,
+                )
+                return ApiResponse.success(message="Steam 已退出，游戏已自动启动。")
+
+            if normalized_action == LaunchWarningAction.CLEAR_WORKSHOP.value:
+                self._launch_profile_with_runtime_links(
+                    profile_id,
+                    profile.game_install_path,
+                    extra_args,
+                    include_workshop=False,
+                )
+                return ApiResponse.success(message="已删除 Workshop 链接并启动游戏")
+            else:
+                steam_running = self.steam_mgr.is_steam_running()
+                if not steam_running:
+                    self._launch_profile_with_runtime_links(
+                        profile_id,
+                        profile.game_install_path,
+                        extra_args,
+                        include_workshop=True,
+                    )
+                    return ApiResponse.success(message="已继续直接启动游戏")
+
+            self._launch_profile_with_runtime_links(
+                profile_id,
+                profile.game_install_path,
+                extra_args,
+                include_workshop=True,
+            )
+            return ApiResponse.success(message="已继续直接启动游戏")
+        except Exception as e:
+            logger.error(f"Resolve launch warning failed: {e}", exc_info=True)
+            return ApiResponse.error(f"处理启动确认失败: {e}")
+
+    @log_api_call
+    def steam_process_status(self):
+        """仅返回 Steam 进程状态，供等待 Steam 完全退出时轮询。"""
+        try:
+            running = bool(self.steam_mgr.is_steam_running())
+            return ApiResponse.success({"running": running})
+        except Exception as e:
+            logger.error(f"Get Steam process status failed: {e}", exc_info=True)
+            return ApiResponse.error(f"获取 Steam 进程状态失败: {e}")
+
+    @log_api_call
+    def steam_client_status(self):
+        """获取 Steam 客户端当前状态。"""
+        try:
+            return ApiResponse.success(self._attach_steam_user_hint(self.steam_mgr.get_steam_client_status()))
+        except Exception as e:
+            logger.error(f"Get Steam status failed: {e}", exc_info=True)
+            return ApiResponse.error(f"获取 Steam 状态失败: {e}")
+
+    @log_api_call
+    def profile_create_desktop_shortcut(self, profile_id: str):
+        """为指定环境创建桌面快捷方式。"""
+        try:
+            if not profile_id:
+                return ApiResponse.error("未指定 Profile ID")
+
+            profile = self.profile_mgr.get_profile(profile_id)
+            check_install = PathChecker.check_install_path(profile.game_install_path)
+            check_data = PathChecker.check_normal_path(profile.user_data_path)
+            if not check_install.get('pass') or not check_data.get('pass'):
+                msg = f"{check_install.get('msg', '')}\n{check_data.get('msg', '')}".strip()
+                return ApiResponse.error(msg or "环境路径无效，无法创建快捷方式")
+
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            default_profile = self.profile_mgr.get_profile('default')
+            same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
+            steam_path_valid = bool(
+                settings.config.steam_path
+                and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
+            )
+            if prefer_steam_launch and not steam_path_valid:
+                return ApiResponse.warning("当前环境设置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径，无法创建 Steam 快捷方式。")
+            if prefer_steam_launch:
+                extra_args = self.profile_mgr.get_launch_args_only(profile_id)
+                if same_install_as_default:
+                    shortcut = self.file_mgr.create_profile_desktop_shortcut(
+                        profile=profile,
+                        extra_args=extra_args,
+                        prefer_steam_launch=True,
+                        steam_exe_path=self.steam_mgr.steam_exe,
+                        steam_app_id=RIMWORLD_APP_ID,
+                    )
+                    self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
+                    launch_mode = "Steam 官方 AppID"
+                    return ApiResponse.success(
+                        data={
+                            "profile_id": profile_id,
+                            "shortcut_path": shortcut.get("shortcut_path"),
+                            "target_path": shortcut.get("target_path"),
+                            "arguments": shortcut.get("arguments", ""),
+                            "launch_mode": launch_mode,
+                            "steam_path_valid": steam_path_valid,
+                            "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
+                        },
+                        message=f"已在桌面创建环境快捷方式（{launch_mode}）",
+                    )
+                return ApiResponse.warning(
+                    "当前环境需要先注册 Steam 非 Steam 游戏条目，再由前端按流程等待 Steam 退出、写入配置并在 Steam 启动后确认稳定快捷方式 ID。",
+                    data={
+                        "profile_id": profile_id,
+                        "launch_mode": "Steam VDF",
+                        "steam_path_valid": steam_path_valid,
+                        "shortcut_kind": "steam_vdf_flow_required",
+                    },
+                )
+
+            shortcut = self.file_mgr.create_profile_desktop_shortcut(
+                profile=profile,
+                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+                prefer_steam_launch=False,
+                steam_exe_path=self.steam_mgr.steam_exe,
+                steam_app_id=RIMWORLD_APP_ID,
+            )
+            self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
+            launch_mode = "游戏本体"
+            return ApiResponse.success(
+                data={
+                    "profile_id": profile_id,
+                    "shortcut_path": shortcut.get("shortcut_path"),
+                    "target_path": shortcut.get("target_path"),
+                    "arguments": shortcut.get("arguments", ""),
+                    "launch_mode": launch_mode,
+                    "steam_path_valid": steam_path_valid,
+                    "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
+                },
+                message=f"已在桌面创建环境快捷方式（{launch_mode}）",
+            )
+        except Exception as e:
+            logger.error(f"Create Profile Shortcut Error: {e}", exc_info=True)
+            return ApiResponse.error(f"创建环境快捷方式时出错: {e}")
+
+    @log_api_call
+    def profile_register_steam_shortcut(self, profile_id: str):
+        """为异路径 Steam 环境写入/更新 shortcuts.vdf 条目。"""
+        try:
+            if not profile_id:
+                return ApiResponse.error("未指定 Profile ID")
+
+            profile = self.profile_mgr.get_profile(profile_id)
+            prefer_steam_launch = bool(getattr(profile, 'prefer_steam_launch', False))
+            if not prefer_steam_launch:
+                return ApiResponse.error("当前环境未启用 Steam 启动，无需注册 Steam 快捷方式")
+
+            default_profile = self.profile_mgr.get_profile('default')
+            same_install_as_default = os.path.normcase(os.path.normpath(profile.game_install_path)) == os.path.normcase(os.path.normpath(default_profile.game_install_path))
+            if same_install_as_default:
+                return ApiResponse.error("当前环境与默认环境使用同一游戏本体，无需注册 Steam 非 Steam 快捷方式")
+
+            log_probe = self.steam_mgr.get_shortcut_log_probe(
+                profile=profile,
+                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+            )
+            result = self.steam_mgr.register_profile_non_steam_shortcut(
+                profile=profile,
+                extra_args=self.profile_mgr.get_launch_args_only(profile_id),
+            )
+            result["log_probe"] = log_probe
+            return ApiResponse.success(result, message="已写入 Steam 快捷方式配置")
+        except Exception as e:
+            logger.error(f"Register Steam shortcut Error: {e}", exc_info=True)
+            return ApiResponse.error(f"写入 Steam 快捷方式配置失败: {e}")
+
+    @log_api_call
+    def profile_finalize_steam_shortcut(self, profile_id: str, log_probe: dict | None = None):
+        """
+        在 Steam 完全启动后静默等待稳定 ID，并创建桌面 `.url` 快捷方式。
+        设计原则：
+        1. “Steam 已启动但尚未产生日志中的 shortcut appid”属于正常处理中间态，不应反复抛 warning。
+        2. 由后端内部负责等待与轮询，前端只展示步骤状态，避免 toast/日志刷屏。
+        3. 仅在最终超时后才向前端返回 warning。
+        """
+        try:
+            if not profile_id:
+                return ApiResponse.error("未指定 Profile ID")
+
+            profile = self.profile_mgr.get_profile(profile_id)
+            timeout_seconds = 60.0
+            poll_interval_seconds = 1.0
+            deadline = time.time() + timeout_seconds
+            shortcut_status = {}
+            launch_url = ''
+
+            while time.time() < deadline:
+                shortcut_status = self.steam_mgr.get_registered_profile_non_steam_shortcut(profile, log_probe=log_probe)
+                launch_url = str(shortcut_status.get("launch_url") or '').strip()
+                if launch_url:
+                    break
+                logger.debug(
+                    "等待 Steam 生成稳定快捷方式 ID: profile=%s, user=%s, index=%s, appid=%s, source=%s",
+                    profile_id,
+                    shortcut_status.get("user_id"),
+                    shortcut_status.get("entry_index"),
+                    shortcut_status.get("appid"),
+                    shortcut_status.get("source"),
+                )
+                time.sleep(poll_interval_seconds)
+
+            if not launch_url:
+                return ApiResponse.warning(
+                    "Steam 已启动，但在限定时间内仍未生成可用的快捷方式 ID。可稍后重试，或检查 Steam 自定义游戏列表手动生成桌面快捷方式。",
+                    data={
+                        **shortcut_status,
+                        "timeout_seconds": timeout_seconds,
+                    },
+                )
+
+            game_exe = GameManager.detect_executable(profile.game_install_path) or ""
+            shortcut = self.file_mgr.create_profile_desktop_url_shortcut(
+                profile=profile,
+                launch_url=launch_url,
+                icon_location=game_exe,
+            )
+            self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
+            return ApiResponse.success(
+                data={
+                    **shortcut_status,
+                    "profile_id": profile_id,
+                    "shortcut_path": shortcut.get("shortcut_path"),
+                    "url": launch_url,
+                    "shortcut_kind": shortcut.get("shortcut_kind", "url"),
+                },
+                message="已创建 Steam 桌面快捷方式",
+            )
+        except Exception as e:
+            logger.error(f"Finalize Steam shortcut Error: {e}", exc_info=True)
+            return ApiResponse.error(f"确认 Steam 快捷方式失败: {e}")
     
 
     # =========================================================================
@@ -1635,6 +2270,8 @@ class API:
                 res = PathChecker.check_steam_path(path)
             elif path_type == "steamcmd_path":
                 res = PathChecker.check_steamcmd_path(path)
+            elif path_type == "texture_tools_path":
+                res = PathChecker.check_texture_tools_path(path)
             else:
                 res = PathChecker.check_normal_path(path)
                 
@@ -1670,23 +2307,22 @@ class API:
             return ApiResponse.error(f"打开路径时出错: {e}")
     
     @log_api_call
-    def path_delete(self, path: str):
+    def path_delete(self, path: str, force: bool = False):
         """删除文件/文件夹"""
         try:
-            success = file_mgr.delete_path(path)
-            if success: return ApiResponse.success()
-            return ApiResponse.warning("路径不存在或无法删除")
+            res = self._delete_paths(path, force=force)
+            if res['paths'] and res['success_count'] <= 0 and not res['errors']:
+                return ApiResponse.warning("路径不存在或无法删除", data=res)
+            return self._build_delete_response("路径", 1 if res['paths'] else 0, res)
         except Exception as e:
             return ApiResponse.error(f"删除路径时出错: {e}")
     
     @log_api_call
-    def paths_delete(self, paths: List[str]):
+    def paths_delete(self, paths: List[str], force: bool = False):
         """批量删除文件/文件夹"""
         try:
-            success_count, error_list = file_mgr.delete_paths(paths)
-            if success_count == len(paths):
-                return ApiResponse.success()
-            return ApiResponse.warning(f"成功删除 {success_count} 个路径，{len(error_list)} 个路径删除失败")
+            res = self._delete_paths(paths, force=force)
+            return self._build_delete_response("路径", len(res['paths']), res)
         except Exception as e:
             return ApiResponse.error(f"批量删除路径时出错: {e}")
     
@@ -1765,7 +2401,7 @@ class API:
             logger.error(f"Localize workshop mods failed: {e}", exc_info=True)
             return ApiResponse.error(f"本地化任务失败: {str(e)}")
         
-        return ApiResponse.success(message="本地化任务已在后台启动")
+        return ApiResponse.success({"task_id": res}, message="本地化任务已在后台启动")
     
     @log_api_call
     def workspace_transfer_mods(self, path_hashes: list, target_store: str, mode: str = 'copy'):
@@ -1942,6 +2578,17 @@ class API:
             return ApiResponse.success() if success else ApiResponse.error("删除失败")
         except Exception as e:
             return ApiResponse.error(f"删除失败: {str(e)}")
+
+    @log_api_call
+    def rule_set_language_pack_owner_override(self, package_id: str, owner_ids: list[str], replace: bool = False):
+        """设置语言包归属手动覆盖。"""
+        if not self.sorter or not self.sorter.rule_mgr:
+            return ApiResponse.error("规则引擎未初始化")
+        try:
+            success = self.sorter.rule_mgr.set_language_pack_owner_override(package_id, owner_ids, replace)
+            return ApiResponse.success() if success else ApiResponse.error("保存失败")
+        except Exception as e:
+            return ApiResponse.error(f"保存失败: {str(e)}")
     
     @log_api_call
     def rule_get_settings(self):
@@ -2084,47 +2731,8 @@ class API:
     
     @log_api_call
     def update_community_rule(self):
-        """
-        更新社区规则库
-        """
-        try:
-            # 1. 路径准备
-            # 注意：settings.config.community_rules_path 是完整文件路径 (例如 .../rules/community.json)
-            full_path = settings.config.community_rules_path
-            file_folder = os.path.dirname(full_path)
-            file_name = os.path.basename(full_path)
-            url = settings.config.community_rules_url
-            
-            if not os.path.exists(file_folder):
-                os.makedirs(file_folder, exist_ok=True)
-
-            logger.info(f"Start updating community rules from: {url}")
-            # 定义回调函数：下载完了自动加载规则
-            def on_rules_ready(task):
-                if not self.sorter or not self.sorter.rule_mgr:
-                    EventBus.send_toast("规则引擎未初始化，无法加载社区规则库", type="warning")
-                else:
-                    logger.info("Rules ready, reloading...")
-                    self.sorter.rule_mgr.load_all()
-                    EventBus.send_toast("社区规则库更新完毕！", type="success")
-            
-            def on_rules_error(task):
-                logger.error(f"Rules download failed: {task.error_msg}", exc_info=True)
-                EventBus.send_toast("社区规则库更新失败！", type="error")
-
-            task_id = self.download_mgr.add_task(
-                url=url, 
-                dest_dir=file_folder, 
-                filename=file_name,
-                on_complete=on_rules_ready,
-                on_error=on_rules_error
-            )
-
-            return ApiResponse.success(data={"task_id": task_id}, message="社区规则库开始更新")
-            
-        except Exception as e:
-            logger.error(f"Update community rules failed: {e}", exc_info=True)
-            return ApiResponse.error(f"系统错误: {str(e)}")
+        """兼容旧入口：统一转发到外置数据更新管线。"""
+        return self.update_external_db("community_rules")
 
     
     # =========================================================================
@@ -2194,27 +2802,40 @@ class API:
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
     @log_api_call
-    def download_cancel(self, task_id: str):
-        self.download_mgr.cancel_task(task_id)
-        return ApiResponse.success(message="尝试取消任务")
-
-    @log_api_call
     def cancel_progress_task(self, task_id: str, task_type: str):
         """统一取消入口，供前端全局任务栏按任务类型路由控制。"""
         normalized_task_id = str(task_id or "").strip()
         normalized_type = str(task_type or "").strip().lower()
 
-        if normalized_type in {"download", "update", "localize", "steamcmd-init"}:
+        if normalized_type in {"download", "update"}:
             if not normalized_task_id:
                 return ApiResponse.error("缺少任务 ID")
             self.download_mgr.cancel_task(normalized_task_id)
             return ApiResponse.success(message="已请求取消下载任务")
+
+        if normalized_type == "localize":
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = file_mgr.cancel_localize_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消本地化任务") if ok else ApiResponse.error("当前没有可取消的本地化任务")
 
         if normalized_type == "scan":
             if not self.scanner:
                 return ApiResponse.error("扫描器未初始化")
             ok = self.scanner.stop_scan(normalized_task_id or None)
             return ApiResponse.success(message="已请求取消扫描任务") if ok else ApiResponse.error("当前没有可取消的扫描任务")
+
+        if normalized_type in {"steamcmd-download", "steamcmd-init"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.steam_mgr.cancel_steamcmd_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 SteamCMD 任务") if ok else ApiResponse.error("当前没有可取消的 SteamCMD 任务")
+
+        if normalized_type in {"steam-subscribe", "steam-unsubscribe"}:
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.steam_mgr.abort_monitor_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 Steam 任务") if ok else ApiResponse.error("当前没有可取消的 Steam 任务")
 
         if normalized_type in {"texture-opt", "texture-opt-analyze"}:
             if not normalized_task_id:
@@ -2226,7 +2847,10 @@ class API:
                 return ApiResponse.error(str(e))
 
         if normalized_type == "ai-batch":
-            return ApiResponse.warning("AI 批量任务暂不支持取消")
+            if not normalized_task_id:
+                return ApiResponse.error("缺少任务 ID")
+            ok = self.ai_mgr.cancel_batch_task(normalized_task_id)
+            return ApiResponse.success(message="已请求取消 AI 批量任务") if ok else ApiResponse.error("当前没有可取消的 AI 批量任务")
 
         return ApiResponse.error(f"该任务类型暂不支持取消: {normalized_type or 'unknown'}")
 
@@ -2334,6 +2958,48 @@ class API:
         """跳过当前版本"""
         settings.set('ignored_update_version', version_str)
         return ApiResponse.success()
+
+    @log_api_call
+    def maintenance_check_tools(self):
+        """检查外部工具环境状态，不自动下载。"""
+        try:
+            checked = self.maintenance_mgr.check_tools()
+            checked_at = int(checked.get("checked_at") or current_ms())
+            settings.set("last_tool_check_time", checked_at)
+            return ApiResponse.success(checked)
+        except Exception as e:
+            logger.error("Check tools maintenance failed: %s", e, exc_info=True)
+            return ApiResponse.error(f"检查工具环境失败: {e}")
+
+    @log_api_call
+    def maintenance_check_external_data(self):
+        """检查社区规则/数据库等外部文件是否需要更新。"""
+        try:
+            checked = self.maintenance_mgr.check_external_data()
+            checked_at = int(checked.get("checked_at") or current_ms())
+            items = checked.get("items") if isinstance(checked, dict) else []
+            failed = checked.get("failed") if isinstance(checked, dict) else []
+            items = items if isinstance(items, list) else []
+            failed = failed if isinstance(failed, list) else []
+            # 整轮远端状态都没拿到时，不刷新“上次成功检查时间”，避免自动检查被失败结果错误限流。
+            if not items or len(failed) < len(items):
+                settings.set("last_external_data_update_check_time", checked_at)
+            return ApiResponse.success(checked)
+        except Exception as e:
+            logger.error("Check external data maintenance failed: %s", e, exc_info=True)
+            return ApiResponse.error(f"检查外部库更新失败: {e}")
+
+    @log_api_call
+    def maintenance_check_steamcmd_mod_updates(self):
+        """仅检查 SteamCMD 管理目录中的工坊模组更新。"""
+        try:
+            checked = self.maintenance_mgr.check_steamcmd_mod_updates()
+            checked_at = int(checked.get("checked_at") or current_ms())
+            settings.set("last_steamcmd_mod_update_check_time", checked_at)
+            return ApiResponse.success(checked)
+        except Exception as e:
+            logger.error("Check SteamCMD mod updates failed: %s", e, exc_info=True)
+            return ApiResponse.error(f"检查 SteamCMD 模组更新失败: {e}")
     
     
     # =========================================================================
@@ -2343,25 +3009,27 @@ class API:
     @log_api_call
     def check_steam_tools(self):
         """
-        前端初始化时调用，检查工具是否就绪。
-        如果有缺失，自动触发下载任务。
+        兼容旧接口：仅返回 SteamCMD 当前状态，不再自动触发下载。
         """
-        # 1. 检查缺失文件并添加下载任务
-        tasks = self.steam_mgr.ensure_tools(self.download_mgr)
-        
-        # 2. 如果有新任务，注册一个回调来处理下载后的解压/部署
-        if tasks:
-            # 需要一个简单的方法来监控这些任务的完成
-            # 这里简化处理：启动一个后台线程轮询这些任务状态
-            threading.Thread(target=self._monitor_setup_tasks, args=(tasks,), daemon=True).start()
-            
         return ApiResponse.success({
             "steamcmd_ready": self.steam_mgr.steamcmd_ready,
-            "pending_tasks": tasks
+            "pending_tasks": [],
+            "status": self.maintenance_mgr.check_tools(),
+        })
+
+    @log_api_call
+    def steam_tools_install(self):
+        """用户确认后调用：按需下载并初始化 SteamCMD。"""
+        tasks = self.steam_mgr.ensure_tools(self.download_mgr)
+        if tasks:
+            threading.Thread(target=self._monitor_setup_tasks, args=(tasks,), daemon=True).start()
+        return ApiResponse.success({
+            "steamcmd_ready": self.steam_mgr.steamcmd_ready,
+            "pending_tasks": tasks,
         })
 
     def _monitor_setup_tasks(self, tasks):
-        """(内部) 监控工具下载任务，完成后执行安装逻辑"""
+        """(内部) 监控工具下载任务，完成后只负责执行解压/部署。"""
         import time
         from backend.managers.mgr_download import TaskStatus
         
@@ -2383,44 +3051,14 @@ class API:
                 elif task.status == TaskStatus.ERROR:
                     logger.error(f"Setup task failed: {task_id}", exc_info=True)
                     pending.remove(item)
-        # 初始化
-        is_initialized = (Path(settings.config.steamcmd_path) / "public").exists()
-        if os.path.exists(self.steamcmd_controller.steamcmd_exe) and not is_initialized:
-            controller = SteamCMDController(self.steamcmd_controller.steamcmd_exe)
-            steamcmd_task_id = str(uuid.uuid4())
-            EventBus.emit_progress(
-                steamcmd_task_id,
-                "steamcmd-init",
-                status="pending",
-                progress=0,
-                message="准备初始化 SteamCMD...",
-                metrics={"title": "SteamCMD 初始化"},
-            )
-            def on_progress(percent, msg):
-                # 将进度推给前端
-                from backend.utils.event_bus import EventBus
-                EventBus.emit_progress(
-                    steamcmd_task_id,
-                    "steamcmd-init",
-                    status="running",
-                    progress=percent,
-                    message=msg,
-                    metrics={"title": "SteamCMD 初始化"},
-                )
-            success, msg = controller.initialize_steamcmd(on_progress)
-            if not success:
-                logger.error(f"SteamCMD 初始化彻底失败: {msg}", exc_info=True)
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": "SteamCMD 初始化"})
-            else:
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
 
     @log_api_call
     def steam_subscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端订阅"""
-        # 前置拦截
-        if not self.steam_mgr.is_steam_running():
-            return ApiResponse.warning("Steam 客户端未运行", data={"action": "need_start_steam"})
         try:
+            ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
+            if not ok:
+                return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
             success = self.steam_mgr.subscribe_items(workshop_ids)
             if success:
                 return ApiResponse.success(message="已发送订阅请求 (需Steam运行中)")
@@ -2432,10 +3070,10 @@ class API:
     @log_api_call
     def steam_unsubscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端取消订阅"""
-        # 前置拦截
-        if not self.steam_mgr.is_steam_running():
-            return ApiResponse.warning("Steam 客户端未运行", data={"action": "need_start_steam"})
         try:
+            ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
+            if not ok:
+                return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
             success = self.steam_mgr.unsubscribe_items(workshop_ids)
             if success:
                 return ApiResponse.success(message="已发送取消订阅请求")
@@ -2445,21 +3083,12 @@ class API:
             return ApiResponse.error(str(e))
     
     @log_api_call
-    def steam_cancle_task(self, task_id: str):
-        """取消 Steam 客户端任务"""
-        success = self.steam_mgr.abort_monitor_task(task_id)
-        if success:
-            return ApiResponse.success(message="已取消任务")
-        else:
-            return ApiResponse.error("操作失败：SteamAPI 未就绪")
-    
-    @log_api_call
     def steam_launch_client(self):
         """前端主动调用唤醒 Steam"""
-        success = self.steam_mgr.start_steam()
-        if success:
-            return ApiResponse.success(message="正在唤起 Steam 客户端，请等待其完全加载...")
-        return ApiResponse.error("无法定位 Steam 路径，请手动打开！")
+        ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
+        if ok:
+            return ApiResponse.success(data=steam_status, message="Steam 客户端已启动并进入可用状态。")
+        return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
 
     @log_api_call
     def steam_open_workshop_page(self, workshop_id: str):
@@ -2497,7 +3126,7 @@ class API:
                 return ApiResponse.error("SteamCMD 未安装，正在尝试自动修复，请稍后...")
             
             # 启动后台下载
-            self.steam_mgr.download_workshop_items(workshop_ids)
+            self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
             return ApiResponse.success(message="SteamCMD 下载任务已启动")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -2647,7 +3276,7 @@ class API:
                 # 任务彻底完成后，发送 complete 事件
                 EventBus.emit(f'ai-batch-complete', {
                     'task_event_id': task_event_id,
-                    'status': 'success', 
+                    'status': 'cancelled' if results.get('cancelled') else 'success', 
                     'data': results
                 })
                 # 可选：可以直接在这里调用 ModDAO 批量入库
@@ -2894,9 +3523,9 @@ class API:
             return ApiResponse.error(str(e))
         
     @log_api_call
-    def profile_delete(self, pid):
+    def profile_delete(self, pid, force: bool = False):
         try:
-            self.profile_mgr.delete_profile(pid)
+            self.profile_mgr.delete_profile(pid, force=force)
             return ApiResponse.success(message="环境已删除")
         except Exception as e:
             return ApiResponse.error(str(e))
@@ -2933,6 +3562,26 @@ class API:
             return ApiResponse.success(message=msg)
         else:
             return ApiResponse.error(msg)
+
+    def _reload_community_rules(self):
+        """外部规则文件更新后，立即把内存中的规则缓存切到新版本。"""
+        if not self.sorter or not self.sorter.rule_mgr:
+            EventBus.send_toast("规则引擎未初始化，无法立即重载社区规则库。", type="warning")
+            return
+        logger.info("Community rules ready, reloading...")
+        self.sorter.rule_mgr.load_all()
+
+    def _reload_workshop_database(self):
+        """工坊数据库更新后，同时刷新依赖规则缓存，避免前端继续读旧关联关系。"""
+        logger.info("Workshop database ready, reloading...")
+        self.workshop_db_mgr.load_all_cache()
+        if self.sorter and self.sorter.rule_mgr:
+            self.sorter.rule_mgr.build_workshop_rules()
+
+    def _reload_instead_database(self):
+        """替代库更新后只需重建外置缓存。"""
+        logger.info("Instead database ready, reloading...")
+        self.workshop_db_mgr.rebuild_instead_cache()
     
     
     # ==========================================
@@ -2941,52 +3590,79 @@ class API:
     @log_api_call
     def update_external_db(self, data_type: str):
         """
-        更新外置数据（例如工坊数据库和替代数据库）
+        更新外置数据。
+
+        这里统一承接三类外部库文件：
+        1. 社区规则库
+        2. 社区工坊数据库
+        3. 替代 Mod 数据库
         """
         try:
-            if data_type == "workshop_db":
-                # 1. 路径准备
-                # 注意：settings.config.community_workshop_db_path 是完整文件路径 (例如 .../steamDB.json)
-                full_path = settings.config.community_workshop_db_path
-                file_folder = os.path.dirname(full_path)
-                file_name = os.path.basename(full_path)
-                url = settings.config.community_workshop_db_url
-            elif data_type == "instead_db":
-                # 1. 路径准备
-                # 注意：settings.config.community_instead_db_path 是完整文件路径 (例如 .../replacements.json)
-                full_path = settings.config.community_instead_db_path
-                file_folder = os.path.dirname(full_path)
-                file_name = os.path.basename(full_path)
-                url = settings.config.community_instead_db_url
-            else:
+            dataset_specs = {
+                "community_rules": {
+                    "path": settings.config.community_rules_path,
+                    "url": settings.config.community_rules_url,
+                    "success_message": "社区规则库更新完毕！",
+                    "error_message": "社区规则库更新失败！",
+                    "start_message": "社区规则库开始更新",
+                    "reload": self._reload_community_rules,
+                },
+                "workshop_db": {
+                    "path": settings.config.community_workshop_db_path,
+                    "url": settings.config.community_workshop_db_url,
+                    "success_message": "社区工坊数据库更新完毕！",
+                    "error_message": "社区工坊数据库更新失败！",
+                    "start_message": "社区工坊数据库开始更新",
+                    "reload": self._reload_workshop_database,
+                },
+                "instead_db": {
+                    "path": settings.config.community_instead_db_path,
+                    "url": settings.config.community_instead_db_url,
+                    "success_message": "替代 Mod 数据库更新完毕！",
+                    "error_message": "替代 Mod 数据库更新失败！",
+                    "start_message": "替代 Mod 数据库开始更新",
+                    "reload": self._reload_instead_database,
+                },
+            }
+            spec = dataset_specs.get(data_type)
+            if not spec:
                 return ApiResponse.error(f"无效的数据库类型 {data_type}")
-            
+
+            full_path = str(spec["path"] or "")
+            url = str(spec["url"] or "")
+            if not full_path or not url:
+                return ApiResponse.error("更新地址或目标路径未配置")
+
+            file_folder = os.path.dirname(full_path)
+            file_name = os.path.basename(full_path)
             if not os.path.exists(file_folder):
                 os.makedirs(file_folder, exist_ok=True)
-            logger.info(f"Start updating community {data_type} from: {url}")
-            # 定义回调函数
+
+            logger.info("Start updating external dataset %s from: %s", data_type, url)
+
             def on_db_ready(task):
-                logger.info(f"{data_type} ready, reloading...")
-                self.workshop_db_mgr.load_all_cache()
-                # 当 workshop_db 更新完毕时，通知规则系统重建关联缓存
-                if data_type == "workshop_db" and self.sorter:
-                    self.sorter.rule_mgr.build_workshop_rules()
-                self.workshop_db_mgr.load_all_cache()
-                # self.sorter.rule_mgr.load_all()
-                EventBus.send_toast(f"社区 {data_type} 数据库更新完毕！", type="success")
+                try:
+                    reload_fn = spec.get("reload")
+                    if callable(reload_fn):
+                        reload_fn()
+                    EventBus.send_toast(str(spec["success_message"]), type="success")
+                except Exception as reload_error:
+                    logger.error("External dataset reload failed: %s", reload_error, exc_info=True)
+                    EventBus.send_toast(f"{spec['success_message']} 但重载失败，请稍后手动刷新。", type="warning")
+
             def on_db_error(task):
-                logger.error(f"{data_type} download failed: {task.error_msg}", exc_info=True)
-                EventBus.send_toast(f"社区 {data_type} 数据库更新失败！", type="error")
+                logger.error("%s download failed: %s", data_type, getattr(task, "error_msg", ""), exc_info=True)
+                EventBus.send_toast(str(spec["error_message"]), type="error")
+
             task_id = self.download_mgr.add_task(
-                url=url, 
-                dest_dir=file_folder, 
+                url=url,
+                dest_dir=file_folder,
                 filename=file_name,
                 on_complete=on_db_ready,
                 on_error=on_db_error
             )
 
-            return ApiResponse.success(data={"task_id": task_id}, message=f"社区 {data_type} 数据库开始更新")
-            
+            return ApiResponse.success(data={"task_id": task_id}, message=str(spec["start_message"]))
         except Exception as e:
             logger.error(f"Update community {data_type} failed: {e}", exc_info=True)
             return ApiResponse.error(f"系统错误: {str(e)}")
@@ -3723,7 +4399,7 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def texture_analyze_mods(self, package_ids: List[str], options: dict|None = None, force_refresh: bool = False):
+    def texture_analyze_mods(self, package_ids: List[str], options: dict|None = None):
         """
         开始分析选中模组的贴图（多线程异步预热）
         """
@@ -3747,10 +4423,18 @@ class API:
                         options,
                         task_id=task_id,
                         cancel_event=cancel_event,
-                        use_cache=not bool(force_refresh),
                     )
                 except TextureOptCancelled:
                     logger.info("后台贴图分析任务已取消")
+                    self.texture_mgr._emit_analysis_progress(
+                        task_id,
+                        status="cancelled",
+                        progress=0,
+                        message="贴图扫描任务已取消",
+                        processed_mods=0,
+                        total_mods=len(paths),
+                        summary=self.texture_mgr._create_empty_stat(include_mod_count=True, mod_count=len(paths)),
+                    )
                 except Exception as e:
                     logger.error(f"后台贴图分析任务执行失败: {e}", exc_info=True)
                 finally:

@@ -18,29 +18,15 @@ export const useTextureStore = defineStore('texture', () => {
     source_total_bytes: 0,
     output_total_count: 0,
     output_total_bytes: 0,
-    managed_output_count: 0,
-    managed_output_bytes: 0,
-    external_output_count: 0,
-    external_output_bytes: 0,
     current_output_count: 0,
     current_output_bytes: 0,
-    stale_output_count: 0,
-    stale_output_bytes: 0,
-    missing_output_count: 0,
     generate_required_count: 0,
-    regenerate_required_count: 0,
-    action_required_count: 0,
     skip_small_count: 0,
-    skip_mask_count: 0,
     unsupported_source_count: 0,
     unreadable_source_count: 0,
-    blocked_source_count: 0,
-    orphan_output_count: 0,
-    orphan_output_bytes: 0,
-    managed_orphan_output_count: 0,
-    managed_orphan_output_bytes: 0,
-    external_orphan_output_count: 0,
-    external_orphan_output_bytes: 0,
+    scaled_count: 0,
+    fallback_scaled_count: 0,
+    keep_original_count: 0,
     source_vram_bytes_est: 0,
     output_vram_bytes_est: 0,
     vram_saving_bytes_est: 0,
@@ -48,6 +34,8 @@ export const useTextureStore = defineStore('texture', () => {
     source_bytes_share_pct: 0,
     output_bytes_share_pct: 0,
     combined_bytes_share_pct: 0,
+    scale_breakdown: [],
+    projection_basis: [],
     engine_unsupported_preview: [],
     mod_count: 0,
   })
@@ -63,13 +51,6 @@ export const useTextureStore = defineStore('texture', () => {
     const sourceTotalBytes = toInt(raw.source_total_bytes ?? base.source_total_bytes)
     const outputTotalCount = toInt(raw.output_total_count ?? base.output_total_count)
     const outputTotalBytes = toInt(raw.output_total_bytes ?? base.output_total_bytes)
-    const generateRequiredCount = toInt(raw.generate_required_count ?? base.generate_required_count)
-    const regenerateRequiredCount = toInt(raw.regenerate_required_count ?? base.regenerate_required_count)
-    const actionRequiredCount = toInt(
-      raw.action_required_count
-      ?? raw.pending_count
-      ?? (generateRequiredCount + regenerateRequiredCount)
-    )
     const currentOutputCount = toInt(raw.current_output_count ?? raw.up_to_date_count ?? base.current_output_count)
     const currentOutputBytes = toInt(raw.current_output_bytes ?? base.current_output_bytes)
 
@@ -82,29 +63,15 @@ export const useTextureStore = defineStore('texture', () => {
       source_total_bytes: sourceTotalBytes,
       output_total_count: outputTotalCount,
       output_total_bytes: outputTotalBytes,
-      managed_output_count: toInt(raw.managed_output_count ?? base.managed_output_count),
-      managed_output_bytes: toInt(raw.managed_output_bytes ?? base.managed_output_bytes),
-      external_output_count: toInt(raw.external_output_count ?? base.external_output_count),
-      external_output_bytes: toInt(raw.external_output_bytes ?? base.external_output_bytes),
       current_output_count: currentOutputCount,
       current_output_bytes: currentOutputBytes,
-      stale_output_count: toInt(raw.stale_output_count ?? base.stale_output_count),
-      stale_output_bytes: toInt(raw.stale_output_bytes ?? base.stale_output_bytes),
-      missing_output_count: toInt(raw.missing_output_count ?? base.missing_output_count),
-      generate_required_count: generateRequiredCount,
-      regenerate_required_count: regenerateRequiredCount,
-      action_required_count: actionRequiredCount,
+      generate_required_count: toInt(raw.generate_required_count ?? raw.pending_count ?? base.generate_required_count),
       skip_small_count: toInt(raw.skip_small_count ?? raw.skipped_small_count ?? base.skip_small_count),
-      skip_mask_count: toInt(raw.skip_mask_count ?? raw.skipped_mask_count ?? base.skip_mask_count),
       unsupported_source_count: toInt(raw.unsupported_source_count ?? raw.unsupported_count ?? base.unsupported_source_count),
       unreadable_source_count: toInt(raw.unreadable_source_count ?? base.unreadable_source_count),
-      blocked_source_count: toInt(raw.blocked_source_count ?? raw.blocked_count ?? base.blocked_source_count),
-      orphan_output_count: toInt(raw.orphan_output_count ?? base.orphan_output_count),
-      orphan_output_bytes: toInt(raw.orphan_output_bytes ?? base.orphan_output_bytes),
-      managed_orphan_output_count: toInt(raw.managed_orphan_output_count ?? base.managed_orphan_output_count),
-      managed_orphan_output_bytes: toInt(raw.managed_orphan_output_bytes ?? base.managed_orphan_output_bytes),
-      external_orphan_output_count: toInt(raw.external_orphan_output_count ?? base.external_orphan_output_count),
-      external_orphan_output_bytes: toInt(raw.external_orphan_output_bytes ?? base.external_orphan_output_bytes),
+      scaled_count: toInt(raw.scaled_count ?? base.scaled_count),
+      fallback_scaled_count: toInt(raw.fallback_scaled_count ?? base.fallback_scaled_count),
+      keep_original_count: toInt(raw.keep_original_count ?? base.keep_original_count),
       source_vram_bytes_est: toInt(raw.source_vram_bytes_est ?? base.source_vram_bytes_est),
       output_vram_bytes_est: toInt(raw.output_vram_bytes_est ?? base.output_vram_bytes_est),
       vram_saving_bytes_est: toInt(
@@ -115,6 +82,8 @@ export const useTextureStore = defineStore('texture', () => {
       source_bytes_share_pct: Number(raw.source_bytes_share_pct ?? base.source_bytes_share_pct) || 0,
       output_bytes_share_pct: Number(raw.output_bytes_share_pct ?? base.output_bytes_share_pct) || 0,
       combined_bytes_share_pct: Number(raw.combined_bytes_share_pct ?? base.combined_bytes_share_pct) || 0,
+      scale_breakdown: Array.isArray(raw.scale_breakdown) ? raw.scale_breakdown : [],
+      projection_basis: Array.isArray(raw.projection_basis) ? raw.projection_basis : [],
       engine_unsupported_preview: Array.isArray(raw.engine_unsupported_preview) ? raw.engine_unsupported_preview : [],
     }
 
@@ -136,6 +105,7 @@ export const useTextureStore = defineStore('texture', () => {
   const currentTaskId = ref('')
   const currentAnalysisTaskId = ref('')
   const currentOptimizationTaskId = ref('')
+  const lastFinishedProgress = ref(null)
   const lastTargetPackageIds = ref([])
   const lastOptimizationAction = ref('')
   
@@ -143,17 +113,7 @@ export const useTextureStore = defineStore('texture', () => {
   const modsData = ref([])        // 分析后返回的所有 Mod 数据
   const globalSummary = ref(normalizeTextureStat({}, { includeModCount: true }))
 
-  const currentTask = computed(() => {
-    const taskId = currentOptimizationTaskId.value || currentAnalysisTaskId.value || currentTaskId.value
-    return (
-      (taskId ? taskStore.getTask(taskId) : null)
-      || taskStore.getLatestTaskByType(['texture-opt', 'texture-opt-analyze'])
-      || null
-    )
-  })
-
-  const progressState = computed(() => {
-    const task = currentTask.value
+  const buildProgressState = (task) => {
     if (!task) {
       return {
         percent: 0,
@@ -182,6 +142,20 @@ export const useTextureStore = defineStore('texture', () => {
         local_status: task.status,
       }
     }
+  }
+
+  const currentTask = computed(() => {
+    const taskId = currentOptimizationTaskId.value || currentAnalysisTaskId.value || currentTaskId.value
+    return (
+      (taskId ? taskStore.getTask(taskId) : null)
+      || taskStore.getLatestTaskByType(['texture-opt', 'texture-opt-analyze'])
+      || null
+    )
+  })
+
+  const progressState = computed(() => {
+    const task = currentTask.value
+    return task ? buildProgressState(task) : (lastFinishedProgress.value || buildProgressState(null))
   })
 
   // 视图控制
@@ -198,6 +172,7 @@ export const useTextureStore = defineStore('texture', () => {
   const bindTaskId = (payload, kind) => {
     const taskId = payload?.task_id || payload?.id || ''
     currentTaskId.value = taskId
+    lastFinishedProgress.value = null
     if (kind === 'analyze') {
       currentAnalysisTaskId.value = taskId
     } else if (kind === 'optimize') {
@@ -208,7 +183,7 @@ export const useTextureStore = defineStore('texture', () => {
 
   const applyReturnedTaskState = (payload) => {
     if (!payload) return
-    taskStore.upsertTask({
+    const task = taskStore.upsertTask({
       id: payload.task_id || payload.id,
       type: payload.type || (payload.action === 'analyze' ? 'texture-opt-analyze' : 'texture-opt'),
       status: payload.status || 'pending',
@@ -217,6 +192,9 @@ export const useTextureStore = defineStore('texture', () => {
       metrics: payload.metrics || {},
       timestamp: payload.updated_at || Date.now(),
     })
+    if (task && ['success', 'failed', 'cancelled'].includes(task.status)) {
+      lastFinishedProgress.value = buildProgressState(task)
+    }
   }
 
   const markTaskCancelling = () => {
@@ -248,6 +226,17 @@ export const useTextureStore = defineStore('texture', () => {
     }
     if (Array.isArray(mods)) {
       modsData.value = normalizeTextureRows(mods)
+    }
+  }
+
+  const upsertCurrentEntry = (entry) => {
+    if (!entry) return
+    const currentEntry = normalizeTextureStat(entry)
+    const existingIdx = modsData.value.findIndex(item => item.mod_path === currentEntry.mod_path)
+    if (existingIdx !== -1) {
+      modsData.value[existingIdx] = currentEntry
+    } else {
+      modsData.value.push(currentEntry)
     }
   }
 
@@ -333,9 +322,9 @@ export const useTextureStore = defineStore('texture', () => {
     isAnalyzing.value = true
     lastTargetPackageIds.value = [...packageIds]
     currentOptimizationTaskId.value = ''
-    modsData.value =[] // 清空旧数据
+    modsData.value = []
     try {
-      const res = await window.pywebview.api.texture_analyze_mods(packageIds, appStore.settings.texture_opt, true)
+      const res = await window.pywebview.api.texture_analyze_mods(packageIds, appStore.settings.texture_opt)
       if (appStore.checkResult(res, "启动贴图分析", false)) {
         bindTaskId(res.data, 'analyze')
         applyReturnedTaskState(res.data)
@@ -397,27 +386,25 @@ export const useTextureStore = defineStore('texture', () => {
     // 如果不是当前任务，忽略
     if (!isKnownTask) return
 
-    applySnapshotPayload(metrics)
+    const hasSnapshotPayload =
+      (metrics.summary && typeof metrics.summary === 'object')
+      || Array.isArray(metrics.final_mods)
+      || Array.isArray(metrics.mods)
+    if (hasSnapshotPayload) {
+      applySnapshotPayload(metrics)
+    }
 
-    // 处理分析进度（动态竞赛图的核心）
+    if (metrics.current_entry) {
+      upsertCurrentEntry(metrics.current_entry)
+    }
+    if (Array.isArray(metrics.final_mods)) {
+      modsData.value = normalizeTextureRows(metrics.final_mods)
+    }
+
+    // 处理分析进度
     if (type === 'texture-opt-analyze') {
-      // 动态将新分析的 Mod 塞入列表，实现实时的动态过渡效果
-      if (metrics.current_entry) {
-        const currentEntry = normalizeTextureStat(metrics.current_entry)
-        const existingIdx = modsData.value.findIndex(m => m.mod_path === currentEntry.mod_path)
-        if (existingIdx !== -1) {
-          modsData.value[existingIdx] = currentEntry
-        } else {
-          modsData.value.push(currentEntry)
-        }
-      }
-
-      // 【核心修复】接收扫描结束时后端下发的最终全量排序数据
-      if (Array.isArray(metrics.final_mods)) {
-        modsData.value = normalizeTextureRows(metrics.final_mods)
-      }
-      
       if (status === 'success' || status === 'failed' || status === 'cancelled') {
+        lastFinishedProgress.value = buildProgressState(currentTask.value || taskStore.getTask(id))
         isAnalyzing.value = false
         currentAnalysisTaskId.value = ''
         if (!currentOptimizationTaskId.value) {
@@ -428,19 +415,8 @@ export const useTextureStore = defineStore('texture', () => {
 
     // 处理优化进度
     if (type === 'texture-opt') {
-      if (metrics.current_entry) {
-        const currentEntry = normalizeTextureStat(metrics.current_entry)
-        const existingIdx = modsData.value.findIndex(m => m.mod_path === currentEntry.mod_path)
-        if (existingIdx !== -1) {
-          modsData.value[existingIdx] = currentEntry
-        } else {
-          modsData.value.push(currentEntry)
-        }
-      }
-      if (Array.isArray(metrics.final_mods)) {
-        modsData.value = normalizeTextureRows(metrics.final_mods)
-      }
       if (status === 'success' || status === 'failed' || status === 'cancelled') {
+        lastFinishedProgress.value = buildProgressState(currentTask.value || taskStore.getTask(id))
         isOptimizing.value = false
         currentOptimizationTaskId.value = ''
         if (!currentAnalysisTaskId.value) {

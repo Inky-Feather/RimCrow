@@ -676,6 +676,7 @@ const buildOperations = () => {
         action: actionMap[getItemKey(item)] || 'disable',
         target_path: item.path,
         target_path_hash: item.path_hash,
+        force_delete: false,
         keep_id: group.package_id,
         keep_path_hash: winner.path_hash,
       })
@@ -703,16 +704,34 @@ const submit = async () => {
     '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。',
   ].filter(Boolean).join('\n')
 
-  const ok = await confirmStore.confirmAction(
-    '确认处理冲突',
-    confirmMessage,
-    {
-      type: summary.value.deleteCount > 0 ? 'error' : 'warning',
-      confirmText: '确认执行',
-      cancelText: '再检查一下',
-    }
-  )
-  if (!ok) return
+  const deleteCount = summary.value.deleteCount || 0
+  const confirmResult = deleteCount > 0
+    ? await confirmStore.confirmDeleteAction(
+        '确认处理冲突',
+        confirmMessage,
+        {
+          confirmText: '确认执行',
+          cancelText: '再检查一下',
+          trashOptionText: '删除副本并移入回收站',
+          forceOptionText: '强制彻底删除副本',
+          deleteOptionsHint: '该选项仅影响本次选择为“删除”的副本；禁用项仍只会调整文件状态。',
+        }
+      )
+    : await confirmStore.confirmAction(
+        '确认处理冲突',
+        confirmMessage,
+        {
+          type: 'warning',
+          confirmText: '确认执行',
+          cancelText: '再检查一下',
+        }
+      )
+  if (deleteCount > 0) {
+    if (!confirmResult?.confirmed) return
+    operations.forEach((item) => {
+      if (item.action === 'delete') item.force_delete = !!confirmResult.force
+    })
+  } else if (!confirmResult) return
 
   processing.value = true
   submitFeedback.value = null

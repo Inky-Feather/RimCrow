@@ -30,7 +30,8 @@ from backend.utils.tools import (
     is_hex_color,
     normalize_hex_color,
     normalize_package_id,
-    normalize_package_ids,
+    normalize_package_ids, 
+    delete_fs_path,
 )
 
 
@@ -133,7 +134,7 @@ class _ProfilePathScope:
             use_tool_mods=bool(settings.config.enable_tool_mods),
         )
 
-    def build_visibility_conditions(self) -> list[Any]:
+    def build_visibility_conditions(self, include_workshop: bool = True) -> list[Any]:
         """
         生成当前 Profile 下“哪些路径应被视为可见资产”的查询条件。
 
@@ -144,7 +145,7 @@ class _ProfilePathScope:
             conditions.append(ModAsset.path.startswith(self.local_root))
         if self.dlc_root:
             conditions.append(ModAsset.path.startswith(self.dlc_root))
-        if self.use_workshop_mods and self.workshop_root:
+        if self.use_workshop_mods and self.workshop_root and include_workshop:
             conditions.append(ModAsset.path.startswith(self.workshop_root))
         if self.use_self_mods and self.self_root:
             conditions.append(ModAsset.path.startswith(self.self_root))
@@ -384,8 +385,9 @@ class ModDAO:
 
     @staticmethod
     def get_profile_conflict_analysis(
-        context: ProfileContext | None,
+        context: ProfileContext | None = None,
         assets: Sequence[dict[str, Any]] | None = None,
+        include_workshop: bool = True,
     ):
         """
         生成当前 Profile 的运行态分析结果。
@@ -405,7 +407,7 @@ class ModDAO:
         active_assets: list[dict[str, Any]] = []
 
         if assets is None:
-            conditions = scope.build_visibility_conditions()
+            conditions = scope.build_visibility_conditions(include_workshop=include_workshop)
             if not conditions:
                 return empty_result
             combined_condition = reduce(operator.or_, conditions)
@@ -940,11 +942,11 @@ class ModMaintenanceDAO:
         return True, "成功"
 
     @staticmethod
-    def delete_mods_physically(path_hashes: List[str] | str):
+    def delete_mods_physically(path_hashes: List[str] | str, force: bool = False):
         """
         根据 path_hash 删除 Mod。
 
-        这里先删数据库，再尝试移入回收站，保持“界面不再引用已删除条目”的数据库事实优先。
+        这里先删数据库，再尝试删除物理文件，保持“界面不再引用已删除条目”的数据库事实优先。
         如果物理删除失败，只记录错误，不回滚数据库，避免在损坏路径上反复死循环。
         """
         normalized_hashes = _normalize_path_hashes(path_hashes)
@@ -971,16 +973,13 @@ class ModMaintenanceDAO:
             logger.error(f"Database deletion failed: {exc}")
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
-        from send2trash import send2trash
-
         for path in target_paths:
             try:
-                absolute_path = os.path.abspath(path)
-                if os.path.exists(absolute_path):
-                    send2trash(absolute_path)
+                delete_fs_path(path, force=force)
                 success_count += 1
             except Exception as exc:
-                errors.append(f"物理文件移除失败 ({os.path.basename(path)}): {exc}")
+                delete_mode = "彻底删除" if force else "移入回收站"
+                errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
 
         return {"success_count": success_count, "errors": errors}
 

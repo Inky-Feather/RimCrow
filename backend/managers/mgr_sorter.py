@@ -7,6 +7,7 @@ from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
 from backend.settings import settings
 from backend.managers.mgr_rules import RuleManager
+from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 
 
 class AtomicGroup:
@@ -506,6 +507,24 @@ class OrderSorter:
         """提取语言包组声明的直接前置/依赖目标。"""
         target_gids = set()
         for mid in group.mod_ids:
+            mod_data = getattr(self, "mod_map", {}).get(mid, {})
+            owner_result = mod_data.get("language_pack_owner_result") or {}
+            owner_confidence = str(owner_result.get("summary_confidence") or "").strip().lower()
+            used_high_confidence_owner_result = False
+            if owner_confidence == "high":
+                used_high_confidence_owner_result = True
+                for owner in owner_result.get("owners", []) or []:
+                    target_id = str(owner.get("package_id") or "").strip().lower()
+                    if not target_id or target_id not in mod_to_group:
+                        continue
+                    target_group = mod_to_group[target_id]
+                    target_gid = id(target_group)
+                    if target_gid != id(group):
+                        target_gids.add(target_gid)
+                # 只要已经存在高置信归属结果，就不要再退回旧的 dependencies/load_after。
+                # 否则当原模组未启用时，旧规则里的 Core/DLC/框架前置会把语言包错误拉到列表前部。
+                if used_high_confidence_owner_result:
+                    continue
             rules = self.effective_rules_cache.get(mid, {})
             # 对语言包来说，dependencies 与 load_after 都表示“它应该跟在这些目标之后”。
             for relation in [*(rules.get('dependencies', []) or []), *(rules.get('load_after', []) or [])]:
@@ -613,7 +632,9 @@ class OrderSorter:
             strategy = self.DEFAULT_SORT_STRATEGY
         logger.info(f"Starting sort for {len(active_ids)} mods with strategy={strategy}...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
+        # all_mods_data = ModDAO.get_profile_mods(self.context or None)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
+        self.mod_map = mod_map
         current_assets_ids = list(mod_map.keys())
         from backend.database.dao import GroupDAO
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids) or []
@@ -634,6 +655,23 @@ class OrderSorter:
         self.effective_rules_cache = {} # 全局规则缓存字典
         for mid, m_data in mod_map.items():
             self.effective_rules_cache[mid] = self.rule_mgr.get_effective_mod_rules(mid, m_data)
+            m_data['rules'] = self.effective_rules_cache[mid]
+        language_pack_owner_map = resolve_language_pack_ownership_for_mods(
+            list(mod_map.values()),
+            user_mod_rules=self.rule_mgr.user_mod_rules,
+        )
+        for mid, m_data in mod_map.items():
+            m_data['language_pack_owner_result'] = language_pack_owner_map.get(
+                mid,
+                {
+                    "owners": [],
+                    "analyzed_owners": [],
+                    "relation_type": "unknown",
+                    "summary_confidence": "unknown",
+                    "analyzed_relation_type": "unknown",
+                    "analyzed_summary_confidence": "unknown",
+                }
+            )
         expanded_active_ids = list(active_ids)
         # 1. 将扩展后的激活列表转化为原子组
         groups, interlock_warnings = self.build_atomic_groups(expanded_active_ids, mod_map)

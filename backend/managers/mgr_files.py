@@ -1,26 +1,33 @@
-import hashlib
+
 import os
-from pathlib import Path
 import re
+import uuid
 import shutil
+import hashlib
 import tempfile
 import threading
 import subprocess
 import platform
-import time
-import uuid
-from typing import Any, Dict
-from urllib.parse import quote
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from PIL import Image
+from pathlib import Path
+from typing import Any, Dict
 import requests
 import urllib.parse
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import webview # 引入 webview 库
-from send2trash import send2trash
 from backend.managers.mgr_game import GameManager
-from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR
+from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
+from backend.utils.tools import delete_fs_path
+from backend.utils.shortcuts import (
+    create_shortcut,
+    format_shortcut_arguments,
+    get_desktop_directory,
+    get_platform_shortcut_kind,
+    get_shortcut_suffix,
+    remove_shortcut_variants,
+)
 
 
 class LocalAssetHandler(SimpleHTTPRequestHandler):
@@ -148,6 +155,9 @@ class FileManager:
     """
     # 定义内部常量，统一管理链接目录名
     LINK_PREFIX = "_Link_" # 使用统一前缀识别由管理器创建的链接
+    # 本地化复制属于后台线程任务，这里集中维护取消令牌，供 API 全局任务栏复用。
+    _localize_lock = threading.Lock()
+    _localize_cancel_events: Dict[str, threading.Event] = {}
     
     def __init__(self):
         # 1. 确保存储目录存在
@@ -188,10 +198,9 @@ class FileManager:
         将本地绝对路径转换为前端可访问的 HTTP URL
         例如: C:/Mod/Preview.png -> http://127.0.0.1:xxxxx/image?path=C%3A%2FMod%2FPreview.png
         """
-        if not local_path or not self._port:
-            return ""
+        if not local_path or not self._port: return ""
         # 对路径进行 URL 编码
-        safe_path = quote(local_path)
+        safe_path = urllib.parse.quote(local_path)
         return f"http://127.0.0.1:{self._port}/image?path={safe_path}"
 
     # =========================================================
@@ -200,8 +209,7 @@ class FileManager:
     def get_gallery_url(self, workshop_id, remote_url):
         """生成指向本地服务器的代理 URL"""
         if not remote_url: return ""
-        from urllib.parse import quote
-        safe_url = quote(remote_url)
+        safe_url = urllib.parse.quote(remote_url)
         return f"http://127.0.0.1:{self._port}/gallery?wid={workshop_id}&url={safe_url}"
     
     @staticmethod
@@ -279,22 +287,17 @@ class FileManager:
             raise Exception(f"打开路径时出错: {e}")
 
     @staticmethod
-    def delete_path(path):
-        """删除文件/文件夹"""
+    def delete_path(path, force: bool = False):
+        """删除文件/文件夹。默认移入回收站，force=True 时彻底删除。"""
         try:
-            # 转换为绝对路径，避免相对路径问题
-            abs_path = os.path.abspath(path)
-            if os.path.isfile(abs_path) or os.path.isdir(abs_path):
-                send2trash(abs_path)
-                return True
-            return False
+            return delete_fs_path(path, force=force)
         except Exception as e:
             raise Exception(f"删除路径时出错: {e}")
     
     @staticmethod
-    def delete_paths(paths: list):
+    def delete_paths(paths: list, force: bool = False):
         """
-        批量删除文件/文件夹到回收站
+        批量删除文件/文件夹。
         :param paths: 路径列表
         :return: (success_count, error_list)
         """
@@ -304,18 +307,10 @@ class FileManager:
         for path in paths:
             if not path: continue
             try:
-                # 1. 转换为绝对路径
-                abs_path = os.path.abspath(path)
-                # 2. 检查是否存在
-                if os.path.exists(abs_path):
-                    # 3. 移至回收站 (比直接删除更安全)
-                    send2trash(abs_path)
+                deleted = delete_fs_path(path, force=force)
+                # 路径不存在时维持历史行为，视为已处理
+                if deleted or not os.path.exists(os.path.abspath(path)):
                     success_count += 1
-                else:
-                    # 如果路径本来就不存在，可以视为删除成功的一种
-                    # 或者记录为跳过，这里直接累加成功，减少用户困惑
-                    success_count += 1
-                    
             except Exception as e:
                 logger.error(f"批量删除出错: {path} -> {e}")
                 error_list.append(f"删除失败 ({os.path.basename(path)}): {str(e)}")
@@ -480,6 +475,194 @@ class FileManager:
                 defaultextension=os.path.splitext(default_filename)[1] or None,
             ) or None
         )
+
+    # =========================================================
+    #  3.1 快捷方式
+    # =========================================================
+
+    @staticmethod
+    def _resolve_profile_shortcut_context(
+        profile: Any,
+        *,
+        for_url: bool,
+        destination_dir: str | None = None,
+    ) -> tuple[str, str]:
+        """统一解析环境快捷方式的目标目录和文件后缀。"""
+        profile_name = FileManager.sanitize_filename(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile'))
+        shortcut_kind = get_platform_shortcut_kind(for_url=for_url)
+        shortcut_dir = destination_dir or get_desktop_directory()
+        if not shortcut_dir:
+            raise FileNotFoundError("无法解析桌面目录")
+        shortcut_path = os.path.join(
+            shortcut_dir,
+            f"RimWorld [{profile_name}]{get_shortcut_suffix(shortcut_kind)}",
+        )
+        return shortcut_kind, shortcut_path
+
+    @staticmethod
+    def build_browser_mode_shortcut_spec(app_exe_path: str) -> Dict[str, str]:
+        """生成管理器 Browser mode 快捷方式定义。"""
+        if platform.system() != 'Windows':
+            raise OSError("Browser mode 快捷方式仅支持 Windows")
+
+        target_path = os.path.abspath(str(app_exe_path or '').strip())
+        if not target_path or not os.path.isfile(target_path):
+            raise FileNotFoundError(f"程序入口不存在: {target_path}")
+
+        exe_stem = Path(target_path).stem
+        shortcut_path = str(Path(target_path).with_name(f"{exe_stem} [Browser mode].lnk"))
+        return {
+            "shortcut_path": shortcut_path,
+            "target_path": target_path,
+            "arguments": "--browser",
+            "working_directory": str(Path(target_path).parent),
+            "icon_location": target_path,
+            "description": f"{exe_stem} Browser mode",
+            "shortcut_kind": "lnk",
+        }
+
+    @staticmethod
+    def ensure_browser_mode_shortcut(app_exe_path: str) -> Dict[str, Any]:
+        """仅在缺失时创建 Browser mode 快捷方式，避免启动阶段做重校验。"""
+        spec = FileManager.build_browser_mode_shortcut_spec(app_exe_path)
+        shortcut_path = str(spec.get("shortcut_path") or '').strip()
+        if shortcut_path and os.path.exists(shortcut_path):
+            return {
+                "changed": False,
+                "reason": "exists",
+                "shortcut": spec,
+            }
+
+        return {
+            "changed": True,
+            "reason": "missing",
+            "shortcut": create_shortcut(spec),
+        }
+
+    @staticmethod
+    def build_profile_shortcut_spec(
+        profile: Any,
+        extra_args: list[str] | None = None,
+        prefer_steam_launch: bool = False,
+        steam_exe_path: str | None = None,
+        destination_dir: str | None = None,
+        steam_app_id: str = "294100",
+    ) -> Dict[str, str]:
+        """
+        根据环境启动逻辑构造桌面快捷方式定义。
+        这里复用后端现有的启动参数，而不是前端重复拼命令，避免两边逻辑漂移。
+        """
+        game_install_path = os.path.abspath(str(getattr(profile, 'game_install_path', '') or '').strip())
+        if not game_install_path or not os.path.isdir(game_install_path):
+            raise FileNotFoundError(f"游戏安装目录无效: {game_install_path}")
+
+        game_exe = GameManager.detect_executable(game_install_path)
+        if not game_exe:
+            raise FileNotFoundError(f"在安装目录下找不到游戏可执行文件: {game_install_path}")
+
+        shortcut_kind, shortcut_path = FileManager._resolve_profile_shortcut_context(
+            profile,
+            for_url=False,
+            destination_dir=destination_dir,
+        )
+        launch_args = [str(arg or '').strip() for arg in (extra_args or []) if str(arg or '').strip()]
+        use_steam_launch = bool(prefer_steam_launch)
+        target_path = os.path.abspath(game_exe)
+        working_directory = game_install_path
+        icon_location = target_path
+        description = f"RimWorld 环境快捷方式：{getattr(profile, 'name', getattr(profile, 'id', ''))}"
+        arguments = format_shortcut_arguments(launch_args)
+
+        if use_steam_launch:
+            resolved_steam_exe = os.path.abspath(str(steam_exe_path or '').strip()) if str(steam_exe_path or '').strip() else ''
+            if not resolved_steam_exe or not os.path.isfile(resolved_steam_exe):
+                raise FileNotFoundError("未找到 Steam.exe，无法为该环境创建 Steam 启动快捷方式")
+            target_path = resolved_steam_exe
+            working_directory = str(Path(resolved_steam_exe).parent)
+            # Steam 启动参数必须保持与当前环境运行逻辑一致。
+            arguments = format_shortcut_arguments(["-applaunch", str(steam_app_id), *launch_args])
+            # 使用游戏图标更直观，点击目标仍然是 Steam.exe。
+            icon_location = os.path.abspath(game_exe)
+
+        return {
+            "shortcut_path": shortcut_path,
+            "target_path": target_path,
+            "arguments": arguments,
+            "working_directory": working_directory,
+            "icon_location": icon_location,
+            "description": description,
+            "shortcut_kind": shortcut_kind,
+        }
+
+    @staticmethod
+    def create_profile_desktop_shortcut(
+        profile: Any,
+        extra_args: list[str] | None = None,
+        prefer_steam_launch: bool = False,
+        steam_exe_path: str | None = None,
+        steam_app_id: str = "294100",
+    ) -> Dict[str, Any]:
+        """为指定环境在桌面创建快捷方式。"""
+        spec = FileManager.build_profile_shortcut_spec(
+            profile=profile,
+            extra_args=extra_args,
+            prefer_steam_launch=prefer_steam_launch,
+            steam_exe_path=steam_exe_path,
+            steam_app_id=steam_app_id,
+        )
+        return create_shortcut(spec)
+
+    @staticmethod
+    def build_profile_url_shortcut_spec(
+        profile: Any,
+        launch_url: str,
+        destination_dir: str | None = None,
+        icon_location: str = '',
+    ) -> Dict[str, str]:
+        """
+        生成 Steam 协议快捷方式定义。
+        统一交给平台适配层决定具体是 `.url`、`.desktop` 还是 `.command`。
+        """
+        shortcut_kind, shortcut_path = FileManager._resolve_profile_shortcut_context(
+            profile,
+            for_url=True,
+            destination_dir=destination_dir,
+        )
+        return {
+            "shortcut_path": shortcut_path,
+            "url": str(launch_url or '').strip(),
+            "icon_location": str(icon_location or '').strip(),
+            "shortcut_kind": shortcut_kind,
+        }
+
+    @staticmethod
+    def create_profile_desktop_url_shortcut(
+        profile: Any,
+        launch_url: str,
+        icon_location: str = '',
+    ) -> Dict[str, Any]:
+        """为指定环境创建基于启动 URL 的桌面快捷方式。"""
+        spec = FileManager.build_profile_url_shortcut_spec(
+            profile=profile,
+            launch_url=launch_url,
+            icon_location=icon_location,
+        )
+        return create_shortcut(spec)
+
+    @staticmethod
+    def remove_existing_shortcut_variants(shortcut_path: str):
+        """删除同名不同后缀的旧快捷方式，避免用户继续点到旧入口。"""
+        remove_shortcut_variants(shortcut_path)
+
+    @staticmethod
+    def sync_managed_links(local_mods_path: str, deploy_paths: list[str]):
+        """
+        将本地 Mods 目录中的管理器链接收敛到 deploy_paths。
+        这里复用既有同步逻辑，避免手写删除规则误伤 Self/Tool 链接。
+        """
+        if settings.config.link_deployment_mode_full:
+            return FileManager.sync_links_full(local_mods_path, deploy_paths)
+        return FileManager.sync_links(local_mods_path, deploy_paths)
     
     @staticmethod
     def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id'):
@@ -509,6 +692,9 @@ class FileManager:
                 'label': display_name # 用于进度显示
             })
         if not tasks: return False
+        cancel_event = threading.Event()
+        with FileManager._localize_lock:
+            FileManager._localize_cancel_events[task_id] = cancel_event
         EventBus.emit_progress(
             task_id,
             "localize",
@@ -531,16 +717,45 @@ class FileManager:
             )
         # 3. 在后台线程执行，避免阻塞 UI（如果是大批量复制）
         def run_task():
-            success, errors, total = FileManager.copy_folders_with_progress(tasks, on_progress)
+            success = []
+            errors = []
+            total = len(tasks)
+            final_status = "success"
+            final_message = "本地化完成"
+            try:
+                success, errors, total = FileManager.copy_folders_with_progress(
+                    tasks,
+                    on_progress,
+                    cancel_event=cancel_event,
+                )
+                success_count = len(success)
+                error_count = len(errors)
+                if cancel_event.is_set():
+                    final_status = "cancelled"
+                    final_message = "本地化已取消"
+                elif success_count == 0 and error_count > 0:
+                    final_status = "failed"
+                    final_message = "本地化失败"
+            except InterruptedError:
+                final_status = "cancelled"
+                final_message = "本地化已取消"
+            except Exception as e:
+                logger.error(f"Localize task failed: {e}", exc_info=True)
+                errors.append(str(e))
+                final_status = "failed"
+                final_message = "本地化失败"
+            finally:
+                with FileManager._localize_lock:
+                    FileManager._localize_cancel_events.pop(task_id, None)
+
             success_count = len(success)
             error_count = len(errors)
-            final_status = "failed" if success_count == 0 and error_count > 0 else "success"
             EventBus.emit_progress(
                 task_id,
                 "localize",
                 status=final_status,
                 progress=100 if total else 0,
-                message="本地化完成" if final_status == "success" else "本地化失败",
+                message=final_message,
                 metrics={
                     "current": total,
                     "total": total,
@@ -550,18 +765,32 @@ class FileManager:
                     "title": "本地化模组",
                 },
             )
-            # 发送完成事件
+            # 这里无论成功、失败还是取消都发完成事件，让前端决定是否刷新视图。
             EventBus.emit('localize-complete', {
                 'task_id': task_id,
-                'success_count': len(success),
-                'error_count': len(errors),
-                'errors': errors
+                'success_count': success_count,
+                'error_count': error_count,
+                'errors': errors,
+                'status': final_status,
             })
         threading.Thread(target=run_task, daemon=True).start()
+        return task_id
+
+    @staticmethod
+    def cancel_localize_task(task_id: str) -> bool:
+        """请求取消本地化复制任务。"""
+        normalized_task_id = str(task_id or '').strip()
+        if not normalized_task_id:
+            return False
+        with FileManager._localize_lock:
+            cancel_event = FileManager._localize_cancel_events.get(normalized_task_id)
+        if not cancel_event:
+            return False
+        cancel_event.set()
         return True
     
     @staticmethod
-    def copy_folders_with_progress(tasks, progress_callback=None):
+    def copy_folders_with_progress(tasks, progress_callback=None, cancel_event: threading.Event | None = None):
         """
         带进度回调的批量复制
         :param tasks: [{'src': '...', 'dst': '...', 'label': '...'}]
@@ -572,6 +801,8 @@ class FileManager:
         error_list = []
 
         for i, task in enumerate(tasks):
+            if cancel_event and cancel_event.is_set():
+                raise InterruptedError("Localize task cancelled by user")
             src = task['src']
             dst = task['dst']
             label = task.get('label', os.path.basename(src))
@@ -587,9 +818,22 @@ class FileManager:
                 while os.path.exists(final_dst):
                     final_dst = f"{dst}_{counter}"
                     counter += 1
-                
-                shutil.copytree(src, final_dst)
+
+                def copy_with_cancel(source_file, dest_file, *, follow_symlinks=True):
+                    # 复制过程只能做到“文件粒度”的中断，至少保证不会继续复制后续文件。
+                    if cancel_event and cancel_event.is_set():
+                        raise InterruptedError("Localize task cancelled by user")
+                    return shutil.copy2(source_file, dest_file, follow_symlinks=follow_symlinks)
+
+                shutil.copytree(src, final_dst, copy_function=copy_with_cancel)
                 success_list.append(final_dst)
+            except InterruptedError:
+                try:
+                    if os.path.exists(final_dst):
+                        delete_fs_path(final_dst)
+                except Exception as cleanup_error:
+                    logger.debug(f"Cleanup cancelled localize folder failed: {final_dst} - {cleanup_error}")
+                raise
             except Exception as e:
                 logger.error(f"Copy failed: {src} -> {dst}: {e}")
                 error_list.append(f"模组 {label} 复制失败: {str(e)}")
@@ -829,7 +1073,6 @@ class FileManager:
                 else:
                     os.symlink(src, dst)
             except Exception as e:
-                from backend.utils.logger import logger
                 logger.error(f"Failed to link {dst} -> {src}: {e}")
     
     # =========================================================
@@ -844,7 +1087,6 @@ class FileManager:
         :param old_mods_path: 变更前的 mods_path，用于数据迁移
         :param move_old_data: 如果 mods_path 变了，是否把旧路径的数据搬过来
         """
-        from backend.settings import settings
         
         # 1. 获取最新配置
         # 实际物理存储路径 (Target)
@@ -1132,6 +1374,25 @@ class PathChecker:
         if exe_path.exists():
             return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
         return cls._format_res(False, msg="路径下未找到 steamcmd.exe", msg_type="warn")
+
+    @classmethod
+    def check_texture_tools_path(cls, path_str: str) -> Dict:
+        """
+        检查贴图工具目录是否有效。
+        这里统一按“目录中是否存在 todds.exe”判断，和 SteamCMD 的目录检查风格保持一致。
+        """
+        if not path_str:
+            return cls._format_res(False, msg="未指定贴图工具目录")
+        path = Path(path_str)
+        if not path.exists():
+            return cls._format_res(False, msg="贴图工具目录不存在")
+        if not path.is_dir():
+            return cls._format_res(False, msg="贴图工具路径必须是目录")
+
+        exe_path = path / "todds.exe"
+        if exe_path.exists():
+            return cls._format_res(True, data=path_str, msg=f"贴图工具：{exe_path}")
+        return cls._format_res(False, msg="目录下未找到 todds.exe，可在外部工具检查中下载安装", msg_type="warn")
         
     @classmethod
     def paths_check(cls, paths_data: Dict[str, str]) -> Dict:
@@ -1155,11 +1416,13 @@ class PathChecker:
                 results["steam_path"] = cls.check_steam_path(paths_data["steam_path"])
             if "steamcmd_path" in paths_data:
                 results["steamcmd_path"] = cls.check_steamcmd_path(paths_data["steamcmd_path"])
+            if "texture_tools_path" in paths_data:
+                results["texture_tools_path"] = cls.check_texture_tools_path(paths_data["texture_tools_path"])
             if "user_data_path" in paths_data:
                 results["user_data_path"] = cls.check_user_data_path(paths_data["user_data_path"])
             # 5. 其他路径
             for key, path in paths_data.items():
-                if key in ["game_install_path", "game_config_path", "workshop_mods_path", "steam_path", "steamcmd_path", "user_data_path"]: continue
+                if key in ["game_install_path", "game_config_path", "workshop_mods_path", "steam_path", "steamcmd_path", "texture_tools_path", "user_data_path"]: continue
                 results[key] = cls.check_normal_path(path)
 
             return results

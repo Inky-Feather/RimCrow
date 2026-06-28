@@ -14,6 +14,7 @@ import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
 import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIdentity'
+import { checkResult as sharedCheckResult } from '../utils/tools'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
@@ -109,7 +110,6 @@ export const useAppStore = defineStore('app', () => {
     // --- 路径 (Paths) ---
     home_path: '',
     steam_path: '',
-    prefer_steam_launch: true,           // 是否优先通过 Steam 启动游戏
     steamcmd_mods_path: '',
     workshop_mods_path: '',
     self_mods_path: '',
@@ -196,15 +196,14 @@ export const useAppStore = defineStore('app', () => {
 
     // --- 贴图优化 ---
     texture_opt: {
-      texture_tools_path: "",                  // todds 工具路径，留空则使用默认
-      generate_mipmaps: false,      // 是否生成 Mipmap
-      scale_factor: 1.0,           // 缩放倍率 (1.0 为不缩放)
-      max_size: 0,                   // 最大分辨率限制 (0为不限制)
-      skip_small_textures: true,    // 是否跳过小贴图
-      min_dimension: 64,             // 小贴图判定阈值
-      clean_orphaned_dds: false,    // 自动清理失效的受管 DDS
-      clean_generated_only: true,   // 清理模式: true=仅本程序生成, false=删除所有有源图对应 DDS
-      overwrite_existing: false,    // 强制覆盖外部生成的 DDS
+      texture_tools_path: "",       // 贴图工具目录
+      process_mode: 'scaled_only_overwrite',
+      generate_mipmaps: true,       // 是否生成远近层级
+      scale_factor: 0.5,            // 缩放比例
+      max_size: 128,                // 最低清晰度
+      skip_small_textures: true,    // 超出建议范围时不参与缩放
+      min_dimension: 128,           // 最短边低于该值时不参与缩放
+      max_source_dimension: 2048,   // 最长边高于该值时不参与缩放
     },
     
     // --- 高级 (Advanced) ---
@@ -226,12 +225,21 @@ export const useAppStore = defineStore('app', () => {
     enable_auto_update_check: true,  // 自动检查更新开关
     ignored_update_version: '',       // 跳过的版本号
     last_update_check_time: 0,      // 上次检查时间（用于限流）
+    enable_auto_tool_check: true,
+    tool_check_interval_days: 3,
+    last_tool_check_time: 0,
+    enable_auto_external_data_update_check: true,
+    external_data_update_check_interval_days: 1,
+    last_external_data_update_check_time: 0,
+    enable_auto_steamcmd_mod_update_check: true,
+    steamcmd_mod_update_check_interval_days: 1,
+    last_steamcmd_mod_update_check_time: 0,
 
   })
 
 
   // === Getters ===
-  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update']))
+  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
 
   const ensureAiBatchSession = (taskId) => {
@@ -261,7 +269,20 @@ export const useAppStore = defineStore('app', () => {
       : taskStore.getLatestTaskByType('ai-batch')
   ))
   const updateInstallPrompted = new Set()
-  const cancellableTaskTypes = new Set(['scan', 'download', 'update', 'localize', 'steamcmd-init', 'texture-opt', 'texture-opt-analyze'])
+  // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
+  const cancellableTaskTypes = new Set([
+    'scan',
+    'download',
+    'update',
+    'localize',
+    'steamcmd-download',
+    'steamcmd-init',
+    'steam-subscribe',
+    'steam-unsubscribe',
+    'texture-opt',
+    'texture-opt-analyze',
+    'ai-batch',
+  ])
 
   const isTaskCancelPending = (taskId = '') => cancelPendingTaskIds.value.has(String(taskId || ''))
 
@@ -305,6 +326,12 @@ export const useAppStore = defineStore('app', () => {
     // 默认 14px，用户调大到 16px，所有使用 rem 的组件都会等比例变大
     document.documentElement.style.fontSize = `${newSize}px`;
   }, { immediate: true });
+  watch(() => settings.value.debug_mode, (enabled) => {
+    // 让通用 checkResult 感知当前调试开关，避免 appStore 再维护一份重复实现。
+    if (typeof window !== 'undefined') {
+      window.__RMM_DEBUG_MODE__ = !!enabled
+    }
+  }, { immediate: true });
   // 像素值缩放函数
   const scalePx = (basePx, defaultFontSize = 16) => {
     if (!settings.value.ui.font_size) return basePx;
@@ -324,17 +351,35 @@ export const useAppStore = defineStore('app', () => {
       else window.addEventListener('pywebviewready', () => resolve(), { once: true })
     })
   }
-  // 通用结果检查
-  const checkResult = (res, workname, showSuccess = false) => {
-    if (settings.value.debug_mode) console.log('checkResult', workname, res)
-    if (res.status === 'success') {
-      if(showSuccess) toast.success(`${workname}成功`, {timeout: 1000})
-      return true;
-    }
-    if (res.status === 'warning') toast.warning(`${workname}注意: \n${res.message}`)
-    else toast.error(`${workname}失败: \n${res.message}`)
-    return false
+  // 统一复用 utils/tools.js 中的通用实现，避免 appStore 再维护一份重复逻辑。
+  const checkResult = (res, workname, showSuccess = false) => (
+    sharedCheckResult(res, workname, showSuccess, { debugMode: settings.value.debug_mode })
+  )
+
+  const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
+    if (!enabled) return false
+    const last = Number(lastCheckTime || 0)
+    const interval = Math.max(1, Number(intervalDays || fallbackDays)) * 24 * 60 * 60 * 1000
+    const duration = Date.now() - last
+    return !last || duration > interval || duration < 0
   }
+
+  const formatDateTime = (timestamp) => {
+    const value = Number(timestamp || 0)
+    if (!value) return '未知'
+    try {
+      return new Date(value).toLocaleString('zh-CN')
+    } catch {
+      return '未知'
+    }
+  }
+
+  const escapeHtml = (value = '') => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 
   const recoverFromSuspendedState = async () => {
     if (suspendRecoveryPromise) return suspendRecoveryPromise
@@ -370,6 +415,206 @@ export const useAppStore = defineStore('app', () => {
     })()
 
     return suspendRecoveryPromise
+  }
+
+  const installToolIssues = async (issues = []) => {
+    if (!window.pywebview || !Array.isArray(issues) || issues.length === 0) return false
+    let started = false
+    const hasSteamCmdIssue = issues.some(item => item?.tool_id === 'steamcmd')
+    const hasToddsIssue = issues.some(item => item?.tool_id === 'todds')
+
+    if (hasSteamCmdIssue) {
+      const res = await window.pywebview.api.steam_tools_install()
+      if (checkResult(res, '处理 SteamCMD 环境')) {
+        started = true
+        if (Array.isArray(res.data?.pending_tasks) && res.data.pending_tasks.length > 0) {
+          toast.info('SteamCMD 相关任务已启动，请留意底部状态栏。')
+        }
+      }
+    }
+
+    if (hasToddsIssue) {
+      const res = await window.pywebview.api.texture_prepare_download(settings.value.texture_opt)
+      if (checkResult(res, '处理 todds 环境')) {
+        started = true
+        if (!res.data?.already_ready) {
+          toast.info('todds 下载任务已启动，请留意底部状态栏。')
+        }
+      }
+    }
+    return started
+  }
+
+  const persistMaintenanceCheckedAt = (settingKey, data, shouldPersist = null) => {
+    const checkedAt = Number(data?.checked_at || 0)
+    if (!settingKey || !checkedAt) return
+    if (typeof shouldPersist === 'function' && !shouldPersist(data)) return
+    settings.value[settingKey] = checkedAt
+  }
+
+  const fetchMaintenanceData = async ({
+    apiName,
+    workName,
+    manual = true,
+    lastCheckKey = '',
+    shouldPersistCheckedAt = null,
+  } = {}) => {
+    if (!window.pywebview) return null
+    const caller = window.pywebview.api?.[apiName]
+    if (typeof caller !== 'function') return null
+
+    const res = await caller()
+    if (manual ? !checkResult(res, workName) : res?.status !== 'success') {
+      return null
+    }
+
+    const data = res.data || {}
+    persistMaintenanceCheckedAt(lastCheckKey, data, shouldPersistCheckedAt)
+    return data
+  }
+
+  const checkToolMaintenance = async ({ manual = true, prompt = true } = {}) => {
+    const data = await fetchMaintenanceData({
+      apiName: 'maintenance_check_tools',
+      workName: '检查工具环境',
+      manual,
+      lastCheckKey: 'last_tool_check_time',
+    })
+    if (!data) return null
+
+    const issues = Array.isArray(data.issues) ? data.issues : []
+    if (!prompt) return data
+    if (issues.length === 0) {
+      if (manual) toast.success('工具环境检查完成，当前均已就绪。')
+      return data
+    }
+
+    const confirmStore = useConfirmStore()
+    const html = issues.map(item => (
+      `<li><b>${escapeHtml(item.name || item.tool_id || '工具')}</b>：${escapeHtml(item.message || '需要处理')}</li>`
+    )).join('')
+    const ok = await confirmStore.confirmAction(
+      '工具环境需要处理',
+      `以下工具当前未就绪：<ul style="margin:8px 0 0 18px;list-style:disc;">${html}</ul>是否立即处理？`,
+      { confirmText: '立即处理', cancelText: '稍后再说', type: 'warning', isHtml: true }
+    )
+    if (ok) {
+      await installToolIssues(issues)
+    }
+    return data
+  }
+
+  const checkExternalDataUpdates = async ({ manual = true, prompt = true } = {}) => {
+    const data = await fetchMaintenanceData({
+      apiName: 'maintenance_check_external_data',
+      workName: '检查外部库更新',
+      manual,
+      lastCheckKey: 'last_external_data_update_check_time',
+      // 整轮远端状态都没拿到时，不要把失败记录成一次成功检查。
+      shouldPersistCheckedAt: (payload) => {
+        const items = Array.isArray(payload?.items) ? payload.items : []
+        const failed = Array.isArray(payload?.failed) ? payload.failed : []
+        return items.length === 0 || failed.length < items.length
+      },
+    })
+    if (!data) return null
+
+    const updates = Array.isArray(data.updates) ? data.updates : []
+    const failed = Array.isArray(data.failed) ? data.failed : []
+    if (!prompt) return data
+    if (failed.length > 0 && updates.length === 0) {
+      const summary = failed.slice(0, 3).map(item => item.name || item.data_type || '外部库').join('、')
+      const remain = failed.length > 3 ? ` 等 ${failed.length} 项` : ''
+      toast.warning(`外部库检查未完成：${summary}${remain} 检查失败，请稍后重试或检查网络环境。`, { timeout: 4500 })
+      return data
+    }
+    if (updates.length === 0) {
+      if (manual) toast.success('外部库检查完成，当前均已是最新。')
+      return data
+    }
+
+    const confirmStore = useConfirmStore()
+    const html = updates.map(item => {
+      const localVersion = item.local_version ? `本地版本: ${escapeHtml(item.local_version)}` : `本地时间: ${escapeHtml(formatDateTime(item.local_mtime))}`
+      const remoteVersion = item.remote_version ? `远端签名: ${escapeHtml(item.remote_version)}` : `远端时间: ${escapeHtml(formatDateTime(item.remote_updated_at))}`
+      return `<li><b>${escapeHtml(item.name || item.data_type || '外部库')}</b><br/>${localVersion}<br/>${remoteVersion}</li>`
+    }).join('')
+    const failedHtml = failed.length > 0
+      ? `<p style="margin:0 0 8px 0;color:#f59e0b;">另有 ${failed.length} 项外部库暂时检查失败，本次只展示已成功获取到远端状态的更新项。</p>`
+      : ''
+    const ok = await confirmStore.confirmAction(
+      '发现外部库更新',
+      `${failedHtml}以下外部库文件检测到更新：<ul style="margin:8px 0 0 18px;list-style:disc;">${html}</ul>是否现在开始更新？`,
+      { confirmText: '立即更新', cancelText: '稍后再说', type: 'warning', isHtml: true }
+    )
+    if (!ok) return data
+
+    for (const item of updates) {
+      // 顺序执行，避免同时刷新同一批缓存时互相打断。
+      await updateExternalDB(item.data_type)
+    }
+    return data
+  }
+
+  const checkSteamcmdModUpdates = async ({ manual = true, prompt = true } = {}) => {
+    const data = await fetchMaintenanceData({
+      apiName: 'maintenance_check_steamcmd_mod_updates',
+      workName: '检查 SteamCMD 模组更新',
+      manual,
+      lastCheckKey: 'last_steamcmd_mod_update_check_time',
+    })
+    if (!data) return null
+
+    const updates = Array.isArray(data.updates) ? data.updates : []
+    if (!prompt) return data
+    if (updates.length === 0) {
+      if (manual) toast.success('SteamCMD 模组检查完成，当前均已是最新。')
+      return data
+    }
+
+    const confirmStore = useConfirmStore()
+    const previewHtml = updates.slice(0, 8).map(item => (
+      `<li><b>${escapeHtml(item.title || item.workshop_id || '未知模组')}</b>（${escapeHtml(item.workshop_id || '')}）</li>`
+    )).join('')
+    const remainText = updates.length > 8 ? `<p style="margin-top:8px;">其余 ${updates.length - 8} 项将在确认后一起更新。</p>` : ''
+    const ok = await confirmStore.confirmAction(
+      '发现 SteamCMD 模组更新',
+      `检测到 ${updates.length} 个通过 SteamCMD 管理的工坊模组有新版本：<ul style="margin:8px 0 0 18px;list-style:disc;">${previewHtml}</ul>${remainText}`,
+      { confirmText: '立即更新', cancelText: '稍后再说', type: 'warning', isHtml: true }
+    )
+    if (ok) {
+      await downloadWorkshopItems(updates.map(item => item.workshop_id).filter(Boolean))
+    }
+    return data
+  }
+
+  const runScheduledMaintenanceChecks = async () => {
+    if (isTimedCheckDue(
+      settings.value.enable_auto_tool_check,
+      settings.value.last_tool_check_time,
+      settings.value.tool_check_interval_days,
+      3
+    )) {
+      await checkToolMaintenance({ manual: false, prompt: true })
+    }
+
+    if (isTimedCheckDue(
+      settings.value.enable_auto_external_data_update_check,
+      settings.value.last_external_data_update_check_time,
+      settings.value.external_data_update_check_interval_days,
+      1
+    )) {
+      await checkExternalDataUpdates({ manual: false, prompt: true })
+    }
+
+    if (isTimedCheckDue(
+      settings.value.enable_auto_steamcmd_mod_update_check,
+      settings.value.last_steamcmd_mod_update_check_time,
+      settings.value.steamcmd_mod_update_check_interval_days,
+      1
+    )) {
+      await checkSteamcmdModUpdates({ manual: false, prompt: true })
+    }
   }
 
   // === Actions ===
@@ -429,8 +674,8 @@ export const useAppStore = defineStore('app', () => {
         const modStore = useModStore()
         modStore.scanMods(null, scanForce)
       }
-      // 检查 Steam 工具
-      checkSteamTools()
+      // 非软件更新类检查改为“仅提示不自动执行”，并分别遵循各自的时间间隔。
+      await runScheduledMaintenanceChecks()
       
     } catch (e) {
       console.error("初始化失败:", e)
@@ -533,6 +778,10 @@ export const useAppStore = defineStore('app', () => {
     window.addEventListener('ai-batch-complete', (e) => {
       const taskId = e.detail?.task_event_id || ''
       if (taskId) currentAiBatchTaskId.value = taskId
+      if (e.detail.status === 'cancelled') {
+        toast.info('AI 批量任务已取消')
+        return
+      }
       if (e.detail.status === 'success') {
         const payload = e.detail.data // 获取后端的字典结果
         const successCount = payload.success_count || 0
@@ -549,8 +798,12 @@ export const useAppStore = defineStore('app', () => {
     })
     // 监听：本地化完成
     window.addEventListener('localize-complete', (e) => {
-        const { success_count, error_count, errors } = e.detail;
+        const { success_count, error_count, errors, status } = e.detail;
         console.log(`本地化完成。成功: ${success_count}, 失败: ${error_count}`, errors)
+        if (status === 'cancelled') {
+            toast.info('本地化任务已取消');
+            return
+        }
         if (error_count > 0) {
             toast.warning(`本地化完成。成功: ${success_count}, 失败: ${error_count}`);
         } else {
@@ -609,6 +862,9 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'download' && task.status === 'failed') {
         toast.error(`下载失败: ${task.metrics?.filename || task.message}\n${task.metrics?.error || ''}`)
+      }
+      if (task.type === 'steamcmd-download' && task.status === 'failed') {
+        toast.error(`SteamCMD 下载失败: ${task.metrics?.error || task.message}`)
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
         if (updateState.info) updateState.info.local_status = 'ready'
@@ -797,14 +1053,20 @@ export const useAppStore = defineStore('app', () => {
   // === 系统操作 ===
   // 启动游戏
   const launchGame = async (profile_id=null) => {
-    if (!profile_id) {
+    const profileStore = useProfileStore()
+    const normalizedTargetProfileId = String(profile_id || '').trim()
+    const currentProfileId = String(profileStore.currentProfileId || '').trim()
+    // 当前环境启动前必须先把界面里的最新工作序列落盘；
+    // 只有“启动别的环境”时，才允许跳过这一步。
+    if (!normalizedTargetProfileId || normalizedTargetProfileId === currentProfileId) {
       const orderStore = useOrderStore()
       const res = await orderStore.saveLoadOrder()
       if (!res) return
     }
     if (!window.pywebview) return
-    // 直接启动游戏
-    const gameRes = await window.pywebview.api.game_launch(profile_id)
+    let gameRes = await window.pywebview.api.game_launch(profile_id)
+    gameRes = await resolveGameLaunchWarning(gameRes, profile_id)
+    if (!gameRes) return
     if (checkResult(gameRes, "启动游戏程序")) {
       toast.success(gameRes.message)
     }
@@ -833,10 +1095,10 @@ export const useAppStore = defineStore('app', () => {
       return res.data.paths
     }
   }
-  const getDefaultCommunityPaths = async () => {
+  const getDefaultExternalPaths = async () => {
     if(!window.pywebview) return
-    const res = await window.pywebview.api.get_default_community_paths()
-    if (checkResult(res, "获取默认社区路径",true) && res.data.paths) {
+    const res = await window.pywebview.api.get_default_external_paths()
+    if (checkResult(res, "获取默认外部路径",true) && res.data.paths) {
       return res.data.paths
     }
   }
@@ -891,14 +1153,17 @@ export const useAppStore = defineStore('app', () => {
   const deletePath = async (path, reScan=true) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
-    const confirm = await confirmStore.confirmAction(
-      '删除确认', `确定要删除 ${path} 吗？\n文件/文件夹将被移至回收站。`,
-      { type: 'error' }
+    const decision = await confirmStore.confirmDeleteAction(
+      '删除确认', `确定要删除 ${path} 吗？`,
+      {
+        trashOptionText: '移入回收站',
+        forceOptionText: '强制删除',
+      }
     );
-    if(!confirm) return
-    const res = await window.pywebview.api.path_delete(path)
+    if(!decision?.confirmed) return
+    const res = await window.pywebview.api.path_delete(path, !!decision.force)
     if (checkResult(res, "删除文件/文件夹")) {
-      toast.success(`已删除: \n${path}`)
+      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
       if(reScan){
         // 刷新Mod列表
         const modStore = useModStore()
@@ -911,14 +1176,17 @@ export const useAppStore = defineStore('app', () => {
   const deletePaths = async (paths) => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
-    const confirm = await confirmStore.confirmAction(
-      '删除确认', `确定要删除这 ${paths.length} 个文件/文件夹吗？\n这些文件/文件夹将被移至回收站。`,
-      { type: 'error' }
+    const decision = await confirmStore.confirmDeleteAction(
+      '删除确认', `确定要删除这 ${paths.length} 个文件/文件夹吗？`,
+      {
+        trashOptionText: '移入回收站',
+        forceOptionText: '强制删除',
+      }
     );
-    if(!confirm) return
-    const res = await window.pywebview.api.paths_delete(paths)
+    if(!decision?.confirmed) return
+    const res = await window.pywebview.api.paths_delete(paths, !!decision.force)
     if (checkResult(res, "批量删除文件/文件夹")) {
-      toast.success(`已删除 ${paths.length} 个文件/文件夹`)
+      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${paths.length} 个文件/文件夹`)
       // 刷新Mod列表
       const modStore = useModStore()
       modStore.scanMods()
@@ -960,6 +1228,104 @@ export const useAppStore = defineStore('app', () => {
     return taskStore.waitForTaskCompletion(taskId, timeout).then(task => (
       task?.metrics?.file_path || task?.metrics?.path || ''
     ))
+  }
+
+  const WAIT_STEAM_EXIT_ACTION = 'wait_steam_exit'
+  const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+  const buildDirectLaunchSteamRunningMessage = () => (
+    '当前环境配置为直接启动游戏本体，且已将创意工坊模组链接部署到本地模组目录。\n'
+    + '检测到 Steam 已在运行，如果现在继续启动游戏，Steam 会接管本次启动，游戏内将同时出现两套创意工坊模组。\n'
+    + '默认会优先加载本地目录中的那一套，一般不会影响实际游戏，但界面显示和后续管理会变得混乱。\n'
+    + '请手动退出 Steam，或先删掉这批额外生成的 Workshop 链接后再运行。\n'
+    + '当前窗口会保持等待，Steam 完全退出后将自动启动游戏。'
+  )
+
+  const showSteamNotReadyHint = (res) => {
+    const statusHint = res?.data?.steam_status?.user_hint
+    if (res?.data?.action === 'steam_not_ready' && statusHint?.message) {
+      toast.warning(`${statusHint.title || 'Steam 未就绪'}\n${statusHint.message}`, { timeout: 6000 })
+    }
+  }
+
+  const resolveGameLaunchWarning = async (gameRes, requestedProfileId = null) => {
+    if (gameRes?.status !== 'warning' || gameRes?.data?.action !== 'confirm_direct_launch') {
+      return gameRes
+    }
+
+    const profileStore = useProfileStore()
+    const targetProfileId = gameRes?.data?.profile_id || requestedProfileId || profileStore.currentProfileId
+    if (gameRes?.data?.requires_fallback_confirm) {
+      const confirmStore = useConfirmStore()
+      const ok = await confirmStore.confirmAction(
+        'Steam 启动不可用',
+        gameRes?.message || '当前环境无法按 Steam 方式启动。\n是否改为按游戏本体直接启动？',
+        { type: 'warning', confirmText: '直接启动', cancelText: '取消' }
+      )
+      if (!ok) return null
+    }
+
+    if (gameRes?.data?.steam_running) {
+      return await waitSteamExitAndLaunch(targetProfileId, buildDirectLaunchSteamRunningMessage())
+    }
+    return window.pywebview.api.game_launch_resolve_warning(targetProfileId, 'continue')
+  }
+
+  const waitSteamExitAndLaunch = async (targetProfileId, waitingMessage) => {
+    const confirmStore = useConfirmStore()
+    let stopPolling = false
+    let autoLaunchResult = null
+    let autoResolved = false
+
+    const choicePromise = confirmStore.open({
+      title: 'Steam 已在运行',
+      message: waitingMessage,
+      mode: 'confirm',
+      type: 'warning',
+      actionButtons: [
+        { label: '继续运行', value: 'continue', kind: 'primary' },
+        { label: '删链运行', value: 'clear_workshop', kind: 'danger' },
+        { label: '取消', value: 'cancel', kind: 'secondary' },
+      ],
+    })
+
+    const pollingPromise = (async () => {
+      while (!stopPolling && confirmStore.isVisible) {
+        try {
+          // 等待 Steam 退出时只检测进程，避免 Steamworks/登录态在退出瞬间干扰判断。
+          const statusRes = await window.pywebview.api.steam_process_status()
+          const isRunning = !!statusRes?.data?.running
+          if (statusRes?.status === 'success' && !isRunning) {
+            const launchRes = await window.pywebview.api.game_launch_resolve_warning(targetProfileId, WAIT_STEAM_EXIT_ACTION)
+            if (
+              launchRes?.status === 'warning'
+              && launchRes?.data?.action === WAIT_STEAM_EXIT_ACTION
+              && launchRes?.data?.steam_running
+            ) {
+              // Steam 仍未完全退出，继续等待下一轮轮询。
+            } else {
+              autoLaunchResult = launchRes
+              autoResolved = true
+              stopPolling = true
+              confirmStore.closeSilently()
+              return
+            }
+          }
+        } catch (e) {
+          console.error('轮询 Steam 进程状态失败:', e)
+        }
+        await sleep(1000)
+      }
+    })()
+
+    const choice = await choicePromise
+
+    stopPolling = true
+    await pollingPromise
+
+    if (autoResolved) return autoLaunchResult
+    if (!choice || choice === 'cancel') return null
+    return window.pywebview.api.game_launch_resolve_warning(targetProfileId, choice)
   }
 
   // 后端弹窗
@@ -1012,14 +1378,8 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // === Steam客户端交互 ===
-  // 检查Steam工具
-  const checkSteamTools = async () => {
-    if (!window.pywebview) return
-    const res = await window.pywebview.api.check_steam_tools()
-    if (checkResult(res, "检查Steam工具")) {
-      
-    }
-  }
+  // 兼容旧调用名：手动检查工具环境并按需弹窗。
+  const checkSteamTools = async () => checkToolMaintenance({ manual: true, prompt: true })
   // 下载创意工坊项目
   const downloadWorkshopItems = async (workshop_ids) => {
     if (!window.pywebview) return
@@ -1121,26 +1481,9 @@ export const useAppStore = defineStore('app', () => {
       toast.success(`订阅 ${workshop_ids.length} 个创意工坊项目成功，正在下载中...`)
       return true
     }
-    else if (res.data && res.data.action === "need_start_steam") {
-      const confirmStore = useConfirmStore()
-      const ok = await confirmStore.confirmAction(
-        'Steam 未运行', 
-        '调用官方 API 订阅模组需要启动 Steam 客户端。\n是否现在启动 Steam？', 
-        { type: 'warning', confirmText: '立即启动 Steam' }
-      )
-      if (ok) {
-        const launchRes = await window.pywebview.api.steam_launch_client()
-        if (checkResult(launchRes, "启动 Steam 客户端")) {
-          // 因为 Steam 启动并登录账号通常需要 10-30 秒，建议提示用户等待后再操作
-          toast.info("Steam 正在启动...\n请在登录完毕后，再次点击订阅按钮！", { timeout: 8000 })
-        } else {
-          toast.error(launchRes.message)
-        }
-      }
-      return false
-    } 
     // 其它常规报错
     else {
+      showSteamNotReadyHint(res)
       toast.error(`订阅失败: ${res.message}`)
       return false
     }
@@ -1157,26 +1500,9 @@ export const useAppStore = defineStore('app', () => {
       toast.success(`已发送取消订阅请求`)
       return true
     }
-    else if (res.data && res.data.action === "need_start_steam") {
-      const confirmStore = useConfirmStore()
-      const ok = await confirmStore.confirmAction(
-        'Steam 未运行', 
-        '调用官方 API 取消订阅需要启动 Steam 客户端。\n是否现在启动 Steam？', 
-        { type: 'warning', confirmText: '立即启动 Steam' }
-      )
-      
-      if (ok) {
-        const launchRes = await window.pywebview.api.steam_launch_client()
-        if (launchRes.status === 'success') {
-          toast.info("Steam 正在启动...\n请在登录完毕后，再次执行取消订阅操作！", { timeout: 8000 })
-        } else {
-          toast.error(launchRes.message)
-        }
-      }
-      return false
-    } 
     // 其它常规报错
     else {
+      showSteamNotReadyHint(res)
       toast.error(`取消订阅失败: ${res.message}`)
       return false
     }
@@ -1427,11 +1753,16 @@ export const useAppStore = defineStore('app', () => {
   // 更新外置数据库
   const updateExternalDB = async (type) => {
     try {
+      const workNameMap = {
+        community_rules: '更新社区规则库',
+        workshop_db: '更新社区工坊数据库',
+        instead_db: '更新替代 Mod 数据库',
+      }
       // 调用 API
       const res = await window.pywebview.api.update_external_db(type)
-      if (checkResult(res, `更新外置数据库 ${type}`)) {
+      if (checkResult(res, workNameMap[type] || `更新外置数据库 ${type}`)) {
         const task_id = res.data.task_id
-        const filePath = await waitForDownload(task_id)
+        await waitForDownload(task_id)
         // 重新获取数据
         await refreshData() 
       }
@@ -1456,11 +1787,12 @@ export const useAppStore = defineStore('app', () => {
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
-    checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
+  checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
-    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
+    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks,
+    openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
     // AI处理
     getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, setCurrentAiBatchTask, clearCurrentAiBatchResults,
     fetchPrompts, savePrompt, deletePrompt, resetPrompts,

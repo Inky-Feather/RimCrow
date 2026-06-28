@@ -1,12 +1,13 @@
 
 import { createToastInterface } from 'vue-toastification'
-import { useAppStore } from '../stores/appStore'
 
 const toast = createToastInterface()
 // 通用结果检查
-export function checkResult(res, workname, showSuccess = false) {
-  const appStore = useAppStore()
-  if (appStore.settings.debug_mode) console.log('checkResult', workname, res)
+export function checkResult(res, workname, showSuccess = false, options = {}) {
+  const debugMode = options?.debugMode ?? (
+    typeof window !== 'undefined' ? !!window.__RMM_DEBUG_MODE__ : false
+  )
+  if (debugMode) console.log('checkResult', workname, res)
   if (res.status === 'success') {
     if(showSuccess) toast.success(`${workname}成功`, {timeout: 1000})
     return true;

@@ -1,4 +1,16 @@
 ·[RimModManager]
+├── ·[.claude]
+│   └── ·[skills]
+│   
+│       └── ·[gitnexus]
+│       
+│           ├── ·[gitnexus-cli]
+│           ├── ·[gitnexus-debugging]
+│           ├── ·[gitnexus-exploring]
+│           ├── ·[gitnexus-guide]
+│           ├── ·[gitnexus-impact-analysis]
+│           └── ·[gitnexus-refactoring]
+│           
 ├── ·[.history]
 ├── ·[.pytest_cache]
 │   ├── ·[v]
@@ -21,12 +33,15 @@
 │   │   ├──  migrator.py
 │   │   ├──  models.py
 │   │   ├──  models_ext.py
+│   │   ├──  repair.py
+│   │   ├──  runtime.py
 │   │   └──  workshop_selection.py
 │   │   
 │   ├── ·[load_order]
 │   │   ├──  __init__.py
 │   │   ├──  detector.py
 │   │   ├──  import_check.py
+│   │   ├──  language_pack_ownership.py
 │   │   ├──  models.py
 │   │   ├──  parsers.py
 │   │   └──  share_code.py
@@ -40,6 +55,7 @@
 │   │   ├──  mgr_game_monitor.py
 │   │   ├──  mgr_github.py
 │   │   ├──  mgr_load_order.py
+│   │   ├──  mgr_maintenance.py
 │   │   ├──  mgr_network.py
 │   │   ├──  mgr_profile.py
 │   │   ├──  mgr_rules.py
@@ -52,6 +68,9 @@
 │   │   ├──  mgr_update.py
 │   │   └──  mgr_workshop_db.py
 │   │   
+│   ├── ·[migrations]
+│   │   └──  app_upgrade.py
+│   │   
 │   ├── ·[scanner]
 │   │   ├──  __init__.py
 │   │   ├──  analyzer.py
@@ -62,18 +81,23 @@
 │   ├── ·[utils]
 │   │   ├──  __init__.py
 │   │   ├──  constants.py
+│   │   ├──  delete_ops.py
 │   │   ├──  event_bus.py
 │   │   ├──  lanzou_parser.py
 │   │   ├──  logger.py
+│   │   ├──  restart.py
+│   │   ├──  shortcuts.py
 │   │   ├──  tools.py
 │   │   └──  versioning.py
 │   │   
 │   ├──  _version.py
 │   ├──  api.py
+│   ├──  browser_runtime.py
 │   ├──  settings.py
 │   └──  static_page.py
 │   
 ├── ·[data]
+├── ·[docs]
 ├── ·[frontend]
 │   ├── ·[public]
 │   │   ├──  icon.svg
@@ -92,6 +116,7 @@
 │   │   │   │   ├──  FixedPopover.vue
 │   │   │   │   └──  HoverPanel.vue
 │   │   │   │   
+│   │   │   ├── ·[supplement]
 │   │   │   ├── ·[utils]
 │   │   │   │   ├──  AiDiagnosticSidebar.vue
 │   │   │   │   ├──  AppLogPanel.vue
@@ -122,6 +147,7 @@
 │   │   │   ├──  GuideCenter.vue
 │   │   │   ├──  ListDiffView.vue
 │   │   │   ├──  LogViewer.vue
+│   │   │   ├──  MissingInstallDialog.vue
 │   │   │   ├──  ModDetails.vue
 │   │   │   ├──  ModList.vue
 │   │   │   ├──  ModRuleEditor.vue
@@ -131,6 +157,7 @@
 │   │   │   ├──  RulePanel.vue
 │   │   │   ├──  SettingsPanel.vue
 │   │   │   ├──  StatusBar.vue
+│   │   │   ├──  SupplementSelectionDialog.vue
 │   │   │   ├──  TextureOptModal.vue
 │   │   │   └──  UpdateModal.vue
 │   │   │   
@@ -151,6 +178,10 @@
 │   │   │       ├──  SearchHelp.js
 │   │   │       └──  SearchTypes.js
 │   │   │       
+│   │   ├── ·[runtime]
+│   │   │   ├──  pywebviewBridge.js
+│   │   │   └──  runtimeBridge.js
+│   │   │   
 │   │   ├── ·[stores]
 │   │   │   ├──  appStore.js
 │   │   │   ├──  confirmStore.js
@@ -158,11 +189,13 @@
 │   │   │   ├──  groupStore.js
 │   │   │   ├──  guideStore.js
 │   │   │   ├──  hoverStore.js
+│   │   │   ├──  missingInstallStore.js
 │   │   │   ├──  modStore.js
 │   │   │   ├──  orderStore.js
 │   │   │   ├──  profileStore.js
 │   │   │   ├──  ruleStore.js
 │   │   │   ├──  searchStore.js
+│   │   │   ├──  supplementStore.js
 │   │   │   ├──  taskStore.js
 │   │   │   ├──  textureStore.js
 │   │   │   └──  workspaceStore.js
@@ -170,9 +203,11 @@
 │   │   ├── ·[utils]
 │   │   │   ├──  colorDeal.js
 │   │   │   ├──  constants.js
+│   │   │   ├──  modIdentity.js
 │   │   │   ├──  tools.js
 │   │   │   ├──  uiHelper.js
-│   │   │   └──  unityTextParser.js
+│   │   │   ├──  unityTextParser.js
+│   │   │   └──  versioning.js
 │   │   │   
 │   │   ├──  App.vue
 │   │   ├──  main.js
@@ -189,16 +224,21 @@
 │   
 ├── ·[mods]
 ├── ·[packaging_hooks]
+├── ·[scripts]
 ├── ·[test]
 ├── ·[tests]
 │   ├──  __init__.py
+│   ├──  analyze_language_packs.py
 │   ├──  test_download_manager.py
 │   ├──  test_github_manager.py
 │   ├──  test_import_check.py
+│   ├──  test_language_pack_ownership.py
+│   ├──  test_load_order_manager_import_check.py
 │   ├──  test_load_order_parsers.py
 │   ├──  test_load_order_share_code.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_rule_manager_dynamic_weights.py
+│   ├──  test_shortcuts.py
 │   ├──  test_sorter_strategies.py
 │   ├──  test_texture_opt_manager.py
 │   └──  test_workshop_selection.py

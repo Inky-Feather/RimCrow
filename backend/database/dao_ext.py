@@ -383,11 +383,7 @@ class WorkshopCacheDAO:
         result: dict[str, dict[str, Any]] = {}
         for package_id in normalized_package_ids:
             replacement_sources = dedupe_install_sources([
-                _build_replacement_install_source(
-                    package_id,
-                    replacement,
-                    replacement_meta_map,
-                )
+                _build_replacement_install_source( package_id, replacement, replacement_meta_map)
                 for replacement in replacement_map.get(package_id, [])
             ])
             replacement_sources = [source for source in replacement_sources if source]

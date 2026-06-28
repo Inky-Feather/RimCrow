@@ -73,11 +73,17 @@ class SteamCMDController:
         """
         核心运行器：实时读取输出、处理阻塞、防卡死
         """
-        # Windows 下隐藏黑窗口
+        # 调试模式下强制给 SteamCMD 新建一个独立控制台窗口，便于直接观察真实输出。
+        # 非调试模式仍然保持后台静默运行，并通过管道解析进度。
+        debug_show_console = os.name == 'nt' and bool(settings.config.debug_mode)
         startupinfo = None
+        creationflags = 0
         if os.name == 'nt':
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            if debug_show_console:
+                creationflags = subprocess.CREATE_NEW_CONSOLE
+            else:
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
         try:
             # 启动进程，必须指定 cwd 为 steamcmd 所在目录
@@ -85,10 +91,11 @@ class SteamCMDController:
                 cmd,
                 cwd=str(self.steamcmd_dir),
                 env=self._get_clean_env(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, # 将错误流合并到标准输出，方便一起读取
-                stdin=subprocess.PIPE,    # 开启 stdin 防止 SteamCMD 等待用户输入卡死
+                stdout=None if debug_show_console else subprocess.PIPE,
+                stderr=None if debug_show_console else subprocess.STDOUT, # 调试模式下直接把输出留在新控制台窗口
+                stdin=None if debug_show_console else subprocess.PIPE,    # 非调试模式保留 stdin 防止 SteamCMD 等待用户输入卡死
                 startupinfo=startupinfo,
+                creationflags=creationflags,
                 text=True,
                 encoding='utf-8',         # SteamCMD 有时会有乱码
                 errors='replace'
@@ -97,6 +104,15 @@ class SteamCMDController:
             logger.info(f"SteamCMD 进程已启动 PID: {self.current_process.pid}")
             
             start_time = time.time()
+
+            if debug_show_console:
+                while self.current_process.poll() is None:
+                    if time.time() - start_time > timeout:
+                        logger.error(f"SteamCMD {task_name} 超时被强制终止")
+                        self.kill_all()
+                        return False, "执行超时"
+                    time.sleep(0.2)
+                return self.current_process.returncode == 0, "执行完成"
             
             # 实时读取输出
             for line in iter(self.current_process.stdout.readline, ''): # type: ignore

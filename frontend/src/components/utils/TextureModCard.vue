@@ -1,21 +1,28 @@
 <template>
   <div class="group flex min-h-24 flex-col justify-between border-b border-text-main/5 px-3 py-2 transition-colors hover:bg-text-main/4">
     <div class="flex min-w-0 items-center justify-between gap-4">
-      <div class="flex min-w-0 items-center gap-2">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
         <span class="truncate text-sm font-bold text-text-main">{{ mod.mod_name }}</span>
-        <span v-if="mod.skip_mask_count > 0" v-tooltip="'生成时需要忽略的贴图如法线贴图、遮罩贴图等'" tabindex="0" class="shrink-0 cursor-help rounded border border-accent-special/20 bg-accent-special/10 px-1.5 py-0.5 text-xs font-bold text-accent-special">忽略 {{ mod.skip_mask_count }}</span>
         <span v-if="mod.unsupported_source_count > 0" v-tooltip="unsupportedTooltip"
           class="shrink-0 rounded border border-accent-warning/20 bg-accent-warning/10 px-1.5 py-0.5 text-xs font-bold text-accent-warning">
           无效 PNG {{ mod.unsupported_source_count }}
         </span>
-        <span v-if="mod.external_orphan_output_count > 0" class="shrink-0 rounded border border-accent-primary/20 bg-accent-primary/10 px-1.5 py-0.5 text-xs font-bold text-accent-primary">无源 DDS {{ mod.external_orphan_output_count }}</span>
+        <span
+          v-for="tag in scaleTags"
+          :key="`${tag.kind}-${tag.label}`"
+          v-tooltip="tag.tooltip"
+          class="shrink-0 rounded border px-1.5 py-0.5 text-xs font-bold"
+          :class="tag.className"
+        >
+          {{ tag.text }}
+        </span>
       </div>
 
       <div class="flex shrink-0 items-center gap-2">
         <div class="text-right text-xs font-mono text-text-dim">
           <span>待生成 {{ mod.generate_required_count || 0 }}</span>
           <span class="mx-2 opacity-40">|</span>
-          <span>已完成 {{ mod.managed_output_count || 0 }}</span>
+          <span>现有 DDS {{ mod.output_total_count || 0 }}</span>
         </div>
         <button
           class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-text-main/10 hover:text-text-main"
@@ -72,12 +79,48 @@ const appStore = useAppStore()
 const unsupportedTooltip = computed(() => {
   const preview = Array.isArray(props.mod?.engine_unsupported_preview) ? props.mod.engine_unsupported_preview : []
   if (!preview.length) {
-    return '发现扩展名为 PNG、但文件内容并不是 PNG 的伪装源图，todds 无法处理。'
+    return '有些文件虽然名字是 PNG，但内容不是正常图片，已经自动跳过。'
   }
   return [
     '以下伪装 PNG 已自动跳过：',
     ...preview.map(item => `${item.rel_path}${item.reason ? ` - ${item.reason}` : ''}`),
   ].join('\n')
+})
+
+const scaleTags = computed(() => {
+  const breakdown = Array.isArray(props.mod?.scale_breakdown) ? props.mod.scale_breakdown : []
+  return breakdown
+    .filter(item => Number(item?.count || 0) > 0)
+    .map(item => {
+      const kind = String(item?.kind || 'keep_original')
+      const label = String(item?.label || '原尺寸')
+      const count = Number(item?.count || 0)
+      if (kind === 'fallback') {
+        return {
+          kind,
+          label,
+          text: `回退${label} (${count})`,
+          tooltip: `这些图片不适合当前比例，会自动回退到 ${label} 处理。`,
+          className: 'border-accent-secondary/20 bg-accent-secondary/10 text-accent-secondary',
+        }
+      }
+      if (kind === 'scaled') {
+        return {
+          kind,
+          label,
+          text: `当前${label} (${count})`,
+          tooltip: `这些图片会按 ${label} 缩放生成。`,
+          className: 'border-accent-tip/20 bg-accent-tip/10 text-accent-tip',
+        }
+      }
+      return {
+        kind,
+        label,
+        text: `不缩放 (${count})`,
+        tooltip: '这些图片会保留原来的大小。',
+        className: 'border-text-main/10 bg-text-main/5 text-text-dim',
+      }
+    })
 })
 
 const formatBytes = (bytes) => {

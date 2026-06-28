@@ -5,10 +5,11 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 import html
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import unquote
+from urllib.parse import quote, unquote, urlparse
 
 import requests
 from backend.database.models import GithubModRecord, GithubTimeline, db
@@ -160,6 +161,102 @@ class GithubManager:
         owner = match.group(1)
         repo = match.group(2).replace(".git", "")
         return owner, repo
+
+    def parse_content_url(self, url: str) -> dict[str, str] | None:
+        """解析 GitHub 单文件 URL，统一供“外部库检查”等场景复用。"""
+        try:
+            parsed = urlparse(str(url or "").strip())
+        except Exception:
+            return None
+
+        host = parsed.netloc.lower()
+        path = parsed.path.strip("/")
+        parts = [segment for segment in path.split("/") if segment]
+
+        if host == "raw.githubusercontent.com" and len(parts) >= 4:
+            owner, repo, ref = parts[:3]
+            remote_path = "/".join(parts[3:])
+            return {"owner": owner, "repo": repo, "ref": ref, "remote_path": remote_path}
+
+        if host == "github.com" and len(parts) >= 5 and parts[2] == "blob":
+            owner, repo, _, ref = parts[:4]
+            remote_path = "/".join(parts[4:])
+            return {"owner": owner, "repo": repo, "ref": ref, "remote_path": remote_path}
+        return None
+
+    def fetch_path_commit(self, owner: str, repo: str, *, ref: str, remote_path: str, timeout: tuple[int, int] = (5, 20), missing_ok: bool = False) -> dict[str, Any] | None:
+        """读取某个文件路径最近一次提交，用于判断单文件更新时间。"""
+        normalized_ref = str(ref or "").strip()
+        normalized_path = str(remote_path or "").strip().lstrip("/")
+        if not normalized_path:
+            return None
+
+        cache_key = ("path_commit", owner.lower(), repo.lower(), normalized_ref or "latest", normalized_path)
+        cached = self._get_cached_payload(cache_key)
+        if cached is not self._cache_miss:
+            return cached
+
+        with build_retry_session() as session:
+            response = session.get(
+                f"{GITHUB_API_BASE}/{owner}/{repo}/commits",
+                params={"path": normalized_path, "sha": normalized_ref, "per_page": 1},
+                headers=self._build_github_headers({"Accept": GITHUB_ACCEPT_HEADER}),
+                timeout=timeout,
+            )
+            if missing_ok and response.status_code == 404:
+                self._store_cached_payload(cache_key, None, ttl_seconds=60)
+                return None
+            self._raise_for_github_status(response, f"{owner}/{repo}/commits?path={normalized_path}")
+            payload = response.json()
+            if isinstance(payload, list):
+                payload = payload[0] if payload else None
+            self._store_cached_payload(cache_key, payload)
+            return payload
+
+    def fetch_file_metadata(self, owner: str, repo: str, *, ref: str, remote_path: str, timeout: tuple[int, int] = (8, 25), missing_ok: bool = False) -> dict[str, Any] | None:
+        """读取 GitHub 单文件元数据，并尽量补齐最近更新时间。"""
+        normalized_ref = str(ref or "").strip()
+        normalized_path = str(remote_path or "").strip().lstrip("/")
+        if not normalized_path:
+            return None
+
+        cache_key = ("file_meta", owner.lower(), repo.lower(), normalized_ref or "latest", normalized_path)
+        cached = self._get_cached_payload(cache_key)
+        if cached is not self._cache_miss:
+            return cached
+
+        with build_retry_session() as session:
+            response = session.get(
+                f"{GITHUB_API_BASE}/{owner}/{repo}/contents/{quote(normalized_path)}",
+                params={"ref": normalized_ref},
+                headers=self._build_github_headers({"Accept": GITHUB_ACCEPT_HEADER}),
+                timeout=timeout,
+            )
+            if missing_ok and response.status_code == 404:
+                self._store_cached_payload(cache_key, None, ttl_seconds=60)
+                return None
+            self._raise_for_github_status(response, f"{owner}/{repo}/contents/{normalized_path}")
+            payload = response.json()
+
+        latest_commit = self.fetch_path_commit(
+            owner,
+            repo,
+            ref=normalized_ref,
+            remote_path=normalized_path,
+            timeout=timeout,
+            missing_ok=True,
+        )
+        updated_at = self._parse_iso_datetime_to_ms(self._extract_commit_timestamp(latest_commit))
+        result = {
+            "signature": str(payload.get("sha") or ""),
+            "size": int(payload.get("size") or 0),
+            "download_url": str(payload.get("download_url") or f"https://raw.githubusercontent.com/{owner}/{repo}/{normalized_ref}/{normalized_path}"),
+            # 外部库没有稳定语义版本，这里把短 SHA 作为远端版本提示。
+            "version": str(payload.get("sha") or "")[:12],
+            "updated_at": updated_at,
+        }
+        self._store_cached_payload(cache_key, result)
+        return result
 
     def fetch_repo(self, owner: str, repo: str, *, timeout: tuple[int, int] = (10, 30), missing_ok: bool = False) -> dict[str, Any] | None:
         """读取仓库基础信息。
@@ -1127,6 +1224,16 @@ class GithubManager:
         author_info = commit_info.get("author", {}) if isinstance(commit_info, dict) else {}
         committer_info = commit_info.get("committer", {}) if isinstance(commit_info, dict) else {}
         return str(author_info.get("date") or committer_info.get("date") or "").strip()
+
+    @staticmethod
+    def _parse_iso_datetime_to_ms(value: str) -> int:
+        raw = str(value or "").strip()
+        if not raw:
+            return 0
+        try:
+            return int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp() * 1000)
+        except Exception:
+            return 0
 
     @staticmethod
     def _build_source_version(branch_name: str, commit_timestamp: str) -> str:

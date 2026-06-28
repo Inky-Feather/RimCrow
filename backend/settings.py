@@ -1,6 +1,7 @@
 # backend/settings.py
 
 import json
+import math
 import os
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
@@ -127,16 +128,15 @@ class UIConfig:
 # 贴图优化配置类
 @dataclass
 class TextureOptConfig:
-    texture_tools_path: str = str(TOOLS_DIR / "texture_tools")  # todds 工具目录，留空则使用默认位置
-    generate_mipmaps: bool = False           # 是否生成 Mipmap
-    scale_factor: float = 1.0               # 缩放倍率 (1.0 为不缩放)
-    max_size: int = 0                       # 最大分辨率限制 (0 为不限制)
-    skip_small_textures: bool = True        # 是否跳过小贴图
-    min_dimension: int = 64                 # 小贴图判定阈值
-    clean_orphaned_dds: bool = False         # 自动清理失效受管 DDS
-    clean_generated_only: bool = True       # 清理模式: 只清理自己生成的 DDS，不清理其它 DDS
-    overwrite_existing: bool = False        # 是否全覆盖重生成
-    encode_batch_timeout_seconds: int = 480 # todds 批处理超时
+    texture_tools_path: str = str(TOOLS_DIR / "texture_tools")  # 贴图工具目录
+    process_mode: str = "scaled_only_overwrite"
+    generate_mipmaps: bool = True            # 是否生成 Mipmap
+    scale_factor: float = 1.0                # 缩放倍率，小于1时会缩小贴图
+    max_size: int = 128                      # 最低清晰度
+    skip_small_textures: bool = True         # 超出建议范围时不参与缩放
+    min_dimension: int = 128                 # 最短边低于该值时不参与缩放
+    max_source_dimension: int = 2048         # 最长边高于该值时不参与缩放
+    encode_batch_timeout_seconds: int = 480  # todds 批处理超时
 
 
 @dataclass
@@ -163,12 +163,17 @@ class AppConfig:
     self_mods_path: str = str(MODS_DIR)  # 本程序默认模组路径
     # use_self_mods: bool = True          # 是否使用本程序模组
     move_old_self_mods: bool = False    # 修改路径后是否移动原有模组
+    load_order_import_dir_mode: str = "default"    # 导入文件选择器初始目录策略: default / remember / custom
+    load_order_import_custom_path: str = ""        # 导入文件选择器自定义目录（全局）
+    load_order_import_last_path: str = ""          # 导入文件选择器上次成功目录（全局）
+    load_order_export_dir_mode: str = "default"    # 导出文件选择器初始目录策略: default / remember / custom
+    load_order_export_custom_path: str = ""        # 导出文件选择器自定义目录（全局）
+    load_order_export_last_path: str = ""          # 导出文件选择器上次成功目录（全局）
     
     # --- 游戏设置 ---
     # game_version: str = ""               # RimWorld 版本
     current_profile_id: str = "default"   # 当前激活的环境ID
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
-    prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     enable_tool_mods: bool = False           # 是否启用 ToolMods 目录下的伴生模组
     link_deployment_mode_full: bool = False # 链接部署模式: true=完全重建, false=增量部署
     
@@ -202,6 +207,19 @@ class AppConfig:
     enable_auto_update_check: bool = True  # 自动检查更新开关
     ignored_update_version: str = ""       # 跳过的版本号
     last_update_check_time: float = 0      # 上次检查时间（用于限流）
+    # 以下三类检查都只负责“发现问题并提醒”，真正更新仍需用户确认后手动触发。
+    enable_auto_tool_check: bool = True
+    tool_check_interval_days: int = 3
+    last_tool_check_time: float = 0
+    
+    enable_auto_external_data_update_check: bool = True
+    external_data_update_check_interval_days: int = 1
+    last_external_data_update_check_time: float = 0
+    
+    enable_auto_steamcmd_mod_update_check: bool = True
+    steamcmd_mod_update_check_interval_days: int = 1
+    last_steamcmd_mod_update_check_time: float = 0
+    
     last_version: str = ""                 # 之前的版本号(用于判断是否更新过了)
     last_run_time: float = 0               # 上次运行时间（用于判断Mod是否存在变动）
     run_count: int = 0                     # 运行次数（用于判断是否需要重新扫描）
@@ -232,6 +250,7 @@ class SettingsManager:
     def __init__(self):
         if self._initialized: return
         self._ensure_config_dir()
+        self._legacy_prefer_steam_launch = None
         # self.config: AppConfig = self._load() # 加载配置
         
         # 1. 先初始化一个空的配置对象，防止加载过程中访问 self.config 崩溃
@@ -290,6 +309,19 @@ class SettingsManager:
                 data = repair_json(content, return_objects=True)
                 
             if isinstance(data, dict):
+                legacy_interval_key_map = {
+                    "tool_check_interval_hours": "tool_check_interval_days",
+                    "external_data_update_check_interval_hours": "external_data_update_check_interval_days",
+                    "steamcmd_mod_update_check_interval_hours": "steamcmd_mod_update_check_interval_days",
+                }
+                for legacy_key, new_key in legacy_interval_key_map.items():
+                    if new_key not in data and legacy_key in data:
+                        try:
+                            data[new_key] = max(1, math.ceil(float(data.get(legacy_key) or 0) / 24))
+                        except Exception:
+                            data[new_key] = getattr(self.config, new_key)
+                if 'prefer_steam_launch' in data:
+                    self._legacy_prefer_steam_launch = bool(data.get('prefer_steam_launch'))
                 # 使用递归更新现有的 self.config
                 self._recursive_update(self.config, data)
                 self._normalize_config()
@@ -301,6 +333,15 @@ class SettingsManager:
 
     def _normalize_config(self):
         self.config.language = normalize_language_code(self.config.language, default="zh-cn") or "zh-cn"
+        valid_modes = {"default", "remember", "custom"}
+        if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
+            self.config.load_order_import_dir_mode = "default"
+        else:
+            self.config.load_order_import_dir_mode = str(self.config.load_order_import_dir_mode).strip().lower()
+        if str(self.config.load_order_export_dir_mode or "").strip().lower() not in valid_modes:
+            self.config.load_order_export_dir_mode = "default"
+        else:
+            self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
     
     def _sync_derived_paths(self):
         """
@@ -312,17 +353,20 @@ class SettingsManager:
             new_path = str(base_path / "steamapps" / "workshop" / "content" / "294100")
             self.config.steamcmd_mods_path = new_path
             
-    def get_default_community_paths(self):
-        """获取默认的社区路径"""
-        default_paths = {
-            # "self_mods_path": str(),
-            "steamcmd_mods_path": str(TOOLS_DIR / "steamcmd"),
+    def get_default_external_paths(self):
+        """获取“外部依赖”页相关路径的默认值。"""
+        return {
+            # 目录型外部工具统一在这里给出默认位置。
+            # SteamCMD 的工坊内容目录仍由 `_sync_derived_paths()` 负责衍生，不在这里直接暴露。
+            "steamcmd_path": str(TOOLS_DIR / "steamcmd"),
+            "texture_opt": {
+                "texture_tools_path": str(TOOLS_DIR / "texture_tools"),
+            },
             "community_workshop_db_path": str(COMMUNITY_WORKSHOP_DB_PATH),
             "community_instead_db_path": str(COMMUNITY_INSTEAD_DB_PATH),
             "community_rules_path": str(COMMUNITY_RULES_PATH),
             "user_rules_path": str(USER_RULES_PATH),
         }
-        return default_paths
         
     
     def get(self, key: str) -> Any:

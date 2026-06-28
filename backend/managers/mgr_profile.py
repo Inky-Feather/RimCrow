@@ -8,12 +8,12 @@ from typing import Any, Dict
 from datetime import datetime
 from dataclasses import asdict, dataclass, field
 from playhouse.shortcuts import model_to_dict
-from send2trash import send2trash
 from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game import GameManager
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
 from backend.utils.logger import logger 
+from backend.utils.tools import delete_fs_path
 
 
 # @dataclass
@@ -23,6 +23,7 @@ class ProfileContext:
     game_version: str
     game_install_path: str
     user_data_path: str
+    prefer_steam_launch: bool
     use_workshop_mods: bool
     use_self_mods: bool
     inactive_mods_order: list = field(default_factory=list)
@@ -95,6 +96,7 @@ class ProfileManager:
         'description',
         'game_install_path', 
         'user_data_path', 
+        'prefer_steam_launch',
         'use_workshop_mods', 
         'use_self_mods', 
         'run_commands',
@@ -120,6 +122,7 @@ class ProfileManager:
                     user_data_path='',
                     game_version='',
                     is_steam=False,
+                    prefer_steam_launch=True,
                     use_workshop_mods=True, # 默认非Steam版不加载工坊
                     use_self_mods=False,    # 默认不加载 Self Mod
                     run_commands=[]
@@ -165,6 +168,7 @@ class ProfileManager:
                 user_data_path=data_dir,
                 game_install_path=data.get('game_install_path'),
                 game_version=GameManager.get_game_version(data.get('game_install_path')),
+                prefer_steam_launch=bool(data.get('prefer_steam_launch', False)),
                 use_workshop_mods=data.get('use_workshop_mods', False),
                 use_self_mods=data.get('use_self_mods', False), # 默认不加载 Self Mod
                 is_steam=isSteam,
@@ -215,8 +219,8 @@ class ProfileManager:
         self.current_profile.game_version = GameManager.get_game_version(self.current_profile.game_install_path)
         self.current_profile.save()
 
-    def delete_profile(self, profile_id):
-        """删除环境 (及隔离区数据)"""
+    def delete_profile(self, profile_id, force: bool = False):
+        """删除环境 (及隔离区数据)。默认移入回收站，force=True 时彻底删除。"""
         if profile_id == 'default':
             raise Exception("无法删除默认环境")
             
@@ -226,8 +230,7 @@ class ProfileManager:
         default_profile = self.get_profile('default')
         if profile.user_data_path and os.path.exists(profile.user_data_path) and (Path(profile.user_data_path) != Path(default_profile.user_data_path)):
             try:
-                # shutil.rmtree(profile.user_data_path)
-                send2trash(profile.user_data_path)
+                delete_fs_path(profile.user_data_path, force=force)
             except Exception as e:
                 logger.warning(f"Failed to clean up profile data: {e}")
         # 2. 删库
@@ -269,6 +272,7 @@ class ProfileManager:
             game_version=profile.game_version,
             game_install_path=profile.game_install_path,
             user_data_path=profile.user_data_path,
+            prefer_steam_launch=bool(getattr(profile, 'prefer_steam_launch', False)),
             use_workshop_mods=profile.use_workshop_mods,
             use_self_mods=profile.use_self_mods,
             inactive_mods_order=list(profile.inactive_mods_order or []),
@@ -336,7 +340,7 @@ class ProfileManager:
         profile = GameProfile.get_or_none(GameProfile.id == profile_id)
         if not profile: return []
         # 获取当前 Profile 的 EXE 路径
-        args = [GameManager.detect_executable(profile.game_install_path)]
+        args = [GameManager.detect_executable(profile.game_install_path) or '']
         # 核心：注入数据隔离参数（非默认环境）
         if profile.user_data_path and profile_id != 'default':
             # 必须使用绝对路径，并处理可能的空格（Popen 会自动处理列表项的空格）

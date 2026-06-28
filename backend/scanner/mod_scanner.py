@@ -29,6 +29,7 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
+from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_codes
 from backend.utils.logger import logger # 引入日志
@@ -117,6 +118,10 @@ class ModScanner:
                 raise e
         try:
             # --- 0. 预检查与准备 ---
+            # SteamCMD 下载目录与管理器自管目录当前共用同一份物理数据。
+            # 扫描前先把 ACF 中“目录已不存在”的陈旧安装记录清掉，
+            # 避免后续任何 SteamCMD 下载又被旧记录拖入 Missing game files 校验失败。
+            SteamManager().reconcile_steamcmd_acf()
             valid_paths = [p for p in search_paths if p and os.path.exists(p)]
             if not valid_paths:
                 EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message="没有有效路径", metrics={"title": "模组扫描"})
@@ -241,7 +246,10 @@ class ModScanner:
                 logger.error(f"批量入库失败: {e}", exc_info=True)
                 raise e
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
-            runtime_analysis = ModDAO.get_profile_conflict_analysis(self.context)
+            runtime_analysis = ModDAO.get_profile_conflict_analysis(
+                self.context,
+                include_workshop=not bool(getattr(self.context, 'prefer_steam_launch', False)),
+            )
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']
             final_links_to_create = runtime_analysis['deploy_paths']
@@ -256,10 +264,7 @@ class ModScanner:
             # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
             # 增量模式只处理变化项；全量模式则删除全部旧链接后重建。
             if local_mods_root and os.path.exists(local_mods_root):
-                if settings.config.link_deployment_mode_full:
-                    success = FileManager.sync_links_full(local_mods_root, final_links_to_create)
-                else:
-                    success = FileManager.sync_links(local_mods_root, final_links_to_create)
+                success = FileManager.sync_managed_links(local_mods_root, final_links_to_create)
                 if final_links_to_create:
                     deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
 
