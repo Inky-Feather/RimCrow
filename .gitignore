@@ -1,15 +1,41 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
-build/
-dist/
-wheels/
 *.egg-info
-.vscode/
-.history/
+.venv/
+
+# App Data (忽略运行时生成的数据)
+data/
 cache/
 backups/
+logs/
+test/
 *.db
 *.db-*
-# Virtual environments
-.venv
+*.log
+
+# IDE & System
+.vscode/
+.history/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Frontend
+node_modules/
+dist-ssr/
+dist/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+temp*.vue
+build/
+temp/

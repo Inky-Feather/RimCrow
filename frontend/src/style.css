@@ -3,32 +3,33 @@
 
 /* 相当于 v3 配置文件(tailwind.config.js) 中的 safelist 属性 */
 /* 通过正则表达式模式和变体动态生成所需 CSS 类 */
-@source inline('{hover:,focus:,}{bg,text,shadow,border}-accent-{primary,danger,highlight,special,cool,success,tip,warm,secondary,warning}');
-@source inline('{hover:,focus:,}{bg}-accent-{primary,danger,highlight,special,cool,success,tip,warm,secondary,warning}/{10,20,30,40,50,60}');
-@source inline('{hover:,focus:,}{border,text}-accent-{primary,danger,highlight,special,cool,success,tip,warm,secondary,warning}/{10,20,30,40,50}');
+@source inline('{hover:,focus:,}{bg,text,shadow,border}-accent-{primary,danger,highlight,special,cool,success,tip,warn,secondary,warning}');
+@source inline('{hover:,focus:,}{bg}-accent-{primary,danger,highlight,special,cool,success,tip,warn,secondary,warning}/{10,20,30,40,50,60}');
+@source inline('{hover:,focus:,}{border,text}-accent-{primary,danger,highlight,special,cool,success,tip,warn,secondary,warning}/{10,20,30,40,50}');
 
 /* 这里定义我们的 RimWorld 主题颜色 */
 @theme {
   /* 基础背景色 - 深邃的蓝黑 */
   --color-bg-deep: #0f172a; 
   --color-bg-surface: #1e293b;
-  
+
   /* 玻璃拟态背景 (带透明度) */
   --color-glass-light: rgba(255, 255, 255, 0.03);
   --color-glass-medium: rgba(30, 41, 59, 0.7);
   --color-glass-heavy: rgba(15, 23, 42, 0.9);
   
   /* 强调色 - 赛博朋克风格 */
-  --color-accent-danger:    #ef4444;  /* 红色 - 错误/删除 */
-  --color-accent-highlight: #ec4899;  /* 活力粉 - 用于强调/高亮 */
-  --color-accent-special:   #8b5cf6;  /* 明亮紫 - 用于高级功能/特殊状态*/
-  --color-accent-cool:      #3b82f6;  /* 饱和蓝 - 用于链接/信息补 */
-  --color-accent-primary:   #06b6d4;  /* 青色 - 用于选中/主操作 */
-  --color-accent-success:   #10b981;  /* 绿色 - 正常 */
-  --color-accent-tip:       #84cc16;  /* 黄绿色 - 辅助成功 */
-  --color-accent-warm:      #eab308;  /* 明亮的黄色 - 用于高亮/注意 */
-  --color-accent-secondary: #f59e0b;  /* 琥珀色 - 用于分组/警告 */
-  --color-accent-warning:   #f97316;  /* 温暖的橙色 - 用于中等警告/待处理 */
+  --color-accent-danger:    rgb(239,68,68);  /* 红色 - 错误/删除 */
+  --color-accent-highlight: rgb(236,72,153);  /* 活力粉 - 用于强调/高亮 */
+  --color-accent-special:   rgb(139,92,246);  /* 明亮紫 - 用于高级功能/特殊状态*/
+  --color-accent-cool:      rgb(59,130,246);  /* 饱和蓝 - 用于链接/信息补充 */
+  --color-accent-primary:   rgb(6,182,212);  /* 青色 - 用于选中/主操作 */
+  --color-accent-success:   rgb(16,185,129);  /* 绿色 - 正常 */
+  --color-accent-tip:       rgb(132,204,22);  /* 黄绿色 - 辅助成功 */
+  --color-accent-warn:      rgb(234,179,8);  /* 明亮的黄色 - 用于高亮/注意 */
+  --color-accent-secondary: rgb(245,158,11);  /* 琥珀色 - 用于分组/警告 */
+  --color-accent-warning:   rgb(249,115,22);  /* 温暖的橙色 - 用于中等警告/待处理 */
+
 
   /* 字体颜色 */
   --color-text-main: #f1f5f9;
@@ -44,15 +45,38 @@
   width: 6px;
   height: 6px;
 }
+/* 滚动条轨道 */
 ::-webkit-scrollbar-track {
   background: transparent;
+  width:2px;
+  height: 2px;
 }
+/* 滚动条轨道内边距 */
+::-webkit-scrollbar-track-piece {
+  background: transparent;
+}
+/* 滚动条滑块 */
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border-radius: 4px;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  -ms-border-radius: 4px;
+  -o-border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+/* 滚动条两端按钮 */
+::-webkit-scrollbar-button {
+  background: transparent;
+  /* background: red; */
+  width: 3px;
+  height: 3px;
+}
+/* 滚动条角落 */
+::-webkit-scrollbar-corner {
+  background: rgb(255, 0, 251);
 }
 
 /* 玻璃模糊工具类 */
@@ -82,6 +106,43 @@ body {
 .scroll-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* 取色器样式优化（面板背景边框阴影调整） */
+.vc-colorpicker.white {
+  background-color: var(--color-glass-light) !important;
+  color: var(--color-text-main) !important;
+  backdrop-filter: blur(12px) saturate(120%); /*模糊+饱和度增强*/
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  box-shadow: 5px 8px 20px rgba(0, 0, 0, 0.5); /*柔和阴影*/
+  border-radius: 16px !important;
+}
+/* 取色器容器（边框调整） */
+.vc-colorpicker--container {
+  padding: 15px !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 16px !important;
+}
+/* 取色器输入框（背景边框调整） */
+.vc-display .vc-color-input input {
+  background-color: var(--color-glass-medium) !important;
+  color: var(--color-text-main) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+/* 取色器切换按钮（禁用点击事件-切换颜色格式） */
+.vc-display .vc-input-toggle {
+  pointer-events: none;
+}
+/* 取色器切换按钮（背景边框调整） */
+.vc-display .vc-input-toggle:hover {
+  background-color: var(--color-text-dim) !important;
+  color: var(--color-bg-deep) !important;
+  pointer-events: none;
+}
+/* 取色器颜色列表（透明背景去除-去除不规则白边） */
+.vc-colorPicker__record .color-list .color-item.transparent {
+  background-image: none !important;
+}
+
 
 /* 
 :root {

@@ -1,0 +1,295 @@
+<template>
+  <Teleport to="body">
+    <!-- 统一过渡容器 -->
+    <Transition :name="isMini ? 'mini-zoom' : 'modal-fade'">
+      <div v-if="store.isVisible" 
+        class="fixed inset-0 z-9999 font-sans text-text-main selection:bg-white/20"
+        :class="isMini ? 'pointer-events-none' : 'flex items-center justify-center'"
+        @keydown.esc="handleCancel"
+        @keydown.enter="handleEnterKey"
+      >
+        
+        <!-- 1. 全屏模式下的环境光遮罩 -->
+        <div v-if="!isMini" @mousedown="handleBackdropClick" class="absolute inset-0 bg-bg-deep/20 backdrop-blur-xs transition-opacity duration-500"></div>
+
+        <!-- 2. 弹窗主体容器 -->
+        <div ref="modalRef"
+          class="relative flex flex-col overflow-hidden transition-all pointer-events-auto box-border"
+          :class="[
+            // 核心质感：极深色玻璃 + 顶部高光边框 + 强阴影
+            'bg-bg-deep/85 backdrop-blur-2xl shadow-2xl ring-1 ring-white/10',
+            // 模式区分
+            isMini 
+              ? 'rounded-xl w-[300px] absolute shadow-[0_20px_30px_rgba(0,0,0,0.5)]' 
+              : 'rounded-2xl w-[440px] max-w-[90vw] shadow-[0_20px_50px_rgba(0,0,0,0.6)]',
+            // 抖动动画类
+            shake ? 'animate-shake' : ''
+          ]"
+          :style="containerStyle"
+        >
+          <!-- A. 顶部装饰光条 (根据类型变色) -->
+          <div class="absolute top-0 inset-x-0 h-px bg-linear-to-r from-transparent via-current to-transparent opacity-80 shadow-[0_0_15px_currentColor]" :class="theme.text"></div>
+          
+          <!-- B. 内部环境光晕 (氛围感) -->
+          <div class="absolute -top-20 -right-20 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" 
+               :class="theme.bg"></div>
+
+          <!-- C. 内容区域 -->
+          <div class="flex relative z-10" :class="isMini ? 'p-3 pb-2 gap-2' : 'p-6 pb-4 gap-5'">
+            
+            <!-- 左侧：全息图标容器 -->
+            <div class="shrink-0 pt-1">
+              <div class="relative flex items-center justify-center"
+                :class="isMini ? 'w-8 h-8' : 'w-12 h-12 '">
+                <!-- 图标背景框 -->
+                <div class="absolute inset-0 rounded-xl opacity-20" :class="theme.text"></div>
+                <div class="absolute inset-0 rounded-xl opacity-10 bg-current blur-lg" :class="theme.text"></div>
+                <!-- 核心图标 -->
+                <component :is="theme.icon" class="w-6 h-6 stroke-2 relative z-10 drop-shadow-md" :class="theme.text" />
+                <!-- 呼吸光效 -->
+                <div class="absolute inset-0 rounded-xl bg-current blur-md opacity-20 animate-pulse-slow" :class="theme.text"></div>
+              </div>
+            </div>
+
+            <!-- 右侧：文本与交互 -->
+            <div class="flex-1 min-w-0 flex flex-col justify-center">
+              <h3 class="text-base font-bold text-white tracking-wide leading-snug mb-1.5 flex items-center gap-2">
+                {{ store.state.title }}
+              </h3>
+              
+              <div v-if="store.state.message" class="text-xs text-text-dim/90 leading-relaxed text-pretty font-medium">
+                <span>{{ store.state.message }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入框容器 -->
+          <div class="p-2">
+            <!-- Prompt 输入框 -->
+            <div v-if="store.state.mode === 'prompt'" class="relative group">
+              <input v-model="store.state.inputValue"
+                ref="inputRef" type="text" spellcheck="false"
+                :placeholder="store.state.placeholder"
+                class="block w-full bg-black/40 border border-white/10 rounded-lg py-1 px-2 text-sm text-white font-mono placeholder:text-white/20 
+                        focus:outline-none focus:border-white/30 focus:bg-black/60 focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]
+                        transition-all duration-200"
+              />
+              <!-- 输入框角落装饰 -->
+              <div class="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white/20 rounded-br-lg pointer-events-none group-focus-within:border-white/50 transition-colors"></div>
+            </div>
+          </div>
+
+          <!-- D. 底部操作栏 (玻璃分割线) -->
+          <div class=" flex items-center justify-end gap-3 border-t border-white/5 bg-white/1"
+            :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
+            
+            <!-- Cancel Button -->
+            <button v-if="store.state.mode !== 'alert'" 
+              @click="handleCancel"
+              class=" rounded-lg text-xs font-bold text-text-dim hover:text-white hover:bg-white/10 border border-transparent hover:border-white/5 transition-all duration-200"
+              :class="isMini ? 'px-2 py-1' : 'px-4 py-1.5'">
+              {{ store.state.cancelText }}
+            </button>
+            
+            <!-- Confirm Button (流光按钮) -->
+            <button 
+              @click="handleConfirm"
+              class="relative overflow-hidden  rounded-lg text-xs font-bold text-black shadow-lg transition-transform active:scale-95 group/btn"
+              :class="[theme.btnBg, isMini ? 'px-3 py-1' : 'px-6 py-1.5']"
+            >
+              <!-- 按钮内部高光扫描动画 -->
+              <div class="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-linear-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
+              
+              <div class="relative flex items-center gap-1.5">
+                <span>{{ store.state.confirmText }}</span>
+                <svg v-if="store.state.mode === 'prompt'" class="w-3 h-3 opacity-60 group-hover/btn:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+</template>
+
+<script setup>
+import { computed, ref, nextTick, watch } from 'vue'
+import { useConfirmStore } from '../../stores/confirmStore'
+import { onClickOutside, useWindowSize } from '@vueuse/core'
+import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
+
+// --- SVG 图标 (纯净无依赖) ---
+const Icons = {
+  info:    Info,
+  warning: CircleAlert,
+  error:   CircleX,
+  success: CircleCheckBig
+}
+
+const store = useConfirmStore()
+const { width: winW, height: winH } = useWindowSize()
+
+const modalRef = ref(null)
+const inputRef = ref(null)
+const shake = ref(false)
+
+// --- 计算属性 ---
+
+const isMini = computed(() => !!store.state.targetRect)
+
+// 主题映射：将 type 映射到 Tailwind 类
+const theme = computed(() => {
+  const t = store.state.type || 'info'
+  // btnBg: 按钮背景，需要高亮色
+  // text: 文字和图标颜色
+  // bg: 环境光晕颜色
+  const maps = {
+    info:    { text: 'text-accent-primary',   bg: 'bg-accent-primary',   btnBg: 'bg-accent-primary shadow-accent-primary/20 hover:bg-accent-primary/90', icon: Icons.info },
+    warning: { text: 'text-accent-warn',      bg: 'bg-accent-warn',      btnBg: 'bg-accent-warn shadow-accent-warn/20 hover:bg-accent-warn/90',       icon: Icons.warning },
+    error:   { text: 'text-accent-danger',    bg: 'bg-accent-danger',    btnBg: 'bg-accent-danger shadow-accent-danger/20 hover:bg-accent-danger/90',   icon: Icons.error },
+    success: { text: 'text-accent-success',   bg: 'bg-accent-success',   btnBg: 'bg-accent-success shadow-accent-success/20 hover:bg-accent-success/90', icon: Icons.success }
+  }
+  return maps[t] || maps.info
+})
+
+// 位置计算 (仅用于 Mini 模式)
+const containerStyle = computed(() => {
+  if (!isMini.value) return {}
+
+  const rect = store.state.targetRect
+  const GAP = 12
+  const MODAL_WIDTH = 300
+  // 预估高度，如果内容多可能要调整，或者用 nextTick 动态获取
+  const ESTIMATED_HEIGHT = 180 
+
+  // 1. 垂直定位逻辑：优先下方，溢出则翻转到上方
+  let top = rect.bottom + GAP
+  let transformOriginY = 'top' // 动画锚点
+  
+  if (top + ESTIMATED_HEIGHT > winH.value) {
+    // 空间不足，放上面
+    // 注意：这里需要配合 CSS translateY(-100%) 或者直接计算 bottom 坐标
+    // 为了简单，我们计算 top 坐标为：目标顶部 - 弹窗高度 - 间隙
+    // 但因为高度不确定，更好的方式是用 bottom 定位
+    // 这里我们简单处理：假设高度固定，实际项目中可用 Floating UI
+    top = rect.top - GAP - ESTIMATED_HEIGHT 
+    transformOriginY = 'bottom'
+  }
+
+  // 2. 水平定位逻辑：居中对齐，边缘修正
+  let left = rect.left + (rect.width / 2) - (MODAL_WIDTH / 2)
+  let transformOriginX = 'center'
+
+  if (left < 20) {
+    left = 20
+    transformOriginX = 'left'
+  } else if (left + MODAL_WIDTH > winW.value - 20) {
+    left = winW.value - MODAL_WIDTH - 20
+    transformOriginX = 'right'
+  }
+
+  return {
+    position: 'absolute',
+    top: `${top}px`,
+    left: `${left}px`,
+    transformOrigin: `${transformOriginX} ${transformOriginY}`
+  }
+})
+
+// --- 交互处理 ---
+
+const handleConfirm = () => store.confirm()
+const handleCancel = () => store.cancel()
+
+// 只有在非 IME 输入状态下，回车才提交
+const handleEnterKey = (e) => {
+  if (e.isComposing) return
+  store.confirm()
+}
+
+// 遮罩层点击反馈
+const handleBackdropClick = () => {
+  if (isMini.value) {
+    store.cancel()
+  } else {
+    // 全屏模式下，如果强制要求操作，则拒绝并抖动
+    shake.value = true
+    setTimeout(() => shake.value = false, 400)
+  }
+}
+
+// 自动聚焦
+watch(() => store.isVisible, async (val) => {
+  if (val && store.state.mode === 'prompt') {
+    await nextTick()
+    inputRef.value?.focus()
+  }
+})
+
+// Mini 模式下点击外部关闭
+onClickOutside(modalRef, () => {
+  if (isMini.value && store.isVisible) {
+    store.cancel()
+  }
+})
+
+</script>
+
+<style scoped>
+/* 1. 全屏 Modal 动画：舒展的缩放与淡入 */
+.modal-fade-enter-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-fade-leave-active {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-fade-enter-from {
+  opacity: 0;
+  transform: scale(0.92) translateY(15px);
+  filter: blur(4px);
+}
+.modal-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+  filter: blur(2px);
+}
+
+/* 2. Mini Popover 动画：快速弹出 */
+.mini-zoom-enter-active {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mini-zoom-leave-active {
+  transition: all 0.15s ease-in;
+}
+.mini-zoom-enter-from {
+  opacity: 0;
+  transform: scale(0.8) translateY(-5px);
+}
+.mini-zoom-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+/* 3. 拒绝抖动动画 (物理阻尼感) */
+@keyframes shake-physics {
+  0% { transform: translateX(0); }
+  15% { transform: translateX(-5px) rotate(-1deg); }
+  30% { transform: translateX(4px) rotate(1deg); }
+  45% { transform: translateX(-3px) rotate(0); }
+  60% { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+.animate-shake {
+  animation: shake-physics 0.4s ease-in-out;
+}
+
+/* 4. 缓慢呼吸灯 */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 0.05; transform: scale(0.85); }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 3s infinite ease-in-out;
+}
+</style>

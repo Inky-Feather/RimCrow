@@ -1,0 +1,126 @@
+<template>
+  <div class="fixed bottom-8 left-2 z-9999 font-mono text-xs">
+    <!-- 开关按钮 -->
+    <button @click="isOpen = !isOpen" 
+      class="bg-black/80 text-accent-primary border border-accent-primary/50 px-2 py-1 rounded shadow-lg hover:bg-black transition-all mb-1">
+      {{ isOpen ? 'Close Debug' : 'Debug State' }}
+    </button>
+
+    <!-- 面板主体 -->
+    <div v-if="isOpen" 
+      class="w-[400px] h-[600px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl flex flex-col overflow-hidden">
+      
+      <!-- 顶部信息 -->
+      <div class="p-2 border-b border-white/10 bg-white/5 flex justify-between">
+        <span class="text-green-400">Store 快照</span>
+        <button @click="refresh" class="hover:text-white">刷新</button>
+      </div>
+
+      <!-- JSON 视图 -->
+      <div class="flex-1 overflow-auto custom-scrollbar p-2">
+        <json-viewer :value="sanitizedState" :expand-depth="1" copyable boxed sort />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup >
+import { ref, computed } from 'vue'
+import { JsonViewer } from "vue3-json-viewer"
+import "vue3-json-viewer/dist/vue3-json-viewer.css";
+import { useModStore } from '../stores/modStore'
+import { useHoverStore } from '../stores/hoverStore'
+import { useRuleStore } from '../stores/ruleStore'
+
+const modStore = useModStore()
+const hoverStore = useHoverStore()
+const ruleStore = useRuleStore()
+
+const isOpen = ref(false)
+
+// 强制刷新（虽然是响应式的，但有时候手动触发一下比较安心）
+const refreshKey = ref(0)
+const refresh = () => refreshKey.value++
+
+// --- 核心：数据清洗 ---
+// 直接展示 modStore.$state 会导致浏览器渲染数万个节点卡死
+// 我们只提取关键状态，大对象显示摘要
+const sanitizedState = computed(() => {
+  // 依赖 refreshKey 触发重新计算
+  const _ = refreshKey.value 
+
+  return {
+    // 1. 基础状态
+    FLAGS: {
+      isLoading: modStore.isLoading,
+      isDirty: modStore.isDirty,
+      isDraggingGroup: modStore.isDraggingGroup,
+      showDiffDrawer: modStore.showDiffDrawer,
+      dataVersion: modStore.dataVersion
+    },
+    
+    // 2. 选择与交互
+    SELECTION: {
+      selectedIds: modStore.selectedIds,
+      selectedMod: modStore.lastSelectedMod,
+      selectedStats: modStore.selectedStats,
+      currentTargetId: modStore.currentTargetId,
+      hovering: hoverStore.isHovering,
+      hoverData: hoverStore.data,
+    },
+
+    // 3. 列表概览 (只看长度)
+    COUNTS: {
+      allMods: modStore.allModsMap.size,
+      active: modStore.activeIds.length,
+      inactive: modStore.inactiveIds.length,
+      groups: modStore.groupList.length,
+      issues: modStore.modIssues.size
+    },
+
+    // 4. 当前选中的 Mod 详情 (完整显示)
+    CURRENT_MOD: modStore.lastSelectedMod ? {
+      id: modStore.lastSelectedMod.package_id,
+      name: modStore.lastSelectedMod.name,
+      tags: modStore.lastSelectedMod.tags,
+      groups: modStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
+      issues: modStore.modIssues.get(modStore.lastSelectedMod.package_id.toLowerCase())
+    } : null,
+
+    // 5. 进度
+    PROGRESS: modStore.scanProgress,
+
+    // 6. 规则
+    RULES: {
+      communityRules: ruleStore.communityModRules,
+      userRules: ruleStore.userModRules,
+      userDynamicRules: ruleStore.userDynamicRules,
+      currentId: ruleStore.currentId,
+    }
+  }
+})
+</script>
+
+<style scoped>
+/* 覆盖 json-viewer 默认的浅色背景，适配你的暗色主题 */
+:deep(.jv-container) {
+  background: transparent !important;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+:deep(.jv-container.jv-dark) {
+  background: transparent !important;
+}
+:deep(.jv-key) {
+  color: #9cdcfe !important;
+}
+:deep(.jv-string) {
+  color: #ce9178 !important;
+}
+:deep(.jv-boolean) {
+  color: #569cd6 !important;
+}
+:deep(.jv-number) {
+  color: #b5cea8 !important;
+}
+</style>
