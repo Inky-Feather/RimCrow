@@ -159,7 +159,7 @@
             <svg v-show="modType=='Audio'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M30 34.5C30 32.567 31.567 31 33.5 31H41V34.4C41 36.3882 39.3882 38 37.4 38H33.5C31.567 38 30 36.433 30 34.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M6 38.5C6 36.567 7.567 35 9.5 35H16V38.4C16 40.3882 14.3882 42 12.4 42H9.5C7.567 42 6 40.433 6 38.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 18.044V18.044L41 12.125" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 38V10L41 4V33.6924" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <svg v-show="modType=='Mixed'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="5" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 16L16 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 21L21 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <svg v-show="modType=='Unknown'" width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 28.625V24.625C27.3137 24.625 30 21.9387 30 18.625C30 15.3113 27.3137 12.625 24 12.625C20.6863 12.625 18 15.3113 18 18.625" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24 37.625C25.3807 37.625 26.5 36.5057 26.5 35.125C26.5 33.7443 25.3807 32.625 24 32.625C22.6193 32.625 21.5 33.7443 21.5 35.125C21.5 36.5057 22.6193 37.625 24 37.625Z" fill="currentColor"/></svg>
-            <span v-if="modType" class="flex-1 truncate">{{ store.MOD_TYPE_MAP[modType] }}</span>
+            <span v-if="modType" class="flex-1 truncate">{{ MOD_TYPE_MAP[modType] }}</span>
           </div>
         </div>
       </div>
@@ -217,10 +217,10 @@
           <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)" 
             :key="dep.package_id" 
             class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-highlight hover:bg-accent-highlight/10">
-            <span v-preview="store.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
+            <span v-preview="modStore.takeModById(dep.package_id)" class="flex-1 text-gray-300 truncate">{{ displayNameByMod(dep) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!store.takeModById(dep.package_id).is_missing" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
+              <span v-if="!modStore.takeModById(dep.package_id).is_missing" @click="targetItem(dep.package_id)" v-tooltip="'定位Mod位置'" class="hover:text-accent-highlight">
                 <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-crosshair-icon lucide-crosshair"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
               <span v-if="dep.workshop_url" @click="openUrl(dep.workshop_url)" @click.middle.stop="openSteamUrl(dep.workshop_url)" v-tooltip="'打开工坊页面'" class="hover:text-accent-highlight">
@@ -247,10 +247,10 @@
           <!-- 不兼容项列表 -->
           <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc" 
               class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
-            <span v-preview="store.takeModById(inc)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc) }}</span>
+            <span v-preview="modStore.takeModById(inc)" class="flex-1 text-gray-300 truncate">{{ displayNameById(inc) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!store.takeModById(inc).is_missing" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
+              <span v-if="!modStore.takeModById(inc).is_missing" @click="targetItem(inc)" v-tooltip="'定位Mod位置'" class="hover:text-accent-danger">
                 <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-crosshair-icon lucide-crosshair"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -273,10 +273,10 @@
           <!-- 前置加载项列表 -->
           <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft" 
             class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
-            <span v-preview="store.takeModById(aft)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft) }}</span>
+            <span v-preview="modStore.takeModById(aft)" class="flex-1 text-gray-300 truncate">{{ displayNameById(aft) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!store.takeModById(aft).is_missing" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
+              <span v-if="!modStore.takeModById(aft).is_missing" @click="targetItem(aft)" v-tooltip="'定位Mod位置'" class="hover:text-accent-warn">
                 <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-crosshair-icon lucide-crosshair"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -299,10 +299,10 @@
           <!-- 后置加载项列表 -->
           <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef" 
             class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-black/20 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
-            <span v-preview="store.takeModById(bef)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef) }}</span>
+            <span v-preview="modStore.takeModById(bef)" class="flex-1 text-gray-300 truncate">{{ displayNameById(bef) }}</span>
             <!-- 操作按钮 -->
             <div class="flex items-center gap-2">
-              <span v-if="!store.takeModById(bef).is_missing" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
+              <span v-if="!modStore.takeModById(bef).is_missing" @click="targetItem(bef)" v-tooltip="'定位Mod位置'" class="hover:text-accent-primary">
                 <svg width="15" height="15" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-crosshair-icon lucide-crosshair"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
               </span>
             </div>
@@ -489,14 +489,17 @@
 <script setup >
 import { computed, ref, watch, nextTick } from 'vue'
 import { refDebounced, onClickOutside  } from '@vueuse/core' // 引入防抖函数
+import { MOD_COLOR_LIST, MOD_TYPE_MAP, SOURCE_TYPE_MAP } from '@/utils/constants'
 import { useModStore } from '../stores/modStore'
+import { useAppStore } from '@/stores/appStore'
+import { useGroupStore } from '../stores/groupStore'
 import { parseUnityRichText } from '../utils/unityTextParser'
 import { hexToRgba, hexToRgb } from '../utils/colorDeal'
 import ImageCloud from './utils/ImageCloud.vue';
 import LampEffect from './utils/LampEffect.vue';
 
 // 随机选30个Mod的图标URL
-const imageUrls = computed(() => Array.from(store.allModsMap.values())
+const imageUrls = computed(() => Array.from(modStore.allModsMap.values())
   .filter(mod => mod.icon_url) // 过滤掉没有图标URL的Mod
   .sort(() => 0.5 - Math.random()) // 随机排序
   .slice(0, 30) // 取前30个
@@ -519,12 +522,14 @@ const StatItem = {
     </div>
   `
 }
-const store = useModStore()
+const appStore = useAppStore()
+const modStore = useModStore()
+const groupStore = useGroupStore()
 const userTags = ref([])
 const userAliasName = ref('')
 const userNotes = ref('')
 const newTagInput = ref('')
-const presetColors = store.modColorList
+const presetColors = MOD_COLOR_LIST
 
 // === 标签管理逻辑 ===
 const tagInput = ref('')
@@ -543,12 +548,12 @@ const showAllLoadBefore = ref(false);
 const showAllLoadAfter = ref(false);
 
 // 1. 获取原始数据
-const rawSelectedMod = computed(() => store.lastSelectedMod)
+const rawSelectedMod = computed(() => modStore.lastSelectedMod)
 
 // 2. 创建一个防抖的引用
 // 含义：当 rawSelectedMod 变化时，debouncedMod 会等待 300ms 且无新变化后才更新
 const selectedMod = refDebounced(rawSelectedMod, 200) 
-const modType = computed(() => store.displayModType(selectedMod.value))
+const modType = computed(() => modStore.displayModType(selectedMod.value))
 
 // 监听选中变化，同步本地编辑状态
 watch(selectedMod, (newVal) => {
@@ -565,14 +570,14 @@ const availableGroups = computed(() => {
   const search = groupSearch.value.toLowerCase().trim()
   const currentGroupIds = new Set(userGroups.value.map(g => g.group_id))
   
-  return store.groupList
+  return groupStore.groupList
     .filter(g => !currentGroupIds.has(g.group_id)) // 排除已加入
     .filter(g => g.name.toLowerCase().includes(search)) // 搜索过滤
 })
 // 计算过滤后的建议标签 (排除已存在的)
 const filteredKnownTags = computed(() => {
   const input = tagInput.value.toLowerCase().trim()
-  return store.allModTags
+  return modStore.allModTags
     .filter(t => !userTags.value.includes(t)) // 排除已添加
     .filter(t => t.toLowerCase().includes(input)) // 模糊匹配
     .slice(0, 8) // 最多显示8个
@@ -586,7 +591,7 @@ const formattedDescription = computed(() => {
 })
 // 辅助计算：是否有依赖项或冲突项
 const hasDependencies = computed(() => {
-  return (selectedMod.value?.dependencies_mods?.length > 0) || (selectedMod.value?.incompatible_mods?.length > 0)
+  return (selectedMod.value?.dependencies_mods?.length > 0) || (selectedMod.value?.incompatible_mods?.length > 0) || (selectedMod.value?.load_before_mods?.length > 0) || (selectedMod.value?.load_after_mods?.length > 0)
 })
 // 根据 mod 名字长度动态调整字体大小
 const computedFontSize = computed(() => {
@@ -624,7 +629,7 @@ const computedFontSize0 = computed(() => {
 })
 
 const displaySourceType = computed(() => { 
-  return store.sourceTypeMap[selectedMod.value.source] || selectedMod.value.source
+  return SOURCE_TYPE_MAP[selectedMod.value.source] || selectedMod.value.source
 })
 
 
@@ -650,24 +655,24 @@ const tooltipSaveBreaking = computed((index) => {
   return ['危险：注意！中途启用或停用该Mod会破坏存档！','未知：暂时无法知道该Mod是否会破坏存档。','安全：该Mod不会破坏存档，可放心加入或移除。'][parseInt(selectedMod.value.save_breaking)+1]
 })
 const tooltipModType = computed(() => {
-  return '模组类型：'+store.MOD_TYPE_MAP[selectedMod.value.mod_type]+'\n__(粗略判断)__'
+  return '模组类型：'+MOD_TYPE_MAP[selectedMod.value.mod_type]+'\n__(粗略判断)__'
 })
 
 const displayNameByMod = (mod) => {
-  return store.displayModName(mod);
+  return modStore.displayModName(mod);
 }
 const displayNameById = (id) => {
-  return store.displayModName(id);
+  return modStore.displayModName(id);
 }
 
 // 检查版本是否兼容
 const versionIsCompatible = (version) => {
   // 截取版本号（只保留主版本号，如 1.2.3 截取为 1.2）
-  const game_version = store.settings.game_version.match(/^\d+\.\d+/)?.[0] || ''
+  const game_version = appStore.settings.game_version.match(/^\d+\.\d+/)?.[0] || ''
   // 转为浮点数比较版本号，返回 true 表示兼容，false 表示不兼容
   return parseFloat(version) >= parseFloat(game_version)
 }
-const userGroups = computed(() => {return store.takeGroupsByModId(selectedMod.value?.package_id);})
+const userGroups = computed(() => {return groupStore.takeGroupsByModId(selectedMod.value?.package_id);})
 const toggleGroupDrop = async () => {
   showGroupDrop.value = !showGroupDrop.value
   if (showGroupDrop.value) {
@@ -679,7 +684,7 @@ const toggleGroupDrop = async () => {
 
 const addGroup = (groupId) => {
   if (selectedMod.value) {
-    store.groupAddMods(groupId, [selectedMod.value.package_id])
+    groupStore.groupAddMods(groupId, [selectedMod.value.package_id])
   }
   showGroupDrop.value = false
 }
@@ -690,7 +695,7 @@ onClickOutside(groupDropRef, () => {
 })
 // 从分组中移除模组
 const removeModInGroup =(groupId, modId) => {
-  store.groupRemoveMods(groupId, [modId]);
+  groupStore.groupRemoveMods(groupId, [modId]);
 }
 // 添加标签
 const addTag = (tag) => {
@@ -733,13 +738,13 @@ onClickOutside(tagInputRef, () => {
 // 更新颜色
 const updateColor = (color) => {
   if (selectedMod.value) {
-    store.updateModUserData(selectedMod.value.package_id, { sign_color: color })
+    modStore.updateModUserData(selectedMod.value.package_id, { sign_color: color })
   }
 }
 // 保存用户数据（标签和备注）
 const saveUserData = () => {
   if (selectedMod.value) {
-    store.updateModUserData(selectedMod.value.package_id, {
+    modStore.updateModUserData(selectedMod.value.package_id, {
       tags: userTags.value,
       alias_name: userAliasName.value,
       notes: userNotes.value
@@ -749,21 +754,21 @@ const saveUserData = () => {
 // 打开Mod路径
 const openPath = (path) => {
   // console.log('openPath',path)
-  if(typeof path === 'string' && path)store.openPath(path)
-  else store.openPath(selectedMod.value.path)
+  if(typeof path === 'string' && path) appStore.openPath(path)
+  else appStore.openPath(selectedMod.value.path)
 }
 // 打开Url
 const openUrl = (url) => {
-  store.openUrl(url)
+  appStore.openUrl(url)
 }
 // 打开SteamUrl
 const openSteamUrl = (url) => {
-  store.openSteamWorkshopUrl(url)
+  appStore.openSteamWorkshopUrl(url)
 }
 
 // 定位Mod位置
 const targetItem = (mod_id) => {
-  store.currentTargetId = mod_id
+  modStore.currentTargetId = mod_id
 }
 
 </script>

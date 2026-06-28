@@ -6,7 +6,7 @@ import { useModStore } from '../stores/modStore'
 class SelectionManager {
   constructor(el, binding) {
     this.el = el
-    this.store = useModStore()
+    this.modStore = useModStore()
     
     // 配置
     this.config = {
@@ -128,7 +128,7 @@ class SelectionManager {
       if (!this.config.data || this.config.data.length === 0) return
       // 执行全选，传入的是当前列表的所有 ID
       // 这里的 data 必须是最新的 filtered/sorted 列表 ID 数组
-      this.store.selectMods([...this.config.data], this.store.lastSelectedMod?.package_id)
+      this.modStore.selectMods([...this.config.data], this.modStore.lastSelectedMod?.package_id)
       console.log(`[vSelection] Selected all ${this.config.data.length} items.`)
     }
   }
@@ -147,7 +147,7 @@ class SelectionManager {
     const itemId = this.getItemId(target)
     // 点空白处清空选择。
     if (!itemId && target === this.el) {
-        this.store.clearSelection() 
+        this.modStore.clearSelection() 
     }
     if (!itemId) return
 
@@ -173,7 +173,7 @@ class SelectionManager {
       this.createSelectionBox()
       // 记录快照：如果按住 Ctrl，保留原有选中；否则清空
       if (e.ctrlKey || e.metaKey) {
-        this.selectionSnapshot = new Set(this.store.selectedIds)
+        this.selectionSnapshot = new Set(this.modStore.selectedIds)
       } else {
         this.selectionSnapshot = new Set()
       }
@@ -185,13 +185,13 @@ class SelectionManager {
       // === 模式 B: 准备点击选择 ===
       // 这里不立即执行反选逻辑，而是根据情况决定是否立即选中
       
-      const isSelected = this.store.selectedIds.includes(itemId)
+      const isSelected = this.modStore.selectedIds.includes(itemId)
       const isMulti = e.ctrlKey || e.metaKey
       const isRange = e.shiftKey
 
       if (!isMulti && !isRange && !isSelected) {
         // 场景：单选未选中的项 -> 立即选中（为了让用户能立刻拖拽它）
-        this.store.selectMods([itemId], itemId)
+        this.modStore.selectMods([itemId], itemId)
         this.anchorId = itemId 
       }
       
@@ -221,7 +221,7 @@ class SelectionManager {
       // B. 更新选中数据
       const itemId = this.getItemId(e.target)
       
-      // 【优化1】只有当 ID 变化时才触发昂贵的计算逻辑
+      // 只有当 ID 变化时才触发昂贵的计算逻辑
       if (itemId && itemId !== this.lastHoveredId) {
         this.lastHoveredId = itemId
         this.updateSwipeRange(itemId)
@@ -258,7 +258,7 @@ class SelectionManager {
 
     const isMulti = e.ctrlKey || e.metaKey
     const isRange = e.shiftKey
-    const isSelected = this.store.selectedIds.includes(itemId)
+    const isSelected = this.modStore.selectedIds.includes(itemId)
 
     if (isRange) {
       // --- Shift 连选 (Windows 风格) ---
@@ -267,11 +267,11 @@ class SelectionManager {
       
     } else if (isMulti) {
       // --- Ctrl 多选 (反转状态) ---
-      const newSet = new Set(this.store.selectedIds)
+      const newSet = new Set(this.modStore.selectedIds)
       if (isSelected) newSet.delete(itemId)
       else newSet.add(itemId)
       
-      this.store.selectMods(Array.from(newSet), itemId)
+      this.modStore.selectMods(Array.from(newSet), itemId)
       this.anchorId = itemId // 更新锚点
 
     } else {
@@ -279,7 +279,7 @@ class SelectionManager {
       // 场景：点击已选中的项。
       // 在 MouseDown 时为了允许拖拽，我们没有取消其他项。
       // 现在确认是点击（非拖拽），所以清除其他项，只留这一个。
-      this.store.selectMods([itemId], itemId)
+      this.modStore.selectMods([itemId], itemId)
       this.anchorId = itemId
     }
 
@@ -307,13 +307,13 @@ class SelectionManager {
       const id = this.config.data[i]
       if (id) newSelection.add(id)
     }
-    // 【优化3】数据防抖：只有结果真的变了才提交 Store
+    // 数据防抖：只有结果真的变了才提交 Store
     // 避免因为不必要的 Store 更新导致整个列表重绘
-    const currentStoreSet = new Set(this.store.selectedIds)
+    const currentStoreSet = new Set(this.modStore.selectedIds)
     if (this.setsAreEqual(newSelection, currentStoreSet)) {
         return
     }
-    this.store.selectMods(Array.from(newSelection), currentId)
+    this.modStore.selectMods(Array.from(newSelection), currentId)
   }
 
   // 辅助：Set 比较
@@ -328,7 +328,7 @@ class SelectionManager {
   handleRangeSelect(targetId, keepOthers = false) {
     if (!this.anchorId || !this.config.data.includes(this.anchorId)) {
         // 如果没有锚点，退化为单选并建立锚点
-        this.store.selectMods([targetId], targetId)
+        this.modStore.selectMods([targetId], targetId)
         this.anchorId = targetId
         return
     }
@@ -343,14 +343,14 @@ class SelectionManager {
     const max = Math.max(start, end)
     let newSet
     if (keepOthers) {
-        newSet = new Set(this.store.selectedIds) // Ctrl+Shift: 保留之前的
+        newSet = new Set(this.modStore.selectedIds) // Ctrl+Shift: 保留之前的
     } else {
         newSet = new Set() // 纯 Shift: 清空其他的
     }
     for (let i = min; i <= max; i++) {
         newSet.add(this.config.data[i])
     }
-    this.store.selectMods(Array.from(newSet), targetId)
+    this.modStore.selectMods(Array.from(newSet), targetId)
     // 注意：Shift 连选通常不更新 Anchor，Anchor 依然停留在最初点击的那个位置
     // 这样可以连续调整范围 (例如: 点击1, Shift点10 -> 选中1-10; 保持Shift点5 -> 选中1-5)
   }

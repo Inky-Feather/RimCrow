@@ -28,36 +28,33 @@
 import { ref, computed } from 'vue'
 import { JsonViewer } from "vue3-json-viewer"
 import "vue3-json-viewer/dist/vue3-json-viewer.css";
+import { useAppStore } from '@/stores/appStore';
 import { useModStore } from '../stores/modStore'
+import { useGroupStore } from '../stores/groupStore'
 import { useHoverStore } from '../stores/hoverStore'
 import { useRuleStore } from '../stores/ruleStore'
 
+const appStore = useAppStore()
 const modStore = useModStore()
+const groupStore = useGroupStore()
 const hoverStore = useHoverStore()
 const ruleStore = useRuleStore()
 
 const isOpen = ref(false)
 
-// 强制刷新（虽然是响应式的，但有时候手动触发一下比较安心）
+// 强制刷新
 const refreshKey = ref(0)
 const refresh = () => refreshKey.value++
 
 // --- 核心：数据清洗 ---
-// 直接展示 modStore.$state 会导致浏览器渲染数万个节点卡死
-// 我们只提取关键状态，大对象显示摘要
+// 直接展示 modStore.$state 会导致浏览器渲染数万个节点卡死，只提取关键状态，大对象显示摘要
 const sanitizedState = computed(() => {
   // 依赖 refreshKey 触发重新计算
   const _ = refreshKey.value 
 
   return {
     // 1. 基础状态
-    FLAGS: {
-      isLoading: modStore.isLoading,
-      isDirty: modStore.isDirty,
-      isDraggingGroup: modStore.isDraggingGroup,
-      showDiffDrawer: modStore.showDiffDrawer,
-      dataVersion: modStore.dataVersion
-    },
+    PAGE_STATE: appStore.uiState,
     
     // 2. 选择与交互
     SELECTION: {
@@ -74,7 +71,7 @@ const sanitizedState = computed(() => {
       allMods: modStore.allModsMap.size,
       active: modStore.activeIds.length,
       inactive: modStore.inactiveIds.length,
-      groups: modStore.groupList.length,
+      groups: groupStore.groupList.length,
       issues: modStore.modIssues.size
     },
 
@@ -83,12 +80,12 @@ const sanitizedState = computed(() => {
       id: modStore.lastSelectedMod.package_id,
       name: modStore.lastSelectedMod.name,
       tags: modStore.lastSelectedMod.tags,
-      groups: modStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
+      groups: groupStore.takeGroupsByModId(modStore.lastSelectedMod.package_id).map(g => g.name),
       issues: modStore.modIssues.get(modStore.lastSelectedMod.package_id.toLowerCase())
     } : null,
 
     // 5. 进度
-    PROGRESS: modStore.scanProgress,
+    PROGRESS: appStore.scanProgress,
 
     // 6. 规则
     RULES: {

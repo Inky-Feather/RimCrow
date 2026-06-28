@@ -19,7 +19,7 @@
         <span v-else class="text-xs text-text-dim font-bold font-mono">MOD</span>
       </div>
       <div class="flex-1 truncate">
-        <div class="font-bold text-white truncate">{{ store.displayModName(targetMod) }}</div>
+        <div class="font-bold text-white truncate">{{ modStore.displayModName(targetMod) }}</div>
         <div class="text-xs font-mono text-text-dim/60 truncate">{{ targetMod?.package_id }}</div>
       </div>
     </div>
@@ -291,7 +291,7 @@ const props = defineProps({
   listColor: { type: String, default: 'primary' } // danger/highlight/special/cool/primary/success/tip/warn/secondary/warning
 })
 
-const store = useModStore()
+const modStore = useModStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
@@ -305,11 +305,11 @@ const userIncompatibleWithRules = computed({ get() { return getUserRules('incomp
 // watch(() => ruleStore.currentId, (newId) => {
 //   if (newId) {
 //     // 当选择的 Mod 变化时，更新显示的规则
-//     targetMod.value = store.takeModById(newId)
+//     targetMod.value = modStore.takeModById(newId)
 //   }
 // })
 
-const targetMod = computed(() => store.takeModById(ruleStore.currentId))
+const targetMod = computed(() => modStore.takeModById(ruleStore.currentId))
 
 // 1. Native
 const getNativeRules = (type) => {
@@ -373,7 +373,7 @@ const updateChildren = (e) => {
   console.log("更新子项排序:", e)
   const oldIds = props.groupData.mod_ids  // 原始顺序
   const newIds = internalModList.value.map(item => item.id)  // 获取当前的最新顺序 ID列表
-  const tempSelectedIds = store.selectedIds
+  const tempSelectedIds = modStore.selectedIds
   // 检查是否是当前分组的列表，排除当前列表自身的触发
   const currentListDom = vListRef.value.$el
   if (e.event.from === currentListDom || e.event.from === e.event.to) {

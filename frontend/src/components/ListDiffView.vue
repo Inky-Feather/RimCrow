@@ -159,7 +159,7 @@ const props = defineProps({
   titleB: { type: String, default: 'List B' }
 })
 
-const store = useModStore()
+const modStore = useModStore()
 const hideIdentical = ref(true) // 开关隐藏相同项
 const colorfulBlocks = ref(false) // 开关多彩区块
 const listARef = ref(null)    // 左侧列表 (List A)
@@ -182,7 +182,7 @@ const COLOR_MOVED = getTailwindColorHex('accent-warn')
 const COLOR_MOVED_GRAY = getTailwindColorHex('text-dim')
 
 
-const displayNameById = (id) => store.displayModName(id)  // 根据ID获取显示名称
+const displayNameById = (id) => modStore.displayModName(id)  // 根据ID获取显示名称
 const displayListA = computed(() => foldList(analysis.value.resA))  // 左侧列表 (List A)，经过折叠处理
 const displayListB = computed(() => foldList(analysis.value.resB))   // 右侧列表 (List B)，经过折叠处理
 
@@ -531,7 +531,7 @@ onUnmounted(() => {
 
 // 定位Mod位置
 const targetItem = (mod_id) => {
-  store.currentTargetId = mod_id
+  modStore.currentTargetId = mod_id
 }
 </script>
 

@@ -4,20 +4,20 @@ import { useHoverStore } from '../stores/hoverStore'
 export const vPreview = {
   // 当元素挂载到 DOM 时
   mounted(el, binding) {
-    const store = useHoverStore()
+    const hoverStore = useHoverStore()
     
     // 定义处理函数
     const handleEnter = (e) => {
       // binding.value 就是你传给指令的数据 (例如: modData)
-      store.show(binding.value, e)
+      hoverStore.show(binding.value, e)
     }
     
     const handleMove = (e) => {
-      store.updatePosition(e)
+      hoverStore.updatePosition(e)
     }
     
     const handleLeave = () => {
-      store.hide()
+      hoverStore.hide()
     }
 
     // 绑定事件
@@ -31,12 +31,12 @@ export const vPreview = {
 
   // (可选) 如果传入的数据动态改变了，且鼠标正停留在上面，可以实时更新
   updated(el, binding) {
-    const store = useHoverStore()
+    const hoverStore = useHoverStore()
     // 只有当数据真变了，且当前正在 hover 这个元素时才更新 store
-    if (binding.value !== binding.oldValue && store.isHovering && store.data === binding.oldValue) {
+    if (binding.value !== binding.oldValue && hoverStore.isHovering && hoverStore.data === binding.oldValue) {
       // 延迟更新，避免闪烁
       setTimeout(() => {
-        store.data = binding.value
+        hoverStore.data = binding.value
       }, 200)
     }
   },

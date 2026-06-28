@@ -102,9 +102,11 @@
 <script setup>
 import { ref, watch, reactive } from 'vue'
 import { useModStore } from '../stores/modStore'
+import { useAppStore } from '../stores/appStore'
 import { useToast } from "vue-toastification"
 
-const store = useModStore()
+const appStore = useAppStore()
+const modStore = useModStore()
 const toast = useToast()
 
 const visible = ref(false)
@@ -117,7 +119,7 @@ const selections = reactive({})
 // actionMap: { path: 'disable' | 'delete' } 记录每个路径的具体操作
 const actionMap = reactive({})
 
-watch(() => store.conflictList, (newVal) => {
+watch(() => modStore.conflictList, (newVal) => {
   if (newVal && newVal.length > 0) {
     conflicts.value = newVal
     
@@ -193,12 +195,12 @@ const submit = async () => {
     const res = await window.pywebview.api.resolve_scan_conflicts(operations)
     if (res.status === 'success') {
       toast.success("冲突已解决，正在刷新列表...")
-      store.conflictList = [] 
+      modStore.conflictList = [] 
       visible.value = false
       // 强制重置扫描状态，确保重新开始
-      await store.refreshModList() // 这会读取数据库，但数据库里现在还没有新Mod
+      await appStore.refreshData() // 这会读取数据库，但数据库里现在还没有新Mod
       // 关键：必须重新触发一次扫描，让保留下来的那个Mod（因为没有竞争者了）正常入库
-      store.scanMods() 
+      modStore.scanMods() 
     } else {
       toast.error("处理失败: " + res.message)
     }

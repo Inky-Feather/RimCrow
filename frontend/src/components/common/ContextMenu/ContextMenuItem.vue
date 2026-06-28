@@ -8,7 +8,7 @@
     @mouseleave="handleMouseLeave"
   >
     <!-- 1. 分割线 -->
-    <div v-if="item.divider" class="h-px bg-zinc-200/20 dark:bg-zinc-700/50 my-1 mx-2" />
+    <div v-if="item.divider" class="h-px bg-text-dim/30 my-1 mx-2" />
 
     <!-- 2. Grid 面板模式 (嵌入式网格) -->
     <div v-else-if="item.type === 'grid'" class="px-1 py-1">
@@ -27,19 +27,19 @@
             // 样式分支 B: 标签块 (有 label 时显示)
             subItem.label ? 'px-1 py-1 rounded-md text-[11px] min-w-10' : '',
             // 通用状态样式
-            subItem.active ? 'ring-2 ring-white z-10 border-transparent bg-white/20' : 'border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10',
+            subItem.active ? 'ring-2 ring-text-main z-10 border-transparent bg-text-main/20' : 'border-text-main/10 hover:border-text-main/30 bg-text-main/5 hover:bg-text-main/10',
             // 禁用状态
             subItem.disabled ? 'opacity-40 cursor-not-allowed grayscale' : 'hover:scale-105',
             // 全选状态 (Solid)
-            subItem.state === 'all' ? 'ring-2 ring-white z-10 border-transparent bg-white/20' : '',
+            subItem.state === 'all' ? 'ring-2 ring-text-main z-10 border-transparent bg-text-main/20' : '',
             // 半选状态 (Dashed / Dimmed)
-            subItem.state === 'some' ? 'ring-1 ring-white/50 border-white/30 bg-white/10' : ''
+            subItem.state === 'some' ? 'ring-1 ring-text-main/50 border-text-main/30 bg-text-main/10' : ''
           ]"
           :style="{ backgroundColor: subItem.bgColor || subItem.color || 'transparent' }"
         >
           <!-- 选中状态指示器 (钩号) -->
           <svg v-if="subItem.active" 
-            class="absolute inset-0 m-auto text-white drop-shadow-md pointer-events-none" 
+            class="absolute inset-0 m-auto text-text-main drop-shadow-md pointer-events-none" 
             :class="subItem.color ? 'w-4 h-4' : 'w-full h-full opacity-10'"
             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -60,7 +60,7 @@
           </template>
           
           <!-- 颜色块模式下的特殊图标 (比如清除颜色的 X) -->
-          <component v-else-if="subItem.icon" :is="subItem.icon" class="w-4 h-4 text-white/50 group-hover/btn:text-white" />
+          <component v-else-if="subItem.icon" :is="subItem.icon" class="w-4 h-4 text-text-main/50 group-hover/btn:text-text-main" />
         </button>
       </div>
     </div>
@@ -69,9 +69,8 @@
     <button v-else :disabled="item.disabled" @click.stop="handleClick(item)"
       class="flex w-full cursor-default items-center justify-between rounded-md px-1.5 py-1 text-xs font-medium transition-all duration-200 outline-none
       disabled:cursor-not-allowed disabled:opacity-40
-      hover:bg-zinc-100 hover:dark:bg-zinc-700/50
-      focus:bg-zinc-100 focus:dark:bg-zinc-700/50"
-      :class="[levelClass(), activeSubMenu ? 'bg-zinc-100 dark:bg-zinc-700/50' : '']"
+      bg-transparent hover:bg-bg-highlight focus:bg-bg-highlight "
+      :class="[levelClass(), activeSubMenu ? 'bg-bg-highlight' : '']"
     >
       <!-- 左侧：图标 + 文字 -->
       <div class="flex items-center gap-1 overflow-hidden">
@@ -91,7 +90,7 @@
     <!-- 递归子菜单 (仅针对非 Grid 类型的子菜单) -->
     <Transition name="submenu">
       <div v-if="item.children && activeSubMenu && item.type !== 'grid'" ref="subMenuRef"
-        class="absolute z-50 min-w-40 rounded-xl border border-zinc-200/50 bg-white/80 p-0.5 shadow-xl backdrop-blur-xl dark:border-zinc-700/50 dark:bg-zinc-900/90 dark:shadow-black/40"
+        class="absolute z-50 min-w-30 rounded-xl border border-text-dim/30 bg-bg-surface/90 p-0.5 backdrop-blur-lg shadow-xl shadow-black/40"
         :class="subMenuPositionClass" >
         <ContextMenuItem v-for="(subItem, idx) in item.children" :key="idx"
           :item="subItem" @close-menu="$emit('close-menu')" />
@@ -121,12 +120,12 @@ const { width: windowWidth, height: windowHeight } = useWindowSize()
 const levelClass = () => {
   const level = props.item.level || 'default'
   const classMap = {
-    'default': 'text-text-main dark:text-text-main/70',
-    'success': 'text-accent-success hover:bg-accent-success/10!',
-    'warning': 'text-accent-warning hover:bg-accent-warning/10!',
-    'warn': 'text-accent-warn hover:bg-accent-warn/10!',
-    'error': 'text-red-500 hover:bg-red-500/10!',
-    'danger': 'text-accent-danger hover:bg-accent-danger/10!',
+    'default': 'text-text-main',
+    'success': 'text-accent-success hover:bg-accent-success/20!',
+    'warning': 'text-accent-warning hover:bg-accent-warning/20!',
+    'warn': 'text-accent-warn hover:bg-accent-warn/20!',
+    'error': 'text-red-500 hover:bg-red-500/20!',
+    'danger': 'text-accent-danger hover:bg-accent-danger/20!',
   }
   return classMap[level]
 }

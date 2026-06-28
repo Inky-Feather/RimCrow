@@ -109,7 +109,7 @@
     <div class="flex-1 flex pb-0.5 overflow-y-auto after:pointer-events-none 
         after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent"
-	      @click.self="store.clearSelection()">
+	      @click.self="modStore.clearSelection()">
       
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar" class="w-14 h-full flex-none"
@@ -124,9 +124,9 @@
       </div>
 
       <!-- 列表主体部分 -->
-      <div @click.self="store.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
+      <div @click.self="modStore.clearSelection()" class="flex-1 h-full pl-1 pr-1 min-w-0 relative">
         <!-- 列表为空时的提示 -->
-        <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
+        <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed border-text-dim/60 text-gray-600 text-xs bg-bg-deep/90 select-none pointer-events-none">
             可拖拽模组到此
             <!-- 点阵背景 -->
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px;"></div>
@@ -143,7 +143,7 @@
           }">
           <template v-slot:item="{ record, index, dataKey }">
             <ModItem :item_id="dataKey" :index="index" :key="dataKey" :list-color="listColor" 
-              :is-selected="store.selectedIds.includes(dataKey)" :simple="isSimpleView" 
+              :is-selected="modStore.selectedIds.includes(dataKey)" :simple="isSimpleView" 
               :is-in-search="searchResults.includes(dataKey) && searchQuery.length > 0"
               :search-match="currentTargetId === dataKey">
             </ModItem>
@@ -168,6 +168,7 @@ import { generateHtmlHelp } from '../modules/search/SearchHelp'
 import ModItem from './utils/ModItem.vue';
 import TagsSearch from './common/TagsSearch/TagsSearch.vue';
 import DependencyGraph from './utils/DependencyGraph.vue'
+import { ISSUE_TITLE_MAP } from '@/utils/constants';
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -179,7 +180,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
-const store = useModStore()
+const modStore = useModStore()
 const searchStore = useSearchStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
@@ -196,7 +197,7 @@ const searchQuery = ref([]) // 存储搜索数组
 const searchLogic = ref('AND') // 存储逻辑关系
 const searchResults = ref<string[]>([]) // 搜索结果数组
 const currentSearchIndex = ref(-1) // 当前搜索项在结果数组中的索引
-const currentTargetId = computed(() => store.currentTargetId)   // 当前搜索定位项ID
+const currentTargetId = computed(() => modStore.currentTargetId)   // 当前搜索定位项ID
 const highlightTimer = ref<number>() // 定位高亮定时器
 
 const filterQuery = ref([]) // 存储标签数组
@@ -212,12 +213,12 @@ const engine = computed(() => searchStore.engine)
 // 注意：如果 filtered，禁止排序，因为无法映射回原数组的正确位置
 const isFiltered = computed(() => filterQuery.value.length > 0 || isFilterByIssue.value || filterByLine.value?.length > 0)
 const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
-const allMods = computed(() => store.allModsMap ? Array.from(store.allModsMap.values()) : [])
+const allMods = computed(() => modStore.allModsMap ? Array.from(modStore.allModsMap.values()) : [])
 
 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
-const issuesSummary = computed(() => store.getListIssues(props.listId))
+const issuesSummary = computed(() => modStore.getListIssues(props.listId))
 // 切换问题项筛选
 const toggleIssueFilter = () => {
     isFilterByIssue.value = !isFilterByIssue.value
@@ -257,7 +258,7 @@ const issueTooltip = computed(() => {
   for (const [type, ids] of Object.entries(summary.stats)) {
     if (ids.length === 0) continue
     
-    const typeName = store.ISSUE_TITLE_MAP[type] || type
+    const typeName = ISSUE_TITLE_MAP[type] || type
     const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible','wrong_order'].includes(type)
     
     // 标题颜色: Error 用红(!!), Warn 用黄(^^)
@@ -267,7 +268,7 @@ const issueTooltip = computed(() => {
     // 列出前 3 个
     const previewIds = ids.slice(0, 3)
     previewIds.forEach(id => {
-      text += `\n  • ${store.displayModName(id)}`
+      text += `\n  • ${modStore.displayModName(id)}`
     })
     
     // 剩余数量提示
@@ -331,7 +332,7 @@ const displayList = computed(() => {
   // 1. 优先处理错误筛选
   if (isFilterByIssue.value) {
       list = list.filter(id => {
-          const issues = store.modIssues.get(id.toLowerCase())
+          const issues = modStore.modIssues.get(id.toLowerCase())
           return issues && issues.length > 0
       })
   }
@@ -355,8 +356,8 @@ const displayList = computed(() => {
   // 4. 排序 (仅视觉)
   if (sortMode.value !== 'default') {
     list.sort((a, b) => {
-      const mA = store.takeModById(a)
-      const mB = store.takeModById(b)
+      const mA = modStore.takeModById(a)
+      const mB = modStore.takeModById(b)
       if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
       if (sortMode.value === 'author') return (mA?.author || '').localeCompare(mB?.author || '')
       return 0
@@ -428,7 +429,7 @@ watch(currentTargetId, async (newVal, oldVal) => {
       clearTimeout(highlightTimer.value)
     }
     highlightTimer.value = setTimeout(() => {
-      store.currentTargetId = ''
+      modStore.currentTargetId = ''
     }, 2000)
   }
 })
@@ -437,7 +438,7 @@ const executeSearch = (next = true) => {
   // 清空旧结果
   if (!searchQuery.value.length) {
     searchResults.value = []
-    store.currentTargetId = ''
+    modStore.currentTargetId = ''
     currentSearchIndex.value = -1
     return
   }
@@ -473,7 +474,7 @@ const executeSearch = (next = true) => {
   currentSearchIndex.value = index
   // 先确保目标 ID 在可见范围内
   if (results.includes(targetId)) {
-    store.currentTargetId = targetId
+    modStore.currentTargetId = targetId
   }
   
 }
@@ -500,10 +501,10 @@ const updateChildren = async (e) => {
     // 拖动的是分组 -> 移动分组内的所有 Mod
     movingIds = [...e.item.mod_ids]
     // 顺便更新一下 Store 的选中状态，保持一致性
-    store.selectMods([...movingIds], e.item?.key || null)
+    modStore.selectMods([...movingIds], e.item?.key || null)
   } else {
     // 拖动的是列表项 -> 移动当前选中项
-    movingIds = [...store.selectedIds]
+    movingIds = [...modStore.selectedIds]
     const draggedId = dirtyIds[e.newIndex] // 注意：这里用脏数据的索引获取当前拖拽的元素ID
     
     // 如果拖拽的项不在选中列表中（比如未选中时直接拖），则把它加入
@@ -535,7 +536,7 @@ const updateChildren = async (e) => {
     // 检查前一个元素是否有向后的联锁
     let curr = prevId
     while (true) {
-      const mod = store.takeModById(curr)
+      const mod = modStore.takeModById(curr)
       if (!mod || !mod.lock_next_mod) break
       const nextId = mod.lock_next_mod.toLowerCase()
       // 关键判断：
@@ -570,11 +571,11 @@ const updateChildren = async (e) => {
   // 4. 检查是否有变化
   if (JSON.stringify(finalList) !== JSON.stringify(oldIds)) {
     // 同步 Store（移除旧位置的引用等，虽然这里逻辑上已经是新的了）
-    store.removeIdsOnAllList(movingIds)
+    modStore.removeIdsOnAllList(movingIds)
     // 发出更新
     emit('update:modelValue', finalList)
     // 更新移动时间
-    store.takeModListByIds(movingIds).forEach(mod => {
+    modStore.takeModListByIds(movingIds).forEach(mod => {
       mod.last_moved_time = Date.now()
       if(e.event.target !== e.event.from) {
         mod.last_active_time = Date.now()

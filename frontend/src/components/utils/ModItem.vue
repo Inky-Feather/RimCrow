@@ -26,14 +26,8 @@
         <!-- 图标 -->
         <div class="flex items-center justify-center -mr-1">
           <!-- 类型图标 -->
-          <span :class="[getModTypeClass, 'flex items-center justify-center']">
-            <svg v-show="modType=='LanguagePack'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='XML'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 13L4 25.4322L16 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 13L44 25.4322L32 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 4L21 44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-            <svg v-show="modType=='Assembly'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 29H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Texture'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 23C20.7614 23 23 20.7614 23 18C23 15.2386 20.7614 13 18 13C15.2386 13 13 15.2386 13 18C13 20.7614 15.2386 23 18 23Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27.7901 26.2194C28.6064 25.1269 30.2528 25.1538 31.0329 26.2725L39.8077 38.8561C40.7322 40.182 39.7835 42.0001 38.1671 42.0001H16L27.7901 26.2194Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Audio'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M30 34.5C30 32.567 31.567 31 33.5 31H41V34.4C41 36.3882 39.3882 38 37.4 38H33.5C31.567 38 30 36.433 30 34.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M6 38.5C6 36.567 7.567 35 9.5 35H16V38.4C16 40.3882 14.3882 42 12.4 42H9.5C7.567 42 6 40.433 6 38.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 18.044V18.044L41 12.125" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 38V10L41 4V33.6924" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Mixed'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="5" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 16L16 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 21L21 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Unknown'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 28.625V24.625C27.3137 24.625 30 21.9387 30 18.625C30 15.3113 27.3137 12.625 24 12.625C20.6863 12.625 18 15.3113 18 18.625" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24 37.625C25.3807 37.625 26.5 36.5057 26.5 35.125C26.5 33.7443 25.3807 32.625 24 32.625C22.6193 32.625 21.5 33.7443 21.5 35.125C21.5 36.5057 22.6193 37.625 24 37.625Z" fill="currentColor"/></svg>
+          <span class="flex items-center justify-center">
+            <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
           </span>
           <!-- 来源图标 -->
           <svg v-if="modData.source==='workshop'" width="18" height="18" class="fill-current -m-0.5" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M261.6 373.1C280.2 380.8 288.9 402 281.2 420.5C273.5 439 252.2 447.7 233.6 439.9L205.1 428.1C210.1 438.7 218.9 447.5 230.5 452.3C255.7 462.8 284.6 450.9 295.1 425.8C300.2 413.7 300.2 400.3 295.2 388.1C290.1 376 280.7 366.5 268.5 361.4C256.4 356.4 243.5 356.6 232.1 360.9L261.6 373.1zM544 160C544 124.7 515.3 96 480 96L160 96C124.7 96 96 124.7 96 160L96 304.7L212.6 352.8C224.6 344.6 238.8 340.7 253.3 341.5L308.7 261.3L308.7 260.2C308.7 212 348 172.7 396.3 172.7C444.6 172.7 483.9 212 483.9 260.2C483.9 309.4 443 348.9 394.3 347.7L315.3 404C316.9 442.5 286.2 472.8 249.6 472.8C217.8 472.8 191.1 450.1 185.1 420.1L96 383.2L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160zM337.9 260.2C337.9 292.5 364 318.6 396.3 318.6C428.6 318.6 454.7 292.5 454.7 260.2C454.7 227.9 428.6 201.8 396.3 201.8C364 201.8 337.9 227.9 337.9 260.2zM440.3 260.1C440.3 284.3 420.6 304 396.4 304C372.2 304 352.5 284.3 352.5 260.1C352.5 235.9 372.2 216.2 396.4 216.2C420.6 216.2 440.3 235.9 440.3 260.1z"/></svg>
@@ -53,14 +47,8 @@
         
         <div class="absolute -top-2 -left-1 flex items-center justify-center ">
           <!-- 类型图标 -->
-          <span :class="[getModTypeClass, 'flex items-center justify-center bg-glass-medium/60 rounded-sm mr-0.5']">
-            <svg v-show="modType=='LanguagePack'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='XML'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 13L4 25.4322L16 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 13L44 25.4322L32 37" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 4L21 44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-            <svg v-show="modType=='Assembly'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M29 16V32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 29H32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Texture'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 23C20.7614 23 23 20.7614 23 18C23 15.2386 20.7614 13 18 13C15.2386 13 13 15.2386 13 18C13 20.7614 15.2386 23 18 23Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27.7901 26.2194C28.6064 25.1269 30.2528 25.1538 31.0329 26.2725L39.8077 38.8561C40.7322 40.182 39.7835 42.0001 38.1671 42.0001H16L27.7901 26.2194Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Audio'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M30 34.5C30 32.567 31.567 31 33.5 31H41V34.4C41 36.3882 39.3882 38 37.4 38H33.5C31.567 38 30 36.433 30 34.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M6 38.5C6 36.567 7.567 35 9.5 35H16V38.4C16 40.3882 14.3882 42 12.4 42H9.5C7.567 42 6 40.433 6 38.5Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 18.044V18.044L41 12.125" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 38V10L41 4V33.6924" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Mixed'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="16" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="5" y="5" width="27" height="27" rx="2" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 16L16 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 21L21 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg v-show="modType=='Unknown'" width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M39 6H9C7.34315 6 6 7.34315 6 9V39C6 40.6569 7.34315 42 9 42H39C40.6569 42 42 40.6569 42 39V9C42 7.34315 40.6569 6 39 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 28.625V24.625C27.3137 24.625 30 21.9387 30 18.625C30 15.3113 27.3137 12.625 24 12.625C20.6863 12.625 18 15.3113 18 18.625" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24 37.625C25.3807 37.625 26.5 36.5057 26.5 35.125C26.5 33.7443 25.3807 32.625 24 32.625C22.6193 32.625 21.5 33.7443 21.5 35.125C21.5 36.5057 22.6193 37.625 24 37.625Z" fill="currentColor"/></svg>
+          <span class="flex items-center justify-center bg-glass-medium/60 rounded-sm mr-0.5">
+            <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
           </span>
           <!-- 来源图标 -->
           <span class="flex items-center justify-center bg-glass-medium/70 rounded-sm">
@@ -136,7 +124,10 @@
 
 <script setup>
 import { computed, h, nextTick  } from 'vue'
-import { useModStore, ISSUE_TYPE } from '../../stores/modStore'
+import { MOD_COLOR_LIST, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP } from '../../utils/constants'
+import { useAppStore } from '@/stores/appStore'
+import { useModStore } from '../../stores/modStore'
+import { useGroupStore } from '../../stores/groupStore'
 import { useRuleStore } from '../../stores/ruleStore'
 import { useContextMenuStore } from '../../stores/contextMenuStore'
 import { useConfirmStore } from '../../stores/confirmStore'
@@ -158,18 +149,20 @@ const props = defineProps({
 
 defineEmits(['contextmenu'])
 
-const store = useModStore()
+const appStore = useAppStore()
+const modStore = useModStore()
+const groupStore = useGroupStore()
 const menuStore = useContextMenuStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
-const modData = computed(() => store.takeModById(props.item_id))
-const modGroups = computed(() => store.takeGroupsByModId(props.item_id))
-// const modIcon = computed(() => store.getIconUrl(props.id))
+const modData = computed(() => modStore.takeModById(props.item_id))
+const modGroups = computed(() => groupStore.takeGroupsByModId(props.item_id))
+// const modIcon = computed(() => modStore.getIconUrl(props.id))
 
-const modType = computed(() => store.displayModType(modData.value))
+const modType = computed(() => modStore.displayModType(modData.value))
 
 const linkWarn = computed(() => {
   if (!issues.value) return (false, false)
@@ -196,8 +189,8 @@ const issueTooltip = computed(() => {
 })
 
 // 错误提示
-const issueState = computed(() => store.getModIssueState(props.item_id))
-const issues = computed(() => store.modIssues.get(props.item_id.toLowerCase()))
+const issueState = computed(() => modStore.getModIssueState(props.item_id))
+const issues = computed(() => modStore.modIssues.get(props.item_id.toLowerCase()))
 const getCardClass = computed(() => {
     const select = props.isSelected ? 'ring-2 ring-accent-special ' : ''
     if (issueState.value === 'error') return `${select} border-accent-danger/40 border bg-accent-danger/10 hover:bg-accent-danger/20`
@@ -205,20 +198,9 @@ const getCardClass = computed(() => {
     return `${select} bg-bg-surface/20 border-white/10 hover:border-white/20 hover:bg-text-dim/20` // 原有的选中样式
 })
 
-const getModTypeClass = computed(() => {
-  if (modType.value === 'XML') return 'text-accent-success'
-  else if (modType.value === 'Assembly') return 'text-accent-primary'
-  else if (modType.value === 'Mixed') return 'text-accent-cool'
-  else if (modType.value === 'LanguagePack') return 'text-accent-warn'
-  else if (modType.value === 'Texture') return 'text-accent-special'
-  else if (modType.value === 'Audio') return 'text-accent-highlight'
-  else if (modType.value === 'Unknown') return 'text-accent-primary'
-  return ''
-})
-
 const getCardStyle = (id) => {
   const base = {}
-  const color = store.takeModById(id).sign_color
+  const color = modStore.takeModById(id).sign_color
   // console.log(color)
   if (!color) return base
   if(!issueState.value) { // 防止覆盖错误样式
@@ -232,8 +214,16 @@ const getCardStyle = (id) => {
 const deleteMod = async () => {
   const res = await confirmStore.confirmAction('警告','确定要删除选中项文件吗？',{type:'error'})
   if(res) {
-    store.deletePath(modData.value.path)
-    store.refreshModList()
+    appStore.deletePath(modData.value.path)
+    appStore.refreshData()
+  }
+}
+// 取消订阅模组
+const unsubscribeMod = async () => {
+  const res = await confirmStore.confirmAction('警告','确定要取消订阅选中项吗？Steam 会自动删除已取消订阅的文件！',{type:'error'})
+  if(res) {
+    appStore.unsubscribeMod(props.item_id)
+    appStore.refreshData()
   }
 }
 
@@ -245,67 +235,68 @@ const IconSteam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const handleContextMenu = async (event) => {
   // console.log(issueState,issueState.value)
   // 检查是否选中，若未选中则添加到选中列表
-  if (!store.selectedIds.includes(props.item_id)) {
-    store.selectMods(props.item_id)
+  if (!modStore.selectedIds.includes(props.item_id)) {
+    modStore.selectMods(props.item_id)
     await nextTick()
   }
-  const selectedIds = store.selectedIds;
+  const selectedIds = modStore.selectedIds;
   // 获取统计信息
-  const stats = store.selectedStats
+  const stats = modStore.selectedStats
   // 通用菜单
   const commnMenuItems = [
-    { label: '标签管理', icon: Tag, disabled: !store.allModTags?.length, children: [{type: 'grid', columns: 5,
-      children: store.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
-        label: '#'+tag, action: () => store.selectModsTag(tag)
+    { label: '标签管理', icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5,
+      children: modStore.allModTags.map(tag => ({ state: stats.tags[tag] || null, 
+        label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理', icon: Group, disabled: !store.groupList?.length, children: [{type: 'grid', columns: 4,
-      children: store.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
-        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => store.selectModsGroup(group.group_id)
+    { label: '分组管理', icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4,
+      children: groupStore.groupList.map(group => ({ state: stats.groups[group.group_id] || null,
+        label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => groupStore.selectModsGroup(group.group_id)
       }))}]
     },
     { label: '标记颜色', icon: Palette, children: [{ type: 'grid', columns: 5, 
-        children:[...store.modColorList.map(c => ({ tooltip: c, color: c, 
-          active: modData.value.sign_color === c, action: () => store.setModsColor(selectedIds, c)
+        children:[...MOD_COLOR_LIST.map(c => ({ tooltip: c, color: c, 
+          active: modData.value.sign_color === c, action: () => modStore.setModsColor(selectedIds, c)
         })), 
-        { icon: X, color: 'transparent', tooltip: '清除', action: () => store.setModsColor(selectedIds, null) }]
+        { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }]
       }]
     },
     { label: '修改类型', icon: ChessPawn,
-      children: [...Object.entries(store.MOD_TYPE_MAP).map(([key, value]) => ({
-        label: value, action: () => store.setModsType(selectedIds, key)
-      })),{ label: '恢复默认', level: 'warn', action: () => store.setModsType(selectedIds, null) }]
+      children: [...Object.entries(MOD_TYPE_MAP).map(([key, value]) => ({ 
+        icon: MOD_TYPE_ICON_MAP[key],
+        label: value, action: () => modStore.setModsType(selectedIds, key)
+      })),{ label: '恢复默认', level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     }
   ]
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
     { label: '编辑排序规则', icon: PencilRuler, action: () => ruleStore.currentId = props.item_id },
-    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => store.openUrl(modData.value.url) },
-    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => store.openPath(modData.value.path) },
+    { label: '访问网页', disabled: !modData.value.url, icon: ExternalLink, action: () => appStore.openUrl(modData.value.url) },
+    { label: '打开文件夹', disabled: !modData.value.path, icon: FolderInput, action: () => appStore.openPath(modData.value.path) },
     { label: '删除', disabled: !modData.value.path, icon: Trash2, level: 'danger', action: () => deleteMod() },
     { label: 'Steam操作', icon: IconSteam, children: [
-      { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => store.openSteamWorkshopUrl(modData.value.url) },
-      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => store.subscribeMod(props.item_id) },
-      { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => store.unsubscribeMod(props.item_id) },
+      { label: '访问创意工坊', disabled: modData.value.source!=='workshop', icon: IconSteam, action: () => appStore.openSteamWorkshopUrl(modData.value.url) },
+      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeMod(props.item_id) },
+      { label: '取消订阅', disabled: modData.value.source!=='workshop', icon: FlagOff, level: 'danger', action: () => unsubscribeMod() },
     ]},
   ]
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '联锁选中项', icon: Link2, action: () => store.linkMods(selectedIds) },
+    { label: '联锁选中项', icon: Link2, action: () => modStore.linkMods(selectedIds) },
   ]
   if (modData.value.lock_previous_mod || modData.value.lock_next_mod) {
-    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => store.unlinkMods(selectedIds) })
+    selectedMenuItems.push({ label: '解除联锁', icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
   }
   // 1. 获取所有选中 Mod 的当前问题并集
-  const allSelectedIssues = selectedIds.flatMap(id => store.modIssues.get(id.toLowerCase()) || []);
+  const allSelectedIssues = selectedIds.flatMap(id => modStore.modIssues.get(id.toLowerCase()) || []);
   // 2. 提取唯一的错误类型 (Type Unique Set)
   const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))];
 
   // 3. 检查选中项中是否有人已经设置了忽略 (用于显示“恢复警告”)
   const anyModHasIgnored = selectedIds.some(id => {
-    const m = store.takeModById(id);
+    const m = modStore.takeModById(id);
     return m && m.ignored_issues && m.ignored_issues.length > 0;
   });
   // 统一的忽略/恢复菜单组
@@ -317,10 +308,10 @@ const handleContextMenu = async (event) => {
       label: selectedIds.length > 1 ? `批量忽略问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
       icon: MegaphoneOff,
       children: uniqueIssueTypes.map(type => ({
-        label: `忽略：${store.ISSUE_TITLE_MAP[type] || type}`,
+        label: `忽略：${ISSUE_TITLE_MAP[type] || type}`,
         // 这里的 level 可以取该类型在所有 Mod 中的最高级别
         level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
-        action: () => store.batchIgnoreIssues(selectedIds, type)
+        action: () => modStore.batchIgnoreIssues(selectedIds, type)
       }))
     });
   }
@@ -332,7 +323,7 @@ const handleContextMenu = async (event) => {
       label: selectedIds.length > 1 ? '恢复所有选中项警告' : '恢复警告',
       icon: Megaphone,
       level: 'warn',
-      action: () => store.batchIgnoreIssues(selectedIds, null)
+      action: () => modStore.batchIgnoreIssues(selectedIds, null)
     });
   }
 

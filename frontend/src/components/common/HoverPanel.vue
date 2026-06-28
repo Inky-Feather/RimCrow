@@ -18,17 +18,17 @@
       }"
       :transition="{
         type: 'spring',
-        damping: store.type === 'text' ? 20 : 30, // 阻尼，文本提示可以更灵敏一点
+        damping: hoverStore.type === 'text' ? 20 : 30, // 阻尼，文本提示可以更灵敏一点
         stiffness: 350,  // 刚度：控制回弹力度 (参考代码值)
         mass: 1          // 质量：控制惯性
       }"
     >
       <!-- 模式 A: 复杂预览卡片 (data 是对象) -->
-      <div v-if="store.type === 'preview'" 
+      <div v-if="hoverStore.type === 'preview'" 
         class="relative flex flex-col h-full overflow-visible select-none"
         :style="{ 
-          '--accent-rgb': hexToRgb(store.data.sign_color || '#a1a1aa'),
-          '--accent': store.data.sign_color || '#a1a1aa'
+          '--accent-rgb': hexToRgb(hoverStore.data.sign_color || '#a1a1aa'),
+          '--accent': hoverStore.data.sign_color || '#a1a1aa'
         }">
         
         <!-- 悬浮装饰：分组标签 (破格设计，浮在卡片上方) -->
@@ -42,7 +42,7 @@
 
         <!-- 背景层：图片 + 模糊 + 渐变 -->
         <div class="absolute inset-0 overflow-hidden rounded-xl bg-bg-deep m-0.5">
-          <img v-if="store.data.preview_url" :src="store.data.preview_url" 
+          <img v-if="hoverStore.data.preview_url" :src="hoverStore.data.preview_url" 
               class="absolute inset-0 w-full h-full object-cover opacity-90 blur-xs scale-100" />
           <!-- 渐变遮罩：底部更黑以显示文字 -->
           <div class="absolute inset-0 bg-linear-to-t from-bg-deep via-bg-deep/70 to-bg-deep/30"></div>
@@ -59,12 +59,12 @@
           
           <!-- 第一行：元数据 (ID & Ver & Type) -->
           <div class="flex items-center justify-between text-[10px] font-mono text-text-main/80 border-b border-white/5 pb-1">
-            <span class="truncate opacity-70 tracking-tighter">{{ store.data.package_id }}</span>
+            <span class="truncate opacity-70 tracking-tighter">{{ hoverStore.data.package_id }}</span>
             <div class="flex items-center gap-2 shrink-0">
-              <span v-if="store.data.version" class="text-accent-primary">v{{ store.data.version }}</span>
+              <span v-if="hoverStore.data.version" class="text-accent-primary">v{{ hoverStore.data.version }}</span>
               <!-- Mod类型徽章 -->
               <span class="px-1.5 rounded-sm bg-white/5 border border-white/10 text-white/80">
-                {{ MOD_TYPE_MAP[modStore.displayModType(store.data)] || 'MOD' }}
+                {{ MOD_TYPE_MAP[modStore.displayModType(hoverStore.data)] || 'MOD' }}
               </span>
             </div>
           </div>
@@ -72,12 +72,12 @@
           <!-- 第二行：标题 -->
           <div>
             <!-- 别名 -->
-            <div v-if="store.data.alias_name" class="text-[10px] text-text-dim truncate font-mono ">
-              {{ store.data.name }}
+            <div v-if="hoverStore.data.alias_name" class="text-[10px] text-text-dim truncate font-mono ">
+              {{ hoverStore.data.name }}
             </div>
             <!-- 主名称 -->
             <h2 class="font-medium truncate">
-              {{ modStore.displayModName(store.data) }}
+              {{ modStore.displayModName(hoverStore.data) }}
             </h2>
           </div>
 
@@ -86,19 +86,19 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-[10px] text-text-dim flex items-center gap-1">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {{ store.data.author?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.author?.join(', ') || 'Unknown' }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-[10px] text-text-dim flex items-center gap-1">
                 <svg width="15" height="15" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                {{ store.data.supported_languages?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_languages?.join(', ') || 'Unknown' }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-[10px] text-text-dim flex items-center gap-1">
                 <Milestone :size="15"/>
-                {{ store.data.supported_versions?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_versions?.join(', ') || 'Unknown' }}
               </span>
             </div>
           </div>
@@ -106,9 +106,9 @@
           <!-- 第四行：描述/备注 -->
           <div class="grow min-h-0 relative">
             <!-- 如果有备注，显示备注(黄色)，否则显示描述 -->
-            <p v-if="store.data.notes" class="text-[11px] text-accent-warn/90 leading-relaxed line-clamp-3 font-medium italic border-l-2 border-accent-warn pl-2">
+            <p v-if="hoverStore.data.notes" class="text-[11px] text-accent-warn/90 leading-relaxed line-clamp-3 font-medium italic border-l-2 border-accent-warn pl-2">
               <span class="text-[9px] opacity-50 not-italic block mb-0.5">NOTES</span>
-              {{ store.data.notes }}
+              {{ hoverStore.data.notes }}
             </p>
             <p v-else class="text-[10px] text-text-dim/80 leading-relaxed line-clamp-4 font-mono">
               {{ cleanDescription }}
@@ -116,25 +116,25 @@
           </div>
 
           <!-- 第五行：Tags 流 -->
-          <div v-if="store.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-white/5">
-            <span v-for="tag in store.data.tags.slice(0, 7)" :key="tag" 
+          <div v-if="hoverStore.data.tags?.length" class="flex flex-wrap gap-1 mt-auto pt-2 border-t border-white/5">
+            <span v-for="tag in hoverStore.data.tags.slice(0, 7)" :key="tag" 
                   class="text-[9px] px-1.5 py-px rounded-full bg-white/5 text-white/70 border border-white/5 whitespace-nowrap">
               #{{ tag }}
             </span>
-            <span v-if="store.data.tags.length > 7" class="text-[9px] text-text-dim px-1">...</span>
+            <span v-if="hoverStore.data.tags.length > 7" class="text-[9px] text-text-dim px-1">...</span>
           </div>
 
         </div>
 
       </div>
       <!-- 模式 B: 纯文本 Tooltip (data 是字符串) -->
-      <div v-else-if="store.type === 'text'" class="text-xs font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
-        <!-- {{ parseMarkup(store.) }} -->
-        <div v-html="parseMarkup(store.data)"></div>
+      <div v-else-if="hoverStore.type === 'text'" class="text-xs font-medium text-white text-pretty wrap-break-word whitespace-pre-wrap">
+        <!-- {{ parseMarkup(hoverStore.) }} -->
+        <div v-html="parseMarkup(hoverStore.data)"></div>
       </div>
       <!-- 模式 3: 全自定义组件 -->
-       <div v-else-if="store.type === 'component'">
-        <component :is="store.customComponent" v-bind="store.componentProps" />
+       <div v-else-if="hoverStore.type === 'component'">
+        <component :is="hoverStore.customComponent" v-bind="hoverStore.componentProps" />
       </div>
 
     </Motion>
@@ -147,9 +147,11 @@ import { Milestone } from 'lucide-vue-next';
 import { Motion } from 'motion-v'
 import { useHoverStore } from '../../stores/hoverStore'
 import { useModStore } from '../../stores/modStore'
+import { useGroupStore } from '@/stores/groupStore';
 
-const store = useHoverStore()
+const hoverStore = useHoverStore()
 const modStore = useModStore()
+const groupStore = useGroupStore()
 
 // --- 1. 显隐控制逻辑 ---
 const isVisible = ref(false)
@@ -162,7 +164,7 @@ const lastY = ref(0)
 
 
 // 监听悬停状态变化
-watch(() => store.isHovering, (hovering) => {
+watch(() => hoverStore.isHovering, (hovering) => {
   if (hovering) {
     if (hideTimer) clearTimeout(hideTimer) // 如果正在准备销毁，取消销毁
     shouldRender.value = true // 立即渲染 DOM
@@ -184,12 +186,12 @@ watch(() => store.isHovering, (hovering) => {
 
 // --- 动态样式 ---
 const containerClasses = computed(() => {
-  if (store.type === 'text') {
+  if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
     return 'px-2 py-1.5 max-w-[30dvw] rounded-md break-all text-pretty whitespace-normal bg-black/50 backdrop-blur-sm border border-white/20 shadow-lg'
   }
   // 让组件自己决定长什么样
-  if (store.type === 'component') {
+  if (hoverStore.type === 'component') {
     return 'shadow-2xl' // 可能只留个阴影，或者连阴影都不要，完全由组件内部控制
   }
   // Preview 样式：宽大、有背景、圆角大
@@ -250,8 +252,8 @@ watch(() => shouldRender.value, (render) => {
 const GAP = 16 // 鼠标与面板的间距
 
 const safeX = computed(() => {
-  if (!store.isHovering) return lastX.value
-  const x = store.targetX
+  if (!hoverStore.isHovering) return lastX.value
+  const x = hoverStore.targetX
   const w = winWidth.value
   const pW = realWidth.value // 使用真实宽度
   
@@ -271,8 +273,8 @@ const safeX = computed(() => {
 })
 
 const safeY = computed(() => {
-  if (!store.isHovering) return lastY.value
-  const y = store.targetY
+  if (!hoverStore.isHovering) return lastY.value
+  const y = hoverStore.targetY
   const h = winHeight.value
   const pH = realHeight.value // 使用真实高度
   
@@ -297,7 +299,7 @@ const rotation = ref(0)
 let resetRotationTimer = null
 
 // 监听 Y 轴变化计算速度
-watch(() => store.targetY, (newY) => {
+watch(() => hoverStore.targetY, (newY) => {
   if (!isVisible.value) {
     lastY_ = newY
     return
@@ -329,7 +331,7 @@ const parseMarkup = (text) => {
   if (!text) return ''
 
   // 0. 如果标记为 HTML，则直接返回
-  if (store.isHtml) return text
+  if (hoverStore.isHtml) return text
 
   // 1. HTML 转义 (防止 XSS 和标签冲突)
   let html = text
@@ -394,12 +396,12 @@ const parseMarkup = (text) => {
 
 // 获取 Mod 所属分组
 const modGroups = computed(() => {
-  if (store.type !== 'preview' || !store.data) return []
-  return modStore.takeGroupsByModId(store.data.package_id)
+  if (hoverStore.type !== 'preview' || !hoverStore.data) return []
+  return groupStore.takeGroupsByModId(hoverStore.data.package_id)
 })
 
 // 存档破坏性 映射逻辑
-const saveBreakingVal = computed(() => parseInt(store.data?.save_breaking ?? -99))
+const saveBreakingVal = computed(() => parseInt(hoverStore.data?.save_breaking ?? -99))
 
 const saveBreakingColor = computed(() => {
   const v = saveBreakingVal.value
@@ -440,7 +442,7 @@ const MOD_TYPE_MAP = {
 
 // 清理描述文本 (移除 HTML 标签，只留纯文本做预览)
 const cleanDescription = computed(() => {
-  const desc = store.data?.description || 'No description available.'
+  const desc = hoverStore.data?.description || 'No description available.'
   return desc.replace(/<[^>]+>/g, '') // 简单移除 HTML 标签
 })
 

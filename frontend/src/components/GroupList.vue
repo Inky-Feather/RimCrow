@@ -45,7 +45,7 @@
         after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent">
 
       <!-- 列表主体 -->
-      <div class="h-full px-1 relative" @click.self="store.clearSelection()">
+      <div class="h-full px-1 relative" @click.self="modStore.clearSelection()">
 
 
         <div v-if="groupList.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center text-gray-600 text-xs select-none pointer-events-none">
@@ -91,6 +91,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useModStore } from '../stores/modStore'
+import { useGroupStore } from '../stores/groupStore'
 import VirtualList from 'vue-virtual-sortable';
 import GroupItem from './utils/GroupItem.vue'
 
@@ -101,7 +102,9 @@ const props = defineProps({
   listColor: { type: String, default: 'primary' } // danger/highlight/special/cool/primary/success/tip/warn/secondary/warning
 })
 
-const store = useModStore()
+const modStore = useModStore()
+const groupStore = useGroupStore()
+
 const vListRef = ref<VirtualList>()
 
 // 搜索文本
@@ -166,47 +169,47 @@ const executeSearch = (forward: boolean) => {
 // 切换分组展开状态
 const toggle = (id: string) => {
   if (expandedIds.value.has(id)) {
-    store.updateGroup(id, { is_expanded: false })
+    groupStore.updateGroup(id, { is_expanded: false })
   } else {
-    store.updateGroup(id, { is_expanded: true })
+    groupStore.updateGroup(id, { is_expanded: true })
   }
 }
 
 // 全部展开
 const expandAll = async () => {
-  await store.changeAllGroupExpansion(true);
+  await groupStore.changeAllGroupExpansion(true);
 }
 
 // 全部折叠
 const collapseAll = async () => {
-  await store.changeAllGroupExpansion(false);
+  await groupStore.changeAllGroupExpansion(false);
 }
 
 // 新建分组
 const createGroup = async () => {
-  await store.createGroup();
+  await groupStore.createGroup();
 }
 // 删除分组
 const deleteGroup = (groupId: string) => {
-  store.deleteGroup(groupId);
+  groupStore.deleteGroup(groupId);
   expandedIds.value.delete(groupId); // 同时从展开列表中移除
 }
 // 更新分组信息
 const updateGroup = (groupId: string, data = props.groupData) => {
-  store.updateGroup(groupId, data);
+  groupStore.updateGroup(groupId, data);
 }
 // 更新分组内模组列表
 const updateChildren = (groupId: string, newIds: Array<string>) => {
-  store.groupContentReorder(groupId, newIds)
+  groupStore.groupContentReorder(groupId, newIds)
 }
 const stratDrag = () => {
   // 标记当前正在拖动分组
-  store.isDraggingGroup = true
+  groupStore.isDraggingGroup = true
 }
 // 分组排序
 const groupReorder = (e) => {
   // const groupIds = groupList.value.map(g => g.group_id)
-  // const originGroupIds = store.groupList.map(g => g.group_id)
+  // const originGroupIds = groupStore.groupList.map(g => g.group_id)
   // console.log("分组排序:", groupIds)
   // console.log("原始排序:", originGroupIds)
   console.log("分组排序:", e)
@@ -214,13 +217,13 @@ const groupReorder = (e) => {
     console.log("分组排序错误")
     return
   }
-  store.groupReorder();
+  groupStore.groupReorder();
   // 拖动结束后，重置状态
-  store.isDraggingGroup = false
+  groupStore.isDraggingGroup = false
 }
 // 移除模组
 const removeMod =(groupId: string, modId: Array<string>) => {
-  store.groupRemoveMods(groupId, modId);
+  groupStore.groupRemoveMods(groupId, modId);
 }
 
 </script>

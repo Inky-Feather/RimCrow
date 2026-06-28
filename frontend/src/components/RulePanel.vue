@@ -146,7 +146,7 @@
               class="flex gap-4 p-2 rounded-xl bg-white/2 border border-white/5 hover:bg-white/5 transition-colors">
               
               <!-- Mod 信息 -->
-              <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="store.takeModById(item.id)">
+              <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="modStore.takeModById(item.id)">
                 <div class="w-10 h-10 rounded-lg bg-black/30 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                    <img v-if="item.icon" :src="item.icon" class="w-full h-full object-cover">
                    <div v-else class="text-[10px] text-text-dim">{{ item.id.substring(0,2) }}</div>
@@ -335,7 +335,7 @@ import { useConfirmStore } from '../stores/confirmStore'
 
 const emit = defineEmits(['close'])
 const toast = useToast()
-const store = useModStore()
+const modStore = useModStore()
 const ruleStore = useRuleStore()
 const confirmStore = useConfirmStore()
 
@@ -405,7 +405,7 @@ const filteredStaticRules = computed(() => {
   
   // 转换为数组方便渲染: [{ id: 'package_id', rules: {...}, name: 'Mod Name', icon: '...' }]
   let list = Object.entries(source).map(([id, rules]) => {
-    const mod = store.takeModById(id) // 从 store 获取 Mod 信息
+    const mod = modStore.takeModById(id) // 从 store 获取 Mod 信息
     return {
       id: id,
       rules: rules,
@@ -444,11 +444,11 @@ const formatOperator = (op) => {
 const formatAction = (act) => {
   if (act.type === 'weight_shift') return `权重 ${act.value > 0 ? '+' : ''}${act.value}`
   else if (act.type === 'weight_set') return `权重设为 ${act.value}`
-  else if (act.type.includes('load_')) return `在 ${store.displayModName(act.value)} ${act.type === 'load_after' ? '之后' : '之前'}`
+  else if (act.type.includes('load_')) return `在 ${modStore.displayModName(act.value)} ${act.type === 'load_after' ? '之后' : '之前'}`
   else return act.type === 'top' ? '置顶' : '置底'
 }
 // 获取 Mod 显示名称
-const getDisplayName = (id, defaultName) => store.displayModName(id, defaultName)
+const getDisplayName = (id, defaultName) => modStore.displayModName(id, defaultName)
 // 格式化动态规则的提示信息
 const formatTooltip = (targetId, info) => {
   let text = `ID: ${targetId}`

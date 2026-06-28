@@ -2,7 +2,7 @@
   <Teleport to="body">
     <!-- 统一过渡容器 -->
     <Transition :name="isMini ? 'mini-zoom' : 'modal-fade'">
-      <div v-if="store.isVisible" 
+      <div v-if="confirmStore.isVisible" 
         class="fixed inset-0 z-9999 font-sans text-text-main selection:bg-white/20"
         :class="isMini ? 'pointer-events-none' : 'flex items-center justify-center'"
         @keydown.esc="handleCancel"
@@ -54,11 +54,11 @@
             <!-- 右侧：文本与交互 -->
             <div class="flex-1 min-w-0 flex flex-col justify-center">
               <h3 class="text-base font-bold text-white tracking-wide leading-snug mb-1.5 flex items-center gap-2">
-                {{ store.state.title }}
+                {{ confirmStore.state.title }}
               </h3>
               
-              <div v-if="store.state.message" class="text-xs text-text-dim/90 leading-relaxed text-pretty font-medium">
-                <span>{{ store.state.message }}</span>
+              <div v-if="confirmStore.state.message" class="text-xs text-text-dim/90 leading-relaxed text-pretty font-medium">
+                <span>{{ confirmStore.state.message }}</span>
               </div>
             </div>
           </div>
@@ -66,10 +66,10 @@
           <!-- 输入框容器 -->
           <div class="p-2">
             <!-- Prompt 输入框 -->
-            <div v-if="store.state.mode === 'prompt'" class="relative group">
-              <input v-model="store.state.inputValue"
+            <div v-if="confirmStore.state.mode === 'prompt'" class="relative group">
+              <input v-model="confirmStore.state.inputValue"
                 ref="inputRef" type="text" spellcheck="false"
-                :placeholder="store.state.placeholder"
+                :placeholder="confirmStore.state.placeholder"
                 class="block w-full bg-black/40 border border-white/10 rounded-lg py-1 px-2 text-sm text-white font-mono placeholder:text-white/20 
                         focus:outline-none focus:border-white/30 focus:bg-black/60 focus:shadow-[0_0_15px_rgba(255,255,255,0.05)]
                         transition-all duration-200"
@@ -84,11 +84,11 @@
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
             
             <!-- Cancel Button -->
-            <button v-if="store.state.mode !== 'alert'" 
+            <button v-if="confirmStore.state.mode !== 'alert'" 
               @click="handleCancel"
               class=" rounded-lg text-xs font-bold text-text-dim hover:text-white hover:bg-white/10 border border-transparent hover:border-white/5 transition-all duration-200"
               :class="isMini ? 'px-2 py-1' : 'px-4 py-1.5'">
-              {{ store.state.cancelText }}
+              {{ confirmStore.state.cancelText }}
             </button>
             
             <!-- Confirm Button (流光按钮) -->
@@ -101,8 +101,8 @@
               <div class="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700 bg-linear-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
               
               <div class="relative flex items-center gap-1.5">
-                <span>{{ store.state.confirmText }}</span>
-                <svg v-if="store.state.mode === 'prompt'" class="w-3 h-3 opacity-60 group-hover/btn:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <span>{{ confirmStore.state.confirmText }}</span>
+                <svg v-if="confirmStore.state.mode === 'prompt'" class="w-3 h-3 opacity-60 group-hover/btn:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
               </div>
             </button>
           </div>
@@ -127,7 +127,7 @@ const Icons = {
   success: CircleCheckBig
 }
 
-const store = useConfirmStore()
+const confirmStore = useConfirmStore()
 const { width: winW, height: winH } = useWindowSize()
 
 const modalRef = ref(null)
@@ -136,11 +136,11 @@ const shake = ref(false)
 
 // --- 计算属性 ---
 
-const isMini = computed(() => !!store.state.targetRect)
+const isMini = computed(() => !!confirmStore.state.targetRect)
 
 // 主题映射：将 type 映射到 Tailwind 类
 const theme = computed(() => {
-  const t = store.state.type || 'info'
+  const t = confirmStore.state.type || 'info'
   // btnBg: 按钮背景，需要高亮色
   // text: 文字和图标颜色
   // bg: 环境光晕颜色
@@ -157,7 +157,7 @@ const theme = computed(() => {
 const containerStyle = computed(() => {
   if (!isMini.value) return {}
 
-  const rect = store.state.targetRect
+  const rect = confirmStore.state.targetRect
   const GAP = 12
   const MODAL_WIDTH = 300
   // 预估高度，如果内容多可能要调整，或者用 nextTick 动态获取
@@ -199,19 +199,19 @@ const containerStyle = computed(() => {
 
 // --- 交互处理 ---
 
-const handleConfirm = () => store.confirm()
-const handleCancel = () => store.cancel()
+const handleConfirm = () => confirmStore.confirm()
+const handleCancel = () => confirmStore.cancel()
 
 // 只有在非 IME 输入状态下，回车才提交
 const handleEnterKey = (e) => {
   if (e.isComposing) return
-  store.confirm()
+  confirmStore.confirm()
 }
 
 // 遮罩层点击反馈
 const handleBackdropClick = () => {
   if (isMini.value) {
-    store.cancel()
+    confirmStore.cancel()
   } else {
     // 全屏模式下，如果强制要求操作，则拒绝并抖动
     shake.value = true
@@ -220,8 +220,8 @@ const handleBackdropClick = () => {
 }
 
 // 自动聚焦
-watch(() => store.isVisible, async (val) => {
-  if (val && store.state.mode === 'prompt') {
+watch(() => confirmStore.isVisible, async (val) => {
+  if (val && confirmStore.state.mode === 'prompt') {
     await nextTick()
     inputRef.value?.focus()
   }
@@ -229,8 +229,8 @@ watch(() => store.isVisible, async (val) => {
 
 // Mini 模式下点击外部关闭
 onClickOutside(modalRef, () => {
-  if (isMini.value && store.isVisible) {
-    store.cancel()
+  if (isMini.value && confirmStore.isVisible) {
+    confirmStore.cancel()
   }
 })
 

@@ -7,6 +7,7 @@ import time
 import re
 import zipfile
 import shutil
+import webview
 import importlib.util
 from typing import Optional
 
@@ -339,6 +340,8 @@ class SteamManager:
                 logger.warning("Steamworks API failed to initialize (Is Steam running?)")
         except Exception as e:
             logger.warning(f"Steamworks init error: {e}")
+            if webview.windows:
+                webview.windows[0].create_confirmation_dialog("Steamworks 初始化失败", "Steamworks API 初始化失败，请确认 Steam 运行后重试。")
 
     def subscribe_item(self, published_file_id: int):
         """订阅模组"""

@@ -21,7 +21,7 @@
 
         <!-- ================= COLUMN 2: 待选库 (Library) ================= -->
         <div class="h-full p-1 transition-opacity" :style="{ width: colWidths[1] + 'px' }">
-            <ModList v-model="store.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
+            <ModList v-model="modStore.inactiveIds" title="未启用" listColor="primary" listId="inactive" />
         </div>
 
         <!-- 分割线 2 -->
@@ -30,13 +30,13 @@
 
         <!-- ================= COLUMN 3: 启用/排序 (Active) ================= -->
         <div class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
-              <ModList v-model="store.activeIds" title="启用" :hasSidebar=true listColor="success" listId="active" />
+              <ModList v-model="modStore.activeIds" title="启用" :hasSidebar=true listColor="success" listId="active" />
         </div>
 
         <!-- 分割线 3 -->
         <Resizer :active="resizeState.activeIndex === 2" 
                 @mousedown="startResize(2, $event)" />
-        <div v-if="store.ruleStore.currentId" class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
+        <div v-if="ruleStore.currentId" class="h-full p-1 transition-opacity" :style="{ width: colWidths[2] + 'px' }">
           <ModRuleEditor title="Rule" listColor="warn" />
         </div>
         
@@ -53,9 +53,9 @@
               leave-to-class="opacity-0">
               <KeepAlive>
 
-                <ModList v-if="activeTab === tabs[0]" v-model="store.tempIds" title="Temp" listColor="warning" listId="temp"
+                <ModList v-if="activeTab === tabs[0]" v-model="modStore.tempIds" title="Temp" listColor="warning" listId="temp"
                   class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                <GroupList v-else-if="activeTab === tabs[1]" v-model="store.groupList" title="Groups" listColor="special" 
+                <GroupList v-else-if="activeTab === tabs[1]" v-model="groupStore.groupList" title="Groups" listColor="special" 
                   class="rounded-b-none col-start-1 row-start-1 w-full"/>
                 <BackupList v-else-if="activeTab === tabs[2]" class="rounded-b-none col-start-1 row-start-1 w-full"/>
 
@@ -76,22 +76,22 @@
           <div class="p-3 rounded-b-2xl grid grid-cols-3 gap-2 bg-bg-surface/80 shadow-2xl backdrop-blur-md border-t border-white/5">
             
             <!-- 刷新按钮 -->
-            <button :class="{'scan': store.scanProgress.scanning}"
+            <button :class="{'scan': appStore.scanProgress.scanning}"
               class="col-span-1 py-1 rounded-lg bg-white/5 border border-white/5 
                     text-sm text-gray-300 font-bold uppercase tracking-wider
                     hover:bg-white/10 hover:text-white hover:border-white/20
                     active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
-              @click="store.scanMods()"
-              :disabled="store.scanProgress.scanning"
+              @click="modStore.scanMods()"
+              :disabled="appStore.scanProgress.scanning"
             >
-              <!-- <svg v-if="store.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
-              <span >{{ store.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
+              <!-- <svg v-if="appStore.scanProgress.scanning" class="animate-spin w-3 h-3 text-accent-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> -->
+              <span >{{ appStore.scanProgress.scanning ? '扫描中...' : '刷新' }}</span>
             </button>
             
             <!-- 自动排序按钮 -->
             <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-black hover:bg-accent-tip shadow-lg shadow-accent-primary/10
                     flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                    @click="store.autoSortMods()"
+                    @click="modStore.autoSortMods()"
             >
               <span >自动排序</span>
             </button>
@@ -99,19 +99,19 @@
             <!-- 保存按钮 (Dirty 状态提示) -->
             <button class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
                     flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-              :class="[store.isDirty 
+              :class="[modStore.isDirty 
                   ? 'bg-accent-secondary text-black hover:bg-accent-warn shadow-[0_0_15px_rgba(234,179,8,0.4)] animate-pulse-soft' 
                   : 'bg-accent-primary/60 text-black hover:bg-accent-primary shadow-lg shadow-accent-primary/10'
               ]"
-              @click="store.saveLoadOrder()"
+              @click="orderStore.saveLoadOrder()"
             >
               <!-- Dirty 状态下的流光效果 -->
-              <div v-if="store.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
+              <div v-if="modStore.isDirty" class="absolute inset-0 bg-white/20 -translate-x-full animate-shimmer skew-x-12"></div>
               
-              <svg v-if="store.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              <svg v-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
               
-              <span>{{ store.isDirty ? '保存变动' : '保存' }}</span>
+              <span>{{ modStore.isDirty ? '保存变动' : '保存' }}</span>
             </button>
 
             <!-- 启动游戏 -->
@@ -119,7 +119,7 @@
                     shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 
                     transition-all duration-200 uppercase tracking-widest
                     hover:bg-[#059669] hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
-              @click="store.launchGame()"
+              @click="appStore.launchGame()"
             >
               <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
               启动游戏
@@ -142,7 +142,7 @@
         leave-from-class="translate-x-0"
         leave-to-class="-translate-x-full"
       >
-        <div v-if="store.showDiffDrawer" 
+        <div v-if="appStore.uiState.showDiffDrawer" 
           class="fixed inset-y-8 top-18 left-0 w-[50vw] z-100 flex flex-col"
         >
           <!-- 
@@ -169,9 +169,9 @@
             
             <!-- 抽屉内容：Diff 组件 -->
             <div class="flex-1 overflow-hidden">
-                <ListDiffView v-if="store.showDiffDrawer"
-                  :list-a="store.activeIds" title-a="当前启用"
-                  :list-b="store.backupIds||[]" title-b="对比文件"
+                <ListDiffView v-if="appStore.uiState.showDiffDrawer"
+                  :list-a="modStore.activeIds" title-a="当前启用"
+                  :list-b="orderStore.backupIds||[]" title-b="对比文件"
                   class="rounded-b-none rounded-tl-none col-start-1 row-start-1 w-full"
                 />
             </div>
@@ -180,8 +180,8 @@
             <div class="p-2 px-5 bg-black/20 flex items-center justify-between border-t border-white/5">
               <h2 class="text-white/80 font-bold">Mod序列对比</h2>
               <div class="flex items-center gap-2">
-                <button @click="store.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">加载文件序列</button>
-                <button @click="store.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
+                <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">加载文件序列</button>
+                <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-white/10 text-xs font-bold transition-all">关闭</button>
               </div>
             </div>
 
@@ -204,13 +204,13 @@
     </Teleport>
 
     <!-- 日志 --><!-- translate-x-1/2  -->
-    <div v-show="store.showLogDrawer" @click.self="store.showLogDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999">
+    <div v-show="appStore.uiState.showLogDrawer" @click.self="appStore.uiState.showLogDrawer = false" class="fixed top-0 left-0 w-full h-full p-20 bg-black/50 backdrop-blur-2xl rounded-lg z-999">
       <LogViewer />
     </div>
 
     <!-- 测试 -->
-    <div v-if="store.settings.debug_mode">
-      <Test v-show="store.showTestDrawer" />
+    <div v-if="appStore.settings.debug_mode">
+      <Test class="fixed bottom-4 left-4 " v-show="appStore.uiState.showTestDrawer" />
       <DebugPanel />
     </div>
     <!-- 重复包名冲突弹窗 -->
@@ -220,7 +220,7 @@
     <SettingsModal />
 
     <!-- 规则面板 -->
-    <RulePanel v-if="store.showRuleDrawer" @close="store.showRuleDrawer = false" />
+    <RulePanel v-if="appStore.uiState.showRuleDrawer" @close="appStore.uiState.showRuleDrawer = false" />
 
     <!-- 状态条 -->
     <StatusBar class="relative z-20 flex-none" />
@@ -240,6 +240,10 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, h, provide } from 'vue'
 import { useModStore } from './stores/modStore'
+import { useAppStore } from './stores/appStore'
+import { useRuleStore } from './stores/ruleStore'
+import { useGroupStore } from './stores/groupStore'
+import { useOrderStore } from './stores/orderStore'
 import RimHeader from './components/RimHeader.vue'
 import ModDetails from './components/ModDetails.vue'
 import ModList from './components/ModList.vue'
@@ -260,8 +264,11 @@ import Confirm from './components/common/Confirm.vue'
 import Test from './components/temp/test.vue'
 
 
-
-const store = useModStore()
+const appStore = useAppStore()
+const modStore = useModStore()
+const ruleStore = useRuleStore()
+const groupStore = useGroupStore()
+const orderStore = useOrderStore()
 
 const tabs = ['临时', '分组', '备份']
 const activeTab = ref(tabs[0])
@@ -352,7 +359,7 @@ let resizeObserver = null
 // 渲染时初始化
 onMounted(() => {
   console.log("应用已启动，正在初始化存储……")
-  store.initialize()  // 初始化存储（加载数据）
+  appStore.initialize()  // 初始化存储（加载数据）
 
   // === 动态尺寸调整 ===
   distributeEvenly()  // 初始平均分配宽度
