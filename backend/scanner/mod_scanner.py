@@ -30,6 +30,7 @@ from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
 from backend.settings import TOOL_MODS_DIR, settings
+from backend.utils.constants import normalize_language_codes
 from backend.utils.logger import logger # 引入日志
 from backend.utils.event_bus import EventBus # 引入事件总线
 
@@ -46,6 +47,10 @@ class ModScanner:
         self._stop_requested = False  # 中断请求标志
         self._current_task_id: str | None = None
 
+    @property
+    def is_scanning(self) -> bool:
+        return self._is_scanning
+
     def stop_scan(self, task_id: str | None = None) -> bool:
         """外部调用：请求中断扫描"""
         if not self._is_scanning:
@@ -56,7 +61,16 @@ class ModScanner:
         self._stop_requested = True
         logger.warning("Scan interruption requested by user. task_id=%s", self._current_task_id)
         return True
-            
+
+    def wait_until_idle(self, timeout: float = 10.0, poll_interval: float = 0.1) -> bool:
+        """等待扫描任务彻底结束并释放线程内连接。"""
+        deadline = time.time() + max(0.0, timeout)
+        while time.time() < deadline:
+            if not self._is_scanning:
+                return True
+            time.sleep(max(0.01, poll_interval))
+        return not self._is_scanning
+
     def scan_paths_async(self, search_paths, forced_update=False):
         """
         异步扫描入口。立即返回，任务在后台运行。
@@ -140,7 +154,6 @@ class ModScanner:
             # 使用 temp_registry 暂存所有扫描结果，而不是一边扫一边入库
             # 结构: { package_id: [mod_data_1, mod_data_2] }
             temp_registry = defaultdict(list)
-            scanned_package_ids = set()
             start_time = time.time()
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
@@ -175,7 +188,6 @@ class ModScanner:
                     pid = mod_data['package_id'].lower()
                     # 记录到暂存区
                     temp_registry[pid].append(mod_data)
-                    scanned_package_ids.add(pid)
                     if mod_data.get('_skipped'):
                         stats['skipped'] += 1
                     elif mod_data.get('is_new'):
@@ -188,7 +200,7 @@ class ModScanner:
                 logger.info("Scan stopped during parsing stage.")
                 self._handle_interruption(task_id)
                 return # 直接结束任务，不进入写库阶段
-            # --- 3. 冲突仲裁与入库决策 ---
+            # --- 3. 库存落库与运行态分析 ---
             EventBus.emit_progress(
                 task_id,
                 "scan",
@@ -199,111 +211,23 @@ class ModScanner:
             )
             
             mods_to_upsert = []
-            final_conflicts = [] # 发送给前端的硬冲突列表
-            final_coexistences = []  # 发送给前端的软冲突列表
-            
-            # 部署准备：Local Mod 集合 (用于部署时排除)
-            local_mod_ids_for_deploy = set()
-            # 部署准备：Workshop Mod 和 Self Mod 候选列表 (路径)
-            self_mods_paths_for_deploy = []
-            workshop_paths_for_deploy = []
-            tool_mods_paths_for_deploy = []
 
-            # 获取本地 Mods 根目录 (用于判定是否同级冲突)
-            local_mods_root = self.context.local_mods_path
-            if local_mods_root: 
-                local_mods_root = os.path.normpath(local_mods_root).lower()
-            self_mods_root = settings.config.self_mods_path
-            if self_mods_root:
-                self_mods_root = os.path.normpath(self_mods_root).lower()
-            workshop_mods_root = settings.config.workshop_mods_path
-            if workshop_mods_root:
-                workshop_mods_root = os.path.normpath(workshop_mods_root).lower()
-            tool_mods_root = str(TOOL_MODS_DIR)
-            if tool_mods_root:
-                tool_mods_root = os.path.normpath(tool_mods_root).lower()
-            
             shadow_paths_map = {}
-            for pid, entries in temp_registry.items():
+            for entries in temp_registry.values():
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("Scan stopped during parsing stage.")
                     self._handle_interruption(task_id)
                     return # 直接结束任务
 
-                active_entries = [mod for mod in entries if not mod.get('disabled')]
                 disabled_paths = [mod['path'] for mod in entries if mod.get('disabled') and mod.get('path')]
                 for mod in entries:
                     path_hash = mod.get('path_hash')
                     if path_hash:
                         shadow_paths_map[path_hash] = disabled_paths if not mod.get('disabled') else []
-                
-                # 情况 A: 只有一个实例 -> 直接入库
-                if len(entries) == 1:
-                    mod = entries[0]
-                    if not mod.get('_skipped'): # 跳过的不需要重新 Upsert，除非想更新 timestamp
+                    # 扫描阶段只负责同步库存事实，不在这里做 Profile 遮蔽。
+                    if not mod.get('_skipped'):
                         mods_to_upsert.append(mod)
-                    
-                    # 收集部署信息
-                    self._classify_for_deploy(mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
-                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy)
-                    continue
-
-                # 情况 B: 多个实例 -> 判定冲突类型
-                # 若只有一个启用实例，其余均为禁用副本，则不视为冲突，只做元数据同步。
-                if len(active_entries) <= 1:
-                    for mod in entries:
-                        if not mod.get('_skipped'):
-                            mods_to_upsert.append(mod)
-                        self._classify_for_deploy( mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
-                            local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy
-                        )
-                    continue
-
-                # 按父目录分组
-                by_parent = defaultdict(list)
-                for mod in active_entries:
-                    parent_dir = os.path.dirname(mod['path']).lower()
-                    by_parent[parent_dir].append(mod)
-
-                # 判定逻辑
-                has_hard_conflict = False
-                for parent, group in by_parent.items():
-                    if len(group) > 1:
-                        # 【硬冲突】：同一个目录下有重复 ID
-                        # 例如 LocalMods/A 和 LocalMods/B 都是同一个 ID
-                        has_hard_conflict = True
-                        final_conflicts.append({
-                            'package_id': pid,
-                            'items': group,         # 发送冲突的具体条目
-                            'type': 'same_directory' # 标记类型：同级目录冲突
-                        })
-                if has_hard_conflict:
-                    # 发生硬冲突，同样入库
-                    logger.warning(f"Hard conflict detected for {pid}")
-                    # 强制将硬冲突也加入待更新列表，否则数据库里没数据
-                    for mod in entries:
-                        if not mod.get('_skipped'): mods_to_upsert.append(mod)
-                        # 硬冲突通常不执行部署(Deploy)，所以跳过 _classify_for_deploy
-                    continue # 结束当前这组的后续软冲突逻辑
-                
-                # --- 检查软冲突 (跨目录遮蔽/共存) ---
-                # 走到这里说明 len(entries) > 1 且没有硬冲突
-                final_coexistences.append({
-                    'package_id': pid,
-                    'items': active_entries,      # 禁用副本不参与冲突提示
-                    'type': 'different_directory' # 标记类型：跨目录共存
-                })
-
-                # 【软冲突/共存】：不同目录下的重复 ID (Local vs Workshop)
-                # 策略：全部入库！
-                # 数据库会存储多条记录 (path不同，path_hash不同，主键不冲突)
-                # 查询时由 DAO 根据 Profile 过滤，部署时由下方逻辑过滤
-                for mod in entries:
-                    # 优化：跳过未变动的 Mod，避免无意义的数据库重写
-                    if not mod.get('_skipped'): mods_to_upsert.append(mod)
-                    self._classify_for_deploy(mod, local_mods_root, self_mods_root, workshop_mods_root, tool_mods_root,
-                        local_mod_ids_for_deploy, self_mods_paths_for_deploy, workshop_paths_for_deploy, tool_mods_paths_for_deploy)
 
             # --- 4. 批量入库 ---
             # 这是数据安全最关键的一步
@@ -316,53 +240,28 @@ class ModScanner:
                 # txn.rollback() # 万一出错，回滚所有改动
                 logger.error(f"批量入库失败: {e}", exc_info=True)
                 raise e
-            
-            
+            # 入库完成后，再按当前 Profile 的启用域统一分析冲突与部署计划。
+            runtime_analysis = ModDAO.get_profile_conflict_analysis(self.context)
+            final_conflicts = runtime_analysis['hard_conflicts']
+            final_coexistences = runtime_analysis['coexistences']
+            final_links_to_create = runtime_analysis['deploy_paths']
+
             # --- 6. 自动部署链接 (Deployment) ---
             deploy_msg = "跳过链接部署"
-            logger.debug(f"Skip deployment: use_workshop_mods={self.context.use_workshop_mods}, use_self_mods={self.context.use_self_mods}, current_profile_not_default={self.context.profile_id != 'default'}")
-            final_links_to_create = []
-            final_package_ids = local_mod_ids_for_deploy
-            # 管理器模组优先部署
-            if self.context.use_self_mods and local_mods_root and os.path.exists(local_mods_root):
-                # 遮蔽策略：过滤掉 ID 已经在 Local 存在的 Self Mod
-                for path, p_id in self_mods_paths_for_deploy:
-                    if p_id not in final_package_ids:
-                        final_links_to_create.append(path)
-                        final_package_ids.add(p_id)
-                    else:
-                        # 被本地遮蔽，忽略
-                        pass
-            # 其次部署 创意工坊模组
-            if self.context.use_workshop_mods and self.context.profile_id != 'default' \
-                and local_mods_root and os.path.exists(local_mods_root):
-                # 遮蔽策略：过滤掉 ID 已经在 Local 和 self 存在的 Workshop Mod
-                for path, p_id in workshop_paths_for_deploy:
-                    if p_id not in final_package_ids:
-                        final_links_to_create.append(path)
-                        final_package_ids.add(p_id)
-                    else:
-                        # 被本地遮蔽，忽略
-                        pass
-            # 最后部署 系统工具模组
-            if settings.config.enable_tool_mods and local_mods_root and os.path.exists(local_mods_root):
-                for path, p_id in tool_mods_paths_for_deploy:
-                    if p_id not in final_package_ids:
-                        final_links_to_create.append(path)
-                        final_package_ids.add(p_id)
-                    else:
-                        # 被本地遮蔽，忽略
-                        pass
+            local_mods_root = self.context.local_mods_path
+            if local_mods_root:
+                local_mods_root = os.path.normpath(local_mods_root).lower()
             
             # 调用 FileManager 执行部署
             # 注意：这里需要传入 local_mods_path 的原始大小写路径（用于创建目录）
             # 增量模式只处理变化项；全量模式则删除全部旧链接后重建。
-            if settings.config.link_deployment_mode_full:
-                success = FileManager.sync_links_full(local_mods_root, final_links_to_create)
-            else:
-                success = FileManager.sync_links(local_mods_root, final_links_to_create)
-            if final_links_to_create:
-                deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
+            if local_mods_root and os.path.exists(local_mods_root):
+                if settings.config.link_deployment_mode_full:
+                    success = FileManager.sync_links_full(local_mods_root, final_links_to_create)
+                else:
+                    success = FileManager.sync_links(local_mods_root, final_links_to_create)
+                if final_links_to_create:
+                    deploy_msg = f"Deployed {len(final_links_to_create)} links" if success else "Deployment failed"
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
@@ -430,27 +329,6 @@ class ModScanner:
             result.setdefault('task_id', task_id)
         EventBus.emit('scan-complete', result)
 
-    def _classify_for_deploy(self, mod_data, local_root, self_mods_root, workshop_root, tool_mods_root, local_ids_set, self_mods_paths_list, workshop_paths_list, tool_mods_paths_list):
-        """
-        辅助函数：将 Mod 分类以便后续部署。
-        """
-        mod_path = mod_data.get('path')
-        if not mod_path or mod_data.get('disabled'): return
-        mod_path_norm = os.path.normpath(mod_path).lower()
-        pid = mod_data['package_id'].lower()
-        # 判断 Local
-        if local_root and mod_path_norm.startswith(local_root):
-            local_ids_set.add(pid)
-        # 判断 Self Mod
-        elif self_mods_root and mod_path_norm.startswith(self_mods_root):
-            self_mods_paths_list.append((mod_path, pid)) # 保留原大小写路径用于部署
-        # 判断 Workshop
-        elif workshop_root and mod_path_norm.startswith(workshop_root):
-            workshop_paths_list.append((mod_path, pid))
-        # 判断 Tool Mod
-        elif tool_mods_root and mod_path_norm.startswith(tool_mods_root):
-            tool_mods_paths_list.append((mod_path, pid))
-        
     def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False):
         """
         处理单个 Mod 的纯函数逻辑。
@@ -520,7 +398,7 @@ class ModScanner:
         # DLC 注入翻译
         if is_dlc_dir and dlc_parser:
             dlc_parser.enrich_data(mod_data, mod_path)
-            mod_data['supported_languages'] = list(dlc_parser.translations.keys())
+            mod_data['supported_languages'] = normalize_language_codes(dlc_parser.translations.keys())
             
         # 路径与来源分析
         workshop_id = self._resolve_workshop_id(mod_path)
@@ -580,7 +458,9 @@ class ModScanner:
             
         mod_data.update({
             'path_hash': path_hash,
-            'supported_languages': analysis_info['supported_languages'] if not is_dlc_dir else mod_data.get('supported_languages', []),
+            'supported_languages': normalize_language_codes(
+                analysis_info['supported_languages'] if not is_dlc_dir else mod_data.get('supported_languages', [])
+            ),
             'file_stats': analysis_info['file_stats'],
             'mod_type': analysis_info['mod_type'],
             'path': mod_path,

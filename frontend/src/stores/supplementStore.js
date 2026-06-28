@@ -1,0 +1,1130 @@
+import { defineStore } from 'pinia'
+import { computed, reactive, ref } from 'vue'
+import { createToastInterface } from 'vue-toastification'
+import { useConfirmStore } from './confirmStore'
+import { useAppStore } from './appStore'
+import { useModStore } from './modStore'
+import { useProfileStore } from './profileStore'
+import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../utils/modIdentity'
+import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../utils/versioning'
+
+const TOOL_MOD_IDS = ['rmm.companion']
+const LANGUAGE_PACK_EXCLUDED_OWNER_IDS = new Set([
+  'brrainz.harmony',
+])
+
+const CATEGORY_ORDER = [
+  'core',
+  'official_dlc',
+  'tool_mod',
+  'dependency',
+  'replacement',
+  'language_pack',
+]
+
+const CATEGORY_META = {
+  core: {
+    title: 'Core',
+    description: '游戏核心模组。缺失时建议优先补齐。',
+    severity: 'required',
+  },
+  official_dlc: {
+    title: '官方 DLC',
+    description: '当前序列引用了未启用的官方扩展。',
+    severity: 'required',
+  },
+  tool_mod: {
+    title: '辅助工具',
+    description: '当前设置允许的工具模组未启用。',
+    severity: 'required',
+  },
+  dependency: {
+    title: '依赖项',
+    description: '这些模组是当前序列或补充候选的前置依赖。',
+    severity: 'required',
+  },
+  replacement: {
+    title: '替代模组',
+    description: '原模组缺失时，可切换到已安装的替代版本。',
+    severity: 'optional',
+  },
+  language_pack: {
+    title: '语言包',
+    description: '当前语言存在可用但未启用的语言包。',
+    severity: 'optional',
+  },
+}
+
+const SEVERITY_META = {
+  required: {
+    tone: 'danger',
+    label: '必需',
+  },
+  optional: {
+    tone: 'warn',
+    label: '可选',
+  },
+}
+
+const dedupeValues = (values = []) => [...new Set((values || []).filter(Boolean))]
+const isCoreId = (packageId = '') => normalizePackageId(packageId) === 'ludeon.rimworld'
+const isOfficialDlcId = (packageId = '') => {
+  const normalized = normalizePackageId(packageId)
+  return normalized.startsWith('ludeon.rimworld.') && normalized !== 'ludeon.rimworld'
+}
+const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
+const isToolModId = (packageId = '') => TOOL_MOD_IDS.includes(normalizePackageId(packageId))
+
+const clearReactiveObject = (target) => {
+  Object.keys(target).forEach(key => {
+    delete target[key]
+  })
+}
+
+const uniquePush = pushUnique
+
+const mergeText = (...values) => [...new Set(
+  values
+    .flatMap(value => String(value || '').split('；'))
+    .map(value => value.trim())
+    .filter(Boolean)
+)].join('；')
+
+const listOwnerNames = (owners = [], modStore) => (
+  mapUniqueDisplayNames(owners, ownerId => modStore.displayModName(ownerId))
+)
+
+const compareCategory = (left = '', right = '') => (
+  CATEGORY_ORDER.indexOf(left) - CATEGORY_ORDER.indexOf(right)
+)
+
+const pickPreferredCategory = (left = '', right = '') => {
+  if (!left) return right
+  if (!right) return left
+  return compareCategory(left, right) <= 0 ? left : right
+}
+
+const pickPreferredSeverity = (left = 'optional', right = 'optional') => (
+  left === 'required' || right === 'required' ? 'required' : 'optional'
+)
+
+const normalizeSelectionMode = (value = 'all') => {
+  const normalized = String(value || '').trim().toLowerCase()
+  return ['all', 'required', 'none', 'custom'].includes(normalized) ? normalized : 'all'
+}
+
+const sortRows = (rows = []) => (
+  [...rows].sort((left, right) => {
+    const categoryDiff = compareCategory(left.category, right.category)
+    if (categoryDiff !== 0) return categoryDiff
+    return String(left.title || '').localeCompare(String(right.title || ''))
+  })
+)
+
+export const useSupplementStore = defineStore('supplement', () => {
+  const toast = createToastInterface()
+  const appStore = useAppStore()
+  const modStore = useModStore()
+  const profileStore = useProfileStore()
+  const confirmStore = useConfirmStore()
+
+  const isVisible = ref(false)
+  const state = reactive({
+    title: '',
+    message: '',
+    confirmText: '应用选中项',
+    cancelText: '取消',
+    groups: [],
+    summary: {
+      count: 0,
+      requiredCount: 0,
+      optionalCount: 0,
+      urgency: 'none',
+    },
+  })
+
+  const toggleSelections = reactive({})
+  const choiceSelections = reactive({})
+
+  let resolvePromise = null
+
+  const currentGameVersion = computed(() => normalizeVersion(profileStore.activeContext?.game_version))
+  const currentLanguage = computed(() => String(appStore.settings?.language || '').trim())
+  const visibleRows = computed(() => state.groups.flatMap(group => group.rows || []))
+
+  // 语言包匹配严格依赖 supported_languages，避免把普通模组误判成可补充语言包。
+  const modSupportsLanguage = (mod, targetLanguage = currentLanguage.value) => {
+    const languageCode = String(targetLanguage || '').trim()
+    if (!languageCode) return false
+    return (mod?.supported_languages || []).includes(languageCode)
+  }
+
+  // 统一计算版本兼容状态，供替代模组排序和界面标签复用。
+  const getVersionInfo = (packageId = '') => {
+    const mod = modStore.takeModById(packageId)
+    if (!mod || mod.isMissing) return getVersionInfoByVersions(currentGameVersion.value)
+    const versions = dedupeNormalizedPackageIds((mod.supported_versions || []).map(value => normalizeVersion(value)))
+    return getVersionInfoByVersions(currentGameVersion.value, versions)
+  }
+
+  // 预构建“被翻译模组 -> 可用语言包”的查找表，减少递归过程中重复扫描全量模组。
+  const getLanguagePackTargetMap = () => {
+    const targetMap = new Map()
+    if (!currentLanguage.value) return targetMap
+    for (const mod of modStore.allModsMap.values()) {
+      if (!mod || mod.isMissing || !mod.path || !isLanguagePackMod(mod)) continue
+      if (!modSupportsLanguage(mod, currentLanguage.value)) continue
+      const relatedTargets = new Set()
+      ;(mod.rules?.dependencies || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
+      ;(mod.rules?.load_after || []).forEach(rule => relatedTargets.add(normalizePackageId(rule?.target_id)))
+      relatedTargets.forEach(targetId => {
+        if (!targetId) return
+        if (!targetMap.has(targetId)) targetMap.set(targetId, [])
+        targetMap.get(targetId).push(mod)
+      })
+    }
+    return targetMap
+  }
+
+  // ctx 是一次补缺计算共享的只读上下文，递归构图时都复用这一份派生数据。
+  const createContext = (activeIds = modStore.activeIds) => {
+    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    return {
+      activeIds: normalizedActiveIds,
+      activeSet: new Set(normalizedActiveIds),
+      languagePackTargetMap: getLanguagePackTargetMap(),
+    }
+  }
+
+  const buildOwnersDetail = (owners = [], suffix = '') => {
+    const ownerNames = listOwnerNames(owners, modStore)
+    if (ownerNames.length === 0) return suffix
+    const joined = ownerNames.join('、')
+    return suffix ? `${joined}${suffix}` : joined
+  }
+
+  // 这些通用前置不参与语言包补缺，避免把提示范围扩大到用户不关心的基础包。
+  const shouldSkipLanguageSupplementOwner = (ownerId = '') => {
+    const normalizedOwnerId = normalizePackageId(ownerId)
+    return isCoreId(normalizedOwnerId)
+      || isOfficialDlcId(normalizedOwnerId)
+      || isToolModId(normalizedOwnerId)
+      || LANGUAGE_PACK_EXCLUDED_OWNER_IDS.has(normalizedOwnerId)
+  }
+
+  // 替代项限定在同一 workshop_id 且已安装的模组中查找，并优先兼容当前版本。
+  const findReplacementCandidates = (missingMod, activeSet, trailSet = new Set()) => {
+    const workshopId = String(missingMod?.workshop_id || '').trim()
+    if (!missingMod?.isMissing || !workshopId) return []
+    return Array.from(modStore.allModsMap.values())
+      .filter(candidate => {
+        const candidateId = normalizePackageId(candidate?.package_id)
+        return !!candidateId
+          && !candidate?.isMissing
+          && !!candidate?.path
+          && !activeSet.has(candidateId)
+          && !trailSet.has(candidateId)
+          && String(candidate?.workshop_id || '').trim() === workshopId
+          && candidateId !== normalizePackageId(missingMod?.package_id)
+      })
+      .sort((left, right) => {
+        const leftVersion = getVersionInfo(left.package_id).tone === 'success' ? 0 : 1
+        const rightVersion = getVersionInfo(right.package_id).tone === 'success' ? 0 : 1
+        if (leftVersion !== rightVersion) return leftVersion - rightVersion
+        return modStore.displayModName(left).localeCompare(modStore.displayModName(right))
+      })
+  }
+
+  // 这里只收集“候选条目”，不直接决定是否显示或启用。
+  // satisfiedSet 表示当前路径已满足的包，trailSet 用于阻断递归回环。
+  const collectDependencyEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
+    const entryMap = new Map()
+
+    ownerIds.forEach(ownerId => {
+      const owner = modStore.takeModById(ownerId)
+      if (!owner || isLanguagePackMod(owner)) return
+      ;(owner.rules?.dependencies || []).forEach(rule => {
+        const targetId = normalizePackageId(rule?.target_id)
+        if (!targetId) return
+        const alternativeIds = dedupeNormalizedPackageIds(rule?.alternatives || [])
+        const optionIds = dedupeNormalizedPackageIds([targetId, ...alternativeIds]).filter(optionId => !trailSet.has(optionId))
+        if (optionIds.length === 0) return
+        if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
+
+        const installedOptionIds = optionIds.filter(optionId => modStore.hasRealModById(optionId))
+        if (installedOptionIds.length === 0) return
+
+        const category = isCoreId(targetId)
+          ? 'core'
+          : isOfficialDlcId(targetId)
+            ? 'official_dlc'
+            : 'dependency'
+
+        const key = `dependency:${targetId}:${installedOptionIds.join('|')}`
+        if (!entryMap.has(key)) {
+          const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
+          const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
+          entryMap.set(key, {
+            entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
+            key,
+            category,
+            severity: CATEGORY_META[category]?.severity || 'required',
+            title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
+            reason: '',
+            detail: '',
+            owners: [],
+            packageId: onlyOptionId,
+            removeIds: [],
+            relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
+            allowSkip: true,
+            defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
+            options: installedOptionIds.map(optionId => ({
+              packageId: optionId,
+              title: modStore.displayModName(optionId),
+              detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+              removeIds: [],
+              relationLabel: optionId === targetId ? '依赖' : '备选依赖',
+            })),
+          })
+        }
+        uniquePush(entryMap.get(key).owners, ownerId)
+      })
+    })
+
+    return Array.from(entryMap.values()).map(entry => {
+      const ownerCount = entry.owners.length
+      const ownerDetail = buildOwnersDetail(entry.owners, ownerCount > 0 ? ' 的依赖' : '依赖')
+      return {
+        ...entry,
+        reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖` : '当前序列缺少依赖项',
+        detail: ownerDetail,
+      }
+    })
+  }
+
+  // 语言包候选会参与递归构图，因此“新补进来的依赖”也能继续带出自己的语言包。
+  const collectLanguageEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
+    if (!currentLanguage.value) return []
+    const entryMap = new Map()
+
+    ownerIds.forEach(ownerId => {
+      const owner = modStore.takeModById(ownerId)
+      if (!owner || isLanguagePackMod(owner)) return
+      if (shouldSkipLanguageSupplementOwner(ownerId)) return
+      const supportedLanguages = owner.supported_languages || []
+      if (supportedLanguages.length === 0) return
+      if (supportedLanguages.includes(currentLanguage.value)) return
+      const candidates = (ctx.languagePackTargetMap.get(normalizePackageId(ownerId)) || [])
+        .filter(candidate => {
+          const candidateId = normalizePackageId(candidate?.package_id)
+          return !!candidateId
+            && !candidate?.isMissing
+            && !!candidate?.path
+            && !satisfiedSet.has(candidateId)
+            && !trailSet.has(candidateId)
+        })
+      if (candidates.length === 0) return
+
+      candidates.forEach(candidate => {
+        const candidateId = normalizePackageId(candidate.package_id)
+        const key = `language:${candidateId}`
+        if (!entryMap.has(key)) {
+          entryMap.set(key, {
+            entryType: 'toggle',
+            key,
+            category: 'language_pack',
+            severity: 'optional',
+            title: modStore.displayModName(candidate),
+            reason: '',
+            detail: '',
+            owners: [],
+            packageId: candidateId,
+            removeIds: [],
+            relationLabel: '语言包',
+          })
+        }
+        uniquePush(entryMap.get(key).owners, ownerId)
+      })
+    })
+
+    return Array.from(entryMap.values()).map(entry => {
+      const ownerCount = entry.owners.length
+      return {
+        ...entry,
+        reason: ownerCount > 1 ? `可为 ${ownerCount} 个模组提供当前语言支持` : '可补充当前语言包',
+        detail: buildOwnersDetail(entry.owners, ' 的语言包'),
+      }
+    })
+  }
+
+  // 替代项属于互斥选择，因此这里直接产出 choice 类型条目。
+  const collectReplacementEntries = (ctx, trailSet = new Set()) => {
+    return ctx.activeIds
+      .map(activeId => modStore.takeModById(activeId))
+      .filter(mod => mod?.isMissing)
+      .map(missingMod => {
+        const candidates = findReplacementCandidates(missingMod, ctx.activeSet, trailSet)
+        if (candidates.length === 0) return null
+        const preferredCandidate = candidates.find(candidate => getVersionInfo(candidate.package_id).tone === 'success') || candidates[0]
+        return {
+          entryType: 'choice',
+          key: `replacement:${normalizePackageId(missingMod.package_id)}`,
+          category: 'replacement',
+          severity: 'optional',
+          title: modStore.displayModName(missingMod.package_id),
+          reason: '原模组缺失，可切换到已安装替代版本',
+          detail: '替代模组与原模组二选一，默认优先选择当前版本兼容项。',
+          owners: [normalizePackageId(missingMod.package_id)],
+          allowSkip: true,
+          defaultOptionPackageId: normalizePackageId(preferredCandidate.package_id),
+          options: candidates.map(candidate => ({
+            packageId: normalizePackageId(candidate.package_id),
+            title: modStore.displayModName(candidate),
+            detail: '应用后会移除当前缺失项并启用该替代版本',
+            removeIds: [normalizePackageId(missingMod.package_id)],
+            relationLabel: '替代',
+          })),
+        }
+      })
+      .filter(Boolean)
+  }
+
+  // 根候选只负责当前工作序列直接可见的缺口，链式补缺在后续构图阶段递归展开。
+  const collectRootEntries = (ctx) => {
+    const entries = []
+
+    if (modStore.hasRealModById('ludeon.rimworld') && !ctx.activeSet.has('ludeon.rimworld')) {
+      entries.push({
+        entryType: 'toggle',
+        key: 'core:ludeon.rimworld',
+        category: 'core',
+        severity: 'required',
+        title: modStore.displayModName('ludeon.rimworld'),
+        reason: '当前启用序列缺少 Core',
+        detail: '保存或启动游戏前建议补齐。',
+        owners: [],
+        packageId: 'ludeon.rimworld',
+        removeIds: [],
+        relationLabel: 'Core',
+      })
+    }
+
+    if (appStore.settings.enable_tool_mods) {
+      TOOL_MOD_IDS.forEach(toolId => {
+        if (!modStore.hasRealModById(toolId) || ctx.activeSet.has(toolId)) return
+        entries.push({
+          entryType: 'toggle',
+          key: `tool:${toolId}`,
+          category: 'tool_mod',
+          severity: 'required',
+          title: modStore.displayModName(toolId),
+          reason: '当前设置启用了工具模组支持',
+          detail: '工具模组已安装但未启用。',
+          owners: [],
+          packageId: toolId,
+          removeIds: [],
+          relationLabel: '工具',
+        })
+      })
+    }
+
+    entries.push(...collectDependencyEntries(ctx.activeIds, ctx, ctx.activeSet, new Set()))
+    entries.push(...collectReplacementEntries(ctx, new Set()))
+    entries.push(...collectLanguageEntries(ctx.activeIds, ctx, ctx.activeSet, new Set()))
+
+    return entries
+  }
+
+  const graphState = ref(null)
+  const toggleOverrides = reactive({})
+  const choiceOverrides = reactive({})
+  const defaultSelectionMode = ref('all')
+
+  // choice option 需要跨不同来源合并，这里先统一成标准结构。
+  const createChoiceOption = (rowId, option = {}) => {
+    const packageId = normalizePackageId(option.packageId)
+    return {
+      id: `${rowId}:${packageId}`,
+      packageId,
+      title: option.title || modStore.displayModName(packageId),
+      detail: option.detail || '',
+      removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
+      relationLabel: option.relationLabel || '',
+      relationLabels: option.relationLabel ? [option.relationLabel] : [],
+      versionInfo: getVersionInfo(packageId),
+    }
+  }
+
+  // 同一 option 可能被多条路径引用，按 packageId 合并后再用于平面展示。
+  const mergeChoiceOptions = (currentOptions = [], incomingOptions = [], rowId) => {
+    const optionMap = new Map(currentOptions.map(option => [option.packageId, { ...option }]))
+    ;(incomingOptions || []).forEach(option => {
+      const nextOption = createChoiceOption(rowId, option)
+      const currentOption = optionMap.get(nextOption.packageId)
+      if (!currentOption) {
+        optionMap.set(nextOption.packageId, nextOption)
+        return
+      }
+      currentOption.title = currentOption.title || nextOption.title
+      currentOption.detail = mergeText(currentOption.detail, nextOption.detail)
+      currentOption.removeIds = dedupeNormalizedPackageIds([...currentOption.removeIds, ...nextOption.removeIds])
+      currentOption.relationLabel = currentOption.relationLabel || nextOption.relationLabel
+      currentOption.relationLabels = dedupeValues([...currentOption.relationLabels, ...nextOption.relationLabels])
+      currentOption.versionInfo = currentOption.versionInfo?.tone === 'success' ? currentOption.versionInfo : nextOption.versionInfo
+    })
+    return Array.from(optionMap.values()).sort((left, right) => String(left.title || '').localeCompare(String(right.title || '')))
+  }
+
+  const createEmptySummary = () => ({
+    count: 0,
+    requiredCount: 0,
+    optionalCount: 0,
+    urgency: 'none',
+  })
+
+  // 图节点不是最终 UI 行；这里把节点转成可合并的平面行结构。
+  const createToggleRow = (node) => ({
+    id: node.rowId,
+    kind: 'toggle',
+    category: node.category,
+    severity: node.severity || 'optional',
+    packageId: node.packageId,
+    title: node.title || modStore.displayModName(node.packageId),
+    reason: node.reason || '',
+    detail: node.detail || '',
+    owners: dedupeNormalizedPackageIds(node.owners || []),
+    removeIds: dedupeNormalizedPackageIds(node.removeIds || []),
+    relationLabel: node.relationLabel || '',
+    relationLabels: node.relationLabel ? [node.relationLabel] : [],
+    versionInfo: node.versionInfo || getVersionInfo(node.packageId),
+  })
+
+  const createChoiceRow = (node) => ({
+    id: node.rowId,
+    kind: 'choice',
+    category: node.category,
+    severity: node.severity || 'optional',
+    title: node.title || '',
+    reason: node.reason || '',
+    detail: node.detail || '',
+    owners: dedupeNormalizedPackageIds(node.owners || []),
+    allowSkip: node.allowSkip !== false,
+    options: mergeChoiceOptions([], node.options || [], node.rowId),
+    defaultOptionId: node.defaultOptionId || '',
+  })
+
+  // rowCatalog 用来把内部递归图投影成“去重后的平面行目录”。
+  const mergeRowFromNode = (catalog, node) => {
+    if (node.kind === 'choice') {
+      const currentRow = catalog.get(node.rowId)
+      if (!currentRow) {
+        catalog.set(node.rowId, createChoiceRow(node))
+        return
+      }
+      currentRow.category = pickPreferredCategory(currentRow.category, node.category)
+      currentRow.severity = pickPreferredSeverity(currentRow.severity, node.severity)
+      currentRow.title = currentRow.title || node.title || ''
+      currentRow.reason = mergeText(currentRow.reason, node.reason)
+      currentRow.detail = mergeText(currentRow.detail, node.detail)
+      currentRow.owners = dedupeNormalizedPackageIds([...currentRow.owners, ...(node.owners || [])])
+      currentRow.allowSkip = currentRow.allowSkip && node.allowSkip !== false
+      currentRow.options = mergeChoiceOptions(currentRow.options, node.options || [], node.rowId)
+      const preferredOption = currentRow.options.find(option => option.id === node.defaultOptionId) || currentRow.options[0]
+      currentRow.defaultOptionId = preferredOption?.id || currentRow.defaultOptionId || ''
+      return
+    }
+
+    const currentRow = catalog.get(node.rowId)
+    if (!currentRow) {
+      catalog.set(node.rowId, createToggleRow(node))
+      return
+    }
+    currentRow.category = pickPreferredCategory(currentRow.category, node.category)
+    currentRow.severity = pickPreferredSeverity(currentRow.severity, node.severity)
+    currentRow.title = currentRow.title || node.title || modStore.displayModName(node.packageId)
+    currentRow.reason = mergeText(currentRow.reason, node.reason)
+    currentRow.detail = mergeText(currentRow.detail, node.detail)
+    currentRow.owners = dedupeNormalizedPackageIds([...currentRow.owners, ...(node.owners || [])])
+    currentRow.removeIds = dedupeNormalizedPackageIds([...currentRow.removeIds, ...(node.removeIds || [])])
+    currentRow.relationLabels = dedupeValues([...currentRow.relationLabels, ...(node.relationLabel ? [node.relationLabel] : [])])
+    currentRow.relationLabel = currentRow.relationLabels[0] || ''
+    currentRow.versionInfo = currentRow.versionInfo?.tone === 'success' ? currentRow.versionInfo : node.versionInfo
+  }
+
+  const cloneRow = (row) => {
+    if (!row) return null
+    if (row.kind === 'choice') {
+      return {
+        ...row,
+        owners: [...(row.owners || [])],
+        options: (row.options || []).map(option => ({
+          ...option,
+          removeIds: [...(option.removeIds || [])],
+          relationLabels: [...(option.relationLabels || [])],
+        })),
+      }
+    }
+    return {
+      ...row,
+      owners: [...(row.owners || [])],
+      removeIds: [...(row.removeIds || [])],
+      relationLabels: [...(row.relationLabels || [])],
+    }
+  }
+
+  // UI 仍按类别分组，但数据来源是闭包求解后的平面行结果。
+  const buildGroupsFromRows = (rows = []) => {
+    const groups = CATEGORY_ORDER
+      .map(category => {
+        const groupRows = rows.filter(row => row.category === category)
+        if (groupRows.length === 0) return null
+        return {
+          key: category,
+          title: CATEGORY_META[category]?.title || category,
+          description: CATEGORY_META[category]?.description || '',
+          severity: CATEGORY_META[category]?.severity || 'optional',
+          rows: sortRows(groupRows),
+        }
+      })
+      .filter(Boolean)
+
+    const count = rows.length
+    const requiredCount = rows.filter(row => row.severity === 'required').length
+    const optionalCount = count - requiredCount
+
+    return {
+      groups,
+      summary: {
+        count,
+        requiredCount,
+        optionalCount,
+        urgency: requiredCount > 0 ? 'danger' : count > 0 ? 'warn' : 'none',
+      },
+    }
+  }
+
+  const getDefaultToggleSelection = (row, mode = defaultSelectionMode.value) => {
+    const normalizedMode = normalizeSelectionMode(mode)
+    if (normalizedMode === 'none') return false
+    if (normalizedMode === 'required') return row?.severity === 'required'
+    return true
+  }
+
+  const getDefaultChoiceSelection = (row, mode = defaultSelectionMode.value) => {
+    const normalizedMode = normalizeSelectionMode(mode)
+    if (normalizedMode === 'none') return ''
+    if (normalizedMode === 'required' && row?.severity !== 'required') return ''
+    return row?.defaultOptionId || ''
+  }
+
+  // 核心设计：先完整构图，再从图里按当前选择求闭包。
+  // 这样可以一次拿到整条补缺链，不会出现“补一次再补一次”。
+  const buildSupplementGraph = (activeIds = modStore.activeIds) => {
+    const ctx = createContext(activeIds)
+    const nodes = new Map()
+    const rowCatalog = new Map()
+    const sequenceRef = { value: 0 }
+
+    const nextNodeId = (prefix = 'node') => {
+      sequenceRef.value += 1
+      return `${prefix}:${sequenceRef.value}`
+    }
+
+    // satisfiedSet 会随着当前路径假定启用的包逐层扩展，
+    // 因此新补进来的依赖也会继续触发自己的依赖和语言包检查。
+    const buildNode = (entry, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
+      if (!entry) return null
+
+      if (entry.entryType === 'choice') {
+        const rowId = entry.key
+        const options = (entry.options || []).map(option => {
+          const packageId = normalizePackageId(option.packageId)
+          const nextTrailSet = new Set([...Array.from(trailSet), packageId])
+          const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
+          const childEntries = [
+            ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+            ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+          ]
+          const childNodeIds = childEntries
+            .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
+            .filter(Boolean)
+
+          return {
+            id: `${rowId}:${packageId}`,
+            packageId,
+            title: option.title || modStore.displayModName(packageId),
+            detail: option.detail || '',
+            removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
+            relationLabel: option.relationLabel || '',
+            relationLabels: option.relationLabel ? [option.relationLabel] : [],
+            versionInfo: getVersionInfo(packageId),
+            childNodeIds,
+          }
+        })
+
+        const preferredPackageId = normalizePackageId(entry.defaultOptionPackageId)
+        const preferredOption = options.find(option => option.packageId === preferredPackageId) || options[0]
+        const node = {
+          id: nextNodeId('choice'),
+          rowId,
+          kind: 'choice',
+          category: entry.category,
+          severity: entry.severity || 'optional',
+          title: entry.title || '',
+          reason: entry.reason || '',
+          detail: entry.detail || '',
+          owners: dedupeNormalizedPackageIds(entry.owners || []),
+          allowSkip: entry.allowSkip !== false,
+          options,
+          defaultOptionId: preferredOption?.id || '',
+        }
+        nodes.set(node.id, node)
+        mergeRowFromNode(rowCatalog, node)
+        return node.id
+      }
+
+      const packageId = normalizePackageId(entry.packageId)
+      if (!packageId) return null
+      const rowId = `toggle:${packageId}`
+      const nextTrailSet = new Set([...Array.from(trailSet), packageId])
+      const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
+      const childEntries = [
+        ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+        ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+      ]
+      const childNodeIds = childEntries
+        .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
+        .filter(Boolean)
+
+      const node = {
+        id: nextNodeId('toggle'),
+        rowId,
+        kind: 'toggle',
+        category: entry.category,
+        severity: entry.severity || 'optional',
+        packageId,
+        title: entry.title || modStore.displayModName(packageId),
+        reason: entry.reason || '',
+        detail: entry.detail || '',
+        owners: dedupeNormalizedPackageIds(entry.owners || []),
+        removeIds: dedupeNormalizedPackageIds(entry.removeIds || []),
+        relationLabel: entry.relationLabel || '',
+        versionInfo: getVersionInfo(packageId),
+        childNodeIds,
+      }
+      nodes.set(node.id, node)
+      mergeRowFromNode(rowCatalog, node)
+      return node.id
+    }
+
+    const rootNodeIds = collectRootEntries(ctx)
+      .map(entry => buildNode(entry, ctx.activeSet, new Set()))
+      .filter(Boolean)
+
+    return {
+      nodes,
+      rowCatalog,
+      rootNodeIds,
+    }
+  }
+
+  // 用户交互只记录 override，真实可见项与最终 payload 每次都重新从图里求解。
+  const applySelectionDefaults = (rowId, row) => {
+    if (row.kind === 'choice') {
+      if (Object.prototype.hasOwnProperty.call(choiceOverrides, rowId)) {
+        return choiceOverrides[rowId] || ''
+      }
+      return getDefaultChoiceSelection(row, defaultSelectionMode.value)
+    }
+    if (Object.prototype.hasOwnProperty.call(toggleOverrides, rowId)) {
+      return !!toggleOverrides[rowId]
+    }
+    return getDefaultToggleSelection(row, defaultSelectionMode.value)
+  }
+
+  // 闭包求解同时完成两件事：
+  // 1. 计算当前应显示的平面列表
+  // 2. 汇总最终 add/remove 的 packageId 载荷
+  const resolveSelectionClosure = (graph) => {
+    if (!graph) {
+      return {
+        rows: [],
+        toggleState: {},
+        choiceState: {},
+        payload: { addIds: [], removeIds: [] },
+      }
+    }
+
+    const visibleRowMap = new Map()
+    const toggleState = {}
+    const choiceState = {}
+    const addIds = []
+    const removeIds = []
+
+    const ensureVisibleRow = (rowId) => {
+      if (visibleRowMap.has(rowId)) return visibleRowMap.get(rowId)
+      const baseRow = cloneRow(graph.rowCatalog.get(rowId))
+      if (!baseRow) return null
+      visibleRowMap.set(rowId, baseRow)
+      return baseRow
+    }
+
+    const traverseNode = (nodeId) => {
+      const node = graph.nodes.get(nodeId)
+      if (!node) return
+      const row = ensureVisibleRow(node.rowId)
+      if (!row) return
+
+      if (node.kind === 'choice') {
+        const selectedOptionId = applySelectionDefaults(node.rowId, row)
+        choiceState[node.rowId] = selectedOptionId
+        const selectedOption = (node.options || []).find(option => option.id === selectedOptionId)
+        if (!selectedOption) return
+        uniquePush(addIds, selectedOption.packageId)
+        ;(selectedOption.removeIds || []).forEach(removeId => uniquePush(removeIds, removeId))
+        ;(selectedOption.childNodeIds || []).forEach(traverseNode)
+        return
+      }
+
+      const checked = applySelectionDefaults(node.rowId, row)
+      toggleState[node.rowId] = checked
+      if (!checked) return
+      uniquePush(addIds, node.packageId)
+      ;(node.removeIds || []).forEach(removeId => uniquePush(removeIds, removeId))
+      ;(node.childNodeIds || []).forEach(traverseNode)
+    }
+
+    ;(graph.rootNodeIds || []).forEach(traverseNode)
+
+    return {
+      rows: sortRows(Array.from(visibleRowMap.values())),
+      toggleState,
+      choiceState,
+      payload: {
+        addIds,
+        removeIds: removeIds.filter(removeId => !addIds.includes(removeId)),
+      },
+    }
+  }
+
+  // UI 使用的是分组平面计划，而不是内部节点结构。
+  const resolveProjectedPlan = (graph) => {
+    const closure = resolveSelectionClosure(graph)
+    return {
+      ...buildGroupsFromRows(closure.rows),
+      toggleState: closure.toggleState,
+      choiceState: closure.choiceState,
+      payload: closure.payload,
+    }
+  }
+
+  // 这是直接绑定到界面的派生选择状态，每次重算计划时整体替换。
+  const replaceSelectionState = (toggleState = {}, choiceState = {}) => {
+    clearReactiveObject(toggleSelections)
+    clearReactiveObject(choiceSelections)
+    Object.entries(toggleState).forEach(([key, value]) => {
+      toggleSelections[key] = !!value
+    })
+    Object.entries(choiceState).forEach(([key, value]) => {
+      choiceSelections[key] = value || ''
+    })
+  }
+
+  // 打开弹窗时只灌入预先算好的结果，不在这里再做业务判断。
+  const applyResolvedPlan = (plan, {
+    title = '',
+    message = '',
+    confirmText = '应用选中项',
+    cancelText = '取消',
+  } = {}) => {
+    state.title = title
+    state.message = message
+    state.confirmText = confirmText
+    state.cancelText = cancelText
+    state.groups = plan.groups || []
+    state.summary = plan.summary || createEmptySummary()
+    replaceSelectionState(plan.toggleState || {}, plan.choiceState || {})
+  }
+
+  const clearSelectionOverrides = () => {
+    clearReactiveObject(toggleOverrides)
+    clearReactiveObject(choiceOverrides)
+  }
+
+  const resetDialogState = () => {
+    state.title = ''
+    state.message = ''
+    state.confirmText = '应用选中项'
+    state.cancelText = '取消'
+    state.groups = []
+    state.summary = createEmptySummary()
+    graphState.value = null
+    defaultSelectionMode.value = 'all'
+    clearReactiveObject(toggleSelections)
+    clearReactiveObject(choiceSelections)
+    clearSelectionOverrides()
+  }
+
+  // 每次切换勾选后都重新投影一次计划，确保父子联动始终一致。
+  const rebuildVisiblePlan = () => {
+    const plan = resolveProjectedPlan(graphState.value)
+    state.groups = plan.groups || []
+    state.summary = plan.summary || createEmptySummary()
+    replaceSelectionState(plan.toggleState || {}, plan.choiceState || {})
+  }
+
+  // 摘要同样走完整闭包流程，避免和弹窗实际看到的建议数量不一致。
+  const buildSummary = (activeIds = modStore.activeIds) => {
+    const graph = buildSupplementGraph(activeIds)
+    const closure = resolveSelectionClosure(graph)
+    return buildGroupsFromRows(closure.rows)
+  }
+
+  const collectSelectionPayload = () => resolveSelectionClosure(graphState.value).payload
+
+  // 打开前先补齐 ghost mod 信息，避免缺失项无法建立替代关系或依赖关系。
+  const prepareDialogPlan = async (activeIds = modStore.activeIds) => {
+    await modStore.fetchAndCacheGhostMods(activeIds)
+    const graph = buildSupplementGraph(activeIds)
+    const plan = resolveProjectedPlan(graph)
+    return { graph, plan }
+  }
+
+  // prepared 允许外部复用同一份预计算结果，减少重复构图与闭包求解。
+  const openPreparedPlan = async ({
+    activeIds = modStore.activeIds,
+    title = '补充建议',
+    message = '',
+    confirmText = '应用选中项',
+    cancelText = '取消',
+    prepared = null,
+  } = {}) => {
+    resetDialogState()
+    defaultSelectionMode.value = 'all'
+    const resolvedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    const resolvedPrepared = prepared || await prepareDialogPlan(resolvedActiveIds)
+    graphState.value = resolvedPrepared.graph
+    applyResolvedPlan(resolvedPrepared.plan, { title, message, confirmText, cancelText })
+    isVisible.value = true
+    return new Promise(resolve => {
+      resolvePromise = resolve
+    })
+  }
+
+  const cancel = () => {
+    isVisible.value = false
+    resolvePromise?.(null)
+    resolvePromise = null
+  }
+
+  const confirm = () => {
+    const payload = collectSelectionPayload()
+    isVisible.value = false
+    resolvePromise?.(payload)
+    resolvePromise = null
+  }
+
+  // 这些批量操作本质上只是切换默认选择模式并清空手动 override。
+  const selectAll = () => {
+    defaultSelectionMode.value = 'all'
+    clearSelectionOverrides()
+    rebuildVisiblePlan()
+  }
+
+  const selectRequiredOnly = () => {
+    defaultSelectionMode.value = 'required'
+    clearSelectionOverrides()
+    rebuildVisiblePlan()
+  }
+
+  const clearSelection = () => {
+    defaultSelectionMode.value = 'none'
+    clearSelectionOverrides()
+    rebuildVisiblePlan()
+  }
+
+  const isRootChecked = (rowId) => !!toggleSelections[rowId]
+  const getChoiceSelection = (rowId) => choiceSelections[rowId] || ''
+
+  const toggleRoot = (rowId, checked) => {
+    toggleOverrides[rowId] = !!checked
+    rebuildVisiblePlan()
+  }
+
+  const chooseRootOption = (rowId, optionId) => {
+    choiceOverrides[rowId] = optionId || ''
+    rebuildVisiblePlan()
+  }
+
+  // 真正应用时只改前端工作序列并写入历史栈，绝不直接写盘。
+  // removeIds 主要服务于替代模组这类“启用新项同时移除旧项”的场景。
+  const applySelectionPayload = async (payload = { addIds: [], removeIds: [] }, { silent = false } = {}) => {
+    const idsToEnable = dedupeNormalizedPackageIds(payload.addIds || [])
+    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || []).filter(removeId => !idsToEnable.includes(removeId))
+    if (idsToEnable.length === 0 && idsToRemove.length === 0) return false
+
+    const success = await modStore.runListHistoryTransaction({
+      type: 'supplement-enable',
+      label: idsToRemove.length > 0
+        ? `补充启用 ${idsToEnable.length} 项并替换 ${idsToRemove.length} 项`
+        : `补充启用 ${idsToEnable.length} 项`,
+      trackedModIds: [...idsToEnable, ...idsToRemove],
+    }, async () => {
+      modStore.removeIdsOnAllList([...idsToEnable, ...idsToRemove])
+      if (idsToEnable.length > 0) {
+        await modStore.smartInsertMods(idsToEnable)
+        modStore.takeModListByIds(idsToEnable).forEach(mod => {
+          mod.last_moved_time = Date.now()
+          mod.last_active_time = Date.now()
+        })
+      }
+      modStore.updateInactiveIds()
+    })
+
+    if (success && !silent) {
+      const suffix = idsToRemove.length > 0 ? `，并移除了 ${idsToRemove.length} 个原项` : ''
+      toast.success(`已补充启用 ${idsToEnable.length} 个模组${suffix}`)
+    }
+    return success
+  }
+
+  // 常规入口：用户主动打开补缺弹窗。
+  const openForActiveList = async ({
+    activeIds = modStore.activeIds,
+    title = '补充建议',
+    message = '以下内容只会在你确认后应用到当前前端工作序列，不会自动写入磁盘。',
+  } = {}) => {
+    const prepared = await prepareDialogPlan(activeIds)
+    if (prepared.plan.summary.count === 0) {
+      toast.info('当前序列没有可补充项', { timeout: 1800 })
+      return false
+    }
+    const payload = await openPreparedPlan({
+      activeIds,
+      title,
+      message,
+      confirmText: '应用到当前序列',
+      cancelText: '取消',
+      prepared,
+    })
+    if (!payload) return false
+    return await applySelectionPayload(payload)
+  }
+
+  // 保存前只强提示必需项；用户仍可明确确认后跳过。
+  const ensureRequiredBeforeSave = async ({
+    activeIds = modStore.activeIds,
+    actionLabel = '保存',
+  } = {}) => {
+    const prepared = await prepareDialogPlan(activeIds)
+    if (prepared.plan.summary.requiredCount === 0) return true
+
+    const payload = await openPreparedPlan({
+      activeIds,
+      title: `${actionLabel}前发现必需补缺项`,
+      message: '以下必需项会在保存或启动前重点提示。你可以先应用需要的补缺；若仍保留当前序列，也可以继续保存。',
+      confirmText: '应用选中项',
+      cancelText: '暂不处理',
+      prepared,
+    })
+
+    if (payload) {
+      await applySelectionPayload(payload, { silent: true })
+    }
+
+    const nextSummary = buildSummary(modStore.activeIds).summary
+    if (nextSummary.requiredCount === 0) return true
+
+    return await confirmStore.confirmAction(
+      `${actionLabel}前仍有必需补缺项`,
+      `当前还有 ${nextSummary.requiredCount} 项必需补缺建议未处理。\n继续${actionLabel}会按当前序列直接写盘，是否继续？`,
+      {
+        type: 'warning',
+        confirmText: `继续${actionLabel}`,
+        cancelText: '返回处理',
+      }
+    )
+  }
+
+  // 自动排序前更严格：必需项未处理时直接取消排序，避免在不完整序列上排序。
+  const ensureRequiredBeforeAutosort = async ({
+    activeIds = modStore.activeIds,
+  } = {}) => {
+    const prepared = await prepareDialogPlan(activeIds)
+    if (prepared.plan.summary.requiredCount === 0) return true
+
+    const payload = await openPreparedPlan({
+      activeIds,
+      title: '自动排序前发现必需补缺项',
+      message: '这些必需项会参与本次自动排序。请先补齐需要启用的模组，再继续自动排序。',
+      confirmText: '补齐并继续排序',
+      cancelText: '取消排序',
+      prepared,
+    })
+    if (!payload) return false
+
+    await applySelectionPayload(payload, { silent: true })
+    const nextSummary = buildSummary(modStore.activeIds).summary
+    if (nextSummary.requiredCount === 0) return true
+
+    toast.warning(`自动排序已取消，仍有 ${nextSummary.requiredCount} 项必需补缺建议未处理。`, { timeout: 2600 })
+    return false
+  }
+
+  // 统计始终基于当前闭包结果，因此父项取消后其子项会同步从计数中移除。
+  const selectedStats = computed(() => {
+    let total = 0
+    let selected = 0
+
+    visibleRows.value.forEach(row => {
+      total += 1
+      if (row.kind === 'choice') {
+        if (choiceSelections[row.id]) selected += 1
+        return
+      }
+      if (toggleSelections[row.id]) selected += 1
+    })
+
+    return { selected, total }
+  })
+
+  const selectedCount = computed(() => selectedStats.value.selected)
+  const totalCount = computed(() => selectedStats.value.total)
+
+  // 提供给外层按钮/徽标使用的轻量摘要，不暴露完整行数据。
+  const getSuggestionSummary = (activeIds = modStore.activeIds) => {
+    const { groups, summary } = buildSummary(activeIds)
+    return {
+      groups: groups.map(group => ({
+        key: group.key,
+        title: group.title,
+        severity: group.severity,
+        count: group.rows.length,
+      })),
+      ...summary,
+    }
+  }
+
+  return {
+    isVisible,
+    state,
+    toggleSelections,
+    choiceSelections,
+    selectedCount,
+    totalCount,
+    getSuggestionSummary,
+    openForActiveList,
+    ensureRequiredBeforeSave,
+    ensureRequiredBeforeAutosort,
+    isRootChecked,
+    getChoiceSelection,
+    toggleRoot,
+    chooseRootOption,
+    selectAll,
+    selectRequiredOnly,
+    clearSelection,
+    confirm,
+    cancel,
+    severityMeta: SEVERITY_META,
+  }
+})

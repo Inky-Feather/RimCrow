@@ -132,6 +132,36 @@ export const useTaskStore = defineStore('tasks', () => {
     })
   }
 
+  const settleActiveTasks = (types = null, { status = 'cancelled', message = '', metrics = {} } = {}) => {
+    const normalizedTypes = types == null
+      ? null
+      : (Array.isArray(types) ? types : [types])
+          .map(type => String(type || '').trim().toLowerCase())
+          .filter(Boolean)
+
+    let settledCount = 0
+    for (const task of Array.from(taskMap.value.values())) {
+      if (!ACTIVE_STATUSES.has(task.status)) continue
+      if (normalizedTypes && !normalizedTypes.includes(task.type)) continue
+
+      upsertTask({
+        id: task.id,
+        type: task.type,
+        status,
+        progress: task.progress ?? 0,
+        message: message || task.message,
+        metrics: {
+          ...(task.metrics || {}),
+          ...(metrics || {}),
+        },
+        timestamp: Date.now(),
+      })
+      settledCount += 1
+    }
+
+    return settledCount
+  }
+
   return {
     taskMap,
     tasks,
@@ -144,5 +174,6 @@ export const useTaskStore = defineStore('tasks', () => {
     getLatestTaskByType,
     hasActiveTaskOfType,
     waitForTaskCompletion,
+    settleActiveTasks,
   }
 })

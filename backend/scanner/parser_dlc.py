@@ -18,7 +18,7 @@ if __name__ == "__main__":
     # sys.path 需要字符串类型，所以要用 str() 转换一下
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-from backend.utils.constants import LANGUAGE_MAP
+from backend.utils.constants import normalize_language_code
 
 
 CACHE_FILE = os.path.join(CACHE_DIR, 'dlc_i18n_all.json')
@@ -152,10 +152,20 @@ class DLCParser:
             except Exception:
                 logger.info("[DLCParser] Cache corrupted, rebuilding all.")
 
-        current_trans = cache_data.get('translations', {})
+        current_trans = {}
         current_meta = cache_data.get('meta', {}) # 记录文件名对应的时间戳
         
         is_dirty = False
+        for lang_key, translations in (cache_data.get('translations', {}) or {}).items():
+            normalized_key = normalize_language_code(lang_key)
+            if not normalized_key:
+                continue
+            if normalized_key != lang_key:
+                is_dirty = True
+            if normalized_key not in current_trans:
+                current_trans[normalized_key] = {}
+            if isinstance(translations, dict):
+                current_trans[normalized_key].update(translations)
 
         # 2. 扫描磁盘上的所有 tar 文件
         tar_files = glob.glob(os.path.join(self.languages_dir, "*.tar"))
@@ -200,6 +210,9 @@ class DLCParser:
                 # 下次全量重建自然没了。或者可以反向存一个 mapping。
                 is_dirty = True
 
+        cache_data['translations'] = current_trans
+        cache_data['meta'] = current_meta
+
         # 5. 如果有变动，写入磁盘
         if is_dirty:
             self._save_cache(cache_data)
@@ -230,28 +243,13 @@ class DLCParser:
         # 取空格前缀: "ChineseSimplified (简体中文)" -> "ChineseSimplified"
         prefix = name_no_ext.split(' ')[0].strip()
         
-        # 查表
-        if prefix in LANGUAGE_MAP:
-            return LANGUAGE_MAP[prefix]
-        
-        return prefix.lower() # 兜底
+        return normalize_language_code(prefix)
 
     def _resolve_lang_key(self, input_code):
         """
         将输入的 code (可能是 zh-cn, 也可能是 ChineseSimplified) 统一为缓存里的 key
         """
-        input_code = input_code.lower()
-        # 1. 已经是 zh-cn 这种格式
-        if input_code in self.translations:
-            return input_code
-        
-        # 2. 是 ChineseSimplified 这种格式，尝试转 zh-cn
-        if input_code in LANGUAGE_MAP:
-             return LANGUAGE_MAP[input_code]
-             
-        # 3. 反向查找：输入了 zh-cn，但缓存里没存 zh-cn (比如存了 chinesesimplified)
-        # 这种情况较少，因为 _filename_to_lang_code 已经做了归一化
-        return input_code
+        return normalize_language_code(input_code)
 
     def _load_official_defs(self):
         """读取 Core 的 ExpansionDefs (英文原版)"""

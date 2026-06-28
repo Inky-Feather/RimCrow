@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
 from typing import Dict, Any, List, Optional
+from backend.utils.constants import normalize_language_code
 
 
 # 1. 资源目录：存放前端文件、内置工具 (对应开发时的项目根目录)
@@ -170,7 +171,6 @@ class AppConfig:
     prefer_steam_launch: bool = True         # 是否通过 Steam 启动游戏
     enable_tool_mods: bool = False           # 是否启用 ToolMods 目录下的伴生模组
     link_deployment_mode_full: bool = False # 链接部署模式: true=完全重建, false=增量部署
-    use_raw_ids: bool = False               # 是否使用原始 Mod ID
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
@@ -180,7 +180,6 @@ class AppConfig:
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
     auto_sort_strategy: str = "edge_enhanced_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
-    auto_activate_dependencies: bool = False   # 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = True      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
@@ -196,6 +195,7 @@ class AppConfig:
     user_rules_path: str = str(USER_RULES_PATH)
     
     # --- 开发与调试设置 ---
+    browser_mode: bool = False            # 是否默认使用浏览器模式启动
     debug_mode: bool = False  # 开发模式开关
     log_retention_days: int = 7  # 日志保留天数
     log_level: str = "INFO"  # 默认日志等级 DEBUG, INFO, WARNING, ERROR
@@ -207,7 +207,7 @@ class AppConfig:
     run_count: int = 0                     # 运行次数（用于判断是否需要重新扫描）
     
     # --- 界面设置 ---
-    language: str = "ZH-cn"     # 默认语言
+    language: str = "zh-cn"     # 默认语言
     window_width: int = 1400
     window_height: int = 900
     completed_guides: Dict[str, str] = field(default_factory=dict) # 存储已完成的引导, e.g. {"main_v1.0": "done"}
@@ -292,11 +292,15 @@ class SettingsManager:
             if isinstance(data, dict):
                 # 使用递归更新现有的 self.config
                 self._recursive_update(self.config, data)
+                self._normalize_config()
                 # 加载完成后，手动同步一次衍生路径
                 self._sync_derived_paths()
             
         except Exception as e:
             print(f"Config load error: {e}")
+
+    def _normalize_config(self):
+        self.config.language = normalize_language_code(self.config.language, default="zh-cn") or "zh-cn"
     
     def _sync_derived_paths(self):
         """
@@ -345,6 +349,7 @@ class SettingsManager:
             self._recursive_update(current_attr, value)
         else:
             setattr(self.config, key, value)
+        self._normalize_config()
         # --- 逻辑触发区 ---
         # 1. 重新计算衍生路径
         self._sync_derived_paths()
@@ -364,6 +369,7 @@ class SettingsManager:
     def save(self):
         """保存当前配置到磁盘"""
         try:
+            self._normalize_config()
             with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
                 # asdict 将 dataclass 转换为字典
                 json.dump(asdict(self.config), f, indent=4, ensure_ascii=False)
@@ -379,6 +385,7 @@ class SettingsManager:
         old_self_mods_path = self.config.self_mods_path
         old_steamcmd_path = self.config.steamcmd_path
         self._recursive_update(self.config, data_dict)
+        self._normalize_config()
         self._sync_derived_paths()
         # 检查并同步
         if old_self_mods_path != self.config.self_mods_path or \

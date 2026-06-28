@@ -70,7 +70,20 @@ def get_entrypoint():
     # 4. 兜底回退：本地开发服务器
     from backend.utils.logger import logger 
     logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
-    return dev_server
+    if is_port_available("localhost", 5173):
+        return dev_server
+    return path_external.absolute().as_uri()
+
+def get_local_frontend_root():
+    candidates = [
+        BASE_RESOURCE_DIR / "frontend" / "dist",
+        HOME_DIR / "frontend" / "dist",
+        HOME_DIR,
+    ]
+    for root in candidates:
+        if (root / "index.html").exists():
+            return root
+    return None
 
 def get_webview2_version():
     """
@@ -144,13 +157,13 @@ def show_webview2_missing_dialog():
     if res == 6: # 用户点击了“是”
         webbrowser.open(url)
 
-def validate_environment(on_error=None):
+def validate_environment(on_error=None, require_webview2=True):
     """
     启动前的环境全校验
     """
     # 1. 检测组件
     wv2_version = get_webview2_version()
-    if not wv2_version:
+    if require_webview2 and not wv2_version:
         if on_error:
             on_error()
         show_webview2_missing_dialog()

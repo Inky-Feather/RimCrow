@@ -27,12 +27,13 @@ enable_dpi_awareness()
 
 import multiprocessing
 import os
+import webbrowser
 from backend._version import __version__
 from backend.utils.logger import logger 
 from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.tools import current_ms
-from validate_environment import get_entrypoint, validate_environment
+from validate_environment import get_entrypoint, get_local_frontend_root, is_port_available, validate_environment
 
 from icecream import ic
 import builtins
@@ -86,10 +87,19 @@ def on_resized(width, height):
     
 def on_main_window_closed():
     """窗口关闭时触发"""
+    persist_exit_state()
+
+def persist_exit_state():
+    """统一持久化退出状态"""
     settings.set('last_run_time', current_ms())
     settings.set('run_count', settings.get('run_count') + 1)
     settings.set('last_version', __version__)
     settings.save()  # 保存配置
+
+def get_launch_mode():
+    if "--browser" in sys.argv:
+        return "browser"
+    return "browser" if bool(getattr(settings.config, "browser_mode", False)) else "desktop"
 
 def cleanup_update_remnants():
     """清理热更新遗留的 .old 文件"""
@@ -150,18 +160,19 @@ def main():
     # 捕获启动阶段未处理异常，确保异常弹窗前启动屏已经关闭
     try:
         # 0. 先校验环境，有问题直接弹原生框并退出
-        validate_environment(on_error=close_startup_splash)
+        launch_mode = get_launch_mode()
+        validate_environment(on_error=close_startup_splash, require_webview2=launch_mode != "browser")
 
         # 只有主进程才会执行到这里，此时再导入 GUI 库
         # 避免 Worker 进程加载浏览器内核，节省内存并防止冲突
-        import webview
         from backend.api import API
         
         # 记录启动信息
         logger.info(f"Starting RimModManager... Ver: {__version__ or 'Dev'}")
         logger.debug(f"Debug Mode: {settings.config.debug_mode}")
+        logger.info(f"Launch Mode: {launch_mode}")
         
-        api = API()
+        api = API(runtime_mode=launch_mode)
         window_width = int(settings.config.window_width)  # 默认1400px
         window_height = int(settings.config.window_height)  # 默认900px
         
@@ -187,6 +198,29 @@ def main():
         os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = " ".join(additional_args)
         entrypoint = get_entrypoint()
         
+        if launch_mode == "browser":
+            from backend.browser_runtime import BrowserAppServer
+
+            static_root = get_local_frontend_root()
+            browser_runtime = BrowserAppServer(
+                api=api,
+                static_root=static_root,
+                use_dev_server=(not getattr(sys, 'frozen', False) and is_port_available("localhost", 5173)),
+            )
+            browser_runtime.start()
+            api.set_browser_base_url(browser_runtime.base_url)
+            EventBus.set_browser_dispatcher(browser_runtime.broadcast)
+            close_startup_splash()
+            launch_url = browser_runtime.get_launch_url()
+            logger.info(f"Browser launch URL: {launch_url}")
+            webbrowser.open(launch_url)
+            browser_runtime.wait_for_shutdown()
+            browser_runtime.stop()
+            api.cleanup()
+            persist_exit_state()
+            return
+
+        import webview
         # 创建窗口
         window = webview.create_window(
             'RimModManager', 

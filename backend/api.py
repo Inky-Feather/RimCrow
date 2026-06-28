@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
@@ -9,7 +10,10 @@ import threading
 import time
 import functools
 import uuid
+import webbrowser
 import webview
+import tempfile
+from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Any, Dict, List
 from datetime import datetime
@@ -40,10 +44,18 @@ from backend.utils.logger import logger, app_log_reader
 from backend.managers.mgr_network import network_mgr
 
 # 2. 引入数据库层
-from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, init_db, db
+from backend.database.models import ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.models_ext import WorkshopMeta
 from backend.database.dao_ext import ExtDAO
+from backend.database.runtime import close_db, clear_db, init_db
+from backend.database.repair import (
+    _cleanup_database_sidecars,
+    _cleanup_repair_artifacts,
+    _remove_file_with_retry,
+    prepare_database_for_startup,
+    prepare_manual_database_repair,
+)
 
 # 3. 引入业务逻辑管理器
 from backend.scanner.parser_dlc import DLCParser
@@ -65,6 +77,8 @@ from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_texture_opt import TextureOptCancelled, TextureOptimizationManager
+from backend.browser_runtime import build_sub_browser_target_url
+from backend.utils.restart import launch_new_application
 from playhouse.shortcuts import model_to_dict
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
@@ -172,16 +186,10 @@ class API:
     所有前端调用的 window.pywebview.api.xxx 方法都在这里定义。
     """
 
-    def __init__(self):
+    def __init__(self, runtime_mode: str = "desktop"):
         logger.info("API Layer Initializing...")
-        # 1. 初始化数据库
-        # 数据库文件放在当前工作目录的data目录下
-        db_path = str(DATA_DIR / 'mod_manager.db')
-        self.is_first_db_init = not os.path.exists(db_path) # 标记是否首次初始化数据库
-        init_db(db_path)
-        # 当 pywebview 试图序列化 API 给 JS 用时，会试图深入序列化，
-        # 公开属性会导致陷入无限递归（Window -> API -> Window -> ...），最终导致堆栈溢出崩溃
         self._window = None  # 私有属性
+        self._runtime_mode = str(runtime_mode or "desktop").strip().lower() or "desktop"
         self._upgrade_context = {
             "version_changed": False,
             "old_version": "0.0.0",
@@ -190,10 +198,24 @@ class API:
             "pending_actions": [],    # 记录需要前端配合的操作 (如 'show_news', 'force_scan')
             "messages": []            # 具体的提示文本
         }
+        # 1. 初始化数据库
+        # 数据库文件放在当前工作目录的 data 目录下。
+        # 启动前先跑一遍数据库预处理：应用待切换修复库、尝试被动热修复、必要时降级为空库继续启动。
+        db_path = str(DATA_DIR / 'mod_manager.db')
+        startup_repair_result = prepare_database_for_startup(db_path)
+        self.is_first_db_init = bool(startup_repair_result.get('created_clean_database')) or (not os.path.exists(db_path))
+        init_ok = init_db(db_path)
+        if not init_ok:
+            self._upgrade_context["messages"].append("数据库加载失败，部分功能可能暂时不可用。")
+        self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
+        self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
         self._native_drop_bound = False
         self._native_drop_selector = '#backup-drop-zone'
         self._native_drop_element = None
         self._native_drop_handler = None
+        self._browser_base_url = ""
+        self._browser_import_files: set[str] = set()
+        self._db_maintenance_lock = threading.Lock()
         self._github_subs_refresh_lock = threading.Lock()
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
@@ -272,19 +294,25 @@ class API:
 
         if self.active_context and self.load_order_mgr and target_profile_id == self.active_context.profile_id:
             profile = self.profile_mgr.get_current_profile()
-            return self.load_order_mgr, self.active_context, profile
+            return self.active_context, profile
 
         context = self.profile_mgr.build_profile_context(target_profile_id)
         profile = self.profile_mgr.get_profile(target_profile_id)
-        return LoadOrderManager(context), context, profile
+        return context, profile
 
     def _handle_app_version_upgrade(self):
         """实例初始化时运行的升级逻辑"""
         from backend.database.models import SystemInfo
         last_ver_record = SystemInfo.get_or_none(SystemInfo.key == 'app_version')
-        last_version = last_ver_record.value if last_ver_record else "0.17.9"
         current_version = __version__
-        if last_version == current_version: return
+        if not last_ver_record:
+            # 新库、重置库或修复后缺失元数据的库，不应被误判成跨版本升级。
+            SystemInfo.insert(key='app_version', value=current_version).on_conflict_replace().execute()
+            return
+
+        last_version = str(last_ver_record.value or '').strip() or current_version
+        if last_version == current_version:
+            return
 
         # 标记版本已变动
         self._upgrade_context["version_changed"] = True
@@ -319,6 +347,13 @@ class API:
     
     def cleanup(self):
         """关闭数据库清理资源"""
+        for temp_path in list(self._browser_import_files):
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except Exception:
+                logger.debug(f"Failed to clean browser temp import file: {temp_path}", exc_info=True)
+            finally:
+                self._browser_import_files.discard(temp_path)
         # 停止后台扫描任务 (如果有)
         if hasattr(self, 'scanner') and self.scanner: self.scanner.stop_scan() 
         # 停止游戏日志监视器
@@ -327,7 +362,6 @@ class API:
         if self.game_monitor: self.game_monitor.running = False
         # 暂停所有事件发送
         EventBus.pause()
-        from backend.database.models import close_db
         logger.info("Closing database connection...")
         close_db()
         # 强制杀死正在运行的 SteamCMD 进程
@@ -344,7 +378,78 @@ class API:
     def get_window(self):
         """获取主窗口"""
         return self._window
-    
+
+    def is_browser_runtime(self) -> bool:
+        return self._runtime_mode == 'browser'
+
+    def set_browser_base_url(self, base_url: str):
+        self._browser_base_url = str(base_url or "").rstrip("/")
+
+    def _build_load_order_result(
+        self,
+        file_path: str,
+        res: dict | None = None,
+        source_profile_id: str = "",
+        source_profile_name: str = "",
+        list_name_override: str = "",
+    ):
+        payload = dict(res or {})
+        list_name = str(list_name_override or payload.get('list_name') or '').strip()
+        return {
+            "file": file_path,
+            "active_ids": payload.get('active_mods', []),
+            "modify_time": payload.get('modify_time', 0),
+            "format": payload.get('format', 'modsconfig'),
+            "list_name": list_name,
+            "mods": payload.get('mods', []),
+            "mod_names": payload.get('mod_names', []),
+            "mod_steam_workshop_ids": payload.get('mod_steam_workshop_ids', []),
+            "source_urls": payload.get('source_urls', []),
+            "workshop_ids": payload.get('workshop_ids', []),
+            "warnings": payload.get('warnings', []),
+            "errors": payload.get('errors', []),
+            "import_check": payload.get('import_check', {"summary": {}, "items": []}),
+            "version_token": payload.get('version_token', {}),
+            "source_profile_id": source_profile_id,
+            "source_profile_name": source_profile_name if source_profile_id else '',
+        }
+
+    def _write_browser_import_temp_file(self, filename: str, content: bytes) -> str:
+        suffix = Path(str(filename or "").strip() or "import.txt").suffix or ".txt"
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=suffix,
+            prefix="rmm-import-",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(content or b"")
+            temp_path = temp_file.name
+        self._browser_import_files.add(temp_path)
+        return temp_path
+
+    def _decode_browser_import_payload(self, payload: Any):
+        if isinstance(payload, dict):
+            filename = str(payload.get("filename") or "import.txt").strip() or "import.txt"
+            if payload.get("content_base64"):
+                return filename, base64.b64decode(str(payload.get("content_base64") or ""))
+            text_content = str(payload.get("content") or "")
+            encoding = str(payload.get("encoding") or "utf-8") or "utf-8"
+            return filename, text_content.encode(encoding, errors="replace")
+        filename = "import.txt"
+        return filename, str(payload or "").encode("utf-8")
+
+    def _build_save_conflict_payload(self, disk_result: dict, editing_ids: list[str]):
+        return {
+            "status": "conflict",
+            "disk_order": self._build_load_order_result(
+                disk_result.get("source_path") or (self.active_context.mods_config_file if self.active_context else ""),
+                disk_result,
+            ),
+            "editing_order": {
+                "active_ids": [str(package_id or "").strip().lower() for package_id in (editing_ids or []) if str(package_id or "").strip()],
+            },
+        }
+
     def _on_app_loaded(self):
         """主窗口加载完毕回调"""
         self._bind_native_drag_drop()
@@ -444,10 +549,12 @@ class API:
         """
         由前端在 BackupList 挂载后显式调用，确保 pywebview 绑定到真实存在的拖放区域。
         """
+        normalized_selector = self._normalize_native_drop_selector(selector)
+        if self.is_browser_runtime():
+            return ApiResponse.success({"selector": normalized_selector, "native": False})
         if not self._window:
             return ApiResponse.error("主窗口尚未就绪")
 
-        normalized_selector = self._normalize_native_drop_selector(selector)
         if self._bind_native_drag_drop(normalized_selector):
             return ApiResponse.success({"selector": normalized_selector})
         return ApiResponse.warning("拖放区域尚未挂载，稍后会重试", {"selector": normalized_selector})
@@ -471,6 +578,9 @@ class API:
         """前端 Vue 挂载完毕后，主动调用此接口通知后端"""
         EventBus.resume()
         EventBus.mark_ready() # 激活 EventBus
+        if self.game_monitor and not self.game_monitor.running:
+            logger.info("前端已就绪，启动游戏监视器...")
+            self.game_monitor.start()
         if self.game_monitor:
             # 告诉前端当前的游戏状态
             EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running})
@@ -489,6 +599,7 @@ class API:
         result = {
             "app_version": __version__,
             "build_mode": __build__,
+            "runtime_mode": self._runtime_mode,
             "settings": asdict(settings.config), # 转为字典发给前端
             "asset_port": self.file_mgr.get_port(),
             "context_healthy": False, 
@@ -497,6 +608,7 @@ class API:
             "groups": [],
             "active_load_order": [],
             "active_load_modify_time": 0,
+            "active_load_version_token": {},
             "is_first_db_init": self.is_first_db_init,
             "active_context": self.active_context if self.active_context else None,
             "upgrade_context": self._upgrade_context.copy() 
@@ -517,13 +629,6 @@ class API:
         # 4. 获取当前激活的加载顺序
         active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {'active_mods': [], 'modify_time': 0}
         inactive_mods_order = self.active_context.inactive_mods_order if getattr(self.active_context, 'inactive_mods_order', []) else []
-        
-        # 防呆：注入核心模组
-        current_active_ids = active_load_order.get('active_mods', [])
-        mod_map = {m['package_id'].lower(): m for m in context_mods}
-        if self.sorter:
-            active_ids, needs_added_ids = self.sorter.ensure_mods(current_active_ids, mod_map)
-            current_active_ids = self.sorter.smart_insert_mods(needs_added_ids, current_active_ids, mod_map)
         
         replacements = self.workshop_db_mgr.get_replacements()
         replacements_map = {r['old_workshop_id']: r for r in replacements}
@@ -555,9 +660,10 @@ class API:
             "all_mods": context_mods,  # 返回过滤后的列表
             "groups": all_groups,
             "interlocks": interlock_map,
-            "active_load_order": current_active_ids, # 发送完成补齐后的最终列表
+            "active_load_order": active_load_order.get('active_mods', []),
             "inactive_load_order": inactive_mods_order,
             "active_load_modify_time": active_load_order.get('modify_time', 0),
+            "active_load_version_token": active_load_order.get('version_token', {}),
         })
         
         self._reset_upgrade_context()
@@ -577,57 +683,154 @@ class API:
             "messages": []
         }
     
+    def _prepare_database_maintenance(self, timeout: float = 12.0):
+        """
+        在重置/修复数据库前，先停止会持有 SQLite 连接的后台任务。
+        """
+        deadline = time.time() + max(1.0, timeout)
+
+        if self.scanner and self.scanner.is_scanning:
+            logger.warning("数据库维护前检测到扫描任务仍在运行，准备中止并等待释放连接")
+            self.scanner.stop_scan()
+
+        if self.texture_mgr:
+            active_analysis_tasks = self.texture_mgr.cancel_all_analysis_tasks()
+            if active_analysis_tasks:
+                logger.warning("数据库维护前取消贴图分析任务: %s", active_analysis_tasks)
+
+        remaining = max(0.1, deadline - time.time())
+        if self.scanner and not self.scanner.wait_until_idle(timeout=remaining):
+            return False, "当前有扫描任务正在运行，请稍后再试。"
+
+        remaining = max(0.1, deadline - time.time())
+        if self.texture_mgr and not self.texture_mgr.wait_for_analysis_idle(timeout=remaining):
+            return False, "当前有贴图任务正在运行，请稍后再试。"
+
+        return True, ""
+
+    def _close_database_for_maintenance(self):
+        """
+        在数据库维护前主动关闭连接并释放文件句柄。
+        原因：Windows 下 SQLite 文件切换、删除、重命名对句柄占用非常敏感。
+        """
+        try:
+            close_db()
+        except Exception:
+            logger.warning("数据库维护前关闭连接失败", exc_info=True)
+        gc.collect()
+        time.sleep(0.5)
+
+    def _restart_application(self, delay_seconds: float = 1.0):
+        """
+        延迟重启当前应用实例，确保 API 响应先返回给前端。
+        """
+        def worker():
+            time.sleep(max(0.1, delay_seconds))
+            try:
+                self.cleanup()
+            except Exception:
+                logger.warning("重启前清理资源失败", exc_info=True)
+
+            try:
+                launch_new_application()
+                logger.info("数据库修复完成，已拉起新实例，当前进程准备退出。")
+            except Exception:
+                logger.error("重启应用失败", exc_info=True)
+                return
+
+            os._exit(0)
+
+        threading.Thread(target=worker, daemon=True, name="RestartAfterDbRepair").start()
+
     @log_api_call
     def reset_database(self):
         """
         重置数据库：强制关闭连接，删除文件，重建。
         """
-        import time
-        from backend.database.models import db, init_db, clear_db
+        from backend.database.models import SystemInfo
         
+        if not self._db_maintenance_lock.acquire(blocking=False):
+            return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
-            # 1. 强制关闭连接
-            if not db.is_closed():
-                db.commit() # 主动提交一次事务，彻底释放 WAL 临时文件
-                db.close()
-            gc.collect() # 强制回收资源，确保文件句柄释放
-            time.sleep(0.5) # 给操作系统一点缓冲时间
-            # 关键：对于 SqliteExtDatabase，有时候即使 close 了，
-            # 内部连接池可能还持有引用。如果是 Peewee，通常 close 足够。
-            # 但为了保险，可以设为 None 或者再次 init。
-            
-            # 2. 定义文件路径
-            db_dir = str(DATA_DIR)
-            db_path = str(DATA_DIR / 'mod_manager.db')
-            wal_path = db_path + '-wal'
-            shm_path = db_path + '-shm'
+            ready, reason = self._prepare_database_maintenance()
+            if not ready:
+                return ApiResponse.warning(reason)
+            self._close_database_for_maintenance()
 
-            # 3. 尝试删除 (带重试机制，防止系统延迟释放)
-            for _ in range(3):
-                try:
-                    if os.path.exists(db_path): os.remove(db_path)
-                    if os.path.exists(wal_path): os.remove(wal_path)
-                    if os.path.exists(shm_path): os.remove(shm_path)
-                    break # 删除成功，跳出循环
-                except PermissionError:
-                    # 如果还是占用，等待 1s 重试
-                    time.sleep(1)
-            
-            # 再次检查是否删除成功，若存在则尝试清空数据库
+            # 清理修复残留，避免重置后下次启动又应用旧的修复候选库。
+            db_path = str(DATA_DIR / 'mod_manager.db')
+            _cleanup_repair_artifacts(db_path, keep_failed_source=False)
+
+            # 先尽量物理删除整库；删除失败时再回退到 clear_db，避免因为偶发占用直接整次失败。
+            _remove_file_with_retry(db_path, retries=5, delay=0.4)
+            _cleanup_database_sidecars(db_path)
+
             if os.path.exists(db_path):
                 result = clear_db()
                 if not result:
-                    return ApiResponse.error("清空数据库失败")
+                    return ApiResponse.error("重置失败，请关闭相关操作后重试。")
 
             self.is_first_db_init = True
-            # 4. 重新初始化
-            init_db(db_path)
+            init_ok = init_db(db_path)
+            if not init_ok:
+                return ApiResponse.error("重置失败，数据库无法重新创建。")
+            # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
+            SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
             
-            return ApiResponse.success({"message": "数据库已重置"})
+            return ApiResponse.success({"message": "数据库已重置。"})
         except Exception as e:
             import traceback
             traceback.print_exc()
             return ApiResponse.error(str(e))
+        finally:
+            self._db_maintenance_lock.release()
+
+    @log_api_call
+    def repair_database(self):
+        """
+        主动触发数据库修复：离线生成并校验候选库，成功后仅提示前端可重启切换。
+        """
+        if not self._db_maintenance_lock.acquire(blocking=False):
+            return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
+        try:
+            ready, reason = self._prepare_database_maintenance()
+            if not ready:
+                return ApiResponse.warning(reason)
+            db_path = str(DATA_DIR / 'mod_manager.db')
+            result = prepare_manual_database_repair(db_path)
+            if not result:
+                return ApiResponse.error("修复失败，请稍后重试。")
+            if result.get("initialized"):
+                self.is_first_db_init = True
+                return ApiResponse.success({
+                    "message": "未找到本地数据库，已为你重新创建。",
+                    "restart_required": False,
+                    "initialized": True,
+                })
+            if not result.get("restart_required"):
+                return ApiResponse.error("修复失败，请稍后重试。")
+            return ApiResponse.success({
+                "message": "修复已完成，重启软件后生效。",
+                "restart_required": True,
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return ApiResponse.error(str(e))
+        finally:
+            self._db_maintenance_lock.release()
+
+    @log_api_call
+    def restart_application(self):
+        """
+        主动重启应用。
+        用途：手动修复准备完成后，由前端在用户确认后触发重启，不再在后端静默自动重启。
+        """
+        ready, reason = self._prepare_database_maintenance(timeout=15.0)
+        if not ready:
+            return ApiResponse.warning(reason)
+        self._restart_application()
+        return ApiResponse.success({"restarting": True}, message="软件即将重启。")
     
     @log_api_call
     def perform_database_cleanup(self):
@@ -779,9 +982,10 @@ class API:
                     if os.path.exists(cfg.self_mods_path):
                         paths_to_scan.append(cfg.self_mods_path)
                     # 4. Workshop Mods (公共工坊目录)
-                    # Profile 禁用了 Workshop (use_workshop_mods=False)，则不再扫描
-                    if os.path.exists(cfg.workshop_mods_path) and \
-                        (self.active_context.use_workshop_mods or self.active_context.profile_id=='default'):
+                    # 注意：库存扫描始终同步所有已配置域。
+                    # use_workshop_mods / use_self_mods 只影响后续运行态冲突分析与链接部署，
+                    # 不能影响数据库事实同步，否则工作区三库和缺失/更新状态会陈旧。
+                    if os.path.exists(cfg.workshop_mods_path):
                         paths_to_scan.append(cfg.workshop_mods_path)
                     # 5. Tool Mods (工具模组目录)
                     if os.path.exists(str(TOOL_MODS_DIR)) and cfg.enable_tool_mods:
@@ -1144,6 +1348,7 @@ class API:
             "warnings": res.get('warnings', []),
             "errors": res.get('errors', []),
             "import_check": res.get('import_check', {"summary": {}, "items": []}),
+            "version_token": res.get('version_token', {}),
         })
     
     @log_api_call
@@ -1152,7 +1357,7 @@ class API:
         打开任意支持的排序文件
         """
         from backend.managers.mgr_load_order import LOAD_ORDER_OPEN_FILE_TYPES
-        load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+        context, profile = self._resolve_load_order_scope(profile_id)
         source_profile_id = str(profile_id or "").strip()
         file = ''
         # 默认路径为 ModsConfig.xml 所在目录
@@ -1174,25 +1379,36 @@ class API:
             )
         if not file:
             return ApiResponse.warning("未选择文件")
-        res = load_order_mgr.read_active_mods(file) if load_order_mgr else {}
-        result = {
-            "file": file,
-            "active_ids": res.get('active_mods', []),
-            "modify_time": res.get('modify_time', 0),
-            # 与 load_order_get 保持同一数据协议，避免前端区分“默认配置”和“外部导入文件”两条解析链。
-            "format": res.get('format', 'modsconfig'),
-            "list_name": res.get('list_name', ''),
-            "mods": res.get('mods', []),
-            "mod_names": res.get('mod_names', []),
-            "mod_steam_workshop_ids": res.get('mod_steam_workshop_ids', []),
-            "workshop_ids": res.get('workshop_ids', []),
-            "warnings": res.get('warnings', []),
-            "errors": res.get('errors', []),
-            "import_check": res.get('import_check', {"summary": {}, "items": []}),
-            "source_profile_id": source_profile_id,
-            "source_profile_name": profile.name if source_profile_id else '',
-        }
+        res = self.load_order_mgr.read_active_mods(file) if self.load_order_mgr else {}
+        result = self._build_load_order_result(
+            file,
+            res,
+            source_profile_id=source_profile_id,
+            source_profile_name=profile.name if profile else "",
+        )
         # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
+        if not result["active_ids"] and not result["workshop_ids"]:
+            return ApiResponse.error("解析文件出错!")
+        return ApiResponse.success(result)
+
+    @log_api_call
+    def load_order_file_import_payload(self, payload: Any, profile_id: str | None = None):
+        """
+        浏览器模式下导入拖放的文件内容。
+        标准浏览器不会暴露本地绝对路径，因此这里先落临时文件，再复用现有解析流程。
+        """
+        normalized_name, raw_bytes = self._decode_browser_import_payload(payload)
+        source_profile_id = str(profile_id or "").strip()
+        _context, profile = self._resolve_load_order_scope(profile_id)
+        temp_path = self._write_browser_import_temp_file(normalized_name, raw_bytes)
+        res = self.load_order_mgr.read_active_mods(temp_path) if self.load_order_mgr else {}
+        result = self._build_load_order_result(
+            temp_path,
+            res,
+            source_profile_id=source_profile_id,
+            source_profile_name=profile.name if profile else "",
+            list_name_override=Path(normalized_name).stem,
+        )
         if not result["active_ids"] and not result["workshop_ids"]:
             return ApiResponse.error("解析文件出错!")
         return ApiResponse.success(result)
@@ -1216,13 +1432,34 @@ class API:
         保存当前激活列表到 ModsConfig.xml
         :param active_ids: 激活的 Mod 列表
         """
+        return self.load_order_save_with_token(active_ids, is_dirty=is_dirty, base_version_token=None)
+
+    @log_api_call
+    def load_order_save_with_token(self, active_ids: List[str], is_dirty: bool=True, base_version_token: dict | None = None):
+        """
+        保存当前激活列表到 ModsConfig.xml，并阻止对过期磁盘版本的静默覆盖。
+        """
         if not self.active_context: return ApiResponse.error("环境配置上下文缺失")
-        if not self.active_context.game_config_path or not os.path.exists(self.active_context.game_config_path): 
+        if not self.active_context.game_config_path or not os.path.exists(self.active_context.game_config_path):
             return ApiResponse.error("未指定游戏配置路径")
         try:
-            use_raw_ids = settings.config.use_raw_ids
-            success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty, use_raw_ids=use_raw_ids) if self.load_order_mgr else False
-            if success: return ApiResponse.success()
+            if self.load_order_mgr:
+                is_stale, current_token = self.load_order_mgr.is_version_token_stale(base_version_token)
+                if is_stale:
+                    disk_result = self.load_order_mgr.read_active_mods()
+                    return ApiResponse.warning(
+                        "磁盘加载顺序已被外部修改，请先处理冲突。",
+                        self._build_save_conflict_payload(disk_result, active_ids),
+                    )
+            success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty) if self.load_order_mgr else False
+            if success:
+                latest = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {}
+                return ApiResponse.success({
+                    "saved": True,
+                    "version_token": latest.get("version_token", current_token if self.load_order_mgr else {}),
+                    "modify_time": latest.get("modify_time", 0),
+                    "active_ids": latest.get("active_mods", []),
+                })
             return ApiResponse.warning("取消保存")
         except Exception as e:
             return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
@@ -1236,14 +1473,12 @@ class API:
         """
         try:
             if not target_path and not trigger_dialog: trigger_dialog = True
-            use_raw_ids = settings.config.use_raw_ids
             # 导出格式和列表名都透传给 LoadOrderManager，
             # 由底层统一决定生成 ModsConfig.xml 还是 ModList.xml。
             success = self.load_order_mgr.save_active_mods(
                 active_ids,
                 target_path,
                 trigger_dialog,
-                use_raw_ids=use_raw_ids,
                 export_format=export_format,
                 list_name=list_name
             ) if self.load_order_mgr else False
@@ -1253,6 +1488,25 @@ class API:
             return ApiResponse.error(f"导出加载顺序时出错: {e}")
 
     @log_api_call
+    def load_order_export_pick_path(self, export_format: str = 'modsconfig'):
+        if not self.load_order_mgr:
+            return ApiResponse.error("加载顺序管理器未初始化")
+        try:
+            export_format = str(export_format or 'modsconfig').strip().lower() or 'modsconfig'
+            default_name = self.load_order_mgr._default_export_name(export_format)
+            file_types = self.load_order_mgr._get_save_file_types(export_format)
+            selected = FileManager.save_file_dialog(
+                initial_dir=self.load_order_mgr.other_dir,
+                default_filename=default_name,
+                file_types=file_types,
+            )
+            if not selected:
+                return ApiResponse.warning("未选择导出路径")
+            return ApiResponse.success({"path": selected})
+        except Exception as e:
+            return ApiResponse.error(f"选择导出路径时出错: {e}")
+
+    @log_api_call
     def load_order_share_export(self, active_ids: List[str], list_name: str | None = None):
         """
         把当前加载顺序导出为分享码。
@@ -1260,11 +1514,9 @@ class API:
         if not self.load_order_mgr:
             return ApiResponse.error("加载顺序管理器未初始化")
         try:
-            use_raw_ids = settings.config.use_raw_ids
             share_code = self.load_order_mgr.export_share_code(
                 active_ids,
                 list_name=list_name,
-                use_raw_ids=use_raw_ids,
             )
             return ApiResponse.success({
                 "share_code": share_code,
@@ -1280,10 +1532,9 @@ class API:
         解析分享码并返回与文件导入相同的数据结构。
         """
         try:
-            load_order_mgr, _, _ = self._resolve_load_order_scope(profile_id)
-            if not load_order_mgr:
+            if not self.load_order_mgr:
                 return ApiResponse.error("加载顺序管理器未初始化")
-            res = load_order_mgr.read_share_code(share_code)
+            res = self.load_order_mgr.read_share_code(share_code)
             return ApiResponse.success({
                 "file": res.get("share_code_ref", "share://RMM1"),
                 "active_ids": res.get('active_mods', []),
@@ -1308,7 +1559,8 @@ class API:
     def backups_get_all(self, profile_id: str | None = None):
         """获取所有备份文件路径"""
         try:
-            load_order_mgr, context, profile = self._resolve_load_order_scope(profile_id)
+            context, profile = self._resolve_load_order_scope(profile_id)
+            load_order_mgr = LoadOrderManager(context)
             backups = load_order_mgr.get_all_backups() if load_order_mgr else {"today": [], "earlier": [], "other": []}
             return ApiResponse.success({
                 **backups,
@@ -1986,9 +2238,43 @@ class API:
     @log_api_call
     def open_sub_browser(self, url='', title = 'RimModManager'):
         """打开或更新 浏览器子窗口"""
+        if self.is_browser_runtime() or not self._window:
+            target_url = build_sub_browser_target_url(self._browser_base_url, url, title) if self.is_browser_runtime() else str(url or "")
+            if target_url:
+                webbrowser.open(target_url)
+            return ApiResponse.success({"url": target_url or str(url or "")})
         if not self.browser_window: 
             self.browser_window = SubBrowserManager(self)
         self.browser_window.open(url, title)
+        return ApiResponse.success()
+
+    @log_api_call
+    def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
+        normalized_action = str(action or "").strip().lower()
+        normalized_workshop_id = str(workshop_id or "").strip()
+        normalized_target_url = str(target_url or "").strip()
+
+        if normalized_action == "open_in_steam":
+            if normalized_workshop_id:
+                return self.steam_open_workshop_page(normalized_workshop_id)
+            return ApiResponse.error("无法识别当前页面的 Workshop ID")
+
+        if not normalized_workshop_id:
+            return ApiResponse.error("无法识别当前页面的 Workshop ID")
+
+        if normalized_action == "subscribe":
+            return self.steam_subscribe([normalized_workshop_id])
+        if normalized_action == "unsubscribe":
+            return self.steam_unsubscribe([normalized_workshop_id])
+        if normalized_action == "download":
+            return self.steamcmd_download([normalized_workshop_id])
+        if normalized_action == "open_original":
+            if normalized_target_url:
+                webbrowser.open(normalized_target_url)
+                return ApiResponse.success(message="已在系统浏览器打开原网页")
+            return ApiResponse.error("未提供目标网页地址")
+
+        return ApiResponse.error(f"未知操作: {normalized_action}")
 
 
     # ==========================================
@@ -2129,7 +2415,7 @@ class API:
                 EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
 
     @log_api_call
-    def steam_subscribe(self, workshop_ids: str):
+    def steam_subscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端订阅"""
         # 前置拦截
         if not self.steam_mgr.is_steam_running():
@@ -2144,7 +2430,7 @@ class API:
             return ApiResponse.error(str(e))
 
     @log_api_call
-    def steam_unsubscribe(self, workshop_ids: str):
+    def steam_unsubscribe(self, workshop_ids: str|list[str]):
         """调用 Steam 客户端取消订阅"""
         # 前置拦截
         if not self.steam_mgr.is_steam_running():
@@ -2159,7 +2445,7 @@ class API:
             return ApiResponse.error(str(e))
     
     @log_api_call
-    def steam_cancle_task(self, task_id):
+    def steam_cancle_task(self, task_id: str):
         """取消 Steam 客户端任务"""
         success = self.steam_mgr.abort_monitor_task(task_id)
         if success:
@@ -2174,6 +2460,20 @@ class API:
         if success:
             return ApiResponse.success(message="正在唤起 Steam 客户端，请等待其完全加载...")
         return ApiResponse.error("无法定位 Steam 路径，请手动打开！")
+
+    @log_api_call
+    def steam_open_workshop_page(self, workshop_id: str):
+        """在 Steam 客户端中打开指定工坊页面"""
+        normalized_id = str(workshop_id or "").strip()
+        if not normalized_id:
+            return ApiResponse.error("未提供有效的 Workshop ID")
+        steam_url = f"steam://url/CommunityFilePage/{normalized_id}"
+        try:
+            if webbrowser.open(steam_url):
+                return ApiResponse.success(message="已尝试在 Steam 客户端打开当前页面")
+        except Exception as e:
+            logger.warning(f"Open workshop in Steam failed: {e}")
+        return ApiResponse.error("无法在 Steam 客户端中打开当前页面")
     
     @log_api_call
     def steam_check_status(self, workshop_id: str):
@@ -2838,9 +3138,9 @@ class API:
         if not details:
             return ApiResponse.error("未找到对应的 WorkshopID")
         return ApiResponse.success({
-            package_id: detail["workshop_id"]
+            package_id: (((detail or {}).get("display") or {}).get("selected") or {}).get("workshop_id")
             for package_id, detail in details.items()
-            if detail.get("workshop_id")
+            if (((detail or {}).get("display") or {}).get("selected") or {}).get("workshop_id")
         })
     
     @log_api_call
@@ -2854,6 +3154,19 @@ class API:
             return ApiResponse.success(res)
         except Exception as e:
             logger.error(f"get_workshop_details_by_package_ids failed: {e}", exc_info=True)
+            return ApiResponse.error(str(e))
+
+    @log_api_call
+    def get_install_sources_by_package_ids(self, package_ids: list):
+        """
+        批量获取 package_id 的原版安装来源与替代安装来源。
+        """
+        try:
+            current_game_version = self.active_context.game_version if self.active_context else ""
+            res = ExtDAO.get_install_sources_by_package_ids(package_ids, current_game_version=current_game_version)
+            return ApiResponse.success(res)
+        except Exception as e:
+            logger.error(f"get_install_sources_by_package_ids failed: {e}", exc_info=True)
             return ApiResponse.error(str(e))
     
     @log_api_call
@@ -3149,13 +3462,7 @@ class API:
         for wid, candidates in installed_candidates.items():
             best_pid = min(
                 candidates.items(),
-                key=lambda item: (
-                    -item[1]['count'],
-                    item[1]['disabled_rank'],
-                    item[1]['store_rank'],
-                    item[1]['path_len'],
-                    item[0]
-                )
+                key=lambda item: ( -item[1]['count'], item[1]['disabled_rank'], item[1]['store_rank'], item[1]['path_len'], item[0] )
             )[0]
             resolved_map[wid] = best_pid
 

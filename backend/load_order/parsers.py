@@ -20,16 +20,24 @@ from .models import (
 
 
 def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
+    raw = path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "utf-8", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="ignore")
 
 
 def _append_mod_entry(
     package_ids: list[str],
     mod_names: list[str],
     workshop_ids: list[str],
+    source_urls: list[str],
     package_id: str,
     name: str = "",
     workshop_id: str = "",
+    source_url: str = "",
 ) -> None:
     """
     维护三组并行数组。
@@ -47,6 +55,7 @@ def _append_mod_entry(
     package_ids.append(normalized_package_id)
     mod_names.append(str(name or "").strip())
     workshop_ids.append(normalize_workshop_id(workshop_id, zero_is_empty=False))
+    source_urls.append(str(source_url or "").strip())
 
 
 def _extract_workshop_id(value: str) -> str:
@@ -55,6 +64,23 @@ def _extract_workshop_id(value: str) -> str:
         return line
     match = re.search(r"id=(\d+)", line)
     return match.group(1) if match else ""
+
+
+def _parse_rimsort_clipboard_line(value: str):
+    line = str(value or "").strip()
+    match = re.match(r"^(?P<name>.+?)\s+\[(?P<package_id>[\w.\-]+)\]\[(?P<url>.+)\]\s*$", line)
+    if not match:
+        return None
+    package_id = normalize_package_id(match.group("package_id"))
+    if not package_id:
+        return None
+    name = match.group("name").strip()
+    url = match.group("url").strip()
+    workshop_id = "" if url.lower() == "no url specified" else _extract_workshop_id(url)
+    source_url = ""
+    if url.lower() != "no url specified" and not workshop_id:
+        source_url = url
+    return package_id, name, workshop_id, source_url
 
 
 def _parse_list_node(root: ET.Element, *xpaths: str) -> list[str]:
@@ -88,6 +114,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
     dedup_package_ids: list[str] = []
     dedup_mod_names: list[str] = []
     dedup_workshop_ids: list[str] = []
+    dedup_source_urls: list[str] = []
     seen_package_ids: set[str] = set()
 
     for index, package_id in enumerate(parsed.package_ids):
@@ -98,6 +125,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
         dedup_package_ids.append(normalized_package_id)
         dedup_mod_names.append(str(parsed.mod_names[index]).strip() if index < len(parsed.mod_names) else "")
         dedup_workshop_ids.append(str(parsed.workshop_ids[index]).strip() if index < len(parsed.workshop_ids) else "")
+        dedup_source_urls.append(str(parsed.source_urls[index]).strip() if index < len(parsed.source_urls) else "")
 
     dedup_loose_workshop_ids: list[str] = []
     seen_workshop_ids: set[str] = set()
@@ -111,6 +139,7 @@ def _dedupe_parsed_data(parsed: ParsedLoadOrderData) -> ParsedLoadOrderData:
     parsed.package_ids = dedup_package_ids
     parsed.mod_names = dedup_mod_names
     parsed.workshop_ids = dedup_workshop_ids + dedup_loose_workshop_ids
+    parsed.source_urls = dedup_source_urls
     return parsed
 
 
@@ -133,6 +162,7 @@ def _parse_modlist_xml(path: Path) -> ParsedLoadOrderData:
         package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if normalize_package_id(item)],
         mod_names=_parse_list_node(root, "./modNames", ".//modNames"),
         workshop_ids=_parse_list_node(root, "./modSteamWorkshopIds", ".//modSteamWorkshopIds"),
+        source_urls=[""] * len([normalize_package_id(item) for item in _parse_list_node(root, "./modIds", ".//modIds") if normalize_package_id(item)]),
     )
 
 
@@ -176,6 +206,7 @@ def _parse_rml_file(path: Path) -> ParsedLoadOrderData:
         package_ids=[normalize_package_id(item) for item in package_ids_source if normalize_package_id(item)],
         mod_names=merged_names,
         workshop_ids=meta_workshop_ids,
+        source_urls=[""] * len([normalize_package_id(item) for item in package_ids_source if normalize_package_id(item)]),
     )
 
 
@@ -187,6 +218,7 @@ def _parse_savegame_xml(path: Path) -> ParsedLoadOrderData:
         package_ids=[normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if normalize_package_id(item)],
         mod_names=_parse_list_node(root, "./meta/modNames", ".//meta/modNames"),
         workshop_ids=_parse_list_node(root, "./meta/modSteamIds", ".//meta/modSteamIds"),
+        source_urls=[""] * len([normalize_package_id(item) for item in _parse_list_node(root, "./meta/modIds", ".//meta/modIds") if normalize_package_id(item)]),
     )
 
 
@@ -195,6 +227,7 @@ def _parse_rimpy_xml(path: Path) -> ParsedLoadOrderData:
     package_ids: list[str] = []
     mod_names: list[str] = []
     workshop_ids: list[str] = []
+    source_urls: list[str] = []
     loose_workshop_ids: list[str] = []
 
     for mod_elem in root.iter():
@@ -228,7 +261,7 @@ def _parse_rimpy_xml(path: Path) -> ParsedLoadOrderData:
         workshop_id = workshop_id or str(mod_elem.get("workshopId") or mod_elem.get("steamId") or "").strip()
 
         if package_id:
-            _append_mod_entry(package_ids, mod_names, workshop_ids, package_id, name, workshop_id)
+            _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, package_id, name, workshop_id)
         elif workshop_id.isdigit() and workshop_id not in loose_workshop_ids:
             loose_workshop_ids.append(workshop_id)
 
@@ -240,6 +273,7 @@ def _parse_rimpy_xml(path: Path) -> ParsedLoadOrderData:
                 package_ids.append(package_id)
                 mod_names.append("")
                 workshop_ids.append("")
+                source_urls.append("")
 
     return ParsedLoadOrderData(
         format=FORMAT_RIMPY_XML,
@@ -249,6 +283,7 @@ def _parse_rimpy_xml(path: Path) -> ParsedLoadOrderData:
         # 前半段是与 package_ids 对齐的工坊 ID，后半段是“只有工坊 ID、没有 package_id”的条目。
         # manager 在构建 mod 条目时只会消费前半段，但 API 仍可以保留完整的工坊 ID 列表。
         workshop_ids=workshop_ids + loose_workshop_ids,
+        source_urls=source_urls,
     )
 
 
@@ -258,6 +293,7 @@ def _parse_rimsort_json(path: Path) -> ParsedLoadOrderData:
     package_ids: list[str] = []
     mod_names: list[str] = []
     workshop_ids: list[str] = []
+    source_urls: list[str] = []
     loose_workshop_ids: list[str] = []
 
     if isinstance(data, dict):
@@ -281,7 +317,7 @@ def _parse_rimsort_json(path: Path) -> ParsedLoadOrderData:
                 if item not in loose_workshop_ids:
                     loose_workshop_ids.append(item)
             else:
-                _append_mod_entry(package_ids, mod_names, workshop_ids, item)
+                _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, item)
             continue
 
         if not isinstance(item, dict):
@@ -290,9 +326,14 @@ def _parse_rimsort_json(path: Path) -> ParsedLoadOrderData:
         package_id = str(item.get("packageId") or item.get("package_id") or item.get("id") or "").strip()
         name = str(item.get("name") or item.get("displayName") or "").strip()
         workshop_id = str(item.get("workshopId") or item.get("workshop_id") or item.get("steamId") or "").strip()
+        source_url = str(item.get("source_url") or item.get("sourceUrl") or item.get("url") or "").strip()
+        if source_url and not workshop_id:
+            workshop_id = _extract_workshop_id(source_url)
+        if workshop_id:
+            source_url = ""
 
         if package_id:
-            _append_mod_entry(package_ids, mod_names, workshop_ids, package_id, name, workshop_id)
+            _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, package_id, name, workshop_id, source_url)
         elif workshop_id.isdigit() and workshop_id not in loose_workshop_ids:
             loose_workshop_ids.append(workshop_id)
 
@@ -302,6 +343,7 @@ def _parse_rimsort_json(path: Path) -> ParsedLoadOrderData:
         package_ids=package_ids,
         mod_names=mod_names,
         workshop_ids=workshop_ids + loose_workshop_ids,
+        source_urls=source_urls,
     )
 
 
@@ -310,38 +352,55 @@ def _parse_rmm_json(path: Path) -> ParsedLoadOrderData:
     package_ids: list[str] = []
     mod_names: list[str] = []
     workshop_ids: list[str] = []
+    source_urls: list[str] = []
     loose_workshop_ids: list[str] = []
 
     if isinstance(data, list):
         for item in data:
             if isinstance(item, str):
-                _append_mod_entry(package_ids, mod_names, workshop_ids, item)
+                _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, item)
             elif isinstance(item, dict):
+                workshop_id = str(item.get("workshop_id") or item.get("workshopId") or "").strip()
+                source_url = str(item.get("source_url") or item.get("sourceUrl") or item.get("url") or "").strip()
+                if source_url and not workshop_id:
+                    workshop_id = _extract_workshop_id(source_url)
+                if workshop_id:
+                    source_url = ""
                 _append_mod_entry(
                     package_ids,
                     mod_names,
                     workshop_ids,
+                    source_urls,
                     str(item.get("package_id") or ""),
                     str(item.get("name") or ""),
-                    str(item.get("workshop_id") or item.get("workshopId") or ""),
+                    workshop_id,
+                    source_url,
                 )
     elif isinstance(data, dict):
         if "package_ids" in data:
             for package_id in data["package_ids"]:
-                _append_mod_entry(package_ids, mod_names, workshop_ids, str(package_id))
+                _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, str(package_id))
 
         if "modlist" in data:
             for item in data["modlist"]:
                 if isinstance(item, str):
-                    _append_mod_entry(package_ids, mod_names, workshop_ids, item)
+                    _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, item)
                 elif isinstance(item, dict):
+                    workshop_id = str(item.get("workshop_id") or item.get("workshopId") or "").strip()
+                    source_url = str(item.get("source_url") or item.get("sourceUrl") or item.get("url") or "").strip()
+                    if source_url and not workshop_id:
+                        workshop_id = _extract_workshop_id(source_url)
+                    if workshop_id:
+                        source_url = ""
                     _append_mod_entry(
                         package_ids,
                         mod_names,
                         workshop_ids,
+                        source_urls,
                         str(item.get("package_id") or ""),
                         str(item.get("name") or ""),
-                        str(item.get("workshop_id") or item.get("workshopId") or ""),
+                        workshop_id,
+                        source_url,
                     )
 
         if "mod_names" in data and isinstance(data["mod_names"], dict):
@@ -367,6 +426,7 @@ def _parse_rmm_json(path: Path) -> ParsedLoadOrderData:
         package_ids=package_ids,
         mod_names=mod_names,
         workshop_ids=workshop_ids + loose_workshop_ids,
+        source_urls=source_urls,
         errors=errors,
     )
 
@@ -376,12 +436,27 @@ def _parse_plain_text(path: Path) -> ParsedLoadOrderData:
     package_ids: list[str] = []
     mod_names: list[str] = []
     workshop_ids: list[str] = []
+    source_urls: list[str] = []
     loose_workshop_ids: list[str] = []
     warnings: list[str] = []
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or line.startswith("//"):
+            continue
+
+        # RimSort 剪贴板导出头部说明；属于格式噪音，不应进入警告。
+        if line.startswith("Created with RimSort "):
+            continue
+        if line.startswith("RimWorld game version this list was created for:"):
+            continue
+        if line.startswith("Total # of mods:"):
+            continue
+
+        rimsort_entry = _parse_rimsort_clipboard_line(line)
+        if rimsort_entry is not None:
+            package_id, name, workshop_id, source_url = rimsort_entry
+            _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, package_id, name, workshop_id, source_url)
             continue
 
         if "#" in line:
@@ -394,7 +469,7 @@ def _parse_plain_text(path: Path) -> ParsedLoadOrderData:
             continue
 
         if "." in line or line.startswith("ludeon."):
-            _append_mod_entry(package_ids, mod_names, workshop_ids, line)
+            _append_mod_entry(package_ids, mod_names, workshop_ids, source_urls, line)
             continue
 
         warnings.append(f"Skipped unrecognized line: {line[:50]}")
@@ -409,6 +484,7 @@ def _parse_plain_text(path: Path) -> ParsedLoadOrderData:
         package_ids=package_ids,
         mod_names=mod_names,
         workshop_ids=workshop_ids + loose_workshop_ids,
+        source_urls=source_urls,
         warnings=warnings,
         errors=errors,
     )

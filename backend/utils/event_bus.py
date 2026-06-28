@@ -8,6 +8,7 @@ from backend.utils.tools import current_ms
 class EventBus:
     _instance = None   # 存储单例实例的变量
     _window = None
+    _browser_dispatcher = None
     _paused = False  # 暂停标志
     _frontend_ready = False  # 新增：前端是否彻底就绪的标志
     _lock = threading.Lock() # 线程锁
@@ -22,6 +23,15 @@ class EventBus:
     @classmethod
     def set_window(cls, window: Window):
         cls._window = window
+        cls._browser_dispatcher = None
+        cls._paused = False
+        cls._frontend_ready = False # 绑定窗口时，默认未就绪
+
+    @classmethod
+    def set_browser_dispatcher(cls, dispatcher):
+        cls._window = None
+        cls._browser_dispatcher = dispatcher
+        cls._paused = False
         cls._frontend_ready = False # 绑定窗口时，默认未就绪
 
     @classmethod
@@ -47,6 +57,12 @@ class EventBus:
         使用 evaluate_js 原生 CustomEvent，兼容性好。
         """
         with cls._lock:
+            if cls._browser_dispatcher and cls._frontend_ready and not cls._paused:
+                try:
+                    cls._browser_dispatcher(event_name, data)
+                except Exception:
+                    pass
+                return
             # 增加 _frontend_ready 的严格判断，前端没准备好时，静默丢弃事件，不引发报错
             if cls._paused or not cls._window or not cls._frontend_ready:  return
             # 增加窗口就绪状态的预检

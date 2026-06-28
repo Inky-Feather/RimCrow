@@ -94,6 +94,8 @@ class WorkshopDBManager:
                 batch.append({
                     "old_workshop_id": r.get("oldWorkshopId"),
                     "old_package_id": str(r.get("oldPackageId", "")).lower(),
+                    "old_name": r.get("oldName", ""),
+                    "old_author": r.get("oldAuthor", ""),
                     "new_workshop_id": r.get("newWorkshopId"),
                     "new_package_id": str(r.get("newPackageId", "")).lower(),
                     "new_name": r.get("newName", ""),

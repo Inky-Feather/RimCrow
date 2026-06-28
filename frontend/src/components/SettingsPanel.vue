@@ -123,7 +123,7 @@
                 </h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4 aria-disabled:pointer-events-none aria-disabled:opacity-50" :aria-disabled="true">
-                    <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'ZH-cn'}, {label:'English', value:'EN'}]" />
+                    <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-cn'}, {label:'English', value:'en'}]" />
                     <CommonSelect label="配色方案" v-model="formData.theme" :options="[{label:'自动同步系统', value:'system'}, {label:'黑曜石', value:'dark'}]" />
                   </div>
                   <!-- <div class="grid grid-cols-2 gap-4">
@@ -201,7 +201,6 @@
                     <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
                     <CommonSwitch class="col-span-1" label="扫描时检查文件大小" v-model="formData.enable_file_size_scan" description="开启后，扫描时会自动检查 Mod 的文件大小，以此识别新增或更新的内容。该功能会增加扫描耗时，但能显著提高文件变动的识别精度。" />
                     <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />
-                    <CommonSwitch class="col-span-1" label="自动激活依赖项" v-model="formData.auto_activate_dependencies" description="开启后，自动排序时将会自动激活停用的依赖项。" />
                     <CommonSwitch class="col-span-1" label="检查语言支持" v-model="formData.check_language_support" description="开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。" />
                     <CommonSwitch class="col-span-1" label="显示共存冲突提示" v-model="formData.show_coexistence_message" description="关闭后，将不会显示共存Mod的冲突提示信息。" />
                     <CommonSwitch class="col-span-1" label="语言包贴紧前置" v-model="formData.language_packs_follow_targets" description="开启后，自动排序会尽量让语言包紧跟在它已启用的最后一个前置/依赖模组后方；如果找不到目标，就保持原来的默认底层位置。" />
@@ -219,8 +218,6 @@
                       description="影响启用管理器Mod或多环境下使用创意工坊Mod时的链接部署行为模式，增量部署会尽量保留已正确的链接，只处理变化项；完全重建会先移除全部旧链接，再按当前扫描结果重新部署。"
                       :options="[{label:'增量部署（默认）', value:'incremental'},{label:'完全重建', value:'full'}]" />
                     <CommonNumber class="col-span-1" label="自动备份保留天数" description="管理自动备份的最长保留时间，手动备份不受影响。" v-model="formData.backup_retention_days" :step="1" :min="0" :max="365" />
-                    <CommonSwitch class="col-span-1" label="使用原始 Mod ID" v-model="formData.use_raw_ids" description="开启后，将使用 Mod 的原始 ID 写入排序文件，而不是标准化的小写。" />
-                    
                   </div>
                 </div>
               </section>
@@ -385,6 +382,7 @@
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4">
                     <CommonSwitch class="col-span-2" label="调试模式" v-model="formData.debug_mode" description="开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。" />
+                    <CommonSwitch class="col-span-2" label="浏览器模式启动" v-model="formData.browser_mode" description="默认仍使用内置 WebView。开启后，无启动参数时将改为在本机浏览器中启动；关闭浏览器主页面后程序会自动退出。" />
                     <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
                     <!-- 手动检查按钮 -->
                     <div class="flex items-center justify-between p-3 input-glass">
@@ -416,10 +414,23 @@
                   </div>
                   <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
                     <h4 class="text-sm font-bold text-accent-danger uppercase">危险操作区</h4>
-                    <p class="text-xs text-accent-danger/60 leading-relaxed">重置操作将清空所有本地数据库缓存、分组信息和自定义备注。该操作不可撤销，请确保已备份您的 Mod 列表。</p>
-                    <button @click="handleReset" class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all">
-                      立即重置本地数据库
-                    </button>
+                    <p class="text-xs text-accent-danger/60 leading-relaxed">修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <button
+                        @click="handleRepair"
+                        :disabled="appStore.isLoading"
+                        class="w-full py-2 bg-accent-warn/10 hover:bg-accent-warn text-accent-warn hover:text-text-main border border-accent-warn/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        强制修复本地数据库
+                      </button>
+                      <button
+                        @click="handleReset"
+                        :disabled="appStore.isLoading"
+                        class="w-full py-2 bg-accent-danger/10 hover:bg-accent-danger text-accent-danger hover:text-text-main border border-accent-danger/30 rounded-lg text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        立即重置本地数据库
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -673,8 +684,51 @@ const updateExternalDB = async (dbType) => {
 
 // ====== 数据处理 ======
 const handleReset = async () => {
-  const ok = await confirmStore.confirmAction('确认重置', '这将抹除所有本地缓存数据，确定继续？', { type: 'error' })
+  const ok = await confirmStore.confirmAction('确认重置', '重置后，分组、备注等本地数据将被清空，且无法撤销。确定继续吗？', { type: 'error' })
   if (ok) appStore.resetDatabase()
+}
+
+const handleRepair = async () => {
+  const ok = await confirmStore.confirmAction(
+    '确认修复',
+    '这会尝试修复当前数据库。修复成功后需要重启软件才能生效。\n确定继续吗？',
+    { type: 'warning', confirmText: '开始修复' }
+  )
+  if (!ok) return
+
+  const res = await appStore.repairDatabase()
+  if (!res || res.status !== 'success') {
+    // 主动修复失败时不自动切换任何数据库，直接提示用户转向更保守的重置方案。
+    const shouldReset = await confirmStore.confirmAction(
+      '修复失败',
+      '数据库修复失败，当前数据可能无法正常使用。建议立即重置数据库。',
+      { type: 'error', confirmText: '立即重置', cancelText: '稍后处理' }
+    )
+    if (shouldReset) {
+      await appStore.resetDatabase()
+    }
+    return
+  }
+
+  if (res.data?.initialized) {
+    appStore.closeSettingsPanel()
+    toast.success('未找到本地数据库，已重新创建。')
+    return
+  }
+
+  const restartNow = await confirmStore.confirmAction(
+    '修复完成',
+    '数据库修复已完成。现在重启软件即可生效；如果暂不重启，当前仍会继续使用旧状态。',
+    { type: 'success', confirmText: '立即重启', cancelText: '稍后重启' }
+  )
+
+  if (!restartNow) {
+    toast.info('修复已完成，重启软件后生效。', { timeout: 4000 })
+    return
+  }
+
+  appStore.closeSettingsPanel()
+  await appStore.restartApplication()
 }
 
 const save = async () => {

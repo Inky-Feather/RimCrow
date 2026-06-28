@@ -246,7 +246,7 @@ const modType = computed(() => modStore.displayModType(modData.value))
 // 可替换版本是否已经安装
 const replacementInstalled = computed(() => {
     if (!modData.value?.replacement) return false
-    return modStore.allModWorkshopIds.has(modData.value.replacement.new_workshop_id)
+    return modStore.hasInstalledWorkshopId(modData.value.replacement.new_workshop_id)
 })
 // 可替换版本提示
 const replacementTooltip = computed(() => {

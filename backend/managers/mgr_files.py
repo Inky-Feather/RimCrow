@@ -323,6 +323,40 @@ class FileManager:
         return success_count, error_list
     
     @staticmethod
+    def _parse_dialog_file_types(file_types):
+        parsed_types = []
+        for item in file_types or []:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            match = re.match(r"^(.*?)\s*\((.*?)\)\s*$", text)
+            if match:
+                label = match.group(1).strip() or "文件"
+                patterns = " ".join(part.strip() for part in match.group(2).split(';') if part.strip())
+                parsed_types.append((label, patterns or "*.*"))
+            else:
+                parsed_types.append((text, "*.*"))
+        return parsed_types or [("所有文件", "*.*")]
+
+    @staticmethod
+    def _run_tk_dialog(dialog_callback):
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            root.update()
+            try:
+                return dialog_callback(filedialog)
+            finally:
+                root.destroy()
+        except Exception as e:
+            logger.warning(f"Fallback file dialog failed: {e}")
+            return None
+
+    @staticmethod
     def select_folder_dialog(initial_dir=''):
         """
         打开系统原生的文件夹选择框
@@ -335,17 +369,24 @@ class FileManager:
         # 获取当前活动窗口
         if len(webview.windows) > 0:
             window = webview.windows[0]
-            # 调用原生对话框
-            # allow_multiple=False: 单选
-            result = window.create_file_dialog(
-                webview.FileDialog.FOLDER, 
-                directory=path, 
-                allow_multiple=False
-            )
-            # result 返回的是一个列表 (因为可能多选)，或者 None (取消)
-            if result and len(result) > 0:
-                return result[0]
-        return None
+            try:
+                # 调用原生对话框
+                # allow_multiple=False: 单选
+                result = window.create_file_dialog(
+                    webview.FileDialog.FOLDER, 
+                    directory=path, 
+                    allow_multiple=False
+                )
+                # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
+                if result and len(result) > 0:
+                    return result[0]
+                return None
+            except Exception as e:
+                logger.warning(f"Webview folder dialog failed: {e}")
+                return None
+        return FileManager._run_tk_dialog(
+            lambda filedialog: filedialog.askdirectory(initialdir=path or os.getcwd()) or None
+        )
 
     @staticmethod
     def select_file_dialog(
@@ -373,15 +414,27 @@ class FileManager:
         
         if len(webview.windows) > 0:
             window = webview.windows[0]
-            result = window.create_file_dialog(
-                webview.FileDialog.OPEN, 
-                directory=path, 
-                allow_multiple=False,
-                file_types=file_types
-            )
-            if result and len(result) > 0:
-                return result[0]
-        return None
+            try:
+                result = window.create_file_dialog(
+                    webview.FileDialog.OPEN, 
+                    directory=path, 
+                    allow_multiple=False,
+                    file_types=file_types
+                )
+                # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
+                if result and len(result) > 0:
+                    return result[0]
+                return None
+            except Exception as e:
+                logger.warning(f"Webview open dialog failed: {e}")
+                return None
+        tk_file_types = FileManager._parse_dialog_file_types(file_types)
+        return FileManager._run_tk_dialog(
+            lambda filedialog: filedialog.askopenfilename(
+                initialdir=path or os.getcwd(),
+                filetypes=tk_file_types,
+            ) or None
+        )
     
     @staticmethod
     def save_file_dialog(
@@ -399,20 +452,34 @@ class FileManager:
         
         if len(webview.windows) > 0:
             window = webview.windows[0]
-            # pywebview 的 create_file_dialog 参数：
-            # dialog_type, directory, allow_multiple, save_filename, file_types
-            result = window.create_file_dialog(
-                webview.FileDialog.SAVE, 
-                directory=path, 
-                save_filename=default_filename, # 设置默认文件名
-                allow_multiple=False,
-                file_types=file_types
-            )
-            logger.info(f"用户选择保存路径: {result}")
-            if result and len(result) > 0:
-                return result[0]
-                
-        return None
+            try:
+                # pywebview 的 create_file_dialog 参数：
+                # dialog_type, directory, allow_multiple, save_filename, file_types
+                result = window.create_file_dialog(
+                    webview.FileDialog.SAVE, 
+                    directory=path, 
+                    save_filename=default_filename, # 设置默认文件名
+                    allow_multiple=False,
+                    file_types=file_types
+                )
+                logger.info(f"用户选择保存路径: {result}")
+                # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
+                if result and len(result) > 0:
+                    return result[0]
+                return None
+            except Exception as e:
+                logger.warning(f"Webview save dialog failed: {e}")
+                return None
+
+        tk_file_types = FileManager._parse_dialog_file_types(file_types)
+        return FileManager._run_tk_dialog(
+            lambda filedialog: filedialog.asksaveasfilename(
+                initialdir=path or os.getcwd(),
+                initialfile=default_filename,
+                filetypes=tk_file_types,
+                defaultextension=os.path.splitext(default_filename)[1] or None,
+            ) or None
+        )
     
     @staticmethod
     def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id'):

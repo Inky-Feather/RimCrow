@@ -12,6 +12,8 @@ import { useProfileStore } from './profileStore'
 import { cleanRichText } from '../utils/unityTextParser'
 import { useWorkspaceStore } from './workspaceStore'
 import { useTaskStore } from './taskStore'
+import { isBrowserRuntime, openManagedSubBrowserUrl } from '../runtime/runtimeBridge'
+import { normalizeInstallSource, normalizeInstallSources } from '../utils/modIdentity'
 
 export const useAppStore = defineStore('app', () => {
   const toast = createToastInterface()
@@ -22,6 +24,7 @@ export const useAppStore = defineStore('app', () => {
   const buildMode = ref('')      // 构建模式
   const isLoading = ref(false)   // 加载状态
   const isGameRunning = ref(false) // 新增：全局游戏运行状态
+  const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
   
   // UI 状态
   const uiState = reactive({
@@ -57,6 +60,8 @@ export const useAppStore = defineStore('app', () => {
   const cancelPendingTaskIds = ref(new Set())
   const cancelPendingTimers = new Map()
   const CANCELLATION_PENDING_TIMEOUT_MS = 15000
+  let suspendRecoveryTimer = null
+  let suspendRecoveryPromise = null
 
   const upgradeContext = ref({}); // 升级上下文
 
@@ -121,10 +126,11 @@ export const useAppStore = defineStore('app', () => {
     community_instead_db_path: '',
     
     current_profile_id: 'default',
+    browser_mode: false,
     asset_port: 0,
 
     // --- 系统 ---
-    language: 'ZH-cn',
+    language: 'zh-cn',
     window_width: 1400,
     window_height: 900,
     completed_guides: [],
@@ -208,12 +214,10 @@ export const useAppStore = defineStore('app', () => {
     delete_missing_mods_data: false,
     auto_sort_strategy: "classic_sort_logic",  // 自动排序策略
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
-    auto_activate_dependencies: false,     // 是否在排序时自动激活依赖项
     coexist_mod_folder_name_type: "workshop_id", // 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: true,       // 是否显示共存Mod提示
     check_language_support: true,        // 是否检查语言支持
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
-    use_raw_ids: false,               // 是否使用原始 Mod ID
 
     // --- 调试 (Debug) ---
     debug_mode: true,
@@ -332,6 +336,41 @@ export const useAppStore = defineStore('app', () => {
     return false
   }
 
+  const recoverFromSuspendedState = async () => {
+    if (suspendRecoveryPromise) return suspendRecoveryPromise
+
+    suspendRecoveryPromise = (async () => {
+      try {
+        const clearedScanTasks = taskStore.settleActiveTasks('scan', {
+          status: 'cancelled',
+          message: '扫描因界面挂起而中断，请重新刷新。',
+          metrics: { resumed_after_suspend: true },
+        })
+        if (clearedScanTasks > 0) {
+          toast.info('已清理挂起前遗留的扫描任务，请按需重新刷新。', { timeout: 2500 })
+        }
+
+        await waitForBackend()
+        if (window.pywebview?.api?.monitor_frontend_ready) {
+          await window.pywebview.api.monitor_frontend_ready()
+        }
+        const orderStore = useOrderStore()
+        const resumeSnapshot = orderStore.captureRuntimeRefreshSnapshot()
+        await refreshData(false, {
+          historyLabel: '游戏退出后刷新磁盘状态',
+        })
+        await orderStore.presentRuntimeRefreshDiff(resumeSnapshot)
+      } catch (e) {
+        console.error("恢复挂起界面失败:", e)
+        toast.error(`恢复界面失败: \n${e.message || e}`)
+      } finally {
+        isLoading.value = false
+        suspendRecoveryPromise = null
+      }
+    })()
+
+    return suspendRecoveryPromise
+  }
 
   // === Actions ===
   // 初始化：获取数据并分类
@@ -362,6 +401,9 @@ export const useAppStore = defineStore('app', () => {
           if (upgradeContext.value.actions_taken.length > 0) {
             toast.info(`升级完成: ${upgradeContext.value.actions_taken.join(', ')}`);
           }
+      }
+      if (upgradeContext.value.messages?.length > 0) {
+        toast.info(upgradeContext.value.messages.join('\n'), { timeout: 5000 })
       }
       const profileStore = useProfileStore()
       // 同步当前 Profile ID 到 profileStore
@@ -398,7 +440,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   // 刷新数据 (初始化核心)
-  const refreshData = async (isInit = false) => {
+  const refreshData = async (isInit = false, options = {}) => {
     if (!window.pywebview) return
     isLoading.value = true
     try {
@@ -438,7 +480,17 @@ export const useAppStore = defineStore('app', () => {
         groupStore.setGroups(res.data.groups || [])
         // 更新 Active列表 (防止外部修改 Active列表 导致的状态不一致)
         const modStore = useModStore()
-        modStore.setMods(res.data)
+        const previousSnapshot = !isInit
+          ? modStore.captureListHistorySnapshot()
+          : null
+        modStore.setMods(res.data, { resetHistory: !!isInit })
+        if (previousSnapshot) {
+          modStore.recordListHistory({
+            before: previousSnapshot,
+            type: options.historyType || 'refresh-data',
+            label: options.historyLabel || '刷新磁盘状态',
+          })
+        }
         // 刷新动态规则
         const ruleStore = useRuleStore()
         ruleStore.fetchRules()
@@ -512,10 +564,26 @@ export const useAppStore = defineStore('app', () => {
       console.log('检测到游戏启动，停止所有界面活动...');
       // 1. 设置全局加载状态，屏蔽用户操作
       isLoading.value = true;
+      if (suspendRecoveryTimer) {
+        clearTimeout(suspendRecoveryTimer)
+        suspendRecoveryTimer = null
+      }
     });
     // 监听游戏状态变化
     window.addEventListener('game-status-changed', (e) => {
       isGameRunning.value = e.detail.running
+    })
+    window.addEventListener('app-suspending', () => {
+      isSuspended.value = true
+    })
+    window.addEventListener('app-resuming', () => {
+      isSuspended.value = false
+      isLoading.value = true
+      if (suspendRecoveryTimer) clearTimeout(suspendRecoveryTimer)
+      suspendRecoveryTimer = window.setTimeout(() => {
+        suspendRecoveryTimer = null
+        void recoverFromSuspendedState()
+      }, 120)
     })
     // 通用进度更新
     window.addEventListener('global-progress', (e) => {
@@ -635,6 +703,41 @@ export const useAppStore = defineStore('app', () => {
       isLoading.value = false
     }
   }
+  // 主动修复数据库
+  const repairDatabase = async () => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      const res = await window.pywebview.api.repair_database()
+      if (!checkResult(res, "修复数据库")) {
+        return res
+      }
+      if (res.data?.initialized) {
+        // 数据库文件不存在时，后端会直接初始化新库，这里同步把前端状态也重建一次。
+        const modStore = useModStore()
+        modStore.reset()
+        const groupStore = useGroupStore()
+        groupStore.groupList = []
+        await initialize()
+      }
+      return res
+    } finally {
+      isLoading.value = false
+    }
+  }
+  // 主动重启应用
+  const restartApplication = async () => {
+    if (!window.pywebview) return
+    isLoading.value = true
+    try {
+      // 修复结果切换发生在重启后的启动阶段，这里只负责让当前实例安全退出并拉起新实例。
+      const res = await window.pywebview.api.restart_application()
+      checkResult(res, "重启应用")
+      return res
+    } finally {
+      isLoading.value = false
+    }
+  }
   // 数据库孤立数据清理
   const performDatabaseCleanup = async () => {
     const res = await window.pywebview.api.perform_database_cleanup()
@@ -694,9 +797,11 @@ export const useAppStore = defineStore('app', () => {
   // === 系统操作 ===
   // 启动游戏
   const launchGame = async (profile_id=null) => {
-    const orderStore = useOrderStore()
-    const res = await orderStore.saveLoadOrder()
-    if (!res) return
+    if (!profile_id) {
+      const orderStore = useOrderStore()
+      const res = await orderStore.saveLoadOrder()
+      if (!res) return
+    }
     if (!window.pywebview) return
     // 直接启动游戏
     const gameRes = await window.pywebview.api.game_launch(profile_id)
@@ -708,6 +813,11 @@ export const useAppStore = defineStore('app', () => {
   const enterSleepMode = () => {
     if (window.pywebview) {
       window.pywebview.api.monitor_force_sleep()
+    }
+  }
+  const exitSleepMode = () => {
+    if (window.pywebview) {
+      window.pywebview.api.monitor_force_wake()
     }
   }
   // 自动检测路径
@@ -818,6 +928,10 @@ export const useAppStore = defineStore('app', () => {
   // 打开Url
   const openUrl = (url) => {
     if(!url) { toast.warning("网址为空！"); return}
+    if (isBrowserRuntime()) {
+      openManagedSubBrowserUrl(url, 'RimModManager')
+      return
+    }
     if(settings.value.open_url_on_system){
       window.open(url, '_blank')
     }else{
@@ -927,25 +1041,73 @@ export const useAppStore = defineStore('app', () => {
       window.open(steamUrl, '_blank')
     }
   }
+  const openInstallSource = (source) => {
+    const normalizedSource = normalizeInstallSource(source, source?.packageId || source?.package_id)
+    if (!normalizedSource) return false
+    if (normalizedSource.kind === 'workshop') {
+      openSteamWorkshopById(normalizedSource.workshopId)
+      return true
+    }
+    openUrl(normalizedSource.url)
+    return true
+  }
+  const subscribeInstallSources = async (sources = []) => {
+    const normalizedSources = normalizeInstallSources(sources)
+    const workshopIds = [...new Set(
+      normalizedSources
+        .filter(source => source.kind === 'workshop')
+        .map(source => source.workshopId)
+        .filter(Boolean)
+    )]
+    const skippedUrlCount = normalizedSources.filter(source => source.kind === 'url').length
+    if (workshopIds.length === 0) {
+      if (skippedUrlCount > 0) {
+        toast.info('URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。')
+      }
+      return false
+    }
+    const success = await subscribeWorkshopIds(workshopIds)
+    if (success && skippedUrlCount > 0) {
+      toast.info(`已跳过 ${skippedUrlCount} 个 URL 来源订阅项`)
+    }
+    return success
+  }
+  const downloadInstallSources = async (sources = []) => {
+    const normalizedSources = normalizeInstallSources(sources)
+    const workshopIds = [...new Set(
+      normalizedSources
+        .filter(source => source.kind === 'workshop')
+        .map(source => source.workshopId)
+        .filter(Boolean)
+    )]
+    const urlSources = normalizedSources.filter(source => source.kind === 'url' && source.url)
+    if (workshopIds.length === 0 && urlSources.length === 0) return false
+    if (workshopIds.length > 0) {
+      await downloadWorkshopItems(workshopIds)
+    }
+    if (urlSources.length > 0) {
+      urlSources.forEach(source => openUrl(source.url))
+      toast.info(`已打开 ${urlSources.length} 个外部来源，后续可接入专门下载流程。`)
+    }
+    return true
+  }
+  const resolveWorkshopIdsFromPackageIds = async (packageIds) => {
+    if (!packageIds) return []
+    const workshopStore = useWorkspaceStore()
+    return await workshopStore.resolvePackageIdsToWorkshopIds(packageIds)
+  }
   // 根据包名下载Mod
   const downloadPackageIds = async (packageIds) => {
-    if (!packageIds) return false
-    const workshopStore = useWorkspaceStore()
-    const workshopIdsMap = await workshopStore.getWorkshopIdsByPackageIdsMap(packageIds)
-    if (!workshopIdsMap) return false
-    // {zetrith.prepatcher: '2934420800'}
-    const workshopIds = Object.values(workshopIdsMap)
+    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
+    if (workshopIds.length === 0) return false
     // 调用下载函数
     await downloadWorkshopItems(workshopIds)
     return true
   }
   // 根据包名订阅Mod
   const subscribePackageIds = async (packageIds) => {
-    if (!packageIds) return false
-    const workshopStore = useWorkspaceStore()
-    const workshopIdsMap = await workshopStore.getWorkshopIdsByPackageIdsMap(packageIds)
-    if (!workshopIdsMap) return false
-    const workshopIds = Object.values(workshopIdsMap)
+    const workshopIds = await resolveWorkshopIdsFromPackageIds(packageIds)
+    if (workshopIds.length === 0) return false
     // 调用订阅函数
     await subscribeWorkshopIds(workshopIds)
     return true
@@ -1290,15 +1452,15 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
-    aiState, aiBatchResults, aiBatchResultCount, currentAiBatchTask, currentAiBatchTaskId, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, upgradeContext,
-    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode,
+    aiState, aiBatchResults, aiBatchResultCount, currentAiBatchTask, currentAiBatchTaskId, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, upgradeContext,
+    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     getThumbUrl, getLocalUrl, getRemoteUrl,
     // 游戏相关
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultCommunityPaths, openPath, getFilePath, getFolderPath, deletePath, deletePaths, openUrl, 
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
-    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    saveSetting, applySettings, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     
-    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, checkUpdate, updateExternalDB,
+    checkSteamTools, openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource, checkUpdate, updateExternalDB,
     // AI处理
     getAiConfig, saveAIConfig, getAiProviders, getAiModels, useAI, chatWithAI, startAiBatchTask, setCurrentAiBatchTask, clearCurrentAiBatchResults,
     fetchPrompts, savePrompt, deletePrompt, resetPrompts,

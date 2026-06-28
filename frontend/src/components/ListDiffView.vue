@@ -134,11 +134,6 @@
                       <div v-if="shouldShowIndicator(item, 'b')" class="absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-200" :style="getIndicatorStyle(item, 'b')"></div>
                       <span class="w-6 text-xs font-mono text-text-main text-right mr-2 select-none shrink-0 opacity-80">{{ item.originalIndex + 1 }}</span>
 
-                      <div class="min-w-0 flex-1 pr-22">
-                        <div class="truncate text-sm font-medium transition-colors" :class="getTextClass(item, 'b')" v-tooltip="getImportTooltip(item.id) || displayNameById(item.id, 'b')">
-                          {{ displayNameById(item.id, 'b') }}
-                        </div>
-                      </div>
 
                       <div v-if="getImportStatusMeta(item.id)" v-tooltip="getImportTooltip(item.id)" class="mr-1 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold"
                         :class="getImportStatusMeta(item.id).badgeClass">
@@ -164,7 +159,7 @@
                         <button
                           v-if="canOpenImportWorkshop(item.id)"
                           @click.stop="openImportWorkshop(item.id)"
-                          v-tooltip="'打开工坊页面'"
+                          v-tooltip="'打开来源页面'"
                           class="rounded-full bg-accent-special/85 p-1 text-black transition-transform hover:scale-105">
                           <Link class="size-3" />
                         </button>
@@ -175,6 +170,11 @@
                           class="rounded-full bg-accent-danger/85 p-1 text-black transition-transform hover:scale-105">
                           <X class="size-3" />
                         </button>
+                      </div>
+                      <div class="min-w-0 flex-1 pr-22">
+                        <div class="truncate text-sm font-medium transition-colors" :class="getTextClass(item, 'b')" v-tooltip="getImportTooltip(item.id) || displayNameById(item.id, 'b')">
+                          {{ displayNameById(item.id, 'b') }}
+                        </div>
                       </div>
                     </div>
 
@@ -346,14 +346,16 @@ const shouldShowImportActions = (rowKey) => {
 }
 const canSubscribeImportItem = (rowKey) => {
   const item = getImportCheckItem(rowKey)
-  return !!item?.target_workshop_id && ['missing', 'replacement', 'other_version'].includes(item.status) && !item?.installed_via_replacement
+  const source = orderStore.getImportCheckTargetSource(item)
+  return source?.kind === 'workshop' && ['missing', 'replacement', 'other_version'].includes(item.status) && !item?.installed_via_replacement
 }
 const canDownloadImportItem = (rowKey) => {
   const item = getImportCheckItem(rowKey)
-  return !!item?.target_workshop_id && ['missing', 'replacement', 'other_version'].includes(item.status) && !item?.installed_via_replacement
+  const source = orderStore.getImportCheckTargetSource(item)
+  return !!source && ['missing', 'replacement', 'other_version'].includes(item.status) && !item?.installed_via_replacement
 }
 const canOpenImportWorkshop = (rowKey) => {
-  return !!getImportCheckItem(rowKey)?.target_workshop_id
+  return !!orderStore.getImportCheckTargetSource(getImportCheckItem(rowKey))
 }
 const canRemoveImportItem = (rowKey) => {
   const item = getImportCheckItem(rowKey)

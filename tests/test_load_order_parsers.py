@@ -176,6 +176,43 @@ ludeon.rimworld
         self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
         self.assertIn("2009463077", parsed.workshop_ids)
 
+    def test_parse_rimsort_clipboard_report_text(self):
+        path = self._write(
+            "rimsort_report.txt",
+            """Created with RimSort v1.0.69
+RimWorld game version this list was created for: 1.6.4633 rev1260
+Total # of mods: 4
+
+Harmony [brrainz.harmony][https://github.com/pardeike/HarmonyRimWorld]
+RimModManager Companion [rmm.companion][No url specified]
+Adaptive Storage Framework [adaptive.storage.framework][https://steamcommunity.com/sharedfiles/filedetails/?id=3033901359]
+RimWorld [ludeon.rimworld][https://store.steampowered.com/app/294100/RimWorld]
+""",
+        )
+        parsed = parse_load_order_file(path)
+        self.assertEqual(parsed.format, FORMAT_PLAIN_TEXT)
+        self.assertEqual(
+            parsed.package_ids,
+            [
+                "brrainz.harmony",
+                "rmm.companion",
+                "adaptive.storage.framework",
+                "ludeon.rimworld",
+            ],
+        )
+        self.assertEqual(
+            parsed.mod_names,
+            [
+                "Harmony",
+                "RimModManager Companion",
+                "Adaptive Storage Framework",
+                "RimWorld",
+            ],
+        )
+        self.assertEqual(parsed.workshop_ids[:4], ["", "", "3033901359", ""])
+        self.assertEqual(parsed.warnings, [])
+        self.assertEqual(parsed.errors, [])
+
     def test_parse_workshop_ids_text(self):
         path = self._write(
             "workshop.txt",
@@ -205,6 +242,24 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890
         self.assertEqual(parsed.format, FORMAT_RMM_JSON)
         self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
         self.assertEqual(parsed.mod_names, ["Harmony", "Core"])
+
+    def test_detect_and_parse_rimsort_json_content_saved_as_xml(self):
+        path = self._write(
+            "RimSortExport.xml",
+            """{
+  "version": "1.6.4633 rev1260",
+  "activeMods": [
+    "brrainz.harmony",
+    "ludeon.rimworld"
+  ],
+  "knownExpansions": []
+}""",
+        )
+        self.assertEqual(detect_load_order_format(path), FORMAT_RIMSORT_JSON)
+        parsed = parse_load_order_file(path)
+        self.assertEqual(parsed.format, FORMAT_RIMSORT_JSON)
+        self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
+        self.assertEqual(parsed.errors, [])
 
     def test_duplicate_package_ids_keep_first_occurrence(self):
         path = self._write(

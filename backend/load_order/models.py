@@ -29,5 +29,6 @@ class ParsedLoadOrderData:
     package_ids: list[str] = field(default_factory=list)
     mod_names: list[str] = field(default_factory=list)
     workshop_ids: list[str] = field(default_factory=list)
+    source_urls: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

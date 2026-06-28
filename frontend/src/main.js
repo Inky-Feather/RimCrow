@@ -10,6 +10,9 @@ import App from './App.vue'
 import {vPreview} from './directives/vPreview.js'
 import {vTooltip} from './directives/vTooltip.js'
 import { vSelectableList } from './directives/vSelection' // 引入指令
+import { setupPywebviewBridge } from './runtime/pywebviewBridge'
+
+await setupPywebviewBridge()
 
 
 const pinia = createPinia() 

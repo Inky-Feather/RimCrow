@@ -104,7 +104,7 @@
 
             <!-- 待恢复/孤立环境 -->
             <div v-if="profileStore.orphanedProfiles.length > 0" class="mt-8 space-y-3">
-              <div class="px-2 text-[0.65rem] font-bold text-accent-warn uppercase tracking-tighter">待恢复节点</div>
+              <div class="px-2 text-[0.65rem] font-bold text-accent-warn uppercase tracking-tighter">待恢复环境</div>
               <div v-for="orphan in profileStore.orphanedProfiles" :key="orphan.id"
                 class="p-4 rounded-xl border border-dashed border-accent-warn/30 bg-accent-warn/5 flex items-center justify-between group">
                 <div class="min-w-0">

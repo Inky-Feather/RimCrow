@@ -262,6 +262,7 @@ const finishDragSession = ({ suppressDrop = false } = {}) => {
     suppressNextDrop.value = true
   }
   isDragging.value = false
+  modStore.isDraggingMod = false
 }
 const dispatchSyntheticDragEnd = () => {
   if (typeof document === 'undefined') return
@@ -278,6 +279,7 @@ const cancelActiveDrag = async () => {
 }
 const startDrag = (e) => {
   isDragging.value = true
+  modStore.isDraggingMod = true
   console.log("开始拖拽:", e)
 }
 // 更新子项的排序

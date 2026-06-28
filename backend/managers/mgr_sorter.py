@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List, Dict, Tuple
 import heapq
 from collections import deque, defaultdict
@@ -50,98 +49,6 @@ class OrderSorter:
         self.context = context  # 环境上下文
         self.effective_rules_cache = {} # 缓存每个 Mod 的生效规则
         self.rule_mgr = RuleManager(context)
-
-    def _tool_mod_exists(self, mod_data: dict) -> Tuple[bool, str]:
-        """检查 Tool Mod 是否仍然物理存在且 About 文件可用。"""
-        mod_path = str(mod_data.get('path') or '').strip()
-        if not mod_path:
-            return False, "缺少本地路径"
-
-        mod_root = Path(mod_path)
-        if not mod_root.exists():
-            return False, f"路径不存在: {mod_path}"
-
-        about_xml = mod_root / 'About' / 'About.xml'
-        about_xml_disabled = mod_root / 'About' / 'About.xml.disabled'
-        if not (about_xml.is_file() or about_xml_disabled.is_file()):
-            return False, "缺少 About.xml / About.xml.disabled"
-
-        return True, ""
-
-    def _tool_mod_matches_game_version(self, mod_data: dict) -> Tuple[bool, str]:
-        """检查 Tool Mod 是否兼容当前环境的游戏版本。"""
-        current_version = str(self.context.game_version or '').strip()[:3]
-        if not current_version:
-            return True, ""
-
-        raw_versions = mod_data.get('supported_versions') or []
-        if isinstance(raw_versions, str):
-            raw_versions = [raw_versions]
-        if not isinstance(raw_versions, list):
-            raw_versions = []
-
-        supported_versions = {
-            str(ver).strip()[:3].lower()
-            for ver in raw_versions
-            if str(ver).strip()
-        }
-
-        # 与前端现有版本告警语义保持一致：未声明 supported_versions 时不视为不兼容。
-        if supported_versions and current_version.lower() not in supported_versions:
-            return False, f"不支持当前游戏版本 {current_version} (支持: {sorted(supported_versions)})"
-
-        return True, ""
-    
-    def ensure_mods(self, active_ids: List[str], mod_map: Dict[str, dict]) -> Tuple[List[str], List[str]]:
-        """
-        防呆机制：强制保证官方核心组件在激活列表中，且参与排序。
-        如果物理存在，则强制加入 active_ids。
-        """
-        core_sequence = [
-            "ludeon.rimworld", 
-            # "ludeon.rimworld.royalty", 
-            # "ludeon.rimworld.ideology", 
-            # "ludeon.rimworld.biotech", 
-            # "ludeon.rimworld.anomaly"
-        ]
-        tool_mods = [
-            "rmm.companion"
-        ]
-        active_set = set(active_ids)
-        need_added_ids = []
-        
-        for core_id in core_sequence:
-            if core_id in mod_map and core_id not in active_set:
-                active_ids.append(core_id)
-                active_set.add(core_id)
-                need_added_ids.append(core_id)
-        
-        if settings.config.enable_tool_mods:
-            for tool_id in tool_mods:
-                tool_data = mod_map.get(tool_id)
-                if not tool_data:
-                    logger.info(f"Tool Mod 跳过: {tool_id} 未扫描到，或当前环境不可见")
-                    continue
-
-                exists_ok, exists_msg = self._tool_mod_exists(tool_data)
-                if not exists_ok:
-                    logger.info(f"Tool Mod 跳过: {tool_id} -> {exists_msg}")
-                    continue
-
-                version_ok, version_msg = self._tool_mod_matches_game_version(tool_data)
-                if not version_ok:
-                    logger.info(f"Tool Mod 跳过: {tool_id} -> {version_msg}")
-                    continue
-
-                if tool_id not in active_set:
-                    active_ids.append(tool_id)
-                    active_set.add(tool_id)
-                    need_added_ids.append(tool_id)
-        
-        if need_added_ids:
-            logger.info(f"防呆拦截: 强制补全缺失组件 -> {need_added_ids}")
-            
-        return active_ids, need_added_ids
 
     def build_atomic_groups(self, active_ids: List[str], mod_map: Dict[str, dict]) -> Tuple[List[AtomicGroup], List[dict]]:
         """
@@ -707,8 +614,6 @@ class OrderSorter:
         logger.info(f"Starting sort for {len(active_ids)} mods with strategy={strategy}...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
-        # 防呆：注入官方核心模组
-        active_ids, need_added_ids = self.ensure_mods(active_ids, mod_map)
         current_assets_ids = list(mod_map.keys())
         from backend.database.dao import GroupDAO
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids) or []
@@ -725,55 +630,11 @@ class OrderSorter:
         # 将分组名注入到 mod_map 中
         for mid, m_data in mod_map.items():
             m_data['groups'] = mod_groups_map.get(mid, [])
-        
-        # --- 0. 依赖项自动修补 (受开关控制) ---
-        active_set = set(id.lower() for id in active_ids)
-        auto_activated_deps = []
-        
+
         self.effective_rules_cache = {} # 全局规则缓存字典
         for mid, m_data in mod_map.items():
             self.effective_rules_cache[mid] = self.rule_mgr.get_effective_mod_rules(mid, m_data)
-        
-        MAX_ITERATIONS = 15  # 设定最大迭代深度阈值
-        
-        # 默认 False 保持保守行为
-        if settings.config.auto_activate_dependencies or False:
-            changed = True
-            iteration_count = 0  # 迭代计数器
-            # 因为被自动激活的依赖可能还有它自己的依赖，所以需要循环挖掘直到没有新增
-            while changed and iteration_count < MAX_ITERATIONS:
-                changed = False
-                iteration_count += 1
-                for mid in list(active_set):
-                    m_data = mod_map.get(mid, {})
-                    rules = self.effective_rules_cache.get(mid, {})
-                    
-                    for dep in rules.get('dependencies', []):
-                        target = dep['target_id']
-                        alts = dep.get('alternatives', [])
-                        
-                        # 如果主目标或任一备选目标已在激活列表中，则视为满足，跳过
-                        if target in active_set or any(alt in active_set for alt in alts):
-                            continue
-                            
-                        # 缺失依赖，尝试优先激活主目标
-                        if target in mod_map:
-                            active_set.add(target)
-                            auto_activated_deps.append(target)
-                            changed = True
-                        else:
-                            # 主目标本地没有，尝试激活存在于本地的备选包
-                            for alt in alts:
-                                if alt in mod_map:
-                                    active_set.add(alt)
-                                    auto_activated_deps.append(alt)
-                                    changed = True
-                                    break
-            # 触发阈值警告
-            if iteration_count >= MAX_ITERATIONS:
-                logger.warning(f"依赖自动补全达到最大迭代次数({MAX_ITERATIONS}次)，可能存在循环依赖配置，已强制终止延伸。")
-        
-        expanded_active_ids = list(active_set)
+        expanded_active_ids = list(active_ids)
         # 1. 将扩展后的激活列表转化为原子组
         groups, interlock_warnings = self.build_atomic_groups(expanded_active_ids, mod_map)
         mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
@@ -961,7 +822,7 @@ class OrderSorter:
             interlock_auto_activated .extend(g.auto_activated)
         
         # 12. 合并自动激活的依赖项，形成最终的自动激活列表
-        all_auto_activated = list(set(interlock_auto_activated + auto_activated_deps))
+        all_auto_activated = interlock_auto_activated
 
         return {
             "sorted_ids": final_list,

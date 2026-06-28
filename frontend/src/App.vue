@@ -1,5 +1,27 @@
 <template>
-  <div class="relative h-dvh w-screen flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
+  <div v-if="appStore.isSuspended" class="relative h-[100vh] w-full overflow-hidden font-sans select-none bg-[#0f172a] text-slate-200">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_28%),linear-gradient(160deg,#0f172a_0%,#111827_100%)]"></div>
+    <div class="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
+      <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/8 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-300">
+        <span class="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.8)] animate-pulse"></span>
+        RimWorld Running
+      </div>
+      <h1 class="text-3xl font-black tracking-wide text-slate-100">RimWorld 正在运行</h1>
+      <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+        管理器已切换到浏览器静默挂起状态。游戏退出后会自动恢复主界面；也可以手动唤醒。
+      </p>
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
+        <button
+          class="rounded-full border border-cyan-400/30 bg-cyan-400/12 px-5 py-2.5 text-sm font-bold tracking-wide text-cyan-200 transition-all hover:-translate-y-0.5 hover:bg-cyan-400/24 hover:text-white"
+          @click="appStore.exitSleepMode()"
+        >
+          唤醒管理界面
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="relative h-[100vh] w-full flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
     <RimHeader class="z-100" />
     
     <!-- 主工作区 -->
@@ -196,6 +218,9 @@
     <!-- 环境管理抽屉 -->
     <ProfileDrawer /> 
 
+    <!-- 缺失项下载管理 -->
+    <MissingInstallDialog />
+
     <!-- 引导中心浮动按钮 -->
     <GuideCenter />
     
@@ -207,6 +232,9 @@
 
     <!-- 确认弹窗 -->
     <Confirm />
+
+    <!-- 补充建议弹窗 -->
+    <SupplementSelectionDialog />
 
     <!-- 更新弹窗 -->
     <UpdateModal />
@@ -256,6 +284,8 @@ import WorkspaceOverlay from './components/workspace/WorkspaceOverlay.vue'
 import UpdateModal from './components/UpdateModal.vue'
 import GuideCenter from './components/GuideCenter.vue'
 import TextureOptModal from './components/TextureOptModal.vue'
+import SupplementSelectionDialog from './components/SupplementSelectionDialog.vue'
+import MissingInstallDialog from './components/MissingInstallDialog.vue'
 
 const updateModal = ref(null);
 

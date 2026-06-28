@@ -78,6 +78,17 @@ class GameMonitor:
     def _enter_idle_mode(self):
         """进入静默模式 (原 _on_game_start)"""
         logger.info("[Monitor] 游戏运行中，进入静默模式")
+        if hasattr(self.api, 'is_browser_runtime') and self.api.is_browser_runtime():
+            try:
+                EventBus.emit('app-suspending')
+                EventBus.pause()
+                if hasattr(self.api, 'scanner'):
+                    self.api.scanner.stop_scan()
+            except Exception as e:
+                logger.error(f"[Monitor] Browser silent mode failed: {e}")
+                EventBus.resume()
+            return
+
         window = self.api.get_window()
         if not window: return
         try:
@@ -100,6 +111,16 @@ class GameMonitor:
     def _exit_idle_mode(self):
         """恢复主界面"""
         logger.info("[Monitor] 恢复主界面")
+        if hasattr(self.api, 'is_browser_runtime') and self.api.is_browser_runtime():
+            try:
+                EventBus.resume()
+                EventBus.emit('app-resuming')
+                EventBus.emit('game-status-changed', {'running': self.is_game_running})
+                logger.info("[Monitor] 浏览器模式已恢复主界面")
+            except Exception as e:
+                logger.error(f"[Monitor] Browser resume failed: {e}")
+            return
+
         window = self.api.get_window()
         if not window: return
         

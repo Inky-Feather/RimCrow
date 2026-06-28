@@ -4,15 +4,22 @@ from typing import Any
 from peewee import fn
 from playhouse.shortcuts import model_to_dict
 
+from backend.database.models import ModAsset
 from backend.database.models_ext import ModReplacement, WorkshopMeta
-from backend.database.workshop_selection import normalize_cached_workshop_id, select_best_workshop_detail_for_package
+from backend.database.workshop_selection import (
+    build_workshop_detail_lookup,
+    build_install_source,
+    dedupe_install_sources,
+    install_source_sort_key,
+    normalize_cached_workshop_id,
+)
 from backend.utils.tools import normalize_package_id, normalize_package_ids
 from backend.utils.versioning import score_version_support
 
 
 def _require_database_dependencies() -> None:
     """确保数据库相关依赖可用。"""
-    if model_to_dict is None or fn is None or WorkshopMeta is None or ModReplacement is None:
+    if model_to_dict is None or fn is None or WorkshopMeta is None or ModReplacement is None or ModAsset is None:
         raise ModuleNotFoundError("dao_ext database dependencies are unavailable")
 
 
@@ -46,10 +53,14 @@ def _load_replacement_candidates_by_package_ids(normalized_package_ids: list[str
     replacements = (
         ModReplacement.select(
             ModReplacement.old_package_id,
+            ModReplacement.old_workshop_id,
+            ModReplacement.old_name,
+            ModReplacement.old_author,
             ModReplacement.new_workshop_id,
             ModReplacement.new_name,
             ModReplacement.new_package_id,
             ModReplacement.new_versions,
+            ModReplacement.old_versions,
         )
         .where(fn.LOWER(ModReplacement.old_package_id).in_(normalized_package_ids))
         .dicts()
@@ -87,6 +98,56 @@ def _load_workshop_meta_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]
     return {meta["workshop_id"]: meta for meta in metas}
 
 
+def _load_asset_source_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    assets = (
+        ModAsset.select(
+            ModAsset.package_id,
+            ModAsset.workshop_id,
+            ModAsset.url,
+            ModAsset.name,
+            ModAsset.supported_versions,
+            ModAsset.file_modify_time,
+        )
+        .where(fn.LOWER(ModAsset.package_id).in_(normalized_package_ids))
+        .dicts()
+    )
+
+    asset_map: dict[str, list[dict[str, Any]]] = {}
+    for asset in assets:
+        package_id = normalize_package_id(asset.get("package_id"))
+        if not package_id:
+            continue
+        asset_map.setdefault(package_id, []).append(asset)
+    return asset_map
+
+
+def _build_replacement_install_source(
+    package_id: str,
+    replacement: dict[str, Any],
+    replacement_meta_map: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    normalized_new_workshop_id = normalize_cached_workshop_id(replacement.get("new_workshop_id"))
+    replacement_meta = replacement_meta_map.get(normalized_new_workshop_id, {}) if normalized_new_workshop_id else {}
+    return build_install_source(
+        {
+            "package_id": replacement_meta.get("package_id")
+            or replacement.get("new_package_id")
+            or package_id,
+            "workshop_id": normalized_new_workshop_id,
+            "url": replacement_meta.get("url"),
+            "name": replacement_meta.get("title")
+            or replacement_meta.get("name")
+            or replacement.get("new_name"),
+            "supported_versions": replacement_meta.get("game_versions")
+            or replacement.get("new_versions")
+            or [],
+        },
+        fallback_package_id=package_id,
+        source_origin="replacement",
+        is_replacement=True,
+    )
+
+
 def _serialize_workshop_lookup(meta: dict[str, Any]) -> dict[str, Any]:
     """将 workshop_id 直查结果统一为导入检查和 UI 期望的结构。"""
     workshop_id = str(meta["workshop_id"])
@@ -119,7 +180,7 @@ class WorkshopCacheDAO:
             current_game_version=current_game_version,
         )
         detail = details.get(normalize_package_id(package_id))
-        return detail.get("workshop_id") if detail else None
+        return (((detail or {}).get("display") or {}).get("selected") or {}).get("workshop_id")
 
     @staticmethod
     def get_replacement_suggestion(package_id: str, current_game_version: str):
@@ -255,6 +316,11 @@ class WorkshopCacheDAO:
 
         这是前端“幽灵项补全”和导入检查会大量调用的接口，因此这里优先选择
         批量查询后内存仲裁，而不是对每个 package_id 单独查一遍数据库。
+
+        返回结构刻意拆成三段：
+        - direct: 原版直查结果
+        - replacement: 替代规则结果
+        - display: 仅供展示/兜底补全使用的已选候选
         """
         _require_database_dependencies()
         normalized_package_ids = normalize_package_ids(package_ids)
@@ -274,15 +340,124 @@ class WorkshopCacheDAO:
 
         result: dict[str, dict[str, Any]] = {}
         for package_id in normalized_package_ids:
-            selected = select_best_workshop_detail_for_package(
+            lookup = build_workshop_detail_lookup(
                 package_id,
                 meta_candidates=meta_map.get(package_id, []),
                 replacement_candidates=replacement_map.get(package_id, []),
                 replacement_meta_map=replacement_meta_map,
                 current_game_version=current_game_version,
             )
-            if selected:
-                result[package_id] = selected
+            if (
+                ((lookup.get("direct") or {}).get("selected"))
+                or ((lookup.get("replacement") or {}).get("selected"))
+                or ((lookup.get("display") or {}).get("selected"))
+            ):
+                result[package_id] = lookup
+        return result
+
+    @staticmethod
+    def get_install_sources_by_package_ids(package_ids: list[str], current_game_version: str = ""):
+        """
+        批量返回 package_id 对应的原始安装来源与替代来源。
+
+        与 `get_workshop_details_by_package_ids()` 不同，这里不会把 replacement 混进 original，
+        前端可以基于这个结构自己决定“原版缺失 / 替代候选 / 已装替代”等统计口径。
+        """
+        _require_database_dependencies()
+        normalized_package_ids = normalize_package_ids(package_ids)
+        if not normalized_package_ids:
+            return {}
+
+        asset_map = _load_asset_source_candidates_by_package_ids(normalized_package_ids)
+        meta_map = _load_meta_candidates_by_package_ids(normalized_package_ids)
+        replacement_map = _load_replacement_candidates_by_package_ids(normalized_package_ids)
+        replacement_meta_map = _load_workshop_meta_map(
+            [
+                replacement.get("new_workshop_id", "")
+                for replacements in replacement_map.values()
+                for replacement in replacements
+                if replacement.get("new_workshop_id")
+            ]
+        )
+
+        result: dict[str, dict[str, Any]] = {}
+        for package_id in normalized_package_ids:
+            replacement_sources = dedupe_install_sources([
+                _build_replacement_install_source(
+                    package_id,
+                    replacement,
+                    replacement_meta_map,
+                )
+                for replacement in replacement_map.get(package_id, [])
+            ])
+            replacement_sources = [source for source in replacement_sources if source]
+            replacement_sources.sort(
+                key=lambda source: install_source_sort_key(current_game_version, source),
+                reverse=True,
+            )
+            replacement_workshop_ids = {
+                normalize_cached_workshop_id(source.get("workshop_id"))
+                for source in replacement_sources
+                if source.get("kind") == "workshop"
+            }
+            replacement_urls = {
+                str(source.get("url") or "").strip()
+                for source in replacement_sources
+                if source.get("kind") == "url" and source.get("url")
+            }
+
+            original_sources = dedupe_install_sources([
+                *[
+                    {
+                        "package_id": package_id,
+                        "workshop_id": replacement.get("old_workshop_id"),
+                        "name": replacement.get("old_name") or replacement.get("old_package_id") or package_id,
+                        "supported_versions": replacement.get("old_versions") or [],
+                        "source_origin": "replacement_old",
+                    }
+                    for replacement in replacement_map.get(package_id, [])
+                    if replacement.get("old_workshop_id")
+                ],
+                *[
+                    {
+                        "package_id": package_id,
+                        "workshop_id": asset.get("workshop_id"),
+                        "url": asset.get("url"),
+                        "name": asset.get("name"),
+                        "supported_versions": asset.get("supported_versions") or [],
+                        "source_origin": "asset",
+                    }
+                    for asset in asset_map.get(package_id, [])
+                ],
+                *[
+                    {
+                        "package_id": package_id,
+                        "workshop_id": meta.get("workshop_id"),
+                        "name": meta.get("title") or meta.get("name"),
+                        "supported_versions": meta.get("game_versions") or [],
+                        "source_origin": "meta",
+                    }
+                    for meta in meta_map.get(package_id, [])
+                ],
+            ])
+            original_sources = [
+                source for source in original_sources
+                if not (
+                    (source.get("kind") == "workshop" and normalize_cached_workshop_id(source.get("workshop_id")) in replacement_workshop_ids)
+                    or (source.get("kind") == "url" and str(source.get("url") or "").strip() in replacement_urls)
+                )
+            ]
+            original_sources.sort(
+                key=lambda source: install_source_sort_key(current_game_version, source),
+                reverse=True,
+            )
+
+            result[package_id] = {
+                "package_id": package_id,
+                "original_sources": original_sources,
+                "replacement_sources": replacement_sources,
+            }
+
         return result
 
     @staticmethod

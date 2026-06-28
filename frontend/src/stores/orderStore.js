@@ -4,12 +4,15 @@ import { createToastInterface } from 'vue-toastification'
 import { useModStore } from './modStore'
 import { useAppStore } from './appStore'
 import { useConfirmStore } from './confirmStore'
+import { useSupplementStore } from './supplementStore'
+import { normalizeInstallSource } from '../utils/modIdentity'
 
 export const useOrderStore = defineStore('order', () => {
   const toast = createToastInterface()
   const appStore = useAppStore()
   const modStore = useModStore()
   const confirmStore = useConfirmStore()
+  const supplementStore = useSupplementStore()
   const checkResult = appStore.checkResult
   
   // === State ===
@@ -95,11 +98,104 @@ export const useOrderStore = defineStore('order', () => {
   const clearBackupOrder = () => {
     setBackupOrder({}, '')
   }
+  // 设置当前查看环境的备份目录
   const setBackupProfile = (profileId = '', meta = null) => {
     backupProfileId.value = profileId || ''
     if (meta && Object.prototype.hasOwnProperty.call(meta, 'backup_dir')) {
       backupProfileDir.value = meta.backup_dir || ''
     }
+  }
+  const buildEditingMods = (ids = []) => (
+    (ids || []).map(id => {
+      const normalizedId = String(id || '').toLowerCase()
+      return {
+        package_id: normalizedId,
+        name: modStore.displayModName(normalizedId),
+      }
+    })
+  )
+  const isSameOrder = (left = [], right = []) => {
+    if ((left || []).length !== (right || []).length) return false
+    return (left || []).every((item, index) => item === right[index])
+  }
+  const applyDiskOrder = async (order = {}, { toastMessage = '' } = {}) => {
+    const nextIds = order.active_ids || []
+    modStore.setListIds('active', nextIds)
+    modStore.setActiveLoadBaseline(
+      nextIds,
+      order.modify_time || 0,
+      order.version_token || {}
+    )
+    modStore.updateInactiveIds()
+    await modStore.fetchAndCacheGhostMods(nextIds)
+    if (toastMessage) {
+      toast.info(toastMessage, { timeout: 2200 })
+    }
+    return true
+  }
+  const showDiskConflict = async (payload = {}, toastMessage = '检测到磁盘序列已变化，请先处理冲突。') => {
+    const diskOrder = payload.disk_order || {}
+    const editingIds = payload.editing_order?.active_ids || []
+    await applyDiskOrder(diskOrder)
+    setBackupOrder({
+      active_ids: editingIds,
+      mods: buildEditingMods(editingIds),
+      file: 'conflict://unsaved',
+      modify_time: Date.now(),
+      format: 'conflict',
+      list_name: '未保存改动',
+      source_profile_id: '',
+      source_profile_name: '',
+      workshop_ids: [],
+      warnings: [],
+      errors: [],
+      import_check: { summary: {}, items: [] },
+    }, 'conflict://unsaved')
+    appStore.uiState.showDiffDrawer = true
+    toast.warning(toastMessage, { timeout: 3200 })
+    return false
+  }
+  const captureRuntimeRefreshSnapshot = () => ({
+    active_ids: [...(modStore.activeIds || [])],
+    is_dirty: !!modStore.isDirty,
+    captured_at: Date.now(),
+  })
+  const presentRuntimeRefreshDiff = async (snapshot = null) => {
+    const editingIds = snapshot?.active_ids || []
+    if (!editingIds.length) return false
+    if (isSameOrder(editingIds, modStore.activeIds)) return false
+    setBackupOrder({
+      active_ids: editingIds,
+      mods: buildEditingMods(editingIds),
+      file: 'runtime://before-refresh',
+      modify_time: snapshot?.captured_at || Date.now(),
+      format: 'conflict',
+      list_name: snapshot?.is_dirty ? '刷新前未保存改动' : '刷新前工作序列',
+      source_profile_id: '',
+      source_profile_name: '',
+      workshop_ids: [],
+      warnings: [],
+      errors: [],
+      import_check: { summary: {}, items: [] },
+    }, 'runtime://before-refresh')
+    appStore.uiState.showDiffDrawer = true
+    toast.warning(
+      snapshot?.is_dirty
+        ? '游戏退出后磁盘序列已刷新，未保存改动已转入差异对比。'
+        : '游戏退出后磁盘序列与管理器工作序列不同，已打开差异对比。',
+      { timeout: 3600 }
+    )
+    return true
+  }
+  const bytesToBase64 = (buffer) => {
+    let binary = ''
+    const bytes = new Uint8Array(buffer)
+    const chunkSize = 0x8000
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      const chunk = bytes.subarray(index, index + chunkSize)
+      binary += String.fromCharCode(...chunk)
+    }
+    return btoa(binary)
   }
 
   // === Actions ===
@@ -116,11 +212,17 @@ export const useOrderStore = defineStore('order', () => {
         label: '加载文件序列'
       }, async () => {
         modStore.setListIds('active', order.active_ids || [])
-        modStore.savedActiveIds = [...(order.active_ids || [])]
-        modStore.activeLoadModifyTime = order.active_load_modify_time || order.modify_time || 0
+        modStore.mergeInstallSourceHintsFromMods?.(order.mods || [], 'import')
+        if (!mods_config_file_path) {
+          modStore.setActiveLoadBaseline(
+            order.active_ids || [],
+            order.active_load_modify_time || order.modify_time || 0,
+            order.version_token || {}
+          )
+        }
         modStore.updateInactiveIds()
         // 加载外部存档文件时解析未知项
-        modStore.fetchAndCacheGhostMods(modStore.activeIds)
+        await modStore.fetchAndCacheGhostMods(modStore.activeIds)
       })
       toast.success("Mod序列已加载")
       return true
@@ -164,9 +266,10 @@ export const useOrderStore = defineStore('order', () => {
       label: '应用文件序列'
     }, async () => {
       modStore.setListIds('active', backupIds.value)
+      modStore.mergeInstallSourceHintsFromMods?.(backupMods.value || [], 'import')
       modStore.updateInactiveIds()
       // 加载外部存档文件时解析未知项
-      modStore.fetchAndCacheGhostMods(modStore.activeIds)
+      await modStore.fetchAndCacheGhostMods(modStore.activeIds)
     })
     toast.success("已应用Mod序列")
     return true
@@ -203,12 +306,28 @@ export const useOrderStore = defineStore('order', () => {
     //   // return true
     // }
     if (!window.pywebview) return false
+    const canContinue = await supplementStore.ensureRequiredBeforeSave({
+      activeIds: modStore.activeIds,
+      actionLabel: '保存',
+    })
+    if (!canContinue) return false
     appStore.isLoading = true
     try {
       // 使用默认路径
-      const res = await window.pywebview.api.load_order_save(modStore.activeIds, modStore.isDirty)
+      const res = await window.pywebview.api.load_order_save_with_token(
+        modStore.activeIds,
+        modStore.isDirty,
+        modStore.activeLoadVersionToken || {}
+      )
+      if (res?.status === 'warning' && res?.data?.status === 'conflict') {
+        return await showDiskConflict(res.data, '磁盘加载顺序已被外部修改，未执行保存。')
+      }
       if (checkResult(res, "保存Mod加载顺序", true)) {
-        modStore.savedActiveIds = [...modStore.activeIds] || []
+        modStore.setActiveLoadBaseline(
+          res.data?.active_ids || modStore.activeIds,
+          res.data?.modify_time || Date.now(),
+          res.data?.version_token || {}
+        )
         await saveInactiveOrder()
         modStore.updateInactiveIds()
         // 保存始终写当前环境；这里仅刷新当前正在查看的备份列表，不强行切换筛选环境。
@@ -225,8 +344,16 @@ export const useOrderStore = defineStore('order', () => {
   const exportLoadOrder = async (target_path=null, trigger_dialog=true, export_format='modsconfig', list_name=null) => {
     if (!window.pywebview) return false
     try {
+      let resolvedPath = target_path
+      if (!resolvedPath && trigger_dialog) {
+        const pickRes = await window.pywebview.api.load_order_export_pick_path(export_format)
+        if (pickRes?.status === 'warning') return false
+        if (!checkResult(pickRes, "选择导出路径")) return false
+        resolvedPath = pickRes.data?.path || ''
+        trigger_dialog = false
+      }
       // 导出格式和列表名都直接传给后端，让后端决定写出 ModsConfig.xml 还是 ModList.xml。
-      const res = await window.pywebview.api.load_order_export(modStore.activeIds, target_path, trigger_dialog, export_format, list_name)
+      const res = await window.pywebview.api.load_order_export(modStore.activeIds, resolvedPath, trigger_dialog, export_format, list_name)
       if (checkResult(res, "导出Mod加载顺序")) {
         // console.log("导出加载顺序成功:", res)
         toast.success("Mod序列已导出")
@@ -314,6 +441,29 @@ export const useOrderStore = defineStore('order', () => {
       return res.data
     }
   }
+  const importPayloadFile = async (file, source_profile_id='') => {
+    if (!window.pywebview || !file) return null
+    const normalizedName = String(file.name || 'import.txt').trim() || 'import.txt'
+    const content = await file.arrayBuffer()
+    const res = await window.pywebview.api.load_order_file_import_payload(
+      {
+        filename: normalizedName,
+        mime_type: String(file.type || ''),
+        size: Number(file.size || 0),
+        content_base64: bytesToBase64(content),
+      },
+      source_profile_id || null
+    )
+    if (checkResult(res, '导入加载顺序')) {
+      const order = res.data || {}
+      setBackupOrder(order, order.file || normalizedName)
+      if ((order.warnings || []).length > 0) {
+        toast.info(`导入完成，但有 ${order.warnings.length} 条提示`, { timeout: 1800 })
+      }
+      return order
+    }
+    return null
+  }
   const importShareCode = async (shareCode, source_profile_id='') => {
     const normalizedCode = String(shareCode || '').trim()
     if (!normalizedCode) {
@@ -389,37 +539,39 @@ export const useOrderStore = defineStore('order', () => {
       return true
     })
   }
-  const collectImportCheckWorkshopIds = (items = []) => {
-    return [...new Set(
-      items
-        .map(item => String(item.target_workshop_id || '').trim())
-        .filter(Boolean)
-    )]
-  }
+  const getImportCheckTargetSource = (item = null) => (
+    normalizeInstallSource(item?.target_source || null, item?.package_id || '')
+  )
+  const collectImportCheckSources = (items = []) => (
+    items
+      .map(item => getImportCheckTargetSource(item))
+      .filter(Boolean)
+  )
   const openImportCheckWorkshop = (rowKeyOrPackageId) => {
     const item = getImportCheckItem(rowKeyOrPackageId)
-    if (item?.target_workshop_id) {
-      appStore.openSteamWorkshopById(item.target_workshop_id)
+    const source = getImportCheckTargetSource(item)
+    if (source) {
+      appStore.openInstallSource(source)
     }
   }
   const subscribeImportCheckItems = async (statuses = [], rowKeys = []) => {
     const items = takeImportCheckItems(statuses, rowKeys).filter(item => !item.installed_via_replacement)
-    const workshopIds = collectImportCheckWorkshopIds(items)
-    if (workshopIds.length === 0) {
+    const sources = collectImportCheckSources(items)
+    const hasWorkshopSource = sources.some(source => source.kind === 'workshop')
+    if (!hasWorkshopSource) {
       toast.info("当前筛选结果中没有可订阅的工坊项目")
       return false
     }
-    return await appStore.subscribeWorkshopIds(workshopIds)
+    return await appStore.subscribeInstallSources(sources)
   }
   const downloadImportCheckItems = async (statuses = [], rowKeys = []) => {
     const items = takeImportCheckItems(statuses, rowKeys).filter(item => !item.installed_via_replacement)
-    const workshopIds = collectImportCheckWorkshopIds(items)
-    if (workshopIds.length === 0) {
-      toast.info("当前筛选结果中没有可下载的工坊项目")
+    const sources = collectImportCheckSources(items)
+    if (sources.length === 0) {
+      toast.info("当前筛选结果中没有可下载的目标来源")
       return false
     }
-    await appStore.downloadWorkshopItems(workshopIds)
-    return true
+    return await appStore.downloadInstallSources(sources)
   }
   const _rebuildImportCheckSummary = (items = []) => {
     return items.reduce((summary, item) => {
@@ -468,10 +620,6 @@ export const useOrderStore = defineStore('order', () => {
     toast.success(`已移除 ${items.length} 个导入项`)
     return true
   }
-  // 兼容旧调用入口：缺失项一键订阅现在复用新的 import_check 分类结果。
-  const subscribeMissingBackupMods = async () => {
-    return await subscribeImportCheckItems(['missing'])
-  }
   // 打开备份目录
   const openBackupPath = async () => {
     appStore.openPath(backupProfileDir.value || [appStore.settings.home_path,"backups"].join("/"))
@@ -501,14 +649,12 @@ export const useOrderStore = defineStore('order', () => {
       return payload
     }
   }
-
-
   return {
     backups, backupProfileId, backupProfileDir, backupIds, backupMods, currentBackupFile, backupLoadModifyTime, currentBackupFormat, currentBackupName, currentBackupSourceProfileId, currentBackupWorkshopIds, currentBackupWarnings, currentBackupErrors,
     backupNameMap, backupDisplayIds, currentImportCheck, importCheckItems, importCheckSummary, importCheckMap, problemImportItems, missingImportItems, replacementImportItems, actionableReplacementImportItems, otherVersionImportItems, unknownImportItems, nonImportableImportItems,
     getLoadOrder, getBackupOrder, applyBackup, saveInactiveOrder, saveLoadOrder, exportLoadOrder,
-    exportLoadOrderShareCode, getFileOrder, importShareCode, promptImportShareCode, subscribeMissingBackupMods, getImportCheckItem, takeImportCheckItems, collectImportCheckWorkshopIds, openImportCheckWorkshop,
+    exportLoadOrderShareCode, getFileOrder, importPayloadFile, importShareCode, promptImportShareCode, getImportCheckItem, takeImportCheckItems, getImportCheckTargetSource, openImportCheckWorkshop,
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
-    setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups,
+    setBackupOrder, clearBackupOrder, setBackupProfile, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
   }
 })

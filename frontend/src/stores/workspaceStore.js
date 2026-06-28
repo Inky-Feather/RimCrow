@@ -6,6 +6,12 @@ import { checkResult } from '../utils/tools'
 import { createToastInterface } from 'vue-toastification'
 import { useConfirmStore } from './confirmStore'
 import { SOURCE_TYPE_MAP } from '../utils/constants'
+import {
+  dedupeNormalizedPackageIds,
+  normalizeInstallSources,
+  normalizePackageId,
+  normalizeWorkshopId,
+} from '../utils/modIdentity'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const toast = createToastInterface()
@@ -13,11 +19,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const confirmStore = useConfirmStore()
   const listenersReady = ref(false)
 
-  const normalizePackageId = (value) => String(value || '').trim().toLowerCase()
-  const normalizeWorkshopId = (value) => {
-    const wid = String(value || '').trim()
-    return wid && wid !== 'undefined' && wid !== 'null' && wid !== 'None' ? wid : ''
-  }
   const storeSortOrder = {
     workshop: 0,
     self: 1,
@@ -671,17 +672,83 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // 如果没有缓存，loading 继续保持 true，等待 EventBus 触发
   }
 
+  const normalizeWorkshopDetail = (detail = {}) => {
+    const packageId = normalizePackageId(detail.package_id || detail.package_id_raw)
+    const workshopId = normalizeWorkshopId(detail.workshop_id)
+    if (!packageId || !workshopId) return null
+    return {
+      packageId,
+      workshopId,
+      title: String(detail.name || packageId).trim(),
+      author: Array.isArray(detail.author) ? detail.author.filter(Boolean) : [],
+      url: String(detail.url || '').trim(),
+      previewUrl: String(detail.preview_url || '').trim(),
+      supportedVersions: Array.isArray(detail.game_versions) ? detail.game_versions.filter(Boolean) : [],
+      isReplacementDerived: !!detail.is_replacement_derived,
+      selectionReason: String(detail.selection_reason || '').trim(),
+      candidateCount: Number(detail.candidate_count || 0),
+    }
+  }
+
+  const normalizeWorkshopLookupDisplay = (payload = {}) => {
+    const displayDetail = payload?.display?.selected || payload
+    return normalizeWorkshopDetail(displayDetail)
+  }
+
+  const getWorkshopDetailsByPackageIdsMap = async (packageIds) => {
+    if (!window.pywebview) return {}
+    const normalizedPackageIds = dedupeNormalizedPackageIds(packageIds)
+    if (normalizedPackageIds.length === 0) return {}
+    const res = await window.pywebview.api.get_workshop_details_by_package_ids(normalizedPackageIds)
+    if (checkResult(res, '根据包名获取工坊详情')) {
+      return Object.fromEntries(
+        Object.entries(res.data || {})
+          .map(([packageId, detail]) => [normalizePackageId(packageId), normalizeWorkshopLookupDisplay(detail)])
+          .filter(([packageId, detail]) => packageId && detail)
+      )
+    }
+    return {}
+  }
+
+  const getInstallSourcesByPackageIdsMap = async (packageIds) => {
+    if (!window.pywebview) return {}
+    const normalizedPackageIds = dedupeNormalizedPackageIds(packageIds)
+    if (normalizedPackageIds.length === 0) return {}
+    const res = await window.pywebview.api.get_install_sources_by_package_ids(normalizedPackageIds)
+    if (checkResult(res, '根据包名获取安装来源')) {
+      return Object.fromEntries(
+        Object.entries(res.data || {}).map(([packageId, payload]) => {
+          const normalizedPackageId = normalizePackageId(packageId)
+          return [normalizedPackageId, {
+            packageId: normalizedPackageId,
+            originalSources: normalizeInstallSources(payload?.original_sources, normalizedPackageId),
+            replacementSources: normalizeInstallSources(payload?.replacement_sources, normalizedPackageId),
+          }]
+        }).filter(([packageId]) => packageId)
+      )
+    }
+    return {}
+  }
+
   // 根据包名获取创意工坊ID映射
   const getWorkshopIdsByPackageIdsMap = async (packageIds) => {
-    if (!window.pywebview) return
-    if (!packageIds) return []
-    const res = await window.pywebview.api.get_workshop_ids_by_package_ids_map(packageIds)
-    if (checkResult(res, '根据包名获取创意工坊ID')) {
-      return res.data || {}
+    const detailsMap = await getWorkshopDetailsByPackageIdsMap(packageIds)
+    if (detailsMap && typeof detailsMap === 'object') {
+      return Object.fromEntries(
+        Object.entries(detailsMap)
+          .map(([packageId, detail]) => [normalizePackageId(packageId), normalizeWorkshopId(detail?.workshopId)])
+          .filter(([packageId, workshopId]) => packageId && workshopId)
+      )
     }
-    
-    return []
+    return {}
   }
+  const resolvePackageIdsToWorkshopIds = async (packageIds) => (
+    [...new Set(
+      Object.values(await getWorkshopIdsByPackageIdsMap(packageIds))
+        .map(normalizeWorkshopId)
+        .filter(Boolean)
+    )]
+  )
 
   const modTransfer = async (path_hashs, target_store, mode) => {
     const check = await confirmStore.confirmAction(
@@ -714,7 +781,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     matrixFocusTarget, getMatrixSameItems, getMatrixConflictItems, jumpToMatrixItem,
     fetchLibrariesMods, doWorkshopSearch, fetchWorkshopDetails, openTimeline, openTimelineGithub, setupListeners,
     github, fetchGithubRepos, fetchGithubTimeline, startGithubTimelinePolling, stopGithubTimelinePolling, selectGithubRepo, clearActiveGithubRepo,
-    getGithubOnlineVersion, githubRepoNeedsUpdate, initData, openSteamWorkshopUrl, getWorkshopIdsByPackageIdsMap, goBackWorkshopDetail,
+    getGithubOnlineVersion, githubRepoNeedsUpdate, initData, openSteamWorkshopUrl, getInstallSourcesByPackageIdsMap, getWorkshopIdsByPackageIdsMap, resolvePackageIdsToWorkshopIds, goBackWorkshopDetail,
     collections, fetchSavedCollections, addCollection, removeCollection, selectCollection
   }
 })

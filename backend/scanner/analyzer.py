@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from xml.etree import ElementTree
 # 引入通用常量
-from backend.utils.constants import LANGUAGE_MAP
+from backend.utils.constants import normalize_language_code, normalize_language_codes
 
 
 
@@ -40,7 +40,7 @@ class ModAnalyzer:
         :param mod_path: Mod 根目录绝对路径
         返回: {
             'mod_type': 'XML'|'Assembly'|'LanguagePack'|'Texture'|'Audio'|'Mixed'|'Unknown',
-            'supported_languages': ['ZH-cn', 'EN'],
+            'supported_languages': ['zh-cn', 'en'],
             'file_stats': {'code_dll': 0, 'game_xml': 0, 'patch_xml': 0, 'lang_xml': 0, 'image': 0, 'audio': 0},
             'has_defs': False
             'has_assemblies': False,
@@ -319,12 +319,9 @@ class ModAnalyzer:
                 # 处理 "ChineseSimplified (简体中文)" -> "ChineseSimplified"
                 key = folder_name.split(' ')[0].strip()
                 
-                # 映射到标准代码
-                if key in LANGUAGE_MAP:
-                    lang_set.add(LANGUAGE_MAP[key])
-                else:
-                    # 如果没有映射，直接保留原名 (或统一转小写)
-                    lang_set.add(key)
+                language_code = normalize_language_code(key)
+                if language_code:
+                    lang_set.add(language_code)
         except ValueError:
             pass
 
@@ -354,7 +351,7 @@ class ModAnalyzer:
             mod_type = 'Unknown'
 
         # 转换 set 为 list
-        info['supported_languages'] = list(info['supported_languages'])
+        info['supported_languages'] = sorted(normalize_language_codes(info['supported_languages']))
         info['mod_type'] = mod_type
         
         # 移除中间状态字段 (可选)

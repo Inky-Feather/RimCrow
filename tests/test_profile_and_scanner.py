@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from backend.api import API
+from backend.database.dao import ModDAO
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.mod_scanner import ModScanner
@@ -206,6 +208,191 @@ class TestModScanner(unittest.TestCase):
         self.assertIsNotNone(mod_data)
         self.assertEqual(mod_data["package_id"], "ludeon.rimworld")
         self.assertEqual(mod_data["source"], "core")
+
+
+class TestProfileConflictAnalysis(unittest.TestCase):
+    def test_conflict_analysis_ignores_disabled_domain_assets(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_dir = temp_root / "install"
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_dir),
+            user_data_path=str(temp_root / "userdata"),
+            use_workshop_mods=True,
+            use_self_mods=False,
+        )
+
+        workshop_root = temp_root / "workshop"
+        self_root = temp_root / "selfmods"
+        workshop_path = workshop_root / "123456"
+        self_path = self_root / "123456"
+
+        assets = [
+            {
+                "package_id": "Author.Mod",
+                "path": str(workshop_path),
+                "name": "Workshop Copy",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(self_path),
+                "name": "Self Copy",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(self_root / "123456_dup"),
+                "name": "Self Duplicate",
+                "disabled": False,
+            },
+        ]
+
+        config = SimpleNamespace(
+            workshop_mods_path=str(workshop_root),
+            self_mods_path=str(self_root),
+            enable_tool_mods=False,
+        )
+        with patch("backend.database.dao.settings.config", config):
+            analysis = ModDAO.get_profile_conflict_analysis(context, assets=assets)
+
+        self.assertEqual(analysis["hard_conflicts"], [])
+        self.assertEqual(analysis["coexistences"], [])
+        self.assertEqual(analysis["deploy_paths"], [str(workshop_path)])
+
+    def test_conflict_analysis_reports_active_coexistence_and_prefers_self_deploy(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_dir = temp_root / "install"
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_dir),
+            user_data_path=str(temp_root / "userdata"),
+            use_workshop_mods=True,
+            use_self_mods=True,
+        )
+
+        workshop_root = temp_root / "workshop"
+        self_root = temp_root / "selfmods"
+        workshop_path = workshop_root / "123456"
+        self_path = self_root / "123456"
+
+        assets = [
+            {
+                "package_id": "Author.Mod",
+                "path": str(workshop_path),
+                "name": "Workshop Copy",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(self_path),
+                "name": "Self Copy",
+                "disabled": False,
+            },
+        ]
+
+        config = SimpleNamespace(
+            workshop_mods_path=str(workshop_root),
+            self_mods_path=str(self_root),
+            enable_tool_mods=False,
+        )
+        with patch("backend.database.dao.settings.config", config):
+            analysis = ModDAO.get_profile_conflict_analysis(context, assets=assets)
+
+        self.assertEqual(analysis["hard_conflicts"], [])
+        self.assertEqual(len(analysis["coexistences"]), 1)
+        self.assertEqual(
+            [item["path"] for item in analysis["coexistences"][0]["items"]],
+            [str(self_path), str(workshop_path)],
+        )
+        self.assertEqual(analysis["deploy_paths"], [str(self_path)])
+
+    def test_hard_conflict_still_deploys_all_enabled_copies(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_dir = temp_root / "install"
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_dir),
+            user_data_path=str(temp_root / "userdata"),
+            use_workshop_mods=False,
+            use_self_mods=True,
+        )
+
+        self_root = temp_root / "selfmods"
+        same_parent = self_root / "dup_group"
+        first_path = same_parent / "copy_a"
+        second_path = same_parent / "copy_b"
+
+        assets = [
+            {
+                "package_id": "Author.Mod",
+                "path": str(first_path),
+                "name": "Self Copy A",
+                "disabled": False,
+            },
+            {
+                "package_id": "Author.Mod",
+                "path": str(second_path),
+                "name": "Self Copy B",
+                "disabled": False,
+            },
+        ]
+
+        config = SimpleNamespace(
+            workshop_mods_path=str(temp_root / "workshop"),
+            self_mods_path=str(self_root),
+            enable_tool_mods=False,
+        )
+        with patch("backend.database.dao.settings.config", config):
+            analysis = ModDAO.get_profile_conflict_analysis(context, assets=assets)
+
+        self.assertEqual(len(analysis["hard_conflicts"]), 1)
+        self.assertEqual(analysis["coexistences"], [])
+        self.assertEqual(analysis["deploy_paths"], [str(first_path), str(second_path)])
+
+
+class TestApiScanMods(unittest.TestCase):
+    def test_scan_mods_always_scans_all_configured_domains_for_inventory_sync(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(
+            game_dlc_path="C:/Games/RimWorld/Data",
+            local_mods_path="C:/Games/RimWorld/Mods",
+            use_workshop_mods=False,
+            use_self_mods=False,
+            profile_id="profile-a",
+        )
+        api.scanner = Mock()
+        api.scanner.scan_paths_async.return_value = {"status": "started", "task_id": "task-1"}
+
+        config = SimpleNamespace(
+            self_mods_path="D:/RMM/SelfMods",
+            workshop_mods_path="D:/Steam/workshop/content/294100",
+            enable_tool_mods=False,
+        )
+
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.os.path.exists", return_value=True):
+            res = API.scan_mods(api)
+
+        self.assertEqual(res["status"], "success")
+        api.scanner.scan_paths_async.assert_called_once_with(
+            [
+                "C:/Games/RimWorld/Data",
+                "C:/Games/RimWorld/Mods",
+                "D:/RMM/SelfMods",
+                "D:/Steam/workshop/content/294100",
+            ],
+            forced_update=False,
+        )
 
 
 if __name__ == "__main__":
