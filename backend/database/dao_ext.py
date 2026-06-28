@@ -1,14 +1,15 @@
 from __future__ import annotations
+
 from typing import Any
 
-from peewee import fn
+from peewee import JOIN, fn
 from playhouse.shortcuts import model_to_dict
 
 from backend.database.models import ModAsset
-from backend.database.models_ext import ModReplacement, WorkshopMeta
+from backend.database.models_ext import ModReplacement, WorkshopManifest, WorkshopOnlineCache
 from backend.database.workshop_selection import (
-    build_workshop_detail_lookup,
     build_install_source,
+    build_workshop_detail_lookup,
     dedupe_install_sources,
     install_source_sort_key,
     normalize_cached_workshop_id,
@@ -19,37 +20,123 @@ from backend.utils.versioning import score_version_support
 
 def _require_database_dependencies() -> None:
     """确保数据库相关依赖可用。"""
-    if model_to_dict is None or fn is None or WorkshopMeta is None or ModReplacement is None or ModAsset is None:
+    if (
+        model_to_dict is None
+        or fn is None
+        or WorkshopManifest is None
+        or WorkshopOnlineCache is None
+        or ModReplacement is None
+        or ModAsset is None
+    ):
         raise ModuleNotFoundError("dao_ext database dependencies are unavailable")
 
 
-def _load_meta_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """批量读取 package_id -> WorkshopMeta 候选列表。"""
-    metas = (
-        WorkshopMeta.select(
-            WorkshopMeta.workshop_id,
-            WorkshopMeta.package_id,
-            WorkshopMeta.name,
-            WorkshopMeta.title,
-            WorkshopMeta.author,
-            WorkshopMeta.preview_url,
-            WorkshopMeta.time_updated,
-            WorkshopMeta.game_versions,
+def _merge_manifest_with_online(manifest: dict[str, Any] | None, online: dict[str, Any] | None ) -> dict[str, Any]:
+    """
+    将文件快照层与在线缓存层合并成查询层使用的统一结构。
+
+    合并原则：
+    - 身份与依赖字段来自 manifest；
+    - 展示增强字段优先取 online；
+    - online 缺失时回退到 manifest，保持查询结果稳定。
+    """
+    manifest = manifest or {}
+    online = online or {}
+    workshop_id = str(
+        online.get("workshop_id")
+        or manifest.get("workshop_id")
+        or ""
+    ).strip()
+    return {
+        "workshop_id": workshop_id,
+        "package_id": manifest.get("package_id"),
+        "name": manifest.get("name"),
+        "title": online.get("title") or manifest.get("name"),
+        "author": manifest.get("author"),
+        "game_versions": manifest.get("game_versions") or [],
+        "dependencies_mods": manifest.get("dependencies_mods") or {},
+        "description": online.get("description"),
+        "preview_url": online.get("preview_url"),
+        "screenshots": online.get("screenshots") or [],
+        "time_updated": int(online.get("time_updated") or 0),
+        "last_sync_time": int(online.get("last_sync_time") or 0),
+    }
+
+
+def _normalize_workshop_ids(workshop_ids: list[str]) -> list[str]:
+    """规范化并保序去重 workshop_id，避免重复查询同一批缓存。"""
+    normalized_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for workshop_id in workshop_ids:
+        normalized_id = normalize_cached_workshop_id(workshop_id)
+        if not normalized_id or normalized_id in seen_ids:
+            continue
+        seen_ids.add(normalized_id)
+        normalized_ids.append(normalized_id)
+    return normalized_ids
+
+
+def _get_online_cache_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """按 workshop_id 批量读取在线缓存，避免逐条查询。"""
+    normalized_ids = _normalize_workshop_ids(workshop_ids)
+    if not normalized_ids:
+        return {}
+
+    rows = (
+        WorkshopOnlineCache.select(
+            WorkshopOnlineCache.workshop_id,
+            WorkshopOnlineCache.title,
+            WorkshopOnlineCache.description,
+            WorkshopOnlineCache.preview_url,
+            WorkshopOnlineCache.screenshots,
+            WorkshopOnlineCache.time_updated,
+            WorkshopOnlineCache.last_sync_time,
         )
-        .where(fn.LOWER(WorkshopMeta.package_id).in_(normalized_package_ids))
+        .where(WorkshopOnlineCache.workshop_id.in_(normalized_ids))
+        .dicts()
+    )
+    return {str(row["workshop_id"]): row for row in rows}
+
+
+def _merge_manifest_rows(manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """批量为 manifest 行补齐在线缓存字段，统一返回结构。"""
+    if not manifests:
+        return []
+    online_map = _get_online_cache_map([str(row.get("workshop_id") or "") for row in manifests])
+    return [
+        _merge_manifest_with_online(manifest, online_map.get(str(manifest.get("workshop_id") or "").strip()))
+        for manifest in manifests
+    ]
+
+
+def _load_manifest_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """
+    批量读取 package_id -> manifest 候选列表，并顺手叠加在线缓存。
+
+    这样后续选择逻辑只处理统一候选结构，查询代码无需分别访问多张表。
+    """
+    manifests = (
+        WorkshopManifest.select(
+            WorkshopManifest.workshop_id,
+            WorkshopManifest.package_id,
+            WorkshopManifest.name,
+            WorkshopManifest.author,
+            WorkshopManifest.game_versions,
+        )
+        .where(fn.LOWER(WorkshopManifest.package_id).in_(normalized_package_ids))
         .dicts()
     )
 
-    meta_map: dict[str, list[dict[str, Any]]] = {}
-    for meta in metas:
-        package_id = normalize_package_id(meta.get("package_id"))
-        if package_id:
-            meta_map.setdefault(package_id, []).append(meta)
-    return meta_map
+    manifest_map: dict[str, list[dict[str, Any]]] = {}
+    for manifest in _merge_manifest_rows(list(manifests)):
+        package_id = normalize_package_id(manifest.get("package_id"))
+        if not package_id:
+            continue
+        manifest_map.setdefault(package_id, []).append(manifest)
+    return manifest_map
 
 
 def _load_replacement_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """批量读取 package_id -> replacement 规则候选列表。"""
     replacements = (
         ModReplacement.select(
             ModReplacement.old_package_id,
@@ -75,30 +162,40 @@ def _load_replacement_candidates_by_package_ids(normalized_package_ids: list[str
 
 
 def _load_workshop_meta_map(workshop_ids: list[str]) -> dict[str, dict[str, Any]]:
-    """按 workshop_id 批量加载 WorkshopMeta 记录，便于 replacement 候选补全信息。"""
-    normalized_ids = [normalize_cached_workshop_id(workshop_id) for workshop_id in workshop_ids]
-    normalized_ids = [workshop_id for workshop_id in normalized_ids if workshop_id]
+    """按 workshop_id 批量加载合并后的元数据，供 replacement 补全和详情查询复用。"""
+    normalized_ids = _normalize_workshop_ids(workshop_ids)
     if not normalized_ids:
         return {}
 
-    metas = (
-        WorkshopMeta.select(
-            WorkshopMeta.workshop_id,
-            WorkshopMeta.package_id,
-            WorkshopMeta.name,
-            WorkshopMeta.title,
-            WorkshopMeta.author,
-            WorkshopMeta.preview_url,
-            WorkshopMeta.time_updated,
-            WorkshopMeta.game_versions,
+    manifests = (
+        WorkshopManifest.select(
+            WorkshopManifest.workshop_id,
+            WorkshopManifest.package_id,
+            WorkshopManifest.name,
+            WorkshopManifest.author,
+            WorkshopManifest.game_versions,
         )
-        .where(WorkshopMeta.workshop_id.in_(normalized_ids))
+        .where(WorkshopManifest.workshop_id.in_(normalized_ids))
         .dicts()
     )
-    return {meta["workshop_id"]: meta for meta in metas}
+    merged_manifests = _merge_manifest_rows(list(manifests))
+    return {str(manifest["workshop_id"]): manifest for manifest in merged_manifests}
+
+
+def _build_workshop_summary_items(manifests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """将 manifest 列表压缩为详情页同作者/反向依赖使用的轻量结构。"""
+    return [
+        {
+            "workshop_id": str(item.get("workshop_id") or ""),
+            "name": item.get("title") or item.get("name"),
+            "preview_url": item.get("preview_url"),
+        }
+        for item in _merge_manifest_rows(manifests)
+    ]
 
 
 def _load_asset_source_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """批量读取本地已安装资源，供安装来源推断使用。"""
     assets = (
         ModAsset.select(
             ModAsset.package_id,
@@ -149,7 +246,7 @@ def _build_replacement_install_source(
 
 
 def _serialize_workshop_lookup(meta: dict[str, Any]) -> dict[str, Any]:
-    """将 workshop_id 直查结果统一为导入检查和 UI 期望的结构。"""
+    """将内部合并结构转换成导入检查和 UI 期望的轻量返回格式。"""
     workshop_id = str(meta["workshop_id"])
     return {
         "workshop_id": workshop_id,
@@ -165,15 +262,12 @@ class WorkshopCacheDAO:
     """
     外置 Workshop 缓存数据库访问入口。
 
-    这里的职责只包括：
-    - 查询 WorkshopMeta / ModReplacement
-    - 组装离线缓存接口需要的返回结构
-    - 调用纯选择策略函数
+    该 DAO 负责组合文件快照、在线缓存和替代规则三类数据，
+    并向调用方返回统一的 workshop 查询结果。
     """
 
     @staticmethod
     def get_workshop_id_by_package(package_id: str, current_game_version: str = ""):
-        """通过包名反查最合适的 workshop_id。"""
         _require_database_dependencies()
         details = WorkshopCacheDAO.get_workshop_details_by_package_ids(
             [package_id],
@@ -184,7 +278,6 @@ class WorkshopCacheDAO:
 
     @staticmethod
     def get_replacement_suggestion(package_id: str, current_game_version: str):
-        """根据替代规则返回当前游戏版本可用的 replacement 建议。"""
         _require_database_dependencies()
         rule = ModReplacement.get_or_none(ModReplacement.old_package_id == normalize_package_id(package_id))
         if rule and score_version_support(current_game_version, rule.new_versions) > 0:
@@ -195,41 +288,91 @@ class WorkshopCacheDAO:
         return None
 
     @staticmethod
+    def get_manifest_by_workshop_id(workshop_id: str):
+        """返回文件快照层记录，供依赖判断等稳定语义使用。"""
+        _require_database_dependencies()
+        normalized_id = normalize_cached_workshop_id(workshop_id)
+        if not normalized_id:
+            return None
+        return WorkshopManifest.get_or_none(WorkshopManifest.workshop_id == normalized_id)
+
+    @staticmethod
+    def get_manifests_by_workshop_ids(workshop_ids: list[str]) -> dict[str, Any]:
+        """批量返回文件快照层记录，供依赖判断和包名映射复用。"""
+        _require_database_dependencies()
+        normalized_ids = _normalize_workshop_ids(workshop_ids)
+        if not normalized_ids:
+            return {}
+        manifests = (
+            WorkshopManifest.select()
+            .where(WorkshopManifest.workshop_id.in_(normalized_ids))
+        )
+        return {str(manifest.workshop_id): manifest for manifest in manifests}
+
+    @staticmethod
+    def get_merged_meta_by_workshop_id(workshop_id: str) -> dict[str, Any] | None:
+        """返回按 workshop_id 合并后的元数据。"""
+        _require_database_dependencies()
+        normalized_id = normalize_cached_workshop_id(workshop_id)
+        if not normalized_id:
+            return None
+        manifest = WorkshopManifest.get_or_none(WorkshopManifest.workshop_id == normalized_id)
+        online = WorkshopOnlineCache.get_or_none(WorkshopOnlineCache.workshop_id == normalized_id)
+        if not manifest and not online:
+            return None
+        return _merge_manifest_with_online(
+            model_to_dict(manifest) if manifest else None,
+            model_to_dict(online) if online else None,
+        )
+
+    @staticmethod
     def search_workshop(query: str, page: int = 1, page_size: int = 100):
         """
         在外置缓存库中分页搜索可用 Workshop 条目。
 
-        当前实现只返回带 package_id 的条目，刻意过滤掉合集，
-        因为这个接口主要服务于 Mod 查询，而不是合集浏览。
+        搜索以 manifest 为主，因为 package_id 与依赖语义都来自文件快照；
+        展示阶段再叠加在线缓存里的标题和封面。
         """
         _require_database_dependencies()
         normalized_query = str(query or "").strip().lower()
         search_query = (
-            WorkshopMeta.select(
-                WorkshopMeta.workshop_id,
-                WorkshopMeta.package_id,
-                WorkshopMeta.name,
-                WorkshopMeta.author,
-                WorkshopMeta.preview_url,
-                WorkshopMeta.time_updated,
+            WorkshopManifest.select(
+                WorkshopManifest.workshop_id,
+                WorkshopManifest.package_id,
+                WorkshopManifest.name,
+                WorkshopManifest.author,
+                WorkshopManifest.game_versions,
             )
             .where(
-                (WorkshopMeta.package_id.is_null(False))
-                & (WorkshopMeta.package_id != "")
+                (WorkshopManifest.package_id.is_null(False))
+                & (WorkshopManifest.package_id != "")
             )
         )
 
         if normalized_query:
             search_query = search_query.where(
-                (WorkshopMeta.workshop_id.contains(normalized_query))
-                | (WorkshopMeta.package_id.contains(normalized_query))
-                | (fn.LOWER(WorkshopMeta.name).contains(normalized_query))
+                (WorkshopManifest.workshop_id.contains(normalized_query))
+                | (WorkshopManifest.package_id.contains(normalized_query))
+                | (fn.LOWER(WorkshopManifest.name).contains(normalized_query))
             )
         else:
-            search_query = search_query.order_by(WorkshopMeta.time_updated.desc())
+            # 排序必须发生在分页之前，否则只会把“当前页内”排成最新顺序。
+            search_query = (
+                search_query
+                .join(
+                    WorkshopOnlineCache,
+                    JOIN.LEFT_OUTER,
+                    on=(WorkshopManifest.workshop_id == WorkshopOnlineCache.workshop_id),
+                )
+                .order_by(
+                    fn.COALESCE(WorkshopOnlineCache.time_updated, 0).desc(),
+                    WorkshopManifest.workshop_id.desc(),
+                )
+            )
 
         total = search_query.count()
-        items = list(search_query.paginate(page, page_size).dicts())
+        manifests = list(search_query.paginate(page, page_size).dicts())
+        items = _merge_manifest_rows(manifests)
         return {
             "items": items,
             "total": total,
@@ -239,24 +382,20 @@ class WorkshopCacheDAO:
 
     @staticmethod
     def get_workshop_detail(workshop_id: str):
-        """
-        获取单个 workshop 的基础缓存详情。
-
-        该方法当前在仓库内没有直接调用，这一轮先保留，用于兼容潜在外部调用。
-        """
+        """获取单个 workshop 的基础缓存详情。"""
         _require_database_dependencies()
         normalized_id = str(workshop_id)
-        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == normalized_id)
+        meta = WorkshopCacheDAO.get_merged_meta_by_workshop_id(normalized_id)
         replacement = ModReplacement.get_or_none(ModReplacement.old_workshop_id == normalized_id)
         return {
-            "meta": model_to_dict(meta) if meta else None,
+            "meta": meta,
             "replacement": model_to_dict(replacement) if replacement else None,
         }
 
     @staticmethod
     def get_workshop_detail_extended(workshop_id: str):
         """
-        获取更适合详情页展示的扩展缓存信息。
+        获取适合详情页展示的扩展缓存信息。
 
         除了当前条目本身，还会补充：
         - 同作者其他 Mod
@@ -264,46 +403,48 @@ class WorkshopCacheDAO:
         """
         _require_database_dependencies()
         normalized_id = str(workshop_id)
-        meta = WorkshopMeta.get_or_none(WorkshopMeta.workshop_id == normalized_id)
+        meta = WorkshopCacheDAO.get_merged_meta_by_workshop_id(normalized_id)
         if not meta:
             return None
 
         replacement = ModReplacement.get_or_none(ModReplacement.old_workshop_id == normalized_id)
         same_author_mods = []
-        if meta.author:
-            same_author_mods = list(
-                WorkshopMeta.select(
-                    WorkshopMeta.workshop_id,
-                    WorkshopMeta.name,
-                    WorkshopMeta.preview_url,
+        author = meta.get("author")
+        if author:
+            manifests = list(
+                WorkshopManifest.select(
+                    WorkshopManifest.workshop_id,
+                    WorkshopManifest.name,
+                    WorkshopManifest.author,
                 )
                 .where(
-                    (WorkshopMeta.author == meta.author)
-                    & (WorkshopMeta.workshop_id != normalized_id)
-                    & (WorkshopMeta.package_id.is_null(False))
-                    & (WorkshopMeta.package_id != "")
+                    (WorkshopManifest.author == author)
+                    & (WorkshopManifest.workshop_id != normalized_id)
+                    & (WorkshopManifest.package_id.is_null(False))
+                    & (WorkshopManifest.package_id != "")
                 )
                 .limit(20)
                 .dicts()
             )
+            same_author_mods = _build_workshop_summary_items(manifests)
 
-        dependents_mods = list(
-            WorkshopMeta.select(
-                WorkshopMeta.workshop_id,
-                WorkshopMeta.name,
-                WorkshopMeta.preview_url,
+        dependents_manifests = list(
+            WorkshopManifest.select(
+                WorkshopManifest.workshop_id,
+                WorkshopManifest.name,
             )
             .where(
-                (WorkshopMeta.dependencies_mods.cast("text").contains(f'"{normalized_id}"'))
-                & (WorkshopMeta.package_id.is_null(False))
-                & (WorkshopMeta.package_id != "")
+                (WorkshopManifest.dependencies_mods.cast("text").contains(f'"{normalized_id}"'))
+                & (WorkshopManifest.package_id.is_null(False))
+                & (WorkshopManifest.package_id != "")
             )
             .limit(20)
             .dicts()
         )
+        dependents_mods = _build_workshop_summary_items(dependents_manifests)
 
         return {
-            "meta": model_to_dict(meta),
+            "meta": meta,
             "replacement_mod": model_to_dict(replacement) if replacement else None,
             "same_author_mods": same_author_mods,
             "dependents_mods": dependents_mods,
@@ -314,24 +455,21 @@ class WorkshopCacheDAO:
         """
         批量获取 package_id 对应的离线缓存详情。
 
-        这是前端“幽灵项补全”和导入检查会大量调用的接口，因此这里优先选择
-        批量查询后内存仲裁，而不是对每个 package_id 单独查一遍数据库。
-
-        返回结构刻意拆成三段：
-        - direct: 原版直查结果
-        - replacement: 替代规则结果
-        - display: 仅供展示/兜底补全使用的已选候选
+        返回结构保持三段式：
+        - direct: 直接命中的原版候选
+        - replacement: 替代规则候选
+        - display: 供 UI 直接展示的已选结果
         """
         _require_database_dependencies()
         normalized_package_ids = normalize_package_ids(package_ids)
         if not normalized_package_ids:
             return {}
 
-        meta_map = _load_meta_candidates_by_package_ids(normalized_package_ids)
+        meta_map = _load_manifest_candidates_by_package_ids(normalized_package_ids)
         replacement_map = _load_replacement_candidates_by_package_ids(normalized_package_ids)
         replacement_meta_map = _load_workshop_meta_map(
             [
-                replacement.get("new_workshop_id","")
+                replacement.get("new_workshop_id", "")
                 for replacements in replacement_map.values()
                 for replacement in replacements
                 if replacement.get("new_workshop_id")
@@ -360,8 +498,8 @@ class WorkshopCacheDAO:
         """
         批量返回 package_id 对应的原始安装来源与替代来源。
 
-        与 `get_workshop_details_by_package_ids()` 不同，这里不会把 replacement 混进 original，
-        前端可以基于这个结构自己决定“原版缺失 / 替代候选 / 已装替代”等统计口径。
+        这里不会把 replacement 混进 original，
+        便于前端分别统计“原版来源”和“替代来源”。
         """
         _require_database_dependencies()
         normalized_package_ids = normalize_package_ids(package_ids)
@@ -369,7 +507,7 @@ class WorkshopCacheDAO:
             return {}
 
         asset_map = _load_asset_source_candidates_by_package_ids(normalized_package_ids)
-        meta_map = _load_meta_candidates_by_package_ids(normalized_package_ids)
+        meta_map = _load_manifest_candidates_by_package_ids(normalized_package_ids)
         replacement_map = _load_replacement_candidates_by_package_ids(normalized_package_ids)
         replacement_meta_map = _load_workshop_meta_map(
             [
@@ -382,10 +520,12 @@ class WorkshopCacheDAO:
 
         result: dict[str, dict[str, Any]] = {}
         for package_id in normalized_package_ids:
-            replacement_sources = dedupe_install_sources([
-                _build_replacement_install_source( package_id, replacement, replacement_meta_map)
-                for replacement in replacement_map.get(package_id, [])
-            ])
+            replacement_sources = dedupe_install_sources(
+                [
+                    _build_replacement_install_source(package_id, replacement, replacement_meta_map)
+                    for replacement in replacement_map.get(package_id, [])
+                ]
+            )
             replacement_sources = [source for source in replacement_sources if source]
             replacement_sources.sort(
                 key=lambda source: install_source_sort_key(current_game_version, source),
@@ -402,45 +542,54 @@ class WorkshopCacheDAO:
                 if source.get("kind") == "url" and source.get("url")
             }
 
-            original_sources = dedupe_install_sources([
-                *[
-                    {
-                        "package_id": package_id,
-                        "workshop_id": replacement.get("old_workshop_id"),
-                        "name": replacement.get("old_name") or replacement.get("old_package_id") or package_id,
-                        "supported_versions": replacement.get("old_versions") or [],
-                        "source_origin": "replacement_old",
-                    }
-                    for replacement in replacement_map.get(package_id, [])
-                    if replacement.get("old_workshop_id")
-                ],
-                *[
-                    {
-                        "package_id": package_id,
-                        "workshop_id": asset.get("workshop_id"),
-                        "url": asset.get("url"),
-                        "name": asset.get("name"),
-                        "supported_versions": asset.get("supported_versions") or [],
-                        "source_origin": "asset",
-                    }
-                    for asset in asset_map.get(package_id, [])
-                ],
-                *[
-                    {
-                        "package_id": package_id,
-                        "workshop_id": meta.get("workshop_id"),
-                        "name": meta.get("title") or meta.get("name"),
-                        "supported_versions": meta.get("game_versions") or [],
-                        "source_origin": "meta",
-                    }
-                    for meta in meta_map.get(package_id, [])
-                ],
-            ])
+            original_sources = dedupe_install_sources(
+                [
+                    *[
+                        {
+                            "package_id": package_id,
+                            "workshop_id": replacement.get("old_workshop_id"),
+                            "name": replacement.get("old_name") or replacement.get("old_package_id") or package_id,
+                            "supported_versions": replacement.get("old_versions") or [],
+                            "source_origin": "replacement_old",
+                        }
+                        for replacement in replacement_map.get(package_id, [])
+                        if replacement.get("old_workshop_id")
+                    ],
+                    *[
+                        {
+                            "package_id": package_id,
+                            "workshop_id": asset.get("workshop_id"),
+                            "url": asset.get("url"),
+                            "name": asset.get("name"),
+                            "supported_versions": asset.get("supported_versions") or [],
+                            "source_origin": "asset",
+                        }
+                        for asset in asset_map.get(package_id, [])
+                    ],
+                    *[
+                        {
+                            "package_id": package_id,
+                            "workshop_id": meta.get("workshop_id"),
+                            "name": meta.get("title") or meta.get("name"),
+                            "supported_versions": meta.get("game_versions") or [],
+                            "source_origin": "meta",
+                        }
+                        for meta in meta_map.get(package_id, [])
+                    ],
+                ]
+            )
             original_sources = [
-                source for source in original_sources
+                source
+                for source in original_sources
                 if not (
-                    (source.get("kind") == "workshop" and normalize_cached_workshop_id(source.get("workshop_id")) in replacement_workshop_ids)
-                    or (source.get("kind") == "url" and str(source.get("url") or "").strip() in replacement_urls)
+                    (
+                        source.get("kind") == "workshop"
+                        and normalize_cached_workshop_id(source.get("workshop_id")) in replacement_workshop_ids
+                    )
+                    or (
+                        source.get("kind") == "url"
+                        and str(source.get("url") or "").strip() in replacement_urls
+                    )
                 )
             ]
             original_sources.sort(
@@ -458,32 +607,18 @@ class WorkshopCacheDAO:
 
     @staticmethod
     def get_workshop_details_by_workshop_ids(workshop_ids: list[str]):
-        """
-        批量按 workshop_id 读取缓存详情。
-
-        主要用于“只有 workshop_id、没有 package_id”的导入场景，
-        尽量补出包名、名称和封面，便于前端展示。
-        """
+        """批量按 workshop_id 读取缓存详情，主要用于幽灵项和导入补全。"""
         _require_database_dependencies()
-        normalized_ids = [normalize_cached_workshop_id(workshop_id) for workshop_id in workshop_ids]
-        normalized_ids = [workshop_id for workshop_id in normalized_ids if workshop_id]
+        normalized_ids = _normalize_workshop_ids(workshop_ids)
         if not normalized_ids:
             return {}
 
-        metas = (
-            WorkshopMeta.select(
-                WorkshopMeta.workshop_id,
-                WorkshopMeta.package_id,
-                WorkshopMeta.name,
-                WorkshopMeta.title,
-                WorkshopMeta.author,
-                WorkshopMeta.preview_url,
-            )
-            .where(WorkshopMeta.workshop_id.in_(normalized_ids))
-            .dicts()
-        )
-        return {str(meta["workshop_id"]): _serialize_workshop_lookup(meta) for meta in metas}
+        meta_map = _load_workshop_meta_map(normalized_ids)
+        return {
+            str(workshop_id): _serialize_workshop_lookup(meta)
+            for workshop_id, meta in meta_map.items()
+        }
 
 
-# 兼容现有调用方：项目内部仍然使用 ExtDAO 名称。
+# 兼容项目内以 ExtDAO 名称导入的调用点。
 ExtDAO = WorkshopCacheDAO

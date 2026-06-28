@@ -8,6 +8,7 @@ except ImportError:
 import glob
 import sys
 import ctypes
+import threading
 
 def enable_dpi_awareness():
     """强制开启 Windows DPI 感知，防止多屏缩放导致的窗口拉伸"""
@@ -33,7 +34,13 @@ from backend.utils.logger import logger
 from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.tools import current_ms
-from validate_environment import get_entrypoint, get_local_frontend_root, is_port_available, validate_environment
+from validate_environment import (
+    get_entrypoint,
+    get_local_frontend_root,
+    is_port_available,
+    show_native_error,
+    validate_environment,
+)
 
 from icecream import ic
 import builtins
@@ -126,12 +133,16 @@ def main():
         pyi_splash = None
 
     splash_state = {'module': pyi_splash}
+    desktop_startup_state = {
+        'window_shown': False,
+        'page_loaded': False,
+        'timeout_reported': False,
+    }
 
     def close_startup_splash():
         """关闭启动屏，重复调用时自动忽略。"""
         splash_module = splash_state.get('module')
-        if not splash_module:
-            return
+        if not splash_module: return
 
         try:
             splash_module.close()
@@ -139,6 +150,80 @@ def main():
             logger.debug("Close splash failed", exc_info=True)
         finally:
             splash_state['module'] = None
+
+    def mark_desktop_window_shown():
+        """
+        标记桌面窗口已经真正显示出来，并立即关闭 PyInstaller splash。
+
+        设计原因：
+        1. PyInstaller 启动画面的职责是“遮住程序尚未出现的瞬间”，不是“代替应用内加载动画”；
+        2. 过去把 splash 关闭完全绑定到 `window.events.loaded`，一旦 WebView2 首屏没有触发 loaded，
+           用户就只能一直看到启动图，误以为程序根本没启动；
+        3. 因此这里改成：窗口一旦 shown，就立刻关闭 splash；后续页面仍可继续加载，但那属于应用内阶段。
+        """
+        desktop_startup_state['window_shown'] = True
+        close_startup_splash()
+
+    def mark_desktop_page_loaded():
+        """
+        标记桌面首屏页面已完成加载。
+
+        这个信号仍然保留，因为它可以区分：
+        - 窗口已经出现，但页面迟迟未完成 loaded；
+        - 页面真正就绪。
+        这样超时处理时就能给出更准确的错误提示。
+        """
+        desktop_startup_state['page_loaded'] = True
+        close_startup_splash()
+
+    def report_desktop_startup_timeout():
+        """
+        桌面模式首屏加载超时兜底。
+
+        原理：
+        - 如果窗口一直没有 shown，大概率是 WebView / GUI 内核本身没起来；
+        - 如果窗口 shown 了但页面始终没 loaded，更像是 file:// 资源加载失败、WebView2 渲染异常、
+          杀软/显卡/代理导致的页面初始化问题；
+        - 无论哪种情况，PyInstaller splash 都不能继续占着屏幕，必须先关闭，再把原因告诉用户。
+        """
+        if desktop_startup_state['page_loaded'] or desktop_startup_state['timeout_reported']:
+            return
+
+        desktop_startup_state['timeout_reported'] = True
+        close_startup_splash()
+
+        if desktop_startup_state['window_shown']:
+            show_native_error(
+                "桌面模式加载超时",
+                "桌面窗口已经打开，但首页长时间未完成加载。\n\n"
+                "这通常与 WebView2 本地页面加载失败、显卡兼容性、代理设置或安全软件拦截有关。\n\n"
+                "您可以先尝试使用网页模式启动；如果问题反复出现，请检查日志并反馈。"
+            )
+        else:
+            show_native_error(
+                "桌面窗口启动失败",
+                "程序初始化已开始，但桌面窗口长时间未显示。\n\n"
+                "这通常与 WebView2 / 图形界面初始化失败有关。\n\n"
+                "您可以先尝试使用网页模式启动；如果问题反复出现，请检查日志并反馈。"
+            )
+
+    def start_desktop_startup_timeout_guard(timeout_seconds: float = 12.0):
+        """
+        启动桌面模式首屏超时守护线程。
+
+        说明：
+        - 这里不主动终止进程，只负责关闭 splash 并给用户明确提示；
+        - 这样既避免“看起来永远卡在启动图”，也保留了程序后续自行恢复的可能。
+        """
+        def guard():
+            threading.Event().wait(timeout_seconds)
+            report_desktop_startup_timeout()
+
+        threading.Thread(
+            target=guard,
+            name="rmm-desktop-startup-timeout",
+            daemon=True,
+        ).start()
 
     # 2. 检测是否为 Steam Worker 模式
     if len(sys.argv) > 1 and sys.argv[1] == "--steam-worker":
@@ -190,7 +275,7 @@ def main():
         # [关键] 解决部分机器黑屏/闪退问题
         # --disable-features=RendererCodeIntegrity: 解决部分杀毒软件注入导致渲染进程崩溃
         # --disable-gpu: 最后的手段，解决显卡兼容性
-        # additional_args.append("--disable-features=RendererCodeIntegrity") 
+        additional_args.append("--disable-features=RendererCodeIntegrity") 
         # 某些环境下需要这个来允许本地文件交互
         additional_args.append('--allow-file-access-from-files') 
         
@@ -235,12 +320,16 @@ def main():
         logger.info(f"Entrypoint: {entrypoint}")
         if window: 
             api.set_window(window)
-            window.events.loaded += close_startup_splash
+            # `shown` 是“窗口可见”的信号，用它来结束 PyInstaller 启动画面；
+            # `loaded` 仍然保留，用于区分页面是否真正完成加载，并配合超时提示给用户更准确的信息。
+            window.events.shown += mark_desktop_window_shown
+            window.events.loaded += mark_desktop_page_loaded
             window.events.resized += on_resized            # 窗口尺寸变化时触发
             window.events.closed += api.cleanup
             window.events.closed += on_main_window_closed  # 窗口关闭时退出应用
         # 注册窗口到事件总线
         EventBus.set_window(window) # type: ignore
+        start_desktop_startup_timeout_guard()
         # 捕获全局未处理异常
         webview.start(debug=settings.config.debug_mode) # debug=True 允许在窗口里按 F12 看控制台
     except Exception as e:

@@ -2,12 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <!--
+      这里必须使用相对路径。
+      原因：桌面模式下入口是 file:///.../index.html，如果写成 /icon.svg，
+      浏览器会把它解释成 file:///C:/icon.svg 这类磁盘根路径，直接导致资源 404。
+      使用相对路径后，HTTP 模式与 file:// 模式都会相对于当前入口目录解析。
+    -->
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RimModManager</title>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <!--
+      主入口脚本同样必须使用相对路径。
+      否则在 file:///.../index.html 下会被解析成 file:///src/main.js 或 file:///C:/src/main.js，
+      表现出来就是窗口能弹出，但前端脚本根本没加载，最终只剩黑屏。
+    -->
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

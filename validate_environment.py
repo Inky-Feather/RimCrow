@@ -64,7 +64,12 @@ def get_entrypoint():
     if path_internal.exists():
         return path_internal.absolute().as_uri()
     if path_root.exists():
-        return str(path_root)
+        # 这里必须和其它 file:// 分支保持一致，统一返回标准 URI。
+        # 原因：
+        # 1. 原始本地路径字符串在中文、空格、#、% 等字符存在时，WebView2 的解析行为不稳定；
+        # 2. 桌面模式的首屏黑屏往往不是 index.html 本身不存在，而是入口路径被浏览器内核错误解释；
+        # 3. 统一走 as_uri() 后，所有本地入口都按同一规则编码，便于排除“路径分支不一致”导致的偶发问题。
+        return path_root.absolute().as_uri()
     if path_external.exists():
         return path_external.absolute().as_uri() 
     # 4. 兜底回退：本地开发服务器
