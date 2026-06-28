@@ -17,6 +17,8 @@ test/
 *.db
 *.db-*
 *.log
+steamcmd/
+steam_agent/
 
 # IDE & System
 .vscode/

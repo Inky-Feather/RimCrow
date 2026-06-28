@@ -2,14 +2,14 @@
 <template>
   <div class="relative" :class="{'flex items-center' : mini}" ref="target">
     <!-- Label -->
-    <label v-if="label" class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1" :class="[mini?'':'mb-1']"  @click="toggleMenu" >
+    <span v-if="label" class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1" :class="[mini?'':'mb-1']"  @click="toggleMenu" >
       {{ label }}
       <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
-    </label>
+    </span>
     
     <!-- 主输入区域 -->
     <div class="relative group">
-      <input ref="inputRef" type="text" :value="displayLabel" :placeholder="placeholder" :readonly="!editable"
+      <input ref="inputRef" type="text" :value="inputValue" :placeholder="placeholder" :readonly="!editable"
         :class="[ 'input-glass bg-text-main/5 border border-text-main/10 rounded-lg text-sm text-text-main transition-all duration-200 focus:outline-none focus:border-accent-primary/50 focus:shadow-[0_0_15px_rgba(6,182,212,0.15)] placeholder:text-text-main/20 placeholder:italic',
           mini ? 'py-1 px-2 text-xs' : 'w-full h-9 px-3',
           { 'cursor-pointer': !editable, 'cursor-text': editable }
@@ -32,22 +32,18 @@
     </div>
 
     <!-- 下拉面板 -->
-    <Transition name="dropdown">
-      <div v-show="isOpen"
-        class="absolute z-50 left-0 right-0 p-1 bg-[#1a1a1a]/95 backdrop-blur-xl border border-text-main/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5"
-        :class="[showBottom ? 'mt-2 top-full' : 'mb-2 bottom-full origin-bottom']"
-        @mousedown.prevent 
-      >
+    <FixedPopover :triggerRef="inputRef" :isOpen="isOpen">
+      <div @mousedown.prevent class="p-1 bg-bg-surface backdrop-blur-xl border border-text-main/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] max-h-60 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
         <!-- 有选项时 -->
         <template v-if="filteredOptions.length > 0">
-          <button v-for="(opt, index) in filteredOptions" :key="opt.value" ref="optionRefs" type="button" @click="selectOption(opt)"
+          <button v-for="(opt, index) in filteredOptions" :key="opt.value" :ref="(el) => setOptionRef(el, index)" type="button" @click="selectOption(opt)"
             class="w-full flex items-center px-3 py-1 rounded-lg text-xs text-left transition-all duration-150"
             :class="[
               // 1. 选中状态
               isActive(opt.value) ? 'bg-accent-primary/20 text-accent-primary font-medium' : 'text-gray-300 hover:bg-text-main/10 hover:text-text-main',
               // 2. 键盘导航高亮
               { 'bg-text-main/5 ring-1 ring-text-main/10': index === highlightedIndex },
-              // 3. 【新增】搜索匹配视觉区分：不匹配的项降低透明度
+              // 3. 搜索匹配视觉区分：不匹配的项降低透明度
               isMatch(opt) ? 'opacity-100' : 'opacity-40 grayscale hover:opacity-80 hover:grayscale-0'
             ]"
           >
@@ -55,11 +51,8 @@
             <div class="size-1.5 rounded-full mr-2.5 transition-all shrink-0"
               :class="isActive(opt.value) ? 'bg-accent-primary shadow-[0_0_8px_currentColor] scale-100' : 'scale-0'">
             </div>
-            
-            <span class="truncate flex-1">{{ opt.label }}</span>
-            
-            <!-- 如果有额外描述可以放在这里 -->
-            <span v-if="opt.desc" class="text-xs text-text-main/30 ml-2">{{ opt.desc }}</span>
+            <!-- 如果有额外描述可以放在tooltip中 -->
+            <label class="truncate flex-1" v-tooltip="opt.desc || opt.label">{{ opt.label }}</label>
           </button>
         </template>
 
@@ -68,13 +61,14 @@
           {{ editable && displayLabel ? '按回车使用当前输入值' : '暂无选项' }}
         </div>
       </div>
-    </Transition>
+    </FixedPopover>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
 import { onClickOutside } from '@vueuse/core'
+import FixedPopover from '../FixedPopover.vue'
 
 const props = defineProps({
   label: String,
@@ -99,19 +93,20 @@ const internalSearch = ref('') // 编辑模式下的搜索词
 
 // --- 核心计算属性 ---
 
-// 显示在输入框中的文字
-const displayLabel = computed(() => {
-  // 1. 如果正在搜索(输入中)，显示搜索词
-  if (isOpen.value && props.editable && internalSearch.value !== null) {
+const inputValue = computed(() => {
+  if (isOpen.value && props.editable) {
     return internalSearch.value
   }
-  
-  // 2. 尝试从选项中找到对应 Label
+  return displayLabel.value
+})
+// 显示在输入框中的文字
+const displayLabel = computed(() => {
+  // 尝试从选项中找到对应 Label
   const found = props.options.find(o => o.value === props.modelValue)
   if (found) return found.label
 
-  // 3. 如果找不到且允许编辑，直接显示 modelValue
-  // 4. 如果不允许编辑，且有值但不在列表中，显示 modelValue (容错)
+  // 如果找不到且允许编辑，直接显示 modelValue
+  // 如果不允许编辑，且有值但不在列表中，显示 modelValue (容错)
   return props.modelValue || ''
 })
 
@@ -119,8 +114,9 @@ const displayLabel = computed(() => {
 const filteredOptions = computed(() => {
   // 如果没开启编辑，或者没有输入内容，直接返回原列表
   if (!props.editable || !internalSearch.value) return props.options
-  
-  const query = internalSearch.value.toLowerCase()
+  // 安全处理：确保是字符串
+  const query = (internalSearch.value || '').toString().toLowerCase().trim()
+  if (!query) return props.options
   
   // 1. 拆分数组
   const matches = []
@@ -130,7 +126,7 @@ const filteredOptions = computed(() => {
     const labelStr = String(opt.label).toLowerCase()
     const valueStr = String(opt.value).toLowerCase()
 
-    // 匹配规则：包含即可（你可以根据需要改为 'startsWith'）
+    // 如果 Label 或 Value 包含关键词
     if (labelStr.includes(query) || valueStr.includes(query)) {
       matches.push(opt)
     } else {
@@ -138,7 +134,19 @@ const filteredOptions = computed(() => {
     }
   })
 
-  // 2. 聚合：匹配项在前，其他项在后
+  // 2. 排序：完全匹配 > 开头匹配 > 包含匹配
+  matches.sort((a, b) => {
+    const aLabel = String(a.label).toLowerCase()
+    const bLabel = String(b.label).toLowerCase()
+    
+    if (aLabel === query) return -1
+    if (bLabel === query) return 1
+    if (aLabel.startsWith(query) && !bLabel.startsWith(query)) return -1
+    if (!aLabel.startsWith(query) && bLabel.startsWith(query)) return 1
+    return 0
+  })
+
+  // 3. 合并：匹配的在前，不匹配的在后（置灰显示）
   return [...matches, ...others]
 })
 
@@ -146,9 +154,10 @@ const filteredOptions = computed(() => {
 // 用于在模板中判断当前项是否匹配搜索词（用于控制高亮/置灰样式）
 const isMatch = (opt) => {
   if (!props.editable || !internalSearch.value) return true
-  const query = internalSearch.value.toLowerCase()
+  const query = (internalSearch.value || '').toString().toLowerCase().trim()
+  if (!query) return true
   return String(opt.label).toLowerCase().includes(query) || 
-         String(opt.value).toLowerCase().includes(query)
+        String(opt.value).toLowerCase().includes(query)
 }
 
 
@@ -169,8 +178,9 @@ const openMenu = () => {
   // 如果是编辑模式，打开时重置搜索词为当前显示值，方便修改
   if (props.editable) {
     internalSearch.value = displayLabel.value // 或者设为 displayLabel.value 看需求
+  } else {
+    internalSearch.value = ''
   }
-  
   // 聚焦输入框
   nextTick(() => inputRef.value?.focus())
 }
@@ -179,15 +189,18 @@ const closeMenu = () => {
   if (!isOpen.value) return
   isOpen.value = false
   highlightedIndex.value = -1
-  internalSearch.value = null // 清空内部搜索状态
+  // 不在这里立即清空 internalSearch，可能会导致模板闪烁
+  // 交给下一次 openMenu 处理
   emit('visible-change', false)
-  inputRef.value?.blur()
+  // inputRef.value?.blur()
 }
 
 // 2. 选中逻辑
 const selectOption = (opt) => {
   emit('update:modelValue', opt.value)
   emit('change', opt) // 回传完整对象
+  // 选中后清空搜索状态
+  internalSearch.value = opt.label
   closeMenu()
 }
 
@@ -196,13 +209,13 @@ const handleInput = (e) => {
   if (!props.editable) return
   const val = e.target.value
   internalSearch.value = val
-  isOpen.value = true 
+  if (!isOpen.value) isOpen.value = true
   
   // 输入时，永远将键盘导航索引重置为 0
   // 因为列表已经重排序了，第 0 项就是最匹配的那一项
   highlightedIndex.value = 0 
   
-  emit('update:modelValue', val)
+  // emit('update:modelValue', val)
   // emit('change', { value: val, label: val, isCustom: true })
 }
 
@@ -210,7 +223,19 @@ const handleInput = (e) => {
 // 使用 setTimeout 是为了让 click 事件先于 blur 执行
 const handleBlur = () => {
   setTimeout(() => {
-    emit('change', { value:  displayLabel.value, label: displayLabel.value, isCustom: true })
+    if (!isOpen.value) return; // 如果已经通过 selectOption 关闭了，就不再处理
+    // 只有在弹窗仍然打开，并且是编辑模式时，才强制提交用户手打的值
+    if (isOpen.value && props.editable && internalSearch.value !== null) {
+      // 如果能在当前过滤列表找到精确匹配，那就直接选它
+      const exactMatch = filteredOptions.value.find(o => o.label === internalSearch.value || o.value === internalSearch.value)
+      if (exactMatch) {
+        emit('update:modelValue', exactMatch.value)
+        emit('change', exactMatch)
+      } else {
+        // 否则作为一个全新的自定义值抛出
+        emit('change', { value: internalSearch.value, label: internalSearch.value, isCustom: true })
+      }
+    }
     closeMenu()
   }, 200)
 }
@@ -273,12 +298,17 @@ const scrollToOption = (index) => {
   })
 }
 
+// 动态收集 ref 的函数
+const setOptionRef = (el, index) => {
+  if (el) {
+    optionRefs.value[index] = el
+  }
+}
 // 点击外部关闭
 onClickOutside(target, () => closeMenu())
-
-// 监听值变化，如果外部修改了值，重置内部搜索状态
-watch(() => props.modelValue, () => {
-  internalSearch.value = null
+// 每次更新前清空，防止内存泄漏和死循环
+onBeforeUpdate(() => {
+  optionRefs.value = []
 })
 </script>
 

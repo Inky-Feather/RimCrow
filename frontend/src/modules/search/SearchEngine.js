@@ -244,7 +244,7 @@ export class SearchEngine {
 
     switch (config.type) {
       case FIELD_TYPES.BOOLEAN:
-        //获取值的状态：Positive (有值), Negative (空/False), Null (未定义)
+        //获取值的状态：Positive (有值), Negative (False), Null (未定义)
         const valState = this.getValueState(itemVal);
         if (tag.value === true) {
           // 搜索 + : 要求状态为 Positive
@@ -283,7 +283,7 @@ export class SearchEngine {
    * Null:     根本不存在 (null, undefined)
    */
   getValueState(val) {
-    if (val === null || val === undefined) return 'null';
+    if (val === undefined || val === null) return 'null';
     if (Array.isArray(val)) {
         return val.length > 0 ? 'positive' : 'negative';
     }
@@ -294,9 +294,8 @@ export class SearchEngine {
         return val ? 'positive' : 'negative';
     }
     if (typeof val === 'number') {
-        // 这里看需求：通常 0 视作 false (negative)，非0视作 true
-        // 如果想把 0 当作“有值”，改成 return 'positive'
-        return val !== 0 ? 'positive' : 'negative';
+      // 大于0：Positive，小于0：Null， 等于0：Negative
+      return val > 0 ? 'positive' : val < 0 ? 'null' : 'negative';
     }
     // 对象等其他情况，默认视为有值
     return 'positive';
@@ -415,7 +414,7 @@ export class SearchEngine {
                 });
             }
 
-            // 3. Null (_/Null) - [新增]
+            // 3. Null (_/Null)
             if (config.nullValues.some(v => v.startsWith(valLower))) {
                 suggestionsList.push({
                     type: 'value',
@@ -430,24 +429,24 @@ export class SearchEngine {
 
         // B2. 列表/字符串建议 (去重 + 强转简写)
         if (config.suggest) {
-           const candidates = this.indices.get(realKey);
-           if (candidates) {
-             const valLower = valRaw.toLowerCase();
-             let count = 0;
-             for (const val of candidates) {
-               if (val.toLowerCase().includes(valLower)) {
-                 suggestions.push({
-                   type: 'value',
-                   label: val,
-                   // 关键：这里把用户输入的 keyRaw (可能是全称) 替换为了 shortKey
-                   value: prefix + shortKey + ':' + val, 
-                   desc: config.label || realKey
-                 });
-                 count++;
-                 if (count > 50) break;
-               }
-             }
-           }
+          const candidates = this.indices.get(realKey);
+          if (candidates) {
+            const valLower = valRaw.toLowerCase();
+            let count = 0;
+            for (const val of candidates) {
+              if (val.toLowerCase().includes(valLower)) {
+                suggestions.push({
+                  type: 'value',
+                  label: val,
+                  // 关键：这里把用户输入的 keyRaw (可能是全称) 替换为了 shortKey
+                  value: prefix + shortKey + ':' + val, 
+                  desc: config.label || realKey
+                });
+                count++;
+                if (count > 50) break;
+              }
+            }
+          }
         }
       }
       return suggestions;
@@ -495,7 +494,7 @@ export class SearchEngine {
 
   // 辅助：生成用法示例字符串
   getFieldUsage(conf, key) {
-      if (conf.type === FIELD_TYPES.BOOLEAN) return `${key}:+ | ${key}:- | ${key}:_`;
+      if (conf.type === FIELD_TYPES.BOOLEAN) return `${key}:true | ${key}:false | ${key}:null`;
       if (conf.type === FIELD_TYPES.LIST) return `${key}:Value`;
       return `${key}:XXX`;
   }

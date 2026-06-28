@@ -18,7 +18,7 @@ export const DEFAULT_FIELD_CONFIG = {
   // 布尔值专用配置
   trueValues: ['+', 'true', 'yes', '1', 'on','T','Y'],
   falseValues: ['-', 'false', 'no', '0', 'off','F','N'],
-  nullValues: ['_', 'null', 'nil', 'none', 'null'], // 定义代表 null 的字符
+  nullValues: ['_', 'null', 'nil', 'none'], // 定义代表 null 的字符
   // getter: 动态判断 (高级用法)
   // getter: (mod) => modStore.activeIds.includes(mod.package_id)
   getter:null

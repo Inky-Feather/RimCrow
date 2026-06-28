@@ -139,8 +139,9 @@
           <CommonInput label="环境描述" v-model="form.description" placeholder="这里可以写一些关于这个环境的说明..." />
           <CommonPathInput label="游戏执行目录" v-model="form.game_install_path" @browse="browsePath('game_install_path')" @blur="checkGamePath" :description="gameInfo" />
           <CommonPathInput label="用户数据目录" v-model="form.user_data_path" @browse="browsePath('user_data_path')" :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
-          <CommonSwitch v-if="form.id!='default' && appStore.settings.workshop_mods_path" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod" />
+          <CommonSwitch v-if="form.id!='default' && appStore.settings.workshop_mods_path" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="启用后将通过链接方式自动为游戏添加创意工坊 Mod，仅在非Steam启动时生效，Steam 运行时会自动加载创意工坊 Mod。" />
           <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
+          <CommonTagInput label="游戏启动参数" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
 
           <div class="text-[0.7rem] text-text-dim/60 leading-relaxed">
             * 每一个环境都拥有完全独立的存档、设置和 Mod 排序文件。系统将通过启动参数自动执行数据隔离。Mod 文件则会共用游戏本体所在的 Mods 目录。
@@ -170,6 +171,8 @@ import { useConfirmStore } from '../stores/confirmStore'
 import CommonInput from './common/input/CommonInput.vue'
 import CommonPathInput from './common/input/CommonPathInput.vue'
 import CommonSwitch from './common/input/CommonSwitch.vue'
+import CommonTagInput from './common/input/CommonTagInput.vue'
+import { RUN_COMMAND_TAGS } from '../utils/constants'
 
 const toast = createToastInterface()
 const profileStore = useProfileStore()
@@ -203,6 +206,7 @@ const openCreate = () => {
   form.user_data_path = ''
   form.use_workshop_mods = false
   form.copy_current_data = false
+  form.run_commands = []
   isEditing.value = false
   showModal.value = true
 }
@@ -214,6 +218,7 @@ const handleEdit = (p) => {
   form.game_install_path = p.game_install_path
   form.user_data_path = p.user_data_path
   form.use_workshop_mods = p.use_workshop_mods
+  form.run_commands = p.run_commands
   isEditing.value = true
   showModal.value = true
 }

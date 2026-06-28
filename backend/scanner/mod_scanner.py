@@ -5,7 +5,7 @@ import re
 import time
 import concurrent.futures
 from backend.managers.mgr_game_logs import GameLogManager
-from backend.utils.tools import generate_path_hash
+from backend.utils.tools import generate_path_hash, get_folder_size
 from backend.database.models import db
 
 # --- 模块测试准备 ---
@@ -33,7 +33,7 @@ from backend.utils.event_bus import EventBus # 引入事件总线
 
 class ModScanner:
     def __init__(self):
-        # DLCParser 不在 init 初始化，因为要看扫描路径里有没有 Data
+        # DLCParser 不在 init 初始化，因为要看扫描路径里有没有 DLC 目录
         self.dlc_parser = None
         self.xml_parser = ModXMLParser()
         self.analyzer = ModAnalyzer()
@@ -82,7 +82,7 @@ class ModScanner:
             dlc_dir = next((p for p in valid_paths if os.path.basename(p).lower() == 'data'), None)
             dlc_parser = DLCParser(dlc_dir) if dlc_dir else None
 
-            existing_mtimes = ModDAO.get_mod_mtimes()   # 从数据库获取已存在的 Mod 时间戳
+            existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
             
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
             EventBus.emit('scan-progress', {'stage': 'indexing', 'message': '正在索引文件...'})
@@ -133,7 +133,7 @@ class ModScanner:
                     })
                 # 处理单个 Mod
                 mod_data = self._process_single_mod(
-                    mod_path, is_dlc, existing_mtimes, 
+                    mod_path, is_dlc, existing_snapshots, 
                     dlc_parser, thumbnail_mgr, forced_update
                 )
 
@@ -208,7 +208,7 @@ class ModScanner:
                         # 实际上，如果发生冲突（多个实例），其中一个是 skipped，只要涉及多实例判定，强制全部重读，确保 source/path 准确。
                         full_mod = self._process_single_mod(
                             mod['path'], (os.path.basename(os.path.dirname(mod['path'])).lower() == 'data'),
-                            existing_mtimes, dlc_parser, thumbnail_mgr, forced_update=True
+                            existing_snapshots, dlc_parser, thumbnail_mgr, forced_update=True
                         )
                         if full_mod:
                             mod.update(full_mod) # 更新为完整数据
@@ -358,66 +358,105 @@ class ModScanner:
             # 记录 (路径, ID) 元组
             workshop_paths_list.append((mod_data['path'], pid))
         
-    def _process_single_mod(self, mod_path, is_dlc_dir, existing_mtimes, dlc_parser, thumbnail_mgr, forced_update=False):
+    def _process_single_mod(self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, thumbnail_mgr, forced_update=False):
         """
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
         """
         about_file = os.path.join(mod_path, 'About', 'About.xml')
         disabled_file = os.path.join(mod_path, 'About', 'About.xml.disabled')
-        # DLC 可能没有 About.xml，但 Data 目录下的子文件夹我们通常认为是 DLC
-        # 这里的判断需要稍微灵活点。如果是在 Data 目录下，即使没有 About 也可能是 Core
+        is_disabled = False 
+        # 存在性快速检查 (0 IO)
         # 如果没有 About.xml，但有 .disabled，说明这是被管理器禁用的重复项，直接跳过（视为不存在）
         if not os.path.exists(about_file):
             if os.path.exists(disabled_file):
-                return None  # 这是一个被禁用的影子 Mod，本次扫描忽略
+                about_file = disabled_file  
+                is_disabled = True
+                # return None  # 这是一个被禁用的影子 Mod，本次扫描忽略
             if not is_dlc_dir:
                 return None # 既不是 DLC 也没有 About.xml，无效
-
+        
         # 检查 mtime
         try:
-            mtime = int(os.path.getmtime(about_file)*1000) if os.path.exists(about_file) else 0
-            ctime = int(os.path.getctime(about_file)*1000) if os.path.exists(about_file) else 0
+            stat = os.stat(about_file)
+            mtime = int(stat.st_mtime * 1000)
+            ctime = int(stat.st_ctime * 1000)
         except OSError:
             mtime = 0; ctime = 0
+            
+        # 物理路径作为哈希主键
+        path_hash = generate_path_hash(mod_path)
+        # 增量比对 - 第一阶段：仅比对修改时间
+        snapshot = existing_snapshots.get(path_hash)
+        # 在开启开关或者强制更新的情况下，才需要计算大小
+        need_size_check = settings.config.enable_file_size_scan or forced_update
 
-        # 解析
+        # 如果快照存在且被禁用，直接跳过
+        if snapshot and is_disabled:
+            return {
+                '_skipped': True, 
+                'path_hash': path_hash,
+                'package_id': snapshot['package_id'],
+                'path': mod_path, 
+                'mtime': mtime,
+                'file_size': snapshot['size'], # 复用旧大小
+                'disabled': is_disabled
+            }
+            
+        disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
+        
+        # 增量检测逻辑 (Time AND Size)
+        # 如果快照存在且修改时间一致
+        if disabled_change: pass
+        
+        elif snapshot and abs(snapshot['mtime'] - mtime) < 1.0 and not forced_update :
+            # 修改时间没变，此时我们通过开关决定是否开启“深层大小检测”
+            if need_size_check:
+                # 优化点：只有在修改时间没变时，才执行耗时的 get_folder_size
+                current_size = get_folder_size(mod_path)
+                if snapshot['size'] > 0 and snapshot['size'] == current_size:
+                    # 时间和大小都一致，判定为没变，跳过解析
+                    return {
+                        '_skipped': True, 
+                        'path_hash': path_hash,
+                        'package_id': snapshot['package_id'],
+                        'path': mod_path, 
+                        'mtime': mtime,
+                        'file_size': current_size,
+                        'disabled': is_disabled
+                    }
+                # 走到这里说明大小变了，需要继续向下解析
+            else:
+                # 如果没开大小检测，且修改时间没变，直接视为跳过
+                return {
+                    '_skipped': True, 
+                    'path_hash': path_hash,
+                    'package_id': snapshot['package_id'],
+                    'path': mod_path, 
+                    'mtime': mtime,
+                    'file_size': snapshot['size'], # 复用旧大小
+                    'disabled': is_disabled
+                }
+        
+        # 解析 XML (CPU 密集)
         # parser 内部如果处理异常会返回默认空结构，这里直接调
         mod_data = self.xml_parser.parse(mod_path)
-        pkg_id = mod_data.get('package_id')
+        pkg_id = mod_data.get('package_id','').lower()
         
         # DLC 兜底 ID
         if is_dlc_dir and not pkg_id:
             folder = os.path.basename(mod_path)
-            if folder.lower() == 'core': 
-                pkg_id = 'ludeon.rimworld'
+            if folder.lower() == 'core': pkg_id = 'ludeon.rimworld'
             else: pkg_id = f'ludeon.rimworld.{folder.lower()}'
             mod_data['package_id'] = pkg_id
 
         if not pkg_id: return None
         
-        # 物理路径作为哈希主键
-        path_hash = generate_path_hash(mod_path)
-
-        # 增量检查
-        # 注意：这里只返回最简信息，如果后续发生冲突，会在上层逻辑触发重读
-        if (pkg_id in existing_mtimes and abs(existing_mtimes[pkg_id] - mtime) < 1.0) and not forced_update:
-            return {
-                '_skipped': True, 
-                'path_hash': path_hash,
-                'package_id': pkg_id, 
-                'path': mod_path, 
-                'mtime': mtime,
-                'source': mod_data.get('source') # XML Parser 不一定返回 source，需要下方逻辑补全
-            }
-        
-        # 新增标记
-        if (pkg_id not in existing_mtimes):
-            mod_data['is_new'] = True
-        
         # DLC 注入翻译
         if is_dlc_dir and dlc_parser:
             dlc_parser.enrich_data(mod_data, mod_path)
+            mod_data['supported_languages'] = list(dlc_parser.translations.keys())
+            
 
         # 路径与来源分析
         workshop_id = self._resolve_workshop_id(mod_path)
@@ -438,7 +477,6 @@ class ModScanner:
         
         # 补充 supported_versions
         if mod_data.get('source','').lower() == 'core':
-             
             mod_data['supported_versions'] = [settings.config.game_version[:3]] if settings.config.game_version else 'Unknown'  # Core 补充支持版本
 
         # 图片
@@ -448,19 +486,31 @@ class ModScanner:
 
         # 深度分析
         analysis_info = self.analyzer.analyze(mod_path)
+        
+        final_size = snapshot.get('size', 0) if snapshot and 'size' in snapshot else 0
+        # 新增标记
+        if (path_hash not in existing_snapshots):
+            mod_data['is_new'] = True
+            final_size = get_folder_size(mod_path) # 新增 Mod 时，计算大小
+        elif (need_size_check):
+            final_size = get_folder_size(mod_path) # 增量 Mod 时，在需要检测大小的情况下，计算大小
+            
         mod_data.update({
             'path_hash': path_hash,
-            'supported_languages': analysis_info['supported_languages'],
+            'supported_languages': analysis_info['supported_languages'] if not is_dlc_dir else mod_data.get('supported_languages', []),
             'file_stats': analysis_info['file_stats'],
             'mod_type': analysis_info['mod_type'],
             'path': mod_path,
             'file_create_time': ctime,
             'file_modify_time': mtime,
+            'file_size': final_size,
+            'source': mod_data.get('source', 'local'), # 来源
+            'disabled': False, # 如果它存在 About.xml，说明它是激活的。强制重置为 False
         })
 
         # 缩略图生成 (耗时操作，线程池内执行)
-        if thumbnail_mgr and preview_path:
-            thumbnail_mgr.ensure_thumbnail(pkg_id, preview_path)
+        if thumbnail_mgr and mod_data.get('preview_path'):
+            thumbnail_mgr.ensure_thumbnail(pkg_id, mod_data['preview_path'])
             
         return mod_data
 
