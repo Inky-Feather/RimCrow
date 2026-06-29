@@ -20,6 +20,7 @@ db = SqliteDatabase(None)
 
 MOD_ASSET_STATE_PRESENT = "present"
 MOD_ASSET_STATE_MISSING = "missing"
+MOD_ASSET_STATE_DELETED = "deleted"
 
 
 class BaseModel(Model):

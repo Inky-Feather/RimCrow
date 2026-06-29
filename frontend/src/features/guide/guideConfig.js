@@ -95,10 +95,10 @@ export const mainGuideSteps = [
 
 export const workflowGuideSteps = [
   {
-    element: '[data-tour="refresh-button"]',
+    element: '[data-tour="scan-button"]',
     popover: {
-      title: "第一步：刷新",
-      description: "先刷新模组清单。普通刷新走增量扫描；悬停后还能触发更彻底的强制刷新。",
+      title: "第一步：扫描",
+      description: "先扫描模组清单。普通扫描只处理文件变动；悬停后还能触发更彻底的强制扫描。",
       side: "top",
     },
   },
@@ -655,7 +655,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-entry"]',
     popover: {
       title: "贴图优化入口",
-      description: "这里进入贴图优化中心。它的作用是把真实 PNG 源图预处理成 DDS，以换取更低显存占用和更快的贴图载入。",
+      description: "这里进入贴图优化中心。它会把真实 PNG 源图预先生成为更适合游戏读取的贴图输出。DDS 在 RimWorld 1.6 起可原生读取；ZSTD 会生成更省磁盘空间的 .dds.zstd，但需要配合 Image Opt 使用。",
       side: "bottom",
     },
     onNextBefore: async () => {
@@ -668,7 +668,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-summary"]',
     popover: {
       title: "总览统计",
-      description: "这里会把当前范围内的源图数量、现有 DDS、待生成、无效 PNG、小图跳过和显存预估集中展示。先看这里，再决定是否需要生成或清理。",
+      description: "这里会集中展示当前范围内的源图数量、现有输出、待生成、无效 PNG、缩放分布和显存预估。先看这里，再决定是否需要生成或清理。",
       side: "bottom",
     },
   },
@@ -676,7 +676,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-list-toolbar"]',
     popover: {
       title: "列表筛选与排序",
-      description: "左侧主体按模组展示贴图储存占比。你可以切换 PNG / DDS 视图，搜索模组名称或路径，并按占比、待生成数量或显存节省排序。",
+      description: "左侧主体按模组展示贴图体积占比。你可以切换综合 / PNG / DDS / ZSTD 视图，搜索模组名称或路径，并按占比、待生成数量、优化后显存或显存节省排序。",
       side: "bottom",
     },
   },
@@ -684,7 +684,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-list"]',
     popover: {
       title: "模组明细列表",
-      description: "这里按模组汇总贴图情况。通常优先看待生成多、体积大、显存节省高的模组；遇到无效 PNG 或无源 DDS 也会在这里暴露出来。",
+      description: "这里按模组汇总贴图情况。通常优先看待生成多、体积大、显存节省高的模组；遇到无效 PNG 或没有对应源图的输出文件，也会在这里暴露出来。",
       side: "left",
     },
   },
@@ -692,7 +692,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-options"]',
     popover: {
       title: "优化选项",
-      description: "这里可以调整优化参数，影响生成的 DDS 体积和显存占用。通常而言，缩放倍率越小，越省显存，但贴图也越容易变糊。",
+      description: "这里可以调整输出格式和缩放参数，影响生成结果的磁盘占用、显存占用和画面清晰度。DDS 更偏向直接加载；ZSTD 相当于把 DDS 再压缩一层，更省空间，但需要 Image Opt 才能读取。",
       side: "left",
     },
   },
@@ -700,7 +700,7 @@ export const textureOptGuideSteps = [
     element: '[data-tour="texture-opt-actions"]',
     popover: {
       title: "主要操作",
-      description: "这里有生成、扫描、清理等主要操作按钮。设置好优化参数后，直接生成即可，扫描可以分析现有贴图数量体积占用等信息。",
+      description: "这里有生成、扫描统计、清理等主要操作按钮。设置好参数后可以直接生成；扫描统计会分析当前范围内的源图、输出文件、体积和显存预估。",
       side: "left",
     },
   },

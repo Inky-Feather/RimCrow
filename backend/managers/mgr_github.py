@@ -715,7 +715,7 @@ class GithubManager:
             return payload
         except (GithubApiError, requests.RequestException) as exc:
             primary_error = exc
-            logger.warning("GitHub repo info API failed, fallback to web/cache: repo=%s/%s error=%s", owner, repo, exc)
+            logger.warning("GitHub 仓库信息 API 请求失败，将回退到网页或缓存：repo=%s/%s error=%s", owner, repo, exc)
 
         web_payload = self._fetch_repo_info_via_web(owner, repo, source_branch=normalized_source_branch)
         if web_payload:
@@ -788,6 +788,65 @@ class GithubManager:
         }
         self._store_cached_payload(cache_key, catalog, ttl_seconds=GITLAB_API_CACHE_TTL_SECONDS)
         return catalog
+
+    def check_provider_catalog_updates(self, catalog_url: str = "") -> dict[str, Any]:
+        """检查 Git 推荐清单源是否和本地缓存一致，不刷新缓存。
+
+        provider_json 没有本地文件路径，真正的“本地版本”是已缓存的清单内容；
+        因此这里比较缓存清单和远端清单的内容签名，而不是拿请求头或时间戳猜测。
+        """
+        sources = self._provider_catalog_sources(catalog_url)
+        items: list[dict[str, Any]] = []
+        for source in sources:
+            source_id = str(source.get("id") or "").strip()
+            cached = self._load_provider_catalog_source_cache(source_id) if source_id else None
+            local_signature = self._provider_catalog_source_signature(cached)
+            local_count = len(cached.get("items") or []) if isinstance(cached, dict) else 0
+            try:
+                remote_catalog = self._fetch_provider_catalog_source_remote(source)
+                remote_signature = self._provider_catalog_source_signature(remote_catalog)
+                remote_count = len(remote_catalog.get("items") or []) if isinstance(remote_catalog, dict) else 0
+                exists = bool(cached)
+                items.append({
+                    "source_id": source_id,
+                    "label": source.get("label") or source_id,
+                    "type": source.get("type") or "",
+                    "exists": exists,
+                    "remote_available": True,
+                    "needs_update": (not exists) or (local_signature != remote_signature),
+                    "local_signature": local_signature,
+                    "remote_signature": remote_signature,
+                    "local_count": local_count,
+                    "remote_count": remote_count,
+                })
+            except Exception as exc:
+                logger.warning("Git 推荐清单检查失败: %s", source.get("label") or source_id, exc_info=True)
+                items.append({
+                    "source_id": source_id,
+                    "label": source.get("label") or source_id,
+                    "type": source.get("type") or "",
+                    "exists": bool(cached),
+                    "remote_available": False,
+                    "needs_update": False,
+                    "local_signature": local_signature,
+                    "remote_signature": "",
+                    "local_count": local_count,
+                    "remote_count": 0,
+                    "message": f"获取远端清单失败: {exc}",
+                })
+
+        available_items = [item for item in items if item.get("remote_available")]
+        return {
+            "sources": items,
+            "source_count": len(items),
+            "available_count": len(available_items),
+            "local_signature": self._provider_catalog_sources_signature(items, "local_signature"),
+            "remote_signature": self._provider_catalog_sources_signature(available_items, "remote_signature"),
+            "local_count": sum(int(item.get("local_count") or 0) for item in items),
+            "remote_count": sum(int(item.get("remote_count") or 0) for item in available_items),
+            "needs_update": any(bool(item.get("needs_update")) for item in items),
+            "remote_available": len(available_items) == len(items) if items else False,
+        }
 
     def record_timeline(self, repo_url: str, action: str, message: str):
         """主动记录操作轨迹"""
@@ -1105,7 +1164,7 @@ class GithubManager:
                 resolved = self._build_release_asset_from_payload(request, web_release)
                 if resolved:
                     logger.warning(
-                        "GitHub release resolved via web assets fallback: repo=%s/%s tag=%s error=%s",
+                        "已通过 GitHub 网页资源回退解析 release：repo=%s/%s tag=%s error=%s",
                         request.owner,
                         request.repo,
                         request.artifact.release_tag or "latest",
@@ -1114,7 +1173,7 @@ class GithubManager:
                     return resolved
             except Exception as web_exc:
                 logger.warning(
-                    "GitHub release web assets fallback failed: repo=%s/%s tag=%s error=%s",
+                    "GitHub release 网页资源回退失败：repo=%s/%s tag=%s error=%s",
                     request.owner,
                     request.repo,
                     request.artifact.release_tag or "latest",
@@ -1197,7 +1256,7 @@ class GithubManager:
                 source_commit = self.fetch_gitlab_commit(identity, ref=source_ref, missing_ok=True)
                 resolved_version = self._build_source_version(source_ref, self._extract_commit_timestamp(source_commit))
             except Exception as exc:
-                logger.warning("Resolve GitLab source commit failed: repo=%s/%s branch=%s error=%s", request.owner, request.repo, source_ref, exc)
+                logger.warning("解析 GitLab 源提交失败：repo=%s/%s branch=%s error=%s", request.owner, request.repo, source_ref, exc)
 
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
@@ -1328,7 +1387,7 @@ class GithubManager:
             if request.success_toast:
                 EventBus.send_toast(request.success_toast, type="success", duration=4000)
         except Exception as exc:
-            logger.error("Git repo install failed: %s", exc, exc_info=True)
+            logger.error("Git 仓库安装失败：%s", exc, exc_info=True)
             if timeline_repo_url:
                 self.record_timeline(timeline_repo_url, "error", f"部署失败: {exc}")
             if request.failure_toast:
@@ -1414,7 +1473,7 @@ class GithubManager:
         if not fallback_url or not fallback_filename: return None
 
         logger.warning(
-            "GitHub release resolve failed, fallback to direct download: repo=%s/%s error=%s",
+            "GitHub release 解析失败，将回退到直接下载：repo=%s/%s error=%s",
             request.owner,
             request.repo,
             exc,
@@ -1502,7 +1561,7 @@ class GithubManager:
                 degraded=True,
             )
         except Exception as exc:
-            logger.warning("GitHub web fallback failed: repo=%s/%s error=%s", owner, repo, exc)
+            logger.warning("GitHub 网页回退失败：repo=%s/%s error=%s", owner, repo, exc)
             return None
 
     def _fetch_repo_info_from_record_cache(self, repo_url: str, owner: str, repo: str, *, source_branch: str = "") -> dict[str, Any] | None:
@@ -1625,12 +1684,7 @@ class GithubManager:
                 return cached
 
         try:
-            if source.get("type") == "provider_json":
-                catalog = self._fetch_provider_json_catalog_source(source)
-            elif source.get("type") == "github_owner":
-                catalog = self._fetch_github_owner_catalog_source(source)
-            else:
-                raise ValueError(f"不支持的清单源类型: {source.get('type')}")
+            catalog = self._fetch_provider_catalog_source_remote(source)
         except Exception:
             cached = self._load_provider_catalog_source_cache(source_id)
             if cached:
@@ -1640,6 +1694,13 @@ class GithubManager:
             raise
         self._save_provider_catalog_source_cache(source_id, catalog)
         return catalog
+
+    def _fetch_provider_catalog_source_remote(self, source: dict[str, Any]) -> dict[str, Any]:
+        if source.get("type") == "provider_json":
+            return self._fetch_provider_json_catalog_source(source)
+        if source.get("type") == "github_owner":
+            return self._fetch_github_owner_catalog_source(source)
+        raise ValueError(f"不支持的清单源类型: {source.get('type')}")
 
     def _fetch_provider_json_catalog_source(self, source: dict[str, Any]) -> dict[str, Any]:
         url = str(source.get("url") or "").strip()
@@ -1890,6 +1951,36 @@ class GithubManager:
     def _provider_catalog_sources_key(sources: list[dict[str, Any]]) -> str:
         return json.dumps(sources, sort_keys=True, ensure_ascii=False)
 
+    @staticmethod
+    def _provider_catalog_source_signature(catalog: dict[str, Any] | None) -> str:
+        if not isinstance(catalog, dict):
+            return ""
+        items = catalog.get("items") if isinstance(catalog.get("items"), list) else []
+        normalized_items = sorted(
+            items,
+            key=lambda item: (
+                str(item.get("source_id") or ""),
+                str(item.get("key") or ""),
+                str(item.get("url") or ""),
+                str(item.get("name") or ""),
+            ) if isinstance(item, dict) else str(item),
+        )
+        payload = json.dumps(normalized_items, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+        return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _provider_catalog_sources_signature(items: list[dict[str, Any]], signature_key: str) -> str:
+        payload = [
+            {
+                "source_id": item.get("source_id") or "",
+                "signature": item.get(signature_key) or "",
+                "count": int(item.get("remote_count" if signature_key == "remote_signature" else "local_count") or 0),
+            }
+            for item in items
+        ]
+        text = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+        return hashlib.sha1(text.encode("utf-8")).hexdigest() if payload else ""
+
     def _github_repo_has_about_xml(self, session, owner: str, repo: str, default_branch: str) -> bool:
         """轻量检查仓库根目录是否有 RimWorld About/About.xml。"""
         try:
@@ -2002,7 +2093,7 @@ class GithubManager:
                 default_branch = str(repo_info.get("default_branch") or "").strip()
                 if default_branch: return default_branch
         except Exception as exc:
-            logger.warning("Resolve default branch via API failed: repo=%s/%s error=%s", owner, repo, exc)
+            logger.warning("通过 API 解析默认分支失败：repo=%s/%s error=%s", owner, repo, exc)
 
         web_info = self._fetch_repo_info_via_web(owner, repo)
         if web_info:
@@ -2026,13 +2117,13 @@ class GithubManager:
             source_commit = self.fetch_commit(owner, repo, ref=normalized_branch, missing_ok=True)
             return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
         except Exception as exc:
-            logger.warning("Resolve source commit via API failed, fallback to web/cache: repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
+            logger.warning("通过 API 解析源提交失败，将回退到网页或缓存：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
 
         try:
             source_commit = self.fetch_commit_web(owner, repo, ref=normalized_branch, missing_ok=True)
             if source_commit: return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
         except Exception as exc:
-            logger.warning("Resolve source commit via web failed: repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
+            logger.warning("通过网页解析源提交失败：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
 
         record_info = self._fetch_repo_info_from_record_cache(repo_url or f"{GITHUB_WEB_BASE}/{owner}/{repo}", owner, repo, source_branch=normalized_branch)
         if record_info:

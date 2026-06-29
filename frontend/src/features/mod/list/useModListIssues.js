@@ -29,7 +29,7 @@ export function useModListIssues({
     for (const [type, ids] of Object.entries(summary.stats)) {
       if (ids.length === 0) continue
       const typeName = ISSUE_TITLE_MAP[type] || type
-      const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible','wrong_order'].includes(type)
+      const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible', 'wrong_order', 'multiplayer_incompatible'].includes(type)
       // 标题颜色: Error 用红(!!), Warn 用黄(^^)
       const titleMark = isError ? '!!' : '^^'
       text += `\n${titleMark}${typeName} (${ids.length}):${titleMark}`

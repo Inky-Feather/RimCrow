@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
-import { deepClone, toast, checkResult } from '../../shared/lib/common'
+import { deepClone, toast, checkResult, toUserMessage } from '../../shared/lib/common'
 
 // 动态规则支持属性映射
 const DYNAMIC_RULE_PROPS = {
@@ -64,7 +64,8 @@ export const useRuleStore = defineStore('rules', () => {
   const currentId = ref(null)
   const isLoading = ref(false)
   const refreshRuleState = async () => {
-    await appStore.refreshModsData('规则变更后同步规则数据', { preserveListState: true })
+    await fetchRules()
+    await appStore.refreshModsData('规则变更后同步模组状态', { preserveListState: true, refreshRules: false })
   }
 
   // 当前正在检视的目标 Mod ID
@@ -87,7 +88,7 @@ export const useRuleStore = defineStore('rules', () => {
         settings.value = res.data.settings
       }
     } catch (e) {
-      console.error("Rules fetch failed", e)
+      console.error("获取规则失败:", e)
     }
   }
 
@@ -174,7 +175,7 @@ export const useRuleStore = defineStore('rules', () => {
     // 发送后端
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
     if (!checkResult(res, '添加用户规则')) {
-      toast.error(res.message)
+      toast.error(toUserMessage(res?.message, '添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。'))
       fetchRules() // 回滚
     } else {
       await refreshRuleState()
@@ -406,7 +407,7 @@ export const useRuleStore = defineStore('rules', () => {
     try {
         await appStore.updateExternalDB('community_rules')
     } catch (error) {
-        toast.error("更新社区库失败: " + error.message)
+        toast.error(toUserMessage(error?.message || error, '更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。'))
     } finally {
       isLoading.value = false
     }

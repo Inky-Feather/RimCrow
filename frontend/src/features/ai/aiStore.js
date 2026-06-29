@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { checkResult, normalizeStringList, normalizeText, toast } from '../../shared/lib/common'
+import { checkResult, normalizeStringList, normalizeText, toast, toUserMessage } from '../../shared/lib/common'
 import { normalizeAssistantSessionResult } from './ai-store/runtime/aiActionRuntime'
 import {
   createAssistantRuntimePrefs, createAssistantSession, createEmptyTraceModalState,
@@ -636,7 +636,7 @@ export const useAiStore = defineStore('ai', () => {
     const appStore = useAppStore()
     isLoading.value = true
     if (!appStore.settings.ai.enabled) {
-      toast.warning('AI功能未启用！')
+      toast.warning('AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。')
       isLoading.value = false
       return null
     }
@@ -648,6 +648,7 @@ export const useAiStore = defineStore('ai', () => {
       return null
     } catch (error) {
       console.error('AI 助手会话异常:', error)
+      toast.error(toUserMessage(error?.message || error, 'AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。'))
       return null
     } finally {
       isLoading.value = false
@@ -751,19 +752,19 @@ export const useAiStore = defineStore('ai', () => {
       const result = await runAssistantSession(payload)
       if (!result) {
         delete pendingConsumedAttachmentKeysByRequest[requestId]
-        assistantMessage.content = '⚠️ AI 请求失败。'
+        assistantMessage.content = 'AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。'
         assistantMessage.updatedAt = Date.now()
         return { requestId, userMessage, assistantMessage, response: null }
       }
 
       applyAssistantSessionResult(session.id, requestId, result)
       if (result.cancelled && !String(assistantMessage.content || '').trim()) {
-        assistantMessage.content = '🛑 本次分析已中断。'
+        assistantMessage.content = '本次分析已中断。'
       }
       return { requestId, userMessage, assistantMessage, response: result }
     } catch (error) {
       delete pendingConsumedAttachmentKeysByRequest[requestId]
-      assistantMessage.content = `⚠️ 分析过程中发生错误: ${error?.message || error || '未知错误'}`
+      assistantMessage.content = toUserMessage(error?.message || error, '分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。')
       assistantMessage.updatedAt = Date.now()
       return { requestId, userMessage, assistantMessage, response: null, error }
     } finally {

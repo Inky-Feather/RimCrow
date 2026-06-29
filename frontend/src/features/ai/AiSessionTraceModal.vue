@@ -16,7 +16,8 @@
       </button>
     </template>
 
-        <div class="grid h-full min-h-0 grid-cols-[22rem_minmax(0,1fr)_24rem]">
+        <div class="h-full min-h-0 overflow-x-auto custom-scrollbar">
+          <div class="grid h-full min-h-0 min-w-[64rem] grid-cols-[22rem_minmax(0,1fr)_24rem]">
           <!-- 左栏：会话概览与累计 token 指标 -->
           <div class="sidebar-surface min-h-0 overflow-y-auto p-4">
             <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">会话概览</div>
@@ -198,6 +199,7 @@
           <div class="min-h-0 overflow-y-auto border-l border-border-base/10 bg-bg-muted/70 p-4">
             <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">原始 JSON</div>
             <pre class="whitespace-pre-wrap break-all rounded-2xl border border-border-base/10 bg-bg-inset/70 p-3 text-[0.7rem] text-text-main">{{ prettyJson(rawJsonPanel) }}</pre>
+          </div>
           </div>
         </div>
   </CommonModalShell>

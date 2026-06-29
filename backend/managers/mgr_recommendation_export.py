@@ -177,6 +177,8 @@ class RecommendationExportManager:
             "include_tags": raw_options.get("include_tags", True) is not False,
             "include_group_names": raw_options.get("include_group_names", True) is not False,
             "include_authors": raw_options.get("include_authors", True) is not False,
+            "include_supported_versions": raw_options.get("include_supported_versions", True) is not False,
+            "include_language_packs": bool(raw_options.get("include_language_packs", False)),
             "include_package_id": bool(raw_options.get("include_package_id", False)),
             "include_workshop_id": raw_options.get("include_workshop_id", True) is not False,
             "include_url": raw_options.get("include_url", True) is not False,
@@ -195,6 +197,7 @@ class RecommendationExportManager:
         # 作者在 Mod 数据里通常是列表；这里也兼容单个字符串，避免旧数据导出时丢失信息。
         authors = self._normalize_string_list(mod.get("author") or mod.get("authors") or [])
         tags = self._normalize_string_list(mod.get("tags") or [])
+        supported_versions = self._normalize_string_list(mod.get("supported_versions") or [])
         return {
             "index": index,
             "sequence": f"{index:03d}",
@@ -208,6 +211,8 @@ class RecommendationExportManager:
             "tags": tags,
             "group_names": group_names,
             "authors": authors,
+            "supported_versions": supported_versions,
+            "language_packs": self._normalize_language_packs(mod.get("language_packs") or []),
             "workshop_id": self._clean_inline_text(mod.get("workshop_id")),
             "url": self._clean_inline_text(mod.get("url")),
             "preview_path": self._valid_image_path(mod.get("preview_path") or mod.get("cover_path") or mod.get("icon_path")),
@@ -223,6 +228,26 @@ class RecommendationExportManager:
                 continue
             seen.add(text)
             result.append(text)
+        return result
+
+    def _normalize_language_packs(self, values: Any) -> list[dict[str, str]]:
+        source = values if isinstance(values, list) else [values]
+        result = []
+        seen = set()
+        for value in source:
+            if not isinstance(value, dict):
+                continue
+            name = self._clean_inline_text(
+                value.get("name") or value.get("original_name") or value.get("display_name") or value.get("package_id")
+            )
+            url = self._clean_inline_text(value.get("url"))
+            if not name and not url:
+                continue
+            key = (name, url)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append({"name": name, "url": url})
         return result
 
     def _valid_image_path(self, path_value: Any) -> str:
@@ -271,6 +296,8 @@ class RecommendationExportManager:
             fields.append({"label": "分组", "value": "、".join(item["group_names"])})
         if options["include_authors"] and item["authors"]:
             fields.append({"label": "作者", "value": "、".join(item["authors"])})
+        if options["include_supported_versions"] and item["supported_versions"]:
+            fields.append({"label": "支持版本", "value": "、".join(item["supported_versions"])})
         fields.append({"label": "介绍", "value": item["body"] or "暂无介绍", "multiline": True})
         if options["include_package_id"] and item["package_id_raw"]:
             fields.append({"label": "包名", "value": item["package_id_raw"]})
@@ -278,6 +305,12 @@ class RecommendationExportManager:
             fields.append({"label": "工坊ID", "value": item["workshop_id"]})
         if options["include_url"] and item["url"]:
             fields.append({"label": "网址", "value": item["url"], "url": True})
+        if options["include_language_packs"]:
+            for language_pack in item["language_packs"]:
+                if language_pack["name"]:
+                    fields.append({"label": "语言包", "value": language_pack["name"]})
+                if language_pack["url"]:
+                    fields.append({"label": "语言包网址", "value": language_pack["url"], "url": True})
         return fields
 
     def _render_field_lines(self, item: dict[str, Any], options: dict[str, Any], include_name: bool = True) -> list[str]:
@@ -485,7 +518,7 @@ class RecommendationExportManager:
             if separator:
                 # 字段名加粗，网址字段写成可点击链接，便于分享文档后直接打开来源。
                 paragraph.add_run(f"{label}：").bold = True
-                if label == "网址" and value:
+                if label.endswith("网址") and value:
                     self._add_docx_hyperlink(paragraph, value)
                 else:
                     paragraph.add_run(value)
@@ -600,11 +633,53 @@ class RecommendationExportManager:
         text_height = title_height + max(1, len(text_lines)) * line_height + margin * 2
         # 文本越多图片越高，但至少保留一个适合分享预览的基础高度。
         height = max(720, cover_height + text_height)
+        animated_cover = self._build_animated_cover_frames(item["preview_path"], width, cover_height) if cover_height else None
+        if animated_cover:
+            cover_frames, durations, loop = animated_cover
+            frames = [
+                self._build_recommendation_image_frame(
+                    cover, width, height, cover_height, margin, title_font, body_font, small_font, text_lines, line_height, item, options
+                )
+                for cover in cover_frames
+            ]
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            frames[0].save(
+                target_path,
+                "PNG",
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=loop,
+                optimize=True,
+            )
+            return
+
+        cover = self._build_cover_image(item["preview_path"], width, cover_height) if cover_height else None
+        canvas = self._build_recommendation_image_frame(
+            cover, width, height, cover_height, margin, title_font, body_font, small_font, text_lines, line_height, item, options
+        )
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        canvas.save(target_path, "PNG", optimize=True)
+
+    def _build_recommendation_image_frame(
+        self,
+        cover: Image.Image | None,
+        width: int,
+        height: int,
+        cover_height: int,
+        margin: int,
+        title_font: PillowFont,
+        body_font: PillowFont,
+        small_font: PillowFont,
+        text_lines: list[str],
+        line_height: int,
+        item: dict[str, Any],
+        options: dict[str, Any],
+    ) -> Image.Image:
         canvas = Image.new("RGB", (width, height), "#f5f2ea")
         draw = ImageDraw.Draw(canvas)
 
-        if cover_height:
-            cover = self._build_cover_image(item["preview_path"], width, cover_height)
+        if cover_height and cover:
             canvas.paste(cover, (0, 0))
 
         text_top = cover_height
@@ -620,8 +695,7 @@ class RecommendationExportManager:
             fill = "#666666" if line.startswith("#") else "#2d2d2d"
             draw.text((margin, y), line, font=small_font if line.startswith("#") else body_font, fill=fill)
             y += line_height
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        canvas.save(target_path, "PNG", optimize=True)
+        return canvas
 
     def _build_cover_image(self, source_path: str, width: int, height: int) -> Image.Image:
         if not source_path:
@@ -640,6 +714,26 @@ class RecommendationExportManager:
                 return ImageOps.fit(image, (width, height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
         except Exception:
             return self._build_cover_image("", width, height)
+
+    def _build_animated_cover_frames(self, source_path: str, width: int, height: int) -> tuple[list[Image.Image], list[int], int] | None:
+        if not source_path:
+            return None
+        try:
+            with Image.open(source_path) as image:
+                if getattr(image, "n_frames", 1) <= 1:
+                    return None
+                frames = []
+                durations = []
+                loop = int(image.info.get("loop", 0) or 0)
+                for frame_index in range(image.n_frames):
+                    image.seek(frame_index)
+                    frame = ImageOps.exif_transpose(image.copy()).convert("RGB")
+                    frames.append(ImageOps.fit(frame, (width, height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5)))
+                    duration = frame.info.get("duration", image.info.get("duration", 100))
+                    durations.append(max(20, int(duration or 100)))
+                return (frames, durations, loop) if frames else None
+        except Exception:
+            return None
 
     def _build_image_text_lines(self, item: dict[str, Any], options: dict[str, Any], font: PillowFont, max_width: int) -> list[str]:
         lines = []
@@ -708,7 +802,7 @@ class RecommendationExportManager:
 
     def _format_pdf_field_line(self, line: str) -> str:
         label, separator, value = str(line or "").partition("：")
-        if separator and label == "网址" and value:
+        if separator and label.endswith("网址") and value:
             escaped_label = self._escape_pdf_text(label)
             escaped_href = html.escape(value, quote=True)
             escaped_text = self._escape_pdf_text(value)

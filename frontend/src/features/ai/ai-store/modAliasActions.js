@@ -35,7 +35,7 @@ export const useModAliasActions = ({
     if (!window.pywebview) return ''
     const appStore = useAppStore()
     if (!appStore.settings.ai.enabled) {
-      toast.warning('AI功能未启用！')
+      toast.warning('AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。')
       return ''
     }
     const normalizedMods = normalizeModAliasTaskInputItems(mods)

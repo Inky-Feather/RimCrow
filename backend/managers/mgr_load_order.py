@@ -601,7 +601,7 @@ class LoadOrderManager:
         if not mods_config_file_path:
             mods_config_file_path = self.context.mods_config_file
         if not mods_config_file_path or not os.path.exists(mods_config_file_path):
-            logger.warning(f"ModsConfig.xml not found: {mods_config_file_path}")
+            logger.warning(f"未找到 ModsConfig.xml：{mods_config_file_path}")
             return {
                 'active_mods': [],
                 'modify_time': 0,
@@ -810,9 +810,9 @@ class LoadOrderManager:
             entries = old_data.get('mods', [])
             # 5. 写入 RML 格式
             self._write_rml_file(dest_path, entries)
-            logger.info(f"Successfully backed up previous state to RML format: {filename}")
+            logger.info(f"已将上一次状态备份为 RML 格式：{filename}")
         except Exception as e:
-            logger.error(f"Failed to create pre-save backup: {e}")
+            logger.error(f"创建保存前备份失败：{e}")
 
     def _rotate_backups(self):
         """

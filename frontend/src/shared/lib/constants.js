@@ -2,6 +2,8 @@
 
 import { h, markRaw } from 'vue'
 
+export const RIMWORLD_STEAM_APP_ID = 294100
+
 /**
  * 辅助函数：将 SVG 路径转换为 Vue 渲染函数组件
  * @param {string} colorClass Tailwind 颜色类名
@@ -59,6 +61,10 @@ export const ISSUE_TYPE = {
   WARN_INACTIVE_LANGUAGE_PACK: 'warn_inactive_language_pack', // 语言包未启用
   WARN_UNKNOWN_TARGET: 'warn_unknown_target',       // 未知指向对象
   WARN_INACTIVE_TARGET: 'warn_inactive_target',     // 指向对象未启用
+  WARN_MULTIPLAYER_COMPATIBILITY: 'warn_multiplayer_compatibility', // 旧版联机兼容性类型，保留用于兼容历史忽略记录
+  ERROR_MULTIPLAYER_INCOMPATIBLE: 'multiplayer_incompatible',       // 不兼容联机
+  WARN_MULTIPLAYER_BARELY_COMPATIBLE: 'multiplayer_barely_compatible', // 勉强兼容联机
+  INFO_MULTIPLAYER_UNKNOWN: 'multiplayer_unknown',                  // 联机兼容性未知
 
   INFO_ALTERNATIVE_USED: 'info_alternative_used',   // 依赖替代
 
@@ -80,6 +86,10 @@ export const ISSUE_TITLE_MAP = {
   'warn_inactive_language_pack': '语言包未启用',
   'warn_unknown_target': '语言包指向未知',
   'warn_inactive_target': '语言包指向未启用',
+  'warn_multiplayer_compatibility': '联机兼容性',
+  'multiplayer_incompatible': '不兼容联机',
+  'multiplayer_barely_compatible': '勉强兼容联机',
+  'multiplayer_unknown': '联机兼容性未知',
 
   'default': '其他问题'
 
@@ -162,10 +172,19 @@ export const SOURCE_TYPE_MAP = {
   'dlc': 'DLC',
   'github': 'Git 仓库',
   'workshop': 'Steam 创意工坊',
-  'local': '本地文件',
+  'local': '本地模组',
   'self': '管理器下载',
   'other': '其它来源'
 }
+export const STORE_TYPE_MAP = {
+  'core': '本体',
+  'dlc': 'DLC',
+  'workshop': '工坊',
+  'local': '本地',
+  'self': '管理器',
+  'other': '其它'
+}
+
 
 export const RUN_COMMAND_TAGS = [
   { value: '-popupwindow', label: '无边框窗口模式' },

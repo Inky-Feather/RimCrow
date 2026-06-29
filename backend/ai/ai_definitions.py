@@ -293,7 +293,7 @@ class AIDefinitionManager:
         for prompt_id, prompt_data in (prompt_map or {}).items():
             if prompt_id in self._default_prompt_ids:
                 changed = True
-                logger.warning(f"Prompt {prompt_id} is a system template and will be ignored in ai_definitions.json.")
+                logger.warning(f"AI 自定义提示词与系统模板冲突，已忽略: prompt_id={prompt_id}")
                 continue
             if not isinstance(prompt_data, dict):
                 changed = True
@@ -305,7 +305,7 @@ class AIDefinitionManager:
                 normalized_prompts[prompt_id] = normalized_prompt
             except Exception as exc:
                 changed = True
-                logger.warning(f"Skipping invalid custom prompt {prompt_id}: {exc}")
+                logger.warning("跳过无效 AI 自定义提示词: prompt_id=%s 错误=%s", prompt_id, exc)
         return normalized_prompts, changed
 
     def _create_empty_definition_store(self) -> dict[str, Any]:
@@ -349,7 +349,7 @@ class AIDefinitionManager:
         if os.path.exists(self.definition_file):
             return
 
-        logger.info("Generating AI definition store...")
+        logger.info("正在生成 AI 定义仓库文件。")
         self._save_json_to_disk(self.definition_file, self._create_empty_definition_store())
 
     def _save_json_to_disk(self, path: str, data: dict) -> None:
@@ -362,7 +362,7 @@ class AIDefinitionManager:
                     os.fsync(f.fileno())
                 os.replace(tmp_path, path)
         except Exception as e:
-            logger.error(f"Failed to save config file {path}: {e}")
+            logger.error("保存 AI 定义配置文件失败: path=%s 错误=%s", path, e)
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
@@ -389,7 +389,7 @@ class AIDefinitionManager:
             with open(self.definition_file, "r", encoding="utf-8") as f:
                 raw_store = json.load(f)
         except Exception as e:
-            logger.error(f"Failed to load ai_definitions.json: {e}")
+            logger.error("读取 AI 定义配置文件失败，将使用空定义继续: %s", e)
             raw_store = {}
 
         prompts_payload, assistants_payload, tasks_payload, store_changed = self._extract_definition_sections(raw_store)

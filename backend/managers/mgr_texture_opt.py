@@ -37,6 +37,10 @@ TODDS_WINDOWS_ASSET_PREFIX = "todds_Windows_"
 TODDS_FALLBACK_VERSION = "0.4.1"
 TODDS_FALLBACK_FILENAME = f"todds_Windows_{TODDS_FALLBACK_VERSION}.zip"
 SOURCE_IMAGE_EXTENSIONS = (".png",)
+SOURCE_REFERENCE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".psd")
+TEXTURE_OUTPUT_DDS_EXT = ".dds"
+TEXTURE_OUTPUT_ZSTD_EXT = ".dds.zstd"
+TEXTURE_OUTPUT_EXTENSIONS = (TEXTURE_OUTPUT_DDS_EXT, TEXTURE_OUTPUT_ZSTD_EXT)
 SCALE_STEP_SEQUENCE = (20, 25, 40, 50, 60, 75, 80)
 SCALE_STEP_RATIONALS = {
     20: (1, 5),
@@ -144,7 +148,12 @@ class TextureTargetResolver:
             targets.append(target)
         return targets
 
-    def collect_residue_targets(self, installed_path_keys: set[str] | None = None) -> list[dict[str, Any]]:
+    def collect_residue_targets(
+        self,
+        installed_path_keys: set[str] | None = None,
+        *,
+        include_zstd: bool = False,
+    ) -> list[dict[str, Any]]:
         roots = self.collect_inventory_roots()
         if not roots:
             return []
@@ -171,7 +180,7 @@ class TextureTargetResolver:
                         seen_paths.add(path_key)
                         if path_key in installed_keys:
                             continue
-                        if not self._has_texture_dds(mod_path):
+                        if not self._has_texture_output(mod_path, include_zstd=include_zstd):
                             continue
                         path_hash = generate_path_hash(mod_path)
                         targets.append({
@@ -185,10 +194,17 @@ class TextureTargetResolver:
                             "requires_png_source": False,
                         })
             except OSError as exc:
-                logger.warning("Texture residue target scan failed: root=%s error=%s", root, exc)
+                logger.warning("扫描贴图残留目标失败：root=%s error=%s", root, exc)
         return targets
 
-    def resolve_clean_targets(self, package_ids: list[str], target_scope: str, *, residue_only: bool) -> list[dict[str, Any]]:
+    def resolve_clean_targets(
+        self,
+        package_ids: list[str],
+        target_scope: str,
+        *,
+        residue_only: bool,
+        include_zstd: bool = False,
+    ) -> list[dict[str, Any]]:
         scope = str(target_scope or "active").strip().lower()
         if scope != "all" and not residue_only:
             installed_targets = self.resolve(package_ids, "active")
@@ -199,14 +215,17 @@ class TextureTargetResolver:
 
         all_installed_targets = self.collect_installed_targets(include_disabled=True)
         if residue_only:
-            return self.collect_residue_targets(self._path_keys_from_targets(all_installed_targets))
+            return self.collect_residue_targets(
+                self._path_keys_from_targets(all_installed_targets),
+                include_zstd=include_zstd,
+            )
 
         installed_targets = all_installed_targets
         for target in installed_targets:
             target["residue"] = False
             target["requires_png_source"] = True
         installed_path_keys = self._path_keys_from_targets(all_installed_targets)
-        return [*installed_targets, *self.collect_residue_targets(installed_path_keys)]
+        return [*installed_targets, *self.collect_residue_targets(installed_path_keys, include_zstd=include_zstd)]
 
     def _path_keys_from_targets(self, targets: list[dict[str, Any]]) -> set[str]:
         path_keys: set[str] = set()
@@ -222,11 +241,14 @@ class TextureTargetResolver:
         return os.path.normcase(os.path.abspath(value)) if value else ""
 
     @staticmethod
-    def _has_texture_dds(mod_path: str) -> bool:
+    def _has_texture_output(mod_path: str, *, include_zstd: bool = False) -> bool:
         for texture_root in TextureOptimizationManager._iter_texture_root_dirs(mod_path):
             for _current_root, _dirs, files in os.walk(texture_root):
                 for name in files:
-                    if name.lower().endswith(".dds"):
+                    lower_name = name.lower()
+                    if lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT) or (
+                        include_zstd and lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT)
+                    ):
                         return True
         return False
 
@@ -757,6 +779,7 @@ class TextureOptimizationManager:
         scale_percent = TextureOptimizationManager._get_scale_factor_percent({"scale_factor": scale_factor})
         return {
             "process_mode": str(options.get("process_mode", "")),
+            "output_format": TextureOptimizationManager._normalize_output_format(options.get("output_format")),
             "generate_mipmaps": bool(options.get("generate_mipmaps", True)),
             "scale_factor": scale_factor,
             "max_size": int(options.get("max_size", 0) or 0) if scale_percent is not None else 0,
@@ -1050,9 +1073,15 @@ class TextureOptimizationManager:
         target_scope: str = "active",
         *,
         residue_only: bool = False,
+        include_zstd: bool = False,
         active_context: Any | None = None,
     ) -> list[dict[str, Any]]:
-        return TextureTargetResolver(active_context).resolve_clean_targets(package_ids, target_scope, residue_only=residue_only)
+        return TextureTargetResolver(active_context).resolve_clean_targets(
+            package_ids,
+            target_scope,
+            residue_only=residue_only,
+            include_zstd=include_zstd,
+        )
 
     def start_analysis_task(self, mod_targets: list[dict[str, Any]] | list[str], options: dict[str, Any] | None = None) -> dict[str, str]:
         normalized_targets = self._normalize_mod_targets(mod_targets)
@@ -1310,10 +1339,10 @@ class TextureOptimizationManager:
                 metrics=metrics,
             )
         except TextureOptCancelled as exc:
-            logger.warning("TextureOpt task cancelled: id=%s action=%s", task.id, task.action)
+            logger.warning("贴图优化任务已取消：id=%s action=%s", task.id, task.action)
             self._set_task_state(task, status="cancelled", message=str(exc), error="")
         except Exception as exc:
-            logger.error("Texture optimization task failed", exc_info=True)
+            logger.error("贴图优化任务失败", exc_info=True)
             self._set_task_state(task, status="failed", message="贴图优化失败", error=str(exc))
 
     def _optimize(self, task: TextureTask) -> dict[str, Any]:
@@ -1338,6 +1367,9 @@ class TextureOptimizationManager:
         successful_mod_paths: set[str] = set()
         failed_items: list[dict[str, Any]] = []
         retry_candidates: list[dict[str, Any]] = []
+        zstd_output_mode = self._is_zstd_output_mode(options)
+        zstd_clean_old_dds = bool(options.get("zstd_clean_old_dds", False))
+        output_label = "ZSTD" if zstd_output_mode else "DDS"
 
         def is_recoverable_encode_error(exc: Exception) -> bool:
             if not isinstance(exc, TextureOptError):
@@ -1377,12 +1409,39 @@ class TextureOptimizationManager:
                 return 0
             return min(99, int((done / total_pending) * 100))
 
+        def run_encode_batch(
+            entries: list[dict[str, Any]],
+            *,
+            overwrite_existing: bool,
+            scale_percent: int | None,
+            output_callback: Callable[[str], None] | None = None,
+        ) -> None:
+            source_paths = [str(entry.get("source_path") or "") for entry in entries]
+            backups = self._prepare_zstd_dds_backups(entries) if zstd_output_mode else []
+            try:
+                encoder.encode_mod(
+                    task._cancel_event,
+                    overwrite_existing=True if zstd_output_mode else overwrite_existing,
+                    source_paths=source_paths,
+                    scale_percent=scale_percent,
+                    max_size=0,
+                    use_fix_size=scale_percent is None,
+                    output_callback=output_callback,
+                )
+                if zstd_output_mode:
+                    self._finalize_zstd_batch_results(entries)
+                    self._restore_zstd_dds_backups(backups, keep_old_dds=not zstd_clean_old_dds)
+            except Exception:
+                if zstd_output_mode:
+                    self._restore_zstd_dds_backups(backups, keep_old_dds=True)
+                raise
+
         final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
         self._emit_progress(
             task,
             status="running",
             progress=25,
-            message="开始生成 DDS",
+            message=f"开始生成 {output_label}",
             metrics={
                 "done": 0,
                 "total": total_pending,
@@ -1437,7 +1496,7 @@ class TextureOptimizationManager:
                     message=(
                         f"等待 todds 完成本批写入: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
                         if batch_finishing
-                        else f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
+                        else f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
                     ),
                     metrics={
                         "done": cumulative_done,
@@ -1462,13 +1521,10 @@ class TextureOptimizationManager:
                 )
 
             try:
-                encoder.encode_mod(
-                    task._cancel_event,
+                run_encode_batch(
+                    batch["entries"],
                     overwrite_existing=bool(options.get("overwrite_existing", True)),
-                    source_paths=batch["source_paths"],
                     scale_percent=batch["scale_percent"],
-                    max_size=0,
-                    use_fix_size=batch["scale_percent"] is None,
                     output_callback=handle_todds_output,
                 )
             except TextureOptCancelled:
@@ -1528,7 +1584,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=min(90, max(25, 25 + int((processed_done / max(1, total_pending)) * 65))),
-                message=f"生成 DDS: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                message=f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
                 metrics={
                     "done": processed_done,
                     "total": total_pending,
@@ -1581,14 +1637,11 @@ class TextureOptimizationManager:
                     chunk = entries[offset : offset + TEXTURE_ENCODE_BATCH_SIZE]
                     if task._cancel_event.is_set():
                         raise TextureOptCancelled("DDS 生成任务已取消")
-                    source_paths = [str(entry.get("source_path") or "") for entry in chunk]
                     try:
-                        encoder.encode_batch(
-                            task._cancel_event,
-                            source_paths=source_paths,
+                        run_encode_batch(
+                            chunk,
                             overwrite_existing=overwrite_existing,
                             scale_percent=retry_scale_percent,
-                            max_size=0,
                         )
                     except TextureOptCancelled:
                         raise
@@ -1686,11 +1739,103 @@ class TextureOptimizationManager:
             "preexisting_dds": int(final_summary.get("current_output_count", 0)),
             "orphan_deleted": 0,
             "total_jobs": len(task.mod_paths),
+            "output_format": str(options.get("output_format") or "dds"),
             "final_summary": final_summary,
             "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": f"DDS 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
+            "message": f"{output_label} 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
         }
+
+    @staticmethod
+    def _zstd_backup_path(dds_path: Path) -> Path:
+        return dds_path.with_name(f"{dds_path.name}.rmm-zstd-backup-{uuid.uuid4().hex}")
+
+    def _prepare_zstd_dds_backups(self, entries: list[dict[str, Any]]) -> list[tuple[Path, Path]]:
+        backups: list[tuple[Path, Path]] = []
+        seen_paths: set[str] = set()
+        for entry in entries:
+            source_text = str(entry.get("source_path") or "")
+            if not source_text:
+                continue
+            source_path = Path(source_text)
+            dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+            path_key = os.path.normcase(str(dds_path.resolve()))
+            if path_key in seen_paths:
+                continue
+            seen_paths.add(path_key)
+            if not dds_path.exists():
+                continue
+            backup_path = self._zstd_backup_path(dds_path)
+            try:
+                dds_path.replace(backup_path)
+                backups.append((dds_path, backup_path))
+            except OSError as exc:
+                raise TextureOptError(f"准备 ZSTD 临时文件失败: {dds_path}，{exc}") from exc
+        return backups
+
+    @staticmethod
+    def _restore_zstd_dds_backups(backups: list[tuple[Path, Path]], *, keep_old_dds: bool) -> None:
+        for dds_path, backup_path in backups:
+            try:
+                if keep_old_dds:
+                    if dds_path.exists():
+                        dds_path.unlink()
+                    if backup_path.exists():
+                        backup_path.replace(dds_path)
+                elif backup_path.exists():
+                    backup_path.unlink()
+            except OSError as exc:
+                logger.warning("清理贴图 zstd DDS 备份失败：dds=%s backup=%s error=%s", dds_path, backup_path, exc)
+
+    @staticmethod
+    def _compress_dds_to_zstd(dds_path: Path, zstd_path: Path) -> int:
+        try:
+            import zstandard as zstd
+        except ImportError as exc:
+            raise TextureOptError("当前环境缺少 zstandard，无法生成 ZSTD 贴图。") from exc
+        compressor_class = getattr(zstd, "ZstdCompressor", None)
+        if compressor_class is None:
+            try:
+                from zstandard.backend_c import ZstdCompressor as compressor_class
+            except ImportError as exc:
+                raise TextureOptError("当前 zstandard 安装不完整，无法生成 ZSTD 贴图。") from exc
+
+        if not dds_path.exists():
+            raise TextureOptError(f"todds 未生成临时 DDS，无法压缩为 ZSTD: {dds_path}")
+        zstd_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = zstd_path.with_name(f"{zstd_path.name}.tmp-{uuid.uuid4().hex}")
+        try:
+            compressor = compressor_class(level=0)
+            with dds_path.open("rb") as source, temp_path.open("wb") as target:
+                compressor.copy_stream(source, target)
+            temp_path.replace(zstd_path)
+            return int(zstd_path.stat().st_size)
+        finally:
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    pass
+
+    def _finalize_zstd_batch_results(self, entries: list[dict[str, Any]]) -> None:
+        for entry in entries:
+            source_text = str(entry.get("source_path") or "")
+            if not source_text:
+                continue
+            source_path = Path(source_text)
+            dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+            zstd_path = source_path.with_suffix(TEXTURE_OUTPUT_ZSTD_EXT)
+            # ZSTD 模式复用 todds 的 DDS 编码结果，再压缩成 Image Opt 可读取的同名文件。
+            self._compress_dds_to_zstd(dds_path, zstd_path)
+            try:
+                dds_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise TextureOptError(f"删除 ZSTD 临时 DDS 失败: {dds_path}，{exc}") from exc
+            entry["output_path"] = str(zstd_path)
+            entry["output_rel_path"] = self._to_rel_path(str(zstd_path), str(entry.get("mod_path") or zstd_path.parent))
+            entry["output_format"] = "zstd"
 
     def _apply_batch_results(
         self,
@@ -1720,6 +1865,7 @@ class TextureOptimizationManager:
                     "path": str(output_path),
                     "size": output_size,
                     "mtime_ns": output_mtime_ns,
+                    "format": self._output_format_for_path(output_path),
                 }
 
     def _scan_targets_for_optimize(self, task: TextureTask, options: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1877,7 +2023,14 @@ class TextureOptimizationManager:
         options = self._build_options(task.options)
         task.options = options
         residue_only = bool(options.get("clean_uninstalled_residue_only", False))
-        clean_target_label = "卸载残留 DDS" if residue_only else "DDS"
+        clean_output_format = self._normalize_clean_output_format(options)
+        clean_without_source = bool(options.get("clean_without_source", False))
+        output_label = "ZSTD" if clean_output_format == "zstd" else "DDS"
+        clean_target_label = (
+            f"无源 {output_label}"
+            if clean_without_source
+            else (f"卸载残留 {output_label}" if residue_only else output_label)
+        )
         deleted = 0
         checked = 0
         delete_failed = 0
@@ -1910,7 +2063,9 @@ class TextureOptimizationManager:
                     "phase_total": 0,
                     "phase_unit": "个",
                     "clean_uninstalled_residue_only": residue_only,
-                    "refresh_after_analyze": False,
+                    "clean_output_format": clean_output_format,
+                    "clean_without_source": clean_without_source,
+                    "refresh_after_analyze": clean_without_source,
                 },
             )
 
@@ -1932,7 +2087,9 @@ class TextureOptimizationManager:
                 "phase_total": 0,
                 "phase_unit": "个",
                 "clean_uninstalled_residue_only": residue_only,
-                "refresh_after_analyze": False,
+                "clean_output_format": clean_output_format,
+                "clean_without_source": clean_without_source,
+                "refresh_after_analyze": clean_without_source,
             },
         )
 
@@ -1942,11 +2099,20 @@ class TextureOptimizationManager:
             if task._cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
             emit_clean_progress(index, mod_name, force=True)
-            targets = (
-                self._iter_texture_output_paths_with_source(mod_path, cancel_event=task._cancel_event)
-                if bool(mod_target.get("requires_png_source", True))
-                else self._iter_texture_output_paths(mod_path)
-            )
+            if clean_without_source:
+                targets = self._iter_texture_output_paths_without_source(
+                    mod_path,
+                    cancel_event=task._cancel_event,
+                    output_format=clean_output_format,
+                )
+            elif bool(mod_target.get("requires_png_source", True)):
+                targets = self._iter_texture_output_paths_with_source(
+                    mod_path,
+                    cancel_event=task._cancel_event,
+                    output_format=clean_output_format,
+                )
+            else:
+                targets = self._iter_texture_output_paths(mod_path, output_format=clean_output_format)
             mod_changed = False
             for output_path in targets:
                 if task._cancel_event.is_set():
@@ -1961,7 +2127,7 @@ class TextureOptimizationManager:
                     mod_changed = True
                 except OSError as exc:
                     delete_failed += 1
-                    logger.warning("Texture clean delete failed: path=%s error=%s", output_path, exc)
+                    logger.warning("删除贴图清理输出失败：path=%s error=%s", output_path, exc)
                 emit_clean_progress(index, mod_name)
             if mod_changed:
                 changed_mod_paths.add(mod_path)
@@ -1985,7 +2151,9 @@ class TextureOptimizationManager:
                 "phase_total": 0,
                 "phase_unit": "个",
                 "clean_uninstalled_residue_only": residue_only,
-                "refresh_after_analyze": False,
+                "clean_output_format": clean_output_format,
+                "clean_without_source": clean_without_source,
+                "refresh_after_analyze": clean_without_source,
             },
         )
         return {
@@ -1997,7 +2165,9 @@ class TextureOptimizationManager:
             "checked_outputs": checked,
             "delete_failed": delete_failed,
             "total_jobs": 0,
-            "refresh_after_analyze": False,
+            "clean_output_format": clean_output_format,
+            "clean_without_source": clean_without_source,
+            "refresh_after_analyze": clean_without_source,
             "message": f"{clean_target_label} 清理完成",
         }
 
@@ -2110,7 +2280,7 @@ class TextureOptimizationManager:
                         continue
 
                     rel_path = self._to_rel_path(str(source), mod_path)
-                    output_path = source.with_suffix(".dds")
+                    output_path = source.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
                     output_rel_path = self._to_rel_path(str(output_path), mod_path)
                     records.append((rel_path, int(source_stat.st_mtime_ns)))
                     entry = {
@@ -2233,6 +2403,11 @@ class TextureOptimizationManager:
 
         for source_entry in base_index.get("entries", []):
             entry = dict(source_entry)
+            source_path = Path(str(entry.get("source_path") or ""))
+            output_path = self._source_output_path(source_path, options)
+            entry["output_path"] = str(output_path)
+            entry["output_rel_path"] = self._to_rel_path(str(output_path), mod_path)
+            entry["output_format"] = str(options.get("output_format") or "dds")
             output_rel = str(entry.get("output_rel_path") or "")
             output_info = output_stats.get(output_rel) or {}
             entry["output_exists"] = bool(output_info)
@@ -2434,14 +2609,26 @@ class TextureOptimizationManager:
         stat["mod_instance_key"] = str(entries[0].get("mod_instance_key") or stat["path_hash"] or "") if entries else ""
         stat["output_total_count"] = len(output_stats)
         stat["output_total_bytes"] = sum(int(item.get("size", 0)) for item in output_stats.values())
+        for output_info in output_stats.values():
+            output_format = str(output_info.get("format") or "")
+            if output_format == "zstd":
+                stat["zstd_output_count"] += 1
+                stat["zstd_output_bytes"] += int(output_info.get("size", 0) or 0)
+            elif output_format == "dds":
+                stat["dds_output_count"] += 1
+                stat["dds_output_bytes"] += int(output_info.get("size", 0) or 0)
         scale_buckets: dict[tuple[str, str], int] = {}
         seen_output_keys: set[str] = set()
 
         for entry in entries:
             output_rel = str(entry.get("output_rel_path") or "")
             output_size = int(entry.get("output_size", 0) or 0)
-            if output_rel:
-                seen_output_keys.add(output_rel)
+            source_path = Path(str(entry.get("source_path") or ""))
+            for output_ext in TEXTURE_OUTPUT_EXTENSIONS:
+                try:
+                    seen_output_keys.add(TextureOptimizationManager._to_rel_path(str(source_path.with_suffix(output_ext)), mod_path))
+                except (OSError, ValueError):
+                    pass
             if not bool(entry.get("source_readable")):
                 stat["unreadable_source_count"] += 1
                 continue
@@ -2697,6 +2884,8 @@ class TextureOptimizationManager:
         mod_root = Path(mod_path)
         if not mod_root.exists(): return
         for current_root, dirs, _files in os.walk(mod_root):
+            # Source 目录是作者工程素材，游戏不会按普通贴图资源加载，避免误扫和误清理。
+            dirs[:] = [name for name in dirs if name.lower() != "source"]
             current_path = Path(current_root)
             if current_path.name.lower() == "textures":
                 yield current_path
@@ -2793,18 +2982,33 @@ class TextureOptimizationManager:
         return ""
 
     @staticmethod
-    def _iter_texture_output_paths(mod_path: str):
+    def _iter_texture_output_paths(mod_path: str, *, include_zstd: bool = False, output_format: str = ""):
+        normalized_format = str(output_format or ("all" if include_zstd else "dds")).strip().lower()
         for texture_root in TextureOptimizationManager._iter_texture_root_dirs(mod_path):
             for current_root, _dirs, files in os.walk(texture_root):
                 for name in files:
                     lower_name = name.lower()
                     path = Path(current_root) / name
-                    if lower_name.endswith(".dds"):
+                    is_zstd = lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT)
+                    is_dds = lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT) and not is_zstd
+                    if is_dds and normalized_format in {"dds", "all"}:
+                        yield path
+                    elif is_zstd and normalized_format in {"zstd", "all"}:
                         yield path
 
     @staticmethod
-    def _iter_texture_output_paths_with_source(mod_path: str, cancel_event: threading.Event | None = None):
-        for output_path in TextureOptimizationManager._iter_texture_output_paths(mod_path):
+    def _iter_texture_output_paths_with_source(
+        mod_path: str,
+        cancel_event: threading.Event | None = None,
+        *,
+        include_zstd: bool = False,
+        output_format: str = "",
+    ):
+        for output_path in TextureOptimizationManager._iter_texture_output_paths(
+            mod_path,
+            include_zstd=include_zstd,
+            output_format=output_format,
+        ):
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
             source_path = TextureOptimizationManager._resolve_output_source(output_path)
@@ -2812,9 +3016,28 @@ class TextureOptimizationManager:
                 yield output_path
 
     @staticmethod
+    def _iter_texture_output_paths_without_source(
+        mod_path: str,
+        cancel_event: threading.Event | None = None,
+        *,
+        include_zstd: bool = False,
+        output_format: str = "",
+    ):
+        for output_path in TextureOptimizationManager._iter_texture_output_paths(
+            mod_path,
+            include_zstd=include_zstd,
+            output_format=output_format,
+        ):
+            if cancel_event and cancel_event.is_set():
+                raise TextureOptCancelled("清理 DDS 任务已取消")
+            source_path = TextureOptimizationManager._resolve_output_source(output_path)
+            if not source_path.exists():
+                yield output_path
+
+    @staticmethod
     def _collect_output_stats(mod_path: str) -> dict[str, dict[str, Any]]:
         stats: dict[str, dict[str, Any]] = {}
-        for output_path in TextureOptimizationManager._iter_texture_output_paths(mod_path):
+        for output_path in TextureOptimizationManager._iter_texture_output_paths(mod_path, include_zstd=True):
             try:
                 output_stat = output_path.stat()
             except OSError:
@@ -2823,16 +3046,20 @@ class TextureOptimizationManager:
                 "path": str(output_path),
                 "size": int(output_stat.st_size),
                 "mtime_ns": int(output_stat.st_mtime_ns),
+                "format": TextureOptimizationManager._output_format_for_path(output_path),
             }
         return stats
 
     @staticmethod
     def _resolve_output_source(path: Path) -> Path:
-        if path.suffix.lower() == ".dds":
+        lower_name = path.name.lower()
+        if lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT):
+            stem = path.name[: -len(TEXTURE_OUTPUT_ZSTD_EXT)]
+        elif lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT):
             stem = path.stem
         else:
             return path
-        for ext in SOURCE_IMAGE_EXTENSIONS:
+        for ext in SOURCE_REFERENCE_IMAGE_EXTENSIONS:
             candidate = path.with_name(stem + ext)
             if candidate.exists(): return candidate
         return path.with_name(stem + SOURCE_IMAGE_EXTENSIONS[0])
@@ -2864,6 +3091,37 @@ class TextureOptimizationManager:
         return max(1, min(total_mods, min(8, cpu_count)))
 
     @staticmethod
+    def _normalize_output_format(value: Any) -> str:
+        normalized = str(value or "dds").strip().lower()
+        return "zstd" if normalized == "zstd" else "dds"
+
+    @staticmethod
+    def _normalize_clean_output_format(options: dict[str, Any]) -> str:
+        normalized = str(options.get("clean_output_format") or "").strip().lower()
+        return "zstd" if normalized == "zstd" else "dds"
+
+    @staticmethod
+    def _is_zstd_output_mode(options: dict[str, Any]) -> bool:
+        return TextureOptimizationManager._normalize_output_format(options.get("output_format")) == "zstd"
+
+    @staticmethod
+    def _source_output_path(source: Path, options: dict[str, Any]) -> Path:
+        return source.with_suffix(
+            TEXTURE_OUTPUT_ZSTD_EXT
+            if TextureOptimizationManager._is_zstd_output_mode(options)
+            else TEXTURE_OUTPUT_DDS_EXT
+        )
+
+    @staticmethod
+    def _output_format_for_path(path: Path) -> str:
+        lower_name = path.name.lower()
+        if lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT):
+            return "zstd"
+        if lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT):
+            return "dds"
+        return ""
+
+    @staticmethod
     def _build_options(overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         texture_opt = getattr(settings.config, "texture_opt", {})
         if is_dataclass(texture_opt) and not isinstance(texture_opt, type):
@@ -2877,6 +3135,7 @@ class TextureOptimizationManager:
         merged.update(overrides or {})
         merged.setdefault("texture_tools_path", "")
         merged.setdefault("process_mode", "scaled_only_overwrite")
+        merged.setdefault("output_format", "dds")
         merged.setdefault("generate_mipmaps", True)
         merged.setdefault("scale_factor", 0.5)
         merged.setdefault("max_size", 128)
@@ -2889,12 +3148,16 @@ class TextureOptimizationManager:
         if process_mode not in {"all_overwrite", "scaled_only_overwrite", "all_skip_existing"}:
             process_mode = "scaled_only_overwrite"
         merged["process_mode"] = process_mode
+        merged["output_format"] = TextureOptimizationManager._normalize_output_format(merged.get("output_format"))
         merged["scale_factor"] = float(merged.get("scale_factor", 0.5) or 0.5)
         merged["max_size"] = int(merged.get("max_size", 128) or 128)
         merged["min_dimension"] = int(merged.get("min_dimension", 128) or 128)
         merged["max_source_dimension"] = int(merged.get("max_source_dimension", 2048) or 2048)
         merged["skip_small_textures"] = TextureOptimizationManager._normalize_bool(merged.get("skip_small_textures", True), True)
         merged["clean_uninstalled_residue_only"] = TextureOptimizationManager._normalize_bool(merged.get("clean_uninstalled_residue_only", False), False)
+        merged["clean_without_source"] = TextureOptimizationManager._normalize_bool(merged.get("clean_without_source", False), False)
+        merged["clean_output_format"] = TextureOptimizationManager._normalize_clean_output_format(merged)
+        merged["zstd_clean_old_dds"] = TextureOptimizationManager._normalize_bool(merged.get("zstd_clean_old_dds", False), False)
         merged["texture_tools_path"] = str(resolve_texture_tools_path(merged))
         return merged
 
@@ -2918,6 +3181,9 @@ class TextureOptimizationManager:
             "scaled_count": summary.get("scaled_count", 0),
             "fallback_scaled_count": summary.get("fallback_scaled_count", 0),
             "keep_original_count": summary.get("keep_original_count", 0),
+            "output_format": summary.get("output_format", ""),
+            "clean_output_format": summary.get("clean_output_format", ""),
+            "clean_without_source": summary.get("clean_without_source", False),
         }
 
     @staticmethod
@@ -3002,6 +3268,10 @@ class TextureOptimizationManager:
             "source_total_bytes": 0,
             "output_total_count": 0,
             "output_total_bytes": 0,
+            "dds_output_count": 0,
+            "dds_output_bytes": 0,
+            "zstd_output_count": 0,
+            "zstd_output_bytes": 0,
             "current_output_count": 0,
             "current_output_bytes": 0,
             "external_orphan_output_count": 0,
@@ -3025,6 +3295,8 @@ class TextureOptimizationManager:
             "vram_saving_bytes_est": 0,
             "source_bytes_share_pct": 0.0,
             "output_bytes_share_pct": 0.0,
+            "dds_output_bytes_share_pct": 0.0,
+            "zstd_output_bytes_share_pct": 0.0,
             "combined_bytes_share_pct": 0.0,
         }
         if include_mod_count:
@@ -3094,10 +3366,14 @@ class TextureOptimizationManager:
         summary["vram_saving_bytes_est"] = int(summary.get("source_vram_bytes_est", 0)) - int(summary.get("output_vram_bytes_est", 0))
         total_source = max(1, int(summary.get("source_total_bytes", 0)))
         total_output = max(1, int(summary.get("output_total_bytes", 0)))
+        total_dds_output = max(1, int(summary.get("dds_output_bytes", 0)))
+        total_zstd_output = max(1, int(summary.get("zstd_output_bytes", 0)))
         total_combined = max(1, int(summary.get("combined_total_bytes", 0)))
         for item in mod_stats:
             item["source_bytes_share_pct"] = round((int(item.get("source_total_bytes", 0)) / total_source) * 100, 2)
             item["output_bytes_share_pct"] = round((int(item.get("output_total_bytes", 0)) / total_output) * 100, 2)
+            item["dds_output_bytes_share_pct"] = round((int(item.get("dds_output_bytes", 0)) / total_dds_output) * 100, 2)
+            item["zstd_output_bytes_share_pct"] = round((int(item.get("zstd_output_bytes", 0)) / total_zstd_output) * 100, 2)
             item["combined_bytes_share_pct"] = round((int(item.get("combined_total_bytes", 0)) / total_combined) * 100, 2)
 
     def _set_task_state(

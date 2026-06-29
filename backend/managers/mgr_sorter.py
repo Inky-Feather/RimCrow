@@ -286,7 +286,7 @@ class OrderSorter:
             
             # 物理删除边
             del adj[u_min][v_min]
-            logger.warning(f"Cycle broken: removed edge {u_group_name} -> {v_group_name} (weight {min_w})")
+            logger.warning(f"已打破排序循环：移除边 {u_group_name} -> {v_group_name}（权重 {min_w}）")
 
         return warnings
 
@@ -494,6 +494,100 @@ class OrderSorter:
             if mod_type != 'LanguagePack': return False
         return True
 
+    def _has_language_pack_member(self, group: AtomicGroup, mod_map: Dict[str, dict]) -> bool:
+        """判断原子组内是否包含语言包，避免普通依赖贴靠抢走语言包专用规则。"""
+        for mid in group.mod_ids:
+            mod_data = mod_map.get(mid, {})
+            mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type') or '').strip()
+            if mod_type == 'LanguagePack': return True
+        return False
+
+    def _get_group_dependency_predecessors(self, group: AtomicGroup, mod_to_group: Dict[str, AtomicGroup]) -> set[int]:
+        """提取普通模组组声明的直接依赖目标。"""
+        target_gids = set()
+        for mid in group.mod_ids:
+            rules = self.effective_rules_cache.get(mid, {})
+            for relation in rules.get('dependencies', []) or []:
+                target_id = str(relation.get('target_id') or '').strip().lower()
+                if not target_id or target_id not in mod_to_group:
+                    continue
+                target_group = mod_to_group[target_id]
+                target_gid = id(target_group)
+                if target_gid != id(group):
+                    target_gids.add(target_gid)
+        return target_gids
+
+    def _tighten_dependency_mod_groups(
+        self,
+        sorted_groups: List[AtomicGroup],
+        adj: Dict[int, Dict[int, int]],
+        mod_map: Dict[str, dict],
+        mod_to_group: Dict[str, AtomicGroup],
+        group_anchor_flags: Dict[int, Dict[str, bool]],
+        effective_weights: Dict[int, int],
+    ) -> List[AtomicGroup]:
+        """
+        可选后处理：让普通模组尽量贴在其最后一个直接依赖后方。
+        只在同一有效权重内移动普通模组组，避免依赖贴靠压过基础排序权重。
+        """
+        if not getattr(settings.config, "regular_mods_follow_dependencies", False): return sorted_groups
+
+        order = list(sorted_groups)
+        reverse_adj = defaultdict(set)
+        for u, neighbors in adj.items():
+            for v in neighbors:
+                reverse_adj[v].add(u)
+
+        candidate_groups = [g for g in order if not self._has_language_pack_member(g, mod_map)]
+        for group in candidate_groups:
+            gid = id(group)
+            anchor_flags = group_anchor_flags.get(gid, {})
+            if anchor_flags.get("top") or anchor_flags.get("bottom"):
+                continue
+            group_weight = effective_weights.get(gid)
+            if group_weight is None or group_weight <= POSITION_WEIGHT_TOP or group_weight >= POSITION_WEIGHT_BOTTOM:
+                continue
+
+            dependency_targets = self._get_group_dependency_predecessors(group, mod_to_group)
+            dependency_targets = {
+                pred_gid for pred_gid in dependency_targets
+                if effective_weights.get(pred_gid) == group_weight
+            }
+            if not dependency_targets:
+                continue
+
+            positions = {id(g): idx for idx, g in enumerate(order)}
+            current_pos = positions.get(gid)
+            if current_pos is None:
+                continue
+
+            dependency_positions = [positions[pred_gid] for pred_gid in dependency_targets if pred_gid in positions]
+            if not dependency_positions:
+                continue
+
+            desired_pos = max(dependency_positions) + 1
+            # 只在当前权重段内贴靠
+            bucket_start = 0
+            for idx in range(current_pos - 1, -1, -1):
+                if effective_weights.get(id(order[idx])) != group_weight:
+                    bucket_start = idx + 1
+                    break
+            desired_pos = max(desired_pos, bucket_start)
+
+            direct_predecessor_positions = [positions[pred_gid] for pred_gid in reverse_adj.get(gid, set()) if pred_gid in positions]
+            if direct_predecessor_positions:
+                desired_pos = max(desired_pos, max(direct_predecessor_positions) + 1)
+
+            direct_successor_positions = [positions[succ_gid] for succ_gid in adj.get(gid, {}) if succ_gid in positions]
+            earliest_successor_pos = min(direct_successor_positions) if direct_successor_positions else len(order)
+            if desired_pos >= earliest_successor_pos or desired_pos >= current_pos:
+                continue
+
+            moved_group = order.pop(current_pos)
+            order.insert(desired_pos, moved_group)
+
+        return order
+
     def _get_group_target_predecessors(self, group: AtomicGroup, mod_to_group: Dict[str, AtomicGroup]) -> set[int]:
         """提取语言包组声明的直接前置/依赖目标。"""
         target_gids = set()
@@ -620,7 +714,7 @@ class OrderSorter:
         strategy = str(strategy or getattr(settings.config, "auto_sort_strategy", self.DEFAULT_SORT_STRATEGY) or self.DEFAULT_SORT_STRATEGY).strip()
         if strategy not in self.SORT_STRATEGIES:
             strategy = self.DEFAULT_SORT_STRATEGY
-        logger.info(f"Starting sort for {len(active_ids)} mods with strategy={strategy}...")
+        logger.info(f"开始排序 {len(active_ids)} 个 MOD，策略：{strategy}...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
         # all_mods_data = ModDAO.get_profile_mods(self.context or None)
         mod_map = {m['package_id'].lower(): m for m in all_mods_data}
@@ -815,6 +909,15 @@ class OrderSorter:
                     work_in_degree[neighbor] -= 1
                     if work_in_degree[neighbor] == 0:
                         push_queue_item(neighbor)
+
+        sorted_groups = self._tighten_dependency_mod_groups(
+            sorted_groups,
+            adj,
+            mod_map,
+            mod_to_group,
+            group_anchor_flags,
+            effective_weights,
+        )
 
         # 语言包“贴边”不能只靠主排序权重完成。
         # 原因是 Kahn 拓扑排序一旦把某些无关节点提前出队，就不会再回头把语言包插回它们前面；

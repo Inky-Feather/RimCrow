@@ -14,6 +14,7 @@ from peewee import JOIN, chunked, fn
 from backend.database.models import (
     GroupData,
     GroupMod,
+    MOD_ASSET_STATE_DELETED,
     MOD_ASSET_STATE_MISSING,
     MOD_ASSET_STATE_PRESENT,
     ModAsset,
@@ -32,6 +33,7 @@ from backend.utils.tools import (
     current_ms,
     is_hex_color,
     normalize_hex_color,
+    normalize_dir_root_for_compare,
     normalize_package_id,
     normalize_package_ids, 
     delete_fs_path,
@@ -54,9 +56,9 @@ def _present_asset_condition():
     )
 
 
-def _asset_marked_missing(asset: dict[str, Any]) -> bool:
+def _asset_marked_unavailable(asset: dict[str, Any]) -> bool:
     state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
-    return state == MOD_ASSET_STATE_MISSING or not str(asset.get("path") or "").strip()
+    return state in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED} or not str(asset.get("path") or "").strip()
 
 
 def _normalize_path_hashes(path_hashes: Sequence[str] | str) -> list[str]:
@@ -87,6 +89,54 @@ def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
     if "language" in asset and asset.get("language") is not None:
         asset["language"] = normalize_language_code(asset.get("language"))
     return asset
+
+
+def _normalize_file_stats(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, int] = {}
+    for key, count in value.items():
+        try:
+            normalized[str(key)] = int(count or 0)
+        except (TypeError, ValueError):
+            normalized[str(key)] = 0
+    return normalized
+
+
+def _build_coexist_sync_info(local_asset: dict[str, Any], workshop_asset: dict[str, Any]) -> dict[str, Any]:
+    """判断本地共存副本是否落后于工坊版本，时间方向明确时优先用时间。"""
+    local_modify_time = int(local_asset.get("file_modify_time") or 0)
+    workshop_modify_time = int(workshop_asset.get("file_modify_time") or 0)
+    local_size = int(local_asset.get("file_size") or 0)
+    workshop_size = int(workshop_asset.get("file_size") or 0)
+    local_stats = _normalize_file_stats(local_asset.get("file_stats"))
+    workshop_stats = _normalize_file_stats(workshop_asset.get("file_stats"))
+
+    known_differences = []
+    has_comparable_time = local_modify_time > 0 and workshop_modify_time > 0
+    workshop_is_newer = has_comparable_time and workshop_modify_time > local_modify_time
+    workshop_is_not_older = (not has_comparable_time) or workshop_modify_time >= local_modify_time
+
+    if workshop_is_newer:
+        known_differences.append("modify_time")
+    if workshop_is_not_older:
+        if local_size > 0 and workshop_size > 0 and local_size != workshop_size:
+            known_differences.append("size")
+        if local_stats and workshop_stats and local_stats != workshop_stats:
+            known_differences.append("file_stats")
+
+    return {
+        "coexist_sync_state": "outdated" if known_differences else "synced",
+        "coexist_sync_diff": {
+            "signals": known_differences,
+            "local_modify_time": local_modify_time,
+            "workshop_modify_time": workshop_modify_time,
+            "local_size": local_size,
+            "workshop_size": workshop_size,
+            "local_file_stats": local_stats,
+            "workshop_file_stats": workshop_stats,
+        },
+    }
 
 
 def _should_include_workshop_in_runtime_detection(context: ProfileContext | None) -> bool:
@@ -143,7 +193,7 @@ class _ProfilePathScope:
     @staticmethod
     def _normalize_root(path: str | None) -> str:
         if not path: return ""
-        return os.path.normpath(path).lower() + os.sep
+        return normalize_dir_root_for_compare(path)
 
     @classmethod
     def from_context(cls, context: ProfileContext | None) -> "_ProfilePathScope":
@@ -281,7 +331,7 @@ def _load_group_names_by_mod_id() -> dict[str, list[str]]:
                 continue
             group_map.setdefault(mod_id, []).append(row["name"])
     except Exception as exc:
-        logger.error(f"Failed to load group map: {exc}")
+        logger.error(f"加载分组映射失败：{exc}")
     return group_map
 
 
@@ -474,11 +524,41 @@ class ModDAO:
                     workshop_variant = workshop_variants[0]
                     workshop_variant["groups"] = group_map.get(package_id, [])
                     winner["is_coexistence"] = True
+                    winner.update(_build_coexist_sync_info(winner, workshop_variant))
                     winner["coexist_workshop_variant"] = workshop_variant
 
             visible_mods.append(winner)
 
         return visible_mods
+
+    @staticmethod
+    def get_localizable_assets(context: ProfileContext | None, path_hashes: Sequence[str] | str, store: str):
+        """
+        获取当前 Profile 路径范围内允许同步为本地共存的资产。
+
+        API 层传入的是 path_hash，但数据库里可能残留其它环境的同类资产；
+        这里再按当前 Profile 的运行时路径做一次约束，避免跨环境误同步。
+        """
+        scope = _ProfilePathScope.from_context(context)
+        hashes = _normalize_path_hashes(path_hashes)
+        normalized_store = str(store or "").strip().lower()
+        if not context or not hashes or not normalized_store:
+            return []
+
+        query = (
+            ModAsset.select(ModAsset, UserModData.alias_name)
+            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
+            .where(
+                (ModAsset.path_hash << hashes)  # type: ignore
+                & (ModAsset.store == normalized_store)
+                & _present_asset_condition()
+            )
+            .dicts()
+        )
+        return [
+            asset for asset in query
+            if scope.includes_runtime_path(asset.get("path"), include_workshop=True)
+        ]
 
     @staticmethod
     def get_profile_disabled_mods(context: ProfileContext | None):
@@ -632,7 +712,7 @@ class ModDAO:
                 asset_dict = dict(asset)
                 if asset_dict.get("disabled"):
                     continue
-                if _asset_marked_missing(asset_dict):
+                if _asset_marked_unavailable(asset_dict):
                     continue
                 if not scope.includes_runtime_path(asset_dict.get("path"), include_workshop=detect_workshop):
                     continue
@@ -1089,7 +1169,7 @@ class ModInterlockDAO:
             }
 
             if asset:
-                if _asset_marked_missing(asset) or not _mod_dir_exists(asset["path"]):
+                if _asset_marked_unavailable(asset) or not _mod_dir_exists(asset["path"]):
                     detail["reason"] = "missing"
                 elif asset.get("disabled"):
                     detail["reason"] = "disabled"
@@ -1163,7 +1243,7 @@ class ModMaintenanceDAO:
         for asset in assets:
             path = str(asset.get("path") or "")
             state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
-            if state == MOD_ASSET_STATE_MISSING or not path or not os.path.exists(path):
+            if state in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED} or not path or not os.path.exists(path):
                 success_count += 1
                 continue
             target_paths.append(path)
@@ -1172,7 +1252,7 @@ class ModMaintenanceDAO:
             with db.atomic():
                 ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute()  # type: ignore
         except Exception as exc:
-            logger.error(f"Database deletion failed: {exc}")
+            logger.error(f"数据库删除失败：{exc}")
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
         for path in target_paths:
@@ -1203,7 +1283,7 @@ class ModMaintenanceDAO:
             with db.atomic():
                 deleted_count = ModAsset.delete().where(ModAsset.path_hash << existing_hashes).execute()  # type: ignore
         except Exception as exc:
-            logger.error(f"Database record deletion failed: {exc}")
+            logger.error(f"数据库记录删除失败：{exc}")
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
         return {"success_count": int(deleted_count or 0), "errors": []}
@@ -1246,52 +1326,79 @@ class ModMaintenanceDAO:
                 cleaned_count += len(current_paths) - len(valid_paths)
                 mod.shadow_paths = valid_paths
                 mod.save()
-                logger.info(f"Cleaned invalid shadow paths for {mod.package_id}")
+                logger.debug("清理失效禁用副本路径: package_id=%s removed=%s", mod.package_id, len(current_paths) - len(valid_paths))
 
         return cleaned_count
 
     @staticmethod
-    def find_missing_mods(delete: bool = False):
+    def find_missing_mods(delete: bool = False, subscribed_workshop_ids: Iterable[str] | None = None):
         """
         查找数据库中已经失效的 Mod。
 
-        - missing_mods: 已经标记缺失，或旧版本留下的空路径记录
-        - deleted_mods: path 仍存在，但物理 Mod 结构已经不完整或目录消失
+        - missing_mods: Steam 本地记录仍显示订阅，但没有有效本地模组结构
+        - deleted_mods: 数据库记录的本地资产已经删除或失效
         """
         missing_mods: list[str] = []
         deleted_mods: list[str] = []
+        restored_mods: list[str] = []
+        missing_update_mods: list[str] = []
+        deleted_update_mods: list[str] = []
+        subscribed_ids = {
+            str(workshop_id or "").strip()
+            for workshop_id in (subscribed_workshop_ids or [])
+            if str(workshop_id or "").strip()
+        }
 
-        query = ModAsset.select(ModAsset.path_hash, ModAsset.path, ModAsset.state).dicts()
+        query = ModAsset.select(ModAsset.path_hash, ModAsset.path, ModAsset.state, ModAsset.store, ModAsset.workshop_id).dicts()
         for asset in query:
-            path = asset["path"]
+            path = str(asset.get("path") or "").strip()
             state = str(asset.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
-            if state == MOD_ASSET_STATE_MISSING or not path:
-                missing_mods.append(asset["path_hash"])
-            elif not _mod_dir_exists(path):
-                deleted_mods.append(asset["path_hash"])
+            path_hash = asset["path_hash"]
+            has_valid_mod = _mod_dir_exists(path)
+            if has_valid_mod:
+                if state in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED}:
+                    restored_mods.append(path_hash)
+                continue
+
+            workshop_id = str(asset.get("workshop_id") or "").strip()
+            store = str(asset.get("store") or "").strip().lower()
+            if store == "workshop" and workshop_id and workshop_id in subscribed_ids:
+                missing_mods.append(path_hash)
+                if state != MOD_ASSET_STATE_MISSING:
+                    missing_update_mods.append(path_hash)
+            else:
+                deleted_mods.append(path_hash)
+                if state != MOD_ASSET_STATE_DELETED:
+                    deleted_update_mods.append(path_hash)
 
         total_invalid_mods = missing_mods + deleted_mods
-        if not total_invalid_mods: return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
+        if not total_invalid_mods and not restored_mods:
+            return {"missing_mods": missing_mods, "deleted_mods": deleted_mods, "restored_mods": restored_mods}
 
         with db.atomic():
             if delete:
                 ModAsset.delete().where(cast(Any, ModAsset.path_hash).in_(total_invalid_mods)).execute()
             else:
                 now = current_ms()
-                if missing_mods:
+                if missing_update_mods:
                     ModAsset.update(
                         state=MOD_ASSET_STATE_MISSING,
                         last_scanned_at=now,
                         file_modify_time=now,
-                    ).where(cast(Any, ModAsset.path_hash).in_(missing_mods)).execute()
-                if deleted_mods:
+                    ).where(cast(Any, ModAsset.path_hash).in_(missing_update_mods)).execute()
+                if deleted_update_mods:
                     ModAsset.update(
-                        state=MOD_ASSET_STATE_MISSING,
+                        state=MOD_ASSET_STATE_DELETED,
                         last_scanned_at=now,
                         file_modify_time=now,
-                    ).where(cast(Any, ModAsset.path_hash).in_(deleted_mods)).execute()
+                    ).where(cast(Any, ModAsset.path_hash).in_(deleted_update_mods)).execute()
+                if restored_mods:
+                    ModAsset.update(
+                        state=MOD_ASSET_STATE_PRESENT,
+                        last_scanned_at=now,
+                    ).where(cast(Any, ModAsset.path_hash).in_(restored_mods)).execute()
 
-        return {"missing_mods": missing_mods, "deleted_mods": deleted_mods}
+        return {"missing_mods": missing_mods, "deleted_mods": deleted_mods, "restored_mods": restored_mods}
 
     @staticmethod
     def clean_orphaned_data():

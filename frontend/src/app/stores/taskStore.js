@@ -1,9 +1,15 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { toUserMessage } from '../../shared/lib/common'
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
 const TASK_RETENTION_MS = 3000
+
+const getTaskFailureMessage = (task = {}) => toUserMessage(
+  task.message || task.metrics?.error || task.metrics?.original_error,
+  '任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。',
+)
 
 export const useTaskStore = defineStore('tasks', () => {
   const taskMap = ref(new Map())
@@ -33,7 +39,7 @@ export const useTaskStore = defineStore('tasks', () => {
       if (task.status === 'success') {
         entry.resolve(task)
       } else {
-        entry.reject(new Error(task.message || task.metrics?.error || '任务未成功完成'))
+        entry.reject(new Error(getTaskFailureMessage(task)))
       }
     }
   }
@@ -117,7 +123,7 @@ export const useTaskStore = defineStore('tasks', () => {
     const currentTask = getTask(taskId)
     if (currentTask && TERMINAL_STATUSES.has(currentTask.status)) {
       if (currentTask.status === 'success') return Promise.resolve(currentTask)
-      return Promise.reject(new Error(currentTask.message || currentTask.metrics?.error || '任务未成功完成'))
+      return Promise.reject(new Error(getTaskFailureMessage(currentTask)))
     }
 
     return new Promise((resolve, reject) => {
@@ -129,6 +135,36 @@ export const useTaskStore = defineStore('tasks', () => {
       const entries = waiters.get(taskId) || []
       entries.push({ resolve, reject, timer })
       waiters.set(taskId, entries)
+    })
+  }
+
+  const waitForLatestTaskByType = (types, { since = 0, timeout = 600000, startTimeout = 1500 } = {}) => {
+    const targets = (Array.isArray(types) ? types : [types]).map(type => String(type || '')).filter(Boolean)
+    const startedAfter = Math.max(0, Number(since || 0) - 500)
+    const findTask = () => tasks.value.find(task => (
+      targets.includes(task.type)
+      && (!startedAfter || Number(task.joinedAt || task.metrics?.task_created_at || 0) >= startedAfter)
+    )) || null
+    const currentTask = findTask()
+    if (currentTask?.id) return waitForTaskCompletion(currentTask.id, timeout)
+
+    return new Promise((resolve, reject) => {
+      const startedAt = Date.now()
+      let timer = 0
+      const tick = () => {
+        const task = findTask()
+        if (task?.id) {
+          window.clearTimeout(timer)
+          waitForTaskCompletion(task.id, timeout).then(resolve, reject)
+          return
+        }
+        if (Date.now() - startedAt >= startTimeout) {
+          resolve(null)
+          return
+        }
+        timer = window.setTimeout(tick, 50)
+      }
+      tick()
     })
   }
 
@@ -168,6 +204,6 @@ export const useTaskStore = defineStore('tasks', () => {
     // 写入与清理
     upsertTask, createPlaceholderTask, removeTask, settleActiveTasks,
     // 查询与等待
-    getTask, getLatestTaskByType, hasActiveTaskOfType, waitForTaskCompletion,
+    getTask, getLatestTaskByType, hasActiveTaskOfType, waitForTaskCompletion, waitForLatestTaskByType,
   }
 })

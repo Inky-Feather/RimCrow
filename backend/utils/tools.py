@@ -43,6 +43,58 @@ def normalize_string_list(values: list[Any] | tuple[Any, ...] | None) -> list[st
     return _dedupe_preserve_order([value for value in normalized if value])
 
 
+def normalize_path_for_storage(path: Any) -> str:
+    """
+    将路径统一成当前系统原生绝对路径。
+
+    这个函数只处理本地文件系统路径，不负责 URL 或命令行参数。
+    只做文本层面的绝对化，不解析符号链接或 Junction，避免把“链接位置”折叠成“链接目标”。
+    """
+    raw_value = str(path or "").strip().strip('"')
+    if not raw_value:
+        return ""
+    expanded = os.path.expanduser(raw_value) if raw_value.startswith("~") else raw_value
+    expanded = os.path.expandvars(expanded)
+    return os.path.normpath(os.path.abspath(expanded))
+
+
+def normalize_path_for_compare(path: Any) -> str:
+    """生成路径比较用 key；Windows 下自动折叠大小写和分隔符。"""
+    normalized = normalize_path_for_storage(path)
+    return os.path.normcase(normalized) if normalized else ""
+
+
+def normalize_dir_root_for_compare(path: Any) -> str:
+    """生成目录前缀比较 key，末尾带分隔符避免 `foo` 误匹配 `foobar`。"""
+    normalized = normalize_path_for_compare(path)
+    if not normalized:
+        return ""
+    return normalized if normalized.endswith(os.sep) else normalized + os.sep
+
+
+def normalize_path_list_for_storage(values: Any) -> list[str]:
+    """规范化路径列表，并按规范化后的比较 key 保序去重。"""
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = normalize_path_for_storage(value)
+        key = normalize_path_for_compare(normalized)
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
+def same_path(left: Any, right: Any) -> bool:
+    """按当前系统规则判断两个路径是否指向同一文本规范化位置。"""
+    left_key = normalize_path_for_compare(left)
+    right_key = normalize_path_for_compare(right)
+    return bool(left_key and right_key and left_key == right_key)
+
+
 def get_folder_size(path: str) -> int:
     """
     高效计算文件夹总大小 (字节)

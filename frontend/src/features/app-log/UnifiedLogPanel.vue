@@ -172,15 +172,15 @@
                   class="mt-0.5 text-xs text-accent-primary hover:text-accent-highlight">
                   展开完整日志
                 </button>
-                <!-- 展开详情 (堆栈) -->
-                <div v-if="item.details" class="mt-1">
+                <!-- 展开详情 -->
+                <div v-if="item.details || formatLogDiagnosticDetails(item)" class="mt-1">
                   <button @click="item._expanded = !item._expanded"
                     class="flex items-center gap-1 text-xs text-text-dim hover:text-text-main transition-colors select-none mb-0.5">
                     <svg class="w-3 h-3 transition-transform" :class="item._expanded ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                    <span>{{ item._expanded ? '收起堆栈详情' : '展开堆栈详情' }}</span>
+                    <span>{{ item._expanded ? '收起诊断详情' : '展开诊断详情' }}</span>
                   </button>
                   <div v-if="item._expanded" class="pl-2 border-l border-border-base/10 text-text-dim text-xs bg-bg-inset/70 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
-                    {{ item.details }}
+                    {{ [item.details, formatLogDiagnosticDetails(item)].filter(Boolean).join('\n\n') }}
                   </div>
                 </div>
 
@@ -355,12 +355,35 @@ function normalizeBlock(raw) {
   return base;
 }
 
+function stringifyDiagnosticValue(value) {
+  if (value === null || value === undefined || value === '') return ''
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function formatLogDiagnosticDetails(log) {
+  const parts = []
+  if (log?.error_code) {
+    parts.push(`错误码: ${log.error_code}`)
+  }
+  const extraContext = stringifyDiagnosticValue(log?.extra_context)
+  if (extraContext) {
+    parts.push(`诊断信息:\n${extraContext}`)
+  }
+  return parts.join('\n')
+}
+
 // 提取纯净日志文本
 const copyLogContent = async (logsArray) => {
   if (!logsArray || logsArray.length === 0) return;
   const textToCopy = logsArray.map(l => {
     const msg = l.message || '';
-    const details = l.details ? `\n[Stacktrace]\n${l.details}` : '';
+    const detailsText = [l.details, formatLogDiagnosticDetails(l)].filter(Boolean).join('\n\n');
+    const details = detailsText ? `\n[诊断详情]\n${detailsText}` : '';
     return `${msg}${details}`;
   }).join('\n\n------\n\n');
 
@@ -506,7 +529,7 @@ async function fetchFiles() {
       files.value = res.data || [];
     }
   } catch (e) {
-    console.error("获取文件列表异常:", e);
+    toast.error('获取日志文件列表失败。请稍后重试，或检查日志目录是否可访问。');
   }
 }
 
@@ -602,7 +625,7 @@ async function fetchPage(page, isScrollUp = false, isInitial = false) {
       }
     }
   } catch (e) {
-    toast.error('读取日志失败');
+    toast.error('读取日志失败。请确认日志文件仍存在且没有被其它程序占用。');
   }
 }
 
@@ -626,7 +649,7 @@ function handleRealtimeLog(e) {
 
   // 简单的去重与计数累加
   const lastLog = allLoadedLogs.value[allLoadedLogs.value.length - 1];
-  if (lastLog && lastLog.message === entry.message && lastLog.level === entry.level && lastLog.details === entry.details) {
+  if (lastLog && lastLog.message === entry.message && lastLog.level === entry.level && lastLog.details === entry.details && lastLog.error_code === entry.error_code && stringifyDiagnosticValue(lastLog.extra_context) === stringifyDiagnosticValue(entry.extra_context)) {
     lastLog.count = (lastLog.count || 1) + 1;
     lastLog.timestamp = entry.timestamp;
     lastLog.raw_lines = [...new Set([...(lastLog.raw_lines || []), ...(entry.raw_lines || [])])];
@@ -687,8 +710,10 @@ const filteredLogs = computed(() => {
       const re = new RegExp(searchQuery.value, 'i')
       result = result.filter(l => {
         const ctx = l.context || {};
+        const diagnostics = formatLogDiagnosticDetails(l);
         return re.test(l.message || '') ||
                re.test(l.details || '') ||
+               re.test(diagnostics) ||
                (ctx.inferredType && re.test(ctx.inferredType)) ||
                (Array.isArray(ctx.relatedModIds) && ctx.relatedModIds.some(id => re.test(id))) ||
                (Array.isArray(ctx.relatedFiles) && ctx.relatedFiles.some(f => re.test(f)));
@@ -700,11 +725,13 @@ const filteredLogs = computed(() => {
         const ctx = l.context || {};
         const msg = (l.message || '').toLowerCase();
         const det = (l.details || '').toLowerCase();
+        const diagnostics = formatLogDiagnosticDetails(l).toLowerCase();
         const inferred = (ctx.inferredType || '').toLowerCase();
         const mods = (ctx.relatedModIds || []).map(x => (x || '').toLowerCase());
         const files = (ctx.relatedFiles || []).map(x => (x || '').toLowerCase());
         return msg.includes(q) ||
                det.includes(q) ||
+               diagnostics.includes(q) ||
                inferred.includes(q) ||
                mods.some(x => x.includes(q)) ||
                files.some(x => x.includes(q));
@@ -765,6 +792,8 @@ const getRowSizeDependencies = (item) => {
     searchQuery.value,
     item._parsedMessage || '',
     item.details || '',
+    item.error_code || '',
+    stringifyDiagnosticValue(item.extra_context),
     context.module || '',
     context.func || '',
     context.path || '',

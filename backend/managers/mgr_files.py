@@ -11,7 +11,7 @@ import threading
 import subprocess
 import platform
 import time
-from PIL import Image
+from PIL import Image, ImageFile, UnidentifiedImageError
 from pathlib import Path
 from typing import Any, Dict
 import urllib.parse
@@ -22,9 +22,10 @@ from backend.managers.mgr_network import build_retry_session, merge_headers, net
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
+from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, RIMWORLD_WORKSHOP_CONTENT_PARTS
 from backend.utils.logger import logger
 from backend.utils.text_decode import decode_text_bytes
-from backend.utils.tools import delete_fs_path
+from backend.utils.tools import delete_fs_path, normalize_path_for_storage, same_path
 from backend.utils.shortcuts import (
     create_shortcut,
     format_shortcut_arguments,
@@ -55,6 +56,11 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
     REMOTE_FAILURE_COOLDOWN_SECONDS = 300
     _remote_failure_cache: dict[str, float] = {}
     _remote_failure_lock = threading.Lock()
+    _remote_download_locks: dict[str, threading.Lock] = {}
+    _remote_download_locks_lock = threading.Lock()
+    _thumbnail_locks: dict[str, threading.Lock] = {}
+    _thumbnail_locks_lock = threading.Lock()
+    _thumbnail_tolerant_image_lock = threading.Lock()
     
     def do_GET(self):
         try:
@@ -75,25 +81,11 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 if not pkg_id or not os.path.isfile(src_path):
                     self.send_error(404, "Source not found")
                     return
-                target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{pkg_id}.webp")
-                # 检查缓存是否有效
-                need_generate = True
-                if os.path.exists(target_path):
-                    if os.path.getmtime(src_path) <= os.path.getmtime(target_path):
-                        need_generate = False
-                # 即时生成
-                if need_generate:
-                    try:
-                        with Image.open(src_path) as img:
-                            if img.mode not in ('RGB', 'RGBA'):
-                                img = img.convert('RGBA')
-                            img.thumbnail((64, 64), Image.Resampling.LANCZOS)
-                            img.save(target_path, 'WEBP', quality=80)
-                    except Exception as e:
-                        logger.warning(f"Thumbnail gen failed for {pkg_id}, serving original. Error: {e}")
-                        self._serve_local_file(src_path) # 生成失败，直接降级返回原图
-                        return
-                self._serve_local_file(target_path)
+                target_path = self._ensure_thumbnail(pkg_id, src_path)
+                if target_path:
+                    self._serve_local_file(target_path)
+                    return
+                self._serve_local_file(src_path)
                 return
             # --- 路由 3：代理缓存网络图片 (完美降级) ---
             elif parsed.path == '/remote':
@@ -119,12 +111,12 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass # 忽略前端快速滚动取消请求的错误
         except Exception as e:
-            logger.error(f"Asset Handler Error: {e}")
+            logger.error(f"资源请求处理失败：{e}")
             try: self.send_error(500)
             except: pass
 
     def _fallback_to_browser(self, original_url):
-        """【神级降级】：告诉浏览器我下载失败了，你自己去直接请求原网址吧"""
+        """下载失败时回退到浏览器直接请求原始地址。"""
         self.send_response(302) # Found / Redirect
         self.send_header('Location', original_url)
         self.end_headers()
@@ -188,6 +180,68 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         with self._remote_failure_lock:
             self._remote_failure_cache[remote_url] = time.time()
 
+    @classmethod
+    def _get_lock(cls, lock_map: dict[str, threading.Lock], map_lock: threading.Lock, key: str) -> threading.Lock:
+        with map_lock:
+            lock = lock_map.get(key)
+            if lock is None:
+                lock = threading.Lock()
+                lock_map[key] = lock
+            return lock
+
+    @classmethod
+    def _resolve_thumbnail_path(cls, package_id: str, original_path: str) -> str:
+        cache_key = hashlib.md5(f"{package_id}\0{os.path.abspath(original_path)}".encode('utf-8')).hexdigest()
+        return os.path.join(THUMBNAIL_CACHE_DIR, f"{cache_key}.webp")
+
+    @classmethod
+    def _ensure_thumbnail(cls, package_id: str, original_path: str, max_size: int = 64) -> str | None:
+        if not package_id or not original_path or not os.path.isfile(original_path): return None
+        target_path = cls._resolve_thumbnail_path(package_id, original_path)
+        lock = cls._get_lock(cls._thumbnail_locks, cls._thumbnail_locks_lock, target_path)
+        with lock:
+            try:
+                if os.path.exists(target_path) and os.path.getmtime(original_path) <= os.path.getmtime(target_path):
+                    return target_path
+            except OSError:
+                pass
+
+            temp_path = f"{target_path}.{uuid.uuid4().hex}.tmp"
+            try:
+                def save_thumbnail():
+                    with Image.open(original_path) as img:
+                        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                            if img.mode != 'RGBA':
+                                img = img.convert('RGBA')
+                        else:
+                            img = img.convert('RGB')
+                        img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                        img.save(temp_path, 'WEBP', quality=80)
+
+                try:
+                    save_thumbnail()
+                except (UnidentifiedImageError, SyntaxError, OSError):
+                    with open(original_path, "rb") as f:
+                        is_png = f.read(8) == b"\x89PNG\r\n\x1a\n"
+                    if not is_png:
+                        raise
+
+                    # 部分工坊封面只有 PNG 元数据校验损坏，像素数据仍可正常读取。
+                    with cls._thumbnail_tolerant_image_lock:
+                        old_load_truncated = ImageFile.LOAD_TRUNCATED_IMAGES
+                        try:
+                            ImageFile.LOAD_TRUNCATED_IMAGES = True
+                            save_thumbnail()
+                        finally:
+                            ImageFile.LOAD_TRUNCATED_IMAGES = old_load_truncated
+
+                os.replace(temp_path, target_path)
+                return target_path
+            except Exception as e:
+                delete_fs_path(temp_path)
+                logger.warning(f"缩略图生成失败，将返回原图：{package_id}，错误：{e}")
+                return None
+
     def _resolve_remote_cache_path(self, remote_url: str) -> str:
         """
         按 URL 哈希定位缓存文件。
@@ -196,8 +250,8 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         因此直接长期复用本地缓存，不再引入额外 TTL。
         """
         url_hash = hashlib.md5(remote_url.encode('utf-8')).hexdigest()
-        existing_candidates = sorted(Path(GALLERY_CACHE_DIR).glob(f"{url_hash}.*"))
-        if existing_candidates: return str(existing_candidates[0])
+        existing_cache_path = self._find_remote_cache_candidate(os.path.join(GALLERY_CACHE_DIR, f"{url_hash}.img"))
+        if existing_cache_path: return existing_cache_path
 
         guessed_ext = self._guess_remote_extension(remote_url, content_type="")
         return os.path.join(GALLERY_CACHE_DIR, f"{url_hash}{guessed_ext}")
@@ -215,6 +269,14 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             return ".jpg" if suffix == ".jpeg" else suffix
         return ".img"
 
+    def _find_remote_cache_candidate(self, cache_path: str) -> str | None:
+        candidates = sorted(
+            entry
+            for entry in Path(GALLERY_CACHE_DIR).glob(f"{Path(cache_path).stem}.*")
+            if entry.is_file() and entry.suffix.lower() != ".tmp"
+        )
+        return str(candidates[0]) if candidates else None
+
     def _download_remote_to_cache(self, remote_url: str, cache_path: str) -> str | None:
         """
         下载远程图片到缓存目录。
@@ -222,74 +284,81 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         下载失败时不抛出异常，交给调用方决定是否回退到原始链接。
         """
         if not self._is_allowed_remote_url(remote_url):
-            logger.debug(f"Rejected remote image by safety policy: {remote_url}")
+            logger.debug(f"远程图片被安全策略拒绝：{remote_url}")
             return None
         if self._is_remote_failure_cooled_down(remote_url): return None
+        lock = self._get_lock(self._remote_download_locks, self._remote_download_locks_lock, cache_path)
+        with lock:
+            existing_cache_path = self._find_remote_cache_candidate(cache_path)
+            if existing_cache_path: return existing_cache_path
 
-        try:
-            with build_retry_session(total=2, connect=2, read=2, allowed_methods=("GET", "HEAD")) as session:
-                request_kwargs = {
-                    "headers": merge_headers({"Accept": "image/*"}),
-                    "timeout": (5, 12),
-                    "stream": True,
-                }
-                proxy_url = network_mgr.get_proxy_url()
-                if proxy_url:
-                    request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
+            temp_path = ""
+            try:
+                with build_retry_session(total=2, connect=2, read=2, allowed_methods=("GET", "HEAD")) as session:
+                    request_kwargs = {
+                        "headers": merge_headers({"Accept": "image/*"}),
+                        "timeout": (5, 12),
+                        "stream": True,
+                    }
+                    proxy_url = network_mgr.get_proxy_url()
+                    if proxy_url:
+                        request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
 
-                response = session.get(remote_url, **request_kwargs)
-                if response.status_code != 200:
-                    logger.debug(f"Remote image download failed with status {response.status_code}: {remote_url}")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    response = session.get(remote_url, **request_kwargs)
+                    if response.status_code != 200:
+                        logger.debug(f"远程图片下载失败，状态码 {response.status_code}：{remote_url}")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-                if content_type and content_type not in self.REMOTE_IMAGE_CONTENT_TYPES:
-                    logger.debug(f"Remote image content-type rejected: {content_type} ({remote_url})")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    content_type = str(response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                    if content_type and content_type not in self.REMOTE_IMAGE_CONTENT_TYPES:
+                        logger.debug(f"远程图片 Content-Type 不允许：{content_type}（{remote_url}）")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                declared_length = int(response.headers.get("Content-Length") or 0)
-                if declared_length > self.REMOTE_MAX_FILE_SIZE:
-                    logger.debug(f"Remote image too large by content-length: {declared_length} ({remote_url})")
-                    self._mark_remote_failure(remote_url)
-                    return None
+                    declared_length = int(response.headers.get("Content-Length") or 0)
+                    if declared_length > self.REMOTE_MAX_FILE_SIZE:
+                        logger.debug(f"远程图片 Content-Length 超过限制：{declared_length}（{remote_url}）")
+                        self._mark_remote_failure(remote_url)
+                        return None
 
-                final_cache_path = cache_path
-                expected_ext = self._guess_remote_extension(remote_url, content_type)
-                current_ext = Path(cache_path).suffix.lower()
-                if expected_ext and current_ext != expected_ext:
-                    final_cache_path = str(Path(cache_path).with_suffix(expected_ext))
+                    final_cache_path = cache_path
+                    expected_ext = self._guess_remote_extension(remote_url, content_type)
+                    current_ext = Path(cache_path).suffix.lower()
+                    if expected_ext and current_ext != expected_ext:
+                        final_cache_path = str(Path(cache_path).with_suffix(expected_ext))
 
-                temp_path = f"{final_cache_path}.{uuid.uuid4().hex}.tmp"
-                total_bytes = 0
-                with open(temp_path, 'wb') as handle:
-                    for chunk in response.iter_content(chunk_size=64 * 1024):
-                        if not chunk:
-                            continue
-                        total_bytes += len(chunk)
-                        if total_bytes > self.REMOTE_MAX_FILE_SIZE:
-                            handle.close()
-                            delete_fs_path(temp_path)
-                            logger.debug(f"Remote image exceeded size limit while streaming: {remote_url}")
-                            self._mark_remote_failure(remote_url)
-                            return None
-                        handle.write(chunk)
+                    temp_path = f"{final_cache_path}.{uuid.uuid4().hex}.tmp"
+                    total_bytes = 0
+                    with open(temp_path, 'wb') as handle:
+                        for chunk in response.iter_content(chunk_size=64 * 1024):
+                            if not chunk:
+                                continue
+                            total_bytes += len(chunk)
+                            if total_bytes > self.REMOTE_MAX_FILE_SIZE:
+                                handle.close()
+                                delete_fs_path(temp_path)
+                                logger.debug(f"远程图片流式下载时超过大小限制：{remote_url}")
+                                self._mark_remote_failure(remote_url)
+                                return None
+                            handle.write(chunk)
 
-                if total_bytes <= 0:
+                    if total_bytes <= 0:
+                        delete_fs_path(temp_path)
+                        self._mark_remote_failure(remote_url)
+                        return None
+
+                    os.replace(temp_path, final_cache_path)
+                    return final_cache_path
+            except Exception as e:
+                if temp_path:
                     delete_fs_path(temp_path)
-                    self._mark_remote_failure(remote_url)
-                    return None
-
-                os.replace(temp_path, final_cache_path)
-                return final_cache_path
-        except Exception as e:
-            logger.debug(f"Proxy download failed, fallback to original URL: {e}")
-            self._mark_remote_failure(remote_url)
-            return None
+                logger.debug(f"代理下载失败，将回退到原始地址：{e}")
+                self._mark_remote_failure(remote_url)
+                return None
 
     def _serve_local_file(self, file_path):
-        """发送本地文件流并设置强缓存"""
+        """发送本地文件流。图片内容可能被用户清理或重新生成，浏览器需回到本地服务确认。"""
         ext = os.path.splitext(file_path)[1].lower()
         ctype = 'application/octet-stream'
         if ext == '.png': ctype = 'image/png'
@@ -301,11 +370,11 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', ctype)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Cache-Control', 'max-age=2592000') # 让浏览器缓存 30 天
+        self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         
         with open(file_path, 'rb') as f:
-            self.wfile.write(f.read())
+            shutil.copyfileobj(f, self.wfile, length=64 * 1024)
 
     def log_message(self, format, *args):
         pass # 屏蔽控制台刷屏
@@ -372,9 +441,9 @@ class FileManager:
             
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
-            logger.info(f"File Manager: Asset Server started on port {self._port}")
+            logger.info(f"文件管理资源服务已启动，端口：{self._port}")
         except Exception as e:
-            logger.error(f"File Manager: Failed to start asset server: {e}")
+            logger.error(f"文件管理资源服务启动失败：{e}")
 
     def get_port(self):
         """返回当前 HTTP 服务器端口"""
@@ -407,32 +476,19 @@ class FileManager:
             LocalAssetHandler._remote_failure_cache.clear()
         return cleared_stats
     
-    def get_asset_url(self, local_path):
-        """
-        将本地绝对路径转换为前端可访问的 HTTP URL
-        例如: C:/Mod/Preview.png -> http://127.0.0.1:xxxxx/image?path=C%3A%2FMod%2FPreview.png
-        """
-        if not local_path or not self._port: return ""
-        # 对路径进行 URL 编码
-        safe_path = urllib.parse.quote(local_path)
-        return f"http://127.0.0.1:{self._port}/image?path={safe_path}"
-
     # =========================================================
     #  2. 缩略图管理 (Thumbnail)
     # =========================================================
-    def get_gallery_url(self, workshop_id, remote_url):
-        """生成指向本地服务器的代理 URL"""
-        if not remote_url: return ""
-        safe_url = urllib.parse.quote(remote_url)
-        return f"http://127.0.0.1:{self._port}/gallery?wid={workshop_id}&url={safe_url}"
-    
     @staticmethod
-    def get_thumbnail_path(package_id):
+    def get_thumbnail_path(package_id, original_path=""):
         """
         获取某个 Mod 已生成的缩略图路径 (物理路径)。
         如果不存在返回 None。
         """
-        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
+        if original_path:
+            target_path = LocalAssetHandler._resolve_thumbnail_path(package_id, original_path)
+        else:
+            target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
         if os.path.exists(target_path): return target_path
         return None
 
@@ -442,37 +498,7 @@ class FileManager:
         如果缩略图已存在且未过期，直接返回路径；否则重新生成。
         :return: 缩略图的绝对路径 (str) 或 None
         """
-        if not original_path or not os.path.exists(original_path): return None
-        target_path = os.path.join(THUMBNAIL_CACHE_DIR, f"{package_id}.webp")
-        # 检查是否需要重新生成 (存在性 + 修改时间)
-        need_generate = True
-        if os.path.exists(target_path):
-            try:
-                # 如果原图修改时间比缩略图早，说明缩略图是最新的
-                if os.path.getmtime(original_path) <= os.path.getmtime(target_path):
-                    need_generate = False
-            except OSError:
-                pass
-        if not need_generate: return target_path
-        # 开始生成
-        try:
-            with Image.open(original_path) as img:
-                # 预处理：处理调色板模式、RGBA 等
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    # 创建白色背景处理透明度 (或者保留透明度转为 RGBA，WebP 支持透明)
-                    # 这里为了列表显示统一，建议转为 RGB 或保留 RGBA
-                    if img.mode != 'RGBA':
-                        img = img.convert('RGBA')
-                else:
-                    img = img.convert('RGB')
-                # 缩放 (长宽最大 128px)
-                img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                # 保存 (WEBP 格式，体积小速度快)
-                img.save(target_path, 'WEBP', quality=80)
-                return target_path
-        except Exception as e:
-            logger.error(f"Thumbnail error for {package_id}: {e}")
-            return None
+        return LocalAssetHandler._ensure_thumbnail(package_id, original_path, max_size=max_size)
 
     # =========================================================
     #  3. 常规文件操作
@@ -489,7 +515,8 @@ class FileManager:
             try:
                 # Windows 和 macOS 支持直接选中文件；Linux 桌面环境差异较大，退回打开父目录更稳定。
                 if system_name == 'Windows':
-                    subprocess.Popen(['explorer.exe', f'/select,{path}'])
+                    normalized_path = os.path.normpath(path)
+                    subprocess.Popen(f'explorer.exe /select,"{normalized_path}"')
                     return None
                 if system_name == 'Darwin':
                     subprocess.call(['open', '-R', path])
@@ -618,7 +645,7 @@ class FileManager:
             finally:
                 root.destroy()
         except Exception as e:
-            logger.warning(f"Fallback file dialog failed: {e}")
+            logger.warning(f"备用文件选择对话框打开失败：{e}")
             return None
 
     @staticmethod
@@ -646,7 +673,7 @@ class FileManager:
                 if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
-                logger.warning(f"Webview folder dialog failed: {e}")
+                logger.warning(f"Webview 文件夹选择对话框打开失败：{e}")
                 raise RuntimeError(f"打开文件夹选择框失败: {e}") from e
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askdirectory(initialdir=path or os.getcwd()) or None
@@ -689,7 +716,7 @@ class FileManager:
                 if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
-                logger.warning(f"Webview open dialog failed: {e}")
+                logger.warning(f"Webview 打开文件对话框失败：{e}")
                 raise RuntimeError(f"打开文件选择框失败: {e}") from e
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(
@@ -730,7 +757,7 @@ class FileManager:
                 if result and len(result) > 0: return result[0]
                 return None
             except Exception as e:
-                logger.warning(f"Webview save dialog failed: {e}")
+                logger.warning(f"Webview 保存文件对话框失败：{e}")
                 raise RuntimeError(f"打开保存对话框失败: {e}") from e
 
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
@@ -813,7 +840,7 @@ class FileManager:
         prefer_steam_launch: bool = False,
         steam_exe_path: str | None = None,
         destination_dir: str | None = None,
-        steam_app_id: str = "294100",
+        steam_app_id: str = RIMWORLD_STEAM_APP_ID_STR,
     ) -> Dict[str, str]:
         """
         根据环境启动逻辑构造桌面快捷方式定义。
@@ -866,7 +893,7 @@ class FileManager:
         extra_args: list[str] | None = None,
         prefer_steam_launch: bool = False,
         steam_exe_path: str | None = None,
-        steam_app_id: str = "294100",
+        steam_app_id: str = RIMWORLD_STEAM_APP_ID_STR,
     ) -> Dict[str, Any]:
         """为指定环境在桌面创建快捷方式。"""
         spec = FileManager.build_profile_shortcut_spec(
@@ -933,7 +960,7 @@ class FileManager:
     @staticmethod
     def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id'):
         """
-        将工坊模组转为本地模组，并推送实时进度
+        将工坊模组本地化或同步为本地共存模组，并推送实时进度
         :param query: 包含工坊模组信息的查询结果
         :param local_root: 本地模组存储根目录
         :param folder_name_type: 文件夹命名类型，可选 'alias_name', 'name', 'package_id', 'workshop_id'
@@ -955,9 +982,18 @@ class FileManager:
             tasks.append({
                 'src': mod_data['path'],
                 'dst': os.path.join(local_root, folder_name),
-                'label': display_name # 用于进度显示
+                'label': display_name, # 用于进度显示
+                'is_sync': os.path.exists(os.path.join(local_root, folder_name)),
             })
         if not tasks: return False
+        sync_count = sum(1 for task in tasks if task.get('is_sync'))
+        create_count = len(tasks) - sync_count
+        if sync_count and create_count:
+            action_title = "本地化/同步本地共存模组"
+        elif sync_count:
+            action_title = "同步本地共存模组"
+        else:
+            action_title = "本地化共存模组"
         cancel_event = threading.Event()
         with FileManager._localize_lock:
             FileManager._localize_cancel_events[task_id] = cancel_event
@@ -966,8 +1002,8 @@ class FileManager:
             "localize",
             status="pending",
             progress=0,
-            message="准备本地化任务...",
-            metrics={"total": len(tasks), "current": 0, "title": "本地化模组"},
+            message=f"准备{action_title}...",
+            metrics={"total": len(tasks), "current": 0, "title": action_title},
         )
             
         # 2. 定义进度回调函数，通过 EventBus 发送到前端
@@ -978,8 +1014,8 @@ class FileManager:
                 "localize",
                 status="running",
                 progress=percent,
-                message=f"正在本地化 ({current}/{total}): {label}",
-                metrics={"current": current, "total": total, "label": label, "title": "本地化模组"},
+                message=f"正在{action_title} ({current}/{total}): {label}",
+                metrics={"current": current, "total": total, "label": label, "title": action_title},
             )
         # 3. 在后台线程执行，避免阻塞 UI（如果是大批量复制）
         def run_task():
@@ -987,7 +1023,7 @@ class FileManager:
             errors = []
             total = len(tasks)
             final_status = "success"
-            final_message = "本地化完成"
+            final_message = f"{action_title}完成"
             try:
                 success, errors, total = FileManager.copy_folders_with_progress(
                     tasks,
@@ -998,24 +1034,44 @@ class FileManager:
                 error_count = len(errors)
                 if cancel_event.is_set():
                     final_status = "cancelled"
-                    final_message = "本地化已取消"
+                    final_message = f"{action_title}已取消"
                 elif success_count == 0 and error_count > 0:
                     final_status = "failed"
-                    final_message = "本地化失败"
+                    final_message = f"{action_title}失败"
             except InterruptedError:
                 final_status = "cancelled"
-                final_message = "本地化已取消"
+                final_message = f"{action_title}已取消"
             except Exception as e:
-                logger.error(f"Localize task failed: {e}", exc_info=True)
+                logger.error(f"本地化任务失败：{e}", exc_info=True)
                 errors.append(str(e))
                 final_status = "failed"
-                final_message = "本地化失败"
+                final_message = f"{action_title}失败"
             finally:
                 with FileManager._localize_lock:
                     FileManager._localize_cancel_events.pop(task_id, None)
 
             success_count = len(success)
             error_count = len(errors)
+            success_path_keys = {os.path.normcase(os.path.abspath(path)) for path in success}
+            success_tasks = [
+                task for task in tasks
+                if os.path.normcase(os.path.abspath(task.get('dst', ''))) in success_path_keys
+            ]
+
+            def normalize_event_paths(paths):
+                normalized_paths = []
+                seen = set()
+                for path in paths:
+                    normalized = normalize_path_for_storage(path)
+                    if not normalized or normalized in seen:
+                        continue
+                    seen.add(normalized)
+                    normalized_paths.append(normalized)
+                return normalized_paths
+
+            source_paths = normalize_event_paths(task.get('src', '') for task in success_tasks)
+            success_paths = normalize_event_paths(success)
+            size_check_paths = normalize_event_paths([*source_paths, *success_paths])
             EventBus.emit_progress(
                 task_id,
                 "localize",
@@ -1028,7 +1084,7 @@ class FileManager:
                     "success_count": success_count,
                     "error_count": error_count,
                     "errors": errors,
-                    "title": "本地化模组",
+                    "title": action_title,
                 },
             )
             # 这里无论成功、失败还是取消都发完成事件，让前端决定是否刷新视图。
@@ -1038,6 +1094,10 @@ class FileManager:
                 'error_count': error_count,
                 'errors': errors,
                 'status': final_status,
+                'title': action_title,
+                'source_paths': source_paths,
+                'success_paths': success_paths,
+                'size_check_paths': size_check_paths,
             })
         threading.Thread(target=run_task, daemon=True).start()
         return task_id
@@ -1070,18 +1130,23 @@ class FileManager:
             src = task['src']
             dst = task['dst']
             label = task.get('label', os.path.basename(src))
+            final_dst = dst
+            tmp_dst = f"{dst}.__sync_tmp_{uuid.uuid4().hex}"
+            backup_dst = ""
+
+            def cleanup_internal_path(path):
+                if path and os.path.exists(path):
+                    delete_fs_path(path, force=True)
 
             # 触发进度回调
             if progress_callback:
                 progress_callback(i + 1, total, label)
 
             try:
-                # 自动处理重名
-                final_dst = dst
-                counter = 1
-                while os.path.exists(final_dst):
-                    final_dst = f"{dst}_{counter}"
-                    counter += 1
+                src_abs = os.path.normcase(os.path.abspath(src))
+                dst_abs = os.path.normcase(os.path.abspath(final_dst))
+                if src_abs == dst_abs:
+                    raise ValueError("源目录和目标目录相同")
 
                 def copy_with_cancel(source_file, dest_file, *, follow_symlinks=True):
                     # 复制过程只能做到“文件粒度”的中断，至少保证不会继续复制后续文件。
@@ -1089,18 +1154,41 @@ class FileManager:
                         raise InterruptedError("Localize task cancelled by user")
                     return shutil.copy2(source_file, dest_file, follow_symlinks=follow_symlinks)
 
-                shutil.copytree(src, final_dst, copy_function=copy_with_cancel)
+                shutil.copytree(src, tmp_dst, copy_function=copy_with_cancel)
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Localize task cancelled by user")
+
+                if os.path.exists(final_dst):
+                    backup_dst = f"{dst}.__sync_backup_{uuid.uuid4().hex}"
+                    shutil.move(final_dst, backup_dst)
+                try:
+                    shutil.move(tmp_dst, final_dst)
+                except Exception:
+                    if backup_dst and os.path.exists(backup_dst):
+                        cleanup_internal_path(final_dst)
+                        shutil.move(backup_dst, final_dst)
+                        backup_dst = ""
+                    raise
+                if backup_dst and os.path.exists(backup_dst):
+                    try:
+                        cleanup_internal_path(backup_dst)
+                    except Exception as cleanup_error:
+                        logger.debug(f"清理本地化备份文件夹失败：{backup_dst} - {cleanup_error}")
                 success_list.append(final_dst)
             except InterruptedError:
                 try:
-                    if os.path.exists(final_dst):
-                        delete_fs_path(final_dst)
+                    cleanup_internal_path(tmp_dst)
                 except Exception as cleanup_error:
-                    logger.debug(f"Cleanup cancelled localize folder failed: {final_dst} - {cleanup_error}")
+                    logger.debug(f"清理已取消本地化临时文件夹失败：{tmp_dst} - {cleanup_error}")
                 raise
             except Exception as e:
-                logger.error(f"Copy failed: {src} -> {dst}: {e}")
-                error_list.append(f"模组 {label} 复制失败: {str(e)}")
+                for cleanup_path in (tmp_dst, backup_dst):
+                    try:
+                        cleanup_internal_path(cleanup_path)
+                    except Exception as cleanup_error:
+                        logger.debug(f"清理失败本地化临时文件夹失败：{cleanup_path} - {cleanup_error}")
+                logger.error(f"复制文件失败：{src} -> {dst}，错误：{e}")
+                error_list.append(f"模组 {label} 处理失败: {str(e)}")
 
         return success_list, error_list, total
     
@@ -1130,7 +1218,7 @@ class FileManager:
         """
         # logger.debug(f"Sync links: local_mods_path={local_mods_path}, workshop_mod_paths={workshop_mod_paths}")
         if not local_mods_path or not os.path.exists(local_mods_path):
-            logger.error("Sync links failed: Local mods path does not exist.")
+            logger.error("同步链接失败：本地 MOD 目录不存在。")
             return False
 
         # --- 1. 准备目标清单 (使用小写 Key 解决 Windows 大小写不敏感问题) ---
@@ -1173,11 +1261,11 @@ class FileManager:
                     # 3. 这是一个断头链接 (指向的源已删)
                     to_delete_paths.append(full_path)
         except OSError as e:
-            logger.error(f"Scan directory failed: {e}")
+            logger.error(f"扫描目录失败：{e}")
 
         # --- 3. 执行物理删除 (针对 Windows Junction 的强力清除) ---
         if to_delete_paths:
-            logger.info(f"Cleaning {len(to_delete_paths)} stale links...")
+            logger.info(f"正在清理 {len(to_delete_paths)} 个失效链接...")
             # 关键优化点：不再循环调用 subprocess，而是批量处理
             FileManager._remove_entries_windows_batch(to_delete_paths)
 
@@ -1190,10 +1278,10 @@ class FileManager:
 
         # --- 5. 执行闪电创建 ---
         if links_to_create:
-            logger.info(f"Creating {len(links_to_create)} missing links...")
+            logger.info(f"正在创建 {len(links_to_create)} 个缺失链接...")
             FileManager._create_links_windows_batch(links_to_create)
 
-        logger.info(f"Sync Result -> Kept: {len(existing_valid_keys)}, Created: {len(links_to_create)}, Deleted: {len(to_delete_paths)}")
+        logger.info(f"同步结果：保留 {len(existing_valid_keys)} 个，创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
 
     @staticmethod
@@ -1222,7 +1310,7 @@ class FileManager:
                     if not entry.name.startswith(FileManager.LINK_PREFIX): continue
                     to_delete_paths.append(entry.path)
         except OSError as e:
-            logger.error(f"Scan links failed: {e}")
+            logger.error(f"扫描链接失败：{e}")
 
         # 3. 计算需要重建的全部链接
         for _, info in target_map.items():
@@ -1242,7 +1330,7 @@ class FileManager:
         if links_to_create:
             FileManager._create_links_fast(links_to_create)
 
-        logger.info(f"Sync Full Result -> Created: {len(links_to_create)}, Deleted: {len(to_delete_paths)}")
+        logger.info(f"完整同步结果：创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
 
     @staticmethod
@@ -1287,7 +1375,7 @@ class FileManager:
             # 只启动一个进程，执行成百上千条删除指令
             subprocess.run(temp_path, shell=True, capture_output=True, check=True)
         except Exception as e:
-            logger.error(f"Batch delete failed: {e}")
+            logger.error(f"批量删除失败：{e}")
             # 如果批处理失败，尝试最后的原生备份方案
             for p in paths:
                 try: os.rmdir(p)
@@ -1335,7 +1423,7 @@ class FileManager:
                 else:
                     os.symlink(src, dst)
             except Exception as e:
-                logger.error(f"Failed to link {dst} -> {src}: {e}")
+                logger.error(f"创建链接失败：{dst} -> {src}，错误：{e}")
     
     # =========================================================
     #  5. SteamCMD 根目录重定向 (Root Redirect)
@@ -1353,13 +1441,20 @@ class FileManager:
         # 1. 获取最新配置
         # 实际物理存储路径 (Target)
         real_storage_path = os.path.normpath(os.path.abspath(settings.config.self_mods_path))
-        # SteamCMD 期望的下载路径 (Link Location, 通常是 .../294100)
+        # SteamCMD 期望的下载路径 (Link Location, 通常是 RimWorld 工坊内容目录)
         steamcmd_link_path = os.path.normpath(os.path.abspath(settings.config.steamcmd_mods_path))
         
         os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
         os.makedirs(real_storage_path, exist_ok=True)
 
-        logger.info(f"Redirecting SteamCMD: {steamcmd_link_path} -> {real_storage_path}")
+        logger.info(f"正在重定向 SteamCMD 目录：{steamcmd_link_path} -> {real_storage_path}")
+
+        if same_path(steamcmd_link_path, real_storage_path):
+            logger.warning(
+                "跳过 SteamCMD 重定向：源目录和目标目录相同：%s",
+                real_storage_path,
+            )
+            return True
 
         # ---------------------------------------------------------
         # 步骤 A: 处理 mods_path 变更导致的数据迁移
@@ -1367,7 +1462,7 @@ class FileManager:
         if move_old_data and old_mods_path:
             old_mods_path = os.path.normpath(os.path.abspath(old_mods_path))
             if old_mods_path != real_storage_path and os.path.exists(old_mods_path):
-                logger.info(f"Moving data from OLD mods_path: {old_mods_path} -> {real_storage_path}")
+                logger.info(f"正在从旧 MOD 目录迁移数据：{old_mods_path} -> {real_storage_path}")
                 FileManager._merge_and_delete_folder(old_mods_path, real_storage_path)
 
         # 确保实际物理目录存在
@@ -1383,16 +1478,16 @@ class FileManager:
             if os.path.islink(steamcmd_link_path) or FileManager._is_junction_windows(steamcmd_link_path):
                 # 检查它指向的是不是我们现在的物理路径
                 if FileManager._is_link_correct(steamcmd_link_path, real_storage_path):
-                    logger.info("SteamCMD link is already correct. Skipping.")
+                    logger.info("SteamCMD 链接已正确，跳过处理。")
                     return True
                 else:
                     # 指向了错误的路径，或者是旧的路径，删掉这个链接（不会删掉源文件）
-                    logger.info("Removing stale or incorrect SteamCMD link.")
+                    logger.info("正在移除失效或错误的 SteamCMD 链接。")
                     FileManager._remove_link_safe(steamcmd_link_path)
             
             # 情况 2: 它是一个真实的文件夹 (里面可能有 SteamCMD 之前下的 Mod)
             elif os.path.isdir(steamcmd_link_path):
-                logger.info(f"Found real folder at SteamCMD path. Merging to {real_storage_path}...")
+                logger.info(f"发现 SteamCMD 位置存在真实文件夹，正在合并到 {real_storage_path}...")
                 # 把里面的 Mod 搬到物理路径
                 FileManager._merge_and_delete_folder(steamcmd_link_path, real_storage_path)
                 # 搬完后删掉这个空壳文件夹，为创建链接腾位置
@@ -1412,10 +1507,10 @@ class FileManager:
             else:
                 os.symlink(real_storage_path, steamcmd_link_path)
             
-            logger.info("Successfully created SteamCMD redirection link.")
+            logger.info("SteamCMD 重定向链接创建成功。")
             return True
         except Exception as e:
-            logger.error(f"Failed to create SteamCMD link: {e}")
+            logger.error(f"创建 SteamCMD 链接失败：{e}")
             return False
 
     # =========================================================
@@ -1443,7 +1538,7 @@ class FileManager:
             else:
                 os.unlink(path)
         except Exception as e:
-            logger.error(f"Failed to remove link {path}: {e}")
+            logger.error(f"移除链接失败：{path}，错误：{e}")
 
     @staticmethod
     def _merge_and_delete_folder(src, dst):
@@ -1452,6 +1547,13 @@ class FileManager:
         如果目标位置已存在同名 Mod，则覆盖。
         """
         if not os.path.exists(src): return
+        try:
+            same_real_path = os.path.exists(dst) and os.path.samefile(src, dst)
+        except OSError:
+            same_real_path = False
+        if same_path(src, dst) or same_real_path:
+            logger.warning("跳过同一路径目录合并: %s", src)
+            return
         os.makedirs(dst, exist_ok=True)
         
         try:
@@ -1472,7 +1574,7 @@ class FileManager:
             if os.path.exists(src):
                 shutil.rmtree(src, ignore_errors=True)
         except Exception as e:
-            logger.error(f"Merge folder failed: {e}")
+            logger.error(f"合并文件夹失败：{e}")
     
     
     
@@ -1611,7 +1713,7 @@ class PathChecker:
         检查 Workshop 路径是否有效。
 
         这里不再只看 `steamapps/workshop`，而是要求命中 RimWorld 对应的
-        `steamapps/workshop/content/294100`，避免把其它游戏或中间目录误判为有效。
+        RimWorld 工坊内容目录，避免把其它游戏或中间目录误判为有效。
         返回：{
             'pass': True,
             'data': {},
@@ -1623,12 +1725,13 @@ class PathChecker:
             return cls._format_res(False, msg="Workshop 路径不存在")
 
         normalized_parts = [part.lower() for part in Path(os.path.normpath(path_str)).parts]
+        workshop_parts = [part.lower() for part in RIMWORLD_WORKSHOP_CONTENT_PARTS]
         is_valid = any(
-            normalized_parts[index:index + 4] == ["steamapps", "workshop", "content", "294100"]
+            normalized_parts[index:index + 4] == workshop_parts
             for index in range(max(0, len(normalized_parts) - 3))
         )
         return cls._format_res(is_valid, data=path_str, 
-                               msg=f"Workshop 路径：{path_str}" if is_valid else "路径不在 Steam Workshop 294100 目录中",
+                               msg=f"Workshop 路径：{path_str}" if is_valid else f"路径不在 Steam Workshop {RIMWORLD_STEAM_APP_ID_STR} 目录中",
                                msg_type="success" if is_valid else "warn")
         
     @classmethod
@@ -1752,7 +1855,7 @@ class PathChecker:
 
             return results
         except Exception as e:
-            logger.error(f"Check Paths Error: {e}", exc_info=True)
+            logger.error(f"检查路径失败：{e}", exc_info=True)
             return {}
         
     

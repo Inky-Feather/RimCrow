@@ -1,5 +1,5 @@
 <template>
-  <div ref="targetRef" class="relative">
+  <div class="relative">
     <div class="mb-1 flex items-center justify-between px-1">
       <label class="text-xs font-bold uppercase tracking-widest text-text-dim">配色方案</label>
       <button type="button" class="text-xs font-bold text-accent-primary hover:text-text-main transition-colors" @click="$emit('create')">
@@ -16,8 +16,8 @@
       </svg>
     </button>
 
-    <FixedPopover :triggerRef="triggerRef" :isOpen="isOpen">
-      <div class="w-md max-h-90 overflow-y-auto rounded-2xl border border-border-base/10 bg-glass-heavy p-2 shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur-xl custom-scrollbar">
+    <FixedPopover :triggerRef="triggerRef" :isOpen="isOpen" @request-close="isOpen = false">
+      <div class="popover-surface min-w-80 max-w-[min(50vw,32rem)] max-h-90 overflow-y-auto rounded-2xl p-2 custom-scrollbar">
         <div v-for="theme in themes" :key="theme.id" role="button" tabindex="0"
           class="relative mb-1 flex w-full items-center gap-3 group rounded-xl border px-3 py-2 text-left transition-all"
           :class="theme.id === modelValue ? 'border-accent-primary/50 bg-accent-primary/12' : 'border-border-base/10 bg-glass-medium hover:border-border-base/18 hover:bg-bg-overlay/5'"
@@ -49,7 +49,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { onClickOutside } from '@vueuse/core'
 import FixedPopover from '../../../shared/components/popover/FixedPopover.vue'
 import ThemeSwatches from './ThemeSwatches.vue'
 
@@ -61,7 +60,6 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'create', 'edit', 'delete'])
 
 const isOpen = ref(false)
-const targetRef = ref(null)
 const triggerRef = ref(null)
 
 const selectedTheme = computed(() => props.themes.find(theme => theme.id === props.modelValue) || props.themes[0])
@@ -71,7 +69,4 @@ const selectTheme = (themeId) => {
   isOpen.value = false
 }
 
-onClickOutside(targetRef, () => {
-  isOpen.value = false
-})
 </script>

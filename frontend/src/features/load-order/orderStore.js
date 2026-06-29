@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { toast, checkResult } from '../../shared/lib/common'
+import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
@@ -431,7 +431,7 @@ export const useOrderStore = defineStore('order', () => {
       }
     } catch (e) {
       console.error("导出Mod序列异常:", e)
-      toast.error(`导出Mod序列异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态，详细原因已写入系统日志。'))
     }
     return false
   }
@@ -483,7 +483,7 @@ export const useOrderStore = defineStore('order', () => {
         return true
       }
     } catch (error) {
-      console.warn('Clipboard API copy failed:', error)
+      console.warn('剪贴板 API 复制失败，准备使用兼容复制方式:', error)
     }
 
     try {
@@ -498,7 +498,7 @@ export const useOrderStore = defineStore('order', () => {
       document.body.removeChild(textarea)
       return copied
     } catch (error) {
-      console.warn('Fallback copy failed:', error)
+      console.warn('兼容复制方式失败:', error)
       return false
     }
   }
@@ -534,7 +534,7 @@ export const useOrderStore = defineStore('order', () => {
       return shareCode
     } catch (e) {
       console.error('生成分享码异常:', e)
-      toast.error(`生成分享码异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。'))
     }
     return ''
   }
@@ -546,7 +546,7 @@ export const useOrderStore = defineStore('order', () => {
       await window.pywebview.api.load_order_get()
 
     if (checkResult(res, "打开加载顺序")) {
-      console.log("打开加载顺序:", res)
+      console.debug("加载顺序已打开:", res)
       return res.data
     }
   }
@@ -756,7 +756,7 @@ export const useOrderStore = defineStore('order', () => {
       } else if (!backupProfileId.value) {
         setBackupProfile(appStore.settings.current_profile_id || 'default')
       }
-      console.log("获取备份文件:", backups.value)
+      console.debug("获取备份文件:", backups.value)
       return payload
     }
   }

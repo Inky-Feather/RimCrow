@@ -250,7 +250,8 @@ const cleanSelected = async () => {
     })
     if (!ok) return
     clearSelection()
-    await store.loadOverview()
+    const nextOverview = await store.loadOverview()
+    if (Number(nextOverview?.summary?.item_count || 0) === 0) closeModal()
   } finally {
     cleaning.value = false
   }

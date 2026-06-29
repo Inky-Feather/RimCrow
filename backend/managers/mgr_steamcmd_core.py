@@ -143,9 +143,9 @@ class SteamCMDController:
                 else:
                     # 打印关键日志
                     if "Error" in line or "Failed" in line:
-                        logger.warning(f"[SteamCMD] {line}")
+                        logger.warning(f"[SteamCMD] 输出警告：{line}")
                     else:
-                        logger.debug(f"[SteamCMD] {line}")
+                        logger.debug(f"[SteamCMD] 输出：{line}")
 
             # 等待进程正常结束
             self.current_process.wait()

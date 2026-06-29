@@ -1,6 +1,6 @@
 <!-- components/common/input/CommonSelect.vue -->
 <template>
-  <div class="relative mx-0 p-0" :aria-disabled="disabled" :class="[{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}, disabled ? 'opacity-50' : '']" ref="target">
+<div class="relative mx-0 p-0" :aria-disabled="disabled" :class="[{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}, disabled ? 'opacity-50' : '']">
     <!-- Label：点击时联动聚焦 -->
     <span v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
       :class="[mini ? '' : 'mb-1']" @click="handleLabelClick" >
@@ -31,8 +31,13 @@
     </div>
 
     <!-- 下拉面板 -->
-    <FixedPopover :triggerRef="inputRef" :isOpen="isOpen">
-      <div @mousedown.prevent class="popover-surface bg-glass-medium flex max-h-60 flex-col gap-0.5 overflow-y-auto rounded-xl p-1 custom-scrollbar">
+    <FixedPopover
+      :trigger-ref="inputRef" :is-open="isOpen"
+      :placement="menuPlacement"
+      close-on-other-popover
+      @request-close="handlePopoverRequestClose"
+    >
+      <div @mousedown.prevent class="popover-surface inline-flex max-h-60 min-w-32 max-w-[min(50vw,24rem)] flex-col gap-0.5 overflow-y-auto rounded-xl p-1 custom-scrollbar">
         <!-- 有选项时 -->
         <!-- 体验优化：当有自定义输入且未完全匹配时，提示用户可以作为新值 -->
         <button v-if="showCustomHint" type="button" @click="commitInputValue"
@@ -72,7 +77,6 @@
 
 <script setup>
 import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
-import { onClickOutside } from '@vueuse/core'
 import FixedPopover from '../popover/FixedPopover.vue'
 
 const props = defineProps({
@@ -91,7 +95,6 @@ const emit = defineEmits(['update:modelValue', 'change', 'visible-change'])
 
 // --- 状态 ---
 const isOpen = ref(false)
-const target = ref(null)
 const inputRef = ref(null)
 const optionRefs = ref([])
 const highlightedIndex = ref(-1) // 键盘导航索引
@@ -110,6 +113,7 @@ const displayLabel = computed(() => {
 const inputValue = computed(() => {
   return (isOpen.value && props.editable) ? internalSearch.value : displayLabel.value
 })
+const menuPlacement = computed(() => (props.showBottom ? 'bottom' : 'auto'))
 // 过滤后的选项列表，将匹配项“置顶”
 const filteredOptions = computed(() => {
   // 如果没开启编辑，或者没有输入内容，直接返回原列表
@@ -200,6 +204,11 @@ const closeMenu = () => {
   // inputRef.value?.blur()
 }
 
+const finishEditingAndClose = () => {
+  if (props.editable) commitInputValue()
+  closeMenu()
+}
+
 // 2. 选中逻辑
 const selectOption = (opt) => {
   emit('update:modelValue', opt.value)
@@ -247,8 +256,9 @@ const handleInput = (e) => {
 
 const handleBlur = () => {
   if (props.disabled) return
-  // 因为 options 加了 @mousedown.prevent，点击列表不会触发 blur。
-  // 这里的 blur 只有在真正离开输入框（点击外部 / Tab）时触发。
+  // 面板内容被 Teleport 到 body 后，输入框 blur 不再等于“用户已关闭菜单”。
+  // 这里仅处理焦点离开输入框本身的场景，真正关闭交给 FixedPopover 的外部点击/Esc。
+  if (!props.editable) return
   if (isOpen.value) {
     commitInputValue()
     closeMenu()
@@ -298,7 +308,7 @@ const handleKeydown = (e) => {
       closeMenu()
       break
     case 'Tab':
-      closeMenu()
+      finishEditingAndClose()
       break
   }
 }
@@ -323,13 +333,11 @@ const setOptionRef = (el, index) => {
     optionRefs.value[index] = el
   }
 }
-// 点击外部关闭
-onClickOutside(target, () => {
-  if (isOpen.value) {
-    commitInputValue()
-    closeMenu()
-  }
-})
+const handlePopoverRequestClose = () => {
+  if (!isOpen.value) return
+  if (props.editable) commitInputValue()
+  closeMenu()
+}
 // 每次更新前清空，防止内存泄漏和死循环
 onBeforeUpdate(() => {
   optionRefs.value = []

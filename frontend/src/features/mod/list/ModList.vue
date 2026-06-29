@@ -50,66 +50,60 @@
     <div :data-tour="listId=='active'?'list-toolbar':null" class="px-2 py-1 w-full flex flex-col gap-1 shadow-xl bg-bg-deep/20">
       <div class="flex items-center justify-center gap-1 relative">
         <!-- 搜索定位 (Find) -->
-        <TagsSearch :list-color="listColor" v-model="searchQuery" v-model:logic="searchLogic" ref="searchTagsRef"
-          @search="executeSearch(true)" placeholder="输入关键词定位Mod位置……" class="z-10">
+        <TagSearchInput :list-color="listColor" v-model="searchQuery" v-model:logic="searchLogic" ref="searchTagsRef" class="z-10"
+          :controller="engine?.controller" @search="executeSearch(true)" placeholder="输入关键词定位Mod位置……">
           <template #right>
-            <!-- 定位按钮 -->
-            <button @click="searchTagsRef?.addTag();executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
-              :class="`px-3 py-1 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-              text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-              transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
-              <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[0.55rem] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
-            </button>
+            <div class="flex gap-1 items-center justify-center">
+              <!-- 定位按钮 -->
+              <button @click="searchTagsRef?.addTag();executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
+                :class="`px-2.5 py-1 m-0 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
+                transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
+                <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[0.55rem] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
+              </button>
+              <!-- 视图切换按钮 -->
+              <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+                :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
+                :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
+                @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'" >
+                <svg v-if="!isSimpleView" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
+                <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
+              </Motion>
+            </div>
           </template>
-        </TagsSearch>
-        <!-- 搜索帮助按钮 -->
-        <label v-tooltip="{content: searchHelpText, html:true}" class="absolute -top-1.5 -right-2.5 size-4 rounded-md text-sm text-center text-text-dim hover:text-text-main cursor-help">?</label>
-        
-        <!-- 视图切换按钮 -->
-        <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
-          :initial="{ rotateX: 0, opacity: 1 }"
-          :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
-          :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-          @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'"
-        >
-          <svg v-if="!isSimpleView" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
-          <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
-        </Motion>
+        </TagSearchInput>
       </div>
         
       <div class="flex items-center justify-center gap-1">
         <!-- 筛选过滤 (Filter) -->
-        <TagsSearch :list-color="listColor" v-model="filterQuery" v-model:logic="filterLogic"
-          placeholder="输入关键词筛选Mod……" class="z-5">
+        <TagSearchInput :list-color="listColor" v-model="filterQuery" v-model:logic="filterLogic" class="z-5"
+          :controller="engine?.controller" search-help-text="" placeholder="输入关键词筛选Mod……">
           <template #icon>
             <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
           </template>
 
           <template #right>
+            <div class="flex gap-1 items-center justify-center">
               <!-- 排序切换按钮 -->
               <button @click="isSortChange = !isSortChange" @blur="isSortChange = false" v-tooltip="sortTooltip"
-                :class="`px-3 py-1 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
-                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-                transition-all relative`">
+                :class="`px-2.5 py-1 m-0 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
+                text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all relative`">
                 {{ sortIcon }}
                 <div v-show="isSortChange" class="absolute min-w-20 h-auto p-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
                   <div v-for="(icon, mode) in SORT_MODE_MAP" :key="mode" @click="sortMode = mode" class="w-full rounded-md hover:bg-bg-overlay/10 hover:text-text-main">{{ icon }}</div>
                 </div>
               </button>
+              <!-- 逆序切换按钮 -->
+              <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
+                :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
+                :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
+                @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'" >
+                <svg v-if="isSortAsc" class="size-4 rotate-x-180" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
+                <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+              </Motion>
+            </div>
           </template>
-        </TagsSearch>
-        <!-- 排序切换按钮 -->
-        <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
-          :initial="{ rotateX: 0, opacity: 1 }"
-          :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
-          :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-          @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'"
-        >
-          <svg v-if="isSortAsc" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
-          <span v-else class="rotate-x-180">
-            <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
-          </span>
-        </Motion>
+        </TagSearchInput>
       </div>
     </div>
     
@@ -123,7 +117,7 @@
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" :data-tour="listId=='active'?'list-dependency':null" class="w-[55px] h-full flex-none"
         @wheel.passive="vListRef?.scrollToOffset(vListRef.getOffset()+$event.deltaY)">
-        <DependencyGraph v-if="showDependencyGraph" :listIds="lineData" :isFilter="filterByLine.length>0"
+        <DependencyGraph v-if="showDependencyGraph" :listIds="lineData" :line-filter-ids="filterByLine" :isFilter="filterByLine.length>0"
           :itemHeight="itemHeight" :scrollElement="vListRef"
           @lineClick="handleLineClick"
         />
@@ -176,6 +170,8 @@
                 @toggle-section="toggleSection"
                 @expand-selected-sections="expandSections"
                 @collapse-selected-sections="collapseSections"
+                @expand-all-sections="expandAllSections"
+                @collapse-all-sections="collapseAllSections"
                 @move-selected="handleMoveSelected">
               </ModItem>
               <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
@@ -218,11 +214,11 @@ import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
 import { useAppStore } from '../../../app/stores/appStore';
 import { useModStore } from '../stores/modStore';
-import { useSearchStore } from '../search/searchStore';
+import { useSearchStore } from '../stores/searchStore';
 import { ISSUE_TYPE } from '../../../shared/lib/constants';
 import ModItem from '../ModItem.vue';
 import ModListQuickActions from './ModListQuickActions.vue';
-import TagsSearch from '../search/TagsSearch.vue';
+import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue';
 import DependencyGraph from '../DependencyGraph.vue'
 import { useContextMenuStore } from '../../../shared/components/context-menu/contextMenuStore';
 import { useProfileStore } from '../../profiles/profileStore';
@@ -275,7 +271,7 @@ const {
   // 筛选状态
   filterQuery, filterLogic, filterByLine, isFilterByIssue, isFiltered, toggleIssueFilter, toggleIssueTypeFilter, clearFilter, clearSort, handleLineClick,
   // 展示与提示
-  itemHeight, searchHelpText, sortTooltip, filterTooltip, showDependencyGraph, displayList,
+  itemHeight, engine, sortTooltip, filterTooltip, showDependencyGraph, displayList,
 } = useModListQuery({ 
   props, appStore,  modStore, searchStore, toast, normalizeTokenId, normalizeCanonicalId,
  })
@@ -303,62 +299,88 @@ const {
 })
 const {
   // 分割组状态
-  sectionFeatureEnabled, splitGroupFeatureEnabled, activeSectionGroups,
-  isSectionHeaderId, isSectionCollapsed, getSectionChildCount,
+  sectionFeatureEnabled, splitGroupFeatureEnabled, currentSectionGroups, takeSectionGroupsByListId,
+  isSectionHeaderId, isSectionCollapsed, getSectionChildCount, collapsedSectionCount, expandableSectionCount,
   // 折叠操作
-  toggleSection, expandSections, collapseSections,
+  toggleSection, expandSections, collapseSections, expandAllSections, collapseAllSections,
   // 可见列表与定位
-  visibleList, revealCollapsedSectionFor, findActiveSectionGroupById,
+  visibleList, revealCollapsedSectionFor, findCurrentSectionGroupById,
   // 拖拽与移动
   getSectionMemberIds, resolveInsertionIndex, correctInterlockInsertIndex, internalListProxy,
-  moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToActiveSectionGroup,
+  moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToSectionGroup,
 } = useModListSections({
   props, appStore, modStore, profileStore, displayList, allowSort, normalizeId, normalizeCanonicalId,
 })
 
 const canMoveListItems = computed(() => !appStore.isLoading && allowSort.value)
 const selectedHasSplitHeader = computed(() => (
-  props.listId === 'active'
+  sectionFeatureEnabled.value
   && (modStore.selectedIds || []).some(id => isSectionHeaderId(id))
 ))
 const currentSplitGroupId = computed(() => {
-  if (props.listId !== 'active' || selectedHasSplitHeader.value) return ''
+  if (!sectionFeatureEnabled.value || selectedHasSplitHeader.value) return ''
   const groupIds = [...new Set(
     (modStore.selectedIds || [])
-      .map(id => findActiveSectionGroupById(id)?.groupId || '')
+      .map(id => findCurrentSectionGroupById(id)?.groupId || '')
       .filter(Boolean)
   )]
   return groupIds.length === 1 ? groupIds[0] : ''
 })
 const canMoveWithinSplitGroup = computed(() => (
-  props.listId === 'active'
-  && splitGroupFeatureEnabled.value
+  splitGroupFeatureEnabled.value
   && canMoveListItems.value
   && !selectedHasSplitHeader.value
   && !!currentSplitGroupId.value
 ))
-const splitGroupMenuOptions = computed(() => {
-  if (!splitGroupFeatureEnabled.value || !canMoveListItems.value) return []
-  if (selectedHasSplitHeader.value) return []
-  return activeSectionGroups.value
-    .filter(group => !currentSplitGroupId.value || group.groupId !== currentSplitGroupId.value)
-    .map(group => ({
-      groupId: group.groupId,
-      label: group.label,
-      count: group.modIds.length,
-    }))
+const SECTION_TARGET_MENU_LABEL_MAP = {
+  active: '启用列表分割组...',
+  inactive: '停用列表分割组...',
+}
+const splitGroupTargets = computed(() => {
+  if (!canMoveListItems.value || selectedHasSplitHeader.value) return []
+  const targets = []
+  const currentGroups = splitGroupFeatureEnabled.value
+    ? currentSectionGroups.value.filter(group => !currentSplitGroupId.value || group.groupId !== currentSplitGroupId.value)
+    : []
+  if (currentGroups.length) {
+    targets.push({
+      listId: props.listId,
+      label: props.listId === 'active' ? '其他分割组...' : '当前列表其他分割组...',
+      groups: currentGroups.map(group => ({
+        groupId: group.groupId,
+        label: group.label,
+        count: group.modIds.length,
+      })),
+    })
+  }
+  ;['active', 'inactive'].forEach((listId) => {
+    if (listId === props.listId) return
+    const targetGroups = takeSectionGroupsByListId(listId)
+    if (!targetGroups.length) return
+    targets.push({
+      listId,
+      label: SECTION_TARGET_MENU_LABEL_MAP[listId] || '其它列表分割组...',
+      groups: targetGroups.map(group => ({
+        groupId: group.groupId,
+        label: group.label,
+        count: group.modIds.length,
+      })),
+    })
+  })
+  return targets.filter(target => target.groups.length > 0)
 })
 const moveMenuContext = computed(() => ({
   listId: props.listId,
   enabled: canMoveListItems.value,
   canMoveWithinSplitGroup: canMoveWithinSplitGroup.value,
-  splitGroupLabel: props.listId === 'active' ? '其他分割组...' : '主列表分割组...',
-  splitGroupOptions: splitGroupMenuOptions.value,
+  splitGroupTargets: splitGroupTargets.value,
+  sectionGroupCount: expandableSectionCount.value,
+  collapsedSectionGroupCount: collapsedSectionCount.value,
 }))
 const currentSplitGroupMetaById = computed(() => {
   const map = new Map<string, { headerId: string, label: string, collapsed: boolean }>()
-  if (props.listId !== 'active' || !splitGroupFeatureEnabled.value) return map
-  activeSectionGroups.value.forEach(group => {
+  if (!splitGroupFeatureEnabled.value) return map
+  currentSectionGroups.value.forEach(group => {
     const meta = {
       headerId: group.headerId,
       label: group.label,
@@ -372,7 +394,7 @@ const currentSplitGroupMetaById = computed(() => {
 const getCurrentSplitGroupMeta = (id: string) => currentSplitGroupMetaById.value.get(normalizeId(id)) || null
 
 // 处理移动菜单点击事件
-const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
+const handleMoveSelected = async ({ action, targetGroupId, targetListId } = {}) => {
   const ids = [...(modStore.selectedIds || [])]
   if (!ids.length || !canMoveListItems.value) return
 
@@ -388,9 +410,10 @@ const handleMoveSelected = async ({ action, targetGroupId } = {}) => {
       position: action === 'group-top' ? 'top' : 'bottom',
     })
   } else if (action === 'split-group' && targetGroupId) {
-    changed = await moveIdsToActiveSectionGroup({
+    changed = await moveIdsToSectionGroup({
       ids,
       targetGroupId,
+      targetListId: targetListId || props.listId,
       position: 'bottom',
     })
   }

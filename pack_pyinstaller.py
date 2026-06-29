@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from contextlib import suppress
 from pathlib import Path
 from typing import List
 
@@ -14,6 +15,63 @@ try:
 except ImportError:
     HAS_PATHSPEC = False
     print("提示: 未安装 'pathspec' 库，.gitignore 过滤功能将不可用。")
+
+
+def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
+    existing_paths = [item for item in env.get("PYTHONPATH", "").split(os.pathsep) if item]
+    extra_paths = [str(path.resolve()) for path in paths if path.exists()]
+    env["PYTHONPATH"] = os.pathsep.join([*extra_paths, *existing_paths])
+
+
+def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
+    source_dir = project_root / "submodules" / "SteamworksPy"
+    if not (source_dir / "steamworks" / "__init__.py").exists():
+        raise FileNotFoundError(f"未找到 SteamworksPy 源码目录: {source_dir}")
+    return source_dir
+
+
+def _run_command_with_log(cmd: list[str], log_path: Path, env: dict[str, str] | None = None) -> int:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="")
+            log_file.write(line)
+        return process.wait()
+
+
+def _npm_command() -> str:
+    if sys.platform == "win32":
+        return shutil.which("npm.cmd") or "npm.cmd"
+    return shutil.which("npm") or "npm"
+
+
+def _platform_tag() -> str:
+    if sys.platform.startswith(("win32", "cygwin", "msys")):
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in sys.platform).strip("-") or "unknown"
+
+
+def _release_zip_name(app_name: str, version: str) -> str:
+    version_text = str(version or "0.0.0").strip().lstrip("vV") or "0.0.0"
+    return f"{app_name}-v{version_text}-{_platform_tag()}.zip"
+
+
+def _pyinstaller_add_data_arg(source: str, target: str) -> str:
+    return f"{source}{os.pathsep}{target}"
 
 
 def create_pyinstaller_hook_dir():
@@ -43,17 +101,32 @@ datas = collect_data_files(
         f.write(hook_content)
     return hook_dir
 
+def resolve_upx_dir(default_dir: str = "") -> str:
+    """解析 UPX 目录，不存在时跳过压缩参数，避免换机器打包直接失败。"""
+    raw_path = os.environ.get("UPX_DIR") or default_dir
+    if not raw_path:
+        print("提示: 未配置 UPX 目录，已跳过压缩参数。")
+        return ""
+    upx_path = Path(raw_path)
+    if upx_path.is_file():
+        upx_path = upx_path.parent
+    if upx_path.exists():
+        return str(upx_path)
+    print(f"提示: 未找到 UPX 目录，已跳过压缩参数: {upx_path}")
+    return ""
+
+
 def create_version_file(version="1.0.0.0", company_name="", file_description="", internal_name="", legal_copyright="", product_name=""):
     """
     生成 PyInstaller 所需的版本信息文件
     """
     # 将版本号字符串 "1.0.0" 转换为元组 (1, 0, 0, 0)
     try:
-        v = version.split(".")
+        v = str(version).split(".")
         while len(v) < 4:
             v.append("0")
         v_tuple = tuple(map(int, v[:4]))
-    except:
+    except (TypeError, ValueError):
         v_tuple = (1, 0, 0, 0)
         
     version_str = str(v_tuple)
@@ -99,7 +172,7 @@ VSVersionInfo(
         print(f"生成版本文件失败: {e}")
         return None
 
-def packApplication(main_file="main.py", icon_path="", name="", splash_path="", version="1.0.0", company=""):
+def packApplication(main_file="main.py", icon_path="", name="", splash_path="", version="1.0.0", company="", upx_dir=""):
     """
     使用 PyInstaller 打包应用程序
     Args:
@@ -110,6 +183,8 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
     version_file_path = None
     hook_dir_path = None
     try:
+        project_root = Path(__file__).resolve().parent
+        steamworkspy_source_dir = _resolve_steamworkspy_source_dir(project_root)
         if not os.path.exists(main_file): raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
         
         # 1. 生成版本信息文件
@@ -123,6 +198,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             product_name=name
         )
         hook_dir_path = create_pyinstaller_hook_dir()
+        upx_dir_path = resolve_upx_dir(upx_dir)
 
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
@@ -135,12 +211,12 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             # "-D",  # 打包成目录
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
-            "--contents-directory", "lib",
+            "--paths", str(steamworkspy_source_dir),
             "--additional-hooks-dir", hook_dir_path,
-            "--add-data", "frontend/dist;frontend/dist", # 注意：Windows下通常用分号; Linux用冒号:
-            "--collect-binaries", "steamworks",
+            "--add-data", _pyinstaller_add_data_arg("frontend/dist", "frontend/dist"),
             "--collect-binaries", "tiktoken",
             "--collect-data", "tiktoken",
+            "--collect-submodules", "steamworks",
             "--collect-submodules", "tiktoken",
             "--collect-submodules", "tiktoken_ext",
             "--hidden-import", "tiktoken_ext",
@@ -152,11 +228,12 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "--exclude-module", "pkg_resources", # 通常这两个是一起出现的，建议一并排除
             
             "--clean",  # 清理旧构建文件
-            "--upx-dir", r"D:\Environment\upx-5.0.0-win64",  # 指定 UPX 路径
             "-n", name,  # 指定名称
             main_file  # 主程序文件
         ]
         cmd = pyinstaller_args
+        if upx_dir_path:
+            cmd.extend(["--upx-dir", upx_dir_path])
         if icon_path and os.path.exists(icon_path):
             cmd.extend(["-i", icon_path])
         if splash_path and os.path.exists(splash_path):
@@ -164,19 +241,24 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         if version_file_path:
             cmd.extend(["--version-file", version_file_path])
         
+        env = os.environ.copy()
+        _append_pythonpath(env, steamworkspy_source_dir)
+
         print(f"执行命令: {' '.join(cmd)}")
         # 3. 执行打包
-        result = subprocess.run(cmd, text=True, encoding='utf-8') # 显式指定编码防止乱码
-        if result.returncode == 0:
+        build_log_path = Path("dist") / "pyinstaller-build.log"
+        returncode = _run_command_with_log(cmd, build_log_path, env=env)
+        if returncode == 0:
             print("\n" + "="*30)
             print("★ 打包成功！")
             print(f"★ 输出文件: dist/{name}.exe")
+            print(f"★ 构建日志: {build_log_path.resolve()}")
             print("="*30 + "\n")
             return True
         else:
             print("打包失败！")
-            print("错误信息：")
-            print(result.stderr)
+            print(f"PyInstaller 退出码: {returncode}")
+            print(f"构建日志: {build_log_path.resolve()}")
             return False
     except Exception as e:
         print(f"打包过程中出错: {str(e)}")
@@ -184,11 +266,9 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
     finally:
         # 清理临时版本文件
         if version_file_path and os.path.exists(version_file_path):
-            try: os.remove(version_file_path)
-            except: pass
+            with suppress(OSError): os.remove(version_file_path)
         if hook_dir_path and os.path.exists(hook_dir_path):
-            try: shutil.rmtree(hook_dir_path)
-            except: pass
+            with suppress(OSError): shutil.rmtree(hook_dir_path)
 
 def _iter_toolmods_files(toolmods_dir: Path):
     """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
@@ -204,16 +284,25 @@ def _iter_toolmods_files(toolmods_dir: Path):
             file_path = current_path / filename
             yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
 
+def _should_include_steamcmd_file(relative_path: Path) -> bool:
+    if sys.platform == "win32":
+        return relative_path.name.lower() == "steamcmd.exe"
+    return relative_path.name == "steamcmd.sh"
+
+
 def _iter_tools_files(tools_dir: Path):
-    """遍历 tools 发布文件，仅保留 steamcmd.exe，其它目录按现有内容发布。"""
+    """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
     if not tools_dir.exists():
         return
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
     for file_path in tools_dir.rglob("*"):
         if not file_path.is_file():
             continue
         relative_path = file_path.relative_to(tools_dir)
         normalized_parts = [part.lower() for part in relative_path.parts]
-        if normalized_parts and normalized_parts[0] == "steamcmd" and relative_path.name.lower() != "steamcmd.exe":
+        if normalized_parts and normalized_parts[0] not in allowed_tool_dirs:
+            continue
+        if normalized_parts and normalized_parts[0] == "steamcmd" and not _should_include_steamcmd_file(relative_path):
             continue
         yield file_path, Path("tools") / relative_path
 
@@ -236,7 +325,7 @@ def create_release_zip(app_name: str, version: str):
     project_root = Path(__file__).resolve().parent
     dist_dir = project_root / "dist"
     exe_path = dist_dir / f"{app_name}.exe"
-    zip_path = dist_dir / f"{app_name} v{version}.zip"
+    zip_path = dist_dir / _release_zip_name(app_name, version)
     archive_root = Path(app_name)
 
     if not exe_path.exists():
@@ -264,7 +353,7 @@ def buildFrontend(start_path: str = 'frontend'):
     """
     构建前端项目
     """
-    subprocess.run(["npm", "run", "build"], cwd=start_path, check=True, text=True, encoding='utf-8', shell=True)
+    subprocess.run([_npm_command(), "run", "build"], cwd=start_path, check=True, text=True, encoding='utf-8')
 
 # --- 优化后的目录树生成 ---
 
@@ -278,7 +367,7 @@ def get_gitignore_spec(root_path: str):
             return pathspec.PathSpec.from_lines('gitwildmatch', f)
     return None
 
-def filestree( start_path: str = '.', exclude_dirs: List[str] = [], max_depth: int = -1, use_gitignore: bool = True ) -> str:
+def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max_depth: int = -1, use_gitignore: bool = True ) -> str:
     """
     生成目录树结构字符串（重构版：递归逻辑更清晰，支持 .gitignore）
     
@@ -339,6 +428,7 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] = [], max_depth: i
 
 if __name__ == "__main__":
     from backend._version import __version__
+    # pack_zip = False
     pack_zip = True
     # 配置
     APP_MAIN = 'main.py'
@@ -347,6 +437,7 @@ if __name__ == "__main__":
     APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
+    DEFAULT_UPX_DIR = r'D:\Environment\upx-5.0.0-win64'
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
     
     # 0. 构建前端项目
@@ -354,10 +445,18 @@ if __name__ == "__main__":
     
     # 1. 执行打包
     print(f'=== 开始打包 {APP_NAME} v{APP_VERSION} ===')
-    packed = packApplication(main_file=APP_MAIN, icon_path=ICON_PATH, name=APP_NAME, splash_path=SPLASH_PATH, version=APP_VERSION, company=APP_COMPANY)
+    packed = packApplication(
+        main_file=APP_MAIN,
+        icon_path=ICON_PATH,
+        name=APP_NAME,
+        splash_path=SPLASH_PATH,
+        version=APP_VERSION,
+        company=APP_COMPANY,
+        upx_dir=DEFAULT_UPX_DIR,
+    )
     
     if packed and pack_zip:
-        print(f'=== 生成发布压缩包 {APP_NAME} v{APP_VERSION}.zip ===')
+        print(f'=== 生成发布压缩包 {_release_zip_name(APP_NAME, APP_VERSION)} ===')
         create_release_zip(APP_NAME, APP_VERSION)
     
     # 2. 生成目录树

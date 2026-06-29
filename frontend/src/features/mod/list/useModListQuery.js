@@ -1,5 +1,4 @@
 import { computed, ref, watch } from 'vue'
-import { generateHtmlHelp } from '../search/SearchHelp'
 import { ISSUE_TYPE } from '../../../shared/lib/constants'
 
 const SORT_MODE_MAP = {
@@ -12,6 +11,7 @@ const SORT_MODE_MAP = {
   'file_create_time': '创建时间',
   'file_modify_time': '修改时间',
   'file_size': '文件大小',
+  'multiplayer_compat': '联机兼容性',
 }
 
 export function useModListQuery({
@@ -44,6 +44,30 @@ export function useModListQuery({
   const engine = computed(() => searchStore.engine)
   const searchResultSet = computed(() => new Set(searchResults.value))
 
+  const normalizeExactText = (value) => String(value ?? '').trim().toLowerCase()
+  const getExactTagValues = (mod, tag) => {
+    const config = tag?.schema || engine.value?.schema?.[tag?.key]
+    const rawValue = config?.getter ? config.getter(mod) : mod?.[tag?.key]
+    return Array.isArray(rawValue) ? rawValue : [rawValue]
+  }
+  const matchesExactTag = (mod, tag) => {
+    if (!mod || !tag?.key) return false
+    const expected = normalizeExactText(tag.value)
+    const matched = getExactTagValues(mod, tag).some(value => normalizeExactText(value) === expected)
+    return tag.exclude ? !matched : matched
+  }
+  const buildMainListExactTag = (filter) => {
+    if (!filter?.field || !filter?.value || !engine.value) return null
+    const tag = engine.value.parse(`${filter.field}:${filter.value}`)
+    if (!tag || tag.type !== 'rule') return null
+    return {
+      ...tag,
+      id: `main-list-exact-${filter.field}-${filter.normalizedValue}-${searchStore.mainListFilterRevision}`,
+      exact: true,
+      displayValue: filter.label || tag.displayValue,
+    }
+  }
+
   const resolveTargetListId = (targetId, candidates = []) => {
     const normalizedTargetToken = normalizeTokenId(targetId)
     if (!normalizedTargetToken) return ''
@@ -59,13 +83,29 @@ export function useModListQuery({
   const allowSort = computed(() => sortMode.value === 'default' && !isFiltered.value && isSortAsc.value)
   const itemHeight = computed(() => isSimpleView.value ? appStore.scalePx(30)+4 : appStore.scalePx(50)+4)
 
+  const normalizeLineIds = (lineIds = []) => (
+    (Array.isArray(lineIds) ? lineIds : [lineIds]).map(normalizeCanonicalId).filter(Boolean)
+  )
+  const isSameLineFilter = (lineIds = []) => {
+    const currentIds = normalizeLineIds(filterByLine.value)
+    const nextIds = normalizeLineIds(lineIds)
+    if (currentIds.length !== nextIds.length) return false
+    return currentIds.every((id, index) => id === nextIds[index])
+  }
+  const setLineFilter = (lineIds = []) => {
+    filterByLine.value = normalizeLineIds(lineIds)
+  }
+  const clearLineFilter = () => {
+    filterByLine.value = []
+  }
+
   // 切换问题项筛选
   const toggleIssueFilter = () => {
     isFilterByIssue.value = !isFilterByIssue.value
     filterIssueType.value = ''  // 整体筛选时，清空问题项类型筛选
   }
   const toggleIssueTypeFilter = (type) => {
-    console.log('toggleIssueTypeFilter', type)
+    console.debug('切换问题类型筛选:', type)
     // 检查类型是否符合ISSUE_TYPE
     if (!Object.values(ISSUE_TYPE).includes(type)) {
       isFilterByIssue.value = false
@@ -82,21 +122,23 @@ export function useModListQuery({
   const clearFilter = () => {
     filterQuery.value = []
     isFilterByIssue.value = false
-    filterByLine.value = []
+    clearLineFilter()
     filterIssueType.value = ''
   }
+  const applyMainListExactFilter = () => {
+    // 来自详情页的筛选是一次性覆盖动作：先清掉列表已有筛选，再放入当前精确条件。
+    clearFilter()
+    const tag = buildMainListExactTag(searchStore.mainListExactFilter)
+    if (!tag) return
+    filterLogic.value = 'AND'
+    filterQuery.value = [tag]
+  }
+  watch(() => searchStore.mainListFilterRevision, applyMainListExactFilter, { immediate: true })
   // 清除排序
   const clearSort = () => {
     sortMode.value = 'default'
     isSortAsc.value = true
   }
-
-  // 动态计算帮助文本
-  const searchHelpText = computed(() => {
-    if (!engine.value) return 'Loading...'
-    // 这里可以做一层缓存，避免每次 render 都生成字符串
-    return generateHtmlHelp(engine.value)
-  })
 
   // 排序提示
   const sortTooltip = computed(() => {
@@ -119,12 +161,15 @@ export function useModListQuery({
   })
   // 处理点击依赖图线路（筛选依赖组）
   const handleLineClick = (lines) => {
-    // 重复点击清空
-    if (filterByLine.value.length > 0) {
-      filterByLine.value = []
+    if (!Array.isArray(lines) || lines.length === 0) {
+      clearLineFilter()
       return
     }
-    filterByLine.value = lines
+    if (isSameLineFilter(lines)) {
+      clearLineFilter()
+      return
+    }
+    setLineFilter(lines)
   }
   // 左侧依赖线只跟随当前“可见列表”，这样折叠后视觉和交互才能保持同步。
   const showDependencyGraph = computed(() => allowSort.value || filterByLine.value.length > 0)
@@ -152,10 +197,18 @@ export function useModListQuery({
       })
     }
     // 3. 标签筛选
-    if (filterQuery.value.length > 0 && engine.value) {
+    const exactTags = filterQuery.value.filter(tag => tag?.exact)
+    if (exactTags.length > 0) {
+      list = list.filter(id => {
+        const mod = modStore.takeModById(id)
+        return exactTags.every(tag => matchesExactTag(mod, tag))
+      })
+    }
+    const searchTags = filterQuery.value.filter(tag => !tag?.exact)
+    if (searchTags.length > 0 && engine.value) {
       // A. 全局搜索符合条件的对象
       // engine.search 返回的是 Mod 对象数组
-      const matchedObjects = engine.value.search(filterQuery.value, filterLogic.value)
+      const matchedObjects = engine.value.search(searchTags, filterLogic.value)
       // B. 提取 ID 并建立 Set 供快速查找
       const matchedSet = new Set(matchedObjects.map(m => normalizeCanonicalId(m.package_id)))
       // C. 取交集 (当前列表 AND 搜索结果)
@@ -175,6 +228,7 @@ export function useModListQuery({
         if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
         if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
         if (sortMode.value === 'file_size') return (mA?.file_size || 0) - (mB?.file_size || 0)
+        if (sortMode.value === 'multiplayer_compat') return (mA?.multiplayer_compat?.sort_rank || 0) - (mB?.multiplayer_compat?.sort_rank || 0)
 
         return 0
       })
@@ -233,7 +287,7 @@ export function useModListQuery({
       if (!newVal || newVal === oldVal) return
       const resolvedTargetId = resolveTargetListId(newVal, props.modelValue)
       if (!resolvedTargetId) {
-        console.info(`Item ${newVal} not found in ${props.title} list model.`)
+        console.info(`目标项未出现在当前列表中: ${newVal}，列表=${props.title}`)
         return
       }
       // 1. 检查目标是否在当前所有的 modelValue 中（不仅是 displayList）
@@ -241,7 +295,7 @@ export function useModListQuery({
 
       // 2. 检查是否被当前的筛选器过滤掉了
       if (!displayList.value.includes(resolvedTargetId)) {
-        console.info(`Item ${resolvedTargetId} is filtered out by current ${props.title} filter.`)
+        console.info(`目标项被当前列表筛选器过滤: ${resolvedTargetId}，列表=${props.title}`)
         toast.warning(`搜索项 ${resolvedTargetId} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
       }
       await revealCollapsedSectionFor(resolvedTargetId)
@@ -293,10 +347,12 @@ export function useModListQuery({
     toggleIssueTypeFilter,
     clearFilter,
     clearSort,
-    searchHelpText,
     sortTooltip,
     filterTooltip,
     handleLineClick,
+    setLineFilter,
+    clearLineFilter,
+    isSameLineFilter,
     showDependencyGraph,
     displayList,
     sortIcon,

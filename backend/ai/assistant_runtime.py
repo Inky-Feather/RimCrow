@@ -1760,7 +1760,12 @@ class AssistantRuntime:
             except AssistantRequestCancelled:
                 raise
             except Exception as exc:
-                logger.error(f"AI Session Error: {str(exc)}", exc_info=True)
+                logger.error(
+                    "AI 会话执行失败。session_id=%s",
+                    session_id,
+                    extra={"error_code": "AI.SESSION.RUN_FAILED", "extra_context": {"session_id": session_id, "original_error": str(exc)}},
+                    exc_info=True,
+                )
                 return self._build_error_response(exc, token_usage)
 
         return self._build_forced_summary(
@@ -2134,7 +2139,7 @@ class AssistantRuntime:
             allowed_action_types=allowed_action_types,
         )
 
-    def _build_error_response(self, error: Exception, token_usage: dict[str, Any], summary_label: str = "点击展开错误详情") -> dict[str, Any]:
+    def _build_error_response(self, error: Exception, token_usage: dict[str, Any], summary_label: str = "点击展开诊断建议") -> dict[str, Any]:
         import traceback
 
         token_usage["estimated_total_tokens"] = (
@@ -2142,10 +2147,12 @@ class AssistantRuntime:
         )
         error_trace = traceback.format_exc()
         error_markdown = (
-            "⚠️ **AI 推理链路在本轮处理中发生严重中断。**\n\n"
-            "这通常是因为 API 中转站超时、模型不支持流式工具调用，或者网络连接被强制断开。\n\n"
+            "**AI 请求没有完成。**\n\n"
+            "常见原因包括：模型服务暂时无响应、网络或代理连接中断、API Key 无效、当前模型不支持本次工具调用，"
+            "或中转服务返回了不兼容的响应。\n\n"
             f"<details><summary>{summary_label}</summary>\n\n"
-            f"```text\n{str(error)}\n\n{error_trace}\n```\n"
+            "请先检查 AI 设置里的模型、Base URL、API Key 和代理配置；如果刚才请求内容较大，"
+            "可以减少附件或稍后重试。详细技术错误已写入系统日志。\n"
             "</details>"
         )
         return {
@@ -2153,6 +2160,10 @@ class AssistantRuntime:
             "actions": [],
             "token_usage": token_usage,
             "message_usage": self._build_message_usage_from_request(token_usage),
+            "detail": {
+                "original_error": str(error),
+                "traceback": error_trace,
+            },
         }
 
     def _build_forced_summary(
@@ -2225,5 +2236,10 @@ class AssistantRuntime:
         except AssistantRequestCancelled:
             raise
         except Exception as exc:
-            logger.error(f"AI Session Error: {str(exc)}", exc_info=True)
-            return self._build_error_response(exc, token_usage, "点击展开查看技术报错详情")
+            logger.error(
+                "AI 会话强制总结失败。session_id=%s",
+                session_id,
+                extra={"error_code": "AI.SESSION.FORCED_SUMMARY_FAILED", "extra_context": {"session_id": session_id, "original_error": str(exc)}},
+                exc_info=True,
+            )
+            return self._build_error_response(exc, token_usage, "点击展开诊断建议")

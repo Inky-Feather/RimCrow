@@ -194,7 +194,7 @@ class ModPackageManager:
             self._cleanup_partial_export(target_path)
             self._emit_export_progress(task_id, "cancelled", 0, "模组包导出已取消", phase="cancelled")
         except Exception as e:
-            logger.error("Mod package export task failed: %s", e, exc_info=True)
+            logger.error("MOD 包导出任务失败：%s", e, exc_info=True)
             self._cleanup_partial_export(target_path)
             self._emit_export_progress(
                 task_id,
@@ -419,7 +419,7 @@ class ModPackageManager:
         except InterruptedError:
             self._emit_import_progress(task_id, "cancelled", 0, "模组包导入已取消", phase="cancelled")
         except Exception as e:
-            logger.error("Mod package import task failed: %s", e, exc_info=True)
+            logger.error("MOD 包导入任务失败：%s", e, exc_info=True)
             self._emit_import_progress(
                 task_id,
                 "failed",
@@ -1152,7 +1152,7 @@ class ModPackageManager:
             try:
                 os.remove(normalized_path)
             except OSError:
-                logger.warning("Failed to cleanup partial export bundle: %s", normalized_path, exc_info=True)
+                logger.warning("清理未完成的导出包失败：%s", normalized_path, exc_info=True)
 
     @staticmethod
     def _is_deployed_workshop_link(path: str) -> bool:

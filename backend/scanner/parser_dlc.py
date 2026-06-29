@@ -148,7 +148,7 @@ class DLCParser:
                     loaded = json.load(f)
                     cache_data = loaded
             except Exception:
-                logger.info("[DLCParser] Cache corrupted, rebuilding all.")
+                logger.info("[DLCParser] 缓存已损坏，正在全部重建。")
 
         current_trans = {}
         current_meta = cache_data.get('meta', {}) # 记录文件名对应的时间戳
@@ -186,7 +186,7 @@ class DLCParser:
                (abs(current_meta[filename] - mtime) > 1.0) or \
                (lang_code not in current_trans):
                 
-                logger.info(f"[DLCParser] Updating cache for: {filename}")
+                logger.info(f"[DLCParser] 正在更新缓存：{filename}")
                 # 解析该文件
                 trans_map = self._extract_translations_from_tar(tar_path)
                 
@@ -201,7 +201,7 @@ class DLCParser:
         existing_filenames_in_meta = list(current_meta.keys())
         for fname in existing_filenames_in_meta:
             if fname not in found_filenames:
-                logger.info(f"[DLCParser] Removing stale cache: {fname}")
+                logger.info(f"[DLCParser] 正在移除过期缓存：{fname}")
                 del current_meta[fname]
                 # 尝试移除对应的翻译数据 (可能比较困难，因为 key 转换了)
                 # 简单做法：如果是清理，因为这一步比较少见，不处理 trans 里的残留脏数据也不会崩，
@@ -224,7 +224,7 @@ class DLCParser:
             with open(CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False)
         except Exception as e:
-            logger.error(f"[DLCParser] Failed to save cache: {e}")
+            logger.error(f"[DLCParser] 保存缓存失败：{e}")
 
     # =========================================================================
     #  辅助工具方法
@@ -266,7 +266,7 @@ class DLCParser:
                         'description': node.findtext('description')
                     }
         except Exception: 
-            logger.error(f"[DLCParser] Failed to parse {xml_path}")
+            logger.error(f"[DLCParser] 解析失败：{xml_path}")
         return defs
 
     def _extract_translations_from_tar(self, tar_path):
@@ -284,7 +284,7 @@ class DLCParser:
                         if f:
                             self._parse_translation_xml(f.read(), trans_map)
         except Exception as e:
-            logger.error(f"[DLCParser] Error extracting {tar_path}: {e}")
+            logger.error(f"[DLCParser] 解压失败：{tar_path}，错误：{e}")
         return trans_map
 
     def _parse_translation_xml(self, xml_bytes, trans_map):
@@ -307,7 +307,7 @@ class DLCParser:
                 trans_map[def_name][prop] = text.strip().replace('\\n', '\n')
             # logger.debug(f"[DLCParser] Parsed trans_map: {trans_map}")
         except Exception as e:
-            logger.error(f"[DLCParser] Error parsing XML: {e}")
+            logger.error(f"[DLCParser] 解析 XML 失败：{e}")
             pass
         
 

@@ -6,12 +6,18 @@ from unittest.mock import Mock
 
 from backend.api import API
 from backend.database.models import GithubModRecord, GithubTimeline, ModAsset, UserModData, db
+from backend.settings import settings
+from backend.utils.tools import normalize_path_for_storage
 
 
 class TestWorkspaceMatrixTimes(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
+        self.self_mods_path = Path(self.temp_dir.name) / "SelfMods"
+        original_self_mods_path = settings.config.self_mods_path
+        self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods_path)
+        settings.config.self_mods_path = str(self.self_mods_path)
         db_path = str(Path(self.temp_dir.name) / "workspace-matrix-times.db")
         db.init(db_path)
         db.connect(reuse_if_open=True)
@@ -31,7 +37,7 @@ class TestWorkspaceMatrixTimes(unittest.TestCase):
         return api
 
     def test_workspace_domains_adds_git_download_time_to_self_mod_from_success_timeline(self):
-        mod_path = str(Path(self.temp_dir.name) / "SelfMods" / "_GH_TestRepo")
+        mod_path = str(self.self_mods_path / "_GH_TestRepo")
         ModAsset.create(
             path_hash="git-hash",
             package_id="author.gitmod",
@@ -65,6 +71,29 @@ class TestWorkspaceMatrixTimes(unittest.TestCase):
         self.assertEqual(mod["download_status"]["download_time"], 222)
         self.assertEqual(mod["download_status"]["source"], "github_timeline_success")
         self.assertEqual(mod["download_status"]["installed_version"], "main@2026-01-02T03:04:05Z")
+
+    def test_github_get_subscribed_returns_normalized_local_path(self):
+        local_path = self.self_mods_path / "_GH_TestRepo"
+        local_path.mkdir(parents=True)
+        GithubModRecord.create(
+            repo_url="https://github.com/user/TestRepo",
+            provider="github",
+            host="github.com",
+            owner="user",
+            repo_name="TestRepo",
+            install_type="source",
+            target_branch="main",
+            local_folder="_GH_TestRepo",
+        )
+        api = self._api()
+        api.github_mgr = SimpleNamespace(detect_repo_provider=Mock(return_value=("github", "github.com")), record_timeline=Mock())
+        api._schedule_github_subs_refresh = Mock(return_value=False)
+
+        res = API.github_get_subscribed(api)
+
+        record = res["data"][0]
+        self.assertEqual(record["local_path"], normalize_path_for_storage(local_path))
+        self.assertTrue(record["local_exists"])
 
     def test_workspace_domains_uses_steamcmd_sync_time_as_download_time(self):
         ModAsset.create(

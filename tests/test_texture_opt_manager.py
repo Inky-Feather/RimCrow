@@ -25,6 +25,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.options = {
             "texture_tools_path": str(self.temp_root / "tools"),
             "process_mode": "scaled_only_overwrite",
+            "output_format": "dds",
             "generate_mipmaps": True,
             "overwrite_existing": True,
             "clean_orphaned_dds": False,
@@ -221,10 +222,19 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], first_options))
         self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], second_options))
 
-    def test_resolve_output_source_returns_png_only(self):
+    def test_resolve_output_source_accepts_common_image_sources(self):
         source = self._write_png("Textures/source.png")
         resolved = self.manager._resolve_output_source(source.with_suffix(".dds"))
         self.assertEqual(resolved, source)
+        zstd_resolved = self.manager._resolve_output_source(source.with_suffix(".dds.zstd"))
+        self.assertEqual(zstd_resolved, source)
+
+        jpg_source = self.mod_root / "Textures" / "photo.jpg"
+        psd_source = self.mod_root / "Textures" / "layered.psd"
+        jpg_source.write_bytes(b"jpg")
+        psd_source.write_bytes(b"psd")
+        self.assertEqual(self.manager._resolve_output_source(jpg_source.with_suffix(".dds")), jpg_source)
+        self.assertEqual(self.manager._resolve_output_source(psd_source.with_suffix(".dds.zstd")), psd_source)
 
     def test_calc_progress_never_stays_zero_after_work_starts(self):
         self.assertEqual(self.manager._calc_progress(0, 1000), 0)
@@ -268,9 +278,110 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_iter_texture_output_paths_only_returns_dds_outputs(self):
         self._write_png("Textures/source.png")
         (self.mod_root / "Textures" / "a.dds").write_bytes(b"a")
+        (self.mod_root / "Textures" / "a.dds.zstd").write_bytes(b"z")
 
         found = sorted(path.name for path in self.manager._iter_texture_output_paths(str(self.mod_root)))
         self.assertEqual(found, ["a.dds"])
+        found_with_zstd = sorted(
+            path.name
+            for path in self.manager._iter_texture_output_paths(str(self.mod_root), include_zstd=True)
+        )
+        self.assertEqual(found_with_zstd, ["a.dds", "a.dds.zstd"])
+
+    def test_iter_texture_roots_ignores_source_directory(self):
+        source_texture = self.mod_root / "Source" / "Textures"
+        source_texture.mkdir(parents=True, exist_ok=True)
+        source_texture.joinpath("author.psd").write_bytes(b"psd")
+
+        found = list(self.manager._iter_texture_root_dirs(str(self.mod_root)))
+
+        self.assertNotIn(source_texture, found)
+
+    def test_scan_zstd_mode_tracks_zstd_outputs_separately(self):
+        source = self._write_png("Textures/source.png", size=(128, 128))
+        source.with_suffix(".dds.zstd").write_bytes(b"zstd")
+        source.with_suffix(".dds").write_bytes(b"dds")
+
+        snapshot = self.manager._scan_mods_snapshot(
+            [str(self.mod_root)],
+            {**self.options, "output_format": "zstd"},
+        )
+        row = snapshot["mods"][0]["stat"]
+
+        self.assertEqual(row["output_total_count"], 2)
+        self.assertEqual(row["dds_output_count"], 1)
+        self.assertEqual(row["zstd_output_count"], 1)
+        self.assertEqual(row["dds_output_bytes_share_pct"], 100.0)
+        self.assertEqual(row["zstd_output_bytes_share_pct"], 100.0)
+        self.assertEqual(row["current_output_count"], 1)
+        self.assertEqual(row["external_orphan_output_count"], 0)
+
+    def test_clean_generated_deletes_only_selected_output_format(self):
+        source = self._write_png("Textures/source.png")
+        dds_path = source.with_suffix(".dds")
+        zstd_path = source.with_suffix(".dds.zstd")
+        dds_path.write_bytes(b"dds")
+        zstd_path.write_bytes(b"zstd")
+        task = TextureTask(
+            id="clean-selected-output-format",
+            action="clean_generated",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "clean_output_format": "dds"},
+            status="running",
+        )
+
+        result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["orphan_deleted"], 1)
+        self.assertFalse(dds_path.exists())
+        self.assertTrue(zstd_path.exists())
+
+        dds_path.write_bytes(b"dds")
+        task.options = {**self.options, "clean_output_format": "zstd"}
+        result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["orphan_deleted"], 1)
+        self.assertTrue(dds_path.exists())
+        self.assertFalse(zstd_path.exists())
+
+    def test_clean_without_source_deletes_only_outputs_without_png(self):
+        source = self._write_png("Textures/source.png")
+        source.with_suffix(".dds").write_bytes(b"dds")
+        jpg_source = self.mod_root / "Textures" / "photo.jpg"
+        psd_source = self.mod_root / "Textures" / "layered.psd"
+        jpg_source.write_bytes(b"jpg")
+        psd_source.write_bytes(b"psd")
+        jpg_source.with_suffix(".dds").write_bytes(b"jpg-dds")
+        psd_source.with_suffix(".dds.zstd").write_bytes(b"psd-zstd")
+        orphan_dds = self.mod_root / "Textures" / "orphan.dds"
+        orphan_zstd = self.mod_root / "Textures" / "orphan.dds.zstd"
+        orphan_dds.write_bytes(b"orphan-dds")
+        orphan_zstd.write_bytes(b"orphan-zstd")
+        task = TextureTask(
+            id="clean-without-source",
+            action="clean_generated",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "clean_without_source": True, "clean_output_format": "dds"},
+            status="running",
+        )
+
+        result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["orphan_deleted"], 1)
+        self.assertTrue(source.with_suffix(".dds").exists())
+        self.assertTrue(jpg_source.with_suffix(".dds").exists())
+        self.assertTrue(psd_source.with_suffix(".dds.zstd").exists())
+        self.assertFalse(orphan_dds.exists())
+        self.assertTrue(orphan_zstd.exists())
+        self.assertTrue(result["refresh_after_analyze"])
+
+        task.options = {**self.options, "clean_without_source": True, "clean_output_format": "zstd"}
+        result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["orphan_deleted"], 1)
+        self.assertTrue(psd_source.with_suffix(".dds.zstd").exists())
+        self.assertFalse(orphan_zstd.exists())
+        self.assertTrue(result["refresh_after_analyze"])
 
     def test_scan_snapshot_tracks_external_orphan_dds_separately(self):
         self._write_png("Textures/source.png")
@@ -438,6 +549,82 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(result["final_summary"]["current_output_count"], 1)
         self.assertEqual(result["final_mods"][0]["current_output_count"], 1)
         self.assertTrue(source.with_suffix(".dds").exists())
+
+    def test_optimize_zstd_mode_compresses_temp_dds_and_restores_old_dds(self):
+        source = self._write_png("Textures/zstd.png", size=(128, 128))
+        old_dds = source.with_suffix(".dds")
+        old_dds.write_bytes(b"old-dds")
+        task = TextureTask(
+            id="zstd-generate",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0, "output_format": "zstd"},
+            status="running",
+        )
+        calls = []
+
+        def fake_encode_mod(
+            _cancel_event,
+            overwrite_existing=None,
+            source_paths=None,
+            scale_percent=None,
+            max_size=None,
+            use_fix_size=None,
+            output_callback=None,
+        ):
+            calls.append((overwrite_existing, list(source_paths or [])))
+            source.with_suffix(".dds").write_bytes(b"new-dds")
+
+        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+            result = self.manager._optimize(task)
+
+        from zstandard.backend_c import ZstdDecompressor
+        zstd_path = source.with_suffix(".dds.zstd")
+        with zstd_path.open("rb") as compressed:
+            with ZstdDecompressor().stream_reader(compressed) as reader:
+                self.assertEqual(reader.read(), b"new-dds")
+        self.assertEqual(old_dds.read_bytes(), b"old-dds")
+        self.assertEqual(calls, [(True, [str(source)])])
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["output_format"], "zstd")
+        self.assertEqual(result["final_summary"]["zstd_output_count"], 1)
+        self.assertEqual(result["final_summary"]["dds_output_count"], 1)
+        self.assertEqual(result["final_summary"]["current_output_count"], 1)
+
+    def test_optimize_zstd_mode_can_delete_old_dds_after_success(self):
+        source = self._write_png("Textures/zstd-clean.png", size=(128, 128))
+        old_dds = source.with_suffix(".dds")
+        old_dds.write_bytes(b"old-dds")
+        task = TextureTask(
+            id="zstd-clean-old",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={
+                **self.options,
+                "process_mode": "all_overwrite",
+                "scale_factor": 1.0,
+                "output_format": "zstd",
+                "zstd_clean_old_dds": True,
+            },
+            status="running",
+        )
+
+        def fake_encode_mod(
+            _cancel_event,
+            overwrite_existing=None,
+            source_paths=None,
+            scale_percent=None,
+            max_size=None,
+            use_fix_size=None,
+            output_callback=None,
+        ):
+            source.with_suffix(".dds").write_bytes(b"new-dds")
+
+        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+            self.manager._optimize(task)
+
+        self.assertFalse(old_dds.exists())
+        self.assertTrue(source.with_suffix(".dds.zstd").exists())
 
     def test_optimize_only_scans_each_mod_once(self):
         source = self._write_png("Textures/once.png", size=(128, 128))
@@ -910,6 +1097,7 @@ class TestTextureOptimizationPersistence(unittest.TestCase):
         self.options = {
             "texture_tools_path": str(self.temp_root / "tools"),
             "process_mode": "all_overwrite",
+            "output_format": "dds",
             "generate_mipmaps": True,
             "overwrite_existing": True,
             "skip_small_textures": False,

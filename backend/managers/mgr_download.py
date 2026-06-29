@@ -68,7 +68,7 @@ class DownloadManager:
         self.tasks: Dict[str, DownloadTask] = {}
         # 线程池 (默认最大5并发)
         self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="Downloader")
-        logger.info("DownloadManager initialized.")
+        logger.info("下载管理器已初始化。")
 
     def _sanitize_url(self, url: str) -> str:
         """
@@ -79,7 +79,7 @@ class DownloadManager:
         # 输出: https://raw.githubusercontent.com/user/repo/main/file.json
         if "github.com" in url and "/blob/" in url:
             new_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-            logger.debug(f"Sanitized GitHub URL: {url} -> {new_url}")
+            logger.debug(f"已将 GitHub 页面链接转换为原始文件链接: {url} -> {new_url}")
             return new_url
         return url
 
@@ -127,7 +127,7 @@ class DownloadManager:
         with self._lock:
             self.tasks[task.task_id] = task
         
-        logger.info(f"Task added: {filename} (ID: {task.task_id}) [HashCheck: {bool(expected_hash)}]")
+        logger.info(f"已加入下载任务: filename={filename}, task_id={task.task_id}, hash_check={bool(expected_hash)}")
         self._emit_progress(task)
         
         # 提交到线程池并保存 future
@@ -260,14 +260,14 @@ class DownloadManager:
                     )
                     if total > 0:
                         logger.debug(
-                            "Download size probe success via HEAD: url=%s final_url=%s total=%s",
+                            "下载文件大小预探测成功（HEAD）: url=%s final_url=%s total=%s",
                             url,
                             probe.url,
                             total,
                         )
                         return total
             except Exception as e:
-                logger.debug(f"Download size HEAD probe failed [{url}]: {e}")
+                logger.debug(f"下载文件大小 HEAD 预探测失败: url={url}, error={e}")
 
             try:
                 with session.get(url, stream=True, timeout=(15, 60), headers=range_headers) as probe:
@@ -278,14 +278,14 @@ class DownloadManager:
                     )
                     if total > 0:
                         logger.debug(
-                            "Download size probe success via Range: url=%s final_url=%s total=%s",
+                            "下载文件大小预探测成功（Range）: url=%s final_url=%s total=%s",
                             url,
                             probe.url,
                             total,
                         )
                         return total
             except Exception as e:
-                logger.debug(f"Download size range probe failed [{url}]: {e}")
+                logger.debug(f"下载文件大小 Range 预探测失败: url={url}, error={e}")
         return 0
 
     @staticmethod
@@ -305,14 +305,14 @@ class DownloadManager:
                 if task.status == TaskStatus.PENDING and future and future.cancel():
                     self._set_task_phase(task, None)
                     task.status = TaskStatus.CANCELLED
-                    task.speed = "Cancelled"
+                    task.speed = "已取消"
                     self._emit_progress(task)
-                    logger.info(f"Pending task cancelled before start: {task_id}")
+                    logger.info(f"下载任务在开始前已取消: task_id={task_id}")
                     return
 
                 self._set_task_phase(task, "cancelling")
                 self._emit_progress(task)
-                logger.info(f"Task cancellation requested: {task_id}")
+                logger.info(f"收到下载任务取消请求: task_id={task_id}")
 
     def get_tasks_info(self):
         """获取所有任务的简要信息 (供前端轮询或初始化)"""
@@ -333,7 +333,7 @@ class DownloadManager:
         if task._cancel_event.is_set():
             self._set_task_phase(task, None)
             task.status = TaskStatus.CANCELLED
-            task.speed = "Cancelled"
+            task.speed = "已取消"
             self._emit_progress(task)
             return
 
@@ -366,7 +366,7 @@ class DownloadManager:
                 response.raise_for_status()
                 uses_encoded_transfer = self._uses_encoded_transfer(response.headers)
                 logger.debug(
-                    "Download response: final_url=%s content_length=%s content_range=%s transfer_encoding=%s content_encoding=%s stored_length=%s",
+                    "下载响应信息: final_url=%s content_length=%s content_range=%s transfer_encoding=%s content_encoding=%s stored_length=%s",
                     response.url,
                     response.headers.get('content-length'),
                     response.headers.get('content-range'),
@@ -383,7 +383,7 @@ class DownloadManager:
                     task.total_size = self._probe_total_size(session, [response.url, task.url], headers)
                 if uses_encoded_transfer and task.total_size <= 0:
                     logger.warning(
-                        "Download total size unavailable because response is encoded: url=%s final_url=%s content_encoding=%s",
+                        "下载总大小不可用，响应启用了内容编码: url=%s final_url=%s content_encoding=%s",
                         task.url,
                         response.url,
                         response.headers.get('content-encoding'),
@@ -406,7 +406,7 @@ class DownloadManager:
                                 overflow_tolerance = max(chunk_size, int(task.total_size * 0.02))
                                 if overflow > overflow_tolerance:
                                     logger.warning(
-                                        "Download byte count exceeded reported total, clearing total size: url=%s filename=%s current=%s total=%s",
+                                    "下载字节数超过服务器报告大小，已清空总大小用于继续显示进度: url=%s filename=%s current=%s total=%s",
                                         task.url,
                                         task.filename,
                                         task.downloaded_size,
@@ -435,7 +435,7 @@ class DownloadManager:
                     task.downloaded_size = task.total_size
             elif task.downloaded_size > task.total_size:
                 logger.warning(
-                    "Download finished with actual size larger than reported total, correcting total: url=%s filename=%s current=%s total=%s",
+                    "下载完成后发现实际大小大于服务器报告大小，已修正总大小: url=%s filename=%s current=%s total=%s",
                     task.url,
                     task.filename,
                     task.downloaded_size,
@@ -445,12 +445,12 @@ class DownloadManager:
             # --- 校验阶段 ---
             if task.expected_hash:
                 task.status = TaskStatus.VERIFYING
-                task.speed = "Verifying..."
+                task.speed = "正在校验"
                 self._emit_progress(task)
                 
-                logger.debug(f"Verifying hash for {task.filename}...")
+                logger.debug(f"正在校验下载文件哈希: filename={task.filename}")
                 if not self._verify_hash(temp_path, task.expected_hash, task.hash_algorithm):
-                    raise ValueError("File hash mismatch! The file may be corrupted.")
+                    raise ValueError("文件哈希不一致，下载内容可能已损坏。")
             
             # --- 文件移动 ---
             if os.path.exists(task.dest_path):
@@ -460,21 +460,21 @@ class DownloadManager:
             # 最后发送 COMPLETED，确保 100%
             self._set_task_phase(task, None)
             task.status = TaskStatus.COMPLETED
-            task.speed = "Done"
+            task.speed = "完成"
             self._emit_progress(task)
-            logger.info(f"Download success: {task.dest_path}")
+            logger.info(f"下载任务完成: path={task.dest_path}")
             
             # 执行回调
             if task.on_complete:
                 try:
                     task.on_complete(task)
                 except Exception as cb_e:
-                    logger.error(f"Callback error in task {task.task_id}: {cb_e}")
+                    logger.error(f"下载完成回调执行失败: task_id={task.task_id}, error={cb_e}")
         except InterruptedError:
             # 取消时不视为错误
             self._set_task_phase(task, None)
             task.status = TaskStatus.CANCELLED
-            task.speed = "Cancelled"
+            task.speed = "已取消"
             self._cleanup(temp_path)
             self._emit_progress(task)
         except Exception as e:
@@ -483,7 +483,7 @@ class DownloadManager:
             task.error_msg = str(e)
             self._cleanup(temp_path)
             self._emit_progress(task)
-            logger.error(f"Download failed [{task.url}]: {e}")
+            logger.error(f"下载任务失败: url={task.url}, filename={task.filename}, error={e}")
             # 执行失败回调
             if task.on_error:
                 try:
@@ -501,11 +501,11 @@ class DownloadManager:
             expected = expected.lower()
             
             if calculated != expected:
-                logger.warning(f"Hash mismatch: calculated={calculated}, expected={expected}")
+                logger.warning(f"下载文件哈希不一致: calculated={calculated}, expected={expected}")
                 return False
             return True
         except Exception as e:
-            logger.error(f"Hash check failed: {e}")
+            logger.error(f"下载文件哈希校验失败: path={file_path}, error={e}")
             return False
     def _cleanup(self, path):
         if os.path.exists(path):

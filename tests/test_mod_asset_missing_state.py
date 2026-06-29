@@ -5,12 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from backend.database.dao import ModDAO, ModMaintenanceDAO, _ProfilePathScope
-from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, db
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, db
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.mod_scanner import ModScanner
 from backend.settings import settings
-from backend.utils.tools import generate_path_hash
+from backend.utils.tools import generate_path_hash, normalize_path_for_storage
 
 
 class TestModAssetMissingState(unittest.TestCase):
@@ -26,7 +26,7 @@ class TestModAssetMissingState(unittest.TestCase):
         if not db.is_closed():
             db.close()
 
-    def test_find_missing_marks_state_and_keeps_last_path(self):
+    def test_find_missing_marks_deleted_state_and_keeps_last_path(self):
         missing_path = str(Path(self.temp_dir.name) / "Mods" / "LostMod")
         ModAsset.create(
             path_hash="lost-hash",
@@ -41,6 +41,27 @@ class TestModAssetMissingState(unittest.TestCase):
         asset = ModAsset.get_by_id("lost-hash")
 
         self.assertEqual(result["deleted_mods"], ["lost-hash"])
+        self.assertEqual(asset.path, missing_path)
+        self.assertEqual(asset.state, MOD_ASSET_STATE_DELETED)
+        self.assertGreater(asset.file_modify_time, 0)
+
+    def test_find_missing_marks_subscribed_workshop_record_as_missing(self):
+        missing_path = str(Path(self.temp_dir.name) / "Workshop" / "123")
+        ModAsset.create(
+            path_hash="workshop-missing-hash",
+            package_id="author.workshopmissing",
+            name="Workshop Missing",
+            path=missing_path,
+            source="steam",
+            store="workshop",
+            workshop_id="123",
+        )
+
+        result = ModMaintenanceDAO.find_missing_mods(delete=False, subscribed_workshop_ids=["123"])
+        asset = ModAsset.get_by_id("workshop-missing-hash")
+
+        self.assertEqual(result["missing_mods"], ["workshop-missing-hash"])
+        self.assertEqual(result["deleted_mods"], [])
         self.assertEqual(asset.path, missing_path)
         self.assertEqual(asset.state, MOD_ASSET_STATE_MISSING)
         self.assertGreater(asset.file_modify_time, 0)
@@ -111,7 +132,8 @@ class TestModAssetMissingState(unittest.TestCase):
         scanner._resolve_images = Mock(return_value=("", ""))
 
         stat = about_file.stat()
-        path_hash = generate_path_hash(str(mod_dir))
+        normalized_mod_dir = normalize_path_for_storage(mod_dir)
+        path_hash = generate_path_hash(normalized_mod_dir)
         snapshot = {
             "mtime": int(stat.st_mtime * 1000),
             "size": 0,
@@ -121,7 +143,7 @@ class TestModAssetMissingState(unittest.TestCase):
             "name": "Restored Mod",
             "version": "",
             "store": "local",
-            "path": str(mod_dir),
+            "path": normalized_mod_dir,
             "state": MOD_ASSET_STATE_MISSING,
             "supported_versions": [],
         }
@@ -140,7 +162,121 @@ class TestModAssetMissingState(unittest.TestCase):
         self.assertFalse(mod_data.get("_skipped"))
         self.assertEqual(mod_data["path_hash"], path_hash)
         self.assertEqual(mod_data["state"], MOD_ASSET_STATE_PRESENT)
-        self.assertEqual(mod_data["path"], str(mod_dir))
+        self.assertEqual(mod_data["path"], normalized_mod_dir)
+
+    def _scanner_for_mod(self, temp_root: Path, package_id: str = "author.disabled"):
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(temp_root),
+            user_data_path=str(temp_root / "userdata"),
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=False,
+        )
+        scanner = ModScanner(context)
+        scanner.xml_parser = Mock(return_value=None)
+        scanner.xml_parser.parse.return_value = {"package_id": package_id, "url": "", "icon_path": ""}
+        scanner.analyzer = Mock()
+        scanner.analyzer.analyze.return_value = {"supported_languages": [], "file_stats": {}, "mod_type": "mod"}
+        scanner._resolve_workshop_id = Mock(return_value=None)
+        scanner._resolve_images = Mock(return_value=("", ""))
+        return scanner
+
+    def test_external_enabled_disabled_mod_is_counted_when_strict_mode_off(self):
+        temp_root = Path(self.temp_dir.name)
+        mod_dir = temp_root / "Mods" / "DisabledMod"
+        about_file = mod_dir / "About" / "About.xml"
+        about_file.parent.mkdir(parents=True)
+        about_file.write_text("<ModMetaData />", encoding="utf-8")
+        normalized_mod_dir = normalize_path_for_storage(mod_dir)
+        path_hash = generate_path_hash(normalized_mod_dir)
+        ModAsset.create(path_hash=path_hash, package_id="author.disabled", name="Disabled Mod", path=normalized_mod_dir, disabled=True)
+
+        original_strict = getattr(settings.config, "strict_disabled_mode", False)
+        self.addCleanup(setattr, settings.config, "strict_disabled_mode", original_strict)
+        settings.config.strict_disabled_mode = False
+        stats = {"external_enabled": 0}
+        scan_details = {"external_enabled_mods": []}
+
+        mod_data = self._scanner_for_mod(temp_root)._process_single_mod(
+            str(mod_dir),
+            False,
+            existing_snapshots={path_hash: {"mtime": 0, "size": 0, "disabled": True, "package_id": "author.disabled", "name": "Disabled Mod", "path": normalized_mod_dir}},
+            dlc_parser=None,
+            forced_update=True,
+            stats=stats,
+            scan_details=scan_details,
+        )
+
+        self.assertFalse(mod_data["disabled"])
+        self.assertEqual(stats["external_enabled"], 1)
+        self.assertEqual(scan_details["external_enabled_mods"][0]["path_hash"], path_hash)
+
+    def test_strict_mode_restores_external_enabled_disabled_mod(self):
+        temp_root = Path(self.temp_dir.name)
+        mod_dir = temp_root / "Mods" / "DisabledMod"
+        about_file = mod_dir / "About" / "About.xml"
+        disabled_file = mod_dir / "About" / "About.xml.disabled"
+        about_file.parent.mkdir(parents=True)
+        about_file.write_text("<ModMetaData />", encoding="utf-8")
+        normalized_mod_dir = normalize_path_for_storage(mod_dir)
+        path_hash = generate_path_hash(normalized_mod_dir)
+        ModAsset.create(path_hash=path_hash, package_id="author.disabled", name="Disabled Mod", path=normalized_mod_dir, disabled=True)
+
+        original_strict = getattr(settings.config, "strict_disabled_mode", False)
+        self.addCleanup(setattr, settings.config, "strict_disabled_mode", original_strict)
+        settings.config.strict_disabled_mode = True
+        stats = {"strict_restored_disabled": 0, "strict_restore_failed": 0}
+        scan_details = {"strict_restored_disabled_mods": [], "strict_restore_failed_mods": []}
+
+        mod_data = self._scanner_for_mod(temp_root)._process_single_mod(
+            str(mod_dir),
+            False,
+            existing_snapshots={path_hash: {"mtime": 0, "size": 0, "disabled": True, "package_id": "author.disabled", "name": "Disabled Mod", "path": normalized_mod_dir}},
+            dlc_parser=None,
+            forced_update=True,
+            stats=stats,
+            scan_details=scan_details,
+        )
+
+        self.assertTrue(mod_data["disabled"])
+        self.assertFalse(about_file.exists())
+        self.assertTrue(disabled_file.exists())
+        self.assertEqual(stats["strict_restored_disabled"], 1)
+        self.assertEqual(stats["strict_restore_failed"], 0)
+
+    def test_strict_mode_restore_failure_keeps_database_disabled_state(self):
+        temp_root = Path(self.temp_dir.name)
+        mod_dir = temp_root / "Mods" / "DisabledMod"
+        about_file = mod_dir / "About" / "About.xml"
+        about_file.parent.mkdir(parents=True)
+        about_file.write_text("<ModMetaData />", encoding="utf-8")
+        normalized_mod_dir = normalize_path_for_storage(mod_dir)
+        path_hash = generate_path_hash(normalized_mod_dir)
+        ModAsset.create(path_hash=path_hash, package_id="author.disabled", name="Disabled Mod", path=normalized_mod_dir, disabled=True)
+
+        original_strict = getattr(settings.config, "strict_disabled_mode", False)
+        self.addCleanup(setattr, settings.config, "strict_disabled_mode", original_strict)
+        settings.config.strict_disabled_mode = True
+        stats = {"strict_restored_disabled": 0, "strict_restore_failed": 0}
+        scan_details = {"strict_restored_disabled_mods": [], "strict_restore_failed_mods": []}
+
+        with patch("backend.scanner.mod_scanner.ModMaintenanceDAO.set_mod_disabled_status", return_value=(False, "文件被占用")):
+            mod_data = self._scanner_for_mod(temp_root)._process_single_mod(
+                str(mod_dir),
+                False,
+                existing_snapshots={path_hash: {"mtime": 0, "size": 0, "disabled": True, "package_id": "author.disabled", "name": "Disabled Mod", "path": normalized_mod_dir}},
+                dlc_parser=None,
+                forced_update=True,
+                stats=stats,
+                scan_details=scan_details,
+            )
+
+        self.assertTrue(mod_data["disabled"])
+        self.assertTrue(about_file.exists())
+        self.assertEqual(stats["strict_restore_failed"], 1)
+        self.assertEqual(scan_details["strict_restore_failed_mods"][0]["message"], "文件被占用")
 
     def test_workspace_classification_keeps_missing_assets_in_original_domain(self):
         scope = _ProfilePathScope(
@@ -177,7 +313,7 @@ class TestModAssetMissingState(unittest.TestCase):
                 path_hash=path_hash,
                 package_id=f"author.{path_hash}",
                 name=path_hash,
-                path=str(path),
+                path=normalize_path_for_storage(path),
                 source="local",
                 store="local",
                 state=state,
@@ -228,7 +364,7 @@ class TestModAssetMissingState(unittest.TestCase):
                 path_hash=path_hash,
                 package_id=f"author.{path_hash}",
                 name=path_hash,
-                path=str(path),
+                path=normalize_path_for_storage(path),
                 source=store,
                 store=store,
                 disabled=disabled,

@@ -25,9 +25,21 @@ const callBridgeEndpoint = async (baseUrl, path, payload = null, options = {}) =
     requestInit.body = JSON.stringify(payload)
   }
 
-  const response = await fetch(`${baseUrl}${path}`, requestInit)
+  let response
+  try {
+    response = await fetch(`${baseUrl}${path}`, requestInit)
+  } catch (error) {
+    throw new Error('无法连接软件后端服务。可能是后端进程已退出、浏览器桥接端口不可用或本机安全软件拦截，请重启软件后重试。')
+  }
   if (!response.ok) {
-    throw new Error(`Bridge request failed: ${response.status}`)
+    let message = `浏览器桥接请求失败，状态码：${response.status}。请确认后端服务仍在运行，或重启软件后重试。`
+    try {
+      const payload = await response.json()
+      if (payload?.message) message = payload.message
+    } catch {
+      // 响应体不是 JSON 时保留状态码提示即可。
+    }
+    throw new Error(message)
   }
   return response.json()
 }
@@ -114,7 +126,7 @@ const connectEventStream = (baseUrl, clientId) => {
       const payload = JSON.parse(event.data)
       dispatchBackendEvent(payload)
     } catch (error) {
-      console.warn('Failed to parse backend event payload:', error)
+      console.warn('解析后端事件失败:', error)
     }
   }
   eventStream.onerror = () => {}
@@ -145,7 +157,7 @@ export const setupPywebviewBridge = async () => {
   const session = await callBridgeEndpoint(baseUrl, '/api/session/open', {})
   const clientId = session?.data?.client_id
   if (!clientId) {
-    throw new Error('Browser bridge session open failed')
+    throw new Error('浏览器桥接会话创建失败，请重启软件后重试。')
   }
 
   window.pywebview = {

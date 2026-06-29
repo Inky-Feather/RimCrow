@@ -64,21 +64,36 @@
                 :form-data="formData"
                 :steam-launch-disabled="steamLaunchDisabled"
                 :workshop-mods-disabled="workshopModsDisabled"
+                :mark-steam-launch-touched="markSteamLaunchTouched"
                 :auto-detect="autoDetect"
                 :handle-browse="handleBrowse"
                 :check-path="checkPath"
               />
               <SettingsGeneralTab v-if="currentTab === 'general'" :form-data="formData" />
               <SettingsFeaturesTab v-if="currentTab === 'features'" :form-data="formData" />
-              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsExternalTab
                 v-if="currentTab === 'community'"
                 :form-data="formData"
                 :handle-browse="handleBrowse"
                 :check-path="checkPath"
               />
-              <SettingsNetworkTab v-if="currentTab === 'network'" :form-data="formData" />
-              <SettingsAiTab v-if="currentTab === 'ai'" :form-data="formData" />
+              <SettingsNetworkTab
+                v-if="currentTab === 'network'"
+                :form-data="formData"
+                :reveal-secret="appStore.revealSecret"
+                :is-secret-preserved="isSecretPreserved"
+                @preserve-secret="preserveFormSecret"
+                @clear-secret="clearFormSecret"
+              />
+              <SettingsAiTab
+                v-if="currentTab === 'ai'"
+                :form-data="formData"
+                :reveal-secret="appStore.revealSecret"
+                :is-secret-preserved="isSecretPreserved"
+                @preserve-secret="preserveFormSecret"
+                @clear-secret="clearFormSecret"
+              />
+              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
 
             </div>
@@ -86,8 +101,8 @@
 
           <!-- D. 底部操作栏 -->
           <footer class="modal-footer flex items-center justify-end gap-4 px-10 py-3">
-            <button id="btn-cancel" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
-            <button data-tour="settings-save-button" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
+            <button id="btn-cancel" :disabled="saving" :class="saving ? 'rmm-action-disabled' : ''" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">放弃修改</button>
+            <button data-tour="settings-save-button" :disabled="saving" :class="saving ? 'rmm-action-disabled' : ''" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
               <div class="absolute inset-0 bg-bg-overlay/10 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
               应用并保存配置
             </button>
@@ -101,6 +116,7 @@
 import { ref, watch, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard } from 'lucide-vue-next'
 import { shakeComponent } from '../../shared/lib/domEffects'
+import { toast } from '../../shared/lib/common'
 import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
 
 // 导入 Common UI
@@ -122,6 +138,8 @@ const profileStore = useProfileStore()
 
 const currentTab = ref('paths')
 const formData = ref({})
+const steamLaunchTouched = ref(false)
+const saving = ref(false)
 const detectedIsSteam = computed(() => {
   const checkedInstall = formData.value?.check_info?.game_install_path
   if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
@@ -150,6 +168,13 @@ const tabs = [
   { id: 'ai', label: 'AI 集成', icon: Cpu },
   { id: 'dev', label: '开发调试', icon: Terminal },
 ]
+const SECRET_FIELD_PATHS = {
+  'ai.api_key': 'ai.api_key',
+  'steam.web_api_key': 'steam_web_api_key',
+  'network.proxy.username': 'network.proxy.username',
+  'network.proxy.password': 'network.proxy.password',
+}
+let settingsPanelOpenVersion = 0
 
 const currentTabLabel = computed(() => (
   tabs.find(item => item.id === currentTab.value)?.label || currentTab.value
@@ -158,9 +183,12 @@ const currentTabLabel = computed(() => (
 // 数据同步：打开时深度拷贝
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
+    const openVersion = ++settingsPanelOpenVersion
+    steamLaunchTouched.value = false
     // 利用 requestAnimationFrame 或 setTimeout
     // 让浏览器先渲染出弹窗的“背景”和“动画第一帧”，然后再去塞数据
     requestAnimationFrame(async () => {
+      if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       // 使用 structuredClone (Node 17+ / 现代浏览器均支持，速度更快)，将全局 Settings 和 当前 Context 捏合成一个对象给表单用
       // 如果环境不支持，保留原来的 JSON 方式，但放在 requestAnimationFrame 里依然能解决卡顿
       try {
@@ -177,19 +205,35 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
       if (formData.value.ui && formData.value.ui.smooth_list_target_scroll === undefined) {
         formData.value.ui.smooth_list_target_scroll = true
       }
+      if (formData.value.ui && !Array.isArray(formData.value.ui.hidden_dependency_graph_source_ids)) {
+        formData.value.ui.hidden_dependency_graph_source_ids = []
+      }
       if (formData.value.ui && !formData.value.ui.keybindings) {
         // 兼容旧配置文件：默认键位由前端命令注册表决定，设置里只保存用户覆盖项。
         formData.value.ui.keybindings = createDefaultKeybindingConfig()
       }
+      if (formData.value.skip_language_pack_alias_generation === undefined) {
+        formData.value.skip_language_pack_alias_generation = true
+      }
+      if (!formData.value.translation || typeof formData.value.translation !== 'object') {
+        formData.value.translation = {}
+      }
+      formData.value.translation = appStore.normalizeTranslationSettings(formData.value.translation)
+      markSavedSecretsPreserved(formData.value)
+      showSecretStorageWarning(formData.value)
       // 如果当前上下文不健康，自动检测路径
-      if (!profileStore.activeContext || profileStore.activeContext.is_healthy === false) {
-        await autoDetect()
+      const autoDetected = !profileStore.activeContext || profileStore.activeContext.is_healthy === false
+      if (autoDetected) {
+        await autoDetect(false)
+        if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       }
       // 检测所有路径是否有效
       await checkPaths()
     })
   } else {
+    settingsPanelOpenVersion += 1
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
+    clearFormSecrets(formData.value)
   }
 })
 watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
@@ -213,20 +257,60 @@ const changeTab = (tab) => {
   currentTab.value = tab
 }
 
+const shouldPreferSteamLaunch = () => {
+  const checkInfo = formData.value?.check_info || {}
+  const installCheck = checkInfo.game_install_path || {}
+  const steamCheck = checkInfo.steam_path || {}
+  return !!(
+    installCheck.pass
+    && installCheck.data?.is_steam
+    && steamCheck.pass
+    && !formData.value?.use_workshop_mods
+  )
+}
+
+const applySteamLaunchDefault = () => {
+  if (steamLaunchTouched.value || !formData.value) return
+  if (shouldPreferSteamLaunch() && !formData.value.prefer_steam_launch) {
+    formData.value.prefer_steam_launch = true
+  }
+}
+
+const markSteamLaunchTouched = () => {
+  steamLaunchTouched.value = true
+}
+
 // 自动检测路径
-const autoDetect = async () => {
+const autoDetect = async (checkAfterDetect = true) => {
   const paths = await appStore.autoDetectPaths(false)
-  if (paths) Object.assign(formData.value, paths)
+  if (!paths) return false
+  Object.assign(formData.value, paths)
+  if (checkAfterDetect) await checkPaths()
+  return true
 }
 
 // 检查游戏路径是否有效
 const checkPath = async (type, path) => {
-  console.log('checkPath:', type, path)
-  const res = await appStore.checkPath(type, path)
+  console.debug('检查单项路径:', type, path)
   if (!formData.value['check_info']) {
     formData.value['check_info'] = {};
   }
+  if (!String(path || '').trim()) {
+    formData.value['check_info'][type] = {
+      pass: false,
+      type: 'warn',
+      msg: '未填写路径',
+    }
+    return
+  }
+  const res = await appStore.checkPath(type, path)
   formData.value['check_info'][type] = res
+  if (res?.pass && res?.data && type === 'ripgrep_path') {
+    formData.value.ripgrep_path = res.data
+  }
+  if (['game_install_path', 'steam_path'].includes(type)) {
+    applySteamLaunchDefault()
+  }
 }
 // 检查全部路径
 const checkPaths = async () => {
@@ -244,6 +328,7 @@ const checkPaths = async () => {
   const res = await appStore.checkPaths(paths_data)
   if (res) {
     formData.value['check_info'] = res
+    applySteamLaunchDefault()
   }
 }
 
@@ -266,9 +351,49 @@ const setNestedField = (target, pathKey, value) => {
   current[segments[segments.length - 1]] = value
 }
 
+const clearFormSecrets = (target) => {
+  if (!target || typeof target !== 'object') return
+  Object.values(SECRET_FIELD_PATHS).forEach(pathKey => setNestedField(target, pathKey, ''))
+  delete target._preserve_secret_keys
+}
+
+const getPreserveSecretKeys = () => (
+  Array.isArray(formData.value?._preserve_secret_keys) ? formData.value._preserve_secret_keys : []
+)
+
+const setPreserveSecretKeys = (keys) => {
+  const nextKeys = [...new Set(keys.filter(key => SECRET_FIELD_PATHS[key]))]
+  if (nextKeys.length) {
+    formData.value._preserve_secret_keys = nextKeys
+  } else {
+    delete formData.value._preserve_secret_keys
+  }
+}
+
+const markSavedSecretsPreserved = (target) => {
+  const savedKeys = Object.keys(SECRET_FIELD_PATHS).filter(key => target?._secret_status?.[key]?.has_value)
+  if (savedKeys.length) target._preserve_secret_keys = [...new Set([...(target._preserve_secret_keys || []), ...savedKeys])]
+}
+
+const isSecretPreserved = (secretKey) => getPreserveSecretKeys().includes(secretKey)
+
+const preserveFormSecret = (secretKey) => {
+  setPreserveSecretKeys([...getPreserveSecretKeys(), secretKey])
+}
+
+const clearFormSecret = (secretKey) => {
+  setNestedField(formData.value, SECRET_FIELD_PATHS[secretKey], '')
+  setPreserveSecretKeys(getPreserveSecretKeys().filter(key => key !== secretKey))
+}
+
+const showSecretStorageWarning = (target) => {
+  if (!target?._secret_storage_warning) return
+  toast.warning(target._secret_storage_warning, { timeout: 9000 })
+}
+
 // 手动选择其他路径
 const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
-  console.log('路径选择',pathKey, fileTypes)
+  console.debug('打开路径选择器:', pathKey, fileTypes)
   const currentValue = getNestedField(formData.value, pathKey) || ''
   let res
   if (fileTypes) {
@@ -287,6 +412,7 @@ const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
 }
 
 const save = async () => {
+  if (saving.value) return
   // 校验拦截
   // const hasError = Object.values(formData.value.check_info || {}).some(info => info && !info.pass)
   // if (hasError) {
@@ -296,7 +422,12 @@ const save = async () => {
   if (formData.value?.ui) {
     formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
   }
-  await appStore.applySettings(formData.value)
+  saving.value = true
+  try {
+    await appStore.applySettings(formData.value)
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 

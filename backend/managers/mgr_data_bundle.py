@@ -4,13 +4,11 @@ import shutil
 import uuid
 import zipfile
 from copy import deepcopy
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from backend._version import __version__
-from backend.ai.ai_service import AIManager
 from backend.database.dao import CollectionDAO
 from backend.database.models import GameProfile, GithubModRecord, db
 from backend.utils.bundle_io import (
@@ -26,6 +24,10 @@ from backend.managers.mgr_game_install import GameInstallRegistry
 from backend.managers.mgr_profile import ProfileManager
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import DATA_DIR, settings
+from backend.utils.tools import normalize_path_for_compare, normalize_path_for_storage
+
+if TYPE_CHECKING:
+    from backend.ai.ai_service import AIManager
 
 
 class DataBundleManager:
@@ -127,7 +129,7 @@ class DataBundleManager:
     def __init__(
         self,
         profile_mgr: ProfileManager,
-        ai_mgr: AIManager,
+        ai_mgr: "AIManager",
         rule_mgr_provider: Callable[[], Any],
     ):
         self.profile_mgr = profile_mgr
@@ -212,12 +214,12 @@ class DataBundleManager:
         collected: dict[str, dict[str, Any]] = {}
 
         def _push(install_path: str, source: str):
-            normalized_path = os.path.normpath(str(install_path or "").strip())
+            normalized_path = normalize_path_for_storage(install_path)
             executable_path = str(GameManager.detect_executable(normalized_path) or "")
             if not normalized_path or not executable_path:
                 return
             facts = registry.get(normalized_path)
-            key = os.path.normcase(normalized_path)
+            key = normalize_path_for_compare(normalized_path)
             collected[key] = {
                 "install_path": normalized_path,
                 "game_version": str(
@@ -463,13 +465,15 @@ class DataBundleManager:
         return payloads
 
     def _collect_sanitized_settings(self) -> dict[str, Any]:
-        config = asdict(settings.config)
+        config = settings.to_storage_dict()
         for key in list(self._SETTINGS_EXCLUDED_KEYS):
             config.pop(key, None)
 
         ai_config = config.get("ai", {})
         if isinstance(ai_config, dict):
             ai_config.pop("api_key", None)
+
+        config.pop("steam_web_api_key", None)
 
         network_config = config.get("network", {})
         proxy_config = network_config.get("proxy", {}) if isinstance(network_config, dict) else {}
@@ -849,9 +853,9 @@ class DataBundleManager:
         }
 
     def _resolve_import_install_path(self, selected_install_path: str = "") -> str:
-        normalized_selected = str(selected_install_path or "").strip()
+        normalized_selected = normalize_path_for_storage(selected_install_path)
         if normalized_selected and GameManager.detect_executable(normalized_selected):
-            return os.path.normpath(normalized_selected)
+            return normalized_selected
         return ""
 
     def _resolve_profile_import_target_root(self, target_profile_id: str = "") -> Path:
@@ -885,7 +889,7 @@ class DataBundleManager:
             plan_map[archive_key] = {
                 "mode": mode,
                 "target_profile_id": str(item.get("target_profile_id") or "").strip(),
-                "game_install_path": str(item.get("game_install_path") or "").strip(),
+                "game_install_path": normalize_path_for_storage(item.get("game_install_path")),
             }
         return plan_map
 

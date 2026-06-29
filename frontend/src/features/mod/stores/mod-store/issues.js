@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { deepClone, toast, checkResult } from '../../../../shared/lib/common'
+import { deepClone, toast, checkResult, toUserMessage } from '../../../../shared/lib/common'
 import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../../../../shared/lib/constants'
 import { useProfileStore } from '../../../profiles/profileStore'
 
@@ -36,7 +36,13 @@ export const useModIssues = ({
       const mod = takeModById(id)
       if (!mod) return
       // 忽略检查
-      if (mod.ignored_issues && mod.ignored_issues.includes(type)) return
+      const ignoredIssues = mod.ignored_issues || []
+      const isMultiplayerIssue = [
+        ISSUE_TYPE.ERROR_MULTIPLAYER_INCOMPATIBLE,
+        ISSUE_TYPE.WARN_MULTIPLAYER_BARELY_COMPATIBLE,
+        ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN,
+      ].includes(type)
+      if (ignoredIssues.includes(type) || (isMultiplayerIssue && ignoredIssues.includes(ISSUE_TYPE.WARN_MULTIPLAYER_COMPATIBILITY))) return
       if (!issuesMap.has(id)) issuesMap.set(id, [])
       issuesMap.get(id).push({ type, level, message, targetId })
     }
@@ -107,6 +113,8 @@ export const useModIssues = ({
         activeIndexMap.set(canonicalId, i)
         activeTokenMap.set(canonicalId, tokenId)
     }
+    const multiplayerActive = activeIndexMap.has('rwmt.multiplayer')
+    const mpCompatActive = activeIndexMap.has('rwmt.multiplayercompatibility')
     // 快速判定任意两个 Mod 之间的合法顺序
     // isMustBefore.get(A)?.has(B) 为 true，表示规则要求 A 必须在 B 之前
     const isMustBefore = new Map()
@@ -138,6 +146,23 @@ export const useModIssues = ({
       const currentId = normalizeCanonicalId(activeIds.value[i])
       const mod = takeModById(activeIds.value[i])
       if (!mod || mod.isMissing) continue // X. 文件缺失已在全局检查中处理，这里简单跳过
+      const mpCompat = mod.multiplayer_compat || {}
+      if (multiplayerActive && mpCompat.enabled) {
+        const status = Number(mpCompat.effective_status ?? 0)
+        const hasPatch = !!mpCompat.has_mp_compat_patch
+        const patchEffective = !!mpCompat.mp_compat_effective || (hasPatch && mpCompatActive)
+        if ((status === 1 || status === 2) && !patchEffective) {
+          const label = mpCompat.effective_label || '未知'
+          const type = status === 1 ? ISSUE_TYPE.ERROR_MULTIPLAYER_INCOMPATIBLE : ISSUE_TYPE.WARN_MULTIPLAYER_BARELY_COMPATIBLE
+          const level = status === 1 ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
+          const fixText = hasPatch ? '；可启用 Multiplayer Compatibility 辅助修正' : ''
+          _add(currentToken, type, level,
+            `${status === 1 ? '!!' : '^^'}${ISSUE_TITLE_MAP[type]}${status === 1 ? '!!' : '^^'}：Multiplayer 兼容等级为 [[${label}]]${fixText}`)
+        } else if (status === 0) {
+          _add(currentToken, ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN, ISSUE_LEVEL.INFO,
+            `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN]}__：Multiplayer 暂无明确兼容等级`)
+        }
+      }
       if(!mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
 
       // const rules = mod.rules ，这是后端计算好的 { dependencies, load_after, incompatible ... }
@@ -523,7 +548,7 @@ export const useModIssues = ({
       }
     } catch (e) {
       console.error("批量忽略操作失败:", e);
-      toast.error(`操作失败: ${e.message}`);
+      toast.error(toUserMessage(e?.message || e, '批量更新问题忽略状态失败。已还原本地列表状态，请稍后重试。'));
       rollback.forEach((ignoredIssues, id) => {
         const mod = takeModById(id)
         if (mod) mod.ignored_issues = ignoredIssues
@@ -552,11 +577,17 @@ export const useModIssues = ({
     targetIds.forEach(id => {
       const issues = modIssues.value.get(normalizeListToken(id))
       if (!issues || issues.length === 0) return
-      // result.count += issues.length // 累加总问题数
-      result.count++  // 累加出问题的Mod数
-      // 统计严重程度 (只要有一个 error 就算 error 级)
-      if (issues.some(i => i.level === 'error')) result.errorCount++
-      else result.warnCount++
+      const hasError = issues.some(i => i.level === 'error')
+      const hasWarn = issues.some(i => i.level === 'warn')
+      const hasInfo = issues.some(i => i.level === 'info')
+      // 纯提示不算“问题 Mod”，避免未知联机兼容性抬高列表问题总数。
+      if (hasError || hasWarn) {
+        result.count++  // 累加出问题的 Mod 数
+        if (hasError) result.errorCount++
+        else result.warnCount++
+      } else if (hasInfo) {
+        result.infoCount++
+      }
       // 按类型聚合 Mod 名称，统计所有出现的错误类型
       issues.forEach(issue => {
         const typeKey = issue.type

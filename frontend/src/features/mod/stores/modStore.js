@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, nextTick } from 'vue'
-import { deepClone, toast, checkResult } from '../../../shared/lib/common'
+import { deepClone, toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useGroupStore } from './groupStore'
 import { useTaskStore } from '../../../app/stores/taskStore'
@@ -123,6 +123,7 @@ export const useModStore = defineStore('mods', () => {
   const tempIds = ref([])             // 临时Mod列表
   const activeIds = ref([])           // 已激活Mod列表
   const disabledMods = ref([])        // 当前环境路径范围内的物理禁用 Mod 资产
+  const strictDisableRestoreFailures = ref({}) // 本次扫描中严格禁用恢复失败的提示
 
   const interlocksMap = ref(new Map()) // 联锁字典: Map<String(interlock_id), Array<String(package_ids)>>
   const savedInactiveIds = ref([])   // 从后端拉取的历史停用顺序
@@ -332,12 +333,10 @@ export const useModStore = defineStore('mods', () => {
     const res = mod?.user_mod_type || mod?.mod_type || 'Unknown'
     return res
   }
-  // 显示 Mod 图标（优先 icon_url -> thumb_url -> preview_url）
+  // 显示 Mod 图标，只使用 About 中声明或默认发现的图标。
   const displayModIcon = (id) => {
     const mod = takeModById(id)
-    if (mod && mod.icon_url) return mod.icon_url // 列表图标
-    if (mod && mod.thumb_url) return mod.thumb_url // 缩略图
-    if (mod && mod.preview_url) return mod.preview_url // 详情大图
+    if (mod && mod.icon_path) return appStore.getLocalUrl(mod.icon_path)
     return '' // 返回空或默认图路径
   }
 
@@ -583,6 +582,7 @@ export const useModStore = defineStore('mods', () => {
     inactiveIds.value = []
     tempIds.value = []
     disabledMods.value = []
+    strictDisableRestoreFailures.value = {}
     savedActiveIds.value = []
     savedInactiveIds.value = []
     savedTempIds.value = []
@@ -766,7 +766,7 @@ export const useModStore = defineStore('mods', () => {
     if (!ids || ids.length === 0) return
     if (!window.pywebview) return
     if(typeof ids === 'string') ids = [ids]
-    console.log(ids)
+    console.debug('准备智能插入 Mod:', ids)
 
     const res = await window.pywebview.api.smart_insert_mod_in_actives(ids, activeIds.value)
     if(checkResult(res, '智能插入 Mod 到 Active 列表') && res.data){
@@ -775,15 +775,20 @@ export const useModStore = defineStore('mods', () => {
   }
   // --- 扫描处理 ---
   // 扫描 Mod 文件
-  const scanMods = async (path_list=null, forced_update=false) => {
-    if (appStore.isScanRunning || !window.pywebview) return
+  const scanMods = async (path_list=null, forced_update=false, size_check_override=null, size_check_paths=null) => {
+    if (appStore.isScanRunning || !window.pywebview) return false
+    strictDisableRestoreFailures.value = {}
     try {
       // 调用 API，会立即返回 { status: 'started' }
-      const res = await window.pywebview.api.scan_mods(path_list, forced_update)
+      const res = await window.pywebview.api.scan_mods(path_list, forced_update, size_check_override, size_check_paths)
+      if (res.status === 'warning') {
+        toast.info(res.message || '扫描任务已在进行中，请等待当前扫描完成。')
+        return false
+      }
       if (res.status !== 'success' && res.status !== 'started') {
         console.error("启动扫描失败:", res)
-        toast.error(`扫描启动失败: \n${res.message}`)
-        return
+        toast.error(toUserMessage(res.message, '扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。'))
+        return false
       }
       const taskDetail = res?.data?.details || {}
       const taskId = String(taskDetail?.task_id || '')
@@ -801,24 +806,30 @@ export const useModStore = defineStore('mods', () => {
           },
         })
       }
+      return true
     } catch (e) {
       console.error("扫描请求异常:", e)
-      toast.error(`扫描请求异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。'))
+      return false
     }
   }
   // 扫描完成事件处理
   const scanComplete = async (detail = {}, options = {}) => {
     coexistenceList.value = Array.isArray(detail?.coexistences) ? detail.coexistences : []
     conflictList.value = Array.isArray(detail?.conflicts) ? detail.conflicts : []
+    const restoreFailures = Array.isArray(detail?.strict_disable_restore_failures) ? detail.strict_disable_restore_failures : []
+    strictDisableRestoreFailures.value = Object.fromEntries(
+      restoreFailures.filter(item => item?.path_hash).map(item => [item.path_hash, item])
+    )
 
     if (detail?.status === 'cancelled') {
       toast.info(detail.message || '扫描已取消')
-      console.log("扫描已取消:", detail)
+      console.info("扫描已取消:", detail)
       return
     }
 
     if (detail?.status && detail.status !== 'success') {
-      toast.error(`扫描异常: \n${detail.message || '未知错误'}`)
+      toast.error(toUserMessage(detail.message, '扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。'))
       console.error("扫描完成事件异常:", detail)
       return
     }
@@ -828,7 +839,15 @@ export const useModStore = defineStore('mods', () => {
     const updated = Number(stats.updated || 0)
     const removed = Number(stats.removed || 0)
     const skipped = Number(stats.skipped || 0)
+    const externalEnabled = Number(stats.external_enabled || 0)
+    const strictRestored = Number(stats.strict_restored_disabled || 0)
+    const strictRestoreFailed = Number(stats.strict_restore_failed || 0)
     const total = Number(detail?.total ?? (added + updated + skipped))
+    const disabledStateText = [
+      externalEnabled ? `外部解除禁用 ${externalEnabled} 个` : '',
+      strictRestored ? `已重新禁用 ${strictRestored} 个` : '',
+      strictRestoreFailed ? `恢复失败 ${strictRestoreFailed} 个` : '',
+    ].filter(Boolean).join('，')
 
     let totalCount = 0
     if (coexistenceList.value.length > 0) {
@@ -844,12 +863,21 @@ export const useModStore = defineStore('mods', () => {
     }
     if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning
-      toast.warning(`扫描完成，发现 ${totalCount} 个包名重复冲突需要处理！`, {timeout: 10000})
+      toast.warning(`扫描已完成，发现 ${totalCount} 个包名重复冲突需要处理。${disabledStateText ? `\n${disabledStateText}` : ''}`, {timeout: 10000})
+    } else if (strictRestoreFailed > 0) {
+      toast.warning(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。\n${disabledStateText}`, {position: "top-center", timeout: 8000})
     } else {
-      toast.success(`扫描完成，共计扫描${total}个模组，新增${added}个，\n更新${updated}个，删除${removed}个，已知${skipped}个。`,{position: "top-center",timeout: 5000})
+      toast.success(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。${disabledStateText ? `\n${disabledStateText}` : ''}`,{position: "top-center",timeout: 5000})
     }
     // 扫描结束后只回填模组主数据，避免把工作区、GitHub、合集等页面也一起重刷。
-    console.log("扫描统计:", detail)
+    console.debug("扫描统计:", {
+      status: detail?.status,
+      total,
+      stats,
+      conflict_count: conflictList.value.length,
+      coexistence_count: coexistenceList.value.length,
+      residue_count: Number(detail?.residue_cleanup?.summary?.item_count || 0),
+    })
     await appStore.refreshModsData('扫描后同步模组数据', {
       preserveListState: !!options?.preserveListState,
     })
@@ -886,7 +914,7 @@ export const useModStore = defineStore('mods', () => {
           activeIds.value = res.data.sorted_ids || []
           updateInactiveIds()
         })
-        toast.success("自动排序完成")
+        toast.success("自动排序已完成")
         // 处理警告信息
         if(res.data.warnings?.length > 0) {
           let warningMessages = ''
@@ -899,7 +927,7 @@ export const useModStore = defineStore('mods', () => {
           })
           toast.warning(warningMessages,{position: "top-center",timeout: 5000})
           if (warnModRule.length > 0) {
-            console.log("自动排序警告:",warnModRule)
+            console.debug("自动排序警告:",warnModRule)
             let msg = '请检查以下Mod规则是否正确：\n'
             warnModRule.forEach(item => {
               msg += `${displayModName(item.mod_id)} 的 ${item.type.name} 规则 可能存在问题：（${displayModName(item.target_id)}）\n`
@@ -911,34 +939,66 @@ export const useModStore = defineStore('mods', () => {
       }
     } catch (e) {
       console.error("自动排序Mod异常:", e)
-      toast.error(`自动排序Mod异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。'))
     }
     return false
   }
-  // 创建本地共存
+  const getLocalizeActionTitle = (totalCount = 0, existingCount = 0) => {
+    const createCount = Math.max(Number(totalCount || 0) - Number(existingCount || 0), 0)
+    if (existingCount > 0) return createCount > 0 ? '本地化/同步本地共存模组' : '同步本地共存模组'
+    return '本地化共存模组'
+  }
+  const resolveLocalizeCandidates = (mods = [], store='workshop') => {
+    const candidateMap = new Map()
+    for (const mod of (Array.isArray(mods) ? mods : [])) {
+      if (mod?.store === store && mod.path_hash) {
+        candidateMap.set(mod.path_hash, { pathHash: mod.path_hash, isExisting: !!mod.is_coexistence })
+      } else if (store === 'workshop' && mod?.coexist_workshop_variant?.path_hash) {
+        candidateMap.set(mod.coexist_workshop_variant.path_hash, { pathHash: mod.coexist_workshop_variant.path_hash, isExisting: true })
+      }
+    }
+    const candidates = [...candidateMap.values()]
+    const existingCount = candidates.filter(m => m.isExisting).length
+    return {
+      candidates,
+      pathHashes: candidates.map(m => m.pathHash),
+      existingCount,
+      createCount: Math.max(candidates.length - existingCount, 0),
+      actionTitle: getLocalizeActionTitle(candidates.length, existingCount),
+    }
+  }
+  // 本地化或同步本地共存
   const localizeSelectedMods = async (store='workshop') => {
     if (selectedIds.value.length === 0) return;
     // 使用 path_hash 精确定位当前副本，避免共存场景误选到另一份同包名模组。
-    const pathHashes = selectedMods.value
-      .filter(m => m.store === store)
-      .map(m => m.path_hash)
-      .filter(Boolean);
+    const { pathHashes, existingCount } = resolveLocalizeCandidates(selectedMods.value, store)
     if (pathHashes.length === 0) {
       toast.info("选中的模组中没有来自工坊的项");
       return;
     }
-    await localizeMods(pathHashes, store)
+    await localizeMods(pathHashes, store, { existingCount })
   }
-  const localizeMods = async (pathHashes, store='workshop') => {
+  const localizeMods = async (pathHashes, store='workshop', options = {}) => {
+    const storeText = store === 'workshop' ? '工坊' : store
+    const existingCount = Number(options?.existingCount || 0)
+    const createCount = Math.max(pathHashes.length - existingCount, 0)
+    const actionTitle = getLocalizeActionTitle(pathHashes.length, existingCount)
+    const syncMessage = existingCount > 0
+      ? (
+          createCount > 0
+            ? `选中的 ${pathHashes.length} 个${storeText}模组中，${createCount} 个会本地化为共存模组，${existingCount} 个会同步已有本地共存副本。`
+            : `选中的 ${pathHashes.length} 个${storeText}模组已经存在本地共存模组。\n继续后会用当前${storeText}文件同步已有本地副本。`
+        )
+      : `确定要将选中的 ${pathHashes.length} 个${storeText}模组本地化为共存模组吗？\n本地化后会独立占用磁盘空间，后续${storeText}更新不会自动改动这些本地副本。`
     const confirm = await confirmStore.confirmAction(
-      '本地化确认',
-      `确定要将选中的 ${pathHashes.length} 个${store}模组复制到本地目录吗？\n复制后将独立占用磁盘空间，Steam / 管理器 的更新将不再影响这些本地副本。`,
-      { type: 'info' }
+      actionTitle,
+      syncMessage,
+      { type: existingCount > 0 ? 'warning' : 'info', confirmText: existingCount > 0 ? '开始处理' : '开始本地化' }
     );
     if (confirm) {
       appStore.isLoading = true;
       const res = await window.pywebview.api.localize_workshop_mods(pathHashes, store);
-      if (checkResult(res, '模组本地化')) {
+      if (checkResult(res, actionTitle)) {
         // 成功后会在完成时刷新数据
       }
       appStore.isLoading = false;
@@ -1107,7 +1167,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("更新Mod用户数据异常:", e)
-      toast.error(`更新Mod用户数据异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1124,7 +1184,7 @@ export const useModStore = defineStore('mods', () => {
         last_active_time: mod.last_active_time,
         last_moved_time: mod.last_moved_time
       }));
-      console.log("更新Mod最后操作时间:", {all_mods_time:all_mods})
+      console.debug("准备更新 Mod 最后操作时间:", {all_mods_time:all_mods})
       const res = await window.pywebview.api.mod_time_update(all_mods)
       if (!checkResult(res, "更新Mod最后操作时间")) {
         await appStore.refreshModsData('Mod 时间更新失败后同步模组数据')
@@ -1133,7 +1193,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("更新Mod最后操作时间异常:", e)
-      toast.error(`更新Mod最后操作时间异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。'))
       await appStore.refreshModsData('Mod 时间更新异常后同步模组数据')
       return false
     }
@@ -1158,7 +1218,7 @@ export const useModStore = defineStore('mods', () => {
       }
       return true
     } catch (e) {
-      toast.error(`批量设置颜色失败: ${e}`)
+      toast.error(toUserMessage(e?.message || e, '批量设置颜色失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1181,7 +1241,7 @@ export const useModStore = defineStore('mods', () => {
       }
       return true
     } catch (e) {
-      toast.error(`批量设置类型失败: ${e}`)
+      toast.error(toUserMessage(e?.message || e, '批量设置类型失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1204,7 +1264,7 @@ export const useModStore = defineStore('mods', () => {
       }
       return true
     } catch (e) {
-      toast.error(`批量添加标签失败: ${e}`)
+      toast.error(toUserMessage(e?.message || e, '批量添加标签失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1227,7 +1287,7 @@ export const useModStore = defineStore('mods', () => {
       }
       return true
     } catch (e) {
-      toast.error(`批量移除标签失败: ${e}`)
+      toast.error(toUserMessage(e?.message || e, '批量移除标签失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1272,7 +1332,7 @@ export const useModStore = defineStore('mods', () => {
       }
     } catch (e) {
       console.error("设置 Mod 联锁异常:", e)
-      toast.error(`设置 Mod 联锁异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。'))
       return false
     }
   }
@@ -1340,7 +1400,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("批量更新Mod数据异常:", e)
-      toast.error(`批量更新失败: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。'))
       restoreModSnapshots(rollback)
       return false
     } finally {
@@ -1398,7 +1458,7 @@ export const useModStore = defineStore('mods', () => {
 
   return {
     // 状态
-    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, disabledMods, disabledPathHashes, interlocksMap, savedInactiveIds, savedTempIds, interlockDetailsMap,
+    allModsMap, dataVersion, inactiveIds, tempIds, activeIds, disabledMods, disabledPathHashes, strictDisableRestoreFailures, interlocksMap, savedInactiveIds, savedTempIds, interlockDetailsMap,
     savedActiveIds, activeLoadModifyTime, activeLoadVersionToken, conflictList, coexistenceList,
     selectedIds, lastSelectedMod, currentTargetId, isDraggingMod,
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
@@ -1410,11 +1470,12 @@ export const useModStore = defineStore('mods', () => {
 
     // 列表读取与基础写入
     setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    isLanguagePackMod, getLanguagePackOwnerIds, canUseLanguagePackForIssueDetection, isDeclaredForCurrentLanguage,
     // 来源提示与列表选择
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeDeletedModsFromLocalData, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     // 扫描、排序与模组操作
-    scanMods, scanComplete, autoSortMods, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
+    scanMods, scanComplete, autoSortMods, resolveLocalizeCandidates, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
     canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource, toggleSelectedCoexistenceSource, revealSelectedMod,
     // 用户数据与联锁
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,

@@ -253,7 +253,7 @@ class GameMonitor:
                 if hasattr(self.api, 'scanner'):
                     self.api.scanner.stop_scan()
             except Exception as e:
-                logger.error(f"[Monitor] Browser silent mode failed: {e}")
+                logger.error(f"[Monitor] 浏览器静默模式设置失败：{e}")
                 EventBus.resume()
             return
 
@@ -273,7 +273,7 @@ class GameMonitor:
             time.sleep(0.5) 
             self._trim_memory()
         except Exception as e:
-            logger.error(f"[Monitor] Enter silent mode failed: {e}")
+            logger.error(f"[Monitor] 进入静默模式失败：{e}")
             EventBus.resume()
 
     def _exit_idle_mode(self):
@@ -286,7 +286,7 @@ class GameMonitor:
                 EventBus.emit('game-status-changed', {'running': self.is_game_running, 'runtime_session': self.get_runtime_session_data()})
                 logger.info("[Monitor] 浏览器模式已恢复主界面")
             except Exception as e:
-                logger.error(f"[Monitor] Browser resume failed: {e}")
+                logger.error(f"[Monitor] 浏览器恢复失败：{e}")
             return
 
         window = self.api.get_window()
@@ -305,7 +305,7 @@ class GameMonitor:
             # 让前端在 onMounted 时主动调用 API 恢复
             logger.info("[Monitor] 等待前端 UI 唤醒确认...")
         except Exception as e:
-            logger.error(f"[Monitor] Resume failed: {e}")
+            logger.error(f"[Monitor] 恢复失败：{e}")
             EventBus.resume()
 
     def _trim_memory(self):

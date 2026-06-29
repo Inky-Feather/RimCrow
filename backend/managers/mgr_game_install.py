@@ -13,10 +13,10 @@ from typing import Any
 
 from backend.managers.mgr_game import GameManager
 from backend.settings import BASE_RESOURCE_DIR, DATA_DIR
+from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
 
-RIMWORLD_APP_ID = "294100"
 KNOWN_INSTALLS_PATH = DATA_DIR / "known_game_installs.json"
 
 
@@ -339,7 +339,7 @@ class GameInstallInspector:
         steam_appid_path = self._find_appid_path(normalized_path, executable_path)
         appid_match = bool(
             steam_appid_path
-            and self._read_appid(Path(steam_appid_path)) == RIMWORLD_APP_ID
+            and self._read_appid(Path(steam_appid_path)) == RIMWORLD_STEAM_APP_ID_STR
         )
         is_steam_library_path = detect_is_steam_managed_install(normalized_path)
 
@@ -495,7 +495,7 @@ class GameInstallInspector:
             is_steam = bool(
                 layout["steam_api_path"]
                 and layout["steam_appid_path"]
-                and self._read_appid(Path(layout["steam_appid_path"])) == RIMWORLD_APP_ID
+                and self._read_appid(Path(layout["steam_appid_path"])) == RIMWORLD_STEAM_APP_ID_STR
             )
 
         facts = GameInstallFacts(

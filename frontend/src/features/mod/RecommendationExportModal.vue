@@ -17,6 +17,8 @@
         <CommonSwitch label="标签" v-model="form.includeTags" description="导出为 #tag1 #tag2 形式。" />
         <CommonSwitch label="分组" v-model="form.includeGroupNames" description="导出该模组所属分组名称。" />
         <CommonSwitch label="作者" v-model="form.includeAuthors" description="导出模组作者名称。" />
+        <CommonSwitch label="支持版本" v-model="form.includeSupportedVersions" description="导出模组支持的游戏版本。" />
+        <CommonSwitch label="附加语言包" v-model="form.includeLanguagePacks" description="把匹配的语言包名称和网址附在对应模组后。" />
         <CommonSwitch label="工坊 ID" v-model="form.includeWorkshopId" description="导出 Steam 创意工坊 ID。" />
         <CommonSwitch label="网址" v-model="form.includeUrl" description="导出模组来源网址。" />
         <CommonSwitch label="包名" v-model="form.includePackageId" description="默认隐藏，适合需要精确定位时开启。" />
@@ -81,6 +83,8 @@ const form = reactive({
   includeTags: true,
   includeGroupNames: true,
   includeAuthors: true,
+  includeSupportedVersions: true,
+  includeLanguagePacks: false,
   includePackageId: false,
   includeWorkshopId: true,
   includeUrl: true,
@@ -108,6 +112,7 @@ const exportMods = computed(() => (
   [...new Set((props.modIds || []).map(id => String(id || '').trim()).filter(Boolean))]
     .map(id => modStore.takeModById(id))
     .filter(Boolean)
+    .filter(mod => !modStore.isLanguagePackMod(mod))
 ))
 const defaultExportName = computed(() => {
   const sourceName = String(props.sourceName || '').trim()
@@ -131,6 +136,27 @@ const takeGroupNamesByMod = (mod) => {
   return normalizeTextList(groups.map(group => group?.name))
 }
 
+const normalizePackageId = (value) => String(value || '').trim().toLowerCase()
+const activeCanonicalIdSet = computed(() => new Set((modStore.activeIds || []).map(normalizePackageId).filter(Boolean)))
+
+const takeLanguagePacksByMod = (mod) => {
+  if (!form.includeLanguagePacks || !mod || modStore.isLanguagePackMod(mod) || modStore.isDeclaredForCurrentLanguage(mod)) return []
+  const ownerId = normalizePackageId(mod.package_id)
+  if (!ownerId) return []
+  const strictPacks = []
+  const fallbackPacks = []
+  for (const languagePack of modStore.allModsMap.values()) {
+    if (!modStore.isLanguagePackMod(languagePack) || !modStore.canUseLanguagePackForIssueDetection(languagePack)) continue
+    if (!modStore.getLanguagePackOwnerIds(languagePack).includes(ownerId)) continue
+    ;(modStore.isDeclaredForCurrentLanguage(languagePack) ? strictPacks : fallbackPacks).push(languagePack)
+  }
+  const activePack = [...strictPacks, ...fallbackPacks].find(languagePack => (
+    activeCanonicalIdSet.value.has(normalizePackageId(languagePack?.package_id))
+  ))
+  const pickedPack = activePack || strictPacks[0] || fallbackPacks[0]
+  return pickedPack ? [pickedPack] : []
+}
+
 // 只把推荐导出需要的字段传给后端，避免把完整 Mod 对象里的运行态字段写进文档。
 const buildPayload = () => ({
   format: form.format,
@@ -141,6 +167,8 @@ const buildPayload = () => ({
     include_tags: form.includeTags,
     include_group_names: form.includeGroupNames,
     include_authors: form.includeAuthors,
+    include_supported_versions: form.includeSupportedVersions,
+    include_language_packs: form.includeLanguagePacks,
     include_package_id: form.includePackageId,
     include_workshop_id: form.includeWorkshopId,
     include_url: form.includeUrl,
@@ -158,6 +186,11 @@ const buildPayload = () => ({
     tags: mod.tags || [],
     group_names: takeGroupNamesByMod(mod),
     author: normalizeTextList(mod.author || []),
+    supported_versions: normalizeTextList(mod.supported_versions || []),
+    language_packs: takeLanguagePacksByMod(mod).map(languagePack => ({
+      name: languagePack.name || languagePack.package_id,
+      url: languagePack.url,
+    })),
     workshop_id: mod.workshop_id,
     url: mod.url,
     preview_path: mod.preview_path,
@@ -186,10 +219,16 @@ const previewText = computed(() => {
   if (form.includeGroupNames && groupNames.length) lines.push(`分组：${groupNames.join('、')}`)
   const authors = normalizeTextList(mod.author || [])
   if (form.includeAuthors && authors.length) lines.push(`作者：${authors.join('、')}`)
+  const supportedVersions = normalizeTextList(mod.supported_versions || [])
+  if (form.includeSupportedVersions && supportedVersions.length) lines.push(`支持版本：${supportedVersions.join('、')}`)
   lines.push(`介绍：${form.bodySource === 'description' ? (mod.description || '暂无介绍') : (mod.notes || '暂无介绍')}`)
   if (form.includePackageId) lines.push(`包名：${mod.package_id_raw || mod.package_id}`)
   if (form.includeWorkshopId && mod.workshop_id) lines.push(`工坊ID：${mod.workshop_id}`)
   if (form.includeUrl && mod.url) lines.push(`网址：${mod.url}`)
+  takeLanguagePacksByMod(mod).forEach(languagePack => {
+    lines.push(`语言包：${languagePack.name || languagePack.package_id}`)
+    if (languagePack.url) lines.push(`语言包网址：${languagePack.url}`)
+  })
   return lines.join('\n')
 })
 

@@ -60,7 +60,7 @@ def build_output_path(project_root: Path, explicit_output: str | None, project_v
         return output_path.resolve()
     project_version = project_version.lstrip("-v")  # Remove leading 'v' if present
     timestamp = datetime.now().strftime("%Y%m%d")
-    return (project_root / "dist" / f"{project_root.name}-source-{timestamp}{project_version}.zip").resolve()
+    return (project_root / "dist" / f"{project_root.name}-source-{timestamp}-v{project_version}.zip").resolve()
 
 
 def create_archive(project_root: Path, output_path: Path, script_path: Path) -> int:

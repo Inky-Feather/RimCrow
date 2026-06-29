@@ -1,265 +1,451 @@
-import ast
 import os
-import re
+import shutil
 import subprocess
 import sys
-from typing import Callable, Optional
+import zipfile
+from pathlib import Path
 
-def packApplication(main_file="main.py", icon_path="", name=""):
+
+try:
+    import pathspec
+    HAS_PATHSPEC = True
+except ImportError:
+    HAS_PATHSPEC = False
+    print("提示: 未安装 'pathspec' 库，.gitignore 过滤功能将不可用。")
+
+
+def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
+    existing_paths = [item for item in env.get("PYTHONPATH", "").split(os.pathsep) if item]
+    extra_paths = [str(path.resolve()) for path in paths if path.exists()]
+    env["PYTHONPATH"] = os.pathsep.join([*extra_paths, *existing_paths])
+
+
+def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
+    source_dir = project_root / "submodules" / "SteamworksPy"
+    if not (source_dir / "steamworks" / "__init__.py").exists():
+        raise FileNotFoundError(f"未找到 SteamworksPy 源码目录: {source_dir}")
+    return source_dir
+
+
+def _run_command_with_log(cmd: list[str], log_path: Path, env: dict[str, str] | None = None) -> int:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+        )
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="")
+            log_file.write(line)
+        return process.wait()
+
+
+def _npm_command() -> str:
+    if sys.platform == "win32":
+        return shutil.which("npm.cmd") or "npm.cmd"
+    return shutil.which("npm") or "npm"
+
+
+def _platform_tag() -> str:
+    if sys.platform.startswith(("win32", "cygwin", "msys")):
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    return "".join(ch.lower() if ch.isalnum() else "-" for ch in sys.platform).strip("-") or "unknown"
+
+
+def _release_zip_name(app_name: str, version: str) -> str:
+    version_text = str(version or "0.0.0").strip().lstrip("vV") or "0.0.0"
+    return f"{app_name}-v{version_text}-{_platform_tag()}.zip"
+
+
+def _find_upx_binary(upx_dir: str = "") -> str:
+    raw_path = os.environ.get("UPX_DIR") or upx_dir
+    if not raw_path:
+        return ""
+    upx_path = Path(raw_path)
+    if upx_path.is_dir():
+        upx_path = upx_path / "upx.exe"
+    return str(upx_path) if upx_path.exists() else ""
+
+
+def _normal_version(version: str) -> str:
+    parts = str(version or "1.0.0").split(".")
+    numeric_parts = []
+    for part in parts[:4]:
+        try:
+            numeric_parts.append(str(int(part)))
+        except ValueError:
+            numeric_parts.append("0")
+    while len(numeric_parts) < 4:
+        numeric_parts.append("0")
+    return ".".join(numeric_parts)
+
+
+def _add_existing_data_dir(cmd: list[str], source: Path, target: str) -> None:
+    if source.exists():
+        cmd.append(f"--include-data-dir={source.as_posix()}={target}")
+    else:
+        print(f"警告: 资源目录不存在，已跳过 {source}")
+
+
+def _build_nuitka_args(
+    main_file: str,
+    icon_path: str,
+    name: str,
+    splash_path: str,
+    version: str,
+    company: str,
+    mode: str,
+    upx_dir: str = "",
+) -> list[str]:
+    project_root = Path(__file__).resolve().parent
+    _resolve_steamworkspy_source_dir(project_root)
+    normalized_version = _normal_version(version)
+    mode = mode if mode in {"onefile", "standalone"} else "onefile"
+
+    cmd = [
+        "uv", "run", "python", "-m", "nuitka",
+        f"--mode={mode}",
+        "--assume-yes-for-downloads",
+        "--show-progress",
+        "--remove-output",
+        "--deployment",
+        "--report=dist/nuitka-compilation-report.xml",
+        "--output-dir=dist",
+        f"--output-filename={name}",
+
+        # 动态导入和包数据：与 PyInstaller 配置保持同一运行能力。
+        "--enable-plugins=pywebview",
+        "--include-package=pygments",
+        "--include-package=send2trash",
+        "--include-package=steamworks",
+        "--include-package=tiktoken",
+        "--include-package=tiktoken_ext",
+        "--include-module=tiktoken_ext.openai_public",
+        "--include-package=litellm.litellm_core_utils.llm_response_utils",
+        "--include-package-data=tiktoken",
+        "--include-package-data=litellm",
+        "--noinclude-data-files=litellm/proxy/_experimental/**",
+        "--noinclude-data-files=litellm/proxy/swagger/**",
+
+        # anti-bloat 插件官方参数，用于避免部署包跟进无用的大型开发依赖。
+        "--noinclude-setuptools-mode=nofollow",
+        "--noinclude-pytest-mode=nofollow",
+        "--noinclude-unittest-mode=nofollow",
+    ]
+
+    if sys.platform == "win32":
+        # Nuitka 官方建议优先使用 Visual Studio 2022+；需要 MinGW 时可改回 --mingw64。
+        cmd.extend([
+            "--windows-console-mode=disable",
+            "--msvc=latest",
+
+            # Windows 版本信息。
+            f"--company-name={company}",
+            f"--product-name={name}",
+            f"--file-version={normalized_version}",
+            f"--product-version={normalized_version}",
+            f"--file-description={name} 模组管理器",
+            f"--copyright=Copyright (C) {company}",
+        ])
+        upx_binary = _find_upx_binary(upx_dir)
+        if upx_binary:
+            cmd.extend(["--enable-plugins=upx", f"--upx-binary={upx_binary}"])
+        else:
+            print("提示: 未找到 UPX，Nuitka 将不压缩二进制文件。")
+
+    frontend_dist = project_root / "frontend" / "dist"
+    _add_existing_data_dir(cmd, frontend_dist, "frontend/dist")
+    if mode == "onefile" and frontend_dist.exists():
+        cmd.append("--include-data-files-external=frontend/dist/**")
+
+    if sys.platform == "win32":
+        if mode == "onefile" and splash_path and Path(splash_path).exists():
+            cmd.append(f"--onefile-windows-splash-screen-image={Path(splash_path).as_posix()}")
+        if icon_path and Path(icon_path).exists():
+            cmd.append(f"--windows-icon-from-ico={Path(icon_path).as_posix()}")
+        elif icon_path:
+            print(f"警告: 图标文件不存在，已跳过 {icon_path}")
+
+    cmd.append(f"--main={main_file}")
+    return cmd
+
+
+def packApplication(
+    main_file: str = "main.py",
+    icon_path: str = "",
+    name: str = "",
+    splash_path: str = "",
+    version: str = "1.0.0",
+    company: str = "",
+    mode: str = "onefile",
+    upx_dir: str = "",
+) -> bool:
     """
-    使用 Nuitka 打包应用程序
-    
-    Args:
-        main_file (str): 主程序文件路径
-        icon_path (str): 图标文件路径
-        name (str): 程序名称
+    使用 Nuitka 打包应用程序。
     """
     try:
-        # 确保文件存在
         if not os.path.exists(main_file):
             raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
-        
-        if not os.path.exists(icon_path):
-            raise FileNotFoundError(f"图标文件 '{icon_path}' 不存在")
-            
-        # 构建 Nuitka 命令
-        cmd = [
-            "uv","run",     # 使用uv运行pyinstaller
-            "nuitka",
-            "--standalone", # 独立环境
-            # "--onefile",    # 打包成单个文件
-            "--mingw64",    # 强制 mingw64 编译
-            # "--msvc=latest",  # 使用最新的 MSVC 编译
-            "--plugin-enable=upx",  # 启用 upx 插件
-            r'--upx-binary=D:\Environment\upx-5.0.0-win64',    # 指定 UPX 路径
-            "--assume-yes-for-downloads",  # 自动同意下载
-            "--windows-console-mode=force",  # 强制控制台模式
-            # "--windows-console-mode=disable",  # 禁用控制台模式
-            "--show-progress",  # 显示进度
-            "--remove-output",  # 删除输出文件
-            '--include-data-dir=frontend/dist=frontend/dist',  # 包含资源目录
-            # "--nofollow-import-to=icecream",  # 不跟踪导入的模块
-            "--include-package=pygments",       # 包含 pygments 模块
-            "--include-package=send2trash",       # 包含 send2trash 模块
-            f'--windows-icon-from-ico={icon_path}',  # 指定图标
-            '--output-dir=dist',  # 指定输出目录
-            f'--output-filename={name}',   # 指定名称
-            f'--main={main_file}' # 主程序文件
-        ]
-        
-        # F:/programe/Python/RimModManager/.venv/Scripts/python.exe -m nuitka --standalone --show-progress --remove-output --mingw64 --lto=no --assume-yes-for-downloads --jobs=16 --output-dir=F:/programe/Python/RimModManager/output --main=F:/programe/Python/RimModManager/main.py --plugin-enable=pywebview --include-data-dir=F:/programe/Python/RimModManager/frontend/dist=frontend/dist
-        
-        # 执行打包命令
-        result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8')
-        
-        if result.returncode == 0:
-            print("打包成功！")
-            print(f"输出目录: {os.path.abspath('dist')}")
-        else:
-            print("打包失败！")
-            print("错误信息：")
-            print(result.stderr)
-            
+
+        cmd = _build_nuitka_args(main_file, icon_path, name, splash_path, version, company, mode, upx_dir=upx_dir)
+        env = os.environ.copy()
+        _append_pythonpath(env, _resolve_steamworkspy_source_dir(Path(__file__).resolve().parent))
+
+        print(f"执行命令: {' '.join(cmd)}")
+        build_log_path = Path("dist") / "nuitka-build.log"
+        returncode = _run_command_with_log(cmd, build_log_path, env=env)
+        if returncode == 0:
+            print("\n" + "=" * 30)
+            print("★ 打包成功！")
+            print(f"★ 输出目录: {Path('dist').resolve()}")
+            print(f"★ 构建日志: {build_log_path.resolve()}")
+            print("=" * 30 + "\n")
+            return True
+
+        print("打包失败！")
+        print(f"Nuitka 退出码: {returncode}")
+        print(f"构建日志: {build_log_path.resolve()}")
+        report_path = Path("dist") / "nuitka-compilation-report.xml"
+        if report_path.exists():
+            print(f"编译报告: {report_path.resolve()}")
+        return False
     except Exception as e:
         print(f"打包过程中出错: {str(e)}")
-        sys.exit(1)
+        return False
 
-# 目录树结构
-def filestree(path='.', exclude:list[str]=[], ignore='', max_depth:int=None, filter_func:Optional[Callable[[str], bool]]=None, # type: ignore
-              indent=2,branch_indent:int=None,sub_indent:int=None, # type: ignore
-              branch_sign='·[',branch_sign_end=']',leaf_sign=' ',leaf_sign_end=''):
-    
-    if not path or not os.path.isdir(path): return '路径错误！' # 路径检查
-    if not exclude: exclude = []    # 排除项默认空列表
-    if not filter_func: filter_func = lambda x: True  # 过滤函数默认正确
-    ignore_pattern = re.compile(ignore) if ignore else None # 正则表达式默认
-    # 本质为先叠加后替换，先复制父级前缀，再将尾端分支符号替换为无分支的插入符号
-    if indent==None: indent=2   # 通用缩进处理
-    if indent!=None: branch_indent_=sub_indent_=indent
-    if branch_indent!=None: branch_indent_=branch_indent    # 细节缩进优先级更高
-    if sub_indent!=None: sub_indent_=sub_indent
-    branch_sign = branch_sign or '' # 文件夹标记
-    branch_sign_end = branch_sign_end or ''
-    leaf_sign = leaf_sign or '' # 文件标记
-    leaf_sign_end = leaf_sign_end or ''
-    branch_mid = '├' + '─'*branch_indent_
-    branch_end = '└' + '─'*branch_indent_
-    sub_insert_mid = '│' + ' '*sub_indent_
-    sub_insert_end = ' ' + ' '*sub_indent_
-    treestr = [branch_sign + os.path.basename(path)+branch_sign_end]  # 结果列表
-    # 读取目录内文件，输出按类型排序后的列表 [[地址，前缀符号，深度],……]
-    def process_path(path, files, prefix='', depth=0):
-        pathlist = []
-        for item in files:
-            # 过滤设置
-            if item in exclude: continue # 排除项过滤
-            if not filter_func(item): continue  # 函数过滤
-            if ignore_pattern and ignore_pattern.match(item): continue   # 正则过滤
-            item_path = os.path.join(path, item)    # 获取文件地址
-            pathlist.append([item_path,prefix+branch_mid,depth])    # 添加到结果列表[地址，前缀符号，深度]
-        # 按类型排序文件
-        pathlist = sorted(pathlist, key=lambda x: (
-            not os.path.isdir(x[0]),  # 文件夹在前（False < True）
-            os.path.splitext(x[0])[1] if os.path.isfile(x[0]) else '',  # 按扩展名排序
-            os.path.basename(x[0])  # 按文件名排序（如果扩展名相同）
-        ))
-        if pathlist: pathlist[-1][1] = prefix+branch_end   # 修改最后项的前缀
-        
-        return pathlist[::-1]   # 返回反序列表（pop()会逆序处理）
-    
-    # 添加结果到任务序列
-    worklist = process_path(path,os.listdir(path))
-    while worklist:
-        item_path,prefix,depth = worklist.pop()
-        name = os.path.basename(item_path)   # 输出行=前缀+文件名
-        add = sub_insert_mid if prefix.endswith(branch_mid) else sub_insert_end    # 前缀处理，判断父级是否在中间分支
-        if os.path.isdir(item_path):
-            # treestr.append(prefix[:-len(branch_mid)]+sub_insert_mid) # 目录前空一行
-            if max_depth and depth+1>=max_depth:continue    # 深度过滤
-            worklist.extend(process_path(item_path,os.listdir(item_path),prefix[:-len(branch_mid)]+add,depth+1))
-            line = prefix + branch_sign + name + branch_sign_end # 文件夹标记
+
+def _iter_toolmods_files(toolmods_dir: Path):
+    """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
+    if not toolmods_dir.exists():
+        return
+    for current_root, dirnames, filenames in os.walk(toolmods_dir, followlinks=True):
+        current_path = Path(current_root)
+        relative_dir = current_path.relative_to(toolmods_dir)
+        dirnames[:] = [name for name in dirnames if not name.startswith("Source")]
+        if any(part.startswith("Source") for part in relative_dir.parts):
+            continue
+        for filename in filenames:
+            file_path = current_path / filename
+            yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
+
+
+def _should_include_steamcmd_file(relative_path: Path) -> bool:
+    if sys.platform == "win32":
+        return relative_path.name.lower() == "steamcmd.exe"
+    return relative_path.name == "steamcmd.sh"
+
+
+def _iter_tools_files(tools_dir: Path):
+    """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
+    if not tools_dir.exists():
+        return
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
+    for file_path in tools_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        relative_path = file_path.relative_to(tools_dir)
+        normalized_parts = [part.lower() for part in relative_path.parts]
+        if normalized_parts and normalized_parts[0] not in allowed_tool_dirs:
+            continue
+        if normalized_parts and normalized_parts[0] == "steamcmd" and not _should_include_steamcmd_file(relative_path):
+            continue
+        yield file_path, Path("tools") / relative_path
+
+
+def _iter_data_files(data_dir: Path):
+    """遍历 data 发布文件，仅保留发布包运行所需的固定数据文件。"""
+    required_files = [
+        Path("rules") / "communityRules.json",
+        Path("steamDB.json"),
+        Path("replacements.json.gz"),
+    ]
+    for relative_path in required_files:
+        file_path = data_dir / relative_path
+        if file_path.exists() and file_path.is_file():
+            yield file_path, Path("data") / relative_path
         else:
-            line = prefix + leaf_sign + name + leaf_sign_end    # 文件标记
-        treestr.append(line)
-        if add==sub_insert_end: treestr.append(prefix[:-len(branch_mid)]+sub_insert_end) # 分支结束后空一行
-    
-    return "\n".join(treestr)   # 合并结果行
+            print(f"警告: 发布数据文件缺失，已跳过 {file_path}")
 
-def file_tree(
-    path: str = '.',
-    exclude: list[str] = [],
-    ignore: str = '',
-    max_depth: Optional[int] = None,
-    filter_func: Optional[Callable[[str], bool]] = None,
-    branch_sign: str = '·[',
-    branch_sign_end: str = ']',
-    leaf_sign: str = ' ',
-    leaf_sign_end: str = '',
-    indent: int = 2,
-    branch_indent: Optional[int] = None,
-    sub_indent: Optional[int] = None
+
+def _iter_frontend_dist_files(frontend_dist_dir: Path):
+    """遍历前端构建产物，供 Nuitka onefile 外置资源使用。"""
+    if not frontend_dist_dir.exists():
+        print(f"警告: 前端构建目录缺失，已跳过 {frontend_dist_dir}")
+        return
+    for file_path in frontend_dist_dir.rglob("*"):
+        if file_path.is_file():
+            yield file_path, Path("frontend") / "dist" / file_path.relative_to(frontend_dist_dir)
+
+
+def _iter_nuitka_output_files(dist_dir: Path, app_name: str, mode: str):
+    """遍历 Nuitka 输出产物，onefile 取 exe，standalone 取完整 .dist 目录。"""
+    exe_path = dist_dir / f"{app_name}.exe"
+    if mode == "onefile":
+        if not exe_path.exists():
+            raise FileNotFoundError(f"未找到打包产物: {exe_path}")
+        yield exe_path, Path(exe_path.name)
+        return
+
+    app_dist_dir = dist_dir / f"{app_name}.dist"
+    if not app_dist_dir.exists():
+        raise FileNotFoundError(f"未找到打包目录: {app_dist_dir}")
+    for file_path in app_dist_dir.rglob("*"):
+        if file_path.is_file():
+            yield file_path, file_path.relative_to(app_dist_dir)
+
+
+def create_release_zip(app_name: str, version: str, mode: str = "onefile"):
+    """基于 Nuitka 产物生成发布压缩包，并附带运行所需的外部资源。"""
+    project_root = Path(__file__).resolve().parent
+    dist_dir = project_root / "dist"
+    zip_path = dist_dir / _release_zip_name(app_name, version)
+    archive_root = Path(app_name)
+
+    release_items = list(_iter_nuitka_output_files(dist_dir, app_name, mode))
+    if mode == "onefile":
+        release_items.extend(_iter_frontend_dist_files(project_root / "frontend" / "dist") or [])
+    release_items.extend(_iter_toolmods_files(project_root / "toolmods") or [])
+    release_items.extend(_iter_tools_files(project_root / "tools") or [])
+    release_items.extend(_iter_data_files(project_root / "data") or [])
+
+    if zip_path.exists():
+        zip_path.unlink()
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for source_path, archive_path in release_items:
+            archive.write(source_path, arcname=(archive_root / archive_path).as_posix())
+
+    print("\n" + "=" * 30)
+    print("★ 发布压缩包已生成！")
+    print(f"★ 输出文件: {zip_path}")
+    print("=" * 30 + "\n")
+    return zip_path
+
+
+def buildFrontend(start_path: str = "frontend"):
+    """
+    构建前端项目。
+    """
+    subprocess.run([_npm_command(), "run", "build"], cwd=start_path, check=True, text=True, encoding="utf-8")
+
+
+def get_gitignore_spec(root_path: str):
+    """读取并解析 .gitignore 文件。"""
+    if not HAS_PATHSPEC:
+        return None
+
+    gitignore_path = os.path.join(root_path, ".gitignore")
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, "r", encoding="utf-8") as f:
+            return pathspec.PathSpec.from_lines("gitwildmatch", f)
+    return None
+
+
+def filestree(
+    start_path: str = ".",
+    exclude_dirs: list[str] = [],
+    max_depth: int = -1,
+    use_gitignore: bool = True,
 ) -> str:
     """
-    生成指定路径的文件目录树字符串
-    
-    参数:
-        path: 起始目录路径
-        exclude: 要排除的文件名列表
-        ignore: 用于匹配要忽略的文件名的正则表达式
-        max_depth: 最大递归深度，None表示无限制
-        filter_func: 用于过滤文件的函数，返回True保留
-        branch_sign: 目录节点的前缀符号
-        branch_sign_end: 目录节点的后缀符号
-        leaf_sign: 文件节点的前缀符号
-        leaf_sign_end: 文件节点的后缀符号
-        indent: 通用缩进量
-        branch_indent: 分支缩进量，优先级高于indent
-        sub_indent: 子缩进量，优先级高于indent
-    
-    返回:
-        格式化的目录树字符串，若路径无效则返回错误信息
+    生成目录树结构字符串，支持 .gitignore 过滤。
     """
-    # 路径有效性检查
-    if not path or not os.path.isdir(path): return "错误：无效的目录路径"
-    
-    # 初始化参数默认值
-    exclude = exclude or [] # 排除项默认空列表
-    filter_func = filter_func or (lambda x: True)   # 默认过滤函数，保留所有文件
-    ignore_pattern = re.compile(ignore) if ignore else None # 正则表达式匹配忽略项
-    
-    # 处理缩进参数，特定缩进优先于通用缩进
-    branch_indent_val = branch_indent if branch_indent is not None else indent 
-    sub_indent_val = sub_indent if sub_indent is not None else indent
-    
-    # 定义目录树的分支符号
-    branch_mid = f"├{'─' * branch_indent_val}"    # 中间分支符号
-    branch_end = f"└{'─' * branch_indent_val}"    # 末尾分支符号
-    sub_insert_mid = f"│{' ' * sub_indent_val}"   # 中间分支的子缩进
-    sub_insert_end = f" {' ' * sub_indent_val}"   # 末尾分支的子缩进
-    
-    # 初始化结果列表，添加根目录
-    tree_lines = [f"{branch_sign}{os.path.basename(path)}{branch_sign_end}"]
-    
-    def process_directory(current_path: str, parent_prefix: str, current_depth: int) -> list:
-        """处理目录并返回需要进一步处理的子项列表"""
+    if exclude_dirs is None:
+        exclude_dirs = []
+    output_lines = []
+    spec = get_gitignore_spec(start_path) if use_gitignore else None
+    root_name = os.path.basename(os.path.abspath(start_path))
+    output_lines.append(f"·[{root_name}]")
+
+    def _tree_body(current_path: str, prefix: str = "", depth: int = 0):
+        if max_depth != -1 and depth >= max_depth:
+            return
         try:
-            items = os.listdir(current_path)
+            entries = os.listdir(current_path)
         except PermissionError:
-            return []  # 无权限访问的目录直接跳过
-        
-        # 过滤不符合条件的项
-        filtered_items = []
-        for item in items:
-            # 应用各种过滤条件
-            if item in exclude: continue
-            if not filter_func(item): continue
-            if ignore_pattern and ignore_pattern.match(item): continue
-            # 构建完整路径和前缀
-            item_path = os.path.join(current_path, item)
-            filtered_items.append([item_path, parent_prefix + branch_mid, current_depth])
-        
-        # 排序：目录在前，文件在后；按名称和扩展名排序
-        filtered_items.sort(key=lambda x: (
-            not os.path.isdir(x[0]),  # 目录在前 (False < True)
-            os.path.splitext(x[0])[1] if os.path.isfile(x[0]) else '',  # 按扩展名
-            os.path.basename(x[0])  # 按文件名
-        ))
-        
-        # 将最后一项的分支符号改为末尾样式
-        if filtered_items:
-            filtered_items[-1][1] = parent_prefix + branch_end
-            
-        # 反转列表，以便后续使用pop()从前面取元素
-        return filtered_items[::-1]
-    
-    # 初始化工作列表，处理根目录
-    work_list = process_directory(path, '', 0)
-    
-    # 递归处理所有目录和文件
-    while work_list:
-        item_path, prefix, depth = work_list.pop()
-        item_name = os.path.basename(item_path)
-        
-        # 确定子项的前缀插入符号
-        is_mid_branch = prefix.endswith(branch_mid)
-        sub_prefix = sub_insert_mid if is_mid_branch else sub_insert_end
-        
-        # 处理目录项
-        if os.path.isdir(item_path):
-            # 检查是否超过最大深度
-            if max_depth is not None and depth + 1 >= max_depth:
+            return
+
+        items = []
+        for entry in entries:
+            if entry in exclude_dirs:
                 continue
-                
-            # 添加子目录到工作列表
-            new_parent_prefix = prefix[:-len(branch_mid)] + sub_prefix if is_mid_branch else \
-                               prefix[:-len(branch_end)] + sub_prefix
-            work_list.extend(process_directory(item_path, new_parent_prefix, depth + 1))
-            
-            # 添加目录行到结果
-            tree_lines.append(f"{prefix}{branch_sign}{item_name}{branch_sign_end}")
-        
-        # 处理文件项
-        else:
-            tree_lines.append(f"{prefix}{leaf_sign}{item_name}{leaf_sign_end}")
-        
-        # 在末尾分支后添加空行分隔
-        if not is_mid_branch:
-            tree_lines.append(f"{prefix[:-len(branch_end)]}{sub_insert_end}")
-    
-    return "\n".join(tree_lines)
+            full_path = os.path.join(current_path, entry)
+            rel_path = os.path.relpath(full_path, start_path)
+            if spec and spec.match_file(rel_path.replace(os.sep, "/")):
+                continue
+            items.append(entry)
+
+        items.sort(key=lambda item: (not os.path.isdir(os.path.join(current_path, item)), item.lower()))
+        count = len(items)
+        for index, entry in enumerate(items):
+            full_path = os.path.join(current_path, entry)
+            is_last = index == count - 1
+            is_dir = os.path.isdir(full_path)
+            connector = "└── " if is_last else "├── "
+            display_name = f"·[{entry}]" if is_dir else f" {entry}"
+            output_lines.append(f"{prefix}{connector}{display_name}")
+            if is_last:
+                output_lines.append(f"{prefix}")
+            if is_dir:
+                extension = "    " if is_last else "│   "
+                _tree_body(full_path, prefix + extension, depth + 1)
+
+    _tree_body(start_path)
+    return "\n".join(output_lines)
 
 
 if __name__ == "__main__":
-    # 执行打包
-    main_file = 'main.py'
-    icon_path = 'icon.ico'
-    print('开始打包')
-    packApplication(main_file, icon_path, 'RimModManager')
-    print('生成目录结构')
-    p = r'.'
-    tree = filestree(p, exclude=['__pycache__','__init__.py','build','old','cache','node_modules','dist','data','backups','public','assets','temp','test','tools'],ignore=r'^\.')
-    with open('files_tree.txt','w',encoding='utf-8') as n:
-        n.write(tree)
-    print('生成完毕')
-    
-    
+    from backend._version import __version__
+
+    pack_zip = True
+    APP_MAIN = "main.py"
+    APP_NAME = "RimModManager"
+    APP_VERSION = __version__
+    APP_COMPANY = "Inky Feather"
+    ICON_PATH = "icon.ico"
+    SPLASH_PATH = "splash.png"
+    NUITKA_MODE = "onefile"  # 可改为 "standalone" 便于排查 Nuitka 输出目录问题。
+    DEFAULT_UPX_DIR = r"D:\Environment\upx-5.0.0-win64"
+
+    os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
+
+    buildFrontend(start_path="frontend")
+
+    print(f"=== 开始 Nuitka 打包 {APP_NAME} v{APP_VERSION} ===")
+    packed = packApplication(
+        main_file=APP_MAIN,
+        icon_path=ICON_PATH,
+        name=APP_NAME,
+        splash_path=SPLASH_PATH,
+        version=APP_VERSION,
+        company=APP_COMPANY,
+        mode=NUITKA_MODE,
+        upx_dir=DEFAULT_UPX_DIR,
+    )
+
+    if packed and pack_zip:
+        print(f"=== 生成发布压缩包 {_release_zip_name(APP_NAME, APP_VERSION)} ===")
+        create_release_zip(APP_NAME, APP_VERSION, mode=NUITKA_MODE)
+
+    print("\n=== 生成项目目录树 ===")
+    excludes = [
+        "__pycache__", ".git", ".venv", ".idea", ".vscode",
+        "build", "dist", "node_modules",
+        "cache", "temp", "backups", "Downloads", "updates",
+    ]
+    tree_text = filestree(".", exclude_dirs=excludes, use_gitignore=True, max_depth=5)
+    output_file = "files_tree.txt"
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(tree_text)
+
+    print(f"目录树已保存至: {output_file}")

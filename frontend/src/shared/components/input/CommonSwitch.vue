@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonSwitch.vue -->
 <template>
   <div :aria-disabled="disabled" class="flex items-center justify-between aria-disabled:pointer-events-none aria-disabled:opacity-50" 
-    :class="[mini?'px-1 py-':'input-glass bg-glass-light/80 px-3 py-2']">
+    :class="[mini?'px-1 py-0 gap-2':'input-glass bg-glass-light/80 px-3 py-2']">
     <div class="flex flex-col">
       <span class="text-sm font-bold text-text-main tracking-wide">{{ label }}
         <label v-if="description && mini" v-tooltip="description" class="text-text-dim ml-0 mr-1.5 italic cursor-help underline hover:text-text-main">?</label>
@@ -16,7 +16,7 @@
       ]" >
       <!-- 滑块轨迹指示灯 -->
       <div class="absolute rounded-full transition-all duration-300 ease-out"
-        :class="[modelValue ? 'left-5 bg-accent-primary shadow-[0_0_8px_rgba(var(--rgb-accent-primary),0.75)]' : 'left-1 bg-bg-overlay/10',
+        :class="[modelValue ? 'left-5 bg-accent-primary shadow-[0_0_8px_rgba(var(--rgb-accent-primary),0.75)]' : 'left-0.5 bg-bg-overlay/10',
           mini?'top-[0.2rem] w-3 h-3':'top-1 h-3.5 w-3.5'
         ]">
       </div>

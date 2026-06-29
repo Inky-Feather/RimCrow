@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
+import { decoratePreviewableHtmlImages } from './domEffects'
 
 const md = new MarkdownIt({
   html: true,
@@ -23,23 +24,8 @@ export const sanitizeRenderedHtml = (html) => DOMPurify.sanitize(html, {
   ADD_ATTR: ['class', 'target', 'rel', 'src', 'alt', 'title', 'loading'],
 })
 
-const rewriteMarkdownImages = (html, resolveImageUrl) => {
-  if (typeof resolveImageUrl !== 'function' || typeof document === 'undefined') return html
-  const wrapper = document.createElement('div')
-  wrapper.innerHTML = html
-  wrapper.querySelectorAll('img[src]').forEach(img => {
-    const src = img.getAttribute('src') || ''
-    const cachedSrc = resolveImageUrl(src)
-    if (cachedSrc) {
-      img.setAttribute('src', cachedSrc)
-      img.setAttribute('loading', 'lazy')
-    }
-  })
-  return wrapper.innerHTML
-}
-
 export const renderMarkdownContent = (text, options = {}) => {
   const rendered = md.render(String(text || '')).replace(/<code>/g, '<code class="bg-bg-inset/70 text-accent-special px-1.5 py-0.5 rounded text-sm font-mono border border-border-base/10">')
-  const withCachedImages = rewriteMarkdownImages(rendered, options.resolveImageUrl)
+  const withCachedImages = decoratePreviewableHtmlImages(rendered, { resolveImageUrl: options.resolveImageUrl })
   return sanitizeRenderedHtml(withCachedImages)
 }

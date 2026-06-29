@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
-import { checkResult, deepClone, toast } from '../../shared/lib/common'
+import { checkResult, deepClone, toast, toUserMessage } from '../../shared/lib/common'
 import { useModStore } from '../../features/mod/stores/modStore'
 import { useGroupStore } from '../../features/mod/stores/groupStore'
 import { useOrderStore } from '../../features/load-order/orderStore'
@@ -24,6 +24,7 @@ import { useUpdateActions } from './app/updateActions'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
+  const confirmStore = useConfirmStore()
 
   const createDefaultRuntimeSession = () => ({
     profile_id: '',
@@ -41,6 +42,7 @@ export const useAppStore = defineStore('app', () => {
   const appVersion = ref('')     // 应用版本号
   const buildMode = ref('')      // 构建模式
   const isLoading = ref(false)   // 加载状态
+  const settingsReady = ref(false) // 后端设置已注入，避免其它 store 把默认空配置误判为用户配置
   const isGameRunning = ref(false) // 全局游戏运行状态
   const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
   // 运行时会话与 UI 当前环境分离：这里只记录“游戏现在实际按谁在跑”。
@@ -89,6 +91,8 @@ export const useAppStore = defineStore('app', () => {
     file_count: 0,
     total_bytes: 0,
   })
+  const translationProviders = ref([{ id: 'ai.default', label: 'AI 翻译', type: 'ai' }])
+  const isTranslationProvidersLoaded = ref(false)
   const cancelPendingTaskIds = ref(new Set())
   const cancelPendingTimers = new Map()
   const CANCELLATION_PENDING_TIMEOUT_MS = 15000
@@ -96,6 +100,80 @@ export const useAppStore = defineStore('app', () => {
   let suspendRecoveryPromise = null
 
   const upgradeContext = ref({}); // 升级上下文
+
+  const createDefaultTranslationSettings = () => ({
+    default: {
+      target_language: 'follow_ui',
+      provider: 'ai.default',
+    },
+    workshop_detail: {
+      target_language: 'default',
+      provider: 'default',
+      prefer_ui_language_translation: true,
+      auto_translate_missing: false,
+      source_detection: { enabled: false, mode: 'or', terms: [] },
+    },
+  })
+
+  const normalizeTranslationSettings = (value = {}) => {
+    const defaults = createDefaultTranslationSettings()
+    const source = value && typeof value === 'object' ? value : {}
+    const globalDefault = source.default && typeof source.default === 'object' ? source.default : {}
+    const workshopDetail = source.workshop_detail && typeof source.workshop_detail === 'object' ? source.workshop_detail : {}
+    const sourceDetection = workshopDetail.source_detection && typeof workshopDetail.source_detection === 'object' ? workshopDetail.source_detection : {}
+    const normalized = {
+      ...source,
+      default: {
+        ...defaults.default,
+        ...globalDefault,
+      },
+      workshop_detail: {
+        ...defaults.workshop_detail,
+        ...workshopDetail,
+        source_detection: {
+          ...defaults.workshop_detail.source_detection,
+          ...sourceDetection,
+          terms: Array.isArray(sourceDetection.terms) ? sourceDetection.terms.map(item => String(item || '').trim()).filter(Boolean) : [],
+          mode: String(sourceDetection.mode || '').toLowerCase() === 'and' ? 'and' : 'or',
+          enabled: !!sourceDetection.enabled,
+        },
+      },
+    }
+    delete normalized.defaults
+    delete normalized.scopes
+    return normalized
+  }
+
+  const ensureTranslationSettingsShape = () => {
+    settings.value.translation = normalizeTranslationSettings(settings.value.translation)
+    return settings.value.translation
+  }
+
+  const getTranslationFeatureSettings = (feature = 'workshop_detail') => {
+    const translation = normalizeTranslationSettings(settings.value.translation)
+    const defaults = createDefaultTranslationSettings()
+    const globalDefault = translation.default || defaults.default
+    const fallback = defaults[feature] && typeof defaults[feature] === 'object' ? defaults[feature] : {}
+    const featureSettings = translation[feature] && typeof translation[feature] === 'object' ? translation[feature] : {}
+    const merged = { ...globalDefault, ...fallback, ...featureSettings }
+    const targetLanguage = String(merged.target_language || '').trim()
+    const provider = String(merged.provider || '').trim()
+    return {
+      ...merged,
+      target_language: !targetLanguage || targetLanguage === 'default' ? globalDefault.target_language : targetLanguage,
+      provider: !provider || provider === 'default' ? globalDefault.provider : provider,
+    }
+  }
+
+  const saveTranslationFeatureSettings = async (feature = 'workshop_detail', patch = {}) => {
+    const translation = ensureTranslationSettingsShape()
+    translation[feature] = {
+      ...(translation[feature] || {}),
+      ...(patch && typeof patch === 'object' ? patch : {}),
+    }
+    await saveSetting('translation', translation)
+    return translation[feature]
+  }
 
   // 定义侧边栏标签配置 (ID 与 标题绑定)
   const SIDEBAR_TABS = [
@@ -190,9 +268,12 @@ export const useAppStore = defineStore('app', () => {
 
       show_dependency_graph: true,  // 是否显示依赖关系图
       smooth_list_target_scroll: true,  // 定位到列表项时是否使用平滑滚动
+      hidden_dependency_graph_source_ids: [],  // 全局隐藏的依赖源包名列表
       keybindings: { version: 1, bindings: {}, disabledDefaults: {} },  // 用户自定义快捷键覆盖配置
-      enable_active_section_collapse: false,  // 是否启用启用列表标题分组折叠（仅 active 列表生效）
-      default_collapse_active_sections: false,  // 若当前环境/列表还没有保存过折叠状态，首次是否默认折叠
+      enable_active_section_collapse: false,  // 是否启用启用列表标题分组折叠
+      enable_inactive_section_collapse: false,  // 是否启用停用列表标题分组折叠
+      default_collapse_active_sections: false,  // 若当前环境/启用列表还没有保存过折叠状态，首次是否默认折叠
+      default_collapse_inactive_sections: false,  // 若当前环境/停用列表还没有保存过折叠状态，首次是否默认折叠
       persist_temp_mod_list: false,  // 是否按环境保存临时列表
       show_list_index: true,  // 是否显示列表索引列
       show_list_icon: true,       // 是否显示 Mod 图标
@@ -234,18 +315,36 @@ export const useAppStore = defineStore('app', () => {
       context_window_tokens: 0,
       max_concurrency: 3,     // 最大并发请求数（避免被API封锁）
     },
+    translation: {
+      default: {
+        target_language: 'follow_ui',
+        provider: 'ai.default',
+      },
+      workshop_detail: {
+        target_language: 'default',
+        provider: 'default',
+        prefer_ui_language_translation: true,
+        auto_translate_missing: false,
+        source_detection: { enabled: false, mode: 'or', terms: [] },
+      },
+    },
+    enable_steam_enhanced_api: false,
     steam_web_api_key: '',
+    _secret_status: {},
 
     // --- 贴图优化 ---
     texture_opt: {
       texture_tools_path: "",       // 贴图工具目录
       process_mode: 'scaled_only_overwrite',
+      output_format: 'dds',         // 输出格式：dds 或 zstd
       generate_mipmaps: true,       // 是否生成远近层级
       scale_factor: 0.5,            // 缩放比例
       max_size: 128,                // 最低清晰度
       skip_small_textures: true,    // 超出建议范围时不参与缩放
       min_dimension: 128,           // 最短边低于该值时不参与缩放
       max_source_dimension: 2048,   // 最长边高于该值时不参与缩放
+      zstd_clean_old_dds: false,    // 生成 ZSTD 成功后是否清理旧 DDS
+      clean_output_format: 'dds',   // 清理格式：dds 或 zstd
     },
 
     // --- 高级 (Advanced) ---
@@ -253,6 +352,8 @@ export const useAppStore = defineStore('app', () => {
     enable_auto_scan: true,
     enable_file_size_scan: true,         // 扫描时是否检查文件大小
     enable_mod_residue_scan: true,       // 扫描时是否识别卸载残留
+    startup_inventory_prompt_new_only: false, // 启动库存提醒是否只显示新发现的问题
+    strict_disabled_mode: false,         // 扫描时是否按禁用记录自动恢复被外部启用的 Mod
     delete_missing_mods_data: false,
     auto_sort_strategy: "classic_sort_logic",  // 自动排序策略
     sort_mods_by: "name",                 // 自动排序排列方式: name, id, alias
@@ -261,6 +362,8 @@ export const useAppStore = defineStore('app', () => {
     show_coexistence_message: true,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
+    skip_language_pack_alias_generation: true, // 批量生成别名备注时是否跳过语言包
+    regular_mods_follow_dependencies: false, // 普通模组是否贴紧其最后一个依赖目标
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
 
     // --- 调试 (Debug) ---
@@ -274,6 +377,7 @@ export const useAppStore = defineStore('app', () => {
     tool_check_interval_days: 3,
     last_tool_check_time: 0,
     enable_auto_external_data_update_check: true,
+    enable_silent_external_data_update: false,
     external_data_update_check_interval_days: 1,
     last_external_data_update_check_time: 0,
     enable_auto_steamcmd_mod_update_check: true,
@@ -298,13 +402,16 @@ export const useAppStore = defineStore('app', () => {
     autoDetectPaths, getDefaultExternalPaths, checkPath, checkPaths,
     // 打开、选择与删除
     openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
-  } = usePathActions({ settings })
+  } = usePathActions({
+    settings,
+    requestModScan: (...args) => requestModScan(...args),
+  })
 
   const {
     // 设置面板
     openSettingsPanel, closeSettingsPanel,
     // 设置保存与主题
-    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme,
+    saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme,
   } = useSettingsActions({
     settings,
     uiState,
@@ -313,6 +420,7 @@ export const useAppStore = defineStore('app', () => {
     applyCurrentTheme,
     syncRemoteImageCache: (...args) => syncRemoteImageCache(...args),
     refreshData: (...args) => refreshData(...args),
+    requestModScan: (...args) => requestModScan(...args),
   })
 
   const {
@@ -364,6 +472,7 @@ export const useAppStore = defineStore('app', () => {
     // 订阅与下载
     downloadWorkshopItems, subscribeInstallSources, downloadInstallSources,
     downloadPackageIds, subscribePackageIds, subscribeWorkshopIds, unsubscribeWorkshopIds,
+    downloadWorkshopItemsViaSteam, querySteamWorkshopDetails,
     // 合集
     getCollectionItems,
   } = useSteamWorkshopActions({
@@ -398,7 +507,7 @@ export const useAppStore = defineStore('app', () => {
 
 
   // === Getters ===
-  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download']))
+  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download', 'steam-workshop-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
   const updateInstallPrompted = new Set()
   const exportCompletePrompted = new Set()
@@ -417,6 +526,7 @@ export const useAppStore = defineStore('app', () => {
     'steamcmd-init',
     'steam-subscribe',
     'steam-unsubscribe',
+    'steam-workshop-download',
     'texture-opt',
     'texture-opt-analyze',
     'ai-task',
@@ -536,8 +646,12 @@ export const useAppStore = defineStore('app', () => {
       settings.value = payload.settings
       settings.value.asset_port = payload.asset_port || 0
       upgradeContext.value = payload.upgrade_context
-    } else {
+    } else if (payload.settings) {
       Object.assign(settings.value, payload.settings)
+    }
+    if (payload.settings) {
+      settings.value.translation = normalizeTranslationSettings(settings.value.translation)
+      settingsReady.value = true
     }
     if (Array.isArray(payload.user_themes)) {
       userThemes.value = payload.user_themes
@@ -558,13 +672,35 @@ export const useAppStore = defineStore('app', () => {
     if (payload.active_context) {
       profileStore.activeContext = payload.active_context
       if (!profileStore.activeContext.is_healthy) {
-        toast.warning("未配置游戏路径，请先配置游戏路径。",{position: "top-center",timeout: 5000})
+        toast.warning("需要确认路径配置。已自动搜索到的路径会填入设置面板，请确认后保存。",{position: "top-center",timeout: 5000})
         uiState.showSettingsPanel = true
         return false
       }
     }
 
     return applyModsPayload(payload, { isInit, historyLabel })
+  }
+
+  const refreshRuleData = async () => {
+    const ruleStore = useRuleStore()
+    await ruleStore.fetchRules()
+  }
+
+  const refreshBackupData = () => {
+    const orderStore = useOrderStore()
+    void orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+  }
+
+  const refreshWorkspaceLibraryData = () => {
+    const workspaceStore = useWorkspaceStore()
+    // 扫描只会改变本地三库模组事实，不需要顺带刷新 GitHub/合集列表。
+    void workspaceStore.refreshLoadedData({ librariesOnly: true })
+  }
+
+  const refreshModsRelatedData = async (options = {}) => {
+    if (options?.refreshRules !== false) await refreshRuleData()
+    if (options?.refreshBackups !== false) refreshBackupData()
+    if (options?.refreshWorkspaceLibraries !== false) refreshWorkspaceLibraryData()
   }
 
   // 扫描完成后只同步与模组相关的数据，避免再次触发整套工作区/集合/GitHub 初始化。
@@ -580,22 +716,15 @@ export const useAppStore = defineStore('app', () => {
       })
       if (!applied) return false
 
-      const ruleStore = useRuleStore()
-      ruleStore.fetchRules()
-      const orderStore = useOrderStore()
-      orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
-
-      const workspaceStore = useWorkspaceStore()
-      // 扫描只会改变本地三库模组事实，不需要顺带刷新 GitHub/合集列表。
-      void workspaceStore.refreshLoadedData({ librariesOnly: true })
+      await refreshModsRelatedData(options)
       return true
     } catch (e) {
-      toast.error(`同步模组数据失败: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。'))
       return false
     }
   }
 
-  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false } = {}) => {
+  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null } = {}) => {
     // 多次扫描请求合并时，任意一次要求保留列表状态，最终扫描完成也要保留。
     const normalizeScanRequest = (request = {}) => {
       const normalizedPaths = Array.isArray(request.specificPaths)
@@ -605,6 +734,13 @@ export const useAppStore = defineStore('app', () => {
         forcedUpdate: !!request.forcedUpdate,
         specificPaths: normalizedPaths && normalizedPaths.length > 0 ? [...new Set(normalizedPaths)] : null,
         preserveListState: !!request.preserveListState,
+        sizeCheckOverride: request.sizeCheckOverride == null ? null : !!request.sizeCheckOverride,
+        sizeCheckPaths: Array.isArray(request.sizeCheckPaths)
+          ? [...new Set(request.sizeCheckPaths.map(path => String(path || '').trim()).filter(Boolean))]
+          : [],
+        startupWorkshopChanges: Array.isArray(request.startupWorkshopChanges)
+          ? request.startupWorkshopChanges
+          : [],
       }
     }
     const mergeScanRequest = (left, right) => {
@@ -616,9 +752,14 @@ export const useAppStore = defineStore('app', () => {
           ? null
           : [...new Set([...left.specificPaths, ...right.specificPaths])],
         preserveListState: !!(left.preserveListState || right.preserveListState),
+        sizeCheckOverride: left.sizeCheckOverride === true || right.sizeCheckOverride === true
+          ? true
+          : (left.sizeCheckOverride === false || right.sizeCheckOverride === false ? false : null),
+        sizeCheckPaths: [...new Set([...(left.sizeCheckPaths || []), ...(right.sizeCheckPaths || [])])],
+        startupWorkshopChanges: [...(left.startupWorkshopChanges || []), ...(right.startupWorkshopChanges || [])],
       }
     }
-    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState })
+    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState, sizeCheckOverride, sizeCheckPaths, startupWorkshopChanges })
     if (isScanRunning.value) {
       pendingModScanRequested.value = mergeScanRequest(pendingModScanRequested.value, scanRequest)
       return false
@@ -628,8 +769,9 @@ export const useAppStore = defineStore('app', () => {
     // 扫描任务本身不带前端选项，先暂存在这里，等 scan-complete 事件回来再使用。
     activeModScanRequest.value = scanRequest
     const modStore = useModStore()
-    await modStore.scanMods(scanRequest.specificPaths, scanRequest.forcedUpdate)
-    return true
+    const started = await modStore.scanMods(scanRequest.specificPaths, scanRequest.forcedUpdate, scanRequest.sizeCheckOverride, scanRequest.sizeCheckPaths)
+    if (!started) activeModScanRequest.value = null
+    return !!started
   }
 
   const flushQueuedModScan = async () => {
@@ -639,8 +781,9 @@ export const useAppStore = defineStore('app', () => {
     // 延迟扫描同样要保留原始请求选项，避免排队后丢失列表状态策略。
     activeModScanRequest.value = queuedRequest
     const modStore = useModStore()
-    await modStore.scanMods(queuedRequest.specificPaths, queuedRequest.forcedUpdate)
-    return true
+    const started = await modStore.scanMods(queuedRequest.specificPaths, queuedRequest.forcedUpdate, queuedRequest.sizeCheckOverride, queuedRequest.sizeCheckPaths)
+    if (!started) activeModScanRequest.value = null
+    return !!started
   }
 
   const recoverFromSuspendedState = async () => {
@@ -667,7 +810,7 @@ export const useAppStore = defineStore('app', () => {
         await orderStore.presentRuntimeRefreshDiff(resumeSnapshot)
       } catch (e) {
         console.error("恢复挂起界面失败:", e)
-        toast.error(`恢复界面失败: \n${e.message || e}`)
+        toast.error(toUserMessage(e?.message || e, '恢复界面失败。请刷新界面或重启软件后重试，详细原因已写入系统日志。'))
       } finally {
         isLoading.value = false
         suspendRecoveryPromise = null
@@ -691,11 +834,13 @@ export const useAppStore = defineStore('app', () => {
         upgradeContext,
         uiState,
         checkUpdate,
+        confirmStore,
+        requestModScan,
         runScheduledMaintenanceChecks,
       })
     } catch (e) {
       console.error("初始化失败:", e)
-      toast.error(`初始化失败：\n${e}`)
+      toast.error(toUserMessage(e?.message || e, '初始化失败。可能是配置、数据库或运行环境暂时不可用，详细原因已写入系统日志。'))
     } finally {
       isLoading.value = false
     }
@@ -718,7 +863,7 @@ export const useAppStore = defineStore('app', () => {
       orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
       return true
     } catch (e) {
-      toast.error(`刷新数据失败: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '刷新数据失败。可能是扫描器、数据库或当前环境暂时不可用，请稍后重试。'))
       return false
     } finally {
       isLoading.value = false
@@ -759,6 +904,9 @@ export const useAppStore = defineStore('app', () => {
       await modStore.scanComplete(detail, {
         preserveListState: !!scanRequest?.preserveListState,
       })
+      if (detail.status === 'success' && scanRequest?.startupWorkshopChanges?.length) {
+        void useWorkspaceStore().showStartupWorkshopChangesPrompt(scanRequest.startupWorkshopChanges)
+      }
       if (residuePayload?.summary?.item_count > 0) {
         useModResidueStore().setOverview(residuePayload)
         uiState.showModResidueCleanup = true
@@ -770,25 +918,29 @@ export const useAppStore = defineStore('app', () => {
       }
     })
 
-    // 监听：本地化完成
+    // 监听：本地共存任务完成
     window.addEventListener('localize-complete', (e) => {
-        const { success_count, error_count, errors, status } = e.detail;
-        console.log(`本地化完成。成功: ${success_count}, 失败: ${error_count}`, errors)
+        const detail = e?.detail || {}
+        const { success_count, error_count, errors, status, title } = detail;
+        const taskTitle = title || '本地共存任务'
+        console.info(`${taskTitle}完成。成功 ${success_count} 项，失败 ${error_count} 项。`, errors)
         if (status === 'cancelled') {
-            toast.info('本地化任务已取消');
+            toast.info(`${taskTitle}已取消`);
             return
         }
         if (error_count > 0) {
-            toast.warning(`本地化完成。成功: ${success_count}, 失败: ${error_count}`);
+            toast.warning(`${taskTitle}已完成，成功 ${success_count} 项，失败 ${error_count} 项。失败详情已写入系统日志。`);
         } else {
-            toast.success(`成功本地化 ${success_count} 个模组`);
+            toast.success(`${taskTitle}已完成：${success_count} 个模组`);
         }
-        const modStore = useModStore()
-        modStore.scanMods()
+        const sizeCheckPaths = Array.isArray(detail.size_check_paths)
+          ? detail.size_check_paths.map(path => String(path || '').trim()).filter(Boolean)
+          : []
+        void requestModScan({ preserveListState: true, sizeCheckPaths })
     });
     // 监听：游戏暂停
     window.addEventListener('app-suspending', () => {
-      console.log('检测到游戏启动，停止所有界面活动...');
+      console.info('检测到游戏启动，停止所有界面活动。');
       // 1. 设置全局加载状态，屏蔽用户操作
       isLoading.value = true;
       if (suspendRecoveryTimer) {
@@ -811,7 +963,7 @@ export const useAppStore = defineStore('app', () => {
         toast.info(detail.message, { timeout: 4000 })
       }
       if (detail.failure_reason && detail.message) {
-        toast.error(detail.message)
+        toast.error(toUserMessage(detail.message, '游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用，详细原因已写入系统日志。'))
       }
     })
     window.addEventListener('app-suspending', () => {
@@ -840,15 +992,25 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'download' && task.status === 'success') {
         const filename = task.metrics?.filename || task.message
-        if (filename) toast.success(`下载完成: ${filename}`)
+        if (filename) toast.success(`下载已完成：${filename}`)
         const textureStore = useTextureStore()
         textureStore.handleDownloadEvent(task)
       }
       if (task.type === 'download' && task.status === 'failed') {
-        toast.error(`下载失败: ${task.metrics?.filename || task.message}\n${task.metrics?.error || ''}`)
+        const filename = task.metrics?.filename || task.message || '文件'
+        toast.error(`${filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题，详细原因已写入系统日志。`)
       }
       if (task.type === 'steamcmd-download' && task.status === 'failed') {
-        toast.error(`SteamCMD 下载失败: ${task.metrics?.error || task.message}`)
+        toast.error(toUserMessage(task.metrics?.error || task.message, 'SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限，详细原因已写入系统日志。'))
+      }
+      if (task.type === 'steam-workshop-download' && task.status === 'success') {
+        void (async () => {
+          await requestModScan({ preserveListState: true })
+          toast.success('Steam 下载已完成')
+        })()
+      }
+      if (task.type === 'steam-workshop-download' && task.status === 'failed') {
+        toast.error(toUserMessage(task.metrics?.error || task.message, 'Steam 下载失败。请确认 Steam 已登录并正常联网，或检查代理设置和工坊项目状态。'))
       }
       if (task.type === 'steam-subscribe' && task.status === 'success') {
         void (async () => {
@@ -857,10 +1019,10 @@ export const useAppStore = defineStore('app', () => {
         })()
       }
       if (task.type === 'steam-subscribe' && task.status === 'failed') {
-        toast.error(`Steam 订阅失败: ${task.metrics?.error || task.message}`)
+        toast.error(toUserMessage(task.metrics?.error || task.message, 'Steam 订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
       }
       if (task.type === 'steam-unsubscribe' && task.status === 'failed') {
-        toast.error(`取消订阅失败：${task.metrics?.error || task.message}`)
+        toast.error(toUserMessage(task.metrics?.error || task.message, '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。'))
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
         if (updateState.info) updateState.info.local_status = 'ready'
@@ -870,7 +1032,8 @@ export const useAppStore = defineStore('app', () => {
         }
       }
       if (task.type === 'update' && task.status === 'failed') {
-        toast.error(`更新出错: ${task.metrics?.error || task.message}`)
+        if (task.metrics?.has_fallback_source) return
+        toast.error(toUserMessage(task.metrics?.error || task.message, '下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。'))
       }
       if (task.type === 'mod-export' && task.status === 'success') {
         if (!task.id || !exportCompletePrompted.has(task.id)) {
@@ -879,7 +1042,7 @@ export const useAppStore = defineStore('app', () => {
         }
       }
       if (task.type === 'mod-export' && task.status === 'failed') {
-        toast.error(task.metrics?.error || task.message || '模组包导出失败')
+        toast.error(toUserMessage(task.metrics?.error || task.message, '模组包导出失败。请检查导出目录权限、磁盘空间和待导出模组状态，详细原因已写入系统日志。'))
       }
       if (task.type === 'mod-export' && task.status === 'cancelled') {
         toast.warning('模组包导出已取消')
@@ -895,7 +1058,7 @@ export const useAppStore = defineStore('app', () => {
         })()
       }
       if (task.type === 'mod-import' && task.status === 'failed') {
-        toast.error(task.metrics?.error || task.message || '模组包导入失败')
+        toast.error(toUserMessage(task.metrics?.error || task.message, '模组包导入失败。请检查文件是否完整、目标目录权限和磁盘空间，详细原因已写入系统日志。'))
       }
       if (task.type === 'mod-import' && task.status === 'cancelled') {
         toast.warning('模组包导入已取消')
@@ -903,7 +1066,7 @@ export const useAppStore = defineStore('app', () => {
     });
     // 监听：后端弹窗
     window.addEventListener('backend-popup', (e) => {
-      console.log('收到后端弹窗:', e)
+      console.debug('收到后端弹窗:', e)
       _backendPopup(e)
     })
   }
@@ -917,7 +1080,7 @@ export const useAppStore = defineStore('app', () => {
       if (checkResult(res, "重置数据库")) {
         closeSettingsPanel()
         // 提示成功
-        toast.success("数据库已重置！")
+        toast.success("数据库已重置。")
         // 清空本地状态
         const modStore = useModStore()
         modStore.reset()
@@ -971,7 +1134,7 @@ export const useAppStore = defineStore('app', () => {
   const performDatabaseCleanup = async () => {
     const res = await window.pywebview.api.perform_database_cleanup()
     if (checkResult(res, '数据库深度清理')) {
-      toast.success('无效数据清理完成，正在刷新列表...')
+      toast.success('无效数据清理完成，正在刷新列表。')
       await refreshModsData('无效数据清理后同步模组数据')
     }
   }
@@ -991,7 +1154,7 @@ export const useAppStore = defineStore('app', () => {
     } catch (e) {
       clearTaskCancelPending(task.id)
       console.error('取消任务异常:', e)
-      toast.error(`取消任务异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '取消任务失败。可能是任务已经结束或后端暂时不可用，请稍后刷新状态。'))
       return false
     }
   }
@@ -1224,7 +1387,7 @@ export const useAppStore = defineStore('app', () => {
   const _backendPopup = (event) => {
     const confirmStore = useConfirmStore()
     const { mode, title, message, type, duration } = event.detail
-    console.log('后端弹窗:', event.detail)
+    console.debug('后端弹窗:', event.detail)
     // 模式1: 轻提示 (Toast)
     if (mode === 'toast') {
       const toastType = type || 'info' // success, error, warning, info
@@ -1249,8 +1412,9 @@ export const useAppStore = defineStore('app', () => {
   // 生成列表缩略图 URL
   const getThumbUrl = (packageId, rawPath) => {
     if (!rawPath) return ''
+    const safeId = encodeURIComponent(packageId || '')
     const safePath = encodeURIComponent(rawPath)
-    return `${getAssetBaseUrl()}/thumb?id=${packageId}&path=${safePath}`
+    return `${getAssetBaseUrl()}/thumb?id=${safeId}&path=${safePath}`
   }
 
   // 生成详情页本地大图 URL
@@ -1264,6 +1428,7 @@ export const useAppStore = defineStore('app', () => {
   // 生成网络代理图 URL (如 Steam 截图)
   const getRemoteUrl = (remoteUrl) => {
     if (!remoteUrl) return ''
+    if (String(remoteUrl).startsWith(getAssetBaseUrl())) return remoteUrl
     const safeUrl = encodeURIComponent(remoteUrl)
     return `${getAssetBaseUrl()}/remote?url=${safeUrl}`
   }
@@ -1285,24 +1450,35 @@ export const useAppStore = defineStore('app', () => {
     return res.data
   }
 
+  const ensureTranslationProviders = async () => {
+    if (!window.pywebview || isTranslationProvidersLoaded.value) return translationProviders.value
+    const res = await window.pywebview.api.translation_get_providers()
+    if (checkResult(res, '获取翻译器列表', false, { silent: true })) {
+      translationProviders.value = Array.isArray(res.data) && res.data.length ? res.data : translationProviders.value
+      isTranslationProvidersLoaded.value = true
+    }
+    return translationProviders.value
+  }
+
   return {
     // 基础状态
-    appVersion, buildMode, uiState, settings, isLoading, isDownloading, isScanRunning, updateState,
+    appVersion, buildMode, uiState, settings, settingsReady, isLoading, isDownloading, isScanRunning, updateState,
     themes, currentTheme, userThemes, themeEditor, packageTransferDialog, recommendationExportDialog,
     // 布局与运行态
-    remoteImageCache, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
+    remoteImageCache, translationProviders, isTranslationProvidersLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     // 生命周期与通用工具
     initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     refreshModsData, requestModScan,
     // 图片与缓存
-    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache,
+    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
     // 路径与游戏启动
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     // 下载与工坊
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource,
+    downloadWorkshopItemsViaSteam, querySteamWorkshopDetails,
     // 设置、任务与应用维护
-    saveSetting, applySettings, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
+    saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, updateExternalDB,
     // 包传输
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,

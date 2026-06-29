@@ -97,4 +97,15 @@ def build_task_output_contract(task_key: str) -> str:
             "- `alias_name` 与 `notes` 可以留空字符串，但字段本身不能缺失。\n"
             "- 不要输出数组之外的任何内容。"
         )
+    if task_key == "task.translation":
+        return (
+            "最终输出协议：\n"
+            "- 你的最终输出必须是单个 JSON 对象，不要输出 Markdown 代码块，不要补充额外解释。\n"
+            "- JSON 结构固定为: {\"segments\":[{\"key\":\"输入 key\",\"text\":\"译文\"}]}。\n"
+            "- `segments` 必须与输入 segments 一一对应，不能新增、删除、合并或拆分。\n"
+            "- `key` 必须与输入完全一致，不允许翻译或改写。\n"
+            "- `text` 是译文内容，不能为空；标题和名称也必须返回译文。\n"
+            "- `text` 应保留原文换行、标签、URL、版本号、包名、文件名和 ID。\n"
+            "- 不要输出该 JSON 对象之外的任何内容。"
+        )
     return ""

@@ -20,8 +20,8 @@
             'bg-glass-heavy backdrop-blur-2xl shadow-2xl ring-1 ring-border-base/10',
             // 模式区分
             isMini
-              ? 'rounded-xl w-80 absolute shadow-[0_20px_30px_var(--shadow-color)]'
-              : 'rounded-2xl w-140 max-w-[90vw] shadow-[0_20px_50px_var(--shadow-color)]',
+              ? 'rounded-xl w-80 max-h-[calc(100vh-1rem)] absolute shadow-[0_20px_30px_var(--shadow-color)]'
+              : 'rounded-2xl w-140 max-w-[90vw] max-h-[calc(100vh-2rem)] shadow-[0_20px_50px_var(--shadow-color)]',
             // 抖动动画类
             shake ? 'animate-shake' : ''
           ]"
@@ -57,9 +57,9 @@
                 {{ confirmStore.state.title }}
               </h3>
 
-              <div v-if="confirmStore.state.message" class="text-xs text-text-dim leading-relaxed text-pretty font-medium">
-                <span v-if="confirmStore.state.isHtml" v-html="confirmStore.state.message" class="text-wrap break-all"></span>
-                <span v-else class="text-wrap break-all">{{ confirmStore.state.message }}</span>
+              <div v-if="confirmStore.state.message" class="max-h-[52vh] overflow-y-auto pr-1 text-xs text-text-dim leading-relaxed text-pretty font-medium">
+                <div v-if="confirmStore.state.isHtml" v-html="confirmStore.state.message" class="text-wrap break-all"></div>
+                <div v-else class="whitespace-pre-line break-words">{{ confirmStore.state.message }}</div>
               </div>
             </div>
           </div>
@@ -118,28 +118,9 @@
                 :key="item.id"
                 class="rounded-xl border border-border-base/10 bg-bg-inset/60 px-3 py-2"
               >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="text-sm font-semibold text-text-main break-all">{{ item.title }}</div>
-                    <div v-if="item.description" class="mt-1 text-xs text-text-dim leading-relaxed break-all">{{ item.description }}</div>
-                    <div v-if="item.meta?.length" class="mt-1 flex flex-wrap gap-1">
-                      <span
-                        v-for="meta in item.meta"
-                        :key="meta"
-                        class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim"
-                      >
-                        {{ meta }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="item.statusMessage"
-                      class="mt-1 text-xs"
-                      :class="item.status === 'failed' ? 'text-accent-danger' : item.status === 'success' ? 'text-accent-success' : 'text-text-dim'"
-                    >
-                      {{ item.statusMessage }}
-                    </div>
-                  </div>
-                  <div class="shrink-0 flex flex-wrap justify-end gap-1">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0 text-sm font-semibold text-text-main break-words">{{ item.title }}</div>
+                  <div v-if="item.actions?.length" class="shrink-0 flex flex-wrap justify-end gap-1">
                     <button
                       v-for="action in item.actions"
                       :key="action.id"
@@ -156,12 +137,38 @@
                     </button>
                   </div>
                 </div>
+                <div v-if="item.description" class="mt-2 min-w-0 text-xs text-text-dim leading-relaxed">
+                  <div
+                    v-if="isRichPromptDescription(item)"
+                    class="prompt-description-rich"
+                    v-html="renderPromptDescription(item)"
+                  ></div>
+                  <div v-else class="whitespace-pre-line break-words">{{ item.description }}</div>
+                </div>
+                <div class="min-w-0">
+                  <div v-if="item.meta?.length" class="mt-1 flex flex-wrap gap-1">
+                    <span
+                      v-for="meta in item.meta"
+                      :key="meta"
+                      class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim"
+                    >
+                      {{ meta }}
+                    </span>
+                  </div>
+                  <div
+                    v-if="item.statusMessage"
+                    class="mt-1 text-xs"
+                    :class="item.status === 'failed' ? 'text-accent-danger' : item.status === 'success' ? 'text-accent-success' : 'text-text-dim'"
+                  >
+                    {{ item.statusMessage }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- D. 底部操作栏 (玻璃分割线) -->
-          <div class="modal-footer flex items-center justify-end gap-3"
+          <div class="modal-footer flex shrink-0 flex-wrap items-center justify-end gap-2"
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
 
             <!-- 自定义底部按钮用于“全部处理/全部稍后”等窗口级动作，保持普通确认弹窗的旧按钮逻辑不变。 -->
@@ -221,6 +228,7 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
+import { renderMarkdownContent, sanitizeRenderedHtml } from '../../lib/markdown'
 
 // --- SVG 图标 (纯净无依赖) ---
 const Icons = {
@@ -256,6 +264,17 @@ const theme = computed(() => {
   }
   return maps[t] || maps.info
 })
+
+const promptDescriptionFormat = (item) => String(item?.descriptionFormat || 'text').trim().toLowerCase()
+const isRichPromptDescription = (item) => ['markdown', 'html'].includes(promptDescriptionFormat(item))
+const renderPromptDescription = (item) => {
+  const text = String(item?.description || '')
+  if (promptDescriptionFormat(item) === 'markdown') return renderMarkdownContent(text)
+  if (promptDescriptionFormat(item) === 'html') {
+    return sanitizeRenderedHtml(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '<br>'))
+  }
+  return ''
+}
 
 // 位置计算 (仅用于 Mini 模式)
 const containerStyle = computed(() => {
@@ -396,5 +415,45 @@ onClickOutside(modalRef, () => {
 }
 .animate-pulse-slow {
   animation: pulse-slow 3s infinite ease-in-out;
+}
+
+:deep(.prompt-description-rich) {
+  overflow-wrap: anywhere;
+}
+
+:deep(.prompt-description-rich p) {
+  margin: 0.35rem 0;
+}
+
+:deep(.prompt-description-rich p:first-child) {
+  margin-top: 0;
+}
+
+:deep(.prompt-description-rich p:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.prompt-description-rich h1),
+:deep(.prompt-description-rich h2),
+:deep(.prompt-description-rich h3) {
+  margin: 0.45rem 0 0.3rem;
+  font-weight: 800;
+  color: rgb(var(--rgb-text-main));
+}
+
+:deep(.prompt-description-rich ul),
+:deep(.prompt-description-rich ol) {
+  margin: 0.35rem 0;
+  padding-left: 1.1rem;
+}
+
+:deep(.prompt-description-rich li) {
+  margin: 0.2rem 0;
+}
+
+:deep(.prompt-description-rich a) {
+  color: rgb(var(--rgb-accent-primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

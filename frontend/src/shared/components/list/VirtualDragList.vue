@@ -35,6 +35,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { cancelLongPressFeedback, completeLongPressFeedback, showLongPressFeedback } from '../../directives/vLongPressFeedback'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -321,6 +322,7 @@ const resolveDragTrigger = (event) => {
 }
 
 const clearDragArm = () => {
+  const wasPending = !!dragArmTimer
   if (dragArmTimer) {
     clearTimeout(dragArmTimer)
     dragArmTimer = 0
@@ -330,6 +332,7 @@ const clearDragArm = () => {
     armedTriggerEl = null
   }
   dragArmedIndex.value = -1
+  if (wasPending) cancelLongPressFeedback()
 }
 
 const enableNativeDragOnTrigger = (triggerEl, index) => {
@@ -359,8 +362,10 @@ const armDrag = (event, index) => {
     return
   }
   clearDragArm()
+  showLongPressFeedback(event, delay)
   dragArmTimer = window.setTimeout(() => {
     enableNativeDragOnTrigger(triggerEl, index)
+    completeLongPressFeedback()
     dragArmTimer = 0
   }, delay)
 }

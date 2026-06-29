@@ -401,7 +401,7 @@ class GameLogManager(BaseLogReader): # 继承基类
                 if current_block:
                     self._add_or_merge_block(blocks, current_block)
         except Exception as e:
-            logger.error(f"Error reading text log {filepath}: {e}", exc_info=True)
+            logger.error(f"读取文本日志失败：{filepath}，错误：{e}", exc_info=True)
             
         return blocks if keep_all else blocks[-self.max_blocks:]
 

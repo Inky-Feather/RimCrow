@@ -43,6 +43,7 @@ from backend.ai.def_model_capabilities import (
 from backend.settings import settings
 from backend.managers.mgr_network import network_mgr
 from backend.utils.logger import logger
+from backend.utils.redaction import fingerprint_secret, redact_sensitive_data
 
 DEFAULT_BASE_URLS = {
     "openai_compatible": "https://api.openai.com/v1",
@@ -149,7 +150,7 @@ class LiteLLMGateway:
             os.environ["LITELLM_LOG"] = "DEBUG"
         
         # 轻量级缓存字典，用于缓存自定义接口的模型列表
-        # 格式: { "provider_baseurl_apikey": (timestamp, [models...]) }
+        # 格式: { "provider_baseurl_keyfingerprint": (timestamp, [models...]) }
         self._model_cache: dict[str, tuple[float, list[str]]] = {}
         self._cache_ttl = 300  # 缓存有效期 5 分钟 (300秒)
 
@@ -405,7 +406,12 @@ class LiteLLMGateway:
                 if attempt >= num_retries or not self._is_retryable_error(e):
                     raise
                 sleep_s = self._retry_sleep_seconds(attempt)
-                logger.warning(f"[openai_compatible] 请求失败，{sleep_s:.1f}s 后重试: {e}")
+                logger.warning(
+                    "[AI请求] OpenAI 兼容同步请求失败，%.1f 秒后重试。attempt=%s",
+                    sleep_s,
+                    attempt + 1,
+                    extra={"error_code": "AI.REQUEST.RETRY_SYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "original_error": str(e)}},
+                )
                 time.sleep(sleep_s)
         raise last_error  # type: ignore
 
@@ -419,7 +425,12 @@ class LiteLLMGateway:
                 if attempt >= num_retries or not self._is_retryable_error(e):
                     raise
                 sleep_s = self._retry_sleep_seconds(attempt)
-                logger.warning(f"[openai_compatible] 异步请求失败，{sleep_s:.1f}s 后重试: {e}")
+                logger.warning(
+                    "[AI请求] OpenAI 兼容异步请求失败，%.1f 秒后重试。attempt=%s",
+                    sleep_s,
+                    attempt + 1,
+                    extra={"error_code": "AI.REQUEST.RETRY_ASYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "original_error": str(e)}},
+                )
                 await asyncio.sleep(sleep_s)
         raise last_error  # type: ignore
 
@@ -430,20 +441,7 @@ class LiteLLMGateway:
 
     def _redact_request_kwargs_for_log(self, request_kwargs: dict) -> dict:
         """脱敏请求参数，避免 Debug 日志泄露 API Key。"""
-        redacted = dict(request_kwargs or {})
-        for key in list(redacted.keys()):
-            lowered = str(key).lower()
-            is_sensitive = (
-                lowered in {"api_key", "authorization", "password", "secret"}
-                or lowered.endswith("_api_key")
-                or lowered.endswith("_token")
-                or lowered.endswith("_password")
-                or lowered.endswith("_secret")
-            )
-            if is_sensitive:
-                value = str(redacted.get(key) or "")
-                redacted[key] = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
-        return redacted
+        return redact_sensitive_data(dict(request_kwargs or {}))
 
     # =========================================================================
     # 厂商与模型探测
@@ -467,7 +465,7 @@ class LiteLLMGateway:
         api_key = config_dict.get("api_key", "")
 
         if not provider or not base_url: return []
-        cache_key = f"{provider}_{base_url}_{api_key}"
+        cache_key = f"{provider}_{base_url}_{fingerprint_secret(api_key)}"
         if cache_key in self._model_cache:
             timestamp, cached_models = self._model_cache[cache_key]
             if time.time() - timestamp < self._cache_ttl:
@@ -495,7 +493,11 @@ class LiteLLMGateway:
                     if resp.status_code == 200:
                         return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
                 except requests.exceptions.RequestException as exc:
-                    logger.warning(f"[AI模型列表] Ollama 未连接或不可用 base_url={base_url}: {exc}")
+                    logger.warning(
+                        "[AI模型列表] Ollama 未连接或不可用，base_url=%s",
+                        base_url,
+                        extra={"error_code": "AI.MODELS.OLLAMA_UNAVAILABLE", "extra_context": {"base_url": base_url, "original_error": str(exc)}},
+                    )
                 return []
 
             # 2) Gemini 原生
@@ -516,7 +518,15 @@ class LiteLLMGateway:
                                 for m in resp.json().get("models", [])
                                 if "generateContent" in (m.get("supportedGenerationMethods") or [])
                             ]
-                    except requests.exceptions.RequestException:
+                    except requests.exceptions.RequestException as exc:
+                        logger.warning(
+                            "[AI模型列表] Gemini 模型列表请求失败，继续尝试其它 endpoint。endpoint=%s",
+                            endpoint,
+                            extra={
+                                "error_code": "AI.MODELS.GEMINI_ENDPOINT_FAILED",
+                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "original_error": str(exc)},
+                            },
+                        )
                         continue
                 return []
 
@@ -554,12 +564,25 @@ class LiteLLMGateway:
                         if resp.status_code == 200:
                             data = resp.json()
                             if "data" in data: return [item["id"] for item in data["data"] if item.get("id")]
-                    except requests.exceptions.RequestException:
+                    except requests.exceptions.RequestException as exc:
+                        logger.warning(
+                            "[AI模型列表] OpenAI 兼容模型列表请求失败，继续尝试其它 endpoint。endpoint=%s",
+                            endpoint,
+                            extra={
+                                "error_code": "AI.MODELS.OPENAI_COMPATIBLE_ENDPOINT_FAILED",
+                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "original_error": str(exc)},
+                            },
+                        )
                         continue
                 return []
 
         except Exception as e:
-            logger.warning(f"Failed to fetch models from {provider} -> {base_url}: {e}")
+            logger.warning(
+                "[AI模型列表] 获取模型列表失败，provider=%s base_url=%s",
+                provider,
+                base_url,
+                extra={"error_code": "AI.MODELS.FETCH_FAILED", "extra_context": {"provider": provider, "base_url": base_url, "original_error": str(e)}},
+            )
 
         return []
 
@@ -820,7 +843,11 @@ class LiteLLMGateway:
                 raise
             last_error = error
             for fallback_kwargs, note in self._build_reasoning_fallback_requests(request_kwargs):
-                logger.warning(f"[openai_compatible] {note} error={last_error}")
+                logger.warning(
+                    "[AI请求] 模型思考参数不兼容，正在尝试降级请求参数。note=%s",
+                    note,
+                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK", "extra_context": {"note": note, "original_error": str(last_error)}},
+                )
                 try:
                     return runner(dict(fallback_kwargs))
                 except Exception as fallback_error:
@@ -838,7 +865,11 @@ class LiteLLMGateway:
                 raise
             last_error = error
             for fallback_kwargs, note in self._build_reasoning_fallback_requests(request_kwargs):
-                logger.warning(f"[openai_compatible] {note} error={last_error}")
+                logger.warning(
+                    "[AI请求] 模型思考参数不兼容，正在尝试降级异步请求参数。note=%s",
+                    note,
+                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK_ASYNC", "extra_context": {"note": note, "original_error": str(last_error)}},
+                )
                 try:
                     return await runner(dict(fallback_kwargs))
                 except Exception as fallback_error:
@@ -859,7 +890,7 @@ class LiteLLMGateway:
         if self._messages_require_chat_completions(messages or []):
             return "chat_completions"
         if mode == "responses" and (stream or tools is not None):
-            logger.warning("[openai_compatible] 当前 stream/tools 模式暂不走 responses，已自动改为 chat_completions。")
+            logger.warning("[AI请求] 当前 stream/tools 模式不适合使用 responses endpoint，已自动改为 chat_completions。")
             return "chat_completions"
         if mode in ("chat_completions", "responses"):
             return mode
@@ -952,7 +983,12 @@ class LiteLLMGateway:
             return self._call_with_retries_sync(primary_call, num_retries)
         except Exception as e:
             if self._should_fallback_openai_endpoint(messages=messages, stream=stream, tools=tools, error=e):
-                logger.warning(f"[openai_compatible] {primary_label} 不可用，自动回退到 {fallback_label}: {e}")
+                logger.warning(
+                    "[AI请求] 当前 endpoint 不可用，已自动回退。primary=%s fallback=%s",
+                    primary_label,
+                    fallback_label,
+                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK", "extra_context": {"primary": primary_label, "fallback": fallback_label, "original_error": str(e)}},
+                )
                 return self._call_with_retries_sync(fallback_call, num_retries)
             raise
 
@@ -972,7 +1008,12 @@ class LiteLLMGateway:
             return await self._call_with_retries_async(primary_call, num_retries)
         except Exception as e:
             if self._should_fallback_openai_endpoint(messages=messages, stream=stream, tools=tools, error=e):
-                logger.warning(f"[openai_compatible] {primary_label} 不可用，自动回退到 {fallback_label}: {e}")
+                logger.warning(
+                    "[AI请求] 当前异步 endpoint 不可用，已自动回退。primary=%s fallback=%s",
+                    primary_label,
+                    fallback_label,
+                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK_ASYNC", "extra_context": {"primary": primary_label, "fallback": fallback_label, "original_error": str(e)}},
+                )
                 return await self._call_with_retries_async(fallback_call, num_retries)
             raise
 
@@ -1006,9 +1047,15 @@ class LiteLLMGateway:
             if inspect.isawaitable(result):
                 await result
         except RuntimeError as exc:
-            logger.warning(f"[openai_compatible] 异步 client 关闭时事件循环已关闭: {exc}")
+            logger.warning(
+                "[AI请求] 关闭异步客户端时事件循环已结束。",
+                extra={"error_code": "AI.CLIENT.CLOSE_LOOP_CLOSED", "extra_context": {"original_error": str(exc)}},
+            )
         except Exception as exc:
-            logger.warning(f"[openai_compatible] 异步 client 关闭失败: {exc}")
+            logger.warning(
+                "[AI请求] 关闭异步客户端失败。",
+                extra={"error_code": "AI.CLIENT.CLOSE_FAILED", "extra_context": {"original_error": str(exc)}},
+            )
 
     def _message_text(self, content: Any) -> str:
         """把 LiteLLM/OpenAI 风格的 content 统一压成纯文本。"""

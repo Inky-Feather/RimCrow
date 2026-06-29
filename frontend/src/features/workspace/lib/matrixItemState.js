@@ -10,7 +10,14 @@ export const MATRIX_FILTER_STATE_OPTIONS = [
   { label: '仅看替代项', value: 'replace' },
   { label: '仅看已禁用', value: 'disabled' },
   { label: '仅看缺失', value: 'missing' },
+  { label: '仅看已删除', value: 'deleted' },
 ]
+
+export const isMatrixModDeleted = (mod) => !!mod?.is_deleted || mod?.state === 'deleted'
+export const isMatrixModMissing = (mod) => !!mod?.is_missing && !isMatrixModDeleted(mod)
+export const isMatrixModUnavailable = (mod) => !!mod?.is_unavailable || isMatrixModMissing(mod) || isMatrixModDeleted(mod)
+
+export const isMatrixModAvailable = (mod) => !!mod?.path && !isMatrixModUnavailable(mod)
 
 export const getMatrixReplacementTargets = (mod, workspaceStore) => {
   const replacementWorkshopId = normalizeWorkshopId(mod?.replacement?.new_workshop_id)
@@ -27,8 +34,7 @@ export const getMatrixReplacementTargets = (mod, workspaceStore) => {
   return allMods.filter(item =>
     item?.path_hash &&
     item.path_hash !== mod?.path_hash &&
-    !!item.path &&
-    !item.is_missing &&
+    isMatrixModAvailable(item) &&
     normalizeWorkshopId(item.workshop_id) === replacementWorkshopId
   )
 }
@@ -64,19 +70,24 @@ export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
   const hasLastPlayedTime = normalizedLastPlayedTime > 0
   const createTime = normalizeMatrixTimestamp(mod?.file_create_time)
   const lastChangeTime = getMatrixMeaningfulChangeTime(mod)
+  const downloadTime = normalizeMatrixTimestamp(mod?.download_status?.download_time)
+  const scannedTime = normalizeMatrixTimestamp(mod?.last_scanned_at)
+  // Steam 本地同步记录比上次扫描新时，也属于库存矩阵里的“变更”项。
+  const hasUnscannedWorkshopChange = mod?.download_status?.source === 'steam_sync_log' && downloadTime > scannedTime
 
   const sameTargets = workspaceStore?.getMatrixSameItems?.(mod?.path_hash) || []
   const conflictTargets = workspaceStore?.getMatrixConflictItems?.(mod?.path_hash) || []
   const replacementTargets = getMatrixReplacementTargets(mod, workspaceStore)
 
   const isNew = hasLastPlayedTime && createTime > normalizedLastPlayedTime
-  const isChange = hasLastPlayedTime && !isNew && lastChangeTime > normalizedLastPlayedTime
+  const isChange = hasUnscannedWorkshopChange || (hasLastPlayedTime && !isNew && lastChangeTime > normalizedLastPlayedTime)
   const isUpdate = !!(mod?.has_update || mod?.steam_status?.needs_update)
   const isSame = sameTargets.length > 0
   const isConflict = conflictTargets.length > 0
   const isReplace = replacementTargets.length > 0
   const isDisabled = !!mod?.disabled
-  const isMissing = !!mod?.is_missing
+  const isDeleted = isMatrixModDeleted(mod)
+  const isMissing = isMatrixModMissing(mod)
   const isWorkshopUnavailable = mod?.workshop_online_status === 'unavailable'
 
   return {
@@ -92,6 +103,7 @@ export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
       replace: isReplace,
       disabled: isDisabled,
       missing: isMissing,
+      deleted: isDeleted,
     },
     isNew,
     isChange,
@@ -101,6 +113,7 @@ export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
     isReplace,
     isDisabled,
     isMissing,
+    isDeleted,
     isWorkshopUnavailable,
   }
 }

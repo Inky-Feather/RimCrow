@@ -86,7 +86,7 @@ class WorkshopPageRenderer:
             )
             response.raise_for_status()
         except Exception as exc:
-            logger.warning(f"Workshop proxy fetch failed: {normalized_url} -> {exc}")
+            logger.warning(f"创意工坊代理请求失败：{normalized_url} -> {exc}")
             return build_workshop_error_html(f"加载页面失败: {exc}", normalized_url)
 
         final_url = response.url or normalized_url
@@ -318,7 +318,7 @@ class WorkshopPageRenderer:
     }});
     const payload = await response.json();
     if (!response.ok || payload?.status === 'error') {{
-      throw new Error(payload?.message || `Request failed: ${{response.status}}`);
+      throw new Error(payload?.message || `请求未完成，状态码：${{response.status}}。请检查网络连接或稍后重试。`);
     }}
     return payload;
   }};
@@ -427,7 +427,7 @@ class BrowserSessionManager:
                 should_schedule_shutdown = True
                 self._shutdown_deadline = time.time() + PRIMARY_CLOSE_GRACE_SECONDS
         if should_schedule_shutdown:
-            logger.info("Browser primary session closed, waiting for grace window before shutdown")
+            logger.info("浏览器主会话已关闭，等待宽限期结束后再关闭应用")
         return True
 
     def register_stream(self, session_id: str, stream_queue: queue.Queue):
@@ -474,11 +474,11 @@ class BrowserSessionManager:
                     self._shutdown_deadline = 0.0
 
             if should_shutdown:
-                logger.info("Browser primary session expired, requesting application shutdown")
+                logger.info("浏览器主会话已过期，正在请求关闭应用")
                 try:
                     self._on_shutdown()
                 except Exception:
-                    logger.error("Browser session shutdown callback failed", exc_info=True)
+                    logger.error("浏览器会话关闭回调执行失败", exc_info=True)
                 return
 
 
@@ -523,7 +523,7 @@ class BrowserAppServer:
         self._session_manager.start()
         self._serve_thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
         self._serve_thread.start()
-        logger.info(f"Browser server started at {self.base_url}")
+        logger.info(f"浏览器服务已启动：{self.base_url}")
 
     def stop(self):
         self._shutdown_event.set()
@@ -585,7 +585,7 @@ class BrowserAppServer:
                     payload = self._read_json_body()
                     session_id = str(payload.get("client_id", "")).strip()
                     ok = outer._session_manager.heartbeat(session_id)
-                    return self._send_json({"status": "success" if ok else "warning", "message": "" if ok else "Session not found"})
+                    return self._send_json({"status": "success" if ok else "warning", "message": "" if ok else "浏览器会话已失效，请刷新页面或重启软件。"})
                 if parsed.path == "/api/session/close":
                     payload = self._read_json_body()
                     session_id = str(payload.get("client_id", "")).strip()
@@ -600,7 +600,7 @@ class BrowserAppServer:
 
             def _handle_api_call(self, method_name: str):
                 if method_name not in outer.get_available_methods():
-                    return self._send_json({"status": "error", "message": f"Unknown API method: {method_name}"}, status_code=404)
+                    return self._send_json({"status": "error", "message": "请求的后端接口不存在，请刷新页面或重启软件后重试。"}, status_code=404)
 
                 payload = self._read_json_body()
                 args = payload.get("args", [])
@@ -609,8 +609,24 @@ class BrowserAppServer:
                 try:
                     result = method(*args, **kwargs)
                 except Exception as exc:
-                    logger.error(f"Browser API call failed: {method_name}", exc_info=True)
-                    return self._send_json({"status": "error", "message": str(exc)}, status_code=500)
+                    logger.error(
+                        "浏览器模式 API 调用失败：%s",
+                        method_name,
+                        exc_info=True,
+                        extra={
+                            "error_code": "BROWSER.API.CALL_FAILED",
+                            "extra_context": {"api": method_name, "original_error": str(exc)},
+                        },
+                    )
+                    return self._send_json(
+                        {
+                            "status": "error",
+                            "message": "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用，详细原因已写入系统日志。",
+                            "error_code": "BROWSER.API.CALL_FAILED",
+                            "detail": {"original_error": str(exc), "context": {"api": method_name}},
+                        },
+                        status_code=500,
+                    )
 
                 if not isinstance(result, dict) or "status" not in result:
                     result = {"status": "success", "data": result}
@@ -620,11 +636,11 @@ class BrowserAppServer:
                 query = parse_qs(parsed.query)
                 session_id = str(query.get("client_id", [""])[0]).strip()
                 if not session_id:
-                    return self._send_json({"status": "error", "message": "Missing client_id"}, status_code=400)
+                    return self._send_json({"status": "error", "message": "浏览器会话参数缺失，请刷新页面后重试。"}, status_code=400)
 
                 stream_queue: queue.Queue = queue.Queue()
                 if not outer._session_manager.register_stream(session_id, stream_queue):
-                    return self._send_json({"status": "error", "message": "Session not found"}, status_code=404)
+                    return self._send_json({"status": "error", "message": "浏览器会话已失效，请刷新页面或重启软件。"}, status_code=404)
 
                 self.send_response(200)
                 self._send_common_headers(content_type="text/event-stream; charset=utf-8")
@@ -650,12 +666,12 @@ class BrowserAppServer:
             def _serve_static(self, parsed):
                 if outer.use_dev_server:
                     return self._send_json(
-                        {"status": "error", "message": "Static assets are served by the frontend dev server in browser mode"},
+                        {"status": "error", "message": "浏览器模式下静态资源由前端开发服务提供，请确认前端开发服务仍在运行。"},
                         status_code=404,
                     )
 
                 if not outer.static_root:
-                    return self._send_json({"status": "error", "message": "Frontend assets not found"}, status_code=500)
+                    return self._send_json({"status": "error", "message": "未找到前端页面资源，请重新构建前端或检查安装包完整性。"}, status_code=500)
 
                 request_path = parsed.path or "/"
                 relative_path = request_path.lstrip("/")

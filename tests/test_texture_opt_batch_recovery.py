@@ -20,6 +20,7 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
         self.options = {
             "texture_tools_path": str(self.temp_root / "tools"),
             "process_mode": "all_overwrite",
+            "output_format": "dds",
             "generate_mipmaps": True,
             "overwrite_existing": True,
             "skip_small_textures": False,

@@ -222,6 +222,36 @@ class TestAIServiceHelpers(unittest.TestCase):
         self.assertIn("JSON 数组", prompt_config["system"])
         self.assertTrue(prompt_config["system"].startswith("你是一个任务助手。"))
 
+        translation_prompt = manager._build_task_prompt_config(
+            {"system": "你是翻译器。", "user_template": "{translation_input_json}"},
+            "task.translation",
+        )
+        self.assertIn('"segments"', translation_prompt["system"])
+
+    def test_execute_structured_task_uses_task_prompt_context(self):
+        manager = object.__new__(AIManager)
+        manager._build_task_execution_context = lambda task_key, payload, override_config=None: {
+            "prompt_config": {"system": "SYSTEM", "user_template": "{translation_input_json}"},
+            "runtime_variables": {"translation_input_json": '{"segments":[]}'},
+            "llm_kwargs": {"model": "test-model"},
+        }
+        manager._build_prompt_messages = lambda prompt_config, variables: [
+            {"role": "system", "content": prompt_config["system"]},
+            {"role": "user", "content": variables["translation_input_json"]},
+        ]
+        manager.llm = SimpleNamespace(
+            completion=lambda messages, llm_kwargs: SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"segments":[{"key":"title","text":"译名"}]}'))]
+            )
+        )
+        manager._message_text = lambda content: str(content or "")
+        manager._parse_structured_output = lambda task_key, text: json.loads(text)
+
+        parsed = manager.execute_structured_task("task.translation", {"variables": {}})
+
+        self.assertEqual(parsed["segments"][0]["key"], "title")
+        self.assertEqual(parsed["segments"][0]["text"], "译名")
+
     def test_mod_alias_chunk_budget_does_not_treat_output_tokens_as_context_window(self):
         manager = object.__new__(AIManager)
         manager.llm = SimpleNamespace(

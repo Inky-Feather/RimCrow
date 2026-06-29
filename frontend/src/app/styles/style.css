@@ -22,6 +22,106 @@
 @source inline('{hover:,focus:,}{text}-text-{main,soft,dim,subtle,disabled,inverse}');
 @source inline('{hover:,focus:,}{bg}-text-{disabled}');
 
+.rmm-action-disabled {
+  @apply pointer-events-none opacity-45 brightness-75 saturate-75;
+}
+
+.long-press-feedback {
+  --long-press-duration: 650ms;
+  --long-press-angle: 0deg;
+  position: fixed;
+  z-index: 99999;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.88);
+  filter:
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.92))
+    drop-shadow(0 0 2px rgba(255, 255, 255, 0.86))
+    drop-shadow(0 0 4px rgba(6, 182, 212, 0.72))
+    drop-shadow(0 0 12px rgba(6, 182, 212, 0.38));
+  -webkit-transform: scale(0.88);
+  -moz-transform: scale(0.88);
+  -ms-transform: scale(0.88);
+  -o-transform: scale(0.88);
+  -webkit-filter:
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.92))
+    drop-shadow(0 0 2px rgba(255, 255, 255, 0.86))
+    drop-shadow(0 0 4px rgba(6, 182, 212, 0.72))
+    drop-shadow(0 0 12px rgba(6, 182, 212, 0.38));
+}
+
+.long-press-feedback__ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: conic-gradient(var(--color-accent-primary) 0deg var(--long-press-angle), transparent var(--long-press-angle) 360deg);
+  mask: radial-gradient(circle at center, transparent 58%, #000 62%);
+  -webkit-mask: radial-gradient(circle at center, transparent 58%, #000 62%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 1px 5px rgba(0, 0, 0, 0.82),
+    0 0 5px rgba(255, 255, 255, 0.34),
+    0 0 8px rgba(6, 182, 212, 0.45),
+    inset 0 0 4px rgba(6, 182, 212, 0.55);
+}
+
+.long-press-feedback.is-pressing {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.long-press-feedback.is-pressing .long-press-feedback__ring {
+  animation: long-press-fill var(--long-press-duration) linear forwards;
+}
+
+.long-press-feedback.is-cancel {
+  opacity: 0;
+  transform: scale(0.68);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.long-press-feedback.is-complete {
+  opacity: 0;
+  transform: scale(1.55);
+  transition: opacity 260ms ease-out, transform 260ms cubic-bezier(0.2, 1.35, 0.3, 1);
+}
+
+.long-press-feedback.is-complete .long-press-feedback__ring {
+  --long-press-angle: 360deg;
+  background: conic-gradient(var(--color-accent-primary), var(--color-accent-primary));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.34),
+    0 1px 6px rgba(0, 0, 0, 0.86),
+    0 0 7px rgba(255, 255, 255, 0.45),
+    0 0 12px rgba(6, 182, 212, 0.72),
+    0 0 28px rgba(6, 182, 212, 0.36);
+}
+
+@property --long-press-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes long-press-fill {
+  from {
+    --long-press-angle: 0deg;
+  }
+  to {
+    --long-press-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .long-press-feedback,
+  .long-press-feedback__ring {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* 这里定义主题颜色 */
 @theme {
   /* 基础背景色 - 深邃的蓝黑 */
@@ -360,7 +460,7 @@ body {
     @apply bg-bg-surface/40;
   }
   .popover-surface {
-    @apply border border-border-base/10 bg-glass-medium shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur-xl;
+    @apply border border-border-base/10 bg-glass-medium backdrop-blur-xl;
   }
   .context-menu-surface {
     background-color: color-mix(in srgb, var(--color-glass-medium) 92%, transparent);

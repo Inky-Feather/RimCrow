@@ -74,7 +74,7 @@
             <button @click.stop="openRepoOriginal(repo)" v-tooltip="'打开原始地址'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
-            <button v-if="repo.local_folder" @click.stop="openRepoLocal(repo)" v-tooltip="'打开本地目录'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
+            <button v-if="repo.local_path || repo.local_folder" @click.stop="openRepoLocal(repo)" v-tooltip="'打开本地目录'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <FolderOpen class="size-4" />
             </button>
             <button @click.stop="removeRepo(repo.repo_url)" v-tooltip="'移除订阅'" class="p-2 rounded-lg bg-accent-danger/20 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger transition-colors">
@@ -201,7 +201,7 @@
         <div class="mt-4">
           <div v-if="previewReadme.isLoading" class="text-xs text-text-dim">正在读取 README...</div>
           <div v-else-if="previewReadme.error" class="text-xs text-accent-warn">{{ previewReadme.error }}</div>
-          <div v-else-if="previewReadme.content" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(previewReadme.content)"></div>
+          <div v-else-if="previewReadme.content" v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(previewReadme.content)"></div>
         </div>
       </div>
 
@@ -300,7 +300,7 @@
           </div>
           <div v-if="catalogReadme.isLoading" class="text-xs text-text-dim">正在读取 README...</div>
           <div v-else-if="catalogReadme.error" class="text-xs text-accent-warn">{{ catalogReadme.error }}</div>
-          <div v-else-if="catalogReadme.content" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(catalogReadme.content)"></div>
+          <div v-else-if="catalogReadme.content" v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(catalogReadme.content)"></div>
         </div>
       </div>
 
@@ -334,7 +334,7 @@
               class="p-3 rounded-xl bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
-            <button v-if="workspaceStore.github.activeRepo.local_folder" @click="openRepoLocal(workspaceStore.github.activeRepo)" v-tooltip="'打开本地目录'"
+            <button v-if="workspaceStore.github.activeRepo.local_path || workspaceStore.github.activeRepo.local_folder" @click="openRepoLocal(workspaceStore.github.activeRepo)" v-tooltip="'打开本地目录'"
               class="p-3 rounded-xl bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <FolderOpen class="size-4" />
             </button>
@@ -395,7 +395,8 @@ import { useToast } from 'vue-toastification'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
 import { useProfileStore } from '../../profiles/profileStore'
-import { checkResult } from '../../../shared/lib/common'
+import { checkResult, toUserMessage } from '../../../shared/lib/common'
+import { imageViewerOptions } from '../../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../../shared/lib/markdown'
 import { isOfficialPackageId } from '../../mod/lib/packageScope'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
@@ -506,7 +507,7 @@ const openRepoOriginal = (repo) => {
 }
 
 const openRepoLocal = (repo) => {
-  const path = joinPath(appStore.settings.self_mods_path, repo?.local_folder)
+  const path = repo?.local_path || joinPath(appStore.settings.self_mods_path, repo?.local_folder)
   if (path) appStore.openPath(path)
 }
 
@@ -712,10 +713,11 @@ const loadRepoReadme = async (url, branch, targetRef) => {
       targetRef.value.content = String(res.data?.content || '')
       targetRef.value.error = ''
     } else {
-      targetRef.value.error = res?.message || '读取 README 失败'
+      targetRef.value.error = toUserMessage(res?.message, '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。')
     }
   } catch (error) {
-    targetRef.value.error = String(error?.message || error || '读取 README 失败')
+    console.warn('读取 Git 仓库 README 失败:', error)
+    targetRef.value.error = toUserMessage(error?.message || error, '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。')
   } finally {
     targetRef.value.isLoading = false
   }

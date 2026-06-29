@@ -97,7 +97,7 @@ def _reset_windows_dll_directory():
         import ctypes
         ctypes.windll.kernel32.SetDllDirectoryW(None)
     except Exception as e:
-        logger.warning(f"Failed to reset Windows DLL directory before restart: {e}")
+        logger.warning(f"重启前重置 Windows DLL 目录失败：{e}")
 
 
 def _resolve_restart_command():

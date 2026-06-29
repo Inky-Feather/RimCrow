@@ -126,6 +126,12 @@ watch(currentTab, (tabId) => {
   void workspaceStore.ensureWorkspaceTabLoaded(tabId)
 })
 
+watch(() => workspaceStore.workspaceTargetTab, (tabId) => {
+  if (!tabId) return
+  currentTab.value = tabId
+  workspaceStore.workspaceTargetTab = ''
+})
+
 // 重新打开工作区时保留上次标签，同时补齐该标签需要的缓存数据。
 watch(() => appStore.uiState.showWorkspace, (visible) => {
   if (!visible) return

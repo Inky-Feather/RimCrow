@@ -72,8 +72,8 @@ export const registerBuiltinCommands = () => {
       defaultKeys: ['Ctrl+R'],
       captureWhenDisabled: true,
       description: '增量扫描 Mod 目录，并阻止浏览器默认刷新页面。',
-      enabled: ({ appStore }) => !appStore?.isScanRunning,
-      run: ({ modStore }) => modStore.scanMods(),
+      enabled: ({ appStore }) => !appStore?.isLoading && !appStore?.isScanRunning,
+      run: ({ appStore }) => appStore.requestModScan(),
     },
     {
       id: 'mods.forceRefresh',
@@ -83,8 +83,8 @@ export const registerBuiltinCommands = () => {
       defaultKeys: ['Ctrl+Shift+R'],
       captureWhenDisabled: true,
       description: '重新检查所有文件，适合文件状态不确定时使用。',
-      enabled: ({ appStore }) => !appStore?.isScanRunning,
-      run: ({ modStore }) => modStore.scanMods(null, true),
+      enabled: ({ appStore }) => !appStore?.isLoading && !appStore?.isScanRunning,
+      run: ({ appStore }) => appStore.requestModScan({ forcedUpdate: true }),
     },
     {
       id: 'loadOrder.save',

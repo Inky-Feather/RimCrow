@@ -17,6 +17,7 @@ class ModSettingsManager:
 
     OFFICIAL_PREFIX = "Mod_"
     OFFICIAL_SUFFIX = ".xml"
+    LINK_PREFIX = "_Link_"
 
     @classmethod
     def get_overview(cls, context: ProfileContext | None, active_tokens: list[str] | None = None) -> dict[str, Any]:
@@ -44,6 +45,7 @@ class ModSettingsManager:
             })
 
         cls._apply_external_file_details([record["file_identity"] for record in file_records])
+        workshop_candidate_map = cls._build_candidate_workshop_map(candidate_map)
         package_candidate_map = cls._build_candidate_package_map(candidate_map)
 
         for record in file_records:
@@ -52,6 +54,7 @@ class ModSettingsManager:
             settings_identity = record["settings_identity"]
             candidate = (
                 cls._match_candidate(file_info["file_name"], candidate_map)
+                or cls._match_workshop_candidate(file_identity, workshop_candidate_map)
                 or cls._match_external_package_candidate(file_identity, package_candidate_map)
             )
             if candidate:
@@ -230,12 +233,26 @@ class ModSettingsManager:
                 "folder_name": folder_name,
                 "source_kind": source_kind,
                 "workshop_id": str(instance.get("workshop_id") or "").strip(),
+                "instance_exists": os.path.isdir(mod_path),
                 "is_active_instance": active_path_map.get(package_id) == normalized_path,
                 "is_active_package": package_id in active_package_ids,
             }
-            candidates.setdefault(folder_name.lower(), []).append(candidate)
+            for alias in cls._candidate_folder_aliases(folder_name):
+                candidates.setdefault(alias.lower(), []).append({**candidate, "_candidate_folder_name": alias})
 
         return candidates
+
+    @classmethod
+    def _candidate_folder_aliases(cls, folder_name: str) -> list[str]:
+        normalized_name = str(folder_name or "").strip()
+        if not normalized_name:
+            return []
+
+        aliases = [normalized_name]
+        link_name = f"{cls.LINK_PREFIX}{normalized_name}"
+        if not normalized_name.startswith(cls.LINK_PREFIX):
+            aliases.append(link_name)
+        return list(dict.fromkeys(aliases))
 
     @classmethod
     def _match_candidate(
@@ -262,7 +279,11 @@ class ModSettingsManager:
         if not matched_candidates:
             return None
 
-        return cls._pick_preferred_candidate(matched_candidates)
+        result = cls._pick_preferred_candidate(matched_candidates)
+        if not result:
+            return None
+        result["_matched_folder_name"] = str(result.get("_candidate_folder_name") or best_folder_key)
+        return result
 
     @classmethod
     def _read_settings_identity(cls, file_path: Path) -> dict[str, Any]:
@@ -382,6 +403,45 @@ class ModSettingsManager:
                 package_map.setdefault(package_id, []).append(candidate)
         return package_map
 
+    @staticmethod
+    def _build_candidate_workshop_map(candidate_map: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+        workshop_map: dict[str, list[dict[str, Any]]] = {}
+        seen_paths: set[str] = set()
+        for candidates in candidate_map.values():
+            for candidate in candidates:
+                path_key = str(candidate.get("mod_path") or "").lower()
+                if path_key in seen_paths:
+                    continue
+                seen_paths.add(path_key)
+
+                workshop_ids = {
+                    normalize_workshop_id(candidate.get("workshop_id"), digits_only=True, min_length=6, max_length=20),
+                    normalize_workshop_id(candidate.get("folder_name"), digits_only=True, min_length=6, max_length=20),
+                }
+                for workshop_id in workshop_ids:
+                    if workshop_id:
+                        workshop_map.setdefault(workshop_id, []).append(candidate)
+        return workshop_map
+
+    @classmethod
+    def _match_workshop_candidate(
+        cls,
+        file_identity: dict[str, Any],
+        workshop_candidate_map: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any] | None:
+        workshop_id = normalize_workshop_id(file_identity.get("workshop_id_guess"), digits_only=True, min_length=6, max_length=20)
+        if not workshop_id:
+            return None
+        candidates = workshop_candidate_map.get(workshop_id) or []
+        if not candidates:
+            return None
+
+        result = cls._pick_preferred_candidate(candidates)
+        if not result:
+            return None
+        result["_match_kind"] = "workshop"
+        return result
+
     @classmethod
     def _match_external_package_candidate(
         cls,
@@ -421,27 +481,8 @@ class ModSettingsManager:
         if not normalized_name or not normalized_folder or not cls._is_official_config_filename(normalized_name):
             return 0
         body = normalized_name[len(cls.OFFICIAL_PREFIX) : -len(cls.OFFICIAL_SUFFIX)]
-        lowered_body = body.lower()
-        if lowered_body == normalized_folder or lowered_body.startswith(f"{normalized_folder}_"):
-            return 200 + len(normalized_folder)
-
-        trimmed_body = body.strip("_").lower()
-        if trimmed_body.startswith(f"{normalized_folder}_") or trimmed_body == normalized_folder:
-            return 100 + len(normalized_folder)
-
-        trimmed_folder = normalized_folder.strip("_")
-        if trimmed_folder and trimmed_folder != normalized_folder and (
-            trimmed_body.startswith(f"{trimmed_folder}_") or trimmed_body == trimmed_folder
-        ):
-            return 90 + len(trimmed_folder)
-
-        parts = [part.lower() for part in re.split(r"_+", trimmed_body) if part]
-        if parts and parts[0] == normalized_folder:
-            return 80 + len(normalized_folder)
-        if normalized_folder.isdigit() and normalized_folder in parts:
-            return 60 + len(normalized_folder)
-        if trimmed_folder.isdigit() and trimmed_folder in parts:
-            return 50 + len(trimmed_folder)
+        if body.lower().startswith(f"{normalized_folder}_"):
+            return 1000 + len(normalized_folder)
         return 0
 
     @classmethod
@@ -455,16 +496,7 @@ class ModSettingsManager:
         lowered_folder = normalized_folder.lower()
         if lowered_body.startswith(f"{lowered_folder}_"):
             return body[len(normalized_folder):].lstrip("_")
-        body = body.strip("_")
-        lowered_body = body.lower()
-        parts = [part for part in re.split(r"_+", body) if part]
-        lowered_parts = [part.lower() for part in parts]
-        if lowered_parts and lowered_parts[0] == lowered_folder:
-            return "_".join(parts[1:]).strip("_")
-        compare_folder = lowered_folder.strip("_")
-        if compare_folder and compare_folder in lowered_parts:
-            return "_".join(parts[lowered_parts.index(compare_folder) + 1:]).strip("_")
-        return body
+        return ""
 
     @classmethod
     def _active_file_score(cls, file_name: str, folder_name: str, fallback_name: str) -> int:
@@ -475,25 +507,16 @@ class ModSettingsManager:
             return 0
 
         body = normalized_name[len(cls.OFFICIAL_PREFIX) : -len(cls.OFFICIAL_SUFFIX)]
-        raw_canonical_body = f"{normalized_folder}_{normalized_fallback}".rstrip("_")
-        if normalized_fallback and body == raw_canonical_body:
-            return 300
-
-        trimmed_body = body.strip("_")
-        canonical_body = f"{normalized_folder}_{normalized_fallback}".strip("_")
-        if normalized_fallback and trimmed_body == canonical_body:
-            return 200
-
-        parts = [part for part in re.split(r"_+", trimmed_body) if part]
-        if not parts:
+        prefix = f"{normalized_folder}_"
+        if not body.lower().startswith(prefix.lower()):
             return 0
-        lowered_parts = [part.lower() for part in parts]
-        lowered_folder = normalized_folder.lower()
-        if lowered_parts[0] == lowered_folder:
-            return 120 if normalized_fallback and "_".join(parts[1:]) == normalized_fallback else 100
-        if lowered_folder in lowered_parts:
-            return 60
-        return 0
+
+        mod_handle_name = body[len(normalized_folder):].lstrip("_")
+        if normalized_fallback and mod_handle_name == normalized_fallback:
+            return 300
+        if normalized_fallback and mod_handle_name.lower() == normalized_fallback.lower():
+            return 200
+        return 100
 
     @staticmethod
     def _choose_active_file(files: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -574,12 +597,17 @@ class ModSettingsManager:
         candidate: dict[str, Any] | None,
     ) -> None:
         settings_class = str(settings_identity.get("settings_class") or "").strip()
+        match_kind = str(candidate.get("_match_kind") or "") if candidate else ""
+        exact_instance_match = bool(candidate and not match_kind)
+        matched_folder_name = str(candidate.get("_matched_folder_name") or candidate.get("folder_name") or "") if candidate else ""
         fallback_name = (
-            cls._extract_config_name_for_candidate(str(file_info.get("file_name") or ""), str(candidate.get("folder_name") or ""))
-            if candidate else str(file_identity.get("file_config_name") or "").strip()
+            cls._extract_config_name_for_candidate(str(file_info.get("file_name") or ""), matched_folder_name)
+            if exact_instance_match else str(file_identity.get("file_config_name") or "").strip()
         )
         identity_kind = "class" if settings_class else "filename"
-        setting_identity = settings_class or fallback_name or str(file_info.get("file_name") or "")
+        setting_identity = "::".join(
+            part for part in (fallback_name, settings_class) if part
+        ) or str(file_info.get("file_name") or "")
         setting_key = cls._build_group_key(str(mod_group.get("group_key") or ""), setting_identity)
         setting_map = mod_group["_setting_group_map"]
         setting_group = setting_map.setdefault(setting_key, {
@@ -588,28 +616,32 @@ class ModSettingsManager:
             "identity": identity_kind,
             "class": settings_class,
             "fallback_name": fallback_name,
+            "mod_handle_name": fallback_name,
             "parse_status": settings_identity.get("parse_status"),
             "parse_message": settings_identity.get("parse_message"),
             "files": [],
         })
         active_score = cls._active_file_score(
             str(file_info.get("file_name") or ""),
-            str(candidate.get("folder_name") or "") if candidate else "",
+            matched_folder_name,
             fallback_name,
-        ) if candidate and candidate.get("is_active_instance") else 0
-        matched_by_external_package = bool(candidate and candidate.get("_match_kind") == "external_package")
-        folder_name = str(file_identity.get("folder_hint") or "") if matched_by_external_package else (
-            candidate["folder_name"] if candidate else str(file_identity.get("folder_hint") or "")
+        ) if candidate and candidate.get("instance_exists") and candidate.get("is_active_instance") else 0
+        matched_by_inferred_identity = bool(match_kind in {"external_package", "workshop"})
+        folder_name = str(file_identity.get("folder_hint") or "") if matched_by_inferred_identity else (
+            matched_folder_name if candidate else str(file_identity.get("folder_hint") or "")
         )
-        source_label = "同包名" if matched_by_external_package else (
+        source_label = {"external_package": "同包名", "workshop": "链接副本"}.get(match_kind) or (
             cls._source_label(candidate["source_kind"]) if candidate else str(mod_group.get("source_label") or "未知")
         )
+        state_kind, state_label = cls._resolve_file_state(candidate, mod_group, active_score, match_kind)
         item = {
             "key": file_info["file_path"],
             "name": file_info["file_name"],
             "file_path": file_info["file_path"],
             "folder_name": folder_name,
             "source_label": source_label,
+            "state_kind": state_kind,
+            "state_label": state_label,
             "match_confidence": "high" if candidate else file_identity.get("match_confidence"),
             "file_size": file_info["file_size"],
             "modified_time": file_info["modified_time"],
@@ -620,6 +652,31 @@ class ModSettingsManager:
         }
         setting_group["files"].append(item)
 
+    @staticmethod
+    def _resolve_file_state(
+        candidate: dict[str, Any] | None,
+        mod_group: dict[str, Any],
+        active_score: int,
+        match_kind: str,
+    ) -> tuple[str, str]:
+        if candidate and candidate.get("instance_exists") and candidate.get("is_active_instance") and active_score > 0:
+            return "active", "当前激活"
+        if candidate and not candidate.get("instance_exists"):
+            return "uninstalled", "已卸载"
+        if candidate and match_kind in {"external_package", "workshop"}:
+            return "uninstalled", "已卸载"
+        if candidate and candidate.get("is_active_package"):
+            return "coexist_disabled", "共存停用"
+        if candidate:
+            return "mod_disabled", "模组停用"
+
+        group_status = str(mod_group.get("status") or "").strip().lower()
+        if group_status == "uninstalled":
+            return "uninstalled", "已卸载"
+        if group_status == "unknown":
+            return "unknown", "未知来源"
+        return "unknown", "未知来源"
+
     @classmethod
     def _finalize_mod_group(cls, mod_group: dict[str, Any]) -> None:
         setting_groups = list(mod_group.pop("_setting_group_map", {}).values())
@@ -628,6 +685,8 @@ class ModSettingsManager:
             active_item = cls._choose_active_file(setting_group["files"])
             if active_item:
                 active_item["active"] = True
+                active_item["state_kind"] = "active"
+                active_item["state_label"] = "当前激活"
             setting_group["files"].sort(
                 key=lambda item: (
                     0 if item.get("active") else 1,

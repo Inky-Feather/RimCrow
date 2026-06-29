@@ -1239,7 +1239,7 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       }});
       const payload = await response.json();
       if (!response.ok || payload?.status === 'error') {{
-        throw new Error(payload?.message || `Request failed: ${{response.status}}`);
+        throw new Error(payload?.message || `请求未完成，状态码：${{response.status}}。请检查后端服务是否仍在运行。`);
       }}
       return payload;
     }};

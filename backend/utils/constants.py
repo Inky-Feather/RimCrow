@@ -1,185 +1,257 @@
-import re
+from enum import IntEnum, StrEnum
+from typing import Any
 
-
-def _normalize_language_lookup_key(value: str) -> str:
-    """
-    将语言输入统一整理成可比较的 key。
-    这里只做格式整理，不做映射。
-    """
-    normalized = str(value or "").strip().lower()
-    if not normalized: return ""
-
-    normalized = re.sub(r"\s*\(.*?\)\s*", "", normalized)
-    normalized = normalized.replace("_", "-")
-    normalized = re.sub(r"[\s/]+", "-", normalized)
-    normalized = re.sub(r"-{2,}", "-", normalized).strip("-")
-    return normalized
-
-
-def _canonicalize_language_tag(normalized: str) -> str:
-    """
-    将已整理过的语言标记尽量收束到常见 BCP 47 书写形式。
-
-    这里只做大小写层面的标准化：
-    - 主语言小写，如 `en`
-    - 地区大写，如 `zh-CN`
-    - Script 首字母大写，如 `sr-Latn`
-    """
-    parts = [part for part in str(normalized or "").split("-") if part]
-    if not parts: return ""
-
-    canonical_parts = [parts[0].lower()]
-    for part in parts[1:]:
-        if part.isdigit():
-            canonical_parts.append(part)
-        elif len(part) == 2 and part.isalpha():
-            canonical_parts.append(part.upper())
-        elif len(part) == 4 and part.isalpha():
-            canonical_parts.append(part.title())
-        else:
-            canonical_parts.append(part.lower())
-    return "-".join(canonical_parts)
-
-
-LANGUAGE_SPECS = (
-    # --- 中文与亚洲语言 ---
-    ("ChineseSimplified", "zh-CN", ("Chinese", "zh", "zh-Hans", "schinese")),   # 简体中文
-    ("ChineseTraditional", "zh-TW", ("zh-Hant", "tchinese")),   # 繁体中文
-    ("Japanese", "ja", ("ja-JP",)), # 日语
-    ("Korean", "ko", ("ko-KR",)), # 韩语
-    # --- 欧洲主要语言 ---
-    ("English", "en", ()),  # 英语
-    ("French", "fr", ()),   # 法语
-    ("German", "de", ()),   # 德语
-    ("Italian", "it", ()),   # 意大利语
-    ("Russian", "ru", ()),   # 俄语
-    ("Spanish", "es", ()),   # 西班牙语
-    ("SpanishLatin", "es-419", ("es-la",)),   # 西班牙语（拉丁）
-    ("Portuguese", "pt", ()),   # 葡萄牙语
-    ("PortugueseBrazilian", "pt-BR", ("pt-br",)),   # 葡萄牙语（巴西）
-    ("Polish", "pl", ()),   # 波兰语
-    ("Swedish", "sv", ()),   # 瑞典语
-    ("Danish", "da", ()),   # 丹麦语    
-    ("Norwegian", "no", ()),   # 挪威语
-    ("Finnish", "fi", ()),   # 芬兰语
-    ("Czech", "cs", ()),   # 捷克语
-    ("Ukrainian", "uk", ("ua",)),   # 乌克兰语
-    ("Hungarian", "hu", ()),     # 匈牙利语
-    ("Romanian", "ro", ()),     # 罗马尼亚语
-    ("Slovak", "sk", ()),     # 斯洛伐克语
-    ("Estonian", "et", ()),     # 爱沙尼亚语
-    ("Turkish", "tr", ()),     # 土耳其语
-    ("Dutch", "nl", ()),     # 荷兰语
-    ("Greek", "el", ()),     # 希腊语
-    ("Catalan", "ca", ()),   # 加泰罗尼亚语
-    ("Vietnamese", "vi", ()),   # 越南语
-    ("Thai", "th", ()),   # 泰语
-    ("Arabic", "ar", ()),   # 阿拉伯语
-    ("Hebrew", "he", ()),   # 希伯来语
-    ("Bulgarian", "bg", ()),   # 保加利亚语
-    ("Indonesian", "id", ()),   # 印尼语
+from backend.i18n.language_registry import (
+    LANGUAGE_SPECS, SUPPORTED_LANGUAGE_CODES, get_language_english_name,
+    get_language_label, get_language_options, get_language_spec,
+    get_steam_elanguage_options, normalize_language_code, normalize_language_codes,
+    to_external_language, to_steam_elanguage,
 )
 
-
-def _build_language_maps() -> tuple[dict[str, str], dict[str, str], dict[str, str], set[str]]:
-    """
-    构建语言别名索引。
-
-    - `LANGUAGE_MAP` 保留“目录名 -> 标准语言码”的主映射，便于扫描 Languages 目录。
-    - `_LANGUAGE_CODE_LOOKUP` 额外收纳目录名、标准语言码和历史别名，便于宽松读取旧数据。
-    - `_LANGUAGE_FOLDER_LOOKUP` 用于把标准语言码反查回 RimWorld 使用的目录前缀。
-    """
-    folder_map: dict[str, str] = {}
-    code_lookup: dict[str, str] = {}
-    folder_lookup: dict[str, str] = {}
-    steam_codes: set[str] = set()
-
-    for folder_name, canonical_code, aliases in LANGUAGE_SPECS:
-        folder_map[folder_name] = canonical_code
-        folder_lookup[canonical_code] = folder_name
-        steam_codes.add(canonical_code)
-
-        for candidate in (folder_name, canonical_code, *aliases):
-            lookup_key = _normalize_language_lookup_key(candidate)
-            if not lookup_key:
-                continue
-            code_lookup[lookup_key] = canonical_code
-            compact_key = lookup_key.replace("-", "")
-            if compact_key and compact_key != lookup_key:
-                code_lookup[compact_key] = canonical_code
-
-    return folder_map, code_lookup, folder_lookup, steam_codes
-
-
-LANGUAGE_MAP, _LANGUAGE_CODE_LOOKUP, _LANGUAGE_FOLDER_LOOKUP, STEAM_WEBAPI_LANGUAGE_CODES = _build_language_maps()
-
-
-def _resolve_canonical_language_code(lookup_key: str) -> str:
-    """
-    将比较用 key 解析成内部标准语言码。
-
-    优先命中预置语言别名；命不中时，再按通用语言标记规则整理大小写。
-    这样既能兼容旧配置，又不会把未知语言码粗暴压成全小写。
-    """
-    if not lookup_key: return ""
-
-    compact_key = lookup_key.replace("-", "")
-    matched = _LANGUAGE_CODE_LOOKUP.get(lookup_key) or _LANGUAGE_CODE_LOOKUP.get(compact_key)
-    if matched: return matched
-    return _canonicalize_language_tag(lookup_key)
-
-
-def normalize_language_code(value, default: str = "") -> str:
-    """
-    将各种语言写法统一成后端内部使用的标准语言码。
-    """
-    normalized = _normalize_language_lookup_key(value)
-    if normalized: return _resolve_canonical_language_code(normalized)
-
-    fallback = _normalize_language_lookup_key(default)
-    return _resolve_canonical_language_code(fallback) if fallback else ""
-
-
-def normalize_language_codes(values) -> list[str]:
-    """
-    批量归一化并去重，保持原有顺序。
-    """
-    result = []
-    seen = set()
-    for value in values or []:
-        language_code = normalize_language_code(value)
-        if not language_code or language_code in seen:
-            continue
-        seen.add(language_code)
-        result.append(language_code)
-    return result
+# 兼容旧调用名：历史上该函数用于返回 RimWorld Languages 目录名。
+def get_lang_by_code(code):
+    return get_language_english_name(code, default="English")
 
 
 def to_steam_webapi_language_code(value, default: str = "en") -> str:
-    """
-    将内部语言码转换成 Steamworks Web API 支持的语言码。
-
-    Steam 的语言参数支持集合是有限的，这里先把输入收束成标准语言码，
-    再验证是否属于 Steam 支持的值；不支持时统一回退默认语言。
-    """
-    normalized_default = normalize_language_code(default, default="en") or "en"
-    if normalized_default not in STEAM_WEBAPI_LANGUAGE_CODES:
-        normalized_default = "en"
-
-    normalized = normalize_language_code(value, default=normalized_default)
-    if not normalized: return normalized_default
-    return normalized if normalized in STEAM_WEBAPI_LANGUAGE_CODES else normalized_default
+    return str(to_external_language(value, "code", default=default))
 
 
-def get_lang_by_code(code):
-    """
-    通过标准语言码反查 RimWorld 语言目录前缀。
-    如果找不到，默认返回 English。
-    """
-    normalized = normalize_language_code(code)
-    if not normalized: return "English"
-    return _LANGUAGE_FOLDER_LOOKUP.get(normalized, "English")
+LANGUAGE_MAP = {spec.english_name: spec.code for spec in LANGUAGE_SPECS}
+STEAM_WEBAPI_LANGUAGE_CODES = SUPPORTED_LANGUAGE_CODES
 
 
-if __name__ == '__main__':
-    print(get_lang_by_code('zh-CN'))
+RIMWORLD_STEAM_APP_ID = 294100
+RIMWORLD_STEAM_APP_ID_STR = str(RIMWORLD_STEAM_APP_ID)
+RIMWORLD_WORKSHOP_CONTENT_PARTS = ("steamapps", "workshop", "content", RIMWORLD_STEAM_APP_ID_STR)
+RIMWORLD_APPMANIFEST_NAME = f"appmanifest_{RIMWORLD_STEAM_APP_ID_STR}.acf"
+RIMWORLD_APPWORKSHOP_NAME = f"appworkshop_{RIMWORLD_STEAM_APP_ID_STR}.acf"
+
+RIMWORLD_DLC_APPID_PACKAGE_MAP = {
+    RIMWORLD_STEAM_APP_ID: "ludeon.rimworld",
+    1149640: "ludeon.rimworld.royalty",
+    1392840: "ludeon.rimworld.ideology",
+    1826140: "ludeon.rimworld.biotech",
+    2380740: "ludeon.rimworld.anomaly",
+    3022790: "ludeon.rimworld.odyssey",
+}
+
+RIMWORLD_DLC_OPTIONS = [
+    {"label": "Core", "appid": RIMWORLD_STEAM_APP_ID, "package_id": "ludeon.rimworld"},
+    {"label": "Royalty", "appid": 1149640, "package_id": "ludeon.rimworld.royalty"},
+    {"label": "Ideology", "appid": 1392840, "package_id": "ludeon.rimworld.ideology"},
+    {"label": "Biotech", "appid": 1826140, "package_id": "ludeon.rimworld.biotech"},
+    {"label": "Anomaly", "appid": 2380740, "package_id": "ludeon.rimworld.anomaly"},
+    {"label": "Odyssey", "appid": 3022790, "package_id": "ludeon.rimworld.odyssey"},
+]
+
+
+# --- Steam 工坊 Web API 枚举 -------------------------------------------------
+# 这些值来自 SteamTracking / Steamworks 文档，集中放在这里避免请求代码里继续散落魔法数字。
+
+class SteamPublishedFileQueryType(IntEnum):
+    """IPublishedFileService.QueryFiles 的 query_type。"""
+
+    RANKED_BY_VOTE = 0  # 按评分/投票排序
+    RANKED_BY_PUBLICATION_DATE = 1  # 按发布时间排序
+    ACCEPTED_FOR_GAME_RANKED_BY_ACCEPTANCE_DATE = 2  # 已被游戏接受的项目，按接受时间排序
+    RANKED_BY_TREND = 3  # 趋势/热门排序
+    FAVORITED_BY_FRIENDS_RANKED_BY_PUBLICATION_DATE = 4  # 好友收藏，按发布时间排序
+    CREATED_BY_FRIENDS_RANKED_BY_PUBLICATION_DATE = 5  # 好友创建，按发布时间排序
+    RANKED_BY_NUM_TIMES_REPORTED = 6  # 按举报数排序
+    CREATED_BY_FOLLOWED_USERS_RANKED_BY_PUBLICATION_DATE = 7  # 关注用户创建，按发布时间排序
+    NOT_YET_RATED = 8  # 尚未评分
+    RANKED_BY_TOTAL_UNIQUE_SUBSCRIPTIONS = 9  # 按总订阅数排序
+    RANKED_BY_TOTAL_VOTES_ASC = 10  # 按总投票数升序
+    RANKED_BY_VOTES_UP = 11  # 按赞成票排序
+    RANKED_BY_TEXT_SEARCH = 12  # 按文本相关性排序
+    RANKED_BY_PLAYTIME_TREND = 13  # 按近期游玩时长趋势排序
+    RANKED_BY_TOTAL_PLAYTIME = 14  # 按总游玩时长排序
+    RANKED_BY_AVERAGE_PLAYTIME_TREND = 15  # 按近期平均游玩时长趋势排序
+    RANKED_BY_LIFETIME_AVERAGE_PLAYTIME = 16  # 按生命周期平均游玩时长排序
+    RANKED_BY_PLAYTIME_SESSIONS_TREND = 17  # 按近期游玩次数趋势排序
+    RANKED_BY_LIFETIME_PLAYTIME_SESSIONS = 18  # 按生命周期游玩次数排序
+    RANKED_BY_INAPPROPRIATE_CONTENT_RATING = 19  # 按不当内容评分排序
+    RANKED_BY_BAN_CONTENT_CHECK = 20  # 按封禁内容检查结果排序
+    RANKED_BY_LAST_UPDATED_DATE = 21  # 按最后更新时间排序
+    RANKED_BY_NUM_PARENT_ITEMS = 22  # 按父项目数量排序
+    RANKED_BY_NUM_PARENT_COLLECTIONS = 23  # 按父合集数量排序
+
+
+class SteamPublishedFileMatchingFileType(IntEnum):
+    """IPublishedFileService.QueryFiles/GetUserFiles 的 filetype 筛选枚举。"""
+
+    ITEMS = 0  # 普通工坊项目
+    COLLECTIONS = 1  # 合集
+    ART = 2  # 艺术作品
+    VIDEOS = 3  # 视频
+    SCREENSHOTS = 4  # 截图
+    COLLECTION_ELIGIBLE = 5  # 可加入合集的项目
+    GAMES = 6  # 已废弃/未使用
+    SOFTWARE = 7  # 已废弃/未使用
+    CONCEPTS = 8  # 已废弃/未使用
+    GREENLIGHT_ITEMS = 9  # 已废弃/未使用
+    ALL_GUIDES = 10  # 指南
+    WEB_GUIDES = 11  # Steam 网页指南
+    INTEGRATED_GUIDES = 12  # 应用内指南
+    USABLE_IN_GAME = 13  # 可在游戏中使用
+    MERCH = 14  # 周边/商品投票项
+    CONTROLLER_BINDINGS = 15  # 控制器绑定
+    STEAMWORKS_ACCESS_INVITES = 16  # Steam 内部使用
+    ITEMS_MTX = 17  # 可在游戏内销售的工坊项目
+    ITEMS_READY_TO_USE = 18  # 用户可直接使用的工坊项目
+    WORKSHOP_SHOWCASE = 19  # 工坊展示
+    GAME_MANAGED_ITEMS = 20  # 完全由游戏管理的项目
+
+
+class SteamWorkshopFileType(IntEnum):
+    """Steam 返回字段 file_type 使用的 EWorkshopFileType。"""
+
+    COMMUNITY = 0  # 普通可订阅工坊项目
+    MICROTRANSACTION = 1  # 游戏内售卖候选项
+    COLLECTION = 2  # 合集
+    ART = 3  # 艺术作品
+    VIDEO = 4  # 外部视频
+    SCREENSHOT = 5  # 截图
+    GAME = 6  # 已废弃/未使用
+    SOFTWARE = 7  # 已废弃/未使用
+    CONCEPT = 8  # 已废弃/未使用
+    WEB_GUIDE = 9  # Steam 网页指南
+    INTEGRATED_GUIDE = 10  # 应用内指南
+    MERCH = 11  # 周边/商品投票项
+    CONTROLLER_BINDING = 12  # 控制器绑定
+    STEAMWORKS_ACCESS_INVITE = 13  # Steam 内部使用
+    STEAM_VIDEO = 14  # Steam 视频
+    GAME_MANAGED_ITEM = 15  # 完全由游戏管理的项目
+    MAX = 16  # 枚举边界
+
+
+class SteamRemoteStoragePublishedFileVisibility(IntEnum):
+    """工坊项目可见性。"""
+
+    PUBLIC = 0  # 公开
+    FRIENDS_ONLY = 1  # 仅好友可见
+    PRIVATE = 2  # 仅作者可见
+    UNLISTED = 3  # 不在全局查询中展示
+
+
+class SteamUserUGCList(StrEnum):
+    """GetUserFiles 的 type 字符串枚举。"""
+
+    MY_FILES = "myfiles"  # 用户自己发布的内容
+    VOTED_ON = "votedon"  # 用户投票过的内容
+    VOTED_UP = "votedup"  # 用户赞过的内容
+    VOTED_DOWN = "voteddown"  # 用户踩过的内容
+    WILL_VOTE_LATER = "willvotelater"  # 稍后投票
+    FAVORITES = "favorites"  # 收藏
+    SUBSCRIBED = "subscribed"  # 已订阅
+    USED_ITEMS = "used_items"  # 使用/游玩过
+    FOLLOWED = "followed"  # 关注内容
+
+
+class SteamUserUGCListSortOrder(StrEnum):
+    """GetUserFiles 的 sortmethod 字符串枚举。"""
+
+    NEWEST_FIRST = "newestfirst"  # 创建时间降序
+    OLDEST_FIRST = "oldestfirst"  # 创建时间升序
+    TITLE_ASC = "alpha"  # 标题 A-Z
+    LAST_UPDATED = "lastupdated"  # 最后更新时间降序
+    SUBSCRIPTION_DATE = "subscriptiondate"  # 订阅时间降序
+    SCORE = "score"  # 评分/好评率
+    FOR_MODERATION = "formoderation"  # 管理审核排序
+
+
+class SteamSearchTextTarget(IntEnum):
+    """QueryFiles 的 search_text_target。"""
+
+    TITLE_AND_DESCRIPTION = 0  # 默认：标题和描述
+    TITLE = 1  # 仅标题
+    DESCRIPTION = 2  # 仅描述
+
+
+def _coerce_int_enum(enum_cls: type[IntEnum], value: Any, default: IntEnum) -> IntEnum:
+    """把前端传入的数字、枚举名或业务别名收束到明确枚举值。"""
+    if isinstance(value, enum_cls):
+        return value
+    if value not in (None, ""):
+        try:
+            return enum_cls(int(value))
+        except (TypeError, ValueError):
+            normalized = str(value).strip().upper().replace("-", "_")
+            if normalized in enum_cls.__members__:
+                return enum_cls[normalized]
+    return default
+
+
+def normalize_steam_query_type(value: Any, default: SteamPublishedFileQueryType = SteamPublishedFileQueryType.RANKED_BY_TEXT_SEARCH) -> SteamPublishedFileQueryType:
+    return _coerce_int_enum(SteamPublishedFileQueryType, value, default)
+
+
+def normalize_steam_matching_file_type(value: Any, default: SteamPublishedFileMatchingFileType = SteamPublishedFileMatchingFileType.ITEMS) -> SteamPublishedFileMatchingFileType:
+    aliases = {
+        "mod": SteamPublishedFileMatchingFileType.ITEMS,
+        "mods": SteamPublishedFileMatchingFileType.ITEMS,
+        "item": SteamPublishedFileMatchingFileType.ITEMS,
+        "items": SteamPublishedFileMatchingFileType.ITEMS,
+        "collection": SteamPublishedFileMatchingFileType.COLLECTIONS,
+        "collections": SteamPublishedFileMatchingFileType.COLLECTIONS,
+    }
+    normalized = str(value or "").strip().lower()
+    if normalized in aliases:
+        return aliases[normalized]
+    return _coerce_int_enum(SteamPublishedFileMatchingFileType, value, default)
+
+
+def normalize_steam_workshop_file_type(value: Any, default: SteamWorkshopFileType = SteamWorkshopFileType.COMMUNITY) -> SteamWorkshopFileType:
+    return _coerce_int_enum(SteamWorkshopFileType, value, default)
+
+
+def normalize_steam_search_text_target(value: Any, default: SteamSearchTextTarget = SteamSearchTextTarget.TITLE_AND_DESCRIPTION) -> SteamSearchTextTarget:
+    aliases = {
+        "all": SteamSearchTextTarget.TITLE_AND_DESCRIPTION,
+        "both": SteamSearchTextTarget.TITLE_AND_DESCRIPTION,
+        "title_description": SteamSearchTextTarget.TITLE_AND_DESCRIPTION,
+        "title_and_description": SteamSearchTextTarget.TITLE_AND_DESCRIPTION,
+    }
+    normalized = str(value or "").strip().lower().replace("-", "_")
+    if normalized in aliases:
+        return aliases[normalized]
+    return _coerce_int_enum(SteamSearchTextTarget, value, default)
+
+
+def normalize_steam_user_ugc_list(value: Any, default: SteamUserUGCList = SteamUserUGCList.MY_FILES) -> SteamUserUGCList:
+    try:
+        return SteamUserUGCList(str(value or "").strip().lower())
+    except ValueError:
+        return default
+
+
+def normalize_steam_user_ugc_sort(value: Any, default: SteamUserUGCListSortOrder = SteamUserUGCListSortOrder.LAST_UPDATED) -> SteamUserUGCListSortOrder:
+    try:
+        return SteamUserUGCListSortOrder(str(value or "").strip().lower())
+    except ValueError:
+        return default
+
+
+def steam_appids_to_rimworld_package_ids(values) -> list[str]:
+    """把 RimWorld / DLC 的 Steam AppID 转成缓存依赖里使用的 package_id。"""
+    if isinstance(values, (str, int)):
+        raw_values = [values]
+    elif isinstance(values, (list, tuple, set)):
+        raw_values = values
+    else:
+        raw_values = []
+
+    package_ids: list[str] = []
+    seen: set[str] = set()
+    for value in raw_values:
+        try:
+            appid = int(str(value or "").strip())
+        except (TypeError, ValueError):
+            continue
+        package_id = RIMWORLD_DLC_APPID_PACKAGE_MAP.get(appid)
+        if not package_id or package_id in seen:
+            continue
+        seen.add(package_id)
+        package_ids.append(package_id)
+    return package_ids

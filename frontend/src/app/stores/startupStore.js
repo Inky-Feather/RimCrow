@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { toast } from '../../shared/lib/common'
 import { useAiStore } from '../../features/ai/aiStore'
-import { useModStore } from '../../features/mod/stores/modStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
+import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
 
 // 启动编排只负责“先后顺序”和“阻塞/后台”的取舍，具体业务仍由各自 store/API 执行。
 export const useStartupStore = defineStore('startup', () => {
@@ -35,12 +35,12 @@ export const useStartupStore = defineStore('startup', () => {
     console[method]('[RMM][maintenance-check]', { event, ...payload })
   }
 
-  // 升级上下文由后端在启动时生成；这里把它转成前端动作，例如提示用户和强制刷新扫描。
+  // 升级上下文由后端在启动时生成；这里把它转成前端动作，例如提示用户和强制扫描。
   const handleUpgradeContext = (upgradeContext) => {
     let scanForce = false
     const context = upgradeContext?.value || {}
     if (context.version_changed) {
-      console.log('检测到版本升级:', context.old_version, '->', context.new_version)
+      console.info('检测到版本升级:', context.old_version, '->', context.new_version)
       if (context.pending_actions?.includes('recommend_scan')) {
         scanForce = true
       }
@@ -64,6 +64,8 @@ export const useStartupStore = defineStore('startup', () => {
     upgradeContext,
     uiState,
     checkUpdate,
+    confirmStore,
+    requestModScan,
     runScheduledMaintenanceChecks,
   }) => {
     lastError.value = ''
@@ -85,9 +87,13 @@ export const useStartupStore = defineStore('startup', () => {
       setPhase('post_hydration')
       const scanForce = handleUpgradeContext(upgradeContext)
       const profileStore = useProfileStore()
+      const workspaceStore = useWorkspaceStore()
       if (settings.value.current_profile_id) {
         profileStore.currentProfileId = settings.value.current_profile_id
       }
+      await workspaceStore.fetchLibrariesMods()
+      const startupWorkshopChanges = workspaceStore.detectStartupWorkshopChanges()
+      const startupWorkshopPaths = workspaceStore.takeStartupWorkshopChangesForScan().map(item => item.path)
       // 自动更新探测
       setPhase('startup_update_probe')
       const updateDecision = buildDailyCheckDecision(settings.value.enable_auto_update_check, settings.value.last_update_check_time)
@@ -99,7 +105,25 @@ export const useStartupStore = defineStore('startup', () => {
       // 自动扫描
       setPhase('startup_scan')
       if (settings.value.enable_auto_scan !== false) {
-        useModStore().scanMods(null, scanForce)
+        await requestModScan({
+          forcedUpdate: scanForce,
+          preserveListState: true,
+          sizeCheckPaths: startupWorkshopPaths,
+          startupWorkshopChanges,
+        })
+      } else if (startupWorkshopChanges.length) {
+        window.setTimeout(async () => {
+          await workspaceStore.showStartupWorkshopChangesPrompt(startupWorkshopChanges, {
+            beforeScan: true,
+            scanAction: async () => {
+              await requestModScan({
+                preserveListState: true,
+                sizeCheckPaths: startupWorkshopPaths,
+                startupWorkshopChanges,
+              })
+            },
+          })
+        }, 800)
       }
 
       // 给主界面一次渲染和用户操作机会，再排队启动维护检查，避免首屏刚出现就被弹窗抢占。

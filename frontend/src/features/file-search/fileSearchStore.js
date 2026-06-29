@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { checkResult, toast } from '../../shared/lib/common'
+import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
 
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
@@ -175,7 +175,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       return true
     } catch (error) {
       searchState.status = 'failed'
-      searchState.message = error?.message || '启动失败'
+      searchState.message = toUserMessage(error?.message || error, '启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。')
       toast.error(searchState.message)
       return false
     } finally {

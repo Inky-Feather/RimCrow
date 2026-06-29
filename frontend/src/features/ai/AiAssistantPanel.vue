@@ -151,10 +151,10 @@
                     <span class="text-text-dim">思考过程</span>
                   </template>
                 </summary>
-                <div class="prose prose-sm prose-invert max-w-none select-text text-text-dim mt-2" v-html="renderMarkdown(msg.reasoning)"></div>
+                <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none select-text text-text-dim mt-2" v-html="renderMarkdown(msg.reasoning)"></div>
               </details>
 
-              <div class="prose prose-sm prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none select-text text-wrap break-all relative">
+              <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none select-text text-wrap break-all relative">
                 <div v-if="shouldShowAssistantLoading(msg)" class="flex items-center gap-2 py-1 text-text-dim">
                   <LoaderCircle class="w-4 h-4 animate-spin text-accent-special shrink-0"></LoaderCircle>
                   <span class="text-xs font-mono">正在生成回答...</span>
@@ -276,7 +276,9 @@ import { CircleHelp, Copy, LoaderCircle, Square } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../shared/components/input/CommonNumber.vue'
 import AiActionCard from './AiActionCard.vue'
+import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
+import { toUserMessage } from '../../shared/lib/common'
 import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
   buildAssistantMessageUsageTooltip, buildRequestTotalUsageTooltip,
@@ -410,10 +412,15 @@ const globalAiConfig = computed(() => (
   || aiStore.runtimeAiConfig?.config
   || {}
 ))
+const globalAiSecretStatus = computed(() => (
+  appStore.settings?._secret_status?.['ai.api_key']
+  || globalAiConfig.value?._secret_status
+  || {}
+))
 const globalAiConfigSignature = computed(() => [
   String(globalAiConfig.value?.provider || '').trim(),
   String(globalAiConfig.value?.base_url || '').trim(),
-  String(globalAiConfig.value?.api_key || '').trim(),
+  String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : globalAiConfig.value?.api_key || '').trim(),
   String(globalAiConfig.value?.model || '').trim(),
   String(globalAiConfig.value?.temperature ?? '').trim(),
 ].join('|'))
@@ -424,7 +431,7 @@ const globalConnectionSignature = computed(() => [
 const modelListQuerySignature = computed(() => [
   String(globalAiConfig.value?.provider || '').trim(),
   String(globalAiConfig.value?.base_url || '').trim(),
-  String(globalAiConfig.value?.api_key || '').trim(),
+  String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : globalAiConfig.value?.api_key || '').trim(),
 ].join('|'))
 const runtimePrefs = computed(() => aiStore.getAssistantRuntimePrefs(props.ownerKey, {
   enabledTools: [...defaultEnabledToolIds.value],
@@ -470,6 +477,7 @@ const sessionModelConfig = computed(() => {
     provider: String(config.provider || '').trim(),
     base_url: String(config.base_url || '').trim(),
     api_key: String(config.api_key || '').trim(),
+    api_key_fingerprint: String(globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : '').trim(),
     model: String(sessionModel.value || config.model || '').trim(),
     temperature: Number(sessionTemperature.value),
   }
@@ -622,6 +630,7 @@ const refreshModelOptions = async ({ forceRefresh = true } = {}) => {
     provider: config.provider,
     base_url: config.base_url,
     api_key: config.api_key,
+    api_key_fingerprint: globalAiSecretStatus.value?.has_value ? (globalAiSecretStatus.value?.hint || 'saved') : '',
   }
   const models = await aiStore.getAiModels(query, {
     forceRefresh,
@@ -752,7 +761,7 @@ const copyMessage = async (msg, isMarkdown = false) => {
     await navigator.clipboard.writeText(finalOutput)
     toast.success(isMarkdown ? '已复制 Markdown 格式' : '已复制纯文本格式')
   } catch (err) {
-    toast.error(`复制失败: ${err.message}`)
+    toast.error(toUserMessage(err?.message || err, '复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。'))
   }
 }
 
@@ -930,7 +939,7 @@ const executeAction = async (action) => {
   try {
     await executor(action.payload || {}, action)
   } catch (error) {
-    toast.error(`操作执行失败: ${error?.message || error}`)
+    toast.error(toUserMessage(error?.message || error, '操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。'))
   }
 }
 
@@ -979,7 +988,7 @@ const sendMessage = async () => {
     requestPayload: { ...(props.requestPayload || {}) },
   })
   if (requestMeta?.error) {
-    toast.error(requestMeta.error?.message || String(requestMeta.error))
+    toast.error(toUserMessage(requestMeta.error?.message || requestMeta.error, 'AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。'))
   }
 }
 
@@ -1008,7 +1017,8 @@ const cancelCurrentRequest = async ({ keepBubble = true, silent = false } = {}) 
     await aiStore.cancelAssistantSession(session.id)
     if (!silent) toast.info('已请求中断本次 AI 分析')
   } catch (error) {
-    if (!silent) toast.warning(`已停止等待这次回答，但取消请求没有完成: ${error?.message || error}`)
+    console.warn('取消 AI 助手会话失败:', error)
+    if (!silent) toast.warning(toUserMessage(error?.message || error, '已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。'))
   }
 }
 

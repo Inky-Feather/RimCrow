@@ -145,16 +145,22 @@
                         <button
                           v-if="canSubscribeImportItem(item.id)"
                           @click.stop="subscribeImportItem(item.id)"
-                          v-tooltip="'订阅该导入项对应的工坊项目'"
+                          :disabled="isDiffActionBusy"
+                          :class="isDiffActionBusy ? 'rmm-action-disabled' : ''"
+                          v-tooltip="isDiffActionPending(`subscribe-${item.id}`) ? '正在订阅该工坊项目' : '订阅该导入项对应的工坊项目'"
                           class="rounded-full bg-accent-primary/85 p-1 text-on-accent-primary transition-transform hover:scale-105">
-                          <Flag class="size-3" />
+                          <LoaderCircle v-if="isDiffActionPending(`subscribe-${item.id}`)" class="size-3 animate-spin" />
+                          <Flag v-else class="size-3" />
                         </button>
                         <button
                           v-if="canDownloadImportItem(item.id)"
                           @click.stop="downloadImportItem(item.id)"
-                          v-tooltip="'下载该导入项对应的工坊项目到管理器'"
+                          :disabled="isDiffActionBusy"
+                          :class="isDiffActionBusy ? 'rmm-action-disabled' : ''"
+                          v-tooltip="isDiffActionPending(`download-${item.id}`) ? '正在下载该工坊项目' : '下载该导入项对应的工坊项目到管理器'"
                           class="rounded-full bg-accent-success/85 p-1 text-on-accent-success transition-transform hover:scale-105">
-                          <Download class="size-3" />
+                          <LoaderCircle v-if="isDiffActionPending(`download-${item.id}`)" class="size-3 animate-spin" />
+                          <Download v-else class="size-3" />
                         </button>
                         <button
                           v-if="canOpenImportWorkshop(item.id)"
@@ -203,25 +209,31 @@
               <h2 class="text-text-soft font-bold">Mod序列对比</h2>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button v-if="orderStore.importCheckSummary.missing > 0" @click="orderStore.subscribeImportCheckItems(['missing'])" class="px-3 py-1.5 rounded-lg bg-accent-primary/12 hover:bg-accent-primary/25 text-accent-primary border border-accent-primary/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('subscribe-missing', () => orderStore.subscribeImportCheckItems(['missing']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-primary/12 hover:bg-accent-primary/25 text-accent-primary border border-accent-primary/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('subscribe-missing')" class="size-3 animate-spin" />
                 订阅缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
-              <button v-if="orderStore.importCheckSummary.missing > 0" @click="orderStore.downloadImportCheckItems(['missing'])" class="px-3 py-1.5 rounded-lg bg-accent-tip/12 hover:bg-accent-tip/25 text-accent-tip border border-accent-tip/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('download-missing', () => orderStore.downloadImportCheckItems(['missing']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-tip/12 hover:bg-accent-tip/25 text-accent-tip border border-accent-tip/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('download-missing')" class="size-3 animate-spin" />
                 下载缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
               <button v-if="orderStore.importCheckSummary.missing > 0" @click="orderStore.removeImportCheckItems(['missing'])" class="px-3 py-1.5 rounded-lg bg-accent-warning/10 hover:bg-accent-warning/20 text-accent-warning border border-border-base/10 text-xs font-bold transition-all">
                 移除缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
-              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="orderStore.subscribeImportCheckItems(['replacement'])" class="px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('subscribe-replacement', () => orderStore.subscribeImportCheckItems(['replacement']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('subscribe-replacement')" class="size-3 animate-spin" />
                 订阅替代项 ({{ orderStore.actionableReplacementImportItems.length }})
               </button>
-              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="orderStore.downloadImportCheckItems(['replacement'])" class="px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('download-replacement', () => orderStore.downloadImportCheckItems(['replacement']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('download-replacement')" class="size-3 animate-spin" />
                 下载替代项 ({{ orderStore.actionableReplacementImportItems.length }})
               </button>
-              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="orderStore.subscribeImportCheckItems(['other_version'])" class="px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('subscribe-other-version', () => orderStore.subscribeImportCheckItems(['other_version']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('subscribe-other-version')" class="size-3 animate-spin" />
                 订阅其它版本 ({{ orderStore.importCheckSummary.other_version }})
               </button>
-              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="orderStore.downloadImportCheckItems(['other_version'])" class="px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('download-other-version', () => orderStore.downloadImportCheckItems(['other_version']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('download-other-version')" class="size-3 animate-spin" />
                 下载其它版本 ({{ orderStore.importCheckSummary.other_version }})
               </button>
               <button v-if="orderStore.importCheckSummary.unknown > 0" @click="orderStore.removeImportCheckItems(['unknown'])" class="px-3 py-1.5 rounded-lg bg-bg-overlay/10 hover:bg-bg-overlay/10 text-text-dim border border-border-base/10 text-xs font-bold transition-all">
@@ -230,7 +242,10 @@
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               
-              <button @click="orderStore.applyBackup()" class="px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">应用文件序列</button>
+              <button @click="runDiffAction('apply-backup', () => orderStore.applyBackup())" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">
+                <LoaderCircle v-if="isDiffActionPending('apply-backup')" class="size-3 animate-spin" />
+                应用文件序列
+              </button>
               <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-border-base/10 text-xs font-bold transition-all">关闭</button>
             </div>
           </div>
@@ -261,11 +276,13 @@ import { useDebounceFn } from '@vueuse/core'
 import { getTailwindColorHex, hexToRgba } from '../../shared/lib/color'
 import { useOrderStore } from './orderStore'
 import { useAppStore } from '../../app/stores/appStore'
-import { Download, Flag, Link, X } from 'lucide-vue-next'
+import { useTaskStore } from '../../app/stores/taskStore'
+import { Download, Flag, Link, LoaderCircle, X } from 'lucide-vue-next'
 
 
 // 抽屉的显隐和底部操作继续复用现有 store，避免迁移后行为变化。
 const appStore = useAppStore()
+const taskStore = useTaskStore()
 const orderStore = useOrderStore()
 
 const props = defineProps({
@@ -288,6 +305,31 @@ const highlightedListBItemKey = ref('')
 
 const renderBlocks = ref([])  // 绘制区块
 const renderLines = ref([])    // 绘制线条
+const diffActionPending = ref('')
+const isDiffActionBusy = computed(() => !!diffActionPending.value)
+const isDiffActionPending = (action) => diffActionPending.value === action
+const getTaskIdFromResult = (result) => String(result?.taskId || result?.task_id || result?.data?.task_id || '')
+const waitForDiffTask = async (types, startedAt, result) => {
+  const taskId = getTaskIdFromResult(result)
+  if (taskId) {
+    await taskStore.waitForTaskCompletion(taskId).catch(() => null)
+    return
+  }
+  if (!types) return
+  await taskStore.waitForLatestTaskByType(types, { since: startedAt, startTimeout: 5000 }).catch(() => null)
+}
+const runDiffAction = async (action, runner, taskTypes = null) => {
+  if (diffActionPending.value) return
+  const startedAt = Date.now()
+  diffActionPending.value = action
+  try {
+    const result = await runner?.()
+    await waitForDiffTask(taskTypes, startedAt, result)
+    return result
+  } finally {
+    diffActionPending.value = ''
+  }
+}
 
 const BLOCK_THRESHOLD = 3    // 块阈值，超过这个距离才认为是块移动
 
@@ -362,10 +404,10 @@ const canRemoveImportItem = (rowKey) => {
   return ['missing', 'unknown'].includes(item?.status)
 }
 const subscribeImportItem = async (rowKey) => {
-  await orderStore.subscribeImportCheckItems([], [rowKey])
+  await runDiffAction(`subscribe-${rowKey}`, () => orderStore.subscribeImportCheckItems([], [rowKey]), 'steam-subscribe')
 }
 const downloadImportItem = async (rowKey) => {
-  await orderStore.downloadImportCheckItems([], [rowKey])
+  await runDiffAction(`download-${rowKey}`, () => orderStore.downloadImportCheckItems([], [rowKey]), 'steamcmd-download')
 }
 const openImportWorkshop = (rowKey) => {
   orderStore.openImportCheckWorkshop(rowKey)
@@ -546,7 +588,7 @@ const getBgColor = (item) => {
   const color = getRenderColor(item)
   if (color === 'transparent') return 'transparent'
   if (!color.startsWith('#')) {
-    console.error(`Invalid color:`,item,color, COLOR_REMOVED)
+    console.error('加载顺序差异颜色无效:', item, color, COLOR_REMOVED)
   }
   return hexToRgba(color, 0.2) // 统一 10% 透明度
 }

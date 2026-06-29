@@ -435,7 +435,11 @@ class AIToolExecutor:
         try:
             validated_args = spec.definition.args_model.model_validate(args)
         except ValidationError as e:
-            logger.warning(f"[AI诊断] 工具参数校验失败 name={name}: {e}")
+            logger.warning(
+                "[AI诊断] 工具参数校验失败。tool=%s",
+                name,
+                extra={"error_code": "AI.TOOL.ARGS_INVALID", "extra_context": {"tool": name, "original_error": str(e)}},
+            )
             payload = {"error": f"工具参数不合法: {e.errors(include_url=False)}"}
             return self._build_execution_result(name=name, payload=payload)
 
@@ -444,7 +448,12 @@ class AIToolExecutor:
             payload = spec.handler(validated_args)
             return self._build_execution_result(name=name, payload=payload)
         except Exception as e:
-            logger.error(f"AI工具执行异常 [{name}]: {str(e)}", exc_info=True)
+            logger.error(
+                "AI 工具执行异常。tool=%s",
+                name,
+                extra={"error_code": "AI.TOOL.EXECUTION_FAILED", "extra_context": {"tool": name, "original_error": str(e)}},
+                exc_info=True,
+            )
             payload = {"error": f"工具执行内部异常: {str(e)}"}
             return self._build_execution_result(name=name, payload=payload)
 

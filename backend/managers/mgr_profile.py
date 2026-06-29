@@ -20,7 +20,7 @@ from backend.utils.profile_runtime import (
 )
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
 from backend.utils.logger import logger 
-from backend.utils.tools import delete_fs_path
+from backend.utils.tools import delete_fs_path, normalize_path_for_storage
 
 
 # @dataclass
@@ -230,16 +230,17 @@ class ProfileManager:
         创建新版本环境
         :param copy_current_data: 是否从当前环境复制 Config 和 Saves 到新环境作为初始状态
         """
+        game_install_path = normalize_path_for_storage(data.get('game_install_path'))
         # 验证游戏安装路径是否存在
-        if not GameManager.detect_executable(data.get('game_install_path')):
-            raise ValueError(f"Game executable not found: {data.get('game_install_path')}")
+        if not GameManager.detect_executable(game_install_path):
+            raise ValueError(f"Game executable not found: {game_install_path}")
         profile_id = uuid.uuid4().hex
         # 规划数据隔离目录 (例如存放在 data/profiles/<id>)
         # 注意：这里使用绝对路径
         data_dir = self._ensure_user_data_structure(
             data.get('user_data_path') or str(DATA_DIR / "profiles" / profile_id)
         )
-        install_facts = self._get_install_inspector().inspect(data.get('game_install_path', ''))
+        install_facts = self._get_install_inspector().inspect(game_install_path)
         runtime_flags = normalize_profile_runtime_flags(
             install_facts.is_steam,
             data.get('prefer_steam_launch') if 'prefer_steam_launch' in data else None,
@@ -261,8 +262,8 @@ class ProfileManager:
                 name=data.get('name', 'Profile'),
                 description=data.get('description', ''),
                 user_data_path=data_dir,
-                game_install_path=data.get('game_install_path'),
-                game_version=install_facts.game_version or GameManager.get_game_version(data.get('game_install_path')),
+                game_install_path=game_install_path,
+                game_version=install_facts.game_version or GameManager.get_game_version(game_install_path),
                 prefer_steam_launch=runtime_flags['prefer_steam_launch'],
                 use_workshop_mods=runtime_flags['use_workshop_mods'],
                 use_self_mods=data.get('use_self_mods', False), # 默认不加载 Self Mod
@@ -291,9 +292,9 @@ class ProfileManager:
         if 'user_data_path' in clean_data:
             clean_data['user_data_path'] = self._ensure_user_data_structure(clean_data['user_data_path'])
         if 'game_install_path' in clean_data:
+            clean_data['game_install_path'] = normalize_path_for_storage(clean_data['game_install_path'])
             if not os.path.exists(clean_data['game_install_path']):
                 raise ValueError(f"Path not found: {clean_data['game_install_path']}")
-            clean_data['game_install_path'] = os.path.normpath(clean_data['game_install_path'])
             install_facts = self._get_install_inspector().inspect(clean_data['game_install_path'], force=True)
             clean_data['game_version'] = install_facts.game_version or GameManager.get_game_version(clean_data['game_install_path'])
             clean_data['is_steam'] = install_facts.is_steam
@@ -353,7 +354,7 @@ class ProfileManager:
             try:
                 delete_fs_path(profile.user_data_path, force=force)
             except Exception as e:
-                logger.warning(f"Failed to clean up profile data: {e}")
+                logger.warning(f"清理配置数据失败：{e}")
         # 2. 删库
         profile.delete_instance()
         # 3. 如果删的是当前激活的，回退到 default
@@ -537,7 +538,7 @@ class ProfileManager:
             if os.path.exists(saves_dir):
                 shutil.copytree(saves_dir, os.path.join(target_root, "Saves"), dirs_exist_ok=True)
         except Exception as e:
-            logger.error(f"Clone data failed: {e}")
+            logger.error(f"克隆数据失败：{e}")
             
     def _sync_profile_to_disk(self, profile: GameProfile):
         """
@@ -548,7 +549,7 @@ class ProfileManager:
             # 统一把快照写到应用数据目录，避免污染真实用户数据根目录。
             self._write_profile_snapshot(profile)
         except Exception as e:
-            logger.error(f"Failed to sync profile to disk: {e}")
+            logger.error(f"同步配置到磁盘失败：{e}")
             
     def scan_orphaned_profiles(self):
         """
@@ -586,7 +587,7 @@ class ProfileManager:
                             orphans.append(data)
                             
                     except Exception as e:
-                        logger.error(f"Error reading profile {entry.name}: {e}")
+                        logger.error(f"读取配置失败：{entry.name}，错误：{e}")
         
         return orphans
 
@@ -617,7 +618,7 @@ class ProfileManager:
             install_path = str(clean_data.get('game_install_path') or '').strip()
             install_facts = None
             if install_path:
-                normalized_install_path = os.path.normpath(install_path)
+                normalized_install_path = normalize_path_for_storage(install_path)
                 clean_data['game_install_path'] = normalized_install_path
                 install_facts = self._get_install_inspector().inspect(normalized_install_path, force=True)
             detected_is_steam = bool(install_facts.is_steam) if install_facts else False

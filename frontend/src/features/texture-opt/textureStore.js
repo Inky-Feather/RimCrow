@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { toast, checkResult } from '../../shared/lib/common'
+import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
 
 export const useTextureStore = defineStore('texture', () => {
@@ -21,6 +21,10 @@ export const useTextureStore = defineStore('texture', () => {
     source_total_bytes: 0,
     output_total_count: 0,
     output_total_bytes: 0,
+    dds_output_count: 0,
+    dds_output_bytes: 0,
+    zstd_output_count: 0,
+    zstd_output_bytes: 0,
     current_output_count: 0,
     current_output_bytes: 0,
     external_orphan_output_count: 0,
@@ -40,6 +44,8 @@ export const useTextureStore = defineStore('texture', () => {
     combined_total_bytes: 0,
     source_bytes_share_pct: 0,
     output_bytes_share_pct: 0,
+    dds_output_bytes_share_pct: 0,
+    zstd_output_bytes_share_pct: 0,
     combined_bytes_share_pct: 0,
     scale_breakdown: [],
     projection_basis: [],
@@ -74,6 +80,10 @@ export const useTextureStore = defineStore('texture', () => {
       source_total_bytes: sourceTotalBytes,
       output_total_count: outputTotalCount,
       output_total_bytes: outputTotalBytes,
+      dds_output_count: toInt(raw.dds_output_count ?? (raw.zstd_output_count == null ? outputTotalCount : base.dds_output_count)),
+      dds_output_bytes: toInt(raw.dds_output_bytes ?? (raw.zstd_output_bytes == null ? outputTotalBytes : base.dds_output_bytes)),
+      zstd_output_count: toInt(raw.zstd_output_count ?? base.zstd_output_count),
+      zstd_output_bytes: toInt(raw.zstd_output_bytes ?? base.zstd_output_bytes),
       current_output_count: currentOutputCount,
       current_output_bytes: currentOutputBytes,
       external_orphan_output_count: toInt(raw.external_orphan_output_count ?? base.external_orphan_output_count),
@@ -96,6 +106,8 @@ export const useTextureStore = defineStore('texture', () => {
       combined_total_bytes: toInt(raw.combined_total_bytes ?? (sourceTotalBytes + outputTotalBytes)),
       source_bytes_share_pct: Number(raw.source_bytes_share_pct ?? base.source_bytes_share_pct) || 0,
       output_bytes_share_pct: Number(raw.output_bytes_share_pct ?? base.output_bytes_share_pct) || 0,
+      dds_output_bytes_share_pct: Number(raw.dds_output_bytes_share_pct ?? base.dds_output_bytes_share_pct) || 0,
+      zstd_output_bytes_share_pct: Number(raw.zstd_output_bytes_share_pct ?? base.zstd_output_bytes_share_pct) || 0,
       combined_bytes_share_pct: Number(raw.combined_bytes_share_pct ?? base.combined_bytes_share_pct) || 0,
       scale_breakdown: Array.isArray(raw.scale_breakdown) ? raw.scale_breakdown : [],
       projection_basis: Array.isArray(raw.projection_basis) ? raw.projection_basis : [],
@@ -187,6 +199,9 @@ export const useTextureStore = defineStore('texture', () => {
   const getRowKey = (item = {}) => (
     String(item.mod_instance_key || item.path_hash || item.mod_path || '')
   )
+  const getSingleTargetKey = (target = {}) => (
+    String(target?.mod_instance_key || target?.path_hash || target?.mod_path || '')
+  )
 
   // === 状态 State ===
   const isAnalyzing = ref(false)
@@ -198,6 +213,7 @@ export const useTextureStore = defineStore('texture', () => {
   const lastTargetPackageIds = ref([])
   const lastTargetScope = ref('active')
   const lastOptimizationAction = ref('')
+  const lastSingleModTargetKey = ref('')
 
   // 核心数据源
   const modsData = ref([])        // 分析后返回的所有 Mod 数据
@@ -253,7 +269,7 @@ export const useTextureStore = defineStore('texture', () => {
   })
 
   // 视图控制
-  const viewMode = ref('ALL') // 'ALL' | 'PNG' | 'DDS'
+  const viewMode = ref('ALL') // 'ALL' | 'PNG' | 'DDS' | 'ZSTD'
 
   // 工具就绪状态
   const toolStatus = ref({
@@ -306,16 +322,40 @@ export const useTextureStore = defineStore('texture', () => {
     })
   }
 
+  const mergeTextureRows = (rows = []) => {
+    const nextRows = [...modsData.value]
+    const normalizedRows = normalizeTextureRows(rows)
+    for (const row of normalizedRows) {
+      const rowKey = getRowKey(row)
+      const rowPath = String(row.mod_path || '').trim().toLowerCase()
+      const existingIdx = nextRows.findIndex(item => (
+        (!!rowKey && getRowKey(item) === rowKey)
+        || (!!rowPath && String(item.mod_path || '').trim().toLowerCase() === rowPath)
+      ))
+      if (existingIdx !== -1) {
+        nextRows[existingIdx] = row
+      } else {
+        nextRows.push(row)
+      }
+    }
+    modsData.value = nextRows
+    globalSummary.value = rebuildSummaryFromRows(nextRows)
+  }
+
   const applySnapshotPayload = (payload = {}) => {
     const summary = payload?.summary
     const finalMods = payload?.final_mods
     const mods = payload?.mods
 
-    if (summary && typeof summary === 'object') {
+    if (!lastSingleModTargetKey.value && summary && typeof summary === 'object') {
       globalSummary.value = normalizeTextureStat(summary, { includeModCount: true })
     }
     if (Array.isArray(finalMods)) {
-      modsData.value = normalizeTextureRows(finalMods)
+      if (lastSingleModTargetKey.value) {
+        mergeTextureRows(finalMods)
+      } else {
+        modsData.value = normalizeTextureRows(finalMods)
+      }
       return
     }
     if (Array.isArray(mods)) {
@@ -343,30 +383,72 @@ export const useTextureStore = defineStore('texture', () => {
     return scaled + original
   }
 
-  const clearGeneratedOutputsFromCurrentRows = () => {
+  const clearGeneratedOutputsFromCurrentRows = ({ outputFormat = 'dds' } = {}) => {
+    const normalizedOutputFormat = ['dds', 'zstd'].includes(String(outputFormat || '').toLowerCase())
+      ? String(outputFormat || '').toLowerCase()
+      : 'dds'
+    const clearDds = normalizedOutputFormat === 'dds'
+    const clearZstd = normalizedOutputFormat === 'zstd'
     const targetIds = new Set(lastTargetPackageIds.value.map(item => String(item || '').trim().toLowerCase()).filter(Boolean))
     const shouldUpdateAll = lastTargetScope.value === 'all' || targetIds.size === 0
+    const outputMode = String(appStore.settings?.texture_opt?.output_format || 'dds')
+    const singleTargetKey = String(lastSingleModTargetKey.value || '')
     let changed = false
     const nextRows = modsData.value.map(row => {
       const packageId = String(row.package_id || '').trim().toLowerCase()
-      if (!shouldUpdateAll && !targetIds.has(packageId)) return row
+      const rowKey = getRowKey(row)
+      if (singleTargetKey) {
+        if (rowKey !== singleTargetKey) return row
+      } else if (!shouldUpdateAll && !targetIds.has(packageId)) {
+        return row
+      }
       changed = true
+      const nextDdsCount = clearDds ? 0 : toInt(row.dds_output_count)
+      const nextDdsBytes = clearDds ? 0 : toInt(row.dds_output_bytes)
+      const nextZstdCount = clearZstd ? 0 : toInt(row.zstd_output_count)
+      const nextZstdBytes = clearZstd ? 0 : toInt(row.zstd_output_bytes)
+      const nextCurrentCount = outputMode === 'zstd' ? nextZstdCount : nextDdsCount
+      const nextCurrentBytes = outputMode === 'zstd' ? nextZstdBytes : nextDdsBytes
       const next = {
         ...row,
-        output_total_count: 0,
-        output_total_bytes: 0,
-        current_output_count: 0,
-        current_output_bytes: 0,
+        dds_output_count: nextDdsCount,
+        dds_output_bytes: nextDdsBytes,
+        zstd_output_count: nextZstdCount,
+        zstd_output_bytes: nextZstdBytes,
+        output_total_count: nextDdsCount + nextZstdCount,
+        output_total_bytes: nextDdsBytes + nextZstdBytes,
+        current_output_count: nextCurrentCount,
+        current_output_bytes: nextCurrentBytes,
         external_orphan_output_count: 0,
         external_orphan_output_bytes: 0,
-        output_vram_bytes_est: 0,
+        output_vram_bytes_est: nextCurrentCount > 0 ? toInt(row.output_vram_bytes_est) : 0,
+        dds_output_bytes_share_pct: clearDds ? 0 : Number(row.dds_output_bytes_share_pct || 0),
+        zstd_output_bytes_share_pct: clearZstd ? 0 : Number(row.zstd_output_bytes_share_pct || 0),
       }
       next.generate_required_count = cleanedGenerateRequiredCount(next)
       next.action_required_count = next.generate_required_count
-      next.combined_total_bytes = toInt(next.source_total_bytes)
-      next.vram_saving_bytes_est = toInt(next.source_vram_bytes_est)
+      next.combined_total_bytes = toInt(next.source_total_bytes) + toInt(next.output_total_bytes)
+      next.vram_saving_bytes_est = toInt(next.source_vram_bytes_est) - toInt(next.output_vram_bytes_est)
       next.output_bytes_share_pct = 0
       return normalizeTextureStat(next)
+    })
+    if (!changed) return
+    modsData.value = nextRows
+    globalSummary.value = rebuildSummaryFromRows(nextRows)
+  }
+
+  const clearSourcelessOutputsFromSingleRow = () => {
+    const singleTargetKey = String(lastSingleModTargetKey.value || '')
+    if (!singleTargetKey) return
+    let changed = false
+    const nextRows = modsData.value.map(row => {
+      if (getRowKey(row) !== singleTargetKey) return row
+      changed = true
+      return normalizeTextureStat({
+        ...row,
+        external_orphan_output_count: 0,
+        external_orphan_output_bytes: 0,
+      })
     })
     if (!changed) return
     modsData.value = nextRows
@@ -423,7 +505,7 @@ export const useTextureStore = defineStore('texture', () => {
         toolStatus.value = res.data
       }
     } catch (e) {
-      console.error(e)
+      console.error('检查贴图工具状态失败:', e)
     }
   }
 
@@ -442,7 +524,7 @@ export const useTextureStore = defineStore('texture', () => {
           await checkToolStatus()
         }
       } else {
-        toast.error(res.message)
+        toast.error(toUserMessage(res?.message, '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。'))
       }
     } finally {
       appStore.isLoading = false
@@ -450,16 +532,21 @@ export const useTextureStore = defineStore('texture', () => {
   }
 
   // 3. 启动分析 (扫描)
-  const startAnalysis = async (packageIds, targetScope = 'active') => {
-    if (!window.pywebview || (targetScope !== 'all' && packageIds.length === 0)) return
+  const startAnalysis = async (packageIds, targetScope = 'active', extraOptions = {}) => {
+    const hasDirectTarget = !!extraOptions.single_mod_target
+    if (!window.pywebview || (!hasDirectTarget && targetScope !== 'all' && packageIds.length === 0)) return
     isAnalyzing.value = true
     lastTargetPackageIds.value = [...packageIds]
     lastTargetScope.value = targetScope
+    lastSingleModTargetKey.value = hasDirectTarget ? getSingleTargetKey(extraOptions.single_mod_target) : ''
     currentOptimizationTaskId.value = ''
-    modsData.value = []
+    if (!hasDirectTarget) {
+      modsData.value = []
+    }
     try {
       const res = await window.pywebview.api.texture_analyze_mods(packageIds, {
         ...appStore.settings.texture_opt,
+        ...extraOptions,
         target_scope: targetScope,
       })
       if (checkResult(res, "启动贴图分析", false)) {
@@ -476,11 +563,13 @@ export const useTextureStore = defineStore('texture', () => {
 
   // 4. 启动优化/清理
   const startOptimization = async (packageIds, action = 'optimize', targetScope = 'active', extraOptions = {}) => {
-    if (!window.pywebview || (action !== 'clean_generated' && targetScope !== 'all' && packageIds.length === 0)) return
+    const hasDirectTarget = !!extraOptions.single_mod_target
+    if (!window.pywebview || (!hasDirectTarget && action !== 'clean_generated' && targetScope !== 'all' && packageIds.length === 0)) return
     isOptimizing.value = true
     lastTargetPackageIds.value = [...packageIds]
     lastTargetScope.value = targetScope
     lastOptimizationAction.value = action
+    lastSingleModTargetKey.value = hasDirectTarget ? getSingleTargetKey(extraOptions.single_mod_target) : ''
     currentAnalysisTaskId.value = ''
     try {
       const res = await window.pywebview.api.texture_start_task(packageIds, action, {
@@ -510,7 +599,7 @@ export const useTextureStore = defineStore('texture', () => {
         markTaskCancelling()
       }
     } catch (e) {
-      console.error(e)
+      console.error('取消贴图任务失败:', e)
     }
   }
 
@@ -545,7 +634,7 @@ export const useTextureStore = defineStore('texture', () => {
         selectedResultPath.value = resultHistory.value[0]?.result_path || ''
       }
     } catch (e) {
-      console.error(e)
+      console.error('读取贴图结果历史失败:', e)
     }
   }
 
@@ -556,7 +645,7 @@ export const useTextureStore = defineStore('texture', () => {
       if (!checkResult(res, "读取贴图排除规则", false)) return
       applyExclusionsPayload(res.data)
     } catch (e) {
-      console.error(e)
+      console.error('读取贴图排除规则失败:', e)
     }
   }
 
@@ -610,7 +699,11 @@ export const useTextureStore = defineStore('texture', () => {
       upsertCurrentEntry(metrics.current_entry)
     }
     if (Array.isArray(metrics.final_mods)) {
-      modsData.value = normalizeTextureRows(metrics.final_mods)
+      if (lastSingleModTargetKey.value) {
+        mergeTextureRows(metrics.final_mods)
+      } else {
+        modsData.value = normalizeTextureRows(metrics.final_mods)
+      }
     }
 
     // 处理分析进度
@@ -622,6 +715,7 @@ export const useTextureStore = defineStore('texture', () => {
         if (!currentOptimizationTaskId.value) {
           currentTaskId.value = ''
         }
+        lastSingleModTargetKey.value = ''
       }
     }
 
@@ -629,7 +723,11 @@ export const useTextureStore = defineStore('texture', () => {
     if (type === 'texture-opt') {
       if (status === 'success' || status === 'failed' || status === 'cancelled') {
         if (status === 'success' && metrics.task_action === 'clean_generated') {
-          clearGeneratedOutputsFromCurrentRows()
+          if (metrics.clean_without_source === true) {
+            clearSourcelessOutputsFromSingleRow()
+          } else {
+            clearGeneratedOutputsFromCurrentRows({ outputFormat: metrics.clean_output_format || 'dds' })
+          }
         }
         lastFinishedProgress.value = buildProgressState(currentTask.value || taskStore.getTask(id))
         isOptimizing.value = false
@@ -639,6 +737,7 @@ export const useTextureStore = defineStore('texture', () => {
         if (!currentAnalysisTaskId.value) {
           currentTaskId.value = ''
         }
+        lastSingleModTargetKey.value = ''
         const shouldRefreshAnalyze =
           status === 'success'
           && metrics.refresh_after_analyze === true

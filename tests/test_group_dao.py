@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from backend.database.dao import GroupDAO
-from backend.database.models import GroupData, GroupMod, ModAsset, UserModData, db
+from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
 
 
@@ -14,7 +14,7 @@ class TestGroupDAO(unittest.TestCase):
         db_path = str(Path(self.temp_dir.name) / "group-dao-test.db")
         db.init(db_path)
         db.connect(reuse_if_open=True)
-        db.create_tables([UserModData, GroupData, GroupMod, ModAsset])
+        db.create_tables([UserModData, GroupData, GroupMod, ModAsset, GameProfile])
 
     def tearDown(self):
         if not db.is_closed():
@@ -240,7 +240,7 @@ class TestGroupDAO(unittest.TestCase):
             }
         ]).execute()
 
-        result = run_app_upgrade_migrations("0.20.2", "0.21.0")
+        result = run_app_upgrade_migrations("0.20.4", "0.21.0")
 
         self.assertTrue(any("分组数据修复" in message for message in result.messages))
         ordered_ids = [

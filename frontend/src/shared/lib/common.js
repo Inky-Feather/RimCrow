@@ -50,6 +50,23 @@ export const normalizeStringList = (values = []) => {
   return normalized
 }
 
+const displayNameCollator = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+
+// 标签、分组这类面向用户的列表统一按可见名称排序，避免不同入口顺序忽左忽右。
+export const compareDisplayName = (left, right) => (
+  displayNameCollator.compare(normalizeText(left), normalizeText(right))
+)
+
+export const sortTextByName = (values = []) => (
+  [...(Array.isArray(values) ? values : [])].sort((left, right) => compareDisplayName(left, right))
+)
+
+export const sortByDisplayName = (items = [], getName = item => item?.name ?? item) => (
+  [...(Array.isArray(items) ? items : [])].sort((left, right) => (
+    compareDisplayName(getName(left), getName(right))
+  ))
+)
+
 // 全局 Toast 实例
 export const toast = createToastInterface(globalEventBus)
 
@@ -130,21 +147,51 @@ export const deepClone = (value) => {
 // -----------------------------------------------------------------
 // API 结果提示 (Result Helpers)
 // -----------------------------------------------------------------
+const TECHNICAL_ERROR_PATTERNS = [
+  /\b[A-Za-z]+Error\b/,
+  /\b(Traceback|WinError|Errno|ENOENT|EACCES|ECONNREFUSED|ETIMEDOUT)\b/i,
+  /\b(HTTPConnectionPool|HTTPSConnectionPool|ConnectionError|ReadTimeout|Timeout|timeout)\b/i,
+  /\b(Bridge request failed|Request failed|Failed to fetch|status code|response status)\b/i,
+]
+
+export const isTechnicalErrorMessage = (value = '') => {
+  const text = normalizeText(value)
+  if (!text) return false
+  if (TECHNICAL_ERROR_PATTERNS.some(pattern => pattern.test(text))) return true
+  const chars = [...text]
+  const asciiCount = chars.filter(char => char.charCodeAt(0) < 128).length
+  const chineseCount = chars.filter(char => /[\u4e00-\u9fff]/.test(char)).length
+  return chars.length >= 18 && chineseCount === 0 && asciiCount / Math.max(chars.length, 1) > 0.85
+}
+
+export const toUserMessage = (value = '', fallback = '操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。') => {
+  const text = normalizeText(value)
+  if (!text || isTechnicalErrorMessage(text)) return fallback
+  return text
+}
+
+export const getApiResponseMessage = (res, fallback = '') => {
+  const candidate = normalizeText(res?.user_message) || normalizeText(res?.message)
+  return toUserMessage(candidate, fallback)
+}
+
 export const checkResult = (res, workname, showSuccess = false, options = {}) => {
   const debugMode = options?.debugMode ?? (
     typeof window !== 'undefined' ? !!window.__RMM_DEBUG_MODE__ : false
   )
   const silent = !!options?.silent
-  if (debugMode) console.log('checkResult', workname, res)
-  if (res.status === 'success') {
-    if (showSuccess && !silent) toast.success(`${workname}成功`, { timeout: 1000 })
+  if (debugMode) console.debug('API 结果检查:', workname, res)
+  if (res?.status === 'success') {
+    if (showSuccess && !silent) toast.success(`${workname}已完成`, { timeout: 1000 })
     return true
   }
   if (silent) return false
-  if (res.status === 'warning') {
-    toast.warning(`${workname}注意: \n${res.message}`)
+  if (res?.status === 'warning') {
+    const message = getApiResponseMessage(res, '操作已完成，但有部分情况需要确认。详细原因已写入系统日志。')
+    toast.warning(`${workname}需要确认：\n${message}`)
   } else {
-    toast.error(`${workname}失败: \n${res.message}`)
+    const message = getApiResponseMessage(res, `${workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。`)
+    toast.error(`${workname}失败：\n${message}`)
   }
   return false
 }

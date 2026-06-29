@@ -2,7 +2,7 @@
   <Teleport to="body">
     <transition name="panel-fade">
       <div v-if="isOpen" ref="panelRef"
-        class="fixed z-140 flex max-h-1/2 max-w-1/4 flex-col overflow-hidden rounded-3xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
+        class="fixed z-140 flex max-h-[calc(100vh-1.5rem)] w-[min(46rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
         :style="panelStyle" >
         <div class="absolute -left-16 -top-20 size-52 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
         <div class="absolute -bottom-20 -right-16 size-52 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
@@ -120,14 +120,21 @@ const activeColorValue = computed({
   },
 })
 
+const getRootFontSize = () => {
+  if (typeof window === 'undefined') return 16
+  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
+
 const clampPanelPosition = (x, y) => {
   if (typeof window === 'undefined') return { x, y }
   const rect = panelRef.value?.getBoundingClientRect?.()
-  const width = rect?.width || 460
-  const height = rect?.height || 620
+  const rootFontSize = getRootFontSize()
+  const margin = rootFontSize * 0.75
+  const width = rect?.width || Math.min(rootFontSize * 46, window.innerWidth - margin * 2)
+  const height = rect?.height || Math.min(rootFontSize * 38.75, window.innerHeight - margin * 2)
   return {
-    x: Math.min(Math.max(12, x), Math.max(12, window.innerWidth - width - 12)),
-    y: Math.min(Math.max(12, y), Math.max(12, window.innerHeight - height - 12)),
+    x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - width - margin)),
+    y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - height - margin)),
   }
 }
 
@@ -140,9 +147,11 @@ const resetPanelPosition = async () => {
   await nextTick()
   if (typeof window === 'undefined') return
   const rect = panelRef.value?.getBoundingClientRect?.()
-  const width = rect?.width || window.innerWidth / 4
-  const height = rect?.height || window.innerHeight / 2
-  setPanelPosition(window.innerWidth/2 - width / 2, window.innerHeight / 2 - height / 2)
+  const rootFontSize = getRootFontSize()
+  const margin = rootFontSize * 0.75
+  const width = rect?.width || Math.min(rootFontSize * 46, window.innerWidth - margin * 2)
+  const height = rect?.height || Math.min(rootFontSize * 38.75, window.innerHeight - margin * 2)
+  setPanelPosition(window.innerWidth / 2 - width / 2, window.innerHeight / 2 - height / 2)
 }
 
 const handleDragMove = (event) => {
@@ -155,6 +164,16 @@ const stopDragging = () => {
   dragState.value = null
   window.removeEventListener('pointermove', handleDragMove)
   window.removeEventListener('pointerup', stopDragging)
+}
+
+const handleWindowResize = () => {
+  if (!props.isOpen) return
+  setPanelPosition(panelPosition.value.x, panelPosition.value.y)
+}
+
+const stopPanelListeners = () => {
+  stopDragging()
+  window.removeEventListener('resize', handleWindowResize)
 }
 
 const handleDragStart = (event) => {
@@ -195,11 +214,14 @@ watch(() => props.theme, (theme) => {
 
 watch(() => props.isOpen, async (isOpen) => {
   if (!isOpen) {
-    stopDragging()
+    stopPanelListeners()
     activeColorKey.value = ''
     return
   }
   await resetPanelPosition()
+  if (!props.isOpen) return
+  window.removeEventListener('resize', handleWindowResize)
+  window.addEventListener('resize', handleWindowResize)
 })
 
 watch(draft, (theme) => {
@@ -213,16 +235,16 @@ const getSwatchStyle = (groupKey, tokenKey) => ({
   backgroundColor: draft.value?.tokens?.[groupKey]?.[tokenKey] || '#000000',
 })
 const groupGridTemplate = (groupKey) => {
-  if (groupKey === 'accent') return 'repeat(auto-fit, minmax(185px, 1fr))'
-  if (groupKey === 'glass') return 'repeat(auto-fit, minmax(200px, 1fr))'
-  return 'repeat(auto-fit, minmax(205px, 1fr))'
+  if (groupKey === 'accent') return 'repeat(auto-fit, minmax(11.5625rem, 1fr))'
+  if (groupKey === 'glass') return 'repeat(auto-fit, minmax(12.5rem, 1fr))'
+  return 'repeat(auto-fit, minmax(12.8125rem, 1fr))'
 }
 
 const handleSave = () => {
   emit('save', normalizeTheme(draft.value))
 }
 
-onBeforeUnmount(stopDragging)
+onBeforeUnmount(stopPanelListeners)
 </script>
 
 <style scoped>
@@ -233,7 +255,7 @@ onBeforeUnmount(stopDragging)
     linear-gradient(-45deg, #cbd5e1 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #cbd5e1 75%),
     linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
-  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
-  background-size: 8px 8px;
+  background-position: 0 0, 0 0.25rem, 0.25rem -0.25rem, -0.25rem 0;
+  background-size: 0.5rem 0.5rem;
 }
 </style>

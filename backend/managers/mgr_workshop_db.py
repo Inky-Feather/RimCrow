@@ -15,6 +15,7 @@ from backend.database.models_ext import (
     init_ext_db,
 )
 from backend.settings import settings
+from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
 
@@ -156,7 +157,7 @@ class WorkshopDBManager:
 
             batch = []
             for wid, info in raw_db.items():
-                if wid == "294100": continue # 跳过游戏本体
+                if wid == RIMWORLD_STEAM_APP_ID_STR: continue # 跳过游戏本体
                 # 提取依赖项，压缩结构：{"2891845502": "Alpha Genes"}
                 deps = {}
                 for dep_id, dep_info in (info.get("dependencies", {}) or {}).items():

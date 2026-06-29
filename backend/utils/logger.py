@@ -177,7 +177,7 @@ class BaseLogReader:
                     # 这里省略了对纯文本的具体处理，子类可以通过重写或继续延用原逻辑
                     pass
         except Exception as e:
-            logger.error(f"Error reading log {filepath}: {e}", exc_info=True)
+            logger.error(f"读取日志失败：{filepath}，错误：{e}", exc_info=True)
             
         return blocks if keep_all else blocks[-self.max_blocks:]
     
@@ -209,7 +209,13 @@ class JSONFormatter(logging.Formatter):
                 "path": record.pathname
             }
         }
-        return json.dumps(log_record, ensure_ascii=False)
+        error_code = getattr(record, "error_code", "")
+        extra_context = getattr(record, "extra_context", None)
+        if error_code:
+            log_record["error_code"] = error_code
+        if extra_context:
+            log_record["extra_context"] = extra_context
+        return json.dumps(log_record, ensure_ascii=False, default=str)
 
 class WebviewHandler(logging.Handler):
     """
@@ -276,6 +282,12 @@ class WebviewHandler(logging.Handler):
                     "func": record.funcName
                 }
             }
+            error_code = getattr(record, "error_code", "")
+            extra_context = getattr(record, "extra_context", None)
+            if error_code:
+                log_entry["error_code"] = error_code
+            if extra_context:
+                log_entry["extra_context"] = extra_context
             # 通过 EventBus 发送给前端
             # 前端监听 'app-log' 事件即可
             EventBus.emit('app-log', log_entry)
@@ -390,7 +402,7 @@ class LoggerManager:
 
         # 6. 集成 Icecream (关键步骤)
         self._configure_icecream(settings.config.debug_mode)
-        self._logger.info("Logger system initialized with Colorlog.")
+        self._logger.info("日志系统已初始化，控制台和文件日志已就绪。")
 
     def _configure_icecream(self, debug_mode: bool):
         """ 配置 icecream 的行为 """

@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" ref="pickerRef" class="fixed z-9000" :style="pickerStyle" @click.stop>
+    <div v-if="isOpen" ref="pickerRef" class="fixed z-9000 max-h-[calc(100vh-1.5rem)] w-[min(17.5rem,calc(100vw-1.5rem))] overflow-x-auto overflow-y-auto overscroll-contain custom-scrollbar" :style="pickerStyle" @click.stop>
       <ColorPicker :key="pickerKey" :pureColor="modelValue" is-widget :format="format" picker-type="fk"
         :disable-alpha="disableAlpha" @update:pureColor="emit('update:modelValue', $event)"
       />
@@ -29,16 +29,21 @@ const pickerKey = computed(() => `${props.format}-${props.disableAlpha ? 'solid'
 const pickerStyle = computed(() => ({
   left: `${pickerPosition.value.left}px`,
   top: `${pickerPosition.value.top}px`,
-  width: '280px',
 }))
+
+const getRootFontSize = () => {
+  if (typeof window === 'undefined') return 16
+  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
 
 const updatePosition = () => {
   if (!props.anchorRect || typeof window === 'undefined') return
 
-  const panelWidth = 280
-  const panelHeight = 360
-  const gap = 10
-  const margin = 12
+  const rootFontSize = getRootFontSize()
+  const margin = rootFontSize * 0.75
+  const gap = rootFontSize * 0.625
+  const panelWidth = Math.min(rootFontSize * 17.5, Math.max(rootFontSize * 12, window.innerWidth - margin * 2))
+  const panelHeight = Math.min(rootFontSize * 22.5, Math.max(rootFontSize * 12, window.innerHeight - margin * 2))
   const preferredRight = props.anchorRect.right + gap
   const preferredLeft = props.anchorRect.left - panelWidth - gap
   const left = preferredRight + panelWidth <= window.innerWidth - margin

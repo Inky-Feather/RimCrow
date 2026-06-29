@@ -76,7 +76,7 @@ class AIManager:
             "task.mod_alias_generation": TypeAdapter(list[ModAliasGenerationItem]),
         }
         
-        logger.info("AI Manager initialized.")
+        logger.info("AI 管理器初始化完成。")
 
     def _coerce_int(self, value: Any, default: int) -> int:
         """把动态来源的数值安全收口为 int，避免静态类型和运行时都不稳定。"""
@@ -145,7 +145,10 @@ class AIManager:
             # 如果解析出来既不是 list 也不是 dict (比如解析成了空字符串)
             return None
         except Exception as e:
-            logger.error(f"JSON Repair 彻底失败: {e}\n原文: {text[:200]}...")
+            logger.error(
+                "AI 结构化输出解析失败，已放弃 JSON 修复。",
+                extra={"error_code": "AI.STRUCTURED.JSON_REPAIR_FAILED", "extra_context": {"original_error": str(e), "raw_preview": text[:200]}},
+            )
             return None
 
     def _parse_structured_output(self, task_key: str, text: str) -> Any:
@@ -158,7 +161,11 @@ class AIManager:
             # 对外仍返回原生 dict/list，避免调用方被迫感知 pydantic 模型。
             return self._dump_model_like(parsed)
         except ValidationError as e:
-            logger.warning(f"[AI结构化输出] 校验失败 task={task_key}: {e}")
+            logger.warning(
+                "[AI结构化输出] 校验失败，准备退回宽松解析。task=%s",
+                task_key,
+                extra={"error_code": "AI.STRUCTURED.VALIDATION_FAILED", "extra_context": {"task_key": task_key, "original_error": str(e)}},
+            )
             return self._extract_json_from_text(text, is_batch=(task_key == "task.mod_alias_generation"))
 
     def _normalize_mod_alias_generation_output(
@@ -456,6 +463,34 @@ class AIManager:
         max_item_tokens = max(300, chunk_item_budget - 200)
         return chunk_item_budget, max_item_tokens
 
+    def execute_structured_task(
+        self,
+        task_key: str,
+        payload: Dict[str, Any] | None = None,
+        override_config: dict | None = None,
+    ) -> Any:
+        """同步执行单次结构化任务。
+
+        用于翻译这类即时请求：复用 AI Task / Prompt / 输出契约，
+        但不进入异步任务栏、分块重试或附件专用流程。
+        """
+        context = self._build_task_execution_context(task_key, payload, override_config)
+        prompt_config = dict(context["prompt_config"] or {})
+        runtime_variables = dict(context["runtime_variables"] or {})
+        llm_kwargs = dict(context["llm_kwargs"] or {})
+
+        messages = self._build_prompt_messages(prompt_config, runtime_variables)
+        response = self.llm.completion(messages=messages, llm_kwargs=llm_kwargs)
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            raise ValueError("AI 任务没有返回有效内容")
+        message_obj = choices[0].message  # type: ignore
+        result_text = self._message_text(getattr(message_obj, "content", ""))
+        parsed_json = self._parse_structured_output(task_key, result_text)
+        if parsed_json is None:
+            raise ValueError("AI 任务返回格式无效")
+        return parsed_json
+
     # =========================================================================
     #  核心：异步任务执行引擎
     # =========================================================================
@@ -494,7 +529,21 @@ class AIManager:
                 )
                 return {"chunk_id": chunk_id, "status": "success", "data": normalized_data, "raw": result_text}
             except Exception as exc:
-                logger.error(f"Chunk {chunk_id} failed after retries: {exc}")
+                logger.error(
+                    "AI 分块请求多次重试后仍失败。chunk_id=%s task=%s item_count=%s",
+                    chunk_id,
+                    task_key,
+                    len(chunk_data),
+                    extra={
+                        "error_code": "AI.TASK.CHUNK_FAILED",
+                        "extra_context": {
+                            "chunk_id": chunk_id,
+                            "task_key": task_key,
+                            "item_count": len(chunk_data),
+                            "original_error": str(exc),
+                        },
+                    },
+                )
                 return {"chunk_id": chunk_id, "status": "error", "error": str(exc), "data": None}
 
     async def execute_task_async(self, task_key: str, payload: Dict[str, Any], task_id: str) -> dict[str, Any]:
@@ -601,7 +650,7 @@ class AIManager:
         pending_items = [dict(item) for item in items if item.get("package_id")]
         attempt_count = 0
 
-        logger.info(f"AI Task Started. task_id={task_id} task_key={task_key} total={len(pending_items)}")
+        logger.info("AI 任务开始。task_id=%s task=%s total=%s", task_id, task_key, len(pending_items))
 
         try:
             while pending_items:
@@ -610,7 +659,7 @@ class AIManager:
                 chunks = build_smart_chunks(pending_items)
                 semaphore = asyncio.Semaphore(max_concurrency)
                 logger.info(
-                    "AI Task Round. task_id=%s attempt=%s pending=%s chunks=%s",
+                    "AI 任务进入新一轮请求。task_id=%s attempt=%s pending=%s chunks=%s",
                     task_id,
                     attempt_count,
                     len(pending_items),
@@ -880,20 +929,25 @@ class AIManager:
                 return result
             return result
         except Exception as e:
-            logger.error(f"Test Chat Error: {e}")
+            logger.error(
+                "AI 测试对话失败：%s",
+                e,
+                exc_info=True,
+                extra={"error_code": "AI.TEST_CHAT.FAILED", "extra_context": {"original_error": str(e)}},
+            )
             err_text = str(e)
             err_lower = err_text.lower()
             if "unknown provider for model" in err_lower:
                 raise Exception(
                     "请求失败：当前代理接口无法正确路由这个模型。"
                     "很可能该模型需要走 /v1/responses，或者该中转尚未为此模型配置 provider 映射。"
-                )
+                ) from e
             if "temperature" in err_lower and "unsupported" in err_lower:
                 raise Exception(
                     "请求失败：当前模型不接受你传入的 temperature。"
                     "建议将 temperature 留空，或使用自动兼容模式。"
-                )
-            raise Exception(f"请求失败: {err_text}")
+                ) from e
+            raise Exception("请求失败：AI 服务没有返回可用结果。请检查模型名称、Base URL、API Key、代理设置和服务状态。") from e
         
 
 

@@ -6,6 +6,7 @@ from enum import Enum
 import gc
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -40,17 +41,66 @@ from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_DIR
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
-from backend.utils.tools import normalize_package_id, normalize_workshop_id
+from backend.utils.redaction import redact_sensitive_data
+from backend.utils.tools import normalize_package_id, normalize_path_for_compare, normalize_path_for_storage, normalize_workshop_id
 from backend.utils.tools import current_ms, generate_path_hash
+from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
+from backend.i18n.language_registry import normalize_language_code
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
 
+
+TECHNICAL_ERROR_PATTERNS = (
+    re.compile(r"\b[A-Za-z]+Error\b"),
+    re.compile(r"\b(Traceback|WinError|Errno|ENOENT|EACCES|ECONNREFUSED|ETIMEDOUT)\b", re.IGNORECASE),
+    re.compile(r"\b(HTTPConnectionPool|HTTPSConnectionPool|ConnectionError|ReadTimeout|Timeout|timeout)\b", re.IGNORECASE),
+    re.compile(r"\b(Bridge request failed|Request failed|Failed to fetch|status code|response status)\b", re.IGNORECASE),
+)
+
+
+def _looks_like_technical_error(message: Any) -> bool:
+    """判断文本是否更像底层异常，避免把技术细节直接展示给用户。"""
+    text = str(message or "").strip()
+    if not text:
+        return False
+    if any(pattern.search(text) for pattern in TECHNICAL_ERROR_PATTERNS):
+        return True
+    ascii_count = sum(1 for char in text if ord(char) < 128)
+    chinese_count = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+    return len(text) >= 18 and chinese_count == 0 and ascii_count / max(len(text), 1) > 0.85
+
+
+def _default_user_error_message(message: Any = "") -> str:
+    """把未分类异常收口为用户能理解的中文说明。"""
+    text = str(message or "").strip()
+    if text and not _looks_like_technical_error(text):
+        return text
+    return "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。"
+
+
+def _build_error_detail(detail: Any = None, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    """构造可写入 API 响应和日志的错误详情，第三方原始错误统一放到 original_error。"""
+    payload: dict[str, Any] = {}
+    if detail is not None:
+        if isinstance(detail, dict):
+            payload.update(detail)
+        elif isinstance(detail, BaseException):
+            original = detail.__cause__ or detail.__context__ or detail
+            payload["original_error"] = str(original)
+            payload["exception_type"] = original.__class__.__name__
+        else:
+            payload["original_error"] = str(detail)
+    if context:
+        payload["context"] = context
+    return payload
+
 # 2. 引入数据库层
-from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
 from backend.database.dao_ext import ExtDAO
-from backend.database.runtime import close_db, clear_db, init_db
+from backend.database.models_ext import WorkshopOnlineCache, ext_db
+from backend.database.runtime import close_db, clear_db, ensure_minimum_startup_data, init_db
 from backend.database.repair import (
     _cleanup_database_sidecars,
     _cleanup_repair_artifacts,
@@ -69,34 +119,63 @@ from backend.managers.mgr_files import FileManager, file_mgr, PathChecker
 from backend.managers.mgr_game_logs import GameLogManager, LogCondenser
 from backend.managers.mgr_sorter import OrderSorter
 from backend.managers.mgr_download import DownloadManager, TaskStatus
-from backend.managers.mgr_steam import RIMWORLD_APP_ID, SteamManager
+from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_sub_browser import SubBrowserManager
-from backend.ai.ai_service import AIManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 # from backend.managers.mgr_workshop_db_old import WorkshopDBManager
 from backend.managers.mgr_update import UpdateManager, UpdateInfo
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
-from backend.managers.mgr_mod_config import ModSettingsManager
+from backend.managers.mgr_mod_settings import ModSettingsManager
 from backend.managers.mgr_mod_residue import ModResidueManager
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam_api import SteamWebAPI
+from backend.translation import DEFAULT_TRANSLATION_PROVIDER, TranslationManager
+from backend.translation.contracts import TranslationDocument
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_recommendation_export import RecommendationExportManager
+from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import parse_package_token
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
+from backend.migrations.app_relocation import apply_database_relocation, write_relocation_marker
+from backend.migrations.path_normalization import run_path_normalization_migration
 from backend.text_search.manager import FileSearchManager
 from backend.startup import StartupCoordinator
 from backend.theme_store import ThemeStore
 
 GITHUB_SUBS_REFRESH_MIN_INTERVAL_MS = 3 * 60 * 1000
+IMAGE_SAVE_MIME_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/bmp": ".bmp",
+}
+IMAGE_SAVE_FILE_TYPES = (
+    "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
+    "PNG Files (*.png)",
+    "JPEG Files (*.jpg;*.jpeg)",
+    "WebP Files (*.webp)",
+    "GIF Files (*.gif)",
+    "BMP Files (*.bmp)",
+    "All Files (*.*)",
+)
+
+
+def _resolve_github_local_path(local_folder: str = "") -> str:
+    folder = str(local_folder or "").strip()
+    if not folder:
+        return ""
+    if os.path.isabs(folder):
+        return normalize_path_for_storage(folder)
+    return normalize_path_for_storage(Path(str(settings.config.self_mods_path or "")) / folder)
 
 
 def _ensure_bundle_filename_extension(filename: str, preferred_extension: str, accepted_extensions: list[str] | tuple[str, ...]) -> str:
@@ -126,8 +205,11 @@ def log_api_call(func):
     def wrapper(self, *args, **kwargs):
         start_time = time.time()
         func_name = func.__name__
-        # 截断过长的参数显示（如巨大的文件内容）
-        safe_args = [str(a)[:50] + '...' if len(str(a)) > 50 else a for a in args]
+        # 先递归脱敏，再截断过长内容，避免 API Key 等凭据写入调试日志。
+        safe_args = []
+        for arg in args:
+            text = str(redact_sensitive_data(arg))
+            safe_args.append(text[:50] + "..." if len(text) > 50 else text)
         try:
             EventBus.resume() # 在执行操作前恢复事件总线
             # 执行原函数
@@ -135,15 +217,30 @@ def log_api_call(func):
             duration = (time.time() - start_time) * 1000
             # 只有慢请求或显式 Debug 才记录 INFO，否则记录 DEBUG 避免刷屏
             if duration > 500: 
-                logger.warning(f"API [SLOW] {func_name} took {duration:.2f}ms")
+                logger.warning(f"API 调用耗时较长: name={func_name}, duration_ms={duration:.2f}")
             else:
-                logger.debug(f"API {func_name}({safe_args}) took {duration:.2f}ms")
+                logger.debug(f"API 调用完成: name={func_name}, args={safe_args}, duration_ms={duration:.2f}")
             return result
         except Exception as e:
             duration = (time.time() - start_time) * 1000
-            logger.error(f"API {func_name} failed after {duration:.2f}ms: {str(e)}", exc_info=True)
+            logger.error(
+                "API 调用失败：%s，耗时 %.2fms",
+                func_name,
+                duration,
+                exc_info=True,
+                extra={
+                    "error_code": "API.CALL.UNHANDLED_EXCEPTION",
+                    "extra_context": {"api": func_name, "duration_ms": round(duration, 2), "original_error": str(e)},
+                },
+            )
             # 这里的异常通常需要返回给前端一个标准格式
-            return ApiResponse.error(f"System Error: {str(e)}")
+            return ApiResponse.error(
+                "API 调用发生未处理异常",
+                code="API.CALL.UNHANDLED_EXCEPTION",
+                detail=e,
+                context={"api": func_name, "duration_ms": round(duration, 2)},
+                user_message="操作未完成。软件内部接口执行异常，详细原因已写入系统日志，请稍后重试或重启软件。",
+            )
             
     return wrapper
 
@@ -164,15 +261,39 @@ class ApiResponse:
         return asdict(cls(status="success", data=cls.serialize_data(data), message=message))
 
     @classmethod
-    def error(cls, message, data=None):
+    def error(cls, message, data=None, *, code="APP.UNKNOWN_ERROR", detail=None, user_message=None, context=None):
         has_exc = sys.exc_info()[0] is not None
-        logger.error( f"API Error: {message}", exc_info=has_exc, stacklevel=2)
-        return asdict(cls(status="error", message=message, data=cls.serialize_data(data)))
+        public_message = str(user_message or _default_user_error_message(message)).strip()
+        error_detail = _build_error_detail(detail, context)
+        log_context = error_detail or None
+        logger.error(
+            "API 返回错误：%s",
+            str(message or public_message),
+            exc_info=has_exc,
+            stacklevel=2,
+            extra={"error_code": code, "extra_context": log_context},
+        )
+        payload = asdict(cls(status="error", message=public_message, data=cls.serialize_data(data)))
+        payload["error_code"] = code
+        if error_detail:
+            payload["detail"] = cls.serialize_data(error_detail)
+        return payload
     
     @classmethod
-    def warning(cls, message, data=None):
-        logger.warning(f"API Warning: {message}", stacklevel=2)
-        return asdict(cls(status="warning", message=message, data=cls.serialize_data(data)))
+    def warning(cls, message, data=None, *, code="APP.WARNING", detail=None, user_message=None, context=None):
+        public_message = str(user_message or _default_user_error_message(message or "操作已完成，但有部分情况需要确认。")).strip()
+        warning_detail = _build_error_detail(detail, context)
+        logger.warning(
+            "API 返回警告：%s",
+            str(message or public_message),
+            stacklevel=2,
+            extra={"error_code": code, "extra_context": warning_detail or None},
+        )
+        payload = asdict(cls(status="warning", message=public_message, data=cls.serialize_data(data)))
+        payload["error_code"] = code
+        if warning_detail:
+            payload["detail"] = cls.serialize_data(warning_detail)
+        return payload
 
     @classmethod
     def serialize_data(cls, obj):
@@ -219,6 +340,25 @@ class LaunchWarningAction(Enum):
     CANCEL = "cancel"
 
 
+class _LazyAIManager:
+    """延迟创建 AIManager，避免启动时导入 LiteLLM/OpenAI 全家桶。"""
+
+    def __init__(self):
+        self._instance = None
+        self._lock = threading.Lock()
+
+    def _get(self):
+        if self._instance is None:
+            with self._lock:
+                if self._instance is None:
+                    from backend.ai.ai_service import AIManager
+                    self._instance = AIManager()
+        return self._instance
+
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)
+
+
 class API:
     """
     暴露给 pywebview 前端的统一接口类。
@@ -226,7 +366,7 @@ class API:
     """
 
     def __init__(self, runtime_mode: str = "desktop"):
-        logger.info("API Layer Initializing...")
+        logger.info("API 层开始初始化。")
         self._window = None  # 私有属性
         self._runtime_mode = str(runtime_mode or "desktop").strip().lower() or "desktop"
         self._upgrade_context = {
@@ -248,6 +388,7 @@ class API:
             self._upgrade_context["messages"].append("数据库加载失败，部分功能可能暂时不可用。")
         self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
         self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
+        self._handle_app_relocation()
         self._native_drop_bound = False
         self._native_drop_selector = '#backup-drop-zone'
         self._native_drop_element = None
@@ -262,16 +403,19 @@ class API:
         self._github_subs_refresh_running = False
         self._github_subs_refresh_started_at = 0
         self._last_runtime_link_sync_result: dict[str, Any] = {}
-        self.theme_store = ThemeStore()
+        self._theme_store = ThemeStore()
         # 应用层升级迁移必须早于外置缓存库管理器初始化。
         # 否则像 workshop_cache.db 这类需要“删库重建”的迁移，
         # 会在 Windows 上撞到已打开文件句柄导致无法删除。
         self._handle_app_version_upgrade()
+        path_normalization = run_path_normalization_migration()
+        if path_normalization.messages:
+            self._upgrade_context["messages"].extend(path_normalization.messages)
         renamed_groups = normalize_duplicate_group_names_on_load()
         if renamed_groups:
             self._upgrade_context["messages"].append(f"检测到重名分组，已自动重命名 {len(renamed_groups)} 项。")
             logger.warning(
-                "Duplicate group names normalized on load: %s",
+                "启动时发现重名分组，已自动规范化: %s",
                 ", ".join(f"{old_name!r}->{new_name!r}" for _, old_name, new_name in renamed_groups),
             )
         # 2. 实例化各个管理器
@@ -290,7 +434,8 @@ class API:
         self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
-        self.ai_mgr = AIManager()
+        self.ai_mgr = _LazyAIManager()
+        self.translation_mgr = TranslationManager(self.ai_mgr)
         self.data_bundle_mgr = DataBundleManager(
             self.profile_mgr,
             self.ai_mgr,
@@ -304,6 +449,7 @@ class API:
         )
         # 推荐导出只负责生成分享内容，和模组包导出保持独立，避免两类导出互相影响。
         self.recommendation_export_mgr = RecommendationExportManager()
+        self.multiplayer_compat_mgr = MultiplayerCompatibilityManager()
         self.browser_window = SubBrowserManager(self)
         self.update_mgr = UpdateManager()
         self.texture_mgr = TextureOptimizationManager()
@@ -328,7 +474,23 @@ class API:
         if self._runtime_mode == "desktop" and os.name == "nt":
             self._ensure_browser_mode_shortcut()
 
-        logger.info("API Layer Ready.")
+        logger.info("API 层初始化完成。")
+
+    def _handle_app_relocation(self):
+        relocation = getattr(settings, "last_relocation", None)
+        if not relocation or not getattr(relocation, "old_home", ""):
+            return
+        try:
+            db_result = apply_database_relocation(relocation.old_home, relocation.new_home)
+            relocation.profile_updates = db_result.profile_updates
+            relocation.asset_updates = db_result.asset_updates
+            relocation.messages.extend(db_result.messages)
+            if relocation.messages:
+                self._upgrade_context["messages"].extend(relocation.messages)
+            write_relocation_marker(relocation, DATA_DIR)
+        except Exception as e:
+            logger.warning(f"管理器目录迁移处理失败: {e}", exc_info=True)
+            self._upgrade_context["messages"].append("检测到管理器目录变化，但部分内部路径迁移失败，请检查路径设置。")
         
     @staticmethod
     def _normalize_str_items(items: List[str] | str) -> list[str]:
@@ -349,6 +511,16 @@ class API:
                 return session.to_dict()
             return session or {}
         return {}
+
+    def _settings_payload(self) -> dict[str, Any]:
+        return settings.to_public_dict()
+
+    def _resolve_ai_request_config(self, config_data: dict | None) -> dict:
+        resolved = dict(config_data or {})
+        if not str(resolved.get("api_key") or "").strip():
+            ai_cfg = settings.config.ai
+            resolved["api_key"] = str(getattr(ai_cfg, "api_key", "") or "").strip()
+        return resolved
 
     def _get_runtime_session_manager(self):
         """
@@ -390,7 +562,7 @@ class API:
         parts = [f"event={event}", f"id={check_id}"]
         for key, value in fields.items():
             parts.append(f"{key}={value}")
-        logger.info("[RMM][maintenance-check] %s", " ".join(parts))
+        logger.info("[RMM][maintenance-check] 维护状态检查：%s", " ".join(parts))
 
     @staticmethod
     def _build_delete_response(target_name: str, total: int, result: dict, success_message: str = ""):
@@ -462,7 +634,7 @@ class API:
         except Exception as e:
             if not allow_fallback: raise
             # 兜底：如果报错，强制退回 default
-            logger.error(f"Bootstrap profile {profile_id} failed: {str(e)}", exc_info=True)
+            logger.error("装配环境上下文失败: profile_id=%s", profile_id, exc_info=True)
             self.active_context = self.profile_mgr.activate_profile('default')
         
         # 【拦截分流】如果环境不健康，不再实例化底层的业务引擎！
@@ -477,7 +649,15 @@ class API:
         # 确保 self_mods_path 目录存在
         self_mods_path = str(settings.config.self_mods_path or "").strip()
         if self_mods_path:
-            os.makedirs(self_mods_path, exist_ok=True)
+            if os.path.exists(self_mods_path) and not os.path.isdir(self_mods_path):
+                logger.error("管理器 Mod 路径已存在但不是目录，跳过创建: %s", self_mods_path)
+                self.load_order_mgr = None
+                self.scanner = None
+                self.game_log_mgr = None
+                self.sorter = None
+                return
+            else:
+                os.makedirs(self_mods_path, exist_ok=True)
         else:
             logger.warning("self_mods_path 为空，跳过管理器 Mod 目录创建。")
         
@@ -599,7 +779,7 @@ class API:
             logger.info(f"应用升级处理完成: {last_version} -> {current_version}")
 
         except Exception as e:
-            logger.error(f"Upgrade tasks failed: {e}", exc_info=True)
+            logger.error("应用升级处理失败: %s", e, exc_info=True)
     
     @log_api_call
     def get_changelog(self):
@@ -613,7 +793,7 @@ class API:
             try:
                 Path(temp_path).unlink(missing_ok=True)
             except Exception:
-                logger.debug(f"Failed to clean browser temp import file: {temp_path}", exc_info=True)
+                logger.debug("清理浏览器临时导入文件失败: %s", temp_path, exc_info=True)
             finally:
                 self._browser_import_files.discard(temp_path)
         # 停止后台扫描任务 (如果有)
@@ -626,7 +806,7 @@ class API:
         EventBus.pause()
         if self.steam_mgr:
             self.steam_mgr.cleanup_runtime()
-        logger.info("Closing database connection...")
+        logger.info("正在关闭数据库连接...")
         close_db()
         # SteamCMD 的生命周期已统一收敛到 SteamManager 内部，避免旧控制器残留双重管理。
         
@@ -1034,15 +1214,15 @@ class API:
         前端启动时调用，一次性获取所有必要数据。
         """
         try:
-            user_themes = self.theme_store.list_user_themes()
+            user_themes = self._theme_store.list_user_themes()
         except Exception as e:
-            logger.error(f"Load user themes during startup failed: {e}", exc_info=True)
+            logger.error("启动时读取用户主题失败: %s", e, exc_info=True)
             user_themes = []
         result = {
             "app_version": __version__,
             "build_mode": __build__,
             "runtime_mode": self._runtime_mode,
-            "settings": asdict(settings.config), # 转为字典发给前端
+            "settings": self._settings_payload(), # 转为字典发给前端，密钥只返回保存状态。
             "asset_port": self.file_mgr.get_port(),
             "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             "context_healthy": False, 
@@ -1058,6 +1238,7 @@ class API:
             "upgrade_context": self._upgrade_context.copy(),
             "runtime_session": self._get_runtime_session_data(),
             "user_themes": user_themes,
+            "multiplayer_compatibility_state": {},
         }
         if not self.active_context or not self.active_context.is_healthy: return ApiResponse.success(result)
         
@@ -1125,6 +1306,12 @@ class API:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
                 mod['replacement'] = None
+
+        active_ids_for_compat = active_load_order.get("active_mods", []) if isinstance(active_load_order, dict) else []
+        result["multiplayer_compatibility_state"] = self.multiplayer_compat_mgr.enrich_mods(
+            [*context_mods, *disabled_mods],
+            active_ids_for_compat,
+        )
         
         
         result.update({
@@ -1278,8 +1465,6 @@ class API:
         """
         重置数据库：强制关闭连接，删除文件，重建。
         """
-        from backend.database.models import SystemInfo
-        
         if not self._db_maintenance_lock.acquire(blocking=False):
             return ApiResponse.warning("当前正在处理数据库操作，请稍后再试。")
         try:
@@ -1310,17 +1495,16 @@ class API:
             self.is_first_db_init = True
             init_ok = init_db(db_path)
             if not init_ok: return ApiResponse.error("重置失败，数据库无法重新创建。")
-            # 重置后显式写回当前应用版本，避免少数 fallback 场景把旧元数据残留到下次启动。
-            SystemInfo.insert(key='app_version', value=__version__).on_conflict_replace().execute()
+            # 物理删库和逻辑清库都走同一套最小启动数据补齐，避免两条路径重置结果不一致。
+            ensure_minimum_startup_data(db.connection())
             # 重置会清空所有环境记录，当前进程必须立即回退到 default 并重建上下文，
             # 否则内存里仍可能挂着已被删除的旧 profile manager / context。
             self._bootstrap_context('default')
             
             return ApiResponse.success({"message": "数据库已重置。"})
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return ApiResponse.error(str(e))
+            logger.error("重置数据库失败。", exc_info=True)
+            return ApiResponse.error("重置数据库失败", code="DATABASE.RESET_FAILED", detail=e, user_message="重置数据库失败。请关闭正在占用数据文件的操作后重试，详细原因已写入系统日志。")
         finally:
             self._finish_database_maintenance()
             self._db_maintenance_lock.release()
@@ -1352,9 +1536,8 @@ class API:
                 "restart_required": True,
             })
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return ApiResponse.error(str(e))
+            logger.error("修复数据库失败。", exc_info=True)
+            return ApiResponse.error("修复数据库失败", code="DATABASE.REPAIR_FAILED", detail=e, user_message="修复数据库失败。请检查数据库文件权限和磁盘空间，详细原因已写入系统日志。")
         finally:
             self._finish_database_maintenance()
             self._db_maintenance_lock.release()
@@ -1377,12 +1560,19 @@ class API:
         """手动触发：清理无效的 UserModData、GroupMod 和 ModAsset"""
         try:
             # 1. 清理文件已不存在的 ModAsset
-            missing = ModMaintenanceDAO.find_missing_mods(delete=True)
+            ws_map = self.steam_mgr.workshop_merged_data()
+            subscribed_workshop_ids = [wid for wid, data in ws_map.items() if data.get("is_subscribed")]
+            ModMaintenanceDAO.find_missing_mods(delete=True, subscribed_workshop_ids=subscribed_workshop_ids)
             # 2. 清理孤立的用户数据和分组关联
             ModMaintenanceDAO.clean_orphaned_data()
             return ApiResponse.success(message="数据库清理完成")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "数据库清理失败",
+                code="DATABASE.CLEANUP_FAILED",
+                detail=e,
+                user_message="数据库清理失败。请关闭正在占用数据文件的程序后重试，详细原因已写入系统日志。",
+            )
     
     
     # =========================================================================
@@ -1414,6 +1604,45 @@ class API:
         return self.save_all_settings({key: value})
 
     @log_api_call
+    def settings_reveal_secret(self, secret_key: str):
+        """读取一项已保存密钥；前端只在用户进入密钥输入框时调用。"""
+        try:
+            value = settings.reveal_secret(secret_key)
+            return ApiResponse.success({
+                "key": secret_key,
+                "value": value,
+                "status": settings.get_secret_status().get(secret_key),
+            })
+        except Exception as e:
+            logger.warning("读取已保存密钥失败: secret_key=%s", secret_key, exc_info=True)
+            return ApiResponse.error(
+                "读取已保存密钥失败",
+                code="SETTINGS.SECRET.REVEAL_FAILED",
+                detail=e,
+                context={"secret_key": secret_key},
+                user_message="无法读取已保存密钥。请确认本机安全存储可用后重试，详细原因已写入系统日志。",
+            )
+
+    @log_api_call
+    def settings_clear_secret(self, secret_key: str):
+        """删除一项已保存密钥。"""
+        try:
+            settings.clear_secret(secret_key)
+            return ApiResponse.success({
+                "key": secret_key,
+                "settings": self._settings_payload(),
+            }, message="密钥已清除")
+        except Exception as e:
+            logger.warning("清除已保存密钥失败: secret_key=%s", secret_key, exc_info=True)
+            return ApiResponse.error(
+                "清除已保存密钥失败",
+                code="SETTINGS.SECRET.CLEAR_FAILED",
+                detail=e,
+                context={"secret_key": secret_key},
+                user_message="无法删除已保存密钥。请确认本机安全存储可用后重试，详细原因已写入系统日志。",
+            )
+
+    @log_api_call
     def save_all_settings(self, settings_obj: dict):
         """
         保存所有设置 (前端设置面板保存时调用)
@@ -1431,6 +1660,8 @@ class API:
                 # 如果修改的是核心路径，同步到当前环境
                 if k in profile_keys:
                     profile_data[k] = v
+                elif k == "_preserve_secret_keys":
+                    global_data[k] = v
                 else:
                     # 只有 AppConfig 里定义的字段才进全局配置（过滤掉冗余的 UI 状态）
                     if hasattr(settings.config, k):
@@ -1449,7 +1680,7 @@ class API:
                 normalization_warnings = settings.update_from_dict(global_data)  # recursive_update 批量更新
                 network_mgr.apply() # 应用网络设置
                 # 如果修改了某些会影响环境的全局路径（如 steamcmd_path）
-                if 'steamcmd_path' in global_data or 'workshop_mods_path' in global_data:
+                if any(key in global_data for key in ['steam_path', 'steamcmd_path', 'workshop_mods_path', 'self_mods_path']):
                     env_changed = True
                 rule_paths_changed = 'user_rules_path' in global_data or 'community_rules_path' in global_data
             else:
@@ -1463,48 +1694,56 @@ class API:
                 # 规则文件路径切换后必须立即重载，否则本次会话仍会持有旧文件内容。
                 logger.info("检测到规则文件路径变动，正在重载规则缓存...")
                 self.sorter.rule_mgr.load_all()
+            steam_mgr = getattr(self, "steam_mgr", None)
+            if steam_mgr and any(key in global_data for key in ["steam_path", "steamcmd_path"]):
+                steam_mgr.reload_paths_from_settings()
             if normalization_warnings:
                 EventBus.send_toast("\n".join(normalization_warnings), type="warning", duration=5000)
 
             return ApiResponse.success({
-                "settings": asdict(settings.config),
+                "settings": self._settings_payload(),
                 "active_context": self.active_context # 这里的 serialize_data 会自动调用 to_dict
                 ,
                 "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             }, message="配置保存成功")
             
         except Exception as e:
-            logger.error(f"Save all settings failed: {str(e)}", exc_info=True)
-            return ApiResponse.error(f"保存所有设置失败：{str(e)}")
+            logger.error("保存全局设置失败: %s", e, exc_info=True)
+            return ApiResponse.error(
+                "保存全局设置失败",
+                code="SETTINGS.SAVE_FAILED",
+                detail=e,
+                user_message="保存设置失败。请检查配置内容、路径权限和配置文件是否可写，详细原因已写入系统日志。",
+            )
 
     @log_api_call
     def theme_list_user(self):
         """读取用户自定义主题；内置主题由前端只读资源提供。"""
         try:
-            return ApiResponse.success({"themes": self.theme_store.list_user_themes()})
+            return ApiResponse.success({"themes": self._theme_store.list_user_themes()})
         except Exception as e:
-            logger.error(f"Load user themes failed: {e}", exc_info=True)
-            return ApiResponse.error(f"读取用户主题失败：{e}")
+            logger.error("读取用户主题失败: %s", e, exc_info=True)
+            return ApiResponse.error("读取用户主题失败", code="THEME.USER.LOAD_FAILED", detail=e, user_message="读取用户主题失败。请检查主题文件是否可访问，详细原因已写入系统日志。")
 
     @log_api_call
     def theme_save_user(self, theme: dict):
         """新增或覆盖用户自定义主题。"""
         try:
-            saved_theme = self.theme_store.save_user_theme(theme)
+            saved_theme = self._theme_store.save_user_theme(theme)
             return ApiResponse.success({"theme": saved_theme}, message="主题已保存")
         except Exception as e:
-            logger.error(f"Save user theme failed: {e}", exc_info=True)
-            return ApiResponse.error(f"保存用户主题失败：{e}")
+            logger.error("保存用户主题失败: %s", e, exc_info=True)
+            return ApiResponse.error("保存用户主题失败", code="THEME.USER.SAVE_FAILED", detail=e, user_message="保存用户主题失败。请检查主题内容和文件写入权限，详细原因已写入系统日志。")
 
     @log_api_call
     def theme_delete_user(self, theme_id: str):
         """删除用户自定义主题。"""
         try:
-            deleted = self.theme_store.delete_user_theme(theme_id)
+            deleted = self._theme_store.delete_user_theme(theme_id)
             return ApiResponse.success({"deleted": deleted}, message="主题已删除" if deleted else "主题不存在")
         except Exception as e:
-            logger.error(f"Delete user theme failed: {e}", exc_info=True)
-            return ApiResponse.error(f"删除用户主题失败：{e}")
+            logger.error("删除用户主题失败: theme_id=%s 错误=%s", theme_id, e, exc_info=True)
+            return ApiResponse.error("删除用户主题失败", code="THEME.USER.DELETE_FAILED", detail=e, context={"theme_id": theme_id}, user_message="删除用户主题失败。请检查主题文件是否被占用或无权限删除，详细原因已写入系统日志。")
 
     @log_api_call
     def get_remote_image_cache_stats(self):
@@ -1526,7 +1765,7 @@ class API:
         try:
             return ApiResponse.success(self.data_bundle_mgr.get_schema())
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取数据包配置失败", code="DATA_BUNDLE.SCHEMA_FAILED", detail=e, user_message="读取数据包配置失败。请检查软件数据目录是否可访问，详细原因已写入系统日志。")
 
     @log_api_call
     def data_bundle_inspect(self, bundle_path: str):
@@ -1534,7 +1773,7 @@ class API:
         try:
             return ApiResponse.success(self.data_bundle_mgr.inspect_bundle(bundle_path))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取数据包摘要失败", code="DATA_BUNDLE.INSPECT_FAILED", detail=e, context={"bundle_path": bundle_path}, user_message="读取数据包摘要失败。请确认文件存在、格式正确且未被其它程序占用。")
 
     @log_api_call
     def data_bundle_export(self, payload: dict | None = None):
@@ -1579,8 +1818,8 @@ class API:
             )
             return ApiResponse.success(export_result, message="导出成功")
         except Exception as e:
-            logger.error(f"Data bundle export failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("导出数据包失败: %s", e, exc_info=True)
+            return ApiResponse.error("导出数据包失败", code="DATA_BUNDLE.EXPORT_FAILED", detail=e, user_message="导出数据包失败。请检查目标目录权限、磁盘空间和所选数据模块状态，详细原因已写入系统日志。")
 
     @log_api_call
     def data_bundle_import(self, bundle_path: str, payload: dict | None = None):
@@ -1602,7 +1841,7 @@ class API:
 
             response_data = {
                 "result": import_result,
-                "settings": asdict(settings.config),
+                "settings": self._settings_payload(),
                 "active_context": self.active_context,
             }
             message = "导入成功"
@@ -1610,8 +1849,8 @@ class API:
                 message = f'导入完成，附带 {len(import_result["warnings"])} 条提示'
             return ApiResponse.success(response_data, message=message)
         except Exception as e:
-            logger.error(f"Data bundle import failed: {e}", exc_info=True)
-            return ApiResponse.error(f"导入失败: {e}")
+            logger.error("导入数据包失败: bundle_path=%s 错误=%s", bundle_path, e, exc_info=True)
+            return ApiResponse.error("导入数据包失败", code="DATA_BUNDLE.IMPORT_FAILED", detail=e, context={"bundle_path": bundle_path}, user_message="导入数据包失败。请确认文件完整、格式正确，并检查目标目录权限，详细原因已写入系统日志。")
 
     @log_api_call
     def mod_package_get_schema(self):
@@ -1619,7 +1858,7 @@ class API:
         try:
             return ApiResponse.success(self.mod_package_mgr.get_schema())
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取模组包配置失败", code="MOD_PACKAGE.SCHEMA_FAILED", detail=e, user_message="读取模组包配置失败。请检查当前环境和软件数据目录是否可访问。")
 
     @log_api_call
     def mod_package_prepare_import(self, bundle_path: str, payload: dict | None = None):
@@ -1627,7 +1866,7 @@ class API:
         try:
             return ApiResponse.success(self.mod_package_mgr.prepare_import(bundle_path, payload or {}))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("预检模组包失败", code="MOD_PACKAGE.PREPARE_IMPORT_FAILED", detail=e, context={"bundle_path": bundle_path}, user_message="预检模组包失败。请确认文件完整、格式正确且未被其它程序占用。")
 
     @log_api_call
     def mod_package_export(self, payload: dict | None = None):
@@ -1656,8 +1895,8 @@ class API:
             task_id = self.mod_package_mgr.start_export_task(target_path, payload)
             return ApiResponse.success({"task_id": task_id, "target_path": target_path}, message="导出任务已启动")
         except Exception as e:
-            logger.error(f"Mod package export failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("导出模组包失败: %s", e, exc_info=True)
+            return ApiResponse.error("导出模组包失败", code="MOD_PACKAGE.EXPORT_FAILED", detail=e, user_message="导出模组包失败。请检查目标目录权限、磁盘空间和待导出模组文件状态，详细原因已写入系统日志。")
 
     @log_api_call
     def mod_package_get_profile_summary(self, profile_id: str):
@@ -1665,7 +1904,7 @@ class API:
         try:
             return ApiResponse.success(self.mod_package_mgr.get_profile_export_summary(profile_id))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取环境导出统计失败", code="MOD_PACKAGE.PROFILE_SUMMARY_FAILED", detail=e, context={"profile_id": profile_id}, user_message="读取环境导出统计失败。请确认环境仍存在且路径可访问。")
 
     @log_api_call
     def mod_package_import(self, bundle_path: str, payload: dict | None = None):
@@ -1677,8 +1916,8 @@ class API:
             task_id = self.mod_package_mgr.start_import_task(bundle_path, normalized_payload)
             return ApiResponse.success({"task_id": task_id}, message="导入任务已启动")
         except Exception as e:
-            logger.error(f"Mod package import failed: {e}", exc_info=True)
-            return ApiResponse.error(f"导入失败: {e}")
+            logger.error("导入模组包失败: bundle_path=%s 错误=%s", bundle_path, e, exc_info=True)
+            return ApiResponse.error("导入模组包失败", code="MOD_PACKAGE.IMPORT_FAILED", detail=e, context={"bundle_path": bundle_path}, user_message="导入模组包失败。请确认文件完整、目标目录可写且磁盘空间充足，详细原因已写入系统日志。")
     
     @log_api_call
     def guide_mark_as_done(self, guide_key: str):
@@ -1692,7 +1931,7 @@ class API:
             settings.set('completed_guides', current_guides) # 这会自动触发保存
             return ApiResponse.success()
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存引导状态失败", code="GUIDE.MARK_DONE_FAILED", detail=e, context={"guide_key": guide_key}, user_message="保存引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。")
 
     @log_api_call
     def guide_reset_all(self):
@@ -1703,19 +1942,21 @@ class API:
             settings.set('completed_guides', {})
             return ApiResponse.success()
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("重置引导状态失败", code="GUIDE.RESET_FAILED", detail=e, user_message="重置引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。")
 
     # =========================================================================
     #  3. Mod 扫描与管理 (Scanning & Mods)
     # =========================================================================
     @log_api_call
-    def scan_mods(self, specific_paths: List[str]|None = None, forced_update: bool = False):
+    def scan_mods(self, specific_paths: List[str]|None = None, forced_update: bool = False, size_check_override: bool | None = None, size_check_paths: List[str]|None = None):
         """
         触发后台模组扫描。
         扫描完成后，Scanner 会回调当前环境的运行态收敛入口。
         立即返回状态，前端通过统一任务流和 `scan-complete` 事件获取更新。
         :param specific_paths: 可选，指定要扫描的路径列表。如果为空，则使用设置中的默认路径。
         :param forced_update: 可选，是否强制更新所有 Mod 的数据。默认 False。
+        :param size_check_override: 可选，临时覆盖目录大小检测开关。
+        :param size_check_paths: 可选，只对指定 Mod 路径强制计算目录大小。
         """
         try:
             paths_to_scan = []
@@ -1762,12 +2003,22 @@ class API:
             result = self.scanner.scan_paths_async(
                 paths_to_scan,
                 forced_update=forced_update,
+                size_check_override=size_check_override,
+                size_check_paths=size_check_paths,
                 residue_active_tokens=self._read_active_mod_tokens(),
                 residue_scan_enabled=bool(getattr(settings.config, "enable_mod_residue_scan", True)),
             )
         except Exception as e:
-            logger.error(f"Scan mods failed: {str(e)}", exc_info=True)
-            return ApiResponse.error(f"扫描模组失败：{str(e)}")
+            logger.error("扫描模组失败: %s", e, exc_info=True)
+            return ApiResponse.error(
+                "扫描模组失败",
+                code="MODS.SCAN_FAILED",
+                detail=e,
+                context={"specific_paths": specific_paths, "forced_update": forced_update},
+                user_message="扫描模组失败。请检查游戏、工坊和本地 Mod 路径是否存在且可访问，详细原因已写入系统日志。",
+            )
+        if isinstance(result, dict) and result.get("status") == "busy":
+            return ApiResponse.warning(result.get("message") or "扫描已在进行中", {"details": result})
         return ApiResponse.success({ "details": result },"后台扫描已启动")
     
     @log_api_call
@@ -1811,7 +2062,17 @@ class API:
                     else:
                         msg = f"不支持的操作类型: {action}"
                 except Exception as op_error:
-                    msg = str(op_error)
+                    logger.warning(
+                        "处理扫描冲突项失败: action=%s path=%s",
+                        action,
+                        path,
+                        exc_info=True,
+                        extra={
+                            "error_code": "MODS.CONFLICT_RESOLVE_ITEM_FAILED",
+                            "extra_context": {"action": action, "path": path, "original_error": str(op_error)},
+                        },
+                    )
+                    msg = "处理该项时出错，详细原因已写入系统日志"
 
                 results.append({
                     'path': path,
@@ -1837,10 +2098,22 @@ class API:
                 return ApiResponse.success(payload, "冲突处理完成")
             if success_count == 0:
                 first_error = error_items[0]['msg'] if error_items else "没有可执行的操作"
-                return ApiResponse.error(first_error, payload)
+                return ApiResponse.error(
+                    "扫描冲突处理失败",
+                    payload,
+                    code="MODS.CONFLICT_RESOLVE_FAILED",
+                    detail={"failed_items": error_items},
+                    user_message=f"扫描冲突处理失败：{first_error}。请检查相关 Mod 文件是否仍存在，或稍后刷新后重试。",
+                )
             return ApiResponse.warning(f"部分操作失败：{len(error_items)} 项未处理成功，其余操作已应用。", payload)
         except Exception as e:
-            return ApiResponse.error(f"处理出错: {str(e)}")
+            return ApiResponse.error(
+                "扫描冲突处理异常",
+                code="MODS.CONFLICT_RESOLVE_EXCEPTION",
+                detail=e,
+                context={"operation_count": len(operations or [])},
+                user_message="扫描冲突处理失败。请刷新模组列表后重试，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def mods_delete(self, path_hashes: List[str]|str, force: bool = False, delete_files: bool = True):
@@ -1859,7 +2132,13 @@ class API:
             res['delete_files'] = bool(delete_files)
             return self._build_delete_response("Mod", len(normalized_hashes), res)
         except Exception as e:
-            return ApiResponse.error(f"删除失败: {str(e)}")
+            return ApiResponse.error(
+                "删除 Mod 失败",
+                code="MODS.DELETE_FAILED",
+                detail=e,
+                context={"path_hashes": path_hashes, "force": force, "delete_files": delete_files},
+                user_message="删除 Mod 失败。请检查文件是否被占用、路径权限是否正常，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def mods_disable(self, path_hashes: List[str], disabled: bool = True):
@@ -1903,7 +2182,13 @@ class API:
                 "errors": failed_items,
             }, message=f"Mod 已{action_text} {len(success_items)} 项" + (f"，失败 {len(failed_items)} 项" if failed_items else ""))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "批量启停 Mod 失败",
+                code="MODS.ENABLE_DISABLE_FAILED",
+                detail=e,
+                context={"path_hashes": path_hashes, "disabled": disabled},
+                user_message="批量启停 Mod 失败。已尽量保留当前列表状态，请稍后刷新后重试，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def mod_time_update(self, mods_data_list: List[Dict[str, Any]]):
@@ -1918,7 +2203,7 @@ class API:
             ModDAO.batch_update_mods(mods_data_list)
             return ApiResponse.success(message='最后操作时间已更新')
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("更新 Mod 用户数据失败", code="MODS.USER_DATA_UPDATE_FAILED", detail=e, context={"package_id": package_id}, user_message="更新 Mod 用户数据失败。请检查数据库状态后重试，详细原因已写入系统日志。")
     
     @log_api_call
     def mod_user_data_update(self, package_id: str, data_dict: dict):
@@ -1929,7 +2214,7 @@ class API:
             ModDAO.update_user_data(package_id, data_dict)
             return ApiResponse.success()
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("批量更新 Mod 用户数据失败", code="MODS.USER_DATA_BATCH_UPDATE_FAILED", detail=e, user_message="批量更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。")
     
     @log_api_call
     def mods_user_data_update(self, user_data_list: List[Dict[str, Any]]):
@@ -1944,7 +2229,7 @@ class API:
                 ModDAO.batch_upsert_user_data(valid_list)
             return ApiResponse.success(message=f'已成功应用 {len(valid_list)} 项数据')
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("更新问题忽略状态失败", code="MODS.ISSUE_IGNORE_UPDATE_FAILED", detail=e, user_message="更新问题忽略状态失败。请稍后刷新列表后重试，详细原因已写入系统日志。")
     
     @log_api_call
     def mods_ignore_issues_update(self, mods_data_list: List[Dict[str, Any]]):
@@ -1958,7 +2243,7 @@ class API:
             ModDAO.batch_upsert_user_data(mods_data_list)
             return ApiResponse.success(message='用户数据已更新')
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("更新问题忽略状态失败", code="MODS.ISSUE_IGNORE_UPDATE_FAILED", detail=e, user_message="更新问题忽略状态失败。请稍后刷新列表后重试，详细原因已写入系统日志。")
     
     @log_api_call
     def mods_sign_color_update(self, mod_ids: List[str], color: str):
@@ -1967,7 +2252,7 @@ class API:
             ModDAO.set_mods_color(mod_ids, color)
             return ApiResponse.success(message="颜色已设置")
         except Exception as e:
-            return ApiResponse.error((mod_ids, color, str(e)))
+            return ApiResponse.error("设置 Mod 颜色失败", code="MODS.COLOR_UPDATE_FAILED", detail=e, context={"mod_ids": mod_ids, "color": color}, user_message="设置 Mod 颜色失败。已保留原状态，请稍后重试。")
     
     @log_api_call
     def mods_user_mod_type_update(self, mod_ids: List[str], new_type: str):
@@ -1976,7 +2261,7 @@ class API:
             ModDAO.set_user_mods_type(mod_ids, new_type)
             return ApiResponse.success(message="类型已设置")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("设置 Mod 类型失败", code="MODS.TYPE_UPDATE_FAILED", detail=e, context={"mod_ids": mod_ids, "new_type": new_type}, user_message="设置 Mod 类型失败。已保留原状态，请稍后重试。")
 
     @log_api_call
     def mods_link(self, mod_ids: List[str]):
@@ -1985,7 +2270,7 @@ class API:
             result = ModInterlockDAO.link_mods(mod_ids)
             return ApiResponse.success(data=result)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("创建 Mod 联锁失败", code="MODS.INTERLOCK_LINK_FAILED", detail=e, context={"mod_ids": mod_ids}, user_message="创建 Mod 联锁失败。请确认所选 Mod 仍在当前列表中，稍后重试。")
         
     @log_api_call
     def mods_unlink(self, mod_ids: List[str]):
@@ -1994,7 +2279,7 @@ class API:
             result = ModInterlockDAO.unlink_mods(mod_ids)
             return ApiResponse.success(data=result)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("解除 Mod 联锁失败", code="MODS.INTERLOCK_UNLINK_FAILED", detail=e, context={"mod_ids": mod_ids}, user_message="解除 Mod 联锁失败。请确认所选 Mod 仍在当前列表中，稍后重试。")
     
     @log_api_call
     def mods_interlock_heal(self, interlock_id: str):
@@ -2003,7 +2288,7 @@ class API:
             result = ModInterlockDAO.heal_interlock(interlock_id)
             return ApiResponse.success(data=result, message="联锁修复完成")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("修复 Mod 联锁失败", code="MODS.INTERLOCK_HEAL_FAILED", detail=e, context={"interlock_id": interlock_id}, user_message="修复 Mod 联锁失败。请刷新列表后重试，详细原因已写入系统日志。")
             
     @log_api_call
     def mods_interlock_missing_get(self, interlock_id: str):
@@ -2012,7 +2297,7 @@ class API:
             missing_mods = ModInterlockDAO.get_interlock_missing_mods(interlock_id)
             return ApiResponse.success(data=missing_mods)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取联锁缺失项失败", code="MODS.INTERLOCK_MISSING_LOAD_FAILED", detail=e, context={"interlock_id": interlock_id}, user_message="读取联锁缺失项失败。请刷新列表后重试，详细原因已写入系统日志。")
     
     
     @log_api_call
@@ -2022,7 +2307,7 @@ class API:
             ModDAO.add_tags_to_mods(mod_ids, tags)
             return ApiResponse.success(message="标签已添加")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("添加 Mod 标签失败", code="MODS.TAGS_ADD_FAILED", detail=e, context={"mod_ids": mod_ids, "tags": tags}, user_message="添加 Mod 标签失败。已保留原状态，请稍后重试。")
     
     @log_api_call
     def mods_remove_tags(self, mod_ids: List[str], tags: List[str]):
@@ -2031,7 +2316,7 @@ class API:
             ModDAO.remove_tags_from_mods(mod_ids, tags)
             return ApiResponse.success(message="标签已移除")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("移除 Mod 标签失败", code="MODS.TAGS_REMOVE_FAILED", detail=e, context={"mod_ids": mod_ids, "tags": tags}, user_message="移除 Mod 标签失败。已保留原状态，请稍后重试。")
         
     
     # =========================================================================
@@ -2063,7 +2348,7 @@ class API:
             # 返回完整对象供前端渲染
             return ApiResponse.success(data)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("创建分组失败", code="GROUP.CREATE_FAILED", detail=e, context={"name": name}, user_message="创建分组失败。请检查分组名称是否有效，稍后重试。")
 
     @log_api_call
     def group_delete(self, group_id: str):
@@ -2120,7 +2405,7 @@ class API:
             if not res or not res.get('active_mods', []):
                 return ApiResponse.error("已启用的Mod为空，或文件读取失败!")
         except Exception as e:
-            return ApiResponse.error(f"读取加载顺序文件出错: {e}")
+            return ApiResponse.error("读取加载顺序失败", code="LOAD_ORDER.READ_FAILED", detail=e, user_message="读取加载顺序失败。请确认游戏配置文件存在且可访问，详细原因已写入系统日志。")
         return ApiResponse.success({
             "file": self.active_context.mods_config_file if self.active_context else "",
             "active_ids": res.get('active_mods', []),
@@ -2139,7 +2424,7 @@ class API:
         })
 
     @log_api_call
-    def mod_config_get_overview(self):
+    def mod_settings_get_overview(self):
         """读取当前环境下官方 ModSettings 配置文件总览。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
@@ -2147,10 +2432,10 @@ class API:
             overview = ModSettingsManager.get_overview(self.active_context, self._read_active_mod_tokens())
             return ApiResponse.success(overview)
         except Exception as e:
-            return ApiResponse.error(f"读取模组配置总览失败: {e}")
+            return ApiResponse.error("读取模组设置总览失败", code="MOD_SETTINGS.OVERVIEW_FAILED", detail=e, user_message="读取模组设置总览失败。请确认游戏用户数据目录可访问，并检查当前环境路径配置。")
 
     @log_api_call
-    def mod_config_sync(self, source_path: str, target_path: str):
+    def mod_settings_sync(self, source_path: str, target_path: str):
         """在同一 package_id 分组内手动覆盖同步配置文件。"""
         if not self.active_context:
             return ApiResponse.error("当前环境未初始化")
@@ -2163,22 +2448,22 @@ class API:
             )
             return ApiResponse.success(result, message="已完成配置覆盖")
         except Exception as e:
-            return ApiResponse.error(f"覆盖配置失败: {e}")
+            return ApiResponse.error("覆盖模组设置失败", code="MOD_SETTINGS.SYNC_FAILED", detail=e, context={"source_path": source_path, "target_path": target_path}, user_message="覆盖模组设置失败。请检查目标文件是否被游戏占用、路径权限是否允许写入。")
 
     def _read_active_mod_tokens(self) -> list[str]:
         """读取当前启用列表 token；配置文件识别只需要这个轻量输入。"""
         if not getattr(self, "load_order_mgr", None):
             return []
-        return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or [])
+        return list((self.load_order_mgr.read_active_mods() or {}).get("active_mods", []) or []) # type: ignore
 
     @log_api_call
-    def mod_config_workshop_details(self, workshop_ids: List[str]):
+    def mod_settings_workshop_details(self, workshop_ids: List[str]):
         """批量补全模组配置残留文件里猜测出的工坊信息。"""
         try:
             return ApiResponse.success(SteamWebAPI.get_workshop_details(workshop_ids or [], trace_label="mod-config"))
         except Exception as e:
-            logger.warning("Mod config workshop detail fetch failed: %s", e, exc_info=True)
-            return ApiResponse.error(f"获取工坊信息失败: {e}")
+            logger.warning("获取模组配置关联工坊信息失败: %s", e, exc_info=True)
+            return ApiResponse.error("获取工坊信息失败", code="MOD_SETTINGS.WORKSHOP_DETAIL_FAILED", detail=e, context={"workshop_ids": workshop_ids}, user_message="获取工坊信息失败。请检查网络连接、Steam 服务状态或稍后重试。")
 
     @log_api_call
     def mod_residue_get_overview(self):
@@ -2191,7 +2476,7 @@ class API:
             return ApiResponse.success(overview)
         except Exception as e:
             logger.warning("读取卸载残留总览失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"读取卸载残留列表失败: {e}")
+            return ApiResponse.error("读取卸载残留列表失败", code="MOD_RESIDUE.OVERVIEW_FAILED", detail=e, user_message="读取卸载残留列表失败。请检查当前环境路径和文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def mod_residue_whitelist_add(self, paths: List[str] | str):
@@ -2205,7 +2490,7 @@ class API:
             return ApiResponse.success(result, message="已加入白名单，之后扫描会跳过它")
         except Exception as e:
             logger.warning("加入卸载残留清理白名单失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"加入白名单失败: {e}")
+            return ApiResponse.error("加入白名单失败", code="MOD_RESIDUE.WHITELIST_ADD_FAILED", detail=e, context={"paths": paths}, user_message="加入白名单失败。请检查配置文件权限后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def mod_residue_whitelist_remove(self, paths: List[str] | str):
@@ -2219,7 +2504,7 @@ class API:
             return ApiResponse.success(result, message="已移出白名单，之后扫描会再次提示它")
         except Exception as e:
             logger.warning("移出卸载残留清理白名单失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"移出白名单失败: {e}")
+            return ApiResponse.error("移出白名单失败", code="MOD_RESIDUE.WHITELIST_REMOVE_FAILED", detail=e, context={"paths": paths}, user_message="移出白名单失败。请检查配置文件权限后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def load_order_file_open(self, mods_config_file_path: str|None = None, profile_id: str | None = None):
@@ -2315,7 +2600,7 @@ class API:
                 return ApiResponse.success()
             return ApiResponse.error("更新配置失败")
         except Exception as e:
-            return ApiResponse.error(f"保存停用列表顺序时出错: {e}")
+            return ApiResponse.error("保存停用列表顺序失败", code="LOAD_ORDER.INACTIVE_SAVE_FAILED", detail=e, user_message="保存停用列表顺序失败。请检查环境配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def load_order_save(self, active_ids: List[str], is_dirty: bool=True):
@@ -2353,7 +2638,7 @@ class API:
                 })
             return ApiResponse.warning("取消保存")
         except Exception as e:
-            return ApiResponse.error(f"保存 ModsConfig.xml 时出错: {e}")
+            return ApiResponse.error("保存 ModsConfig.xml 失败", code="LOAD_ORDER.SAVE_FAILED", detail=e, user_message="保存加载顺序失败。请确认游戏未占用配置文件，并检查目录写入权限。")
     
     @log_api_call
     def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None, remember_dialog_dir: bool = False):
@@ -2379,7 +2664,7 @@ class API:
                 return ApiResponse.success()
             return ApiResponse.warning("取消保存")
         except Exception as e:
-            return ApiResponse.error(f"导出加载顺序时出错: {e}")
+            return ApiResponse.error("导出加载顺序失败", code="LOAD_ORDER.EXPORT_FAILED", detail=e, context={"target_path": target_path, "export_format": export_format}, user_message="导出加载顺序失败。请检查目标目录权限、磁盘空间和当前启用列表状态。")
 
     @log_api_call
     def load_order_export_pick_path(self, export_format: str = 'modsconfig'):
@@ -2404,7 +2689,7 @@ class API:
                 return ApiResponse.warning("未选择导出路径")
             return ApiResponse.success({"path": selected})
         except Exception as e:
-            return ApiResponse.error(f"选择导出路径时出错: {e}")
+            return ApiResponse.error("选择导出路径失败", code="LOAD_ORDER.EXPORT_PICK_PATH_FAILED", detail=e, user_message="选择导出路径失败。请稍后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def load_order_share_export(self, active_ids: List[str], list_name: str | None = None):
@@ -2424,7 +2709,7 @@ class API:
                 "count": len(active_ids or []),
             })
         except Exception as e:
-            return ApiResponse.error(f"生成分享码时出错: {e}")
+            return ApiResponse.error("生成分享码失败", code="LOAD_ORDER.SHARE_EXPORT_FAILED", detail=e, user_message="生成分享码失败。请检查当前启用列表是否有效，或稍后重试。")
 
     @log_api_call
     def load_order_share_import(self, share_code: str, profile_id: str | None = None):
@@ -2453,7 +2738,7 @@ class API:
                 "source_profile_id": str(profile_id or "").strip(),
             })
         except Exception as e:
-            return ApiResponse.error(f"解析分享码时出错: {e}")
+            return ApiResponse.error("解析分享码失败", code="LOAD_ORDER.SHARE_IMPORT_FAILED", detail=e, user_message="解析分享码失败。请确认分享码完整且格式正确。")
 
     @log_api_call
     def backups_get_all(self, profile_id: str | None = None):
@@ -2473,7 +2758,7 @@ class API:
                 }
             })
         except Exception as e:
-            return ApiResponse.error(f"获取备份文件时出错: {e}")
+            return ApiResponse.error("获取备份文件失败", code="BACKUP.LIST_FAILED", detail=e, context={"profile_id": profile_id}, user_message="获取备份文件失败。请检查备份目录是否可访问，详细原因已写入系统日志。")
 
     @log_api_call
     def backup_file_save_as_pick_dir(self):
@@ -2490,7 +2775,7 @@ class API:
                 return ApiResponse.warning("未选择保存目录")
             return ApiResponse.success({"path": selected})
         except Exception as e:
-            return ApiResponse.error(f"选择保存目录时出错: {e}")
+            return ApiResponse.error("选择保存目录失败", code="BACKUP.PICK_SAVE_DIR_FAILED", detail=e, user_message="选择保存目录失败。请稍后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def backup_file_save_as(self, path: str, target_dir: str, profile_id: str | None = None):
@@ -2511,7 +2796,7 @@ class API:
             })
         except Exception as e:
             logger.error(f"另存备份时出错: {e}", exc_info=True)
-            return ApiResponse.error(f"另存备份时出错: {e}")
+            return ApiResponse.error("另存备份失败", code="BACKUP.SAVE_AS_FAILED", detail=e, context={"path": path, "target_dir": target_dir, "profile_id": profile_id}, user_message="另存备份失败。请检查目标目录权限和磁盘空间，详细原因已写入系统日志。")
 
     @log_api_call
     def backup_manual_rename(self, path: str, new_name: str, profile_id: str | None = None):
@@ -2555,7 +2840,7 @@ class API:
             })
         except Exception as e:
             logger.error(f"重命名备份时出错: {e}", exc_info=True)
-            return ApiResponse.error(f"重命名备份时出错: {e}")
+            return ApiResponse.error("重命名备份失败", code="BACKUP.RENAME_FAILED", detail=e, context={"path": path, "new_name": new_name, "profile_id": profile_id}, user_message="重命名备份失败。请检查备份名称、文件占用状态和目录权限。")
     
     @log_api_call
     def game_launch(self, profile_id: str):
@@ -2579,7 +2864,7 @@ class API:
             steam_running = bool(steam_status.get("running"))
             steam_ready = bool(steam_status.get("ready"))
             logger.debug(
-                "launch_game: profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s, is_steam_managed=%s",
+                "启动游戏参数：profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s, is_steam_managed=%s",
                 profile_id,
                 prefer_steam_launch,
                 steam_path_valid,
@@ -2619,17 +2904,20 @@ class API:
                                     data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
                                 )
                             session = runtime_session_mgr.begin_launch(profile_id, "steam", message="已尝试通过 Steam URL 启动，等待游戏进程确认。")
-                            os.startfile(f"steam://run/{RIMWORLD_APP_ID}")
+                            os.startfile(f"steam://run/{RIMWORLD_STEAM_APP_ID_STR}")
                             return ApiResponse.warning(
                                 message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
                                 data={"runtime_session": session},
                             )
                         except Exception as e:
-                            logger.warning(f"Launch Steam game via URL failed: {e}", exc_info=True)
+                            logger.warning("通过 Steam URL 启动游戏失败: %s", e, exc_info=True)
                             failed_session = runtime_session_mgr.mark_launch_failed("steam_url_launch_failed", f"通过 Steam URL 启动失败: {e}")
                             return ApiResponse.error(
-                                f"通过 Steam URL 启动失败: {e}",
+                                "通过 Steam URL 启动失败",
                                 data={"runtime_session": failed_session, "failure_reason": "steam_url_launch_failed"},
+                                code="GAME.LAUNCH.STEAM_URL_FAILED",
+                                detail=e,
+                                user_message="通过 Steam URL 启动失败。请确认 Steam 已安装并且系统协议关联正常，详细原因已写入系统日志。",
                             )
 
                     return self._build_direct_launch_confirmation(
@@ -2681,9 +2969,15 @@ class API:
                 return ApiResponse.warning( message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。", data={"runtime_session": session} )
             return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
         except Exception as e:
-            logger.error(f"Launch Game Error: {e}", exc_info=True)
+            logger.error("启动游戏失败: %s", e, exc_info=True)
             failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_exception", f"启动游戏时出错: {e}")
-            return ApiResponse.error( f"启动游戏时出错: {e}", data={"runtime_session": failed_session, "failure_reason": "launch_exception"} )
+            return ApiResponse.error(
+                "启动游戏失败",
+                data={"runtime_session": failed_session, "failure_reason": "launch_exception"},
+                code="GAME.LAUNCH.FAILED",
+                detail=e,
+                user_message="启动游戏失败。请检查游戏路径、启动参数和当前环境链接状态，详细原因已写入系统日志。",
+            )
 
     def _sync_runtime_links_for_profile(self, profile_id: str, include_workshop: bool):
         """
@@ -2794,7 +3088,7 @@ class API:
                 try:
                     temp_scanner.executor.shutdown(wait=False, cancel_futures=False)
                 except Exception:
-                    logger.debug("Shutdown launch prepare scanner failed", exc_info=True)
+                    logger.debug("关闭启动前检查扫描器失败", exc_info=True)
             success = self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
             return {
                 "ok": bool(success),
@@ -2942,7 +3236,7 @@ class API:
             timeout_status["start_result"] = start_result
             return False, timeout_status, "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。"
         except Exception as e:
-            logger.error(f"Ensure Steam ready failed: {e}", exc_info=True)
+            logger.error("确认 Steam 可用状态失败: %s", e, exc_info=True)
             failed_status = {
                 "running": False,
                 "logged_in": False,
@@ -3064,9 +3358,15 @@ class API:
             )
             return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
         except Exception as e:
-            logger.error(f"Resolve launch warning failed: {e}", exc_info=True)
+            logger.error("处理启动确认失败: %s", e, exc_info=True)
             failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_warning_resolve_failed", f"处理启动确认失败: {e}")
-            return ApiResponse.error( f"处理启动确认失败: {e}", data={"runtime_session": failed_session, "failure_reason": "launch_warning_resolve_failed"} )
+            return ApiResponse.error(
+                "处理启动确认失败",
+                data={"runtime_session": failed_session, "failure_reason": "launch_warning_resolve_failed"},
+                code="GAME.LAUNCH.WARNING_RESOLVE_FAILED",
+                detail=e,
+                user_message="处理启动确认失败。请重新尝试启动，或刷新当前环境状态后再试。",
+            )
 
     @log_api_call
     def steam_process_status(self):
@@ -3075,8 +3375,8 @@ class API:
             running = bool(self.steam_mgr.is_steam_running())
             return ApiResponse.success({"running": running})
         except Exception as e:
-            logger.error(f"Get Steam process status failed: {e}", exc_info=True)
-            return ApiResponse.error(f"获取 Steam 进程状态失败: {e}")
+            logger.error("获取 Steam 进程状态失败: %s", e, exc_info=True)
+            return ApiResponse.error("获取 Steam 进程状态失败", code="STEAM.PROCESS_STATUS_FAILED", detail=e, user_message="获取 Steam 进程状态失败。请稍后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def steam_client_status(self):
@@ -3084,8 +3384,8 @@ class API:
         try:
             return ApiResponse.success(self._attach_steam_user_hint(self.steam_mgr.get_steam_client_status()))
         except Exception as e:
-            logger.error(f"Get Steam status failed: {e}", exc_info=True)
-            return ApiResponse.error(f"获取 Steam 状态失败: {e}")
+            logger.error("获取 Steam 客户端状态失败: %s", e, exc_info=True)
+            return ApiResponse.error("获取 Steam 状态失败", code="STEAM.CLIENT_STATUS_FAILED", detail=e, user_message="获取 Steam 状态失败。请确认 Steam 客户端可正常启动，详细原因已写入系统日志。")
 
     @log_api_call
     def profile_create_desktop_shortcut(self, profile_id: str):
@@ -3117,7 +3417,7 @@ class API:
                         extra_args=extra_args,
                         prefer_steam_launch=True,
                         steam_exe_path=self.steam_mgr.steam_exe,
-                        steam_app_id=RIMWORLD_APP_ID,
+                        steam_app_id=RIMWORLD_STEAM_APP_ID_STR,
                     )
                     self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
                     launch_mode = "Steam 官方 AppID"
@@ -3148,7 +3448,7 @@ class API:
                 extra_args=self.profile_mgr.get_launch_args(profile_id, include_executable=False),
                 prefer_steam_launch=False,
                 steam_exe_path=self.steam_mgr.steam_exe,
-                steam_app_id=RIMWORLD_APP_ID,
+                steam_app_id=RIMWORLD_STEAM_APP_ID_STR,
             )
             self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
             launch_mode = "游戏本体"
@@ -3169,8 +3469,8 @@ class API:
                 ),
             )
         except Exception as e:
-            logger.error(f"Create Profile Shortcut Error: {e}", exc_info=True)
-            return ApiResponse.error(f"创建环境快捷方式时出错: {e}")
+            logger.error("创建环境快捷方式失败: %s", e, exc_info=True)
+            return ApiResponse.error("创建环境快捷方式失败", code="PROFILE.SHORTCUT_CREATE_FAILED", detail=e, context={"profile_id": profile_id}, user_message="创建环境快捷方式失败。请检查桌面目录权限和环境路径配置。")
 
     @log_api_call
     def profile_register_steam_shortcut(self, profile_id: str):
@@ -3201,8 +3501,8 @@ class API:
             result["log_probe"] = log_probe
             return ApiResponse.success(result, message="已写入 Steam 快捷方式配置")
         except Exception as e:
-            logger.error(f"Register Steam shortcut Error: {e}", exc_info=True)
-            return ApiResponse.error(f"写入 Steam 快捷方式配置失败: {e}")
+            logger.error("写入 Steam 快捷方式配置失败: %s", e, exc_info=True)
+            return ApiResponse.error("写入 Steam 快捷方式配置失败", code="STEAM.SHORTCUT_REGISTER_FAILED", detail=e, context={"profile_id": profile_id}, user_message="写入 Steam 快捷方式配置失败。请确认 Steam 已关闭或配置文件未被占用，并检查文件权限。")
 
     @log_api_call
     def profile_finalize_steam_shortcut(self, profile_id: str, log_probe: dict | None = None):
@@ -3266,8 +3566,8 @@ class API:
                 message="已创建 Steam 桌面快捷方式",
             )
         except Exception as e:
-            logger.error(f"Finalize Steam shortcut Error: {e}", exc_info=True)
-            return ApiResponse.error(f"确认 Steam 快捷方式失败: {e}")
+            logger.error("确认 Steam 快捷方式失败: %s", e, exc_info=True)
+            return ApiResponse.error("确认 Steam 快捷方式失败", code="STEAM.SHORTCUT_FINALIZE_FAILED", detail=e, context={"profile_id": profile_id}, user_message="确认 Steam 快捷方式失败。请确认 Steam 已启动并完成登录，稍后重试。")
     
 
     # =========================================================================
@@ -3284,6 +3584,7 @@ class API:
         if not path_type or not path:
             return ApiResponse.error("未指定路径类型或路径")
         try:
+            path = normalize_path_for_storage(path)
             if path_type == "game_install_path":
                 res = PathChecker.check_install_path(path)
             elif path_type == "game_config_path":
@@ -3300,9 +3601,13 @@ class API:
                 res = PathChecker.check_texture_tools_path(path)
             else:
                 res = PathChecker.check_normal_path(path)
+            if isinstance(res, dict):
+                data = res.get("data")
+                if isinstance(data, dict):
+                    data.setdefault("normalized_path", path)
                 
         except Exception as e:
-            return ApiResponse.error(f"检查路径时出错: {e}")
+            return ApiResponse.error("检查路径失败", code="PATH.CHECK_FAILED", detail=e, context={"path_type": path_type, "path": path}, user_message="检查路径失败。请确认路径存在、权限可访问，并稍后重试。")
         
         return ApiResponse.success(res)
         
@@ -3316,11 +3621,21 @@ class API:
             return ApiResponse.error("未指定任何路径信息")
         info = {}
         try:
-            info = PathChecker.paths_check(paths_data)
+            normalized_data = {
+                key: normalize_path_for_storage(value)
+                for key, value in paths_data.items()
+            }
+            info = PathChecker.paths_check(normalized_data)
+            for key, res in info.items():
+                if isinstance(res, dict):
+                    data = res.get("data")
+                    normalized_path = normalized_data.get(key, "")
+                    if isinstance(data, dict):
+                        data.setdefault("normalized_path", normalized_path)
             return ApiResponse.success(info)
         except Exception as e:
-            logger.error(f"Check Paths Error: {e}", exc_info=True)
-            return ApiResponse.error(f"检查路径时出错: {e}")
+            logger.error("批量检查路径失败: %s", e, exc_info=True)
+            return ApiResponse.error("批量检查路径失败", code="PATH.BATCH_CHECK_FAILED", detail=e, user_message="批量检查路径失败。请确认路径存在、权限可访问，并稍后重试。")
     
     @log_api_call
     def path_open(self, path: str):
@@ -3330,7 +3645,7 @@ class API:
             return ApiResponse.success()
         except Exception as e:
             logger.error(f"打开路径时出错: {e}", exc_info=True)
-            return ApiResponse.error(f"打开路径时出错: {e}")
+            return ApiResponse.error("打开路径失败", code="PATH.OPEN_FAILED", detail=e, context={"path": path}, user_message="打开路径失败。请确认路径存在且当前系统允许访问。")
 
     @log_api_call
     def path_open_file(self, path: str):
@@ -3340,7 +3655,7 @@ class API:
             return ApiResponse.success()
         except Exception as e:
             logger.error(f"打开文件时出错: {e}", exc_info=True)
-            return ApiResponse.error(f"打开文件时出错: {e}")
+            return ApiResponse.error("打开文件失败", code="PATH.OPEN_FILE_FAILED", detail=e, context={"path": path}, user_message="打开文件失败。请确认文件存在且有默认打开程序。")
 
     @log_api_call
     def path_read_text_file(self, path: str, max_bytes: int = 2 * 1024 * 1024):
@@ -3349,7 +3664,7 @@ class API:
             return ApiResponse.success(data)
         except Exception as e:
             logger.error(f"读取文本文件时出错: {e}", exc_info=True)
-            return ApiResponse.error(f"读取文本文件时出错: {e}")
+            return ApiResponse.error("读取文本文件失败", code="PATH.READ_TEXT_FAILED", detail=e, context={"path": path}, user_message="读取文本文件失败。请确认文件存在、编码可读取且未超过大小限制。")
     
     @log_api_call
     def path_delete(self, path: str, force: bool = False):
@@ -3360,7 +3675,7 @@ class API:
                 return ApiResponse.warning("路径不存在或无法删除", data=res)
             return self._build_delete_response("路径", 1 if res['paths'] else 0, res)
         except Exception as e:
-            return ApiResponse.error(f"删除路径时出错: {e}")
+            return ApiResponse.error("删除路径失败", code="PATH.DELETE_FAILED", detail=e, context={"path": path, "force": force}, user_message="删除路径失败。请检查文件是否被占用、路径权限和回收站状态。")
     
     @log_api_call
     def paths_delete(self, paths: List[str], force: bool = False):
@@ -3369,7 +3684,7 @@ class API:
             res = self._delete_paths(paths, force=force)
             return self._build_delete_response("路径", len(res['paths']), res)
         except Exception as e:
-            return ApiResponse.error(f"批量删除路径时出错: {e}")
+            return ApiResponse.error("批量删除路径失败", code="PATH.BATCH_DELETE_FAILED", detail=e, context={"force": force}, user_message="批量删除路径失败。请检查文件是否被占用、路径权限和回收站状态。")
     
     @log_api_call
     def folder_select_dialog(self, initial_dir: str = ''):
@@ -3378,9 +3693,9 @@ class API:
         """
         try:
             folder = file_mgr.select_folder_dialog(initial_dir)
-            if folder: return ApiResponse.success(folder)
+            if folder: return ApiResponse.success(normalize_path_for_storage(folder))
         except Exception as e:
-            return ApiResponse.error(f"选择文件夹时出错: {e}")
+            return ApiResponse.error("选择文件夹失败", code="DIALOG.FOLDER_SELECT_FAILED", detail=e, user_message="选择文件夹失败。请稍后重试，详细原因已写入系统日志。")
         return ApiResponse.warning("未选择文件夹")
     
     @log_api_call
@@ -3397,9 +3712,9 @@ class API:
         """
         try:
             file = file_mgr.select_file_dialog(initial_dir, file_types)
-            if file: return ApiResponse.success(file)
+            if file: return ApiResponse.success(normalize_path_for_storage(file))
         except Exception as e:
-            return ApiResponse.error(f"选择文件时出错: {e}")
+            return ApiResponse.error("选择文件失败", code="DIALOG.FILE_SELECT_FAILED", detail=e, user_message="选择文件失败。请稍后重试，详细原因已写入系统日志。")
         return ApiResponse.warning("未选择文件")
 
     @log_api_call
@@ -3409,10 +3724,62 @@ class API:
         """
         try:
             file = file_mgr.save_file_dialog(initial_dir, default_filename, file_types)
-            if file: return ApiResponse.success(file)
+            if file: return ApiResponse.success(normalize_path_for_storage(file))
         except Exception as e:
-            return ApiResponse.error(f"保存文件时出错: {e}")
+            return ApiResponse.error("选择保存文件失败", code="DIALOG.FILE_SAVE_FAILED", detail=e, user_message="选择保存文件失败。请稍后重试，详细原因已写入系统日志。")
         return ApiResponse.warning("未选择文件")
+
+    def _default_image_save_filename(self, filename: str = "", mime_type: str = "") -> str:
+        raw_name = str(filename or "").strip()
+        suffix = Path(raw_name).suffix.lower()
+        default_suffix = IMAGE_SAVE_MIME_EXTENSIONS.get(str(mime_type or "").split(";")[0].lower(), ".png")
+        stem = FileManager.sanitize_filename(Path(raw_name).stem or "image").strip() or "image"
+        if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+            suffix = default_suffix
+        return f"{stem}{suffix}"
+
+    def _ensure_image_save_extension(self, target_path: str, default_filename: str) -> str:
+        path = Path(str(target_path or "").strip())
+        if path.suffix:
+            return str(path)
+        default_suffix = Path(default_filename).suffix or ".png"
+        return str(path.with_suffix(default_suffix))
+
+    @log_api_call
+    def image_save_as(self, payload: dict | None = None):
+        """保存前端当前预览的图片内容。"""
+        payload = payload or {}
+        try:
+            content_base64 = str(payload.get("content_base64") or "")
+            if not content_base64:
+                return ApiResponse.warning("没有可保存的图片内容")
+            image_bytes = base64.b64decode(content_base64)
+            if not image_bytes:
+                return ApiResponse.warning("图片内容为空")
+
+            default_filename = self._default_image_save_filename(
+                payload.get("filename") or "",
+                payload.get("mime_type") or "",
+            )
+            target_path = file_mgr.save_file_dialog(
+                initial_dir=str(DATA_DIR),
+                default_filename=default_filename,
+                file_types=IMAGE_SAVE_FILE_TYPES,
+            )
+            if not target_path:
+                return ApiResponse.warning("已取消")
+
+            target = Path(self._ensure_image_save_extension(target_path, default_filename))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # 图片字节来自前端已经加载成功的预览图，后端只负责落盘，不再重新请求网络资源。
+            target.write_bytes(image_bytes)
+            return ApiResponse.success({
+                "path": normalize_path_for_storage(str(target)),
+                "size": len(image_bytes),
+            }, message="图片已保存")
+        except Exception as e:
+            logger.error("图片另存为失败: %s", e, exc_info=True)
+            return ApiResponse.error("图片另存为失败", code="IMAGE.SAVE_AS_FAILED", detail=e, user_message="图片另存为失败。请检查目标目录权限、磁盘空间或文件名是否有效。")
 
     @log_api_call
     def recommendation_export(self, payload: dict | None = None):
@@ -3448,12 +3815,12 @@ class API:
             return ApiResponse.success(result, message="导出成功")
         except Exception as e:
             logger.error("推荐导出失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"推荐导出失败: {e}")
+            return ApiResponse.error("推荐导出失败", code="RECOMMENDATION.EXPORT_FAILED", detail=e, user_message="推荐导出失败。请检查目标目录权限、磁盘空间和所选模组数据状态。")
     
     @log_api_call
     def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):
         """
-        将指定副本转为本地模组，并推送实时进度。
+        将指定副本本地化或同步为本地共存模组，并推送实时进度。
         这里使用 path_hash 精确定位副本，避免共存场景下 workshop_id/package_id 指向不唯一。
         """
         cfg = settings.config
@@ -3462,23 +3829,18 @@ class API:
 
         normalized_hashes = [str(item or "").strip() for item in path_hashes if str(item or "").strip()]
         if not normalized_hashes:
-            return ApiResponse.warning(f"没有可转换的{store}模组")
+            return ApiResponse.warning(f"没有可同步的{store}模组")
 
-        # 1. 准备任务 (使用 JOIN 一次性查出所有需要的数据)
-        # 使用 path_hash 锁定当前副本，避免共存副本间串改。
-        query = (ModAsset.select(ModAsset, UserModData.alias_name)
-            .join(UserModData, on=(ModAsset.package_id == UserModData.mod_id), join_type=JOIN.LEFT_OUTER)
-            .where(ModAsset.path_hash << normalized_hashes, ModAsset.store == store) # type: ignore
-            .dicts())
+        # 使用 path_hash 锁定当前副本，并在 DAO 内按当前 Profile 路径范围二次约束。
+        query = ModDAO.get_localizable_assets(self.active_context, normalized_hashes, store)
         try:
-            # 2. 执行任务
             res = file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)
-            if not res: return ApiResponse.warning(f"没有可转换的{store}模组")
+            if not res: return ApiResponse.warning(f"没有可同步的{store}模组")
         except Exception as e:
-            logger.error(f"Localize workshop mods failed: {e}", exc_info=True)
-            return ApiResponse.error(f"本地化任务失败: {str(e)}")
+            logger.error("启动本地共存任务失败: %s", e, exc_info=True)
+            return ApiResponse.error("本地共存任务失败", code="WORKSPACE.LOCALIZE_FAILED", detail=e, context={"store": store}, user_message="本地共存任务启动失败。请检查目标库路径、文件权限和磁盘空间。")
         
-        return ApiResponse.success({"task_id": res}, message="本地化任务已在后台启动")
+        return ApiResponse.success({"task_id": res}, message="本地共存任务已在后台启动")
     
     @log_api_call
     def workspace_transfer_mods(self, path_hashes: list, target_store: str, mode: str = 'copy'):
@@ -3500,9 +3862,13 @@ class API:
         elif target_store == 'workshop':
             target_root = settings.config.workshop_mods_path
         if not target_root or not os.path.exists(target_root):
-            return ApiResponse.error(f"目标库 {target_store} 的目录未配置或不存在！")
+            return ApiResponse.error(
+                "目标目录未配置或不存在",
+                code="WORKSPACE.TRANSFER_TARGET_MISSING",
+                context={"target_store": target_store},
+                user_message="目标目录未配置或不存在。请先在设置中确认本地模组目录或管理器模组目录可用。",
+            )
         # 3. 查出源文件信息
-        from backend.database.models import ModAsset
         source_mods = ModAsset.select(ModAsset.path_hash, ModAsset.path, ModAsset.package_id, ModAsset.store, ModAsset.name).where(ModAsset.path_hash.in_(path_hashes)).dicts() # type: ignore
         source_mods = list(source_mods)
         if not source_mods: return ApiResponse.error("未找到指定的源文件")
@@ -3510,8 +3876,7 @@ class API:
         import shutil
         success_count = 0
         errors = []
-        # 确定文件夹命名策略
-        name_strategy = settings.config.coexist_mod_folder_name_type
+        moved_records = []
         for mod in source_mods:
             src_path = mod['path']
             # 防御：禁止对工坊项目执行 Move 操作
@@ -3534,6 +3899,11 @@ class API:
             try:
                 if current_mode == 'move':
                     shutil.move(src_path, dst_path)
+                    moved_records.append({
+                        "old_path_hash": mod['path_hash'],
+                        "new_path": dst_path,
+                        "target_store": target_store,
+                    })
                 else:
                     shutil.copytree(src_path, dst_path)
                 success_count += 1
@@ -3542,20 +3912,17 @@ class API:
         
         # 物理操作完成后，同步更新数据库记录，避免前端全量扫描
         with db.atomic():
-            for mod in source_mods:
+            for record in moved_records:
                 if mode == 'move':
                     # 如果是移动，更新 path 和 store
-                    # 注意：path_hash 也要重新生成，因为物理路径变了
-                    new_path = os.path.join(target_root, os.path.basename(mod['path']))
+                    # 注意：path_hash 也要按实际落地路径重新生成，避免重名避让后数据库指向旧目录名。
+                    new_path = normalize_path_for_storage(record["new_path"])
                     new_hash = generate_path_hash(new_path)
                     ModAsset.update(
                         path=new_path,
                         path_hash=new_hash,
-                        store=target_store
-                    ).where(ModAsset.path_hash == mod['path_hash']).execute()
-                else:
-                    # 如果是复制，直接 return success 然后让前端触发异步扫描
-                    pass
+                        store=record["target_store"]
+                    ).where(ModAsset.path_hash == record["old_path_hash"]).execute()
 
         msg = f"成功转移 {success_count} 个模组。"
         if errors:
@@ -3587,8 +3954,14 @@ class API:
             
             return ApiResponse.success(result, msg)
         except Exception as e:
-            logger.error(f"Auto sort failed: {e}", exc_info=True)
-            return ApiResponse.error(f"排序失败: {str(e)}")
+            logger.error("自动排序失败: %s", e, exc_info=True)
+            return ApiResponse.error(
+                "自动排序失败",
+                code="SORT.AUTO_SORT_FAILED",
+                detail=e,
+                context={"active_count": len(active_ids or [])},
+                user_message="自动排序失败。请检查规则配置和当前激活列表状态，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def smart_insert_mod_in_actives(self, package_ids: List[str], current_active_ids: List[str]):
@@ -3609,7 +3982,13 @@ class API:
             final_ids = self._restore_load_order_tokens(final_ids, {**current_token_map, **target_token_map})
             return ApiResponse.success(data=final_ids) if final_ids else ApiResponse.error("插入失败")
         except Exception as e:
-            return ApiResponse.error(f"插入失败: {str(e)}")
+            return ApiResponse.error(
+                "智能插入失败",
+                code="SORT.SMART_INSERT_FAILED",
+                detail=e,
+                context={"package_ids": package_ids, "current_active_count": len(current_active_ids or [])},
+                user_message="智能插入失败。请检查目标 Mod ID、当前激活列表和规则配置，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def rules_get_all(self):
@@ -3638,7 +4017,7 @@ class API:
             success = self.sorter.rule_mgr.update_user_mod_rule(package_id, rule_content)
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
-            return ApiResponse.error(f"保存失败: {str(e)}")
+            return ApiResponse.error("保存用户规则失败", code="RULE.USER_MOD_SAVE_FAILED", detail=e, context={"package_id": package_id}, user_message="保存用户规则失败。请检查规则内容和规则文件权限，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_set_user_mod_absolute_position(self, package_id: str, position: str, comment: str = ""):
@@ -3649,7 +4028,7 @@ class API:
             success = self.sorter.rule_mgr.set_user_mod_absolute_position(package_id, position, comment)
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
-            return ApiResponse.error(f"保存失败: {str(e)}")
+            return ApiResponse.error("保存固定位置规则失败", code="RULE.USER_MOD_POSITION_FAILED", detail=e, context={"package_id": package_id, "position": position}, user_message="保存固定位置规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_delete_user_mod(self, package_id: str):
@@ -3660,7 +4039,7 @@ class API:
             success = self.sorter.rule_mgr.delete_user_mod_rule(package_id)
             return ApiResponse.success() if success else ApiResponse.error("删除失败")
         except Exception as e:
-            return ApiResponse.error(f"删除失败: {str(e)}")
+            return ApiResponse.error("删除用户规则失败", code="RULE.USER_MOD_DELETE_FAILED", detail=e, context={"package_id": package_id}, user_message="删除用户规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
 
     @log_api_call
     def rule_set_language_pack_owner_override(self, package_id: str, owner_ids: list[str], replace: bool = False):
@@ -3671,7 +4050,7 @@ class API:
             success = self.sorter.rule_mgr.set_language_pack_owner_override(package_id, owner_ids, replace)
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
-            return ApiResponse.error(f"保存失败: {str(e)}")
+            return ApiResponse.error("保存语言包归属规则失败", code="RULE.LANGUAGE_PACK_OWNER_FAILED", detail=e, context={"package_id": package_id, "owner_ids": owner_ids, "replace": replace}, user_message="保存语言包归属规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_get_settings(self):
@@ -3691,7 +4070,7 @@ class API:
             success = self.sorter.rule_mgr.change_rule_source_priority(rules_sources)
             return ApiResponse.success() if success else ApiResponse.error("设置失败")
         except Exception as e:
-            return ApiResponse.error(f"设置失败: {str(e)}")
+            return ApiResponse.error("保存规则来源优先级失败", code="RULE.SOURCE_PRIORITY_FAILED", detail=e, context={"rules_sources": rules_sources}, user_message="保存规则来源优先级失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_global_enable(self, key: str, enabled: bool):
@@ -3705,7 +4084,7 @@ class API:
             success = self.sorter.rule_mgr.set_global_setting(key, enabled)
             return ApiResponse.success() if success else ApiResponse.error("设置失败：无效的 Key")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存规则全局开关失败", code="RULE.GLOBAL_ENABLE_FAILED", detail=e, context={"key": key, "enabled": enabled}, user_message="保存规则开关失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
 
     @log_api_call
     def rule_toggle_mod(self, rule_type: str, package_id: str, exclude: bool):
@@ -3725,8 +4104,8 @@ class API:
                 return ApiResponse.error("操作失败：无效的 Rule Type")
             return ApiResponse.success() if success else ApiResponse.error("操作失败")
         except Exception as e:
-            logger.error(f"Toggle mod rule failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("切换 Mod 规则状态失败: %s", e, exc_info=True)
+            return ApiResponse.error("切换 Mod 规则状态失败", code="RULE.MOD_TOGGLE_FAILED", detail=e, context={"rule_type": rule_type, "package_id": package_id, "exclude": exclude}, user_message="切换 Mod 规则状态失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_toggle_dynamic(self, rule_id: str, enabled: bool):
@@ -3737,7 +4116,7 @@ class API:
             success = self.sorter.rule_mgr.toggle_dynamic_rule(rule_id, enabled)
             return ApiResponse.success() if success else ApiResponse.error("切换失败")
         except Exception as e:
-            return ApiResponse.error(f"切换失败: {str(e)}")
+            return ApiResponse.error("切换动态规则失败", code="RULE.DYNAMIC_TOGGLE_FAILED", detail=e, context={"rule_id": rule_id, "enabled": enabled}, user_message="切换动态规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
     
     @log_api_call
     def rule_update_dynamic(self, rule_obj: dict):
@@ -3748,7 +4127,7 @@ class API:
             success = self.sorter.rule_mgr.upsert_dynamic_rule(rule_obj)
             return ApiResponse.success() if success else ApiResponse.error("保存失败")
         except Exception as e:
-            return ApiResponse.error(f"保存失败: {str(e)}")
+            return ApiResponse.error("保存动态规则失败", code="RULE.DYNAMIC_SAVE_FAILED", detail=e, context={"rule_id": (rule_obj or {}).get("id") if isinstance(rule_obj, dict) else None}, user_message="保存动态规则失败。请检查规则内容和规则文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def rule_delete_dynamic(self, rule_id: str):
@@ -3759,7 +4138,7 @@ class API:
             success = self.sorter.rule_mgr.delete_dynamic_rule(rule_id)
             return ApiResponse.success() if success else ApiResponse.error("删除失败")
         except Exception as e:
-            return ApiResponse.error(f"删除失败: {str(e)}")
+            return ApiResponse.error("删除动态规则失败", code="RULE.DYNAMIC_DELETE_FAILED", detail=e, context={"rule_id": rule_id}, user_message="删除动态规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。")
 
     @log_api_call
     def rule_export_bundle(self, dynamic_rule_ids: List[str], initial_dir: str = ''):
@@ -3798,8 +4177,8 @@ class API:
                 return ApiResponse.success(data=import_result, message=message)
             return ApiResponse.warning("已取消")
         except Exception as e:
-            logger.error(f"Import failed: {e}", exc_info=True)
-            return ApiResponse.error(f"导入失败: {e}")
+            logger.error("导入规则包失败: %s", e, exc_info=True)
+            return ApiResponse.error("导入规则包失败", code="RULE.IMPORT_FAILED", detail=e, user_message="导入规则包失败。请确认文件完整、格式正确，详细原因已写入系统日志。")
     
     @log_api_call
     def update_community_rule(self):
@@ -3849,8 +4228,8 @@ class API:
                 
             return ApiResponse.success(files)
         except Exception as e:
-            logger.error(f"Get log files failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("获取日志文件列表失败: %s", e, exc_info=True)
+            return ApiResponse.error("获取日志文件列表失败", code="LOG.FILES_LOAD_FAILED", detail=e, context={"log_type": log_type, "profile_scope": profile_scope}, user_message="获取日志文件列表失败。请确认日志目录可访问，详细原因已写入系统日志。")
 
     def read_log_page(self, log_type: str, filename: str, page: int = 1, page_size: int = 1000, profile_scope: str = "active"):
         """ 分页读取日志 """
@@ -3863,11 +4242,18 @@ class API:
                     return ApiResponse.warning("游戏环境未就绪，无法读取游戏日志")
                 result = manager.read_log_page_for_root(filename, user_data_root=user_data_root, page=page, page_size=page_size)
                 
-            if 'error' in result: return ApiResponse.error(result['error'])
+            if 'error' in result:
+                return ApiResponse.error(
+                    "读取日志分页失败",
+                    code="LOG.PAGE_READ_FAILED",
+                    detail={"original_error": result["error"]},
+                    context={"log_type": log_type, "filename": filename},
+                    user_message=_default_user_error_message(result["error"]),
+                )
             return ApiResponse.success(result)
         except Exception as e:
-            logger.error(f"Read log page failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("读取日志分页失败: %s", e, exc_info=True)
+            return ApiResponse.error("读取日志失败", code="LOG.PAGE_READ_EXCEPTION", detail=e, context={"log_type": log_type, "filename": filename}, user_message="读取日志失败。文件可能已被清理、移动或暂时无法访问，请刷新日志列表后重试。")
     
     
     # =========================================================================
@@ -3952,7 +4338,7 @@ class API:
             if not normalized_task_id:
                 return ApiResponse.error("缺少任务 ID")
             ok = file_mgr.cancel_localize_task(normalized_task_id)
-            return ApiResponse.success(message="已请求取消本地化任务") if ok else ApiResponse.error("当前没有可取消的本地化任务")
+            return ApiResponse.success(message="已请求取消本地共存任务") if ok else ApiResponse.error("当前没有可取消的本地共存任务")
 
         if normalized_type == "scan":
             if not self.scanner:
@@ -3966,7 +4352,7 @@ class API:
             ok = self.steam_mgr.cancel_steamcmd_task(normalized_task_id)
             return ApiResponse.success(message="已请求取消 SteamCMD 任务") if ok else ApiResponse.error("当前没有可取消的 SteamCMD 任务")
 
-        if normalized_type in {"steam-subscribe", "steam-unsubscribe"}:
+        if normalized_type in {"steam-subscribe", "steam-unsubscribe", "steam-workshop-download"}:
             if not normalized_task_id:
                 return ApiResponse.error("缺少任务 ID")
             ok = self.steam_mgr.abort_monitor_task(normalized_task_id)
@@ -3979,7 +4365,7 @@ class API:
                 res = self.texture_mgr.cancel_task(normalized_task_id)
                 return ApiResponse.success(res, message="已请求取消贴图任务")
             except Exception as e:
-                return ApiResponse.error(str(e))
+                return ApiResponse.error("取消贴图任务失败", code="TASK.TEXTURE_CANCEL_FAILED", detail=e, context={"task_id": normalized_task_id}, user_message="取消贴图任务失败。任务可能已经结束，请稍后刷新状态。")
 
         if normalized_type == "file-search":
             if not normalized_task_id:
@@ -4038,8 +4424,8 @@ class API:
             # info.to_dict() 包含了 local_status ('remote'|'downloading'|'ready')
             return ApiResponse.success(info.to_dict())
         except Exception as e:
-            logger.error(f"Check update failed: {e}", exc_info=True)
-            return ApiResponse.error(f"检查更新失败: {str(e)}")
+            logger.error("检查软件更新失败: %s", e, exc_info=True)
+            return ApiResponse.error("检查更新失败", code="UPDATE.CHECK_FAILED", detail=e, user_message="检查更新失败。请检查网络连接、代理设置和更新源状态，稍后重试。")
 
     @log_api_call
     def update_trigger_action(self):
@@ -4055,7 +4441,7 @@ class API:
             # A. 如果本地已就绪 -> 执行安装
             if info.local_status == "ready":
                 self.update_mgr.execute_hot_swap() # 这会重启程序
-                return ApiResponse.success(message="正在重启进行安装...")
+                return ApiResponse.success(message="正在重启并安装更新。")
             # B. 否则 -> 开始下载
             else:
                 result = self.update_mgr.perform_update_download()
@@ -4063,8 +4449,8 @@ class API:
                 return ApiResponse.success(result, message="开始下载更新包")
                 
         except Exception as e:
-            logger.error(f"Update action failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("执行更新动作失败: %s", e, exc_info=True)
+            return ApiResponse.error("执行更新动作失败", code="UPDATE.ACTION_FAILED", detail=e, user_message="执行更新动作失败。请检查网络连接、磁盘空间和安装目录权限，详细原因已写入系统日志。")
 
     @log_api_call
     def update_ignore_version(self, version_str):
@@ -4073,36 +4459,39 @@ class API:
         return ApiResponse.success()
 
     @log_api_call
-    def maintenance_check_tools(self):
+    def maintenance_check_tools(self, overrides: dict | None = None):
         """检查外部工具环境状态，不自动下载。"""
         try:
-            checked = self.maintenance_mgr.check_tools()
+            check_overrides = overrides if isinstance(overrides, dict) else None
+            checked = self.maintenance_mgr.check_tools(check_overrides)
             checked_at = int(checked.get("checked_at") or current_ms())
-            settings.set("last_tool_check_time", checked_at)
+            if not check_overrides:
+                settings.set("last_tool_check_time", checked_at)
             self._log_maintenance_check("api_result", "tools", status="success", checked_at=checked_at, issues=len(checked.get("issues") or []), total=len(checked.get("items") or []))
             return ApiResponse.success(checked)
         except Exception as e:
-            logger.error("Check tools maintenance failed: %s", e, exc_info=True)
-            return ApiResponse.error(f"检查工具环境失败: {e}")
+            logger.error("检查工具环境失败: %s", e, exc_info=True)
+            return ApiResponse.error("检查工具环境失败", code="MAINTENANCE.TOOLS_CHECK_FAILED", detail=e, user_message="检查工具环境失败。请检查工具目录权限和网络连接，详细原因已写入系统日志。")
 
     @log_api_call
-    def maintenance_check_external_data(self):
+    def maintenance_check_external_data(self, overrides: dict | None = None):
         """检查社区规则/数据库等外部文件是否需要更新。"""
         try:
-            checked = self.maintenance_mgr.check_external_data()
+            check_overrides = overrides if isinstance(overrides, dict) else None
+            checked = self.maintenance_mgr.check_external_data(check_overrides)
             checked_at = int(checked.get("checked_at") or current_ms())
             items = checked.get("items") if isinstance(checked, dict) else []
             failed = checked.get("failed") if isinstance(checked, dict) else []
             items = items if isinstance(items, list) else []
             failed = failed if isinstance(failed, list) else []
             # 整轮远端状态都没拿到时，不刷新“上次成功检查时间”，避免自动检查被失败结果错误限流。
-            if not items or len(failed) < len(items):
+            if not check_overrides and (not items or len(failed) < len(items)):
                 settings.set("last_external_data_update_check_time", checked_at)
             self._log_maintenance_check("api_result", "external-data", status="success", checked_at=checked_at, updates=len(checked.get("updates") or []), failed=len(failed), total=len(items))
             return ApiResponse.success(checked)
         except Exception as e:
-            logger.error("Check external data maintenance failed: %s", e, exc_info=True)
-            return ApiResponse.error(f"检查外部库更新失败: {e}")
+            logger.error("检查外部库更新失败: %s", e, exc_info=True)
+            return ApiResponse.error("检查外部库更新失败", code="MAINTENANCE.EXTERNAL_DATA_CHECK_FAILED", detail=e, user_message="检查外部库更新失败。请检查网络连接、代理设置和外部数据源状态。")
 
     @log_api_call
     def maintenance_check_steamcmd_mod_updates(self):
@@ -4114,8 +4503,8 @@ class API:
             self._log_maintenance_check("api_result", "steamcmd-mods", status="success", checked_at=checked_at, updates=len(checked.get("updates") or []))
             return ApiResponse.success(checked)
         except Exception as e:
-            logger.error("Check SteamCMD mod updates failed: %s", e, exc_info=True)
-            return ApiResponse.error(f"检查 SteamCMD 模组更新失败: {e}")
+            logger.error("检查 SteamCMD 模组更新失败: %s", e, exc_info=True)
+            return ApiResponse.error("检查 SteamCMD 模组更新失败", code="MAINTENANCE.STEAMCMD_MOD_CHECK_FAILED", detail=e, user_message="检查 SteamCMD 模组更新失败。请检查网络连接、SteamCMD 状态和管理器模组目录。")
 
     @log_api_call
     def maintenance_check_managed_mod_updates(self):
@@ -4127,8 +4516,8 @@ class API:
             self._log_maintenance_check("api_result", "managed-mods", status="success", checked_at=checked_at, updates=len(checked.get("updates") or []), steamcmd=checked.get("steamcmd_count", 0), github=checked.get("github_count", 0))
             return ApiResponse.success(checked)
         except Exception as e:
-            logger.error("Check managed mod updates failed: %s", e, exc_info=True)
-            return ApiResponse.error(f"检查管理器模组更新失败: {e}")
+            logger.error("检查管理器模组更新失败: %s", e, exc_info=True)
+            return ApiResponse.error("检查管理器模组更新失败", code="MAINTENANCE.MANAGED_MOD_CHECK_FAILED", detail=e, user_message="检查管理器模组更新失败。请检查网络连接、Git/Steam 服务状态和本地目录权限。")
     
     
     # =========================================================================
@@ -4178,7 +4567,7 @@ class API:
                     self.steam_mgr.post_download_setup(task_type, task.dest_path)
                     pending.remove(item)
                 elif task.status == TaskStatus.ERROR:
-                    logger.error(f"Setup task failed: {task_id}", exc_info=True)
+                    logger.error(f"工具部署任务失败: task_id={task_id}", exc_info=True)
                     pending.remove(item)
 
     @log_api_call
@@ -4188,13 +4577,17 @@ class API:
             ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
             if not ok:
                 return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
-            success = self.steam_mgr.subscribe_items(workshop_ids)
-            if success:
-                return ApiResponse.success(message="已发送订阅请求 (需Steam运行中)")
+            task_id = self.steam_mgr.subscribe_items(workshop_ids)
+            if task_id:
+                normalized_ids = [str(workshop_ids)] if isinstance(workshop_ids, (int, str)) else [str(i) for i in workshop_ids]
+                return ApiResponse.success({
+                    "task_id": task_id,
+                    "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
+                }, message="已向 Steam 提交订阅请求。")
             else:
-                return ApiResponse.error("操作失败：SteamAPI 未就绪 (请确保Steam已运行)")
+                return ApiResponse.error("Steam API 未就绪", code="STEAM.SUBSCRIBE.API_NOT_READY", user_message="订阅请求未发送。请确认 Steam 已启动并完成登录后重试。")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("Steam 订阅请求失败", code="STEAM.SUBSCRIBE.FAILED", detail=e, user_message="Steam 订阅请求失败。请确认 Steam 已登录、网络可用，且工坊项目仍可访问。")
 
     @log_api_call
     def steam_unsubscribe(self, workshop_ids: str|list[str]):
@@ -4211,9 +4604,9 @@ class API:
                     "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
                 }, message="已向 Steam 提交取消订阅")
             else:
-                return ApiResponse.error("操作失败：SteamAPI 未就绪")
+                return ApiResponse.error("Steam API 未就绪", code="STEAM.UNSUBSCRIBE.API_NOT_READY", user_message="取消订阅请求未发送。请确认 Steam 已启动并完成登录后重试。")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("Steam 取消订阅请求失败", code="STEAM.UNSUBSCRIBE.FAILED", detail=e, user_message="Steam 取消订阅请求失败。请确认 Steam 已登录、网络可用，稍后重试。")
     
     @log_api_call
     def steam_launch_client(self):
@@ -4234,7 +4627,7 @@ class API:
             if webbrowser.open(steam_url):
                 return ApiResponse.success(message="已尝试在 Steam 客户端打开当前页面")
         except Exception as e:
-            logger.warning(f"Open workshop in Steam failed: {e}")
+            logger.warning("在 Steam 客户端打开工坊页面失败: workshop_id=%s 错误=%s", normalized_id, e)
         return ApiResponse.error("无法在 Steam 客户端中打开当前页面")
     
     @log_api_call
@@ -4247,7 +4640,13 @@ class API:
             is_installed = self.steam_mgr.is_subscribed(wid)
             return ApiResponse.success({"is_installed": is_installed})
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "检查 Steam 工坊安装状态失败",
+                code="STEAM.WORKSHOP_STATUS_FAILED",
+                detail=e,
+                context={"workshop_id": workshop_id},
+                user_message="检查 Steam 工坊安装状态失败。请确认 Steam 已启动并完成登录，稍后重试。",
+            )
 
     @log_api_call
     def steamcmd_download(self, workshop_ids: list):
@@ -4256,13 +4655,78 @@ class API:
         """
         try:
             if not self.steam_mgr.steamcmd_ready:
-                return ApiResponse.error("SteamCMD 未安装，正在尝试自动修复，请稍后...")
+                return ApiResponse.error(
+                    "SteamCMD 未就绪",
+                    code="STEAMCMD.NOT_READY",
+                    user_message="SteamCMD 尚未就绪。请先在工具环境检查中完成安装或修复，然后重试下载。",
+                )
             
             # 启动后台下载
-            self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
-            return ApiResponse.success(message="SteamCMD 下载任务已启动")
+            task_id = self.steam_mgr.download_workshop_items(workshop_ids, on_success=lambda: self.scan_mods())
+            return ApiResponse.success({"task_id": task_id}, message="SteamCMD 下载任务已启动")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "启动 SteamCMD 下载失败",
+                code="STEAMCMD.DOWNLOAD_START_FAILED",
+                detail=e,
+                context={"workshop_ids": workshop_ids},
+                user_message="启动 SteamCMD 下载失败。请检查网络连接、代理设置、SteamCMD 状态和目标目录权限。",
+            )
+
+    @log_api_call
+    def steam_workshop_download(self, workshop_ids: list, high_priority: bool = True, wait_seconds: float = 30.0):
+        """
+        通过 Steam 客户端触发工坊项目下载或修复。
+        """
+        try:
+            ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
+            if not ok:
+                return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
+            task_id = self.steam_mgr.download_items_via_steamworks_task(
+                workshop_ids,
+                high_priority=high_priority,
+            )
+            if task_id:
+                normalized_ids = [str(workshop_ids)] if isinstance(workshop_ids, (int, str)) else [str(i) for i in workshop_ids]
+                return ApiResponse.success({
+                    "task_id": task_id,
+                    "workshop_ids": [item.strip() for item in normalized_ids if item.strip()],
+                }, message="已向 Steam 提交工坊下载请求")
+            return ApiResponse.error(
+                "Steam 未接受工坊下载请求",
+                code="STEAM.WORKSHOP_DOWNLOAD_REJECTED",
+                user_message="Steam 未接受工坊下载请求。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。",
+            )
+        except Exception as e:
+            return ApiResponse.error(
+                "Steam 工坊下载请求失败",
+                code="STEAM.WORKSHOP_DOWNLOAD_FAILED",
+                detail=e,
+                context={"workshop_ids": workshop_ids},
+                user_message="Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，稍后重试。",
+            )
+
+    @log_api_call
+    def steam_workshop_details(self, workshop_ids: list, wait_seconds: float = 20.0):
+        """
+        通过 Steamworks 查询工坊项目详情。
+        """
+        try:
+            ok, steam_status, message = self._ensure_steam_ready(timeout_seconds=45)
+            if not ok:
+                return ApiResponse.warning(message, data={"action": "steam_not_ready", "steam_status": steam_status})
+            result = self.steam_mgr.query_workshop_item_details(workshop_ids, wait_seconds=wait_seconds)
+            if not result.get("ready"):
+                return ApiResponse.warning("Steam 客户端暂时无法查询工坊详情", data=result)
+            return ApiResponse.success(result, message="已获取工坊详情")
+        except Exception as e:
+            return ApiResponse.error(
+                "查询 Steam 工坊详情失败",
+                code="STEAM.WORKSHOP_DETAILS_FAILED",
+                detail=e,
+                context={"workshop_ids": workshop_ids},
+                user_message="查询 Steam 工坊详情失败。请确认 Steam 已登录、网络可用，稍后重试。",
+            )
     
     # =========================================================================
     #  12. AI 功能 (AI Features)
@@ -4278,6 +4742,8 @@ class API:
         if isinstance(ai_cfg, dict):
             ai_cfg = AIConfig(**ai_cfg)
         config_payload = asdict(ai_cfg)
+        config_payload["api_key"] = ""
+        config_payload["_secret_status"] = settings.get_secret_status().get("ai.api_key", {})
         config_payload["resolved_token_budget"] = {
             "profile": ai_cfg.model_token_budget(),
             "context_window_tokens": ai_cfg.resolved_context_window_tokens(),
@@ -4299,12 +4765,13 @@ class API:
         """保存 AI 配置"""
         try:
             current_ai = settings.config.ai
+            config_data = dict(config_data or {})
+            settings.apply_secret_inputs({"ai": config_data})
             editable_keys = {
                 "enabled",
                 "provider",
                 "endpoint_mode",
                 "base_url",
-                "api_key",
                 "model",
                 "temperature",
                 "max_output_tokens",
@@ -4312,7 +4779,7 @@ class API:
                 "context_window_tokens",
                 "max_concurrency",
             }
-            for k, v in (config_data or {}).items():
+            for k, v in config_data.items():
                 if k not in editable_keys or not hasattr(current_ai, k):
                     continue
                 setattr(current_ai, k, v)
@@ -4320,7 +4787,12 @@ class API:
             settings.save()
             return ApiResponse.success(message="AI 配置已保存")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "保存 AI 配置失败",
+                code="AI.CONFIG.SAVE_FAILED",
+                detail=e,
+                user_message="保存 AI 配置失败。请检查配置内容、密钥存储状态和配置文件写入权限。",
+            )
 
     @log_api_call
     def ai_check_enable(self):
@@ -4336,6 +4808,7 @@ class API:
             ai_cfg = AIConfig(**ai_cfg)
 
         if override_config:
+            override_config = self._resolve_ai_request_config(override_config)
             merged = asdict(ai_cfg)
             for key, value in override_config.items():
                 if key in merged:
@@ -4343,12 +4816,21 @@ class API:
             ai_cfg = AIConfig(**merged)
 
         if not ai_cfg.enabled:
-            return ApiResponse.error("AI 功能未启用，请前往设置开启。")
+            return ApiResponse.error(
+                "AI 功能未启用",
+                code="AI.CONFIG.DISABLED",
+                user_message="AI 功能未启用。请先在设置中开启 AI 功能，并完成模型配置。",
+            )
 
         from backend.ai.ai_gateway import validate_ai_connection_config
         ok, message = validate_ai_connection_config(ai_cfg)
         if not ok:
-            return ApiResponse.error(message)
+            return ApiResponse.error(
+                "AI 配置校验未通过",
+                code="AI.CONFIG.INVALID",
+                detail={"original_error": message},
+                user_message=_default_user_error_message(message),
+            )
 
         return ApiResponse.success()
 
@@ -4359,7 +4841,12 @@ class API:
             providers = self.ai_mgr.get_providers()
             return ApiResponse.success(providers)
         except Exception as e:
-            return ApiResponse.error(f"获取厂商列表失败: {str(e)}")
+            return ApiResponse.error(
+                "获取 AI 协议列表失败",
+                code="AI.PROVIDERS.LOAD_FAILED",
+                detail=e,
+                user_message="获取 AI 协议列表失败。可能是本地配置或 AI 定义文件暂时不可用，详细原因已写入系统日志。",
+            )
 
     @log_api_call
     def ai_get_models(self, temp_config: dict):
@@ -4369,10 +4856,15 @@ class API:
         :param temp_config: 前端表单中的临时配置 {provider, base_url, api_key}
         """
         try:
-            models = self.ai_mgr.get_models(temp_config)
+            models = self.ai_mgr.get_models(self._resolve_ai_request_config(temp_config))
             return ApiResponse.success(models)
         except Exception as e:
-            return ApiResponse.error(f"获取模型列表失败: {str(e)}")
+            return ApiResponse.error(
+                "获取 AI 模型列表失败",
+                code="AI.MODELS.LOAD_FAILED",
+                detail=e,
+                user_message="获取 AI 模型列表失败。请确认模型服务已启动、Base URL 可访问、API Key 有效，并检查代理设置。",
+            )
 
     @log_api_call
     def ai_get_model_capabilities(self, temp_config: dict):
@@ -4381,18 +4873,29 @@ class API:
             capabilities = self.ai_mgr.get_model_capabilities(temp_config or {})
             return ApiResponse.success(capabilities)
         except Exception as e:
-            return ApiResponse.error(f"获取模型能力失败: {str(e)}")
+            return ApiResponse.error(
+                "获取 AI 模型能力失败",
+                code="AI.MODEL_CAPABILITY.LOAD_FAILED",
+                detail=e,
+                user_message="获取 AI 模型能力失败。当前模型仍可手动配置，但推理模式和接口兼容性可能需要自行确认。",
+            )
 
     @log_api_call
     def ai_chat(self, message: str, config_data: dict={}):
         """测试对话"""
+        config_data = self._resolve_ai_request_config(config_data)
         result = self._ai_check_enable_with_config(config_data)
         if not result['status'] == 'success': return result
         try:
             result = self.ai_mgr.test_chat(message, config_data)
             return ApiResponse.success(result)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error(
+                "AI 测试请求失败",
+                code="AI.TEST_CHAT.FAILED",
+                detail=e,
+                user_message=_default_user_error_message(str(e)),
+            )
 
     @log_api_call
     def cancel_ai_session(self, session_id: str):
@@ -4523,24 +5026,32 @@ class API:
                     'data': results
                 })
             except Exception as e:
-                logger.error(f"Background AI task failed: {e}", exc_info=True)
+                logger.error(
+                    "后台 AI 任务执行失败。task_id=%s task=%s",
+                    task_id,
+                    task_key,
+                    extra={"error_code": "AI.TASK.BACKGROUND_FAILED", "extra_context": {"task_id": task_id, "task_key": task_key, "original_error": str(e)}},
+                    exc_info=True,
+                )
                 EventBus.emit_progress(
                     task_id,
                     "ai-task",
                     status="failed",
                     progress=0,
-                    message=f"AI 任务异常: {e}",
+                    message="AI 任务执行失败。请检查模型配置、网络连接和 API Key，详细原因已写入系统日志。",
                     metrics={
                         "task_id": task_id,
                         "task_key": task_key,
                         "title": task_title,
-                        "error": str(e),
+                        "error": "AI 任务执行失败",
+                        "original_error": str(e),
                     },
                 )
                 EventBus.emit("ai-task-complete", {
                     'task_id': task_id,
                     'status': 'error', 
-                    'message': str(e)
+                    'message': "AI 任务执行失败。请检查模型配置、网络连接和 API Key，详细原因已写入系统日志。",
+                    'detail': {"original_error": str(e)}
                 })
             finally:
                 try:
@@ -4556,21 +5067,24 @@ class API:
                         )
                 except Exception as cleanup_error:
                     logger.warning(
-                        f"Background AI task pending cleanup failed: {cleanup_error}",
+                        "后台 AI 任务清理未完成任务失败。",
+                        extra={"error_code": "AI.TASK.CLEANUP_PENDING_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
                         exc_info=True,
                     )
                 try:
                     loop.run_until_complete(loop.shutdown_asyncgens())
                 except Exception as cleanup_error:
                     logger.warning(
-                        f"Background AI task asyncgen cleanup failed: {cleanup_error}",
+                        "后台 AI 任务清理异步生成器失败。",
+                        extra={"error_code": "AI.TASK.CLEANUP_ASYNCGEN_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
                         exc_info=True,
                     )
                 try:
                     loop.run_until_complete(loop.shutdown_default_executor())
                 except Exception as cleanup_error:
                     logger.warning(
-                        f"Background AI task executor cleanup failed: {cleanup_error}",
+                        "后台 AI 任务关闭默认执行器失败。",
+                        extra={"error_code": "AI.TASK.CLEANUP_EXECUTOR_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
                         exc_info=True,
                     )
                 try:
@@ -4667,9 +5181,17 @@ class API:
             )
             return ApiResponse.success(result)
         except Exception as e:
-            # 增加异常堆栈打印，方便调试
-            logger.error(f"智能会话异常: {str(e)}", exc_info=True)
-            return ApiResponse.error(f"智能会话异常: {str(e)}")
+            logger.error(
+                "AI 助手会话接口异常。",
+                extra={"error_code": "AI.ASSISTANT_SESSION.FAILED", "extra_context": {"original_error": str(e)}},
+                exc_info=True,
+            )
+            return ApiResponse.error(
+                "AI 助手会话异常",
+                code="AI.ASSISTANT_SESSION.FAILED",
+                detail=e,
+                user_message="AI 助手会话没有完成。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。",
+            )
 
     @log_api_call
     def ai_estimate_assistant_session_request(self, payload: dict):
@@ -4692,8 +5214,17 @@ class API:
             )
             return ApiResponse.success(result)
         except Exception as e:
-            logger.error(f"助手请求预估异常: {str(e)}", exc_info=True)
-            return ApiResponse.error(f"助手请求预估异常: {str(e)}")
+            logger.error(
+                "AI 助手请求预估异常。",
+                extra={"error_code": "AI.ASSISTANT_ESTIMATE.FAILED", "extra_context": {"original_error": str(e)}},
+                exc_info=True,
+            )
+            return ApiResponse.error(
+                "AI 助手请求预估失败",
+                code="AI.ASSISTANT_ESTIMATE.FAILED",
+                detail=e,
+                user_message="AI 请求预估失败。可能是日志内容、附件或模型配置暂时无法处理，详细原因已写入系统日志。",
+            )
 
     # 供“一键排错”使用的全局扫描接口
     @log_api_call
@@ -4724,8 +5255,19 @@ class API:
         try:
             raw_logs = reader.get_all_blocks(filepath, full_scan=True)
         except Exception as e:
-            logger.error(f"[AI全局扫描] 读取完整日志块失败 filename={filename}: {e}", exc_info=True)
-            return ApiResponse.error(f"读取日志失败: {e}")
+            logger.error(
+                "[AI全局扫描] 读取完整日志块失败。filename=%s",
+                filename,
+                extra={"error_code": "AI.GLOBAL_SCAN.LOG_READ_FAILED", "extra_context": {"filename": filename, "source_type": source_type, "original_error": str(e)}},
+                exc_info=True,
+            )
+            return ApiResponse.error(
+                "读取日志失败",
+                code="AI.GLOBAL_SCAN.LOG_READ_FAILED",
+                detail=e,
+                context={"filename": filename, "source_type": source_type},
+                user_message="读取日志失败。文件可能已被清理、移动或暂时无法访问，请刷新日志列表后重试。",
+            )
         if not raw_logs:
             return ApiResponse.warning("当前日志文件中没有可分析的内容。")
         # 全局扫描默认额外保留 2 行堆栈预览，并使用更保守的预算比例，
@@ -4765,7 +5307,7 @@ class API:
             res = self.ai_mgr.save_prompt(prompt_id, prompt_data)
             return ApiResponse.success(res)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存 AI 提示词失败", code="AI.DEFINITION.PROMPT_SAVE_FAILED", detail=e, context={"prompt_id": prompt_id}, user_message="保存 AI 提示词失败。请检查内容格式是否正确，详细原因已写入系统日志。")
 
     @log_api_call
     def ai_delete_prompt(self, prompt_id: str):
@@ -4774,7 +5316,7 @@ class API:
             res = self.ai_mgr.delete_prompt(prompt_id)
             return ApiResponse.success(res)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("删除 AI 提示词失败", code="AI.DEFINITION.PROMPT_DELETE_FAILED", detail=e, context={"prompt_id": prompt_id}, user_message="删除 AI 提示词失败。请确认该提示词仍存在，详细原因已写入系统日志。")
 
     @log_api_call
     def ai_save_assistant(self, assistant_id: str, assistant_data: dict):
@@ -4783,7 +5325,7 @@ class API:
             res = self.ai_mgr.save_assistant(assistant_id, assistant_data)
             return ApiResponse.success(res)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存 AI 助手失败", code="AI.DEFINITION.ASSISTANT_SAVE_FAILED", detail=e, context={"assistant_id": assistant_id}, user_message="保存 AI 助手失败。请检查工具、提示词和输出格式配置是否完整，详细原因已写入系统日志。")
 
     @log_api_call
     def ai_save_task(self, task_id: str, task_data: dict):
@@ -4792,7 +5334,7 @@ class API:
             res = self.ai_mgr.save_task(task_id, task_data)
             return ApiResponse.success(res)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存 AI 任务失败", code="AI.DEFINITION.TASK_SAVE_FAILED", detail=e, context={"task_id": task_id}, user_message="保存 AI 任务失败。请检查任务输入、提示词和输出格式配置是否完整，详细原因已写入系统日志。")
 
     @log_api_call
     def ai_get_trace_records(self, session_id: str = ""):
@@ -4806,7 +5348,7 @@ class API:
             normalized_session_id = str(session_id or "").strip()
             return ApiResponse.success(self.ai_mgr.get_trace_records(normalized_session_id or None))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取 AI 请求链记录失败", code="AI.TRACE.LOAD_FAILED", detail=e, context={"session_id": session_id}, user_message="读取 AI 请求链记录失败。请稍后重试，详细原因已写入系统日志。")
     
     
     # ==========================================
@@ -4828,7 +5370,7 @@ class API:
             self.profile_mgr.create_profile(data, copy_current_data)
             return ApiResponse.success(message="环境创建成功")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("创建环境失败", code="PROFILE.CREATE_FAILED", detail=e, user_message="创建环境失败。请检查环境名称、路径配置和文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def profile_update(self, pid: str, data: Dict[str, Any]):
@@ -4842,7 +5384,7 @@ class API:
                 )
             return ApiResponse.success(message="配置已更新")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("更新环境失败", code="PROFILE.UPDATE_FAILED", detail=e, context={"profile_id": pid}, user_message="更新环境失败。请检查路径配置和文件权限，详细原因已写入系统日志。")
         
     @log_api_call
     def profile_delete(self, pid, force: bool = False):
@@ -4850,7 +5392,7 @@ class API:
             self.profile_mgr.delete_profile(pid, force=force)
             return ApiResponse.success(message="环境已删除")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("删除环境失败", code="PROFILE.DELETE_FAILED", detail=e, context={"profile_id": pid, "force": force}, user_message="删除环境失败。请确认该环境没有正在运行的任务，详细原因已写入系统日志。")
     
     @log_api_call
     def profile_activate(self, pid):
@@ -4864,7 +5406,7 @@ class API:
             res = {
                 "profile": self.profile_mgr.get_current_profile().__dict__,
                 "context": self.active_context.__dict__,
-                "settings": asdict(settings.config)
+                "settings": self._settings_payload()
             }
             return ApiResponse.success(message=f"已切换到环境: {pid}", data=res)
         except Exception as e:
@@ -4888,7 +5430,7 @@ class API:
                     "fallback_profile_id": fallback_profile_id,
                     "active_profile_id": fallback_profile_id,
                     "context": fallback_context,
-                    "settings": asdict(settings.config),
+                    "settings": self._settings_payload(),
                 },
             )
     
@@ -4912,19 +5454,19 @@ class API:
         if not self.sorter or not self.sorter.rule_mgr:
             EventBus.send_toast("规则引擎未初始化，无法立即重载社区规则库。", type="warning")
             return
-        logger.info("Community rules ready, reloading...")
+        logger.info("社区规则库已下载完成，正在重载规则缓存。")
         self.sorter.rule_mgr.load_all()
 
     def _reload_workshop_database(self):
         """工坊数据库更新后，同时刷新依赖规则缓存，避免前端继续读旧关联关系。"""
-        logger.info("Workshop database ready, reloading...")
+        logger.info("社区工坊数据库已下载完成，正在重载工坊缓存。")
         self.workshop_db_mgr.load_all_cache()
         if self.sorter and self.sorter.rule_mgr:
             self.sorter.rule_mgr.build_workshop_rules()
 
     def _reload_instead_database(self):
         """替代库更新后只需重建外置缓存。"""
-        logger.info("Instead database ready, reloading...")
+        logger.info("替代 Mod 数据库已下载完成，正在重建替代关系缓存。")
         self.workshop_db_mgr.rebuild_instead_cache()
     
     
@@ -4967,10 +5509,31 @@ class API:
                     "start_message": "替代 Mod 数据库开始更新",
                     "reload": self._reload_instead_database,
                 },
+                "multiplayer_compatibility": {
+                    "path": settings.config.multiplayer_compatibility_path,
+                    "url": settings.config.multiplayer_compatibility_url,
+                    "success_message": "Multiplayer 兼容表更新完毕！",
+                    "error_message": "Multiplayer 兼容表更新失败！",
+                    "start_message": "Multiplayer 兼容表开始更新",
+                    "reload": self.multiplayer_compat_mgr.format_official_compatibility_file,
+                },
+                "mp_compat_package_ids": {
+                    "path": settings.config.mp_compat_package_ids_path,
+                    "url": settings.config.mp_compat_package_ids_url,
+                    "success_message": "Multiplayer Compatibility 适配缓存生成完毕！",
+                    "error_message": "Multiplayer Compatibility 适配缓存生成失败！",
+                    "start_message": "Multiplayer Compatibility 适配缓存开始生成",
+                    "generator": self.multiplayer_compat_mgr.update_mp_compat_package_ids,
+                },
             }
             spec = dataset_specs.get(data_type)
             if not spec:
-                return ApiResponse.error(f"无效的数据库类型 {data_type}")
+                return ApiResponse.error(
+                    "无效的外部数据类型",
+                    code="EXTERNAL_DATA.INVALID_TYPE",
+                    context={"data_type": data_type},
+                    user_message="无法更新外部数据：数据类型无效。请刷新界面后重试。",
+                )
 
             full_path = str(spec["path"] or "")
             url = str(spec["url"] or "")
@@ -4982,7 +5545,16 @@ class API:
             if not os.path.exists(file_folder):
                 os.makedirs(file_folder, exist_ok=True)
 
-            logger.info("Start updating external dataset %s from: %s", data_type, url)
+            logger.info("开始更新外部数据。type=%s url=%s target=%s", data_type, url, full_path)
+
+            generator = spec.get("generator")
+            if callable(generator):
+                result = generator(source_url=url, target_path=full_path)
+                EventBus.send_toast(str(spec["success_message"]), type="success")
+                return ApiResponse.success(
+                    data={"completed": True, **(result if isinstance(result, dict) else {})},
+                    message=str(spec["success_message"]),
+                )
 
             def on_db_ready(task):
                 try:
@@ -4991,12 +5563,25 @@ class API:
                         reload_fn()
                     EventBus.send_toast(str(spec["success_message"]), type="success")
                 except Exception as reload_error:
-                    logger.error("External dataset reload failed: %s", reload_error, exc_info=True)
+                    logger.error(
+                        "外部数据下载完成，但重载缓存失败。type=%s",
+                        data_type,
+                        extra={"error_code": "EXTERNAL_DATA.RELOAD_FAILED", "extra_context": {"data_type": data_type, "original_error": str(reload_error)}},
+                        exc_info=True,
+                    )
                     EventBus.send_toast(f"{spec['success_message']} 但重载失败，请稍后手动刷新。", type="warning")
 
             def on_db_error(task):
-                logger.error("%s download failed: %s", data_type, getattr(task, "error_msg", ""), exc_info=True)
-                EventBus.send_toast(str(spec["error_message"]), type="error")
+                original_error = str(getattr(task, "error_msg", "") or "")
+                logger.error(
+                    "外部数据下载失败。type=%s url=%s target=%s",
+                    data_type,
+                    url,
+                    full_path,
+                    extra={"error_code": "EXTERNAL_DATA.DOWNLOAD_FAILED", "extra_context": {"data_type": data_type, "url": url, "target": full_path, "original_error": original_error}},
+                    exc_info=True,
+                )
+                EventBus.send_toast(f"{spec['error_message']} 请检查网络连接、代理设置和目标目录权限。", type="error")
 
             task_id = self.download_mgr.add_task(
                 url=url,
@@ -5008,8 +5593,19 @@ class API:
 
             return ApiResponse.success(data={"task_id": task_id}, message=str(spec["start_message"]))
         except Exception as e:
-            logger.error(f"Update community {data_type} failed: {e}", exc_info=True)
-            return ApiResponse.error(f"系统错误: {str(e)}")
+            logger.error(
+                "启动外部数据更新失败。type=%s",
+                data_type,
+                extra={"error_code": "EXTERNAL_DATA.UPDATE_START_FAILED", "extra_context": {"data_type": data_type, "original_error": str(e)}},
+                exc_info=True,
+            )
+            return ApiResponse.error(
+                "启动外部数据更新失败",
+                code="EXTERNAL_DATA.UPDATE_START_FAILED",
+                detail=e,
+                context={"data_type": data_type},
+                user_message="启动外部数据更新失败。请检查更新地址、网络连接、代理设置和目标目录写入权限，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def lifecycle_check_updates(self):
@@ -5182,12 +5778,6 @@ class API:
         info = details.get(str(workshop_id))
         if not info: return ApiResponse.error("无法从 Steam 获取该模组详情")
         
-        # 将原始截图 URL 转换为代理缓存 URL
-        cache_screenshots = []
-        for raw_url in info.get("screenshots", []):
-            cache_url = file_mgr.get_gallery_url(workshop_id, raw_url)
-            cache_screenshots.append(cache_url)
-        
         # 需要先查出这个工坊 ID 对应的 PackageID, 才能查询替代建议
         meta = ExtDAO.get_merged_meta_by_workshop_id(str(workshop_id))
         replacement = None
@@ -5199,7 +5789,7 @@ class API:
             "workshop_id": workshop_id,
             "title": info["title"],
             "description": info["description"],
-            "screenshots": cache_screenshots, # 这里的 URL 列表直接发给前端 v-for
+            "screenshots": info.get("screenshots", []),
             "preview_url": info["preview_url"],
             "online_time": info["time_updated"],
             "replacement": replacement # 如果有替代品，这里会包含 new_id 和 new_name
@@ -5231,8 +5821,8 @@ class API:
             res = ExtDAO.get_workshop_details_by_package_ids(package_ids, current_game_version=current_game_version)
             return ApiResponse.success(res)
         except Exception as e:
-            logger.error(f"get_workshop_details_by_package_ids failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("按 PackageID 读取工坊详情失败: %s", e, exc_info=True)
+            return ApiResponse.error("读取工坊映射详情失败", code="WORKSHOP.PACKAGE_DETAIL_MAP_FAILED", detail=e, user_message="读取工坊映射详情失败。请检查外置工坊数据库是否完整，详细原因已写入系统日志。")
 
     @log_api_call
     def get_install_sources_by_package_ids(self, package_ids: list):
@@ -5244,19 +5834,21 @@ class API:
             res = ExtDAO.get_install_sources_by_package_ids(package_ids, current_game_version=current_game_version)
             return ApiResponse.success(res)
         except Exception as e:
-            logger.error(f"get_install_sources_by_package_ids failed: {e}", exc_info=True)
-            return ApiResponse.error(str(e))
+            logger.error("按 PackageID 读取安装来源失败: %s", e, exc_info=True)
+            return ApiResponse.error("读取安装来源失败", code="WORKSHOP.INSTALL_SOURCE_MAP_FAILED", detail=e, user_message="读取安装来源失败。请检查外置工坊数据库是否完整，详细原因已写入系统日志。")
     
     @log_api_call
     def workspace_get_all_domains(self):
         """
         三域数据全量获取 (统合 DB、ACF、Log 数据)
         """
-        # 1. 获取数据库基础数据 (含有 URL)
-        matrix = ModDAO.get_triple_domain_assets(self.active_context)
-        # 2. 获取 Steam 状态数据 (ACF/Log)
+        # 1. 获取 Steam 状态数据 (ACF/Log)，只使用本地记录做缺失判定。
         ws_map = self.steam_mgr.workshop_merged_data()
         mg_map = self.steam_mgr.steamcmd_merged_data()
+        subscribed_workshop_ids = [wid for wid, data in ws_map.items() if data.get("is_subscribed")]
+        ModMaintenanceDAO.find_missing_mods(False, subscribed_workshop_ids)
+        # 2. 获取数据库基础数据 (含有 URL)
+        matrix = ModDAO.get_triple_domain_assets(self.active_context)
         replacements_map = {
             str(r['old_workshop_id']): r
             for r in self.workshop_db_mgr.get_replacements()
@@ -5281,18 +5873,15 @@ class API:
                 for log in success_logs:
                     latest_success_time.setdefault(str(log.repo_url), int(log.time or 0))
 
-            def normalize_folder(value: str = "") -> str:
-                return str(value or "").strip().replace("\\", "/").strip("/").lower()
-
             github_download_map = {
-                normalize_folder(record.get("local_folder")): {
+                normalize_path_for_compare(_resolve_github_local_path(record.get("local_folder"))): {
                     "repo_url": str(record.get("repo_url") or "").strip(),
                     "download_time": latest_success_time.get(str(record.get("repo_url") or "").strip(), 0),
                     "source": "github_timeline_success",
                     "installed_version": str(record.get("installed_version") or "").strip(),
                 }
                 for record in github_records
-                if normalize_folder(record.get("local_folder")) and latest_success_time.get(str(record.get("repo_url") or "").strip(), 0)
+                if _resolve_github_local_path(record.get("local_folder")) and latest_success_time.get(str(record.get("repo_url") or "").strip(), 0)
             }
         
         known_workshop_ids = set()
@@ -5315,15 +5904,19 @@ class API:
                 if download_status:
                     mod['download_status'] = download_status
             if str(mod.get('source') or '').strip().lower() == 'github':
-                folder = str(mod.get('path') or '').replace("\\", "/").strip("/").split("/")[-1].lower()
-                download_status = github_download_map.get(folder)
+                download_status = github_download_map.get(normalize_path_for_compare(mod.get('path')))
                 if download_status:
                     mod['download_status'] = download_status
             mod['replacement'] = replacements_map.get(wid)
             state = str(mod.get('state') or MOD_ASSET_STATE_PRESENT).strip().lower()
-            is_missing = state == MOD_ASSET_STATE_MISSING or not str(mod.get('path') or '').strip()
-            mod['state'] = MOD_ASSET_STATE_MISSING if is_missing else (state or MOD_ASSET_STATE_PRESENT)
+            if state not in {MOD_ASSET_STATE_PRESENT, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED}:
+                state = MOD_ASSET_STATE_PRESENT
+            is_deleted = state == MOD_ASSET_STATE_DELETED
+            is_missing = state == MOD_ASSET_STATE_MISSING or (not is_deleted and not str(mod.get('path') or '').strip())
+            mod['state'] = state
             mod['is_missing'] = is_missing
+            mod['is_deleted'] = is_deleted
+            mod['is_unavailable'] = is_missing or is_deleted
             if is_missing and wid and str(mod.get('store') or '').lower() == 'workshop':
                 is_subscribed = (mod.get('steam_status') or {}).get('is_subscribed') is True
                 mod['workshop_missing_status'] = 'subscribed_missing' if is_subscribed else 'not_subscribed_missing'
@@ -5368,7 +5961,9 @@ class API:
                 "store": store_type,
                 "source": "workshop",
                 "state": MOD_ASSET_STATE_MISSING,
-                "is_missing": True, 
+                "is_missing": True,
+                "is_deleted": False,
+                "is_unavailable": True,
                 "steam_status": steam_status,
                 "replacement": replacements_map.get(wid),
                 "workshop_missing_status": "subscribed_missing",
@@ -5487,6 +6082,60 @@ class API:
         import threading
         threading.Thread(target=worker, daemon=True).start()
         return ApiResponse.success(message="后台更新检查已启动")
+
+    def _normalize_workshop_id_batch(self, workshop_ids: list, limit: int = 300) -> list[str]:
+        """把前端传入的工坊 ID 收束为去重后的数字列表，避免后台预热收到脏输入。"""
+        normalized_ids = []
+        seen_ids = set()
+        for workshop_id in workshop_ids or []:
+            normalized_id = normalize_workshop_id(workshop_id, digits_only=True, min_length=6, max_length=20)
+            if not normalized_id or normalized_id in seen_ids:
+                continue
+            seen_ids.add(normalized_id)
+            normalized_ids.append(normalized_id)
+            if len(normalized_ids) >= limit:
+                break
+        return normalized_ids
+
+    def _emit_workshop_public_details_async(self, workshop_ids: list[str], *, force_refresh: bool = False, trace_label: str = "workshop_public_preheat"):
+        """
+        后台批量获取公开工坊详情，并复用 workspace-online-update 推给前端。
+
+        这条链路只走公开 GetPublishedFileDetails 与在线缓存，不读取 Steam Web API Key。
+        """
+        normalized_ids = self._normalize_workshop_id_batch(workshop_ids)
+        if not normalized_ids:
+            return 0
+
+        def worker():
+            for i in range(0, len(normalized_ids), 100):
+                batch = normalized_ids[i:i + 100]
+                online_data, _ = SteamWebAPI.fetch_item_details(
+                    batch,
+                    force_refresh=force_refresh,
+                    trace_label=trace_label,
+                )
+                if online_data:
+                    patched_items = self._attach_workshop_translation_meta_to_items(list(online_data.values()))
+                    online_data = {str(item.get("workshop_id") or ""): item for item in patched_items if isinstance(item, dict)}
+                    EventBus.emit('workspace-online-update', online_data)
+
+        threading.Thread(target=worker, daemon=True).start()
+        return len(normalized_ids)
+
+    def _emit_workshop_screenshots_async(self, workshop_id: str):
+        """后台补当前详情项截图，完成后仍走统一公开详情推送事件。"""
+        normalized_id = normalize_workshop_id(workshop_id, digits_only=True, min_length=6, max_length=20)
+        if not normalized_id:
+            return False
+
+        def worker():
+            screenshot_data = SteamWebAPI.fetch_and_cache_screenshots(normalized_id)
+            if screenshot_data.get("screenshots"):
+                EventBus.emit('workspace-online-update', {normalized_id: screenshot_data})
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
     
     @log_api_call
     def workspace_get_mod_timeline(self, workshop_id: str, is_steamcmd: bool = False):
@@ -5494,45 +6143,479 @@ class API:
         return ApiResponse.success(self.steam_mgr.get_item_timeline(workshop_id, is_steamcmd))
     
     @log_api_call
-    def workshop_search(self, query: str, page: int = 1):
-        """离线库搜索 + 在线静默预热"""
-        # 1. 从本地 SQLite 获取当前页的数据 (瞬间完成)
-        data = ExtDAO.search_workshop(query, page, page_size=100)
-        items = data['items']
-        if items:
-            # 2. 提取 ID 列表，去 Steam 检查是否有更新 (利用你已有的缓存机制)
-            workshop_ids = [item['workshop_id'] for item in items]
-            # 只取缓存或触发网络请求更新 DB。因为你设置了 1天的 TTL，大部分情况下也是瞬间返回
-            online_info, _ = SteamWebAPI.fetch_item_details(workshop_ids, force_refresh=False)
-            
-            # 3. 将最新的封面和名字合并回 items
-            for item in items:
-                wid = item['workshop_id']
-                if wid in online_info:
-                    item['preview_url'] = online_info[wid].get('preview_url', item['preview_url'])
-                    item['name'] = online_info[wid].get('title', item['name'])
-                    item['time_updated'] = online_info[wid].get('time_updated', item.get('time_updated'))
-
+    def workshop_search(self, query: str, page: int = 1, filters: dict | None = None):
+        """基础渠道：先返回外置缓存库，再后台预热当前页公开详情。"""
+        data = ExtDAO.search_workshop(query, page, page_size=100, filters=filters)
+        self._attach_workshop_translation_meta_to_result(data)
+        # 普通模式不读 API Key。这里后台获取的是公开详情，用于让当前页 100 项逐步补封面、简介、更新时间等字段。
+        self._emit_workshop_public_details_async(
+            [item.get("workshop_id") for item in data.get("items", [])],
+            trace_label="workshop_search:normal_page",
+        )
         return ApiResponse.success(data)
 
     @log_api_call
-    def workshop_search_online(self, query: str, cursor: str = "*", page_size: int = 25, sort: str = "relevance"):
-        """使用 Steam Web API 在线搜索工坊条目。"""
+    def workshop_search_enhanced(self, query: str, cursor: str = "*", page_size: int = 25, sort: str = "relevance", filters: dict | None = None):
+        """增强渠道：搜索普通工坊物品，并补全当页详情。"""
         try:
-            data = SteamWebAPI.search_workshop_online(query, cursor=cursor, page_size=page_size, sort=sort)
+            data = SteamWebAPI.search_workshop_items_enhanced(query, cursor=cursor, page_size=page_size, sort=sort, filters=filters)
+            self._attach_workshop_translation_meta_to_result(data)
             return ApiResponse.success(data)
         except ValueError as exc:
-            return ApiResponse.warning(str(exc))
+            return ApiResponse.warning("工坊搜索条件无效", code="WORKSHOP.SEARCH_ENHANCED_INVALID", detail=exc, context={"query": query, "cursor": cursor, "page_size": page_size, "sort": sort}, user_message="工坊搜索条件无效。请检查关键词、筛选条件或 Steam Web API Key 后重试。")
         except Exception as exc:
-            return ApiResponse.error(f"在线工坊搜索失败: {exc}")
+            return ApiResponse.error("工坊搜索失败", code="WORKSHOP.SEARCH_ENHANCED_FAILED", detail=exc, context={"query": query}, user_message="工坊搜索失败。请检查网络连接、Steam 服务状态和筛选条件后重试。")
+
+    @log_api_call
+    def workshop_search_collections_enhanced(self, query: str, cursor: str = "*", page_size: int = 100, sort: str = "relevance", filters: dict | None = None):
+        """增强渠道：搜索 Steam 合集。"""
+        try:
+            data = SteamWebAPI.search_workshop_collections_enhanced(query, cursor=cursor, page_size=page_size, sort=sort, filters=filters)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except ValueError as exc:
+            return ApiResponse.warning("合集搜索条件无效", code="WORKSHOP.COLLECTION_SEARCH_INVALID", detail=exc, context={"query": query, "cursor": cursor, "page_size": page_size, "sort": sort}, user_message="合集搜索条件无效。请检查关键词、筛选条件或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("合集搜索失败", code="WORKSHOP.COLLECTION_SEARCH_ENHANCED_FAILED", detail=exc, context={"query": query}, user_message="合集搜索失败。请检查网络连接、Steam 服务状态和筛选条件后重试。")
+
+    @log_api_call
+    def workshop_get_language_options(self):
+        """获取 Steam 在线接口可用语言。"""
+        return ApiResponse.success(get_steam_elanguage_options())
+
+    @log_api_call
+    def translation_get_providers(self):
+        """获取当前可用翻译器。"""
+        return ApiResponse.success(self.translation_mgr.list_providers())
+
+    @log_api_call
+    def translation_translate_document(self, document: dict | None, target_language: str, provider: str = DEFAULT_TRANSLATION_PROVIDER):
+        """通用翻译入口：只处理文本段，不绑定具体业务缓存。"""
+        if self.translation_mgr.provider_requires_ai(provider):
+            ai_ready = self._ai_check_enable_with_config()
+            if ai_ready.get("status") != "success":
+                return ai_ready
+        try:
+            raw_document = document if isinstance(document, dict) else {}
+            translation_document = TranslationDocument.from_segments(
+                raw_document.get("segments", []) if isinstance(raw_document.get("segments"), list) else [],
+                format=raw_document.get("format") or "plain_text",
+                context=raw_document.get("context") or "",
+                glossary=raw_document.get("glossary") if isinstance(raw_document.get("glossary"), list) else [],
+            )
+            result = self.translation_mgr.translate_document(translation_document, target_language, provider_id=provider)
+            return ApiResponse.success(result.to_dict())
+        except ValueError as exc:
+            return ApiResponse.warning("翻译请求内容无效", code="TRANSLATION.DOCUMENT_INVALID", detail=exc, context={"provider": provider, "target_language": target_language}, user_message="翻译请求内容无效。请检查要翻译的文本、目标语言和翻译服务配置。")
+        except Exception as exc:
+            logger.error("通用翻译请求失败: %s", exc, exc_info=True)
+            return ApiResponse.error("翻译失败", code="TRANSLATION.DOCUMENT_FAILED", detail=exc, context={"provider": provider, "target_language": target_language}, user_message="翻译失败。请检查翻译服务配置、网络连接和目标语言设置，详细原因已写入系统日志。")
+
+    def _build_workshop_translation_document(self, workshop_id: str, current_detail: dict[str, Any] | None = None) -> TranslationDocument:
+        """把工坊详情整理成通用翻译文档；翻译系统本身不理解工坊字段。"""
+        current_detail = current_detail or {}
+        meta = ExtDAO.get_merged_meta_by_workshop_id(workshop_id) if workshop_id else None
+        meta = meta or {}
+        source_title = str(
+            current_detail.get("original_title")
+            or meta.get("title")
+            or current_detail.get("title")
+            or current_detail.get("name")
+            or ""
+        ).strip()
+        source_description = str(
+            current_detail.get("original_description")
+            or meta.get("description")
+            or current_detail.get("description")
+            or current_detail.get("short_description")
+            or ""
+        ).strip()
+        return TranslationDocument.from_segments(
+            [
+                {"key": "title", "role": "title", "text": source_title},
+                {"key": "description", "role": "body", "text": source_description},
+            ],
+            format="steam_rich_text",
+            context="Steam Workshop item detail",
+        )
+
+    def _attach_workshop_translation_meta(self, detail: dict[str, Any] | None, cached_translations: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        if not isinstance(detail, dict):
+            return detail
+        # translations 只能来自本地缓存。Steam 返回或前端回传的 detail.translations
+        # 属于展示态数据，不能反向参与缓存合并。
+        translations = dict(cached_translations) if isinstance(cached_translations, dict) else None
+        if translations is None:
+            workshop_id = normalize_workshop_id(detail.get("workshop_id") or "", digits_only=True, min_length=6, max_length=20)
+            row = WorkshopOnlineCache.get_or_none(WorkshopOnlineCache.workshop_id == workshop_id) if workshop_id else None
+            translations = dict((row.translations if row else {}) or {})
+        detail["translations"] = translations if isinstance(translations, dict) else {}
+        detail["translation_source_hash"] = self.translation_mgr.build_source_hash(
+            self._build_workshop_translation_document("", detail)
+        )
+        return detail
+
+    def _attach_workshop_translation_meta_to_items(self, items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        """工坊数据出口统一附带翻译缓存；前端只选择显示，不负责再请求翻译缓存。"""
+        if not isinstance(items, list) or not items:
+            return items or []
+        workshop_ids = [
+            normalized_id
+            for item in items
+            if isinstance(item, dict)
+            if (normalized_id := normalize_workshop_id(item.get("workshop_id") or "", digits_only=True, min_length=6, max_length=20))
+        ]
+        translation_map: dict[str, dict[str, Any]] = {}
+        if workshop_ids:
+            rows = (
+                WorkshopOnlineCache
+                .select(WorkshopOnlineCache.workshop_id, WorkshopOnlineCache.translations)
+                .where(WorkshopOnlineCache.workshop_id.in_(list(dict.fromkeys(workshop_ids))))
+            )
+            translation_map = {str(row.workshop_id): dict(row.translations or {}) for row in rows}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            workshop_id = normalize_workshop_id(item.get("workshop_id") or "", digits_only=True, min_length=6, max_length=20)
+            self._attach_workshop_translation_meta(item, translation_map.get(workshop_id))
+        return items
+
+    def _attach_workshop_translation_meta_to_result(self, data: dict[str, Any] | None) -> dict[str, Any] | None:
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            data["items"] = self._attach_workshop_translation_meta_to_items(data["items"])
+        return data
+
+    def _save_workshop_translation_result(self, workshop_id: str, language: str, translation: dict[str, Any]) -> dict[str, Any]:
+        with ext_db.atomic():
+            row, _created = WorkshopOnlineCache.get_or_create(workshop_id=workshop_id)
+            translations = dict((row.translations if row else {}) or {})
+            translations[language] = translation
+            row.translations = translations
+            row.save(only=[WorkshopOnlineCache.translations])
+            return translations
+
+    @log_api_call
+    def workshop_get_dlc_options(self):
+        """获取 RimWorld / DLC 的 Steam AppID 选项。"""
+        return ApiResponse.success(RIMWORLD_DLC_OPTIONS)
 
     @log_api_call
     def workshop_get_details(self, workshop_id: str):
-        """获取云端详细图文"""
+        """基础渠道详情：缓存信息 + 旧版详情补全。"""
         details = SteamWebAPI.get_or_fetch_details(workshop_id)
         if details:
+            self._attach_workshop_translation_meta(details)
+            # 详情先用已有字段即时展示；截图抓取放后台增量推送，避免点击详情被网页抓图阻塞。
+            self._emit_workshop_screenshots_async(workshop_id)
             return ApiResponse.success(details)
         return ApiResponse.error("未找到模组详情")
+
+    @log_api_call
+    def workshop_get_dependencies(self, workshop_id: str):
+        """基础渠道：从外置缓存库读取依赖项目。"""
+        try:
+            data = ExtDAO.get_workshop_dependencies(workshop_id)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except Exception as exc:
+            return ApiResponse.error("获取依赖项目失败", code="WORKSHOP.DEPENDENCIES_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取依赖项目失败。请检查外置工坊数据库是否已更新，或稍后重试。")
+
+    @log_api_call
+    def workshop_search_dependents(self, workshop_id: str, page: int = 1, page_size: int = 20):
+        """基础渠道：从外置缓存库反查生态关联项。"""
+        try:
+            data = ExtDAO.search_workshop_dependents(workshop_id, page=page, page_size=page_size)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except Exception as exc:
+            return ApiResponse.error("获取生态关联失败", code="WORKSHOP.DEPENDENTS_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取生态关联失败。请检查外置工坊数据库是否已更新，或稍后重试。")
+
+    @log_api_call
+    def workshop_get_same_author(self, workshop_id: str, page: int = 1, page_size: int = 20):
+        """基础渠道：从外置缓存库查找同作者作品。"""
+        try:
+            data = ExtDAO.get_workshop_same_author(workshop_id, page=page, page_size=page_size)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except Exception as exc:
+            return ApiResponse.error("获取作者作品失败", code="WORKSHOP.SAME_AUTHOR_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取作者作品失败。请检查网络连接或外置工坊数据库状态后重试。")
+
+    @log_api_call
+    def workshop_preheat_public_details(self, workshop_ids: list[str]):
+        """普通模式：后台批量获取公开详情，不使用 Steam Web API Key。"""
+        count = self._emit_workshop_public_details_async(workshop_ids, trace_label="workshop_related:normal")
+        return ApiResponse.success({"count": count})
+
+    @log_api_call
+    def workshop_get_enhanced_details(self, workshop_id: str, current_detail: dict | None = None):
+        """增强渠道详情：复用当前项详情，只补全当前条目本体。"""
+        try:
+            details = SteamWebAPI.get_enhanced_workshop_detail(workshop_id, current_detail=current_detail)
+            if details:
+                self._attach_workshop_translation_meta(details)
+                return ApiResponse.success(details)
+            return ApiResponse.error("未找到模组详情")
+        except ValueError as exc:
+            return ApiResponse.warning("工坊详情请求无效", code="WORKSHOP.ENHANCED_DETAIL_INVALID", detail=exc, context={"workshop_id": workshop_id}, user_message="工坊详情请求无效。请检查工坊 ID 或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取工坊详情失败", code="WORKSHOP.ENHANCED_DETAIL_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取工坊详情失败。请检查网络连接、Steam 服务状态，或稍后重试。")
+
+    @log_api_call
+    def workshop_translate_detail(self, workshop_id: str, target_language: str, current_detail: dict | None = None, force: bool = False, provider: str = DEFAULT_TRANSLATION_PROVIDER):
+        """翻译并缓存当前工坊详情标题与说明。"""
+        if self.translation_mgr.provider_requires_ai(provider):
+            ai_ready = self._ai_check_enable_with_config()
+            if ai_ready.get("status") != "success":
+                return ai_ready
+        try:
+            normalized_id = normalize_workshop_id(workshop_id, digits_only=True, min_length=6, max_length=20)
+            if not normalized_id:
+                raise ValueError("工坊 ID 不能为空或格式不正确")
+            document = self._build_workshop_translation_document(normalized_id, current_detail)
+            if not document.segments:
+                raise ValueError("当前工坊项目没有可翻译的标题或说明")
+            language_code = normalize_language_code(target_language)
+            if not language_code:
+                raise ValueError("目标语言不能为空")
+            source_hash = self.translation_mgr.build_source_hash(document)
+            row = WorkshopOnlineCache.get_or_none(WorkshopOnlineCache.workshop_id == normalized_id)
+            translations = dict((row.translations if row else {}) or {})
+            existing = translations.get(language_code)
+            if existing and isinstance(existing, dict) and not force:
+                return ApiResponse.success({
+                    "workshop_id": normalized_id,
+                    "language": language_code,
+                    "translation": existing,
+                    "source_hash": source_hash,
+                    "is_stale": existing.get("source_hash") != source_hash,
+                    "translations": translations,
+                })
+            result = self.translation_mgr.translate_document(document, target_language, provider_id=provider)
+            translated = result.segment_map()
+            translation = {
+                "title": str(translated.get("title") or "").strip(),
+                "description": str(translated.get("description") or "").strip(),
+                "source_hash": result.source_hash,
+                "provider": result.provider,
+                "updated_at": result.updated_at,
+            }
+            if not translation["title"] and not translation["description"]:
+                raise ValueError("翻译器未返回有效译文")
+            translations = self._save_workshop_translation_result(normalized_id, result.target_language, translation)
+            return ApiResponse.success({
+                "workshop_id": normalized_id,
+                "language": result.target_language,
+                "translation": translation,
+                "source_hash": result.source_hash,
+                "is_stale": False,
+                "translations": translations,
+            })
+        except ValueError as exc:
+            return ApiResponse.warning("工坊详情翻译参数无效", code="WORKSHOP.TRANSLATION_INVALID", detail=exc, context={"workshop_id": workshop_id, "target_language": target_language, "provider": provider}, user_message="工坊详情翻译参数无效。请确认当前项目有可翻译内容，并检查目标语言和翻译服务配置。")
+        except Exception as exc:
+            logger.error("工坊详情翻译失败: %s", exc, exc_info=True)
+            return ApiResponse.error("工坊详情翻译失败", code="WORKSHOP.TRANSLATION_FAILED", detail=exc, context={"workshop_id": workshop_id, "target_language": target_language, "provider": provider}, user_message="工坊详情翻译失败。请检查翻译服务配置、AI 配置或网络连接，详细原因已写入系统日志。")
+
+    @log_api_call
+    def workshop_clear_detail_translation(self, workshop_id: str, target_language: str = ""):
+        """清理当前工坊详情的翻译缓存；target_language 为空时清理全部译文。"""
+        try:
+            normalized_id = normalize_workshop_id(workshop_id, digits_only=True, min_length=6, max_length=20)
+            if not normalized_id:
+                raise ValueError("工坊 ID 不能为空或格式不正确")
+            language_code = normalize_language_code(target_language) if target_language else ""
+            with ext_db.atomic():
+                row = WorkshopOnlineCache.get_or_none(WorkshopOnlineCache.workshop_id == normalized_id)
+                translations = dict((row.translations if row else {}) or {})
+                if language_code:
+                    translations.pop(language_code, None)
+                else:
+                    translations = {}
+                if row:
+                    row.translations = translations
+                    row.save(only=[WorkshopOnlineCache.translations])
+            return ApiResponse.success({
+                "workshop_id": normalized_id,
+                "language": language_code,
+                "translations": translations,
+            })
+        except ValueError as exc:
+            return ApiResponse.warning("清理工坊翻译缓存参数无效", code="WORKSHOP.TRANSLATION_CLEAR_INVALID", detail=exc, context={"workshop_id": workshop_id, "target_language": target_language}, user_message="清理工坊翻译缓存参数无效。请检查工坊 ID 和目标语言后重试。")
+        except Exception as exc:
+            logger.error("清理工坊翻译缓存失败: %s", exc, exc_info=True)
+            return ApiResponse.error("清理工坊翻译缓存失败", code="WORKSHOP.TRANSLATION_CLEAR_FAILED", detail=exc, context={"workshop_id": workshop_id, "target_language": target_language}, user_message="清理工坊翻译缓存失败。请稍后重试，详细原因已写入系统日志。")
+
+    @log_api_call
+    def workshop_get_dependencies_enhanced(self, workshop_id: str, current_detail: dict | None = None):
+        """增强渠道：获取依赖项目或合集子项详情。"""
+        try:
+            data = SteamWebAPI.get_workshop_dependencies_enhanced(workshop_id, current_detail=current_detail)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except ValueError as exc:
+            return ApiResponse.warning("依赖项目请求无效", code="WORKSHOP.DEPENDENCIES_INVALID", detail=exc, context={"workshop_id": workshop_id}, user_message="依赖项目请求无效。请检查工坊 ID 或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取依赖项目失败", code="WORKSHOP.DEPENDENCIES_ENHANCED_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取依赖项目失败。请检查网络连接、Steam 服务状态，或稍后重试。")
+
+    @log_api_call
+    def workshop_search_dependents_enhanced(self, workshop_id: str, cursor: str = "*", page_size: int = 20, filters: dict | None = None):
+        """增强渠道：搜索依赖当前工坊项的生态关联项。"""
+        try:
+            data = SteamWebAPI.search_workshop_dependents_enhanced(workshop_id, cursor=cursor, page_size=page_size, filters=filters)
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except ValueError as exc:
+            return ApiResponse.warning("生态关联请求无效", code="WORKSHOP.DEPENDENTS_INVALID", detail=exc, context={"workshop_id": workshop_id, "cursor": cursor, "page_size": page_size}, user_message="生态关联请求无效。请检查工坊 ID、筛选条件或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取生态关联失败", code="WORKSHOP.DEPENDENTS_ENHANCED_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="获取生态关联失败。请检查网络连接、Steam 服务状态，或稍后重试。")
+
+    @log_api_call
+    def workshop_get_same_author_enhanced(self, workshop_id: str, author_steam_id: str = "", page: int = 1, page_size: int = 20, filters: dict | None = None):
+        """增强渠道：分页获取同作者作品。"""
+        try:
+            data = SteamWebAPI.get_workshop_same_author_enhanced(
+                workshop_id,
+                author_steam_id=author_steam_id,
+                page=page,
+                page_size=page_size,
+                filters=filters,
+            )
+            self._attach_workshop_translation_meta_to_result(data)
+            return ApiResponse.success(data)
+        except ValueError as exc:
+            return ApiResponse.warning("作者作品请求无效", code="WORKSHOP.SAME_AUTHOR_INVALID", detail=exc, context={"workshop_id": workshop_id, "author_steam_id": author_steam_id, "page": page, "page_size": page_size}, user_message="作者作品请求无效。请检查作者信息、筛选条件或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取作者作品失败", code="WORKSHOP.SAME_AUTHOR_ENHANCED_FAILED", detail=exc, context={"workshop_id": workshop_id, "author_steam_id": author_steam_id}, user_message="获取作者作品失败。请检查网络连接、Steam 服务状态，或稍后重试。")
+
+    @log_api_call
+    def workshop_get_author_profiles(self, steam_ids: list[str]):
+        """增强渠道：批量获取作者资料。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.fetch_player_summaries(steam_ids or []))
+        except ValueError as exc:
+            return ApiResponse.warning("作者信息请求无效", code="WORKSHOP.AUTHOR_PROFILE_INVALID", detail=exc, context={"steam_ids": steam_ids}, user_message="作者信息请求无效。请检查 Steam 用户 ID 或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取作者信息失败", code="WORKSHOP.AUTHOR_PROFILE_FAILED", detail=exc, context={"steam_ids": steam_ids}, user_message="获取作者信息失败。请检查网络连接、Steam Web API Key 或稍后重试。")
+
+    @log_api_call
+    def workshop_get_user_files(self, steamid: str, page: int = 1, page_size: int = 25, filters: dict | None = None):
+        """获取作者发布的工坊文件。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.get_user_files(steamid, page=page, page_size=page_size, filters=filters))
+        except ValueError as exc:
+            return ApiResponse.warning("作者作品请求无效", code="WORKSHOP.USER_FILES_INVALID", detail=exc, context={"steamid": steamid, "page": page, "page_size": page_size}, user_message="作者作品请求无效。请检查 Steam 用户 ID、筛选条件或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取作者作品失败", code="WORKSHOP.USER_FILES_FAILED", detail=exc, context={"steamid": steamid}, user_message="获取作者作品失败。请检查网络连接、Steam Web API Key 或稍后重试。")
+
+    @log_api_call
+    def workshop_get_user_file_count(self, steamid: str, filters: dict | None = None):
+        """获取作者工坊文件数量。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.get_user_file_count(steamid, filters=filters))
+        except ValueError as exc:
+            return ApiResponse.warning("作者作品数量请求无效", code="WORKSHOP.USER_FILE_COUNT_INVALID", detail=exc, context={"steamid": steamid}, user_message="作者作品数量请求无效。请检查 Steam 用户 ID、筛选条件或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取作者作品数量失败", code="WORKSHOP.USER_FILE_COUNT_FAILED", detail=exc, context={"steamid": steamid}, user_message="获取作者作品数量失败。请检查网络连接、Steam Web API Key 或稍后重试。")
+
+    @log_api_call
+    def workshop_get_user_vote_summary(self, workshop_ids: list):
+        """获取当前账号对工坊项的投票摘要。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.get_user_vote_summary(workshop_ids))
+        except ValueError as exc:
+            return ApiResponse.warning("投票摘要请求无效", code="WORKSHOP.VOTE_SUMMARY_INVALID", detail=exc, context={"workshop_ids": workshop_ids}, user_message="投票摘要请求无效。请检查工坊 ID 列表、Steam 登录状态或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("获取投票摘要失败", code="WORKSHOP.VOTE_SUMMARY_FAILED", detail=exc, context={"workshop_ids": workshop_ids}, user_message="获取投票摘要失败。请检查网络连接、Steam 登录状态或稍后重试。")
+
+    @log_api_call
+    def workshop_can_subscribe(self, workshop_id: str):
+        """检查当前账号是否可通过 WebAPI 订阅。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.can_subscribe(workshop_id))
+        except ValueError as exc:
+            return ApiResponse.warning("订阅权限检查请求无效", code="WORKSHOP.SUBSCRIBE_CHECK_INVALID", detail=exc, context={"workshop_id": workshop_id}, user_message="订阅权限检查请求无效。请检查工坊 ID、Steam 登录状态或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("检查订阅权限失败", code="WORKSHOP.SUBSCRIBE_CHECK_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="检查订阅权限失败。请确认 Steam 已登录、网络可用，且工坊项目仍可访问。")
+
+    @log_api_call
+    def workshop_webapi_subscribe(self, workshop_id: str, options: dict | None = None):
+        """备用 WebAPI 订阅入口。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.subscribe_published_file(workshop_id, options))
+        except ValueError as exc:
+            return ApiResponse.warning("WebAPI 订阅请求无效", code="WORKSHOP.WEBAPI_SUBSCRIBE_INVALID", detail=exc, context={"workshop_id": workshop_id}, user_message="WebAPI 订阅请求无效。请检查工坊 ID、Steam 登录状态或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("WebAPI 订阅失败", code="WORKSHOP.WEBAPI_SUBSCRIBE_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="WebAPI 订阅失败。请确认 Steam 已登录、网络可用，且 API Key 有订阅权限。")
+
+    @log_api_call
+    def workshop_webapi_unsubscribe(self, workshop_id: str, options: dict | None = None):
+        """备用 WebAPI 取消订阅入口。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.unsubscribe_published_file(workshop_id, options))
+        except ValueError as exc:
+            return ApiResponse.warning("WebAPI 取消订阅请求无效", code="WORKSHOP.WEBAPI_UNSUBSCRIBE_INVALID", detail=exc, context={"workshop_id": workshop_id}, user_message="WebAPI 取消订阅请求无效。请检查工坊 ID、Steam 登录状态或 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("WebAPI 取消订阅失败", code="WORKSHOP.WEBAPI_UNSUBSCRIBE_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message="WebAPI 取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。")
+
+    @log_api_call
+    def workshop_publish_file(self, payload: dict):
+        """创建 Steam 工坊文件。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.publish_file(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("发布工坊文件参数无效", code="WORKSHOP.PUBLISH_INVALID", detail=exc, user_message="发布工坊文件参数无效。请检查工坊表单内容、文件路径和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("发布工坊文件失败", code="WORKSHOP.PUBLISH_FAILED", detail=exc, user_message="发布工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容，详细原因已写入系统日志。")
+
+    @log_api_call
+    def workshop_update_file(self, payload: dict):
+        """更新 Steam 工坊文件。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.update_file(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("更新工坊文件参数无效", code="WORKSHOP.UPDATE_FILE_INVALID", detail=exc, user_message="更新工坊文件参数无效。请检查工坊表单内容、文件路径和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("更新工坊文件失败", code="WORKSHOP.UPDATE_FILE_FAILED", detail=exc, user_message="更新工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容，详细原因已写入系统日志。")
+
+    @log_api_call
+    def workshop_delete_file(self, payload: dict):
+        """删除 Steam 工坊文件。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.delete_file(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("删除工坊文件参数无效", code="WORKSHOP.DELETE_FILE_INVALID", detail=exc, user_message="删除工坊文件参数无效。请检查工坊项目 ID、Steam 登录状态和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("删除工坊文件失败", code="WORKSHOP.DELETE_FILE_FAILED", detail=exc, user_message="删除工坊文件失败。请确认当前账号有权限操作该项目，并检查网络连接。")
+
+    @log_api_call
+    def workshop_update_tags(self, payload: dict):
+        """更新 Steam 工坊普通标签。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.update_tags(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("更新工坊标签参数无效", code="WORKSHOP.UPDATE_TAGS_INVALID", detail=exc, user_message="更新工坊标签参数无效。请检查标签内容、工坊项目 ID 和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("更新工坊标签失败", code="WORKSHOP.UPDATE_TAGS_FAILED", detail=exc, user_message="更新工坊标签失败。请确认当前账号有权限操作该项目，并检查网络连接。")
+
+    @log_api_call
+    def workshop_update_key_value_tags(self, payload: dict):
+        """更新 Steam 工坊 Key/Value 标签。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.update_key_value_tags(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("更新工坊键值标签参数无效", code="WORKSHOP.UPDATE_KEY_VALUE_TAGS_INVALID", detail=exc, user_message="更新工坊键值标签参数无效。请检查标签内容、工坊项目 ID 和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("更新工坊键值标签失败", code="WORKSHOP.UPDATE_KEY_VALUE_TAGS_FAILED", detail=exc, user_message="更新工坊键值标签失败。请确认当前账号有权限操作该项目，并检查网络连接。")
+
+    @log_api_call
+    def workshop_set_developer_metadata(self, payload: dict):
+        """设置 Steam 工坊开发者元数据。"""
+        try:
+            return ApiResponse.success(SteamWebAPI.set_developer_metadata(payload))
+        except ValueError as exc:
+            return ApiResponse.warning("设置工坊开发者元数据参数无效", code="WORKSHOP.DEVELOPER_METADATA_INVALID", detail=exc, user_message="设置工坊开发者元数据参数无效。请检查元数据内容、工坊项目 ID 和 Steam Web API Key 后重试。")
+        except Exception as exc:
+            return ApiResponse.error("设置工坊开发者元数据失败", code="WORKSHOP.DEVELOPER_METADATA_FAILED", detail=exc, user_message="设置工坊开发者元数据失败。请确认当前账号有权限操作该项目，并检查网络连接。")
 
     
     # ==========================================
@@ -5556,12 +6639,18 @@ class API:
         阻塞请求直到爬取完成，确保前端能立即得到数据。
         """
         coll_id = str(collection_id)
+        new_coll = self._fetch_and_store_collection(coll_id)
+        if not new_coll: return ApiResponse.error("无效的合集、合集为空，或无法获取合集信息")
+        return ApiResponse.success(model_to_dict(new_coll))
+
+    def _fetch_and_store_collection(self, coll_id: str):
+        """精确获取合集并写入缓存；用于导入和搜索结果点击，避免两条链路重复实现。"""
         child_wids = SteamWebAPI.fetch_collection_children(coll_id)
-        if not child_wids: return ApiResponse.error("无效的合集或合集为空")
+        if not child_wids: return None
 
         all_ids = list(set([coll_id] + child_wids))
         online_results, _ = SteamWebAPI.fetch_item_details(all_ids, force_refresh=True)
-        if coll_id not in online_results: return ApiResponse.error("无法获取合集信息")
+        if coll_id not in online_results: return None
         main_info = online_results[coll_id]
         final_children = self._build_collection_children(child_wids, online_results)
 
@@ -5569,8 +6658,7 @@ class API:
         # 持久化
         CollectionDAO.upsert_collection(coll_id, main_info, final_children, total)
         # 重新取回完整结构返回给前端
-        new_coll = CollectionDAO.get_collection_by_id(coll_id)
-        return ApiResponse.success(model_to_dict(new_coll))
+        return CollectionDAO.get_collection_by_id(coll_id)
 
     @log_api_call
     def lifecycle_fetch_collection(self, collection_id: str):
@@ -5592,8 +6680,17 @@ class API:
                 "total": cached_coll.total,
                 "is_cache": True # 标记这是缓存
             }
-        # 如果没有缓存，或者缓存已过期，启动后台刷新
-        if not is_fresh:
+        if not cached_coll:
+            fetched_coll = self._fetch_and_store_collection(coll_id)
+            if fetched_coll:
+                initial_data = {
+                    "collection": model_to_dict(fetched_coll),
+                    "children": fetched_coll.children or [],
+                    "total": fetched_coll.total,
+                    "is_cache": True
+                }
+        # 如果已有缓存但过期，保留旧数据先展示，后台刷新。
+        elif not is_fresh:
             self._start_tracked_main_db_task("collection-refresh", self._bg_refresh_collection, coll_id)
 
         return ApiResponse.success(initial_data)
@@ -5732,7 +6829,7 @@ class API:
             return ApiResponse.success(self.github_mgr.fetch_provider_catalog(url, force_refresh=bool(force_refresh)))
         except Exception as e:
             logger.error("获取 Git 推荐列表失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"获取推荐列表失败: {e}")
+            return ApiResponse.error("获取 Git 推荐列表失败", code="GITHUB.PROVIDER_CATALOG_FAILED", detail=e, context={"url": url}, user_message="获取 Git 推荐列表失败。请检查网络连接、代理设置和推荐源地址，稍后重试。")
 
     @log_api_call
     def github_fetch_readme(self, url: str, source_branch: str = ""):
@@ -5741,7 +6838,7 @@ class API:
             return ApiResponse.success(self.github_mgr.fetch_repo_readme(url, ref=source_branch))
         except Exception as e:
             logger.error("获取 Git 仓库 README 失败: %s", e, exc_info=True)
-            return ApiResponse.error(f"获取 README 失败: {e}")
+            return ApiResponse.error("获取 Git 仓库 README 失败", code="GITHUB.README_FETCH_FAILED", detail=e, context={"url": url, "source_branch": source_branch}, user_message="获取 Git 仓库 README 失败。请检查网络连接、仓库地址和分支名称后重试。")
 
     @log_api_call
     def github_subscribe(self, payload: dict):
@@ -5820,8 +6917,9 @@ class API:
             repo_url = str(r.get("repo_url") or "")
             local_folder = str(r.get("local_folder") or "").strip()
             if local_folder:
-                local_path = Path(str(settings.config.self_mods_path or "")) / local_folder
-                local_exists = local_path.exists()
+                local_path = _resolve_github_local_path(local_folder)
+                local_exists = bool(local_path and os.path.exists(local_path))
+                r["local_path"] = local_path
                 r["local_exists"] = local_exists
                 last_missing = latest_missing_time.get(repo_url, 0)
                 last_present = latest_present_time.get(repo_url, 0)
@@ -5955,7 +7053,7 @@ class API:
             status = self.texture_mgr.get_backend_status(options)
             return ApiResponse.success(status)
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取贴图工具状态失败", code="TEXTURE.STATUS_FAILED", detail=e, user_message="读取贴图工具状态失败。请检查工具路径和运行环境，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_prepare_download(self, options: dict|None = None):
@@ -5966,7 +7064,7 @@ class API:
                 return ApiResponse.success(res, message="工具已经就绪")
             return ApiResponse.success(res, message="已启动工具下载任务")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("启动贴图工具下载失败", code="TEXTURE.TOOL_DOWNLOAD_FAILED", detail=e, user_message="启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_analyze_mods(self, package_ids: List[str], options: dict|None = None):
@@ -5975,9 +7073,11 @@ class API:
         """
         request_options = dict(options or {})
         target_scope = str(request_options.get("target_scope") or "active").strip().lower()
-        if not package_ids and target_scope != "all":
+        single_mod_target = request_options.get("single_mod_target")
+        direct_targets = [single_mod_target] if isinstance(single_mod_target, dict) else None
+        if not direct_targets and not package_ids and target_scope != "all":
             return ApiResponse.error("未指定要分析的模组")
-        targets = self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
+        targets = direct_targets or self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
         if not targets:
             return ApiResponse.error("未能找到指定模组的有效物理路径")
 
@@ -5986,7 +7086,7 @@ class API:
             return ApiResponse.success(res, message="贴图分析任务已在后台启动")
         except Exception as e:
             logger.error("贴图分析启动失败", exc_info=True)
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("启动贴图分析失败", code="TEXTURE.ANALYSIS_START_FAILED", detail=e, user_message="启动贴图分析失败。请检查所选模组路径、工具状态和文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_start_task(self, package_ids: List[str], action: str = "optimize", options: dict|None = None):
@@ -5996,56 +7096,76 @@ class API:
         """
         request_options = dict(options or {})
         target_scope = str(request_options.get("target_scope") or "active").strip().lower()
+        single_mod_target = request_options.get("single_mod_target")
+        direct_targets = [single_mod_target] if isinstance(single_mod_target, dict) else None
         residue_clean_only = action == "clean_generated" and bool(request_options.get("clean_uninstalled_residue_only"))
+        clean_output_format = "dds"
+        clean_without_source = False
+        if action == "clean_generated":
+            clean_output_format = str(request_options.get("clean_output_format") or "").strip().lower()
+            if clean_output_format not in {"dds", "zstd"}:
+                clean_output_format = "dds"
+            request_options["clean_output_format"] = clean_output_format
+            clean_without_source = bool(request_options.get("clean_without_source"))
         targets = (
-            self.texture_mgr.resolve_clean_targets(
+            direct_targets or self.texture_mgr.resolve_clean_targets(
                 package_ids,
                 target_scope,
                 residue_only=residue_clean_only,
+                include_zstd=clean_output_format == "zstd",
                 active_context=self.active_context,
             )
             if action == "clean_generated"
-            else self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
+            else (direct_targets or self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context))
         )
         if not targets:
-            message = "未找到包含 DDS 的卸载残留模组目录" if residue_clean_only else "未能找到指定模组的有效物理路径"
+            residue_label = "ZSTD" if clean_output_format == "zstd" else "DDS"
+            message = f"未找到包含 {residue_label} 的卸载残留模组目录" if residue_clean_only else "未能找到指定模组的有效物理路径"
             return ApiResponse.error(message)
 
         try:
             res = self.texture_mgr.start_task(targets, action=action, options=request_options)
-            msg = "清理卸载残留 DDS" if residue_clean_only else ("清理已生成 DDS" if action == "clean_generated" else "贴图优化")
+            clean_output_label = "ZSTD" if clean_output_format == "zstd" else "DDS"
+            if clean_without_source:
+                msg = f"删除无源 {clean_output_label}"
+            else:
+                msg = (
+                    f"清理卸载残留 {clean_output_label}"
+                    if residue_clean_only
+                    else (f"清理已生成 {clean_output_label}" if action == "clean_generated" else "贴图优化")
+                )
             return ApiResponse.success(res, message=f"{msg}任务已加入队列")
         except Exception as e:
             logger.error("贴图优化任务启动失败", exc_info=True)
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("启动贴图任务失败", code="TEXTURE.TASK_START_FAILED", detail=e, context={"action": action}, user_message="启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_get_result_history(self, limit: int = 3):
         try:
             return ApiResponse.success(self.texture_mgr.list_result_history(limit))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取贴图任务历史失败", code="TEXTURE.HISTORY_LOAD_FAILED", detail=e, user_message="读取贴图任务历史失败。请稍后重试，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_get_exclusions(self):
         try:
             return ApiResponse.success(self.texture_mgr.get_exclusions())
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("读取贴图排除规则失败", code="TEXTURE.EXCLUSIONS_LOAD_FAILED", detail=e, user_message="读取贴图排除规则失败。请检查配置文件是否可访问，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_toggle_mod_exclusion(self, package_id: str, exclude: bool):
         try:
             return ApiResponse.success(self.texture_mgr.set_mod_exclusion(package_id, exclude))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存模组贴图排除规则失败", code="TEXTURE.MOD_EXCLUSION_SAVE_FAILED", detail=e, context={"package_id": package_id}, user_message="保存模组贴图排除规则失败。请检查配置文件权限，详细原因已写入系统日志。")
 
     @log_api_call
     def texture_toggle_file_exclusion(self, mod_path: str, rel_path: str, exclude: bool):
         try:
             return ApiResponse.success(self.texture_mgr.set_file_exclusion(mod_path, rel_path, exclude))
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("保存文件贴图排除规则失败", code="TEXTURE.FILE_EXCLUSION_SAVE_FAILED", detail=e, context={"mod_path": mod_path, "rel_path": rel_path}, user_message="保存文件贴图排除规则失败。请检查配置文件权限，详细原因已写入系统日志。")
 
 
     # =========================================================================
@@ -6063,7 +7183,7 @@ class API:
                 return ApiResponse.success(res, message="工具已经就绪")
             return ApiResponse.success(res, message="已启动 ripgrep 下载任务")
         except Exception as e:
-            return ApiResponse.error(str(e))
+            return ApiResponse.error("启动 ripgrep 下载失败", code="FILE_SEARCH.RIPGREP_DOWNLOAD_FAILED", detail=e, user_message="启动文件搜索工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。")
     
     @log_api_call
     def search_files_start(self, payload: dict):
@@ -6074,7 +7194,7 @@ class API:
             return ApiResponse.success({"task_id": task_id}, message="搜索任务已启动")
         except Exception as e:
             logger.error(f"启动文件搜索失败: {e}", exc_info=True)
-            return ApiResponse.error(f"启动文件搜索失败: {e}")
+            return ApiResponse.error("启动文件搜索失败", code="FILE_SEARCH.START_FAILED", detail=e, user_message="启动文件搜索失败。请检查搜索路径、ripgrep 工具状态和文件访问权限，详细原因已写入系统日志。")
         
         
 

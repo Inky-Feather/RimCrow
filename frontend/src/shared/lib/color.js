@@ -84,7 +84,7 @@ export const hexToRgbComponents = (hex) => {
 
   const channels = parseHexChannels(normalizedHex)
   if (!channels) {
-    console.error(`hexToRgbComponents Error: 非法十六进制颜色值 → ${hex}`)
+    console.error(`颜色转换失败：非法十六进制颜色值。函数=hexToRgbComponents，输入=${hex}`)
     return FALLBACK_RGB_COMPONENTS
   }
   return channels.join(', ')
@@ -108,7 +108,7 @@ export const hexToRgba = (hex, alpha = 1) => (
 export const rgbToHex = (rgb) => {
   const channels = parseRgbChannels(rgb)
   if (!channels) {
-    console.error(`rgbToHex Error: 非法 RGB 颜色值 → ${rgb}`)
+    console.error(`颜色转换失败：非法 RGB 颜色值。函数=rgbToHex，输入=${rgb}`)
     return FALLBACK_HEX
   }
 
@@ -129,7 +129,7 @@ export const getTailwindColorRgb = (name) => {
   }
   if (color.startsWith('#')) return hexToRgb(color)
 
-  console.error(`getTailwindColorRgb Error: 颜色变量【${name}】取值无效，值为：${color}`)
+  console.error(`读取主题颜色失败：颜色变量【${name}】取值无效，函数=getTailwindColorRgb，值=${color}`)
   return FALLBACK_RGB
 }
 
@@ -155,6 +155,6 @@ export const getTailwindColorHex = (name) => {
   if (color.startsWith('rgb(')) return rgbToHex(color)
   if (color.startsWith('#')) return color
 
-  console.error(`getTailwindColorHex Error: 颜色变量【${name}】取值无效，值为：${color}`)
+  console.error(`读取主题颜色失败：颜色变量【${name}】取值无效，函数=getTailwindColorHex，值=${color}`)
   return FALLBACK_HEX
 }

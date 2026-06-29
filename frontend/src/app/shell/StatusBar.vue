@@ -142,10 +142,11 @@ const taskTypeMeta = {
   'steamcmd-download': { title: 'SteamCMD 下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
   'steam-subscribe': { title: 'Steam 订阅', icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
   'steam-unsubscribe': { title: 'Steam 取消订阅', icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'steam-workshop-download': { title: 'Steam 工坊下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
   'texture-opt': { title: '贴图优化', icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
   'texture-opt-analyze': { title: '贴图分析', icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
   'ai-task': { title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  localize: { title: '本地化模组', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  localize: { title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
   'mod-import': { title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
   'mod-export': { title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
   'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
@@ -206,7 +207,7 @@ const taskExtra = (task) => {
   return parts.join(' ')
 }
 
-const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 刷新后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
+const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
 </script>
 
 <style scoped>

@@ -1,9 +1,8 @@
 import { toast, checkResult } from '../../../shared/lib/common'
-import { useModStore } from '../../../features/mod/stores/modStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../bridge/runtimeBridge'
 
-export const usePathActions = ({ settings } = {}) => {
+export const usePathActions = ({ settings, requestModScan } = {}) => {
   // 自动检测路径
   const autoDetectPaths = async (updateStore = false) => {
     if(!window.pywebview) return
@@ -50,7 +49,7 @@ export const usePathActions = ({ settings } = {}) => {
   const openPath = async (path) => {
     if(!window.pywebview) return
     if(!path) return
-    console.log("打开路径:", path)
+    console.debug("准备打开路径:", path)
     const res = await window.pywebview.api.path_open(path)
     checkResult(res, "打开路径")
   }
@@ -112,8 +111,7 @@ export const usePathActions = ({ settings } = {}) => {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
       if(reScan){
         // 刷新Mod列表
-        const modStore = useModStore()
-        modStore.scanMods()
+        await requestModScan?.()
       }
       return true
     }
@@ -156,15 +154,14 @@ export const usePathActions = ({ settings } = {}) => {
     }
     if (reScan) {
       // 刷新Mod列表
-      const modStore = useModStore()
-      modStore.scanMods()
+      await requestModScan?.()
     }
     return true
   }
 
   // 打开Url
   const openUrl = (url) => {
-    if(!url) { toast.warning("网址为空！"); return}
+    if(!url) { toast.warning("没有可打开的网址。请确认当前条目包含有效链接。"); return}
     if (isBrowserRuntime()) {
       openManagedSubBrowserUrl(url, 'RimModManager')
       return

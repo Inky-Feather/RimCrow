@@ -22,6 +22,7 @@ def _sample_payload(preview_path: str = ""):
                 "tags": ["QoL", "UI"],
                 "group_names": ["推荐:分组"],
                 "author": ["作者A", "作者B"],
+                "supported_versions": ["1.6", "1.7"],
                 "workshop_id": "1234567890",
                 "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890",
                 "preview_path": preview_path,
@@ -50,15 +51,16 @@ def test_plain_text_defaults_to_notes_and_omits_package_id():
     assert "#QoL #UI" in text
     assert "分组：推荐:分组" in text
     assert "作者：作者A、作者B" in text
+    assert "支持版本：1.6、1.7" in text
 
 
-def test_intro_is_after_tags_groups_and_authors():
+def test_intro_is_after_tags_groups_authors_and_versions():
     manager = RecommendationExportManager()
     normalized = manager.normalize_payload(_sample_payload())
     text = manager.render_plain_text(normalized["mods"], normalized["options"])
 
-    # 介绍排在标签、分组和作者之后，便于先看分类信息，再读推荐说明。
-    assert text.index("#QoL #UI") < text.index("分组：推荐:分组") < text.index("作者：作者A、作者B") < text.index("介绍：适合作为推荐介绍。")
+    # 介绍排在标签、分组、作者和支持版本之后，便于先看分类信息，再读推荐说明。
+    assert text.index("#QoL #UI") < text.index("分组：推荐:分组") < text.index("作者：作者A、作者B") < text.index("支持版本：1.6、1.7") < text.index("介绍：适合作为推荐介绍。")
 
 
 def test_author_export_can_be_disabled():
@@ -70,6 +72,43 @@ def test_author_export_can_be_disabled():
 
     # 作者是可选字段，关闭后不应该留下空标签或多余分隔符。
     assert "作者：" not in text
+
+
+def test_supported_versions_export_can_be_disabled():
+    manager = RecommendationExportManager()
+    payload = _sample_payload()
+    payload["options"] = {"include_supported_versions": False}
+    normalized = manager.normalize_payload(payload)
+    text = manager.render_plain_text(normalized["mods"], normalized["options"])
+
+    # 支持版本是可选字段，关闭后不应影响介绍和其它基础字段。
+    assert "支持版本：" not in text
+    assert "作者：作者A、作者B" in text
+    assert "介绍：适合作为推荐介绍。" in text
+
+
+def test_language_pack_appendix_is_optional():
+    manager = RecommendationExportManager()
+    payload = _sample_payload()
+    payload["mods"][0]["language_packs"] = [
+        {
+            "name": "中文语言包",
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=9876543210",
+        }
+    ]
+
+    text_without_appendix = manager.render_plain_text(
+        manager.normalize_payload(payload)["mods"],
+        manager.normalize_payload(payload)["options"],
+    )
+    payload["options"] = {"include_language_packs": True}
+    normalized = manager.normalize_payload(payload)
+    text = manager.render_plain_text(normalized["mods"], normalized["options"])
+
+    # 语言包默认不附加；开启后按名称和网址附在对应模组字段后。
+    assert "语言包：" not in text_without_appendix
+    assert "语言包：中文语言包" in text
+    assert "语言包网址：https://steamcommunity.com/sharedfiles/filedetails/?id=9876543210" in text
 
 
 def test_description_option_replaces_notes():
@@ -154,7 +193,7 @@ def test_markdown_uses_title_and_clickable_url_without_repeated_name(tmp_path: P
     assert markdown.startswith("# 推荐:分组\n")
     assert "## 001\\. 好用模组" in markdown
     assert "名称：" not in markdown
-    assert markdown.index("#QoL #UI") < markdown.index("分组：推荐:分组") < markdown.index("作者：作者A、作者B") < markdown.index("介绍：适合作为推荐介绍。")
+    assert markdown.index("#QoL #UI") < markdown.index("分组：推荐:分组") < markdown.index("作者：作者A、作者B") < markdown.index("支持版本：1\\.6、1\\.7") < markdown.index("介绍：适合作为推荐介绍。")
     assert "网址：<https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890>" in markdown
 
 
@@ -207,6 +246,30 @@ def test_image_export_creates_unique_named_folder(tmp_path: Path):
     assert output_dir.name == "推荐_分组_2"
     assert output_dir.is_dir()
     assert Path(result["files"][0]).parent == output_dir
+
+
+def test_image_export_keeps_animated_png_cover(tmp_path: Path):
+    preview_path = tmp_path / "animated.png"
+    frames = [
+        Image.new("RGB", (120, 80), "#cc3333"),
+        Image.new("RGB", (120, 80), "#3366cc"),
+    ]
+    frames[0].save(preview_path, "PNG", save_all=True, append_images=frames[1:], duration=[80, 120], loop=0)
+    manager = RecommendationExportManager()
+    payload = _sample_payload(str(preview_path))
+    payload["format"] = "image"
+
+    result = manager.export(payload, target_dir=str(tmp_path / "images"))
+
+    exported = Path(result["files"][0])
+    with Image.open(exported) as image:
+        # 推荐图封面是动图时，输出仍是 PNG，但应保留 APNG 多帧信息。
+        assert getattr(image, "n_frames", 1) == 2
+        image.seek(0)
+        first_pixel = image.convert("RGB").getpixel((20, 20))
+        image.seek(1)
+        second_pixel = image.convert("RGB").getpixel((20, 20))
+    assert first_pixel != second_pixel
 
 
 def test_docx_and_pdf_exports_create_files(tmp_path: Path):

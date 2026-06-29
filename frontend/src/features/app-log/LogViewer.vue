@@ -112,6 +112,7 @@ import UnifiedLogPanel from './UnifiedLogPanel.vue';
 import AiDiagnosticSidebar from '../ai/AiDiagnosticSidebar.vue'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue';
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
+import { toUserMessage } from '../../shared/lib/common'
 
 
 // -----------------------------------------------------------------
@@ -281,7 +282,7 @@ const autoAnalyzeGlobalErrors = async () => {
     return
   }
 
-  toast.info("正在扫描全部日志，请稍候...", { timeout: 3000 })
+  toast.info("正在扫描全部日志，请稍候。", { timeout: 3000 })
   isGlobalScanning.value = true
   
   resetAttachmentState() 
@@ -309,13 +310,13 @@ const autoAnalyzeGlobalErrors = async () => {
     const repeatCount = stats.total_repeat_count || 0
     const tokenText = `${(Number(scanResult.tokenInfo?.estimated || 0) / 1000).toFixed(1)}k TK`
     const notice = scanResult.notice || `压缩完成：保留 ${tocCount} 条错误摘要，共覆盖 ${repeatCount} 次错误，当前占用约 ${tokenText}。`
-    toast.success(`${notice} 正在启动 AI 分析...`, { timeout: 5000 })
+    toast.success(`${notice} 正在启动 AI 分析。`, { timeout: 5000 })
     autoDiagnosisRequest.value = {
       nonce: Date.now(),
     }
   } catch (e) {
     clearLogSelection()
-    toast.error("全局扫描失败: " + e.message)
+    toast.error(toUserMessage(e?.message || e, '全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。'))
   }
 }
 </script>

@@ -9,8 +9,9 @@ from typing import Any
 from urllib.parse import urlparse
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
-from backend.utils.tools import generate_path_hash, get_folder_size
-from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
+from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
+from backend.utils.tools import generate_path_hash, get_folder_size, normalize_path_for_storage
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -69,10 +70,10 @@ class ModScanner:
         """外部调用：请求中断扫描"""
         if not self._is_scanning: return False
         if task_id and self._current_task_id and task_id != self._current_task_id:
-            logger.warning("Ignored scan interruption for stale task: requested=%s active=%s", task_id, self._current_task_id)
+            logger.warning("忽略过期扫描中断请求：requested=%s active=%s", task_id, self._current_task_id)
             return False
         self._stop_requested = True
-        logger.warning("Scan interruption requested by user. task_id=%s", self._current_task_id)
+        logger.warning("用户请求中断扫描：task_id=%s", self._current_task_id)
         return True
 
     def wait_until_idle(self, timeout: float = 10.0, poll_interval: float = 0.1) -> bool:
@@ -83,7 +84,16 @@ class ModScanner:
             time.sleep(max(0.01, poll_interval))
         return not self._is_scanning
 
-    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
+    def _scan_mod_detail(self, path_hash: str, mod_path: str, snapshot: dict | None = None, message: str = "") -> dict[str, Any]:
+        return {
+            "path_hash": path_hash,
+            "package_id": (snapshot or {}).get("package_id", ""),
+            "name": (snapshot or {}).get("name", ""),
+            "path": mod_path,
+            "message": message,
+        }
+
+    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
@@ -101,29 +111,49 @@ class ModScanner:
                 status="pending",
                 progress=0,
                 message="准备扫描任务...",
-                metrics={ "title": "模组扫描", "forced_update": forced_update, "size_check_override": size_check_override },
+                metrics={ "title": "模组扫描", "forced_update": forced_update, "size_check_override": size_check_override, "size_check_paths_count": len(size_check_paths or []) },
             )
         # 提交到线程池
-        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, emit_events, residue_active_tokens, residue_scan_enabled )
+        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, size_check_paths, emit_events, residue_active_tokens, residue_scan_enabled )
         return {'status': 'started', 'task_id': task_id}
 
-    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
+    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | set[str] | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
         """
         后台执行的扫描主逻辑
         """
-        logger.info(f"Scan started. Paths: {search_paths}")
+        logger.info(f"扫描已开始，路径：{search_paths}")
         start_time = time.time()
         db.connect(reuse_if_open=True) # 确保线程有连接
-        stats = {'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0}
+        stats = {
+            'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0,
+            'external_enabled': 0, 'strict_restored_disabled': 0, 'strict_restore_failed': 0,
+            'about_conflict_cleaned': 0, 'shadow_path_cleaned': 0,
+        }
+        scan_details = {
+            'external_enabled_mods': [],
+            'strict_restored_disabled_mods': [],
+            'strict_restore_failed_mods': [],
+            'about_conflict_cleaned_mods': [],
+        }
         with db.atomic() as txn:
             try:
                 # --- 5. 清理失效数据 ---
                 # 扫描缺失的 Mod (物理文件没了)
-                deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data)
-                stats['removed'] = len(deletion_result['deleted_mods'])
-                logger.info(f"{'Deleted' if settings.config.delete_missing_mods_data else 'Find'} {stats['removed']} missing mods.")
+                workshop_status = SteamManager().workshop_merged_data()
+                subscribed_workshop_ids = [wid for wid, data in workshop_status.items() if data.get("is_subscribed")]
+                deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data, subscribed_workshop_ids)
+                missing_count = len(deletion_result.get('missing_mods') or [])
+                deleted_count = len(deletion_result.get('deleted_mods') or [])
+                stats['removed'] = missing_count + deleted_count if settings.config.delete_missing_mods_data else deleted_count
+                logger.info(
+                    "库存失效检测完成: missing=%s deleted=%s restored=%s delete_data=%s",
+                    missing_count,
+                    deleted_count,
+                    len(deletion_result.get('restored_mods') or []),
+                    settings.config.delete_missing_mods_data,
+                )
                 # 清理失效的 Shadow Paths
-                ModMaintenanceDAO.clean_invalid_shadow_paths()
+                stats['shadow_path_cleaned'] = ModMaintenanceDAO.clean_invalid_shadow_paths()
             except Exception as e:
                 txn.rollback() # 万一出错，回滚所有改动
                 raise e
@@ -133,12 +163,21 @@ class ModScanner:
             # 扫描前先把 ACF 中“目录已不存在”的陈旧安装记录清掉，
             # 避免后续任何 SteamCMD 下载又被旧记录拖入 Missing game files 校验失败。
             SteamManager().reconcile_steamcmd_acf()
-            valid_paths = [p for p in search_paths if p and os.path.exists(p)]
+            valid_paths = [
+                normalize_path_for_storage(p)
+                for p in search_paths
+                if p and os.path.exists(p)
+            ]
             if not valid_paths:
                 if emit_events:
                     EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message="没有有效路径", metrics={"title": "模组扫描"})
                 self._finish_scan({'error': '没有有效路径', 'task_id': task_id}, task_id, emit_events=emit_events)
                 return
+            size_check_path_set = {
+                normalize_path_for_storage(path)
+                for path in (size_check_paths or [])
+                if path
+            }
             # 初始化 DLC Parser
             dlc_parser = DLCParser(self.context.game_dlc_path)
             existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
@@ -157,12 +196,17 @@ class ModScanner:
                 try:
                     # 判断是否是 DLC 目录 (Data)
                     is_data_dir = (os.path.basename(base_path).lower() == 'data')
+                    if not is_data_dir:
+                        about_state = ModAnalyzer.resolve_mod_about_state(base_path, cleanup_dual_files=False)
+                        if about_state.resolved_path:
+                            mod_folders.append((normalize_path_for_storage(base_path), False))
+                            continue
                     with os.scandir(base_path) as it:
                         for entry in it:
                             if entry.is_dir():
                                 # 遇到链接生成目录直接跳过，防止无限递归和重复
                                 if entry.name.startswith(FileManager.LINK_PREFIX): continue
-                                mod_folders.append((entry.path, is_data_dir))
+                                mod_folders.append((normalize_path_for_storage(entry.path), is_data_dir))
                 except OSError as e:
                     logger.warning(f"无法访问路径 {base_path}: {e}")
             total_count = len(mod_folders)
@@ -176,7 +220,7 @@ class ModScanner:
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
-                    logger.info("Scan stopped during parsing stage.")
+                    logger.info("扫描在解析阶段停止。")
                     self._handle_interruption(task_id)
                     return # 直接结束任务，不进入写库阶段
                 # 进度报告
@@ -197,7 +241,7 @@ class ModScanner:
                             },
                         )
                 # 处理单个 Mod
-                mod_data = self._process_single_mod( mod_path, is_dlc, existing_snapshots, dlc_parser, forced_update, size_check_override )
+                mod_data = self._process_single_mod( mod_path, is_dlc, existing_snapshots, dlc_parser, forced_update, size_check_override, size_check_path_set, stats, scan_details )
                 if mod_data:
                     # 如果是增量跳过，需要补全 package_id 以便后续逻辑使用
                     # _process_single_mod 返回 {'_skipped': True, 'package_id': ...}
@@ -213,7 +257,7 @@ class ModScanner:
                         
             # 【关键检查点】：解析完成后检查中断标志
             if self._stop_requested:
-                logger.info("Scan stopped during parsing stage.")
+                logger.info("扫描在解析阶段停止。")
                 self._handle_interruption(task_id, emit_events=emit_events)
                 return # 直接结束任务，不进入写库阶段
             # --- 3. 库存落库与运行态分析 ---
@@ -234,7 +278,7 @@ class ModScanner:
             for entries in temp_registry.values():
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
-                    logger.info("Scan stopped during parsing stage.")
+                    logger.info("扫描在解析阶段停止。")
                     self._handle_interruption(task_id, emit_events=emit_events)
                     return # 直接结束任务
 
@@ -298,7 +342,7 @@ class ModScanner:
                 try:
                     residue_cleanup = ModResidueManager.get_overview(valid_paths, self.context, residue_active_tokens or [])
                 except Exception as residue_error:
-                    logger.warning("Mod residue scan failed: %s", residue_error, exc_info=True)
+                    logger.warning("MOD 残留扫描失败：%s", residue_error, exc_info=True)
             
             if emit_events:
                 residue_count = int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0)
@@ -329,17 +373,52 @@ class ModScanner:
                 'conflicts': final_conflicts,
                 'coexistences': final_coexistences,
                 'runtime_sync_message': runtime_sync_msg,
+                'strict_disable_restore_failures': scan_details['strict_restore_failed_mods'],
             }
             if residue_cleanup is not None:
                 result['residue_cleanup'] = residue_cleanup
             self._finish_scan(result, task_id, emit_events=emit_events)
 
             duration = time.time() - start_time
-            logger.info(f"Scan finished in {duration:.2f}s. Added: {stats['added']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Removed: {stats['removed']}, Conflicts: {len(final_conflicts)}, Coexistences: {len(final_coexistences)}. {runtime_sync_msg}")
+            logger.info(
+                "扫描完成，用时 %.2fs。新增：%s，更新：%s，跳过：%s，移除：%s，"
+                "外部启用：%s，严格恢复：%s，严格恢复失败：%s，About 冲突清理：%s，"
+                "影子路径清理：%s，冲突：%s，共存：%s，残留：%s。%s",
+                duration, stats['added'], stats['updated'], stats['skipped'], stats['removed'],
+                stats['external_enabled'], stats['strict_restored_disabled'], stats['strict_restore_failed'],
+                stats['about_conflict_cleaned'], stats['shadow_path_cleaned'], len(final_conflicts),
+                len(final_coexistences), int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0),
+                runtime_sync_msg,
+            )
+            disabled_debug = {
+                key: [
+                    item.get("package_id") or item.get("path") or item.get("path_hash")
+                    for item in items
+                ]
+                for key, items in scan_details.items()
+                if items
+            }
+            conflict_debug = [
+                {
+                    "package_id": item.get("package_id"),
+                    "paths": [entry.get("path") for entry in item.get("items", []) if entry.get("path")],
+                }
+                for item in final_conflicts
+            ]
+            coexistence_debug = [
+                {
+                    "package_id": item.get("package_id"),
+                    "paths": [entry.get("path") for entry in item.get("items", []) if entry.get("path")],
+                }
+                for item in final_coexistences
+            ]
+            residue_debug = (residue_cleanup or {}).get("summary") if residue_cleanup else None
+            logger.debug("扫描禁用状态详情: %s", disabled_debug)
+            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s residue=%s", conflict_debug, coexistence_debug, residue_debug)
         except Exception as e:
             import traceback
             traceback.print_exc()
-            logger.error("Scan task failed", exc_info=True)
+            logger.error("扫描任务失败", exc_info=True)
             if emit_events:
                 EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=f"扫描失败: {e}", metrics={'title': '模组扫描'})
             self._finish_scan({'status': 'error', 'message': str(e), 'task_id': task_id}, task_id, emit_events=emit_events)
@@ -359,7 +438,7 @@ class ModScanner:
             'status': 'cancelled',
             'message': '扫描已由用户中止，未对数据库进行任何修改。',
         }, task_id, emit_events=emit_events)
-        logger.info("Scan cancelled safely.")
+        logger.info("扫描已安全取消。")
 
     def _finish_scan(self, result, task_id: str | None = None, emit_events: bool = True):
         """扫描结束，通知前端并发送最终统计"""
@@ -382,15 +461,16 @@ class ModScanner:
         if emit_events:
             EventBus.emit('scan-complete', payload)
 
-    def _process_single_mod( self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False, size_check_override: bool | None = None ):
+    def _process_single_mod( self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False, size_check_override: bool | None = None, size_check_paths: set[str] | None = None, stats: dict | None = None, scan_details: dict | None = None ):
         """
         处理单个 Mod 的纯函数逻辑。
         返回: Mod数据字典 或 None(无效) 或 {'_skipped': True, 'package_id': ...}
         """
+        mod_path = normalize_path_for_storage(mod_path)
         try:
             about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=True)
         except OSError as e:
-            logger.warning(f"Failed to clean duplicate About files for {mod_path}: {e}")
+            logger.warning(f"清理重复 About 文件失败：{mod_path}，错误：{e}")
             about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=False)
         about_file = about_state.resolved_path
         is_disabled = about_state.is_disabled
@@ -408,17 +488,46 @@ class ModScanner:
         path_hash = generate_path_hash(mod_path)
         # 增量比对 - 第一阶段：仅比对修改时间
         snapshot = existing_snapshots.get(path_hash)
+        detail = self._scan_mod_detail(path_hash, mod_path, snapshot)
+        if getattr(about_state, 'cleaned_conflict', False) and stats is not None and scan_details is not None:
+            stats['about_conflict_cleaned'] = int(stats.get('about_conflict_cleaned') or 0) + 1
+            scan_details.setdefault('about_conflict_cleaned_mods', []).append(detail)
+
+        if snapshot and snapshot.get('disabled') is True and not is_disabled:
+            if bool(getattr(settings.config, 'strict_disabled_mode', False)):
+                success, message = ModMaintenanceDAO.set_mod_disabled_status(mod_path, True)
+                if success:
+                    if stats is not None:
+                        stats['strict_restored_disabled'] = int(stats.get('strict_restored_disabled') or 0) + 1
+                    if scan_details is not None:
+                        scan_details.setdefault('strict_restored_disabled_mods', []).append({**detail, "message": message})
+                    about_state = ModAnalyzer.resolve_mod_about_state(mod_path, cleanup_dual_files=False)
+                    about_file = about_state.resolved_path or about_file
+                    is_disabled = True
+                else:
+                    if stats is not None:
+                        stats['strict_restore_failed'] = int(stats.get('strict_restore_failed') or 0) + 1
+                    if scan_details is not None:
+                        scan_details.setdefault('strict_restore_failed_mods', []).append({**detail, "message": message})
+                    is_disabled = True
+            else:
+                if stats is not None:
+                    stats['external_enabled'] = int(stats.get('external_enabled') or 0) + 1
+                if scan_details is not None:
+                    scan_details.setdefault('external_enabled_mods', []).append(detail)
         # 在开启开关或者强制更新的情况下，才需要计算大小
         # 直启前检查同步会显式绕过“大文件夹体积统计”，避免为了启动准备把耗时放大。
         if size_check_override is None:
             need_size_check = settings.config.enable_file_size_scan or forced_update
         else:
             need_size_check = bool(size_check_override)
+        if not need_size_check and size_check_paths and mod_path in size_check_paths:
+            need_size_check = True
 
         disabled_change = not(snapshot and snapshot['disabled'] is is_disabled)
         snapshot_missing = bool(
             snapshot and (
-                str(snapshot.get("state") or "").strip().lower() == MOD_ASSET_STATE_MISSING
+                str(snapshot.get("state") or "").strip().lower() in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED}
                 or not str(snapshot.get("path") or "").strip()
             )
         )
@@ -579,12 +688,11 @@ class ModScanner:
             except Exception:
                 pass
         
-        # 2. 尝试使用文件夹名 (如果是纯数字 且 路径中包含 "steamapps\workshop\content\427520")
+        # 2. 尝试使用文件夹名 (如果是纯数字且路径位于 RimWorld Workshop 内容目录)
         # 建议：使用 path 字符串查找，不依赖正则，避免分隔符坑
         norm_path = os.path.normpath(mod_path).lower() # 统一转为小写、标准分隔符
-        # 检查路径中是否包含 workshop/content/294100 关键段
-        # Windows normpath 会是 workshop\content\294100
-        keywords = os.path.join('workshop', 'content', '294100').lower()
+        # Windows normpath 会把关键段转换成系统分隔符。
+        keywords = os.path.join('workshop', 'content', RIMWORLD_STEAM_APP_ID_STR).lower()
         if keywords in norm_path:
             folder_name = os.path.basename(mod_path)
             # 只要是纯数字就认
@@ -601,14 +709,17 @@ class ModScanner:
         # 扩展：RimWorld 也支持 jpg/gif 改名为 png，或者直接识别。
         # 这里简单起见，先只找 About/Preview.png，如果要做得细致，可以 glob 搜索
         preview_path = os.path.join(mod_path, 'About', 'Preview.png')
-        if not os.path.isfile(preview_path): preview_path = ""
+        if os.path.isfile(preview_path): preview_path = normalize_path_for_storage(preview_path)
+        else: preview_path = ""
 
         # --- ModIcon.png ---
         icon_path = os.path.join(mod_path, 'About', 'ModIcon.png')
-        if not os.path.isfile(icon_path): icon_path = ""
+        if os.path.isfile(icon_path): icon_path = normalize_path_for_storage(icon_path)
+        else: icon_path = ""
         
         rel_xml_icon_path = os.path.join(mod_path, 'Textures', xml_icon_path+'.png')
-        if not os.path.isfile(rel_xml_icon_path): rel_xml_icon_path = ""
+        if os.path.isfile(rel_xml_icon_path): rel_xml_icon_path = normalize_path_for_storage(rel_xml_icon_path)
+        else: rel_xml_icon_path = ""
         
         # 使用 XML 中定义的路径 (RimWorld 1.5+)
         if not icon_path and rel_xml_icon_path:

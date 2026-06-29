@@ -137,7 +137,7 @@ import { useAiStore } from './aiStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useToast } from 'vue-toastification'
-import { normalizeText } from '../../shared/lib/common'
+import { normalizeText, toUserMessage } from '../../shared/lib/common'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 
@@ -210,6 +210,12 @@ const closeModal = () => {
   appStore.uiState.showModAliasReviewModal = false
 }
 
+const closeWhenEmpty = () => {
+  if (reviewTasks.value.length === 0 || totalPendingItems.value === 0) {
+    closeModal()
+  }
+}
+
 const removeTaskGroup = async (taskId) => {
   /** 从待审池中移除整组任务结果。 */
   const group = aiStore.getModAliasReviewTask(taskId)
@@ -220,9 +226,7 @@ const removeTaskGroup = async (taskId) => {
   )
   if (!ok) return
   aiStore.removeModAliasReviewTask(taskId)
-  if (reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  closeWhenEmpty()
 }
 
 const removeItem = (taskId, index) => {
@@ -232,9 +236,7 @@ const removeItem = (taskId, index) => {
   const item = group.items[index]
   if (!item?.package_id) return
   aiStore.removeModAliasReviewTaskItem(taskId, item.package_id)
-  if (reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  closeWhenEmpty()
 }
 
 const regenerateItem = async (taskId, item) => {
@@ -261,7 +263,8 @@ const regenerateItem = async (taskId, item) => {
       toast.error('重新生成失败')
     }
   } catch (error) {
-    toast.error(`重新生成失败: ${error?.message || error}`)
+    console.warn('重新生成模组别名失败:', error)
+    toast.error(toUserMessage(error?.message || error, '重新生成失败。请检查 AI 配置、网络连接和当前模组数据后重试。'))
   } finally {
     regeneratingIds.value.delete(item.package_id)
   }
@@ -288,11 +291,9 @@ const saveTaskGroup = async (taskId) => {
     return
   }
   const success = await modStore.batchUpdateModsUserData(updates)
-  if (success && reviewTasks.value.length === 0) {
-    closeModal()
-  }
   if (success) {
     aiStore.removeModAliasReviewTask(taskId)
+    closeWhenEmpty()
   }
 }
 
@@ -318,9 +319,7 @@ const applyAll = async () => {
       aiStore.removeModAliasReviewTask(taskId)
     }
   }
-  if (appliedCount > 0 && reviewTasks.value.length === 0) {
-    closeModal()
-  }
+  if (appliedCount > 0) closeWhenEmpty()
 }
 
 const clearAll = async () => {

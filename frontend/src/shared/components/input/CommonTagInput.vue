@@ -21,10 +21,11 @@
       <div class="relative flex-1 flex" ref="tagInputContainer">
         <input 
           v-model="newTag"
+          @input="handleInput"
           @keydown.up.prevent="navTag(-1)" 
           @keydown.down.prevent="navTag(1)" 
-          @keydown.esc="showTagSuggest = false" 
-          @focus="showTagSuggest = true" 
+          @keydown.esc="closeSuggest" 
+          @focus="handleFocus" 
           @blur="handleBlur"
           @keydown.enter.prevent="confirmAddTag"
           @keydown.backspace="handleBackspace"
@@ -34,7 +35,7 @@
         
         <!-- 标签建议下拉框 -->
         <div v-if="showTagSuggest && filteredKnownTags.length > 0" 
-            class="popover-surface absolute bottom-full left-0 z-50 mb-1 flex max-h-40 w-48 flex-col overflow-y-auto rounded-lg p-1">
+            class="popover-surface absolute bottom-full left-0 z-50 mb-1 flex max-h-40 w-48 flex-col overflow-y-auto rounded-lg p-1 shadow-[0_18px_50px_var(--shadow-color)]">
           <button 
             v-for="(tag, idx) in filteredKnownTags" 
             :key="tag.value"  
@@ -52,6 +53,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { sortByDisplayName } from '../../lib/common'
 
 const props = defineProps({
   label: String,
@@ -65,17 +67,20 @@ const emit = defineEmits(['update:modelValue'])
 
 const newTag = ref('')
 const showTagSuggest = ref(false)
-const tagNavIndex = ref(0)
+const tagNavIndex = ref(-1)
 const tagInputContainer = ref(null)
 
 // 1. 归一化建议数据
 const normalizedTags = computed(() => {
-  return props.allTags.map(item => {
-    if (typeof item === 'string') {
-      return { label: item, value: item }
-    }
-    return item
-  })
+  return sortByDisplayName(
+    props.allTags.map(item => {
+      if (typeof item === 'string') {
+        return { label: item, value: item }
+      }
+      return item
+    }),
+    item => item?.label || item?.value
+  )
 })
 
 // 2. 过滤建议列表 (排除已存在的，并进行模糊匹配)
@@ -96,15 +101,15 @@ const addTag = (val) => {
   if (targetValue && !props.modelValue.includes(targetValue)) {
     emit('update:modelValue', [...props.modelValue, targetValue])
     newTag.value = ''
-    tagNavIndex.value = 0
+    tagNavIndex.value = -1
     showTagSuggest.value = false
   }
 }
 
 // 确认添加 (处理回车键)
 const confirmAddTag = () => {
-  // 如果下拉框显示且有选中项，优先添加选中项
-  if (showTagSuggest.value && filteredKnownTags.value.length > 0 && tagNavIndex.value >= 0) {
+  // 只有显式导航选中过建议项时，回车才采纳建议；否则保留用户原始输入。
+  if (showTagSuggest.value && tagNavIndex.value >= 0 && filteredKnownTags.value.length > tagNavIndex.value) {
     const selected = filteredKnownTags.value[tagNavIndex.value]
     addTag(selected.value)
   } else {
@@ -117,10 +122,13 @@ const confirmAddTag = () => {
 const navTag = (step) => {
   if (!showTagSuggest.value) {
     showTagSuggest.value = true
-    return
   }
   const len = filteredKnownTags.value.length
   if (len === 0) return
+  if (tagNavIndex.value < 0) {
+    tagNavIndex.value = step > 0 ? 0 : len - 1
+    return
+  }
   tagNavIndex.value = (tagNavIndex.value + step + len) % len
 }
 
@@ -140,9 +148,23 @@ const handleBackspace = () => {
 const handleBlur = () => {
   // 延迟关闭，让点击建议列表的操作能够先触发
   setTimeout(() => {
-    showTagSuggest.value = false
-    tagNavIndex.value = 0
+    closeSuggest()
   }, 200)
+}
+
+const closeSuggest = () => {
+  showTagSuggest.value = false
+  tagNavIndex.value = -1
+}
+
+const handleFocus = () => {
+  showTagSuggest.value = true
+  tagNavIndex.value = -1
+}
+
+const handleInput = () => {
+  showTagSuggest.value = true
+  tagNavIndex.value = -1
 }
 </script>
 

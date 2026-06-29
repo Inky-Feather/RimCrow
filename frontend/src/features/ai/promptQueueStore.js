@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { toast } from '../../shared/lib/common'
+import { toast, toUserMessage } from '../../shared/lib/common'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 
 // 队列只接收规范化后的动作，避免不同检查模块各自拼 Confirm 参数造成弹窗行为不一致。
@@ -15,6 +15,7 @@ const normalizePromptItem = (item = {}) => ({
   id: String(item.id || item.key || '').trim(),
   title: String(item.title || item.name || '').trim(),
   description: String(item.description || item.message || '').trim(),
+  descriptionFormat: String(item.descriptionFormat || item.description_format || 'text').trim().toLowerCase(),
   meta: Array.isArray(item.meta) ? item.meta.map(value => String(value || '').trim()).filter(Boolean) : [],
   status: 'pending',
   statusMessage: '',
@@ -97,7 +98,8 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
       return true
     } catch (error) {
       item.status = 'failed'
-      item.statusMessage = error?.message || '处理失败'
+      console.warn('提示队列单项处理失败:', error)
+      item.statusMessage = toUserMessage(error?.message || error, '处理失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。')
       toast.error(item.statusMessage)
       return false
     }
@@ -122,7 +124,8 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
         await prompt.onBulkAction(actionId, targets.map(item => item.raw), prompt)
       }
     } catch (error) {
-      toast.error(error?.message || `${targetAction.label}失败`)
+      console.warn('提示队列批量处理失败:', error)
+      toast.error(toUserMessage(error?.message || error, `${targetAction.label}失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。`))
     } finally {
       prompt.isBulkSubmitting = false
     }

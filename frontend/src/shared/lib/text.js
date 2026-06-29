@@ -1,6 +1,8 @@
 /**
  * 对纯文本做 HTML 转义，避免直接插入 DOM 时破坏结构。
  */
+import { decoratePreviewableHtmlImages } from './domEffects'
+
 export const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -419,6 +421,7 @@ export const parseUnityRichText = (unityText, removeImg = true, remoteImageResol
     .replace(/<blockquote[^>]*>\s*<\/blockquote>/gi, '')
     .replace(/<strong>\s*<\/strong>/gi, '')
     .trim()
+  htmlText = decoratePreviewableHtmlImages(htmlText)
 
   // 13. 统一包裹展示容器，保持现有样式和 white-space 行为不变。
   return `<div class="unity-content text-sm leading-relaxed" style="white-space: pre-wrap;">${htmlText}</div>`
@@ -430,26 +433,31 @@ export const parseUnityRichText = (unityText, removeImg = true, remoteImageResol
 export const cleanRichText = (text, maxLength = 500) => {
   if (!text) return ''
 
-  let clean = text;
-  // 1. 移除 Unity 标签 (如 <color=#ff0000>...</color>, <b>...</b>)
-  // 采用非贪婪匹配移除所有 <...> 格式的标签
-  clean = clean.replace(/<[^>]+>/g, '');
-  // 2. 移除 Steam/BBCode 链接标签，但保留中间的文字内容
-  // 匹配 [url=xxxx]显示文字[/url] -> 替换为 "显示文字"
-  clean = clean.replace(/\[url=[^\]]*\]([^\[]+)\[\/url\]/gi, '$1');
-  // 3. 移除其它 BBCode 标签 (如 [list], [img], [b], [i] 等)
-  // 匹配所有 [...] 格式的标签
-  clean = clean.replace(/\[[^\]]+\]/g, '');
-  // 4. 移除 Markdown 格式的链接 (如果描述里有的话)
-  // 匹配 [显示文字](http://...) -> 替换为 "显示文字"
-  clean = clean.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
-  // 5. 移除裸露的 URL (http/https/ftp)
-  // AI 不需要具体的网址来理解 Mod 的功能
-  clean = clean.replace(/(https?|ftp):\/\/[^\s/$.?#].[^\s]*/gi, '');
-  // 6. 极致压缩：去除多余换行、制表符
-  // 将 2 个及以上的换行/空格合并为 1 个，并去除首尾空格
-  clean = clean.replace(/\s{2,}/g, ' ').replace(/\n+/g, '\n').trim();
-  // 7. 长度兜底拦截 (AI 只需要前 300-500 字通常就足够理解功能了)
+  let clean = String(text)
+  // 1. 统一真实换行与转义换行，后续才能把多段空行稳定压成一行。
+  clean = clean.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n')
+  // 2. 移除 HTML / Unity 尖括号标签，保留标签内文字。
+  clean = clean.replace(/<[^>]+>/g, '')
+  // 3. 图片、视频、预览类标签对 tooltip 没有帮助，连同内部 URL 一起移除。
+  clean = clean
+    .replace(/\[(img|video|previewimg|previewicon|screenshot)[^\]]*\][\s\S]*?\[\/\1\]/gi, '')
+    .replace(/\[(img|previewimg|previewicon|screenshot)=[^\]]+\]/gi, '')
+    .replace(/\[previewyoutube[^\]]*\]\[\/previewyoutube\]/gi, '')
+  // 4. 链接标签保留可读文字，裸 URL 直接移除。
+  clean = clean
+    .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
+    .replace(/\[url\]([\s\S]*?)\[\/url\]/gi, '')
+    .replace(/\[([^\]]+)\]\((https?|ftp):\/\/[^\)]+\)/gi, '$1')
+    .replace(/(https?|ftp):\/\/[^\s<>\]]+/gi, '')
+  // 5. 移除剩余 BBCode/Steam 标签，保留中间的普通文字。
+  clean = clean.replace(/\[[^\]]+\]/g, '')
+  // 6. 压缩空白：连续空格变一个，多个换行变一个。
+  clean = clean
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+  // 7. 长度兜底拦截。
   if (clean.length > maxLength) {
     clean = clean.substring(0, maxLength) + "...";
   }

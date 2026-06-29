@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { checkResult, toast } from '../../../shared/lib/common'
+import { checkResult, toast, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { normalizePackageId } from '../lib/modIdentity'
 
@@ -58,8 +58,14 @@ export const useGroupStore = defineStore('groups', () => {
   // === State ===
   const groupList = ref([]) // 分组列表
   const isDraggingGroup = ref(false) // 是否正在拖动分组
+  const targetGroupRequest = ref(null) // 外部页面请求分组面板定位的目标
 
   // === Actions ===
+  const focusGroup = (groupId) => {
+    const id = String(groupId ?? '').trim()
+    if (!id) return
+    targetGroupRequest.value = { groupId: id, requestedAt: Date.now() }
+  }
   // 设置分组数据
   const setGroups = (groups) => {
     groupList.value = normalizeGroups(groups)
@@ -100,7 +106,7 @@ export const useGroupStore = defineStore('groups', () => {
       }
     } catch (e) {
       console.error("获取分组异常:", e)
-      toast.error(`获取分组异常: \n${e.message}`)
+      toast.error(toUserMessage(e?.message || e, '获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。'))
     } finally {
       appStore.isLoading = false
     }
@@ -131,7 +137,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("创建分组异常:", e)
-        toast.error(`创建分组异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '创建分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
       // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -153,7 +159,7 @@ export const useGroupStore = defineStore('groups', () => {
         await getGroups()
       } catch (e) {
         console.error("删除分组异常:", e)
-        toast.error(`删除分组异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '删除分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -179,7 +185,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("更新分组异常:", e)
-        toast.error(`更新分组异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -210,7 +216,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组添加模组异常:", e)
-        toast.error(`分组添加模组异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '添加模组到分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -238,7 +244,7 @@ export const useGroupStore = defineStore('groups', () => {
         await getGroups()
       } catch (e) {
         console.error("分组移除模组异常:", e)
-        toast.error(`分组移除模组异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -262,7 +268,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("批量展开切换异常:", e)
-        toast.error(`批量展开切换异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '保存分组展开状态失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -286,7 +292,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组排序异常:", e)
-        toast.error(`分组排序异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -315,7 +321,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组内排序异常:", e)
-        toast.error(`分组内排序异常: \n${e.message}\n正在还原...`)
+        toast.error(toUserMessage(e?.message || e, '保存分组内排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -326,9 +332,9 @@ export const useGroupStore = defineStore('groups', () => {
 
   return {
     // 状态
-    groupList, isDraggingGroup, allGroupNames,
+    groupList, isDraggingGroup, targetGroupRequest, allGroupNames,
     // 查询与本地同步
-    takeGroupsByModId, takeGroupById, setGroups, reset,
+    focusGroup, takeGroupsByModId, takeGroupById, setGroups, reset,
     // 分组管理
     getGroups, createGroup, deleteGroup, updateGroup,
     // 分组内容与排序

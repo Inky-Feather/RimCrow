@@ -1,42 +1,41 @@
 <!-- src/components/workspace/components/MiniModCard.vue -->
 <template>
-  <div class="relative w-36 shrink-0 bg-bg-inset/80 rounded-xl border border-border-base/10 overflow-hidden group cursor-pointer hover:border-accent-primary/50 transition-all"
+  <div class="relative w-36 shrink-0 bg-bg-inset/80 rounded-xl border border-border-base/10 overflow-hidden group hover:border-accent-primary/50 transition-all"
+    v-tooltip="descriptionTooltip"
     @click="$emit('navigate', mod.workshop_id)">
-    
     <!-- 封面图 -->
     <div class="h-24 w-full bg-bg-inset relative overflow-hidden">
       <img v-if="mod.preview_url" :src="appStore.getRemoteUrl(mod.preview_url)" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
       <div v-else class="absolute inset-0 flex items-center justify-center text-text-dim text-xs">无封面</div>
       
       <!-- 悬浮操作层 -->
-      <div class="absolute inset-0 rounded-t-xl bg-bg-inset opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm" @click.stop>
-        <!-- 订阅 -->
-        <button v-if="!isSubscribed" @click="subscribe" v-tooltip="'订阅'" class="p-1.5 rounded-full bg-accent-primary/80 hover:bg-accent-primary text-on-accent-primary transition-transform hover:scale-110">
-          <Flag class="size-3.5" />
-        </button>
-        <!-- 取订 -->
-        <button v-else @click="unsubscribe" v-tooltip="'取消订阅'" class="p-1.5 rounded-full bg-accent-danger/80 hover:bg-accent-danger text-on-accent-danger transition-transform hover:scale-110">
-          <FlagOff class="size-3.5" />
-        </button>
-        <!-- 下载 -->
-        <button @click="download" v-tooltip="'管理器下载'" class="p-1.5 rounded-full bg-accent-success/80 hover:bg-accent-success text-on-accent-success transition-transform hover:scale-110">
-          <Download class="size-3.5" />
-        </button>
+      <div class="absolute inset-0 rounded-t-xl bg-bg-inset/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-sm" @click.stop>
+        <WorkshopItemActions :workshop-id="props.mod.workshop_id" :show-unsubscribe="isSubscribed" colorful size="xs" class="pointer-events-auto transition-all duration-300" />
+      </div>
+      
+      <div v-if="isSubscribed" class="absolute top-0 left-0 bg-accent-primary/80 text-on-accent-primary text-xs px-1 rounded-full">
+        已订阅
       </div>
     </div>
 
     <!-- 文本信息 -->
-    <div class="p-2">
-      <div class="text-xs font-bold text-text-main truncate group-hover:text-accent-primary" :title="mod.name">{{ mod.name }}</div>
+    <div class="p-2 cursor-pointer">
+      <div v-if="showsTranslatedTitle" class="truncate text-[0.62rem] font-bold leading-none text-text-dim">
+        {{ originalTitle }}
+      </div>
+      <div class="mt-1 truncate text-xs font-bold text-text-main group-hover:text-accent-primary">
+        {{ displayTitle }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { Flag, FlagOff, Download } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
+import { cleanRichText } from '../../../shared/lib/text'
+import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
 
 const props = defineProps({
   mod: { type: Object, required: true }
@@ -46,11 +45,12 @@ const emit = defineEmits(['navigate'])
 const appStore = useAppStore()
 const workspaceStore = useWorkspaceStore()
 
-// 这里的状态可以利用你之前重构的 computed 集合
 const isSubscribed = computed(() => workspaceStore.subscribedWorkshopIds.has(String(props.mod.workshop_id)))
-const isInstalled = computed(() => workspaceStore.installedAllIds.has(String(props.mod.workshop_id)))
-
-const subscribe = () => appStore.subscribeWorkshopIds([props.mod.workshop_id])
-const unsubscribe = () => appStore.unsubscribeWorkshopIds([props.mod.workshop_id])
-const download = () => appStore.downloadWorkshopItems([props.mod.workshop_id])
+const originalTitle = computed(() => String(props.mod.original_title || props.mod.title || props.mod.name || props.mod.workshop_id || '').trim())
+const displayTitle = computed(() => String(props.mod.display_title || props.mod.title || props.mod.name || props.mod.workshop_id || '').trim())
+const showsTranslatedTitle = computed(() => !!(props.mod.shows_translated_title && originalTitle.value && displayTitle.value !== originalTitle.value))
+const descriptionTooltip = computed(() => {
+  const text = String(props.mod.display_description || props.mod.short_description || props.mod.description || '').trim()
+  return text ? cleanRichText(text, 220).replace(/\n+/g, '\n').trim() : '点击查看详情'
+})
 </script>

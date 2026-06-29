@@ -139,7 +139,7 @@ class RuleManager:
         try:
             parsed = int(raw_timestamp)
         except (TypeError, ValueError):
-            logger.warning(f"Community rules timestamp is invalid: {raw_timestamp!r}")
+            logger.warning(f"社区规则时间戳无效：{raw_timestamp!r}")
             return 0
         return parsed if parsed >= 10**11 else parsed * 1000
 
@@ -240,12 +240,12 @@ class RuleManager:
         try:
             self._load_community_rules()
         except Exception as e:
-            logger.error(f"Failed to load community rules: {e}", exc_info=True)
+            logger.error(f"加载社区规则失败：{e}", exc_info=True)
 
         try:
             self._load_user_rules()
         except Exception as e:
-            logger.error(f"Failed to load user rules: {e}", exc_info=True)
+            logger.error(f"加载用户规则失败：{e}", exc_info=True)
             # 用户规则损坏时回到空白基线，避免残留旧内存数据继续污染 UI。
             self.user_mod_rules = {}
             self.user_dynamic_rules = []
@@ -254,7 +254,7 @@ class RuleManager:
         try:
             self.build_workshop_rules()
         except Exception as e:
-            logger.error(f"Failed to rebuild workshop rules cache: {e}", exc_info=True)
+            logger.error(f"重建创意工坊规则缓存失败：{e}", exc_info=True)
 
     def save_user_rules(self):
         """持久化用户规则"""
@@ -281,7 +281,7 @@ class RuleManager:
                 self._write_json_atomic(self._get_user_rules_path(), data, "保存用户规则")
             return True
         except Exception as e:
-            logger.error(f"Failed to save user rules: {e}", exc_info=True)
+            logger.error(f"保存用户规则失败：{e}", exc_info=True)
             raise
     
     def build_workshop_rules(self):
@@ -344,9 +344,9 @@ class RuleManager:
                 if resolved_target_pids:
                     new_cache[source_pid] = resolved_target_pids
             self.workshop_rules_cache = new_cache
-            logger.info(f"Workshop rules cache built. Active: {len(new_cache)} mods.")
+            logger.info(f"创意工坊规则缓存已构建，生效 MOD 数量：{len(new_cache)}")
         except Exception as e:
-            logger.error(f"Failed to build workshop rules cache: {e}", exc_info=True)
+            logger.error(f"构建创意工坊规则缓存失败：{e}", exc_info=True)
     
     # =========================================================================
     # 0. 开关控制逻辑 (Professional Toggle Logic)
@@ -680,7 +680,7 @@ class RuleManager:
             self.load_all()
             return True
         except Exception as e:
-            logger.error(f"Failed to update community rules: {e}")
+            logger.error(f"更新社区规则失败：{e}")
             raise e
 
     # =========================================================================
@@ -1249,13 +1249,13 @@ class RuleManager:
                 
             # 事务结束，保存文件
             self.save_user_rules()
-            logger.info("Import bundle processed successfully.")
+            logger.info("规则导入包处理完成。")
             for warning in import_warnings:
                 logger.warning(warning)
             return {"warnings": import_warnings}
 
         except Exception as e:
-            logger.error(f"Failed to process import bundle: {e}", exc_info=True)
+            logger.error(f"处理规则导入包失败：{e}", exc_info=True)
             # 抛出异常让上层 API 捕获并返回错误信息给前端
             raise Exception(f"Import Error: {str(e)}")
     

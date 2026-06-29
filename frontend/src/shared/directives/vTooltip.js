@@ -34,17 +34,29 @@ export const vTooltip = {
       el._isHovering = false
       hoverStore.hide()
     }
+    const handleFocus = (e) => {
+      el._isHovering = true
+      hoverStore.show(el._tipValue, e)
+    }
+    const handleBlur = () => {
+      el._isHovering = false
+      hoverStore.hide()
+    }
 
     // 缓存处理函数以便卸载
     el._vTooltipHandlers = {
       enter: handleEnter, // 第三个参数标记类型
       move: handleMove,
-      leave: handleLeave
+      leave: handleLeave,
+      focus: handleFocus,
+      blur: handleBlur,
     }
 
     el.addEventListener('mouseenter', el._vTooltipHandlers.enter)
     el.addEventListener('mousemove', el._vTooltipHandlers.move)
     el.addEventListener('mouseleave', el._vTooltipHandlers.leave)
+    el.addEventListener('focusin', el._vTooltipHandlers.focus)
+    el.addEventListener('focusout', el._vTooltipHandlers.blur)
   },
    updated(el, binding) {
     // 更新元素上存储的值，供下次 enter 使用
@@ -83,6 +95,8 @@ export const vTooltip = {
       el.removeEventListener('mouseenter', el._vTooltipHandlers.enter)
       el.removeEventListener('mousemove', el._vTooltipHandlers.move)
       el.removeEventListener('mouseleave', el._vTooltipHandlers.leave)
+      el.removeEventListener('focusin', el._vTooltipHandlers.focus)
+      el.removeEventListener('focusout', el._vTooltipHandlers.blur)
       delete el._vTooltipHandlers
       delete el._tipValue
     }

@@ -89,7 +89,7 @@ class SubBrowserManager:
                 self.window.load_html(html)
                 self.window.set_title(url)
         except Exception as e:
-            logger.debug(f"Sub browser workshop render skipped: {e}")
+            logger.debug(f"跳过子浏览器创意工坊渲染：{e}")
 
     def _delayed_load_url(self, url: str):
         if not self.window: return
@@ -98,7 +98,7 @@ class SubBrowserManager:
             if self.window and self._mode == "external":
                 self.window.load_url(url)
         except Exception as e:
-            logger.debug(f"Sub browser delayed load skipped: {e}")
+            logger.debug(f"跳过子浏览器延迟加载：{e}")
 
     def _on_loaded(self):
         if not self.window: return
@@ -107,7 +107,7 @@ class SubBrowserManager:
                 current_url = self.window.get_current_url() or self._current_url
                 self.window.set_title(current_url)
         except Exception as e:
-            logger.debug(f"Sub browser load hook skipped: {e}")
+            logger.debug(f"跳过子浏览器加载钩子：{e}")
 
     def _on_closing(self):
         self.window = None

@@ -12,7 +12,9 @@ import './styles/style.css'
 import App from './App.vue'
 import {vPreview} from '../shared/directives/vPreview.js'
 import {vTooltip} from '../shared/directives/vTooltip.js'
+import { vLongPressFeedback } from '../shared/directives/vLongPressFeedback.js'
 import { vSelectableList } from '../shared/directives/vSelection' // 引入指令
+import { imageViewerOptions } from '../shared/lib/domEffects'
 import { setupPywebviewBridge } from '../app/bridge/pywebviewBridge'
 
 await setupPywebviewBridge()
@@ -28,21 +30,7 @@ const options = {
 
 app.use(VueVirtualScroller)
 app.use(VueViewer, {
-  defaultOptions: {
-    zIndex: 100000,
-    focus: false,
-    navbar: false,
-    title: false,
-    toolbar: true,
-    tooltip: true,
-    transition: false,
-    hide: () => {
-      const activeElement = document.activeElement
-      if (activeElement?.closest?.('.viewer-container')) {
-        activeElement.blur()
-      }
-    },
-  },
+  defaultOptions: imageViewerOptions,
 })
 app.use(Toast, options);
 app.use(pinia) 
@@ -51,6 +39,7 @@ app.use(pinia)
 
 app.directive('preview', vPreview) // 注册预览面板指令
 app.directive('tooltip', vTooltip) // 注册 Tooltip 指令
+app.directive('long-press-feedback', vLongPressFeedback)
 app.directive('selectable-list', vSelectableList) // 注册列表项选择指令
 
 app.mount('#app')

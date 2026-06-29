@@ -8,7 +8,7 @@
       @mouseleave="handleMouseLeave"
       class="matrix-select-trigger flex items-center gap-2 p-1.5 rounded-lg border transition-all cursor-pointer group bg-bg-overlay/5"
       :class="[
-        mod.is_missing ? 'opacity-70 grayscale border-dashed border-accent-danger/50 bg-accent-danger/5 hover:bg-accent-danger/10 hover:border-accent-danger/30' :
+        mod.is_unavailable ? 'opacity-70 grayscale border-dashed border-accent-danger/50 bg-accent-danger/5 hover:bg-accent-danger/10 hover:border-accent-danger/30' :
         storeType === 'workshop' ? 'border-accent-primary/10 hover:bg-accent-primary/10 hover:border-accent-primary/30' :
         storeType === 'self' ? 'border-accent-success/10 hover:bg-accent-success/10 hover:border-accent-success/30' :
         'border-accent-warn/10 hover:bg-accent-warn/10 hover:border-accent-warn/30', 
@@ -70,8 +70,11 @@
         <span v-if="matrixState.isDisabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warning animate-pulse">
           DISABLED
         </span>
-        <span v-if="matrixState.isMissing" title="文件缺失" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isMissing" title="工坊记录存在，但本地没有有效模组文件" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           MISSING
+        </span>
+        <span v-if="matrixState.isDeleted" title="库存记录存在，但本地模组目录已删除或失效" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+          DELETED
         </span>
         <span v-if="matrixState.isWorkshopUnavailable" title="Steam 已无法获取该工坊项目详情，可能已下架或不可访问" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           失效
@@ -86,7 +89,7 @@
         <div v-if="showPopover" 
           @mouseenter="clearHideTimer"
           @mouseleave="hidePopover"
-          class="fixed z-9999 w-72 bg-glass-heavy backdrop-blur-3xl border border-border-base/10 rounded-xl shadow-2xl p-4 flex flex-col gap-3"
+          class="fixed z-9999 flex max-h-[calc(100vh-2rem)] w-72 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-border-base/10 bg-glass-heavy p-4 shadow-2xl backdrop-blur-3xl custom-scrollbar"
           :style="popoverStyle">
           
           <!-- 详细内容区 -->
@@ -295,36 +298,40 @@ const clearHideTimer = () => {
 const hidePopover = () => {
   handleMouseLeave()
 }
+const getRootFontSize = () => {
+  if (typeof window === 'undefined') return 16
+  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
 const calculatePosition = () => {
   if (!itemRef.value) return
   const rect = itemRef.value.getBoundingClientRect()
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const gap = 16
+  const rootFontSize = getRootFontSize()
+  const gap = rootFontSize
+  const margin = rootFontSize
+  const panelWidth = Math.min(rootFontSize * 18, Math.max(rootFontSize * 10, vw - margin * 2))
+  const panelHeight = Math.min(rootFontSize * 22, Math.max(rootFontSize * 10, vh - margin * 2))
 
-  // 判断中线，决定左右弹出
-  const isLeftSide = rect.left < vw / 2;
-  const isBottomHalf = rect.top > vh / 2;
+  const rightSpace = vw - rect.right - margin
+  const leftSpace = rect.left - margin
+  const opensRight = rightSpace >= panelWidth || rightSpace >= leftSpace
 
   // 设置弹出层方向
-  popoverDirection.value = isLeftSide ? 'right' : 'left';
-  // 初始化样式对象
-  const baseStyle = {};
-  // 根据左右位置设置水平方向
-  if (isLeftSide) {
-    baseStyle.left = `${rect.right + gap}px`;
-  } else {
-    baseStyle.right = `${vw - rect.left + gap}px`; // 原逻辑右侧的left赋值是笔误，已修正
-  }
-  // 根据上下位置设置垂直方向
-  if (isBottomHalf) {
-    baseStyle.bottom = `${Math.max(20, vh - rect.bottom - 20)}px`;
-  } else {
-    baseStyle.top = `${Math.max(20, rect.top - 20)}px`;
-  }
-  // 最终赋值
-  popoverStyle.value = baseStyle;
+  popoverDirection.value = opensRight ? 'right' : 'left'
 
+  let left = opensRight
+    ? rect.right + gap
+    : rect.left - panelWidth - gap
+  left = Math.min(Math.max(margin, left), Math.max(margin, vw - panelWidth - margin))
+
+  let top = rect.top - margin
+  top = Math.min(Math.max(margin, top), Math.max(margin, vh - panelHeight - margin))
+
+  popoverStyle.value = {
+    left: `${Math.round(left)}px`,
+    top: `${Math.round(top)}px`,
+  }
 }
 
 // 代理右键事件给父组件
@@ -341,6 +348,6 @@ const openContextMenu = (e) => {
 .slide-left-enter-active, .slide-left-leave-active {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.slide-right-enter-from, .slide-right-leave-to { opacity: 0; transform: translateX(-15px) scale(0.95); }
-.slide-left-enter-from, .slide-left-leave-to { opacity: 0; transform: translateX(15px) scale(0.95); }
+.slide-right-enter-from, .slide-right-leave-to { opacity: 0; transform: translateX(-0.9375rem) scale(0.95); }
+.slide-left-enter-from, .slide-left-leave-to { opacity: 0; transform: translateX(0.9375rem) scale(0.95); }
 </style>

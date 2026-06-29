@@ -260,6 +260,48 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual([source["label"] for source in sources], ["RJW", "RJW"])
         self.assertEqual(len({source["id"] for source in sources}), 2)
 
+    def test_provider_catalog_update_check_compares_cache_with_remote_without_saving(self):
+        source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
+        cached_catalog = {
+            "source": {"id": source["id"], "label": "RJW", "type": "provider_json", "count": 1},
+            "items": [{"key": "old", "name": "Old"}],
+        }
+        remote_catalog = {
+            "source": {"id": source["id"], "label": "RJW", "type": "provider_json", "count": 1},
+            "items": [{"key": "new", "name": "New"}],
+        }
+
+        with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", self.temp_root):
+            self.manager._save_provider_catalog_source_cache(source["id"], cached_catalog)
+            with patch.object(self.manager, "_provider_catalog_sources", return_value=[source]), \
+                 patch.object(self.manager, "_fetch_provider_catalog_source_remote", return_value=remote_catalog):
+                result = self.manager.check_provider_catalog_updates()
+
+            saved_catalog = self.manager._load_provider_catalog_source_cache(source["id"])
+
+        self.assertTrue(result["needs_update"])
+        self.assertTrue(result["remote_available"])
+        self.assertEqual(result["sources"][0]["local_count"], 1)
+        self.assertEqual(result["sources"][0]["remote_count"], 1)
+        self.assertNotEqual(result["sources"][0]["local_signature"], result["sources"][0]["remote_signature"])
+        self.assertEqual(saved_catalog["items"], cached_catalog["items"])
+
+    def test_provider_catalog_update_check_marks_missing_cache_as_update(self):
+        source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
+        remote_catalog = {
+            "source": {"id": source["id"], "label": "RJW", "type": "provider_json", "count": 1},
+            "items": [{"key": "new", "name": "New"}],
+        }
+
+        with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", self.temp_root), \
+             patch.object(self.manager, "_provider_catalog_sources", return_value=[source]), \
+             patch.object(self.manager, "_fetch_provider_catalog_source_remote", return_value=remote_catalog):
+            result = self.manager.check_provider_catalog_updates()
+
+        self.assertTrue(result["needs_update"])
+        self.assertFalse(result["sources"][0]["exists"])
+        self.assertEqual(result["sources"][0]["remote_count"], 1)
+
     def test_github_owner_repo_detects_rimworld_mod_description(self):
         repo_item, checked_about = self.manager._normalize_github_owner_repo_item(
             {

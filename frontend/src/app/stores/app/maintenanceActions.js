@@ -1,4 +1,4 @@
-import { toast, checkResult } from '../../../shared/lib/common'
+import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { usePromptQueueStore } from '../../../features/ai/promptQueueStore'
 
@@ -42,6 +42,51 @@ export const useMaintenanceActions = ({
     }
   }
 
+  const formatFileSize = (value) => {
+    const size = Number(value || 0)
+    if (!size) return '未知'
+    if (size < 1024) return `${size} B`
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+    return `${(size / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  const shortSignature = (value) => String(value || '').trim().slice(0, 12)
+
+  const buildExternalDataMeta = (item = {}) => {
+    const mode = String(item?.comparison_mode || '').trim()
+    if (mode === 'missing') {
+      if (item.data_type === 'git_provider_catalog') {
+        return [
+          '本地缓存缺失',
+          Array.isArray(item.source_labels) && item.source_labels.length > 0 ? `来源 ${item.source_labels.join('、')}` : '',
+          item.remote_size ? `远端项目 ${item.remote_size} 个` : '',
+        ].filter(Boolean)
+      }
+      return [
+        '本地文件缺失',
+        item.remote_signature ? `远端签名 ${shortSignature(item.remote_signature)}` : '',
+        item.remote_size ? `远端大小 ${formatFileSize(item.remote_size)}` : '',
+      ].filter(Boolean)
+    }
+    if (mode === 'signature') {
+      return [
+        Array.isArray(item.source_labels) && item.source_labels.length > 0 ? `来源 ${item.source_labels.join('、')}` : '',
+        item.local_signature ? `本地签名 ${shortSignature(item.local_signature)}` : '',
+        item.remote_signature ? `远端签名 ${shortSignature(item.remote_signature)}` : '',
+      ].filter(Boolean)
+    }
+    if (mode === 'size') {
+      return [
+        `本地大小 ${formatFileSize(item.local_size)}`,
+        `远端大小 ${formatFileSize(item.remote_size)}`,
+      ].filter(Boolean)
+    }
+    return [
+      item.local_version ? `本地版本 ${item.local_version}` : `本地时间 ${formatDateTime(item.local_mtime)}`,
+      item.remote_version ? `远端版本 ${item.remote_version}` : `远端时间 ${formatDateTime(item.remote_updated_at)}`,
+    ].filter(Boolean)
+  }
+
   const installToolIssues = async (issues = []) => {
     if (!window.pywebview || !Array.isArray(issues) || issues.length === 0) return false
     let started = false
@@ -80,6 +125,27 @@ export const useMaintenanceActions = ({
       }
     }
     return started
+  }
+
+  const refreshGitProviderCatalog = async ({ silent = false } = {}) => {
+    if (!window.pywebview) return false
+    if (silent) {
+      const res = await window.pywebview.api.github_get_provider_catalog('', true)
+      return checkResult(res, '刷新 Git 推荐清单', false, { silent: true })
+    }
+    const workspaceStore = useWorkspaceStore()
+    const refreshed = await workspaceStore.fetchGithubProviderCatalog({ force: true })
+    if (refreshed) toast.success('Git 推荐清单已刷新。')
+    return refreshed
+  }
+
+  const updateExternalDataItems = async (items = [], { silent = false } = {}) => {
+    let updated = 0
+    for (const item of Array.isArray(items) ? items : []) {
+      if (!item?.data_type) continue
+      if (await updateExternalDB(item.data_type, { silent })) updated += 1
+    }
+    return updated
   }
 
   const getToolIssueActionLabel = (item = {}) => {
@@ -134,12 +200,13 @@ export const useMaintenanceActions = ({
     manual = true,
     lastCheckKey = '',
     shouldPersistCheckedAt = null,
+    overrides = null,
   } = {}) => {
     if (!window.pywebview) return null
     const caller = window.pywebview.api?.[apiName]
     if (typeof caller !== 'function') return null
 
-    const res = await caller()
+    const res = overrides ? await caller(overrides) : await caller()
     if (manual ? !checkResult(res, workName) : res?.status !== 'success') {
       logMaintenanceCheck('api_result', { apiName, workName, manual, status: res?.status || 'missing', message: res?.message || '' }, manual ? 'warn' : 'error')
       return null
@@ -152,12 +219,13 @@ export const useMaintenanceActions = ({
   }
 
   // 工具环境可能涉及外部下载，因此只做检查本身静默；发现问题后统一进入提示队列交给用户决定。
-  const checkToolMaintenance = async ({ manual = true, prompt = true } = {}) => {
+  const checkToolMaintenance = async ({ manual = true, prompt = true, overrides = null } = {}) => {
     const data = await fetchMaintenanceData({
       apiName: 'maintenance_check_tools',
       workName: '检查工具环境',
       manual,
       lastCheckKey: 'last_tool_check_time',
+      overrides,
     })
     if (!data) return null
 
@@ -205,12 +273,13 @@ export const useMaintenanceActions = ({
   }
 
   // 外部库更新属于网络下载动作：启动期可以静默检查，但实际更新必须经由队列弹窗确认。
-  const checkExternalDataUpdates = async ({ manual = true, prompt = true } = {}) => {
+  const checkExternalDataUpdates = async ({ manual = true, prompt = true, overrides = null } = {}) => {
     const data = await fetchMaintenanceData({
       apiName: 'maintenance_check_external_data',
       workName: '检查外部库更新',
       manual,
       lastCheckKey: 'last_external_data_update_check_time',
+      overrides,
       // 整轮远端状态都没拿到时，不要把失败记录成一次成功检查。
       shouldPersistCheckedAt: (payload) => {
         const items = Array.isArray(payload?.items) ? payload.items : []
@@ -223,6 +292,11 @@ export const useMaintenanceActions = ({
     const updates = Array.isArray(data.updates) ? data.updates : []
     const failed = Array.isArray(data.failed) ? data.failed : []
     if (!prompt) return data
+    if (!manual && settings.value.enable_silent_external_data_update && updates.length > 0) {
+      const updated = await updateExternalDataItems(updates, { silent: true })
+      logMaintenanceCheck('external_data_silent_update', { total: updates.length, updated, failed: failed.length })
+      return data
+    }
     if (failed.length > 0 && updates.length === 0) {
       const summary = failed.slice(0, 3).map(item => item.name || item.data_type || '外部库').join('、')
       const remain = failed.length > 3 ? ` 等 ${failed.length} 项` : ''
@@ -246,11 +320,8 @@ export const useMaintenanceActions = ({
       items: updates.map(item => ({
         id: item.data_type || item.name,
         title: item.name || item.data_type || '外部库',
-        description: item.message || '检测到远端版本与本地不一致。',
-        meta: [
-          item.local_version ? `本地版本 ${item.local_version}` : `本地时间 ${formatDateTime(item.local_mtime)}`,
-          item.remote_version ? `远端签名 ${item.remote_version}` : `远端时间 ${formatDateTime(item.remote_updated_at)}`,
-        ],
+        description: item.message || '检测到远端文件与本地不一致。',
+        meta: buildExternalDataMeta(item),
         raw: item,
         actions: [
           { id: 'update', label: '更新', kind: 'primary' },
@@ -266,10 +337,8 @@ export const useMaintenanceActions = ({
       },
       onBulkAction: async (actionId, items) => {
         if (actionId !== 'update_all') return
-        for (const item of items) {
-          // 顺序执行，避免同时刷新同一批缓存时互相打断。
-          await updateExternalDB(item.data_type)
-        }
+        // 顺序执行，避免同时刷新同一批缓存时互相打断。
+        await updateExternalDataItems(items)
       },
     })
     return data
@@ -380,18 +449,24 @@ export const useMaintenanceActions = ({
   const checkSteamTools = async () => checkToolMaintenance({ manual: true, prompt: true })
 
   // 更新外置数据库
-  const updateExternalDB = async (type) => {
+  const updateExternalDB = async (type, { silent = false } = {}) => {
     try {
       const workNameMap = {
         community_rules: '更新社区规则库',
         workshop_db: '更新社区工坊数据库',
         instead_db: '更新替代 Mod 数据库',
+        multiplayer_compatibility: '更新 Multiplayer 兼容表',
+        mp_compat_package_ids: '生成 Multiplayer Compatibility 适配缓存',
+        git_provider_catalog: '刷新 Git 推荐清单',
+      }
+      if (type === 'git_provider_catalog') {
+        return refreshGitProviderCatalog({ silent })
       }
       // 调用 API
       const res = await window.pywebview.api.update_external_db(type)
-      if (checkResult(res, workNameMap[type] || `更新外置数据库 ${type}`)) {
+      if (checkResult(res, workNameMap[type] || `更新外置数据库 ${type}`, false, { silent })) {
         const task_id = res.data.task_id
-        await waitForDownload(task_id)
+        if (task_id) await waitForDownload(task_id)
         // 重新获取数据
         const historyLabel = `${workNameMap[type] || '外置数据库更新'}后同步模组数据`
         if (refreshModsData) await refreshModsData(historyLabel)
@@ -400,7 +475,7 @@ export const useMaintenanceActions = ({
       }
       return false
     } catch (error) {
-      toast.error("更新社区库失败: " + error.message)
+      if (!silent) toast.error(toUserMessage(error?.message || error, '更新外部库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。'))
       return false
     }
   }

@@ -1,0 +1,3 @@
+[submodule "submodules/SteamworksPy"]
+	path = submodules/SteamworksPy
+	url = https://github.com/philippj/SteamworksPy.git

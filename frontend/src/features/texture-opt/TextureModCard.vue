@@ -1,9 +1,10 @@
 <template>
-  <div class="group flex min-h-24 flex-col justify-between rounded-lg border border-border-base/2 px-3 py-2 transition-colors hover:bg-bg-overlay/5">
+  <div class="group flex min-h-24 flex-col justify-between rounded-lg border border-border-base/2 px-3 py-2 transition-colors hover:bg-bg-overlay/5"
+    @contextmenu.prevent="emit('open-mod-menu', $event, mod)">
     <div class="flex min-w-0 items-center justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-2">
         <span class="truncate text-sm font-bold text-text-main">{{ mod.mod_name }}</span>
-        <span v-if="storeLabel" class="shrink-0 rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[11px] font-bold text-text-dim">
+        <span v-if="storeLabel" class="shrink-0 rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-xs font-bold text-text-dim">
           {{ storeLabel }}
         </span>
         <span v-if="mod.unsupported_source_count > 0" v-tooltip="unsupportedTooltip"
@@ -20,12 +21,18 @@
         <div class="text-right text-xs font-mono text-text-dim">
           <span>待生成 {{ mod.generate_required_count || 0 }}</span>
           <span class="mx-2 opacity-40">|</span>
-          <span>现有 DDS {{ mod.output_total_count || 0 }}</span>
+          <span>现有 DDS {{ mod.dds_output_count || 0 }}</span>
+          <span v-if="mod.zstd_output_count" class="mx-2 opacity-40">|</span>
+          <span v-if="mod.zstd_output_count">ZSTD {{ mod.zstd_output_count }}</span>
         </div>
         <button v-if="mod.package_id" class="rounded-lg border px-1 py-0.5 text-xs font-bold transition-colors"
           :class="isExcluded ? 'border-accent-danger/30 bg-accent-danger/10 text-accent-danger' : 'border-border-base/10 bg-bg-overlay/5 text-text-dim hover:text-text-main'"
           @click.stop="emit('toggle-mod-exclusion', mod)" >
           {{ isExcluded ? '已排除' : '排除模组' }}
+        </button>
+        <button class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-overlay/10 hover:text-text-main"
+          @click.stop="emit('open-mod-menu', $event, mod)" v-tooltip="'模组贴图操作'">
+          <MoreVertical class="w-4 h-4" />
         </button>
         <button class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-overlay/10 hover:text-text-main"
           @click.stop="openModPath" v-tooltip="mod.mod_path || '打开模组路径'" >
@@ -34,39 +41,51 @@
       </div>
     </div>
 
-    <div class="items-center text-xs my-1">
-      <div class="flex items-center gap-2">
-        <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="shrink-0 font-bold text-accent-tip/80">PNG</div>
-        <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="flex-1 relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">
+    <div class="my-1 space-y-1 text-xs">
+      <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="grid grid-cols-[2rem_minmax(0,1fr)_3rem] items-center gap-2">
+        <div class="font-bold text-accent-tip/80">PNG</div>
+        <div class="relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">
           <div class="absolute left-0 top-0 h-full rounded-full bg-linear-to-r from-accent-tip/60 to-accent-tip transition-all duration-500 ease-out" :style="{ width: pngWidth }"></div>
         </div>
-        <div v-show="viewMode === 'ALL' || viewMode === 'PNG'" class="text-right font-mono text-text-dim">总占比：{{ formatPercent(mod.source_bytes_share_pct || 0) }}</div>
+        <div class="text-right font-mono text-text-dim">{{ formatPercent(mod.source_bytes_share_pct || 0) }}</div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <div v-show="viewMode === 'ALL' || viewMode === 'DDS'" class="shrink-0 font-bold text-accent-primary/80">DDS</div>
-        <div v-show="viewMode === 'ALL' || viewMode === 'DDS'" class="flex-1 relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">
+      <div v-show="viewMode === 'ALL' || viewMode === 'DDS'" class="grid grid-cols-[2rem_minmax(0,1fr)_3rem] items-center gap-2">
+        <div class="font-bold text-accent-primary/80">DDS</div>
+        <div class="relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">
           <div class="absolute left-0 top-0 h-full rounded-full bg-linear-to-r from-accent-primary/60 to-accent-primary transition-all duration-500 ease-out" :style="{ width: ddsWidth }"></div>
         </div>
-        <div v-show="viewMode === 'ALL' || viewMode === 'DDS'" class="text-right font-mono text-text-dim">总占比：{{ formatPercent(mod.output_bytes_share_pct || 0) }}</div>
+        <div class="text-right font-mono text-text-dim">{{ formatPercent(mod.dds_output_bytes_share_pct || 0) }}</div>
+      </div>
+
+      <div v-show="viewMode === 'ALL' || viewMode === 'ZSTD'" class="grid grid-cols-[2rem_minmax(0,1fr)_3rem] items-center gap-2">
+        <div class="font-bold text-accent-secondary/80">ZSTD</div>
+        <div class="relative h-1.5 overflow-hidden rounded-full bg-bg-inset/80">
+          <div class="absolute left-0 top-0 h-full rounded-full bg-linear-to-r from-accent-secondary/60 to-accent-secondary transition-all duration-500 ease-out" :style="{ width: zstdWidth }"></div>
+        </div>
+        <div class="text-right font-mono text-text-dim">{{ formatPercent(mod.zstd_output_bytes_share_pct || 0) }}</div>
       </div>
     </div>
 
 
     <div class="grid grid-cols-4 items-center gap-x-4 text-xs text-text-dim">
       <div class="truncate"><span class="font-bold text-text-main">PNG</span> {{ formatBytes(mod.source_total_bytes) }} / {{ mod.source_total_count || 0 }}张</div>
-      <div class="truncate"><span class="font-bold text-text-main">DDS</span> {{ formatBytes(mod.output_total_bytes) }} / {{ mod.output_total_count || 0 }}张</div>
+      <div class="truncate">
+        <span class="font-bold text-text-main">DDS</span> {{ formatBytes(mod.dds_output_bytes) }} / {{ mod.dds_output_count || 0 }}张
+        <span v-if="mod.zstd_output_count" class="ml-2"><span class="font-bold text-text-main">ZSTD</span> {{ formatBytes(mod.zstd_output_bytes) }} / {{ mod.zstd_output_count }}张</span>
+      </div>
       <div class="truncate"><span class="font-bold text-text-main">综合体积占比</span> {{ formatPercent(mod.combined_bytes_share_pct || 0) }}</div>
       <div class="truncate"><span class="font-bold text-text-main">显存预估</span> {{ formatBytes(mod.source_vram_bytes_est) }} → {{ formatBytes(mod.output_vram_bytes_est) }}</div>
     </div>
-    <div class="truncate text-[11px] text-text-dim">{{ mod.mod_path }}</div>
+    <div class="truncate text-[0.8rem] text-text-subtle">{{ mod.mod_path }}</div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { FolderOpen } from 'lucide-vue-next'
+import { FolderOpen, MoreVertical } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
+import { STORE_TYPE_MAP } from '../../shared/lib/constants'
 
 const props = defineProps({
   mod: { type: Object, required: true },
@@ -75,7 +94,7 @@ const props = defineProps({
   isExcluded: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['toggle-mod-exclusion'])
+const emit = defineEmits(['toggle-mod-exclusion', 'open-mod-menu'])
 
 const appStore = useAppStore()
 
@@ -92,9 +111,9 @@ const unsupportedTooltip = computed(() => {
 
 const storeLabel = computed(() => {
   const store = String(props.mod?.store || '').trim().toLowerCase()
-  if (store === 'workshop') return 'Steam'
-  if (store === 'local') return 'Local'
-  if (store === 'self') return 'Manager'
+  if (store in STORE_TYPE_MAP) {
+    return STORE_TYPE_MAP[store]
+  }
   return store ? store : ''
 })
 
@@ -156,7 +175,12 @@ const pngWidth = computed(() => {
 })
 
 const ddsWidth = computed(() => {
-  const percent = (Number(props.mod.output_total_bytes || 0) / Number(props.maxBytes || 1)) * 100
+  const percent = (Number(props.mod.dds_output_bytes || 0) / Number(props.maxBytes || 1)) * 100
+  return `${Math.min(100, Math.max(0.5, percent))}%`
+})
+
+const zstdWidth = computed(() => {
+  const percent = (Number(props.mod.zstd_output_bytes || 0) / Number(props.maxBytes || 1)) * 100
   return `${Math.min(100, Math.max(0.5, percent))}%`
 })
 
