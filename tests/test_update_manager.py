@@ -183,6 +183,53 @@ class TestLanzouUpdatePackageNames(unittest.TestCase):
         self.assertEqual(latest["id"], "rimcrow")
         self.assertEqual(latest["version"], "0.22.8")
 
+    def test_get_file_retries_acw_challenge_and_returns_https_url(self):
+        class FakeResponse:
+            def __init__(self, text="", payload=None, status_code=200, headers=None):
+                self.text = text
+                self._payload = payload or {}
+                self.status_code = status_code
+                self.headers = headers or {}
+
+            def json(self):
+                return self._payload
+
+        class FakeCookies:
+            def __init__(self):
+                self.values = {}
+
+            def set(self, name, value, **kwargs):
+                self.values[name] = value
+
+        class FakeSession:
+            def __init__(self):
+                self.cookies = FakeCookies()
+                self.get_calls = []
+
+            def get(self, url, **kwargs):
+                self.get_calls.append(url)
+                if url == "https://wwbns.lanzouu.com/iabc":
+                    if len([item for item in self.get_calls if item == url]) == 1:
+                        return FakeResponse("<html><script>var arg1='B0F7DFAACD80635E8AF18DF2B24B461666A78C0A';document.cookie='acw_sc__v2=';</script></html>")
+                    return FakeResponse('<span class="p7">文件描述：</span><br>更新说明</td><iframe src="/fn?abc"></iframe><script>var fid = 123;</script>')
+                if url == "https://wwbns.lanzouu.com/fn?abc":
+                    return FakeResponse("var wp_sign = 'sign'; var ajaxdata = 'key'; var kdns =1; $.ajax({url : '/ajaxm.php?file=123', data : { 'action':'downprocess','websignkey':ajaxdata,'signs':ajaxdata,'sign':wp_sign,'websign':'','kd':kdns,'ves':1 }})")
+                if url == "https://zip.example.com/file/path.zip":
+                    return FakeResponse(status_code=200)
+                raise AssertionError(url)
+
+            def post(self, url, **kwargs):
+                self.post_url = url
+                return FakeResponse(payload={"zt": 1, "dom": "zip.example.com", "url": "path.zip"})
+
+        parser = LanzouParser()
+        parser.session = FakeSession()
+
+        info = parser.get_file("https://wwbns.lanzouu.com/iabc")
+
+        self.assertEqual(parser.session.cookies.values["acw_sc__v2"], "6a4279dcdc74c4d9b0ed0b4908616fa7aa7b6b72")
+        self.assertEqual(info["download_url"], "https://zip.example.com/file/path.zip")
+
 
 class TestUpdateManagerSources(unittest.TestCase):
     def _manager_with_sources(self, infos):

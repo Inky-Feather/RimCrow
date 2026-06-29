@@ -1,6 +1,13 @@
 import hashlib
 from dataclasses import asdict, is_dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeGuard
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
+
+
+def _is_dataclass_instance(value: Any) -> TypeGuard["DataclassInstance"]:
+    return not isinstance(value, type) and is_dataclass(value)
 
 
 SENSITIVE_EXACT_KEYS = {
@@ -51,7 +58,7 @@ def redact_sensitive_data(value: Any, *, max_depth: int = 8) -> Any:
     """递归脱敏日志对象，保留普通结构，避免 API 参数日志泄露凭据。"""
     if max_depth <= 0:
         return "<max-depth>"
-    if is_dataclass(value):
+    if _is_dataclass_instance(value):
         value = asdict(value)
     if isinstance(value, dict):
         redacted = {}

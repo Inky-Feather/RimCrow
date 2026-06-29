@@ -19,9 +19,12 @@ import tempfile
 from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 from peewee import Model, JOIN
 from playhouse.shortcuts import model_to_dict
+
+if TYPE_CHECKING:
+    from backend.ai.ai_service import AIManager
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -474,7 +477,7 @@ class API:
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
         _log_startup_perf("API 初始化", "core_managers_ready", init_start_at)
-        self.ai_mgr = _LazyAIManager()
+        self.ai_mgr = cast("AIManager", _LazyAIManager())
         self.translation_mgr = TranslationManager(self.ai_mgr)
         self.data_bundle_mgr = DataBundleManager(
             self.profile_mgr,
@@ -2506,7 +2509,13 @@ class API:
             ModDAO.batch_update_mods(mods_data_list)
             return ApiResponse.success(message='最后操作时间已更新')
         except Exception as e:
-            return ApiResponse.error("更新 Mod 用户数据失败", code="MODS.USER_DATA_UPDATE_FAILED", detail=e, context={"package_id": package_id}, user_message="更新 Mod 用户数据失败。请检查数据库状态后重试，详细原因已写入系统日志。")
+            return ApiResponse.error(
+                "更新 Mod 最后操作时间失败",
+                code="MODS.TIME_UPDATE_FAILED",
+                detail=e,
+                context={"mod_count": len(mods_data_list or [])},
+                user_message="更新 Mod 最后操作时间失败。请检查数据库状态后重试，详细原因已写入系统日志。",
+            )
     
     @log_api_call
     def mod_user_data_update(self, package_id: str, data_dict: dict):
@@ -2895,12 +2904,12 @@ class API:
             normalized_inactive_ids = normalize_companion_package_ids(inactive_ids)
             normalized_temp_ids = normalize_companion_package_ids(temp_ids) if temp_ids is not None else None
             payload = {"inactive_mods_order": normalized_inactive_ids}
-            if temp_ids is not None:
+            if normalized_temp_ids is not None:
                 payload["temp_mods_order"] = normalized_temp_ids
             result = self.profile_mgr.update_profile(self.active_context.profile_id, payload)
             if result:
                 object.__setattr__(self.active_context, "inactive_mods_order", normalized_inactive_ids)
-                if temp_ids is not None:
+                if normalized_temp_ids is not None:
                     object.__setattr__(self.active_context, "temp_mods_order", normalized_temp_ids)
                 return ApiResponse.success()
             return ApiResponse.error("更新配置失败")

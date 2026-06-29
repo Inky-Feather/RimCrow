@@ -1,10 +1,27 @@
 import requests
 import re
 from packaging import version
+from urllib.parse import urljoin, urlparse
+
+# --- 模块测试准备 ---
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    # Path(__file__).resolve() 获取当前文件的绝对路径
+    # .parents[2] 表示向上跳 3 级 (文件->scanner->backend->项目根目录)
+    project_root = Path(__file__).resolve().parents[2]
+    # 调试打印，确保路径正确
+    print(f"Project Root: {project_root}")
+    # sys.path 需要字符串类型，所以要用 str() 转换一下
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
 from backend.utils.tools import get_package_platform_match, get_current_package_platform_keywords, has_supported_update_package_name
 
 class LanzouParser:
     UPDATE_FILENAME_PATTERN = re.compile(r"(?<!\d)v?(\d+\.\d+\.\d+)(?!\d)", re.I)
+    ACW_ARG_ORDER = [0xf, 0x23, 0x1d, 0x18, 0x21, 0x10, 0x1, 0x26, 0xa, 0x9, 0x13, 0x1f, 0x28, 0x1b, 0x16, 0x17, 0x19, 0xd, 0x6, 0xb, 0x27, 0x12, 0x14, 0x8, 0xe, 0x15, 0x20, 0x1a, 0x2, 0x1e, 0x7, 0x4, 0x11, 0x5, 0x3, 0x1c, 0x22, 0x25, 0xc, 0x24]
+    ACW_KEY = "3000176000856006061501533003690027800375"
 
     def __init__(self):
         self.session = requests.Session()
@@ -20,6 +37,48 @@ class LanzouParser:
     def log_step(self, step, msg):
         print(f"[Lanzou] {step} >> {msg}")
 
+    def _get_with_acw_retry(self, url, **kwargs):
+        res = self.session.get(url, **kwargs)
+        cookie_value = self._extract_acw_cookie(res.text)
+        if not cookie_value:
+            return res
+        domain = urlparse(url).hostname
+        cookie_kwargs = {"path": "/"}
+        if domain:
+            cookie_kwargs["domain"] = domain
+        self.session.cookies.set("acw_sc__v2", cookie_value, **cookie_kwargs)
+        self.log_step("ACW", "蓝奏云要求浏览器校验，已计算校验 Cookie 后重试")
+        return self.session.get(url, **kwargs)
+
+    @classmethod
+    def _extract_acw_cookie(cls, html):
+        if "acw_sc__v2" not in str(html or ""):
+            return ""
+        match = re.search(r"var\s+arg1\s*=\s*'([0-9a-fA-F]{40})'", html)
+        if not match:
+            return ""
+        arg1 = match.group(1)
+        reordered = [""] * len(cls.ACW_ARG_ORDER)
+        for idx, order in enumerate(cls.ACW_ARG_ORDER):
+            reordered[idx] = arg1[order - 1]
+        mixed = "".join(reordered)
+        result = []
+        for idx in range(0, min(len(mixed), len(cls.ACW_KEY)), 2):
+            value = int(mixed[idx:idx + 2], 16) ^ int(cls.ACW_KEY[idx:idx + 2], 16)
+            result.append(f"{value:02x}")
+        return "".join(result)
+
+    @staticmethod
+    def _ensure_url_scheme(url):
+        text = str(url or "").strip()
+        if not text:
+            return ""
+        if text.startswith("//"):
+            return f"https:{text}"
+        if not urlparse(text).scheme:
+            return f"https://{text.lstrip('/')}"
+        return text
+
     def get_all_files(self, folder_url, password=""):
         """
         获取文件夹内所有文件及其版本信息
@@ -28,7 +87,7 @@ class LanzouParser:
         try:
             self.log_step("INIT", f"正在检索文件夹列表: {folder_url}")
             domain = folder_url.split('/')[2]
-            res = self.session.get(folder_url)
+            res = self._get_with_acw_retry(folder_url)
             html = res.text
 
             # 1. 提取文件夹权限参数
@@ -174,7 +233,7 @@ class LanzouParser:
         """
         try:
             domain = url.split('/')[2]
-            res = self.session.get(url)
+            res = self._get_with_acw_retry(url)
             html = res.text
 
             # 提取文件描述 (Changelog)
@@ -195,6 +254,9 @@ class LanzouParser:
             
             # 获取下载直链
             download_url = self._get_direct_link_from_ifr(ifr_url, fid)
+            if not download_url:
+                self.last_error = "无法获取下载直链"
+                return None
 
             return {
                 'note': note,
@@ -209,7 +271,7 @@ class LanzouParser:
         try:
             domain = ifr_url.split('/')[2]
             # 必须带上 Referer，模仿用户从详情页点击
-            res = self.session.get(ifr_url, headers={'Referer': f"https://{domain}/{fid}"})
+            res = self._get_with_acw_retry(ifr_url, headers={'Referer': f"https://{domain}/{fid}"})
             html = res.text
 
             # 1. 提取所有变量 (更加宽泛的匹配)
@@ -220,7 +282,8 @@ class LanzouParser:
                 js_vars[n] = v
 
             data_match = re.search(r"data\s*:\s*\{([^}]+)\}", html, re.S)
-            if not data_match: return None
+            if not data_match:
+                return None
             data_content = data_match.group(1)
             
             def find_val(key):
@@ -257,16 +320,17 @@ class LanzouParser:
 
             if res_json.get('zt') == 1:
                 # 此时 res_json['dom'] 可能已经是 zip1.webgetstore.com 这种
-                raw_url = f"{res_json['dom']}/file/{res_json['url']}"
+                raw_url = self._ensure_url_scheme(f"{res_json['dom']}/file/{res_json['url']}")
                 
                 # 4. 重要：不要用 HEAD，改用 GET 配合 allow_redirects=False
                 # 这样可以精准拿到 302 的 Location 头部，且不会被 CDN 拦截
                 try:
                     # 模拟真实点击跳转
                     r = self.session.get(raw_url, allow_redirects=False, headers={'Referer': ifr_url})
-                    if r.status_code == 302: return r.headers.get('Location')
+                    if r.status_code == 302:
+                        return urljoin(raw_url, r.headers.get('Location') or "")
                     return raw_url # 如果没重定向，这本身就是直链
-                except:
+                except Exception:
                     return raw_url
             
             return None

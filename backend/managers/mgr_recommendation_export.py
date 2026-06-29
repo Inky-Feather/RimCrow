@@ -720,12 +720,13 @@ class RecommendationExportManager:
             return None
         try:
             with Image.open(source_path) as image:
-                if getattr(image, "n_frames", 1) <= 1:
+                frame_count = int(getattr(image, "n_frames", 1) or 1)
+                if frame_count <= 1:
                     return None
                 frames = []
                 durations = []
                 loop = int(image.info.get("loop", 0) or 0)
-                for frame_index in range(image.n_frames):
+                for frame_index in range(frame_count):
                     image.seek(frame_index)
                     frame = ImageOps.exif_transpose(image.copy()).convert("RGB")
                     frames.append(ImageOps.fit(frame, (width, height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5)))

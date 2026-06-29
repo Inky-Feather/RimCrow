@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.23.4"  # 主版本.次版本.补丁
+__version__ = "0.23.5"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -8,7 +8,7 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
     {
-        "version": "0.23.4",
+        "version": "0.23.5",
         "date": "2026-06-29",
         "entries": [
             {
@@ -16,7 +16,8 @@ APP_CHANGELOG = [
                 "changes": [
                     { "type": "breaking", "text": "项目正式更名为 RimCrow，更新相关标识与配置路径" },
                     { "type": "feature", "text": "新增自动迁移功能，支持将旧版工具数据与凭据平滑迁移至 RimCrow" },
-                    { "type": "optimize", "text": "重构内部组件结构，清理冗余资源，提升系统运行效率" }
+                    { "type": "optimize", "text": "重构内部组件结构，清理冗余资源，提升系统运行效率" },
+                    { "type": "optimize", "text": "改进蓝奏云校验方式与请求自动重试机制" }
                 ]
             },
             {
