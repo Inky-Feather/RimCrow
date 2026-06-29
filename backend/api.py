@@ -1041,15 +1041,18 @@ class API:
             return self._ensure_directory(str(Path(self.active_context.backup_dir) / "other"))
         return ""
 
-    def _get_default_backup_save_as_dir(self) -> str:
-        """
-        备份文件“另存为”的默认入口使用桌面，更符合把文件拿出去使用的预期。
-        """
+    def _get_default_desktop_dir(self) -> str:
         try:
             return self._normalize_existing_dir(get_desktop_directory())
         except Exception:
             logger.warning("无法解析桌面目录，将交给系统选择窗口决定初始位置", exc_info=True)
             return ""
+
+    def _get_default_backup_save_as_dir(self) -> str:
+        """
+        备份文件“另存为”的默认入口使用桌面，更符合把文件拿出去使用的预期。
+        """
+        return self._get_default_desktop_dir()
 
     def _resolve_dialog_initial_dir(
         self,
@@ -2099,7 +2102,7 @@ class API:
             suggested_name = _ensure_bundle_filename_extension(
                 suggested_name,
                 DataBundleManager.FILE_EXTENSION,
-                [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+                [DataBundleManager.FILE_EXTENSION],
             )
 
             target_path = file_mgr.save_file_dialog(
@@ -2108,12 +2111,12 @@ class API:
                 file_types=(
                     _build_dialog_file_type_label(
                         'RimCrow Data Package',
-                        [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
+                        [DataBundleManager.FILE_EXTENSION],
                     ),
-                    'All Files (*.*)',
                 ),
             )
             if not target_path: return ApiResponse.warning("已取消")
+            target_path = _ensure_bundle_filename_extension(target_path, DataBundleManager.FILE_EXTENSION, [DataBundleManager.FILE_EXTENSION])
 
             export_result = self.data_bundle_mgr.write_bundle(
                 target_path=target_path,
@@ -2183,7 +2186,7 @@ class API:
             suggested_name = _ensure_bundle_filename_extension(
                 suggested_name,
                 self.mod_package_mgr.FILE_EXTENSION,
-                [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+                [self.mod_package_mgr.FILE_EXTENSION],
             )
             target_path = file_mgr.save_file_dialog(
                 initial_dir=str(DATA_DIR),
@@ -2191,13 +2194,13 @@ class API:
                 file_types=(
                     _build_dialog_file_type_label(
                         'RimCrow Mod Package',
-                        [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
+                        [self.mod_package_mgr.FILE_EXTENSION],
                     ),
-                    'All Files (*.*)',
                 ),
             )
             if not target_path:
                 return ApiResponse.warning("已取消")
+            target_path = _ensure_bundle_filename_extension(target_path, self.mod_package_mgr.FILE_EXTENSION, [self.mod_package_mgr.FILE_EXTENSION])
             task_id = self.mod_package_mgr.start_export_task(target_path, payload)
             return ApiResponse.success({"task_id": task_id, "target_path": target_path}, message="导出任务已启动")
         except Exception as e:
@@ -4106,7 +4109,7 @@ class API:
 
             if export_format in {"markdown", "image"}:
                 # Markdown 需要同级 img 目录，纯图片会生成多个文件，所以这里选择目标文件夹。
-                target_dir = file_mgr.select_folder_dialog(self._get_default_export_dir())
+                target_dir = file_mgr.select_folder_dialog(self._get_default_desktop_dir())
                 if not target_dir:
                     return ApiResponse.warning("已取消")
                 result = self.recommendation_export_mgr.export(payload, target_dir=target_dir)
@@ -4116,7 +4119,7 @@ class API:
             default_filename = self.recommendation_export_mgr.default_filename(payload)
             file_types = self.recommendation_export_mgr.file_types_for_format(export_format)
             target_path = file_mgr.save_file_dialog(
-                initial_dir=self._get_default_export_dir(),
+                initial_dir=self._get_default_desktop_dir(),
                 default_filename=default_filename,
                 file_types=file_types,
             )
@@ -4470,7 +4473,7 @@ class API:
     def rule_import_bundle(self):
         """规则中心导入入口，同时兼容旧版 JSON 规则包。"""
         try:
-            path = file_mgr.select_file_dialog(file_types=(
+            path = file_mgr.select_file_dialog(str(DATA_DIR), file_types=(
                 _build_dialog_file_type_label(
                     'RimCrow Data Package',
                     [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS, '.json'],

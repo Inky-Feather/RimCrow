@@ -145,19 +145,26 @@ class BaseLogReader:
         """
         blocks = []
         filename = os.path.basename(filepath)
-        is_json = filepath.endswith('.json') or filename in {'RimCrow_Realtime.log', 'RMM_Realtime.log'} or 'app.log' in filename
+        realtime_json_names = {
+            'RimCrow_Realtime.log', 'RimCrow_Realtime-prev.log',
+            'RMM_Realtime.log', 'RMM_Realtime-prev.log',
+        }
+        is_json = filepath.endswith('.json') or filename in realtime_json_names or 'app.log' in filename
         
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 if is_json:
+                    skipped_count = 0
+                    first_skip = None
                     for line_idx, line in enumerate(f):
                         line_str = line.strip()
                         if not line_str: continue
                         try:
-                            data = json.loads(line_str)
+                            data = json.loads(line_str.lstrip('\ufeff'))
                             # 归一化处理
-                            data['message'] = data.get('message', '').replace('\\n', '\n')
-                            data['details'] = (data.get('details') or data.get('exception', '')).replace('\\n', '\n')
+                            data['level'] = data.get('level', 'INFO')
+                            data['message'] = str(data.get('message', '') or '').replace('\\n', '\n')
+                            data['details'] = str(data.get('details') or data.get('exception', '') or '').replace('\\n', '\n')
                             # 统一生成ID并注入行号
                             data['id'] = generate_log_id(data.get('timestamp', ''), data.get('level', 'INFO'), data['message'])
                             data['raw_lines'] = [line_idx + 1] # linecache 从 1 开始
@@ -168,9 +175,19 @@ class BaseLogReader:
                                 
                             if data:
                                 self._add_or_merge_block(blocks, data)
-                        except Exception: continue
+                        except Exception as e:
+                            skipped_count += 1
+                            if first_skip is None:
+                                first_skip = (line_idx + 1, str(e), line_str[:200])
+                            continue
                         if keep_all and max_keep_blocks and len(blocks) > max_keep_blocks:
                             blocks.pop(0)
+                    if skipped_count:
+                        first_line, reason, sample = first_skip or ("", "", "")
+                        logger.warning(
+                            "跳过无法解析的 JSON 日志行：filepath=%s skipped=%s first_line=%s reason=%s sample=%s",
+                            filepath, skipped_count, first_line, reason, sample,
+                        )
                 else:
                     # 纯文本读取(向下兼容 Player.log)
                     current_block = None

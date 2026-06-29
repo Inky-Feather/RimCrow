@@ -17,6 +17,7 @@ from typing import Any, Dict
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import webview # 引入 webview 库
+from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
 from backend.profile import UserDataRoot
@@ -631,6 +632,25 @@ class FileManager:
         return parsed_types or [("所有文件", "*.*")]
 
     @staticmethod
+    def _normalize_webview_file_types(file_types):
+        normalized_types = []
+        for item in file_types or []:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            parse_file_type(text)
+            normalized_types.append(text)
+        return tuple(normalized_types) or ("All Files (*.*)",)
+
+    @staticmethod
+    def _can_use_webview_file_types(file_types):
+        try:
+            FileManager._normalize_webview_file_types(file_types)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
     def _run_tk_dialog(dialog_callback):
         try:
             import tkinter as tk
@@ -703,14 +723,15 @@ class FileManager:
         # 检查路径是否有效
         if not os.path.exists(path): path = ''
         
-        if len(webview.windows) > 0:
+        use_webview_dialog = len(webview.windows) > 0 and FileManager._can_use_webview_file_types(file_types)
+        if use_webview_dialog:
             window = webview.windows[0]
             try:
                 result = window.create_file_dialog(
                     webview.FileDialog.OPEN, 
                     directory=path, 
                     allow_multiple=False,
-                    file_types=file_types
+                    file_types=FileManager._normalize_webview_file_types(file_types)
                 )
                 # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
                 if result and len(result) > 0: return result[0]
@@ -718,6 +739,8 @@ class FileManager:
             except Exception as e:
                 logger.warning(f"Webview 打开文件对话框失败：{e}")
                 raise RuntimeError(f"打开文件选择框失败: {e}") from e
+        elif len(webview.windows) > 0:
+            logger.debug("文件选择过滤器超出 pywebview 支持范围，改用备用文件选择框")
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(
             lambda filedialog: filedialog.askopenfilename(
@@ -740,7 +763,8 @@ class FileManager:
         # 检查路径是否有效
         if not os.path.exists(path): path = ''
         
-        if len(webview.windows) > 0:
+        use_webview_dialog = len(webview.windows) > 0 and FileManager._can_use_webview_file_types(file_types)
+        if use_webview_dialog:
             window = webview.windows[0]
             try:
                 # pywebview 的 create_file_dialog 参数：
@@ -750,7 +774,7 @@ class FileManager:
                     directory=path, 
                     save_filename=default_filename, # 设置默认文件名
                     allow_multiple=False,
-                    file_types=file_types
+                    file_types=FileManager._normalize_webview_file_types(file_types)
                 )
                 logger.info(f"用户选择保存路径: {result}")
                 # 在 pywebview 环境里，取消选择应直接返回，不要再额外弹 Tk 对话框。
@@ -759,6 +783,8 @@ class FileManager:
             except Exception as e:
                 logger.warning(f"Webview 保存文件对话框失败：{e}")
                 raise RuntimeError(f"打开保存对话框失败: {e}") from e
+        elif len(webview.windows) > 0:
+            logger.debug("文件保存过滤器超出 pywebview 支持范围，改用备用文件选择框")
 
         tk_file_types = FileManager._parse_dialog_file_types(file_types)
         return FileManager._run_tk_dialog(

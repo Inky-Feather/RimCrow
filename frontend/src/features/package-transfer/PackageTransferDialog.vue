@@ -65,6 +65,23 @@
             </div>
           </section>
 
+          <section v-if="dialogMode === 'data-import' && dataImportModuleRows.length" class="modal-section p-4">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div class="text-sm font-bold text-text-main">包含数据</div>
+              <div class="text-xs text-text-dim">{{ dataImportSummary }}</div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label v-for="row in dataImportModuleRows" :key="row.key" class="modal-section-subtle flex items-start gap-3 px-3 py-3">
+                <input :checked="!!dataImportModuleSelection[row.key]" class="mt-0.5 accent-accent-primary" type="checkbox"
+                  @change="setDataImportModuleSelected(row.key, $event.target.checked)">
+                <div class="min-w-0">
+                  <div class="text-sm font-bold text-text-main">{{ row.label }}</div>
+                  <div class="mt-1 text-xs leading-relaxed text-text-dim">{{ row.description }}</div>
+                </div>
+              </label>
+            </div>
+          </section>
+
           <template v-if="dialogMode === 'mod-import' && inspectData">
             <section class="modal-section p-4">
               <div class="mb-3">
@@ -230,7 +247,7 @@
               </section>
           </template>
 
-          <section v-if="dialogMode === 'data-import' && inspectData" class="modal-section p-4">
+          <section v-if="dialogMode === 'data-import' && inspectData && hasSelectedProfileImport" class="modal-section p-4">
             <div class="mb-3 text-sm font-bold text-text-main">环境导入冲突处理</div>
             <div class="mb-3 rounded-xl border border-accent-danger/20 bg-accent-danger/8 px-3 py-3 text-xs leading-relaxed text-text-dim">
               这里统一处理所有同名环境。覆盖时只替换环境里的实际使用数据；新建时会尽量保留导入包里的环境信息。
@@ -400,6 +417,7 @@ const dataBundleSchema = ref(null)
 const inspectData = ref(null)
 const selectedBundlePath = ref('')
 const lastPreparedImportTargetKey = ref('')
+const dataImportModuleSelection = ref({})
 
 const exportForm = reactive({
   profile_id: '',
@@ -496,6 +514,71 @@ const targetDiskSpaceSummary = computed(() => {
     text: `当前剩余 ${freeText}，按这次导入建议至少预留 ${recommendedText}`,
   }
 })
+const dataBundleModuleDefMap = computed(() => new Map(
+  (dataBundleSchema.value?.modules || []).map(module => [String(module.key || ''), module])
+))
+const dataImportModuleRows = computed(() => {
+  const entries = Array.isArray(inspectData.value?.modules) ? inspectData.value.modules : []
+  return entries
+    .map((entry) => {
+      const key = String(entry?.key || '').trim()
+      if (!key) return null
+      const schemaModule = dataBundleModuleDefMap.value.get(key) || {}
+      const profileCount = key === 'profiles' ? Number(inspectData.value?.profiles?.length || 0) : 0
+      return {
+        key,
+        label: String(entry?.label || schemaModule.label || key),
+        description: key === 'profiles'
+          ? `包含 ${profileCount} 个环境数据。`
+          : String(schemaModule.description || '包含该数据源的导入内容。'),
+      }
+    })
+    .filter(Boolean)
+})
+const dataImportAvailableModuleKeys = computed(() => new Set(dataImportModuleRows.value.map(row => row.key)))
+const getDataImportModuleDependencies = (key = '') => {
+  const normalizedKey = String(key || '').trim()
+  const module = dataBundleModuleDefMap.value.get(normalizedKey) || {}
+  return (Array.isArray(module.dependencies) ? module.dependencies : [])
+    .map(item => String(item || '').trim())
+    .filter(item => item && dataImportAvailableModuleKeys.value.has(item))
+}
+const setDataImportModuleSelected = (key = '', selected = false) => {
+  const normalizedKey = String(key || '').trim()
+  if (!normalizedKey) return
+  const nextSelection = { ...(dataImportModuleSelection.value || {}) }
+  const visitSelected = (targetKey, visited = new Set()) => {
+    if (visited.has(targetKey)) return
+    visited.add(targetKey)
+    getDataImportModuleDependencies(targetKey).forEach(depKey => visitSelected(depKey, visited))
+    nextSelection[targetKey] = true
+  }
+  const visitUnselected = (targetKey, visited = new Set()) => {
+    if (visited.has(targetKey)) return
+    visited.add(targetKey)
+    nextSelection[targetKey] = false
+    dataImportModuleRows.value.forEach((row) => {
+      if (getDataImportModuleDependencies(row.key).includes(targetKey)) {
+        visitUnselected(row.key, visited)
+      }
+    })
+  }
+  if (selected) visitSelected(normalizedKey)
+  else visitUnselected(normalizedKey)
+  dataImportModuleSelection.value = nextSelection
+}
+const selectedDataImportModuleKeys = computed(() => dataImportModuleRows.value
+  .filter(row => !!dataImportModuleSelection.value?.[row.key])
+  .map(row => row.key)
+)
+const hasSelectedProfileImport = computed(() => selectedDataImportModuleKeys.value.includes('profiles'))
+const dataImportSummary = computed(() => {
+  const selectedCount = selectedDataImportModuleKeys.value.length
+  const totalCount = dataImportModuleRows.value.length
+  const profileCount = Number(inspectData.value?.profiles?.length || 0)
+  const suffix = profileCount > 0 ? `，含 ${profileCount} 个环境` : ''
+  return `已选择 ${selectedCount}/${totalCount} 项${suffix}`
+})
 
 const dialogTitle = computed(() => {
   if (dialogMode.value === 'mod-export') return dialogPreset.value?.title || '导出模组打包'
@@ -514,9 +597,27 @@ const exportScopeOptions = computed(() => {
   return options
 })
 const allowExportEnvironmentAttach = computed(() => !!dialogPreset.value?.sourceProfile)
+const isProfileSourceExport = computed(() => dialogMode.value === 'mod-export' && !!dialogPreset.value?.sourceProfile)
 const showExportExtraOptions = computed(() => dialogMode.value === 'mod-export' && !!dialogPreset.value?.allowExtraOptions)
+const selectedProfileScopeOption = computed(() => {
+  if (!isProfileSourceExport.value) return null
+  return exportScopeOptions.value.find(option => String(option?.value || '') === String(exportForm.export_scope || '')) || null
+})
+const selectedProfileScopeCount = computed(() => {
+  const count = Number(selectedProfileScopeOption.value?.count)
+  return Number.isFinite(count) ? count : null
+})
 const exportPreview = computed(() => {
   if (dialogMode.value !== 'mod-export') return null
+  if (isProfileSourceExport.value) {
+    const count = selectedProfileScopeCount.value
+    return {
+      selected_count: count ?? 0,
+      mod_count: count ?? 0,
+      extra_count: 0,
+      mod_ids: [],
+    }
+  }
   return modStore.resolveCurrentExportPlan({
     exportScope: exportForm.export_scope,
     modIds: exportForm.mod_ids,
@@ -544,10 +645,13 @@ const exportSummary = computed(() => {
     const resolvedCount = Number(exportPreview.value?.mod_count || selectedCount || 0)
     const extraCount = Number(exportPreview.value?.extra_count || 0)
     const summary = formatExportPlanSummary(selectedCount, resolvedCount, extraCount, false)
-    if (dialogPreset.value?.sourceProfile) {
+    if (isProfileSourceExport.value) {
       const profileName = dialogPreset.value?.profileName || profileStore.currentProfile?.name || '当前环境'
       if (dialogPreset.value?.scopeOptionsLoading) {
         return `当前来源：${profileName}。正在读取这个环境的模组统计。`
+      }
+      if (selectedProfileScopeCount.value === null) {
+        return `当前来源：${profileName}。请选择有效导出范围。`
       }
       return `当前来源：${profileName}。${summary}`
     }
@@ -566,11 +670,17 @@ const extraExportSummary = computed(() => {
 
 const canSubmit = computed(() => {
   if (dialogMode.value === 'mod-export') {
-    if (!exportForm.profile_id && dialogPreset.value?.sourceProfile) return false
+    if (isProfileSourceExport.value) {
+      if (!exportForm.profile_id || dialogPreset.value?.scopeOptionsLoading) return false
+      return Number(selectedProfileScopeCount.value || 0) > 0
+    }
     return resolvedExportModIds.value.length > 0
   }
   if (!selectedBundlePath.value || !inspectData.value) return false
-  if (dialogMode.value === 'data-import') return validateProfileRows()
+  if (dialogMode.value === 'data-import') {
+    if (selectedDataImportModuleKeys.value.length === 0) return false
+    return !hasSelectedProfileImport.value || validateProfileRows()
+  }
   if (!modImportForm.import_mods && !modImportForm.apply_environment_data) return false
   if (modImportForm.import_mods) {
     if (modImportForm.target_kind === 'game_install' && !modImportForm.game_install_path) return false
@@ -594,22 +704,31 @@ const buildImportTargetKey = () => (
   `${selectedBundlePath.value}::${modImportForm.target_kind}::${modImportForm.game_install_path}`
 )
 
-const resetState = () => {
-  selectedBundlePath.value = String(dialogPreset.value?.bundlePath || '')
-  inspectData.value = dialogPreset.value?.inspectData || null
+const buildDataImportModuleSelection = (inspect) => Object.fromEntries(
+  (Array.isArray(inspect?.modules) ? inspect.modules : [])
+    .map(entry => String(entry?.key || '').trim())
+    .filter(Boolean)
+    .map(key => [key, true])
+)
+
+const resetState = (preset = dialogPreset.value) => {
+  selectedBundlePath.value = String(preset?.bundlePath || '')
+  inspectData.value = preset?.inspectData || null
+  dataImportModuleSelection.value = buildDataImportModuleSelection(inspectData.value)
   profilePlanRows.value = buildProfileRows(inspectData.value)
   modConflictRows.value = buildModConflictRows(inspectData.value)
-  exportForm.profile_id = String(dialogPreset.value?.profileId || profileStore.currentProfile?.id || appStore.settings.current_profile_id || 'default')
-  exportForm.export_scope = String(dialogPreset.value?.export_scope || (exportScopeOptions.value[0]?.value || 'custom'))
-  exportForm.mod_ids = Array.isArray(dialogPreset.value?.mod_ids) ? [...dialogPreset.value.mod_ids] : []
-  exportForm.folder_name_type = String(dialogPreset.value?.folder_name_type || dialogPreset.value?.folderNameType || appStore.settings.bundle_mod_folder_name_type || 'default')
-  exportForm.include_dependencies = !!dialogPreset.value?.include_dependencies
-  exportForm.include_interlocks = !!dialogPreset.value?.include_interlocks
-  exportForm.include_language_packs = !!dialogPreset.value?.include_language_packs
-  exportForm.include_environment_data = !!dialogPreset.value?.include_environment_data
+  exportForm.profile_id = String(preset?.profileId || profileStore.currentProfile?.id || appStore.settings.current_profile_id || 'default')
+  const presetScopeOptions = Array.isArray(preset?.scopeOptions) ? preset.scopeOptions : []
+  exportForm.export_scope = String(preset?.export_scope || (presetScopeOptions[0]?.value || 'custom'))
+  exportForm.mod_ids = Array.isArray(preset?.mod_ids) ? [...preset.mod_ids] : []
+  exportForm.folder_name_type = String(preset?.folder_name_type || preset?.folderNameType || appStore.settings.bundle_mod_folder_name_type || 'default')
+  exportForm.include_dependencies = !!preset?.include_dependencies
+  exportForm.include_interlocks = !!preset?.include_interlocks
+  exportForm.include_language_packs = !!preset?.include_language_packs
+  exportForm.include_environment_data = !!preset?.include_environment_data
   modImportForm.import_mods = dialogMode.value === 'mod-import'
-  modImportForm.target_kind = String(dialogPreset.value?.targetKind || (availableInstalls.value.length > 0 ? 'game_install' : 'self_mods'))
-  modImportForm.game_install_path = String(dialogPreset.value?.gameInstallPath || availableInstalls.value[0]?.install_path || '')
+  modImportForm.target_kind = String(preset?.targetKind || (availableInstalls.value.length > 0 ? 'game_install' : 'self_mods'))
+  modImportForm.game_install_path = String(preset?.gameInstallPath || availableInstalls.value[0]?.install_path || '')
   modImportForm.apply_environment_data = false
   profileStrategy.value = 'per_item'
   modConflictStrategy.value = 'per_item'
@@ -618,29 +737,20 @@ const resetState = () => {
     : ''
 }
 
-const loadSchemas = async () => {
+const loadSchemas = async (preset = dialogPreset.value) => {
   if (dialogMode.value === 'mod-import' || dialogMode.value === 'mod-export') {
-    modPackageSchema.value = dialogPreset.value?.modPackageSchema || modPackageSchema.value
+    modPackageSchema.value = preset?.modPackageSchema || modPackageSchema.value
     if (!modPackageSchema.value) {
       modPackageSchema.value = await appStore.getModPackageSchema()
     }
   }
   if (dialogMode.value === 'data-import') {
-    dataBundleSchema.value = dialogPreset.value?.dataBundleSchema || dataBundleSchema.value
+    dataBundleSchema.value = preset?.dataBundleSchema || dataBundleSchema.value
     if (!dataBundleSchema.value) {
       dataBundleSchema.value = await appStore.getDataBundleSchema()
     }
   }
 }
-
-watch(
-  () => appStore.uiState.showPackageTransferDialog,
-  async (visible) => {
-    if (!visible) return
-    await loadSchemas()
-    resetState()
-  }
-)
 
 const buildProfileRows = (inspect) => {
   const entries = Array.isArray(inspect?.profile_conflicts) ? inspect.profile_conflicts : []
@@ -736,11 +846,20 @@ const getBundleFilters = () => {
       .filter(Boolean)
     return [`RimCrow Data Package (${extensions.map(item => `*${item}`).join(';')})`, 'All Files (*.*)']
   }
-  return [`RimCrow Mod Package (*${modPackageSchema.value?.file_extension || '.rimcrowmods.zip'})`, 'All Files (*.*)']
+  const extensions = [
+    modPackageSchema.value?.file_extension || '.rimcrowmods.zip',
+    ...(Array.isArray(modPackageSchema.value?.legacy_file_extensions) ? modPackageSchema.value.legacy_file_extensions : ['.rmmmods.zip']),
+  ]
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  return [`RimCrow Mod Package (${extensions.map(item => `*${item}`).join(';')})`, 'All Files (*.*)']
 }
 
 const pickImportBundle = async () => {
-  const bundlePath = await appStore.getFilePath('', getBundleFilters())
+  const initialDir = dialogMode.value === 'data-import'
+    ? (dataBundleSchema.value?.data_dir || 'data')
+    : (modPackageSchema.value?.data_dir || 'data')
+  const bundlePath = await appStore.getFilePath(initialDir, getBundleFilters())
   if (!bundlePath) return
   selectedBundlePath.value = bundlePath
   if (dialogMode.value === 'data-import') {
@@ -753,6 +872,7 @@ const pickImportBundle = async () => {
   }
   if (!inspectData.value) return
   lastPreparedImportTargetKey.value = dialogMode.value === 'mod-import' ? buildImportTargetKey() : ''
+  dataImportModuleSelection.value = buildDataImportModuleSelection(inspectData.value)
   profilePlanRows.value = buildProfileRows(inspectData.value)
   modConflictRows.value = buildModConflictRows(inspectData.value)
 }
@@ -786,12 +906,23 @@ const buildModConflictPlan = () => modConflictRows.value.map((row) => ({
   rename_to: row.mode === 'rename' ? String(row.rename_to || '').trim() : '',
 }))
 
+watch(
+  () => appStore.uiState.showPackageTransferDialog,
+  async (visible) => {
+    if (!visible) return
+    const preset = { ...(dialogPreset.value || {}) }
+    await loadSchemas(preset)
+    resetState(preset)
+  },
+  { immediate: true }
+)
+
 const handleSubmit = async () => {
   if (dialogMode.value === 'mod-export') {
     const exportPromise = appStore.exportModPackage({
       profile_id: exportForm.profile_id,
       export_scope: exportForm.export_scope,
-      mod_ids: resolvedExportModIds.value,
+      mod_ids: isProfileSourceExport.value ? [] : resolvedExportModIds.value,
       include_dependencies: showExportExtraOptions.value ? false : exportForm.include_dependencies,
       include_interlocks: showExportExtraOptions.value ? false : exportForm.include_interlocks,
       include_language_packs: showExportExtraOptions.value ? false : exportForm.include_language_packs,
@@ -806,6 +937,7 @@ const handleSubmit = async () => {
 
   if (dialogMode.value === 'data-import') {
     const imported = await appStore.importDataBundle(selectedBundlePath.value, {
+      module_keys: selectedDataImportModuleKeys.value,
       profile_import_plan: buildProfileImportPlan(),
     })
     if (imported) closeDialog()

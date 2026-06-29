@@ -212,7 +212,7 @@ const openDataBundleImportDialog = async () => {
     ]
       .map(item => String(item || '').trim())
       .filter(Boolean)
-    const bundlePath = await appStore.getFilePath('', [
+    const bundlePath = await appStore.getFilePath(schema.data_dir || 'data', [
       `RimCrow Data Package (${extensions.map(item => `*${item}`).join(';')})`,
       'All Files (*.*)',
     ])
@@ -236,8 +236,11 @@ const openModPackageImportDialog = async () => {
     const schema = await appStore.getModPackageSchema()
     if (!schema) return
 
-    const bundlePath = await appStore.getFilePath('', [
-      `RimCrow Mod Package (*${schema.file_extension || '.rimcrowmods.zip'})`,
+    const bundlePath = await appStore.getFilePath(schema.data_dir || 'data', [
+      `RimCrow Mod Package (${[
+        schema.file_extension || '.rimcrowmods.zip',
+        ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmmods.zip']),
+      ].map(item => `*${String(item || '').trim()}`).filter(item => item !== '*').join(';')})`,
       'All Files (*.*)',
     ])
     if (!bundlePath) return
@@ -272,8 +275,8 @@ const openCurrentProfileExportDialog = () => {
     profileId: currentProfile.id || appStore.settings.current_profile_id || 'default',
     profileName: currentProfile.name || '当前环境',
     scopeOptions: [
-      { value: 'profile-effective', label: `当前环境有效模组（${modStore.exportableVisibleCount}）`, description: '导出当前环境里能正常使用的模组。' },
-      { value: 'profile-active', label: `当前环境启用模组（${modStore.exportableActiveCount}）`, description: '只导出当前环境里已经启用的模组。' },
+      { value: 'profile-effective', label: `当前环境有效模组（${modStore.exportableVisibleCount}）`, count: modStore.exportableVisibleCount, description: '导出当前环境里能正常使用的模组。' },
+      { value: 'profile-active', label: `当前环境启用模组（${modStore.exportableActiveCount}）`, count: modStore.exportableActiveCount, description: '只导出当前环境里已经启用的模组。' },
     ],
     export_scope: 'profile-effective',
     folder_name_type: props.formData?.bundle_mod_folder_name_type || appStore.settings.bundle_mod_folder_name_type || 'default',

@@ -15,67 +15,67 @@
               </h2>
               <p class="text-sm text-text-dim mt-2">管理排序逻辑与约束</p>
             </div>
-
-            <nav class="flex-1 px-2 space-y-1" data-tour="rule-tabs">
-              <button v-for="tab in tabs" :key="tab.id" :data-tour="`rule-tab-${tab.id}`" @click="currentTab = tab.id"
-                class="w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-bold transition-all duration-200 group"
-                :class="currentTab === tab.id ? 'bg-accent-primary/10 text-accent-primary border border-accent-primary/20' : 'text-text-dim hover:bg-bg-overlay/5 border border-transparent'">
-                <div class="flex items-center gap-2">
-                  <component :is="tab.icon" class="w-4 h-4 transition-transform group-hover:scale-110" />
-                  {{ tab.label }}
-                </div>
-                <span v-if="tab.count !== undefined" class="bg-bg-inset/70 px-2 py-0.5 rounded text-xs opacity-60">{{ tab.count }}</span>
-              </button>
-            </nav>
-
-            <!-- ================= 优先级排序 (侧边栏) ================= -->
-            <div class="px-4 py-4 bg-bg-highlight/25 border-border-base/5" data-tour="rule-priority">
-              <div class="flex items-center justify-between mb-3 px-2">
-                <span class="text-xs font-bold text-text-dim uppercase tracking-widest">
-                  生效优先级
-                  <label v-tooltip="'规则生效优先级，影响自动排序和问题检测的判定。'" class="text-xs text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
-                </span>
-                <div class="flex gap-2">
-                  <button v-if="isPriorityDirty" @click="resetPriority" v-tooltip="'重置'"
-                    class="text-text-dim hover:text-text-main transition-colors">
-                    <RotateCcw class="w-3.5 h-3.5" />
-                  </button>
-                  <button @click="savePriority" v-tooltip="isPriorityDirty ? '保存优先级修改' : '无变化'"
-                    :class="[isPriorityDirty ? 'text-accent-success scale-110' : 'text-text-dim opacity-50']"
-                    class="transition-all duration-300">
-                    <Save class="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div class="space-y-1 relative">
-                <TransitionGroup name="flip-list">
-                  <div v-for="(source, idx) in localPriority" :key="source"
-                    draggable="true"
-                    @dragstart="onDragStart($event, idx)"
-                    @dragover="onDragOver($event, idx)" 
-                    @dragend="onDragEnd"
-                    class="drag-item flex items-center gap-2 px-3 py-2 bg-bg-overlay/5 border border-border-base/5 rounded-lg cursor-grab active:cursor-grabbing group transition-colors hover:border-accent-primary/30"
-                    :class="{ 'opacity-20 bg-accent-primary/5 border-accent-primary/50': dragIndex === idx }">
-                    <!-- 内部元素增加 pointer-events-none 防止干扰 dragenter -->
-                    <GripVertical class="pointer-events-none w-3.5 h-3.5  group-hover:text-accent-primary transition-colors" :class="[(globalRulesEnableMap[source]||source=='native')?'text-accent-success':'text-text-dim']" />
-                    <span class="pointer-events-none text-xs font-medium text-text-soft select-none">{{ sourceNames[source] }}</span>
-                    <span class="pointer-events-none ml-auto text-[0.7rem] font-mono text-text-dim bg-bg-inset/80 w-4 h-4 flex items-center justify-center rounded">
-                      {{ idx + 1 }}
-                    </span>
+            <div class="w-full flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
+              <nav class="flex-1 px-2 space-y-1" data-tour="rule-tabs">
+                <button v-for="tab in tabs" :key="tab.id" :data-tour="`rule-tab-${tab.id}`" @click="currentTab = tab.id"
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-bold transition-all duration-200 group"
+                  :class="currentTab === tab.id ? 'bg-accent-primary/10 text-accent-primary border border-accent-primary/20' : 'text-text-dim hover:bg-bg-overlay/5 border border-transparent'">
+                  <div class="flex items-center gap-2">
+                    <component :is="tab.icon" class="w-4 h-4 transition-transform group-hover:scale-110" />
+                    {{ tab.label }}
                   </div>
-                </TransitionGroup>
+                  <span v-if="tab.count !== undefined" class="bg-bg-inset/70 px-2 py-0.5 rounded text-xs opacity-60">{{ tab.count }}</span>
+                </button>
+              </nav>
+              <!-- ================= 优先级排序 (侧边栏) ================= -->
+              <div class="px-4 pt-3 pb-2 bg-bg-highlight/25 border-border-base/5" data-tour="rule-priority">
+                <div class="flex items-center justify-between mb-3 px-2">
+                  <span class="text-xs font-bold text-text-dim uppercase tracking-widest">
+                    生效优先级
+                    <label v-tooltip="'规则生效优先级，影响自动排序和问题检测的判定。'" class="text-xs text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
+                  </span>
+                  <div class="flex gap-2">
+                    <button v-if="isPriorityDirty" @click="resetPriority" v-tooltip="'重置'"
+                      class="text-text-dim hover:text-text-main transition-colors">
+                      <RotateCcw class="w-3.5 h-3.5" />
+                    </button>
+                    <button @click="savePriority" v-tooltip="isPriorityDirty ? '保存优先级修改' : '无变化'"
+                      :class="[isPriorityDirty ? 'text-accent-success scale-110' : 'text-text-dim opacity-50']"
+                      class="transition-all duration-300">
+                      <Save class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1 relative">
+                  <TransitionGroup name="flip-list">
+                    <div v-for="(source, idx) in localPriority" :key="source"
+                      draggable="true"
+                      @dragstart="onDragStart($event, idx)"
+                      @dragover="onDragOver($event, idx)" 
+                      @dragend="onDragEnd"
+                      class="drag-item flex items-center gap-2 px-3 py-2 bg-bg-overlay/5 border border-border-base/5 rounded-lg cursor-grab active:cursor-grabbing group transition-colors hover:border-accent-primary/30"
+                      :class="{ 'opacity-20 bg-accent-primary/5 border-accent-primary/50': dragIndex === idx }">
+                      <!-- 内部元素增加 pointer-events-none 防止干扰 dragenter -->
+                      <GripVertical class="pointer-events-none w-3.5 h-3.5  group-hover:text-accent-primary transition-colors" :class="[(globalRulesEnableMap[source]||source=='native')?'text-accent-success':'text-text-dim']" />
+                      <span class="pointer-events-none text-xs font-medium text-text-soft select-none">{{ sourceNames[source] }}</span>
+                      <span class="pointer-events-none ml-auto text-[0.7rem] font-mono text-text-dim bg-bg-inset/80 w-4 h-4 flex items-center justify-center rounded">
+                        {{ idx + 1 }}
+                      </span>
+                    </div>
+                  </TransitionGroup>
+                </div>
+                <p class="text-[0.7rem] text-text-disabled mt-2 px-2 leading-relaxed">
+                  * 生效优先级：从上到下，优先级从高到低。
+                </p>
               </div>
-              <p class="text-[0.7rem] text-text-disabled mt-2 px-2 leading-relaxed">
-                * 生效优先级：从上到下，优先级从高到低。
-              </p>
             </div>
 
             <div class="p-4 border-t border-border-base/5 space-y-2" data-tour="rule-import-export">
               <button @click="ruleStore.handleImport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-sm text-text-dim transition-all border border-border-base/5">
                 <Download class="w-3 h-3" /> 导入配置包
               </button>
-              <button @click="ruleStore.handleExport" class="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-sm text-text-dim transition-all border border-border-base/5">
+              <button @click="ruleStore.handleExport" class="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-sm text-text-dim transition-all border border-border-base/5">
                 <Share2 class="w-3 h-3" /> 导出配置包
               </button>
             </div>
