@@ -1,9 +1,11 @@
 # RimCrow
 
+<img src="./doc/assets/Preview.png" style="width:50%;" />
+
 RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管理器，目标是把模组扫描、排序、备份、工坊管理、日志排错和常用辅助工具放到一个界面里，减少手动翻文件夹和反复切窗口的成本。
 
 
-当前仓库处于持续开发中，正在持续迭代和逐步整理成公开项目。
+![主界面](./doc/assets/主界面.png)
 
 ## 主要功能
 

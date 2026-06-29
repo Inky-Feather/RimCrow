@@ -240,9 +240,7 @@
 │   │   │   │   └──  modResidueStore.js
 │   │   │   │   
 │   │   │   ├── ·[package-transfer]
-│   │   │   │   ├──  ModConflictPlanEditor.vue
-│   │   │   │   ├──  PackageTransferDialog.vue
-│   │   │   │   └──  ProfileConflictPlanEditor.vue
+│   │   │   │   └──  PackageTransferDialog.vue
 │   │   │   │   
 │   │   │   ├── ·[profiles]
 │   │   │   │   ├──  ProfileDrawer.vue
@@ -422,6 +420,7 @@
 │   ├──  test_ai_gateway_request_compat.py
 │   ├──  test_ai_service_helpers.py
 │   ├──  test_app_relocation.py
+│   ├──  test_browser_runtime.py
 │   ├──  test_bundle_managers.py
 │   ├──  test_database_runtime.py
 │   ├──  test_dlc_parser_cache_mode.py
@@ -445,6 +444,7 @@
 │   ├──  test_mod_residue_manager.py
 │   ├──  test_mod_settings_manager.py
 │   ├──  test_multiplayer_compat_manager.py
+│   ├──  test_network_manager.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_recommendation_export_manager.py
 │   ├──  test_rule_manager_dynamic_weights.py
@@ -479,6 +479,5 @@
 ├──  pyproject.toml
 ├──  README.md
 ├──  splash.png
-├──  splash1.png
 ├──  uv.lock
 └──  validate_environment.py

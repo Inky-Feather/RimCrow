@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.23.1"  # 主版本.次版本.补丁
+__version__ = "0.23.4"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,39 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.23.4",
+        "date": "2026-06-29",
+        "entries": [
+            {
+                "title": "RimCrow 项目重塑与数据迁移",
+                "changes": [
+                    { "type": "breaking", "text": "项目正式更名为 RimCrow，更新相关标识与配置路径" },
+                    { "type": "feature", "text": "新增自动迁移功能，支持将旧版工具数据与凭据平滑迁移至 RimCrow" },
+                    { "type": "optimize", "text": "重构内部组件结构，清理冗余资源，提升系统运行效率" }
+                ]
+            },
+            {
+                "title": "启动流程、性能优化与兼容性改进",
+                "changes": [
+                    { "type": "feature", "text": "增强 Steam 启动与创意工坊环境校验，新增启动警告机制" },
+                    { "type": "feature", "text": "扩展多人联机兼容性及包 ID 配置支持" },
+                    { "type": "optimize", "text": "重构启动流程，引入后台任务调度与预热机制，显著提升首屏加载速度" },
+                    { "type": "optimize", "text": "优化配置文件更新策略，支持用户手动控制启动行为" },
+                    { "type": "fix", "text": "修复旧版运行环境下路径检测的兼容性问题" }
+                ]
+            },
+            {
+                "title": "诊断引擎与设置面板升级",
+                "changes": [
+                    { "type": "feature", "text": "集成启发式日志诊断引擎，支持自动识别诊断阶段与异常命名空间" },
+                    { "type": "feature", "text": "新增关于页面，整合项目元数据、反馈渠道及致谢信息" },
+                    { "type": "feature", "text": "支持自定义更新源配置，实现更新流程动态化" },
+                    { "type": "optimize", "text": "优化设置面板结构，改进外部链接跳转体验" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.23.0",
         "date": "2026-06-26",
