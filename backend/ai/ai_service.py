@@ -907,11 +907,11 @@ class AIManager:
                 "raw_message": raw_message,
                 "request_meta": {
                     "model": llm_kwargs.get("model", ""),
-                    "provider": llm_kwargs.get("_rmm_provider", ""),
-                    "base_url": llm_kwargs.get("_rmm_base_url", ""),
-                    "endpoint_mode": llm_kwargs.get("_rmm_endpoint_mode", ""),
-                    "enable_reasoning": bool(llm_kwargs.get("_rmm_enable_reasoning", False)),
-                    "reasoning_effort": llm_kwargs.get("_rmm_reasoning_effort", "medium"),
+                    "provider": llm_kwargs.get("_rimcrow_provider", ""),
+                    "base_url": llm_kwargs.get("_rimcrow_base_url", ""),
+                    "endpoint_mode": llm_kwargs.get("_rimcrow_endpoint_mode", ""),
+                    "enable_reasoning": bool(llm_kwargs.get("_rimcrow_enable_reasoning", False)),
+                    "reasoning_effort": llm_kwargs.get("_rimcrow_reasoning_effort", "medium"),
                 },
             }
             if content_text.strip(): return result
@@ -1030,3 +1030,4 @@ class AITaskRequestCancelled(Exception):
     """用户主动取消的 AI 异步任务请求"""
     pass
     
+

@@ -162,8 +162,8 @@
             :check="form.check_info?.user_data_path" @blur="checkPath('user_data_path', form.user_data_path)"
             description="游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。"
             :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
-          <CommonSwitch v-if="showWorkshopSwitch" :disabled="!canUseSteamLaunch" label="优先使用 Steam 启动" v-model="form.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动游戏，进而挂载创意工坊内容。（前提是账号正常使用该游戏和相关关创意工坊内容。）" />
-          <CommonSwitch v-if="showWorkshopSwitch" :disabled="form.prefer_steam_launch" label="使用创意工坊 Mod" v-model="form.use_workshop_mods" description="适用于非 Steam 版环境。为当前环境使用创意工坊模组，启用后将通过链接方式自动为游戏添加创意工坊模组。（前提是账号正常使用该游戏和相关关创意工坊内容。）" />
+          <CommonSwitch :disabled="steamLaunchChecking" label="优先使用 Steam 启动" :model-value="form.prefer_steam_launch" description="开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。" @update:modelValue="handlePreferSteamLaunchUpdate" />
+          <CommonSwitch :disabled="workshopModsChecking" label="使用创意工坊 Mod" :model-value="form.use_workshop_mods" description="开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。" @update:modelValue="handleWorkshopModsUpdate" />
           <CommonSwitch v-if="appStore.settings.self_mods_path" label="使用管理器 Mod" v-model="form.use_self_mods" description="启用后将通过链接方式自动为游戏添加管理器模组。" />
           <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
           <CommonTagInput label="游戏启动参数" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
@@ -210,6 +210,8 @@ const confirmStore = useConfirmStore()
 const showModal = ref(false)
 const isEditing = ref(false)
 const gameInfo = ref('')
+const steamLaunchChecking = ref(false)
+const workshopModsChecking = ref(false)
 const form = reactive({
   id: '',
   name: '',
@@ -223,23 +225,6 @@ const form = reactive({
   run_commands: [],
   check_info: {}
 })
-const detectedIsSteam = computed(() => {
-  const checkedInstall = form.check_info?.game_install_path
-  if (checkedInstall && Object.prototype.hasOwnProperty.call(checkedInstall, 'pass')) {
-    if (checkedInstall.data && Object.prototype.hasOwnProperty.call(checkedInstall.data, 'is_steam')) {
-      return !!checkedInstall.data.is_steam
-    }
-    return false
-  }
-  if (isEditing.value) {
-    const editingProfile = profileStore.profiles.find(item => item.id === form.id)
-    return !!editingProfile?.is_steam
-  }
-  return !!profileStore.activeContext?.is_steam
-})
-const canUseSteamLaunch = computed(() => detectedIsSteam.value)
-const showWorkshopSwitch = computed(() => !!appStore.settings.workshop_mods_path)
-
 const showSteamVersionBadge = (profile) => !!profile?.is_steam
 const runtimeProfileId = computed(() => String(appStore.runtimeSession?.profile_id || '').trim())
 const runtimeProfileLabel = computed(() => {
@@ -265,12 +250,6 @@ watch(() => form.prefer_steam_launch, (enabled) => {
     form.use_workshop_mods = false
   }
 })
-watch(detectedIsSteam, (isSteam) => {
-  if (!isSteam && form.prefer_steam_launch) {
-    form.prefer_steam_launch = false
-  }
-})
-
 const openCreate = () => {
   form.id = ''
   form.name = ''
@@ -335,6 +314,12 @@ const submitForm = async () => {
     toast.warning('请输入一个有效的用户数据目录')
     return
   }
+  if (form.prefer_steam_launch) {
+    await validateSteamLaunchEnable()
+  }
+  if (form.use_workshop_mods) {
+    await validateWorkshopModsEnable()
+  }
   if (isEditing.value) {
     const cleanForm = { ...form }
     delete cleanForm.copy_current_data
@@ -348,12 +333,91 @@ const submitForm = async () => {
 }
 
 // 检查游戏路径是否有效
-const checkPath = async (type, path) => {
-  const res = await appStore.checkPath(type, path)
+const checkPath = async (type, path, options = {}) => {
+  const res = await appStore.checkPath(type, path, options)
   if (!form['check_info']) {
     form['check_info'] = {};
   }
   form['check_info'][type] = res
+  return res
+}
+
+const getSteamLaunchProblem = (installCheck, steamCheck) => {
+  if (!installCheck?.pass) return `游戏执行目录可能无法用于 Steam 启动：${installCheck?.msg || '请重新选择游戏执行目录'}`
+  if (!steamCheck?.pass) return `Steam 程序路径可能无法使用：${steamCheck?.msg || '请先到设置页填写 Steam.exe 所在目录'}`
+  return ''
+}
+
+const validateSteamLaunchEnable = async () => {
+  const installPath = String(form.game_install_path || '').trim()
+  const steamPath = String(appStore.settings?.steam_path || '').trim()
+  if (!installPath) {
+    toast.warning('未填写游戏执行目录，Steam 启动可能无法使用')
+    return false
+  }
+  if (!steamPath) {
+    toast.warning('未填写 Steam 程序路径，Steam 启动可能无法使用')
+    return false
+  }
+  const installCheck = await checkPath('game_install_path', installPath, { force: true })
+  const steamCheck = await checkPath('steam_path', steamPath)
+  const problem = getSteamLaunchProblem(installCheck, steamCheck)
+  if (problem) {
+    toast.warning(`${problem}\n此开关会按你的选择保留，启动失败时可改为直接启动。`)
+    return false
+  }
+  if (!installCheck?.data?.is_steam) {
+    toast.warning('未能确认当前游戏本体是否为 Steam 版，仍会优先尝试通过 Steam 启动；如果启动失败，可改为直接启动。')
+  }
+  return true
+}
+
+const validateWorkshopModsEnable = async () => {
+  const workshopPath = String(appStore.settings?.workshop_mods_path || '').trim()
+  if (!workshopPath) {
+    toast.warning('未填写创意工坊目录，工坊 Mod 可能无法加载')
+    return false
+  }
+  const workshopCheck = await checkPath('workshop_mods_path', workshopPath)
+  if (workshopCheck?.pass && workshopCheck?.type === 'warn') {
+    toast.warning(workshopCheck.msg || '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。')
+  }
+  if (!workshopCheck?.pass) {
+    toast.warning(`创意工坊目录可能无法使用：${workshopCheck?.msg || '请先到设置页重新选择创意工坊目录'}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。`)
+    return false
+  }
+  return true
+}
+
+const handlePreferSteamLaunchUpdate = async (value) => {
+  if (!value) {
+    form.prefer_steam_launch = false
+    return
+  }
+  if (steamLaunchChecking.value) return
+  steamLaunchChecking.value = true
+  try {
+    await validateSteamLaunchEnable()
+    form.prefer_steam_launch = true
+  } finally {
+    steamLaunchChecking.value = false
+  }
+}
+
+const handleWorkshopModsUpdate = async (value) => {
+  if (!value) {
+    form.use_workshop_mods = false
+    return
+  }
+  if (workshopModsChecking.value) return
+  workshopModsChecking.value = true
+  try {
+    await validateWorkshopModsEnable()
+    form.use_workshop_mods = true
+    form.prefer_steam_launch = false
+  } finally {
+    workshopModsChecking.value = false
+  }
 }
 
 const handleDelete = async (p) => {

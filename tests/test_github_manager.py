@@ -259,6 +259,35 @@ class TestGithubManager(unittest.TestCase):
 
         self.assertEqual([source["label"] for source in sources], ["RJW", "RJW"])
         self.assertEqual(len({source["id"] for source in sources}), 2)
+        self.assertEqual({source["cache_id"] for source in sources}, {"rjw"})
+
+    def test_provider_catalog_cache_path_uses_source_cache_id(self):
+        source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
+
+        with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", self.temp_root):
+            cache_path = self.manager._provider_catalog_cache_path(source)
+
+        self.assertEqual(cache_path, self.temp_root / "rjw.json")
+
+    def test_provider_catalog_cache_load_migrates_legacy_source_id_file(self):
+        source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
+        stale_catalog = {
+            "source": {"id": "rjw", "label": "RJW", "type": "provider_json", "count": 1},
+            "items": [{"key": "old", "name": "Old"}],
+        }
+        current_catalog = {
+            "source": {"id": source["id"], "label": "RJW", "type": "provider_json", "count": 1},
+            "items": [{"key": "new", "name": "New"}],
+        }
+
+        with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", self.temp_root):
+            self.manager._save_provider_catalog_source_cache(source, stale_catalog)
+            self.manager._save_provider_catalog_source_cache(source["id"], current_catalog)
+            loaded_catalog = self.manager._load_provider_catalog_source_cache(source)
+            migrated_catalog = self.manager._load_provider_catalog_source_cache("rjw")
+
+        self.assertEqual(loaded_catalog["items"], current_catalog["items"])
+        self.assertEqual(migrated_catalog["source"]["id"], source["id"])
 
     def test_provider_catalog_update_check_compares_cache_with_remote_without_saving(self):
         source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
@@ -272,12 +301,12 @@ class TestGithubManager(unittest.TestCase):
         }
 
         with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", self.temp_root):
-            self.manager._save_provider_catalog_source_cache(source["id"], cached_catalog)
+            self.manager._save_provider_catalog_source_cache(source, cached_catalog)
             with patch.object(self.manager, "_provider_catalog_sources", return_value=[source]), \
                  patch.object(self.manager, "_fetch_provider_catalog_source_remote", return_value=remote_catalog):
                 result = self.manager.check_provider_catalog_updates()
 
-            saved_catalog = self.manager._load_provider_catalog_source_cache(source["id"])
+            saved_catalog = self.manager._load_provider_catalog_source_cache(source)
 
         self.assertTrue(result["needs_update"])
         self.assertTrue(result["remote_available"])

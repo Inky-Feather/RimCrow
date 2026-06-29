@@ -25,14 +25,14 @@ class TestAttachmentResolver(unittest.TestCase):
         attachment.summary = "1 条已选日志"
         attachment.facts = {
             "source_type": "game",
-            "filename": "RMM_Realtime.log",
+            "filename": "RimCrow_Realtime.log",
             "errors": [{"target_line": 588}],
         }
 
         variables = resolver.extract_prompt_variables([attachment])
 
         self.assertEqual(variables["diagnosis_context.source_type"], "game")
-        self.assertEqual(variables["diagnosis_context.filename"], "RMM_Realtime.log")
+        self.assertEqual(variables["diagnosis_context.filename"], "RimCrow_Realtime.log")
 
 
 if __name__ == "__main__":

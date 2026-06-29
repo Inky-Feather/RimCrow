@@ -7,6 +7,7 @@ export const useMaintenanceActions = ({
   waitForDownload,
   refreshData,
   refreshModsData,
+  refreshModCoreData,
   downloadWorkshopItems,
 } = {}) => {
   const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
@@ -29,7 +30,7 @@ export const useMaintenanceActions = ({
   const logMaintenanceCheck = (event, payload = {}, level = 'info') => {
     // 统一启动/维护检测日志格式，排查“为什么没自动检查”时只需要搜索这个前缀。
     const method = level === 'warn' ? 'warn' : level === 'error' ? 'error' : 'info'
-    console[method]('[RMM][maintenance-check]', { event, ...payload })
+    console[method]('[RimCrow][maintenance-check]', { event, ...payload })
   }
 
   const formatDateTime = (timestamp) => {
@@ -139,12 +140,24 @@ export const useMaintenanceActions = ({
     return refreshed
   }
 
+  const MOD_DATA_EXTERNAL_DB_TYPES = new Set(['community_rules', 'workshop_db', 'instead_db', 'multiplayer_compatibility', 'mp_compat_package_ids'])
+  const refreshAfterExternalDataUpdate = async (historyLabel = '外部库更新后同步模组数据') => {
+    if (refreshModCoreData) return await refreshModCoreData(historyLabel, { preserveListState: true })
+    if (refreshModsData) return await refreshModsData(historyLabel, { preserveListState: true })
+    return await refreshData(false, historyLabel)
+  }
+
   const updateExternalDataItems = async (items = [], { silent = false } = {}) => {
     let updated = 0
+    let shouldRefreshModData = false
     for (const item of Array.isArray(items) ? items : []) {
       if (!item?.data_type) continue
-      if (await updateExternalDB(item.data_type, { silent })) updated += 1
+      if (await updateExternalDB(item.data_type, { silent, refreshAfter: false })) {
+        updated += 1
+        shouldRefreshModData = shouldRefreshModData || MOD_DATA_EXTERNAL_DB_TYPES.has(item.data_type)
+      }
     }
+    if (shouldRefreshModData) await refreshAfterExternalDataUpdate()
     return updated
   }
 
@@ -449,7 +462,7 @@ export const useMaintenanceActions = ({
   const checkSteamTools = async () => checkToolMaintenance({ manual: true, prompt: true })
 
   // 更新外置数据库
-  const updateExternalDB = async (type, { silent = false } = {}) => {
+  const updateExternalDB = async (type, { silent = false, refreshAfter = true } = {}) => {
     try {
       const workNameMap = {
         community_rules: '更新社区规则库',
@@ -469,8 +482,7 @@ export const useMaintenanceActions = ({
         if (task_id) await waitForDownload(task_id)
         // 重新获取数据
         const historyLabel = `${workNameMap[type] || '外置数据库更新'}后同步模组数据`
-        if (refreshModsData) await refreshModsData(historyLabel)
-        else await refreshData(false, historyLabel)
+        if (refreshAfter && MOD_DATA_EXTERNAL_DB_TYPES.has(type)) await refreshAfterExternalDataUpdate(historyLabel)
         return true
       }
       return false

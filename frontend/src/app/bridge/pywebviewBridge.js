@@ -7,7 +7,7 @@ let heartbeatCleanup = null
 
 const getConfiguredApiBaseUrl = () => {
   const url = new URL(window.location.href)
-  return url.searchParams.get('rmm_api_base') || ''
+  return url.searchParams.get('api_base') || url.searchParams.get('rmm_api_base') || ''
 }
 
 const callBridgeEndpoint = async (baseUrl, path, payload = null, options = {}) => {
@@ -134,7 +134,7 @@ const connectEventStream = (baseUrl, clientId) => {
 
 export const setupPywebviewBridge = async () => {
   if (window.pywebview?.api) {
-    window.__RMM_RUNTIME_MODE__ = 'desktop'
+    window.__APP_RUNTIME_MODE__ = 'desktop'
     return 'desktop'
   }
 
@@ -163,9 +163,9 @@ export const setupPywebviewBridge = async () => {
   window.pywebview = {
     api: createApiProxy(baseUrl),
   }
-  window.__RMM_RUNTIME_MODE__ = 'browser'
-  window.__RMM_API_BASE_URL__ = baseUrl
-  window.__RMM_BROWSER_SESSION_ID__ = clientId
+  window.__APP_RUNTIME_MODE__ = 'browser'
+  window.__APP_API_BASE_URL__ = baseUrl
+  window.__APP_BROWSER_SESSION_ID__ = clientId
 
   startHeartbeat(baseUrl, clientId)
   connectEventStream(baseUrl, clientId)

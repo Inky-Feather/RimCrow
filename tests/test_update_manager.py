@@ -1,8 +1,12 @@
+import tempfile
 import unittest
+import zipfile
+from pathlib import Path
 from unittest.mock import patch
 
 from backend.managers.mgr_download import DownloadTask
-from backend.managers.mgr_update import GithubSource, UpdateInfo, UpdateManager, UpdateSourceError
+from backend.managers.mgr_update import GithubSource, LanzouSource, LocalSource, UpdateInfo, UpdateManager, UpdateSourceError, _build_configured_update_sources
+from backend.utils.lanzou_parser import LanzouParser
 
 
 class StubUpdateSource:
@@ -29,7 +33,7 @@ class StubDownloadManager:
 
 class TestGithubUpdateSource(unittest.TestCase):
     def test_check_returns_github_release_asset_update(self):
-        source = GithubSource("Ink-Feather-362/RimModManager")
+        source = GithubSource("Inky-Feather/RimCrow")
         releases = [
             {
                 "tag_name": "v0.22.7",
@@ -41,7 +45,7 @@ class TestGithubUpdateSource(unittest.TestCase):
                 "assets": [
                     {"name": "source.zip", "browser_download_url": "https://example.invalid/source.zip", "size": 10},
                     {
-                        "name": "RimModManager-v0.22.7-windows.zip",
+                        "name": "RimCrow-v0.22.7-windows.zip",
                         "browser_download_url": "https://example.invalid/app.zip",
                         "size": 67227285,
                         "digest": "sha256:abc123",
@@ -51,7 +55,7 @@ class TestGithubUpdateSource(unittest.TestCase):
         ]
 
         with patch("backend.managers.mgr_update.__version__", "0.22.6"), \
-            patch("backend.managers.mgr_update.platform.system", return_value="Windows"), \
+            patch("backend.utils.tools.platform.system", return_value="Windows"), \
             patch.object(source.github_mgr, "fetch_release", return_value=releases[0]):
             info = source.check()
 
@@ -64,7 +68,7 @@ class TestGithubUpdateSource(unittest.TestCase):
         self.assertEqual(info.file_size, "64.1 MB")
 
     def test_check_ignores_same_version_release(self):
-        source = GithubSource("Ink-Feather-362/RimModManager")
+        source = GithubSource("Inky-Feather/RimCrow")
         releases = [
             {
                 "tag_name": "v0.22.6",
@@ -85,7 +89,7 @@ class TestGithubUpdateSource(unittest.TestCase):
         self.assertIsNone(info)
 
     def test_check_ignores_prerelease_by_default(self):
-        source = GithubSource("Ink-Feather-362/RimModManager")
+        source = GithubSource("Inky-Feather/RimCrow")
         releases = [
             {
                 "tag_name": "v0.22.7",
@@ -106,18 +110,78 @@ class TestGithubUpdateSource(unittest.TestCase):
         self.assertIsNone(info)
 
     def test_select_asset_prefers_current_system(self):
-        source = GithubSource("Ink-Feather-362/RimModManager")
+        source = GithubSource("Inky-Feather/RimCrow")
         assets = [
             {"name": "RimModManager-v0.22.7-windows.zip", "browser_download_url": "https://example.invalid/windows.zip"},
-            {"name": "RimModManager-v0.22.7-linux.zip", "browser_download_url": "https://example.invalid/linux.zip"},
-            {"name": "RimModManager-v0.22.7.zip", "browser_download_url": "https://example.invalid/generic.zip"},
+            {"name": "RimCrow-v0.22.7-linux.zip", "browser_download_url": "https://example.invalid/linux.zip"},
+            {"name": "RimCrow-v0.22.7.zip", "browser_download_url": "https://example.invalid/generic.zip"},
         ]
 
-        with patch("backend.managers.mgr_update.platform.system", return_value="Linux"):
+        with patch("backend.utils.tools.platform.system", return_value="Linux"):
             asset = source._select_asset(assets)
 
         self.assertIsNotNone(asset)
         self.assertEqual(asset["browser_download_url"], "https://example.invalid/linux.zip")
+
+
+class TestLanzouUpdatePackageNames(unittest.TestCase):
+    def _file(self, name, file_id):
+        return {"id": file_id, "name_all": name, "size": "64 MB", "time": "2026-06-26"}
+
+    def test_select_latest_accepts_old_name_without_platform(self):
+        parser = LanzouParser()
+        files = [
+            parser._build_file_info(self._file("RimModManager_v0.22.7.zip", "old")),
+            parser._build_file_info(self._file("readme.txt", "txt")),
+        ]
+
+        with patch("backend.utils.tools.platform.system", return_value="Windows"):
+            latest = parser._select_latest_update_file(files)
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest["id"], "old")
+        self.assertEqual(latest["version"], "0.22.7")
+        self.assertFalse(latest["platform_matched"])
+
+    def test_select_latest_prefers_current_system_for_new_name(self):
+        parser = LanzouParser()
+
+        with patch("backend.utils.tools.platform.system", return_value="Windows"):
+            files = [
+                parser._build_file_info(self._file("RimCrow-v0.22.8-linux.zip", "linux")),
+                parser._build_file_info(self._file("RimCrow-v0.22.7-windows.zip", "windows")),
+                parser._build_file_info(self._file("RimModManager_v0.22.6.zip", "old")),
+            ]
+            latest = parser._select_latest_update_file(files)
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest["id"], "windows")
+        self.assertEqual(latest["version"], "0.22.7")
+        self.assertTrue(latest["platform_matched"])
+
+    def test_select_latest_supports_new_name_without_v_prefix(self):
+        parser = LanzouParser()
+
+        with patch("backend.utils.tools.platform.system", return_value="Windows"):
+            info = parser._build_file_info(self._file("RimCrow-0.22.8-win64.zip", "win64"))
+
+        self.assertTrue(info["is_update_package"])
+        self.assertTrue(info["platform_compatible"])
+        self.assertEqual(info["version"], "0.22.8")
+
+    def test_select_latest_ignores_unknown_zip_with_version(self):
+        parser = LanzouParser()
+
+        with patch("backend.utils.tools.platform.system", return_value="Windows"):
+            files = [
+                parser._build_file_info(self._file("OtherTool-v9.9.9-windows.zip", "other")),
+                parser._build_file_info(self._file("RimCrow-v0.22.8-windows.zip", "rimcrow")),
+            ]
+            latest = parser._select_latest_update_file(files)
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest["id"], "rimcrow")
+        self.assertEqual(latest["version"], "0.22.8")
 
 
 class TestUpdateManagerSources(unittest.TestCase):
@@ -210,7 +274,6 @@ class TestUpdateManagerSources(unittest.TestCase):
 
         first = manager.perform_update_download()
         second = manager.perform_update_download()
-
         self.assertEqual(first["task_id"], second["task_id"])
         self.assertEqual(len(manager.download_mgr.tasks), 1)
 
@@ -233,6 +296,59 @@ class TestUpdateManagerSources(unittest.TestCase):
         self.assertEqual(manager.current_update_info.version, "0.22.7")
         self.assertEqual(manager.current_update_info.source_name, "蓝奏云")
         self.assertEqual(manager.current_update_info.local_status, "ready")
+
+    def test_hot_swap_from_rimmodmanager_launches_rimcrow_exe(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            install_root = root / "app"
+            install_root.mkdir()
+            current_exe = install_root / "RimModManager.exe"
+            current_exe.write_text("old", encoding="utf-8")
+            zip_path = root / "update.zip"
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("RimCrow/RimCrow.exe", "new")
+
+            manager = self._manager_with_sources([])
+            with patch("backend.managers.mgr_update.sys.executable", str(current_exe)), \
+                patch("backend.managers.mgr_update.backup_config_for_update"), \
+                patch("backend.managers.mgr_update.launch_new_application") as launch_mock, \
+                patch("backend.managers.mgr_update.os._exit", side_effect=SystemExit):
+                with self.assertRaises(SystemExit):
+                    manager.execute_hot_swap(str(zip_path))
+
+            new_exe = install_root / "RimCrow.exe"
+            self.assertTrue(new_exe.exists())
+            self.assertTrue((install_root / "RimModManager.exe.old").exists())
+            launch_mock.assert_called_once_with(str(new_exe))
+
+
+class TestConfiguredUpdateSources(unittest.TestCase):
+    def test_build_configured_update_sources_reads_project_meta(self):
+        sources = _build_configured_update_sources({
+            "project": {"github_repo": "Inky-Feather/RimCrow"},
+            "update": {
+                "sources": [
+                    {"type": "lanzou", "url": "https://example.invalid/lanzou", "password": "abcd"},
+                    {"type": "github"},
+                ]
+            },
+        })
+
+        self.assertEqual(len(sources), 3)
+        self.assertIsInstance(sources[0], LocalSource)
+        self.assertIsInstance(sources[1], LanzouSource)
+        self.assertEqual(sources[1].url, "https://example.invalid/lanzou")
+        self.assertEqual(sources[1].pwd, "abcd")
+        self.assertIsInstance(sources[2], GithubSource)
+        self.assertEqual(sources[2].repo, "Inky-Feather/RimCrow")
+
+    def test_build_configured_update_sources_falls_back_when_meta_missing(self):
+        sources = _build_configured_update_sources({})
+
+        self.assertEqual(len(sources), 3)
+        self.assertIsInstance(sources[0], LocalSource)
+        self.assertIsInstance(sources[1], LanzouSource)
+        self.assertIsInstance(sources[2], GithubSource)
 
 
 if __name__ == "__main__":

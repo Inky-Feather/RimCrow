@@ -12,14 +12,23 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        onlyExplicitManualChunks: true,
         manualChunks(id) {
-          if (!id.includes('node_modules')) return
+          const normalizedId = id.replace(/\\/g, '/')
+          if (!normalizedId.includes('/node_modules/')) return
           if (
-            id.includes('vue-codemirror6')
-            || id.includes('/codemirror/')
-            || id.includes('/@codemirror/')
-            || id.includes('/@lezer/')
-            || id.includes('/@replit/codemirror-lang-csharp/')
+            normalizedId.includes('/node_modules/vue/')
+            || normalizedId.includes('/node_modules/@vue/')
+            || normalizedId.includes('/node_modules/pinia/')
+          ) {
+            return
+          }
+          if (
+            normalizedId.includes('/node_modules/vue-codemirror6/')
+            || normalizedId.includes('/node_modules/codemirror/')
+            || normalizedId.includes('/node_modules/@codemirror/')
+            || normalizedId.includes('/node_modules/@lezer/')
+            || normalizedId.includes('/node_modules/@replit/codemirror-lang-csharp/')
           ) {
             return 'codemirror'
           }

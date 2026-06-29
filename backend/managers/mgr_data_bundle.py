@@ -40,10 +40,10 @@ class DataBundleManager:
     3. 把模块依赖、包格式、导入策略集中到一处管理
     """
 
-    FORMAT = "rmm.data.bundle"
+    FORMAT = "rimcrow.data.bundle"
     SCHEMA_VERSION = 1
-    FILE_EXTENSION = ".rmmdata.zip"
-    LEGACY_FILE_EXTENSIONS = (".rmmdata",)
+    FILE_EXTENSION = ".rimcrowdata.zip"
+    LEGACY_FILE_EXTENSIONS = (".rmmdata.zip", ".rmmdata")
     RULE_PRESET = ["rules", "user_custom", "groups"]
     PROFILE_IMPORT_MODES = {"create", "overwrite", "skip"}
 
@@ -759,7 +759,7 @@ class DataBundleManager:
         target_profile_id: str = "",
     ) -> Path:
         target_root = self._resolve_profile_import_target_root(target_profile_id)
-        staging_root = create_sibling_stage_dir(target_root, "rmm-import-profile-")
+        staging_root = create_sibling_stage_dir(target_root, "profile-import-")
         extract_prefix_to_dir(
             bundle,
             f"environments/{archive_key}/user_data",

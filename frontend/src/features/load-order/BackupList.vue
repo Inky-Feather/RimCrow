@@ -46,7 +46,7 @@
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
-          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
           @click="runBackupToolbarAction('import-file', () => loadOrder('0'))" v-tooltip="isToolbarActionPending('import-file') ? '正在导入加载序列' : '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'">
             <span class="relative transition duration-300 only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('import-file')" class="size-5 animate-spin" />
@@ -59,8 +59,8 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
-            @click="importShareCode()" v-tooltip="isToolbarActionPending('import-share-code') ? '正在导入分享码' : '导入分享码（粘贴 RMM1 分享码）'" >
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
+            @click="importShareCode()" v-tooltip="isToolbarActionPending('import-share-code') ? '正在导入分享码' : '导入分享码（粘贴 RC- 分享码）'" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('import-share-code')" class="size-5 animate-spin" />
               <ClipboardPlus v-else class="size-5" />
@@ -76,7 +76,7 @@
           text-text-dim bg-accent-primary/1
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
-          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+          :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
           @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? '正在导出 ModsConfig' : '导出为 ModsConfig.xml（仅含包名）'">
             <span class="relative transition duration-300 only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-order')" class="size-5 animate-spin" />
@@ -89,7 +89,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
             @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? '正在导出 RML' : '导出为 RML 游戏原生格式（含包名和工坊ID）'" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-rml')" class="size-5 animate-spin" />
@@ -102,7 +102,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'rmm-action-disabled' : ''"
+            :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
             @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? '正在生成分享码' : '生成当前启用序列的分享码并复制到剪贴板'" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-share-code')" class="size-5 animate-spin" />
@@ -115,7 +115,7 @@
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <svg class="size-5"  xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
-      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'rmm-action-disabled' : ''" v-tooltip="loading ? '正在刷新备份列表' : '刷新'"
+      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'app-action-disabled' : ''" v-tooltip="loading ? '正在刷新备份列表' : '刷新'"
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <LoaderCircle v-if="loading" class="size-5 animate-spin" />
         <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -345,7 +345,7 @@ const parsedData = computed(() => {
         rimsort_json: 'RimSort',
         plain_text: 'Text',
         workshop_ids: 'Workshop',
-        rmm_json: 'RMM JSON',
+        rimcrow_json: 'RimCrow JSON',
       }
       const formatLabel = formatLabelMap[file.format] || ''
 
@@ -508,7 +508,7 @@ const exportBackupItemShareCode = async (item) => {
     mode: 'prompt',
     type: 'success',
     inputValue: shareCode,
-    placeholder: 'RMM1-...',
+    placeholder: 'RC-...',
     confirmText: '关闭',
     cancelText: '取消',
   })
@@ -875,7 +875,7 @@ watch(currentProfileId, async (newProfileId) => {
 }, { immediate: true })
 
 onMounted(() => {
-  window.__rmm_handleNativeBackupDrop = handleNativeBackupDrop
+  window.__handleNativeBackupDrop = handleNativeBackupDrop
   nativeDropBindAttempts = 0
   if (!isBrowserRuntime.value) {
     nativeDropBindTimer = window.setTimeout(() => {
@@ -889,8 +889,8 @@ onUnmounted(() => {
     window.clearTimeout(nativeDropBindTimer)
     nativeDropBindTimer = null
   }
-  if (window.__rmm_handleNativeBackupDrop === handleNativeBackupDrop) {
-    delete window.__rmm_handleNativeBackupDrop
+  if (window.__handleNativeBackupDrop === handleNativeBackupDrop) {
+    delete window.__handleNativeBackupDrop
   }
 })
 </script>

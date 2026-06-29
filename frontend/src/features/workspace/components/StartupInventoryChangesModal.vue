@@ -27,7 +27,7 @@
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-1">
               <button v-for="action in groupActions(group)" :key="action.id" :disabled="isGroupActionDisabled(group, action.id)"
-                class="rmm-inventory-action" :class="actionClass(action.kind)"
+                class="inventory-action" :class="actionClass(action.kind)"
                 @click="runGroupAction(group, action.id)" >
                 <Loader2 v-if="isGroupActionPending(group, action.id)" class="size-3.5 animate-spin" />
                 <span>{{ action.label }}</span>
@@ -49,7 +49,7 @@
               <button
                 v-if="itemAction(group.id, item)"
                 :disabled="isItemActionDisabled(group.id, item)"
-                class="rmm-inventory-action shrink-0"
+                class="inventory-action shrink-0"
                 :class="actionClass(itemAction(group.id, item).kind)"
                 @click="runItemAction(group, item)"
               >
@@ -70,7 +70,7 @@
       <button
         v-if="hasDeletedItems"
         :disabled="isBatchActionDisabled('cleanup_deleted', 'all:deleted')"
-        class="rmm-inventory-action px-4 py-1.5"
+        class="inventory-action px-4 py-1.5"
         :class="actionClass('danger')"
         @click="runAllAction('deleted', 'cleanup_deleted')"
       >
@@ -80,7 +80,7 @@
       <button
         v-if="hasMissingItems"
         :disabled="isBatchActionDisabled('download_missing', 'all:missing')"
-        class="rmm-inventory-action px-4 py-1.5"
+        class="inventory-action px-4 py-1.5"
         :class="actionClass('primary')"
         @click="runAllAction('missing', 'download_missing')"
       >
@@ -88,7 +88,7 @@
         <span>重新下载缺失项</span>
       </button>
       <button
-        class="rmm-inventory-action px-4 py-1.5"
+        class="inventory-action px-4 py-1.5"
         :class="actionClass('secondary')"
         @click="workspaceStore.closeStartupInventoryDialog"
       >
@@ -199,7 +199,7 @@ const runAllAction = async (groupId, actionId) => {
 </script>
 
 <style scoped>
-.rmm-inventory-action {
+.inventory-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -213,7 +213,7 @@ const runAllAction = async (groupId, actionId) => {
   transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
 }
 
-.rmm-inventory-action:disabled {
+.inventory-action:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }

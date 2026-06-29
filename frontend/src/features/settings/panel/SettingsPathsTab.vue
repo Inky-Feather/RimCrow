@@ -7,7 +7,7 @@
                       {{ profileStore?.currentProfile?.name }}
                     </label>
                   </h3>
-                  <button @click="handleAutoDetect" :disabled="isPending('auto-detect')" :class="isPending('auto-detect') ? 'rmm-action-disabled' : ''"
+                  <button @click="handleAutoDetect" :disabled="isPending('auto-detect')" :class="isPending('auto-detect') ? 'app-action-disabled' : ''"
                     v-tooltip="isPending('auto-detect') ? '正在自动搜索路径' : '尝试通过注册表自动搜索路径'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
                     <LoaderCircle v-if="isPending('auto-detect')" class="size-3 animate-spin" />
                     {{ isPending('auto-detect') ? '搜索中' : '自动搜索路径' }}
@@ -38,10 +38,12 @@
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
                     />
                     <div class="grid grid-cols-2 gap-2">
-                      <CommonSwitch label="优先使用 Steam 启动" :disabled="steamLaunchDisabled"
-                        :model-value="formData.prefer_steam_launch" description="适用于 Steam 版游戏。开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。"
+                      <CommonSwitch label="优先使用 Steam 启动" :disabled="isPending('steam-launch-check')"
+                        :model-value="formData.prefer_steam_launch" description="开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。"
                         @update:modelValue="handlePreferSteamLaunchUpdate" />
-                      <CommonSwitch label="使用创意工坊 Mod" :disabled="workshopModsDisabled" v-model="formData.use_workshop_mods" description="适用于非 Steam 版环境。开启后，管理器会把创意工坊模组接入当前环境的本地模组目录，这样直接启动游戏本体时也能使用这些模组。" />
+                      <CommonSwitch label="使用创意工坊 Mod" :disabled="isPending('workshop-mods-check')"
+                        :model-value="formData.use_workshop_mods" description="开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。"
+                        @update:modelValue="handleWorkshopModsUpdate" />
                     </div>
                   </div>
                   <div class="modal-section grid grid-cols-2 gap-2 p-3">
@@ -55,7 +57,7 @@
                     <CommonSwitch class="col-span-1" label="自动检查管理器模组更新" v-model="formData.enable_auto_steamcmd_mod_update_check" description="按设定间隔检查管理器模组目录中由 SteamCMD 下载的工坊模组和 Git 仓库订阅模组更新。" />
                     <div class="col-span-1 grid grid-cols-2 gap-3 items-end">
                       <CommonNumber class="col-span-1" label="检查间隔（天）" v-model="formData.steamcmd_mod_update_check_interval_days" :step="1" :min="1" :max="365" />
-                      <button @click="handleCheckSteamcmdMods" :disabled="isPending('steamcmd-mods')" :class="isPending('steamcmd-mods') ? 'rmm-action-disabled' : ''"
+                      <button @click="handleCheckSteamcmdMods" :disabled="isPending('steamcmd-mods')" :class="isPending('steamcmd-mods') ? 'app-action-disabled' : ''"
                         class="inline-flex items-center justify-center gap-1 px-3 py-1.5 mx-2 my-1 h-8 bg-accent-warn/10 hover:bg-accent-warn/25 border border-accent-warn/20 rounded-lg text-xs font-bold transition-all">
                         <LoaderCircle v-if="isPending('steamcmd-mods')" class="size-3 animate-spin" />
                         {{ isPending('steamcmd-mods') ? '检查中' : '检查更新' }}
@@ -100,9 +102,8 @@ import { useProfileStore } from '../../profiles/profileStore'
 
 const props = defineProps({
   formData: { type: Object, required: true },
-  steamLaunchDisabled: Boolean,
-  workshopModsDisabled: Boolean,
-  markSteamLaunchTouched: Function,
+  validateSteamLaunchEnable: Function,
+  validateWorkshopModsEnable: Function,
   autoDetect: { type: Function, required: true },
   handleBrowse: { type: Function, required: true },
   checkPath: { type: Function, required: true },
@@ -126,9 +127,27 @@ const handleGameBrowse = async () => {
   await props.checkPath('game_install_path', props.formData.game_install_path)
 }
 
-const handlePreferSteamLaunchUpdate = (value) => {
-  props.markSteamLaunchTouched?.()
-  props.formData.prefer_steam_launch = !!value
+const handlePreferSteamLaunchUpdate = async (value) => {
+  if (!value) {
+    props.formData.prefer_steam_launch = false
+    return
+  }
+  await runPendingAction('steam-launch-check', async () => {
+    await props.validateSteamLaunchEnable?.()
+    props.formData.prefer_steam_launch = true
+  })
+}
+
+const handleWorkshopModsUpdate = async (value) => {
+  if (!value) {
+    props.formData.use_workshop_mods = false
+    return
+  }
+  await runPendingAction('workshop-mods-check', async () => {
+    await props.validateWorkshopModsEnable?.()
+    props.formData.use_workshop_mods = true
+    props.formData.prefer_steam_launch = false
+  })
 }
 const isPending = (action) => pendingAction.value === action
 const runPendingAction = async (action, runner) => {

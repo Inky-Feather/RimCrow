@@ -177,7 +177,7 @@ export const getApiResponseMessage = (res, fallback = '') => {
 
 export const checkResult = (res, workname, showSuccess = false, options = {}) => {
   const debugMode = options?.debugMode ?? (
-    typeof window !== 'undefined' ? !!window.__RMM_DEBUG_MODE__ : false
+    typeof window !== 'undefined' ? !!window.__APP_DEBUG_MODE__ : false
   )
   const silent = !!options?.silent
   if (debugMode) console.debug('API 结果检查:', workname, res)

@@ -574,6 +574,24 @@ export const useModStore = defineStore('mods', () => {
     // 初始化获取完所有模组后，如果 activeIds 中存在未知项，批量缓存它们！
     if (!preserveListState) fetchAndCacheGhostMods(activeIds.value)
   }
+  const mergeModEnrichment = (payload = {}) => {
+    // enrichment 只补列表展示标记，不改变三列表和主数据集合。
+    const patches = payload?.mods && typeof payload.mods === 'object' ? payload.mods : {}
+    Object.entries(patches).forEach(([packageId, patch]) => {
+      const mod = allModsMap.value.get(normalizeCanonicalId(packageId))
+      if (!mod || !patch || typeof patch !== 'object') return
+      Object.assign(mod, patch)
+    })
+    const disabledPatches = payload?.disabled_mods && typeof payload.disabled_mods === 'object' ? payload.disabled_mods : {}
+    disabledMods.value.forEach(mod => {
+      const patch = disabledPatches[String(mod?.path_hash || '').trim()]
+      if (patch && typeof patch === 'object') Object.assign(mod, patch)
+    })
+    if (payload?.interlocks && typeof payload.interlocks === 'object') {
+      interlocksMap.value = payload.interlocks
+    }
+    dataVersion.value++
+  }
   // 重置 Mod 数据
   const reset = () => {
     clearListHistory()
@@ -843,6 +861,7 @@ export const useModStore = defineStore('mods', () => {
     const strictRestored = Number(stats.strict_restored_disabled || 0)
     const strictRestoreFailed = Number(stats.strict_restore_failed || 0)
     const total = Number(detail?.total ?? (added + updated + skipped))
+    const silentSuccess = !!options?.silentSuccess
     const disabledStateText = [
       externalEnabled ? `外部解除禁用 ${externalEnabled} 个` : '',
       strictRestored ? `已重新禁用 ${strictRestored} 个` : '',
@@ -866,7 +885,7 @@ export const useModStore = defineStore('mods', () => {
       toast.warning(`扫描已完成，发现 ${totalCount} 个包名重复冲突需要处理。${disabledStateText ? `\n${disabledStateText}` : ''}`, {timeout: 10000})
     } else if (strictRestoreFailed > 0) {
       toast.warning(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。\n${disabledStateText}`, {position: "top-center", timeout: 8000})
-    } else {
+    } else if (!silentSuccess) {
       toast.success(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。${disabledStateText ? `\n${disabledStateText}` : ''}`,{position: "top-center",timeout: 5000})
     }
     // 扫描结束后只回填模组主数据，避免把工作区、GitHub、合集等页面也一起重刷。
@@ -876,11 +895,20 @@ export const useModStore = defineStore('mods', () => {
       stats,
       conflict_count: conflictList.value.length,
       coexistence_count: coexistenceList.value.length,
-      residue_count: Number(detail?.residue_cleanup?.summary?.item_count || 0),
+      should_check_mod_residue: !!detail?.should_check_mod_residue,
+      core_refresh_required: detail?.core_refresh_required !== false,
     })
-    await appStore.refreshModsData('扫描后同步模组数据', {
-      preserveListState: !!options?.preserveListState,
-    })
+    if (detail?.core_refresh_required === false) {
+      console.info('扫描未发现列表核心数据变化，跳过核心列表同步。')
+      void appStore.refreshModEnrichment({ silent: true })
+    } else {
+      await appStore.refreshModCoreData('扫描后同步模组数据', {
+        preserveListState: !!options?.preserveListState,
+        refreshRules: options?.refreshRules !== false,
+        refreshBackups: options?.refreshBackups !== false,
+        refreshWorkspaceLibraries: options?.refreshWorkspaceLibraries !== false,
+      })
+    }
     // 状态注入
     if (coexistenceList.value.length > 0){
       // 处理可共存Mod，标记为 is_coexistence = true
@@ -1187,14 +1215,24 @@ export const useModStore = defineStore('mods', () => {
       console.debug("准备更新 Mod 最后操作时间:", {all_mods_time:all_mods})
       const res = await window.pywebview.api.mod_time_update(all_mods)
       if (!checkResult(res, "更新Mod最后操作时间")) {
-        await appStore.refreshModsData('Mod 时间更新失败后同步模组数据')
+        await appStore.refreshModCoreData('Mod 时间更新失败后同步模组数据', {
+          preserveListState: true,
+          refreshRules: false,
+          refreshBackups: false,
+          refreshWorkspaceLibraries: false,
+        })
         return false
       }
       return true
     } catch (e) {
       console.error("更新Mod最后操作时间异常:", e)
       toast.error(toUserMessage(e?.message || e, '更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。'))
-      await appStore.refreshModsData('Mod 时间更新异常后同步模组数据')
+      await appStore.refreshModCoreData('Mod 时间更新异常后同步模组数据', {
+        preserveListState: true,
+        refreshRules: false,
+        refreshBackups: false,
+        refreshWorkspaceLibraries: false,
+      })
       return false
     }
   }
@@ -1317,7 +1355,21 @@ export const useModStore = defineStore('mods', () => {
   const getModInterlockChain = (modId) => {
     const mod = takeModById(modId);
     if (!mod || !mod.interlock_id) return null;
-    return interlocksMap.value.get(mod.interlock_id) || null;
+    const source = interlocksMap.value
+    if (source instanceof Map) return source.get(mod.interlock_id) || null
+    return source?.[mod.interlock_id] || null
+  }
+  const refreshAfterInterlockChange = async (historyLabel) => {
+    const refreshed = await appStore.refreshModCoreData(historyLabel, {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+      refreshEnrichment: false,
+    })
+    await appStore.refreshModEnrichment({ silent: true })
+    dataVersion.value++
+    return refreshed
   }
   // 批量设置 Mod 联锁
   const linkMods = async (modIds) => {
@@ -1326,8 +1378,7 @@ export const useModStore = defineStore('mods', () => {
       // 发送请求给后端
       const res = await window.pywebview.api.mods_link(modIds)
       if (checkResult(res, "设置 Mod 联锁", true)) {
-        await appStore.refreshModsData('联锁变更后同步模组数据', { preserveListState: true })
-        dataVersion.value++ // 数据版本+1，确保问题判断刷新
+        await refreshAfterInterlockChange('联锁变更后同步模组数据')
         return true
       }
     } catch (e) {
@@ -1342,8 +1393,7 @@ export const useModStore = defineStore('mods', () => {
     try {
       const res = await window.pywebview.api.mods_unlink(modIds)
       if (checkResult(res, "解除 Mod 联锁", true)) {
-        await appStore.refreshModsData('联锁变更后同步模组数据', { preserveListState: true })
-        dataVersion.value++ // 数据版本+1，确保问题判断刷新
+        await refreshAfterInterlockChange('联锁变更后同步模组数据')
         return true
       }
     } catch (e) {
@@ -1357,7 +1407,7 @@ export const useModStore = defineStore('mods', () => {
     try {
       const res = await window.pywebview.api.mods_interlock_heal(interlock_id)
       if (checkResult(res, "修复断裂联锁", true)) {
-        await appStore.refreshModsData('联锁修复后同步模组数据', { preserveListState: true })
+        await refreshAfterInterlockChange('联锁修复后同步模组数据')
         return true
       }
     } finally {
@@ -1469,7 +1519,7 @@ export const useModStore = defineStore('mods', () => {
     canUndoListHistory, canRedoListHistory,
 
     // 列表读取与基础写入
-    setMods, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    setMods, mergeModEnrichment, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
     isLanguagePackMod, getLanguagePackOwnerIds, canUseLanguagePackForIssueDetection, isDeclaredForCurrentLanguage,
     // 来源提示与列表选择
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,

@@ -1325,7 +1325,7 @@ class SteamManager:
             script_lines.append(f"workshop_download_item {RIMWORLD_STEAM_APP_ID_STR} {workshop_id}")
         script_lines.append("quit")
 
-        fd, script_path = tempfile.mkstemp(prefix="rmm_steamcmd_", suffix=".txt")
+        fd, script_path = tempfile.mkstemp(prefix="steamcmd_", suffix=".txt")
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
                 handle.write("\n".join(script_lines) + "\n")
@@ -2347,7 +2347,7 @@ class SteamManager:
 
         target_path = Path(shortcuts_path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        backup_path = target_path.with_suffix(".vdf.rmm.bak")
+        backup_path = target_path.with_suffix(".vdf.rimcrow.bak")
         had_original = target_path.exists()
 
         if had_original:
@@ -2371,7 +2371,7 @@ class SteamManager:
         2. 已存在的 `appid` 与 `tags` 会尽量保留，避免 Steam 重新生成后桌面协议变化。
         """
         profile_name = str(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile')).strip()
-        marker = f"rmm://profile/{getattr(profile, 'id', '')}"
+        marker = f"rimcrow://profile/{getattr(profile, 'id', '')}"
         existing = existing_entry or {}
         entry = {
             # Steam 当前 shortcuts.vdf 主流字段名以 AppName/Exe/StartDir 为准；
@@ -2403,14 +2403,15 @@ class SteamManager:
         container = self._normalize_shortcuts_payload(shortcuts).get("shortcuts", {})
         if not isinstance(container, dict): return None, None
 
-        marker = f"rmm://profile/{getattr(profile, 'id', '')}"
+        profile_id = getattr(profile, 'id', '')
+        managed_markers = {f"rimcrow://profile/{profile_id}", f"rmm://profile/{profile_id}"}
         expected_name = f"RimWorld [{str(getattr(profile, 'name', None) or getattr(profile, 'id', 'Profile')).strip()}]"
         normalized_exe = self._normalize_shortcut_path_value(game_exe)
 
         for key, entry in container.items():
             if not isinstance(entry, dict):
                 continue
-            if str(self._get_shortcut_field(entry, "ShortcutPath", "")).strip() == marker:
+            if str(self._get_shortcut_field(entry, "ShortcutPath", "")).strip() in managed_markers:
                 return str(key), entry
 
         for key, entry in container.items():
@@ -2757,7 +2758,7 @@ class SteamManager:
                         if child.is_file()
                     )
                 timestamp_seconds = max(0, int(stat.st_mtime))
-                synthetic_manifest = f"rmm-{timestamp_seconds}-{folder_size}"
+                synthetic_manifest = f"rimcrow-{timestamp_seconds}-{folder_size}"
                 normalized_installed[workshop_id] = {
                     "size": str(folder_size),
                     "timeupdated": str(timestamp_seconds),
@@ -2781,7 +2782,7 @@ class SteamManager:
         app_workshop["WorkshopItemDetails"] = normalized_details
         payload["AppWorkshop"] = app_workshop
 
-        backup_path = acf_path.with_suffix(".acf.rmm.bak")
+        backup_path = acf_path.with_suffix(".acf.rimcrow.bak")
         try:
             shutil.copy2(acf_path, backup_path)
         except Exception as e:

@@ -42,7 +42,7 @@ from backend.settings import DATA_DIR, HOME_DIR, TOOL_MODS_DIR, settings, RULES_
 from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.redaction import redact_sensitive_data
-from backend.utils.tools import normalize_package_id, normalize_path_for_compare, normalize_path_for_storage, normalize_workshop_id
+from backend.utils.tools import normalize_companion_package_ids, normalize_package_id, normalize_path_for_compare, normalize_path_for_storage, normalize_workshop_id
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import normalize_language_code
@@ -194,6 +194,14 @@ def _build_dialog_file_type_label(label: str, extensions: list[str] | tuple[str,
         if str(extension or "").strip()
     ]
     return f"{label} ({';'.join(normalized_extensions)})" if normalized_extensions else f"{label} (*.*)"
+
+
+def _log_startup_perf(scope: str, stage: str, start_at: float, **fields):
+    """启动性能埋点，统一前缀便于在日志中筛选。"""
+    elapsed_ms = (time.perf_counter() - start_at) * 1000
+    extras = " ".join(f"{key}={value}" for key, value in fields.items())
+    suffix = f" {extras}" if extras else ""
+    logger.info("[StartupPerf] %s：stage=%s elapsed_ms=%.2f%s", scope, stage, elapsed_ms, suffix)
 
 
 def log_api_call(func):
@@ -365,7 +373,17 @@ class API:
     所有前端调用的 window.pywebview.api.xxx 方法都在这里定义。
     """
 
+    def __dir__(self):
+        """pywebview 通过 dir() 生成 JS API；这里只暴露 API 类方法，避免递归扫描内部管理器。"""
+        names = []
+        for cls in type(self).mro():
+            for name, value in cls.__dict__.items():
+                if not name.startswith('_') and callable(value):
+                    names.append(name)
+        return sorted(set(names))
+
     def __init__(self, runtime_mode: str = "desktop"):
+        init_start_at = time.perf_counter()
         logger.info("API 层开始初始化。")
         self._window = None  # 私有属性
         self._runtime_mode = str(runtime_mode or "desktop").strip().lower() or "desktop"
@@ -389,6 +407,13 @@ class API:
         self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
         self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
         self._handle_app_relocation()
+        _log_startup_perf(
+            "API 初始化",
+            "database_ready",
+            init_start_at,
+            init_ok=init_ok,
+            first_db=self.is_first_db_init,
+        )
         self._native_drop_bound = False
         self._native_drop_selector = '#backup-drop-zone'
         self._native_drop_element = None
@@ -418,6 +443,13 @@ class API:
                 "启动时发现重名分组，已自动规范化: %s",
                 ", ".join(f"{old_name!r}->{new_name!r}" for _, old_name, new_name in renamed_groups),
             )
+        _log_startup_perf(
+            "API 初始化",
+            "migration_ready",
+            init_start_at,
+            path_messages=len(path_normalization.messages or []),
+            renamed_groups=len(renamed_groups or []),
+        )
         # 2. 实例化各个管理器
         self.workshop_db_mgr = WorkshopDBManager()
         self.game_mgr = GameManager()
@@ -429,11 +461,19 @@ class API:
         self.sorter = None
         # 3. 启动时激活上下文
         self._bootstrap_context(settings.config.current_profile_id)
+        _log_startup_perf(
+            "API 初始化",
+            "context_ready",
+            init_start_at,
+            profile_id=settings.config.current_profile_id,
+            healthy=bool(self.active_context and self.active_context.is_healthy),
+        )
         self.game_monitor = GameMonitor(self)
         self.download_mgr = DownloadManager()
         self.github_mgr = GithubManager()
         self.file_mgr = file_mgr
         self.steam_mgr = SteamManager()
+        _log_startup_perf("API 初始化", "core_managers_ready", init_start_at)
         self.ai_mgr = _LazyAIManager()
         self.translation_mgr = TranslationManager(self.ai_mgr)
         self.data_bundle_mgr = DataBundleManager(
@@ -460,10 +500,12 @@ class API:
             self.workshop_db_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
         )
+        _log_startup_perf("API 初始化", "feature_managers_ready", init_start_at)
         # 启动期后台动作交给协调器，API 只注入依赖，避免 __init__ 继续膨胀。
         self.startup_coordinator = StartupCoordinator(
             self.workshop_db_mgr,
             rule_mgr_provider=lambda: self.sorter.rule_mgr if self.sorter else None,
+            dlc_cache_warmup=lambda: self._warm_current_language_dlc_cache(),
             append_messages=lambda messages: self._upgrade_context["messages"].extend(messages),
         )
         
@@ -473,6 +515,7 @@ class API:
         # 打包版每次启动都校验 Browser mode 快捷方式，缺失或过期就自动修复。
         if self._runtime_mode == "desktop" and os.name == "nt":
             self._ensure_browser_mode_shortcut()
+        _log_startup_perf("API 初始化", "startup_checks_ready", init_start_at)
 
         logger.info("API 层初始化完成。")
 
@@ -557,12 +600,12 @@ class API:
     def _log_maintenance_check(event: str, check_id: str, **fields):
         """统一检测日志格式。
 
-        前后端都使用 [RMM][maintenance-check] 前缀，排查启动检测时可以按 id/event 快速过滤。
+        前后端都使用 [RimCrow][maintenance-check] 前缀，排查启动检测时可以按 id/event 快速过滤。
         """
         parts = [f"event={event}", f"id={check_id}"]
         for key, value in fields.items():
             parts.append(f"{key}={value}")
-        logger.info("[RMM][maintenance-check] 维护状态检查：%s", " ".join(parts))
+        logger.info("[RimCrow][maintenance-check] 维护状态检查：%s", " ".join(parts))
 
     @staticmethod
     def _build_delete_response(target_name: str, total: int, result: dict, success_message: str = ""):
@@ -861,7 +904,7 @@ class API:
         with tempfile.NamedTemporaryFile(
             mode="wb",
             suffix=suffix,
-            prefix="rmm-import-",
+            prefix="load-order-import-",
             delete=False,
         ) as temp_file:
             temp_file.write(content or b"")
@@ -1048,23 +1091,24 @@ class API:
         主窗口加载完毕回调。
 
         设计原则：
-        1. `loaded` 说明 WebView 页面已经完成首轮加载，可以开始做“不会影响 splash 关闭”的后台预热；
-        2. 这里不再承担“必须完成后才能显示窗口”的职责，避免把桌面模式首屏与社区库重建、监视器启动强绑定；
-        3. 所有重活都改为后台线程执行，失败时只记录日志并给前端发送提示，不再阻塞首屏。
+        `loaded` 只说明 WebView 页面加载完成，不代表首屏核心数据已经显示。
+        这里仅绑定原生交互，不主动启动缓存预热，避免与首屏列表读取和扫描竞争数据库/磁盘。
         """
         self._bind_native_drag_drop()
-        self._start_startup_warmup()
 
     def _start_startup_warmup(self):
         """
         启动阶段后台预热。
 
-        为什么挂在这里：
-        - `API.__init__` 发生在主窗口创建前，适合做“没有就无法启动”的准备；
-        - 社区工坊库 / 替代库缓存重建属于“有则更好”的能力，不应拖住桌面首屏；
-        - 因此把它后移到窗口完成首轮加载后再后台执行，用户至少能先看到主界面。
+        社区工坊库 / 替代库缓存重建属于“有则更好”的能力，只能由前端在首屏和扫描之后排队触发。
         """
-        self.startup_coordinator.start_background_warmup()
+        return self.startup_coordinator.start_background_warmup()
+
+    def _warm_current_language_dlc_cache(self):
+        """后台同步当前界面语言的 DLC 翻译缓存，避免首屏和扫描冷启动解包全部语言。"""
+        if not self.active_context or not self.active_context.is_healthy:
+            return
+        DLCParser(self.active_context.game_dlc_path, current_language_code=settings.config.language)
 
     def _normalize_native_drop_selector(self, selector: str | None = None) -> str:
         """把前端传入的 id / selector 统一成 pywebview 可直接查询的 CSS 选择器。"""
@@ -1124,7 +1168,7 @@ class API:
             payload = json.dumps(full_paths, ensure_ascii=False)
             self._window.evaluate_js(
                 "window.setTimeout(function () {"
-                f"  if (window.__rmm_handleNativeBackupDrop) window.__rmm_handleNativeBackupDrop({payload});"
+                f"  if (window.__handleNativeBackupDrop) window.__handleNativeBackupDrop({payload});"
                 "}, 0);"
             )
         except Exception as e:
@@ -1208,11 +1252,237 @@ class API:
     # =========================================================================
     #  1. 初始化与全局数据 (Initialization)
     # =========================================================================
+
+    def _get_startup_base_payload(self, *, include_upgrade_context: bool = True) -> dict[str, Any]:
+        """构造启动首屏需要的轻量全局数据，不触发 Mod 规则、兼容性和工作区检查。"""
+        try:
+            user_themes = self._theme_store.list_user_themes()
+        except Exception as e:
+            logger.error("启动时读取用户主题失败: %s", e, exc_info=True)
+            user_themes = []
+        return {
+            "app_version": __version__,
+            "build_mode": __build__,
+            "runtime_mode": self._runtime_mode,
+            "settings": self._settings_payload(),
+            "asset_port": self.file_mgr.get_port(),
+            # 网络图片缓存目录可能有数千文件；首屏只需要字段形状，真实统计由前端后台补齐。
+            "remote_image_cache": {"file_count": 0, "total_bytes": 0},
+            "context_healthy": bool(self.active_context and self.active_context.is_healthy),
+            "health_report": {},
+            "is_first_db_init": self.is_first_db_init,
+            "active_context": self.active_context if self.active_context else None,
+            "upgrade_context": self._upgrade_context.copy() if include_upgrade_context else {},
+            "runtime_session": self._get_runtime_session_data(),
+            "user_themes": user_themes,
+        }
+
+    def _get_empty_mod_list_payload(self) -> dict[str, Any]:
+        return {
+            "context_healthy": bool(self.active_context and self.active_context.is_healthy),
+            "health_report": {},
+            "all_mods": [],
+            "disabled_mods": [],
+            "groups": [],
+            "interlocks": {},
+            "active_load_order": [],
+            "inactive_load_order": [],
+            "temp_load_order": [],
+            "active_load_modify_time": 0,
+            "active_load_version_token": {},
+            "is_first_db_init": self.is_first_db_init,
+            "active_context": self.active_context if self.active_context else None,
+            "multiplayer_compatibility_state": {},
+        }
+
+    def _read_mod_list_core_payload(self, perf_scope: str = "get_mod_list_core") -> dict[str, Any]:
+        """读取首屏列表核心数据；规则会影响主列表问题标记，必须随核心列表返回。"""
+        perf_start_at = time.perf_counter()
+        result = self._get_empty_mod_list_payload()
+        if not self.active_context or not self.active_context.is_healthy:
+            _log_startup_perf(perf_scope, "early_return_unhealthy_context", perf_start_at)
+            return result
+
+        context_mods = ModDAO.get_profile_mods(self.active_context)
+        disabled_mods = ModDAO.get_profile_disabled_mods(self.active_context)
+        _log_startup_perf(perf_scope, "mods_loaded", perf_start_at, active=len(context_mods or []), disabled=len(disabled_mods or []))
+
+        current_assets_ids = [m["package_id"] for m in context_mods]
+        all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids)
+        active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {"active_mods": [], "modify_time": 0}
+        inactive_mods_order = self.active_context.inactive_mods_order if getattr(self.active_context, "inactive_mods_order", []) else []
+        temp_mods_order = self.active_context.temp_mods_order if getattr(self.active_context, "temp_mods_order", []) else []
+        _log_startup_perf(
+            perf_scope,
+            "core_metadata_ready",
+            perf_start_at,
+            groups=len(all_groups or []),
+            active_order=len(active_load_order.get("active_mods", []) if isinstance(active_load_order, dict) else []),
+        )
+
+        dlc_parser = DLCParser(self.active_context.game_dlc_path, sync_translations=False, current_language_code=settings.config.language) if (context_mods or disabled_mods) else None
+        for mod in context_mods:
+            if dlc_parser:
+                dlc_parser.translate_record(mod, settings.config.language)
+        for mod in disabled_mods:
+            if dlc_parser:
+                dlc_parser.translate_record(mod, settings.config.language)
+        _log_startup_perf(perf_scope, "translations_ready", perf_start_at)
+
+        rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
+        for mod in context_mods:
+            mod["rules"] = rule_mgr.get_effective_mod_rules(mod["package_id"], mod) if rule_mgr else {}
+        _log_startup_perf(perf_scope, "rules_ready", perf_start_at, active=len(context_mods or []))
+
+        result.update({
+            "context_healthy": True,
+            "all_mods": context_mods,
+            "disabled_mods": disabled_mods,
+            "groups": all_groups,
+            "active_load_order": active_load_order.get("active_mods", []),
+            "inactive_load_order": inactive_mods_order,
+            "temp_load_order": temp_mods_order,
+            "active_load_modify_time": active_load_order.get("modify_time", 0),
+            "active_load_version_token": active_load_order.get("version_token", {}),
+        })
+        if context_mods:
+            self.is_first_db_init = False
+        _log_startup_perf(perf_scope, "result_ready", perf_start_at, active=len(context_mods or []), disabled=len(disabled_mods or []))
+        return result
+
+    def _build_mod_list_enrichment_payload(self) -> dict[str, Any]:
+        """补齐主列表非核心标记：语言包归属、替代版本、联机兼容和联锁映射。"""
+        perf_start_at = time.perf_counter()
+        result = {
+            "mods": {},
+            "disabled_mods": {},
+            "interlocks": {},
+            "multiplayer_compatibility_state": {},
+        }
+        if not self.active_context or not self.active_context.is_healthy:
+            _log_startup_perf("get_mod_list_enrichment", "early_return_unhealthy_context", perf_start_at)
+            return result
+
+        context_mods = ModDAO.get_profile_mods(self.active_context)
+        disabled_mods = ModDAO.get_profile_disabled_mods(self.active_context)
+        replacements_map = {r["old_workshop_id"]: r for r in self.workshop_db_mgr.get_replacements()}
+        rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
+        interlocks = list(ModInterlock.select().dicts())
+        interlock_map = {i["id"]: i["chain"] for i in interlocks}
+        _log_startup_perf(
+            "get_mod_list_enrichment",
+            "metadata_ready",
+            perf_start_at,
+            active=len(context_mods or []),
+            disabled=len(disabled_mods or []),
+            replacements=len(replacements_map),
+            interlocks=len(interlocks or []),
+        )
+
+        language_owner_enabled = bool(getattr(settings.config, "check_language_support", True))
+        language_pack_owner_map = (
+            resolve_language_pack_ownership_for_mods(
+                context_mods,
+                user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
+            )
+            if language_owner_enabled
+            else {}
+        )
+        _log_startup_perf("get_mod_list_enrichment", "language_owner_ready", perf_start_at, enabled=language_owner_enabled)
+
+        for mod in context_mods:
+            mod["language_pack_owner_result"] = (
+                language_pack_owner_map.get(
+                    str(mod.get("package_id") or "").strip().lower(),
+                    {
+                        "owners": [],
+                        "analyzed_owners": [],
+                        "relation_type": "unknown",
+                        "summary_confidence": "unknown",
+                        "analyzed_relation_type": "unknown",
+                        "analyzed_summary_confidence": "unknown",
+                    },
+                )
+                if language_owner_enabled
+                else None
+            )
+            mod["replacement"] = replacements_map.get(mod.get("workshop_id")) if mod.get("workshop_id") else None
+        for mod in disabled_mods:
+            mod["replacement"] = replacements_map.get(mod.get("workshop_id")) if mod.get("workshop_id") else None
+
+        multiplayer_check_enabled = bool(getattr(settings.config, "enable_multiplayer_compatibility_check", False))
+        active_ids_for_compat = []
+        if multiplayer_check_enabled:
+            active_load_order = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {"active_mods": []}
+            active_ids_for_compat = active_load_order.get("active_mods", []) if isinstance(active_load_order, dict) else []
+            result["multiplayer_compatibility_state"] = self.multiplayer_compat_mgr.enrich_mods(
+                [*context_mods, *disabled_mods],
+                active_ids_for_compat,
+            )
+        _log_startup_perf(
+            "get_mod_list_enrichment",
+            "compatibility_ready",
+            perf_start_at,
+            enabled=multiplayer_check_enabled,
+            active_ids=len(active_ids_for_compat or []),
+        )
+
+        result["mods"] = {
+            str(mod.get("package_id") or "").strip().lower(): {
+                "language_pack_owner_result": mod.get("language_pack_owner_result"),
+                "replacement": mod.get("replacement"),
+                "multiplayer_compat": mod.get("multiplayer_compat"),
+            }
+            for mod in context_mods
+            if str(mod.get("package_id") or "").strip()
+        }
+        result["disabled_mods"] = {
+            str(mod.get("path_hash") or "").strip(): {
+                "replacement": mod.get("replacement"),
+                "multiplayer_compat": mod.get("multiplayer_compat"),
+            }
+            for mod in disabled_mods
+            if str(mod.get("path_hash") or "").strip()
+        }
+        result["interlocks"] = interlock_map
+        _log_startup_perf("get_mod_list_enrichment", "result_ready", perf_start_at, mods=len(result["mods"]))
+        return result
+
+    @log_api_call
+    def get_startup_bootstrap(self):
+        """启动首屏全局数据。旧 get_initial_data 保持兼容，新启动流优先使用本接口。"""
+        perf_start_at = time.perf_counter()
+        payload = self._get_startup_base_payload(include_upgrade_context=True)
+        _log_startup_perf("get_startup_bootstrap", "result_ready", perf_start_at)
+        return ApiResponse.success(payload)
+
+    @log_api_call
+    def get_mod_list_core(self):
+        """启动和扫描完成后的列表核心数据，不包含可后台补齐的展示标记。"""
+        payload = self._read_mod_list_core_payload("get_mod_list_core")
+        if payload.get("context_healthy"):
+            self._reset_upgrade_context()
+        return ApiResponse.success(payload)
+
+    @log_api_call
+    def get_mod_list_enrichment(self):
+        """后台补齐列表 badge、问题提示、替代版本和联锁等展示数据。"""
+        return ApiResponse.success(self._build_mod_list_enrichment_payload())
+
+    @log_api_call
+    def startup_warm_auxiliary_data(self):
+        """首屏和扫描之后再排队的辅助缓存预热。"""
+        started = self._start_startup_warmup()
+        return ApiResponse.success({"started": started})
+
     @log_api_call
     def get_initial_data(self):
         """
         前端启动时调用，一次性获取所有必要数据。
+        后续将逐步迁移到 get_startup_bootstrap + get_mod_list_core + get_mod_list_enrichment；
+        当前接口保持旧行为不变，兼容非启动场景和旧调用方。
         """
+        perf_start_at = time.perf_counter()
         try:
             user_themes = self._theme_store.list_user_themes()
         except Exception as e:
@@ -1240,7 +1510,10 @@ class API:
             "user_themes": user_themes,
             "multiplayer_compatibility_state": {},
         }
-        if not self.active_context or not self.active_context.is_healthy: return ApiResponse.success(result)
+        _log_startup_perf("get_initial_data", "base_payload_ready", perf_start_at, user_themes=len(user_themes or []))
+        if not self.active_context or not self.active_context.is_healthy:
+            _log_startup_perf("get_initial_data", "early_return_unhealthy_context", perf_start_at)
+            return ApiResponse.success(result)
         
         # 2. 获取当前环境的 Mod 数据 (包含用户自定义数据), 并排除缺失的 Mod
         # 传入 None 让 DAO 自动读取 settings.current_profile_id
@@ -1250,6 +1523,13 @@ class API:
         #   - 执行 "Local 覆盖 Workshop" 的遮蔽策略
         context_mods = ModDAO.get_profile_mods(self.active_context)
         disabled_mods = ModDAO.get_profile_disabled_mods(self.active_context)
+        _log_startup_perf(
+            "get_initial_data",
+            "mods_loaded",
+            perf_start_at,
+            active=len(context_mods or []),
+            disabled=len(disabled_mods or []),
+        )
         # 3. 获取所有分组数据 (结构化)
         # 传入当前的 assets 列表 ID，用于过滤掉分组中存在但当前环境下不可见的 Mod
         current_assets_ids = [m['package_id'] for m in context_mods]
@@ -1262,13 +1542,22 @@ class API:
         replacements = self.workshop_db_mgr.get_replacements()
         replacements_map = {r['old_workshop_id']: r for r in replacements}
         
-        dlc_parser = DLCParser(self.active_context.game_dlc_path)
+        dlc_parser = DLCParser(self.active_context.game_dlc_path, current_language_code=settings.config.language)
         rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
         current_version = self.active_context.game_version[:3]
         
         # 新增：提取所有联锁组并做映射
         interlocks = list(ModInterlock.select().dicts())
         interlock_map = {i['id']: i['chain'] for i in interlocks}
+        _log_startup_perf(
+            "get_initial_data",
+            "metadata_loaded",
+            perf_start_at,
+            groups=len(all_groups or []),
+            replacements=len(replacements or []),
+            interlocks=len(interlocks or []),
+            active_order=len(active_load_order.get('active_mods', []) if isinstance(active_load_order, dict) else []),
+        )
         
         # 5. 数据加工：先注入翻译和生效规则，再统一计算语言包归属
         for mod in context_mods:
@@ -1283,6 +1572,7 @@ class API:
             context_mods,
             user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
         )
+        _log_startup_perf("get_initial_data", "rules_and_language_owner_ready", perf_start_at)
         for mod in context_mods:
             mod['language_pack_owner_result'] = language_pack_owner_map.get(
                 str(mod.get('package_id') or '').strip().lower(),
@@ -1312,6 +1602,12 @@ class API:
             [*context_mods, *disabled_mods],
             active_ids_for_compat,
         )
+        _log_startup_perf(
+            "get_initial_data",
+            "compatibility_ready",
+            perf_start_at,
+            active_ids=len(active_ids_for_compat or []),
+        )
         
         
         result.update({
@@ -1329,6 +1625,13 @@ class API:
         self._reset_upgrade_context()
         if self.active_context.is_healthy and context_mods: 
             self.is_first_db_init = False   # 标记数据库已初始化
+        _log_startup_perf(
+            "get_initial_data",
+            "result_ready",
+            perf_start_at,
+            active=len(context_mods or []),
+            disabled=len(disabled_mods or []),
+        )
         
         return ApiResponse.success(result)
     
@@ -1787,9 +2090,9 @@ class API:
             suggested_name = str(payload.get("filename") or "").strip()
             if not suggested_name:
                 if preset == "rules":
-                    suggested_name = f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
+                    suggested_name = f"RimCrow_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
                 else:
-                    suggested_name = f"RimModManager_Data_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
+                    suggested_name = f"RimCrow_Data_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}"
             suggested_name = _ensure_bundle_filename_extension(
                 suggested_name,
                 DataBundleManager.FILE_EXTENSION,
@@ -1801,7 +2104,7 @@ class API:
                 default_filename=suggested_name,
                 file_types=(
                     _build_dialog_file_type_label(
-                        'RMM Data Package',
+                        'RimCrow Data Package',
                         [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS],
                     ),
                     'All Files (*.*)',
@@ -1873,7 +2176,7 @@ class API:
         """导出模组实体包。"""
         payload = payload or {}
         try:
-            suggested_name = str(payload.get("filename") or "").strip() or f"RimModManager_Mods_{datetime.now().strftime('%Y%m%d')}{self.mod_package_mgr.FILE_EXTENSION}"
+            suggested_name = str(payload.get("filename") or "").strip() or f"RimCrow_Mods_{datetime.now().strftime('%Y%m%d')}{self.mod_package_mgr.FILE_EXTENSION}"
             suggested_name = _ensure_bundle_filename_extension(
                 suggested_name,
                 self.mod_package_mgr.FILE_EXTENSION,
@@ -1884,7 +2187,7 @@ class API:
                 default_filename=suggested_name,
                 file_types=(
                     _build_dialog_file_type_label(
-                        'RMM Mod Package',
+                        'RimCrow Mod Package',
                         [self.mod_package_mgr.FILE_EXTENSION, *self.mod_package_mgr.LEGACY_FILE_EXTENSIONS],
                     ),
                     'All Files (*.*)',
@@ -2000,13 +2303,13 @@ class API:
             # 2. 识别 Local vs Workshop 冲突
             # 3. 触发当前环境的运行态收敛回调（若仍是当前环境）
             if not self.scanner: return ApiResponse.error("扫描器未初始化")
+            is_full_scan = not specific_paths
             result = self.scanner.scan_paths_async(
                 paths_to_scan,
                 forced_update=forced_update,
                 size_check_override=size_check_override,
                 size_check_paths=size_check_paths,
-                residue_active_tokens=self._read_active_mod_tokens(),
-                residue_scan_enabled=bool(getattr(settings.config, "enable_mod_residue_scan", True)),
+                residue_scan_enabled=is_full_scan and bool(getattr(settings.config, "enable_mod_residue_scan", True)),
             )
         except Exception as e:
             logger.error("扫描模组失败: %s", e, exc_info=True)
@@ -2589,14 +2892,16 @@ class API:
         """
         if not self.active_context: return ApiResponse.error("环境配置上下文缺失")
         try:
-            payload = {"inactive_mods_order": inactive_ids}
+            normalized_inactive_ids = normalize_companion_package_ids(inactive_ids)
+            normalized_temp_ids = normalize_companion_package_ids(temp_ids) if temp_ids is not None else None
+            payload = {"inactive_mods_order": normalized_inactive_ids}
             if temp_ids is not None:
-                payload["temp_mods_order"] = temp_ids
+                payload["temp_mods_order"] = normalized_temp_ids
             result = self.profile_mgr.update_profile(self.active_context.profile_id, payload)
             if result:
-                object.__setattr__(self.active_context, "inactive_mods_order", list(inactive_ids or []))
+                object.__setattr__(self.active_context, "inactive_mods_order", normalized_inactive_ids)
                 if temp_ids is not None:
-                    object.__setattr__(self.active_context, "temp_mods_order", list(temp_ids or []))
+                    object.__setattr__(self.active_context, "temp_mods_order", normalized_temp_ids)
                 return ApiResponse.success()
             return ApiResponse.error("更新配置失败")
         except Exception as e:
@@ -2721,7 +3026,7 @@ class API:
                 return ApiResponse.error("加载顺序管理器未初始化")
             res = self.load_order_mgr.read_share_code(share_code)
             return ApiResponse.success({
-                "file": res.get("share_code_ref", "share://RMM1"),
+                "file": res.get("share_code_ref", "share://RC"),
                 "active_ids": res.get('active_mods', []),
                 "modify_time": res.get('modify_time', 0),
                 "format": res.get('format', 'share_code'),
@@ -2924,7 +3229,7 @@ class API:
                         profile_id=profile_id,
                         steam_running=bool(steam_running),
                         reason="steam_path_invalid",
-                        message="当前环境无法按 Steam 方式启动，需要先确认是否改为直接启动。",
+                        message="当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。",
                         requires_fallback_confirm=True,
                         steam_status=self._attach_steam_user_hint(steam_status),
                     )
@@ -2938,14 +3243,13 @@ class API:
                     return ApiResponse.success( data={"runtime_session": session}, message="Steam 已就绪，已发起游戏启动，等待游戏进程确认。" )
 
                 failed_reason = str((ensured_status or {}).get("reason") or "steam_not_ready").strip() or "steam_not_ready"
-                failed_session = runtime_session_mgr.mark_launch_failed( failed_reason, message or "Steam 未能进入可用状态。" )
-                return ApiResponse.error(
-                    message or "Steam 未能进入可用状态。",
-                    data={
-                        "runtime_session": failed_session,
-                        "failure_reason": failed_reason,
-                        "steam_status": ensured_status or {},
-                    },
+                return self._build_direct_launch_confirmation(
+                    profile_id=profile_id,
+                    steam_running=bool((ensured_status or {}).get("running")),
+                    reason="steam_not_ready",
+                    message=message or "Steam 未能进入可用状态。",
+                    requires_fallback_confirm=True,
+                    steam_status={**(ensured_status or {}), "reason": failed_reason},
                 )
 
             # 这里只处理“当前环境启用了创意工坊模组链接，且 Steam 已运行”时的冲突提示。
@@ -2966,7 +3270,7 @@ class API:
 
             # 使用Steam启动，且Steam路径无效，提示用户
             if prefer_steam_launch and not steam_path_valid:
-                return ApiResponse.warning( message="未检测到有效的 Steam 程序路径，已自动切换为游戏本体直接启动。", data={"runtime_session": session} )
+                return ApiResponse.warning( message="未检测到有效的 Steam 程序路径，本次已改为游戏本体直接启动。", data={"runtime_session": session} )
             return ApiResponse.success( data={"runtime_session": session}, message="已发起游戏启动，等待游戏进程确认。" )
         except Exception as e:
             logger.error("启动游戏失败: %s", e, exc_info=True)
@@ -3575,7 +3879,7 @@ class API:
     # =========================================================================
 
     @log_api_call
-    def path_check(self, path_type, path):
+    def path_check(self, path_type, path, force: bool = False):
         """
         检查指定路径类型是否正确
         :param path_type: 路径类型（game_install_path, game_config_path, workshop_mods_path, steam_path）
@@ -3586,7 +3890,7 @@ class API:
         try:
             path = normalize_path_for_storage(path)
             if path_type == "game_install_path":
-                res = PathChecker.check_install_path(path)
+                res = PathChecker.check_install_path(path, force_steam_inspect=bool(force))
             elif path_type == "game_config_path":
                 res = PathChecker.check_mods_config(path)
             elif path_type == "workshop_mods_path":
@@ -4150,7 +4454,7 @@ class API:
             "preset": "rules",
             "module_keys": list(DataBundleManager.RULE_PRESET),
             "dynamic_rule_ids": list(dynamic_rule_ids or []),
-            "filename": f"RimModManager_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}",
+            "filename": f"RimCrow_Rules_{datetime.now().strftime('%Y%m%d')}{DataBundleManager.FILE_EXTENSION}",
         })
 
     @log_api_call
@@ -4159,7 +4463,7 @@ class API:
         try:
             path = file_mgr.select_file_dialog(file_types=(
                 _build_dialog_file_type_label(
-                    'RMM Data Package',
+                    'RimCrow Data Package',
                     [DataBundleManager.FILE_EXTENSION, *DataBundleManager.LEGACY_FILE_EXTENSIONS, '.json'],
                 ),
                 'All Files (*.*)',
@@ -4277,7 +4581,7 @@ class API:
         return ApiResponse.success({"task_id": task_id}, "下载任务已添加")
 
     @log_api_call
-    def open_sub_browser(self, url='', title = 'RimModManager'):
+    def open_sub_browser(self, url='', title = 'RimCrow'):
         """打开或更新 浏览器子窗口"""
         if self.is_browser_runtime() or not self._window:
             target_url = build_sub_browser_target_url(self._browser_base_url, url, title) if self.is_browser_runtime() else str(url or "")
@@ -4288,6 +4592,15 @@ class API:
             self.browser_window = SubBrowserManager(self)
         self.browser_window.open(url, title)
         return ApiResponse.success()
+
+    @log_api_call
+    def open_external_url(self, url=''):
+        """强制在系统默认浏览器中打开链接。"""
+        target_url = str(url or "").strip()
+        if not target_url:
+            return ApiResponse.error("没有可打开的网址。")
+        webbrowser.open(target_url)
+        return ApiResponse.success({"url": target_url})
 
     @log_api_call
     def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
@@ -5615,6 +5928,7 @@ class API:
         - workshop 域：优先使用 Steamworks 试验适配层读取 Steam 客户端本机状态；
         - self 域：继续使用 Steam Web API 在线时间与本地安装时间做比对。
         """
+        perf_start_at = time.perf_counter()
         workshop_local_data = self.steam_mgr.workshop_merged_data()
         manager_local_data = self.steam_mgr.steamcmd_merged_data()
 
@@ -5636,6 +5950,15 @@ class API:
             len(manager_local_data),
             len(self_installed_wids),
         )
+        _log_startup_perf(
+            "lifecycle_check_updates",
+            "merged_data_ready",
+            perf_start_at,
+            workshop_total=len(workshop_local_data),
+            workshop_installed=len(workshop_installed_wids),
+            self_total=len(manager_local_data),
+            self_installed=len(self_installed_wids),
+        )
 
         updates_available = []
 
@@ -5653,6 +5976,14 @@ class API:
                 )
                 workshop_states = workshop_state_result.get("states") if isinstance(workshop_state_result, dict) else {}
                 workshop_states = workshop_states if isinstance(workshop_states, dict) else {}
+                _log_startup_perf(
+                    "lifecycle_check_updates",
+                    "workshop_states_ready",
+                    perf_start_at,
+                    checked=len(workshop_installed_wids),
+                    hits=len(workshop_states),
+                    ready=bool(workshop_state_result.get("ready")) if isinstance(workshop_state_result, dict) else False,
+                )
                 logger.debug(
                     "生命周期更新检查[workshop]：Steamworks 可用 %s，ready %s，检查 %s 条，命中状态 %s 条，detail=%s",
                     bool(workshop_state_result.get("available")) if isinstance(workshop_state_result, dict) else False,
@@ -5682,6 +6013,13 @@ class API:
                 list(self_installed_wids),
                 trace_label="lifecycle_check_updates:self",
             )
+            _log_startup_perf(
+                "lifecycle_check_updates",
+                "self_details_ready",
+                perf_start_at,
+                checked=len(self_installed_wids),
+                hits=len(online_details or {}),
+            )
             for local_item in manager_local_data.values():
                 if not local_item.get('is_installed'):
                     continue
@@ -5704,6 +6042,12 @@ class API:
         else:
             logger.debug("生命周期更新检查[self]：没有可检查的已安装 self 模组")
 
+        _log_startup_perf(
+            "lifecycle_check_updates",
+            "result_ready",
+            perf_start_at,
+            updates=len(updates_available),
+        )
         return ApiResponse.success({"updates": updates_available})
 
     @log_api_call
@@ -5838,14 +6182,102 @@ class API:
             return ApiResponse.error("读取安装来源失败", code="WORKSHOP.INSTALL_SOURCE_MAP_FAILED", detail=e, user_message="读取安装来源失败。请检查外置工坊数据库是否完整，详细原因已写入系统日志。")
     
     @log_api_call
+    def workspace_get_startup_inventory_summary(self):
+        """
+        启动库存轻量摘要，只返回自动扫描和提示需要的异常事件。
+        不触发 workspace_get_all_domains 的全量矩阵、在线预热和生命周期更新检查。
+        """
+        perf_start_at = time.perf_counter()
+        if not self.active_context or not self.active_context.is_healthy:
+            _log_startup_perf("workspace_get_startup_inventory_summary", "early_return_unhealthy_context", perf_start_at)
+            return ApiResponse.success({"events": [], "counts": {"changed": 0, "missing": 0, "deleted": 0}})
+
+        workshop_map = self.steam_mgr.workshop_merged_data()
+        subscribed_workshop_ids = [wid for wid, data in workshop_map.items() if data.get("is_subscribed")]
+        ModMaintenanceDAO.find_missing_mods(False, subscribed_workshop_ids)
+        matrix = ModDAO.get_triple_domain_assets(self.active_context)
+        events: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+
+        def normalize_timestamp(value: Any) -> int:
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        def push_event(event: dict[str, Any]):
+            key = "|".join([
+                str(event.get("status") or ""),
+                str(event.get("store") or ""),
+                str(event.get("workshopId") or ""),
+                str(event.get("pathHash") or ""),
+                normalize_path_for_compare(event.get("path")),
+                str(event.get("downloadTime") or 0),
+            ])
+            if key in seen_keys:
+                return
+            seen_keys.add(key)
+            events.append(event)
+
+        for mod in [*(matrix.get("workshop") or []), *(matrix.get("self") or []), *(matrix.get("local") or [])]:
+            state = str(mod.get("state") or MOD_ASSET_STATE_PRESENT).strip().lower()
+            is_deleted = state == MOD_ASSET_STATE_DELETED
+            is_missing = state == MOD_ASSET_STATE_MISSING or (not is_deleted and not str(mod.get("path") or "").strip())
+            status = "deleted" if is_deleted else ("missing" if is_missing else "")
+            base_event = {
+                "store": str(mod.get("store") or "").strip() or "workshop",
+                "workshopId": normalize_workshop_id(mod.get("workshop_id")),
+                "pathHash": str(mod.get("path_hash") or "").strip(),
+                "path": str(mod.get("path") or "").strip(),
+                "name": str(mod.get("name") or mod.get("package_id") or mod.get("workshop_id") or "未知模组").strip(),
+                "downloadTime": 0,
+                "scannedTime": normalize_timestamp(mod.get("last_scanned_at")),
+            }
+            if status:
+                push_event({**base_event, "status": status})
+
+            if str(mod.get("store") or "").strip().lower() != "workshop":
+                continue
+            workshop_id = normalize_workshop_id(mod.get("workshop_id"))
+            steam_status = workshop_map.get(workshop_id) if workshop_id else None
+            download_time = normalize_timestamp((steam_status or {}).get("time_last_sync"))
+            scanned_time = normalize_timestamp(mod.get("last_scanned_at"))
+            if base_event["path"] and download_time and download_time > scanned_time:
+                push_event({**base_event, "status": "changed", "downloadTime": download_time, "scannedTime": scanned_time})
+
+        counts = {
+            "changed": sum(1 for event in events if event.get("status") == "changed"),
+            "missing": sum(1 for event in events if event.get("status") == "missing"),
+            "deleted": sum(1 for event in events if event.get("status") == "deleted"),
+        }
+        _log_startup_perf(
+            "workspace_get_startup_inventory_summary",
+            "result_ready",
+            perf_start_at,
+            events=len(events),
+            changed=counts["changed"],
+            missing=counts["missing"],
+            deleted=counts["deleted"],
+        )
+        return ApiResponse.success({"events": events, "counts": counts})
+
     def workspace_get_all_domains(self):
         """
         三域数据全量获取 (统合 DB、ACF、Log 数据)
         """
+        perf_start_at = time.perf_counter()
         # 1. 获取 Steam 状态数据 (ACF/Log)，只使用本地记录做缺失判定。
         ws_map = self.steam_mgr.workshop_merged_data()
         mg_map = self.steam_mgr.steamcmd_merged_data()
         subscribed_workshop_ids = [wid for wid, data in ws_map.items() if data.get("is_subscribed")]
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "steam_maps_ready",
+            perf_start_at,
+            workshop=len(ws_map),
+            steamcmd=len(mg_map),
+            subscribed=len(subscribed_workshop_ids),
+        )
         ModMaintenanceDAO.find_missing_mods(False, subscribed_workshop_ids)
         # 2. 获取数据库基础数据 (含有 URL)
         matrix = ModDAO.get_triple_domain_assets(self.active_context)
@@ -5854,6 +6286,15 @@ class API:
             for r in self.workshop_db_mgr.get_replacements()
             if r.get('old_workshop_id')
         }
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "matrix_ready",
+            perf_start_at,
+            workshop=len(matrix.get('workshop') or []),
+            self_count=len(matrix.get('self') or []),
+            local=len(matrix.get('local') or []),
+            replacements=len(replacements_map),
+        )
         github_download_map = {}
         if matrix.get('self'):
             github_records = list(GithubModRecord.select(
@@ -5883,6 +6324,12 @@ class API:
                 for record in github_records
                 if _resolve_github_local_path(record.get("local_folder")) and latest_success_time.get(str(record.get("repo_url") or "").strip(), 0)
             }
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "github_status_ready",
+            perf_start_at,
+            github_records=len(github_download_map),
+        )
         
         known_workshop_ids = set()
         # install_self_ids = set()
@@ -5936,6 +6383,12 @@ class API:
         
         for mod in matrix['local']:
             inject_workspace_fields(mod)
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "workspace_fields_injected",
+            perf_start_at,
+            known_workshop=len(known_workshop_ids),
+        )
         
         # 4. 核心逻辑：找出“已订阅但物理丢失”的模组 (Ghost Mods)
         # ACF 中仍标记订阅、但 DB 没有对应工坊资产的条目，仍然属于“工坊列表”视图。
@@ -5947,6 +6400,13 @@ class API:
         ghost_meta_map = {}
         if all_ghost_ids:
             ghost_meta_map = ExtDAO.get_workshop_details_by_workshop_ids(all_ghost_ids)
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "ghosts_ready",
+            perf_start_at,
+            ghost_count=len(all_ghost_ids),
+            ghost_meta=len(ghost_meta_map),
+        )
 
         # 构造幽灵模组对象并塞回对应列表
         def create_ghost(wid, store_type, steam_status):
@@ -6005,6 +6465,16 @@ class API:
             import threading
             threading.Thread(target=self._bg_check_online_updates, args=(all_wids,), daemon=True).start()
 
+        _log_startup_perf(
+            "workspace_get_all_domains",
+            "result_ready",
+            perf_start_at,
+            workshop=len(matrix["workshop"]),
+            self_count=len(matrix["self"]),
+            local=len(matrix["local"]),
+            missing=len(missing_workshop_ids),
+            preheat=len(all_wids),
+        )
         return ApiResponse.success(res)
 
     def _bg_probe_missing_workshop_items(self, workshop_ids: list[str]):

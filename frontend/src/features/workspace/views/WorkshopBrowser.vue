@@ -355,17 +355,17 @@
               </h4>
               <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">加载中...</span>
               <div class="flex flex-wrap justify-end gap-1.5">
-                <button @click="handleUnsubscribe(dependencyIds)" :disabled="isDependencyActionPending('unsubscribe')" :class="isDependencyActionPending('unsubscribe') ? 'rmm-action-disabled' : ''"
+                <button @click="handleUnsubscribe(dependencyIds)" :disabled="isDependencyActionPending('unsubscribe')" :class="isDependencyActionPending('unsubscribe') ? 'app-action-disabled' : ''"
                   class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-danger/30 bg-accent-danger/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger active:scale-[0.98]">
                   <LoaderCircle v-if="isDependencyActionPending('unsubscribe')" class="size-3 animate-spin" />
                   {{ isDependencyActionPending('unsubscribe') ? '取消中' : '取消订阅全部依赖' }}
                 </button>
-                <button @click="handleSubscribe(dependencyIds)" :disabled="isDependencyActionPending('subscribe')" :class="isDependencyActionPending('subscribe') ? 'rmm-action-disabled' : ''"
+                <button @click="handleSubscribe(dependencyIds)" :disabled="isDependencyActionPending('subscribe')" :class="isDependencyActionPending('subscribe') ? 'app-action-disabled' : ''"
                   class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-primary/30 bg-accent-primary/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-primary transition-all hover:bg-accent-primary hover:text-on-accent-primary active:scale-[0.98]">
                   <LoaderCircle v-if="isDependencyActionPending('subscribe')" class="size-3 animate-spin" />
                   {{ isDependencyActionPending('subscribe') ? '订阅中' : '订阅全部依赖' }}
                 </button>
-                <button @click="handleDownload(dependencyIds)" :disabled="isDependencyActionPending('download')" :class="isDependencyActionPending('download') ? 'rmm-action-disabled' : ''"
+                <button @click="handleDownload(dependencyIds)" :disabled="isDependencyActionPending('download')" :class="isDependencyActionPending('download') ? 'app-action-disabled' : ''"
                   class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-success/30 bg-accent-success/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-success transition-all hover:bg-accent-success hover:text-on-accent-success active:scale-[0.98]">
                   <LoaderCircle v-if="isDependencyActionPending('download')" class="size-3 animate-spin" />
                   {{ isDependencyActionPending('download') ? '下载中' : '下载全部依赖' }}

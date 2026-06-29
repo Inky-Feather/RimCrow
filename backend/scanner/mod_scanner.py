@@ -32,7 +32,6 @@ from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
 from backend.managers.mgr_files import FileManager
-from backend.managers.mgr_mod_residue import ModResidueManager
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
@@ -93,7 +92,21 @@ class ModScanner:
             "message": message,
         }
 
-    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
+    @staticmethod
+    def _should_refresh_core_after_scan(stats: dict | None, forced_update: bool = False) -> bool:
+        if forced_update:
+            return True
+        stats = stats or {}
+        return any(
+            int(stats.get(key) or 0) > 0
+            for key in (
+                'added', 'updated', 'removed',
+                'external_enabled', 'strict_restored_disabled', 'strict_restore_failed',
+                'about_conflict_cleaned', 'shadow_path_cleaned',
+            )
+        )
+
+    def scan_paths_async( self, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | None = None, emit_events: bool = True, residue_scan_enabled: bool | None = None ):
         """
         异步扫描入口。立即返回，任务在后台运行。
         """
@@ -114,10 +127,10 @@ class ModScanner:
                 metrics={ "title": "模组扫描", "forced_update": forced_update, "size_check_override": size_check_override, "size_check_paths_count": len(size_check_paths or []) },
             )
         # 提交到线程池
-        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, size_check_paths, emit_events, residue_active_tokens, residue_scan_enabled )
+        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, size_check_paths, emit_events, residue_scan_enabled )
         return {'status': 'started', 'task_id': task_id}
 
-    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | set[str] | None = None, emit_events: bool = True, residue_active_tokens: list[str] | None = None, residue_scan_enabled: bool | None = None ):
+    def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | set[str] | None = None, emit_events: bool = True, residue_scan_enabled: bool | None = None ):
         """
         后台执行的扫描主逻辑
         """
@@ -135,6 +148,15 @@ class ModScanner:
             'strict_restore_failed_mods': [],
             'about_conflict_cleaned_mods': [],
         }
+        if emit_events:
+            EventBus.emit_progress(
+                task_id,
+                "scan",
+                status="running",
+                progress=1,
+                message="正在准备扫描...",
+                metrics={'stage': 'preparing', 'current': 0, 'total': 0, 'title': '模组扫描'},
+            )
         with db.atomic() as txn:
             try:
                 # --- 5. 清理失效数据 ---
@@ -178,8 +200,17 @@ class ModScanner:
                 for path in (size_check_paths or [])
                 if path
             }
-            # 初始化 DLC Parser
-            dlc_parser = DLCParser(self.context.game_dlc_path)
+            if emit_events:
+                EventBus.emit_progress(
+                    task_id,
+                    "scan",
+                    status="running",
+                    progress=3,
+                    message="正在读取游戏基础信息...",
+                    metrics={'stage': 'preparing', 'current': 0, 'total': 0, 'title': '模组扫描'},
+                )
+            # 扫描只需要 DLC 基础定义；全语言 tar 缓存按需或后台同步，避免首次扫描被解包阻塞。
+            dlc_parser = DLCParser(self.context.game_dlc_path, sync_translations=False, current_language_code=settings.config.language)
             existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
             if emit_events:
@@ -187,7 +218,7 @@ class ModScanner:
                     task_id,
                     "scan",
                     status="running",
-                    progress=0,
+                    progress=5,
                     message='正在索引文件...',
                     metrics={'stage': 'indexing', 'current': 0, 'total': 0, 'title': '模组扫描'},
                 )
@@ -225,7 +256,7 @@ class ModScanner:
                     return # 直接结束任务，不进入写库阶段
                 # 进度报告
                 if (idx + 1) % report_interval == 0:
-                    percent = int(((idx + 1) / total_count) * 100)
+                    percent = min(98, 5 + int(((idx + 1) / total_count) * 93))
                     if emit_events:
                         EventBus.emit_progress(
                             task_id,
@@ -335,17 +366,10 @@ class ModScanner:
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
-            residue_cleanup = None
-            should_scan_residue = bool(getattr(settings.config, "enable_mod_residue_scan", True)) if residue_scan_enabled is None else bool(residue_scan_enabled)
-            if should_scan_residue:
-                residue_cleanup = {"summary": {"group_count": 0, "item_count": 0}, "groups": [], "whitelist": [], "scan_roots": valid_paths}
-                try:
-                    residue_cleanup = ModResidueManager.get_overview(valid_paths, self.context, residue_active_tokens or [])
-                except Exception as residue_error:
-                    logger.warning("MOD 残留扫描失败：%s", residue_error, exc_info=True)
+            should_check_mod_residue = bool(getattr(settings.config, "enable_mod_residue_scan", True)) if residue_scan_enabled is None else bool(residue_scan_enabled)
+            core_refresh_required = self._should_refresh_core_after_scan(stats, forced_update)
             
             if emit_events:
-                residue_count = int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0)
                 EventBus.emit_progress(
                     task_id,
                     "scan",
@@ -359,7 +383,8 @@ class ModScanner:
                         'stats': stats,
                         'conflict_count': len(final_conflicts),
                         'coexistence_count': len(final_coexistences),
-                        'residue_count': residue_count,
+                        'should_check_mod_residue': should_check_mod_residue,
+                        'core_refresh_required': core_refresh_required,
                         'runtime_sync_message': runtime_sync_msg,
                         'title': '模组扫描',
                     },
@@ -374,20 +399,21 @@ class ModScanner:
                 'coexistences': final_coexistences,
                 'runtime_sync_message': runtime_sync_msg,
                 'strict_disable_restore_failures': scan_details['strict_restore_failed_mods'],
+                'should_check_mod_residue': should_check_mod_residue,
+                'core_refresh_required': core_refresh_required,
             }
-            if residue_cleanup is not None:
-                result['residue_cleanup'] = residue_cleanup
             self._finish_scan(result, task_id, emit_events=emit_events)
 
             duration = time.time() - start_time
             logger.info(
                 "扫描完成，用时 %.2fs。新增：%s，更新：%s，跳过：%s，移除：%s，"
                 "外部启用：%s，严格恢复：%s，严格恢复失败：%s，About 冲突清理：%s，"
-                "影子路径清理：%s，冲突：%s，共存：%s，残留：%s。%s",
+                "影子路径清理：%s，冲突：%s，共存：%s，核心刷新：%s，残留检测：%s。%s",
                 duration, stats['added'], stats['updated'], stats['skipped'], stats['removed'],
                 stats['external_enabled'], stats['strict_restored_disabled'], stats['strict_restore_failed'],
                 stats['about_conflict_cleaned'], stats['shadow_path_cleaned'], len(final_conflicts),
-                len(final_coexistences), int(((residue_cleanup or {}).get('summary') or {}).get('item_count') or 0),
+                len(final_coexistences), "需要" if core_refresh_required else "跳过",
+                "待检测" if should_check_mod_residue else "跳过",
                 runtime_sync_msg,
             )
             disabled_debug = {
@@ -412,9 +438,8 @@ class ModScanner:
                 }
                 for item in final_coexistences
             ]
-            residue_debug = (residue_cleanup or {}).get("summary") if residue_cleanup else None
             logger.debug("扫描禁用状态详情: %s", disabled_debug)
-            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s residue=%s", conflict_debug, coexistence_debug, residue_debug)
+            logger.debug("扫描冲突详情: conflicts=%s coexistences=%s should_check_mod_residue=%s", conflict_debug, coexistence_debug, should_check_mod_residue)
         except Exception as e:
             import traceback
             traceback.print_exc()

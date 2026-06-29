@@ -82,7 +82,7 @@
 
                   <!-- 扫描按钮 -->
                   <div role="button" :aria-disabled="isBaseActionDisabled('scan')"
-                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'rmm-action-disabled' : '']" v-tooltip="'扫描文件变动，并同步当前环境的 Mod 列表'"
+                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'app-action-disabled' : '']" v-tooltip="'扫描文件变动，并同步当前环境的 Mod 列表'"
                     data-tour="scan-button"
                     class="col-span-1 py-1 rounded-lg bg-bg-overlay/5 border border-border-base/5 group
                           text-sm text-text-soft font-bold uppercase tracking-wider relative cursor-pointer
@@ -94,7 +94,7 @@
                     <span >{{ appStore.isScanRunning ? '扫描中...' : '扫描' }}</span>
 
                     <button v-show="!appStore.isScanRunning" v-tooltip="'重新检查所有文件，包括未变动的文件，比较耗时'"
-                      :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'rmm-action-disabled' : ''"
+                      :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'app-action-disabled' : ''"
                       class="absolute bottom-full py-1 px-2 mb-1.5 rounded-lg bg-accent-secondary/50 border border-border-base/10 transition-all duration-500
                           text-sm text-text-dim font-bold uppercase tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
                           hover:bg-accent-secondary/80 hover:text-text-main hover:border-border-base/18"
@@ -104,7 +104,7 @@
 
                   </div>
                   <!-- 自动排序按钮 -->
-                  <button data-tour="autosort-button" :disabled="isBaseActionDisabled('autosort')" :class="isBaseActionDisabled('autosort') ? 'rmm-action-disabled' : ''"
+                  <button data-tour="autosort-button" :disabled="isBaseActionDisabled('autosort')" :class="isBaseActionDisabled('autosort') ? 'app-action-disabled' : ''"
                     class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                           @click="runBaseAction('autosort', () => modStore.autoSortMods())" v-tooltip="'根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。'"
@@ -119,7 +119,7 @@
                     :class="[modStore.isDirty
                         ? 'bg-accent-secondary text-on-accent-secondary hover:bg-accent-warn hover:text-on-accent-warn shadow-[0_0_15px_rgba(var(--rgb-accent-warn),0.4)] animate-pulse-soft'
                         : 'bg-accent-primary/60 text-on-accent-primary hover:bg-accent-primary shadow-lg shadow-accent-primary/10',
-                        isBaseActionDisabled('save') ? 'rmm-action-disabled' : ''
+                        isBaseActionDisabled('save') ? 'app-action-disabled' : ''
                     ]"
                     @click="runBaseAction('save', () => orderStore.saveLoadOrder())"
                   >
@@ -134,7 +134,7 @@
                   </button>
 
                   <!-- 启动游戏 -->
-                  <button data-tour="launch-button" :disabled="isBaseActionDisabled('launch')" :class="isBaseActionDisabled('launch') ? 'rmm-action-disabled' : ''"
+                  <button data-tour="launch-button" :disabled="isBaseActionDisabled('launch')" :class="isBaseActionDisabled('launch') ? 'app-action-disabled' : ''"
                     class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
                           shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2
                           transition-all duration-200 uppercase tracking-widest
@@ -193,7 +193,7 @@
     </Transition>
 
     <!-- 列表对比抽屉 -->
-    <ListDiffView
+    <ListDiffView v-if="appStore.uiState.showDiffDrawer"
       :list-a="modStore.activeIds"
       title-a="当前启用"
       :list-b="orderStore.backupDisplayIds || []"
@@ -204,57 +204,57 @@
 
 
     <!-- 日志 -->
-    <LogViewer />
+    <LogViewer v-if="appStore.uiState.showLogDrawer" />
 
     <!-- 测试 -->
     <div v-if="appStore.settings.debug_mode">
-      <TestPage class="fixed bottom-4 left-4 " v-show="appStore.uiState.showTestDrawer" />
-      <DebugPanel />
+      <TestPage v-if="appStore.uiState.showTestDrawer" class="fixed bottom-4 left-4 " />
+      <DebugPanel v-if="appStore.uiState.showTestDrawer" />
     </div>
     <!-- 重复包名冲突弹窗 -->
-    <ConflictResolver />
+    <ConflictResolver v-if="hasPendingConflicts" />
 
     <!-- AI 生成数据弹窗 -->
-    <ModAliasReviewModal />
+    <ModAliasReviewModal v-if="appStore.uiState.showModAliasReviewModal" />
     <!-- AI 会话链路弹窗 -->
-    <AiSessionTraceModal />
+    <AiSessionTraceModal v-if="aiStore.traceModalState.visible" />
     <!-- 文件搜索工作台 -->
-    <FileSearchWorkbench />
+    <FileSearchWorkbench v-if="appStore.uiState.showFileSearchWorkbench" />
     <!-- AI 定义管理器 -->
-    <AIDefinitionManager />
+    <AIDefinitionManager v-if="appStore.uiState.showAIDefinitionManager" />
 
     <!-- 工坊更新管理中心 -->
-    <WorkspaceOverlay />
+    <WorkspaceOverlay v-if="appStore.uiState.showWorkspace" />
 
     <!-- 启动库存状态检测 -->
-    <StartupInventoryChangesModal />
+    <StartupInventoryChangesModal v-if="workspaceStore.startupInventoryDialog.visible" />
 
     <!-- 贴图优化功能面板 -->
-    <TextureOptModal />
+    <TextureOptModal v-if="appStore.uiState.showTextureOptModal" />
 
     <!-- 模组配置弹窗 -->
-    <ModSettingsManagerModal
+    <ModSettingsManagerModal v-if="appStore.uiState.showModSettingsManager"
       :visible="appStore.uiState.showModSettingsManager"
       @close="appStore.uiState.showModSettingsManager = false"
     />
 
     <!-- 卸载残留清理弹窗 -->
-    <ModResidueCleanupModal />
+    <ModResidueCleanupModal v-if="appStore.uiState.showModResidueCleanup" />
 
     <!-- 环境管理抽屉 -->
-    <ProfileDrawer />
+    <ProfileDrawer v-if="appStore.uiState.showProfileDrawer" />
 
     <!-- 缺失项下载管理 -->
-    <MissingInstallDialog />
+    <MissingInstallDialog v-if="missingInstallStore.isVisible" />
 
     <!-- 设置弹窗 -->
-    <SettingsModal />
+    <SettingsModal v-if="appStore.uiState.showSettingsPanel" />
 
     <!-- 模组包/数据包传输弹窗 -->
-    <PackageTransferDialog />
+    <PackageTransferDialog v-if="appStore.uiState.showPackageTransferDialog" />
 
     <!-- 推荐导出弹窗 -->
-    <RecommendationExportModal
+    <RecommendationExportModal v-if="appStore.uiState.showRecommendationExportDialog"
       :show="appStore.uiState.showRecommendationExportDialog"
       :title="appStore.recommendationExportDialog.title"
       :source-name="appStore.recommendationExportDialog.sourceName"
@@ -263,16 +263,16 @@
     />
 
     <!-- 规则面板 -->
-    <RulePanel />
+    <RulePanel v-if="appStore.uiState.showRuleDrawer" />
 
     <!-- 确认弹窗 -->
-    <Confirm />
+    <Confirm v-if="confirmStore.isVisible" />
 
     <!-- 补充建议弹窗 -->
-    <SupplementSelectionDialog />
+    <SupplementSelectionDialog v-if="supplementStore.isVisible" />
 
     <!-- 更新弹窗 -->
-    <UpdateModal />
+    <UpdateModal v-if="appStore.uiState.showUpdateModal" />
 
     <!-- 右键菜单 -->
     <ContextMenu />
@@ -284,7 +284,7 @@
     <StatusBar class="relative z-20 flex-none" />
 
     <!-- 全局主题编辑器 -->
-    <ThemeEditorModal
+    <ThemeEditorModal v-if="appStore.themeEditor.isOpen"
       :is-open="appStore.themeEditor.isOpen"
       :theme="appStore.themeEditor.theme"
       @close="closeThemeEditor"
@@ -302,6 +302,11 @@ import { useRuleStore } from '../features/rules/ruleStore'
 import { useGroupStore } from '../features/mod/stores/groupStore'
 import { useOrderStore } from '../features/load-order/orderStore'
 import { useGuideStore } from '../features/guide/guideStore'
+import { useAiStore } from '../features/ai/aiStore'
+import { useWorkspaceStore } from '../features/workspace/workspaceStore'
+import { useMissingInstallStore } from '../features/supplement/missingInstallStore'
+import { useSupplementStore } from '../features/supplement/supplementStore'
+import { useConfirmStore } from '../shared/components/modal/confirmStore'
 import { useCommandStore } from '../shared/commands/commandStore'
 import { startKeybindingRuntime } from '../shared/commands/keybindingRuntime'
 import { registerBuiltinCommands } from './commands/builtinCommands'
@@ -311,44 +316,51 @@ import ModDetails from '../features/mod/ModDetails.vue'
 import DisabledModList from '../features/mod/DisabledModList.vue'
 import ModList from '../features/mod/list/ModList.vue'
 import GroupList from '../features/mod/GroupList.vue'
-import SettingsModal from '../features/settings/SettingsPanel.vue'
-import FocusTabs from '../shared/components/tabs/FocusTabs.vue'
 import ContextMenu from '../shared/components/context-menu/ContextMenu.vue'
 import HoverPanel from '../shared/components/popover/HoverPanel.vue'
 import BackupList from '../features/load-order/BackupList.vue'
-import ListDiffView from '../features/load-order/ListDiffView.vue'
-import LogViewer from '../features/app-log/LogViewer.vue'
-import ConflictResolver from '../features/dialogs/ConflictResolver.vue'
-import DebugPanel from '../dev/DebugPanel.vue'
-import RulePanel from '../features/rules/RulePanel.vue'
 import ModRuleEditor from '../features/rules/ModRuleEditor.vue'
-import Confirm from '../shared/components/modal/Confirm.vue'
 import SegmentedTabs from '../shared/components/tabs/SegmentedTabs.vue'
-import ProfileDrawer from '../features/profiles/ProfileDrawer.vue'
-import ModAliasReviewModal from '../features/ai/ModAliasReviewModal.vue'
-import AiSessionTraceModal from '../features/ai/AiSessionTraceModal.vue'
-import FileSearchWorkbench from '../features/file-search/FileSearchWorkbench.vue'
 import { useFileSearchStore } from '../features/file-search/fileSearchStore'
-import AIDefinitionManager from '../features/ai/AIDefinitionManager.vue'
-import WorkspaceOverlay from '../features/workspace/WorkspaceOverlay.vue'
-import StartupInventoryChangesModal from '../features/workspace/components/StartupInventoryChangesModal.vue'
-import UpdateModal from '../features/dialogs/UpdateModal.vue'
 import GuideCenter from '../features/guide/GuideCenter.vue'
-import TextureOptModal from '../features/texture-opt/TextureOptModal.vue'
-import ModSettingsManagerModal from '../features/mod/ModSettingsManagerModal.vue'
-import ModResidueCleanupModal from '../features/mod-residue/ModResidueCleanupModal.vue'
-import SupplementSelectionDialog from '../features/supplement/SupplementSelectionDialog.vue'
-import MissingInstallDialog from '../features/supplement/MissingInstallDialog.vue'
-import PackageTransferDialog from '../features/package-transfer/PackageTransferDialog.vue'
-import RecommendationExportModal from '../features/mod/RecommendationExportModal.vue'
-import ThemeEditorModal from '../features/settings/theme/ThemeEditorModal.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
 import { LoaderCircle } from 'lucide-vue-next'
+import { startupPerfMark } from '../shared/lib/startupPerf'
+
+// 首屏只同步加载主工作区需要的组件，其余弹窗/工具面板按需拆包，减少 WebView 首轮解析时间。
+const SettingsModal = defineAsyncComponent(() => import('../features/settings/SettingsPanel.vue'))
+const ListDiffView = defineAsyncComponent(() => import('../features/load-order/ListDiffView.vue'))
+const LogViewer = defineAsyncComponent(() => import('../features/app-log/LogViewer.vue'))
+const ConflictResolver = defineAsyncComponent(() => import('../features/dialogs/ConflictResolver.vue'))
+const DebugPanel = defineAsyncComponent(() => import('../dev/DebugPanel.vue'))
+const RulePanel = defineAsyncComponent(() => import('../features/rules/RulePanel.vue'))
+const Confirm = defineAsyncComponent(() => import('../shared/components/modal/Confirm.vue'))
+const ProfileDrawer = defineAsyncComponent(() => import('../features/profiles/ProfileDrawer.vue'))
+const ModAliasReviewModal = defineAsyncComponent(() => import('../features/ai/ModAliasReviewModal.vue'))
+const AiSessionTraceModal = defineAsyncComponent(() => import('../features/ai/AiSessionTraceModal.vue'))
+const FileSearchWorkbench = defineAsyncComponent(() => import('../features/file-search/FileSearchWorkbench.vue'))
+const AIDefinitionManager = defineAsyncComponent(() => import('../features/ai/AIDefinitionManager.vue'))
+const WorkspaceOverlay = defineAsyncComponent(() => import('../features/workspace/WorkspaceOverlay.vue'))
+const StartupInventoryChangesModal = defineAsyncComponent(() => import('../features/workspace/components/StartupInventoryChangesModal.vue'))
+const UpdateModal = defineAsyncComponent(() => import('../features/dialogs/UpdateModal.vue'))
+const TextureOptModal = defineAsyncComponent(() => import('../features/texture-opt/TextureOptModal.vue'))
+const ModSettingsManagerModal = defineAsyncComponent(() => import('../features/mod/ModSettingsManagerModal.vue'))
+const ModResidueCleanupModal = defineAsyncComponent(() => import('../features/mod-residue/ModResidueCleanupModal.vue'))
+const SupplementSelectionDialog = defineAsyncComponent(() => import('../features/supplement/SupplementSelectionDialog.vue'))
+const MissingInstallDialog = defineAsyncComponent(() => import('../features/supplement/MissingInstallDialog.vue'))
+const PackageTransferDialog = defineAsyncComponent(() => import('../features/package-transfer/PackageTransferDialog.vue'))
+const RecommendationExportModal = defineAsyncComponent(() => import('../features/mod/RecommendationExportModal.vue'))
+const ThemeEditorModal = defineAsyncComponent(() => import('../features/settings/theme/ThemeEditorModal.vue'))
 
 const updateModal = ref(null);
 
 const appStore = useAppStore()
 const taskStore = useTaskStore()
+const aiStore = useAiStore()
+const workspaceStore = useWorkspaceStore()
+const missingInstallStore = useMissingInstallStore()
+const supplementStore = useSupplementStore()
+const confirmStore = useConfirmStore()
 const modStore = useModStore()
 const ruleStore = useRuleStore()
 const groupStore = useGroupStore()
@@ -356,6 +368,11 @@ const orderStore = useOrderStore()
 const guideStore = useGuideStore()
 const commandStore = useCommandStore()
 const fileSearchStore = useFileSearchStore()
+
+const hasPendingConflicts = computed(() => (
+  (Array.isArray(modStore.conflictList) && modStore.conflictList.length > 0)
+  || (appStore.settings.show_coexistence_message && Array.isArray(modStore.coexistenceList) && modStore.coexistenceList.length > 0)
+))
 
 registerBuiltinCommands()
 // 快捷键命令只持有运行所需的 store 引用，不直接 import 业务 store，便于后续插件命令复用同一套上下文。
@@ -519,15 +536,8 @@ let resizeObserver = null
 let stopKeybindingRuntime = null
 onMounted(() => {
   console.info("应用已启动，正在初始化存储……")
+  startupPerfMark('app_mounted')
   stopKeybindingRuntime = startKeybindingRuntime({ commandStore })
-  // 确保 API 存在
-  if (window.pywebview) {
-    window.pywebview.api.monitor_frontend_ready()
-  } else {
-    window.addEventListener('pywebviewready', () => {
-      window.pywebview.api.monitor_frontend_ready()
-    })
-  }
   // 确保数据初始化
   appStore.initialize()
   // 监听后端传递过来的升级上下文

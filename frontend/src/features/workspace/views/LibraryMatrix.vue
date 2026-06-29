@@ -16,7 +16,7 @@
       <MatrixColumn title="管理器 (SteamCMD)" iconColor="text-accent-success" storeType="self" data-tour="workspace-self-list"
         :mods="workspaceStore.librariesMods.self" @open-timeline="handleOpenTimeline"
         :disabled="managerColumnDisabled"
-        tooltip="由 RimModManager 通过SteamCMD/Git下载管理的模组库。" />
+        tooltip="由 RimCrow 通过 SteamCMD/Git 下载管理的模组库。" />
       <!-- 中：游戏本地目录 (Local) -->
       <MatrixColumn title="游戏本地模组" iconColor="text-accent-warn" storeType="local"
         :mods="localMatrixMods" v-model:show-official-local-mods="showOfficialLocalMods" @open-timeline="handleOpenTimeline"

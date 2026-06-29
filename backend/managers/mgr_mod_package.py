@@ -41,10 +41,11 @@ class ModPackageManager:
     4. 执行导入，并复用 DataBundle 的环境导入能力
     """
 
-    FORMAT = "rmm.mod.package"
+    FORMAT = "rimcrow.mod.package"
+    LEGACY_FORMATS = ("rmm.mod.package",)
     SCHEMA_VERSION = 1
-    FILE_EXTENSION = ".rmmmods.zip"
-    LEGACY_FILE_EXTENSIONS: tuple[str, ...] = ()
+    FILE_EXTENSION = ".rimcrowmods.zip"
+    LEGACY_FILE_EXTENSIONS = (".rmmmods.zip",)
     EXPORT_TASK_TYPE = "mod-export"
     IMPORT_TASK_TYPE = "mod-import"
     EXPORT_FOLDER_NAME_TYPES = {"default", "workshop_id", "package_id", "name", "alias_name"}
@@ -93,7 +94,7 @@ class ModPackageManager:
             archive_stats = summarize_zip_members(bundle)
             mod_payload_stats = summarize_zip_members(bundle, ["mods"])
             environment_payload_stats = summarize_zip_members(bundle, ["environments"])
-        if not isinstance(manifest, dict) or manifest.get("format") != self.FORMAT:
+        if not isinstance(manifest, dict) or str(manifest.get("format") or "") not in {self.FORMAT, *self.LEGACY_FORMATS}:
             raise ValueError("无法识别的模组包格式")
 
         profiles = manifest.get("profiles", [])
@@ -1010,7 +1011,7 @@ class ModPackageManager:
         *,
         cancel_event: threading.Event | None = None,
     ) -> Path:
-        staging_root = create_sibling_stage_dir(destination_path, "rmm-import-mod-")
+        staging_root = create_sibling_stage_dir(destination_path, "mod-import-")
         extract_prefix_to_dir(
             bundle,
             f"mods/{folder_name}",

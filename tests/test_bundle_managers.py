@@ -42,6 +42,27 @@ class _StubProfileManager:
 
 
 class TestDataBundleManager(unittest.TestCase):
+    def test_schema_uses_rimcrow_data_bundle_name_and_keeps_legacy_extensions(self):
+        manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
+
+        schema = manager.get_schema()
+
+        self.assertEqual(schema["format"], "rimcrow.data.bundle")
+        self.assertEqual(schema["file_extension"], ".rimcrowdata.zip")
+        self.assertIn(".rmmdata.zip", schema["legacy_file_extensions"])
+
+    def test_legacy_rmm_data_bundle_manifest_still_imports(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "legacy.rmmdata.zip"
+            with zipfile.ZipFile(bundle_path, "w") as bundle:
+                bundle.writestr("manifest.json", '{"format":"rmm.data.bundle","schema_version":1,"modules":[],"profiles":[]}')
+
+            manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
+
+            inspected = manager.inspect_bundle(str(bundle_path))
+
+        self.assertEqual(inspected["format"], "rmm.data.bundle")
+
     def test_build_profile_conflict_entries_collects_all_same_name_profiles(self):
         profile_mgr = _StubProfileManager([
             {
@@ -156,6 +177,17 @@ class TestDataBundleManager(unittest.TestCase):
 
 
 class TestModPackageManager(unittest.TestCase):
+    def test_schema_uses_rimcrow_mod_package_name_and_keeps_legacy_extension(self):
+        profile_mgr = _StubProfileManager()
+        data_bundle_mgr = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
+        manager = ModPackageManager(profile_mgr, data_bundle_mgr, load_order_mgr_provider=lambda: None)
+
+        schema = manager.get_schema()
+
+        self.assertEqual(schema["format"], "rimcrow.mod.package")
+        self.assertEqual(schema["file_extension"], ".rimcrowmods.zip")
+        self.assertIn(".rmmmods.zip", schema["legacy_file_extensions"])
+
     def test_import_bundle_post_actions_keeps_profile_refresh_and_scan_independent(self):
         profile_mgr = _StubProfileManager()
         data_bundle_mgr = DataBundleManager(profile_mgr, ai_mgr=None, rule_mgr_provider=lambda: None)
@@ -264,6 +296,7 @@ class TestModPackageManager(unittest.TestCase):
             self.assertTrue(bundle_path.exists())
             self.assertEqual(len(export_result["mods"]), 1)
             self.assertEqual(export_result["profiles"][0]["original_profile_id"], "profile-1")
+            self.assertEqual(inspect_result["format"], "rimcrow.mod.package")
             self.assertTrue(inspect_result["has_environment_data"])
             self.assertEqual(inspect_result["mods"][0]["folder_name"], "LocalMod")
             self.assertEqual(import_result["imported_mods"][0]["folder_name"], "LocalMod")

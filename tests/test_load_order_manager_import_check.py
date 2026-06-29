@@ -68,6 +68,26 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
             self.assertEqual(result["mods"][0]["package_token"], "author.steammod_steam")
             self.assertEqual(result["mods"][1]["package_token"], "author.localmod")
 
+    def test_build_entries_from_parsed_rewrites_legacy_companion_and_dedupes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=False,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+            parsed = ParsedLoadOrderData(
+                format="modsconfig",
+                list_name="Demo",
+                package_ids=["ludeon.rimworld", "rmm.companion", "rimcrow.companion", "after.mod"],
+            )
+
+            result = manager._build_entries_from_parsed(parsed)
+
+            self.assertEqual(result["active_mods"], ["ludeon.rimworld", "rimcrow.companion", "after.mod"])
+            self.assertEqual(result["mods"][1]["package_id"], "rimcrow.companion")
+
     def test_build_entries_from_parsed_drops_stale_steam_token_when_no_coexist_workshop_variant(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             context = SimpleNamespace(
@@ -124,6 +144,21 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
             self.assertEqual([entry["package_id"] for entry in entries], ["author.steammod", "author.localmod"])
             self.assertEqual([entry["package_token"] for entry in entries], ["author.steammod", "author.localmod"])
             self.assertEqual([entry["package_id_raw"] for entry in entries], ["author.steammod", "author.localmod"])
+
+    def test_build_export_entries_rewrites_legacy_companion_to_current_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=False,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+
+            with patch.object(manager, "_enrich_mod_entries", side_effect=lambda entries: entries):
+                entries = manager._build_export_entries(["before.mod", "rmm.companion", "rimcrow.companion"])
+
+            self.assertEqual([entry["package_id"] for entry in entries], ["before.mod", "rimcrow.companion"])
 
 
 if __name__ == "__main__":

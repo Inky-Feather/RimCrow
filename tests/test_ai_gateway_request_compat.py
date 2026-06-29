@@ -25,9 +25,9 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
             "model": "unused",
             "temperature": 0.7,
             "max_output_tokens": 5000,
-            "_rmm_enable_reasoning": reasoning,
-            "_rmm_reasoning_mode": "high" if reasoning else "off",
-            "_rmm_reasoning_effort": "high" if reasoning else "auto",
+            "_rimcrow_enable_reasoning": reasoning,
+            "_rimcrow_reasoning_mode": "high" if reasoning else "off",
+            "_rimcrow_reasoning_effort": "high" if reasoning else "auto",
         }
 
     def test_openai_reasoning_chat_uses_chat_specific_token_and_reasoning_fields(self):
@@ -50,8 +50,8 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
     def test_openai_reasoning_auto_omits_explicit_reasoning_effort(self):
         meta = self._meta("gpt-5", "https://api.openai.com/v1")
         request = self._request()
-        request["_rmm_reasoning_mode"] = "auto"
-        request["_rmm_reasoning_effort"] = "auto"
+        request["_rimcrow_reasoning_mode"] = "auto"
+        request["_rimcrow_reasoning_effort"] = "auto"
         sanitized, _ = self.gateway._sanitize_openai_compatible_params(request, meta)
 
         kwargs = self.gateway._build_openai_chat_create_kwargs(
@@ -82,12 +82,12 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
         kwargs = self.gateway._normalize_litellm_request_fields({
             "model": "anthropic/claude-sonnet-4",
             "max_output_tokens": 6000,
-            "_rmm_provider": "anthropic",
+            "_rimcrow_provider": "anthropic",
         })
 
         self.assertEqual(kwargs["max_tokens"], 6000)
         self.assertNotIn("max_output_tokens", kwargs)
-        self.assertNotIn("_rmm_provider", kwargs)
+        self.assertNotIn("_rimcrow_provider", kwargs)
 
     def test_request_log_redaction_preserves_token_budget_fields(self):
         redacted = self.gateway._redact_request_kwargs_for_log({
@@ -224,8 +224,8 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
 
     def test_openai_compatible_existing_openai_prefix_is_not_duplicated(self):
         request_kwargs, meta = self.gateway._strip_private_meta({
-            "_rmm_provider": "openai_compatible",
-            "_rmm_raw_model": "openai/google/gemma-4-e4b",
+            "_rimcrow_provider": "openai_compatible",
+            "_rimcrow_raw_model": "openai/google/gemma-4-e4b",
             "model": "openai/google/gemma-4-e4b",
         })
 
@@ -266,8 +266,8 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
     def test_deepseek_v4_auto_keeps_thinking_control_without_forcing_effort(self):
         meta = self._meta("deepseek-v4-pro", "https://api.deepseek.com")
         request = self._request()
-        request["_rmm_reasoning_mode"] = "auto"
-        request["_rmm_reasoning_effort"] = "auto"
+        request["_rimcrow_reasoning_mode"] = "auto"
+        request["_rimcrow_reasoning_effort"] = "auto"
 
         kwargs = self.gateway._build_openai_chat_create_kwargs(
             [{"role": "user", "content": "hi"}],
@@ -466,3 +466,4 @@ class TestAIGatewayRequestCompat(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

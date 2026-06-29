@@ -65,9 +65,9 @@ const canPutFrom = (sourceGroup) => {
 }
 
 const handleDragOver = () => {
-  // VirtualDragList 在 dragstart 时写入 window.__RMM_DRAG_SESSION__；
+  // VirtualDragList 在 dragstart 时写入 window.__VIRTUAL_DRAG_SESSION__；
   // 小型 drop zone 只读取这份会话，避免每个小组件都实现一套拖拽协议。
-  const session = window.__RMM_DRAG_SESSION__
+  const session = window.__VIRTUAL_DRAG_SESSION__
   isDropActive.value = !!session && canPutFrom(session.sourceGroup)
 }
 const handleDragLeave = (event) => {
@@ -77,7 +77,7 @@ const handleDragLeave = (event) => {
   }
 }
 const handleDrop = (event) => {
-  const session = window.__RMM_DRAG_SESSION__
+  const session = window.__VIRTUAL_DRAG_SESSION__
   isDropActive.value = false
   if (!session || !canPutFrom(session.sourceGroup)) return
   const item = session.item

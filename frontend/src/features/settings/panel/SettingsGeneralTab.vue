@@ -86,24 +86,24 @@
                     </div>
 
                     <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
-                      <CommonSwitch class="col-span-2 px-2 pt-2" mini label="Mod 详情面板" v-model="getDataById('details', formData.ui.main_layout).visible" description="可关闭Mod详情栏。" />
-                      <CommonSwitch :disabled="!getDataById('details', formData.ui.main_layout).visible" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
+                      <CommonSwitch class="col-span-2 px-2 pt-2" mini label="Mod 详情面板" v-model="detailsPanelVisible" description="可关闭Mod详情栏。" />
+                      <CommonSwitch :disabled="!detailsPanelVisible" label="动态图标云" v-model="formData.ui.show_icons_cloud" description="控制详情页闲置时的动态图标云显示。" />
                       <CommonNumber label="详情页加载延迟" description="控制 Mod 详情页加载的延迟时间，单位是毫秒，默认值为 200 毫秒。" v-model="formData.ui.detail_delay" :step="10" :min="0" :max="5000" />
                       <span class="col-span-2 text-xs ml-2 mt-2">Mod 详情布局
                         <label v-tooltip="'可拖动切换布局顺序'" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                       </span>
                       <div class="col-span-2 flex flex-col gap-1 p-2 rounded-xl bg-bg-deep/10 border border-border-base/10"
-                        :class="{ 'pointer-events-none opacity-50': !getDataById('details', formData.ui.main_layout).visible }">
+                        :class="{ 'pointer-events-none opacity-50': !detailsPanelVisible }">
                         <div v-for="item, index in formData.ui.mod_details_layout" :key="item.id"
                           class="flex items-center transition-transform duration-150"
                           :class="getLayoutDragClass('mod_details_layout', index)"
-                          :draggable="getDataById('details', formData.ui.main_layout).visible"
+                          :draggable="detailsPanelVisible"
                           @dragstart="handleLayoutDragStart('mod_details_layout', index, $event)"
                           @dragover.prevent="handleLayoutDragOver('mod_details_layout', index)"
                           @drop.prevent="handleLayoutDrop('mod_details_layout', index)"
                           @dragend="handleLayoutDragEnd">
                           <span class="p-1 mr-1 rounded-md bg-accent-primary/30">{{ index }}</span>
-                          <CommonSwitch class="flex-1 cursor-move" :disabled="!getDataById('details', formData.ui.main_layout).visible" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
+                          <CommonSwitch class="flex-1 cursor-move" :disabled="!detailsPanelVisible" :key="item.id" :label="appStore.DETAILS_LAYOUT_MAPS[item.id].label" v-model="item.visible" :description="appStore.DETAILS_LAYOUT_MAPS[item.id].desc" />
                         </div>
                       </div>
                       
@@ -171,7 +171,20 @@ const handleThemeDelete = async (theme) => {
   }
 }
 
-const getDataById = (id, datas) => datas.find(item => item.id === id)
+const findLayoutItem = (id, datas) => Array.isArray(datas) ? datas.find(item => item?.id === id) : null
+const detailsPanelVisible = computed({
+  get: () => findLayoutItem('details', props.formData?.ui?.main_layout)?.visible !== false,
+  set: (visible) => {
+    if (!props.formData.ui || typeof props.formData.ui !== 'object') props.formData.ui = {}
+    if (!Array.isArray(props.formData.ui.main_layout)) props.formData.ui.main_layout = []
+    let item = findLayoutItem('details', props.formData.ui.main_layout)
+    if (!item) {
+      item = { id: 'details', visible: true }
+      props.formData.ui.main_layout.unshift(item)
+    }
+    item.visible = !!visible
+  },
+})
 
 // 布局排序只修改当前设置表单副本，最终仍由设置面板的保存流程统一提交。
 const getLayoutList = (layoutKey) => {

@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
 from backend.managers.mgr_files import FileManager
 from backend.settings import settings
-from backend.utils.tools import normalize_package_id, normalize_workshop_id
+from backend.utils.tools import CURRENT_COMPANION_PACKAGE_ID, normalize_companion_package_id, normalize_package_id, normalize_workshop_id
 from lxml import html
 etree = html.etree
 
@@ -125,6 +125,7 @@ class LoadOrderManager:
         mod_workshop_ids = mod_workshop_ids or []
         mod_source_urls = mod_source_urls or []
         entries = []
+        seen_package_ids = set()
         for index, raw_package_id in enumerate(mod_ids):
             package_token_raw = str(
                 package_tokens[index]
@@ -133,9 +134,10 @@ class LoadOrderManager:
             ).strip()
             token_info = parse_package_token(package_token_raw or raw_package_id)
             package_id_raw = str(raw_package_id or "").strip()
-            package_id = token_info.canonical_package_id or normalize_package_id(package_id_raw)
-            if not package_id:
+            package_id = normalize_companion_package_id(token_info.canonical_package_id or package_id_raw)
+            if not package_id or package_id in seen_package_ids:
                 continue
+            seen_package_ids.add(package_id)
             name = str(mod_names[index]).strip() if index < len(mod_names) and mod_names[index] else ""
             workshop_id_raw = str(mod_workshop_ids[index]).strip() if index < len(mod_workshop_ids) and mod_workshop_ids[index] else ""
             source_url_raw = str(mod_source_urls[index]).strip() if index < len(mod_source_urls) and mod_source_urls[index] else ""
@@ -146,7 +148,7 @@ class LoadOrderManager:
                 # `_local` 只做兼容读取，不继续向前端和保存流程传播。
                 "package_token": (
                     token_info.normalized_token
-                    if token_info.source_preference == "steam"
+                    if token_info.source_preference == "steam" and package_id != CURRENT_COMPANION_PACKAGE_ID
                     else package_id
                 ),
                 "package_token_raw": package_token_raw or package_id_raw or package_id,
@@ -427,12 +429,19 @@ class LoadOrderManager:
         # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
         normalized_ids = []
         normalized_tokens = []
+        seen_ids = set()
         for package_token in active_ids or []:
             token_info = parse_package_token(package_token)
-            if not token_info.canonical_package_id:
+            package_id = normalize_companion_package_id(token_info.canonical_package_id)
+            if not package_id or package_id in seen_ids:
                 continue
-            normalized_ids.append(token_info.canonical_package_id)
-            normalized_tokens.append(token_info.normalized_token or token_info.canonical_package_id)
+            seen_ids.add(package_id)
+            normalized_ids.append(package_id)
+            normalized_tokens.append(
+                token_info.normalized_token
+                if token_info.source_preference == "steam" and package_id != CURRENT_COMPANION_PACKAGE_ID
+                else package_id
+            )
 
         entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids, normalized_tokens))
         for entry in entries:

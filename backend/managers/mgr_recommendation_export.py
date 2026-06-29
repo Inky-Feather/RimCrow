@@ -371,7 +371,7 @@ class RecommendationExportManager:
         document = Document()
         self._configure_docx_styles(document)
         document.add_heading(source_name or "模组推荐清单", level=1)
-        with tempfile.TemporaryDirectory(prefix="rmm_recommend_docx_") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="recommend_docx_") as temp_dir:
             for item in items:
                 # DOCX 用标题承载名称，正文只放原名、标签、分组、作者和介绍等字段。
                 title = item["display_name"]
@@ -401,7 +401,7 @@ class RecommendationExportManager:
         styles = self._build_pdf_styles(font_name)
         story.append(Paragraph(self._escape_pdf_text(source_name or "模组推荐清单"), styles["title"]))
         story.append(Spacer(1, 8))
-        with tempfile.TemporaryDirectory(prefix="rmm_recommend_pdf_") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="recommend_pdf_") as temp_dir:
             for item in items:
                 # ReportLab 的 Paragraph 支持超链接标记，所以字段先格式化再写入 story。
                 title = item["display_name"]
@@ -571,8 +571,8 @@ class RecommendationExportManager:
             try:
                 if Path(candidate).is_file():
                     # 优先使用系统中文字体，避免 PDF 导出后出现方块字。
-                    pdfmetrics.registerFont(TTFont("RMMDocumentFont", candidate))
-                    return "RMMDocumentFont"
+                    pdfmetrics.registerFont(TTFont("RecommendationDocumentFont", candidate))
+                    return "RecommendationDocumentFont"
             except Exception:
                 continue
         try:
@@ -585,7 +585,7 @@ class RecommendationExportManager:
         sample_styles = getSampleStyleSheet()
         return {
             "title": ParagraphStyle(
-                "RMMRecommendationTitle",
+                "RecommendationTitle",
                 parent=sample_styles["Title"],
                 fontName=font_name,
                 fontSize=20,
@@ -594,7 +594,7 @@ class RecommendationExportManager:
                 alignment=TA_LEFT,
             ),
             "heading": ParagraphStyle(
-                "RMMRecommendationHeading",
+                "RecommendationHeading",
                 parent=sample_styles["Heading2"],
                 fontName=font_name,
                 fontSize=14,
@@ -604,7 +604,7 @@ class RecommendationExportManager:
                 wordWrap="CJK",
             ),
             "body": ParagraphStyle(
-                "RMMRecommendationBody",
+                "RecommendationBody",
                 parent=sample_styles["BodyText"],
                 fontName=font_name,
                 fontSize=10,

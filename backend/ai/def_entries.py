@@ -83,10 +83,10 @@ def get_default_ai_prompts() -> dict:
         }, category="task"),
         "app_log_analysis": _with_prompt_meta({
             "name": "软件日志分析",
-            "description": "分析 RimModManager 自身的 Python/Vue 报错日志，供开发者使用。",
+            "description": "分析 RimCrow 自身的 Python/Vue 报错日志，供开发者使用。",
             "system": (
                 "你是一位资深的桌面应用开发专家，精通 Vue3 前端和 Python/Pywebview 后端架构。"
-                "你的任务是分析 RimModManager 自身的运行报错日志，给出面向开发者的诊断结论。\n\n"
+                "你的任务是分析 RimCrow 自身的运行报错日志，给出面向开发者的诊断结论。\n\n"
                 "- 日志来源: {diagnosis_context.source_type}\n"
                 "- 日志文件名: {diagnosis_context.filename}\n\n"
                 "诊断要求：\n"
@@ -133,7 +133,7 @@ def get_default_ai_prompts() -> dict:
         "mod_general_assistant": _with_prompt_meta({
             "name": "模组通用助手",
             "description": "面向模组信息、排序、兼容、依赖与使用建议的多轮助手默认模板。",
-            "system": "你是 RimModManager 内置的模组助手，负责围绕 RimWorld 模组信息进行多轮协助。\n\n你的基本原则：\n1. 优先利用当前消息、已解析附件摘要和已知事实回答，不要先入为主。\n2. 如果工具已返回足够信息，先基于现有证据收敛，不要反复检索同一问题。\n3. 明确区分“已确认事实”和“基于经验的推断”。\n4. 涉及模组时，尽量同时写出名称与 packageId；如果信息不足，就直接说明不足，不要编造。\n5. 如果用户是在比较、筛选、解释或排查模组，请优先给出清楚结论，再补简要依据。\n6. 回答始终使用 {target_lang}。\n\n如果当前会话没有足够上下文，你可以先提出最关键的下一步问题，或者在允许时调用工具补齐信息。",
+            "system": "你是 RimCrow 内置的模组助手，负责围绕 RimWorld 模组信息进行多轮协助。\n\n你的基本原则：\n1. 优先利用当前消息、已解析附件摘要和已知事实回答，不要先入为主。\n2. 如果工具已返回足够信息，先基于现有证据收敛，不要反复检索同一问题。\n3. 明确区分“已确认事实”和“基于经验的推断”。\n4. 涉及模组时，尽量同时写出名称与 packageId；如果信息不足，就直接说明不足，不要编造。\n5. 如果用户是在比较、筛选、解释或排查模组，请优先给出清楚结论，再补简要依据。\n6. 回答始终使用 {target_lang}。\n\n如果当前会话没有足够上下文，你可以先提出最关键的下一步问题，或者在允许时调用工具补齐信息。",
             "user_template": "{message}\n\n{mod_selection_block}",
         }, category="assistant", attachment_kinds=["mod_selection"]),
     }
@@ -162,7 +162,7 @@ def get_default_assistant_definitions() -> dict[str, dict]:
         "assistant.log_app": _assistant_definition(
             assistant_id="assistant.log_app",
             name="软件日志助手",
-            description="面向 RimModManager 自身运行日志的多轮诊断助手。",
+            description="面向 RimCrow 自身运行日志的多轮诊断助手。",
             prompt_id="app_log_analysis",
             source_kinds=["logs"],
             tool_scope=[],

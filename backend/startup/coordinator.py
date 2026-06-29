@@ -19,10 +19,12 @@ class StartupCoordinator:
         workshop_db_mgr,
         *,
         rule_mgr_provider: Callable[[], object | None] | None = None,
+        dlc_cache_warmup: Callable[[], object | None] | None = None,
         append_messages: Callable[[list[str]], None] | None = None,
     ):
         self.workshop_db_mgr = workshop_db_mgr
         self.rule_mgr_provider = rule_mgr_provider
+        self.dlc_cache_warmup = dlc_cache_warmup
         self.append_messages = append_messages
         # 预热只允许启动一次；API 可能被前端 ready 事件或测试重复触发。
         self._warmup_started = False
@@ -37,7 +39,7 @@ class StartupCoordinator:
 
         threading.Thread(
             target=self._run_background_warmup,
-            name="rmm-startup-warmup",
+            name="startup-warmup",
             daemon=True,
         ).start()
         return True
@@ -53,15 +55,17 @@ class StartupCoordinator:
                 if rule_mgr:
                     # 工坊缓存会影响依赖/替代规则判断，预热完成后同步重建规则镜像。
                     rule_mgr.build_workshop_rules()
-                startup_messages.append("工坊数据缓存已加载，规则索引已刷新。")
+            if self.dlc_cache_warmup:
+                logger.info("启动后台预热：同步当前语言 DLC 翻译缓存")
+                self.dlc_cache_warmup()
         except Exception as exc:
             logger.error(f"启动后台预热失败: {exc}", exc_info=True)
-            startup_messages.append("工坊数据缓存加载失败，主界面已继续打开；依赖和替代提示可能暂时不完整。")
+            startup_messages.append("后台数据缓存加载失败，主界面已继续打开；依赖、替代或 DLC 文本可能暂时不完整。")
         finally:
             if not startup_messages:
                 return
             if self.append_messages and any("失败" in item for item in startup_messages):
-                # 只有失败需要写入启动上下文，成功消息只走即时 toast，避免前端再提示一次。
+                # 只有失败需要写入启动上下文；成功保持静默，避免启动后重复打扰用户。
                 self.append_messages(startup_messages)
             EventBus.send_toast(
                 "\n".join(startup_messages),

@@ -1,7 +1,7 @@
 import { normalizePackageId } from './modIdentity'
 
 export const OFFICIAL_PACKAGE_PREFIX = 'ludeon.rimworld'
-export const DEFAULT_TOOL_PACKAGE_IDS = new Set(['rmm.companion'])
+export const DEFAULT_TOOL_PACKAGE_IDS = new Set(['rimcrow.companion', 'rmm.companion'])
 
 // 本体包是官方体系里最特殊的一项，因此单独提供判断函数。
 export const isCorePackageId = (packageId = '') => (

@@ -1,6 +1,8 @@
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.database.dao import GroupDAO
 from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
@@ -251,6 +253,48 @@ class TestGroupDAO(unittest.TestCase):
         ]
         self.assertEqual(ordered_ids, ["mod.alpha"])
         self.assertIsNotNone(UserModData.get_or_none(UserModData.mod_id == "mod.alpha"))
+
+    def test_upgrade_migration_moves_companion_to_rimcrow_id_and_removes_old_tool_asset(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool_root = Path(temp_dir) / "toolmods"
+            old_tool_dir = tool_root / "RMM_Companion"
+            old_tool_dir.mkdir(parents=True)
+            kept_old_asset_path = Path(temp_dir) / "external" / "RMM_Companion"
+            kept_old_asset_path.mkdir(parents=True)
+            user_data_path = Path(temp_dir) / "user"
+            game_config_path = user_data_path / "Config"
+            game_config_path.mkdir(parents=True)
+            mods_config_path = game_config_path / "ModsConfig.xml"
+            mods_config_path.write_text(
+                "<ModsConfigData><activeMods>"
+                "<li>before.mod</li><li>rmm.companion</li><li>rimcrow.companion</li><li>after.mod</li>"
+                "</activeMods></ModsConfigData>",
+                encoding="utf-8",
+            )
+            self._create_asset("rmm.companion", path_hash="old-tool", path=str(old_tool_dir), source="local", store="self")
+            self._create_asset("rmm.companion", path_hash="external-tool", path=str(kept_old_asset_path), source="local", store="self")
+            GameProfile.create(
+                id="profile-a",
+                name="Profile A",
+                game_version="1.5",
+                game_install_path=str(Path(temp_dir) / "game"),
+                user_data_path=str(user_data_path),
+                inactive_mods_order=["before.mod", "rmm.companion", "rimcrow.companion", "after.mod"],
+                temp_mods_order=["rmm.companion", "temp.mod"],
+            )
+
+            import backend.migrations.app_upgrade as app_upgrade
+            with patch.object(app_upgrade, "TOOL_MODS_DIR", tool_root):
+                run_app_upgrade_migrations("0.23.0", "0.23.1")
+
+            profile = GameProfile.get_by_id("profile-a")
+            self.assertEqual(profile.inactive_mods_order, ["before.mod", "rimcrow.companion", "after.mod"])
+            self.assertEqual(profile.temp_mods_order, ["rimcrow.companion", "temp.mod"])
+            active_mods = [node.text for node in ET.parse(mods_config_path).getroot().findall("./activeMods/li")]
+            self.assertEqual(active_mods, ["before.mod", "rimcrow.companion", "after.mod"])
+            self.assertFalse(old_tool_dir.exists())
+            self.assertIsNone(ModAsset.get_or_none(ModAsset.path_hash == "old-tool"))
+            self.assertIsNotNone(ModAsset.get_or_none(ModAsset.path_hash == "external-tool"))
 
     def test_startup_normalization_renames_duplicate_group_names_with_suffix(self):
         GroupData.create(group_id="g1", name="UI", color="#ffffff", sort_index=0, is_expanded=True)

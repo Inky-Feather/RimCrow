@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
+import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { RIMWORLD_STEAM_APP_ID, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
 import { matchesTranslationSourceDetection } from '../../shared/lib/translationDetection'
@@ -11,7 +12,7 @@ import {
   normalizePackageId, normalizeUrl, normalizeWorkshopId,
 } from '../mod/lib/modIdentity'
 import { hasWorkshopSearchText, resolveWorkshopDays, resolveWorkshopSort } from './workshopSearchOptions'
-import { isMatrixModAvailable, isMatrixModDeleted, isMatrixModMissing, normalizeMatrixTimestamp } from './lib/matrixItemState'
+import { isMatrixModAvailable } from './lib/matrixItemState'
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const appStore = useAppStore()
@@ -37,7 +38,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     pendingActions: [],
     resolve: null,
   })
-  const STARTUP_INVENTORY_ACK_KEY = 'rmm.startupInventoryPromptAck.v1'
+  const STARTUP_INVENTORY_ACK_KEY = 'rimcrow.startupInventoryPromptAck.v1'
+  const LEGACY_STARTUP_INVENTORY_ACK_KEY = 'rmm.startupInventoryPromptAck.v1'
 
   const storeSortOrder = {
     workshop: 0,
@@ -450,62 +452,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return true
   }
   const normalizeSizeRefreshPathKey = (path = '') => String(path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-  const resolveWorkshopChangedMods = (mods = []) => {
-    const seen = new Set()
-    return (Array.isArray(mods) ? mods : [])
-      .map(mod => {
-        const path = String(mod?.path || '').trim()
-        const downloadTime = normalizeMatrixTimestamp(mod?.download_status?.download_time)
-        const scannedTime = normalizeMatrixTimestamp(mod?.last_scanned_at)
-        const key = `${normalizeSizeRefreshPathKey(path)}\n${downloadTime}`
-        if (!path || seen.has(key) || mod?.download_status?.source !== 'steam_sync_log' || !downloadTime || downloadTime <= scannedTime) return null
-        seen.add(key)
-        return {
-          status: 'changed',
-          store: mod?.store || 'workshop',
-          workshopId: normalizeWorkshopId(mod?.workshop_id),
-          pathHash: String(mod?.path_hash || '').trim(),
-          path,
-          name: mod?.name || mod?.package_id || mod?.workshop_id || '未知模组',
-          downloadTime,
-          scannedTime,
-        }
-      })
-      .filter(Boolean)
-  }
-  const resolveStartupInventoryEvents = (mods = []) => {
-    const allMods = Array.isArray(mods) && mods.length
-      ? mods
-      : [...librariesMods.workshop, ...librariesMods.self, ...librariesMods.local]
-    const changedEvents = resolveWorkshopChangedMods(allMods.filter(mod => mod?.store === 'workshop'))
-    const issueEvents = allMods
-      .map(mod => {
-        const isDeleted = isMatrixModDeleted(mod)
-        const isMissing = isMatrixModMissing(mod)
-        const status = isDeleted ? 'deleted' : (isMissing ? 'missing' : '')
-        if (!status) return null
-        return {
-          status,
-          store: mod?.store || 'workshop',
-          workshopId: normalizeWorkshopId(mod?.workshop_id),
-          pathHash: String(mod?.path_hash || '').trim(),
-          path: String(mod?.path || '').trim(),
-          name: mod?.name || mod?.package_id || mod?.workshop_id || '未知模组',
-          downloadTime: normalizeMatrixTimestamp(mod?.download_status?.download_time),
-          scannedTime: normalizeMatrixTimestamp(mod?.last_scanned_at),
-        }
-      })
-      .filter(Boolean)
-    return [...changedEvents, ...issueEvents]
-  }
-  const detectStartupWorkshopChanges = (mods = []) => {
-    if (startupWorkshopChangeState.detected) return startupWorkshopChangeState.changes
+  const applyStartupInventorySummary = (summary = {}) => {
+    // 启动轻量接口已经在后端完成变更判断，这里只接入现有提示和扫描路径。
     startupWorkshopChangeState.detected = true
     startupWorkshopChangeState.prompted = false
-    startupWorkshopChangeState.changes = resolveStartupInventoryEvents(mods)
+    startupWorkshopChangeState.changes = Array.isArray(summary?.events) ? summary.events : []
     return startupWorkshopChangeState.changes
   }
-  const takeStartupWorkshopChangesForScan = () => startupWorkshopChangeState.changes.filter(item => item.status === 'changed' && item.path)
   const STARTUP_EVENT_GROUPS = [
     ['deleted', '已删除模组', '库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。'],
     ['missing', '缺失模组', '仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。'],
@@ -608,7 +561,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   ].join('|')
   const loadStartupPromptAck = () => {
     try {
-      return new Set(JSON.parse(localStorage.getItem(STARTUP_INVENTORY_ACK_KEY) || '[]'))
+      const saved = localStorage.getItem(STARTUP_INVENTORY_ACK_KEY) || localStorage.getItem(LEGACY_STARTUP_INVENTORY_ACK_KEY) || '[]'
+      return new Set(JSON.parse(saved))
     } catch {
       return new Set()
     }
@@ -620,6 +574,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (key) ack.add(key)
     })
     localStorage.setItem(STARTUP_INVENTORY_ACK_KEY, JSON.stringify([...ack].slice(-1000)))
+    localStorage.removeItem(LEGACY_STARTUP_INVENTORY_ACK_KEY)
   }
   const getPromptableStartupEvents = (changes = []) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status)
@@ -655,6 +610,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       group.items = group.items.filter(item => !ids.has(item.id))
     })
     startupInventoryDialog.groups = startupInventoryDialog.groups.filter(group => group.items.length > 0)
+    if (startupInventoryDialog.groups.length === 0) closeStartupInventoryDialog()
   }
   const closeStartupInventoryDialog = () => {
     startupInventoryDialog.visible = false
@@ -752,8 +708,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const refreshLifecycleUpdateStates = async () => {
     if (!window.pywebview) return true
-    const res = await window.pywebview.api.lifecycle_check_updates()
+    const res = await startupPerfMeasure('workspace.lifecycle_check_updates', () => window.pywebview.api.lifecycle_check_updates())
     if (checkResult(res, '检查库内模组更新状态')) {
+      startupPerfMark('workspace.lifecycle_updates_received', { updates: res.data?.updates?.length || 0 })
       applyLifecycleUpdateState(res.data?.updates || [])
       return true
     }
@@ -916,21 +873,28 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 拉取无遮蔽的三个库全量数据
   const fetchLibrariesMods = async () => {
     if (!window.pywebview) return
+    startupPerfMark('workspace.fetch_libraries_start')
     setupListeners()
     isFetching.value = true
     try {
       // 这个 API 现在只负责去读本地 SQLite 和内存缓存，响应时间应该 < 50ms
-      const res = await window.pywebview.api.workspace_get_all_domains()
+      const res = await startupPerfMeasure('workspace.get_all_domains', () => window.pywebview.api.workspace_get_all_domains())
       if (checkResult(res, '获取所有库数据')) {
         // 直接替换数组引用
         librariesMods.local = res.data.local || []
         librariesMods.workshop = res.data.workshop || []
         librariesMods.self = res.data.self || []
+        startupPerfMark('workspace.libraries_assigned', {
+          local: librariesMods.local.length,
+          workshop: librariesMods.workshop.length,
+          self: librariesMods.self.length,
+        })
 
         // 渲染完毕！如果后端在此接口中发现了需要触发的在线查询，
         // 后端会自己开启线程并发 `workspace-online-update` 事件。
         await refreshLifecycleUpdateStates()
         loadState.librariesLoaded = true
+        startupPerfMark('workspace.fetch_libraries_done')
         return true
       }
     } finally {
@@ -1149,7 +1113,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const logWorkshopSearchDebug = (payload = {}) => {
     if (!isWorkshopSearchDebugEnabled()) return
-    console.groupCollapsed(`[RMM 工坊搜索] ${payload.isEnhancedMode ? '增强模式' : '普通模式'} ${payload.isAppend ? '追加结果' : '发起搜索'}`)
+    console.groupCollapsed(`[RimCrow 工坊搜索] ${payload.isEnhancedMode ? '增强模式' : '普通模式'} ${payload.isAppend ? '追加结果' : '发起搜索'}`)
     console.info('请求参数', payload.request)
     console.info('响应数据', payload.response)
     console.info('结果项目', payload.items)
@@ -2528,7 +2492,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     librariesMods, isFetching, librariesSize, activeChildrenWithStatus,
     workshopSearch, timeline, subscribedWorkshopIds, installedAllIds, missingWorkshopIds, getModStatus, modTransfer,
     matrixFocusTarget, matrixFilterTarget, workspaceTargetTab, getMatrixSameItems, getMatrixConflictItems, jumpToMatrixItem,
-    detectStartupWorkshopChanges, takeStartupWorkshopChangesForScan, formatStartupWorkshopChangeNames, showStartupWorkshopChangesPrompt, openWorkspaceForStartupChanges,
+    applyStartupInventorySummary, formatStartupWorkshopChangeNames, showStartupWorkshopChangesPrompt, openWorkspaceForStartupChanges,
     startupInventoryDialog, closeStartupInventoryDialog, runStartupInventoryDialogAction, openStartupInventoryDialogDetails,
     // 库数据与工坊时间线
     fetchLibrariesMods, refreshLifecycleUpdateStates, doWorkshopSearch, fetchWorkshopDetails, loadSteamLanguageOptions, loadTranslationProviders, loadWorkshopDlcOptions, openTimeline, openTimelineGithub, setupListeners, setWorkshopSearchMode, syncWorkshopSearchModeFromSettings, ensureWorkshopSearchReady,

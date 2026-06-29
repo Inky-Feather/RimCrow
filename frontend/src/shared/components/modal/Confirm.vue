@@ -228,7 +228,6 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
-import { renderMarkdownContent, sanitizeRenderedHtml } from '../../lib/markdown'
 
 // --- SVG 图标 (纯净无依赖) ---
 const Icons = {
@@ -245,6 +244,8 @@ const { width: winW, height: winH } = useWindowSize()
 const modalRef = ref(null)
 const inputRef = ref(null)
 const shake = ref(false)
+const richDescriptionHtml = ref({})
+let richRendererPromise = null
 
 // --- 计算属性 ---
 
@@ -267,13 +268,52 @@ const theme = computed(() => {
 
 const promptDescriptionFormat = (item) => String(item?.descriptionFormat || 'text').trim().toLowerCase()
 const isRichPromptDescription = (item) => ['markdown', 'html'].includes(promptDescriptionFormat(item))
+const promptDescriptionKey = (item) => [
+  item?.id || '',
+  promptDescriptionFormat(item),
+  String(item?.description || ''),
+].join('\u0001')
+const escapeHtmlText = (text) => String(text || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+  .replace(/\r\n/g, '\n')
+  .replace(/\r/g, '\n')
+  .replace(/\n/g, '<br>')
+const loadRichRenderer = () => {
+  if (!richRendererPromise) richRendererPromise = import('../../lib/markdown')
+  return richRendererPromise
+}
 const renderPromptDescription = (item) => {
-  const text = String(item?.description || '')
-  if (promptDescriptionFormat(item) === 'markdown') return renderMarkdownContent(text)
-  if (promptDescriptionFormat(item) === 'html') {
-    return sanitizeRenderedHtml(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '<br>'))
+  return richDescriptionHtml.value[promptDescriptionKey(item)] || escapeHtmlText(item?.description)
+}
+const ensureRichPromptDescriptions = async (items) => {
+  const richItems = (Array.isArray(items) ? items : []).filter(item => item?.description && isRichPromptDescription(item))
+  if (!richItems.length) {
+    richDescriptionHtml.value = {}
+    return
   }
-  return ''
+  const activeKeys = new Set(richItems.map(promptDescriptionKey))
+  const pendingItems = richItems.filter(item => !richDescriptionHtml.value[promptDescriptionKey(item)])
+  if (!pendingItems.length) {
+    richDescriptionHtml.value = Object.fromEntries(Object.entries(richDescriptionHtml.value).filter(([key]) => activeKeys.has(key)))
+    return
+  }
+  try {
+    const { renderMarkdownContent, sanitizeRenderedHtml } = await loadRichRenderer()
+    const next = Object.fromEntries(Object.entries(richDescriptionHtml.value).filter(([key]) => activeKeys.has(key)))
+    pendingItems.forEach((item) => {
+      const text = String(item?.description || '')
+      next[promptDescriptionKey(item)] = promptDescriptionFormat(item) === 'markdown'
+        ? renderMarkdownContent(text)
+        : sanitizeRenderedHtml(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '<br>'))
+    })
+    richDescriptionHtml.value = next
+  } catch (error) {
+    console.warn('富文本提示渲染失败:', error)
+  }
 }
 
 // 位置计算 (仅用于 Mini 模式)
@@ -349,7 +389,20 @@ watch(() => confirmStore.isVisible, async (val) => {
     await nextTick()
     inputRef.value?.focus()
   }
+  if (val) {
+    void ensureRichPromptDescriptions(confirmStore.state.promptItems)
+  } else {
+    richDescriptionHtml.value = {}
+  }
 })
+
+watch(
+  () => confirmStore.state.promptItems,
+  (items) => {
+    if (confirmStore.isVisible) void ensureRichPromptDescriptions(items)
+  },
+  { deep: true }
+)
 
 // Mini 模式下点击外部关闭
 onClickOutside(modalRef, () => {

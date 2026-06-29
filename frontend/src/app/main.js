@@ -7,7 +7,6 @@ import VueVirtualScroller from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import VueViewer from 'v-viewer'
 import 'viewerjs/dist/viewer.css'
-import 'vue3-colorpicker/style.css'
 import './styles/style.css'
 import App from './App.vue'
 import {vPreview} from '../shared/directives/vPreview.js'
@@ -16,8 +15,10 @@ import { vLongPressFeedback } from '../shared/directives/vLongPressFeedback.js'
 import { vSelectableList } from '../shared/directives/vSelection' // 引入指令
 import { imageViewerOptions } from '../shared/lib/domEffects'
 import { setupPywebviewBridge } from '../app/bridge/pywebviewBridge'
+import { startupPerfMark, startupPerfMeasure } from '../shared/lib/startupPerf'
 
-await setupPywebviewBridge()
+startupPerfMark('main_module_loaded')
+await startupPerfMeasure('setup_pywebview_bridge', () => setupPywebviewBridge())
 
 
 const pinia = createPinia() 
@@ -42,4 +43,6 @@ app.directive('tooltip', vTooltip) // 注册 Tooltip 指令
 app.directive('long-press-feedback', vLongPressFeedback)
 app.directive('selectable-list', vSelectableList) // 注册列表项选择指令
 
+startupPerfMark('vue_mount_start')
 app.mount('#app')
+startupPerfMark('vue_mount_called')

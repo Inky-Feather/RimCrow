@@ -207,13 +207,13 @@ const buildDragEvent = (event, item, newIndex, list, meta = {}) => ({
   newIndex,
   // visualIndex 是鼠标所在位置对应的原始视觉落点，用于分组标题这类仍需要按原始 row 流找目标标题的场景。
   visualIndex: meta.visualIndex ?? newIndex,
-  sourceIndex: meta.sourceIndex ?? window.__RMM_DRAG_SESSION__?.sourceIndex ?? -1,
+  sourceIndex: meta.sourceIndex ?? window.__VIRTUAL_DRAG_SESSION__?.sourceIndex ?? -1,
   sameList: !!meta.sameList,
   list,
-  dragSession: window.__RMM_DRAG_SESSION__ || null,
+  dragSession: window.__VIRTUAL_DRAG_SESSION__ || null,
   event: {
     ...event,
-    from: window.__RMM_DRAG_SESSION__?.sourceEl || null,
+    from: window.__VIRTUAL_DRAG_SESSION__?.sourceEl || null,
     to: scrollRef.value,
     target: scrollRef.value,
   },
@@ -385,7 +385,7 @@ const handleDragStart = (event, index) => {
   // 会话项保持原业务行数据不变，只在拖拽开始的瞬间叠加数量、标签等展示元信息。
   // 这样选择状态变化不会反向污染虚拟列表结构，也能保证拖拽预览拿到最新状态。
   const sessionItem = { ...item, ...dragMeta }
-  window.__RMM_DRAG_SESSION__ = {
+  window.__VIRTUAL_DRAG_SESSION__ = {
     item: sessionItem,
     sourceIndex: index,
     sourceListId: listId,
@@ -462,7 +462,7 @@ const updateAutoScroll = (event) => {
 }
 
 const handleDragOver = (event) => {
-  const session = window.__RMM_DRAG_SESSION__
+  const session = window.__VIRTUAL_DRAG_SESSION__
   const nextDropIndex = resolveDropIndex(event)
   if (!session || !canPutSessionAt(session, nextDropIndex)) {
     dropIndex.value = -1
@@ -491,7 +491,7 @@ const handleDragLeave = (event) => {
 }
 
 const handleDrop = (event) => {
-  const session = window.__RMM_DRAG_SESSION__
+  const session = window.__VIRTUAL_DRAG_SESSION__
   const visualIndex = dropIndex.value === -1 ? resolveDropIndex(event) : dropIndex.value
   if (!session || !canPutSessionAt(session, visualIndex)) {
     dropIndex.value = -1
@@ -533,7 +533,7 @@ const handleDragEnd = () => {
   forbiddenDropActive.value = false
   clearDragArm()
   stopAutoScroll()
-  window.__RMM_DRAG_SESSION__ = null
+  window.__VIRTUAL_DRAG_SESSION__ = null
   emit('dragend')
 }
 

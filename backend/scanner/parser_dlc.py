@@ -29,20 +29,21 @@ class DLCParser:
     自动扫描 Core/Languages 下所有 tar 包，维护一个全语言的翻译缓存。
     """
 
-    def __init__(self, game_dlc_path):
+    def __init__(self, game_dlc_path, sync_translations: bool = True, current_language_code: str | None = None):
         """
-        初始化时即完成缓存同步。
+        默认保持旧行为：初始化时同步翻译缓存。
         """
         self.data_path = game_dlc_path
         self.core_path = os.path.join(game_dlc_path, 'Core')
         self.languages_dir = os.path.join(self.core_path, 'Languages')
+        self.current_language_code = normalize_language_code(current_language_code) if current_language_code else ''
         
         # 1. 加载官方基础定义 (英文)
         self.official_defs = self._load_official_defs()
         
         # 2. 同步并加载翻译缓存 (核心逻辑)
-# self.translations 结构: { 'zh-CN': {'Royalty': {...}}, 'fr': {...} }
-        self.translations = self._sync_cache()
+        # self.translations 结构: { 'zh-CN': {'Royalty': {...}}, 'fr': {...} }
+        self.translations = self._sync_cache() if sync_translations else self._load_cached_translations()
         self._translate_cache = {}
 
     def translate_record(self, mod_record, target_lang_code):
@@ -141,29 +142,9 @@ class DLCParser:
         if not os.path.exists(self.languages_dir): return {}
 
         # 1. 读取旧缓存
-        cache_data = {'translations': {}, 'meta': {}}
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                    loaded = json.load(f)
-                    cache_data = loaded
-            except Exception:
-                logger.info("[DLCParser] 缓存已损坏，正在全部重建。")
-
-        current_trans = {}
-        current_meta = cache_data.get('meta', {}) # 记录文件名对应的时间戳
-        
-        is_dirty = False
-        for lang_key, translations in (cache_data.get('translations', {}) or {}).items():
-            normalized_key = normalize_language_code(lang_key)
-            if not normalized_key:
-                continue
-            if normalized_key != lang_key:
-                is_dirty = True
-            if normalized_key not in current_trans:
-                current_trans[normalized_key] = {}
-            if isinstance(translations, dict):
-                current_trans[normalized_key].update(translations)
+        cache_data = self._load_cache_file()
+        current_trans, is_dirty = self._normalize_cached_translations(cache_data.get('translations', {}) or {})
+        current_meta = cache_data.get('meta', {}) if isinstance(cache_data.get('meta'), dict) else {} # 记录文件名对应的时间戳
 
         # 2. 扫描磁盘上的所有 tar 文件
         tar_files = glob.glob(os.path.join(self.languages_dir, "*.tar"))
@@ -181,6 +162,8 @@ class DLCParser:
             # 3. 检查是否需要更新 (新文件 OR 修改过的文件)
             # 记录的时间戳不一致，或者缓存里根本没有这个语言的数据
             lang_code = self._filename_to_lang_code(filename)
+            if self.current_language_code and lang_code != self.current_language_code:
+                continue
             
             if (filename not in current_meta) or \
                (abs(current_meta[filename] - mtime) > 1.0) or \
@@ -215,7 +198,49 @@ class DLCParser:
         if is_dirty:
             self._save_cache(cache_data)
 
-        return current_trans
+        return self._filter_translations(current_trans)
+
+    def _load_cache_file(self, log_corrupt: bool = True):
+        cache_data = {'translations': {}, 'meta': {}}
+        if os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict):
+                        cache_data = loaded
+            except Exception:
+                if log_corrupt:
+                    logger.info("[DLCParser] 缓存已损坏，正在全部重建。")
+        return cache_data
+
+    def _normalize_cached_translations(self, translations):
+        current_trans = {}
+        is_dirty = False
+        for lang_key, lang_translations in (translations or {}).items():
+            normalized_key = normalize_language_code(lang_key)
+            if not normalized_key:
+                continue
+            if normalized_key != lang_key:
+                is_dirty = True
+            if normalized_key not in current_trans:
+                current_trans[normalized_key] = {}
+            if isinstance(lang_translations, dict):
+                current_trans[normalized_key].update(lang_translations)
+        return current_trans, is_dirty
+
+    def _filter_translations(self, translations):
+        if not self.current_language_code:
+            return translations
+        return {
+            self.current_language_code: translations.get(self.current_language_code, {})
+        } if self.current_language_code in translations else {}
+
+    def _load_cached_translations(self):
+        """只读取已有缓存，不扫描语言包；用于启动核心数据和扫描这种不应冷启动解包的场景。"""
+        if not os.path.exists(self.languages_dir): return {}
+        cache_data = self._load_cache_file(log_corrupt=False)
+        current_trans, _ = self._normalize_cached_translations(cache_data.get('translations', {}) or {})
+        return self._filter_translations(current_trans)
 
     def _save_cache(self, data):
         if not os.path.exists(CACHE_DIR):

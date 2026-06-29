@@ -634,12 +634,12 @@ class LiteLLMGateway:
         kwargs = {
             "api_key": getattr(cfg, "api_key", "") or "dummy_key",
             "model": openai_routed_model if provider == "openai_compatible" else model_name,
-            "_rmm_provider": provider,
-            "_rmm_raw_model": openai_wire_model if provider == "openai_compatible" else model_name,
-            "_rmm_base_url": base_url,
-            "_rmm_endpoint_mode": endpoint_mode,
-            "_rmm_reasoning_mode": requested_reasoning_mode,
-            "_rmm_reasoning_effort": (
+            "_rimcrow_provider": provider,
+            "_rimcrow_raw_model": openai_wire_model if provider == "openai_compatible" else model_name,
+            "_rimcrow_base_url": base_url,
+            "_rimcrow_endpoint_mode": endpoint_mode,
+            "_rimcrow_reasoning_mode": requested_reasoning_mode,
+            "_rimcrow_reasoning_effort": (
                 requested_reasoning_mode
                 if requested_reasoning_mode in {"low", "medium", "high", "xhigh"}
                 else "auto"
@@ -671,9 +671,9 @@ class LiteLLMGateway:
                 or "reasoning_effort" in override_data
             )
         ):
-            kwargs["_rmm_enable_reasoning"] = requested_reasoning_mode != "off"
-            kwargs["_rmm_reasoning_mode"] = requested_reasoning_mode
-            kwargs["_rmm_reasoning_effort"] = (
+            kwargs["_rimcrow_enable_reasoning"] = requested_reasoning_mode != "off"
+            kwargs["_rimcrow_reasoning_mode"] = requested_reasoning_mode
+            kwargs["_rimcrow_reasoning_effort"] = (
                 requested_reasoning_mode
                 if requested_reasoning_mode in {"low", "medium", "high", "xhigh"}
                 else "auto"
@@ -719,13 +719,13 @@ class LiteLLMGateway:
         """剥离内部元数据，得到真正可下发给 SDK / LiteLLM 的参数。"""
         kwargs = dict(request_kwargs)
         meta = {
-            "provider": kwargs.pop("_rmm_provider", ""),
-            "base_url": kwargs.pop("_rmm_base_url", ""),
-            "raw_model": kwargs.pop("_rmm_raw_model", kwargs.get("model", "")),
-            "endpoint_mode": kwargs.pop("_rmm_endpoint_mode", "auto"),
-            "enable_reasoning": bool(kwargs.pop("_rmm_enable_reasoning", False)),
-            "reasoning_mode": _normalize_reasoning_mode(kwargs.pop("_rmm_reasoning_mode", "off")),
-            "reasoning_effort": _normalize_reasoning_effort(kwargs.pop("_rmm_reasoning_effort", "medium")),
+            "provider": kwargs.pop("_rimcrow_provider", ""),
+            "base_url": kwargs.pop("_rimcrow_base_url", ""),
+            "raw_model": kwargs.pop("_rimcrow_raw_model", kwargs.get("model", "")),
+            "endpoint_mode": kwargs.pop("_rimcrow_endpoint_mode", "auto"),
+            "enable_reasoning": bool(kwargs.pop("_rimcrow_enable_reasoning", False)),
+            "reasoning_mode": _normalize_reasoning_mode(kwargs.pop("_rimcrow_reasoning_mode", "off")),
+            "reasoning_effort": _normalize_reasoning_effort(kwargs.pop("_rimcrow_reasoning_effort", "medium")),
         }
         if meta["provider"] == "openai_compatible":
             raw_model, routed_model = self._normalize_openai_compatible_model_names(
@@ -736,16 +736,16 @@ class LiteLLMGateway:
                 kwargs["model"] = routed_model
         # 后续 chat/responses 参数构造仍需要知道本次是否开启深度思考，
         # 因此在 meta 里留一份规范化后的逻辑开关，避免被上一步 pop 掉后丢失。
-        kwargs["_rmm_enable_reasoning"] = meta["enable_reasoning"]
-        kwargs["_rmm_reasoning_mode"] = meta["reasoning_mode"]
-        kwargs["_rmm_reasoning_effort"] = meta["reasoning_effort"]
+        kwargs["_rimcrow_enable_reasoning"] = meta["enable_reasoning"]
+        kwargs["_rimcrow_reasoning_mode"] = meta["reasoning_mode"]
+        kwargs["_rimcrow_reasoning_effort"] = meta["reasoning_effort"]
         return kwargs, meta
 
     def _drop_internal_request_fields(self, request_kwargs: dict) -> dict:
         """删除只供本兼容层消费的内部字段，避免传给 LiteLLM。"""
         kwargs = dict(request_kwargs)
         for key in list(kwargs.keys()):
-            if key.startswith("_rmm_"):
+            if key.startswith("_rimcrow_"):
                 kwargs.pop(key, None)
         return kwargs
 
@@ -803,30 +803,30 @@ class LiteLLMGateway:
 
     def _build_reasoning_fallback_requests(self, request_kwargs: dict) -> list[tuple[dict, str]]:
         """构造思考模式的降级重试链。"""
-        if not bool(request_kwargs.get("_rmm_enable_reasoning", False)): return []
+        if not bool(request_kwargs.get("_rimcrow_enable_reasoning", False)): return []
 
-        mode = _normalize_reasoning_mode(request_kwargs.get("_rmm_reasoning_mode", "off"))
+        mode = _normalize_reasoning_mode(request_kwargs.get("_rimcrow_reasoning_mode", "off"))
         candidates: list[tuple[dict, str]] = []
         if mode not in {"off", "auto"}:
             auto_kwargs = dict(request_kwargs)
-            auto_kwargs["_rmm_enable_reasoning"] = True
-            auto_kwargs["_rmm_reasoning_mode"] = "auto"
-            auto_kwargs["_rmm_reasoning_effort"] = "auto"
+            auto_kwargs["_rimcrow_enable_reasoning"] = True
+            auto_kwargs["_rimcrow_reasoning_mode"] = "auto"
+            auto_kwargs["_rimcrow_reasoning_effort"] = "auto"
             candidates.append((auto_kwargs, "当前模型不接受该思考等级，自动降级为“自动”后重试。"))
 
         off_kwargs = dict(request_kwargs)
-        off_kwargs["_rmm_enable_reasoning"] = False
-        off_kwargs["_rmm_reasoning_mode"] = "off"
-        off_kwargs["_rmm_reasoning_effort"] = "auto"
+        off_kwargs["_rimcrow_enable_reasoning"] = False
+        off_kwargs["_rimcrow_reasoning_mode"] = "off"
+        off_kwargs["_rimcrow_reasoning_effort"] = "auto"
         candidates.append((off_kwargs, "当前模型不接受思考参数，自动关闭思考后重试。"))
 
         normalized_candidates: list[tuple[dict, str]] = []
         seen: set[tuple[Any, ...]] = set()
         for candidate_kwargs, note in candidates:
             signature = (
-                bool(candidate_kwargs.get("_rmm_enable_reasoning", False)),
-                _normalize_reasoning_mode(candidate_kwargs.get("_rmm_reasoning_mode", "off")),
-                _normalize_reasoning_effort(candidate_kwargs.get("_rmm_reasoning_effort", "auto")),
+                bool(candidate_kwargs.get("_rimcrow_enable_reasoning", False)),
+                _normalize_reasoning_mode(candidate_kwargs.get("_rimcrow_reasoning_mode", "off")),
+                _normalize_reasoning_effort(candidate_kwargs.get("_rimcrow_reasoning_effort", "auto")),
             )
             if signature in seen:
                 continue
@@ -1096,7 +1096,7 @@ class LiteLLMGateway:
         capability_policy = self._resolve_model_capability_policy(meta.get("raw_model", ""))
         if not capability_policy or not capability_policy.supports_reasoning:
             return False
-        if not bool((request_kwargs or {}).get("_rmm_enable_reasoning", False)):
+        if not bool((request_kwargs or {}).get("_rimcrow_enable_reasoning", False)):
             return False
 
         vendor = self._openai_compatible_vendor(meta)
@@ -1195,9 +1195,9 @@ class LiteLLMGateway:
 
         # OpenAI-compatible 没有统一的 thinking 开关字段。
         # 这里统一把“逻辑开关 + 强度”翻译成各模型真正接受的参数。
-        enable_reasoning = bool(request_kwargs.get("_rmm_enable_reasoning", False))
-        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rmm_reasoning_mode", "off"))
-        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rmm_reasoning_effort", "medium"))
+        enable_reasoning = bool(request_kwargs.get("_rimcrow_enable_reasoning", False))
+        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rimcrow_reasoning_mode", "off"))
+        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rimcrow_reasoning_effort", "medium"))
         extra_body = dict(request_kwargs.get("extra_body") or {})
         vendor = self._openai_compatible_vendor(meta)
 
@@ -1286,9 +1286,9 @@ class LiteLLMGateway:
         ):
             create_kwargs["temperature"] = request_kwargs["temperature"]
 
-        enable_reasoning = bool(request_kwargs.get("_rmm_enable_reasoning", False))
-        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rmm_reasoning_mode", "off"))
-        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rmm_reasoning_effort", "medium"))
+        enable_reasoning = bool(request_kwargs.get("_rimcrow_enable_reasoning", False))
+        reasoning_mode = _normalize_reasoning_mode(request_kwargs.get("_rimcrow_reasoning_mode", "off"))
+        reasoning_effort = _normalize_reasoning_effort(request_kwargs.get("_rimcrow_reasoning_effort", "medium"))
 
         # Responses 模式下目前主要服务 GPT-5。
         # 这里仍按统一逻辑开关处理，避免前端覆盖在 responses 路径失效。
@@ -1512,3 +1512,4 @@ class LiteLLMGateway:
             merged_text = "\n".join(str(m.get("content", "")) for m in messages)
             return self.estimate_text_tokens(merged_text, model_name)
     
+

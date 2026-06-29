@@ -10,7 +10,7 @@ FORMAT_RIMSORT_JSON = "rimsort_json"
 FORMAT_RIMPY_XML = "rimpy_xml"
 FORMAT_PLAIN_TEXT = "plain_text"
 FORMAT_WORKSHOP_IDS = "workshop_ids"
-FORMAT_RMM_JSON = "rmm_json"
+FORMAT_RIMCROW_JSON = "rimcrow_json"
 FORMAT_SHARE_CODE = "share_code"
 
 

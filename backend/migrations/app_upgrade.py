@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+import shutil
+import xml.etree.ElementTree as ET
 
 from typing import cast
 
@@ -13,9 +15,16 @@ from backend.database.repair import _remove_file_with_retry
 from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
-from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, settings
+from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, TOOL_MODS_DIR, settings
 from backend.utils.logger import logger
-from backend.utils.tools import normalize_package_id
+from backend.utils.tools import (
+    LEGACY_COMPANION_PACKAGE_IDS,
+    normalize_companion_package_ids,
+    normalize_companion_package_id,
+    normalize_dir_root_for_compare,
+    normalize_package_id,
+    normalize_path_for_compare,
+)
 
 
 @dataclass
@@ -60,6 +69,9 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
 
     if last < Version("0.21.1"):
         _migrate_profile_steam_runtime_flags(result)
+
+    if last < Version("0.23.1"):
+        _migrate_legacy_companion_toolmod(result)
 
     result.pending_actions.append("show_update_news")
     return result
@@ -312,7 +324,7 @@ def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
 
     这一步不再信任旧 `is_steam` 的路径语义，而是重新探测：
     - `is_steam`：当前副本是否像一个真实 Steam 正版副本；
-    - `prefer_steam_launch`：默认按历史缺省值视作 True，仅在重新探测为非 Steam 时关闭；
+    - `prefer_steam_launch`：默认按历史缺省值视作 True，之后保留用户选择；
     - `use_workshop_mods`：优先保留旧值，仅在 Steam 启动开启时归零。
     """
     if not str(settings.config.steam_path or "").strip():
@@ -357,3 +369,109 @@ def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
 
     if normalized_count:
         result.messages.append(f"已归一化 {normalized_count} 个环境的 Steam / Workshop 运行配置。")
+
+
+def _migrate_legacy_companion_toolmod(result: AppUpgradeResult):
+    """
+    将旧版 RMM_Companion 迁移到 RimCrow Companion。
+
+    这里只处理旧内置工具模组目录下的旧资产记录；外部同 ID 记录可能来自用户手动导入，
+    需要继续保留，让后续扫描或用户操作自行处理。
+    """
+    old_tool_dir = TOOL_MODS_DIR / "RMM_Companion"
+    old_tool_dir_key = normalize_path_for_compare(old_tool_dir)
+    old_tool_dir_root = normalize_dir_root_for_compare(old_tool_dir)
+
+    removed_dir = False
+    if old_tool_dir.exists():
+        try:
+            shutil.rmtree(old_tool_dir)
+            removed_dir = True
+        except Exception as exc:
+            logger.warning(f"清理旧版伴生工具模组目录失败: {old_tool_dir}, {exc}", exc_info=True)
+
+    legacy_assets = list(
+        ModAsset.select(ModAsset.path_hash, ModAsset.path)
+        .where(cast(str, ModAsset.package_id).in_(list(LEGACY_COMPANION_PACKAGE_IDS))) # type: ignore
+        .dicts()
+    )
+    legacy_path_hashes = []
+    for asset in legacy_assets:
+        asset_path_key = normalize_path_for_compare(asset.get("path"))
+        if asset_path_key and (asset_path_key == old_tool_dir_key or asset_path_key.startswith(old_tool_dir_root)):
+            legacy_path_hashes.append(str(asset.get("path_hash") or "").strip())
+
+    profile_updates = []
+    migrated_active_files = 0
+    for profile in GameProfile.select():
+        inactive_order = list(getattr(profile, "inactive_mods_order", []) or [])
+        temp_order = list(getattr(profile, "temp_mods_order", []) or [])
+        normalized_inactive_order = normalize_companion_package_ids(inactive_order)
+        normalized_temp_order = normalize_companion_package_ids(temp_order)
+        if _migrate_profile_active_mods_config(profile):
+            migrated_active_files += 1
+        if normalized_inactive_order != inactive_order or normalized_temp_order != temp_order:
+            profile_updates.append((profile.id, normalized_inactive_order, normalized_temp_order))
+
+    if legacy_path_hashes or profile_updates:
+        with db.atomic():
+            if legacy_path_hashes:
+                ModAsset.delete().where(cast(str, ModAsset.path_hash).in_(legacy_path_hashes)).execute() # type: ignore
+            for profile_id, inactive_order, temp_order in profile_updates:
+                GameProfile.update(
+                    inactive_mods_order=inactive_order,
+                    temp_mods_order=temp_order,
+                ).where(GameProfile.id == profile_id).execute()
+
+    if removed_dir or legacy_path_hashes or profile_updates or migrated_active_files:
+        result.messages.append("已完成内置伴生工具模组迁移，旧版工具模组目录和排序引用已清理。")
+
+
+def _migrate_profile_active_mods_config(profile: GameProfile) -> bool:
+    user_data_path = str(getattr(profile, "user_data_path", "") or "").strip()
+    if not user_data_path:
+        return False
+    user_data_root = Path(user_data_path)
+    config_dir = user_data_root if user_data_root.name.lower() == "config" else user_data_root / "Config"
+    mods_config_path = config_dir / "ModsConfig.xml"
+    if not mods_config_path.is_file():
+        return False
+
+    try:
+        tree = ET.parse(mods_config_path)
+    except Exception as exc:
+        logger.warning(f"迁移伴生工具模组时读取 ModsConfig.xml 失败: {mods_config_path}, {exc}", exc_info=True)
+        return False
+
+    root = tree.getroot()
+    active_node = root.find("./activeMods")
+    if active_node is None:
+        active_node = root.find(".//activeMods")
+    if active_node is None:
+        return False
+
+    changed = False
+    seen_package_ids: set[str] = set()
+    for item in list(active_node.findall("li")):
+        raw_value = str(item.text or "").strip()
+        normalized_id = normalize_companion_package_id(raw_value)
+        if not normalized_id:
+            continue
+        if normalized_id in seen_package_ids:
+            active_node.remove(item)
+            changed = True
+            continue
+        seen_package_ids.add(normalized_id)
+        if raw_value != normalized_id:
+            item.text = normalized_id
+            changed = True
+
+    if not changed:
+        return False
+
+    try:
+        tree.write(mods_config_path, encoding="utf-8", xml_declaration=True)
+        return True
+    except Exception as exc:
+        logger.warning(f"迁移伴生工具模组时写入 ModsConfig.xml 失败: {mods_config_path}, {exc}", exc_info=True)
+        return False

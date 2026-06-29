@@ -18,6 +18,74 @@ from backend.utils.logger import BaseLogReader, generate_log_id, logger
 class LogAnalyzer:
     """启发式日志诊断分析器：推断错误类型并提取关联的 Mod ID 或 文件路径"""
     def __init__(self):
+        self.known_rules = [
+            {
+                'id': 'missing_def',
+                'type': 'MissingDef',
+                'pattern': re.compile(r'\b\S+\s+\S+\s+is not defined in any loaded mods\.', re.IGNORECASE),
+                'explanation': '有 Mod 正在引用不存在的定义，通常是缺少前置、版本不匹配或旧存档残留引用。'
+            },
+            {
+                'id': 'xml_unknown_field',
+                'type': 'XMLFieldError',
+                'pattern': re.compile(r"XML error:\s+.+?\s+doesn't correspond to any field in type\s+.+?\.", re.IGNORECASE),
+                'explanation': '某个 XML 字段不被当前游戏或目标类型识别，常见原因是 Mod 版本过旧、游戏版本不匹配或配置写错。'
+            },
+            {
+                'id': 'config_error',
+                'type': 'DefConfigError',
+                'pattern': re.compile(r'Config error in', re.IGNORECASE),
+                'explanation': '某个定义配置不符合游戏要求，通常需要检查日志提到的对象和对应 Mod。'
+            },
+            {
+                'id': 'cross_reference_missing',
+                'type': 'CrossRefError',
+                'pattern': re.compile(r'Could not resolve cross-reference|Could not resolve reference to object with loadID', re.IGNORECASE),
+                'explanation': '游戏无法找到被引用的对象，常见原因是缺少依赖、加载顺序不对或存档里引用了已移除内容。'
+            },
+            {
+                'id': 'could_not_load_reference',
+                'type': 'MissingReference',
+                'pattern': re.compile(r'Could not load reference to\s+.+?\s+named\s+.+', re.IGNORECASE),
+                'explanation': '日志中的对象引用没有加载成功，优先检查相关 Mod 是否启用、依赖是否齐全。'
+            },
+            {
+                'id': 'missing_texture',
+                'type': 'MissingTexture',
+                'pattern': re.compile(r'Failed to find any texture|Could not load UnityEngine\.Texture2D', re.IGNORECASE),
+                'explanation': '游戏找不到贴图资源，通常是资源路径写错、Mod 文件缺失或版本包不完整。'
+            },
+            {
+                'id': 'null_reference_exception',
+                'type': 'NullReference',
+                'pattern': re.compile(r'NullReferenceException', re.IGNORECASE),
+                'explanation': '有代码访问了不存在的对象。单独看这类错误信息量有限，需要结合错误堆栈里的来源继续判断。'
+            },
+            {
+                'id': 'type_load_exception',
+                'type': 'AssemblyConflict',
+                'pattern': re.compile(r'ReflectionTypeLoadException|MissingMethodException|TypeLoadException|MissingFieldException', re.IGNORECASE),
+                'explanation': '程序集或方法字段不匹配，常见原因是 Mod 版本不兼容、依赖库版本冲突或游戏更新后旧 DLL 未适配。'
+            },
+            {
+                'id': 'translation_data_error',
+                'type': 'TranslationError',
+                'pattern': re.compile(r'Translation data .*? has errors|translation data has errors', re.IGNORECASE),
+                'explanation': '翻译文件存在格式或字段问题，通常不一定导致崩溃，但会影响文本显示。'
+            },
+            {
+                'id': 'package_id_format',
+                'type': 'PackageIdError',
+                'pattern': re.compile(r'PackageId .*? is not in valid format', re.IGNORECASE),
+                'explanation': 'Mod 的 packageId 格式不规范，可能影响依赖识别、加载顺序和管理器匹配。'
+            },
+            {
+                'id': 'patch_obsolete_method',
+                'type': 'PatchWarning',
+                'pattern': re.compile(r'patch(?:es)? on obsolete method|patched jump instruction', re.IGNORECASE),
+                'explanation': '有补丁作用在过时或不稳定的方法上，通常说明相关 Mod 需要更新。'
+            },
+        ]
         # 常见错误特征匹配
         self.rules = {
             'XMLSyntaxError': re.compile(r'XML error|XML parsing error', re.IGNORECASE),
@@ -34,6 +102,11 @@ class LogAnalyzer:
         self.mod_id_pattern = re.compile(r'\[([a-zA-Z0-9\-_]{2,}\.[a-zA-Z0-9\-_]{2,})\]')
         # 提取相关 XML 文件路径
         self.file_pattern = re.compile(r'([A-Za-z0-9_\-\/\\]+\.xml)', re.IGNORECASE)
+        self.namespace_pattern = re.compile(r'^\s*at(?:\s+\([^)]*\))*\s+([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*)\.', re.MULTILINE)
+        self.ignored_namespaces = {
+            'system', 'microsoft', 'mono', 'mscorlib', 'unityengine',
+            'verse', 'rimworld', 'harmonylib', 'runtime',
+        }
 
     def analyze(self, block, is_realtime_json=False, active_mods=None):
         """
@@ -42,21 +115,25 @@ class LogAnalyzer:
         """
         # 核心：如果 C# 伴生 Mod 已经提供了精确上下文，我们只填补空白，绝不覆盖！
         has_csharp_context = 'context' in block and isinstance(block['context'], dict)
+        detected_phase = block.pop('_log_phase', None)
+        is_diagnostic_level = self._is_diagnostic_level(block)
         
         # 1. 伴生 Mod 日志处理逻辑 (高可信度)
         if has_csharp_context or is_realtime_json:
             if not has_csharp_context:
                 block['context'] = {'inferredType': None, 'relatedModIds': [], 'relatedFiles': []}
             context = block['context']
+            has_context_diagnosis = bool(context.get('inferredType') or context.get('relatedModIds') or context.get('relatedFiles'))
+            if is_diagnostic_level or has_context_diagnosis:
+                self._fill_phase(context, detected_phase or ('runtime' if is_realtime_json else None))
             
             # 补救推断：如果 C# 没有识别出类型，Python 端利用丰富的正则库再补救一下
             details = block.get('details', '')
-            if not context.get('inferredType') and block.get('level') in ['ERROR', 'WARNING']:
+            if is_diagnostic_level:
                 full_text = block.get('message', '') + "\n" + details
-                for err_type, pattern in self.rules.items():
-                    if pattern.search(full_text):
-                        context['inferredType'] = err_type
-                        break
+                self._fill_known_diagnosis(context, full_text)
+                self._fill_type_fallback(context, full_text)
+                self._fill_related_namespaces(context, full_text)
                         
             return block
         # 2. 原版 Player.log 的降级正则提取逻辑 (低可信度，兜底用)，安全获取 details，防止 KeyError
@@ -68,11 +145,10 @@ class LogAnalyzer:
             'relatedModIds': [],
             'relatedFiles': []
         }
-        if block['level'] in['ERROR', 'WARNING']:
-            for err_type, pattern in self.rules.items():
-                if pattern.search(full_text):
-                    context['inferredType'] = err_type
-                    break
+        if is_diagnostic_level:
+            self._fill_phase(context, detected_phase)
+            self._fill_known_diagnosis(context, full_text)
+            self._fill_type_fallback(context, full_text)
         mod_matches = self.mod_id_pattern.findall(full_text)
         if mod_matches:
             # Python端同样过滤底层框架噪音
@@ -109,15 +185,64 @@ class LogAnalyzer:
         file_matches = self.file_pattern.findall(full_text)
         if file_matches:
             context['relatedFiles'] = list(dict.fromkeys(file_matches))
+
+        self._fill_related_namespaces(context, full_text)
             
-        if context['inferredType'] or context['relatedModIds'] or context['relatedFiles']:
+        if (
+            context['inferredType']
+            or context['relatedModIds']
+            or context['relatedFiles']
+            or context.get('relatedNamespaces')
+            or context.get('knownPattern')
+        ):
             block['context'] = context
             
         return block
 
+    def _is_diagnostic_level(self, block):
+        return str(block.get('level') or '').upper() in {'ERROR', 'WARNING', 'EXCEPTION'}
+
+    def _fill_phase(self, context, phase):
+        if phase and not context.get('phase'):
+            context['phase'] = phase
+
+    def _fill_known_diagnosis(self, context, full_text):
+        if context.get('knownPattern'):
+            return
+        for rule in self.known_rules:
+            if not rule['pattern'].search(full_text):
+                continue
+            if not context.get('inferredType'):
+                context['inferredType'] = rule['type']
+            context['knownPattern'] = rule['id']
+            context['diagnosisExplanation'] = rule['explanation']
+            return
+
+    def _fill_type_fallback(self, context, full_text):
+        if context.get('inferredType'):
+            return
+        for err_type, pattern in self.rules.items():
+            if pattern.search(full_text):
+                context['inferredType'] = err_type
+                return
+
+    def _fill_related_namespaces(self, context, full_text):
+        namespaces = []
+        for match in self.namespace_pattern.findall(full_text or ''):
+            root = match.split('.', 1)[0].lower()
+            if root in self.ignored_namespaces:
+                continue
+            namespaces.append(match)
+        if namespaces and not context.get('relatedNamespaces'):
+            context['relatedNamespaces'] = list(dict.fromkeys(namespaces))[:8]
+
 
 class GameLogManager(BaseLogReader): # 继承基类
-    _GAME_LOG_FILENAMES = ('RMM_Realtime.log', 'RMM_Realtime-prev.log', 'Player.log', 'Player-prev.log')
+    REALTIME_LOG_NAME = 'RimCrow_Realtime.log'
+    REALTIME_PREV_LOG_NAME = 'RimCrow_Realtime-prev.log'
+    LEGACY_REALTIME_LOG_NAME = 'RMM_Realtime.log'
+    LEGACY_REALTIME_PREV_LOG_NAME = 'RMM_Realtime-prev.log'
+    _GAME_LOG_FILENAMES = (REALTIME_LOG_NAME, REALTIME_PREV_LOG_NAME, 'Player.log', 'Player-prev.log')
 
     def __init__(self, context: ProfileContext):
         # 游戏日志通常较长，这里限制为最近 2 万条结构化 Block，避免长时间运行后占用过多内存
@@ -127,22 +252,43 @@ class GameLogManager(BaseLogReader): # 继承基类
         # 实时监视器相关状态
         self._realtime_thread = None
         self._stop_event = threading.Event()
-        self.realtime_log_file = self.resolve_log_file_path('RMM_Realtime.log', must_exist=False)
+        self.realtime_log_file = self.resolve_log_file_path(self.REALTIME_LOG_NAME, must_exist=False)
         
         self._patterns = {
-            'error': re.compile(r'error|exception|crash|fail', re.IGNORECASE),
+            'error': re.compile(
+                r'error|exception|crash|fail|Could not resolve|Could not load reference|'
+                r'not defined in any loaded mods|Config error in|'
+                r'MissingMethodException|MissingFieldException|TypeLoadException',
+                re.IGNORECASE
+            ),
             'warning': re.compile(r'warning', re.IGNORECASE)
         }
+
+    @classmethod
+    def _is_realtime_log_name(cls, filename: str) -> bool:
+        return filename in {
+            cls.REALTIME_LOG_NAME,
+            cls.REALTIME_PREV_LOG_NAME,
+            cls.LEGACY_REALTIME_LOG_NAME,
+            cls.LEGACY_REALTIME_PREV_LOG_NAME,
+        }
+
+    @classmethod
+    def _realtime_log_aliases(cls, filename: str) -> tuple[str, ...]:
+        if filename == cls.REALTIME_LOG_NAME:
+            return cls.REALTIME_LOG_NAME, cls.LEGACY_REALTIME_LOG_NAME
+        if filename == cls.REALTIME_PREV_LOG_NAME:
+            return cls.REALTIME_PREV_LOG_NAME, cls.LEGACY_REALTIME_PREV_LOG_NAME
+        return (filename,)
 
     def _build_realtime_log_paths(self, filename: str) -> list[str]:
         candidates = []
         context_root = str(getattr(self.context, "user_data_path", "") or "").strip()
+        filenames = self._realtime_log_aliases(filename)
         if context_root:
-            candidates.append(os.path.join(context_root, filename))
-        candidates.extend(
-            os.path.join(root, filename)
-            for root in GameManager.get_default_user_data_paths()
-        )
+            candidates.extend(os.path.join(context_root, item) for item in filenames)
+        for root in GameManager.get_default_user_data_paths():
+            candidates.extend(os.path.join(root, item) for item in filenames)
         return list(dict.fromkeys(candidates))
 
     def _build_log_path_candidates(self, filename: str) -> list[str]:
@@ -151,19 +297,19 @@ class GameLogManager(BaseLogReader): # 继承基类
             return []
         if normalized_name.startswith('Player'):
             return GameManager.get_default_player_log_paths(normalized_name)
-        if normalized_name.startswith('RMM_Realtime'):
+        if self._is_realtime_log_name(normalized_name):
             return self._build_realtime_log_paths(normalized_name)
         return []
 
     def resolve_log_file_path(self, filename: str, *, must_exist: bool = True) -> str:
-        """解析游戏日志路径：Player 固定默认目录，RMM_Realtime 跟随当前环境。"""
+        """解析游戏日志路径：Player 固定默认目录，RimCrow_Realtime 跟随当前环境。"""
         for filepath in self._build_log_path_candidates(filename):
             if not must_exist or os.path.exists(filepath):
                 return filepath
         return ""
 
     def get_preferred_log_directory(self) -> str:
-        for filename in ('RMM_Realtime.log', 'RMM_Realtime-prev.log', 'Player.log', 'Player-prev.log'):
+        for filename in self._GAME_LOG_FILENAMES:
             filepath = self.resolve_log_file_path(filename)
             if filepath:
                 return os.path.dirname(filepath)
@@ -189,8 +335,8 @@ class GameLogManager(BaseLogReader): # 继承基类
         for filename in self._GAME_LOG_FILENAMES:
             if player_only and not filename.startswith("Player"):
                 continue
-            if filename.startswith("RMM_Realtime") and normalized_root:
-                filepath = os.path.join(normalized_root, filename)
+            if self._is_realtime_log_name(filename) and normalized_root:
+                filepath = next((path for path in (os.path.join(normalized_root, item) for item in self._realtime_log_aliases(filename)) if os.path.exists(path)), "")
             else:
                 filepath = self.resolve_log_file_path(filename)
             if filepath and os.path.exists(filepath):
@@ -206,8 +352,8 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     def read_log_page_for_root(self, filename, user_data_root: str = "", page=1, page_size=1000):
         normalized_name = os.path.basename(str(filename or "").strip())
-        if normalized_name.startswith('RMM_Realtime') and str(user_data_root or "").strip():
-            filepath = os.path.join(str(user_data_root).strip(), normalized_name)
+        if self._is_realtime_log_name(normalized_name) and str(user_data_root or "").strip():
+            filepath = next((path for path in (os.path.join(str(user_data_root).strip(), item) for item in self._realtime_log_aliases(normalized_name)) if os.path.exists(path)), "")
         else:
             filepath = self.resolve_log_file_path(normalized_name)
         if not filepath or not os.path.exists(filepath):
@@ -226,7 +372,7 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     # 启动/停止实时监视器
     def start_realtime_monitor(self):
-        """启动后台线程来实时监视 RMM_Realtime.log 文件"""
+        """启动后台线程来实时监视 RimCrow_Realtime.log 文件"""
         if self._realtime_thread and self._realtime_thread.is_alive(): return # 已经启动
         # 确保日志文件存在
         if not os.path.exists(self.realtime_log_file):
@@ -345,7 +491,7 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     def _analyze_page(self, page_blocks, filename):
         """游戏日志特有的分析逻辑"""
-        is_json_log = filename.startswith('RMM_Realtime') or filename.endswith('.json')
+        is_json_log = self._is_realtime_log_name(filename) or filename.endswith('.json')
         # 获取激活 Mod 列表用于交叉比对
         active_mods_set = set()
         try:
@@ -360,13 +506,12 @@ class GameLogManager(BaseLogReader): # 继承基类
         except Exception: pass
 
         for block in page_blocks:
-            if 'context' not in block or 'inferredType' not in block.get('context', {}):
-                self.analyzer.analyze(block, is_realtime_json=is_json_log, active_mods=active_mods_set)
+            self.analyzer.analyze(block, is_realtime_json=is_json_log, active_mods=active_mods_set)
 
     def _parse_file_to_blocks(self, filepath, keep_all=False, max_keep_blocks=None):
         """重写：使用基类方法处理 JSON，保留纯文本特化逻辑"""
         filename = os.path.basename(filepath)
-        is_json = filename.endswith('.json') or filename.startswith('RMM_Realtime')
+        is_json = filename.endswith('.json') or self._is_realtime_log_name(filename)
         
         # 如果是 JSON，直接复用基类的高效解析
         if is_json:
@@ -378,9 +523,14 @@ class GameLogManager(BaseLogReader): # 继承基类
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 current_block = None
+                current_phase = 'unknown'
                 for idx, line in enumerate(f):
                     line_content = line.rstrip('\r\n')
                     if not line_content: continue
+                    if line_content.startswith('Log file contents:'):
+                        current_phase = 'startup'
+                    elif line_content.startswith('Loading game from file'):
+                        current_phase = 'runtime'
                     
                     if line_content.startswith((' ', '\t', 'at ', '(Filename:')) and current_block:
                         current_block['details'] += '\n' + line_content
@@ -396,7 +546,8 @@ class GameLogManager(BaseLogReader): # 继承基类
                         current_block = {
                             'id': generate_log_id(f'playerlog_{idx}', level, line_content),
                             'timestamp': '', 'level': level, 'message': line_content, 'details': '', 'count': 1,
-                            'raw_lines': [idx + 1] # 文本模式同样注入行号
+                            'raw_lines': [idx + 1], # 文本模式同样注入行号
+                            '_log_phase': current_phase,
                         }
                 if current_block:
                     self._add_or_merge_block(blocks, current_block)
@@ -500,7 +651,11 @@ class LogCondenser:
                     # "time": log.get("timestamp", ""),
                     "level": str(log.get("level", "") or "").upper(),
                     "type": ctx.get("inferredType", "Unknown"),
+                    "phase": ctx.get("phase", ""),
+                    "known_pattern": ctx.get("knownPattern", ""),
+                    "diagnosis": ctx.get("diagnosisExplanation", ""),
                     "suspect_mods": suspect_mods,
+                    "suspect_namespaces": [str(ns).strip() for ns in ctx.get("relatedNamespaces", []) if str(ns).strip()],
                     "related_files": [str(path).strip() for path in ctx.get("relatedFiles", []) if str(path).strip()],
                     "message_preview": str(log.get("message", "") or "").strip(),
                     "stack_preview": stack_preview
@@ -520,6 +675,8 @@ class LogCondenser:
 
             merged_mods = item.get("suspect_mods", []) + suspect_mods
             item["suspect_mods"] = list(dict.fromkeys(merged_mods))
+            merged_namespaces = item.get("suspect_namespaces", []) + [str(ns).strip() for ns in ctx.get("relatedNamespaces", []) if str(ns).strip()]
+            item["suspect_namespaces"] = list(dict.fromkeys(merged_namespaces))
             merged_files = item.get("related_files", []) + [str(path).strip() for path in ctx.get("relatedFiles", []) if str(path).strip()]
             item["related_files"] = list(dict.fromkeys(merged_files))
 

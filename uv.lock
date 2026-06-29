@@ -2259,7 +2259,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rimmodmanager"
+name = "rimcrow"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

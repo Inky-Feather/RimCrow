@@ -72,7 +72,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'backdrop'])
 const confirmStore = useConfirmStore()
 const modalId = Symbol('common-modal')
-const modalStack = window.__rmmCommonModalStack || (window.__rmmCommonModalStack = [])
+const modalStack = window.__commonModalStack || (window.__commonModalStack = [])
 
 const isOpen = computed(() => props.show)
 const shouldRender = computed(() => props.persistent || isOpen.value)

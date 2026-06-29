@@ -162,7 +162,7 @@ def replace_dir_atomically(target_path: str | Path, prepared_path: str | Path) -
 
     try:
         if target_root.exists():
-            backup_root = target_root.parent / f".rmm-backup-{target_root.name}-{uuid.uuid4().hex}"
+            backup_root = target_root.parent / f".bundle-backup-{target_root.name}-{uuid.uuid4().hex}"
             target_root.replace(backup_root)
         prepared_root.replace(target_root)
     except Exception:

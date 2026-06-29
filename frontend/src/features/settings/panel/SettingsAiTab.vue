@@ -242,10 +242,7 @@ const fetchAiModels = async ({ forceRefresh = false, warnOnEmpty = false, silent
 
 watch(() => props.formData?.ai, async (ai) => {
   if (!ai) return
-  // 设置面板每次重新灌入表单对象时，同步当前协议草稿并预热已有模型缓存。
+  // 设置面板每次重新灌入表单对象时，只同步当前协议草稿；模型列表在下拉展开或手动刷新时读取。
   hydrateAiProviderDrafts()
-  if (ai.enabled && ai.provider) {
-    await fetchAiModels({ silent: true })
-  }
 }, { immediate: true })
 </script>

@@ -12,6 +12,7 @@ class TestLoadOrderShareCode(unittest.TestCase):
             list_name="My Shared Order",
             game_version="1.5.4104",
         )
+        self.assertTrue(share_code.startswith("RC-"))
 
         parsed = parse_share_code(share_code)
         self.assertEqual(parsed.format, FORMAT_SHARE_CODE)
@@ -43,7 +44,15 @@ class TestLoadOrderShareCode(unittest.TestCase):
     def test_describe_share_code_returns_short_ref(self):
         share_code = build_share_code(package_ids=["brrainz.harmony"])
         description = describe_share_code(share_code)
-        self.assertTrue(description.startswith("share://RMM1/"))
+        self.assertTrue(description.startswith("share://RC/"))
+
+    def test_legacy_rmm1_share_code_still_imports(self):
+        share_code = build_share_code(package_ids=["brrainz.harmony"])
+        legacy_code = "RMM1-" + share_code[len("RC-"):]
+
+        parsed = parse_share_code(legacy_code)
+
+        self.assertEqual(parsed.package_ids, ["brrainz.harmony"])
 
 
 if __name__ == "__main__":

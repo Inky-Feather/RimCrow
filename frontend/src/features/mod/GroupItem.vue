@@ -79,9 +79,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { ColorPicker } from "vue3-colorpicker";
 import { Package } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore';
 import { useGroupStore } from './stores/groupStore';
@@ -100,6 +99,11 @@ const props = defineProps({
 const appStore = useAppStore()
 const groupStore = useGroupStore()
 const emit = defineEmits(['toggle', 'delete-group', 'update-group'])
+const ColorPicker = defineAsyncComponent(async () => {
+  await import('vue3-colorpicker/style.css')
+  const module = await import('vue3-colorpicker')
+  return module.ColorPicker
+})
 
 const groupModIds = computed(() => Array.isArray(props.groupData?.mod_ids) ? props.groupData.mod_ids : [])
 // 分组标题上的打包导出是原有模组包功能，和推荐导出入口分开处理。

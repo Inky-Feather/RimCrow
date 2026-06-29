@@ -255,9 +255,9 @@ export const useSteamWorkshopActions = ({
   // 获取订阅合集列表
   const getCollectionItems = async (collection_id) => {
     if (!window.pywebview) return
-    const res = await window.pywebview.api.steam_collection_items_get(collection_id)
+    const res = await window.pywebview.api.lifecycle_fetch_collection(collection_id)
     if (checkResult(res, `获取订阅合集列表 ${collection_id}`)) {
-      return res.data
+      return res.data?.children || []
     }
   }
 

@@ -26,10 +26,10 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
   }
 
   // 检测路径信息
-  const checkPath = async (path_type, path) => {
+  const checkPath = async (path_type, path, options = {}) => {
     if(!path_type || !path) return
     if(!window.pywebview) return
-    const res = await window.pywebview.api.path_check(path_type, path)
+    const res = await window.pywebview.api.path_check(path_type, path, !!options.force)
     if (checkResult(res, "检测路径信息")) {
       return res.data
     }
@@ -39,10 +39,27 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
   const checkPaths = async (path_data) => {
     if(!path_data) return
     if(!window.pywebview) return
-    const res = await window.pywebview.api.paths_check(path_data)
-    if (checkResult(res, "批量检测路径信息")) {
-      return res.data
+    if (typeof window.pywebview.api.paths_check === 'function') {
+      const res = await window.pywebview.api.paths_check(path_data)
+      if (checkResult(res, "批量检测路径信息")) {
+        return res.data
+      }
+      return
     }
+
+    // 兼容旧运行态：桌面端已注入的 API 对象可能没有批量检测方法。
+    const results = {}
+    for (const [pathType, path] of Object.entries(path_data)) {
+      if (!String(path || '').trim()) {
+        results[pathType] = { pass: false, data: null, type: 'error', msg: '未填写路径' }
+        continue
+      }
+      const res = await window.pywebview.api.path_check(pathType, path, false)
+      if (checkResult(res, "检测路径信息", true)) {
+        results[pathType] = res.data
+      }
+    }
+    return results
   }
 
   // 打开路径
@@ -163,7 +180,7 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
   const openUrl = (url) => {
     if(!url) { toast.warning("没有可打开的网址。请确认当前条目包含有效链接。"); return}
     if (isBrowserRuntime()) {
-      openManagedSubBrowserUrl(url, 'RimModManager')
+      openManagedSubBrowserUrl(url, 'RimCrow')
       return
     }
     if(settings.value.open_url_on_system){

@@ -1,7 +1,7 @@
 <template>
               <section class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">外部依赖
-                  <button @click="resetToDefaultExternalPaths" :disabled="isPending('reset-default-paths')" :class="isPending('reset-default-paths') ? 'rmm-action-disabled' : ''"
+                  <button @click="resetToDefaultExternalPaths" :disabled="isPending('reset-default-paths')" :class="isPending('reset-default-paths') ? 'app-action-disabled' : ''"
                     v-tooltip="isPending('reset-default-paths') ? '正在读取默认路径' : '将外部依赖相关路径重置为默认值'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
                     <LoaderCircle v-if="isPending('reset-default-paths')" class="size-3 animate-spin" />
                     {{ isPending('reset-default-paths') ? '读取中' : '重置为默认路径' }}
@@ -11,7 +11,7 @@
                   <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部工具</h4><p class="text-xs text-text-dim mt-1">SteamCMD、贴图工具等由管理器调用的外部程序配置与状态检查。</p></div>
-                      <button @click="handleCheckTools" :disabled="isPending('check-tools')" :class="isPending('check-tools') ? 'rmm-action-disabled' : ''"
+                      <button @click="handleCheckTools" :disabled="isPending('check-tools')" :class="isPending('check-tools') ? 'app-action-disabled' : ''"
                         class="inline-flex items-center gap-1 px-3 py-1.5 bg-accent-tip/10 hover:bg-accent-tip/25 border border-accent-tip/20 rounded-lg text-xs font-bold transition-all">
                         <LoaderCircle v-if="isPending('check-tools')" class="size-3 animate-spin" />
                         {{ isPending('check-tools') ? '检查中' : '检查外部工具' }}
@@ -29,7 +29,7 @@
                   <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">外部库与规则</h4><p class="text-xs text-text-dim mt-1">规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。</p></div>
-                      <button @click="handleCheckExternalData" :disabled="isPending('check-external-data')" :class="isPending('check-external-data') ? 'rmm-action-disabled' : ''"
+                      <button @click="handleCheckExternalData" :disabled="isPending('check-external-data')" :class="isPending('check-external-data') ? 'app-action-disabled' : ''"
                         class="inline-flex items-center gap-1 px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
                         <LoaderCircle v-if="isPending('check-external-data')" class="size-3 animate-spin" />
                         {{ isPending('check-external-data') ? '检查中' : '检查外部库更新' }}
@@ -39,7 +39,7 @@
                     <CommonPathInput label="用户规则路径" v-model="formData.user_rules_path" @browse="handleBrowse('user_rules_path', ['JSON Files (*.json)'])" :check="formData.check_info?.user_rules_path" description="本地用户规则文件，用来保存自定义排序、依赖和冲突规则。" />
                     <div class="flex items-end gap-1.5">
                         <CommonInput label="社区规则库 URL" v-model="formData.community_rules_url" description="RimSort 维护的规则库文件，用来补充排序、依赖和冲突规则。" />
-                      <button @click="ruleStore.updateCommunity()" :disabled="ruleStore.isLoading" v-tooltip="ruleStore.isLoading ? '正在下载更新社区规则' : '下载更新 社区规则'" :class="ruleStore.isLoading ? 'rmm-action-disabled' : ''"
+                      <button @click="ruleStore.updateCommunity()" :disabled="ruleStore.isLoading" v-tooltip="ruleStore.isLoading ? '正在下载更新社区规则' : '下载更新 社区规则'" :class="ruleStore.isLoading ? 'app-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="ruleStore.isLoading" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />
@@ -50,7 +50,7 @@
                     <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="工坊数据库 URL" v-model="formData.community_workshop_db_url" description="工坊信息数据库，用来补充模组名称、作者和简介。来源：社区缓存文件。" />
-                      <button @click="updateExternalDB('workshop_db')" :disabled="downloadState['workshop_db']" v-tooltip="downloadState['workshop_db'] ? '正在下载更新社区工坊数据库' : '下载更新 社区工坊数据库'" :class="downloadState['workshop_db'] ? 'rmm-action-disabled' : ''"
+                      <button @click="updateExternalDB('workshop_db')" :disabled="downloadState['workshop_db']" v-tooltip="downloadState['workshop_db'] ? '正在下载更新社区工坊数据库' : '下载更新 社区工坊数据库'" :class="downloadState['workshop_db'] ? 'app-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="downloadState['workshop_db']" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />
@@ -60,7 +60,7 @@
                     <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="替代 Mod 数据库 URL" v-model="formData.community_instead_db_url" description="替代 Mod 数据库，用来提示失效、重制或推荐替代项。来源：社区缓存文件。" />
-                      <button @click="updateExternalDB('instead_db')" :disabled="downloadState['instead_db']" v-tooltip="downloadState['instead_db'] ? '正在下载更新社区替代 Mod 数据库' : '下载更新 社区替代 Mod 数据库'" :class="downloadState['instead_db'] ? 'rmm-action-disabled' : ''"
+                      <button @click="updateExternalDB('instead_db')" :disabled="downloadState['instead_db']" v-tooltip="downloadState['instead_db'] ? '正在下载更新社区替代 Mod 数据库' : '下载更新 社区替代 Mod 数据库'" :class="downloadState['instead_db'] ? 'app-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="downloadState['instead_db']" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />
@@ -81,7 +81,7 @@
                           placeholder="RJW|https://example.invalid/providers.json"></textarea>
                         <p class="text-xs text-text-dim mt-1 px-1">Git 模组推荐清单，用来提供可订阅的仓库来源。</p>
                       </div>
-                      <button @click="updateExternalDB('git_provider_catalog')" :disabled="downloadState['git_provider_catalog']" v-tooltip="downloadState['git_provider_catalog'] ? '正在刷新 Git 推荐清单' : '刷新 Git 推荐清单'" :class="downloadState['git_provider_catalog'] ? 'rmm-action-disabled' : ''"
+                      <button @click="updateExternalDB('git_provider_catalog')" :disabled="downloadState['git_provider_catalog']" v-tooltip="downloadState['git_provider_catalog'] ? '正在刷新 Git 推荐清单' : '刷新 Git 推荐清单'" :class="downloadState['git_provider_catalog'] ? 'app-action-disabled' : ''"
                         class="shrink-0 mb-0.5 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="downloadState['git_provider_catalog']" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />
@@ -90,7 +90,7 @@
                     <div class="py-2 pt-2 place-self-center w-[90%] border-b border-border-base/10"></div>
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="联机模组兼容表 URL" v-model="formData.multiplayer_compatibility_url" description="Multiplayer 的兼容等级表，用来显示联机兼容状态。来源：官方接口。" />
-                      <button @click="updateExternalDB('multiplayer_compatibility')" :disabled="downloadState['multiplayer_compatibility']" v-tooltip="downloadState['multiplayer_compatibility'] ? '正在刷新 Multiplayer 兼容表' : '刷新 Multiplayer 兼容表'" :class="downloadState['multiplayer_compatibility'] ? 'rmm-action-disabled' : ''"
+                      <button @click="updateExternalDB('multiplayer_compatibility')" :disabled="downloadState['multiplayer_compatibility']" v-tooltip="downloadState['multiplayer_compatibility'] ? '正在刷新 Multiplayer 兼容表' : '刷新 Multiplayer 兼容表'" :class="downloadState['multiplayer_compatibility'] ? 'app-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="downloadState['multiplayer_compatibility']" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />
@@ -99,7 +99,7 @@
                     <CommonPathInput label="联机模组兼容表路径" v-model="formData.multiplayer_compatibility_path" @browse="handleBrowse('multiplayer_compatibility_path', ['JSON Files (*.json)'])" :check="formData.check_info?.multiplayer_compatibility_path" description="联机模组兼容表的本地缓存文件。" />
                     <div class="flex items-end gap-1.5">
                       <CommonInput label="联机兼容修正模组支持表 URL" v-model="formData.mp_compat_package_ids_url" description="Multiplayer Compatibility 的修正支持表，用来标记可由辅助模组修正的模组。来源：源码解析。" />
-                      <button @click="updateExternalDB('mp_compat_package_ids')" :disabled="downloadState['mp_compat_package_ids']" v-tooltip="downloadState['mp_compat_package_ids'] ? '正在刷新 Multiplayer Compatibility 支持表' : '刷新 Multiplayer Compatibility 支持表'" :class="downloadState['mp_compat_package_ids'] ? 'rmm-action-disabled' : ''"
+                      <button @click="updateExternalDB('mp_compat_package_ids')" :disabled="downloadState['mp_compat_package_ids']" v-tooltip="downloadState['mp_compat_package_ids'] ? '正在刷新 Multiplayer Compatibility 支持表' : '刷新 Multiplayer Compatibility 支持表'" :class="downloadState['mp_compat_package_ids'] ? 'app-action-disabled' : ''"
                         class="shrink-0 h-9 w-9 bg-accent-tip/10 hover:bg-accent-tip text-accent-tip hover:text-text-main border border-accent-tip/30 rounded-lg flex items-center justify-center transition-colors">
                         <LoaderCircle v-if="downloadState['mp_compat_package_ids']" class="size-5 animate-spin" />
                         <Download v-else class="size-5" />

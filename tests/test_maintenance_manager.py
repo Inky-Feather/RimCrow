@@ -123,6 +123,42 @@ def test_mp_compat_generated_cache_uses_source_etag(tmp_path):
     assert result["comparison_mode"] == "source_etag"
 
 
+def test_mp_compat_generated_cache_uses_source_id(tmp_path):
+    path = tmp_path / "mpCompatPackageIds.json"
+    path.write_text(
+        '{"package_ids": ["example.mod"], "source": {"source_id": "old-commit", "etag": "same-etag"}}',
+        encoding="utf-8",
+    )
+
+    manager = MaintenanceManager.__new__(MaintenanceManager)
+    manager._probe_mp_compat_source = lambda url: {
+        "supported": True,
+        "available": True,
+        "source_id": "new-commit",
+        "signature": "new-commit",
+        "etag": "same-etag",
+        "updated_at": 1777950026000,
+    }
+
+    result = manager._check_external_dataset(
+        {
+            "data_type": "mp_compat_package_ids",
+            "name": "Multiplayer Compatibility 适配缓存",
+            "path_key": "mp_compat_package_ids_path",
+            "url_key": "mp_compat_package_ids_url",
+        },
+        {
+            "mp_compat_package_ids_path": str(path),
+            "mp_compat_package_ids_url": "https://github.com/rwmt/Multiplayer-Compatibility/archive/refs/heads/master.zip",
+        },
+    )
+
+    assert result["needs_update"] is True
+    assert result["comparison_mode"] == "source_id"
+    assert result["local_version"] == "old-commit"
+    assert result["remote_signature"] == "new-commit"
+
+
 def test_external_dataset_list_includes_multiplayer_sources():
     data_types = {spec["data_type"] for spec in MaintenanceManager.EXTERNAL_DATASETS}
 

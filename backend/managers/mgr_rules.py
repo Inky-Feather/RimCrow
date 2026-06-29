@@ -18,7 +18,7 @@ from backend._version import __version__
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
 
 BUILTIN_RULES = {
-    "rmm.companion": {
+    "rimcrow.companion": {
         "loadTop": {"value": True, "comment": "管理器伴生工具，必须极早期加载"},
         "loadAfter": {
             "brrainz.harmony": {"name": ["Harmony"], "comment": "必须在 Harmony 之后加载"}

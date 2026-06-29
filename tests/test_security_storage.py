@@ -72,6 +72,15 @@ class TestSecurityStorage(unittest.TestCase):
 
         self.assertEqual(store.last_error, "")
 
+    def test_default_secret_store_migrates_legacy_service_name(self):
+        fake = FakeKeyring()
+        fake.values[("RimModManager", "ai.api_key")] = "sk-legacy-secret"
+        store = SecretStore(backend=fake)
+
+        self.assertEqual(store.get_secret("ai.api_key"), "sk-legacy-secret")
+        self.assertEqual(fake.values.get(("RimCrow", "ai.api_key")), "sk-legacy-secret")
+        self.assertNotIn(("RimModManager", "ai.api_key"), fake.values)
+
     def test_empty_secret_input_deletes_saved_secret(self):
         fake = FakeKeyring()
         store = SecretStore(service_name="test-service", backend=fake)

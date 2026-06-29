@@ -9,7 +9,7 @@ from .models import (
     FORMAT_RML,
     FORMAT_RIMPY_XML,
     FORMAT_RIMSORT_JSON,
-    FORMAT_RMM_JSON,
+    FORMAT_RIMCROW_JSON,
     FORMAT_SAVEGAME,
     FORMAT_WORKSHOP_IDS,
 )
@@ -66,11 +66,14 @@ def _detect_json_export_format(text: str) -> str | None:
         return None
 
     if isinstance(data, dict):
+        declared_format = str(data.get("format") or "").strip().lower()
+        if declared_format == FORMAT_RIMCROW_JSON:
+            return FORMAT_RIMCROW_JSON
         if any(key in data for key in ("mods", "active_mods", "activeMods", "mod_list", "modList")):
             return FORMAT_RIMSORT_JSON
         if any(key in data for key in ("package_ids", "modlist", "workshop_ids", "mod_names")):
-            return FORMAT_RMM_JSON
-    return FORMAT_RMM_JSON if isinstance(data, list) else None
+            return FORMAT_RIMCROW_JSON
+    return FORMAT_RIMCROW_JSON if isinstance(data, list) else None
 
 
 def detect_load_order_format(file_path: str | Path) -> str:
@@ -89,7 +92,7 @@ def detect_load_order_format(file_path: str | Path) -> str:
     if suffix == ".json":
         json_format = _detect_json_export_format(text)
         if json_format: return json_format
-        return FORMAT_RMM_JSON
+        return FORMAT_RIMCROW_JSON
 
     # RimSort 某些导出会把 JSON 内容写进带 .xml 的路径里，不能只靠后缀判断。
     json_format = _detect_json_export_format(text)

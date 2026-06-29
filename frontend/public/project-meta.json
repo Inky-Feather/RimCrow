@@ -1,0 +1,73 @@
+{
+  "project": {
+    "name": "RimCrow",
+    "description": "RimCrow 用于整理模组、调整排序、管理 RimWorld 本地环境，原名 RimModManager。",
+    "github_repo": "Inky-Feather/RimCrow"
+  },
+  "update": {
+    "sources": [
+      {
+        "type": "lanzou",
+        "url": "https://wwbns.lanzouu.com/b00mq4tqgf",
+        "password": "aite"
+      },
+      {
+        "type": "github",
+        "repo": "Inky-Feather/RimCrow"
+      }
+    ]
+  },
+  "feedback": {
+    "qq_group": "1083700747",
+    "qq_description": "适合快速反馈问题、补充截图或交流使用情况。",
+    "tieba_url": "https://tieba.baidu.com/p/10475510000?pid=153184576966",
+    "tieba_description": "查看集中说明、更新记录和公开讨论。"
+  },
+  "references": [
+    {
+      "title": "管理器功能实现参考",
+      "items": [
+        {
+          "name": "RimSort",
+          "url": "https://github.com/RimSort/RimSort"
+        },
+        {
+          "name": "RimModManager",
+          "url": "https://github.com/MrXploisLite/RimModManager"
+        },
+        {
+          "name": "LibidinousLoader",
+          "url": "https://gitgud.io/AblativeAbsolute/libidinous_loader"
+        }
+      ]
+    },
+    {
+      "title": "辅助工具模组与日志解析的开发参考",
+      "items": [
+        {
+          "name": "BetterModSort",
+          "url": "https://github.com/Yan-Zero/BetterModSort"
+        },
+        {
+          "name": "LogAfterDefError",
+          "url": "https://github.com/emipa606/LogAfterDefError"
+        },
+        {
+          "name": "BetterLog",
+          "url": "https://github.com/bbradson/BetterLog"
+        },
+        {
+          "name": "RimworldConflictChecker",
+          "url": "https://github.com/biship/RimworldConflictChecker"
+        }
+      ]
+    }
+  ],
+  "credits": [],
+  "donate": {
+    "enabled": true,
+    "title": "打赏支持",
+    "description": "如果你觉得这个工具用起来不错，也可以请我喝杯奶茶哦 ~ \n卤蛋鸡爪烤脆肠、辣条雪糕棒棒糖、瓜子花生矿泉水、啤酒饮料八宝粥，统统可投喂 o(≧▽≦)o ",
+    "qr_image_url": "/project-assets/donate-qr.png"
+  }
+}

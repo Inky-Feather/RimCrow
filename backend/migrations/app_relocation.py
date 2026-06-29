@@ -75,6 +75,8 @@ def apply_config_relocation(config: Any, old_home: str, new_home: str) -> AppRel
         "community_workshop_db_path",
         "community_instead_db_path",
         "community_rules_path",
+        "multiplayer_compatibility_path",
+        "mp_compat_package_ids_path",
         "user_rules_path",
         "load_order_import_custom_path",
         "load_order_import_last_path",

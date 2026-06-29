@@ -11,7 +11,7 @@
                       <CommonSwitch class="col-span-1" label="启动时自动扫描 Mod 目录" v-model="formData.enable_auto_scan" description="关闭后，需要手动点击扫描按钮才能更新 Mod 列表。" />
                       <CommonSwitch class="col-span-1" label="环境直启前检查同步" v-model="formData.enable_launch_profile_quick_scan" description="从环境列表直接启动非当前环境时，会先检查并同步运行前所需的链接。开启后会先做一次轻量扫描再同步；关闭后只按当前数据库缓存和环境配置强制同步。" />
                       <CommonSwitch class="col-span-1" label="扫描时检查文件大小" v-model="formData.enable_file_size_scan" description="开启后，扫描时会自动检查 Mod 的文件大小，以此识别新增或更新的内容。该功能会增加扫描耗时，但能显著提高文件变动的识别精度。" />
-                      <CommonSwitch class="col-span-1" label="扫描时检查残留" v-model="formData.enable_mod_residue_scan" description="开启后，扫描完成时会自动识别卸载后留下的文件夹和设置文件；关闭后只在手动打开残留清理时检查。" />
+                      <CommonSwitch class="col-span-1" label="扫描后检查残留" v-model="formData.enable_mod_residue_scan" description="开启后，全量扫描结束会在后台检查卸载后留下的文件夹和设置文件；关闭后只在手动打开残留清理时检查。" />
                       <CommonSwitch class="col-span-1" label="启动时只提醒新异常" v-model="formData.startup_inventory_prompt_new_only" description="开启后，启动库存提醒只显示新发现的变更、缺失和已删除项；关闭后，只要问题仍存在就会继续提醒。" />
                       <CommonSwitch class="col-span-1" label="严格禁用模式" v-model="formData.strict_disabled_mode" description="开启后，扫描时会按管理器记录保持禁用状态；被外部恢复启用的 Mod 会自动重新禁用。手动解除禁用不受影响。" />
                       <CommonSwitch class="col-span-1" label="自动清理缺失的 Mod 数据" v-model="formData.delete_missing_mods_data" description="关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。" />

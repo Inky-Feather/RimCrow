@@ -5,6 +5,7 @@
 ├── ·[.history]
 ├── ·[.pytest_cache]
 ├── ·[.ruff_cache]
+├── ·[.worktrees]
 ├── ·[backend]
 │   ├── ·[ai]
 │   │   ├──  __init__.py
@@ -135,9 +136,19 @@
 │   └──  theme_store.py
 │   
 ├── ·[data]
+├── ·[doc]
+│   └── ·[assets]
+│   
+│       ├──  Preview.png
+│       └──  主界面.png
+│       
 ├── ·[frontend]
 │   ├── ·[public]
+│   │   ├── ·[project-assets]
+│   │   │   └──  donate-qr.png
+│   │   │   
 │   │   ├──  icon.svg
+│   │   ├──  project-meta.json
 │   │   └──  vite.svg
 │   │   
 │   ├── ·[src]
@@ -229,9 +240,7 @@
 │   │   │   │   └──  modResidueStore.js
 │   │   │   │   
 │   │   │   ├── ·[package-transfer]
-│   │   │   │   ├──  ModConflictPlanEditor.vue
-│   │   │   │   ├──  PackageTransferDialog.vue
-│   │   │   │   └──  ProfileConflictPlanEditor.vue
+│   │   │   │   └──  PackageTransferDialog.vue
 │   │   │   │   
 │   │   │   ├── ·[profiles]
 │   │   │   │   ├──  ProfileDrawer.vue
@@ -274,6 +283,11 @@
 │   │       ├── ·[assets]
 │   │       │   └──  vue.svg
 │   │       │   
+│   │       ├── ·[branding]
+│   │       │   ├── ·[private-assets]
+│   │       │   ├──  brandProfile.js
+│   │       │   └──  BrandSignature.vue
+│   │       │   
 │   │       ├── ·[commands]
 │   │       │   ├──  commandRegistry.js
 │   │       │   ├──  commandStore.js
@@ -315,6 +329,7 @@
 │   │           ├──  domEffects.js
 │   │           ├──  format.js
 │   │           ├──  markdown.js
+│   │           ├──  startupPerf.js
 │   │           ├──  text.js
 │   │           └──  translationDetection.js
 │   │           
@@ -405,8 +420,10 @@
 │   ├──  test_ai_gateway_request_compat.py
 │   ├──  test_ai_service_helpers.py
 │   ├──  test_app_relocation.py
+│   ├──  test_browser_runtime.py
 │   ├──  test_bundle_managers.py
 │   ├──  test_database_runtime.py
+│   ├──  test_dlc_parser_cache_mode.py
 │   ├──  test_download_manager.py
 │   ├──  test_environment_runtime.py
 │   ├──  test_file_manager.py
@@ -427,6 +444,7 @@
 │   ├──  test_mod_residue_manager.py
 │   ├──  test_mod_settings_manager.py
 │   ├──  test_multiplayer_compat_manager.py
+│   ├──  test_network_manager.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_recommendation_export_manager.py
 │   ├──  test_rule_manager_dynamic_weights.py

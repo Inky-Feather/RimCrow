@@ -20,33 +20,6 @@
                         />
                       </div>
                     </div>
-                    <CommonSwitch class="col-span-1" label="自动检查更新" v-model="formData.enable_auto_update_check" description="关闭后，需要手动点击检查更新按钮才能更新 RimModManager。" />
-                    <!-- 手动检查按钮 -->
-                    <div class="modal-section flex items-center justify-between p-3">
-                      <div class="flex flex-col">
-                        <span class="text-sm font-bold text-text-main">软件版本</span>
-                        <span class="text-xs text-text-dim">当前版本: v{{ appStore.appVersion }}</span>
-                      </div>
-
-                      <div class="flex items-center justify-between gap-1">
-                        <button @click="handleShowChangelog" :disabled="isPending('changelog')" :class="isPending('changelog') ? 'rmm-action-disabled' : ''"
-                          class="px-3 py-1.5 bg-accent-tip/15 hover:bg-accent-tip/30 border border-accent-tip/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
-                          <span class="flex items-center gap-2">
-                            <LoaderCircle v-if="isPending('changelog')" class="h-3 w-3 animate-spin" />
-                            {{ isPending('changelog') ? '读取中' : '更新日志' }}
-                          </span>
-                        </button>
-                        <button @click="appStore.checkUpdate(true)" :disabled="appStore.updateState.isChecking"
-                          class="px-3 py-1.5 bg-accent-highlight/15 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
-                          <span v-if="appStore.updateState.isChecking" class="flex items-center gap-2">
-                            <LoaderCircle class="animate-spin h-3 w-3" />
-                            检查中
-                          </span>
-                          <span v-else>检查更新</span>
-                        </button>
-                      </div>
-
-                    </div>
                     <CommonSelect label="日志等级" v-model="formData.log_level" :options="[{label:'DEBUG', value:'DEBUG'},{label:'INFO', value:'INFO'},{label:'WARNING', value:'WARNING'}]" />
                     <CommonNumber label="日志保留天数" v-model="formData.log_retention_days" :step="1" :min="0" :max="365" />
                   </div>
@@ -77,14 +50,14 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button @click="openDataBundleImportDialog" :disabled="isPending('data-import')" :class="isPending('data-import') ? 'rmm-action-disabled' : ''"
+                        <button @click="openDataBundleImportDialog" :disabled="isPending('data-import')" :class="isPending('data-import') ? 'app-action-disabled' : ''"
                           class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
                           <span class="inline-flex items-center gap-1">
                             <LoaderCircle v-if="isPending('data-import')" class="h-3 w-3 animate-spin" />
                             {{ isPending('data-import') ? '读取中' : '导入数据包' }}
                           </span>
                         </button>
-                        <button @click="openDataBundleModal" :disabled="isPending('data-export')" :class="isPending('data-export') ? 'rmm-action-disabled' : ''"
+                        <button @click="openDataBundleModal" :disabled="isPending('data-export')" :class="isPending('data-export') ? 'app-action-disabled' : ''"
                           class="px-4 py-1.5 rounded-lg bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-xs font-black shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.2)] transition-all" >
                           <span class="inline-flex items-center gap-1">
                             <LoaderCircle v-if="isPending('data-export')" class="h-3 w-3 animate-spin" />
@@ -103,7 +76,7 @@
                         </p>
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button @click="openModPackageImportDialog" :disabled="isPending('mod-import')" :class="isPending('mod-import') ? 'rmm-action-disabled' : ''"
+                        <button @click="openModPackageImportDialog" :disabled="isPending('mod-import')" :class="isPending('mod-import') ? 'app-action-disabled' : ''"
                           class="px-3 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 text-xs font-bold transition-all" >
                           <span class="inline-flex items-center gap-1">
                             <LoaderCircle v-if="isPending('mod-import')" class="h-3 w-3 animate-spin" />
@@ -178,7 +151,7 @@ const dataBundleSchema = ref({
   modules: [],
   profiles: [],
   presets: {},
-  file_extension: '.rmmdata.zip',
+  file_extension: '.rimcrowdata.zip',
 })
 const showDataBundleModal = ref(false)
 const pendingAction = ref('')
@@ -192,10 +165,6 @@ const runPendingAction = async (action, runner) => {
     pendingAction.value = ''
   }
 }
-const handleShowChangelog = async () => {
-  await runPendingAction('changelog', () => appStore.showChangelog())
-}
-
 const loadDataBundleSchema = async () => {
   // schema 由后端提供，前端只按模块定义渲染导出项，避免写死可打包范围。
   const schema = await appStore.getDataBundleSchema()
@@ -238,13 +207,13 @@ const openDataBundleImportDialog = async () => {
     if (!schema) return
 
     const extensions = [
-      schema.file_extension || '.rmmdata.zip',
-      ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata']),
+      schema.file_extension || '.rimcrowdata.zip',
+      ...(Array.isArray(schema.legacy_file_extensions) ? schema.legacy_file_extensions : ['.rmmdata.zip', '.rmmdata']),
     ]
       .map(item => String(item || '').trim())
       .filter(Boolean)
     const bundlePath = await appStore.getFilePath('', [
-      `RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`,
+      `RimCrow Data Package (${extensions.map(item => `*${item}`).join(';')})`,
       'All Files (*.*)',
     ])
     if (!bundlePath) return
@@ -268,7 +237,7 @@ const openModPackageImportDialog = async () => {
     if (!schema) return
 
     const bundlePath = await appStore.getFilePath('', [
-      `RMM Mod Package (*${schema.file_extension || '.rmmmods.zip'})`,
+      `RimCrow Mod Package (*${schema.file_extension || '.rimcrowmods.zip'})`,
       'All Files (*.*)',
     ])
     if (!bundlePath) return

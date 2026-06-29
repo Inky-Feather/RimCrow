@@ -228,6 +228,7 @@ def _iter_toolmods_files(toolmods_dir: Path):
     """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
     if not toolmods_dir.exists():
         return
+    archive_root = Path("toolmods") / toolmods_dir.name
     for current_root, dirnames, filenames in os.walk(toolmods_dir, followlinks=True):
         current_path = Path(current_root)
         relative_dir = current_path.relative_to(toolmods_dir)
@@ -236,7 +237,7 @@ def _iter_toolmods_files(toolmods_dir: Path):
             continue
         for filename in filenames:
             file_path = current_path / filename
-            yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
+            yield file_path, archive_root / file_path.relative_to(toolmods_dir)
 
 
 def _should_include_steamcmd_file(relative_path: Path) -> bool:
@@ -314,7 +315,7 @@ def create_release_zip(app_name: str, version: str, mode: str = "onefile"):
     release_items = list(_iter_nuitka_output_files(dist_dir, app_name, mode))
     if mode == "onefile":
         release_items.extend(_iter_frontend_dist_files(project_root / "frontend" / "dist") or [])
-    release_items.extend(_iter_toolmods_files(project_root / "toolmods") or [])
+    release_items.extend(_iter_toolmods_files(project_root / "toolmods" / "RimCrowCompanion") or [])
     release_items.extend(_iter_tools_files(project_root / "tools") or [])
     release_items.extend(_iter_data_files(project_root / "data") or [])
 
@@ -409,7 +410,7 @@ if __name__ == "__main__":
 
     pack_zip = True
     APP_MAIN = "main.py"
-    APP_NAME = "RimModManager"
+    APP_NAME = "RimCrow"
     APP_VERSION = __version__
     APP_COMPANY = "Inky Feather"
     ICON_PATH = "icon.ico"

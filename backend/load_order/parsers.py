@@ -13,7 +13,7 @@ from .models import (
     FORMAT_RML,
     FORMAT_RIMPY_XML,
     FORMAT_RIMSORT_JSON,
-    FORMAT_RMM_JSON,
+    FORMAT_RIMCROW_JSON,
     FORMAT_SAVEGAME,
     FORMAT_WORKSHOP_IDS,
     ParsedLoadOrderData,
@@ -435,7 +435,7 @@ def _parse_rimsort_json(path: Path) -> ParsedLoadOrderData:
     )
 
 
-def _parse_rmm_json(path: Path) -> ParsedLoadOrderData:
+def _parse_rimcrow_json(path: Path) -> ParsedLoadOrderData:
     data = json.loads(_read_text(path) or "null")
     package_ids: list[str] = []
     package_tokens: list[str] = []
@@ -512,7 +512,7 @@ def _parse_rmm_json(path: Path) -> ParsedLoadOrderData:
         errors.append("No valid mods found in JSON")
 
     return ParsedLoadOrderData(
-        format=FORMAT_RMM_JSON,
+        format=FORMAT_RIMCROW_JSON,
         list_name=path.stem,
         package_ids=package_ids,
         package_tokens=package_tokens,
@@ -635,8 +635,8 @@ def parse_load_order_file(file_path: str | Path) -> ParsedLoadOrderData:
         parsed = _parse_rimpy_xml(path)
     elif format_name == FORMAT_RIMSORT_JSON:
         parsed = _parse_rimsort_json(path)
-    elif format_name == FORMAT_RMM_JSON:
-        parsed = _parse_rmm_json(path)
+    elif format_name == FORMAT_RIMCROW_JSON:
+        parsed = _parse_rimcrow_json(path)
     elif format_name == FORMAT_WORKSHOP_IDS:
         parsed = _parse_workshop_ids(path)
     else:

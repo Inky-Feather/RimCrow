@@ -34,7 +34,7 @@ REMOTE_USER_AGENT = (
 )
 
 
-def build_sub_browser_target_url(base_url: str, url: str = "", title: str = "RimModManager") -> str:
+def build_sub_browser_target_url(base_url: str, url: str = "", title: str = "RimCrow") -> str:
     normalized_url = str(url or "").strip()
     if not normalized_url: return ""
 
@@ -45,7 +45,7 @@ def build_sub_browser_target_url(base_url: str, url: str = "", title: str = "Rim
     if parsed.scheme in {"http", "https"} and parsed.netloc.lower().endswith("steamcommunity.com"):
         return f"{normalized_base_url}/workshop-view?url={quote(normalized_url, safe='')}"
 
-    helper_title = str(title or "RimModManager").strip() or "RimModManager"
+    helper_title = str(title or "RimCrow").strip() or "RimCrow"
     return (
         f"{normalized_base_url}/sub-browser-helper"
         f"?url={quote(normalized_url, safe='')}"
@@ -97,7 +97,7 @@ class WorkshopPageRenderer:
         head_html = soup.head.decode_contents() if soup.head else ""
         remote_body_html = soup.body.decode_contents() if soup.body else str(soup)
         bridge_script = self._build_bridge_script(final_url)
-        combined_body = f"{self._build_toolbar_html(page_title, final_url)}<main class=\"rmm-proxy-page\">{remote_body_html}</main>"
+        combined_body = f"{self._build_toolbar_html(page_title, final_url)}<main class=\"rimcrow-proxy-page\">{remote_body_html}</main>"
         return build_workshop_page_html(page_title, final_url, head_html, combined_body, bridge_script)
 
     def _sanitize_remote_soup(self, soup: BeautifulSoup, base_url: str):
@@ -124,7 +124,7 @@ class WorkshopPageRenderer:
             absolute_url = urljoin(base_url, href)
             if self.is_steamcommunity_url(absolute_url):
                 tag["href"] = absolute_url
-                tag["data-rmm-proxy-url"] = absolute_url
+                tag["data-rimcrow-proxy-url"] = absolute_url
             else:
                 tag["href"] = absolute_url
                 tag["target"] = "_blank"
@@ -149,8 +149,8 @@ class WorkshopPageRenderer:
             absolute_action = urljoin(base_url, str(form.get("action") or "").strip() or base_url)
             form["action"] = absolute_action
             if self.is_steamcommunity_url(absolute_action):
-                form["data-rmm-proxy-form"] = absolute_action
-                form["data-rmm-proxy-method"] = str(form.get("method") or "get").strip().lower() or "get"
+                form["data-rimcrow-proxy-form"] = absolute_action
+                form["data-rimcrow-proxy-method"] = str(form.get("method") or "get").strip().lower() or "get"
 
         for tag in soup.find_all(["img", "source"]):
             self._rewrite_srcset(tag, "srcset", base_url)
@@ -184,22 +184,22 @@ class WorkshopPageRenderer:
         safe_url = html.escape(target_url or "")
         safe_workshop_id = html.escape(workshop_id or "未识别")
         return f"""
-<section class="rmm-workshop-toolbar">
-  <div class="rmm-toolbar-left">
-    <div class="rmm-toolbar-badge">Workshop Browser</div>
-    <div class="rmm-toolbar-title">{safe_title}</div>
-    <div class="rmm-toolbar-url">{safe_url}</div>
+<section class="rimcrow-workshop-toolbar">
+  <div class="rimcrow-toolbar-left">
+    <div class="rimcrow-toolbar-badge">Workshop Browser</div>
+    <div class="rimcrow-toolbar-title">{safe_title}</div>
+    <div class="rimcrow-toolbar-url">{safe_url}</div>
   </div>
-  <div class="rmm-toolbar-right">
-    <div class="rmm-toolbar-id">Workshop ID: <strong>{safe_workshop_id}</strong></div>
-    <div class="rmm-toolbar-actions">
-      <button id="rmm-open-original" class="ghost">打开原网页</button>
-      <button id="rmm-open-in-steam" class="ghost">在Steam打开</button>
-      <button id="rmm-subscribe">订阅</button>
-      <button id="rmm-unsubscribe" class="warn">取消订阅</button>
-      <button id="rmm-download" class="secondary">SteamCMD 下载</button>
+  <div class="rimcrow-toolbar-right">
+    <div class="rimcrow-toolbar-id">Workshop ID: <strong>{safe_workshop_id}</strong></div>
+    <div class="rimcrow-toolbar-actions">
+      <button id="rimcrow-open-original" class="ghost">打开原网页</button>
+      <button id="rimcrow-open-in-steam" class="ghost">在Steam打开</button>
+      <button id="rimcrow-subscribe">订阅</button>
+      <button id="rimcrow-unsubscribe" class="warn">取消订阅</button>
+      <button id="rimcrow-download" class="secondary">SteamCMD 下载</button>
     </div>
-    <div id="rmm-toolbar-status" class="rmm-toolbar-status"></div>
+    <div id="rimcrow-toolbar-status" class="rimcrow-toolbar-status"></div>
   </div>
 </section>"""
 
@@ -215,12 +215,12 @@ class WorkshopPageRenderer:
   const workshopId = {js_workshop_id};
   const navigationMode = {js_navigation_mode};
   const proxyBaseUrl = {js_proxy_base_url};
-  const statusEl = document.getElementById('rmm-toolbar-status');
-  const subscribeBtn = document.getElementById('rmm-subscribe');
-  const unsubscribeBtn = document.getElementById('rmm-unsubscribe');
-  const downloadBtn = document.getElementById('rmm-download');
-  const openInSteamBtn = document.getElementById('rmm-open-in-steam');
-  const openOriginalBtn = document.getElementById('rmm-open-original');
+  const statusEl = document.getElementById('rimcrow-toolbar-status');
+  const subscribeBtn = document.getElementById('rimcrow-subscribe');
+  const unsubscribeBtn = document.getElementById('rimcrow-unsubscribe');
+  const downloadBtn = document.getElementById('rimcrow-download');
+  const openInSteamBtn = document.getElementById('rimcrow-open-in-steam');
+  const openOriginalBtn = document.getElementById('rimcrow-open-original');
 
   const setStatus = (message, isError = false) => {{
     statusEl.textContent = message || '';
@@ -278,7 +278,7 @@ class WorkshopPageRenderer:
       window.location.href;
     const rawMethod =
       submitter?.getAttribute('formmethod') ||
-      form.dataset.rmmProxyMethod ||
+      form.dataset.rimcrowProxyMethod ||
       form.getAttribute('method') ||
       'get';
 
@@ -351,9 +351,9 @@ class WorkshopPageRenderer:
   downloadBtn.addEventListener('click', () => withAction('正在启动 SteamCMD 下载...', 'download'));
 
   document.addEventListener('click', (event) => {{
-    const anchor = event.target.closest('a[data-rmm-proxy-url]');
+    const anchor = event.target.closest('a[data-rimcrow-proxy-url]');
     if (!anchor) return;
-    const nextUrl = anchor.dataset.rmmProxyUrl || '';
+    const nextUrl = anchor.dataset.rimcrowProxyUrl || '';
     if (!nextUrl) return;
     event.preventDefault();
     void navigateTo(nextUrl).catch((error) => {{
@@ -362,7 +362,7 @@ class WorkshopPageRenderer:
   }}, true);
 
   document.addEventListener('submit', (event) => {{
-    const form = event.target.closest('form[data-rmm-proxy-form]');
+    const form = event.target.closest('form[data-rimcrow-proxy-form]');
     if (!form) return;
 
     const navigation = buildFormNavigation(form, event.submitter || null);
@@ -508,8 +508,8 @@ class BrowserAppServer:
         api_base = quote(self.base_url, safe="")
         if self.use_dev_server:
             separator = "&" if "?" in DEV_SERVER_URL else "?"
-            return f"{DEV_SERVER_URL}{separator}rmm_api_base={api_base}"
-        return f"{self.base_url}/?rmm_api_base={api_base}"
+            return f"{DEV_SERVER_URL}{separator}api_base={api_base}"
+        return f"{self.base_url}/?api_base={api_base}"
 
     def get_available_methods(self):
         blocked = {"cleanup", "get_window", "set_window"}
@@ -554,7 +554,7 @@ class BrowserAppServer:
         outer = self
 
         class BrowserRequestHandler(BaseHTTPRequestHandler):
-            server_version = "RimModManagerBrowser/1.0"
+            server_version = "RimCrowBrowser/1.0"
 
             def do_OPTIONS(self):
                 self.send_response(204)
@@ -703,7 +703,7 @@ class BrowserAppServer:
             def _serve_sub_browser_helper(self, parsed):
                 query = parse_qs(parsed.query)
                 target_url = str(query.get("url", [""])[0] or "").strip()
-                title = str(query.get("title", ["RimModManager"])[0] or "RimModManager").strip() or "RimModManager"
+                title = str(query.get("title", ["RimCrow"])[0] or "RimCrow").strip() or "RimCrow"
                 body = build_sub_browser_helper_html(target_url, title).encode("utf-8")
                 self.send_response(200)
                 self._send_common_headers(content_type="text/html; charset=utf-8")

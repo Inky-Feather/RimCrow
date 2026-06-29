@@ -819,6 +819,13 @@ class FileManager:
     def ensure_browser_mode_shortcut(app_exe_path: str) -> Dict[str, Any]:
         """仅在缺失时创建 Browser mode 快捷方式，避免启动阶段做重校验。"""
         spec = FileManager.build_browser_mode_shortcut_spec(app_exe_path)
+        target_path = Path(str(spec.get("target_path") or ""))
+        if target_path.name.lower() == "rimcrow.exe":
+            for legacy_name in ("RimModManager.exe", "RimModManager [Browser mode].lnk"):
+                try:
+                    target_path.with_name(legacy_name).unlink(missing_ok=True)
+                except Exception as e:
+                    logger.debug(f"清理旧版入口失败: {legacy_name} - {e}")
         shortcut_path = str(spec.get("shortcut_path") or '').strip()
         if shortcut_path and os.path.exists(shortcut_path):
             return {
@@ -1614,7 +1621,7 @@ class PathChecker:
         return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
     
     @classmethod
-    def check_install_path(cls, path_str: str) -> Dict:
+    def check_install_path(cls, path_str: str, *, force_steam_inspect: bool = False) -> Dict:
         """
         检查游戏安装路径是否有效
         返回：{
@@ -1642,7 +1649,8 @@ class PathChecker:
         # 3. Steam 判定
         from backend.managers.mgr_game_install import GameInstallInspector
 
-        install_facts = GameInstallInspector().quick_inspect(str(path))
+        inspector = GameInstallInspector()
+        install_facts = inspector.inspect(str(path), force=True) if force_steam_inspect else inspector.quick_inspect(str(path))
         res['data']["is_steam"] = bool(install_facts.is_steam)
         res['data']["is_steam_managed"] = bool(install_facts.is_steam_managed)
         steam_text = "Steam 版" if install_facts.is_steam else "非 Steam 版"
@@ -1712,8 +1720,8 @@ class PathChecker:
         """
         检查 Workshop 路径是否有效。
 
-        这里不再只看 `steamapps/workshop`，而是要求命中 RimWorld 对应的
-        RimWorld 工坊内容目录，避免把其它游戏或中间目录误判为有效。
+        优先要求命中 RimWorld 对应的工坊内容目录；如果 294100 目录尚未生成，
+        但上级 Steam Workshop 内容目录存在，则允许保存并给出提醒。
         返回：{
             'pass': True,
             'data': {},
@@ -1721,15 +1729,25 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str or not Path(path_str).exists():
+        if not path_str:
             return cls._format_res(False, msg="Workshop 路径不存在")
 
+        path = Path(path_str)
         normalized_parts = [part.lower() for part in Path(os.path.normpath(path_str)).parts]
         workshop_parts = [part.lower() for part in RIMWORLD_WORKSHOP_CONTENT_PARTS]
         is_valid = any(
             normalized_parts[index:index + 4] == workshop_parts
             for index in range(max(0, len(normalized_parts) - 3))
         )
+        if is_valid and not path.exists() and path.parent.exists():
+            return cls._format_res(
+                True,
+                data=path_str,
+                msg=f"RimWorld 工坊目录尚未生成：{path_str}\n订阅或下载工坊内容后通常会自动出现。",
+                msg_type="warn",
+            )
+        if not path.exists():
+            return cls._format_res(False, msg="Workshop 路径不存在")
         return cls._format_res(is_valid, data=path_str, 
                                msg=f"Workshop 路径：{path_str}" if is_valid else f"路径不在 Steam Workshop {RIMWORLD_STEAM_APP_ID_STR} 目录中",
                                msg_type="success" if is_valid else "warn")

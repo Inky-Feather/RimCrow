@@ -57,8 +57,9 @@ class SecretStatus:
 class SecretStore:
     """跨平台凭据存储封装，真实密钥只写入系统凭据后端。"""
 
-    def __init__(self, service_name: str = "RimModManager", backend: Any = None):
+    def __init__(self, service_name: str = "RimCrow", backend: Any = None, legacy_service_names: tuple[str, ...] | None = None):
         self.service_name = service_name
+        self.legacy_service_names = tuple(legacy_service_names or (("RimModManager",) if service_name == "RimCrow" else ()))
         self._backend = backend
         self.last_error = ""
         self.fallback_keys: set[str] = set()
@@ -92,12 +93,32 @@ class SecretStore:
             return ""
         try:
             value = backend.get_password(self.service_name, normalized)
+            if not value:
+                value = self._migrate_legacy_secret(backend, normalized)
             self.last_error = ""
             return str(value or "")
         except Exception as exc:
             self.last_error = str(exc) or "系统凭据库读取失败"
             logger.warning("读取系统凭据失败: %s", normalized, exc_info=True)
             return ""
+
+    def _migrate_legacy_secret(self, backend: Any, key: str) -> str:
+        for legacy_service_name in self.legacy_service_names:
+            legacy_value = backend.get_password(legacy_service_name, key)
+            if not legacy_value:
+                continue
+            try:
+                backend.set_password(self.service_name, key, str(legacy_value))
+                try:
+                    backend.delete_password(legacy_service_name, key)
+                except Exception as exc:
+                    if not self._is_missing_secret_error(exc):
+                        logger.warning("旧凭据删除失败，将在后续启动继续清理: service=%s key=%s", legacy_service_name, key, exc_info=True)
+                logger.info("已迁移旧凭据: %s -> %s key=%s", legacy_service_name, self.service_name, key)
+            except Exception:
+                logger.warning("旧凭据迁移失败，已保留旧值等待下次重试: service=%s key=%s", legacy_service_name, key, exc_info=True)
+            return str(legacy_value or "")
+        return ""
 
     def set_secret(self, key: str, value: str) -> None:
         normalized = self.validate_key(key)
@@ -122,12 +143,12 @@ class SecretStore:
         if backend is None:
             raise self._fail("本机安全存储不可用，请检查系统凭据服务后重试")
         try:
-            if not backend.get_password(self.service_name, normalized):
-                self.fallback_keys.discard(normalized)
-                self.fallback_errors.pop(normalized, None)
-                self.last_error = ""
-                return
-            backend.delete_password(self.service_name, normalized)
+            removed = False
+            for service_name in (self.service_name, *self.legacy_service_names):
+                if not backend.get_password(service_name, normalized):
+                    continue
+                backend.delete_password(service_name, normalized)
+                removed = True
             self.fallback_keys.discard(normalized)
             self.fallback_errors.pop(normalized, None)
             self.last_error = ""

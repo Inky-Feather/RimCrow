@@ -9,7 +9,7 @@ from backend.utils.logger import logger
 from backend.utils.tools import generate_path_hash, normalize_path_for_storage, normalize_path_list_for_storage
 
 
-PATH_NORMALIZATION_VERSION = "1"
+PATH_NORMALIZATION_VERSION = "2"
 PATH_NORMALIZATION_INFO_KEY = "path_normalization_version"
 
 

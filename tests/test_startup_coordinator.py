@@ -37,7 +37,7 @@ def wait_until(predicate, timeout=1.0):
 
 
 def test_startup_warmup_runs_once_and_rebuilds_workshop_rules(monkeypatch):
-    """验证启动预热只启动一次，成功消息只走即时 toast，避免升级上下文重复提示。"""
+    """验证启动预热只启动一次，成功时不打扰用户，也不写入升级上下文。"""
 
     workshop_db = FakeWorkshopDB()
     rule_mgr = FakeRuleManager()
@@ -61,5 +61,4 @@ def test_startup_warmup_runs_once_and_rebuilds_workshop_rules(monkeypatch):
     assert wait_until(lambda: workshop_db.load_count == 1)
     assert rule_mgr.build_count == 1
     assert messages == []
-    assert toasts and toasts[0][1] == "info"
-    assert toasts[0][0] == "工坊数据缓存已加载，规则索引已刷新。"
+    assert toasts == []

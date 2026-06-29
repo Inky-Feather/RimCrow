@@ -578,6 +578,8 @@ class SettingsManager:
         self.config.community_workshop_db_path = normalize_path_for_storage(self.config.community_workshop_db_path) or str(COMMUNITY_WORKSHOP_DB_PATH)
         self.config.community_instead_db_path = normalize_path_for_storage(self.config.community_instead_db_path) or str(COMMUNITY_INSTEAD_DB_PATH)
         self.config.community_rules_path = normalize_path_for_storage(self.config.community_rules_path) or str(COMMUNITY_RULES_PATH)
+        self.config.multiplayer_compatibility_path = normalize_path_for_storage(self.config.multiplayer_compatibility_path) or str(MULTIPLAYER_COMPAT_DB_PATH)
+        self.config.mp_compat_package_ids_path = normalize_path_for_storage(self.config.mp_compat_package_ids_path) or str(MP_COMPAT_PACKAGE_IDS_PATH)
         self.config.user_rules_path = normalize_path_for_storage(self.config.user_rules_path) or str(USER_RULES_PATH)
         self.config.texture_opt.texture_tools_path = normalize_path_for_storage(self.config.texture_opt.texture_tools_path) or str(TOOLS_DIR / "texture_tools")
         self.config.language = normalize_language_code(self.config.language, default="zh-CN") or "zh-CN"

@@ -814,8 +814,8 @@ export const useAiStore = defineStore('ai', () => {
   // 事件桥接 (Event Bridge)
   // -----------------------------------------------------------------
   const setupEventListeners = () => {
-    if (window._rmmAiEventsInitialized) return
-    window._rmmAiEventsInitialized = true
+    if (window._aiEventsInitialized) return
+    window._aiEventsInitialized = true
 
     window.addEventListener('ai-task-complete', (e) => {
       const taskId = normalizeText(e.detail?.task_id)
@@ -886,9 +886,9 @@ export const useAiStore = defineStore('ai', () => {
     })
   }
 
-  const initialize = async () => {
+  const initialize = async (options = {}) => {
     setupEventListeners()
-    return await getAiConfig()
+    return await getAiConfig(options)
   }
 
   const getToolDefinitions = () => normalizedToolDefinitions.value || {}

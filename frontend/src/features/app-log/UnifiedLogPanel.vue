@@ -25,7 +25,7 @@
           </div>
         </div>
 
-        <!-- 显式的实时模式切换按钮：优先绑定到 app.log / RMM_Realtime.log -->
+        <!-- 显式的实时模式切换按钮：优先绑定到 app.log / RimCrow_Realtime.log -->
         <button v-if="liveFileName"
           @click="switchToLive"
           class="px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border transition-all"
@@ -144,6 +144,9 @@
                   <span v-if="item.context.inferredType" class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30">
                     {{ item.context.inferredType }}
                   </span>
+                  <span v-if="item.context.phase" class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18">
+                    {{ formatLogPhase(item.context.phase) }}
+                  </span>
                   <!-- 关联文件 -->
                   <span v-for="file in (item.context.relatedFiles || []).slice(0,3)"
                     :key="file"
@@ -161,6 +164,12 @@
                     class="px-1.5 py-0.5 rounded bg-accent-primary/20 hover:bg-accent-primary/40 text-accent-primary text-xs cursor-pointer border border-accent-primary/30 transition-colors"
                     v-tooltip="'点击查看 Mod 详情'">[Mod: {{ modId }}]
                   </button>
+                  <span v-for="namespace in (item.context.relatedNamespaces || []).slice(0,3)"
+                    :key="namespace"
+                    class="px-1.5 py-0.5 rounded bg-accent-warning/12 text-accent-warning text-xs border border-accent-warning/25 max-w-56 truncate"
+                    v-tooltip="'错误堆栈中出现的可疑来源'">
+                    {{ namespace }}
+                  </span>
                 </div>
                 <!-- 消息正文 (高亮搜索词) -->
                 <div class="whitespace-pre-wrap"
@@ -365,8 +374,25 @@ function stringifyDiagnosticValue(value) {
   }
 }
 
+function formatLogPhase(value) {
+  const phase = String(value || '').trim()
+  if (phase === 'startup') return '启动阶段'
+  if (phase === 'runtime') return '运行阶段'
+  return '阶段未知'
+}
+
 function formatLogDiagnosticDetails(log) {
   const parts = []
+  const context = log?.context || {}
+  if (context.phase) {
+    parts.push(`阶段: ${formatLogPhase(context.phase)}`)
+  }
+  if (context.diagnosisExplanation) {
+    parts.push(`说明: ${context.diagnosisExplanation}`)
+  }
+  if (Array.isArray(context.relatedNamespaces) && context.relatedNamespaces.length) {
+    parts.push(`可疑来源: ${context.relatedNamespaces.join(', ')}`)
+  }
   if (log?.error_code) {
     parts.push(`错误码: ${log.error_code}`)
   }
@@ -416,11 +442,11 @@ defineExpose({
 // --- 模式判断 ---
 const LIVE_FILES = {
   app: ['app.log'],
-  game: ['RMM_Realtime.log']
+  game: ['RimCrow_Realtime.log']
 };
 const isLiveView = computed(() => LIVE_FILES[props.sourceType]?.includes(selectedFile.value));
 
-// 当前源类型下，匹配到的“实时文件”名（app: app.log, game: RMM_Realtime.log）
+// 当前源类型下，匹配到的“实时文件”名（app: app.log, game: RimCrow_Realtime.log）
 const liveFileName = computed(() => {
   const candidates = LIVE_FILES[props.sourceType] || [];
   const match = files.value.find(f => candidates.includes(f.name));

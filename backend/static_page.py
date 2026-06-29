@@ -56,7 +56,7 @@ def build_idle_home_html() -> str:
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>RimModManager - 挂起中</title>
+    <title>RimCrow - 挂起中</title>
     <style>
         body {
             background-color: #0f172a; color: #475569; font-family: sans-serif;
@@ -145,7 +145,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RimModManager - 游戏日志</title>
+    <title>RimCrow - 游戏日志</title>
     <style>
         :root {{
             --bg: #0f172a;
@@ -664,7 +664,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 throw new Error(res?.message || '获取日志文件失败');
             }}
             const rawFiles = Array.isArray(res.data) ? res.data : [];
-            const preferredOrder = ['RMM_Realtime.log', 'Player.log'];
+            const preferredOrder = ['RimCrow_Realtime.log', 'Player.log'];
             state.files = preferredOrder
                 .map((name) => rawFiles.find((file) => file.name === name))
                 .filter(Boolean);
@@ -676,7 +676,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 return;
             }}
             if (!state.selectedFile || !state.files.some((file) => file.name === state.selectedFile)) {{
-                const preferred = state.files.find((file) => file.name === 'RMM_Realtime.log') || state.files[0];
+                const preferred = state.files.find((file) => file.name === 'RimCrow_Realtime.log') || state.files[0];
                 state.selectedFile = preferred.name;
             }}
             renderFiles();
@@ -826,13 +826,13 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
   {head_html}
   <style>
     :root {{
-      --rmm-toolbar-bg: rgba(17, 24, 39, 0.96);
-      --rmm-toolbar-line: rgba(255, 255, 255, 0.08);
-      --rmm-toolbar-text: #f8fafc;
-      --rmm-toolbar-dim: rgba(248, 250, 252, 0.72);
-      --rmm-toolbar-accent: #38bdf8;
-      --rmm-toolbar-danger: #f87171;
-      --rmm-toolbar-ok: #34d399;
+      --rimcrow-toolbar-bg: rgba(17, 24, 39, 0.96);
+      --rimcrow-toolbar-line: rgba(255, 255, 255, 0.08);
+      --rimcrow-toolbar-text: #f8fafc;
+      --rimcrow-toolbar-dim: rgba(248, 250, 252, 0.72);
+      --rimcrow-toolbar-accent: #38bdf8;
+      --rimcrow-toolbar-danger: #f87171;
+      --rimcrow-toolbar-ok: #34d399;
     }}
     html {{ scroll-behavior: smooth; }}
     body {{
@@ -840,7 +840,7 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       padding-top: 80px;
       background: #171717;
     }}
-    .rmm-workshop-toolbar {{
+    .rimcrow-workshop-toolbar {{
       position: fixed;
       inset: 0 0 auto 0;
       z-index: 2147483647;
@@ -849,19 +849,19 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       align-items: center;
       justify-content: space-between;
       padding: 6px 12px;
-      color: var(--rmm-toolbar-text);
+      color: var(--rimcrow-toolbar-text);
       background:
         radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 24%),
-        linear-gradient(135deg, rgba(17, 24, 39, 0.98), var(--rmm-toolbar-bg));
-      border-bottom: 1px solid var(--rmm-toolbar-line);
+        linear-gradient(135deg, rgba(17, 24, 39, 0.98), var(--rimcrow-toolbar-bg));
+      border-bottom: 1px solid var(--rimcrow-toolbar-line);
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
       font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
     }}
-    .rmm-toolbar-left {{
+    .rimcrow-toolbar-left {{
       min-width: 0;
       flex: 1 1 auto;
     }}
-    .rmm-toolbar-badge {{
+    .rimcrow-toolbar-badge {{
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -870,9 +870,9 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.14em;
-      color: var(--rmm-toolbar-accent);
+      color: var(--rimcrow-toolbar-accent);
     }}
-    .rmm-toolbar-badge::before {{
+    .rimcrow-toolbar-badge::before {{
       content: "";
       width: 7px;
       height: 7px;
@@ -880,7 +880,7 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       background: currentColor;
       box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
     }}
-    .rmm-toolbar-title {{
+    .rimcrow-toolbar-title {{
       font-size: 15px;
       font-weight: 800;
       line-height: 1.15;
@@ -888,34 +888,34 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       overflow: hidden;
       text-overflow: ellipsis;
     }}
-    .rmm-toolbar-url {{
+    .rimcrow-toolbar-url {{
       margin-top: 1px;
       font-size: 10px;
       font-family: Consolas, "Courier New", monospace;
-      color: var(--rmm-toolbar-dim);
+      color: var(--rimcrow-toolbar-dim);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }}
-    .rmm-toolbar-right {{
+    .rimcrow-toolbar-right {{
       display: grid;
       gap: 5px;
       min-width: 400px;
       max-width: 58vw;
       justify-items: end;
     }}
-    .rmm-toolbar-id {{
+    .rimcrow-toolbar-id {{
       font-size: 10px;
-      color: var(--rmm-toolbar-dim);
+      color: var(--rimcrow-toolbar-dim);
       text-align: right;
     }}
-    .rmm-toolbar-actions {{
+    .rimcrow-toolbar-actions {{
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
       gap: 6px;
     }}
-    .rmm-toolbar-actions button {{
+    .rimcrow-toolbar-actions button {{
       border: 0;
       border-radius: 999px;
       padding: 6px 10px;
@@ -923,57 +923,57 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
       font-weight: 700;
       cursor: pointer;
       color: #03111a;
-      background: var(--rmm-toolbar-accent);
+      background: var(--rimcrow-toolbar-accent);
       box-shadow: 0 6px 14px rgba(56, 189, 248, 0.22);
     }}
-    .rmm-toolbar-actions button.secondary {{
-      background: var(--rmm-toolbar-ok);
+    .rimcrow-toolbar-actions button.secondary {{
+      background: var(--rimcrow-toolbar-ok);
       box-shadow: 0 6px 14px rgba(52, 211, 153, 0.18);
     }}
-    .rmm-toolbar-actions button.warn {{
+    .rimcrow-toolbar-actions button.warn {{
       color: #fff;
-      background: var(--rmm-toolbar-danger);
+      background: var(--rimcrow-toolbar-danger);
       box-shadow: 0 6px 14px rgba(248, 113, 113, 0.18);
     }}
-    .rmm-toolbar-actions button.ghost {{
-      color: var(--rmm-toolbar-text);
+    .rimcrow-toolbar-actions button.ghost {{
+      color: var(--rimcrow-toolbar-text);
       background: rgba(255, 255, 255, 0.08);
       box-shadow: none;
       border: 1px solid rgba(255, 255, 255, 0.1);
     }}
-    .rmm-toolbar-actions button:disabled {{
+    .rimcrow-toolbar-actions button:disabled {{
       opacity: 0.45;
       cursor: not-allowed;
       box-shadow: none;
     }}
-    .rmm-toolbar-status {{
+    .rimcrow-toolbar-status {{
       min-height: 16px;
       font-size: 10px;
-      color: var(--rmm-toolbar-dim);
+      color: var(--rimcrow-toolbar-dim);
       text-align: right;
     }}
-    .rmm-toolbar-status[data-error="1"] {{
+    .rimcrow-toolbar-status[data-error="1"] {{
       color: #fca5a5;
     }}
-    .rmm-proxy-page {{
+    .rimcrow-proxy-page {{
       position: relative;
       z-index: 1;
     }}
     @media (max-width: 960px) {{
       body {{ padding-top: 120px; }}
-      .rmm-workshop-toolbar {{
+      .rimcrow-workshop-toolbar {{
         align-items: flex-start;
         flex-direction: column;
       }}
-      .rmm-toolbar-right {{
+      .rimcrow-toolbar-right {{
         min-width: 0;
         max-width: none;
         width: 100%;
         justify-items: start;
       }}
-      .rmm-toolbar-id,
-      .rmm-toolbar-status,
-      .rmm-toolbar-actions {{
+      .rimcrow-toolbar-id,
+      .rimcrow-toolbar-status,
+      .rimcrow-toolbar-actions {{
         text-align: left;
         justify-content: flex-start;
       }}
@@ -1059,10 +1059,10 @@ def build_workshop_error_html(message: str, target_url: str) -> str:
 
 
 def build_sub_browser_helper_html(target_url: str, title: str) -> str:
-    safe_title = html.escape(title or "RimModManager")
+    safe_title = html.escape(title or "RimCrow")
     safe_url = html.escape(target_url or "")
     js_target_url = json.dumps(target_url or "", ensure_ascii=False)
-    js_title = json.dumps(title or "RimModManager", ensure_ascii=False)
+    js_title = json.dumps(title or "RimCrow", ensure_ascii=False)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>

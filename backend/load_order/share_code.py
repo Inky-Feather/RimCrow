@@ -6,7 +6,8 @@ from backend.utils.tools import normalize_package_id, normalize_workshop_id
 from .models import FORMAT_SHARE_CODE, ParsedLoadOrderData
 
 
-SHARE_CODE_PREFIX = "RMM1"
+SHARE_CODE_PREFIX = "RC-"
+LEGACY_SHARE_CODE_PREFIX = "RMM1-"
 
 
 def _encode_mod_entry(package_id: str, workshop_id: str = "", name: str = ""):
@@ -93,17 +94,28 @@ def build_share_code(
     ]
     compressed = _compress_payload(payload)
     checksum = _checksum_hex(compressed)
-    return f"{SHARE_CODE_PREFIX}-{checksum}-{_urlsafe_b64encode(compressed)}"
+    return f"{SHARE_CODE_PREFIX}{checksum}-{_urlsafe_b64encode(compressed)}"
+
+
+def _split_share_code(share_code: str) -> tuple[str, str, str]:
+    normalized_code = "".join(str(share_code or "").split())
+    if normalized_code.lower().startswith("share://"):
+        normalized_code = normalized_code[8:].replace("/", "-", 1)
+
+    if normalized_code.startswith(SHARE_CODE_PREFIX):
+        checksum, separator, payload_text = normalized_code[len(SHARE_CODE_PREFIX):].partition("-")
+        return SHARE_CODE_PREFIX, checksum, payload_text if separator else ""
+
+    if normalized_code.startswith(LEGACY_SHARE_CODE_PREFIX):
+        checksum, separator, payload_text = normalized_code[len(LEGACY_SHARE_CODE_PREFIX):].partition("-")
+        return LEGACY_SHARE_CODE_PREFIX, checksum, payload_text if separator else ""
+
+    raise ValueError("分享码前缀无效，当前支持 RC- 或旧版 RMM1 分享码")
 
 
 def parse_share_code(share_code: str) -> ParsedLoadOrderData:
-    normalized_code = "".join(str(share_code or "").split())
-    prefix, separator, rest = normalized_code.partition("-")
-    if prefix != SHARE_CODE_PREFIX or not separator:
-        raise ValueError("分享码前缀无效，当前只支持 RMM1 分享码")
-
-    checksum, separator, payload_text = rest.partition("-")
-    if not checksum or not separator or not payload_text:
+    _, checksum, payload_text = _split_share_code(share_code)
+    if not checksum or not payload_text:
         raise ValueError("分享码结构无效")
 
     compressed = _urlsafe_b64decode(payload_text)
@@ -150,10 +162,9 @@ def parse_share_code(share_code: str) -> ParsedLoadOrderData:
 
 
 def describe_share_code(share_code: str) -> str:
-    normalized_code = "".join(str(share_code or "").split())
-    prefix, separator, rest = normalized_code.partition("-")
-    if prefix != SHARE_CODE_PREFIX or not separator: return "share://invalid"
-
-    checksum, separator, _ = rest.partition("-")
+    try:
+        prefix, checksum, _ = _split_share_code(share_code)
+    except ValueError:
+        return "share://invalid"
     if not checksum: return "share://invalid"
-    return f"share://{SHARE_CODE_PREFIX}/{checksum.upper()}"
+    return f"share://{prefix.rstrip('-')}/{checksum.upper()}"

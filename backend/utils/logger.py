@@ -145,7 +145,7 @@ class BaseLogReader:
         """
         blocks = []
         filename = os.path.basename(filepath)
-        is_json = filepath.endswith('.json') or 'RMM_Realtime' in filename or 'app.log' in filename
+        is_json = filepath.endswith('.json') or filename in {'RimCrow_Realtime.log', 'RMM_Realtime.log'} or 'app.log' in filename
         
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
@@ -307,7 +307,7 @@ class CustomColoredFormatter(colorlog.ColoredFormatter):
         if getattr(record, 'is_icecream', False):
             # 对于 ic() 的输出，移除 %(name)s:%(module)s:%(lineno)d 部分
             # 因为 ic() 的 message 内容本身就已经包含了原本的文件名和行号
-            # 这样就避免了打印出 "RimModManager:logger:133" 这种无效信息
+            # 这样就避免了打印出 "RimCrow:logger:133" 这种无效信息
             self._style._fmt = '%(log_color)s%(asctime)s | %(levelname)-8s | %(message)s'
         
         # 调用父类的 format 方法进行格式化
@@ -332,7 +332,7 @@ class LoggerManager:
         self._initialized = True
 
         # 1. 创建 Logger
-        self._logger = logging.getLogger("RimModManager")
+        self._logger = logging.getLogger("RimCrow")
         self._logger.setLevel(logging.DEBUG if settings.config.debug_mode else logging.INFO)
         self._logger.propagate = False # 防止重复打印
 

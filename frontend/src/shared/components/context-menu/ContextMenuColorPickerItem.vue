@@ -9,7 +9,13 @@
 </template>
 
 <script setup>
-import { ColorPicker } from 'vue3-colorpicker'
+import { defineAsyncComponent } from 'vue'
+
+const ColorPicker = defineAsyncComponent(async () => {
+  await import('vue3-colorpicker/style.css')
+  const module = await import('vue3-colorpicker')
+  return module.ColorPicker
+})
 
 const props = defineProps({
   item: { type: Object, required: true },

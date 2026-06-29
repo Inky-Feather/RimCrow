@@ -9,7 +9,7 @@ from urllib3.util.retry import Retry
 from backend.settings import settings
 from backend.utils.logger import logger
 
-DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 RimModManager"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 RimCrow"
 
 class NetworkManager:
     def __init__(self):
@@ -23,8 +23,8 @@ class NetworkManager:
         else:
             self.sys_hosts_path = "/etc/hosts"
             
-        self.marker_start = "# --- RimModManager Hosts Start ---\n"
-        self.marker_end = "# --- RimModManager Hosts End ---\n"
+        self.marker_start = "# --- RimCrow Hosts Start ---\n"
+        self.marker_end = "# --- RimCrow Hosts End ---\n"
 
         # 注册退出时的清理函数
         atexit.register(self.restore_system_hosts)
@@ -156,13 +156,16 @@ class NetworkManager:
 
     def _remove_custom_block(self, content: str) -> str:
         """从字符串中安全移除被 Marker 包裹的区域"""
-        start_idx = content.find(self.marker_start)
-        end_idx = content.find(self.marker_end)
-        
-        if start_idx != -1 and end_idx != -1:
-            end_idx += len(self.marker_end)
-            # 拼接开头和结尾部分
-            return content[:start_idx] + content[end_idx:]
+        markers = (
+            (self.marker_start, self.marker_end),
+            ("# --- RimModManager Hosts Start ---\n", "# --- RimModManager Hosts End ---\n"),
+        )
+        for marker_start, marker_end in markers:
+            start_idx = content.find(marker_start)
+            end_idx = content.find(marker_end)
+            if start_idx != -1 and end_idx != -1:
+                end_idx += len(marker_end)
+                content = content[:start_idx] + content[end_idx:]
         return content
 
 

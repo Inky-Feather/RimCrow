@@ -30,12 +30,12 @@ export const useModResidueStore = defineStore('modResidue', () => {
     overview.value = data && typeof data === 'object' ? data : createEmptyOverview()
   }
 
-  const loadOverview = async () => {
+  const loadOverview = async ({ silent = false } = {}) => {
     if (!window.pywebview?.api?.mod_residue_get_overview) return null
     loading.value = true
     try {
       const res = await window.pywebview.api.mod_residue_get_overview()
-      if (!checkResult(res, '读取卸载残留列表', false)) return null
+      if (!checkResult(res, '读取卸载残留列表', false, { silent })) return null
       setOverview(res.data || createEmptyOverview())
       return overview.value
     } finally {

@@ -63,9 +63,15 @@ export const useRuleStore = defineStore('rules', () => {
 
   const currentId = ref(null)
   const isLoading = ref(false)
+  const hasLoaded = ref(false)
   const refreshRuleState = async () => {
     await fetchRules()
-    await appStore.refreshModsData('规则变更后同步模组状态', { preserveListState: true, refreshRules: false })
+    await appStore.refreshModCoreData('规则变更后同步模组状态', {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+    })
   }
 
   // 当前正在检视的目标 Mod ID
@@ -74,11 +80,11 @@ export const useRuleStore = defineStore('rules', () => {
   // --- Actions ---
 
   // 初始化加载 (在 App 启动或 refreshModList 时调用)
-  const fetchRules = async () => {
+  const fetchRules = async ({ silent = false } = {}) => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.rules_get_all()
-      if (checkResult(res, '获取规则')) {
+      if (checkResult(res, '获取规则', false, { silent })) {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time
         workshopRulesUpdateTime.value = res.data.workshop_rules_update_time || 0
@@ -86,10 +92,14 @@ export const useRuleStore = defineStore('rules', () => {
         workshopModRules.value = res.data.workshop_rules
         userDynamicRules.value = res.data.user_dynamic_rules
         settings.value = res.data.settings
+        hasLoaded.value = true
+        return true
       }
     } catch (e) {
       console.error("获取规则失败:", e)
+      if (!silent) toast.error('获取规则失败。请稍后重试，详细原因已写入系统日志。')
     }
+    return false
   }
 
   // --- 核心：计算当前 Mod 的所有约束视图 ---
@@ -439,7 +449,7 @@ export const useRuleStore = defineStore('rules', () => {
 
   return {
     // 规则状态
-    communityModRules, communityRulesUpdateTime, workshopRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading,
+    communityModRules, communityRulesUpdateTime, workshopRulesUpdateTime, workshopModRules, userModRules, userDynamicRules, currentId, isLoading, hasLoaded,
     targetId, currentConstraints, settings, DYNAMIC_RULE_PROPS, DYNAMIC_RULE_ACTIONS, DYNAMIC_RULE_OPERATORS,
     // 规则读取与用户规则
     fetchRules, addUserModRule, removeUserModRuleItem, deleteUserModRule, updateComment,

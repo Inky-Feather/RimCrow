@@ -130,14 +130,25 @@ def test_mp_compat_package_ids_can_be_generated_from_source_archive(tmp_path):
     with patch.object(manager, "_download_source_archive", return_value=(
         archive_bytes,
         {"Last-Modified": "Wed, 11 Jun 2025 12:00:00 GMT", "ETag": '"source-etag"'},
-        "https://example.invalid/source.zip",
-    )):
-        result = manager.update_mp_compat_package_ids("https://example.invalid/source.zip", str(target_path))
+        "https://github.com/rwmt/Multiplayer-Compatibility/archive/refs/heads/master.zip",
+    )), patch("backend.managers.mgr_multiplayer_compat.GithubManager.fetch_commit", return_value={
+        "sha": "abcdef1234567890",
+        "commit": {"committer": {"date": "2025-06-11T12:00:00Z"}},
+    }):
+        result = manager.update_mp_compat_package_ids(
+            "https://github.com/rwmt/Multiplayer-Compatibility/archive/refs/heads/master.zip",
+            str(target_path),
+        )
 
     payload = json.loads(target_path.read_text(encoding="utf-8"))
     assert result["count"] == 3
     assert payload["package_ids"] == ["example.other", "example.target", "referenced.target"]
     assert payload["source"]["etag"] == "source-etag"
+    assert payload["source"]["source_id"] == "abcdef1234567890"
+    assert payload["source"]["source_id_type"] == "github_commit"
+    assert payload["source"]["repository"] == "rwmt/Multiplayer-Compatibility"
+    assert payload["source"]["ref"] == "master"
+    assert result["source_id"] == "abcdef1234567890"
 
 
 def test_official_compatibility_file_is_formatted_after_download(tmp_path):

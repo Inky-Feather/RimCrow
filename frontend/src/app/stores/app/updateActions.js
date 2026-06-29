@@ -26,7 +26,7 @@ const buildUpdatePromptItems = (info = {}, manual = true) => {
 
     return {
       id: `${info.version || 'app-update'}:${sourceName}:${index}`,
-      title: `${sourceName} · RimModManager v${source.version || info.version}`,
+      title: `${sourceName} · RimCrow v${source.version || info.version}`,
       description: source.changelog || info.changelog || '发现可用更新。',
       descriptionFormat: getUpdateDescriptionFormat(sourceName),
       meta,

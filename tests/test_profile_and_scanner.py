@@ -83,16 +83,16 @@ class TestProfileManager(unittest.TestCase):
         api.profile_mgr = Mock()
         api.profile_mgr.update_profile.return_value = True
 
-        result = API.load_order_inactive_save(api, ["mod.a"], ["mod.temp"])
+        result = API.load_order_inactive_save(api, ["mod.a", "rmm.companion", "rimcrow.companion"], ["rmm.companion", "mod.temp"])
 
         self.assertEqual(result["status"], "success")
-        self.assertEqual(api.active_context.inactive_mods_order, ["mod.a"])
-        self.assertEqual(api.active_context.temp_mods_order, ["mod.temp"])
+        self.assertEqual(api.active_context.inactive_mods_order, ["mod.a", "rimcrow.companion"])
+        self.assertEqual(api.active_context.temp_mods_order, ["rimcrow.companion", "mod.temp"])
         api.profile_mgr.update_profile.assert_called_once_with(
             "profile-a",
             {
-                "inactive_mods_order": ["mod.a"],
-                "temp_mods_order": ["mod.temp"],
+                "inactive_mods_order": ["mod.a", "rimcrow.companion"],
+                "temp_mods_order": ["rimcrow.companion", "mod.temp"],
             },
         )
 
@@ -279,6 +279,7 @@ class TestProfileManager(unittest.TestCase):
 
         with patch("backend.managers.mgr_profile.GameProfile.select", return_value=[SimpleNamespace(id="default")]), \
              patch.object(manager, "get_profile", return_value=profile), \
+             patch("backend.managers.mgr_profile.GameManager.detect_executable", return_value=str(install_root / "RimWorldWin64.exe")), \
              patch("backend.managers.mgr_profile.GameManager.get_game_version", return_value="1.5.4100"), \
              patch("backend.managers.mgr_profile.GameProfile.update", side_effect=lambda **kwargs: update_payload.update(kwargs) or _UpdateQuery()), \
              patch("backend.managers.mgr_profile.GameProfile.get_or_none", return_value=profile):
@@ -291,6 +292,48 @@ class TestProfileManager(unittest.TestCase):
         self.assertTrue(result)
         self.assertFalse(update_payload["prefer_steam_launch"])
         self.assertFalse(update_payload["use_workshop_mods"])
+        self.assertTrue(update_payload["is_steam"])
+
+    def test_update_profile_keeps_existing_steam_launch_choice_when_path_changes(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        install_root.mkdir(parents=True)
+
+        profile = SimpleNamespace(
+            id="default",
+            game_install_path="",
+            user_data_path="",
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+        )
+        update_payload = {}
+
+        class _UpdateQuery:
+            def where(self, *_args, **_kwargs):
+                return self
+
+            def execute(self):
+                return 1
+
+        manager._get_install_inspector = Mock(return_value=SimpleNamespace(
+            inspect=Mock(return_value=SimpleNamespace(is_steam=True, game_version="1.5.4100"))
+        ))
+        manager._sync_profile_to_disk = Mock()
+
+        with patch("backend.managers.mgr_profile.GameProfile.select", return_value=[SimpleNamespace(id="default")]), \
+             patch.object(manager, "get_profile", return_value=profile), \
+             patch("backend.managers.mgr_profile.GameManager.detect_executable", return_value=str(install_root / "RimWorldWin64.exe")), \
+             patch("backend.managers.mgr_profile.GameManager.get_game_version", return_value="1.5.4100"), \
+             patch("backend.managers.mgr_profile.GameProfile.update", side_effect=lambda **kwargs: update_payload.update(kwargs) or _UpdateQuery()), \
+             patch("backend.managers.mgr_profile.GameProfile.get_or_none", return_value=profile):
+            result = manager.update_profile("default", {
+                "game_install_path": str(install_root),
+            })
+
+        self.assertTrue(result)
+        self.assertFalse(update_payload["prefer_steam_launch"])
         self.assertTrue(update_payload["is_steam"])
 
     def test_update_profile_keeps_workshop_link_mode_when_enabled(self):
@@ -323,6 +366,7 @@ class TestProfileManager(unittest.TestCase):
 
         with patch("backend.managers.mgr_profile.GameProfile.select", return_value=[SimpleNamespace(id="default")]), \
              patch.object(manager, "get_profile", return_value=profile), \
+             patch("backend.managers.mgr_profile.GameManager.detect_executable", return_value=str(install_root / "RimWorldWin64.exe")), \
              patch("backend.managers.mgr_profile.GameManager.get_game_version", return_value="1.5.4100"), \
              patch("backend.managers.mgr_profile.GameProfile.update", side_effect=lambda **kwargs: update_payload.update(kwargs) or _UpdateQuery()), \
              patch("backend.managers.mgr_profile.GameProfile.get_or_none", return_value=profile):
@@ -372,8 +416,8 @@ class TestProfileManager(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(len(inserted_rows), 1)
-        self.assertFalse(inserted_rows[0]["prefer_steam_launch"])
-        self.assertTrue(inserted_rows[0]["use_workshop_mods"])
+        self.assertTrue(inserted_rows[0]["prefer_steam_launch"])
+        self.assertFalse(inserted_rows[0]["use_workshop_mods"])
         self.assertFalse(inserted_rows[0]["is_steam"])
         self.assertEqual(inserted_rows[0]["game_version"], "1.6.4100")
 
@@ -554,6 +598,11 @@ class TestPathChecker(unittest.TestCase):
         invalid_root.mkdir(parents=True, exist_ok=True)
 
         self.assertTrue(PathChecker.check_workshop_path(str(valid_root))["pass"])
+        missing_rimworld_root = temp_root / "steamapps" / "workshop" / "content" / "294100"
+        shutil.rmtree(valid_root)
+        pending_check = PathChecker.check_workshop_path(str(missing_rimworld_root))
+        self.assertTrue(pending_check["pass"])
+        self.assertEqual(pending_check["type"], "warn")
         self.assertFalse(PathChecker.check_workshop_path(str(invalid_root))["pass"])
 
 
@@ -569,7 +618,7 @@ class TestProfileRuntimeHelpers(unittest.TestCase):
         self.assertTrue(result["prefer_steam_launch"])
         self.assertFalse(result["use_workshop_mods"])
 
-    def test_normalize_profile_runtime_flags_forces_prefer_false_when_not_steam(self):
+    def test_normalize_profile_runtime_flags_keeps_manual_prefer_when_not_steam(self):
         result = normalize_profile_runtime_flags(
             False,
             prefer_steam_launch=True,
@@ -577,8 +626,8 @@ class TestProfileRuntimeHelpers(unittest.TestCase):
         )
 
         self.assertFalse(result["is_steam"])
-        self.assertFalse(result["prefer_steam_launch"])
-        self.assertTrue(result["use_workshop_mods"])
+        self.assertTrue(result["prefer_steam_launch"])
+        self.assertFalse(result["use_workshop_mods"])
 
     def test_detect_is_steam_managed_install_keeps_old_path_semantics_separate(self):
         self.assertTrue(detect_is_steam_managed_install("C:/Program Files (x86)/Steam/steamapps/common/RimWorld"))
@@ -599,6 +648,20 @@ class TestProfileRuntimeHelpers(unittest.TestCase):
         self.assertTrue(caps["steam_launch_enabled"])
         self.assertFalse(caps["workshop_deploy_enabled"])
         self.assertTrue(caps["workshop_detection_enabled"])
+
+    def test_resolve_profile_runtime_capabilities_keeps_manual_steam_launch_when_detection_fails(self):
+        context = SimpleNamespace(
+            is_steam=False,
+            is_steam_managed=False,
+            prefer_steam_launch=True,
+            use_workshop_mods=True,
+        )
+
+        with patch("backend.utils.profile_runtime.settings.config", SimpleNamespace(workshop_mods_path="D:/Workshop", steam_path="C:/Steam")):
+            caps = resolve_profile_runtime_capabilities(context)
+
+        self.assertTrue(caps["steam_launch_enabled"])
+        self.assertFalse(caps["workshop_deploy_enabled"])
 
 
 class TestGameInstallRegistry(unittest.TestCase):
@@ -1990,6 +2053,17 @@ class TestProfileConflictAnalysis(unittest.TestCase):
         self.assertEqual(mods[0]["coexist_sync_diff"]["signals"], ["size", "file_stats"])
 
 class TestApiScanMods(unittest.TestCase):
+    def test_scan_core_refresh_decision_ignores_noop_scans(self):
+        base_stats = {
+            'added': 0, 'updated': 0, 'skipped': 20, 'removed': 0,
+            'external_enabled': 0, 'strict_restored_disabled': 0, 'strict_restore_failed': 0,
+            'about_conflict_cleaned': 0, 'shadow_path_cleaned': 0,
+        }
+
+        self.assertFalse(ModScanner._should_refresh_core_after_scan(base_stats, forced_update=False))
+        self.assertTrue(ModScanner._should_refresh_core_after_scan({**base_stats, 'updated': 1}, forced_update=False))
+        self.assertTrue(ModScanner._should_refresh_core_after_scan(base_stats, forced_update=True))
+
     def test_scan_mods_always_scans_all_configured_domains_for_inventory_sync(self):
         api = API.__new__(API)
         api.active_context = SimpleNamespace(
@@ -2025,7 +2099,6 @@ class TestApiScanMods(unittest.TestCase):
             forced_update=False,
             size_check_override=None,
             size_check_paths=None,
-            residue_active_tokens=[],
             residue_scan_enabled=True,
         )
 
@@ -2063,7 +2136,6 @@ class TestApiScanMods(unittest.TestCase):
             forced_update=False,
             size_check_override=True,
             size_check_paths=None,
-            residue_active_tokens=[],
             residue_scan_enabled=True,
         )
 
@@ -2083,8 +2155,7 @@ class TestApiScanMods(unittest.TestCase):
             forced_update=False,
             size_check_override=None,
             size_check_paths=["D:/Mods/123456"],
-            residue_active_tokens=[],
-            residue_scan_enabled=True,
+            residue_scan_enabled=False,
         )
 
     def test_scan_mods_returns_warning_when_scanner_is_busy(self):
@@ -2099,6 +2170,44 @@ class TestApiScanMods(unittest.TestCase):
 
         self.assertEqual(res["status"], "warning")
         self.assertEqual(res["data"]["details"]["status"], "busy")
+
+    def test_startup_inventory_summary_refreshes_missing_state_before_reading_matrix(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(is_healthy=True)
+        api.steam_mgr = Mock()
+        api.steam_mgr.workshop_merged_data.return_value = {
+            "123456789": {"is_subscribed": True, "time_last_sync": 200},
+            "987654321": {"is_subscribed": False, "time_last_sync": 300},
+        }
+        calls = []
+
+        def fake_find_missing(delete, subscribed_workshop_ids):
+            calls.append(("find_missing", list(subscribed_workshop_ids)))
+
+        def fake_get_matrix(context):
+            calls.append(("get_matrix", context))
+            return {
+                "workshop": [{
+                    "store": "workshop",
+                    "workshop_id": "123456789",
+                    "path_hash": "hash-1",
+                    "path": "D:/Mods/123456789",
+                    "name": "Changed Mod",
+                    "last_scanned_at": 100,
+                    "state": MOD_ASSET_STATE_PRESENT,
+                }],
+                "self": [],
+                "local": [],
+            }
+
+        with patch("backend.api.ModMaintenanceDAO.find_missing_mods", side_effect=fake_find_missing), \
+             patch("backend.api.ModDAO.get_triple_domain_assets", side_effect=fake_get_matrix):
+            res = API.workspace_get_startup_inventory_summary(api)
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(calls[0], ("find_missing", ["123456789"]))
+        self.assertEqual(calls[1][0], "get_matrix")
+        self.assertEqual(res["data"]["counts"]["changed"], 1)
 
     def test_workspace_classification_treats_current_local_self_path_as_local_only(self):
         scope = _ProfilePathScope(
@@ -2201,7 +2310,7 @@ class TestApiGameLaunch(unittest.TestCase):
         api._ensure_runtime_links_for_launch.assert_not_called()
         startfile.assert_called_once_with("steam://run/294100")
 
-    def test_game_launch_returns_error_when_steam_not_ready_for_direct_game_launch(self):
+    def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)
         profile = SimpleNamespace(
             id="default",
@@ -2235,9 +2344,10 @@ class TestApiGameLaunch(unittest.TestCase):
              patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}):
             res = API.game_launch(api, "default")
 
-        self.assertEqual(res["status"], "error")
-        self.assertEqual(res["data"]["runtime_session"]["state"], "idle")
-        self.assertEqual(res["data"]["failure_reason"], "steam_ready_timeout")
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["data"]["action"], "confirm_direct_launch")
+        self.assertEqual(res["data"]["reason"], "steam_not_ready")
+        self.assertEqual(res["data"]["steam_status"]["reason"], "steam_ready_timeout")
         api._launch_profile_with_runtime_links.assert_not_called()
 
     def test_game_launch_warns_when_direct_launching_steam_profile_with_workshop_links_while_steam_running(self):
@@ -2498,6 +2608,37 @@ class TestSettingsPathNormalization(unittest.TestCase):
 
         self.assertEqual(warnings, [])
         self.assertEqual(settings.config.workshop_mods_path, normalize_path_for_storage(raw_workshop_path))
+
+    def test_update_from_dict_normalizes_multiplayer_data_paths(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        official_path = temp_root / "Data" / "multiplayerCompatibility.json"
+        package_ids_path = temp_root / "Data" / "mpCompatPackageIds.json"
+        official_path.parent.mkdir(parents=True, exist_ok=True)
+
+        original_official = settings.config.multiplayer_compatibility_path
+        original_package_ids = settings.config.mp_compat_package_ids_path
+        self.addCleanup(setattr, settings.config, "multiplayer_compatibility_path", original_official)
+        self.addCleanup(setattr, settings.config, "mp_compat_package_ids_path", original_package_ids)
+
+        raw_official_path = str(official_path).replace(os.sep, "/")
+        raw_package_ids_path = str(package_ids_path).replace(os.sep, "/")
+        with patch.object(settings, "save"):
+            warnings = settings.update_from_dict({
+                "multiplayer_compatibility_path": raw_official_path,
+                "mp_compat_package_ids_path": raw_package_ids_path,
+            })
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(
+            settings.config.multiplayer_compatibility_path,
+            normalize_path_for_storage(raw_official_path),
+        )
+        self.assertEqual(
+            settings.config.mp_compat_package_ids_path,
+            normalize_path_for_storage(raw_package_ids_path),
+        )
 
     def test_update_from_dict_resets_self_mods_path_when_equal_to_workshop(self):
         temp_root = Path(tempfile.mkdtemp())
@@ -2963,11 +3104,11 @@ class TestApiSaveSettings(unittest.TestCase):
         api.profile_mgr = SimpleNamespace(build_profile_context=Mock(return_value=SimpleNamespace(user_data_path="D:/Profiles/runtime")))
         api.game_monitor = SimpleNamespace(get_runtime_session=Mock(return_value=RuntimeSession(profile_id="profile-b", state="running", source="manager")))
 
-        res = API.read_log_page(api, "game", "RMM_Realtime.log", 1, 500, "runtime")
+        res = API.read_log_page(api, "game", "RimCrow_Realtime.log", 1, 500, "runtime")
 
         self.assertEqual(res["status"], "success")
         api.game_log_mgr.read_log_page_for_root.assert_called_once_with(
-            "RMM_Realtime.log",
+            "RimCrow_Realtime.log",
             user_data_root="D:/Profiles/runtime",
             page=1,
             page_size=500,

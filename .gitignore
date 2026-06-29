@@ -9,6 +9,7 @@ updates/
 *.md
 !README.md
 .*/
+.worktrees/
 tools/
 *.bat
 
@@ -53,3 +54,4 @@ temp*.vue
 build/
 temp/
 .gitnexus
+frontend/src/shared/branding/private-assets/

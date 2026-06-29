@@ -140,7 +140,40 @@
                 <div class="rounded-xl border border-accent-danger/20 bg-accent-danger/8 px-3 py-3 text-xs leading-relaxed text-text-dim">
                   覆盖环境会替换这个环境里的游戏设置、模组设置和存档排序等内容。
                 </div>
-                <ProfileConflictPlanEditor :rows="profilePlanRows" :available-installs="availableInstalls" @strategy="applyProfileStrategy" />
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-bold uppercase tracking-wide text-text-dim">批量处理</span>
+                    <label v-for="option in profileStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
+                      :class="profileStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
+                      <input class="mr-1 accent-accent-primary" type="radio" :checked="profileStrategy === option.value" @change="setProfileStrategy(option.value)" >
+                      {{ option.label }}
+                    </label>
+                  </div>
+
+                  <div v-for="row in profilePlanRows" :key="row.archive_key" class="modal-section-subtle p-3" >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="text-sm font-bold text-text-main">{{ row.name || row.archive_key }}</div>
+                      <span class="text-[0.68rem] text-text-dim">
+                        {{ row.conflicts.length > 0 ? `本地找到 ${row.conflicts.length} 个同名环境` : '本地没有重名环境' }}
+                      </span>
+                    </div>
+
+                    <div class="mt-3 grid grid-cols-3 gap-3">
+                      <div class="text-xs text-text-dim">
+                        <CommonSelect v-model="row.mode" label="处理方式" :options="buildProfileModeOptions(row)" />
+                      </div>
+                      <div v-if="row.mode === 'overwrite'" class="col-span-2 text-xs text-text-dim">
+                        <CommonSelect v-model="row.target_profile_id" label="覆盖到" :options="buildProfileConflictOptions(row)" />
+                      </div>
+                      <div v-else-if="row.mode === 'create'" class="col-span-2 text-xs text-text-dim">
+                        <CommonSelect v-model="row.game_install_path" label="要使用的游戏目录" :options="profileAvailableInstallOptions" />
+                      </div>
+                      <div v-else class="col-span-2 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2 text-xs text-text-dim">
+                        这项将跳过。
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div v-else class="modal-section-subtle px-3 py-3 text-xs leading-relaxed text-text-dim">
                 当前包附带 {{ inspectData.profiles?.length || 0 }} 个环境。勾选“同时应用环境数据”后，再在这里选择重名环境的处理方式。
@@ -158,10 +191,35 @@
                   <div class="modal-section-subtle px-3 py-3 text-xs leading-relaxed text-text-dim">
                     当前发现 {{ modConflictRows.length }} 个同名模组，导入时会按这里的规则处理。
                   </div>
-                  <ModConflictPlanEditor
-                    :rows="modConflictRows"
-                    @strategy="applyModConflictStrategy"
-                  />
+                  <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-xs font-bold uppercase tracking-wide text-text-dim">批量处理</span>
+                      <label v-for="option in modConflictStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
+                        :class="modConflictStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
+                        <input class="mr-1 accent-accent-primary" type="radio" :checked="modConflictStrategy === option.value" @change="setModConflictStrategy(option.value)" >
+                        {{ option.label }}
+                      </label>
+                    </div>
+
+                    <div v-for="row in modConflictRows" :key="row.folder_name" class="modal-section-subtle p-3" >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="text-sm font-bold text-text-main">{{ row.folder_name }}</div>
+                        <div class="text-[0.68rem] text-text-dim">{{ row.existing_path }}</div>
+                      </div>
+
+                      <div class="mt-3 grid grid-cols-3 gap-3">
+                        <div class="text-xs text-text-dim">
+                          <CommonSelect v-model="row.mode" label="处理方式" :options="modConflictModeOptions" />
+                        </div>
+                        <div v-if="row.mode === 'rename'" class="col-span-2 text-xs text-text-dim">
+                          <CommonInput v-model="row.rename_to" label="新文件夹名" placeholder="留空会自动补一个新名字" />
+                        </div>
+                        <div v-else class="col-span-2 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2 text-xs text-text-dim">
+                          {{ row.mode === 'overwrite' ? '导入后会直接替换本地同名文件夹。' : '这项将跳过。' }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div v-else-if="modImportForm.import_mods" class="rounded-xl border border-accent-tip/20 bg-accent-tip/8 px-3 py-3 text-xs leading-relaxed text-text-dim">
                   当前没有发现同名模组，导入时会直接写入目标目录。
@@ -177,11 +235,40 @@
             <div class="mb-3 rounded-xl border border-accent-danger/20 bg-accent-danger/8 px-3 py-3 text-xs leading-relaxed text-text-dim">
               这里统一处理所有同名环境。覆盖时只替换环境里的实际使用数据；新建时会尽量保留导入包里的环境信息。
             </div>
-            <ProfileConflictPlanEditor
-              :rows="profilePlanRows"
-              :available-installs="availableInstalls"
-              @strategy="applyProfileStrategy"
-            />
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wide text-text-dim">批量处理</span>
+                <label v-for="option in profileStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
+                  :class="profileStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
+                  <input class="mr-1 accent-accent-primary" type="radio" :checked="profileStrategy === option.value" @change="setProfileStrategy(option.value)" >
+                  {{ option.label }}
+                </label>
+              </div>
+
+              <div v-for="row in profilePlanRows" :key="row.archive_key" class="modal-section-subtle p-3" >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="text-sm font-bold text-text-main">{{ row.name || row.archive_key }}</div>
+                  <span class="text-[0.68rem] text-text-dim">
+                    {{ row.conflicts.length > 0 ? `本地找到 ${row.conflicts.length} 个同名环境` : '本地没有重名环境' }}
+                  </span>
+                </div>
+
+                <div class="mt-3 grid grid-cols-3 gap-3">
+                  <div class="text-xs text-text-dim">
+                    <CommonSelect v-model="row.mode" label="处理方式" :options="buildProfileModeOptions(row)" />
+                  </div>
+                  <div v-if="row.mode === 'overwrite'" class="col-span-2 text-xs text-text-dim">
+                    <CommonSelect v-model="row.target_profile_id" label="覆盖到" :options="buildProfileConflictOptions(row)" />
+                  </div>
+                  <div v-else-if="row.mode === 'create'" class="col-span-2 text-xs text-text-dim">
+                    <CommonSelect v-model="row.game_install_path" label="要使用的游戏目录" :options="profileAvailableInstallOptions" />
+                  </div>
+                  <div v-else class="col-span-2 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2 text-xs text-text-dim">
+                    这项将跳过。
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
         </div>
 
@@ -296,9 +383,8 @@ import { useModStore } from '../mod/stores/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { formatFileSize } from '../../shared/lib/format'
 import { toast } from '../../shared/lib/common'
+import CommonInput from '../../shared/components/input/CommonInput.vue'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
-import ProfileConflictPlanEditor from './ProfileConflictPlanEditor.vue'
-import ModConflictPlanEditor from './ModConflictPlanEditor.vue'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 
 const appStore = useAppStore()
@@ -333,6 +419,23 @@ const modFolderNameTypeOptions = [
   { label: '按工坊ID', value: 'workshop_id' },
   { label: '按包名', value: 'package_id' },
 ]
+const profileStrategyOptions = [
+  { value: 'overwrite_all', label: '全部覆盖' },
+  { value: 'create_all', label: '全部新建' },
+  { value: 'skip_all', label: '全部跳过' },
+  { value: 'per_item', label: '逐项处理' },
+]
+const modConflictStrategyOptions = [
+  { value: 'overwrite_all', label: '全部替换' },
+  { value: 'skip_all', label: '全部跳过' },
+  { value: 'rename_all', label: '全部另存' },
+  { value: 'per_item', label: '逐项处理' },
+]
+const modConflictModeOptions = [
+  { value: 'overwrite', label: '替换原文件' },
+  { value: 'skip', label: '跳过' },
+  { value: 'rename', label: '另存为新文件夹' },
+]
 
 const modImportForm = reactive({
   import_mods: true,
@@ -343,6 +446,8 @@ const modImportForm = reactive({
 
 const profilePlanRows = ref([])
 const modConflictRows = ref([])
+const profileStrategy = ref('per_item')
+const modConflictStrategy = ref('per_item')
 
 const availableInstalls = computed(() => {
   const raw = inspectData.value?.available_installs || modPackageSchema.value?.available_installs || dataBundleSchema.value?.available_installs || []
@@ -361,6 +466,10 @@ const availableInstallOptions = computed(() => {
     ...options,
   ]
 })
+const profileAvailableInstallOptions = computed(() => availableInstalls.value.map(install => ({
+  value: String(install.install_path || ''),
+  label: `${install.game_version || '版本未知'} | ${install.install_path || '路径未知'}`,
+})))
 const selfModsPath = computed(() => String(modPackageSchema.value?.self_mods_path || appStore.settings.self_mods_path || '').trim())
 const archiveSummary = computed(() => {
   const archiveStats = inspectData.value?.archive_stats || {}
@@ -502,6 +611,8 @@ const resetState = () => {
   modImportForm.target_kind = String(dialogPreset.value?.targetKind || (availableInstalls.value.length > 0 ? 'game_install' : 'self_mods'))
   modImportForm.game_install_path = String(dialogPreset.value?.gameInstallPath || availableInstalls.value[0]?.install_path || '')
   modImportForm.apply_environment_data = false
+  profileStrategy.value = 'per_item'
+  modConflictStrategy.value = 'per_item'
   lastPreparedImportTargetKey.value = (dialogMode.value === 'mod-import' && inspectData.value)
     ? buildImportTargetKey()
     : ''
@@ -562,6 +673,22 @@ const applyProfileStrategy = (strategy) => {
     }
   })
 }
+const setProfileStrategy = (strategy) => {
+  profileStrategy.value = strategy
+  applyProfileStrategy(strategy)
+}
+const buildProfileModeOptions = (row) => [
+  { value: 'create', label: '新建环境' },
+  { value: 'overwrite', label: '覆盖现有环境' },
+  { value: 'skip', label: '跳过' },
+].filter(option => option.value !== 'overwrite' || row.conflicts.length > 0)
+const buildProfileConflictOptions = (row) => [
+  { value: '', label: '请选择要覆盖的环境' },
+  ...(row.conflicts || []).map(item => ({
+    value: String(item.profile_id || ''),
+    label: `${item.name || '未命名环境'} | ${item.game_version || '版本未知'} | ${item.game_install_path || '暂未绑定游戏目录'}`,
+  })),
+]
 
 const buildModConflictRows = (inspect) => {
   const entries = Array.isArray(inspect?.mod_conflicts) ? inspect.mod_conflicts : []
@@ -579,6 +706,10 @@ const applyModConflictStrategy = (strategy) => {
     else if (strategy === 'skip_all') row.mode = 'skip'
     else if (strategy === 'rename_all') row.mode = 'rename'
   })
+}
+const setModConflictStrategy = (strategy) => {
+  modConflictStrategy.value = strategy
+  applyModConflictStrategy(strategy)
 }
 
 const validateProfileRows = () => {
@@ -598,14 +729,14 @@ const validateModConflictRows = () => {
 const getBundleFilters = () => {
   if (dialogMode.value === 'data-import') {
     const extensions = [
-      dataBundleSchema.value?.file_extension || '.rmmdata.zip',
-      ...(Array.isArray(dataBundleSchema.value?.legacy_file_extensions) ? dataBundleSchema.value.legacy_file_extensions : ['.rmmdata']),
+      dataBundleSchema.value?.file_extension || '.rimcrowdata.zip',
+      ...(Array.isArray(dataBundleSchema.value?.legacy_file_extensions) ? dataBundleSchema.value.legacy_file_extensions : ['.rmmdata.zip', '.rmmdata']),
     ]
       .map(item => String(item || '').trim())
       .filter(Boolean)
-    return [`RMM Data Package (${extensions.map(item => `*${item}`).join(';')})`, 'All Files (*.*)']
+    return [`RimCrow Data Package (${extensions.map(item => `*${item}`).join(';')})`, 'All Files (*.*)']
   }
-  return [`RMM Mod Package (*${modPackageSchema.value?.file_extension || '.rmmmods.zip'})`, 'All Files (*.*)']
+  return [`RimCrow Mod Package (*${modPackageSchema.value?.file_extension || '.rimcrowmods.zip'})`, 'All Files (*.*)']
 }
 
 const pickImportBundle = async () => {

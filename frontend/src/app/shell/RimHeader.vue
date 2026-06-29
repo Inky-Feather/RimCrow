@@ -5,9 +5,12 @@
   <header class="m-1 h-14 bg-bg-surface/60 rounded-2xl flex items-center px-3 justify-between border border-border-base/5 shadow-lg shrink-0 z-50">
     <!-- 标题 -->
     <div class="flex items-center gap-4 mx-1 ">
-      <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-text-main to-text-dim bg-clip-text text-transparent">
-        <span class="text-accent-primary animate-breathe ">RIM</span> MODMANAGER
-      </h1>
+      <div class="flex items-center gap-2">
+        <IconSelfOriginal class="size-7 shrink-0" />
+        <h1 class="font-bold tracking-wider text-lg bg-linear-to-r from-text-main to-text-dim bg-clip-text text-transparent">
+          <span class="text-accent-primary animate-breathe ">RIM</span> CROW
+        </h1>
+      </div>
       <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion }}</span>
       <!-- 环境切换器 -->
       <div data-tour="profile-switcher">
@@ -66,33 +69,33 @@
         <ClipboardList class="size-6" />
         <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-lg opacity-0
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
-          <button @click="runHeaderAction('import-file', () => loadOrder('0'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+          <button @click="runHeaderAction('import-file', () => loadOrder('0'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
             v-tooltip="isHeaderActionPending('import-file') ? '正在导入加载序列' : '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'" >
             <LoaderCircle v-if="isHeaderActionPending('import-file')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('import-file') ? '导入中' : '导入加载序列' }}
           </button>
-          <button @click="runHeaderAction('export-modsconfig', () => exportOrder())" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+          <button @click="runHeaderAction('export-modsconfig', () => exportOrder())" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
             v-tooltip="isHeaderActionPending('export-modsconfig') ? '正在导出 ModsConfig' : '导出为 ModsConfig.xml（仅含包名）'">
             <LoaderCircle v-if="isHeaderActionPending('export-modsconfig')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-modsconfig') ? '导出中' : '导出加载序列' }}
           </button>
-          <button @click="runHeaderAction('export-modlist', () => exportOrder(null,'modlist'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+          <button @click="runHeaderAction('export-modlist', () => exportOrder(null,'modlist'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
             v-tooltip="isHeaderActionPending('export-modlist') ? '正在导出 ModList' : '导出为 ModList.xml（含包名和工坊ID）'" >
             <LoaderCircle v-if="isHeaderActionPending('export-modlist')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-modlist') ? '导出中' : '导出分享列表' }}
           </button>
-          <button @click="runHeaderAction('export-rml', () => exportOrder(null,'rml'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+          <button @click="runHeaderAction('export-rml', () => exportOrder(null,'rml'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
             v-tooltip="isHeaderActionPending('export-rml') ? '正在导出 RML' : '导出为 RML（游戏原生导出格式）'" >
             <LoaderCircle v-if="isHeaderActionPending('export-rml')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-rml') ? '导出中' : '导出原生分享' }}
           </button>
-          <button @click="runHeaderAction('import-share-code', importShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('import-share-code') ? '正在导入分享码' : '粘贴 RMM1 分享码并导入到对比视图'" >
+          <button @click="runHeaderAction('import-share-code', importShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+            v-tooltip="isHeaderActionPending('import-share-code') ? '正在导入分享码' : '粘贴 RC- 分享码并导入到对比视图'" >
             <LoaderCircle v-if="isHeaderActionPending('import-share-code')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('import-share-code') ? '导入中' : '导入分享码' }}
           </button>
-          <button @click="runHeaderAction('export-share-code', exportShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'rmm-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-share-code') ? '正在生成分享码' : '生成 RMM1 分享码并复制到剪贴板'" >
+          <button @click="runHeaderAction('export-share-code', exportShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
+            v-tooltip="isHeaderActionPending('export-share-code') ? '正在生成分享码' : '生成 RC- 分享码并复制到剪贴板'" >
             <LoaderCircle v-if="isHeaderActionPending('export-share-code')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-share-code') ? '生成中' : '复制分享码' }}
           </button>
@@ -140,6 +143,7 @@ import { useAppStore } from '../stores/appStore.js'
 import { useAiStore } from '../../features/ai/aiStore.js'
 import ProfileSwitcher from '../../features/profiles/ProfileSwitcher.vue';
 import { BotMessageSquare, ClipboardList, FileSearch2, FileSliders, BrushCleaning, Images, LoaderCircle } from 'lucide-vue-next';
+import { IconSelfOriginal } from '../../shared/lib/constants'
 import { useProfileStore } from '../../features/profiles/profileStore.js';
 import { useOrderStore } from '../../features/load-order/orderStore.js';
 import { useModResidueStore } from '../../features/mod-residue/modResidueStore.js';

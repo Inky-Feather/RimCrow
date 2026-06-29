@@ -127,6 +127,29 @@ class TestShortcutHelpers(unittest.TestCase):
             self.assertFalse(existing_result["changed"])
             self.assertEqual(create_shortcut_mock.call_count, 1)
 
+    def test_ensure_browser_mode_shortcut_removes_legacy_rimmodmanager_entries(self):
+        current_exe = self.temp_dir / "RimCrow.exe"
+        current_exe.write_text("current", encoding="utf-8")
+        legacy_exe = self.temp_dir / "RimModManager.exe"
+        legacy_exe.write_text("legacy", encoding="utf-8")
+        legacy_shortcut = self.temp_dir / "RimModManager [Browser mode].lnk"
+        legacy_shortcut.write_text("legacy shortcut", encoding="utf-8")
+        shortcut_path = self.temp_dir / "RimCrow [Browser mode].lnk"
+        spec = {
+            "shortcut_path": str(shortcut_path),
+            "target_path": str(current_exe),
+            "shortcut_kind": "lnk",
+        }
+
+        with (
+            patch.object(FileManager, "build_browser_mode_shortcut_spec", return_value=spec),
+            patch("backend.managers.mgr_files.create_shortcut", return_value={**spec, "arguments": "--browser"}),
+        ):
+            FileManager.ensure_browser_mode_shortcut(str(current_exe))
+
+        self.assertFalse(legacy_exe.exists())
+        self.assertFalse(legacy_shortcut.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

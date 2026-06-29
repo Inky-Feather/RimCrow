@@ -9,6 +9,7 @@ import glob
 import sys
 import ctypes
 import threading
+import time
 
 def enable_dpi_awareness():
     """强制开启 Windows DPI 感知，防止多屏缩放导致的窗口拉伸"""
@@ -119,6 +120,15 @@ def cleanup_update_remnants():
 
 
 def main():
+    startup_start_at = time.perf_counter()
+
+    def log_startup_perf(stage: str, *, level: str = "info", **fields):
+        elapsed_ms = (time.perf_counter() - startup_start_at) * 1000
+        extras = " ".join(f"{key}={value}" for key, value in fields.items())
+        suffix = f" {extras}" if extras else ""
+        log = logger.warning if level == "warning" else logger.info
+        log("[StartupPerf] 桌面启动阶段：stage=%s total_ms=%.2f%s", stage, elapsed_ms, suffix)
+
     # 1. Windows 打包后的多进程支持 (必须放在最前面)
     multiprocessing.freeze_support()
     # 2. 清理热更新遗留的 .old 文件
@@ -160,6 +170,7 @@ def main():
         3. 因此这里改成：窗口一旦 shown，就立刻关闭 splash；后续页面仍可继续加载，但那属于应用内阶段。
         """
         desktop_startup_state['window_shown'] = True
+        log_startup_perf("window_shown")
         close_startup_splash()
 
     def mark_desktop_page_loaded():
@@ -172,6 +183,7 @@ def main():
         这样超时处理时就能给出更准确的错误提示。
         """
         desktop_startup_state['page_loaded'] = True
+        log_startup_perf("page_loaded")
         close_startup_splash()
 
     def report_desktop_startup_timeout():
@@ -187,6 +199,7 @@ def main():
         if desktop_startup_state['page_loaded'] or desktop_startup_state['timeout_reported']: return
 
         desktop_startup_state['timeout_reported'] = True
+        log_startup_perf("startup_timeout", level="warning", window_shown=desktop_startup_state['window_shown'])
         close_startup_splash()
 
         if desktop_startup_state['window_shown']:
@@ -218,7 +231,7 @@ def main():
 
         threading.Thread(
             target=guard,
-            name="rmm-desktop-startup-timeout",
+            name="desktop-startup-timeout",
             daemon=True,
         ).start()
 
@@ -244,17 +257,21 @@ def main():
         # 0. 先校验环境，有问题直接弹原生框并退出
         launch_mode = get_launch_mode()
         validate_environment(on_error=close_startup_splash, require_webview2=launch_mode != "browser")
+        log_startup_perf("environment_validated", launch_mode=launch_mode)
 
         # 只有主进程才会执行到这里，此时再导入 GUI 库
         # 避免 Worker 进程加载浏览器内核，节省内存并防止冲突
+        log_startup_perf("api_import_start")
         from backend.api import API
+        log_startup_perf("api_import_ready")
         
         # 记录启动信息
-        logger.info(f"Starting RimModManager... Ver: {__version__ or 'Dev'}")
+        logger.info(f"Starting RimCrow... Ver: {__version__ or 'Dev'}")
         logger.debug(f"Debug Mode: {settings.config.debug_mode}")
         logger.info(f"Launch Mode: {launch_mode}")
         
         api = API(runtime_mode=launch_mode)
+        log_startup_perf("api_ready")
         window_width = int(settings.config.window_width)  # 默认1400px
         window_height = int(settings.config.window_height)  # 默认900px
         
@@ -279,6 +296,7 @@ def main():
         # 设置环境变量传给 WebView2
         os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = " ".join(additional_args)
         entrypoint = get_entrypoint()
+        log_startup_perf("entrypoint_resolved", entrypoint=entrypoint)
         
         if launch_mode == "browser":
             from backend.browser_runtime import BrowserAppServer
@@ -305,7 +323,7 @@ def main():
         import webview
         # 创建窗口
         window = webview.create_window(
-            'RimModManager', 
+            'RimCrow',
             url=entrypoint,
             js_api=api,
             width=window_width, # 读取记忆的窗口大小
@@ -315,6 +333,7 @@ def main():
             frameless=False, # 可以选择开启无边框模式来实现完全自定义标题栏
         )
         logger.info(f"Entrypoint: {entrypoint}")
+        log_startup_perf("window_created")
         if window: 
             api.set_window(window)
             # `shown` 是“窗口可见”的信号，用它来结束 PyInstaller 启动画面；
@@ -328,6 +347,7 @@ def main():
         EventBus.set_window(window) # type: ignore
         start_desktop_startup_timeout_guard()
         # 捕获全局未处理异常
+        log_startup_perf("webview_start_call")
         webview.start(debug=settings.config.debug_mode) # debug=True 允许在窗口里按 F12 看控制台
     except Exception as e:
         close_startup_splash()

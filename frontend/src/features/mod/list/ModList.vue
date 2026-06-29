@@ -184,16 +184,8 @@
 
         <ModListQuickActions
           :list-id="props.listId"
-          :missing-install-summary="missingInstallSummary"
-          :missing-install-tooltip="missingInstallTooltip"
-          :missing-install-button-class="missingInstallButtonClass"
-          :supplement-summary="supplementSummary"
-          :supplement-tooltip="supplementTooltip"
-          :supplement-button-class="supplementButtonClass"
-          :invalid-mods-to-remove="invalidModsToRemove"
-          :open-missing-install-dialog="openMissingInstallDialog"
-          :open-supplement-dialog="openSupplementDialog"
-          :remove-invalid-mod="removeInvalidMod"
+          :model-value="props.modelValue"
+          :refresh-virtual-list="refreshVirtualList"
         />
 
       </div>
@@ -208,31 +200,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import VirtualDragList from '../../../shared/components/list/VirtualDragList.vue';
 import { useToast } from "vue-toastification";
 import { Motion } from 'motion-v';
 import { useAppStore } from '../../../app/stores/appStore';
 import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
-import { ISSUE_TYPE } from '../../../shared/lib/constants';
+import { ISSUE_TITLE_MAP } from '../../../shared/lib/constants';
 import ModItem from '../ModItem.vue';
 import ModListQuickActions from './ModListQuickActions.vue';
 import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue';
 import DependencyGraph from '../DependencyGraph.vue'
 import { useContextMenuStore } from '../../../shared/components/context-menu/contextMenuStore';
 import { useProfileStore } from '../../profiles/profileStore';
-import { useSupplementStore } from '../../supplement/supplementStore';
-import { useMissingInstallStore } from '../../supplement/missingInstallStore';
+import { useGuideStore } from '../../guide/guideStore'
 import { normalizePackageId, normalizePackageToken } from '../lib/modIdentity';
-import { useModListQuickActions } from './useModListQuickActions'
 import { useModListQuery } from './useModListQuery'
-import { useModListIssues } from './useModListIssues'
 import { useModListSections } from './useModListSections'
 import { useModListDrag } from './useModListDrag'
-import { useModListViewport } from './useModListViewport'
 import { setActiveKeyScope } from '../../../shared/commands/keyScopeStore'
 import { registerModListActions } from '../../../app/commands/modListActions'
+import { Megaphone, MegaphoneOff, SearchAlert } from 'lucide-vue-next'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -248,8 +237,6 @@ const modStore = useModStore()
 const searchStore = useSearchStore()
 const menuStore = useContextMenuStore()
 const profileStore = useProfileStore()
-const supplementStore = useSupplementStore()
-const missingInstallStore = useMissingInstallStore()
 const toast = useToast();
 const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 
@@ -288,15 +275,71 @@ const getRealIndex = (id: string) => realIndexMap.value.get(normalizeId(id)) ?? 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
 const issuesSummary = computed(() => modStore.getListIssues(props.listId))
-
-const {
-  // 缺失安装
-  missingInstallSummary, missingInstallTooltip, missingInstallButtonClass, invalidModsToRemove, openMissingInstallDialog,
-  // 补全提示
-  supplementSummary, supplementTooltip, supplementButtonClass, openSupplementDialog,
-} = useModListQuickActions({
-  props, profileStore, supplementStore, missingInstallStore, issuesSummary, missingFileIssueType: ISSUE_TYPE.ERROR_MISSING_FILE, 
+const issueTooltip = computed(() => {
+  const summary = issuesSummary.value
+  if (summary.count === 0) return null
+  const errorInfo = summary.errorCount > 0 ? `!!${summary.errorCount} 个错误!!` : ''
+  const warningInfo = summary.warnCount > 0 ? `^^${summary.warnCount} 个警告^^` : ''
+  let text = `**发现 ${summary.count} 个问题Mod**（${errorInfo} ${warningInfo}）`
+  for (const [type, ids] of Object.entries(summary.stats)) {
+    if ((ids as string[]).length === 0) continue
+    const typeName = ISSUE_TITLE_MAP[type] || type
+    const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible', 'wrong_order', 'multiplayer_incompatible'].includes(type)
+    const titleMark = isError ? '!!' : '^^'
+    text += `\n${titleMark}${typeName} (${(ids as string[]).length}):${titleMark}`
+    ;(ids as string[]).slice(0, 3).forEach(id => {
+      text += `\n  • ${modStore.displayModName(id)}`
+    })
+    if ((ids as string[]).length > 3) {
+      text += `\n  __...及其他 ${(ids as string[]).length - 3} 项__`
+    }
+  }
+  text += isFilterByIssue.value ? '\n\n__[[(再次点击取消筛选)]]__' : '\n\n__[[(点击筛选查看全部问题项)]]__'
+  text += '\n__[[(可从^^右键菜单^^筛选单项问题)]]__'
+  text += appStore.settings.check_language_support ? '\n__(可在设置中关闭语言支持检查)__' : ''
+  return text
 })
+const issueContextMenu = async (event) => {
+  const allSelectedIssues = props.modelValue.flatMap(id => modStore.modIssues.get(normalizeTokenId(id)) || [])
+  const uniqueIssueTypes = [...new Set(allSelectedIssues.map(i => i.type))]
+  const anyModHasIgnored = props.modelValue.some(id => {
+    const mod = modStore.takeModById(id)
+    return mod && mod.ignored_issues && mod.ignored_issues.length > 0
+  })
+  const issueManagementItems = []
+  if (uniqueIssueTypes.length > 0) {
+    issueManagementItems.push({
+      label: props.modelValue.length > 1 ? `筛选单项问题 (${uniqueIssueTypes.length})...` : '筛选单项问题...',
+      icon: SearchAlert,
+      children: uniqueIssueTypes.map(type => ({
+        label: `单独筛选：${ISSUE_TITLE_MAP[type] || type}`,
+        level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
+        action: () => toggleIssueTypeFilter(type)
+      }))
+    })
+    issueManagementItems.push({ divider: true })
+    issueManagementItems.push({
+      label: props.modelValue.length > 1 ? `忽略所有问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
+      icon: MegaphoneOff,
+      children: uniqueIssueTypes.map(type => ({
+        label: `忽略：${ISSUE_TITLE_MAP[type] || type}`,
+        level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
+        action: () => modStore.batchIgnoreIssues(props.modelValue, type)
+      }))
+    })
+  }
+  if (anyModHasIgnored) {
+    if (issueManagementItems.length === 0) issueManagementItems.push({ divider: true })
+    issueManagementItems.push({
+      label: props.modelValue.length > 1 ? '恢复所有警告' : '恢复警告',
+      icon: Megaphone,
+      level: 'warn',
+      action: () => modStore.batchIgnoreIssues(props.modelValue, null)
+    })
+  }
+  menuStore.open(event, issueManagementItems)
+}
+
 const {
   // 分割组状态
   sectionFeatureEnabled, splitGroupFeatureEnabled, currentSectionGroups, takeSectionGroupsByListId,
@@ -472,28 +515,51 @@ const {
   normalizeId,
 })
 
-const {
-  // 问题提示与操作
-  issueTooltip, removeInvalidMod, issueContextMenu,
-} = useModListIssues({
-  props,
-  appStore,
-  modStore,
-  menuStore,
-  issuesSummary,
-  invalidModsToRemove,
-  refreshVirtualList,
-  isFilterByIssue,
-  toggleIssueTypeFilter,
-  normalizeTokenId,
+const focusContainer = (event) => {
+  event.currentTarget.focus()
+}
+const handleDirectiveNavigate = (nextId, nextIndex, direction) => {
+  const vList = vListRef.value
+  if (vList) {
+    const currentOffset = vList.getOffset()
+    vList.scrollToOffset(currentOffset + (direction * itemHeight.value))
+  }
+}
+const savePosition = () => {
+  if (vListRef.value) {
+    const offset = vListRef.value.getOffset()
+    if (offset > 0) appStore.recordScroll(props.listId, offset)
+  }
+}
+const restorePosition = () => {
+  const savedOffset = appStore.getScroll(props.listId)
+  if (savedOffset > 0 && vListRef.value) {
+    nextTick(() => {
+      setTimeout(() => {
+        vListRef.value?.scrollToOffset(savedOffset)
+      }, 30)
+    })
+  }
+}
+onBeforeUnmount(() => {
+  if (isDragging.value) {
+    finishDragSession({ suppressDrop: true })
+    dispatchSyntheticDragEnd()
+  }
+  savePosition()
 })
-
-const {
-  // 视口导航
-  focusContainer, handleDirectiveNavigate,
-} = useModListViewport({
-  props, appStore, modStore, vListRef,  visibleList, itemHeight, isDragging, 
-  finishDragSession, dispatchSyntheticDragEnd, cancelActiveDrag,
+onMounted(() => {
+  if (!appStore.isLoading) restorePosition()
+})
+watch(() => appStore.isLoading, async (loading) => {
+  if (loading) {
+    await cancelActiveDrag()
+    savePosition()
+  } else {
+    await nextTick()
+    restorePosition()
+    useGuideStore()
+  }
 })
 
 const getModRowDragMeta = (row) => {

@@ -476,6 +476,10 @@ const filterInstalled = ref(true) // 默认开启“仅显示已安装”
 
 const editingRule = ref(null)
 
+watch(() => appStore.uiState.showRuleDrawer, (visible) => {
+  if (visible && !ruleStore.hasLoaded) void ruleStore.fetchRules({ silent: true })
+}, { immediate: true })
+
 const tabs = computed(() => [
   { id: 'dynamic', label: '动态群组规则', icon: Zap, count: allRules.value.user_dynamic_rules.length },
   { id: 'user', label: '用户Mod规则', icon: User, count: Object.keys(allRules.value.user_mod_rules).length },

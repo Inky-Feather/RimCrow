@@ -74,10 +74,10 @@ export const useModelConfigActions = ({
     api_key_fingerprint: normalizeText(tempConfig?.api_key_fingerprint) || fingerprintText(tempConfig?.api_key),
   })
 
-  const getAiConfig = async () => {
+  const getAiConfig = async ({ silent = false } = {}) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.ai_get_config()
-    if (checkResult(res, '获取AI配置')) {
+    if (checkResult(res, '获取AI配置', false, { silent })) {
       runtimeAiConfig.value = res.data || null
       return res.data
     }

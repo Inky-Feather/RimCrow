@@ -295,6 +295,8 @@ class ProfileManager:
             clean_data['game_install_path'] = normalize_path_for_storage(clean_data['game_install_path'])
             if not os.path.exists(clean_data['game_install_path']):
                 raise ValueError(f"Path not found: {clean_data['game_install_path']}")
+            if not GameManager.detect_executable(clean_data['game_install_path']):
+                raise ValueError(f"Game executable not found: {clean_data['game_install_path']}")
             install_facts = self._get_install_inspector().inspect(clean_data['game_install_path'], force=True)
             clean_data['game_version'] = install_facts.game_version or GameManager.get_game_version(clean_data['game_install_path'])
             clean_data['is_steam'] = install_facts.is_steam
@@ -303,7 +305,7 @@ class ProfileManager:
         prefer_input = (
             clean_data.get('prefer_steam_launch')
             if 'prefer_steam_launch' in clean_data
-            else (None if 'game_install_path' in clean_data else getattr(profile, 'prefer_steam_launch', False))
+            else getattr(profile, 'prefer_steam_launch', False)
         )
         workshop_input = (
             clean_data.get('use_workshop_mods')
@@ -318,9 +320,9 @@ class ProfileManager:
             default_use_workshop_mods=False,
         )
         # 更新阶段同样强制走统一归一化：
-        # 1. 安装路径变化时，重新以探测结果决定默认 Steam 启动值；
+        # 1. 安装路径变化时只更新识别结果，不覆盖已有 Steam 启动选择；
         # 2. 用户手动开启 Steam 启动时，Workshop 链接部署开关立即归零；
-        # 3. 非 Steam 正版副本不保留 `prefer_steam_launch=True` 的脏状态。
+        # 3. Steam 版识别结果只记录事实，不覆盖用户手动选择。
         clean_data['prefer_steam_launch'] = runtime_flags['prefer_steam_launch']
         clean_data['use_workshop_mods'] = runtime_flags['use_workshop_mods']
         clean_data['is_steam'] = runtime_flags['is_steam']

@@ -49,6 +49,11 @@ export function useModListSections({
   const sectionStateStorageKey = computed(() => {
     if (!sectionFeatureEnabled.value) return ''
     const profileId = profileStore.currentProfileId || appStore.settings.current_profile_id || 'default'
+    return `rimcrow:collapsed-sections:${profileId}:${props.listId}`
+  })
+  const legacySectionStateStorageKey = computed(() => {
+    if (!sectionFeatureEnabled.value) return ''
+    const profileId = profileStore.currentProfileId || appStore.settings.current_profile_id || 'default'
     return `rmm:collapsed-sections:${profileId}:${props.listId}`
   })
 
@@ -237,7 +242,7 @@ export function useModListSections({
   const getPersistedSectionIds = () => {
     if (!sectionStateStorageKey.value) return null
     try {
-      const raw = window.localStorage?.getItem(sectionStateStorageKey.value)
+      const raw = window.localStorage?.getItem(sectionStateStorageKey.value) || window.localStorage?.getItem(legacySectionStateStorageKey.value)
       if (!raw) return null
       const parsed = JSON.parse(raw)
       return Array.isArray(parsed) ? parsed : null
@@ -251,6 +256,7 @@ export function useModListSections({
     if (!sectionStateStorageKey.value) return
     try {
       window.localStorage?.setItem(sectionStateStorageKey.value, JSON.stringify(ids))
+      if (legacySectionStateStorageKey.value) window.localStorage?.removeItem(legacySectionStateStorageKey.value)
     } catch {
     }
   }

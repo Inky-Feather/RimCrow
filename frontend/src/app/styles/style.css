@@ -22,7 +22,7 @@
 @source inline('{hover:,focus:,}{text}-text-{main,soft,dim,subtle,disabled,inverse}');
 @source inline('{hover:,focus:,}{bg}-text-{disabled}');
 
-.rmm-action-disabled {
+.app-action-disabled {
   @apply pointer-events-none opacity-45 brightness-75 saturate-75;
 }
 

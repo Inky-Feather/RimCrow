@@ -1748,7 +1748,7 @@ class TextureOptimizationManager:
 
     @staticmethod
     def _zstd_backup_path(dds_path: Path) -> Path:
-        return dds_path.with_name(f"{dds_path.name}.rmm-zstd-backup-{uuid.uuid4().hex}")
+        return dds_path.with_name(f"{dds_path.name}.zstd-backup-{uuid.uuid4().hex}")
 
     def _prepare_zstd_dds_backups(self, entries: list[dict[str, Any]]) -> list[tuple[Path, Path]]:
         backups: list[tuple[Path, Path]] = []

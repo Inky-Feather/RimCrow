@@ -3,6 +3,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { checkResult, deepClone, toast, toUserMessage } from '../../shared/lib/common'
+import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useModStore } from '../../features/mod/stores/modStore'
 import { useGroupStore } from '../../features/mod/stores/groupStore'
 import { useOrderStore } from '../../features/load-order/orderStore'
@@ -98,8 +99,10 @@ export const useAppStore = defineStore('app', () => {
   const CANCELLATION_PENDING_TIMEOUT_MS = 15000
   let suspendRecoveryTimer = null
   let suspendRecoveryPromise = null
+  let modResidueCheckTimer = null
 
   const upgradeContext = ref({}); // 升级上下文
+  let modEnrichmentRequestVersion = 0
 
   const createDefaultTranslationSettings = () => ({
     default: {
@@ -491,6 +494,7 @@ export const useAppStore = defineStore('app', () => {
     waitForDownload: (...args) => waitForDownload(...args),
     refreshData: (...args) => refreshData(...args),
     refreshModsData: (...args) => refreshModsData(...args),
+    refreshModCoreData: (...args) => refreshModCoreData(...args),
     downloadWorkshopItems: (...args) => downloadWorkshopItems(...args),
   })
 
@@ -578,7 +582,7 @@ export const useAppStore = defineStore('app', () => {
   watch(() => settings.value.debug_mode, (enabled) => {
     // 让通用 checkResult 感知当前调试开关，避免 appStore 再维护一份重复实现。
     if (typeof window !== 'undefined') {
-      window.__RMM_DEBUG_MODE__ = !!enabled
+      window.__APP_DEBUG_MODE__ = !!enabled
     }
   }, { immediate: true });
   watch(currentTheme, (theme) => {
@@ -604,6 +608,12 @@ export const useAppStore = defineStore('app', () => {
     })
   }
 
+  const notifyFrontendReady = async () => {
+    if (window.pywebview?.api?.monitor_frontend_ready) {
+      await window.pywebview.api.monitor_frontend_ready()
+    }
+  }
+
   const syncRemoteImageCache = (cacheStats = {}) => {
     // 统一整理后端返回的缓存统计，避免各入口分别处理默认值。
     remoteImageCache.file_count = Number(cacheStats?.file_count || 0)
@@ -625,6 +635,7 @@ export const useAppStore = defineStore('app', () => {
     groupStore.setGroups(payload.groups || [])
 
     const modStore = useModStore()
+    modEnrichmentRequestVersion += 1
     // 保留列表状态的刷新只替换模组主数据，不进入三列表撤销历史。
     const previousSnapshot = isInit || preserveListState ? null : modStore.captureListHistorySnapshot()
     modStore.setMods(payload, { resetHistory: !!isInit, preserveListState })
@@ -681,14 +692,66 @@ export const useAppStore = defineStore('app', () => {
     return applyModsPayload(payload, { isInit, historyLabel })
   }
 
-  const refreshRuleData = async () => {
-    const ruleStore = useRuleStore()
-    await ruleStore.fetchRules()
+  const applyStartupBootstrapPayload = (payload) => {
+    if (!payload) return false
+
+    if (payload.settings) {
+      settings.value = payload.settings
+      settings.value.asset_port = payload.asset_port || 0
+      settings.value.translation = normalizeTranslationSettings(settings.value.translation)
+      settingsReady.value = true
+    }
+    upgradeContext.value = payload.upgrade_context || {}
+    if (Array.isArray(payload.user_themes)) {
+      userThemes.value = payload.user_themes
+    }
+    applyCurrentTheme()
+    syncRemoteImageCache(payload.remote_image_cache)
+    appVersion.value = payload.app_version || 'Unknown'
+    buildMode.value = payload.build_mode || ''
+    setRuntimeSession(payload.runtime_session)
+
+    const profileStore = useProfileStore()
+    profileStore.fetchProfiles()
+    if (payload.active_context) {
+      profileStore.activeContext = payload.active_context
+      if (!profileStore.activeContext.is_healthy) {
+        toast.warning("需要确认路径配置。已自动搜索到的路径会填入设置面板，请确认后保存。",{position: "top-center",timeout: 5000})
+        uiState.showSettingsPanel = true
+        // 路径未配置时仍要完成前端 ready，否则设置保存后触发的扫描事件会被后端事件总线丢弃。
+        return true
+      }
+    }
+    return true
   }
 
-  const refreshBackupData = () => {
+  const loadStartupCoreData = async () => {
+    if (!window.pywebview) return false
+    startupPerfMark('startup_core_data_start')
+    const bootstrapRes = await startupPerfMeasure('startup.get_startup_bootstrap', () => window.pywebview.api.get_startup_bootstrap())
+    if (!checkResult(bootstrapRes, '加载启动配置')) return false
+    if (!applyStartupBootstrapPayload(bootstrapRes.data)) return false
+
+    const coreRes = await startupPerfMeasure('startup.get_mod_list_core', () => window.pywebview.api.get_mod_list_core())
+    if (!checkResult(coreRes, '加载模组列表')) return false
+    if (coreRes.data?.is_first_db_init && coreRes.data?.context_healthy && (!coreRes.data?.all_mods || coreRes.data.all_mods.length === 0)) {
+      toast.warning("数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。",{position: "top-center",timeout: 10000})
+    }
+    const applied = applyModsPayload(coreRes.data, { isInit: true, historyLabel: '启动加载核心数据' })
+    startupPerfMark('startup_core_data_done')
+    return applied
+  }
+
+  const refreshRuleData = async (options = {}) => {
+    const ruleStore = useRuleStore()
+    return await ruleStore.fetchRules(options)
+  }
+
+  const refreshBackupData = (options = {}) => {
     const orderStore = useOrderStore()
-    void orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+    const promise = orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default', options)
+    void promise
+    return promise
   }
 
   const refreshWorkspaceLibraryData = () => {
@@ -703,11 +766,66 @@ export const useAppStore = defineStore('app', () => {
     if (options?.refreshWorkspaceLibraries !== false) refreshWorkspaceLibraryData()
   }
 
+  const refreshModEnrichment = async ({ silent = false } = {}) => {
+    if (!window.pywebview) return false
+    const requestVersion = ++modEnrichmentRequestVersion
+    try {
+      const res = await startupPerfMeasure('refresh_mod_enrichment.get_mod_list_enrichment', () => window.pywebview.api.get_mod_list_enrichment())
+      if (!checkResult(res, '补充列表标记', false, { silent })) return false
+      if (requestVersion !== modEnrichmentRequestVersion) {
+        startupPerfMark('refresh_mod_enrichment_skipped_stale')
+        return false
+      }
+      const modStore = useModStore()
+      modStore.mergeModEnrichment(res.data || {})
+      startupPerfMark('refresh_mod_enrichment_done', { mods: Object.keys(res.data?.mods || {}).length })
+      return true
+    } catch (e) {
+      if (!silent) toast.error(toUserMessage(e?.message || e, '补充列表标记失败。部分问题提示、替代版本或联机兼容状态可能暂时不显示。'))
+      return false
+    }
+  }
+
+  const refreshModCoreData = async (historyLabel = '同步模组核心数据', options = {}) => {
+    if (!window.pywebview) return false
+    startupPerfMark('refresh_mod_core_data_start', { historyLabel })
+    try {
+      const res = await startupPerfMeasure('refresh_mod_core_data.get_mod_list_core', () => window.pywebview.api.get_mod_list_core(), { historyLabel })
+      if (!checkResult(res, '同步模组核心数据')) return false
+      const applied = applyModsPayload(res.data, {
+        isInit: false,
+        historyLabel,
+        preserveListState: !!options?.preserveListState,
+      })
+      if (!applied) return false
+      if (options?.refreshRelated !== false) {
+        await startupPerfMeasure('refresh_mod_core_data.related_data', () => refreshModsRelatedData(options), { historyLabel })
+      }
+      if (options?.refreshEnrichment !== false) {
+        void refreshModEnrichment({ silent: true })
+      }
+      startupPerfMark('refresh_mod_core_data_done', { historyLabel })
+      return true
+    } catch (e) {
+      toast.error(toUserMessage(e?.message || e, '同步模组核心数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。'))
+      return false
+    }
+  }
+
+  const loadStartupInventorySummary = async ({ silent = false } = {}) => {
+    if (!window.pywebview) return []
+    const res = await startupPerfMeasure('startup.workspace_inventory_summary', () => window.pywebview.api.workspace_get_startup_inventory_summary())
+    if (!checkResult(res, '启动库存检测', false, { silent })) return false
+    const workspaceStore = useWorkspaceStore()
+    return workspaceStore.applyStartupInventorySummary(res.data || {})
+  }
+
   // 扫描完成后只同步与模组相关的数据，避免再次触发整套工作区/集合/GitHub 初始化。
   const refreshModsData = async (historyLabel = '扫描后同步模组数据', options = {}) => {
     if (!window.pywebview) return false
+    startupPerfMark('refresh_mods_data_start', { historyLabel })
     try {
-      const res = await window.pywebview.api.get_initial_data()
+      const res = await startupPerfMeasure('refresh_mods_data.get_initial_data', () => window.pywebview.api.get_initial_data(), { historyLabel })
       if (!checkResult(res, '同步模组数据')) return false
       const applied = applyModsPayload(res.data, {
         isInit: false,
@@ -716,7 +834,8 @@ export const useAppStore = defineStore('app', () => {
       })
       if (!applied) return false
 
-      await refreshModsRelatedData(options)
+      await startupPerfMeasure('refresh_mods_data.related_data', () => refreshModsRelatedData(options), { historyLabel })
+      startupPerfMark('refresh_mods_data_done', { historyLabel })
       return true
     } catch (e) {
       toast.error(toUserMessage(e?.message || e, '同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。'))
@@ -724,7 +843,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null } = {}) => {
+  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null, refreshRules = true, refreshBackups = true, refreshWorkspaceLibraries = true, silentSuccess = false } = {}) => {
     // 多次扫描请求合并时，任意一次要求保留列表状态，最终扫描完成也要保留。
     const normalizeScanRequest = (request = {}) => {
       const normalizedPaths = Array.isArray(request.specificPaths)
@@ -741,6 +860,10 @@ export const useAppStore = defineStore('app', () => {
         startupWorkshopChanges: Array.isArray(request.startupWorkshopChanges)
           ? request.startupWorkshopChanges
           : [],
+        refreshRules: request.refreshRules !== false,
+        refreshBackups: request.refreshBackups !== false,
+        refreshWorkspaceLibraries: request.refreshWorkspaceLibraries !== false,
+        silentSuccess: !!request.silentSuccess,
       }
     }
     const mergeScanRequest = (left, right) => {
@@ -757,9 +880,13 @@ export const useAppStore = defineStore('app', () => {
           : (left.sizeCheckOverride === false || right.sizeCheckOverride === false ? false : null),
         sizeCheckPaths: [...new Set([...(left.sizeCheckPaths || []), ...(right.sizeCheckPaths || [])])],
         startupWorkshopChanges: [...(left.startupWorkshopChanges || []), ...(right.startupWorkshopChanges || [])],
+        refreshRules: left.refreshRules !== false || right.refreshRules !== false,
+        refreshBackups: left.refreshBackups !== false || right.refreshBackups !== false,
+        refreshWorkspaceLibraries: left.refreshWorkspaceLibraries !== false || right.refreshWorkspaceLibraries !== false,
+        silentSuccess: !!(left.silentSuccess && right.silentSuccess),
       }
     }
-    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState, sizeCheckOverride, sizeCheckPaths, startupWorkshopChanges })
+    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState, sizeCheckOverride, sizeCheckPaths, startupWorkshopChanges, refreshRules, refreshBackups, refreshWorkspaceLibraries, silentSuccess })
     if (isScanRunning.value) {
       pendingModScanRequested.value = mergeScanRequest(pendingModScanRequested.value, scanRequest)
       return false
@@ -820,24 +947,58 @@ export const useAppStore = defineStore('app', () => {
     return suspendRecoveryPromise
   }
 
+  const scheduleModResidueCheck = (delayMs = 4500) => {
+    if (modResidueCheckTimer) clearTimeout(modResidueCheckTimer)
+    modResidueCheckTimer = window.setTimeout(() => {
+      modResidueCheckTimer = null
+      if (isScanRunning.value || pendingModScanRequested.value) {
+        scheduleModResidueCheck(3000)
+        return
+      }
+      void (async () => {
+        try {
+          const residueStore = useModResidueStore()
+          const overview = await startupPerfMeasure('post_scan.mod_residue_overview', () => residueStore.loadOverview({ silent: true }))
+          startupPerfMark('post_scan.mod_residue_done', {
+            items: Number(overview?.summary?.item_count || 0),
+            groups: Number(overview?.summary?.group_count || 0),
+          })
+          if (overview?.summary?.item_count > 0) uiState.showModResidueCleanup = true
+          if (!overview && window.pywebview?.api?.mod_residue_get_overview) {
+            toast.warning('卸载残留检查未完成，可稍后手动打开残留清理。', { timeout: 3000 })
+          }
+        } catch (error) {
+          console.warn('卸载残留检测失败:', error)
+          toast.warning('卸载残留检查未完成，可稍后手动打开残留清理。', { timeout: 3000 })
+        }
+      })()
+    }, delayMs)
+  }
+
   // === Actions ===
   // 初始化只保留“设置 loading + 调用启动编排 + 统一失败提示”，具体启动步骤交给 startupStore。
   const initialize = async () => {
     isLoading.value = true
+    startupPerfMark('app_initialize_start')
     try {
       const startupStore = useStartupStore()
-      await startupStore.run({
+      await startupPerfMeasure('app_initialize.startup_store_run', () => startupStore.run({
         waitForBackend,
         setupEventListeners,
-        refreshData,
+        notifyFrontendReady,
+        loadStartupCoreData,
+        refreshModEnrichment,
+        refreshBackupData,
+        loadStartupInventorySummary,
+        isScanRunning,
         settings,
         upgradeContext,
         uiState,
         checkUpdate,
-        confirmStore,
         requestModScan,
         runScheduledMaintenanceChecks,
-      })
+      }))
+      startupPerfMark('app_initialize_done')
     } catch (e) {
       console.error("初始化失败:", e)
       toast.error(toUserMessage(e?.message || e, '初始化失败。可能是配置、数据库或运行环境暂时不可用，详细原因已写入系统日志。'))
@@ -849,18 +1010,20 @@ export const useAppStore = defineStore('app', () => {
   const refreshData = async (isInit = false, historyLabel = '刷新磁盘状态') => {
     if (!window.pywebview) return false
     isLoading.value = true
+    startupPerfMark('refresh_data_start', { isInit, historyLabel })
     try {
       // 调用后端获取全量数据
-      const res = await window.pywebview.api.get_initial_data()
+      const res = await startupPerfMeasure('refresh_data.get_initial_data', () => window.pywebview.api.get_initial_data(), { isInit, historyLabel })
       if (!checkResult(res, '刷新数据')) return false
       const applied = applyInitialPayload(res.data, { isInit, historyLabel })
       if (!applied) return false
       // 刷新动态规则
       const ruleStore = useRuleStore()
-      ruleStore.fetchRules()
+      void startupPerfMeasure('refresh_data.rules_get_all', () => ruleStore.fetchRules(), { isInit })
       const orderStore = useOrderStore()
       // 备份列表优先保持用户当前正在查看的环境视图；无选择时再回退到当前环境。
-      orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default')
+      void startupPerfMeasure('refresh_data.backups_get_all', () => orderStore.getBackups(orderStore.backupProfileId || settings.value.current_profile_id || 'default'), { isInit })
+      startupPerfMark('refresh_data_done', { isInit, historyLabel })
       return true
     } catch (e) {
       toast.error(toUserMessage(e?.message || e, '刷新数据失败。可能是扫描器、数据库或当前环境暂时不可用，请稍后重试。'))
@@ -897,19 +1060,21 @@ export const useAppStore = defineStore('app', () => {
       }
       // 扫描完成后的逻辑主要涉及 Mod 数据更新
       const modStore = useModStore()
-      const residuePayload = detail?.residue_cleanup || null
       // 取出并清空本次扫描选项，避免下一次外部扫描误用旧状态。
       const scanRequest = activeModScanRequest.value
       activeModScanRequest.value = null
       await modStore.scanComplete(detail, {
         preserveListState: !!scanRequest?.preserveListState,
+        refreshRules: scanRequest?.refreshRules !== false,
+        refreshBackups: scanRequest?.refreshBackups !== false,
+        refreshWorkspaceLibraries: scanRequest?.refreshWorkspaceLibraries !== false,
+        silentSuccess: !!scanRequest?.silentSuccess,
       })
       if (detail.status === 'success' && scanRequest?.startupWorkshopChanges?.length) {
         void useWorkspaceStore().showStartupWorkshopChangesPrompt(scanRequest.startupWorkshopChanges)
       }
-      if (residuePayload?.summary?.item_count > 0) {
-        useModResidueStore().setOverview(residuePayload)
-        uiState.showModResidueCleanup = true
+      if (detail.status === 'success' && detail.should_check_mod_residue) {
+        scheduleModResidueCheck()
       }
       if (pendingModScanRequested.value) {
         window.setTimeout(() => {
@@ -1135,7 +1300,11 @@ export const useAppStore = defineStore('app', () => {
     const res = await window.pywebview.api.perform_database_cleanup()
     if (checkResult(res, '数据库深度清理')) {
       toast.success('无效数据清理完成，正在刷新列表。')
-      await refreshModsData('无效数据清理后同步模组数据')
+      await refreshModCoreData('无效数据清理后同步模组数据', {
+        refreshRules: false,
+        refreshBackups: false,
+        refreshWorkspaceLibraries: false,
+      })
     }
   }
   const cancelTaskByProgress = async (task) => {
@@ -1250,11 +1419,25 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const WAIT_STEAM_EXIT_ACTION = 'wait_steam_exit'
+  const GAME_LAUNCH_ACTION = Object.freeze({
+    CONTINUE: 'continue',
+    CHECK_STEAM_STATUS: 'check_steam_status',
+    DISABLE_STEAM_LAUNCH: 'disable_steam_launch',
+    CANCEL: 'cancel',
+  })
   const GAME_LAUNCH_WARNING_REASON = Object.freeze({
     STEAM_PATH_INVALID: 'steam_path_invalid',
+    STEAM_NOT_READY: 'steam_not_ready',
     STEAM_RUNNING_WORKSHOP_CONFLICT: 'steam_running_workshop_conflict',
   })
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+  const steamLaunchFallbackButtons = () => [
+    { label: '本次直启游戏', value: GAME_LAUNCH_ACTION.CONTINUE, kind: 'primary' },
+    { label: '检查 Steam 状态', value: GAME_LAUNCH_ACTION.CHECK_STEAM_STATUS, kind: 'secondary' },
+    { label: '关闭 Steam 优先启动', value: GAME_LAUNCH_ACTION.DISABLE_STEAM_LAUNCH, kind: 'danger' },
+    { label: '取消', value: GAME_LAUNCH_ACTION.CANCEL, kind: 'secondary' },
+  ]
 
   const buildGameLaunchWarningConfig = (gameRes) => {
     const reason = String(gameRes?.data?.reason || '').trim()
@@ -1263,12 +1446,18 @@ export const useAppStore = defineStore('app', () => {
       case GAME_LAUNCH_WARNING_REASON.STEAM_PATH_INVALID:
         return {
           type: 'warning',
-          mode: 'confirm',
+          mode: 'actions',
           title: 'Steam 启动不可用',
-          message: '当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。\n你可以改为直接启动游戏本体，或先修复 Steam 路径后重试。',
-          confirmText: '直接启动',
-          cancelText: '取消',
-          action: 'continue',
+          message: '当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。\n你可以只在本次改为直接启动，也可以检查 Steam 状态，或关闭这个开关并保存。',
+          actionButtons: steamLaunchFallbackButtons(),
+        }
+      case GAME_LAUNCH_WARNING_REASON.STEAM_NOT_READY:
+        return {
+          type: 'warning',
+          mode: 'actions',
+          title: 'Steam 暂时不可用',
+          message: `${fallbackMessage || 'Steam 未能进入可用状态。'}\n你可以只在本次改为直接启动，也可以检查 Steam 状态，或关闭这个开关并保存。`,
+          actionButtons: steamLaunchFallbackButtons(),
         }
       case GAME_LAUNCH_WARNING_REASON.STEAM_RUNNING_WORKSHOP_CONFLICT:
         return {
@@ -1297,6 +1486,26 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  const showSteamStatusForLaunch = async () => {
+    const statusRes = await window.pywebview.api.steam_client_status()
+    if (!checkResult(statusRes, '检查 Steam 状态')) return null
+    const hint = statusRes?.data?.user_hint || {}
+    await confirmStore.alert(
+      hint.title || 'Steam 状态',
+      hint.message || statusRes.message || '已完成 Steam 状态检查。',
+      { type: statusRes?.data?.ready ? 'success' : 'warning' }
+    )
+    return null
+  }
+
+  const disableSteamLaunchForProfile = async (profileId) => {
+    const targetProfileId = String(profileId || '').trim()
+    if (!targetProfileId) return null
+    const profileStore = useProfileStore()
+    await profileStore.updateProfile(targetProfileId, { prefer_steam_launch: false })
+    return null
+  }
+
   const resolveGameLaunchWarning = async (gameRes, requestedProfileId = null) => {
     if (gameRes?.status !== 'warning' || gameRes?.data?.action !== 'confirm_direct_launch') {
       return gameRes
@@ -1318,6 +1527,20 @@ export const useAppStore = defineStore('app', () => {
       )
       if (!ok) return null
       return window.pywebview.api.game_launch_resolve_warning(targetProfileId, warningConfig.action || 'continue')
+    }
+
+    if (warningConfig.mode === 'actions') {
+      const choice = await confirmStore.open({
+        title: warningConfig.title,
+        message: warningConfig.message,
+        mode: 'confirm',
+        type: warningConfig.type || 'warning',
+        actionButtons: warningConfig.actionButtons,
+      })
+      if (!choice || choice === GAME_LAUNCH_ACTION.CANCEL) return null
+      if (choice === GAME_LAUNCH_ACTION.CHECK_STEAM_STATUS) return await showSteamStatusForLaunch()
+      if (choice === GAME_LAUNCH_ACTION.DISABLE_STEAM_LAUNCH) return await disableSteamLaunchForProfile(targetProfileId)
+      return window.pywebview.api.game_launch_resolve_warning(targetProfileId, choice)
     }
 
     if (warningConfig.mode === 'wait_steam_exit') {
@@ -1433,10 +1656,10 @@ export const useAppStore = defineStore('app', () => {
     return `${getAssetBaseUrl()}/remote?url=${safeUrl}`
   }
 
-  const refreshRemoteImageCacheStats = async () => {
+  const refreshRemoteImageCacheStats = async ({ silent = false } = {}) => {
     if (!window.pywebview) return null
     const res = await window.pywebview.api.get_remote_image_cache_stats()
-    if (!checkResult(res, '获取网络图片缓存统计')) return null
+    if (!checkResult(res, '获取网络图片缓存统计', false, { silent })) return false
     syncRemoteImageCache(res.data)
     return res.data
   }
@@ -1467,8 +1690,8 @@ export const useAppStore = defineStore('app', () => {
     // 布局与运行态
     remoteImageCache, translationProviders, isTranslationProvidersLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     // 生命周期与通用工具
-    initialize, checkResult, refreshData, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
-    refreshModsData, requestModScan,
+    initialize, checkResult, refreshData, loadStartupCoreData, refreshRuleData, refreshBackupData, loadStartupInventorySummary, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
+    refreshModsData, refreshModCoreData, refreshModEnrichment, requestModScan,
     // 图片与缓存
     getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
     // 路径与游戏启动

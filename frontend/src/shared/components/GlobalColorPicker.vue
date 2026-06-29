@@ -9,9 +9,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
-import { ColorPicker } from 'vue3-colorpicker'
+
+const ColorPicker = defineAsyncComponent(async () => {
+  await import('vue3-colorpicker/style.css')
+  const module = await import('vue3-colorpicker')
+  return module.ColorPicker
+})
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

@@ -527,7 +527,7 @@ export const useOrderStore = defineStore('order', () => {
         mode: 'prompt',
         type: copied ? 'success' : 'warning',
         inputValue: shareCode,
-        placeholder: 'RMM1-...',
+        placeholder: 'RC-...',
         confirmText: '关闭',
         cancelText: '取消',
       })
@@ -597,10 +597,10 @@ export const useOrderStore = defineStore('order', () => {
   const promptImportShareCode = async (source_profile_id='') => {
     const shareCode = await confirmStore.open({
       title: '导入分享码',
-      message: '请粘贴 RMM1 开头的分享码，解析后会进入差异对比视图。',
+      message: '请粘贴 RC- 开头的分享码，解析后会进入差异对比视图。',
       mode: 'prompt',
       type: 'info',
-      placeholder: 'RMM1-...',
+      placeholder: 'RC-...',
       confirmText: '导入',
       cancelText: '取消',
     })
@@ -736,10 +736,10 @@ export const useOrderStore = defineStore('order', () => {
     appStore.openPath(backupProfileDir.value || [appStore.settings.home_path,"backups"].join("/"))
   }
   // 获取所有备份文件路径 {today: [], earlier: [], other: []}
-  const getBackups = async (profile_id=null) => {
+  const getBackups = async (profile_id=null, { silent = false } = {}) => {
     if(!window.pywebview) return
     const res = await window.pywebview.api.backups_get_all(profile_id)
-    if (checkResult(res, "获取备份文件")) {
+    if (checkResult(res, "获取备份文件", false, { silent })) {
       const payload = res.data || {}
       const files = {
         today: payload.today || [],

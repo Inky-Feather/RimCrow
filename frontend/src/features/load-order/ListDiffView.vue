@@ -146,7 +146,7 @@
                           v-if="canSubscribeImportItem(item.id)"
                           @click.stop="subscribeImportItem(item.id)"
                           :disabled="isDiffActionBusy"
-                          :class="isDiffActionBusy ? 'rmm-action-disabled' : ''"
+                          :class="isDiffActionBusy ? 'app-action-disabled' : ''"
                           v-tooltip="isDiffActionPending(`subscribe-${item.id}`) ? '正在订阅该工坊项目' : '订阅该导入项对应的工坊项目'"
                           class="rounded-full bg-accent-primary/85 p-1 text-on-accent-primary transition-transform hover:scale-105">
                           <LoaderCircle v-if="isDiffActionPending(`subscribe-${item.id}`)" class="size-3 animate-spin" />
@@ -156,7 +156,7 @@
                           v-if="canDownloadImportItem(item.id)"
                           @click.stop="downloadImportItem(item.id)"
                           :disabled="isDiffActionBusy"
-                          :class="isDiffActionBusy ? 'rmm-action-disabled' : ''"
+                          :class="isDiffActionBusy ? 'app-action-disabled' : ''"
                           v-tooltip="isDiffActionPending(`download-${item.id}`) ? '正在下载该工坊项目' : '下载该导入项对应的工坊项目到管理器'"
                           class="rounded-full bg-accent-success/85 p-1 text-on-accent-success transition-transform hover:scale-105">
                           <LoaderCircle v-if="isDiffActionPending(`download-${item.id}`)" class="size-3 animate-spin" />
@@ -209,30 +209,30 @@
               <h2 class="text-text-soft font-bold">Mod序列对比</h2>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
-              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('subscribe-missing', () => orderStore.subscribeImportCheckItems(['missing']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-primary/12 hover:bg-accent-primary/25 text-accent-primary border border-accent-primary/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('subscribe-missing', () => orderStore.subscribeImportCheckItems(['missing']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-primary/12 hover:bg-accent-primary/25 text-accent-primary border border-accent-primary/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('subscribe-missing')" class="size-3 animate-spin" />
                 订阅缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
-              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('download-missing', () => orderStore.downloadImportCheckItems(['missing']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-tip/12 hover:bg-accent-tip/25 text-accent-tip border border-accent-tip/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.missing > 0" @click="runDiffAction('download-missing', () => orderStore.downloadImportCheckItems(['missing']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-tip/12 hover:bg-accent-tip/25 text-accent-tip border border-accent-tip/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('download-missing')" class="size-3 animate-spin" />
                 下载缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
               <button v-if="orderStore.importCheckSummary.missing > 0" @click="orderStore.removeImportCheckItems(['missing'])" class="px-3 py-1.5 rounded-lg bg-accent-warning/10 hover:bg-accent-warning/20 text-accent-warning border border-border-base/10 text-xs font-bold transition-all">
                 移除缺失项 ({{ orderStore.importCheckSummary.missing }})
               </button>
-              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('subscribe-replacement', () => orderStore.subscribeImportCheckItems(['replacement']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('subscribe-replacement', () => orderStore.subscribeImportCheckItems(['replacement']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('subscribe-replacement')" class="size-3 animate-spin" />
                 订阅替代项 ({{ orderStore.actionableReplacementImportItems.length }})
               </button>
-              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('download-replacement', () => orderStore.downloadImportCheckItems(['replacement']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.actionableReplacementImportItems.length > 0" @click="runDiffAction('download-replacement', () => orderStore.downloadImportCheckItems(['replacement']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-cool/12 hover:bg-accent-cool/25 text-accent-cool border border-accent-cool/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('download-replacement')" class="size-3 animate-spin" />
                 下载替代项 ({{ orderStore.actionableReplacementImportItems.length }})
               </button>
-              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('subscribe-other-version', () => orderStore.subscribeImportCheckItems(['other_version']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('subscribe-other-version', () => orderStore.subscribeImportCheckItems(['other_version']), 'steam-subscribe')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('subscribe-other-version')" class="size-3 animate-spin" />
                 订阅其它版本 ({{ orderStore.importCheckSummary.other_version }})
               </button>
-              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('download-other-version', () => orderStore.downloadImportCheckItems(['other_version']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
+              <button v-if="orderStore.importCheckSummary.other_version > 0" @click="runDiffAction('download-other-version', () => orderStore.downloadImportCheckItems(['other_version']), 'steamcmd-download')" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-warn/12 hover:bg-accent-warn/25 text-accent-warn border border-accent-warn/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('download-other-version')" class="size-3 animate-spin" />
                 下载其它版本 ({{ orderStore.importCheckSummary.other_version }})
               </button>
@@ -242,7 +242,7 @@
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               
-              <button @click="runDiffAction('apply-backup', () => orderStore.applyBackup())" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'rmm-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">
+              <button @click="runDiffAction('apply-backup', () => orderStore.applyBackup())" :disabled="isDiffActionBusy" :class="isDiffActionBusy ? 'app-action-disabled' : ''" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent-success/20 hover:bg-accent-success/40 text-accent-success border border-accent-success/30 text-xs font-bold transition-all">
                 <LoaderCircle v-if="isDiffActionPending('apply-backup')" class="size-3 animate-spin" />
                 应用文件序列
               </button>

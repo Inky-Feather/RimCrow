@@ -17,7 +17,7 @@ def normalize_profile_runtime_flags(
     统一收口环境运行开关。
 
     规则：
-    1. `prefer_steam_launch` 只在 Steam 正版副本上允许开启；
+    1. `prefer_steam_launch` 保留用户选择，`is_steam` 只作为识别结果；
     2. `prefer_steam_launch=True` 时，`use_workshop_mods` 必须归零；
     3. 只做冲突归零，不做互相自动补开。
 
@@ -41,8 +41,6 @@ def normalize_profile_runtime_flags(
         else bool(use_workshop_mods)
     )
 
-    if not target_is_steam:
-        prefer_value = False
     if prefer_value:
         workshop_value = False
 
@@ -108,9 +106,7 @@ def resolve_profile_runtime_capabilities(
         "use_workshop_mods": normalized["use_workshop_mods"],
         "has_workshop_mods_path": has_workshop_root,
         "has_steam_path": bool(steam_root),
-        "steam_launch_enabled": bool(
-            normalized["is_steam"] and normalized["prefer_steam_launch"]
-        ),
+        "steam_launch_enabled": bool(normalized["prefer_steam_launch"]),
         "workshop_detection_enabled": bool(
             has_workshop_root
             and (

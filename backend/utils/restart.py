@@ -100,13 +100,15 @@ def _reset_windows_dll_directory():
         logger.warning(f"重启前重置 Windows DLL 目录失败：{e}")
 
 
-def _resolve_restart_command():
+def _resolve_restart_command(executable_path: str = ""):
     """
     解析当前环境下的新实例启动命令。
     原则：
     1. 打包环境直接启动当前 exe。
     2. 开发环境优先使用 pythonw.exe，避免重启时弹出控制台窗口。
     """
+    if executable_path:
+        return [os.path.abspath(executable_path)]
     if getattr(sys, 'frozen', False):
         return [os.path.abspath(sys.executable)]
 
@@ -118,12 +120,12 @@ def _resolve_restart_command():
     return [os.path.abspath(sys.executable), str(HOME_DIR / 'main.py')]
 
 
-def launch_new_application():
+def launch_new_application(executable_path: str = ""):
     """
     静默拉起新实例。
     目的：统一所有“重启当前应用”的入口，避免在 Windows 下弹出 cmd 窗口。
     """
-    command = _resolve_restart_command()
+    command = _resolve_restart_command(executable_path)
     clean_env = _build_restart_environment()
     _reset_windows_dll_directory()
 

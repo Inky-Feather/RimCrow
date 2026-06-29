@@ -10,7 +10,7 @@ from backend.load_order import (
     FORMAT_RML,
     FORMAT_RIMPY_XML,
     FORMAT_RIMSORT_JSON,
-    FORMAT_RMM_JSON,
+    FORMAT_RIMCROW_JSON,
     FORMAT_SAVEGAME,
     FORMAT_WORKSHOP_IDS,
     detect_load_order_format,
@@ -323,9 +323,9 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890
         self.assertEqual(parsed.package_ids, [])
         self.assertEqual(parsed.workshop_ids, ["2009463077", "2873415404", "1234567890"])
 
-    def test_parse_rmm_json(self):
+    def test_parse_rimcrow_json(self):
         path = self._write(
-            "rmm.json",
+            "rimcrow.json",
             """{
   "package_ids": ["brrainz.harmony", "ludeon.rimworld"],
   "mod_names": {
@@ -336,7 +336,7 @@ https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890
 }""",
         )
         parsed = parse_load_order_file(path)
-        self.assertEqual(parsed.format, FORMAT_RMM_JSON)
+        self.assertEqual(parsed.format, FORMAT_RIMCROW_JSON)
         self.assertEqual(parsed.package_ids, ["brrainz.harmony", "ludeon.rimworld"])
         self.assertEqual(parsed.mod_names, ["Harmony", "Core"])
 

@@ -97,45 +97,45 @@ const IMAGE_SAVE_TYPES = new Map([
   ['image/gif', '.gif'],
   ['image/bmp', '.bmp'],
 ])
-const IMAGE_VIEWER_STYLE_ID = 'rmm-image-viewer-style'
+const IMAGE_VIEWER_STYLE_ID = 'image-viewer-style'
 
 const ensureImageViewerStyle = () => {
   if (typeof document === 'undefined' || document.getElementById(IMAGE_VIEWER_STYLE_ID)) return
   const style = document.createElement('style')
   style.id = IMAGE_VIEWER_STYLE_ID
   style.textContent = `
-    .rmm-image-viewer .viewer-toolbar > ul {
+    .image-viewer .viewer-toolbar > ul {
       padding: 12px 6px 18px;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > li {
+    .image-viewer .viewer-toolbar > ul > li {
       width: 48px;
       height: 48px;
       margin-left: 6px;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > li:first-child {
+    .image-viewer .viewer-toolbar > ul > li:first-child {
       margin-left: 0;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > li::before {
+    .image-viewer .viewer-toolbar > ul > li::before {
       margin: 14px;
       transform: scale(2);
       transform-origin: center;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > .viewer-small {
+    .image-viewer .viewer-toolbar > ul > .viewer-small {
       width: 36px;
       height: 36px;
       margin-top: 6px;
       margin-bottom: 6px;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > .viewer-small::before {
+    .image-viewer .viewer-toolbar > ul > .viewer-small::before {
       margin: 8px;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > .viewer-large {
+    .image-viewer .viewer-toolbar > ul > .viewer-large {
       width: 60px;
       height: 60px;
       margin-top: -6px;
       margin-bottom: -6px;
     }
-    .rmm-image-viewer .viewer-toolbar > ul > .viewer-large::before {
+    .image-viewer .viewer-toolbar > ul > .viewer-large::before {
       margin: 20px;
     }
   `
@@ -289,17 +289,17 @@ const attachViewerImageContextMenu = (event) => {
   ensureImageViewerStyle()
   const viewerImage = event?.detail?.image
   if (!viewerImage) return
-  if (viewerImage._rmmViewerImageContextMenu) {
-    viewerImage.removeEventListener('contextmenu', viewerImage._rmmViewerImageContextMenu)
+  if (viewerImage._viewerImageContextMenu) {
+    viewerImage.removeEventListener('contextmenu', viewerImage._viewerImageContextMenu)
   }
   const imagePayload = getViewerImagePayload(viewerImage, event?.detail?.originalImage)
   const handler = (menuEvent) => openViewerImageContextMenu(menuEvent, imagePayload)
   viewerImage.addEventListener('contextmenu', handler)
-  viewerImage._rmmViewerImageContextMenu = handler
+  viewerImage._viewerImageContextMenu = handler
 }
 
 export const imageViewerOptions = {
-  className: 'rmm-image-viewer',
+  className: 'image-viewer',
   focus: false,
   navbar: false,
   title: false,

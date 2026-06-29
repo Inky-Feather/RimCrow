@@ -102,8 +102,8 @@ datas = collect_data_files(
     return hook_dir
 
 def resolve_upx_dir(default_dir: str = "") -> str:
-    """解析 UPX 目录，不存在时跳过压缩参数，避免换机器打包直接失败。"""
-    raw_path = os.environ.get("UPX_DIR") or default_dir
+    """解析 UPX_DIR；未显式配置时不启用 UPX，避免换机器打包直接失败。"""
+    raw_path = os.environ.get("UPX_DIR")
     if not raw_path:
         print("提示: 未配置 UPX 目录，已跳过压缩参数。")
         return ""
@@ -274,6 +274,7 @@ def _iter_toolmods_files(toolmods_dir: Path):
     """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
     if not toolmods_dir.exists():
         return
+    archive_root = Path("toolmods") / toolmods_dir.name
     for current_root, dirnames, filenames in os.walk(toolmods_dir, followlinks=True):
         current_path = Path(current_root)
         relative_dir = current_path.relative_to(toolmods_dir)
@@ -282,7 +283,7 @@ def _iter_toolmods_files(toolmods_dir: Path):
             continue
         for filename in filenames:
             file_path = current_path / filename
-            yield file_path, Path("toolmods") / file_path.relative_to(toolmods_dir)
+            yield file_path, archive_root / file_path.relative_to(toolmods_dir)
 
 def _should_include_steamcmd_file(relative_path: Path) -> bool:
     if sys.platform == "win32":
@@ -302,6 +303,8 @@ def _iter_tools_files(tools_dir: Path):
         normalized_parts = [part.lower() for part in relative_path.parts]
         if normalized_parts and normalized_parts[0] not in allowed_tool_dirs:
             continue
+        if normalized_parts and normalized_parts[0] == "ripgrep" and relative_path.name.lower() not in {"rg.exe", "rg"}:
+            continue
         if normalized_parts and normalized_parts[0] == "steamcmd" and not _should_include_steamcmd_file(relative_path):
             continue
         yield file_path, Path("tools") / relative_path
@@ -312,6 +315,10 @@ def _iter_data_files(data_dir: Path):
         Path("rules") / "communityRules.json",
         Path("steamDB.json"),
         Path("replacements.json.gz"),
+        Path("multiplayerCompatibility.json"),
+        Path("mpCompatPackageIds.json"),
+        Path("git_catalogs") / "rjw.json",
+        Path("git_catalogs") / "mlie.json",
     ]
     for relative_path in required_files:
         file_path = data_dir / relative_path
@@ -332,7 +339,7 @@ def create_release_zip(app_name: str, version: str):
         raise FileNotFoundError(f"未找到打包产物: {exe_path}")
 
     release_items = [(exe_path, Path(exe_path.name))]
-    release_items.extend(_iter_toolmods_files(project_root / "toolmods") or [])
+    release_items.extend(_iter_toolmods_files(project_root / "toolmods" / "RimCrowCompanion") or [])
     release_items.extend(_iter_tools_files(project_root / "tools") or [])
     release_items.extend(_iter_data_files(project_root / "data") or [])
 
@@ -432,12 +439,12 @@ if __name__ == "__main__":
     pack_zip = True
     # 配置
     APP_MAIN = 'main.py'
-    APP_NAME = 'RimModManager'
+    APP_NAME = 'RimCrow'
     APP_VERSION = __version__  # 在这里修改版本号
     APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
-    DEFAULT_UPX_DIR = r'D:\Environment\upx-5.0.0-win64'
+    DEFAULT_UPX_DIR = ''
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
     
     # 0. 构建前端项目
