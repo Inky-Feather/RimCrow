@@ -799,7 +799,7 @@ class GithubManager:
         items: list[dict[str, Any]] = []
         for source in sources:
             source_id = str(source.get("id") or "").strip()
-            cached = self._load_provider_catalog_source_cache(source_id) if source_id else None
+            cached = self._load_provider_catalog_source_cache(source) if source_id else None
             local_signature = self._provider_catalog_source_signature(cached)
             local_count = len(cached.get("items") or []) if isinstance(cached, dict) else 0
             try:
@@ -1679,20 +1679,20 @@ class GithubManager:
         if not source_id:
             raise ValueError("清单源缺少 id")
         if not force_refresh:
-            cached = self._load_provider_catalog_source_cache(source_id)
+            cached = self._load_provider_catalog_source_cache(source)
             if cached:
                 return cached
 
         try:
             catalog = self._fetch_provider_catalog_source_remote(source)
         except Exception:
-            cached = self._load_provider_catalog_source_cache(source_id)
+            cached = self._load_provider_catalog_source_cache(source)
             if cached:
                 cached["warning"] = f"{source.get('label') or source_id} 远程读取失败，已使用本地缓存"
                 cached["source"]["is_stale"] = True
                 return cached
             raise
-        self._save_provider_catalog_source_cache(source_id, catalog)
+        self._save_provider_catalog_source_cache(source, catalog)
         return catalog
 
     def _fetch_provider_catalog_source_remote(self, source: dict[str, Any]) -> dict[str, Any]:
@@ -1882,8 +1882,21 @@ class GithubManager:
             item["not_recommended"] = True
         return item
 
-    def _load_provider_catalog_source_cache(self, source_id: str) -> dict[str, Any] | None:
-        cache_path = self._provider_catalog_cache_path(source_id)
+    def _load_provider_catalog_source_cache(self, source: dict[str, Any] | str) -> dict[str, Any] | None:
+        cache_path = self._provider_catalog_cache_path(source)
+        payload = self._read_provider_catalog_cache(cache_path)
+        if self._provider_catalog_cache_matches_source(payload, source):
+            return payload
+
+        legacy_path = self._legacy_provider_catalog_cache_path(source)
+        if legacy_path and legacy_path != cache_path:
+            legacy_payload = self._read_provider_catalog_cache(legacy_path)
+            if isinstance(legacy_payload, dict) and self._provider_catalog_cache_matches_source(legacy_payload, source):
+                self._save_provider_catalog_source_cache(source, legacy_payload)
+                return legacy_payload
+        return None
+
+    def _read_provider_catalog_cache(self, cache_path: Path) -> dict[str, Any] | None:
         if not cache_path.exists():
             return None
         try:
@@ -1895,8 +1908,28 @@ class GithubManager:
             logger.warning("读取 Git 推荐清单缓存失败: %s", exc)
             return None
 
-    def _save_provider_catalog_source_cache(self, source_id: str, catalog: dict[str, Any]) -> None:
-        cache_path = self._provider_catalog_cache_path(source_id)
+    @staticmethod
+    def _provider_catalog_cache_matches_source(payload: dict[str, Any] | None, source: dict[str, Any] | str) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        if not isinstance(source, dict):
+            return True
+        expected_id = str(source.get("id") or "").strip()
+        cached_source = payload.get("source")
+        cached_id = str(cached_source.get("id") or "").strip() if isinstance(cached_source, dict) else ""
+        return not expected_id or not cached_id or cached_id == expected_id
+
+    def _legacy_provider_catalog_cache_path(self, source: dict[str, Any] | str) -> Path | None:
+        if not isinstance(source, dict):
+            return None
+        source_id = str(source.get("id") or "").strip()
+        cache_id = str(source.get("cache_id") or "").strip()
+        if not source_id or source_id == cache_id:
+            return None
+        return self._provider_catalog_cache_path(source_id)
+
+    def _save_provider_catalog_source_cache(self, source: dict[str, Any] | str, catalog: dict[str, Any]) -> None:
+        cache_path = self._provider_catalog_cache_path(source)
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             with open(cache_path, "w", encoding="utf-8") as handle:
@@ -1904,8 +1937,9 @@ class GithubManager:
         except Exception as exc:
             logger.warning("保存 Git 推荐清单缓存失败: %s", exc)
 
-    def _provider_catalog_cache_path(self, source_id: str) -> Path:
-        safe_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(source_id or "catalog")).strip("_") or "catalog"
+    def _provider_catalog_cache_path(self, source: dict[str, Any] | str) -> Path:
+        source_key = (source.get("cache_id") or source.get("id")) if isinstance(source, dict) else source
+        safe_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(source_key or "catalog")).strip("_") or "catalog"
         return GIT_PROVIDER_CATALOG_DIR / f"{safe_id}.json"
 
     def _provider_catalog_sources(self, override_url: str = "") -> list[dict[str, Any]]:
@@ -1924,6 +1958,7 @@ class GithubManager:
                 continue
             sources.append({
                 "id": self._catalog_source_id(label, "provider_json", url),
+                "cache_id": self._catalog_source_cache_id(label, "provider_json", url),
                 "label": label,
                 "type": "provider_json",
                 "url": url,
@@ -1943,9 +1978,13 @@ class GithubManager:
 
     @staticmethod
     def _catalog_source_id(label: str, source_type: str, value: str) -> str:
-        base = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(label or value or source_type).strip().lower()).strip("_")
+        base = GithubManager._catalog_source_cache_id(label, source_type, value)
         digest = hashlib.sha1(str(value or "").strip().encode("utf-8")).hexdigest()[:8]
         return f"{base or source_type}_{digest}"
+
+    @staticmethod
+    def _catalog_source_cache_id(label: str, source_type: str, value: str) -> str:
+        return re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(label or value or source_type).strip().lower()).strip("_") or source_type
 
     @staticmethod
     def _provider_catalog_sources_key(sources: list[dict[str, Any]]) -> str:
@@ -1955,16 +1994,15 @@ class GithubManager:
     def _provider_catalog_source_signature(catalog: dict[str, Any] | None) -> str:
         if not isinstance(catalog, dict):
             return ""
-        items = catalog.get("items") if isinstance(catalog.get("items"), list) else []
-        normalized_items = sorted(
-            items,
-            key=lambda item: (
-                str(item.get("source_id") or ""),
-                str(item.get("key") or ""),
-                str(item.get("url") or ""),
-                str(item.get("name") or ""),
-            ) if isinstance(item, dict) else str(item),
-        )
+        raw_items = catalog.get("items")
+        items: list[Any] = raw_items if isinstance(raw_items, list) else []
+        def sort_key(item: Any) -> str:
+            if not isinstance(item, dict):
+                return f"1\x1f{item}"
+            parts = [str(item.get(key) or "") for key in ("source_id", "key", "url", "name")]
+            return "0\x1f" + "\x1f".join(parts)
+
+        normalized_items = sorted(items, key=sort_key)
         payload = json.dumps(normalized_items, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
         return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 

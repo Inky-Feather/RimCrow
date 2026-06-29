@@ -248,6 +248,11 @@ const createGithubUrl = (repo, suffix = '') => {
   const normalizedSuffix = String(suffix || '').replace(/^\/+/, '')
   return normalizedSuffix ? `https://github.com/${normalizedRepo}/${normalizedSuffix}` : `https://github.com/${normalizedRepo}`
 }
+const resolvePublicAssetUrl = (value) => {
+  const path = String(value || '').trim()
+  if (!path || /^(https?:|data:|blob:|file:)/i.test(path)) return path
+  return `${import.meta.env.BASE_URL || './'}${path.replace(/^\/+/, '')}`
+}
 const normalizeLinkItem = (item) => ({
   name: String(item?.name || '').trim(),
   url: String(item?.url || '').trim(),
@@ -286,13 +291,13 @@ const normalizeAboutMeta = (rawMeta) => {
       enabled: !!rawMeta?.donate?.enabled,
       title: String(rawMeta?.donate?.title || '打赏支持').trim(),
       description: String(rawMeta?.donate?.description || '').trim(),
-      qrImageUrl: String(rawMeta?.donate?.qr_image_url || '').trim(),
+      qrImageUrl: resolvePublicAssetUrl(rawMeta?.donate?.qr_image_url),
     },
   }
 }
 const loadAboutMeta = async () => {
   try {
-    const response = await fetch('/project-meta.json', { cache: 'no-store' })
+    const response = await fetch(resolvePublicAssetUrl('project-meta.json'), { cache: 'no-store' })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     aboutMeta.value = normalizeAboutMeta(await response.json())
   } catch (error) {

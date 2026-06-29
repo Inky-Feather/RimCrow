@@ -9,9 +9,10 @@ import zipfile
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from backend.settings import settings
+from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.utils.logger import logger
 
@@ -126,12 +127,14 @@ class MultiplayerCompatibilityManager:
         target.parent.mkdir(parents=True, exist_ok=True)
         updated_at = self._parse_http_datetime_to_ms(headers.get("Last-Modified"))
         signature = hashlib.sha256(archive_bytes).hexdigest()
+        source_marker = self._resolve_source_marker(source_url, archive_url)
         payload = {
             "package_ids": sorted(package_ids),
             "source": {
                 "url": source_url,
                 "download_url": final_url or archive_url,
                 "signature": signature,
+                **source_marker,
                 "updated_at": updated_at,
                 "etag": str(headers.get("ETag") or "").strip('"'),
                 "generated_at": int(time.time() * 1000),
@@ -145,6 +148,7 @@ class MultiplayerCompatibilityManager:
             "source_url": source_url,
             "download_url": final_url or archive_url,
             "source_signature": signature,
+            "source_id": str(source_marker.get("source_id") or ""),
             "source_updated_at": updated_at,
         }
 
@@ -191,6 +195,58 @@ class MultiplayerCompatibilityManager:
             if len(parts) == 2:
                 return f"https://github.com/{owner}/{repo}/archive/refs/heads/master.zip"
         return text
+
+    def _resolve_source_marker(self, source_url: str, archive_url: str) -> dict[str, Any]:
+        source_ref = self.parse_source_repository_ref(archive_url) or self.parse_source_repository_ref(source_url)
+        if not source_ref:
+            return {}
+        github_mgr = GithubManager()
+        owner = source_ref["owner"]
+        repo = source_ref["repo"]
+        ref = source_ref["ref"]
+        try:
+            if not ref:
+                repo_info = github_mgr.fetch_repo(owner, repo, missing_ok=True) or {}
+                ref = str(repo_info.get("default_branch") or "master").strip() or "master"
+            commit = github_mgr.fetch_commit(owner, repo, ref=ref, missing_ok=True)
+            if not commit:
+                return {}
+            commit_at = GithubManager._extract_commit_timestamp(commit)
+            source_id = str(commit.get("sha") or "").strip()
+            if not source_id:
+                return {}
+            return {
+                "source_id": source_id,
+                "source_id_type": "github_commit",
+                "repository": f"{owner}/{repo}",
+                "ref": ref,
+                "commit_at": commit_at,
+            }
+        except Exception as exc:
+            logger.warning("读取 MP Compat 远端库标识失败: %s/%s ref=%s error=%s", owner, repo, ref, exc)
+            return {}
+
+    @staticmethod
+    def parse_source_repository_ref(url: str) -> dict[str, str] | None:
+        try:
+            parsed = urlparse(str(url or "").strip())
+        except Exception:
+            return None
+        if parsed.netloc.lower() != "github.com":
+            return None
+        parts = [unquote(part) for part in parsed.path.strip("/").split("/") if part]
+        if len(parts) < 2:
+            return None
+        owner, repo = parts[0], parts[1]
+        if len(parts) >= 6 and parts[2] == "archive" and parts[3] == "refs" and parts[4] in {"heads", "tags"}:
+            ref_parts = parts[5:]
+            ref_parts[-1] = re.sub(r"\.zip$", "", ref_parts[-1], flags=re.I)
+            return {"owner": owner, "repo": repo, "ref": "/".join(ref_parts)}
+        if len(parts) >= 4 and parts[2] == "tree":
+            return {"owner": owner, "repo": repo, "ref": "/".join(parts[3:])}
+        if len(parts) == 2:
+            return {"owner": owner, "repo": repo, "ref": ""}
+        return None
 
     @staticmethod
     def _download_source_archive(url: str) -> tuple[bytes, dict[str, Any], str]:

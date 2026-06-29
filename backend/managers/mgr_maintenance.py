@@ -13,6 +13,7 @@ from packaging.version import InvalidVersion, Version
 
 from backend.database.models import GithubModRecord
 from backend.managers.mgr_github import GithubManager
+from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
 from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_steam_api import SteamWebAPI
@@ -390,10 +391,14 @@ class MaintenanceManager:
         local_size = path.stat().st_size if exists and path else 0
         local_mtime = int(path.stat().st_mtime * 1000) if exists and path else 0
         local_signature = self._compute_git_blob_sha(path) if exists and path else ""
-        local_version = self._resolve_local_dataset_version(data_type)
         local_source_info = self._read_local_source_info(path) if data_type == "mp_compat_package_ids" and exists and path else {}
+        local_version = (
+            str(local_source_info.get("source_id") or local_source_info.get("etag") or local_source_info.get("updated_at") or local_source_info.get("signature") or "")
+            if data_type == "mp_compat_package_ids"
+            else self._resolve_local_dataset_version(data_type)
+        )
 
-        remote_info = self._probe_remote_file(url)
+        remote_info = self._probe_mp_compat_source(url) if data_type == "mp_compat_package_ids" else self._probe_remote_file(url)
         remote_signature = str(remote_info.get("signature") or "")
         remote_size = int(remote_info.get("size") or 0)
         remote_updated_at = int(remote_info.get("updated_at") or 0)
@@ -404,10 +409,15 @@ class MaintenanceManager:
             needs_update = True
             comparison_mode = "missing"
         elif data_type == "mp_compat_package_ids":
+            local_source_id = str(local_source_info.get("source_id") or local_source_info.get("signature") or "").strip()
+            remote_source_id = str(remote_info.get("source_id") or remote_info.get("signature") or "").strip()
             local_source_etag = str(local_source_info.get("etag") or "").strip()
             local_source_updated_at = int(local_source_info.get("updated_at") or 0)
             remote_etag = str(remote_info.get("etag") or "").strip()
-            if remote_info.get("available") and remote_etag and local_source_etag:
+            if remote_info.get("available") and remote_source_id:
+                comparison_mode = "source_id"
+                needs_update = remote_source_id != local_source_id
+            elif remote_info.get("available") and remote_etag and local_source_etag:
                 comparison_mode = "source_etag"
                 needs_update = remote_etag != local_source_etag
             elif remote_info.get("available") and remote_updated_at > 0:
@@ -521,7 +531,7 @@ class MaintenanceManager:
                 return str(self.workshop_db_mgr.get_insteaddb_version() or "")
             if data_type == "mp_compat_package_ids":
                 source = self._read_local_source_info(Path(settings.config.mp_compat_package_ids_path))
-                return str(source.get("etag") or source.get("updated_at") or source.get("signature") or "")
+                return str(source.get("source_id") or source.get("etag") or source.get("updated_at") or source.get("signature") or "")
             if data_type == "community_rules" and callable(self.rule_mgr_provider):
                 rule_mgr = self.rule_mgr_provider()
                 if rule_mgr and getattr(rule_mgr, "community_rules_update_time", 0):
@@ -539,6 +549,45 @@ class MaintenanceManager:
             return {}
         source = payload.get("source")
         return source if isinstance(source, dict) else {}
+
+    def _probe_mp_compat_source(self, url: str) -> dict[str, Any]:
+        source_ref = MultiplayerCompatibilityManager.parse_source_repository_ref(url)
+        if not source_ref:
+            return self._probe_remote_file(url)
+        owner = source_ref["owner"]
+        repo = source_ref["repo"]
+        ref = source_ref["ref"]
+        try:
+            if not ref:
+                repo_info = self.github_mgr.fetch_repo(owner, repo, missing_ok=True) or {}
+                ref = str(repo_info.get("default_branch") or "master").strip() or "master"
+            commit = self.github_mgr.fetch_commit(owner, repo, ref=ref, missing_ok=True)
+            if not commit:
+                return {
+                    "supported": True,
+                    "available": False,
+                    "message": f"GitHub 资源不存在: {owner}/{repo}@{ref}",
+                }
+            commit_at = GithubManager._extract_commit_timestamp(commit)
+            source_id = str(commit.get("sha") or "").strip()
+            updated_at = GithubManager._parse_iso_datetime_to_ms(commit_at)
+            return {
+                "supported": True,
+                "available": bool(source_id),
+                "signature": source_id,
+                "source_id": source_id,
+                "source_id_type": "github_commit",
+                "version": source_id[:12],
+                "updated_at": updated_at,
+                "download_url": url,
+            }
+        except Exception as exc:
+            logger.warning("GitHub MP Compat 源码库检查失败: %s/%s ref=%s", owner, repo, ref, exc_info=True)
+            return {
+                "supported": True,
+                "available": False,
+                "message": f"获取远端库状态失败: {exc}",
+            }
 
     def _compute_git_blob_sha(self, path: Path) -> str:
         try:
