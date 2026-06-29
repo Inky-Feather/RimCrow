@@ -428,6 +428,7 @@
 │   ├──  test_environment_runtime.py
 │   ├──  test_file_manager.py
 │   ├──  test_file_search.py
+│   ├──  test_frontend_build_config.py
 │   ├──  test_game_log_paths.py
 │   ├──  test_github_manager.py
 │   ├──  test_group_dao.py
@@ -446,6 +447,7 @@
 │   ├──  test_multiplayer_compat_manager.py
 │   ├──  test_network_manager.py
 │   ├──  test_profile_and_scanner.py
+│   ├──  test_recommendation_export_dialog.py
 │   ├──  test_recommendation_export_manager.py
 │   ├──  test_rule_manager_dynamic_weights.py
 │   ├──  test_security_storage.py

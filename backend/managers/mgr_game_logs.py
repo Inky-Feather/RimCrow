@@ -252,6 +252,8 @@ class GameLogManager(BaseLogReader): # 继承基类
         # 实时监视器相关状态
         self._realtime_thread = None
         self._stop_event = threading.Event()
+        self._legacy_migration_checked_roots = set()
+        self._migrate_legacy_realtime_logs_for_root(getattr(self.context, "user_data_path", ""))
         self.realtime_log_file = self.resolve_log_file_path(self.REALTIME_LOG_NAME, must_exist=False)
         
         self._patterns = {
@@ -266,6 +268,8 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     @classmethod
     def _is_realtime_log_name(cls, filename: str) -> bool:
+        # 这里判断的是 Companion 生成的 JSON 日志族，包含当前日志和 prev 归档日志。
+        # 真正需要后台 tail 的只有 REALTIME_LOG_NAME。
         return filename in {
             cls.REALTIME_LOG_NAME,
             cls.REALTIME_PREV_LOG_NAME,
@@ -281,11 +285,37 @@ class GameLogManager(BaseLogReader): # 继承基类
             return cls.REALTIME_PREV_LOG_NAME, cls.LEGACY_REALTIME_PREV_LOG_NAME
         return (filename,)
 
+    @classmethod
+    def _legacy_realtime_pairs(cls) -> tuple[tuple[str, str], ...]:
+        return (
+            (cls.REALTIME_LOG_NAME, cls.LEGACY_REALTIME_LOG_NAME),
+            (cls.REALTIME_PREV_LOG_NAME, cls.LEGACY_REALTIME_PREV_LOG_NAME),
+        )
+
+    def _migrate_legacy_realtime_logs_for_root(self, user_data_root: str):
+        root = str(user_data_root or "").strip()
+        if not root:
+            return
+        if root in self._legacy_migration_checked_roots:
+            return
+        self._legacy_migration_checked_roots.add(root)
+        for canonical_name, legacy_name in self._legacy_realtime_pairs():
+            canonical_path = os.path.join(root, canonical_name)
+            legacy_path = os.path.join(root, legacy_name)
+            if os.path.exists(canonical_path) or not os.path.exists(legacy_path):
+                continue
+            try:
+                os.rename(legacy_path, canonical_path)
+                logger.info(f"旧实时日志已重命名: {legacy_path} -> {canonical_path}")
+            except OSError as e:
+                logger.warning(f"旧实时日志重命名失败，继续使用兼容读取: {legacy_path} -> {canonical_path}，错误：{e}")
+
     def _build_realtime_log_paths(self, filename: str) -> list[str]:
         candidates = []
         context_root = str(getattr(self.context, "user_data_path", "") or "").strip()
         filenames = self._realtime_log_aliases(filename)
         if context_root:
+            self._migrate_legacy_realtime_logs_for_root(context_root)
             candidates.extend(os.path.join(context_root, item) for item in filenames)
         for root in GameManager.get_default_user_data_paths():
             candidates.extend(os.path.join(root, item) for item in filenames)
@@ -332,6 +362,8 @@ class GameLogManager(BaseLogReader): # 继承基类
         """
         result = []
         normalized_root = str(user_data_root or "").strip()
+        if normalized_root:
+            self._migrate_legacy_realtime_logs_for_root(normalized_root)
         for filename in self._GAME_LOG_FILENAMES:
             if player_only and not filename.startswith("Player"):
                 continue
@@ -352,8 +384,10 @@ class GameLogManager(BaseLogReader): # 继承基类
 
     def read_log_page_for_root(self, filename, user_data_root: str = "", page=1, page_size=1000):
         normalized_name = os.path.basename(str(filename or "").strip())
-        if self._is_realtime_log_name(normalized_name) and str(user_data_root or "").strip():
-            filepath = next((path for path in (os.path.join(str(user_data_root).strip(), item) for item in self._realtime_log_aliases(normalized_name)) if os.path.exists(path)), "")
+        normalized_root = str(user_data_root or "").strip()
+        if self._is_realtime_log_name(normalized_name) and normalized_root:
+            self._migrate_legacy_realtime_logs_for_root(normalized_root)
+            filepath = next((path for path in (os.path.join(normalized_root, item) for item in self._realtime_log_aliases(normalized_name)) if os.path.exists(path)), "")
         else:
             filepath = self.resolve_log_file_path(normalized_name)
         if not filepath or not os.path.exists(filepath):
@@ -375,9 +409,12 @@ class GameLogManager(BaseLogReader): # 继承基类
         """启动后台线程来实时监视 RimCrow_Realtime.log 文件"""
         if self._realtime_thread and self._realtime_thread.is_alive(): return # 已经启动
         # 确保日志文件存在
-        if not os.path.exists(self.realtime_log_file):
+        realtime_log_file = self.resolve_log_file_path(self.REALTIME_LOG_NAME)
+        if not realtime_log_file:
+            self.realtime_log_file = self.resolve_log_file_path(self.REALTIME_LOG_NAME, must_exist=False)
             logger.warning(f"实时日志文件不存在，无法启动监视: {self.realtime_log_file}")
             return
+        self.realtime_log_file = realtime_log_file
         self._stop_event.clear()
         self._realtime_thread = threading.Thread(target=self._tail_log_file, daemon=True)
         self._realtime_thread.start()

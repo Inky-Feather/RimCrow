@@ -464,8 +464,8 @@ const buildProfileExportScopeOptions = ({
     return Number.isFinite(count) ? `${title}（${count}）` : title
   }
   return [
-    { value: 'profile-effective', label: formatLabel('当前环境有效模组', effectiveCount), description: loading ? '正在读取这个环境里可导出的模组数量。' : '导出当前环境里能正常使用的模组。' },
-    { value: 'profile-active', label: formatLabel('当前环境启用模组', activeCount), description: loading ? '正在读取这个环境里已启用的模组数量。' : '导出当前环境里已经启用的模组。' },
+    { value: 'profile-effective', label: formatLabel('当前环境有效模组', effectiveCount), count: Number.isFinite(effectiveCount) ? effectiveCount : null, description: loading ? '正在读取这个环境里可导出的模组数量。' : '导出当前环境里能正常使用的模组。' },
+    { value: 'profile-active', label: formatLabel('当前环境启用模组', activeCount), count: Number.isFinite(activeCount) ? activeCount : null, description: loading ? '正在读取这个环境里已启用的模组数量。' : '导出当前环境里已经启用的模组。' },
   ]
 }
 

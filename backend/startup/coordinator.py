@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
+
+if TYPE_CHECKING:
+    from backend.managers.mgr_rules import RuleManager
 
 
 class StartupCoordinator:
@@ -18,7 +21,7 @@ class StartupCoordinator:
         self,
         workshop_db_mgr,
         *,
-        rule_mgr_provider: Callable[[], object | None] | None = None,
+        rule_mgr_provider: Callable[[], RuleManager | None] | None = None,
         dlc_cache_warmup: Callable[[], object | None] | None = None,
         append_messages: Callable[[list[str]], None] | None = None,
     ):

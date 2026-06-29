@@ -186,7 +186,7 @@
                   <button @click="item._expanded = !item._expanded"
                     class="flex items-center gap-1 text-xs text-text-dim hover:text-text-main transition-colors select-none mb-0.5">
                     <svg class="w-3 h-3 transition-transform" :class="item._expanded ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                    <span>{{ item._expanded ? '收起诊断详情' : '展开诊断详情' }}</span>
+                    <span>{{ item._expanded ? '收起详情' : '展开详情' }}</span>
                   </button>
                   <div v-if="item._expanded" class="pl-2 border-l border-border-base/10 text-text-dim text-xs bg-bg-inset/70 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
                     {{ [item.details, formatLogDiagnosticDetails(item)].filter(Boolean).join('\n\n') }}
@@ -409,7 +409,7 @@ const copyLogContent = async (logsArray) => {
   const textToCopy = logsArray.map(l => {
     const msg = l.message || '';
     const detailsText = [l.details, formatLogDiagnosticDetails(l)].filter(Boolean).join('\n\n');
-    const details = detailsText ? `\n[诊断详情]\n${detailsText}` : '';
+    const details = detailsText ? `\n[详情]\n${detailsText}` : '';
     return `${msg}${details}`;
   }).join('\n\n------\n\n');
 

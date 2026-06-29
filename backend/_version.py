@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.23.4"  # 主版本.次版本.补丁
+__version__ = "0.23.7"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -8,9 +8,18 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
     {
-        "version": "0.23.4",
+        "version": "0.23.7",
         "date": "2026-06-29",
         "entries": [
+            {
+                "title": "紧急修复",
+                "changes": [
+                    { "type": "optimize", "text": "改进蓝奏云校验方式与请求自动重试机制" },
+                    { "type": "fix", "text": "修正因 Webview 文件对话框兼容性不足导致的无法导入数据问题" },
+                    { "type": "fix", "text": "修正因前端构建错误导致的部分页面无法打开的Bug" },
+                    { "type": "optimize", "text": "优化数据导入可按需进行，修正模组导出的环境数据统计问题" }
+                ]
+            },
             {
                 "title": "RimCrow 项目重塑与数据迁移",
                 "changes": [

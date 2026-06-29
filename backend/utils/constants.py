@@ -1,5 +1,5 @@
 from enum import IntEnum, StrEnum
-from typing import Any
+from typing import Any, TypeVar
 
 from backend.i18n.language_registry import (
     LANGUAGE_SPECS, SUPPORTED_LANGUAGE_CODES, get_language_english_name,
@@ -7,6 +7,8 @@ from backend.i18n.language_registry import (
     get_steam_elanguage_options, normalize_language_code, normalize_language_codes,
     to_external_language, to_steam_elanguage,
 )
+
+IntEnumT = TypeVar("IntEnumT", bound=IntEnum)
 
 # 兼容旧调用名：历史上该函数用于返回 RimWorld Languages 目录名。
 def get_lang_by_code(code):
@@ -169,7 +171,7 @@ class SteamSearchTextTarget(IntEnum):
     DESCRIPTION = 2  # 仅描述
 
 
-def _coerce_int_enum(enum_cls: type[IntEnum], value: Any, default: IntEnum) -> IntEnum:
+def _coerce_int_enum(enum_cls: type[IntEnumT], value: Any, default: IntEnumT) -> IntEnumT:
     """把前端传入的数字、枚举名或业务别名收束到明确枚举值。"""
     if isinstance(value, enum_cls):
         return value

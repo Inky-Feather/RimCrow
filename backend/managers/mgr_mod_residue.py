@@ -222,10 +222,10 @@ class ModResidueManager:
             if not folder_key:
                 continue
             identity = cls._identity_from_values(
-                workshop_id=record.get("workshop_id"),
-                package_id=record.get("package_id"),
-                mod_name=record.get("mod_name"),
-                detail=details.get(record.get("workshop_id") or ""),
+                workshop_id=record.get("workshop_id",""),
+                package_id=record.get("package_id",""),
+                mod_name=record.get("mod_name",""),
+                detail=details.get(record.get("workshop_id") or "", {}),
                 fallback_key=f"settings:{record.get('mod_group_key') or folder_key}",
                 fallback_name=record.get("mod_name") or record.get("folder_name") or "未知模组",
                 confidence=record.get("match_confidence") or "unknown",
@@ -262,8 +262,8 @@ class ModResidueManager:
         if selected_id:
             return cls._identity_from_values(
                 workshop_id=selected_id,
-                package_id=selected_detail.get("package_id"),
-                mod_name=selected_detail.get("title") or selected_detail.get("name"),
+                package_id=selected_detail.get("package_id",""),
+                mod_name=selected_detail.get("title","") or selected_detail.get("name",""),
                 detail=selected_detail,
                 fallback_key=f"workshop:{selected_id}",
                 fallback_name=record.get("folder_name") or f"Workshop {selected_id}",
@@ -303,9 +303,9 @@ class ModResidueManager:
             }
         detail = details.get(record.get("workshop_id") or "") or {}
         return cls._identity_from_values(
-            workshop_id=record.get("workshop_id"),
-            package_id=record.get("package_id"),
-            mod_name=record.get("mod_name"),
+            workshop_id=record.get("workshop_id",""),
+            package_id=record.get("package_id",""),
+            mod_name=record.get("mod_name",""),
             detail=detail,
             fallback_key=f"settings:{record.get('mod_group_key') or record.get('path_key')}",
             fallback_name=record.get("mod_name") or record.get("folder_name") or "未知模组",

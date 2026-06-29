@@ -371,7 +371,7 @@ class MultiplayerCompatibilityManager:
     @staticmethod
     def _is_multiplayer_xml_only(mod: dict[str, Any]) -> bool:
         # Multiplayer 的 XML-only 实际语义是“没有程序集”；这里直接使用扫描期 DLL 统计。
-        file_stats = mod.get("file_stats") if isinstance(mod.get("file_stats"), dict) else {}
+        file_stats = mod.get("file_stats", {}) if isinstance(mod.get("file_stats"), dict) else {}
         try:
             return int(file_stats.get("code_dll") or 0) <= 0
         except (TypeError, ValueError):

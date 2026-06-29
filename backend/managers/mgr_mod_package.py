@@ -24,7 +24,7 @@ from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_files import FileManager
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileManager
-from backend.settings import settings
+from backend.settings import DATA_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 from backend.utils.tools import normalize_package_id
@@ -77,6 +77,7 @@ class ModPackageManager:
             "schema_version": self.SCHEMA_VERSION,
             "file_extension": self.FILE_EXTENSION,
             "legacy_file_extensions": list(self.LEGACY_FILE_EXTENSIONS),
+            "data_dir": str(DATA_DIR),
             "profiles": self.profile_mgr.get_all_profiles(),
             "available_installs": self.data_bundle_mgr.get_available_install_choices(),
             "self_mods_path": str(settings.config.self_mods_path or ""),

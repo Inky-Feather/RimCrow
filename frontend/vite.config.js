@@ -29,6 +29,11 @@ export default defineConfig({
             || normalizedId.includes('/node_modules/@codemirror/')
             || normalizedId.includes('/node_modules/@lezer/')
             || normalizedId.includes('/node_modules/@replit/codemirror-lang-csharp/')
+            // @codemirror/view 的运行时依赖必须同包，否则打包后会形成 codemirror 与业务 chunk 的循环引用。
+            || normalizedId.includes('/node_modules/style-mod/')
+            || normalizedId.includes('/node_modules/w3c-keyname/')
+            || normalizedId.includes('/node_modules/crelt/')
+            || normalizedId.includes('/node_modules/@marijn/find-cluster-break/')
           ) {
             return 'codemirror'
           }

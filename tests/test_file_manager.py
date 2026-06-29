@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PIL import Image
+from webview.util import parse_file_type
 
 from backend.managers.mgr_files import FileManager, LocalAssetHandler
 from backend.utils.tools import normalize_path_for_storage
@@ -39,6 +40,38 @@ class TestFileManager(unittest.TestCase):
         popen.assert_called_once_with(
             'explorer.exe /select,"C:\\Users\\Administrator\\AppData\\LocalLow\\Ludeon Studios\\RimWorld by Ludeon Studios\\Config\\Mod_1541721856_AlphaAnimals_Mod.xml"'
         )
+
+    def test_webview_file_types_reject_missing_dot_after_star(self):
+        with self.assertRaises(ValueError):
+            parse_file_type("RimCrow Data Package (*rimcrowdata.zip)")
+
+    def test_complex_import_filters_use_tk_without_zip_wildcard_downgrade(self):
+        file_types = (
+            "RimCrow Data Package (*.rimcrowdata.zip;*.rmmdata.zip;*.rmmdata)",
+            "Load Order Files (*.xml;*.rws;*.rml)",
+            "All Files (*.*)",
+        )
+
+        class FakeWindow:
+            def create_file_dialog(self, *args, **kwargs):
+                raise AssertionError("复杂导入过滤器不应交给 pywebview")
+
+        self.assertFalse(FileManager._can_use_webview_file_types(file_types))
+        with (
+            patch("backend.managers.mgr_files.webview.windows", [FakeWindow()]),
+            patch("backend.managers.mgr_files.os.path.exists", return_value=True),
+            patch("backend.managers.mgr_files.FileManager._run_tk_dialog", return_value="picked.rimcrowdata.zip") as tk_dialog,
+        ):
+            selected = FileManager.select_file_dialog("C:\\", file_types)
+
+        self.assertEqual(selected, "picked.rimcrowdata.zip")
+        filedialog_callback = tk_dialog.call_args.args[0]
+        class FakeFileDialog:
+            @staticmethod
+            def askopenfilename(**kwargs):
+                self.assertEqual(kwargs["filetypes"][0], ("RimCrow Data Package", "*.rimcrowdata.zip *.rmmdata.zip *.rmmdata"))
+                return "picked.rmmdata.zip"
+        self.assertEqual(filedialog_callback(FakeFileDialog), "picked.rmmdata.zip")
 
     def test_thumbnail_generation_tolerates_broken_png_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:

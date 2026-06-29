@@ -189,6 +189,7 @@ class DataBundleManager:
             "schema_version": self.SCHEMA_VERSION,
             "file_extension": self.FILE_EXTENSION,
             "legacy_file_extensions": list(self.LEGACY_FILE_EXTENSIONS),
+            "data_dir": str(DATA_DIR),
             "modules": self.module_definitions(),
             "presets": {
                 "rules": {

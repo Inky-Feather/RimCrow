@@ -11,7 +11,7 @@ from backend.ai.def_attachments import AttachmentResolver, get_attachment_defini
 from backend.api import API
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_logs import GameLogManager, LogAnalyzer
-from backend.utils.logger import AppLogReader
+from backend.utils.logger import AppLogReader, BaseLogReader
 
 
 class _DefinitionManagerStub:
@@ -170,7 +170,7 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertEqual(context["phase"], "runtime")
         self.assertEqual(context["relatedNamespaces"], ["ExampleMod.Runtime.Worker"])
 
-    def test_legacy_rmm_realtime_log_still_resolves_when_new_file_is_missing(self):
+    def test_legacy_rmm_realtime_log_still_reads_after_migration(self):
         profile_root = self.temp_dir / "profile-userdata"
         profile_root.mkdir(parents=True)
         (profile_root / "RMM_Realtime.log").write_text('{"message":"legacy realtime"}\n', encoding="utf-8")
@@ -180,9 +180,82 @@ class TestGameLogPathResolution(unittest.TestCase):
             filepath = manager.resolve_log_file_path("RimCrow_Realtime.log")
             page = manager.read_log_page("RimCrow_Realtime.log", page=1, page_size=20)
 
-        self.assertEqual(filepath, str(profile_root / "RMM_Realtime.log"))
+        self.assertEqual(filepath, str(profile_root / "RimCrow_Realtime.log"))
         self.assertEqual(page["status"], "success")
         self.assertIn("legacy realtime", page["blocks"][0]["message"])
+
+    def test_legacy_realtime_logs_are_renamed_to_canonical_when_new_file_is_missing(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        legacy_log = profile_root / "RMM_Realtime.log"
+        legacy_prev_log = profile_root / "RMM_Realtime-prev.log"
+        legacy_log.write_text('{"message":"legacy realtime"}\n', encoding="utf-8")
+        legacy_prev_log.write_text('{"message":"legacy prev realtime"}\n', encoding="utf-8")
+
+        GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+
+        self.assertFalse(legacy_log.exists())
+        self.assertFalse(legacy_prev_log.exists())
+        self.assertTrue((profile_root / "RimCrow_Realtime.log").exists())
+        self.assertTrue((profile_root / "RimCrow_Realtime-prev.log").exists())
+
+    def test_legacy_rmm_realtime_prev_log_reads_as_json_when_new_file_is_missing(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        (profile_root / "RMM_Realtime-prev.log").write_text('{"message":"legacy prev realtime"}\n', encoding="utf-8")
+
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+        with patch("backend.managers.mgr_game_logs.GameManager.get_default_user_data_paths", return_value=[]):
+            page = manager.read_log_page("RimCrow_Realtime-prev.log", page=1, page_size=20)
+
+        self.assertEqual(page["status"], "success")
+        self.assertIn("legacy prev realtime", page["blocks"][0]["message"])
+
+    def test_realtime_json_reader_reports_bad_lines_and_keeps_valid_lines(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        (profile_root / "RimCrow_Realtime.log").write_text(
+            '{"level":"INFO","message":"valid before","details":""}\n'
+            '{bad json}\n'
+            '{"level":"INFO","message":"valid after","details":""}\n',
+            encoding="utf-8",
+        )
+
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+        with patch("backend.utils.logger.logger.warning") as log_warning:
+            page = manager.read_log_page("RimCrow_Realtime.log", page=1, page_size=20)
+
+        self.assertEqual(page["status"], "success")
+        self.assertEqual([block["message"] for block in page["blocks"]], ["valid before", "valid after"])
+        self.assertTrue(any("跳过无法解析的 JSON 日志行" in str(call.args[0]) for call in log_warning.call_args_list))
+
+    def test_base_reader_only_parses_whitelisted_realtime_log_names_as_json(self):
+        allowed_log = self.temp_dir / "RMM_Realtime-prev.log"
+        unknown_log = self.temp_dir / "Companion-prev.log"
+        allowed_log.write_text('{"level":"INFO","message":"allowed json"}\n', encoding="utf-8")
+        unknown_log.write_text('{"level":"INFO","message":"unknown json"}\n', encoding="utf-8")
+
+        reader = BaseLogReader()
+
+        self.assertEqual(reader._parse_file_base(str(allowed_log))[0]["message"], "allowed json")
+        self.assertEqual(reader._parse_file_base(str(unknown_log)), [])
+
+    def test_realtime_monitor_uses_legacy_rmm_log_when_new_file_is_missing(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        legacy_log = profile_root / "RMM_Realtime.log"
+        legacy_log.write_text('{"message":"legacy realtime"}\n', encoding="utf-8")
+
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+        with patch("backend.managers.mgr_game_logs.GameManager.get_default_user_data_paths", return_value=[]), \
+             patch("backend.managers.mgr_game_logs.threading.Thread") as thread_cls:
+            thread_instance = thread_cls.return_value
+            manager.start_realtime_monitor()
+
+        self.assertEqual(manager.realtime_log_file, str(profile_root / "RimCrow_Realtime.log"))
+        self.assertFalse(legacy_log.exists())
+        thread_cls.assert_called_once()
+        thread_instance.start.assert_called_once()
 
     def test_game_log_page_can_reach_older_blocks_beyond_cache_limit(self):
         profile_root = self.temp_dir / "profile-userdata"
