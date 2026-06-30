@@ -444,7 +444,8 @@ class GameLogManager(BaseLogReader): # 继承基类
                     # 有新内容，解析并推送
                     try:
                         data = json.loads(line)
-                        data['id'] = generate_log_id(data.get('timestamp', ''), data.get('level', 'INFO'), data.get('message', ''))
+                        data['level'] = self._normalize_log_level(data, self.realtime_log_file, current_line_no)
+                        data['id'] = generate_log_id(data.get('timestamp', ''), data['level'], data.get('message', ''))
                         data['raw_lines'] = [current_line_no]
                         EventBus.emit('game-log', data)
                     except json.JSONDecodeError:

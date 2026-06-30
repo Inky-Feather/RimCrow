@@ -320,16 +320,24 @@ class DataBundleManager:
                 module_payload_stats = summarize_zip_members(bundle, ["modules"])
                 environment_payload_stats = summarize_zip_members(bundle, ["environments"])
 
-            module_entries = manifest.get("modules", [])
-            profiles = manifest.get("profiles", [])
+            raw_module_entries = manifest.get("modules")
+            raw_profiles = manifest.get("profiles")
+            validation_warnings: list[str] = []
+            if not isinstance(raw_module_entries, list):
+                validation_warnings.append("数据包 manifest 中的 modules 字段格式无效，无法读取包含的数据模块。")
+            if not isinstance(raw_profiles, list):
+                validation_warnings.append("数据包 manifest 中的 profiles 字段格式无效，无法读取环境列表。")
+            module_entries = raw_module_entries if isinstance(raw_module_entries, list) else []
+            profiles = raw_profiles if isinstance(raw_profiles, list) else []
             return {
                 "format": manifest.get("format"),
                 "schema_version": manifest.get("schema_version"),
                 "app_version": manifest.get("app_version"),
                 "exported_at": manifest.get("exported_at"),
                 "preset": manifest.get("preset", "custom"),
-                "modules": module_entries if isinstance(module_entries, list) else [],
-                "profiles": profiles if isinstance(profiles, list) else [],
+                "modules": module_entries,
+                "profiles": profiles,
+                "warnings": validation_warnings,
                 "bundle_size_bytes": int(path.stat().st_size),
                 "archive_stats": archive_stats,
                 "module_payload_stats": module_payload_stats,
@@ -361,6 +369,7 @@ class DataBundleManager:
                     {"key": "groups", "label": "分组"},
                 ],
                 "profiles": [],
+                "warnings": [],
                 "has_default_profile": False,
                 "legacy_rule_bundle": True,
             }
@@ -387,6 +396,8 @@ class DataBundleManager:
         if zipfile.is_zipfile(path):
             with zipfile.ZipFile(path, "r") as bundle:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
+                if not isinstance(manifest, dict):
+                    raise ValueError("数据包缺少有效的 manifest.json")
                 included_modules: list[str] = [
                     str(item.get("key"))
                     for item in manifest.get("modules", [])
@@ -398,17 +409,23 @@ class DataBundleManager:
                 if not active_modules:
                     raise ValueError("导入包中没有可处理的数据模块")
 
-                module_payloads: dict[str, Any] = {
-                    module_key: self._read_json_from_zip(bundle, f"modules/{module_key}.json", {})
-                    for module_key in active_modules
-                    if module_key != "profiles"
-                }
+                module_payloads: dict[str, Any] = {}
+                for module_key in active_modules:
+                    if module_key == "profiles":
+                        continue
+                    payload = self._read_json_from_zip(bundle, f"modules/{module_key}.json")
+                    if payload is None:
+                        raise ValueError(f"数据包缺少模块文件: {module_key}")
+                    module_payloads[module_key] = payload
                 self._apply_module_payloads(module_payloads, result)
 
                 if "profiles" in active_modules:
+                    profiles = manifest.get("profiles")
+                    if not isinstance(profiles, list):
+                        raise ValueError("数据包缺少有效的 profiles 列表")
                     imported_profiles, warnings = self._import_profiles_from_bundle(
                         bundle,
-                        manifest.get("profiles", []),
+                        profiles,
                         default_profile_mode=default_profile_mode,
                         profile_import_plan=profile_import_plan,
                     )

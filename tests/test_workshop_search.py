@@ -296,6 +296,22 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertEqual(result["1111111111"]["kv_tags"][0], {"key": "packageId", "value": "alpha.tools"})
         save_mock.assert_called_once()
 
+    def test_service_detail_request_rejects_malformed_response(self):
+        with (
+            patch.object(SteamWebAPI, "_get_steam_web_api_key", return_value="test-key"),
+            patch.object(SteamWebAPI, "_request_published_file_service", return_value={"unexpected": {}}),
+        ):
+            with self.assertRaises(RuntimeError):
+                SteamWebAPI.fetch_published_file_service_details(["9999999999"])
+
+    def test_legacy_detail_request_logs_malformed_response(self):
+        with patch.object(SteamWebAPI, "_request_json", return_value={"unexpected": {}}), \
+             patch("backend.managers.mgr_steam_api.logger.error") as log_error:
+            result = SteamWebAPI._request_published_file_details(["1111111111"])
+
+        self.assertEqual(result, {})
+        self.assertTrue(any("Steam API 请求失败" in str(call.args[0]) for call in log_error.call_args_list))
+
     def test_enhanced_details_reuse_cached_online_detail_without_api_key(self):
         SteamWebAPI._save_online_details(
             {
@@ -587,6 +603,14 @@ class TestWorkshopSearch(unittest.TestCase):
         row = WorkshopAuthorCache.get_by_id("76561198000000001")
         self.assertEqual(row.personaname, "Alice Steam")
 
+    def test_fetch_player_summaries_rejects_malformed_response(self):
+        with (
+            patch.object(SteamWebAPI, "_get_steam_web_api_key", return_value="test-key"),
+            patch.object(SteamWebAPI, "_request_json", return_value={"unexpected": {}}),
+        ):
+            with self.assertRaises(RuntimeError):
+                SteamWebAPI.fetch_player_summaries(["76561198000000009"], force_refresh=True)
+
     def test_legacy_item_parser_handles_field_name_differences_and_url_cleanup(self):
         normalized = SteamWebAPI._normalize_published_file_item(
             {
@@ -657,6 +681,14 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertIn("ISteamRemoteStorage/GetPublishedFileDetails", captured["url"])
         self.assertEqual(result["1111111111"]["title"], "Legacy Alpha")
 
+    def test_online_search_rejects_malformed_response(self):
+        with (
+            patch.object(SteamWebAPI, "_get_steam_web_api_key", return_value="test-key"),
+            patch.object(SteamWebAPI, "_request_json", return_value={"response": {}}),
+        ):
+            with self.assertRaises(RuntimeError):
+                SteamWebAPI.search_workshop_enhanced("alpha", filters={"skip_author_profiles": True})
+
     def test_get_user_files_maps_filters(self):
         captured = {}
 
@@ -704,6 +736,14 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertEqual(params["date_range_updated[0]"], 100)
         self.assertEqual(params["date_range_updated[1]"], 200)
         self.assertEqual(result["total"], 0)
+
+    def test_get_user_files_rejects_malformed_response(self):
+        with (
+            patch.object(SteamWebAPI, "_get_steam_web_api_key", return_value="test-key"),
+            patch.object(SteamWebAPI, "_request_published_file_service", return_value={"response": {}}),
+        ):
+            with self.assertRaises(RuntimeError):
+                SteamWebAPI.get_user_files("76561198000000001")
 
     def test_get_user_files_only_sends_privacy_when_explicit(self):
         captured = {}
@@ -897,6 +937,14 @@ class TestWorkshopSearch(unittest.TestCase):
             SteamWebAPI._collect_related_workshop_ids(detail),
             ["2222222222", "3333333333", "4444444444"],
         )
+
+    def test_collection_children_logs_malformed_response(self):
+        with patch.object(SteamWebAPI, "_request_json", return_value={"response": {}}), \
+             patch("backend.managers.mgr_steam_api.logger.error") as log_error:
+            children = SteamWebAPI.fetch_collection_children("1234567890")
+
+        self.assertEqual(children, [])
+        self.assertTrue(any("解析合集失败" in str(call.args[0]) for call in log_error.call_args_list))
 
 
 if __name__ == "__main__":

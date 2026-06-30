@@ -602,6 +602,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!checkResult(res, '清理已删除记录')) return false
     toast.success(`已清理 ${res.data?.success_count || deletedHashes.length} 条已删除记录`)
     await fetchLibrariesMods()
+    await appStore.refreshModCoreData('清理库存记录后同步模组数据', {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+    })
     return true
   }
   const removeStartupInventoryDialogItems = (itemIds = []) => {
@@ -2405,11 +2411,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     )
     if(check) {
       appStore.isLoading = true
-      const res = await window.pywebview.api.workspace_transfer_mods(path_hashs, target_store, mode)
-      if(checkResult(res, "库间转移")) {
-        await appStore.requestModScan()
+      try {
+        const res = await window.pywebview.api.workspace_transfer_mods(path_hashs, target_store, mode)
+        if(checkResult(res, "库间转移")) {
+          await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
+        }
+      } finally {
+        appStore.isLoading = false
       }
-      appStore.isLoading = false
     }
   }
 

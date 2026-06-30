@@ -9,10 +9,20 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+_STUBBED_MODULE_NAMES = [
+    "backend.managers.mgr_rules",
+    "backend.database.dao",
+    "backend.managers.mgr_profile",
+    "peewee",
+]
+_ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _STUBBED_MODULE_NAMES}
+
 
 fake_dao_module = types.ModuleType("backend.database.dao")
 fake_dao_module.ModDAO = Mock()
 fake_dao_module.GroupDAO = Mock()
+fake_dao_module.normalize_interlock_payload = lambda payload: payload
+fake_dao_module.normalize_user_mod_data_payload = lambda payload: payload
 sys.modules["backend.database.dao"] = fake_dao_module
 
 fake_profile_module = types.ModuleType("backend.managers.mgr_profile")
@@ -40,6 +50,13 @@ RuleActionType = mgr_rules_module.RuleActionType
 RuleManager = mgr_rules_module.RuleManager
 RULE_SOURCES = mgr_rules_module.RULE_SOURCES
 resolve_import_group_mod_ids = mgr_rules_module._resolve_import_group_mod_ids
+
+for module_name in ("backend.database.dao", "backend.managers.mgr_profile", "peewee"):
+    original_module = _ORIGINAL_MODULES[module_name]
+    if original_module is None:
+        sys.modules.pop(module_name, None)
+    else:
+        sys.modules[module_name] = original_module
 
 
 class DummyAtomic:

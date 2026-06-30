@@ -77,6 +77,13 @@ class LocalSource(UpdateSource):
     检查 updates/ 目录下是否有已经下载好且版本高于当前版本的安装包。
     用于离线更新或避免重复下载。
     """
+    def _infer_hash_algorithm(self, file_hash: Optional[str]) -> Optional[str]:
+        normalized = str(file_hash or "").strip().lower()
+        if len(normalized) == 32: return "md5"
+        if len(normalized) == 40: return "sha1"
+        if len(normalized) == 64: return "sha256"
+        return None
+
     def check(self) -> Optional[UpdateInfo]:
         if not os.path.exists(UPDATE_DIR): return None
         
@@ -100,7 +107,16 @@ class LocalSource(UpdateSource):
                     else:
                         continue # 元数据对应的文件丢失，无效
 
-                remote_v = data.get('version', '0.0.0')
+                remote_v = str(data.get('version') or '').strip()
+                if not remote_v:
+                    logger.warning("跳过无效本地更新缓存：metadata=%s reason=缺少版本号", jf)
+                    continue
+                file_hash = data.get('file_hash')
+                hash_algorithm = str(data.get('hash_algorithm') or '').strip() or self._infer_hash_algorithm(file_hash)
+                if file_hash and not hash_algorithm:
+                    logger.warning("本地更新缓存缺少可识别的校验算法，跳过 hash 校验：metadata=%s", jf)
+                    file_hash = None
+                    hash_algorithm = None
                 # 只有当本地缓存的版本 > 当前版本才算有效更新
                 if version.parse(remote_v) > version.parse(__version__):
                     # 如果有多个本地版本，取最新的
@@ -112,8 +128,8 @@ class LocalSource(UpdateSource):
                             download_url=data.get('download_url', ''),
                             source_name="本地缓存",
                             file_size=data.get('file_size'),
-                            file_hash=data.get('file_hash'),
-                            hash_algorithm=data.get('hash_algorithm', 'md5'),
+                            file_hash=file_hash,
+                            hash_algorithm=hash_algorithm or "md5",
                             publish_time=data.get('publish_time'),
                             local_status="ready",  # 本地源默认为 ready
                             local_file_path=local_path

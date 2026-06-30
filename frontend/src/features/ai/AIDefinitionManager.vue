@@ -26,7 +26,13 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-2">
-              <template v-if="activeTab === 'entries'">
+              <div v-if="isLoadingDefinitions" class="flex h-full items-center justify-center px-4 text-sm text-text-dim">
+                正在加载 AI 定义...
+              </div>
+              <div v-else-if="loadErrorText" class="px-3 py-4 text-sm text-accent-danger">
+                {{ loadErrorText }}
+              </div>
+              <template v-else-if="activeTab === 'entries'">
                 <div class="space-y-1">
                   <div v-for="entry in filteredEntries" :key="entry.id" @click="selectEntry(entry)"
                     class="cursor-pointer rounded-lg px-3 py-2 transition-all" :class="currentEntryId === entry.id ? 'bg-accent-special/20 shadow-[inset_3px_0_0_rgba(var(--rgb-accent-special),1)]' : 'hover:bg-bg-overlay/5'" >
@@ -70,7 +76,18 @@
           </div>
 
           <div class="content-surface flex flex-1 flex-col">
-            <template v-if="activeTab === 'entries' && currentEntryForm">
+            <div v-if="isLoadingDefinitions" class="flex flex-1 flex-col items-center justify-center text-text-disabled">
+              <TerminalSquare class="mb-4 size-16 opacity-20" />
+              <p class="text-sm uppercase tracking-widest">正在加载 AI 定义</p>
+            </div>
+
+            <div v-else-if="loadErrorText" class="flex flex-1 flex-col items-center justify-center px-8 text-center text-text-disabled">
+              <TerminalSquare class="mb-4 size-16 opacity-20" />
+              <p class="mb-2 text-sm uppercase tracking-widest">读取失败</p>
+              <p class="text-sm text-accent-danger">{{ loadErrorText }}</p>
+            </div>
+
+            <template v-else-if="activeTab === 'entries' && currentEntryForm">
               <div class="toolbar-surface flex h-12 shrink-0 items-center justify-between px-6">
                 <div class="flex items-center gap-2">
                   <span class="rounded border border-accent-special/20 bg-accent-special/10 px-2 py-0.5 font-mono text-xs text-accent-special">
@@ -264,7 +281,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Bot, Braces, Drama, Lock, Paperclip, Plus, TerminalSquare, User } from 'lucide-vue-next'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import CommonInput from '../../shared/components/input/CommonInput.vue'
@@ -300,6 +317,8 @@ const prompts = ref({})
 const assistants = ref({})
 const tasks = ref({})
 const definitionEditorMeta = ref(EMPTY_PROMPT_EDITOR_META)
+const isLoadingDefinitions = ref(false)
+const loadErrorText = ref('')
 
 const currentPromptId = ref(null)
 const currentPromptForm = ref(null)
@@ -418,18 +437,32 @@ const getToolTooltip = (tool = {}) => {
 // 数据加载与同步 (Lifecycle / Watch)
 // -----------------------------------------------------------------
 const loadData = async () => {
-  const config = await aiStore.getAiConfig()
-  prompts.value = config?.prompts || {}
-  assistants.value = config?.assistants || {}
-  tasks.value = config?.tasks || {}
-  definitionEditorMeta.value = config?.definition_editor_meta || EMPTY_PROMPT_EDITOR_META
+  isLoadingDefinitions.value = true
+  loadErrorText.value = ''
+  try {
+    const config = await aiStore.getAiConfig({ silent: true })
+    if (!config) {
+      loadErrorText.value = 'AI 定义暂时还没准备好，请稍后重试。'
+      return
+    }
 
-  if (!currentEntryId.value && filteredEntries.value.length > 0) selectEntry(filteredEntries.value[0])
-  if (!currentPromptId.value && sortedPromptEntries.value.length > 0) selectPrompt(sortedPromptEntries.value[0][0])
+    prompts.value = config.prompts || {}
+    assistants.value = config.assistants || {}
+    tasks.value = config.tasks || {}
+    definitionEditorMeta.value = config.definition_editor_meta || EMPTY_PROMPT_EDITOR_META
+
+    if (!currentEntryId.value && filteredEntries.value.length > 0) selectEntry(filteredEntries.value[0])
+    if (!currentPromptId.value && sortedPromptEntries.value.length > 0) selectPrompt(sortedPromptEntries.value[0][0])
+  } catch (error) {
+    console.error('加载 AI 定义失败:', error)
+    loadErrorText.value = '读取 AI 定义失败，请稍后重试。'
+  } finally {
+    isLoadingDefinitions.value = false
+  }
 }
 
-watch(() => appStore.uiState.showAIDefinitionManager, (val) => {
-  if (val) loadData()
+onMounted(() => {
+  loadData()
 })
 
 // -----------------------------------------------------------------

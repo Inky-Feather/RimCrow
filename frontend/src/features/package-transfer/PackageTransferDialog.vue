@@ -63,6 +63,10 @@
                 </div>
               </div>
             </div>
+            <div v-if="inspectWarnings.length" class="mt-3 rounded-xl border border-accent-warn/25 bg-accent-warn/8 px-3 py-3 text-xs leading-relaxed text-accent-warn">
+              <div class="mb-1 font-bold text-text-main">这个包的部分信息无法读取</div>
+              <div v-for="warning in inspectWarnings" :key="warning">{{ warning }}</div>
+            </div>
           </section>
 
           <section v-if="dialogMode === 'data-import' && dataImportModuleRows.length" class="modal-section p-4">
@@ -514,6 +518,9 @@ const targetDiskSpaceSummary = computed(() => {
     text: `当前剩余 ${freeText}，按这次导入建议至少预留 ${recommendedText}`,
   }
 })
+const inspectWarnings = computed(() => (
+  Array.isArray(inspectData.value?.warnings) ? inspectData.value.warnings.map(item => String(item || '').trim()).filter(Boolean) : []
+))
 const dataBundleModuleDefMap = computed(() => new Map(
   (dataBundleSchema.value?.modules || []).map(module => [String(module.key || ''), module])
 ))

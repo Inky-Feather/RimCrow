@@ -1025,7 +1025,7 @@ watch(() => appStore.uiState.showTextureOptModal, (visible) => {
     textureStore.loadResultHistory()
     textureStore.loadExclusions()
   }
-})
+}, { immediate: true })
 
 const handleToggleModExclusion = async (item) => {
   if (!item?.package_id) return

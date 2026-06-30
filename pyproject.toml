@@ -35,3 +35,7 @@ dependencies = [
     "steam-vdf>=0.1.10",
     "zstandard>=0.25.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

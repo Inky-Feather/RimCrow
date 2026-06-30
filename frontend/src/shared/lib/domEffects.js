@@ -236,7 +236,7 @@ const copyViewerImage = async (imagePayload) => {
       ? sourceBlob
       : await convertImageBlobToPng(sourceBlob)
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': clipboardBlob })])
-    toast.success('已复制图片')
+    toast.success('已复制图片', { timeout: 600 })
   } catch (error) {
     console.warn('复制图片失败:', error)
     toast.error(toUserMessage(error?.message || error, '复制图片失败。请检查浏览器剪贴板权限，或改用另存为。'))
@@ -248,7 +248,7 @@ const copyViewerImageUrl = async (imagePayload) => {
     if (!imagePayload?.originalSrc) throw new Error('未找到图片地址')
     if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持复制文本到剪贴板')
     await navigator.clipboard.writeText(imagePayload.originalSrc)
-    toast.success('已复制图片地址')
+    toast.success('已复制图片地址', { timeout: 600 })
   } catch (error) {
     console.warn('复制图片地址失败:', error)
     toast.error(toUserMessage(error?.message || error, '复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。'))

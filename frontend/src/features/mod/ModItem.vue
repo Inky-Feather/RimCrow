@@ -209,6 +209,7 @@ import { useCommandStore } from '../../shared/commands/commandStore'
 import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../../shared/lib/color'
 import { extractSectionHeaderTitle, isSectionHeaderTitle, sortByDisplayName, sortTextByName, toast, toUserMessage } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
+import { isOfficialMod } from './lib/packageScope'
 import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, RefreshCw, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
 
 
@@ -487,7 +488,7 @@ const handleClick = (e) => {
 }
 // 批量生成别名备注
 const generateAliasNotes = async () => {
-  const selectedMods = Array.isArray(modStore.selectedMods) ? modStore.selectedMods : []
+  const selectedMods = (Array.isArray(modStore.selectedMods) ? modStore.selectedMods : []).filter(mod => !isOfficialMod(mod))
   if (selectedMods.length === 0) return
 
   if (selectedMods.length === 1) {
@@ -565,7 +566,7 @@ const copyTextToClipboard = async (text, label) => {
   try {
     if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持剪贴板')
     await navigator.clipboard.writeText(text)
-    toast.success(`已复制${label}`)
+    toast.success(`已复制${label}`, { timeout: 600 })
   } catch (error) {
     console.warn(`复制${label}失败:`, error)
     toast.error(toUserMessage(error?.message || error, `复制${label}失败。请检查剪贴板权限，或手动选中文本复制。`))
@@ -587,6 +588,8 @@ const handleContextMenu = async (event) => {
   await ensureInterlockDetails()
   const selectedIds = modStore.selectedIds;
   const selectedCountStr = selectedIds.length>1?` (${selectedIds.length}项)`:''
+  const nonOfficialSelectedIds = selectedIds.filter(id => !isOfficialMod(modStore.takeModById(id)))
+  const nonOfficialSelectedCountStr = nonOfficialSelectedIds.length>1?` (${nonOfficialSelectedIds.length}项)`:''
   const singleSelectedMod = selectedIds.length === 1 ? modStore.takeModById(selectedIds[0]) : null
   const copyInfoMenuItems = COPY_INFO_FIELDS.map(field => ({
     label: field.label + selectedCountStr,
@@ -721,21 +724,21 @@ const handleContextMenu = async (event) => {
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '生成别名备注'+ selectedCountStr, icon: BotMessageSquare, action: () => generateAliasNotes() },
-    { label: '打包导出模组' + selectedCountStr, icon: Package,
+    { label: '生成别名备注'+ nonOfficialSelectedCountStr, icon: BotMessageSquare, disabled: !nonOfficialSelectedIds.length, action: () => generateAliasNotes() },
+    { label: '打包导出模组' + nonOfficialSelectedCountStr, icon: Package, disabled: !nonOfficialSelectedIds.length,
       action: () => appStore.openCustomModExportDialog({
-        title: `打包导出已选模组${selectedCountStr}`,
+        title: `打包导出已选模组${nonOfficialSelectedCountStr}`,
         description: '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。',
-        modIds: [...selectedIds],
-        summary: `已选 ${selectedIds.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
+        modIds: [...nonOfficialSelectedIds],
+        summary: `已选 ${nonOfficialSelectedIds.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
       })
     },
     // 推荐导出只面向当前多选模组的介绍信息，不处理模组文件和依赖打包。
-    { label: '导出推荐' + selectedCountStr, icon: MessageSquareHeart, disabled: selectedIds.length === 0,
+    { label: '导出推荐' + nonOfficialSelectedCountStr, icon: MessageSquareHeart, disabled: nonOfficialSelectedIds.length === 0,
       action: () => appStore.openRecommendationExportDialog({
-        title: `推荐导出已选模组${selectedCountStr}`,
+        title: `推荐导出已选模组${nonOfficialSelectedCountStr}`,
         sourceName: '已选模组',
-        modIds: [...selectedIds],
+        modIds: [...nonOfficialSelectedIds],
       })
     },
   ]

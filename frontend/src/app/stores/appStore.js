@@ -843,7 +843,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null, refreshRules = true, refreshBackups = true, refreshWorkspaceLibraries = true, silentSuccess = false } = {}) => {
+  const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, forceCoreRefresh = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null, refreshRules = true, refreshBackups = true, refreshWorkspaceLibraries = true, silentSuccess = false } = {}) => {
     // 多次扫描请求合并时，任意一次要求保留列表状态，最终扫描完成也要保留。
     const normalizeScanRequest = (request = {}) => {
       const normalizedPaths = Array.isArray(request.specificPaths)
@@ -853,6 +853,7 @@ export const useAppStore = defineStore('app', () => {
         forcedUpdate: !!request.forcedUpdate,
         specificPaths: normalizedPaths && normalizedPaths.length > 0 ? [...new Set(normalizedPaths)] : null,
         preserveListState: !!request.preserveListState,
+        forceCoreRefresh: !!request.forceCoreRefresh,
         sizeCheckOverride: request.sizeCheckOverride == null ? null : !!request.sizeCheckOverride,
         sizeCheckPaths: Array.isArray(request.sizeCheckPaths)
           ? [...new Set(request.sizeCheckPaths.map(path => String(path || '').trim()).filter(Boolean))]
@@ -875,6 +876,7 @@ export const useAppStore = defineStore('app', () => {
           ? null
           : [...new Set([...left.specificPaths, ...right.specificPaths])],
         preserveListState: !!(left.preserveListState || right.preserveListState),
+        forceCoreRefresh: !!(left.forceCoreRefresh || right.forceCoreRefresh),
         sizeCheckOverride: left.sizeCheckOverride === true || right.sizeCheckOverride === true
           ? true
           : (left.sizeCheckOverride === false || right.sizeCheckOverride === false ? false : null),
@@ -886,7 +888,7 @@ export const useAppStore = defineStore('app', () => {
         silentSuccess: !!(left.silentSuccess && right.silentSuccess),
       }
     }
-    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState, sizeCheckOverride, sizeCheckPaths, startupWorkshopChanges, refreshRules, refreshBackups, refreshWorkspaceLibraries, silentSuccess })
+    const scanRequest = normalizeScanRequest({ forcedUpdate, specificPaths, preserveListState, forceCoreRefresh, sizeCheckOverride, sizeCheckPaths, startupWorkshopChanges, refreshRules, refreshBackups, refreshWorkspaceLibraries, silentSuccess })
     if (isScanRunning.value) {
       pendingModScanRequested.value = mergeScanRequest(pendingModScanRequested.value, scanRequest)
       return false
@@ -1065,6 +1067,7 @@ export const useAppStore = defineStore('app', () => {
       activeModScanRequest.value = null
       await modStore.scanComplete(detail, {
         preserveListState: !!scanRequest?.preserveListState,
+        forceCoreRefresh: !!scanRequest?.forceCoreRefresh,
         refreshRules: scanRequest?.refreshRules !== false,
         refreshBackups: scanRequest?.refreshBackups !== false,
         refreshWorkspaceLibraries: scanRequest?.refreshWorkspaceLibraries !== false,

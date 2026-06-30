@@ -675,7 +675,7 @@ class AIToolExecutor:
             return {"error": f"无法定位请求的代表行号 #{target_line}。该错误可能已被折叠或文件已变更。"}
         
         # 6. 提炼极其纯净的上下文给 AI，绝对不暴露 raw_lines 数组等让它困惑的数据
-        level = str(target_block.get("level", "INFO") or "INFO")
+        level = str(target_block.get("level") or "UNKNOWN")
         message = str(target_block.get("message", "") or "").strip()
         details = str(target_block.get("details", "") or "").strip()
         repeat_count = int(target_block.get("count", 1) or 1)

@@ -12,7 +12,8 @@ from packaging.version import Version
 
 from backend.database.models_ext import ext_db
 from backend.database.repair import _remove_file_with_retry
-from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
+from backend.database.dao import normalize_interlock_payload, normalize_user_mod_data_payload
+from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, ModInterlock, UserModData, db
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, TOOL_MODS_DIR, settings
@@ -73,8 +74,41 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
     if last < Version("0.23.1"):
         _migrate_legacy_companion_toolmod(result)
 
+    if last < Version("0.23.8"):
+        _migrate_legacy_user_custom_json_fields(result)
+
     result.pending_actions.append("show_update_news")
     return result
+
+
+def _migrate_legacy_user_custom_json_fields(result: AppUpgradeResult):
+    """修正用户自定义数据中被旧流程二次编码的 JSON 列表字段。"""
+    fixed_user_rows = 0
+    fixed_interlocks = 0
+
+    with db.atomic():
+        for row in UserModData.select().dicts():
+            normalized = normalize_user_mod_data_payload(row)
+            updates = {}
+            if row.get("tags") != normalized.get("tags"):
+                updates["tags"] = normalized.get("tags", [])
+            if row.get("ignored_issues") != normalized.get("ignored_issues"):
+                updates["ignored_issues"] = normalized.get("ignored_issues", [])
+            if str(row.get("interlock_id") or "").strip() != str(normalized.get("interlock_id") or "").strip():
+                updates["interlock_id"] = normalized.get("interlock_id")
+            if updates:
+                UserModData.update(**updates).where(UserModData.mod_id == row["mod_id"]).execute()
+                fixed_user_rows += 1
+
+        for row in ModInterlock.select().dicts():
+            normalized = normalize_interlock_payload(row)
+            if row.get("chain") == normalized.get("chain"):
+                continue
+            ModInterlock.update(chain=normalized.get("chain", [])).where(ModInterlock.id == row["id"]).execute()
+            fixed_interlocks += 1
+
+    if fixed_user_rows or fixed_interlocks:
+        result.messages.append(f"已修复用户自定义数据格式：用户数据 {fixed_user_rows} 项，联锁组 {fixed_interlocks} 项。")
 
 
 def normalize_duplicate_group_names_on_load() -> list[tuple[str, str, str]]:

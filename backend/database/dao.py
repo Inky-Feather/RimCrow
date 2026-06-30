@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import reduce
+import json
 import operator
 import os
 from pathlib import Path
@@ -28,6 +29,7 @@ from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_code, normalize_language_codes
+from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 from backend.utils.tools import (
     current_ms,
@@ -81,6 +83,51 @@ def _normalize_path_hashes(path_hashes: Sequence[str] | str) -> list[str]:
 def _sanitize_model_payload(payload: dict[str, Any], valid_field_names: set[str]) -> dict[str, Any]:
     """过滤掉模型上不存在的字段，避免批量写入时混入 UI 临时字段。"""
     return {key: value for key, value in payload.items() if key in valid_field_names}
+
+
+def _coerce_json_list(value: Any) -> list[Any]:
+    """兼容旧库里被二次 JSON 编码的列表字段。"""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            return [text]
+        if isinstance(parsed, list):
+            return parsed
+        if parsed in (None, ""):
+            return []
+        return [parsed]
+    return [value]
+
+
+def normalize_user_mod_data_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """统一用户自定义数据的可变字段格式，避免旧格式继续扩散。"""
+    normalized = dict(payload or {})
+    normalized["mod_id"] = normalize_package_id(normalized.get("mod_id"))
+    for field_name in ("tags", "ignored_issues"):
+        if field_name in normalized:
+            normalized[field_name] = [str(item).strip() for item in _coerce_json_list(normalized.get(field_name)) if str(item).strip()]
+    if "interlock_id" in normalized:
+        interlock_id = normalized.get("interlock_id")
+        if hasattr(interlock_id, "id"):
+            interlock_id = interlock_id.id
+        normalized["interlock_id"] = str(interlock_id or "").strip() or None
+    return normalized
+
+
+def normalize_interlock_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """统一联锁组结构，导入导出和迁移共用同一套格式。"""
+    normalized = dict(payload or {})
+    normalized["id"] = str(normalized.get("id") or "").strip()
+    normalized["chain"] = normalize_package_ids(_coerce_json_list(normalized.get("chain")))
+    return normalized
 
 
 def _normalize_language_fields(asset: dict[str, Any]) -> dict[str, Any]:
@@ -967,7 +1014,7 @@ class ModDAO:
                 clean_batch = []
                 for user_data in batch:
                     clean_data = _sanitize_model_payload(user_data, valid_field_names)
-                    clean_data["mod_id"] = normalize_package_id(clean_data.get("mod_id"))
+                    clean_data = normalize_user_mod_data_payload(clean_data)
                     if clean_data["mod_id"]:
                         clean_batch.append(clean_data)
                 if not clean_batch:
@@ -1239,6 +1286,16 @@ class ModMaintenanceDAO:
         valid_hashes = [asset["path_hash"] for asset in assets]
         errors: list[str] = []
         success_count = 0
+        task_id = uuid.uuid4().hex
+        EventBus.resume()
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status="pending",
+            progress=0,
+            message=f"准备删除 {len(assets)} 个模组...",
+            metrics={"title": "删除模组文件", "current": 0, "total": len(assets)},
+        )
 
         for asset in assets:
             path = str(asset.get("path") or "")
@@ -1253,9 +1310,19 @@ class ModMaintenanceDAO:
                 ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute()  # type: ignore
         except Exception as exc:
             logger.error(f"数据库删除失败：{exc}")
+            EventBus.emit_progress(task_id, "file-delete", status="failed", progress=0, message="数据库记录清理失败", metrics={"title": "删除模组文件"})
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
-        for path in target_paths:
+        total_paths = max(len(target_paths), 1)
+        for index, path in enumerate(target_paths, start=1):
+            EventBus.emit_progress(
+                task_id,
+                "file-delete",
+                status="running",
+                progress=min(95, int((index - 1) / total_paths * 90) + 5),
+                message=f"正在删除: {os.path.basename(path)}",
+                metrics={"title": "删除模组文件", "current": index, "total": len(target_paths)},
+            )
             try:
                 delete_fs_path(path, force=force)
                 success_count += 1
@@ -1263,6 +1330,15 @@ class ModMaintenanceDAO:
                 delete_mode = "彻底删除" if force else "移入回收站"
                 errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
 
+        final_status = "failed" if success_count <= 0 and errors else "success"
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status=final_status,
+            progress=100,
+            message=f"删除完成：成功 {success_count} 个，失败 {len(errors)} 个",
+            metrics={"title": "删除模组文件", "current": len(target_paths), "total": len(target_paths), "success_count": success_count, "error_count": len(errors)},
+        )
         return {"success_count": success_count, "errors": errors}
 
     @staticmethod

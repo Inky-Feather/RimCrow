@@ -302,8 +302,7 @@ class TestAIServiceHelpers(unittest.TestCase):
         with self.assertRaises(Exception) as ctx:
             manager.test_chat("hi", {})
 
-        self.assertIn("非 OpenAI Chat Completions 兼容格式或空 choices", str(ctx.exception))
-        self.assertIn("bad provider prefix", str(ctx.exception))
+        self.assertIn("AI 服务没有返回可用结果", str(ctx.exception))
 
     def test_assistant_definition_keeps_selectable_tool_scope(self):
         definition = AssistantDefinition.model_validate({

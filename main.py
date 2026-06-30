@@ -7,25 +7,13 @@ except ImportError:
 
 import glob
 import sys
-import ctypes
 import threading
 import time
 
-def enable_dpi_awareness():
-    """强制开启 Windows DPI 感知，防止多屏缩放导致的窗口拉伸"""
-    if sys.platform == 'win32':
-        try:
-            # 适用于 Windows 10/11
-            ctypes.windll.shcore.SetProcessDpiAwareness(1) # PROCESS_SYSTEM_DPI_AWARE
-        except Exception:
-            try:
-                # 适用于老版本 Windows
-                ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
-            
+from backend.window_state import MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WindowStateManager, enable_per_monitor_dpi_awareness
+
 # 必须在创建任何窗口前调用
-enable_dpi_awareness()
+enable_per_monitor_dpi_awareness()
 
 import multiprocessing
 import os
@@ -86,13 +74,6 @@ def get_webview_proxy_args():
         "proxy_bypass_list": bypass_str
     }
 
-
-    
-def on_resized(width, height):
-    """窗口尺寸变化时触发"""
-    settings.config.window_width = width
-    settings.config.window_height = height
-    
 def on_main_window_closed():
     """窗口关闭时触发"""
     persist_exit_state()
@@ -126,7 +107,7 @@ def main():
         elapsed_ms = (time.perf_counter() - startup_start_at) * 1000
         extras = " ".join(f"{key}={value}" for key, value in fields.items())
         suffix = f" {extras}" if extras else ""
-        log = logger.warning if level == "warning" else logger.info
+        log = logger.warning if level == "warning" else logger.debug
         log("[StartupPerf] 桌面启动阶段：stage=%s total_ms=%.2f%s", stage, elapsed_ms, suffix)
 
     # 1. Windows 打包后的多进程支持 (必须放在最前面)
@@ -272,8 +253,6 @@ def main():
         
         api = API(runtime_mode=launch_mode)
         log_startup_perf("api_ready")
-        window_width = int(settings.config.window_width)  # 默认1400px
-        window_height = int(settings.config.window_height)  # 默认900px
         
         # 获取代理参数
         # Pywebview 目前对代理的直接支持有限，通常需要通过底层 flag 传递
@@ -321,16 +300,30 @@ def main():
             return
 
         import webview
+        window_state = WindowStateManager(settings)
+        if "--reset-window-state" in sys.argv:
+            window_state.reset()
+            logger.info("[WindowState] 已按启动参数重置窗口大小和位置")
+        launch_geometry = window_state.resolve_launch_geometry()
+        window_options = {
+            "x": launch_geometry.x,
+            "y": launch_geometry.y,
+            "width": launch_geometry.width,
+            "height": launch_geometry.height,
+            "resizable": True,
+            "min_size": (MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT),
+            "maximized": launch_geometry.maximized,
+            "background_color": "#0f172a", # 与前端背景色一致，防止白屏闪烁
+            "frameless": False, # 可以选择开启无边框模式来实现完全自定义标题栏
+        }
+        if launch_geometry.screen is not None:
+            window_options["screen"] = launch_geometry.screen
         # 创建窗口
         window = webview.create_window(
             'RimCrow',
             url=entrypoint,
             js_api=api,
-            width=window_width, # 读取记忆的窗口大小
-            height=window_height,
-            resizable=True,
-            background_color='#0f172a', # 与前端背景色一致，防止白屏闪烁
-            frameless=False, # 可以选择开启无边框模式来实现完全自定义标题栏
+            **window_options,
         )
         logger.info(f"Entrypoint: {entrypoint}")
         log_startup_perf("window_created")
@@ -340,7 +333,10 @@ def main():
             # `loaded` 仍然保留，用于区分页面是否真正完成加载，并配合超时提示给用户更准确的信息。
             window.events.shown += mark_desktop_window_shown
             window.events.loaded += mark_desktop_page_loaded
-            window.events.resized += on_resized            # 窗口尺寸变化时触发
+            window.events.resized += window_state.on_resized
+            window.events.moved += window_state.on_moved
+            window.events.maximized += window_state.on_maximized
+            window.events.restored += window_state.on_restored
             window.events.closed += api.cleanup
             window.events.closed += on_main_window_closed  # 窗口关闭时退出应用
         # 注册窗口到事件总线

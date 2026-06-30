@@ -51,7 +51,7 @@ class TestLanguagePackOwnership(unittest.TestCase):
             },
         )
 
-        self.assertEqual(result["owners"], [{"package_id": "brrainz.harmony"}])
+        self.assertEqual(result["owners"], [{"package_id": "author.realmod"}, {"package_id": "brrainz.harmony"}])
 
 
 if __name__ == "__main__":

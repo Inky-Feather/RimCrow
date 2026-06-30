@@ -204,11 +204,11 @@ def _log_startup_perf(scope: str, stage: str, start_at: float, **fields):
     elapsed_ms = (time.perf_counter() - start_at) * 1000
     extras = " ".join(f"{key}={value}" for key, value in fields.items())
     suffix = f" {extras}" if extras else ""
-    logger.info("[StartupPerf] %s：stage=%s elapsed_ms=%.2f%s", scope, stage, elapsed_ms, suffix)
+    logger.debug("[StartupPerf] %s：stage=%s elapsed_ms=%.2f%s", scope, stage, elapsed_ms, suffix)
 
 
 def log_api_call(func):
-    """ 
+    """
     装饰器：记录 API 调用、参数及耗时 
     仅在 DEBUG 模式或发生错误时记录详细信息
     """
@@ -4190,11 +4190,31 @@ class API:
         if not source_mods: return ApiResponse.error("未找到指定的源文件")
         # 4. 执行物理操作
         import shutil
+        task_id = uuid.uuid4().hex
+        action_title = "移动模组" if mode == 'move' else "复制模组"
+        EventBus.resume()
+        EventBus.emit_progress(
+            task_id,
+            "file-transfer",
+            status="pending",
+            progress=0,
+            message=f"准备{action_title}...",
+            metrics={"title": action_title, "current": 0, "total": len(source_mods), "mode": mode, "target_store": target_store},
+        )
         success_count = 0
         errors = []
         moved_records = []
-        for mod in source_mods:
+        total_mods = max(len(source_mods), 1)
+        for index, mod in enumerate(source_mods, start=1):
             src_path = mod['path']
+            EventBus.emit_progress(
+                task_id,
+                "file-transfer",
+                status="running",
+                progress=min(95, int((index - 1) / total_mods * 90) + 5),
+                message=f"正在{action_title}: {mod.get('name') or os.path.basename(src_path)}",
+                metrics={"title": action_title, "current": index, "total": len(source_mods), "mode": mode, "target_store": target_store},
+            )
             # 防御：禁止对工坊项目执行 Move 操作
             current_mode = mode
             if mod['store'] == 'workshop' and mode == 'move':
@@ -4243,8 +4263,24 @@ class API:
         msg = f"成功转移 {success_count} 个模组。"
         if errors:
             msg += f" {len(errors)} 个失败。"
+            EventBus.emit_progress(
+                task_id,
+                "file-transfer",
+                status="failed" if success_count <= 0 else "success",
+                progress=100,
+                message=msg,
+                metrics={"title": action_title, "current": len(source_mods), "total": len(source_mods), "success_count": success_count, "error_count": len(errors)},
+            )
             return ApiResponse.warning(msg, data={"errors": errors})
         
+        EventBus.emit_progress(
+            task_id,
+            "file-transfer",
+            status="success",
+            progress=100,
+            message=msg,
+            metrics={"title": action_title, "current": len(source_mods), "total": len(source_mods), "success_count": success_count, "error_count": 0},
+        )
         return ApiResponse.success(message=msg)
     
     

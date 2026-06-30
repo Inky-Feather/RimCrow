@@ -13,6 +13,7 @@ from backend.migrations.app_relocation import apply_config_relocation
 from backend.utils.json_io import write_json_atomic
 from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_store
 from backend.utils.tools import normalize_path_for_storage, same_path
+from backend.window_state import WindowStateConfig
 
 
 def _resolve_base_resource_dir() -> Path:
@@ -342,6 +343,7 @@ class AppConfig:
     language: str = "zh-CN"     # 默认语言
     window_width: int = 1400
     window_height: int = 900
+    window_state: WindowStateConfig = field(default_factory=WindowStateConfig)
     completed_guides: Dict[str, str] = field(default_factory=dict) # 存储已完成的引导, e.g. {"main_v1.0": "done"}
     ui: UIConfig = field(default_factory=UIConfig)
     

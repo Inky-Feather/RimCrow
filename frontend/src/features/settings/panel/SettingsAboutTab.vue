@@ -405,7 +405,7 @@ const copyText = async (text) => {
   if (!normalizedText) return
   try {
     await navigator.clipboard.writeText(normalizedText)
-    toast.success(`已复制：${normalizedText}`)
+    toast.success(`已复制：${normalizedText}`, { timeout: 600 })
   } catch {
     toast.error('复制失败，请手动复制。')
   }

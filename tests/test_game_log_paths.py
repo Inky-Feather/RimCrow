@@ -229,6 +229,22 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertEqual([block["message"] for block in page["blocks"]], ["valid before", "valid after"])
         self.assertTrue(any("跳过无法解析的 JSON 日志行" in str(call.args[0]) for call in log_warning.call_args_list))
 
+    def test_realtime_json_reader_does_not_default_missing_level_to_info(self):
+        profile_root = self.temp_dir / "profile-userdata"
+        profile_root.mkdir(parents=True)
+        (profile_root / "RimCrow_Realtime.log").write_text(
+            '{"message":"missing level"}\n',
+            encoding="utf-8",
+        )
+
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(profile_root)))
+        with patch("backend.utils.logger.logger.warning") as log_warning:
+            page = manager.read_log_page("RimCrow_Realtime.log", page=1, page_size=20)
+
+        self.assertEqual(page["status"], "success")
+        self.assertEqual(page["blocks"][0]["level"], "UNKNOWN")
+        self.assertTrue(any("日志缺少等级字段" in str(call.args[0]) for call in log_warning.call_args_list))
+
     def test_base_reader_only_parses_whitelisted_realtime_log_names_as_json(self):
         allowed_log = self.temp_dir / "RMM_Realtime-prev.log"
         unknown_log = self.temp_dir / "Companion-prev.log"

@@ -53,10 +53,16 @@ class AIToolExecutorStub:
 
 tools_stub.AIToolExecutor = AIToolExecutorStub
 tools_stub.ToolExecutionResult = ToolExecutionResultStub
-sys.modules.setdefault("backend.ai.ai_tools", tools_stub)
+original_ai_tools_module = sys.modules.get("backend.ai.ai_tools")
+sys.modules["backend.ai.ai_tools"] = tools_stub
 
 import backend.ai.assistant_runtime as assistant_runtime_module
 from backend.ai.assistant_runtime import AssistantRuntime
+
+if original_ai_tools_module is None:
+    sys.modules.pop("backend.ai.ai_tools", None)
+else:
+    sys.modules["backend.ai.ai_tools"] = original_ai_tools_module
 
 
 class AIDefinitionManagerStub:

@@ -8,8 +8,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.database.dao import ModDAO, _ProfilePathScope
+from backend.database.models import GroupData, GroupMod, ModInterlock, UserModData, db
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
+from backend.managers.mgr_rules import RuleManager
 from backend.settings import settings
 
 
@@ -41,6 +43,15 @@ class _StubProfileManager:
         raise KeyError(profile_id)
 
 
+def _make_rule_manager_for_test():
+    manager = RuleManager.__new__(RuleManager)
+    manager.user_mod_rules = {}
+    manager.user_dynamic_rules = []
+    manager.settings = {}
+    manager.save_user_rules = lambda: True
+    return manager
+
+
 class TestDataBundleManager(unittest.TestCase):
     def test_schema_uses_rimcrow_data_bundle_name_and_keeps_legacy_extensions(self):
         manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
@@ -62,6 +73,47 @@ class TestDataBundleManager(unittest.TestCase):
             inspected = manager.inspect_bundle(str(bundle_path))
 
         self.assertEqual(inspected["format"], "rmm.data.bundle")
+
+    def test_inspect_bundle_reports_invalid_manifest_lists(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "broken-preview.rimcrowdata.zip"
+            with zipfile.ZipFile(bundle_path, "w") as bundle:
+                bundle.writestr("manifest.json", '{"format":"rimcrow.data.bundle","schema_version":1,"modules":{},"profiles":{}}')
+
+            manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
+
+            inspected = manager.inspect_bundle(str(bundle_path))
+
+        self.assertEqual(inspected["modules"], [])
+        self.assertEqual(inspected["profiles"], [])
+        self.assertTrue(any("modules" in item for item in inspected["warnings"]))
+        self.assertTrue(any("profiles" in item for item in inspected["warnings"]))
+
+    def test_import_bundle_rejects_manifest_module_missing_payload_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "broken.rimcrowdata.zip"
+            with zipfile.ZipFile(bundle_path, "w") as bundle:
+                bundle.writestr("manifest.json", '{"format":"rimcrow.data.bundle","schema_version":1,"modules":[{"key":"settings"}],"profiles":[]}')
+
+            manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
+
+            with self.assertRaises(ValueError) as ctx:
+                manager.import_bundle(str(bundle_path))
+
+        self.assertIn("settings", str(ctx.exception))
+
+    def test_import_bundle_rejects_profiles_module_missing_profile_list(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_path = Path(temp_dir) / "broken-profiles.rimcrowdata.zip"
+            with zipfile.ZipFile(bundle_path, "w") as bundle:
+                bundle.writestr("manifest.json", '{"format":"rimcrow.data.bundle","schema_version":1,"modules":[{"key":"profiles"}]}')
+
+            manager = DataBundleManager(_StubProfileManager(), ai_mgr=None, rule_mgr_provider=lambda: None)
+
+            with self.assertRaises(ValueError) as ctx:
+                manager.import_bundle(str(bundle_path))
+
+        self.assertIn("profiles", str(ctx.exception))
 
     def test_build_profile_conflict_entries_collects_all_same_name_profiles(self):
         profile_mgr = _StubProfileManager([
@@ -174,6 +226,65 @@ class TestDataBundleManager(unittest.TestCase):
             self.assertEqual(created_rows[0]["game_install_path"], "")
             self.assertEqual(created_rows[0]["user_data_path"], str(temp_root / "appdata" / "profiles" / "profile-new"))
             self.assertEqual(created_rows[0]["name"], "导入环境")
+
+    def test_rule_import_creates_interlocks_before_user_data_and_normalizes_json_fields(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db.init(str(Path(temp_dir) / "rules-import.db"))
+            db.connect(reuse_if_open=True)
+            db.execute_sql("PRAGMA foreign_keys = ON")
+            try:
+                db.create_tables([ModInterlock, UserModData, GroupData, GroupMod])
+
+                manager = _make_rule_manager_for_test()
+                manager.process_import_bundle({
+                    "user_rules": {},
+                    "environment": {
+                        "interlocks": [{"id": "lock-a", "chain": '["mod.alpha", "mod.beta"]'}],
+                        "user_mod_data": [{
+                            "mod_id": "Mod.Alpha",
+                            "tags": '["标签"]',
+                            "ignored_issues": '["missing_dependency"]',
+                            "interlock_id": "lock-a",
+                        }],
+                    },
+                })
+
+                user_data = UserModData.get_by_id("mod.alpha")
+                interlock = ModInterlock.get_by_id("lock-a")
+                self.assertEqual(user_data.tags, ["标签"])
+                self.assertEqual(user_data.ignored_issues, ["missing_dependency"])
+                self.assertEqual(user_data.interlock_id.id, "lock-a")
+                self.assertEqual(interlock.chain, ["mod.alpha", "mod.beta"])
+            finally:
+                if not db.is_closed():
+                    db.close()
+
+    def test_rule_export_normalizes_legacy_json_strings(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db.init(str(Path(temp_dir) / "rules-export.db"))
+            db.connect(reuse_if_open=True)
+            db.execute_sql("PRAGMA foreign_keys = ON")
+            try:
+                db.create_tables([ModInterlock, UserModData, GroupData, GroupMod])
+                ModInterlock.create(id="lock-a", chain='["mod.alpha", "mod.beta"]')
+                UserModData.create(
+                    mod_id="mod.alpha",
+                    tags='["标签"]',
+                    ignored_issues='["missing_dependency"]',
+                    interlock_id="lock-a",
+                )
+
+                manager = _make_rule_manager_for_test()
+                exported = manager.create_export_bundle(dynamic_rule_ids=None)
+
+                user_data = exported["environment"]["user_mod_data"][0]
+                interlock = exported["environment"]["interlocks"][0]
+                self.assertEqual(user_data["tags"], ["标签"])
+                self.assertEqual(user_data["ignored_issues"], ["missing_dependency"])
+                self.assertEqual(interlock["chain"], ["mod.alpha", "mod.beta"])
+            finally:
+                if not db.is_closed():
+                    db.close()
 
 
 class TestModPackageManager(unittest.TestCase):

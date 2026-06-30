@@ -28,6 +28,28 @@ const DEFAULT_AI_BASE_URLS = {
   ollama: 'http://127.0.0.1:11434',
 }
 
+const waitForPywebviewApi = (timeoutMs = 5000) => new Promise((resolve) => {
+  if (typeof window === 'undefined') {
+    resolve(null)
+    return
+  }
+  if (window.pywebview?.api) {
+    resolve(window.pywebview.api)
+    return
+  }
+
+  let timeoutId = null
+  const handleReady = () => {
+    if (timeoutId) window.clearTimeout(timeoutId)
+    window.removeEventListener('pywebviewready', handleReady)
+    resolve(window.pywebview?.api || null)
+  }
+
+  // 等后端桥接注入完成，避免首次打开时把“还没准备好”误判成“空配置”。
+  window.addEventListener('pywebviewready', handleReady, { once: true })
+  timeoutId = window.setTimeout(handleReady, timeoutMs)
+})
+
 const resolveAiProviderBaseUrl = (provider = '', baseUrl = '') => {
   const normalizedProvider = normalizeText(provider, 'openai_compatible').toLowerCase()
   const explicitBaseUrl = normalizeText(baseUrl).replace(/\/+$/, '')
@@ -75,12 +97,14 @@ export const useModelConfigActions = ({
   })
 
   const getAiConfig = async ({ silent = false } = {}) => {
-    if (!window.pywebview) return
-    const res = await window.pywebview.api.ai_get_config()
+    const api = await waitForPywebviewApi()
+    if (!api?.ai_get_config) return null
+    const res = await api.ai_get_config()
     if (checkResult(res, '获取AI配置', false, { silent })) {
       runtimeAiConfig.value = res.data || null
       return res.data
     }
+    return null
   }
 
   const saveAIConfig = async (configData) => {

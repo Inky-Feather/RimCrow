@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Tuple
 import uuid
 from backend.managers.mgr_profile import ProfileContext
 from backend.utils.logger import logger
-from backend.database.dao import ModDAO, GroupDAO
+from backend.database.dao import GroupDAO, ModDAO, normalize_interlock_payload, normalize_user_mod_data_payload
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms, normalize_package_id
 from backend._version import __version__
@@ -1063,7 +1063,14 @@ class RuleManager:
         else:
             export_dynamic = [r for r in self.user_dynamic_rules if r['rule_id'] in dynamic_rule_ids]
         # 获取所有的联锁组
-        all_interlocks = list(ModInterlock.select().dicts())
+        all_interlocks = [
+            normalize_interlock_payload(interlock)
+            for interlock in ModInterlock.select().dicts()
+        ]
+        user_mod_data = [
+            normalize_user_mod_data_payload(user_data)
+            for user_data in ModDAO.get_all_user_data()
+        ]
         # 2. 这里的策略是全量导出 UserModData 和 Groups，因为规则可能依赖这些环境
         return {
             "version": __version__,
@@ -1074,11 +1081,97 @@ class RuleManager:
                 "dynamic_rules": export_dynamic
             },
             "environment": {
-                "user_mod_data": ModDAO.get_all_user_data(),
+                "user_mod_data": user_mod_data,
                 "groups": GroupDAO.get_all_groups_structured(),
                 "interlocks": all_interlocks
             }
         }
+
+    def _import_interlocks(self, raw_interlocks: list, ModInterlock, chunked):
+        imported_interlocks = [
+            normalize_interlock_payload(item)
+            for item in raw_interlocks
+            if isinstance(item, dict)
+        ]
+        imported_interlocks = [
+            item for item in imported_interlocks
+            if item.get("id") and len(item.get("chain", [])) > 1
+        ]
+        if not imported_interlocks:
+            return
+        for batch in chunked(imported_interlocks, 100):
+            ModInterlock.insert_many(batch).on_conflict(
+                conflict_target=[ModInterlock.id],
+                preserve=[ModInterlock.chain],
+            ).execute()
+
+    def _prepare_user_mod_data_import(self, user_data_list: list, UserModData, ModInterlock, import_warnings: list[str]) -> list[dict]:
+        batch_data = []
+        valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
+        legacy_locks = {} # { mod_id: { prev: xxx, next: yyy } }
+
+        for item in user_data_list:
+            clean_item = {}
+            for k in list(item.keys()):
+                if k in valid_field_names:
+                    clean_item[k] = item[k]
+            clean_item = normalize_user_mod_data_payload(clean_item)
+
+            pid = item.get('mod_id', '').lower()
+            if pid and ('lock_previous_mod' in item or 'lock_next_mod' in item):
+                prev_id = item.get('lock_previous_mod')
+                next_id = item.get('lock_next_mod')
+                if prev_id or next_id:
+                    legacy_locks[pid] = {
+                        'prev': prev_id.lower() if prev_id else None,
+                        'next': next_id.lower() if next_id else None
+                    }
+
+            if clean_item.get('mod_id'):
+                batch_data.append(clean_item)
+
+        if legacy_locks:
+            visited = set()
+            chains_to_create = []
+            for mid in list(legacy_locks.keys()):
+                if mid in visited: continue
+                curr = mid
+                path_visited = set()
+                while legacy_locks.get(curr) and legacy_locks[curr]['prev']:
+                    prev_id = legacy_locks[curr]['prev']
+                    if prev_id in path_visited: break
+                    path_visited.add(prev_id)
+                    curr = prev_id
+
+                chain = []
+                path_visited = set()
+                while curr:
+                    if curr in path_visited: break
+                    path_visited.add(curr)
+                    chain.append(curr)
+                    visited.add(curr)
+                    curr = legacy_locks.get(curr, {}).get('next')
+
+                if len(chain) > 1:
+                    chains_to_create.append(chain)
+
+            for chain in chains_to_create:
+                new_id = uuid.uuid4().hex
+                ModInterlock.create(**normalize_interlock_payload({"id": new_id, "chain": chain}))
+                for cd in batch_data:
+                    if cd['mod_id'].lower() in chain:
+                        cd['interlock_id'] = new_id
+
+        available_interlock_ids = {
+            row.id for row in ModInterlock.select(ModInterlock.id)
+        }
+        for clean_item in batch_data:
+            interlock_id = clean_item.get("interlock_id")
+            if interlock_id and interlock_id not in available_interlock_ids:
+                import_warnings.append(f"导入用户数据 {clean_item['mod_id']} 引用的联锁组不存在，已忽略该联锁关系。")
+                clean_item["interlock_id"] = None
+
+        return batch_data
 
     def process_import_bundle(self, bundle: dict):
         """导入规则包"""
@@ -1115,83 +1208,15 @@ class RuleManager:
                         )
                     self.user_dynamic_rules.append(r)
                     existing_ids.add(r['rule_id'])
+
+                self._import_interlocks(env.get("interlocks", []), ModInterlock, chunked)
                 
                 # =================================================
                 # 2. UserModData 批量导入 (备注、标签等)
                 # =================================================
                 user_data_list = env.get("user_mod_data", [])
                 if user_data_list:
-                    # 准备批量数据
-                    batch_data = []
-                    valid_field_names = set(UserModData._meta.fields.keys()) # type: ignore
-                    # ==== 旧链表兼容池 ====
-                    legacy_locks = {} # { mod_id: { prev: xxx, next: yyy } }
-                    for item in user_data_list:
-                        # 清洗数据，只保留有效字段
-                        clean_item={}
-                        for k in list(item.keys()):
-                            if k in valid_field_names:
-                                clean_item[k] = item[k]
-                        # 拦截旧版链表数据
-                        pid = item.get('mod_id', '').lower()
-                        if pid and ('lock_previous_mod' in item or 'lock_next_mod' in item):
-                            prev_id = item.get('lock_previous_mod')
-                            next_id = item.get('lock_next_mod')
-                            if prev_id or next_id:
-                                legacy_locks[pid] = {
-                                    'prev': prev_id.lower() if prev_id else None,
-                                    'next': next_id.lower() if next_id else None
-                                }
-                        # 移除 None 值，防止覆盖本地已有数据（实现 Merge 逻辑）
-                        # 但 batch_upsert 通常是全量覆盖或忽略，为了实现“仅更新非空值”比较复杂
-                        # 这里采用策略：直接 Upsert。导入包通常代表“我想恢复成这样”。
-                        if clean_item['mod_id']:
-                            batch_data.append(clean_item)
-                    
-                    # 调用 DAO 的批量方法 (利用 on_conflict_replace 或 update)
-                    # 注意：ModDAO.batch_upsert_user_data 需要支持部分字段更新
-                    if batch_data:
-                        ModDAO.batch_upsert_user_data(batch_data)
-                
-                    # ==== 将收集到的旧链表转换为新数组 ====
-                    if legacy_locks:
-                        visited = set()
-                        chains_to_create = []
-                        for mid in list(legacy_locks.keys()):
-                            if mid in visited: continue
-                            # 回溯找头
-                            curr = mid
-                            path_visited = set()
-                            while legacy_locks.get(curr) and legacy_locks[curr]['prev']:
-                                prev_id = legacy_locks[curr]['prev']
-                                if prev_id in path_visited: break
-                                path_visited.add(prev_id)
-                                curr = prev_id
-                                
-                            head = curr
-                            chain = []
-                            curr = head
-                            path_visited = set()
-                            while curr:
-                                if curr in path_visited: break
-                                path_visited.add(curr)
-                                chain.append(curr)
-                                visited.add(curr)
-                                curr = legacy_locks.get(curr, {}).get('next')
-                                
-                            if len(chain) > 1:
-                                chains_to_create.append(chain)
-                        
-                        # 写入新表并为 batch_data 注入 interlock_id
-                        for chain in chains_to_create:
-                            new_id = uuid.uuid4().hex
-                            ModInterlock.create(id=new_id, chain=chain)
-                            # 给准备 upsert 的 batch_data 打上标记
-                            for cd in batch_data:
-                                if cd['mod_id'].lower() in chain:
-                                    cd['interlock_id'] = new_id
-                    
-                    # 调用 DAO 写入
+                    batch_data = self._prepare_user_mod_data_import(user_data_list, UserModData, ModInterlock, import_warnings)
                     if batch_data:
                         ModDAO.batch_upsert_user_data(batch_data)
 
@@ -1238,15 +1263,6 @@ class RuleManager:
                     for batch in chunked(group_mods_to_insert, 500):
                         GroupMod.insert_many(batch).on_conflict_ignore().execute()
 
-                # =================================================
-                # 4. 联锁组导入
-                # =================================================
-                imported_interlocks = env.get("interlocks", [])
-                if imported_interlocks:
-                    # 使用 insert_many().on_conflict_replace()，如果 ID 重复直接覆盖
-                    for batch in chunked(imported_interlocks, 100):
-                        ModInterlock.insert_many(batch).on_conflict_replace().execute()
-                
             # 事务结束，保存文件
             self.save_user_rules()
             logger.info("规则导入包处理完成。")

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.database.dao import GroupDAO
-from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, UserModData, db
+from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, ModInterlock, UserModData, db
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
 
 
@@ -16,7 +16,7 @@ class TestGroupDAO(unittest.TestCase):
         db_path = str(Path(self.temp_dir.name) / "group-dao-test.db")
         db.init(db_path)
         db.connect(reuse_if_open=True)
-        db.create_tables([UserModData, GroupData, GroupMod, ModAsset, GameProfile])
+        db.create_tables([ModInterlock, UserModData, GroupData, GroupMod, ModAsset, GameProfile])
 
     def tearDown(self):
         if not db.is_closed():
@@ -295,6 +295,24 @@ class TestGroupDAO(unittest.TestCase):
             self.assertFalse(old_tool_dir.exists())
             self.assertIsNone(ModAsset.get_or_none(ModAsset.path_hash == "old-tool"))
             self.assertIsNotNone(ModAsset.get_or_none(ModAsset.path_hash == "external-tool"))
+
+    def test_upgrade_migration_normalizes_legacy_user_json_fields(self):
+        ModInterlock.create(id="lock-a", chain='["mod.alpha", "mod.beta"]')
+        UserModData.create(
+            mod_id="mod.alpha",
+            tags='["标签"]',
+            ignored_issues='["missing_dependency"]',
+            interlock_id="lock-a",
+        )
+
+        result = run_app_upgrade_migrations("0.23.7", "0.23.8")
+
+        self.assertTrue(any("用户自定义数据格式" in message for message in result.messages))
+        user_data = UserModData.get_by_id("mod.alpha")
+        interlock = ModInterlock.get_by_id("lock-a")
+        self.assertEqual(user_data.tags, ["标签"])
+        self.assertEqual(user_data.ignored_issues, ["missing_dependency"])
+        self.assertEqual(interlock.chain, ["mod.alpha", "mod.beta"])
 
     def test_startup_normalization_renames_duplicate_group_names_with_suffix(self):
         GroupData.create(group_id="g1", name="UI", color="#ffffff", sort_index=0, is_expanded=True)

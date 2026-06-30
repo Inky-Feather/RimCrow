@@ -122,6 +122,20 @@ class SteamWebAPI:
         return cls._request_json(method, url, params=params if method == "GET" else None, data=data if method != "GET" else None, timeout=timeout)
 
     @classmethod
+    def _require_response_dict(cls, payload: dict[str, Any], api_name: str) -> dict[str, Any]:
+        response = payload.get("response") if isinstance(payload, dict) else None
+        if not isinstance(response, dict):
+            raise RuntimeError(f"{api_name} 返回缺少 response")
+        return response
+
+    @classmethod
+    def _require_response_list(cls, payload: dict[str, Any], field: str, api_name: str) -> list[Any]:
+        response = cls._require_response_dict(payload, api_name)
+        if not isinstance(response.get(field), list):
+            raise RuntimeError(f"{api_name} 返回缺少 response.{field}")
+        return response[field]
+
+    @classmethod
     def _require_steam_web_api_key(cls) -> str:
         api_key = cls._get_steam_web_api_key()
         if not api_key:
@@ -644,7 +658,7 @@ class SteamWebAPI:
 
             try:
                 payload = cls._request_json("POST", cls.PUBLISHED_FILE_DETAILS_URL, data=data)
-                res_data = payload.get("response", {}).get("publishedfiledetails", [])
+                res_data = cls._require_response_list(payload, "publishedfiledetails", "Steam PublishedFileDetails")
                 for item in res_data:
                     if not isinstance(item, dict):
                         continue
@@ -676,7 +690,7 @@ class SteamWebAPI:
 
             try:
                 payload = cls._request_json("POST", cls.PUBLISHED_FILE_DETAILS_URL, data=data, timeout=(5, 12))
-                for item in payload.get("response", {}).get("publishedfiledetails", []):
+                for item in cls._require_response_list(payload, "publishedfiledetails", "Steam PublishedFileDetails"):
                     wid = str(item.get("publishedfileid") or "").strip()
                     if wid not in result:
                         continue
@@ -868,7 +882,7 @@ class SteamWebAPI:
                 cls.STEAM_USER_SUMMARIES_URL,
                 params={"key": api_key, "format": "json", "steamids": ",".join(batch_ids)},
             )
-            players = payload.get("response", {}).get("players", [])
+            players = cls._require_response_list(payload, "players", "Steam PlayerSummaries")
             for player in players:
                 if not isinstance(player, dict):
                     continue
@@ -1122,11 +1136,8 @@ class SteamWebAPI:
         cls._add_indexed_params(params, "appids_required_for_use", required_appids)
         cls._add_indexed_params(params, "excluded_appids_required_for_use", normalized_filters.get("excluded_appids_required_for_use"))
         payload = cls._request_json("GET", cls.QUERY_FILES_URL, params=params)
-        response = payload.get("response", {})
-        if not isinstance(response, dict):
-            raise RuntimeError("Steam 在线搜索返回了无法识别的响应结构")
-
-        raw_items = response.get("publishedfiledetails") or []
+        response = cls._require_response_dict(payload, "Steam QueryFiles")
+        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam QueryFiles")
         items = [cls._normalize_query_file_item(item) for item in raw_items if isinstance(item, dict)]
         if filters and filters.get("force_details", filters.get("forceDetails", False)):
             detail_map = cls.fetch_published_file_service_details(
@@ -1363,7 +1374,7 @@ class SteamWebAPI:
                     params[key] = options[key]
             cls._add_indexed_params(params, "publishedfileids", batch_ids)
             payload = cls._request_published_file_service("GetDetails", params=params)
-            details = payload.get("response", {}).get("publishedfiledetails", [])
+            details = cls._require_response_list(payload, "publishedfiledetails", "Steam GetDetails")
             for item in details:
                 if not isinstance(item, dict):
                     continue
@@ -1515,8 +1526,8 @@ class SteamWebAPI:
         cls._add_date_range_params(params, "date_range_created", normalized_filters.get("date_range_created"))
         cls._add_date_range_params(params, "date_range_updated", normalized_filters.get("date_range_updated"))
         payload = cls._request_published_file_service("GetUserFiles", params=params)
-        response = payload.get("response", {})
-        raw_items = response.get("publishedfiledetails") if isinstance(response, dict) else []
+        response = cls._require_response_dict(payload, "Steam GetUserFiles")
+        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam GetUserFiles")
         items = [cls._normalize_published_file_service_detail_item(item) for item in (raw_items or []) if isinstance(item, dict)]
         if not bool(filters.get("skip_author_profiles") or filters.get("skipAuthorProfiles")):
             items = cls._attach_author_profiles(items)
@@ -1648,7 +1659,10 @@ class SteamWebAPI:
         data = {"collectioncount": "1", "publishedfileids[0]": str(collection_id)}
         try:
             payload = cls._request_json("POST", cls.COLLECTION_DETAILS_URL, data=data)
-            children = payload.get("response", {}).get("collectiondetails", [{}])[0].get("children", [])
+            details = cls._require_response_list(payload, "collectiondetails", "Steam CollectionDetails")
+            if not details or not isinstance(details[0], dict) or not isinstance(details[0].get("children"), list):
+                raise RuntimeError("Steam CollectionDetails 返回缺少 response.collectiondetails[0].children")
+            children = details[0]["children"]
             return [str(c.get("publishedfileid")) for c in children if c.get("filetype") == int(SteamPublishedFileMatchingFileType.ITEMS)]
         except Exception as e:
             logger.error(f"解析合集失败: {e}")

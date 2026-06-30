@@ -4,6 +4,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+_STUBBED_MODULE_NAMES = [
+    "backend.database.dao",
+    "backend.database.models",
+    "backend.managers.mgr_profile",
+    "backend.managers.mgr_rules",
+]
+_ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _STUBBED_MODULE_NAMES}
+
 fake_dao_module = types.ModuleType("backend.database.dao")
 fake_dao_module.ModDAO = Mock()
 fake_dao_module.GroupDAO = Mock()
@@ -27,6 +35,14 @@ sys.modules.setdefault("backend.managers.mgr_rules", fake_rules_module)
 import backend.managers.mgr_sorter as mgr_sorter_module
 from backend.managers.mgr_sorter import AtomicGroup, OrderSorter
 
+for module_name, original_module in _ORIGINAL_MODULES.items():
+    if original_module is None:
+        sys.modules.pop(module_name, None)
+    else:
+        sys.modules[module_name] = original_module
+
+import backend.database.dao as dao_module
+
 
 class TestOrderSorterStrategies(unittest.TestCase):
     def setUp(self):
@@ -47,7 +63,7 @@ class TestOrderSorterStrategies(unittest.TestCase):
             config.update(config_overrides)
 
         with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
-             patch.object(fake_dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
              patch.object(self.sorter, "build_atomic_groups", return_value=(groups, [])), \
              patch.object(self.sorter, "_build_weighted_graph", return_value=(adj, {})), \
              patch.object(self.sorter, "_break_cycles", return_value=[]), \

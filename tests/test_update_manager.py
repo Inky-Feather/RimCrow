@@ -124,6 +124,25 @@ class TestGithubUpdateSource(unittest.TestCase):
         self.assertEqual(asset["browser_download_url"], "https://example.invalid/linux.zip")
 
 
+class TestLocalUpdateSource(unittest.TestCase):
+    def test_check_skips_cache_metadata_without_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            update_dir = Path(temp_dir)
+            package_path = update_dir / "update.zip"
+            package_path.write_text("zip", encoding="utf-8")
+            (update_dir / "update.json").write_text(
+                '{"local_file_path": "%s", "changelog": "cached"}' % str(package_path).replace("\\", "\\\\"),
+                encoding="utf-8",
+            )
+
+            with patch("backend.managers.mgr_update.UPDATE_DIR", str(update_dir)), \
+                 patch("backend.managers.mgr_update.logger.warning") as log_warning:
+                info = LocalSource().check()
+
+        self.assertIsNone(info)
+        self.assertTrue(any("缺少版本号" in str(call.args[0]) for call in log_warning.call_args_list))
+
+
 class TestLanzouUpdatePackageNames(unittest.TestCase):
     def _file(self, name, file_id):
         return {"id": file_id, "name_all": name, "size": "64 MB", "time": "2026-06-26"}

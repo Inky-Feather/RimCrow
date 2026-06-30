@@ -26,6 +26,14 @@ class BaseLogReader:
         self._cache = {}
         self.max_blocks = max_blocks
 
+    def _normalize_log_level(self, data, filepath="", line_num=0, warn=True):
+        level = str(data.get('level') or '').strip()
+        if level:
+            return level
+        if warn:
+            logger.warning("日志缺少等级字段：filepath=%s line=%s", filepath, line_num)
+        return "UNKNOWN"
+
     def _ensure_cache(self, filepath, loader, cache_key=None):
         """统一的缓存入口，避免不同读取路径重复拼装缓存逻辑。"""
         cache_key = cache_key or filepath
@@ -127,8 +135,9 @@ class BaseLogReader:
                     # 必须把这行日志的物理行号注入进去，否则 AI 看不到
                     data['raw_lines'] = [line_num] 
                     # 稳妥起见，顺手把 ID 也生成一下，防止老版本日志没这个字段
+                    data['level'] = self._normalize_log_level(data, filepath, line_num)
                     if 'id' not in data:
-                        data['id'] = generate_log_id(data.get('timestamp', ''), data.get('level', 'INFO'), data.get('message', ''))
+                        data['id'] = generate_log_id(data.get('timestamp', ''), data['level'], data.get('message', ''))
                     raw_logs.append(data)
                 except json.JSONDecodeError:
                     pass
@@ -156,17 +165,22 @@ class BaseLogReader:
                 if is_json:
                     skipped_count = 0
                     first_skip = None
+                    missing_level_count = 0
+                    first_missing_level = None
                     for line_idx, line in enumerate(f):
                         line_str = line.strip()
                         if not line_str: continue
                         try:
                             data = json.loads(line_str.lstrip('\ufeff'))
                             # 归一化处理
-                            data['level'] = data.get('level', 'INFO')
+                            data['level'] = self._normalize_log_level(data, filepath, line_idx + 1, warn=False)
+                            if data['level'] == "UNKNOWN":
+                                missing_level_count += 1
+                                first_missing_level = first_missing_level or (line_idx + 1)
                             data['message'] = str(data.get('message', '') or '').replace('\\n', '\n')
                             data['details'] = str(data.get('details') or data.get('exception', '') or '').replace('\\n', '\n')
                             # 统一生成ID并注入行号
-                            data['id'] = generate_log_id(data.get('timestamp', ''), data.get('level', 'INFO'), data['message'])
+                            data['id'] = generate_log_id(data.get('timestamp', ''), data['level'], data['message'])
                             data['raw_lines'] = [line_idx + 1] # linecache 从 1 开始
                             
                             # 执行子类自定义逻辑
@@ -187,6 +201,11 @@ class BaseLogReader:
                         logger.warning(
                             "跳过无法解析的 JSON 日志行：filepath=%s skipped=%s first_line=%s reason=%s sample=%s",
                             filepath, skipped_count, first_line, reason, sample,
+                        )
+                    if missing_level_count:
+                        logger.warning(
+                            "日志缺少等级字段：filepath=%s count=%s first_line=%s level=UNKNOWN",
+                            filepath, missing_level_count, first_missing_level,
                         )
                 else:
                     # 纯文本读取(向下兼容 Player.log)

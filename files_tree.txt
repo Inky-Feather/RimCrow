@@ -133,7 +133,8 @@
 │   ├──  browser_runtime.py
 │   ├──  settings.py
 │   ├──  static_page.py
-│   └──  theme_store.py
+│   ├──  theme_store.py
+│   └──  window_state.py
 │   
 ├── ·[data]
 ├── ·[doc]
@@ -415,6 +416,9 @@
 ├── ·[tests]
 │   ├──  __init__.py
 │   ├──  analyze_language_packs.py
+│   ├──  esm-js-loader.mjs
+│   ├──  frontend_matrix_item_state.mjs
+│   ├──  frontend_package_scope.mjs
 │   ├──  test_ai_assistant_runtime.py
 │   ├──  test_ai_attachment_resolver.py
 │   ├──  test_ai_gateway_request_compat.py
@@ -460,6 +464,7 @@
 │   ├──  test_texture_opt_manager.py
 │   ├──  test_update_manager.py
 │   ├──  test_user_data_root.py
+│   ├──  test_window_state.py
 │   ├──  test_workshop_db_manager.py
 │   ├──  test_workshop_search.py
 │   ├──  test_workshop_selection.py

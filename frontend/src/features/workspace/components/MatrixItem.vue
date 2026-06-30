@@ -141,6 +141,7 @@ const props = defineProps({
   mod: Object,
   storeType: String,
   lastPlayedTime: Number,
+  lastRunTime: Number,
   isSelected: Boolean,
 })
 
@@ -154,7 +155,7 @@ let hideTimer = null
 let showTimer = null
 
 // --- 状态计算 ---
-const matrixState = computed(() => getMatrixItemState(props.mod, props.lastPlayedTime, workspaceStore))
+const matrixState = computed(() => getMatrixItemState(props.mod, props.lastPlayedTime, workspaceStore, props.lastRunTime))
 
 const sourceIcon = computed(() => {
   if (props.storeType === 'workshop') return CloudDownload

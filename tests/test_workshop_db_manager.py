@@ -30,6 +30,14 @@ class TestWorkshopDBManager(unittest.TestCase):
 
         self.assertEqual(loaded, payload)
 
+    def test_require_dataset_field_rejects_missing_required_payload_field(self):
+        manager = object.__new__(WorkshopDBManager)
+
+        with self.assertRaises(ValueError) as ctx:
+            manager._require_dataset_field({"version": "2026-05-18"}, "database", dict, "SteamDB")
+
+        self.assertIn("database", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

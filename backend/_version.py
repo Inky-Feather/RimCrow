@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.23.7"  # 主版本.次版本.补丁
+__version__ = "0.23.9"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,35 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.23.9",
+        "date": "2026-06-30",
+        "entries": [
+            {
+                "title": "操作显示优化与稳定性提升",
+                "changes": [
+                    { "type": "feature", "text": "增加文件删除与转移操作的实时进度反馈" },
+                    { "type": "feature", "text": "新增官方模组校验机制，限制对官方模组的别名生成、打包及导出操作" },
+                    { "type": "feature", "text": "优化工作区矩阵项更新状态计算逻辑" },
+                    { "type": "fix", "text": "修复模组删除后列表状态缓存导致的残留数据同步问题" },
+                    { "type": "fix", "text": "修复工作区矩阵列表滚动定位与过滤状态异常" },
+                    { "type": "optimize", "text": "升级核心依赖库，提升系统运行稳定性" },
+                ]
+            },
+            {
+                "title": "问题修复与多屏分辨率修正",
+                "changes": [
+                    { "type": "feature", "text": "引入窗口状态持久化管理，支持窗口位置、尺寸及多显示器状态记忆" },
+                    { "type": "optimize", "text": "增强窗口DPI感知逻辑与后端数据校验健壮性" },
+                    { "type": "feature", "text": "新增重置窗口配置的命令行启动参数" },
+                    { "type": "fix", "text": "修正AI定义管理器加载错误与错误提示UI" },
+                    { "type": "fix", "text": "修复数据库数据格式异常及迁移逻辑" },
+                    { "type": "fix", "text": "修复纹理优化窗口与AI配置初始化阶段的逻辑竞态问题" },
+                    { "type": "fix", "text": "修正多处数据格式校验，防止异常数据导致程序崩溃" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.23.7",
         "date": "2026-06-29",

@@ -20,7 +20,7 @@ export const copyTextToClipboard = async (text = '', label = '内容') => {
   }
   try {
     await navigator.clipboard.writeText(value)
-    toast.success(`${label}已复制`)
+    toast.success(`${label}已复制`, { timeout: 600 })
     return true
   } catch (error) {
     console.warn('复制文本失败:', error)
