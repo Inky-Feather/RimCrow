@@ -566,7 +566,7 @@ const copyTextToClipboard = async (text, label) => {
   try {
     if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持剪贴板')
     await navigator.clipboard.writeText(text)
-    toast.success(`已复制${label}`)
+    toast.success(`已复制${label}`, { timeout: 600 })
   } catch (error) {
     console.warn(`复制${label}失败:`, error)
     toast.error(toUserMessage(error?.message || error, `复制${label}失败。请检查剪贴板权限，或手动选中文本复制。`))

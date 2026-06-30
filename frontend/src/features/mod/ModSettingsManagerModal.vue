@@ -334,7 +334,8 @@ watch(
     overview.value = null
     resetSelection()
     syncingTargetPath.value = ''
-  }
+  },
+  { immediate: true }
 )
 
 const ensureSelection = () => {
@@ -379,7 +380,7 @@ const hydrateWorkshopDetails = async () => {
   }
 }
 
-const loadOverview = async () => {
+async function loadOverview() {
   overview.value = null
   previewData.value = null
   if (!window.pywebview) return

@@ -414,7 +414,7 @@ const runBaseAction = async (action, runner, taskTypes = null) => {
 }
 const runBaseScan = async (forced = false) => {
   const action = forced ? 'force-scan' : 'scan'
-  await runBaseAction(action, () => appStore.requestModScan({ forcedUpdate: forced }), 'scan')
+  await runBaseAction(action, () => appStore.requestModScan({ forcedUpdate: forced, forceCoreRefresh: true }), 'scan')
 }
 
 const closeThemeEditor = () => {

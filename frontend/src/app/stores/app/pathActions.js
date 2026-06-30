@@ -128,7 +128,7 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'}: \n${path}`)
       if(reScan){
         // 刷新Mod列表
-        await requestModScan?.()
+        await requestModScan?.({ forceCoreRefresh: true })
       }
       return true
     }
@@ -171,7 +171,7 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
     }
     if (reScan) {
       // 刷新Mod列表
-      await requestModScan?.()
+      await requestModScan?.({ forceCoreRefresh: true })
     }
     return true
   }

@@ -231,7 +231,7 @@ const unsubscribeSelectedMods = async () => {
   const ok = await appStore.unsubscribeWorkshopIds(workshopIds, pathHashes)
   if (ok) {
     clearSelection()
-    await appStore.requestModScan({ preserveListState: true })
+    await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
   }
 }
 const deleteSelectedMods = async () => {

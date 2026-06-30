@@ -602,8 +602,27 @@ class FileManager:
         success_count = 0
         error_list = []
         if not paths: return 0, []
-        for path in paths:
+        task_id = uuid.uuid4().hex
+        EventBus.resume()
+        total = len([path for path in paths if path])
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status="pending",
+            progress=0,
+            message=f"准备删除 {total} 个路径...",
+            metrics={"title": "删除文件", "current": 0, "total": total},
+        )
+        for index, path in enumerate(paths, start=1):
             if not path: continue
+            EventBus.emit_progress(
+                task_id,
+                "file-delete",
+                status="running",
+                progress=min(95, int((index - 1) / max(total, 1) * 90) + 5),
+                message=f"正在删除: {os.path.basename(path)}",
+                metrics={"title": "删除文件", "current": index, "total": total},
+            )
             try:
                 deleted = delete_fs_path(path, force=force)
                 # 路径不存在时维持历史行为，视为已处理
@@ -613,6 +632,15 @@ class FileManager:
                 logger.error(f"批量删除出错: {path} -> {e}")
                 error_list.append(f"删除失败 ({os.path.basename(path)}): {str(e)}")
 
+        final_status = "failed" if success_count <= 0 and error_list else "success"
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status=final_status,
+            progress=100,
+            message=f"删除完成：成功 {success_count} 个，失败 {len(error_list)} 个",
+            metrics={"title": "删除文件", "current": total, "total": total, "success_count": success_count, "error_count": len(error_list)},
+        )
         return success_count, error_list
     
     @staticmethod

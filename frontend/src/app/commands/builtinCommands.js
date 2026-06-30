@@ -73,7 +73,7 @@ export const registerBuiltinCommands = () => {
       captureWhenDisabled: true,
       description: '增量扫描 Mod 目录，并阻止浏览器默认刷新页面。',
       enabled: ({ appStore }) => !appStore?.isLoading && !appStore?.isScanRunning,
-      run: ({ appStore }) => appStore.requestModScan(),
+      run: ({ appStore }) => appStore.requestModScan({ forceCoreRefresh: true }),
     },
     {
       id: 'mods.forceRefresh',
@@ -84,7 +84,7 @@ export const registerBuiltinCommands = () => {
       captureWhenDisabled: true,
       description: '重新检查所有文件，适合文件状态不确定时使用。',
       enabled: ({ appStore }) => !appStore?.isLoading && !appStore?.isScanRunning,
-      run: ({ appStore }) => appStore.requestModScan({ forcedUpdate: true }),
+      run: ({ appStore }) => appStore.requestModScan({ forcedUpdate: true, forceCoreRefresh: true }),
     },
     {
       id: 'loadOrder.save',

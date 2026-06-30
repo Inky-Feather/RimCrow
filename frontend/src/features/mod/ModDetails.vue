@@ -626,7 +626,7 @@ const copyDetailValue = async (label, value) => {
   if (!text || !navigator?.clipboard?.writeText) return
   try {
     await navigator.clipboard.writeText(text)
-    toast.success(`${label}已复制`, { timeout: 1000 })
+    toast.success(`${label}已复制`, { timeout: 600 })
   } catch {
     toast.error(`${label}复制失败`, { timeout: 1500 })
   }

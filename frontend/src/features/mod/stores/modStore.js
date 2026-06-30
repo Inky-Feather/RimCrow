@@ -134,7 +134,7 @@ export const useModStore = defineStore('mods', () => {
   const pendingGhostFetches = new Map()
   const dismissedUnavailableIds = new Set()
   // 仅用于删除/取订后的保留列表状态同步，防止残留目录把刚清掉的数据立刻写回界面。
-  const locallyRemovedModIds = new Set()
+  const locallyRemovedPathHashes = new Set()
 
   const conflictList = ref([])        // 重复包名冲突列表
   const coexistenceList = ref([])     // 共存Mod列表
@@ -510,7 +510,7 @@ export const useModStore = defineStore('mods', () => {
     clearInstallSourceHintsByOrigin('import')
     if (!preserveListState) {
       dismissedUnavailableIds.clear()
-      locallyRemovedModIds.clear()
+      locallyRemovedPathHashes.clear()
     }
     const nextActiveIds = normalizeHistoryModIds(data.active_load_order || [])
     if (!preserveListState) {
@@ -536,8 +536,9 @@ export const useModStore = defineStore('mods', () => {
     const tempMap = new Map()
     data.all_mods.forEach(mod => {
       const canonicalId = normalizeCanonicalId(mod.package_id)
-      // 删除/取订后的自动扫描会保留三列表状态；残留目录不应立刻把刚清掉的前端数据写回来。
-      if (preserveListState && locallyRemovedModIds.has(canonicalId)) return
+      const pathHash = String(mod.path_hash || '').trim()
+      // 删除/取订后的自动扫描会保留三列表状态；只屏蔽刚处理的具体副本，避免误挡同包名共存副本。
+      if (preserveListState && pathHash && locallyRemovedPathHashes.has(pathHash)) return
       // 初始化启用时间（如果 Mod 是 Active 但没有启用时间，则记录为排序文件更新时间，若仍有问题则记录为当前时间）
       if (canonicalId && activeSet.has(canonicalId) && !mod.last_active_time) {
         mod.last_active_time = data.active_load_modify_time || Date.now()
@@ -556,6 +557,7 @@ export const useModStore = defineStore('mods', () => {
       tempMap.set(canonicalId, mod)
     })
     allModsMap.value = tempMap
+    if (preserveListState) locallyRemovedPathHashes.clear()
     disabledMods.value = Array.isArray(data.disabled_mods) ? data.disabled_mods.filter(mod => mod?.path_hash) : []
     if (lastSelectedMod.value) {
       const lastToken = lastSelectedMod.value.active_package_token || lastSelectedMod.value.package_id
@@ -618,14 +620,23 @@ export const useModStore = defineStore('mods', () => {
     tempIds.value = tempIds.value.filter(i => !normalizedIds.has(normalizeCanonicalId(i)))
   }
   // 删除或取订删除成功后只清理前端真实模组数据；是否移除列表项由调用方按具体流程决定。
-  const removeDeletedModsFromLocalData = (ids) => {
-    const normalizedIdSet = buildCanonicalIdSet(normalizeHistoryModIds(ids))
-    if (normalizedIdSet.size === 0) return 0
+  const removeDeletedModsFromLocalData = (items) => {
+    const list = Array.isArray(items) ? items : [items].filter(Boolean)
+    const normalizedIdSet = buildCanonicalIdSet(normalizeHistoryModIds(list.map(item => (
+      item && typeof item === 'object'
+        ? (item.package_id || item.id)
+        : item
+    ))))
+    const removedPathHashes = new Set(list
+      .map(item => item && typeof item === 'object' ? String(item.path_hash || '').trim() : '')
+      .filter(Boolean))
+    if (normalizedIdSet.size === 0 && removedPathHashes.size === 0) return 0
 
     let changed = false
+    removedPathHashes.forEach(pathHash => locallyRemovedPathHashes.add(pathHash))
     normalizedIdSet.forEach(id => {
-      locallyRemovedModIds.add(id)
-      if (allModsMap.value.delete(id)) changed = true
+      const mod = allModsMap.value.get(id)
+      if ((!removedPathHashes.size || removedPathHashes.has(String(mod?.path_hash || '').trim())) && allModsMap.value.delete(id)) changed = true
       dismissedUnavailableIds.delete(id)
     })
 
@@ -646,7 +657,7 @@ export const useModStore = defineStore('mods', () => {
     }
 
     if (changed) dataVersion.value++
-    return normalizedIdSet.size
+    return normalizedIdSet.size || removedPathHashes.size
   }
   const removeUnavailableIdsCompletely = (ids) => {
     const normalizedIds = normalizeHistoryModIds(ids)
@@ -896,9 +907,9 @@ export const useModStore = defineStore('mods', () => {
       conflict_count: conflictList.value.length,
       coexistence_count: coexistenceList.value.length,
       should_check_mod_residue: !!detail?.should_check_mod_residue,
-      core_refresh_required: detail?.core_refresh_required !== false,
+      core_refresh_required: !!options?.forceCoreRefresh || detail?.core_refresh_required !== false,
     })
-    if (detail?.core_refresh_required === false) {
+    if (!options?.forceCoreRefresh && detail?.core_refresh_required === false) {
       console.info('扫描未发现列表核心数据变化，跳过核心列表同步。')
       void appStore.refreshModEnrichment({ silent: true })
     } else {
@@ -907,13 +918,6 @@ export const useModStore = defineStore('mods', () => {
         refreshRules: options?.refreshRules !== false,
         refreshBackups: options?.refreshBackups !== false,
         refreshWorkspaceLibraries: options?.refreshWorkspaceLibraries !== false,
-      })
-    }
-    // 状态注入
-    if (coexistenceList.value.length > 0){
-      // 处理可共存Mod，标记为 is_coexistence = true
-      coexistenceList.value.forEach(item => {
-        takeModById(item.package_id)['is_coexistence'] = true
       })
     }
   }
@@ -1101,7 +1105,7 @@ export const useModStore = defineStore('mods', () => {
     const res = await window.pywebview.api.mods_delete(path_hashes, !!decision.force)
     if (checkResult(res, "批量删除Mod")) {
       toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${res.data.success_count} 个Mod`)
-      if(finish_scan) await scanMods()
+      if(finish_scan) await appStore.requestModScan({ forceCoreRefresh: true })
       return true
     }
   }
@@ -1114,7 +1118,10 @@ export const useModStore = defineStore('mods', () => {
   }
   const removeDeletedItemsFromLists = async ({ items = [], type, label }) => {
     const listIds = items.map(item => item.id).filter(Boolean)
-    const dataIds = items.map(item => item.mod?.package_id || item.id).filter(Boolean)
+    const dataItems = items.map(item => ({
+      id: item.mod?.package_id || item.id,
+      path_hash: item.mod?.path_hash || '',
+    })).filter(item => item.id || item.path_hash)
     if (listIds.length === 0) return false
 
     // 删除类动作会移除真实数据；撤销列表历史时只恢复列表 ID，缺失状态由扫描结果继续接管。
@@ -1123,7 +1130,7 @@ export const useModStore = defineStore('mods', () => {
       label,
       trackedModIds: listIds,
     }, async () => {
-      removeDeletedModsFromLocalData(dataIds)
+      removeDeletedModsFromLocalData(dataItems)
       selectMods([])
       removeIdsOnAllList(listIds)
       return true
@@ -1140,7 +1147,7 @@ export const useModStore = defineStore('mods', () => {
       type: 'delete-mod-files',
       label: `删除 ${deleteItems.length} 个本地文件`,
     })
-    if (removed) await appStore.requestModScan({ preserveListState: true })
+    if (removed) await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
     return removed
   }
   const unsubscribeSelectedWorkshopMods = async (deleteFiles = false, ids = selectedIds.value) => {
@@ -1174,7 +1181,7 @@ export const useModStore = defineStore('mods', () => {
         ? `取消订阅并删除 ${removedWorkshopItems.length} 个文件`
         : `取消订阅 ${removedWorkshopItems.length} 个创意工坊项目`,
     })
-    if (removed) await appStore.requestModScan({ preserveListState: true })
+    if (removed) await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
     return removed
   }
 

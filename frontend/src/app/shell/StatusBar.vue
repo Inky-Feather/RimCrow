@@ -121,7 +121,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Bot, Download, Image, LoaderCircle, Radar, X, Flag, FlagOff, ScanSearch, Box, Search, Package } from 'lucide-vue-next'
+import { ArrowRightLeft, Bot, Download, Image, LoaderCircle, Radar, X, Flag, FlagOff, ScanSearch, Box, Search, Package, Trash2 } from 'lucide-vue-next'
 import { useModStore } from '../../features/mod/stores/modStore'
 import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
@@ -149,6 +149,8 @@ const taskTypeMeta = {
   localize: { title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
   'mod-import': { title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
   'mod-export': { title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  'file-delete': { title: '删除文件', icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'file-transfer': { title: '转移文件', icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
   'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
   'file-search': { title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
 }

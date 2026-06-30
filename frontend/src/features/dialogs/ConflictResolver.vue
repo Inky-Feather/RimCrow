@@ -813,6 +813,7 @@ const handleLocalize = async (mod) => {
 
 const handleUnsubscribe = async (mod) => {
   if (!mod?.workshop_id || !mod?.path_hash) return
-  await appStore.unsubscribeWorkshopIds([mod.workshop_id], [mod.path_hash])
+  const ok = await appStore.unsubscribeWorkshopIds([mod.workshop_id], [mod.path_hash])
+  if (ok) await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
 }
 </script>

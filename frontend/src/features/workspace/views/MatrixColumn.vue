@@ -359,6 +359,15 @@ const handleSelect = (pathHashes) => {
   localSelectedPathHashes.value = Array.isArray(pathHashes) ? pathHashes : [pathHashes].filter(Boolean)
 }
 
+const refreshCoreAfterInventoryChange = async (label = '库存变更后同步模组数据') => {
+  await appStore.refreshModCoreData(label, {
+    preserveListState: true,
+    refreshRules: false,
+    refreshBackups: false,
+    refreshWorkspaceLibraries: false,
+  })
+}
+
 const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
   const hashes = [...new Set((Array.isArray(pathHashes) ? pathHashes : [pathHashes])
     .map(pathHash => String(pathHash || '').trim())
@@ -369,7 +378,10 @@ const unsubscribeWorkshopIds = async (pathHashes, deleteFile = false) => {
   if (!workshopIds.length) return
 
   const ok = await appStore.unsubscribeWorkshopIds(workshopIds, hashes, { deleteFiles: !!deleteFile })
-  if (ok) await workspaceStore.fetchLibrariesMods()
+  if (ok) {
+    await workspaceStore.fetchLibrariesMods()
+    await refreshCoreAfterInventoryChange('取消订阅后同步模组数据')
+  }
 }
 
 const unsubscribeAndClearMissingWorkshopRecords = async (mods) => {
@@ -394,6 +406,7 @@ const unsubscribeAndClearMissingWorkshopRecords = async (mods) => {
   }
 
   await workspaceStore.fetchLibrariesMods()
+  await refreshCoreAfterInventoryChange('清理缺失记录后同步模组数据')
   return true
 }
 
@@ -455,6 +468,7 @@ const clearMissingRecords = async (pathHashes) => {
   if (checkResult(res, '清理数据记录')) {
     toast.success(`已清理 ${res.data?.success_count || hashes.length} 条数据记录`)
     await workspaceStore.fetchLibrariesMods()
+    await refreshCoreAfterInventoryChange('清理库存记录后同步模组数据')
     return true
   }
   return false

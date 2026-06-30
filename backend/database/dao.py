@@ -29,6 +29,7 @@ from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
 from backend.settings import TOOL_MODS_DIR, settings
 from backend.utils.constants import normalize_language_code, normalize_language_codes
+from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 from backend.utils.tools import (
     current_ms,
@@ -1285,6 +1286,16 @@ class ModMaintenanceDAO:
         valid_hashes = [asset["path_hash"] for asset in assets]
         errors: list[str] = []
         success_count = 0
+        task_id = uuid.uuid4().hex
+        EventBus.resume()
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status="pending",
+            progress=0,
+            message=f"准备删除 {len(assets)} 个模组...",
+            metrics={"title": "删除模组文件", "current": 0, "total": len(assets)},
+        )
 
         for asset in assets:
             path = str(asset.get("path") or "")
@@ -1299,9 +1310,19 @@ class ModMaintenanceDAO:
                 ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute()  # type: ignore
         except Exception as exc:
             logger.error(f"数据库删除失败：{exc}")
+            EventBus.emit_progress(task_id, "file-delete", status="failed", progress=0, message="数据库记录清理失败", metrics={"title": "删除模组文件"})
             return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
 
-        for path in target_paths:
+        total_paths = max(len(target_paths), 1)
+        for index, path in enumerate(target_paths, start=1):
+            EventBus.emit_progress(
+                task_id,
+                "file-delete",
+                status="running",
+                progress=min(95, int((index - 1) / total_paths * 90) + 5),
+                message=f"正在删除: {os.path.basename(path)}",
+                metrics={"title": "删除模组文件", "current": index, "total": len(target_paths)},
+            )
             try:
                 delete_fs_path(path, force=force)
                 success_count += 1
@@ -1309,6 +1330,15 @@ class ModMaintenanceDAO:
                 delete_mode = "彻底删除" if force else "移入回收站"
                 errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
 
+        final_status = "failed" if success_count <= 0 and errors else "success"
+        EventBus.emit_progress(
+            task_id,
+            "file-delete",
+            status=final_status,
+            progress=100,
+            message=f"删除完成：成功 {success_count} 个，失败 {len(errors)} 个",
+            metrics={"title": "删除模组文件", "current": len(target_paths), "total": len(target_paths), "success_count": success_count, "error_count": len(errors)},
+        )
         return {"success_count": success_count, "errors": errors}
 
     @staticmethod

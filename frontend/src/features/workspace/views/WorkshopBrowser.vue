@@ -1000,7 +1000,7 @@ const copyHeaderValue = async (label, value) => {
   if (!text || text === '-' || !navigator?.clipboard?.writeText) return
   try {
     await navigator.clipboard.writeText(text)
-    toast.success(`${label}已复制`, { timeout: 1000 })
+    toast.success(`${label}已复制`, { timeout: 600 })
   } catch (error) {
     toast.error(`${label}复制失败`)
   }
