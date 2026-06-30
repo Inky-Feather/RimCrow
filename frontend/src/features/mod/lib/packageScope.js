@@ -14,6 +14,14 @@ export const isOfficialPackageId = (packageId = '') => (
   || isCorePackageId(packageId)
 )
 
+export const isOfficialMod = (mod = {}) => {
+  if (typeof mod === 'string') return isOfficialPackageId(mod)
+  const source = String(mod?.source || '').trim().toLowerCase()
+  return source === 'core'
+    || source === 'dlc'
+    || isOfficialPackageId(mod?.package_id || mod?.packageId || mod?.canonical_package_id || mod?.canonicalPackageId || mod?.package_id_raw)
+}
+
 export const isOfficialDlcPackageId = (packageId = '') => {
   const normalized = normalizePackageId(packageId)
   return normalized.startsWith(`${OFFICIAL_PACKAGE_PREFIX}.`) && normalized !== OFFICIAL_PACKAGE_PREFIX

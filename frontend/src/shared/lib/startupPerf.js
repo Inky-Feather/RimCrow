@@ -11,7 +11,7 @@ const formatFields = (fields = {}) => Object.fromEntries(
 
 export const startupPerfMark = (stage, fields = {}) => {
   const totalMs = performance.now() - getStartupStart()
-  console.info('[StartupPerf][frontend]', {
+  console.debug('[StartupPerf][frontend]', {
     stage,
     total_ms: Number(totalMs.toFixed(2)),
     ...formatFields(fields),

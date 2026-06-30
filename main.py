@@ -107,7 +107,7 @@ def main():
         elapsed_ms = (time.perf_counter() - startup_start_at) * 1000
         extras = " ".join(f"{key}={value}" for key, value in fields.items())
         suffix = f" {extras}" if extras else ""
-        log = logger.warning if level == "warning" else logger.info
+        log = logger.warning if level == "warning" else logger.debug
         log("[StartupPerf] 桌面启动阶段：stage=%s total_ms=%.2f%s", stage, elapsed_ms, suffix)
 
     # 1. Windows 打包后的多进程支持 (必须放在最前面)

@@ -91,6 +91,7 @@
           >
             <MatrixItem class="timeline-trigger h-full" :mod="displayMods[virtualRow.index]" :storeType="storeType"
               :lastPlayedTime="lastPlayedTime" :isSelected="localSelectedPathHashes.includes(displayMods[virtualRow.index]?.path_hash)"
+              :lastRunTime="lastRunTime"
               @contextmenu="handleContextMenu" @click="$emit('open-timeline', displayMods[virtualRow.index])"
             />
           </div>
@@ -155,6 +156,7 @@ const scrollRef = ref(null)
 const columnSize = computed(() => (props.mods || []).reduce((acc, mod) => acc + (mod.file_size || 0), 0))
 
 const lastPlayedTime = computed(() => profileStore.currentProfile?.last_played_time || 0)
+const lastRunTime = computed(() => appStore.settings?.last_run_time || 0)
 const hasWorkshopLibrary = computed(() => !!appStore.settings.workshop_mods_path)
 const canToggleWorkshopMods = computed(() => hasWorkshopLibrary.value)
 const workshopSwitchDisabled = computed(() => !!profileStore.currentProfile?.prefer_steam_launch)
@@ -251,7 +253,7 @@ const scrollToPathHash = (pathHash) => {
 const modsWithState = computed(() => {
   return (props.mods || []).map(mod => ({
     mod,
-    state: getMatrixItemState(mod, lastPlayedTime.value, workspaceStore)
+    state: getMatrixItemState(mod, lastPlayedTime.value, workspaceStore, lastRunTime.value)
   }))
 })
 
@@ -332,9 +334,16 @@ watch(
     filterState.value = target.filterState || 'default'
     if (!pathHashes.length) return
     const targetIds = new Set(pathHashes)
-    const visiblePathHashes = displayMods.value
+    let visiblePathHashes = displayMods.value
       .filter(mod => targetIds.has(mod.path_hash))
       .map(mod => mod.path_hash)
+    if (!visiblePathHashes.length && (props.mods || []).some(mod => targetIds.has(mod.path_hash))) {
+      filterState.value = 'default'
+      await nextTick()
+      visiblePathHashes = displayMods.value
+        .filter(mod => targetIds.has(mod.path_hash))
+        .map(mod => mod.path_hash)
+    }
     if (!visiblePathHashes.length) return
     localSelectedPathHashes.value = visiblePathHashes
     await nextTick()

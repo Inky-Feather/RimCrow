@@ -204,11 +204,11 @@ def _log_startup_perf(scope: str, stage: str, start_at: float, **fields):
     elapsed_ms = (time.perf_counter() - start_at) * 1000
     extras = " ".join(f"{key}={value}" for key, value in fields.items())
     suffix = f" {extras}" if extras else ""
-    logger.info("[StartupPerf] %s：stage=%s elapsed_ms=%.2f%s", scope, stage, elapsed_ms, suffix)
+    logger.debug("[StartupPerf] %s：stage=%s elapsed_ms=%.2f%s", scope, stage, elapsed_ms, suffix)
 
 
 def log_api_call(func):
-    """ 
+    """
     装饰器：记录 API 调用、参数及耗时 
     仅在 DEBUG 模式或发生错误时记录详细信息
     """

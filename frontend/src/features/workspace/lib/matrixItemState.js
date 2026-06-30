@@ -65,22 +65,21 @@ export const getMatrixMeaningfulChangeTime = (mod = {}) => Math.max(
   normalizeMatrixTimestamp(mod?.file_create_time),
 )
 
-export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore) => {
+export const getMatrixItemState = (mod, lastPlayedTime = 0, workspaceStore, lastRunTime = 0) => {
   const normalizedLastPlayedTime = Number(lastPlayedTime || 0)
   const hasLastPlayedTime = normalizedLastPlayedTime > 0
+  const normalizedLastRunTime = Number(lastRunTime || 0)
+  const referenceTime = hasLastPlayedTime ? normalizedLastPlayedTime : normalizedLastRunTime
+  const hasReferenceTime = referenceTime > 0
   const createTime = normalizeMatrixTimestamp(mod?.file_create_time)
   const lastChangeTime = getMatrixMeaningfulChangeTime(mod)
-  const downloadTime = normalizeMatrixTimestamp(mod?.download_status?.download_time)
-  const scannedTime = normalizeMatrixTimestamp(mod?.last_scanned_at)
-  // Steam 本地同步记录比上次扫描新时，也属于库存矩阵里的“变更”项。
-  const hasUnscannedWorkshopChange = mod?.download_status?.source === 'steam_sync_log' && downloadTime > scannedTime
 
   const sameTargets = workspaceStore?.getMatrixSameItems?.(mod?.path_hash) || []
   const conflictTargets = workspaceStore?.getMatrixConflictItems?.(mod?.path_hash) || []
   const replacementTargets = getMatrixReplacementTargets(mod, workspaceStore)
 
-  const isNew = hasLastPlayedTime && createTime > normalizedLastPlayedTime
-  const isChange = hasUnscannedWorkshopChange || (hasLastPlayedTime && !isNew && lastChangeTime > normalizedLastPlayedTime)
+  const isNew = hasReferenceTime && createTime > referenceTime
+  const isChange = hasReferenceTime && !isNew && lastChangeTime > referenceTime
   const isUpdate = !!(mod?.has_update || mod?.steam_status?.needs_update)
   const isSame = sameTargets.length > 0
   const isConflict = conflictTargets.length > 0
