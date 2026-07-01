@@ -1082,11 +1082,13 @@ class TestSteamManagerPlatformGuards(unittest.TestCase):
             "logged_in": False,
         })
 
-    def test_get_steam_path_returns_none_when_winreg_unavailable(self):
+    def test_get_steam_path_returns_none_when_all_candidates_unavailable(self):
         manager = SteamManager.__new__(SteamManager)
 
         with patch("backend.managers.mgr_steam.platform.system", return_value="Windows"), \
-             patch("backend.managers.mgr_steam.winreg", None):
+             patch("backend.managers.mgr_steam.winreg", None), \
+             patch("backend.managers.mgr_steam.GameManager._detect_steam_root_candidates", return_value=[]), \
+             patch("backend.managers.mgr_steam.shutil.which", return_value=None):
             result = SteamManager.get_steam_path(manager)
 
         self.assertIsNone(result)

@@ -1,9 +1,11 @@
 import json
 import subprocess
+import tarfile
 import threading
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.managers.mgr_steam import SteamManager
@@ -82,6 +84,96 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertEqual(manager.steamcmd_exe, str(steamcmd_root / "steamcmd.exe"))
         self.assertIsNone(manager._cached_cmd_map)
         self.assertEqual(manager._last_cmd_log_mtime, 0)
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Linux")
+    def test_reload_paths_from_settings_uses_platform_steam_executable(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        steam_root = temp_root / "Steam"
+        steamcmd_root = temp_root / "steamcmd"
+        steam_root.mkdir()
+        steamcmd_root.mkdir()
+        (steam_root / "steam").write_text("", encoding="utf-8")
+
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = "old"
+        manager._cached_cmd_map = {"old": True}
+        manager._last_cmd_log_mtime = 1
+        manager._last_cmd_acf_mtime = 1
+        manager._last_acf_mtime = 1
+        manager._last_log_mtime = 1
+        manager._cached_merged_data = [{"old": True}]
+        manager.get_steam_path = lambda exe=False: ""
+
+        with patch.object(settings.config, "steam_path", str(steam_root)), \
+             patch.object(settings.config, "steamcmd_path", str(steamcmd_root)):
+            result = manager.reload_paths_from_settings()
+
+        self.assertEqual(result["steam_exe"], str(steam_root / "steam"))
+        self.assertEqual(manager.steamcmd_exe, str(steamcmd_root / "steamcmd.sh"))
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Linux")
+    def test_ensure_tools_uses_linux_steamcmd_archive(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = str(temp_root)
+        manager.steamcmd_exe = str(temp_root / "steamcmd.sh")
+        captured = {}
+
+        class DownloadManager:
+            def add_task(self, url, target_dir, filename):
+                captured.update({"url": url, "target_dir": target_dir, "filename": filename})
+                return "task-a"
+
+        with patch.object(settings.config, "steamcmd_path", str(temp_root)):
+            tasks = manager.ensure_tools(DownloadManager())
+
+        self.assertEqual(tasks, [{"type": "steamcmd", "id": "task-a"}])
+        self.assertTrue(captured["url"].endswith("steamcmd_linux.tar.gz"))
+        self.assertEqual(captured["filename"], "steamcmd_linux.tar.gz")
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Linux")
+    def test_post_download_setup_extracts_linux_steamcmd_archive(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        archive_path = temp_root / "steamcmd_linux.tar.gz"
+        source_file = temp_root / "steamcmd.sh"
+        source_file.write_text("#!/bin/sh\n", encoding="utf-8")
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(source_file, arcname="steamcmd.sh")
+        source_file.unlink()
+
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = str(temp_root)
+        manager.steamcmd_exe = str(temp_root / "steamcmd.sh")
+        manager.steamcmd_ready = False
+
+        manager.post_download_setup("steamcmd", str(archive_path))
+
+        self.assertTrue((temp_root / "steamcmd.sh").exists())
+        self.assertTrue(manager.steamcmd_ready)
+        self.assertFalse(archive_path.exists())
+
+    @patch("backend.managers.mgr_steam.psutil.process_iter")
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Darwin")
+    def test_is_steam_running_uses_platform_process_names(self, _platform_system, process_iter):
+        manager = self.make_manager()
+        process_iter.return_value = [SimpleNamespace(info={"name": "steam_osx"})]
+
+        self.assertTrue(manager.is_steam_running())
+
+    @patch("backend.managers.mgr_steam.webbrowser.open", return_value=True)
+    def test_start_steam_uses_url_fallback_on_non_windows(self, webbrowser_open):
+        manager = self.make_manager()
+        manager.is_steam_running = lambda: False
+        manager.steam_exe = ""
+
+        result = manager.start_steam()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["method"], "steam_url")
+        webbrowser_open.assert_called_once_with("steam://open/main")
 
     def test_steamworks_download_wrapper_uses_worker_payload_and_marker(self):
         manager = self.make_manager()

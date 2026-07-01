@@ -1379,6 +1379,7 @@ export const useAppStore = defineStore('app', () => {
     gameRes = await resolveGameLaunchWarning(gameRes, profile_id)
     if (!gameRes) return
     if (checkResult(gameRes, "启动游戏程序")) {
+      if (gameRes?.data?.runtime_session) setRuntimeSession(gameRes.data.runtime_session)
       const runtimeState = String(gameRes?.data?.runtime_session?.state || '').trim()
       if (runtimeState === 'launching') {
         toast.success(`正在启动“${targetProfileName}”环境，请等待游戏进程确认。`)

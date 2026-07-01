@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import zipfile
 from contextlib import suppress
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import List
 
@@ -72,6 +73,21 @@ def _release_zip_name(app_name: str, version: str) -> str:
 
 def _pyinstaller_add_data_arg(source: str, target: str) -> str:
     return f"{source}{os.pathsep}{target}"
+
+
+def _steamworks_runtime_files(project_root: Path) -> list[Path]:
+    names_by_platform = {
+        "win32": ["SteamworksPy64.dll", "steam_api64.dll"],
+        "darwin": ["SteamworksPy.dylib", "libsteam_api.dylib"],
+        "linux": ["SteamworksPy.so", "libsteam_api.so"],
+    }
+    platform_key = "win32" if sys.platform.startswith(("win32", "cygwin", "msys")) else "darwin" if sys.platform == "darwin" else "linux"
+    runtime_dir = project_root / "tools" / "steamworks"
+    files = [runtime_dir / name for name in names_by_platform[platform_key]]
+    missing = [path for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("缺少当前平台 Steamworks 运行库: " + ", ".join(str(path) for path in missing))
+    return files
 
 
 def create_pyinstaller_hook_dir():
@@ -199,6 +215,9 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         )
         hook_dir_path = create_pyinstaller_hook_dir()
         upx_dir_path = resolve_upx_dir(upx_dir)
+        steamworks_data_args = []
+        for runtime_file in _steamworks_runtime_files(project_root):
+            steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
 
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
@@ -214,6 +233,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "--paths", str(steamworkspy_source_dir),
             "--additional-hooks-dir", hook_dir_path,
             "--add-data", _pyinstaller_add_data_arg("frontend/dist", "frontend/dist"),
+            *steamworks_data_args,
             "--collect-binaries", "tiktoken",
             "--collect-data", "tiktoken",
             "--collect-submodules", "steamworks",
@@ -295,7 +315,7 @@ def _iter_tools_files(tools_dir: Path):
     """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
     if not tools_dir.exists():
         return
-    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "texture_tools"}
     for file_path in tools_dir.rglob("*"):
         if not file_path.is_file():
             continue
@@ -385,6 +405,7 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
         use_gitignore: 是否读取 .gitignore 进行过滤
     """
     if exclude_dirs is None: exclude_dirs = []
+    exclude_patterns = [pattern.replace(os.sep, '/') for pattern in exclude_dirs]
     output_lines = []
     # 准备 gitignore spec
     spec = get_gitignore_spec(start_path) if use_gitignore else None
@@ -405,9 +426,12 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
             if entry in exclude_dirs: continue
             full_path = os.path.join(current_path, entry)
             rel_path = os.path.relpath(full_path, start_path)
+            rel_match_path = rel_path.replace(os.sep, '/')
+            is_dir = os.path.isdir(full_path)
             # 2. .gitignore 过滤
-            # 注意：pathspec 需要 unix 风格的路径分隔符
-            if spec and spec.match_file(rel_path.replace(os.sep, '/')): continue
+            # pathspec 的目录规则（如 .*/）需要尾部斜杠才能命中。
+            if spec and (spec.match_file(rel_match_path) or (is_dir and spec.match_file(f"{rel_match_path}/"))): continue
+            if exclude_patterns and any(fnmatch(rel_match_path, pattern) or (is_dir and fnmatch(f"{rel_match_path}/", pattern)) for pattern in exclude_patterns): continue
             items.append(entry)
 
         # 3. 排序：文件夹在前，然后按字母顺序
@@ -440,11 +464,11 @@ if __name__ == "__main__":
     # 配置
     APP_MAIN = 'main.py'
     APP_NAME = 'RimCrow'
-    APP_VERSION = __version__  # 在这里修改版本号
+    APP_VERSION = __version__
     APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
-    DEFAULT_UPX_DIR = ''
+    DEFAULT_UPX_DIR = r'D:\Environment\upx-5.0.0-win64'
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
     
     # 0. 构建前端项目
@@ -472,9 +496,7 @@ if __name__ == "__main__":
     
     # 强制排除的系统/构建目录
     excludes = [
-        '__pycache__', '.git', '.venv', '.idea', '.vscode', 
-        'build', 'dist', 'node_modules', 
-        'cache', 'temp', 'backups','Downloads','updates'
+        '__init__.py', 'tests', 'Downloads', 'submodules'
     ]
     
     tree_text = filestree(

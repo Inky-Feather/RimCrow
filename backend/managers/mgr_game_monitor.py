@@ -7,6 +7,7 @@ import ctypes
 import psutil
 from backend.settings import DATA_DIR
 from backend.settings import settings
+from backend.managers.mgr_game import GameManager
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
 from backend.static_page import build_idle_home_html, build_idle_logs_html
@@ -36,15 +37,18 @@ class GameMonitor:
     def __init__(self, api):
         self.api = api
         self.running = False
-        self.game_process_name = "RimWorldWin64.exe" 
+        self.game_process_names = self._build_game_process_names()
         self.is_game_running = False
         self.runtime_session = RuntimeSession()
         self.resume_url = None
         # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
         self.manual_override_idle = False 
-        # Windows API
-        self.psapi = ctypes.windll.psapi
-        self.kernel32 = ctypes.windll.kernel32
+        # Windows 内存修剪接口，非 Windows 平台没有 windll，直接跳过即可。
+        self.psapi = None
+        self.kernel32 = None
+        if hasattr(ctypes, "windll"):
+            self.psapi = ctypes.windll.psapi
+            self.kernel32 = ctypes.windll.kernel32
 
         # 准备静默页面的路径 (生成真实 html 文件，避免长字符串常驻内存)
         self.idle_home_page_path = str(DATA_DIR / 'idle.html')
@@ -65,6 +69,27 @@ class GameMonitor:
             self.idle_logs_page_path,
             build_idle_logs_html(),
         )
+
+    @staticmethod
+    def _build_game_process_names() -> set[str]:
+        names: set[str] = set()
+        for values in GameManager.PROCESS_NAMES_BY_SYSTEM.values():
+            names.update(str(name or "").strip().lower() for name in values if str(name or "").strip())
+        return names
+
+    def _is_target_process(self, process_name: str | None) -> bool:
+        names = getattr(self, "game_process_names", None) or self._build_game_process_names()
+        return str(process_name or "").strip().lower() in names
+
+    def _detect_game_process(self, processes=None) -> bool:
+        process_source = processes if processes is not None else psutil.process_iter(['name'])
+        for proc in process_source:
+            try:
+                if self._is_target_process(proc.info.get('name')):
+                    return True
+            except Exception:
+                continue
+        return False
 
     def _get_default_idle_page_path(self) -> str:
         if str(settings.config.silent_mode_default_view).strip().lower() == 'logs':
@@ -192,7 +217,8 @@ class GameMonitor:
     def _monitor_loop(self):
         while self.running:
             try:
-                expired_session = self.expire_launch_if_needed()
+                game_found = self._detect_game_process()
+                expired_session = None if game_found else self.expire_launch_if_needed()
                 if expired_session:
                     EventBus.emit(
                         'game-status-changed',
@@ -204,13 +230,6 @@ class GameMonitor:
                         },
                     )
 
-                game_found = False
-                # 优化：使用 process_iter 的过滤器减少性能消耗
-                for proc in psutil.process_iter(['name']):
-                    if proc.info['name'] == self.game_process_name:
-                        game_found = True
-                        break
-                
                 # 状态机跃迁逻辑更新
                 if game_found and not self.is_game_running:
                     self.is_game_running = True
@@ -310,6 +329,8 @@ class GameMonitor:
 
     def _trim_memory(self):
         try:
+            if not self.psapi or not self.kernel32:
+                return
             pid = os.getpid()
             handle = self.kernel32.OpenProcess(0x001F0FFF, False, pid)
             if handle:

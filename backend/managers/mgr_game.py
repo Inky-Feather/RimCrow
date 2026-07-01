@@ -18,6 +18,24 @@ class GameManager:
     游戏管理：路径检测、启动游戏
     """
 
+    EXECUTABLE_NAMES_BY_SYSTEM = {
+        'Windows': ("RimWorldWin64.exe", "RimWorldWin.exe"),
+        'Darwin': ("RimWorldMac.app", "RimWorldMac"),
+        'Linux': ("RimWorldLinux", "RimWorldLinux.x86_64", "start_RimWorld.sh", "RimWorldWin64.exe", "RimWorldWin.exe"),
+    }
+
+    PROCESS_NAMES_BY_SYSTEM = {
+        'Windows': ("RimWorldWin64.exe", "RimWorldWin.exe"),
+        'Darwin': ("RimWorldMac",),
+        'Linux': ("RimWorldLinux", "RimWorldLinux.x86_64", "RimWorldWin64.exe", "RimWorldWin.exe"),
+    }
+
+    UNITY_DATA_DIR_NAMES_BY_SYSTEM = {
+        'Windows': ("RimWorldWin64_Data", "RimWorldWin_Data"),
+        'Linux': ("RimWorldLinux_Data", "RimWorldWin64_Data", "RimWorldWin_Data"),
+        'Darwin': (),
+    }
+
     @staticmethod
     def _unique_paths(candidates: list[str]) -> list[str]:
         """按顺序去重并规范化路径。"""
@@ -140,14 +158,7 @@ class GameManager:
     def detect_executable(install_path):
         """检测游戏可执行文件"""
         system_name = platform.system()
-        
-        if system_name == 'Windows':
-            candidates = ["RimWorldWin64.exe", "RimWorldWin.exe"]
-        elif system_name == 'Darwin': # macOS
-            # macOS 下通常是 RimWorldMac.app，执行里面的 binary
-            candidates = ["RimWorldMac.app", "RimWorldMac"] 
-        else: # Linux
-            candidates = ["RimWorldLinux", "RimWorldLinux.x86_64"]
+        candidates = GameManager.EXECUTABLE_NAMES_BY_SYSTEM.get(system_name, GameManager.EXECUTABLE_NAMES_BY_SYSTEM['Linux'])
 
         for exe in candidates:
             p = os.path.join(install_path, exe)
@@ -184,6 +195,8 @@ class GameManager:
                     cmd = [target_exe] + args
                 subprocess.Popen(cmd)
             else: # Linux
+                if target_exe.lower().endswith(".exe"):
+                    raise Exception("Linux 下检测到 Windows 版 RimWorld，请通过 Steam/Proton 启动。")
                 cmd = [target_exe] + args
                 subprocess.Popen(cmd, cwd=game_install_path)
             from backend.utils.logger import logger 

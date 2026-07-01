@@ -1,7 +1,10 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
+from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_monitor import GameMonitor
 
 
@@ -71,3 +74,69 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         self.assertEqual(expired.state, "idle")
         self.assertEqual(expired.failure_reason, "launch_timeout")
         self.assertEqual(expired.message, "启动超时，未检测到游戏进程。")
+
+    def test_is_target_process_matches_supported_rimworld_names(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+
+        self.assertTrue(monitor._is_target_process("RimWorldWin64.exe"))
+        self.assertTrue(monitor._is_target_process("rimworldwin.exe"))
+        self.assertTrue(monitor._is_target_process("RimWorldLinux.x86_64"))
+        self.assertTrue(monitor._is_target_process("RimWorldMac"))
+        self.assertFalse(monitor._is_target_process("Steam.exe"))
+
+    def test_detect_game_process_checks_all_supported_names(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+        processes = [
+            SimpleNamespace(info={"name": "Steam.exe"}),
+            SimpleNamespace(info={"name": "RimWorldWin.exe"}),
+        ]
+
+        self.assertTrue(monitor._detect_game_process(processes))
+
+    def test_detect_game_process_skips_inaccessible_processes(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+
+        class BrokenProcess:
+            @property
+            def info(self):
+                raise RuntimeError("denied")
+
+        self.assertFalse(monitor._detect_game_process([BrokenProcess()]))
+
+    def test_trim_memory_skips_when_windows_api_is_unavailable(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+        monitor.psapi = None
+        monitor.kernel32 = None
+
+        monitor._trim_memory()
+
+    def test_linux_detect_executable_accepts_proton_windows_binary(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorldWin64.exe"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
+                self.assertEqual(GameManager.detect_executable(str(install_root)), str(exe_path))
+
+    def test_linux_detect_executable_accepts_steam_launcher_script(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            launcher_path = install_root / "start_RimWorld.sh"
+            launcher_path.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
+                self.assertEqual(GameManager.detect_executable(str(install_root)), str(launcher_path))
+
+    def test_linux_launch_game_rejects_proton_windows_binary_for_direct_launch(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorldWin64.exe"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
+                 patch("backend.managers.mgr_game.subprocess.Popen") as popen:
+                with self.assertRaisesRegex(Exception, "Steam/Proton"):
+                    GameManager.launch_game(str(install_root))
+
+        popen.assert_not_called()

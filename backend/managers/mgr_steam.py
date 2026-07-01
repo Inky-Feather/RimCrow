@@ -7,6 +7,7 @@ import re
 import sys
 import platform
 import subprocess
+import tarfile
 import threading
 import time
 import shutil
@@ -14,10 +15,12 @@ import importlib.util
 import uuid
 import struct
 import tempfile
+import webbrowser
 from dateutil import parser
 from typing import Any, cast
 from json_repair import repair_json
 from pathlib import Path
+import psutil
 
 try:
     import winreg
@@ -55,6 +58,26 @@ STEAMWORKS_PY_SUBMODULE_DIRS = [
     BASE_RESOURCE_DIR / "submodules" / "SteamworksPy",
     HOME_DIR / "submodules" / "SteamworksPy",
 ]
+STEAMCMD_PACKAGE_BY_SYSTEM = {
+    "Windows": ("https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip", "steamcmd.zip"),
+    "Darwin": ("https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz", "steamcmd_osx.tar.gz"),
+    "Linux": ("https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz", "steamcmd_linux.tar.gz"),
+}
+STEAMCMD_EXECUTABLE_BY_SYSTEM = {
+    "Windows": "steamcmd.exe",
+    "Darwin": "steamcmd.sh",
+    "Linux": "steamcmd.sh",
+}
+STEAM_PROCESS_NAMES_BY_SYSTEM = {
+    "Windows": ("steam.exe",),
+    "Darwin": ("steam", "steam_osx"),
+    "Linux": ("steam",),
+}
+STEAM_EXECUTABLE_NAMES_BY_SYSTEM = {
+    "Windows": ("steam.exe",),
+    "Darwin": ("Steam.app", "Contents/MacOS/steam_osx"),
+    "Linux": ("steam",),
+}
 
 
 def _steamworks_platform_dir_name() -> str:
@@ -73,6 +96,45 @@ def _steamworks_library_names() -> tuple[str, str]:
     if system == "Darwin":
         return "SteamworksPy.dylib", "libsteam_api.dylib"
     return "SteamworksPy.so", "libsteam_api.so"
+
+
+def _steamcmd_package_info() -> tuple[str, str]:
+    return STEAMCMD_PACKAGE_BY_SYSTEM.get(platform.system(), STEAMCMD_PACKAGE_BY_SYSTEM["Linux"])
+
+
+def _steamcmd_executable_name() -> str:
+    return STEAMCMD_EXECUTABLE_BY_SYSTEM.get(platform.system(), STEAMCMD_EXECUTABLE_BY_SYSTEM["Linux"])
+
+
+def _steam_process_names() -> set[str]:
+    return {name.lower() for name in STEAM_PROCESS_NAMES_BY_SYSTEM.get(platform.system(), STEAM_PROCESS_NAMES_BY_SYSTEM["Linux"])}
+
+
+def _resolve_steam_executable(path_value: Any) -> str:
+    raw = str(path_value or "").strip()
+    if not raw:
+        return ""
+    path = Path(raw)
+    if path.exists() and (path.is_file() or path.suffix.lower() == ".app"):
+        return str(path)
+    for name in STEAM_EXECUTABLE_NAMES_BY_SYSTEM.get(platform.system(), STEAM_EXECUTABLE_NAMES_BY_SYSTEM["Linux"]):
+        candidate = path / name
+        if candidate.exists():
+            return str(candidate)
+    found = shutil.which(raw if path.name == raw else path.name)
+    return found or ""
+
+
+def _safe_extract_tar_gz(archive_path: str, target_dir: str) -> None:
+    target_root = Path(target_dir).resolve()
+    with tarfile.open(archive_path, "r:gz") as archive:
+        for member in archive.getmembers():
+            if member.issym() or member.islnk():
+                raise RuntimeError(f"压缩包包含不支持的链接: {member.name}")
+            member_path = (target_root / member.name).resolve()
+            if member_path != target_root and target_root not in member_path.parents:
+                raise RuntimeError(f"压缩包包含非法路径: {member.name}")
+        archive.extractall(target_root)
 
 
 def _steamworks_py_source_paths() -> list[str]:
@@ -752,20 +814,13 @@ class SteamManager:
         self._ensure_steamworks_runtime_environment()
 
     def _get_steamcmd_exe_path(self):
-        system = platform.system()
-        if system == "Windows":
-            return os.path.join(self.steamcmd_dir, "steamcmd.exe")
-        elif system == "Linux": # Linux/Mac 逻辑保持不变
-            return os.path.join(self.steamcmd_dir, "steamcmd.sh")
-        elif system == "Darwin":
-            return os.path.join(self.steamcmd_dir, "steamcmd.sh")
-        return ""
+        return os.path.join(self.steamcmd_dir, _steamcmd_executable_name())
 
     def reload_paths_from_settings(self):
         """配置保存或目录迁移后刷新运行时缓存的 Steam/SteamCMD 路径。"""
         old_steamcmd_dir = getattr(self, "steamcmd_dir", "")
         self.steam_dir = settings.config.steam_path or self.get_steam_path()
-        self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True)
+        self.steam_exe = _resolve_steam_executable(self.steam_dir) or self.get_steam_path(True)
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
         os.makedirs(self.steamcmd_dir, exist_ok=True)
@@ -871,15 +926,8 @@ class SteamManager:
         tasks = []
         if not os.path.exists(self.steamcmd_exe):
             logger.info("未找到 SteamCMD，正在添加下载任务...")
-            url = ""
-            if platform.system() == "Windows":
-                url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
-            elif platform.system() == "Darwin":
-                url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_osx.tar.gz"
-            else:
-                url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
-            
-            tid = download_mgr.add_task(url, self.steamcmd_dir, "steamcmd_package.zip")
+            url, filename = _steamcmd_package_info()
+            tid = download_mgr.add_task(url, self.steamcmd_dir, filename)
             tasks.append({"type": "steamcmd", "id": tid})
             
         is_initialized = (Path(settings.config.steamcmd_path) / "public").exists()
@@ -930,34 +978,27 @@ class SteamManager:
         """下载完成后的解压/配置回调"""
         if task_type == "steamcmd":
             try:
-                if file_path.endswith('.zip'):
+                lower_path = str(file_path or "").lower()
+                if lower_path.endswith('.zip'):
                     extract_zip(file_path, self.steamcmd_dir)
-                    os.remove(file_path)
-                    self.steamcmd_ready = True
-                    logger.info("SteamCMD 已安装。")
+                elif lower_path.endswith(('.tar.gz', '.tgz')):
+                    _safe_extract_tar_gz(file_path, self.steamcmd_dir)
+                else:
+                    raise ValueError(f"不支持的 SteamCMD 压缩包格式: {file_path}")
+                os.remove(file_path)
+                self.steamcmd_ready = os.path.exists(self.steamcmd_exe)
+                logger.info("SteamCMD 已安装。")
             except Exception as e:
                 logger.error(f"解压 SteamCMD 失败：{e}")
 
     def is_steam_running(self) -> bool:
         """跨平台检测 Steam 进程是否存活"""
         try:
-            sys_name = platform.system()
-            if sys_name == "Windows":
-                # 隐藏控制台窗口
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                # 使用内置 tasklist 过滤，/NH 去掉表头提升解析速度
-                res = subprocess.run(
-                    ['tasklist', '/FI', 'IMAGENAME eq steam.exe', '/NH'], 
-                    capture_output=True, text=True, startupinfo=si
-                )
-                return 'steam.exe' in res.stdout.lower()
-            elif sys_name == "Darwin": # MacOS
-                res = subprocess.run(['ps', '-A'], capture_output=True, text=True)
-                return 'steam.app' in res.stdout.lower()
-            else: # Linux
-                res = subprocess.run(['ps', '-A'], capture_output=True, text=True)
-                return 'steam' in res.stdout.lower()
+            target_names = _steam_process_names()
+            for proc in psutil.process_iter(['name']):
+                if str(proc.info.get('name') or '').strip().lower() in target_names:
+                    return True
+            return False
         except Exception as e:
             logger.error(f"检查 Steam 进程失败：{e}")
             return False
@@ -1288,7 +1329,10 @@ class SteamManager:
         steam_exe = str(self.steam_exe) if self.steam_exe else None
         if steam_exe and os.path.exists(steam_exe):
             try:
-                subprocess.Popen([steam_exe])
+                if platform.system() == "Darwin" and steam_exe.lower().endswith(".app"):
+                    subprocess.Popen(["open", steam_exe])
+                else:
+                    subprocess.Popen([steam_exe])
                 return {
                     "ok": True,
                     "method": "steam_exe",
@@ -1297,16 +1341,15 @@ class SteamManager:
             except Exception as e:
                 logger.warning(f"通过可执行文件启动 Steam 失败：{e}", exc_info=True)
 
-        if platform.system() == "Windows":
-            try:
-                os.startfile("steam://open/main")
+        try:
+            if webbrowser.open("steam://open/main"):
                 return {
                     "ok": True,
                     "method": "steam_url",
                     "used_url_fallback": True,
                 }
-            except Exception as e:
-                logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
 
         return {
             "ok": False,
@@ -2141,42 +2184,54 @@ class SteamManager:
     
     def get_steam_path(self, with_exe=False):
         """检测 Steam 安装路径"""
-        if platform.system() != "Windows" or winreg is None:
-            return None
-
         candidates = []
-        key_paths = [
-            r"SOFTWARE\WOW6432Node\Valve\Steam",
-            r"SOFTWARE\Valve\Steam",
-        ]
+        if platform.system() == "Windows" and winreg is not None:
+            key_paths = [
+                r"SOFTWARE\WOW6432Node\Valve\Steam",
+                r"SOFTWARE\Valve\Steam",
+            ]
 
-        # Windows 下 Steam 可能只写入当前用户注册表；最后再复用通用候选路径兜底。
-        for key_path in key_paths:
-            for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
-                try:
-                    with winreg.OpenKey(root, key_path) as key:
-                        path, _ = winreg.QueryValueEx(key, "InstallPath")
-                    if path:
-                        candidates.append(str(path))
-                except OSError:
-                    continue
+            # Windows 下 Steam 可能只写入当前用户注册表；最后再复用通用候选路径兜底。
+            for key_path in key_paths:
+                for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+                    try:
+                        with winreg.OpenKey(root, key_path) as key:
+                            path, _ = winreg.QueryValueEx(key, "InstallPath")
+                        if path:
+                            candidates.append(str(path))
+                    except OSError:
+                        continue
 
         candidates.extend(GameManager._detect_steam_root_candidates())
+        if platform.system() == "Darwin":
+            candidates.append("/Applications/Steam.app")
+        which_steam = shutil.which("steam")
+        if which_steam:
+            candidates.append(which_steam)
         for steam_dir in GameManager._unique_paths(candidates):
-            steam_exe = Path(steam_dir) / "steam.exe"
-            if steam_exe.exists():
-                return str(steam_exe) if with_exe else str(Path(steam_dir))
+            steam_exe = _resolve_steam_executable(steam_dir)
+            if steam_exe:
+                if with_exe:
+                    return steam_exe
+                path = Path(steam_dir)
+                if path.is_dir() and path.suffix.lower() != ".app":
+                    return str(path)
 
-        logger.debug("未找到 Steam InstallPath。")
+        if not with_exe:
+            for steam_dir in GameManager._unique_paths(candidates):
+                path = Path(steam_dir)
+                if path.exists() and path.is_dir() and path.suffix.lower() != ".app":
+                    return str(path)
+
+        logger.debug("未找到 Steam 安装路径。")
         return None
 
     def launch_via_steam_cmd(self, app_id=RIMWORLD_STEAM_APP_ID_STR, extra_args=None):
         steam_exe = str(self.steam_exe) if self.steam_exe else None
         # 如果找不到 Steam.exe，回退到原来的 URL 方式
-        if not steam_exe or not os.path.exists(steam_exe):
-            logger.warning("未找到 Steam.exe，回退到 URL 协议启动")
-            # os.startfile(f"steam://rungameid/{app_id}")
-            os.startfile(f"steam://run/{app_id}")
+        if not steam_exe or not os.path.exists(steam_exe) or steam_exe.lower().endswith(".app"):
+            logger.warning("未找到可直接传参的 Steam 程序，回退到 URL 协议启动")
+            webbrowser.open(f"steam://run/{app_id}")
             return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]

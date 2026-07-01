@@ -244,8 +244,10 @@ class GameInstallInspector:
 
     def _unity_data_dir_candidates(self, root: Path, executable_path: str) -> list[Path]:
         exe_path = Path(str(executable_path or ""))
-        names = {name for name in (exe_path.stem, "RimWorldWin64", "RimWorldWin", "RimWorldLinux") if name}
-        return self._dedupe_paths([root / f"{name}_Data" for name in names])
+        names = list(GameManager.UNITY_DATA_DIR_NAMES_BY_SYSTEM.get(platform.system(), ()))
+        if exe_path.stem:
+            names.append(f"{exe_path.stem}_Data")
+        return self._dedupe_paths([root / name for name in names])
 
     def _candidate_appid_paths(self, install_path: str, executable_path: str = "") -> list[Path]:
         """

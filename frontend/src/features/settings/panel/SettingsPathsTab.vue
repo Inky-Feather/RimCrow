@@ -8,7 +8,7 @@
                     </label>
                   </h3>
                   <button @click="handleAutoDetect" :disabled="isPending('auto-detect')" :class="isPending('auto-detect') ? 'app-action-disabled' : ''"
-                    v-tooltip="isPending('auto-detect') ? '正在自动搜索路径' : '尝试通过注册表自动搜索路径'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
+                    v-tooltip="isPending('auto-detect') ? '正在自动搜索路径' : '尝试通过系统和 Steam 记录自动搜索路径'" class="inline-flex items-center gap-1 px-3 py-1 bg-accent-success/10 hover:bg-accent-success/20 border border-accent-success/30 rounded text-xs font-bold text-accent-success transition-all">
                     <LoaderCircle v-if="isPending('auto-detect')" class="size-3 animate-spin" />
                     {{ isPending('auto-detect') ? '搜索中' : '自动搜索路径' }}
                   </button>
@@ -16,11 +16,11 @@
                 <div class="grid gap-6">
                   <CommonPathInput label="游戏安装目录" v-model="formData.game_install_path" @browse="handleGameBrowse"
                     :check="formData.check_info?.game_install_path"
-                    :description="'游戏安装目录即游戏主程序所在的目录，默认安装目录一般位于：\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld'" 
+                    :description="'游戏安装目录即游戏主程序所在的目录，不同系统位置不同，Windows下默认安装目录一般位于：\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld'" 
                     @blur="checkPath('game_install_path', formData.game_install_path)"/>
                   <CommonPathInput label="用户数据目录" v-model="formData.user_data_path" @browse="handleBrowse('user_data_path')" 
                     :check="formData.check_info?.user_data_path"
-                    :description="'用户数据目录即游戏数据及存档所在的目录，默认配置目录一般位于：\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios'" 
+                    :description="'用户数据目录即游戏配置、存档和日志所在的目录，不同系统位置不同，可使用自动搜索或手动选择。\nWindows下默认数据目录一般位于：\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios'"
                     @blur="checkPath('user_data_path', formData.user_data_path)"/>
                   <!-- <CommonPathInput label="游戏配置目录" v-model="formData.game_config_path" @browse="handleBrowse('game_config_path')" 
                     :check="formData.check_info?.game_config_path"
@@ -34,7 +34,7 @@
                   <CommonTagInput label="游戏启动参数" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
                   <div class="modal-section grid grid-cols-1 gap-2 p-3">
                     <CommonPathInput label="Steam程序路径" :check="formData.check_info?.steam_path"
-                      :description="'Steam程序路径即Steam.exe所在的目录，默认路径一般位于：\nC:/Program Files (x86)/Steam'" 
+                      :description="'Steam 程序路径即 Steam 安装目录或程序所在位置，不同系统位置不同，可留空使用自动检测。'"
                       v-model="formData.steam_path" @browse="handleBrowse('steam_path')" @blur="checkPath('steam_path', formData.steam_path)"
                     />
                     <div class="grid grid-cols-2 gap-2">
