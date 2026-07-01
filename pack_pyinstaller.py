@@ -71,10 +71,6 @@ def _release_zip_name(app_name: str, version: str) -> str:
     return f"{app_name}-v{version_text}-{_platform_tag()}.zip"
 
 
-def _pyinstaller_add_data_arg(source: str, target: str) -> str:
-    return f"{source}{os.pathsep}{target}"
-
-
 def _is_windows() -> bool:
     return sys.platform.startswith(("win32", "cygwin", "msys"))
 
@@ -83,32 +79,52 @@ def _is_macos() -> bool:
     return sys.platform == "darwin"
 
 
-def _pyinstaller_output_candidates(dist_dir: Path, app_name: str):
+def _pyinstaller_add_data_arg(source: str, target: str) -> str:
+    return f"{source}{os.pathsep}{target}"
+
+
+def _pyinstaller_output_candidates(dist_dir: Path, app_name: str) -> list[Path]:
+    candidates = []
     if _is_macos():
-        yield dist_dir / f"{app_name}.app"
-        yield dist_dir / app_name
-        return
-    if _is_windows():
-        yield dist_dir / f"{app_name}.exe"
-        return
-    yield dist_dir / app_name
+        candidates.extend([
+            dist_dir / f"{app_name}.app",
+            dist_dir / app_name / f"{app_name}.app",
+            dist_dir / app_name,
+        ])
+    elif _is_windows():
+        candidates.extend([
+            dist_dir / f"{app_name}.exe",
+            dist_dir / app_name / f"{app_name}.exe",
+        ])
+    else:
+        candidates.extend([
+            dist_dir / app_name,
+            dist_dir / app_name / app_name,
+        ])
+    return candidates
 
 
 def _resolve_pyinstaller_output(dist_dir: Path, app_name: str) -> Path:
     for candidate in _pyinstaller_output_candidates(dist_dir, app_name):
         if candidate.exists():
             return candidate
-    expected = ", ".join(str(path) for path in _pyinstaller_output_candidates(dist_dir, app_name))
-    raise FileNotFoundError(f"未找到打包产物: {expected}")
+    searched = "\n - ".join(str(path) for path in _pyinstaller_output_candidates(dist_dir, app_name))
+    raise FileNotFoundError(f"未找到打包产物，已检查:\n - {searched}")
 
 
 def _iter_release_output_files(output_path: Path):
     if output_path.is_file():
         yield output_path, Path(output_path.name)
         return
-    for file_path in output_path.rglob("*"):
-        if file_path.is_file():
-            yield file_path, Path(output_path.name) / file_path.relative_to(output_path)
+
+    if output_path.is_dir():
+        root_parent = output_path.parent
+        for file_path in output_path.rglob("*"):
+            if file_path.is_file():
+                yield file_path, file_path.relative_to(root_parent)
+        return
+
+    raise FileNotFoundError(f"未找到打包产物: {output_path}")
 
 
 def _steamworks_runtime_files(project_root: Path) -> list[Path]:
@@ -239,9 +255,9 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         steamworkspy_source_dir = _resolve_steamworkspy_source_dir(project_root)
         if not os.path.exists(main_file): raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
         
+        print("正在生成版本信息...")
+        # Windows 才需要版本资源；macOS/Linux 传入该参数没有收益，反而容易造成打包失败。
         if _is_windows():
-            # Windows 才需要版本资源；macOS/Linux 传入该参数没有收益，反而容易造成打包失败。
-            print("正在生成版本信息...")
             version_file_path = create_version_file(
                 version=version,
                 company_name=company,
@@ -255,8 +271,6 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         steamworks_data_args = []
         for runtime_file in _steamworks_runtime_files(project_root):
             steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
-        bundle_mode_arg = "-D" if _is_macos() else "-F"
-
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
         # 但在 PyInstaller 单文件模式下，命名空间插件和动态加载模块经常会漏收。
@@ -264,7 +278,6 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         # Unknown encoding cl100k_base / Plugins found: []
         pyinstaller_args = [
             "uv", "run", "pyinstaller", # 使用uv运行pyinstaller
-            bundle_mode_arg,
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
             "--paths", str(steamworkspy_source_dir),
@@ -288,15 +301,24 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "-n", name,  # 指定名称
             main_file  # 主程序文件
         ]
+        if _is_macos():
+            pyinstaller_args.insert(3, "-D")
+        else:
+            pyinstaller_args.insert(3, "-F")
         cmd = pyinstaller_args
-        if upx_dir_path:
+        if upx_dir_path and _is_windows():
             cmd.extend(["--upx-dir", upx_dir_path])
         if icon_path and os.path.exists(icon_path):
-            cmd.extend(["-i", icon_path])
-        if _is_windows() and splash_path and os.path.exists(splash_path):
+            if not _is_macos() or Path(icon_path).suffix.lower() == ".icns":
+                cmd.extend(["-i", icon_path])
+            else:
+                print(f"提示: macOS 打包已跳过非 .icns 图标: {icon_path}")
+        if splash_path and os.path.exists(splash_path) and _is_windows():
             cmd.extend(["--splash", splash_path])
         if version_file_path:
             cmd.extend(["--version-file", version_file_path])
+        if _is_macos():
+            cmd.extend(["--osx-bundle-identifier", "com.inkyfeather.rimcrow"])
         
         env = os.environ.copy()
         _append_pythonpath(env, steamworkspy_source_dir)
@@ -306,13 +328,10 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         build_log_path = Path("dist") / "pyinstaller-build.log"
         returncode = _run_command_with_log(cmd, build_log_path, env=env)
         if returncode == 0:
-            try:
-                output_path = _resolve_pyinstaller_output(Path("dist"), name)
-            except FileNotFoundError:
-                output_path = next(_pyinstaller_output_candidates(Path("dist"), name))
+            output_path = _resolve_pyinstaller_output(Path("dist"), name)
             print("\n" + "="*30)
             print("★ 打包成功！")
-            print(f"★ 输出文件: {output_path}")
+            print(f"★ 输出产物: {output_path}")
             print(f"★ 构建日志: {build_log_path.resolve()}")
             print("="*30 + "\n")
             return True
@@ -389,7 +408,7 @@ def _iter_data_files(data_dir: Path):
             print(f"警告: 发布数据文件缺失，已跳过 {file_path}")
 
 def create_release_zip(app_name: str, version: str):
-    """基于 PyInstaller 产物生成发布压缩包，并附带运行所需的外部资源。"""
+    """基于 dist 中的平台产物生成发布压缩包，并附带运行所需的外部资源。"""
     project_root = Path(__file__).resolve().parent
     dist_dir = project_root / "dist"
     output_path = _resolve_pyinstaller_output(dist_dir, app_name)
