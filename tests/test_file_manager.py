@@ -11,7 +11,7 @@ from unittest.mock import patch
 from PIL import Image
 from webview.util import parse_file_type
 
-from backend.managers.mgr_files import FileManager, LocalAssetHandler
+from backend.managers.mgr_files import FileManager, LocalAssetHandler, PathChecker
 from backend.utils.tools import normalize_path_for_storage
 
 
@@ -182,6 +182,32 @@ class TestFileManager(unittest.TestCase):
             self.assertEqual(payload["source_paths"], [expected_source])
             self.assertEqual(payload["success_paths"], [expected_success])
             self.assertEqual(payload["size_check_paths"], [expected_source, expected_success])
+
+    def test_check_steam_path_accepts_macos_steam_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_root))
+
+            self.assertTrue(result["pass"])
+            self.assertIn("steam_osx", result["msg"])
+
+    def test_check_steamcmd_path_accepts_unix_shell_entry(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.sh"
+            steamcmd_root.mkdir(parents=True, exist_ok=True)
+            steamcmd_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertIn("steamcmd.sh", result["msg"])
 
 
 if __name__ == "__main__":

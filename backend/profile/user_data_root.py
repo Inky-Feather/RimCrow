@@ -1,20 +1,16 @@
 import os
-import platform
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
+
+from backend.paths.core import canonicalize_path_text, path_key
 
 
 def _canonicalize_path(raw_path: str) -> str:
     value = str(raw_path or "").strip()
     if not value:
         raise ValueError("用户数据路径不能为空")
-    return os.path.normpath(os.path.abspath(value))
-
-
-def _path_key(path: str) -> str:
-    normalized = os.path.normpath(str(path or ""))
-    return normalized.lower() if platform.system() == "Windows" else normalized
+    return canonicalize_path_text(value)
 
 
 @dataclass(frozen=True)
@@ -34,7 +30,7 @@ class UserDataRoot:
         normalized = _canonicalize_path(raw_path)
         fixed_root = cls._try_fix_default_like_path(normalized, default_roots or [])
         if fixed_root:
-            return cls(root_path=fixed_root, was_corrected=_path_key(fixed_root) != _path_key(normalized))
+            return cls(root_path=fixed_root, was_corrected=path_key(fixed_root) != path_key(normalized))
         if cls._looks_like_child_path(normalized):
             raise ValueError("user_data_path 必须指向用户数据根目录，不能直接指向 Config、Saves 或 ModsConfig.xml")
         return cls(root_path=normalized, was_corrected=False)
@@ -47,11 +43,11 @@ class UserDataRoot:
             config_dir = os.path.join(default_root, "Config")
             saves_dir = os.path.join(default_root, "Saves")
             mods_config = os.path.join(config_dir, "ModsConfig.xml")
-            if _path_key(normalized_path) in {
-                _path_key(default_root),
-                _path_key(config_dir),
-                _path_key(saves_dir),
-                _path_key(mods_config),
+            if path_key(normalized_path) in {
+                path_key(default_root),
+                path_key(config_dir),
+                path_key(saves_dir),
+                path_key(mods_config),
             }:
                 return default_root
         return ""
@@ -68,7 +64,7 @@ class UserDataRoot:
         return False
 
     def equivalent_to(self, other_path: str) -> bool:
-        return _path_key(self.root_path) == _path_key(_canonicalize_path(other_path))
+        return path_key(self.root_path) == path_key(_canonicalize_path(other_path))
 
     @property
     def config_dir(self) -> str:

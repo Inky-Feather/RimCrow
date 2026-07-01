@@ -19,6 +19,7 @@ from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
+from backend.paths.game_locations import resolve_steamcmd_executable_path
 from backend.text_search.tooling import get_ripgrep_status
 from backend.settings import settings
 from backend.utils.logger import logger
@@ -91,7 +92,8 @@ class MaintenanceManager:
             else str(self.steam_mgr.steamcmd_dir or "").strip()
         )
         steamcmd_dir = Path(steamcmd_path) if steamcmd_path else None
-        steamcmd_exe = steamcmd_dir / ("steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh") if steamcmd_dir else None
+        steamcmd_exe_path = resolve_steamcmd_executable_path(steamcmd_path, system_name=platform.system()) if steamcmd_path else ""
+        steamcmd_exe = Path(steamcmd_exe_path) if steamcmd_exe_path else None
         steamcmd_installed = bool(steamcmd_exe and steamcmd_exe.exists())
         steamcmd_initialized = bool(steamcmd_dir and (steamcmd_dir / "public").exists())
         steamcmd_ready = steamcmd_installed and steamcmd_initialized

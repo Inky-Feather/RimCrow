@@ -20,6 +20,7 @@ import webview # 引入 webview 库
 from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
+from backend.paths.game_locations import resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
@@ -1817,9 +1818,20 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="未指定 Steam 路径")
-        exe_path = Path(path_str) / "steam.exe"
-        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{exe_path}")
+        if not path_str:
+            return cls._format_res(False, msg="未指定 Steam 路径")
+        steam_root = Path(path_str)
+        if not steam_root.exists():
+            return cls._format_res(False, msg="Steam 路径不存在")
+
+        system_name = platform.system()
+        resolved_executable = resolve_steam_executable_path(path_str, system_name=system_name)
+        if resolved_executable:
+            return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{resolved_executable}")
+        if system_name == "Linux":
+            return cls._format_res(True, data=path_str, msg=f"Steam 根目录：{steam_root}")
+        if system_name == "Darwin":
+            return cls._format_res(False, msg="路径下未找到 Steam.app/Contents/MacOS/steam_osx", msg_type="warn")
         return cls._format_res(False, msg="路径下未找到 steam.exe", msg_type="warn")
     
     @classmethod
@@ -1839,9 +1851,11 @@ class PathChecker:
         result = pattern.search(path_str)
         if result: return cls._format_res(False, msg="SteamCMD 路径不能包含中文")
         
-        exe_path = Path(path_str) / "steamcmd.exe"
-        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
-        return cls._format_res(False, msg="路径下未找到 steamcmd.exe", msg_type="warn")
+        exe_path = Path(resolve_steamcmd_executable_path(path_str, system_name=platform.system()))
+        if exe_path.exists():
+            return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
+        expected_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
+        return cls._format_res(False, msg=f"路径下未找到 {expected_name}", msg_type="warn")
 
     @classmethod
     def check_texture_tools_path(cls, path_str: str) -> Dict:
@@ -1860,6 +1874,8 @@ class PathChecker:
         exe_path = path / "todds.exe"
         if exe_path.exists():
             return cls._format_res(True, data=path_str, msg=f"贴图工具：{exe_path}")
+        if platform.system() != "Windows":
+            return cls._format_res(False, msg="当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持", msg_type="warn")
         return cls._format_res(False, msg="目录下未找到 todds.exe，可在外部工具检查中下载安装", msg_type="warn")
 
     @classmethod
@@ -1932,6 +1948,5 @@ class PathChecker:
         
     
 file_mgr = FileManager()
-
 
 
