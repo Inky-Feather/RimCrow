@@ -195,6 +195,34 @@ class TestFileManager(unittest.TestCase):
 
             self.assertTrue(result["pass"])
             self.assertIn("steam_osx", result["msg"])
+            self.assertEqual(result["data"], str(steam_root))
+
+    def test_check_steam_path_accepts_macos_app_bundle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_app = steam_root / "Steam.app"
+            steam_exe = steam_app / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_app))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["data"], str(steam_root))
+
+    def test_check_steam_path_accepts_macos_steam_osx(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_exe))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["data"], str(steam_root))
 
     def test_check_steamcmd_path_accepts_unix_shell_entry(self):
         with tempfile.TemporaryDirectory() as temp_dir:

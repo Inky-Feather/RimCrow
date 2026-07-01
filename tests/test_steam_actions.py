@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.managers.mgr_steam import SteamManager
+from backend.paths.game_locations import normalize_steam_root
 from backend.settings import settings
 
 
@@ -82,6 +83,71 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertEqual(manager.steamcmd_exe, str(steamcmd_root / "steamcmd.exe"))
         self.assertIsNone(manager._cached_cmd_map)
         self.assertEqual(manager._last_cmd_log_mtime, 0)
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Darwin")
+    def test_reload_paths_from_settings_normalizes_macos_app_bundle_to_root(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        steam_root = temp_root / "Steam"
+        steam_app = steam_root / "Steam.app"
+        steam_exe = steam_app / "Contents" / "MacOS" / "steam_osx"
+        steamcmd_root = temp_root / "steamcmd"
+        steam_exe.parent.mkdir(parents=True, exist_ok=True)
+        steam_exe.write_text("", encoding="utf-8")
+        steamcmd_root.mkdir()
+
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = "old"
+        manager._cached_cmd_map = {"old": True}
+        manager._last_cmd_log_mtime = 1
+        manager._last_cmd_acf_mtime = 1
+        manager._last_acf_mtime = 1
+        manager._last_log_mtime = 1
+        manager._cached_merged_data = [{"old": True}]
+        manager.get_steam_path = lambda exe=False: ""
+
+        with patch.object(settings.config, "steam_path", str(steam_app)), \
+             patch.object(settings.config, "steamcmd_path", str(steamcmd_root)):
+            result = manager.reload_paths_from_settings()
+
+        self.assertEqual(result["steam_dir"], str(steam_root))
+        self.assertEqual(result["steam_exe"], str(steam_exe))
+
+    @patch("backend.managers.mgr_steam.platform.system", return_value="Darwin")
+    def test_reload_paths_from_settings_normalizes_macos_executable_to_root(self, _platform_system):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(temp_root, ignore_errors=True))
+        steam_root = temp_root / "Steam"
+        steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+        steamcmd_root = temp_root / "steamcmd"
+        steam_exe.parent.mkdir(parents=True, exist_ok=True)
+        steam_exe.write_text("", encoding="utf-8")
+        steamcmd_root.mkdir()
+
+        manager = object.__new__(SteamManager)
+        manager.steamcmd_dir = "old"
+        manager._cached_cmd_map = {"old": True}
+        manager._last_cmd_log_mtime = 1
+        manager._last_cmd_acf_mtime = 1
+        manager._last_acf_mtime = 1
+        manager._last_log_mtime = 1
+        manager._cached_merged_data = [{"old": True}]
+        manager.get_steam_path = lambda exe=False: ""
+
+        with patch.object(settings.config, "steam_path", str(steam_exe)), \
+             patch.object(settings.config, "steamcmd_path", str(steamcmd_root)):
+            result = manager.reload_paths_from_settings()
+
+        self.assertEqual(result["steam_dir"], str(steam_root))
+        self.assertEqual(result["steam_exe"], str(steam_exe))
+
+    def test_normalize_steam_root_accepts_macos_app_bundle_and_executable(self):
+        app_path = "/Users/test/Library/Application Support/Steam/Steam.app"
+        exe_path = "/Users/test/Library/Application Support/Steam/Steam.app/Contents/MacOS/steam_osx"
+
+        with patch("backend.paths.game_locations.platform.system", return_value="Darwin"):
+            self.assertEqual(normalize_steam_root(app_path), "/Users/test/Library/Application Support/Steam")
+            self.assertEqual(normalize_steam_root(exe_path), "/Users/test/Library/Application Support/Steam")
 
     def test_steamworks_download_wrapper_uses_worker_payload_and_marker(self):
         manager = self.make_manager()

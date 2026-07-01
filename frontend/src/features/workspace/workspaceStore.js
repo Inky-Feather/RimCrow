@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
+import { buildWorkshopSteamUri, buildWorkshopWebUrl, dispatchSteamUri } from '../../shared/lib/steamUri'
 import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { RIMWORLD_STEAM_APP_ID, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
@@ -2423,10 +2424,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   // 打开Steam创意工坊
-  const openSteamWorkshopUrl = (workshop_id, on_steam=true) => {
-    if(!workshop_id) return
-    const steamUrl = on_steam ? `steam://url/CommunityFilePage/${workshop_id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshop_id}`
-    window.open(steamUrl, '_blank')
+  const openSteamWorkshopUrl = async (workshop_id, on_steam=true) => {
+    const normalizedId = String(workshop_id || '').trim()
+    if (!normalizedId) return false
+    if (!on_steam) {
+      window.open(buildWorkshopWebUrl(normalizedId), '_blank')
+      return true
+    }
+    return dispatchSteamUri(buildWorkshopSteamUri(normalizedId))
   }
 
   const searchCollectionsOnline = async (queryStr = '', isAppend = false) => {

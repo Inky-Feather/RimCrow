@@ -1,4 +1,5 @@
 import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
+import { buildWorkshopSteamUri, buildWorkshopWebUrl, dispatchSteamUri } from '../../../shared/lib/steamUri'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { normalizeInstallSource, normalizeInstallSources } from '../../../features/mod/lib/modIdentity'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
@@ -76,18 +77,23 @@ export const useSteamWorkshopActions = ({
   }
 
   // 打开Steam创意工坊
-  const openSteamWorkshopUrl = (url) => {
-    if(url) {
-      const steamUrl = url.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', 'steam://url/CommunityFilePage/')
-      window.open(steamUrl, '_blank')
-    }
+  const openSteamWorkshopUrl = async (url) => {
+    const normalizedUrl = String(url || '').trim()
+    if (!normalizedUrl) return false
+    const workshopId = normalizedUrl.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', '')
+    const steamUri = buildWorkshopSteamUri(workshopId)
+    if (!steamUri) return false
+    return dispatchSteamUri(steamUri)
   }
 
-  const openSteamWorkshopById = (id, openInSteam = true) => {
-    if(id) {
-      const steamUrl = openInSteam ? `steam://url/CommunityFilePage/${id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`
-      window.open(steamUrl, '_blank')
+  const openSteamWorkshopById = async (id, openInSteam = true) => {
+    const normalizedId = String(id || '').trim()
+    if (!normalizedId) return false
+    if (!openInSteam) {
+      openUrl?.(buildWorkshopWebUrl(normalizedId))
+      return true
     }
+    return dispatchSteamUri(buildWorkshopSteamUri(normalizedId))
   }
 
   const openInstallSource = (source) => {

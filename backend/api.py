@@ -52,7 +52,8 @@ from backend.i18n.language_registry import normalize_language_code
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
-from backend.platform.runtime import open_uri
+from backend.platform.runtime import is_windows, open_uri
+from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path
 
 
 TECHNICAL_ERROR_PATTERNS = (
@@ -3172,8 +3173,13 @@ class API:
             prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             is_steam_managed = bool(runtime_caps.get('is_steam_managed'))
             # 检查 Steam 路径是否有效，无效则尝试重新获取
+            if prefer_steam_launch and settings.config.steam_path:
+                settings.config.steam_path = normalize_steam_root(settings.config.steam_path)
             if prefer_steam_launch and not settings.config.steam_path:
                 settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
+            if prefer_steam_launch and settings.config.steam_path:
+                self.steam_mgr.steam_dir = settings.config.steam_path
+                self.steam_mgr.steam_exe = resolve_steam_executable_path(settings.config.steam_path)
             steam_path_valid = bool(
                 settings.config.steam_path
                 and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
@@ -3224,7 +3230,7 @@ class API:
                             session = runtime_session_mgr.begin_launch(profile_id, "steam", message="已尝试通过 Steam URL 启动，等待游戏进程确认。")
                             open_uri(f"steam://run/{RIMWORLD_STEAM_APP_ID_STR}")
                             return ApiResponse.warning(
-                                message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
+                                message="未定位到可直接启动的 Steam 客户端，已尝试通过系统协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
                                 data={"runtime_session": session},
                             )
                         except Exception as e:
@@ -3795,6 +3801,11 @@ class API:
         try:
             if not profile_id:
                 return ApiResponse.error("未指定 Profile ID")
+            if not is_windows():
+                return ApiResponse.warning(
+                    "当前平台暂不支持自动写入 Steam 非 Steam 快捷方式，请改用普通桌面快捷方式或手动在 Steam 中添加。",
+                    data={"action": "unsupported", "shortcut_kind": "unsupported_manual_only"},
+                )
 
             profile = self.profile_mgr.get_profile(profile_id)
             runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
@@ -4652,6 +4663,19 @@ class API:
         return ApiResponse.success({"url": target_url})
 
     @log_api_call
+    def open_system_uri(self, uri=''):
+        """通过系统分发 URI，供 Steam 等自定义协议统一复用。"""
+        target_uri = str(uri or "").strip()
+        if not target_uri:
+            return ApiResponse.error("没有可打开的链接。")
+        try:
+            open_uri(target_uri)
+            return ApiResponse.success({"uri": target_uri})
+        except Exception as e:
+            logger.warning("通过系统打开 URI 失败: uri=%s 错误=%s", target_uri, e, exc_info=True)
+            return ApiResponse.error("无法通过系统打开当前链接", code="URI.OPEN_FAILED", detail=e, context={"uri": target_uri}, user_message="无法通过系统打开当前链接。请确认系统协议关联正常或稍后重试。")
+
+    @log_api_call
     def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
         normalized_action = str(action or "").strip().lower()
         normalized_workshop_id = str(workshop_id or "").strip()
@@ -4985,12 +5009,10 @@ class API:
         if not normalized_id:
             return ApiResponse.error("未提供有效的 Workshop ID")
         steam_url = f"steam://url/CommunityFilePage/{normalized_id}"
-        try:
-            if webbrowser.open(steam_url):
-                return ApiResponse.success(message="已尝试在 Steam 客户端打开当前页面")
-        except Exception as e:
-            logger.warning("在 Steam 客户端打开工坊页面失败: workshop_id=%s 错误=%s", normalized_id, e)
-        return ApiResponse.error("无法在 Steam 客户端中打开当前页面")
+        response = self.open_system_uri(steam_url)
+        if response.get("status") == "success":
+            response["message"] = "已尝试在 Steam 客户端打开当前页面"
+        return response
     
     @log_api_call
     def steam_check_status(self, workshop_id: str):
