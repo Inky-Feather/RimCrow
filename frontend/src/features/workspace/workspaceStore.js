@@ -7,6 +7,7 @@ import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPer
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { RIMWORLD_STEAM_APP_ID, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
 import { matchesTranslationSourceDetection } from '../../shared/lib/translationDetection'
+import { openWorkshopPage } from '../../shared/lib/steamUri'
 import {
   dedupeNormalizedPackageIds, normalizeInstallSources,
   normalizePackageId, normalizeUrl, normalizeWorkshopId,
@@ -2425,8 +2426,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (workshop_id, on_steam=true) => {
     if(!workshop_id) return
-    const steamUrl = on_steam ? `steam://url/CommunityFilePage/${workshop_id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshop_id}`
-    window.open(steamUrl, '_blank')
+    void openWorkshopPage(workshop_id, on_steam)
   }
 
   const searchCollectionsOnline = async (queryStr = '', isAppend = false) => {

@@ -163,8 +163,8 @@ class TestSteamActionReadiness(unittest.TestCase):
 
         self.assertTrue(manager.is_steam_running())
 
-    @patch("backend.managers.mgr_steam.webbrowser.open", return_value=True)
-    def test_start_steam_uses_url_fallback_on_non_windows(self, webbrowser_open):
+    @patch("backend.managers.mgr_steam.open_system_uri", return_value=True)
+    def test_start_steam_uses_url_fallback_on_non_windows(self, open_system_uri):
         manager = self.make_manager()
         manager.is_steam_running = lambda: False
         manager.steam_exe = ""
@@ -173,7 +173,7 @@ class TestSteamActionReadiness(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["method"], "steam_url")
-        webbrowser_open.assert_called_once_with("steam://open/main")
+        open_system_uri.assert_called_once_with("steam://open/main")
 
     def test_steamworks_download_wrapper_uses_worker_payload_and_marker(self):
         manager = self.make_manager()

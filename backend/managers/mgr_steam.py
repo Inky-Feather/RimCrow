@@ -15,7 +15,6 @@ import importlib.util
 import uuid
 import struct
 import tempfile
-import webbrowser
 from dateutil import parser
 from typing import Any, cast
 from json_repair import repair_json
@@ -49,7 +48,7 @@ from backend.managers.mgr_download import TaskStatus
 from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.managers.mgr_game import GameManager
 from backend.utils.constants import RIMWORLD_APPWORKSHOP_NAME, RIMWORLD_STEAM_APP_ID_STR
-from backend.utils.tools import extract_zip
+from backend.utils.tools import extract_zip, open_system_uri
 
 STEAMCMD_DOWNLOAD_BATCH_SIZE = 25
 STEAMCMD_RETRY_BATCH_SIZE = 10
@@ -1342,7 +1341,7 @@ class SteamManager:
                 logger.warning(f"通过可执行文件启动 Steam 失败：{e}", exc_info=True)
 
         try:
-            if webbrowser.open("steam://open/main"):
+            if open_system_uri("steam://open/main"):
                 return {
                     "ok": True,
                     "method": "steam_url",
@@ -2231,7 +2230,7 @@ class SteamManager:
         # 如果找不到 Steam.exe，回退到原来的 URL 方式
         if not steam_exe or not os.path.exists(steam_exe) or steam_exe.lower().endswith(".app"):
             logger.warning("未找到可直接传参的 Steam 程序，回退到 URL 协议启动")
-            webbrowser.open(f"steam://run/{app_id}")
+            open_system_uri(f"steam://run/{app_id}")
             return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]

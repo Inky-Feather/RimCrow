@@ -46,6 +46,7 @@ from backend.utils.event_bus import EventBus
 from backend._version import __version__, __build__, get_all_changelogs
 from backend.utils.redaction import redact_sensitive_data
 from backend.utils.tools import normalize_companion_package_ids, normalize_package_id, normalize_path_for_compare, normalize_path_for_storage, normalize_workshop_id
+from backend.utils.tools import open_system_uri as open_uri_with_system_handler
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import normalize_language_code
@@ -3221,7 +3222,7 @@ class API:
                                     data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
                                 )
                             session = runtime_session_mgr.begin_launch(profile_id, "steam", message="已尝试通过 Steam URL 启动，等待游戏进程确认。")
-                            os.startfile(f"steam://run/{RIMWORLD_STEAM_APP_ID_STR}")
+                            open_uri_with_system_handler(f"steam://run/{RIMWORLD_STEAM_APP_ID_STR}")
                             return ApiResponse.warning(
                                 message="未检测到有效的 Steam 程序路径，已尝试通过 URL 协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
                                 data={"runtime_session": session},
@@ -4651,6 +4652,26 @@ class API:
         return ApiResponse.success({"url": target_url})
 
     @log_api_call
+    def open_system_uri(self, uri=''):
+        """通过系统协议处理器打开 URI。"""
+        target_uri = str(uri or "").strip()
+        if not target_uri:
+            return ApiResponse.error("没有可打开的链接。")
+        try:
+            if open_uri_with_system_handler(target_uri):
+                return ApiResponse.success({"uri": target_uri})
+        except Exception as e:
+            logger.warning("通过系统协议打开链接失败: uri=%s 错误=%s", target_uri, e, exc_info=True)
+            return ApiResponse.error(
+                "打开链接失败",
+                code="SYSTEM.URI_OPEN_FAILED",
+                detail=e,
+                context={"uri": target_uri},
+                user_message="打开链接失败。请确认系统已关联对应协议，详细原因已写入系统日志。",
+            )
+        return ApiResponse.error("打开链接失败。请确认系统已关联对应协议。")
+
+    @log_api_call
     def workshop_browser_action(self, action: str, workshop_id: str = "", target_url: str = ""):
         normalized_action = str(action or "").strip().lower()
         normalized_workshop_id = str(workshop_id or "").strip()
@@ -4985,7 +5006,7 @@ class API:
             return ApiResponse.error("未提供有效的 Workshop ID")
         steam_url = f"steam://url/CommunityFilePage/{normalized_id}"
         try:
-            if webbrowser.open(steam_url):
+            if open_uri_with_system_handler(steam_url):
                 return ApiResponse.success(message="已尝试在 Steam 客户端打开当前页面")
         except Exception as e:
             logger.warning("在 Steam 客户端打开工坊页面失败: workshop_id=%s 错误=%s", normalized_id, e)

@@ -2,7 +2,10 @@ import os
 import platform
 import re
 import shutil
+import subprocess
+import sys
 import time
+import webbrowser
 import zipfile
 import hashlib
 from pathlib import Path
@@ -160,6 +163,20 @@ def get_folder_size(path: str) -> int:
 def extract_zip(zip_path: str, target_dir: str) -> None:
     with zipfile.ZipFile(zip_path, "r") as archive:
         archive.extractall(target_dir)
+
+
+def open_system_uri(uri: Any) -> bool:
+    """用系统协议处理器打开 URI，覆盖 Steam 这类浏览器不稳定接管的协议。"""
+    target_uri = str(uri or "").strip()
+    if not target_uri:
+        return False
+    if sys.platform.startswith(("win32", "cygwin", "msys")) and hasattr(os, "startfile"):
+        os.startfile(target_uri)
+        return True
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", target_uri])
+        return True
+    return bool(webbrowser.open(target_uri))
 
 
 def normalize_package_id(package_id: Any) -> str:

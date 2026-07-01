@@ -62,6 +62,7 @@ import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonTagInput from '../../../shared/components/input/CommonTagInput.vue'
 import CommonKVEditor from '../../../shared/components/input/CommonKVEditor.vue'
+import { buildSteamOpenUrl, dispatchSteamUri } from '../../../shared/lib/steamUri'
 
 const props = defineProps({
   formData: { type: Object, required: true },
@@ -74,6 +75,6 @@ defineEmits(['preserve-secret', 'clear-secret'])
 const secretStatus = (secretKey) => props.formData?._secret_status?.[secretKey] || {}
 
 const openUrlOnSteam = (url) => {
-  window.open('steam://openurl/' + url, '_blank')
+  void dispatchSteamUri(buildSteamOpenUrl(url))
 }
 </script>

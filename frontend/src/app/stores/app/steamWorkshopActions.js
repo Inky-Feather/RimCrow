@@ -3,6 +3,7 @@ import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { normalizeInstallSource, normalizeInstallSources } from '../../../features/mod/lib/modIdentity'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useTaskStore } from '../taskStore'
+import { dispatchSteamUri, openWorkshopPage } from '../../../shared/lib/steamUri'
 
 export const useSteamWorkshopActions = ({
   openUrl,
@@ -79,14 +80,13 @@ export const useSteamWorkshopActions = ({
   const openSteamWorkshopUrl = (url) => {
     if(url) {
       const steamUrl = url.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', 'steam://url/CommunityFilePage/')
-      window.open(steamUrl, '_blank')
+      void dispatchSteamUri(steamUrl)
     }
   }
 
   const openSteamWorkshopById = (id, openInSteam = true) => {
     if(id) {
-      const steamUrl = openInSteam ? `steam://url/CommunityFilePage/${id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`
-      window.open(steamUrl, '_blank')
+      void openWorkshopPage(id, openInSteam)
     }
   }
 

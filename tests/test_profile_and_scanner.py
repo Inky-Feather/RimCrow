@@ -2303,14 +2303,33 @@ class TestApiGameLaunch(unittest.TestCase):
         config = SimpleNamespace(steam_path="")
         with patch("backend.api.settings.config", config), \
              patch("backend.api.PathChecker.check_steam_path", return_value={"pass": False}), \
-             patch("backend.api.os.startfile") as startfile:
+             patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "warning")
         self.assertIn("URL 协议启动", res["message"])
         self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
         api._ensure_runtime_links_for_launch.assert_not_called()
-        startfile.assert_called_once_with("steam://run/294100")
+        open_system_uri.assert_called_once_with("steam://run/294100")
+
+    def test_open_system_uri_routes_to_system_handler(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
+            res = API.open_system_uri(api, "steam://run/294100")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["uri"], "steam://run/294100")
+        open_system_uri.assert_called_once_with("steam://run/294100")
+
+    def test_steam_open_workshop_page_uses_system_uri_handler(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
+            res = API.steam_open_workshop_page(api, "1001")
+
+        self.assertEqual(res["status"], "success")
+        open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/1001")
 
     def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)
