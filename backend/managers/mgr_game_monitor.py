@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 
 import ctypes
 import psutil
+from backend.platform.runtime import monitoring_mode, supports_win32_ctypes
 from backend.settings import DATA_DIR
 from backend.settings import settings
 from backend.utils.logger import logger
@@ -38,13 +39,17 @@ class GameMonitor:
         self.running = False
         self.game_process_name = "RimWorldWin64.exe" 
         self.is_game_running = False
+        self.monitoring_mode = monitoring_mode()
         self.runtime_session = RuntimeSession()
         self.resume_url = None
         # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
         self.manual_override_idle = False 
-        # Windows API
-        self.psapi = ctypes.windll.psapi
-        self.kernel32 = ctypes.windll.kernel32
+        self.psapi = None
+        self.kernel32 = None
+        if supports_win32_ctypes():
+            # Windows API
+            self.psapi = ctypes.windll.psapi
+            self.kernel32 = ctypes.windll.kernel32
 
         # 准备静默页面的路径 (生成真实 html 文件，避免长字符串常驻内存)
         self.idle_home_page_path = str(DATA_DIR / 'idle.html')
@@ -184,6 +189,10 @@ class GameMonitor:
         return self.runtime_session, {"running": False, "runtime_session": self.runtime_session.to_dict()}
 
     def start(self):
+        if self.monitoring_mode == "disabled":
+            logger.info("[Monitor] 当前平台未启用游戏进程监控，跳过后台监控线程")
+            self.running = False
+            return
         self.running = True
         EventBus.resume()   # 恢复事件总线
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -309,6 +318,8 @@ class GameMonitor:
             EventBus.resume()
 
     def _trim_memory(self):
+        if not self.kernel32 or not self.psapi:
+            return
         try:
             pid = os.getpid()
             handle = self.kernel32.OpenProcess(0x001F0FFF, False, pid)
@@ -341,5 +352,4 @@ class GameMonitor:
         """静默模式下打开日志页。"""
         self._create_idle_pages()
         self._load_url_deferred(f"file://{self.idle_logs_page_path}")
-
 

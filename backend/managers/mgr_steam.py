@@ -45,6 +45,7 @@ from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
 from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.managers.mgr_game import GameManager
+from backend.platform.runtime import open_uri
 from backend.paths.core import path_key
 from backend.paths.game_locations import (
     get_default_steam_root_candidates,
@@ -1298,7 +1299,7 @@ class SteamManager:
 
         if platform.system() == "Windows":
             try:
-                os.startfile("steam://open/main")
+                open_uri("steam://open/main")
                 return {
                     "ok": True,
                     "method": "steam_url",
@@ -1308,8 +1309,7 @@ class SteamManager:
                 logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
         else:
             try:
-                opener = "open" if platform.system() == "Darwin" else "xdg-open"
-                subprocess.Popen([opener, "steam://open/main"])
+                open_uri("steam://open/main")
                 return {
                     "ok": True,
                     "method": "steam_url",
@@ -2173,12 +2173,7 @@ class SteamManager:
         # 如果找不到 Steam 可执行文件，回退到 URL 方式
         if not steam_exe or not os.path.exists(steam_exe):
             logger.warning("未找到 Steam 可执行文件，回退到 URL 协议启动")
-            if platform.system() == "Windows":
-                os.startfile(f"steam://run/{app_id}")
-            elif platform.system() == "Darwin":
-                subprocess.Popen(["open", f"steam://run/{app_id}"])
-            else:
-                subprocess.Popen(["xdg-open", f"steam://run/{app_id}"])
+            open_uri(f"steam://run/{app_id}")
             return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]

@@ -1161,7 +1161,7 @@ class TestSteamManagerPlatformGuards(unittest.TestCase):
         manager.steam_exe = ""
 
         with patch("backend.managers.mgr_steam.platform.system", return_value="Darwin"), \
-             patch("backend.managers.mgr_steam.subprocess.Popen") as popen:
+             patch("backend.platform.runtime.subprocess.Popen") as popen:
             SteamManager.launch_via_steam_cmd(manager, app_id="294100")
 
         popen.assert_called_once_with(["open", "steam://run/294100"])
@@ -2354,14 +2354,14 @@ class TestApiGameLaunch(unittest.TestCase):
         config = SimpleNamespace(steam_path="")
         with patch("backend.api.settings.config", config), \
              patch("backend.api.PathChecker.check_steam_path", return_value={"pass": False}), \
-             patch("backend.api.os.startfile", create=True) as startfile:
+             patch("backend.api.open_uri") as open_uri:
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "warning")
         self.assertIn("URL 协议启动", res["message"])
         self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
         api._ensure_runtime_links_for_launch.assert_not_called()
-        startfile.assert_called_once_with("steam://run/294100")
+        open_uri.assert_called_once_with("steam://run/294100")
 
     def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)
