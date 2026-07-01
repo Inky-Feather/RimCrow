@@ -13,6 +13,12 @@ class TestPackPyInstaller(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
 
+    def test_prepare_pyinstaller_env_forces_stdlib_distutils(self):
+        env = pack_pyinstaller._prepare_pyinstaller_env({"PATH": "/usr/bin"})
+
+        self.assertEqual(env["PATH"], "/usr/bin")
+        self.assertEqual(env["SETUPTOOLS_USE_DISTUTILS"], "stdlib")
+
     def _prepare_pack_root(self) -> None:
         (self.temp_dir / "submodules" / "SteamworksPy" / "steamworks").mkdir(parents=True)
         (self.temp_dir / "submodules" / "SteamworksPy" / "steamworks" / "__init__.py").write_text("", encoding="utf-8")

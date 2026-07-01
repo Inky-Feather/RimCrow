@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.managers.mgr_steam import SteamManager
-from backend.paths.game_locations import normalize_steam_root
+from backend.paths.game_locations import get_default_steam_root_candidates, normalize_steam_root
 from backend.settings import settings
 
 
@@ -171,12 +171,19 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertEqual(result["steam_exe"], str(steam_exe))
 
     def test_normalize_steam_root_accepts_macos_app_bundle_and_executable(self):
-        app_path = "/Users/test/Library/Application Support/Steam/Steam.app"
-        exe_path = "/Users/test/Library/Application Support/Steam/Steam.app/Contents/MacOS/steam_osx"
+        app_path = "/Applications/Steam.app"
+        exe_path = "/Applications/Steam.app/Contents/MacOS/steam_osx"
 
         with patch("backend.paths.game_locations.platform.system", return_value="Darwin"):
-            self.assertEqual(normalize_steam_root(app_path), "/Users/test/Library/Application Support/Steam")
-            self.assertEqual(normalize_steam_root(exe_path), "/Users/test/Library/Application Support/Steam")
+            self.assertEqual(normalize_steam_root(app_path), "/Applications")
+            self.assertEqual(normalize_steam_root(exe_path), "/Applications")
+
+    def test_default_steam_root_candidates_prefer_macos_applications_dirs(self):
+        with patch("backend.paths.game_locations.platform.system", return_value="Darwin"), \
+             patch("backend.paths.game_locations.os.path.expanduser", return_value="/Users/test"):
+            candidates = get_default_steam_root_candidates()
+
+        self.assertEqual(candidates, ["/Applications", "/Users/test/Applications"])
 
     @patch("backend.managers.mgr_steam.platform.system", return_value="Linux")
     def test_ensure_tools_uses_linux_steamcmd_archive(self, _platform_system):

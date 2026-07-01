@@ -82,7 +82,10 @@ def get_default_steam_root_candidates(system_name: str | None = None) -> list[st
         ])
     elif resolved_system_name == "Darwin":
         home = os.path.expanduser("~")
-        candidates.append(os.path.join(home, "Library", "Application Support", "Steam"))
+        candidates.extend([
+            "/Applications",
+            os.path.join(home, "Applications"),
+        ])
     else:
         home = os.path.expanduser("~")
         xdg_data_home = os.getenv("XDG_DATA_HOME")

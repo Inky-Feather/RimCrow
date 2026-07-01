@@ -24,6 +24,14 @@ def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
     env["PYTHONPATH"] = os.pathsep.join([*extra_paths, *existing_paths])
 
 
+def _prepare_pyinstaller_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(base_env or os.environ)
+    # uv 自带的 CPython 3.11.15 上，setuptools 69.x 的本地 distutils 接管会触发断言；
+    # 打包阶段强制退回 stdlib distutils，避免 PyInstaller 启动前就崩溃。
+    env["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
+    return env
+
+
 def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
     source_dir = project_root / "submodules" / "SteamworksPy"
     if not (source_dir / "steamworks" / "__init__.py").exists():
@@ -320,7 +328,7 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         if _is_macos():
             cmd.extend(["--osx-bundle-identifier", "com.inkyfeather.rimcrow"])
         
-        env = os.environ.copy()
+        env = _prepare_pyinstaller_env()
         _append_pythonpath(env, steamworkspy_source_dir)
 
         print(f"执行命令: {' '.join(cmd)}")
