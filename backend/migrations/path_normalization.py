@@ -37,6 +37,7 @@ def _normalize_optional_path(value: Any) -> str:
 
 def _normalize_asset_paths(asset: ModAsset) -> dict[str, Any]:
     payload: dict[str, Any] = {}
+    current_path = _path_text(getattr(asset, "path", ""))
     for key in ["path", "icon_path", "preview_path"]:
         current = _path_text(getattr(asset, key, ""))
         normalized = _normalize_optional_path(current)
@@ -51,8 +52,11 @@ def _normalize_asset_paths(asset: ModAsset) -> dict[str, Any]:
     if shadow_paths != list(getattr(asset, "shadow_paths", []) or []):
         payload["shadow_paths"] = shadow_paths
 
-    if "path" in payload:
-        payload["path_hash"] = generate_path_hash(payload["path"])
+    effective_path = str(payload.get("path") or current_path or "").strip()
+    if effective_path:
+        normalized_hash = generate_path_hash(effective_path)
+        if normalized_hash != str(getattr(asset, "path_hash", "") or ""):
+            payload["path_hash"] = normalized_hash
     return payload
 
 

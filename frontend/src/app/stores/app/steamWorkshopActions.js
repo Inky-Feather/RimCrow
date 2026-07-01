@@ -78,16 +78,18 @@ export const useSteamWorkshopActions = ({
 
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (url) => {
-    if(url) {
+    if (url) {
       const steamUrl = url.replace('https://steamcommunity.com/sharedfiles/filedetails/?id=', 'steam://url/CommunityFilePage/')
       void dispatchSteamUri(steamUrl)
     }
   }
 
   const openSteamWorkshopById = (id, openInSteam = true) => {
-    if(id) {
+    if (id) {
       void openWorkshopPage(id, openInSteam)
+      return true
     }
+    return false
   }
 
   const openInstallSource = (source) => {

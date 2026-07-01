@@ -9,8 +9,9 @@ from typing import Any
 from urllib.parse import urlparse
 from backend.managers.mgr_game_logs import GameLogManager
 from backend.managers.mgr_profile import ProfileContext
+from backend.paths.rimworld_layout import resolve_rimworld_layout
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
-from backend.utils.tools import generate_path_hash, get_folder_size, normalize_path_for_storage
+from backend.utils.tools import generate_path_hash, get_folder_size, normalize_path_for_storage, same_path
 from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, db
 
 # --- 模块测试准备 ---
@@ -223,10 +224,14 @@ class ModScanner:
                     metrics={'stage': 'indexing', 'current': 0, 'total': 0, 'title': '模组扫描'},
                 )
             mod_folders = [] # [(folder_path, is_dlc), ...]
+            official_data_root = str(getattr(self.context, "game_dlc_path", "") or "").strip()
+            install_layout = resolve_rimworld_layout(str(getattr(self.context, "game_install_path", "") or "").strip())
+            resource_data_root = install_layout.resource_data_root
             for base_path in valid_paths:
                 try:
-                    # 判断是否是 DLC 目录 (Data)
-                    is_data_dir = (os.path.basename(base_path).lower() == 'data')
+                    is_data_dir = bool(official_data_root and same_path(base_path, official_data_root))
+                    if resource_data_root and same_path(base_path, resource_data_root):
+                        is_data_dir = False
                     if not is_data_dir:
                         about_state = ModAnalyzer.resolve_mod_about_state(base_path, cleanup_dual_files=False)
                         if about_state.resolved_path:

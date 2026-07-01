@@ -11,6 +11,12 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from backend.paths.core import (
+    normalize_path_for_compare as core_normalize_path_for_compare,
+    normalize_path_for_storage as core_normalize_path_for_storage,
+    same_path as core_same_path,
+)
+
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
     """对字符串列表做保序去重。"""
     seen: set[str] = set()
@@ -93,18 +99,12 @@ def normalize_path_for_storage(path: Any) -> str:
     这个函数只处理本地文件系统路径，不负责 URL 或命令行参数。
     只做文本层面的绝对化，不解析符号链接或 Junction，避免把“链接位置”折叠成“链接目标”。
     """
-    raw_value = str(path or "").strip().strip('"')
-    if not raw_value:
-        return ""
-    expanded = os.path.expanduser(raw_value) if raw_value.startswith("~") else raw_value
-    expanded = os.path.expandvars(expanded)
-    return os.path.normpath(os.path.abspath(expanded))
+    return core_normalize_path_for_storage(path)
 
 
 def normalize_path_for_compare(path: Any) -> str:
     """生成路径比较用 key；Windows 下自动折叠大小写和分隔符。"""
-    normalized = normalize_path_for_storage(path)
-    return os.path.normcase(normalized) if normalized else ""
+    return core_normalize_path_for_compare(path)
 
 
 def normalize_dir_root_for_compare(path: Any) -> str:
@@ -133,9 +133,7 @@ def normalize_path_list_for_storage(values: Any) -> list[str]:
 
 def same_path(left: Any, right: Any) -> bool:
     """按当前系统规则判断两个路径是否指向同一文本规范化位置。"""
-    left_key = normalize_path_for_compare(left)
-    right_key = normalize_path_for_compare(right)
-    return bool(left_key and right_key and left_key == right_key)
+    return core_same_path(left, right)
 
 
 def get_folder_size(path: str) -> int:

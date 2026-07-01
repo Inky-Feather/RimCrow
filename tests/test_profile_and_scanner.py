@@ -20,6 +20,7 @@ from backend.managers.mgr_files import FileManager, PathChecker
 from backend.managers.mgr_game_monitor import RuntimeSession
 from backend.managers.mgr_profile import ProfileContext, ProfileManager
 from backend.managers.mgr_steam import SteamManager, run_steam_worker
+from backend.paths.rimworld_layout import normalize_rimworld_install_root, resolve_rimworld_layout
 from backend.settings import MODS_DIR, settings
 from backend.utils.profile_runtime import normalize_profile_runtime_flags, resolve_profile_runtime_capabilities
 from backend.migrations.app_upgrade import AppUpgradeResult, _migrate_profile_steam_runtime_flags
@@ -572,6 +573,80 @@ class TestProfileContext(unittest.TestCase):
         self.assertEqual(data["game_saves_path"], "")
         self.assertEqual(data["mods_config_file"], "")
 
+    def test_profile_context_uses_macos_bundle_data_root(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        (bundle_root / "Data" / "Core").mkdir(parents=True)
+
+        with patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            context = ProfileContext(
+                profile_id="default",
+                game_version="",
+                game_install_path=str(install_root),
+                user_data_path="",
+                prefer_steam_launch=False,
+                use_workshop_mods=False,
+                use_self_mods=False,
+            )
+
+        self.assertEqual(context.local_mods_path, str(install_root / "Mods"))
+        self.assertEqual(context.game_dlc_path, str(bundle_root / "Data"))
+
+    def test_profile_context_bundle_input_normalizes_derived_paths_to_install_root_layout(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        (bundle_root / "Data" / "Core").mkdir(parents=True)
+
+        with patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            context = ProfileContext(
+                profile_id="default",
+                game_version="",
+                game_install_path=str(bundle_root),
+                user_data_path="",
+                prefer_steam_launch=False,
+                use_workshop_mods=False,
+                use_self_mods=False,
+            )
+
+        self.assertEqual(context.local_mods_path, str(install_root / "Mods"))
+        self.assertEqual(context.game_dlc_path, str(bundle_root / "Data"))
+
+
+class TestRimWorldLayout(unittest.TestCase):
+    def test_resolve_macos_layout_prefers_bundle_data_and_exposes_resource_data(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        (bundle_root / "Data" / "Core").mkdir(parents=True)
+        (bundle_root / "Contents" / "Resources" / "Data").mkdir(parents=True)
+
+        with patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            layout = resolve_rimworld_layout(str(install_root))
+
+        self.assertEqual(layout.install_root, str(install_root))
+        self.assertEqual(layout.app_bundle_path, str(bundle_root))
+        self.assertEqual(layout.official_data_root, str(bundle_root / "Data"))
+        self.assertEqual(layout.core_root, str(bundle_root / "Data" / "Core"))
+        self.assertEqual(layout.resource_data_root, str(bundle_root / "Contents" / "Resources" / "Data"))
+        self.assertNotEqual(layout.official_data_root, layout.resource_data_root)
+
+    def test_normalize_install_root_maps_macos_bundle_to_parent_install_root(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        bundle_root.mkdir(parents=True)
+
+        with patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            normalized = normalize_rimworld_install_root(str(bundle_root))
+
+        self.assertEqual(normalized, str(install_root))
+
 
 class TestPathChecker(unittest.TestCase):
     def test_check_user_data_path_warns_when_mods_config_missing(self):
@@ -604,6 +679,21 @@ class TestPathChecker(unittest.TestCase):
         self.assertTrue(pending_check["pass"])
         self.assertEqual(pending_check["type"], "warn")
         self.assertFalse(PathChecker.check_workshop_path(str(invalid_root))["pass"])
+
+    def test_check_install_path_accepts_macos_app_bundle_and_reports_bundle_executable(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        (bundle_root / "Data" / "Core").mkdir(parents=True)
+
+        with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"), \
+             patch("backend.managers.mgr_game.platform.system", return_value="Darwin"), \
+             patch("backend.managers.mgr_game_install.platform.system", return_value="Darwin"):
+            result = PathChecker.check_install_path(str(bundle_root))
+
+        self.assertTrue(result["pass"])
+        self.assertEqual(result["data"]["game_exe"], str(bundle_root))
 
 
 class TestProfileRuntimeHelpers(unittest.TestCase):
@@ -811,6 +901,24 @@ class TestGameInstallInspector(unittest.TestCase):
         self.assertTrue(facts.is_steam)
         self.assertIn("probe_fallback:probe_error", facts.signals)
 
+    def test_find_macos_steam_api_when_inspecting_app_bundle_path(self):
+        install_root = self.temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        macos_dir = bundle_root / "Contents" / "MacOS"
+        plugin_dir = bundle_root / "Contents" / "PlugIns" / "steam_api.bundle" / "Contents" / "MacOS"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        macos_dir.mkdir(parents=True, exist_ok=True)
+        (bundle_root / "steam_appid.txt").write_text("294100", encoding="utf-8")
+        (macos_dir / "RimWorldMac").write_text("", encoding="utf-8")
+        target_lib = plugin_dir / "libsteam_api.dylib"
+        target_lib.write_text("", encoding="utf-8")
+
+        with patch("backend.managers.mgr_game_install.platform.system", return_value="Darwin"):
+            facts = GameInstallInspector().quick_inspect(str(bundle_root))
+
+        self.assertEqual(Path(facts.steam_api_path).resolve(), target_lib.resolve())
+        self.assertEqual(Path(facts.steam_appid_path).resolve(), (bundle_root / "steam_appid.txt").resolve())
+
     def test_probe_official_steam_api_uses_steam_worker_instead_of_python_c(self):
         install_root = self.temp_root / "RimWorld"
         install_root.mkdir(parents=True, exist_ok=True)
@@ -949,7 +1057,7 @@ class TestGameManager(unittest.TestCase):
         install_root.mkdir(parents=True, exist_ok=True)
 
         with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
-             patch("backend.managers.mgr_game.os.path.expanduser", return_value=str(fake_home)), \
+             patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)), \
              patch.object(GameManager, "_detect_userdata_path", return_value=""), \
              patch.object(GameManager, "detect_executable", return_value=str(install_root / "RimWorldLinux")):
             result = GameManager.auto_detect_paths()
@@ -959,15 +1067,40 @@ class TestGameManager(unittest.TestCase):
     def test_auto_detect_paths_finds_macos_default_steam_install(self):
         fake_home = self.temp_root / "home"
         install_root = fake_home / "Library" / "Application Support" / "Steam" / "steamapps" / "common" / "RimWorld"
+        (install_root / "Mods").mkdir(parents=True, exist_ok=True)
         install_root.mkdir(parents=True, exist_ok=True)
 
         with patch("backend.managers.mgr_game.platform.system", return_value="Darwin"), \
-             patch("backend.managers.mgr_game.os.path.expanduser", return_value=str(fake_home)), \
+             patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"), \
+             patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)), \
              patch.object(GameManager, "_detect_userdata_path", return_value=""), \
              patch.object(GameManager, "detect_executable", return_value=str(install_root / "RimWorldMac.app")):
             result = GameManager.auto_detect_paths()
 
         self.assertEqual(result["game_install_path"], normalize_path_for_storage(install_root))
+        self.assertEqual(result["local_mods_path"], normalize_path_for_storage(install_root / "Mods"))
+
+    def test_detect_executable_prefers_macos_app_bundle(self):
+        install_root = self.temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+
+        with patch("backend.managers.mgr_game.platform.system", return_value="Darwin"), \
+             patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            result = GameManager.detect_executable(str(install_root))
+
+        self.assertEqual(result, str(bundle_root))
+
+    def test_detect_executable_accepts_macos_bundle_input(self):
+        install_root = self.temp_root / "RimWorld"
+        bundle_root = install_root / "RimWorldMac.app"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+
+        with patch("backend.managers.mgr_game.platform.system", return_value="Darwin"), \
+             patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            result = GameManager.detect_executable(str(bundle_root))
+
+        self.assertEqual(result, str(bundle_root))
 
     def test_auto_detect_paths_uses_steam_libraryfolders_fallback(self):
         steam_root = self.temp_root / "Steam"
@@ -1108,12 +1241,37 @@ class TestSteamManagerPlatformGuards(unittest.TestCase):
 
         with patch("backend.managers.mgr_steam.platform.system", return_value="Windows"), \
              patch("backend.managers.mgr_steam.winreg", fake_winreg), \
-             patch.object(GameManager, "_detect_steam_root_candidates", return_value=[str(steam_root)]):
+             patch("backend.managers.mgr_steam.get_default_steam_root_candidates", return_value=[str(steam_root)]):
             result = SteamManager.get_steam_path(manager)
             result_with_exe = SteamManager.get_steam_path(manager, with_exe=True)
 
         self.assertEqual(result, str(steam_root))
         self.assertEqual(result_with_exe, str(steam_root / "steam.exe"))
+
+    def test_get_steam_path_returns_macos_root_and_executable(self):
+        manager = SteamManager.__new__(SteamManager)
+        steam_root = self.temp_root / "Steam"
+        steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+        steam_exe.parent.mkdir(parents=True, exist_ok=True)
+        steam_exe.write_text("", encoding="utf-8")
+
+        with patch("backend.managers.mgr_steam.platform.system", return_value="Darwin"), \
+             patch("backend.managers.mgr_steam.get_default_steam_root_candidates", return_value=[str(steam_root)]):
+            result = SteamManager.get_steam_path(manager)
+            result_with_exe = SteamManager.get_steam_path(manager, with_exe=True)
+
+        self.assertEqual(result, str(steam_root))
+        self.assertEqual(result_with_exe, str(steam_exe))
+
+    def test_launch_via_steam_cmd_falls_back_to_open_on_macos(self):
+        manager = SteamManager.__new__(SteamManager)
+        manager.steam_exe = ""
+
+        with patch("backend.managers.mgr_steam.platform.system", return_value="Darwin"), \
+             patch("backend.platform.runtime.subprocess.Popen") as popen:
+            SteamManager.launch_via_steam_cmd(manager, app_id="294100")
+
+        popen.assert_called_once_with(["open", "steam://run/294100"])
 
 
 class TestAppUpgradeMigrations(unittest.TestCase):
@@ -1381,6 +1539,57 @@ class TestModScanner(unittest.TestCase):
         self.assertIsNotNone(mod_data)
         self.assertEqual(mod_data["package_id"], "ludeon.rimworld")
         self.assertEqual(mod_data["source"], "core")
+
+    def test_scan_paths_task_does_not_treat_macos_resources_data_as_official_dlc_root(self):
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_root = temp_root / "RimWorld"
+        official_data_root = install_root / "RimWorldMac.app" / "Data"
+        resource_data_root = install_root / "RimWorldMac.app" / "Contents" / "Resources" / "Data"
+        (official_data_root / "Core").mkdir(parents=True, exist_ok=True)
+        (resource_data_root / "Core").mkdir(parents=True, exist_ok=True)
+
+        context = ProfileContext(
+            profile_id="profile-a",
+            game_version="1.5.4100",
+            game_install_path=str(install_root),
+            user_data_path=str(temp_root / "userdata"),
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=False,
+        )
+        scanner = ModScanner(context)
+        scanner._process_single_mod = Mock(return_value=None)
+
+        with patch("backend.scanner.mod_scanner.db.connect"), \
+             patch("backend.scanner.mod_scanner.db.atomic", return_value=nullcontext()), \
+             patch("backend.scanner.mod_scanner.db.is_closed", return_value=True), \
+             patch("backend.scanner.mod_scanner.ModMaintenanceDAO.find_missing_mods", return_value={"deleted_mods": []}), \
+             patch("backend.scanner.mod_scanner.ModMaintenanceDAO.clean_invalid_shadow_paths", return_value=0), \
+             patch("backend.scanner.mod_scanner.SteamManager") as steam_manager_cls, \
+             patch("backend.scanner.mod_scanner.ModDAO.get_mod_snapshots", return_value={}), \
+             patch("backend.scanner.mod_scanner.ModDAO.batch_upsert_mods"), \
+             patch("backend.scanner.mod_scanner.ModDAO.batch_update_mods"), \
+             patch("backend.scanner.mod_scanner.ModDAO.batch_update_shadow_paths"), \
+             patch("backend.scanner.mod_scanner.ModDAO.get_profile_conflict_analysis", return_value={"hard_conflicts": [], "coexistences": []}), \
+             patch("backend.scanner.mod_scanner.DLCParser"), \
+             patch("backend.scanner.mod_scanner.ModAnalyzer.resolve_mod_about_state", return_value=SimpleNamespace(resolved_path="", is_disabled=False)), \
+             patch("backend.scanner.mod_scanner.EventBus.emit_progress"), \
+             patch("backend.scanner.mod_scanner.EventBus.emit"), \
+             patch("backend.paths.rimworld_layout.platform.system", return_value="Darwin"):
+            steam_manager_cls.return_value.reconcile_steamcmd_acf = Mock()
+            scanner._scan_paths_task(
+                "task-resource-data",
+                [str(resource_data_root)],
+                forced_update=True,
+                size_check_override=True,
+                size_check_paths=None,
+                residue_scan_enabled=False,
+            )
+
+        scanner._process_single_mod.assert_called_once()
+        self.assertFalse(scanner._process_single_mod.call_args.args[1])
 
     def test_gitlab_and_gitgud_urls_use_git_repo_source(self):
         temp_root = Path(tempfile.mkdtemp())
@@ -2307,7 +2516,7 @@ class TestApiGameLaunch(unittest.TestCase):
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "warning")
-        self.assertIn("URL 协议启动", res["message"])
+        self.assertIn("系统协议启动", res["message"])
         self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
         api._ensure_runtime_links_for_launch.assert_not_called()
         open_system_uri.assert_called_once_with("steam://run/294100")
@@ -2330,6 +2539,79 @@ class TestApiGameLaunch(unittest.TestCase):
 
         self.assertEqual(res["status"], "success")
         open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/1001")
+
+    def test_game_launch_normalizes_macos_steam_app_path_before_launch(self):
+        api = API.__new__(API)
+        profile = SimpleNamespace(
+            id="default",
+            game_install_path="/Games/RimWorld",
+            prefer_steam_launch=True,
+            is_steam=True,
+        )
+        api.profile_mgr = SimpleNamespace(
+            current_profile=profile,
+            get_profile=Mock(return_value=profile),
+            get_launch_args=Mock(return_value=[]),
+        )
+        api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value=""),
+            get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
+            launch_via_steam_cmd=Mock(),
+            steam_dir="",
+            steam_exe="",
+        )
+        api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
+            "steam_launch_enabled": True,
+            "is_steam": True,
+            "is_steam_managed": True,
+        })
+        api._prepare_profile_launch = Mock(return_value={"ok": True})
+
+        steam_root = "/Users/test/Library/Application Support/Steam"
+        steam_app = f"{steam_root}/Steam.app"
+        steam_exe = f"{steam_root}/Steam.app/Contents/MacOS/steam_osx"
+        config = SimpleNamespace(steam_path=steam_app)
+
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.normalize_steam_root", return_value=steam_root), \
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}), \
+             patch("backend.api.resolve_steam_executable_path", return_value=steam_exe):
+            res = API.game_launch(api, "default")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(config.steam_path, steam_root)
+        self.assertEqual(api.steam_mgr.steam_dir, steam_root)
+        self.assertEqual(api.steam_mgr.steam_exe, steam_exe)
+        api.steam_mgr.launch_via_steam_cmd.assert_called_once_with(extra_args=[])
+
+    def test_steam_open_workshop_page_uses_open_system_uri(self):
+        api = API.__new__(API)
+
+        with patch.object(api, "open_system_uri", return_value={"status": "success", "data": {"uri": "steam://url/CommunityFilePage/294100"}}) as open_system_uri:
+            res = API.steam_open_workshop_page(api, "294100")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["message"], "已尝试在 Steam 客户端打开当前页面")
+        open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/294100")
+
+    def test_open_system_uri_dispatches_via_runtime_helper(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.open_uri") as open_uri:
+            res = API.open_system_uri(api, "steam://open/main")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["uri"], "steam://open/main")
+        open_uri.assert_called_once_with("steam://open/main")
+
+    def test_profile_register_steam_shortcut_warns_on_non_windows(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.is_windows", return_value=False):
+            res = API.profile_register_steam_shortcut(api, "profile-a")
+
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["data"]["shortcut_kind"], "unsupported_manual_only")
 
     def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)

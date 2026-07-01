@@ -25,7 +25,6 @@
 │   │   ├──  runtime.py
 │   │   └──  workshop_selection.py
 │   │   
-│   ├── ·[environment]
 │   ├── ·[i18n]
 │   │   └──  language_registry.py
 │   │   
@@ -70,6 +69,14 @@
 │   │   ├──  app_relocation.py
 │   │   ├──  app_upgrade.py
 │   │   └──  path_normalization.py
+│   │   
+│   ├── ·[paths]
+│   │   ├──  core.py
+│   │   ├──  game_locations.py
+│   │   └──  rimworld_layout.py
+│   │   
+│   ├── ·[platform]
+│   │   └──  runtime.py
 │   │   
 │   ├── ·[profile]
 │   │   └──  user_data_root.py
@@ -311,6 +318,7 @@
 │   │           ├──  format.js
 │   │           ├──  markdown.js
 │   │           ├──  startupPerf.js
+│   │           ├──  steamUri.js
 │   │           ├──  text.js
 │   │           └──  translationDetection.js
 │   │           
@@ -327,7 +335,6 @@
 ├──  .gitignore
 ├──  .gitmodules
 ├──  .python-version
-├──  files_tree.txt
 ├──  icon.ico
 ├──  icon.svg
 ├──  LICENSE
