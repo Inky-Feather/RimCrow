@@ -1,11 +1,5 @@
 ·[RimModManager]
-├── ·[.claude]
-├── ·[.codegraph]
-├── ·[.cursor]
-├── ·[.history]
 ├── ·[.pytest_cache]
-├── ·[.ruff_cache]
-├── ·[.worktrees]
 ├── ·[backend]
 │   ├── ·[ai]
 │   │   ├──  __init__.py
@@ -34,7 +28,6 @@
 │   │   ├──  runtime.py
 │   │   └──  workshop_selection.py
 │   │   
-│   ├── ·[environment]
 │   ├── ·[i18n]
 │   │   ├──  __init__.py
 │   │   └──  language_registry.py
@@ -82,6 +75,16 @@
 │   │   ├──  app_relocation.py
 │   │   ├──  app_upgrade.py
 │   │   └──  path_normalization.py
+│   │   
+│   ├── ·[paths]
+│   │   ├──  __init__.py
+│   │   ├──  core.py
+│   │   ├──  game_locations.py
+│   │   └──  rimworld_layout.py
+│   │   
+│   ├── ·[platform]
+│   │   ├──  __init__.py
+│   │   └──  runtime.py
 │   │   
 │   ├── ·[profile]
 │   │   ├──  __init__.py
@@ -285,7 +288,6 @@
 │   │       │   └──  vue.svg
 │   │       │   
 │   │       ├── ·[branding]
-│   │       │   ├── ·[private-assets]
 │   │       │   ├──  brandProfile.js
 │   │       │   └──  BrandSignature.vue
 │   │       │   
@@ -331,6 +333,7 @@
 │   │           ├──  format.js
 │   │           ├──  markdown.js
 │   │           ├──  startupPerf.js
+│   │           ├──  steamUri.js
 │   │           ├──  text.js
 │   │           └──  translationDetection.js
 │   │           
@@ -412,13 +415,13 @@
 │       ├──  requirements.txt
 │       └──  setup.py
 │       
-├── ·[test]
 ├── ·[tests]
 │   ├──  __init__.py
 │   ├──  analyze_language_packs.py
 │   ├──  esm-js-loader.mjs
 │   ├──  frontend_matrix_item_state.mjs
 │   ├──  frontend_package_scope.mjs
+│   ├──  frontend_steam_uri_dispatch.mjs
 │   ├──  test_ai_assistant_runtime.py
 │   ├──  test_ai_attachment_resolver.py
 │   ├──  test_ai_gateway_request_compat.py
@@ -450,6 +453,7 @@
 │   ├──  test_mod_settings_manager.py
 │   ├──  test_multiplayer_compat_manager.py
 │   ├──  test_network_manager.py
+│   ├──  test_pack_pyinstaller.py
 │   ├──  test_profile_and_scanner.py
 │   ├──  test_recommendation_export_dialog.py
 │   ├──  test_recommendation_export_manager.py
