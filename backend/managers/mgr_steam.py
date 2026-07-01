@@ -50,6 +50,7 @@ from backend.managers.mgr_game import GameManager
 from backend.paths.core import path_key
 from backend.paths.game_locations import (
     get_default_steam_root_candidates,
+    normalize_steam_root,
     resolve_steam_executable_path,
     resolve_steamcmd_executable_path,
 )
@@ -776,7 +777,7 @@ class SteamManager:
         if self._initialized: return
         self._initialized = True
         # Steam 安装目录
-        self.steam_dir = settings.config.steam_path or self.get_steam_path()
+        self.steam_dir = normalize_steam_root(settings.config.steam_path, system_name=platform.system()) or self.get_steam_path()
         self.steam_exe = resolve_steam_executable_path(self.steam_dir, system_name=platform.system()) if self.steam_dir else (self.get_steam_path(True) or "")
         # SteamCMD 路径
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
@@ -824,7 +825,7 @@ class SteamManager:
     def reload_paths_from_settings(self):
         """配置保存或目录迁移后刷新运行时缓存的 Steam/SteamCMD 路径。"""
         old_steamcmd_dir = getattr(self, "steamcmd_dir", "")
-        self.steam_dir = settings.config.steam_path or self.get_steam_path()
+        self.steam_dir = normalize_steam_root(settings.config.steam_path, system_name=platform.system()) or self.get_steam_path()
         self.steam_exe = resolve_steam_executable_path(self.steam_dir, system_name=platform.system()) if self.steam_dir else (self.get_steam_path(True) or "")
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()

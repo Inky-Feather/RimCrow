@@ -2516,7 +2516,7 @@ class TestApiGameLaunch(unittest.TestCase):
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "warning")
-        self.assertIn("URL 协议启动", res["message"])
+        self.assertIn("系统协议启动", res["message"])
         self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
         api._ensure_runtime_links_for_launch.assert_not_called()
         open_system_uri.assert_called_once_with("steam://run/294100")
@@ -2539,6 +2539,79 @@ class TestApiGameLaunch(unittest.TestCase):
 
         self.assertEqual(res["status"], "success")
         open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/1001")
+
+    def test_game_launch_normalizes_macos_steam_app_path_before_launch(self):
+        api = API.__new__(API)
+        profile = SimpleNamespace(
+            id="default",
+            game_install_path="/Games/RimWorld",
+            prefer_steam_launch=True,
+            is_steam=True,
+        )
+        api.profile_mgr = SimpleNamespace(
+            current_profile=profile,
+            get_profile=Mock(return_value=profile),
+            get_launch_args=Mock(return_value=[]),
+        )
+        api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value=""),
+            get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
+            launch_via_steam_cmd=Mock(),
+            steam_dir="",
+            steam_exe="",
+        )
+        api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
+            "steam_launch_enabled": True,
+            "is_steam": True,
+            "is_steam_managed": True,
+        })
+        api._prepare_profile_launch = Mock(return_value={"ok": True})
+
+        steam_root = "/Users/test/Library/Application Support/Steam"
+        steam_app = f"{steam_root}/Steam.app"
+        steam_exe = f"{steam_root}/Steam.app/Contents/MacOS/steam_osx"
+        config = SimpleNamespace(steam_path=steam_app)
+
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.normalize_steam_root", return_value=steam_root), \
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}), \
+             patch("backend.api.resolve_steam_executable_path", return_value=steam_exe):
+            res = API.game_launch(api, "default")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(config.steam_path, steam_root)
+        self.assertEqual(api.steam_mgr.steam_dir, steam_root)
+        self.assertEqual(api.steam_mgr.steam_exe, steam_exe)
+        api.steam_mgr.launch_via_steam_cmd.assert_called_once_with(extra_args=[])
+
+    def test_steam_open_workshop_page_uses_open_system_uri(self):
+        api = API.__new__(API)
+
+        with patch.object(api, "open_system_uri", return_value={"status": "success", "data": {"uri": "steam://url/CommunityFilePage/294100"}}) as open_system_uri:
+            res = API.steam_open_workshop_page(api, "294100")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["message"], "已尝试在 Steam 客户端打开当前页面")
+        open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/294100")
+
+    def test_open_system_uri_dispatches_via_runtime_helper(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.open_uri") as open_uri:
+            res = API.open_system_uri(api, "steam://open/main")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["uri"], "steam://open/main")
+        open_uri.assert_called_once_with("steam://open/main")
+
+    def test_profile_register_steam_shortcut_warns_on_non_windows(self):
+        api = API.__new__(API)
+
+        with patch("backend.api.is_windows", return_value=False):
+            res = API.profile_register_steam_shortcut(api, "profile-a")
+
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["data"]["shortcut_kind"], "unsupported_manual_only")
 
     def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
         api = API.__new__(API)

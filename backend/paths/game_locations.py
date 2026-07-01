@@ -151,6 +151,32 @@ def resolve_steam_executable_path(steam_root: str, system_name: str | None = Non
     return ""
 
 
+def normalize_steam_root(path: str, system_name: str | None = None) -> str:
+    raw_value = normalize_path_for_storage(path)
+    if not raw_value:
+        return ""
+
+    resolved_system_name = _resolved_system_name(system_name)
+    target = Path(raw_value)
+
+    if resolved_system_name == "Darwin":
+        if target.name == "steam_osx" and target.parent.name == "MacOS":
+            app_bundle = target.parents[2]
+            if app_bundle.name == "Steam.app":
+                return normalize_path_for_storage(app_bundle.parent)
+        if target.name == "Steam.app":
+            return normalize_path_for_storage(target.parent)
+        return raw_value
+
+    if resolved_system_name == "Windows" and target.name.lower() == "steam.exe":
+        return normalize_path_for_storage(target.parent)
+
+    if resolved_system_name != "Windows" and target.name in {"steam.sh", "steam"}:
+        return normalize_path_for_storage(target.parent)
+
+    return raw_value
+
+
 def resolve_steamcmd_executable_path(steamcmd_dir: str, system_name: str | None = None) -> str:
     root = str(steamcmd_dir or "").strip()
     if not root:

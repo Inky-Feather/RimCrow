@@ -20,7 +20,7 @@ import webview # 引入 webview 库
 from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
-from backend.paths.game_locations import resolve_steam_executable_path, resolve_steamcmd_executable_path
+from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
@@ -1821,16 +1821,17 @@ class PathChecker:
         """
         if not path_str:
             return cls._format_res(False, msg="未指定 Steam 路径")
-        steam_root = Path(path_str)
+        normalized_root = normalize_steam_root(path_str, system_name=platform.system())
+        steam_root = Path(normalized_root or path_str)
         if not steam_root.exists():
             return cls._format_res(False, msg="Steam 路径不存在")
 
         system_name = platform.system()
-        resolved_executable = resolve_steam_executable_path(path_str, system_name=system_name)
+        resolved_executable = resolve_steam_executable_path(str(steam_root), system_name=system_name)
         if resolved_executable:
-            return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{resolved_executable}")
+            return cls._format_res(True, data=str(steam_root), msg=f"Steam 客户端：{resolved_executable}")
         if system_name == "Linux":
-            return cls._format_res(True, data=path_str, msg=f"Steam 根目录：{steam_root}")
+            return cls._format_res(True, data=str(steam_root), msg=f"Steam 根目录：{steam_root}")
         if system_name == "Darwin":
             return cls._format_res(False, msg="路径下未找到 Steam.app/Contents/MacOS/steam_osx", msg_type="warn")
         return cls._format_res(False, msg="路径下未找到 steam.exe", msg_type="warn")
@@ -1949,4 +1950,3 @@ class PathChecker:
         
     
 file_mgr = FileManager()
-
