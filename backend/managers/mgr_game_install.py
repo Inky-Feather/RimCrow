@@ -14,6 +14,7 @@ from typing import Any
 from backend.managers.mgr_game import GameManager
 from backend.paths.core import canonicalize_path_text, path_key, unique_paths
 from backend.paths.game_locations import find_app_bundle_path
+from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.settings import BASE_RESOURCE_DIR, DATA_DIR
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.logger import logger
@@ -214,7 +215,7 @@ class GameInstallInspector:
 
     @staticmethod
     def _normalize_install_path(install_path: str) -> str:
-        return _canonicalize_path_text(install_path)
+        return normalize_rimworld_install_root(_canonicalize_path_text(install_path), system_name=platform.system())
 
     @staticmethod
     def _read_appid(path: Path) -> str:

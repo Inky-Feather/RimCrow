@@ -21,6 +21,7 @@ from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
 from backend.paths.game_locations import resolve_steam_executable_path, resolve_steamcmd_executable_path
+from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
@@ -1687,7 +1688,7 @@ class PathChecker:
         }
         """
         if not path_str: return cls._format_res(False, msg="安装路径不能为空")
-        path = Path(path_str)
+        path = Path(normalize_rimworld_install_root(path_str, system_name=platform.system()))
         if not path.exists(): return cls._format_res(False, msg="游戏安装路径不存在！")
         res = {}
         # 1. 检查执行文件
@@ -1948,5 +1949,4 @@ class PathChecker:
         
     
 file_mgr = FileManager()
-
 

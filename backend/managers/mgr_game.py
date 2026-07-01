@@ -18,6 +18,7 @@ from backend.paths.game_locations import (
     get_default_user_data_paths,
 )
 from backend.paths.core import unique_paths
+from backend.paths.rimworld_layout import normalize_rimworld_install_root, resolve_rimworld_layout
 from backend.utils.constants import RIMWORLD_APPMANIFEST_NAME, RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.tools import normalize_path_for_storage
 
@@ -78,14 +79,13 @@ class GameManager:
         if install_loc and os.path.exists(install_loc):
             paths['game_install_path'] = ''
             # 检测 可执行文件是否存在(多平台)
-            normalized_install = normalize_path_for_storage(install_loc)
+            normalized_install = normalize_rimworld_install_root(install_loc, system_name=platform.system())
             if cls.detect_executable(normalized_install):
                 paths['game_install_path'] = normalized_install
             
-            # 推导 Local Mods
-            local_mods = os.path.join(normalized_install, "Mods")
-            if os.path.exists(local_mods):
-                paths['local_mods_path'] = normalize_path_for_storage(local_mods)
+            layout = resolve_rimworld_layout(normalized_install, system_name=platform.system())
+            if layout.local_mods_root and os.path.exists(layout.local_mods_root):
+                paths['local_mods_path'] = layout.local_mods_root
             
             # 推导 Workshop Mods
             # Steam 结构: steamapps/common/RimWorld -> RimWorld 工坊内容目录
@@ -102,7 +102,15 @@ class GameManager:
     @staticmethod
     def detect_executable(install_path):
         """检测游戏可执行文件"""
-        return detect_rimworld_executable(install_path, system_name=platform.system()) or None
+        layout = resolve_rimworld_layout(install_path, system_name=platform.system())
+        normalized_install = normalize_rimworld_install_root(install_path, system_name=platform.system())
+        if not os.path.exists(normalized_install):
+            return None
+        if layout.app_bundle_path and os.path.exists(layout.app_bundle_path):
+            return layout.app_bundle_path
+        if layout.executable_path and os.path.exists(layout.executable_path):
+            return layout.executable_path
+        return detect_rimworld_executable(normalized_install, system_name=platform.system()) or None
     
     @classmethod
     def launch_game(cls, game_install_path, custom_args: list = []):
@@ -142,7 +150,8 @@ class GameManager:
     @staticmethod
     def get_game_version(game_install_path):
         """获取游戏版本号"""
-        version_file = os.path.join(game_install_path, 'Version.txt')
+        normalized_install = normalize_rimworld_install_root(game_install_path, system_name=platform.system())
+        version_file = os.path.join(normalized_install, 'Version.txt')
         if os.path.exists(version_file):
             try:
                 with open(version_file, 'r', encoding='utf-8-sig') as f: 
@@ -256,4 +265,3 @@ class GameManager:
     @staticmethod
     def _find_rimworld_from_steam_libraries(steam_root: str) -> str:
         return find_rimworld_install_from_steam(steam_root, system_name=platform.system())
-

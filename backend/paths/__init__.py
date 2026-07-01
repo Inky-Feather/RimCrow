@@ -17,6 +17,11 @@ from .game_locations import (
     resolve_steam_executable_path,
     resolve_steamcmd_executable_path,
 )
+from .rimworld_layout import (
+    RimWorldLayout,
+    normalize_rimworld_install_root,
+    resolve_rimworld_layout,
+)
 
 __all__ = [
     "canonicalize_path_text",
@@ -34,4 +39,7 @@ __all__ = [
     "get_default_user_data_paths",
     "resolve_steam_executable_path",
     "resolve_steamcmd_executable_path",
+    "RimWorldLayout",
+    "normalize_rimworld_install_root",
+    "resolve_rimworld_layout",
 ]
