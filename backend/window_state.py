@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, cast
 
+from backend.platform.runtime import is_windows
+
 MIN_WINDOW_WIDTH = 700
 MIN_WINDOW_HEIGHT = 450
 DEFAULT_WINDOW_WIDTH = 1400
@@ -61,7 +63,7 @@ class LaunchGeometry:
 
 def enable_per_monitor_dpi_awareness():
     """尽早启用每显示器 DPI 感知，避免多屏缩放下窗口尺寸被系统错换算。"""
-    if sys.platform != "win32":
+    if not is_windows():
         return
     try:
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
@@ -85,7 +87,7 @@ def enable_per_monitor_dpi_awareness():
 
 
 def get_current_displays() -> list[DisplayInfo]:
-    if sys.platform == "win32":
+    if is_windows():
         displays = _get_win32_displays()
         if displays:
             return displays

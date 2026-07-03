@@ -47,6 +47,13 @@ from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
 from backend.managers.mgr_steamcmd_core import SteamCMDController
 from backend.managers.mgr_game import GameManager
+from backend.paths.core import path_key
+from backend.paths.game_locations import (
+    get_default_steam_root_candidates,
+    normalize_steam_root,
+    resolve_steam_executable_path,
+    resolve_steamcmd_executable_path,
+)
 from backend.utils.constants import RIMWORLD_APPWORKSHOP_NAME, RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.tools import extract_zip, open_system_uri
 
@@ -770,8 +777,8 @@ class SteamManager:
         if self._initialized: return
         self._initialized = True
         # Steam 安装目录
-        self.steam_dir = settings.config.steam_path or self.get_steam_path()
-        self.steam_exe = str(Path(self.steam_dir) / "steam.exe") if self.steam_dir else self.get_steam_path(True) 
+        self.steam_dir = normalize_steam_root(settings.config.steam_path, system_name=platform.system()) or self.get_steam_path()
+        self.steam_exe = resolve_steam_executable_path(self.steam_dir, system_name=platform.system()) if self.steam_dir else (self.get_steam_path(True) or "")
         # SteamCMD 路径
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
@@ -813,13 +820,13 @@ class SteamManager:
         self._ensure_steamworks_runtime_environment()
 
     def _get_steamcmd_exe_path(self):
-        return os.path.join(self.steamcmd_dir, _steamcmd_executable_name())
+        return resolve_steamcmd_executable_path(self.steamcmd_dir, system_name=platform.system())
 
     def reload_paths_from_settings(self):
         """配置保存或目录迁移后刷新运行时缓存的 Steam/SteamCMD 路径。"""
         old_steamcmd_dir = getattr(self, "steamcmd_dir", "")
-        self.steam_dir = settings.config.steam_path or self.get_steam_path()
-        self.steam_exe = _resolve_steam_executable(self.steam_dir) or self.get_steam_path(True)
+        self.steam_dir = normalize_steam_root(settings.config.steam_path, system_name=platform.system()) or self.get_steam_path()
+        self.steam_exe = resolve_steam_executable_path(self.steam_dir, system_name=platform.system()) if self.steam_dir else (self.get_steam_path(True) or "")
         self.steamcmd_dir = settings.config.steamcmd_path or str(TOOLS_DIR / "steamcmd")
         self.steamcmd_exe = self._get_steamcmd_exe_path()
         os.makedirs(self.steamcmd_dir, exist_ok=True)
@@ -1347,6 +1354,8 @@ class SteamManager:
                     "method": "steam_url",
                     "used_url_fallback": True,
                 }
+        except Exception as e:
+            logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
         except Exception as e:
             logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
 
@@ -2183,53 +2192,28 @@ class SteamManager:
     
     def get_steam_path(self, with_exe=False):
         """检测 Steam 安装路径"""
-        candidates = []
-        if platform.system() == "Windows" and winreg is not None:
-            key_paths = [
-                r"SOFTWARE\WOW6432Node\Valve\Steam",
-                r"SOFTWARE\Valve\Steam",
-            ]
+        system_name = platform.system()
+        candidates = get_default_steam_root_candidates(system_name=system_name)
+        if system_name == "Windows" and winreg is None:
+            return None
 
-            # Windows 下 Steam 可能只写入当前用户注册表；最后再复用通用候选路径兜底。
-            for key_path in key_paths:
-                for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
-                    try:
-                        with winreg.OpenKey(root, key_path) as key:
-                            path, _ = winreg.QueryValueEx(key, "InstallPath")
-                        if path:
-                            candidates.append(str(path))
-                    except OSError:
-                        continue
-
-        candidates.extend(GameManager._detect_steam_root_candidates())
-        if platform.system() == "Darwin":
-            candidates.append("/Applications/Steam.app")
-        which_steam = shutil.which("steam")
-        if which_steam:
-            candidates.append(which_steam)
-        for steam_dir in GameManager._unique_paths(candidates):
-            steam_exe = _resolve_steam_executable(steam_dir)
+        for steam_dir in candidates:
+            steam_exe = resolve_steam_executable_path(steam_dir, system_name=system_name)
             if steam_exe:
-                if with_exe:
-                    return steam_exe
-                path = Path(steam_dir)
-                if path.is_dir() and path.suffix.lower() != ".app":
-                    return str(path)
+                return steam_exe if with_exe else str(Path(steam_dir))
 
-        if not with_exe:
-            for steam_dir in GameManager._unique_paths(candidates):
-                path = Path(steam_dir)
-                if path.exists() and path.is_dir() and path.suffix.lower() != ".app":
-                    return str(path)
-
-        logger.debug("未找到 Steam 安装路径。")
+        if system_name != "Windows":
+            for steam_dir in candidates:
+                if Path(steam_dir).exists():
+                    return None if with_exe else str(Path(steam_dir))
+        logger.debug("未找到 Steam InstallPath。")
         return None
 
     def launch_via_steam_cmd(self, app_id=RIMWORLD_STEAM_APP_ID_STR, extra_args=None):
         steam_exe = str(self.steam_exe) if self.steam_exe else None
-        # 如果找不到 Steam.exe，回退到原来的 URL 方式
-        if not steam_exe or not os.path.exists(steam_exe) or steam_exe.lower().endswith(".app"):
-            logger.warning("未找到可直接传参的 Steam 程序，回退到 URL 协议启动")
+        # 如果找不到 Steam 可执行文件，回退到 URL 方式
+        if not steam_exe or not os.path.exists(steam_exe):
+            logger.warning("未找到 Steam 可执行文件，回退到 URL 协议启动")
             open_system_uri(f"steam://run/{app_id}")
             return
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
@@ -2383,7 +2367,7 @@ class SteamManager:
     @staticmethod
     def _normalize_shortcut_path_value(value: Any) -> str:
         text = str(value or '').strip().strip('"')
-        return os.path.normcase(os.path.normpath(text)) if text else ''
+        return path_key(text, system_name=platform.system())
 
     def _load_shortcuts_file(self, shortcuts_path: str) -> dict[str, Any]:
         try:
@@ -2562,7 +2546,7 @@ class SteamManager:
         - 但不会稳定地把 appid 回写进 shortcuts.vdf
         """
         log_path = str((probe or {}).get("log_path") or '').strip()
-        exe_path = os.path.normcase(os.path.normpath(str((probe or {}).get("exe") or '').strip()))
+        exe_path = path_key(str((probe or {}).get("exe") or '').strip(), system_name=platform.system())
         start_offset = int((probe or {}).get("log_start_offset") or 0)
         if not log_path or not os.path.exists(log_path):
             return {
@@ -2588,7 +2572,7 @@ class SteamManager:
                     match = re.search(r'sanitize shortcut app id "([^"]+)": replacing \d+ with (\d+)', line, flags=re.I)
                     if not match:
                         continue
-                    candidate_exe = os.path.normcase(os.path.normpath(str(match.group(1) or '').strip()))
+                    candidate_exe = path_key(str(match.group(1) or '').strip(), system_name=platform.system())
                     if candidate_exe != exe_path:
                         continue
                     latest_appid = int(match.group(2))

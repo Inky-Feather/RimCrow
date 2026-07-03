@@ -20,6 +20,7 @@ from typing import Any, Callable
 from PIL import Image
 
 from backend.load_order.package_tokens import parse_package_token
+from backend.paths.core import path_key
 from backend.settings import DATA_DIR, TOOLS_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
@@ -238,7 +239,7 @@ class TextureTargetResolver:
     @staticmethod
     def _path_key(path: str) -> str:
         value = str(path or "").strip()
-        return os.path.normcase(os.path.abspath(value)) if value else ""
+        return path_key(os.path.abspath(value) if value else "", system_name=platform.system())
 
     @staticmethod
     def _has_texture_output(mod_path: str, *, include_zstd: bool = False) -> bool:
