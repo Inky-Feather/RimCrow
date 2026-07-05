@@ -199,6 +199,11 @@ class GameInstallRegistry:
 
 
 class GameInstallInspector:
+    UNITY_DATA_DIR_NAMES_BY_SYSTEM = {
+        "Windows": ("RimWorldWin64_Data", "RimWorldWin_Data"),
+        "Linux": ("RimWorldLinux_Data", "RimWorldWin64_Data", "RimWorldWin_Data"),
+    }
+
     _startup_prune_lock = threading.Lock()
     _startup_pruned = False
 
@@ -234,7 +239,7 @@ class GameInstallInspector:
 
     def _unity_data_dir_candidates(self, root: Path, executable_path: str) -> list[Path]:
         exe_path = Path(str(executable_path or ""))
-        names = list(GameManager.UNITY_DATA_DIR_NAMES_BY_SYSTEM.get(platform.system(), ()))
+        names = list(self.UNITY_DATA_DIR_NAMES_BY_SYSTEM.get(platform.system(), ()))
         if exe_path.stem:
             names.append(f"{exe_path.stem}_Data")
         return self._dedupe_paths([root / name for name in names])
