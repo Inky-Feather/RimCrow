@@ -18,18 +18,18 @@
               <h2 class="text-2xl font-black text-text-main tracking-wide">{{ modalTitle }}</h2>
               <p class="text-sm text-text-dim mt-1">
                 <template v-if="isUpgradeView">
-                  从 <span class="font-mono">{{ oldVersion }}</span> 跃升至 <span class="font-mono text-accent-primary font-bold">{{ currentVersion }}</span>
+                  {{ t('ui.update_modal.upgrade_prefix', '从') }} <span class="font-mono">{{ oldVersion }}</span> {{ t('ui.update_modal.upgrade_to', '跃升至') }} <span class="font-mono text-accent-primary font-bold">{{ currentVersion }}</span>
                 </template>
                 <template v-else>
-                  查看当前版本线的完整变更记录
+                  {{ t('ui.update_modal.full_history_desc', '查看当前版本线的完整变更记录') }}
                 </template>
               </p>
             </div>
           </div>
           
           <div class="flex items-center gap-2">
-            <common-switch v-model="showFullHistory" mini label="完整历史" class="w-35" />
-            <button class="modal-close-button" aria-label="关闭" @click="closeModal">
+            <common-switch v-model="showFullHistory" mini :label="t('ui.update_modal.full_history', '完整历史')" class="w-35" />
+            <button class="modal-close-button" :aria-label="t('common.close', '关闭')" @click="closeModal">
               <X class="size-4" />
             </button>
           </div>
@@ -38,7 +38,7 @@
         <!-- 滚动时间线区域 -->
         <div class="flex-1 overflow-y-auto p-5 custom-scrollbar relative z-10">
           <div v-if="displayedLogs.length === 0" class="text-center text-text-dim py-10">
-            没有找到更新记录...
+            {{ t('ui.update_modal.empty', '没有找到更新记录...') }}
           </div>
           <div v-else class="relative space-y-5 before:absolute before:inset-0 before:ml-3 before:h-full before:-left-[0.05rem] before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-text-main/10 before:to-transparent">
             <!-- 每一版的记录 -->
@@ -54,7 +54,7 @@
                   <span class="text-lg font-black font-mono text-text-main" :class="{'text-accent-primary drop-shadow-[0_0_5px_rgba(var(--rgb-accent-primary),0.8)]': idx === 0}">
                     v{{ log.version }}
                   </span>
-                  <span class="text-xs text-text-dim bg-bg-overlay/10 px-2 py-0.5 rounded-full">{{ log.date || '开发中' }}</span>
+                  <span class="text-xs text-text-dim bg-bg-overlay/10 px-2 py-0.5 rounded-full">{{ log.date || t('ui.update_modal.in_development', '开发中') }}</span>
                 </div>
                 <div class="space-y-4">
                   <section
@@ -88,7 +88,7 @@
         <footer class="px-8 py-4 border-t border-border-base/5 bg-bg-overlay/5 flex justify-end shrink-0 relative z-10">
           <button @click="closeModal" 
             class="px-8 py-2.5 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary text-sm font-bold rounded-xl shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.4)] hover:scale-105 active:scale-95 transition-all">
-            我知道了
+            {{ t('common.got_it', '我知道了') }}
           </button>
         </footer>
   </CommonModalShell>
@@ -102,6 +102,7 @@ import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { Bug, CircleFadingPlus, Dna, Zap, X } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
+import { t } from '../../shared/i18n'
 
 const appStore = useAppStore()
 const toast = useToast()
@@ -117,7 +118,7 @@ const currentVersion = computed(() => context.value.new_version || '0.0.0')
 const oldVersion = computed(() => context.value.old_version || '0.0.0')
 const allLogs = computed(() => context.value.changelog || [])
 const isUpgradeView = computed(() => !!context.value.version_changed && currentVersion.value !== oldVersion.value)
-const modalTitle = computed(() => isUpgradeView.value ? '版本升级成功' : '更新日志')
+const modalTitle = computed(() => isUpgradeView.value ? t('ui.update_modal.upgrade_success', '版本升级成功') : t('ui.update_modal.title', '更新日志'))
 
 // 监听弹窗打开动作
 watch(() => appStore.uiState.showUpdateModal, (isOpen) => {
@@ -167,7 +168,7 @@ const closeModal = () => {
   appStore.uiState.showUpdateModal = false
   // 可选：触发一个推荐扫描的通知
   if (context.value.pending_actions?.includes('recommend_scan')) {
-    toast.info("建议执行一次全量扫描，以应用新版本的核心引擎特性！", { timeout: 5000 })
+    toast.info(t('toast.update_modal.recommend_scan', '建议执行一次全量扫描，以应用新版本的核心引擎特性！'), { timeout: 5000 })
   }
 }
 

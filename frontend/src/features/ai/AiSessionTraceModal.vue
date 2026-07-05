@@ -1,7 +1,7 @@
 <template>
   <CommonModalShell
     :show="aiStore.traceModalState.visible"
-    title="会话请求链路"
+    :title="t('dialog.ai_trace.title', '会话请求链路')"
     :description="activeSession?.session_id || aiStore.traceModalState.sessionId"
     size="page"
     :z-index="140"
@@ -12,7 +12,7 @@
   >
     <template #header-actions>
       <button @click="refresh" class="rounded border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-xs text-text-dim transition-colors hover:text-accent-special">
-        刷新
+        {{ t('common.refresh', '刷新') }}
       </button>
     </template>
 
@@ -20,30 +20,30 @@
           <div class="grid h-full min-h-0 min-w-[64rem] grid-cols-[22rem_minmax(0,1fr)_24rem]">
           <!-- 左栏：会话概览与累计 token 指标 -->
           <div class="sidebar-surface min-h-0 overflow-y-auto p-4">
-            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">会话概览</div>
+	            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.session_overview', '会话概览') }}</div>
             <div v-if="!activeSession" class="modal-section-subtle px-4 py-6 text-center text-xs text-text-dim">
-              当前会话暂无链路数据
+	              {{ t('dialog.ai_trace.no_session_trace', '当前会话暂无链路数据') }}
             </div>
             <div v-else class="space-y-3 text-xs text-text-dim">
               <div class="modal-section-subtle p-3">
-                <div class="mb-2 text-sm font-bold text-text-main">{{ activeSession.title || '未命名会话' }}</div>
-                <div>所属助手：{{ activeSession.assistant_id || '未知' }}</div>
-                <div>当前模型：{{ sessionRequestMeta.model }}</div>
-                <div>当前随机性：{{ sessionRequestMeta.temperature }}</div>
-                <div>请求数量：{{ activeSession.request_count || 0 }}</div>
-                <div>会话状态：{{ activeSession.status || 'unknown' }}</div>
+	                <div class="mb-2 text-sm font-bold text-text-main">{{ activeSession.title || t('dialog.ai_trace.untitled_session', '未命名会话') }}</div>
+	                <div>{{ t('dialog.ai_trace.assistant', '所属助手：{assistant}', { assistant: activeSession.assistant_id || t('common.unknown', '未知') }) }}</div>
+	                <div>{{ t('dialog.ai_trace.model', '当前模型：{model}', { model: sessionRequestMeta.model }) }}</div>
+	                <div>{{ t('dialog.ai_trace.temperature', '当前随机性：{temperature}', { temperature: sessionRequestMeta.temperature }) }}</div>
+	                <div>{{ t('dialog.ai_trace.request_count', '请求数量：{count}', { count: activeSession.request_count || 0 }) }}</div>
+	                <div>{{ t('dialog.ai_trace.status', '会话状态：{status}', { status: activeSession.status || 'unknown' }) }}</div>
               </div>
               <div class="modal-section-subtle p-3">
                 <div class="mb-2 flex items-center gap-1 text-sm font-bold text-text-main">
-                  <span>消息累计</span>
-                  <button class="text-text-dim hover:text-accent-special transition-colors" v-tooltip="'这里显示的是这条消息对应请求的^^估算Token^^消耗量，包含固定说明、上下文、附件、用户输入和工具补充内容。'">
+	                  <span>{{ t('dialog.ai_trace.message_usage', '消息累计') }}</span>
+	                  <button class="text-text-dim hover:text-accent-special transition-colors" v-tooltip="t('dialog.ai_trace.message_usage_tip', '这里显示的是这条消息对应请求的^^估算Token^^消耗量，包含固定说明、上下文、附件、用户输入和工具补充内容。')">
                     <CircleHelp class="size-3.5" />
                   </button>
                 </div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between text-text-main">
                     <div class="flex items-center gap-1">
-                      <span>消息输入总计</span>
+	                      <span>{{ t('dialog.ai_trace.message_input_total', '消息输入总计') }}</span>
                       <button class="text-text-dim hover:text-accent-special transition-colors" v-tooltip="sessionMessageUsageTooltip">
                         <CircleHelp class="size-3.5" />
                       </button>
@@ -52,32 +52,32 @@
                   </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between pl-4">
-                      <span>主对话输入</span>
+	                      <span>{{ t('dialog.ai_trace.main_prompt_input', '主对话输入') }}</span>
                       <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.mainPromptTokens) }}</span>
                     </div>
                     <div class="text-[0.7rem] text-text-dim -mt-1">
                       <div v-if="sessionTokenSummary.promptTemplateTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>系统提示</span>
+	                        <span>{{ t('dialog.ai_trace.system_prompt', '系统提示') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.promptTemplateTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.memoryTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>会话记忆</span>
+	                        <span>{{ t('dialog.ai_trace.session_memory', '会话记忆') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.memoryTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.attachmentTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>附件信息</span>
+	                        <span>{{ t('dialog.ai_trace.attachments', '附件信息') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.attachmentTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.userInputTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>用户输入</span>
+	                        <span>{{ t('dialog.ai_trace.user_input', '用户输入') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.userInputTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.toolContextTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>工具调用</span>
+	                        <span>{{ t('dialog.ai_trace.tool_context', '工具调用') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.toolContextTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.forcedSummaryTokens > 0" class="flex items-center justify-between pl-8">
-                        <span>总结补充</span>
+	                        <span>{{ t('dialog.ai_trace.forced_summary', '总结补充') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.forcedSummaryTokens) }}</span>
                       </div>
                     </div>
@@ -85,7 +85,7 @@
 
                   <div class="flex items-center justify-between pt-1 text-text-main">
                     <div class="flex items-center gap-1">
-                      <span>消息输出总计</span>
+	                      <span>{{ t('dialog.ai_trace.message_output_total', '消息输出总计') }}</span>
                       <button class="text-text-dim hover:text-accent-special transition-colors" v-tooltip="sessionOutputUsageTooltip">
                         <CircleHelp class="size-3.5" />
                       </button>
@@ -94,20 +94,20 @@
                   </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between pl-4">
-                      <span>主回复输出</span>
+	                      <span>{{ t('dialog.ai_trace.main_completion_output', '主回复输出') }}</span>
                       <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.mainCompletionTokens) }}</span>
                     </div>
                     <div class="text-[0.7rem] text-text-dim -mt-1">
                       <div v-if="sessionTokenSummary.reasoningTokens > 0" class="flex items-center justify-between pl-8 ">
-                        <span>深度思考</span>
+	                        <span>{{ t('dialog.ai_trace.reasoning', '深度思考') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.reasoningTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.toolCallTokens > 0" class="flex items-center justify-between pl-8 ">
-                        <span>工具调用</span>
+	                        <span>{{ t('dialog.ai_trace.tool_calls', '工具调用') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.toolCallTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.answerTokens > 0" class="flex items-center justify-between pl-8 ">
-                        <span>回复正文</span>
+	                        <span>{{ t('dialog.ai_trace.answer_body', '回复正文') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.answerTokens) }}</span>
                       </div>
                     </div>
@@ -117,18 +117,18 @@
               </div>
               <div class="modal-section-subtle p-3">
                 <div class="mb-2 flex items-center gap-1 text-sm font-bold text-text-main">
-                  <span>补充指标</span>
+	                  <span>{{ t('dialog.ai_trace.extra_metrics', '补充指标') }}</span>
                   <button class="text-text-dim hover:text-accent-special transition-colors" v-tooltip="sessionRequestUsageTooltip">
                     <CircleHelp class="size-3.5" />
                   </button>
                 </div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between text-text-main">
-                    <span>总请求消耗</span>
+	                    <span>{{ t('dialog.ai_trace.request_total_usage', '总请求消耗') }}</span>
                     <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.requestTotalTokens) }}</span>
                   </div>
                   <div class="flex items-center justify-between">
-                    <span>工具轮次</span>
+	                    <span>{{ t('dialog.ai_trace.tool_rounds', '工具轮次') }}</span>
                     <span class="font-mono">{{ sessionTokenSummary.toolRounds }}</span>
                   </div>
                 </div>
@@ -139,12 +139,12 @@
           <!-- 中栏：统一时间轴，按请求顺序展开事件 -->
           <div class="content-surface min-h-0 overflow-y-auto overflow-x-hidden p-4">
             <div v-if="aiStore.traceModalState.isLoading" class="modal-section px-4 py-8 text-center text-sm text-text-dim">
-              正在加载链路...
+	              {{ t('dialog.ai_trace.loading', '正在加载链路...') }}
             </div>
             <div v-else>
-              <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">统一时间轴</div>
+	              <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.timeline', '统一时间轴') }}</div>
               <div v-if="!timelineItems.length" class="modal-section px-4 py-8 text-center text-sm text-text-dim">
-                当前会话没有可展示的链路数据
+	                {{ t('dialog.ai_trace.timeline_empty', '当前会话没有可展示的链路数据') }}
               </div>
               <div v-else class="relative space-y-4 pb-6 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-bg-overlay/10">
                 <div v-for="item in timelineItems" :key="item.id" class="relative pl-4" >
@@ -181,12 +181,12 @@
                     <pre v-if="item.body" class="whitespace-pre-wrap break-all text-xs text-text-dim">{{ item.body }}</pre>
 
                     <div v-if="item.reasoning" class="modal-section-subtle mt-3 p-3">
-                      <div class="mb-2 text-xs font-bold text-text-main">思考流</div>
+	                      <div class="mb-2 text-xs font-bold text-text-main">{{ t('dialog.ai_trace.reasoning_stream', '思考流') }}</div>
                       <pre class="whitespace-pre-wrap break-all text-xs text-text-dim">{{ item.reasoning }}</pre>
                     </div>
 
                     <details v-if="item.details" class="modal-section-subtle mt-3 p-2 text-[0.7rem] text-text-main">
-                      <summary class="cursor-pointer text-text-dim">查看原始数据</summary>
+	                      <summary class="cursor-pointer text-text-dim">{{ t('dialog.ai_trace.view_raw_data', '查看原始数据') }}</summary>
                       <pre class="mt-2 whitespace-pre-wrap break-all rounded border border-border-base/10 bg-bg-inset/60 p-2">{{ prettyJson(item.details) }}</pre>
                     </details>
                   </div>
@@ -197,7 +197,7 @@
 
           <!-- 右栏：当前选中会话的原始 JSON 面板 -->
           <div class="min-h-0 overflow-y-auto border-l border-border-base/10 bg-bg-muted/70 p-4">
-            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">原始 JSON</div>
+	            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.raw_json', '原始 JSON') }}</div>
             <pre class="whitespace-pre-wrap break-all rounded-2xl border border-border-base/10 bg-bg-inset/70 p-3 text-[0.7rem] text-text-main">{{ prettyJson(rawJsonPanel) }}</pre>
           </div>
           </div>
@@ -217,6 +217,7 @@ import {
   formatTokenCount,
   numberOrZero,
 } from './aiUsageTooltips'
+import { getCurrentLocale, t } from '../../shared/i18n'
 
 // -----------------------------------------------------------------
 // Store 依赖 (Stores)
@@ -235,10 +236,10 @@ const activeSession = computed(() => {
 const formatTime = (value) => {
   /** 把毫秒时间戳格式化为面板可读时间。 */
   const timestamp = Number(value)
-  if (!timestamp) return '未知时间'
+  if (!timestamp) return t('dialog.ai_trace.unknown_time', '未知时间')
   const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return '未知时间'
-  return date.toLocaleString('zh-CN', {
+  if (Number.isNaN(date.getTime())) return t('dialog.ai_trace.unknown_time', '未知时间')
+  return date.toLocaleString(getCurrentLocale(), {
     hour12: false,
     month: '2-digit',
     day: '2-digit',
@@ -316,34 +317,34 @@ const decorateTimelineItem = (item) => {
   const messageUsage = details?.message_usage && typeof details.message_usage === 'object' ? details.message_usage : {}
   const normalizedItem = { ...item }
   if (normalizedItem.kind === 'request') {
-    normalizedItem.metrics = [
-      {
-        label: '消息输入',
-        value: formatTokenMetric(numberOrZero(messageUsage?.user?.total_tokens)),
-      },
+	    normalizedItem.metrics = [
+	      {
+	        label: t('dialog.ai_trace.metric.message_input', '消息输入'),
+	        value: formatTokenMetric(numberOrZero(messageUsage?.user?.total_tokens)),
+	      },
     ]
   } else if (normalizedItem.kind === 'response') {
     normalizedItem.metrics = [
-      {
-        label: '主回复输出',
-        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_completion_tokens)),
-      },
-      {
-        label: '深度思考',
-        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_reasoning_completion_tokens)),
-      },
-      {
-        label: '工具调用',
-        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_tool_call_completion_tokens)),
-      },
-      {
-        label: '回复正文',
-        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_answer_completion_tokens)),
-      },
-      {
-        label: '消息输出总计',
-        value: formatTokenMetric(numberOrZero(messageUsage?.assistant?.total_tokens)),
-      },
+	      {
+	        label: t('dialog.ai_trace.main_completion_output', '主回复输出'),
+	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_completion_tokens)),
+	      },
+	      {
+	        label: t('dialog.ai_trace.reasoning', '深度思考'),
+	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_reasoning_completion_tokens)),
+	      },
+	      {
+	        label: t('dialog.ai_trace.tool_calls', '工具调用'),
+	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_tool_call_completion_tokens)),
+	      },
+	      {
+	        label: t('dialog.ai_trace.answer_body', '回复正文'),
+	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_answer_completion_tokens)),
+	      },
+	      {
+	        label: t('dialog.ai_trace.message_output_total', '消息输出总计'),
+	        value: formatTokenMetric(numberOrZero(messageUsage?.assistant?.total_tokens)),
+	      },
     ].filter(metric => metric.value !== '0 token')
   }
   return {
@@ -392,11 +393,11 @@ const sessionRequestMeta = computed(() => {
     : {}
   const rawTemperature = overrideConfig?.temperature
   const numericTemperature = Number(rawTemperature)
-  return {
-    model: String(latestTrace?.model || '未知'),
-    temperature: Number.isFinite(numericTemperature) ? `${numericTemperature.toFixed(1)}` : '默认',
-  }
-})
+	  return {
+	    model: String(latestTrace?.model || t('common.unknown', '未知')),
+	    temperature: Number.isFinite(numericTemperature) ? `${numericTemperature.toFixed(1)}` : t('common.default', '默认'),
+	  }
+	})
 
 const sessionMessageUsageTooltip = computed(() => buildUserMessageUsageTooltip({
   totalTokens: sessionTokenSummary.value.messageInputTotal,

@@ -198,7 +198,9 @@
       "loading": "Loading...",
       "move": "Move",
       "no_record": "No record",
-      "create": "Create"
+      "create": "Create",
+      "no_description": "No description",
+      "unknown_mod": "Unknown mod"
     },
     "issue": {
       "default": "Other issue",
@@ -2126,6 +2128,23 @@
       "provider": {
         "ai_default": "AI translation"
       }
+    },
+    "mod": {
+      "field": {
+        "authors": "Authors: {authors}",
+        "package_id": "Package ID: {packageId}",
+        "workshop_id": "Workshop ID: {workshopId}"
+      }
+    },
+    "update_modal": {
+      "empty": "No update records found...",
+      "full_history": "Full history",
+      "full_history_desc": "View the full changelog for the current version line",
+      "in_development": "In development",
+      "title": "Changelog",
+      "upgrade_prefix": "From",
+      "upgrade_success": "Version upgraded successfully",
+      "upgrade_to": "to"
     }
   },
   "tooltip": {
@@ -2646,6 +2665,27 @@
       },
       "apply_failed": "Failed to apply settings. The configuration may be invalid, a path may be inaccessible, or the configuration file may not be writable. Details have been written to the system log.",
       "save_failed": "Failed to save settings. The backend service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later."
+    },
+    "log_viewer": {
+      "global_scan_failed": "Global log scan failed. The log file may be temporarily unreadable, too large, or AI diagnosis context generation may have failed. Details were written to the system log.",
+      "no_log_file_selected": "No log file selected.",
+      "scan_complete_notice": "Compression complete: kept {tocCount} error summaries covering {repeatCount} errors; current usage is about {tokenText}.",
+      "scanning_all_logs": "Scanning the full log, please wait.",
+      "starting_ai_analysis": "{notice} Starting AI analysis."
+    },
+    "mod_alias_review": {
+      "no_valid_result": "This task has no valid results to apply yet",
+      "regenerate_failed": "Regeneration failed",
+      "regenerate_failed_detail": "Regeneration failed. Check AI settings, network connection, and current mod data, then retry.",
+      "regenerated": "[{name}] regenerated"
+    },
+    "recommendation_export": {
+      "completed": "Recommendation export complete",
+      "copied": "Recommendation text copied to clipboard",
+      "copy_failed": "Copy failed, possibly due to browser permission restrictions"
+    },
+    "update_modal": {
+      "recommend_scan": "Run a full scan to apply the new version's core engine features."
     }
   },
   "dialog": {
@@ -2787,6 +2827,469 @@
         "message": "Create a desktop shortcut for profile \"{name}\"?\nThe shortcut will use this profile's current launch mode and be placed on the desktop.\nIf this profile prefers Steam launch and its game path differs from the default profile, the manager will update Steam non-Steam game shortcut configuration and create a Steam protocol shortcut on the desktop. Steam must be fully closed before writing, and restarted afterwards for this to take effect.\nIf multiple profiles share the same game directory, the shortcut can only guarantee the launch target and arguments are correct. It cannot guarantee that directory links always match this profile.",
         "title": "Create desktop shortcut"
       }
+    },
+    "ai_trace": {
+      "answer_body": "Answer body",
+      "assistant": "Assistant: {assistant}",
+      "attachments": "Attachments",
+      "extra_metrics": "Extra metrics",
+      "forced_summary": "Forced summary",
+      "loading": "Loading trace...",
+      "main_completion_output": "Main response output",
+      "main_prompt_input": "Main conversation input",
+      "message_input_total": "Total message input",
+      "message_output_total": "Total message output",
+      "message_usage": "Message usage",
+      "message_usage_tip": "Shows the ^^estimated token^^ usage for this message request, including fixed instructions, context, attachments, user input, and tool-provided content.",
+      "metric": {
+        "message_input": "Message input"
+      },
+      "model": "Current model: {model}",
+      "no_session_trace": "No trace data for this session",
+      "raw_json": "Raw JSON",
+      "reasoning": "Reasoning",
+      "reasoning_stream": "Reasoning stream",
+      "request_count": "Requests: {count}",
+      "request_total_usage": "Total request usage",
+      "session_memory": "Session memory",
+      "session_overview": "Session overview",
+      "status": "Session status: {status}",
+      "system_prompt": "System prompt",
+      "temperature": "Current randomness: {temperature}",
+      "timeline": "Unified timeline",
+      "timeline_empty": "No trace data to show for this session",
+      "title": "Session request trace",
+      "tool_calls": "Tool calls",
+      "tool_context": "Tool calls",
+      "tool_rounds": "Tool rounds",
+      "unknown_time": "Unknown time",
+      "untitled_session": "Untitled session",
+      "user_input": "User input",
+      "view_raw_data": "View raw data"
+    },
+    "log_viewer": {
+      "ai_analyze": "AI analysis",
+      "auto_analyze": "Analyze all",
+      "copy_selection": "Copy selected content",
+      "estimating": "Estimating...",
+      "hide_ai_assistant": "Hide AI assistant",
+      "open_ai_assistant": "Open AI assistant",
+      "selected_count_prefix": "Selected",
+      "selected_count_suffix": "items",
+      "tab": {
+        "app": "System log",
+        "game": "Game log"
+      },
+      "use_tool_mods": "Use helper tool mod",
+      "use_tool_mods_desc": "When enabled, helper tool mods are automatically enabled during save or auto-sort so the app can collect more detailed game logs."
+    },
+    "missing_install": {
+      "auto_switch_badge": "Auto-switches when subscribing or downloading",
+      "can_cleanup": "Cleanable",
+      "cancel_action": "Cancel {action}",
+      "choice": {
+        "current": "Current",
+        "installed": "Installed",
+        "original": "Original",
+        "replacement": "Replacement"
+      },
+      "cleanup_unknown": "Clean unknown items",
+      "cleanup_unknown_and_continue": "Clean unknown items and continue {action}",
+      "cleanup_unknown_still_has_issues": "Unknown items were cleaned, but other issues still need attention.",
+      "cleanup_unknown_success": "Cleaned {count} unknown items",
+      "continue_without_fix": "Continue {action} without fixing",
+      "disable_related": "Deactivate related mods",
+      "disable_related_and_continue": "Deactivate related mods and continue {action}",
+      "download_selected": "Download selected",
+      "downloading": "Downloading...",
+      "group": {
+        "installed_replacement": {
+          "description": "A usable replacement is already installed. Subscribing or downloading will automatically switch to it.",
+          "title": "Installed replacement"
+        },
+        "missing_install": {
+          "description": "These mods are not installed yet and can be handled now.",
+          "title": "Ready to install"
+        },
+        "optional_install": {
+          "description": "The current mod is already usable. Other versions can be added if needed.",
+          "title": "Optional add-on"
+        },
+        "replacement_choice": {
+          "description": "You can install the original mod or switch to a replacement.",
+          "title": "Original or replacement"
+        },
+        "version_replacement": {
+          "description": "The current mod may not fit this version. You can switch to a better replacement.",
+          "title": "Version replacement"
+        }
+      },
+      "history": {
+        "cleanup_unknown": "Clean {count} unknown items",
+        "switch_replacements": "Switch {count} installed replacements"
+      },
+      "installed_replacement_tip": "After selecting an installed replacement, subscribing or downloading will automatically replace the missing item.",
+      "invalid_item_details": "Invalid items: {items}",
+      "message": "Handle uninstalled mods.",
+      "message_with_unknown": "Handle uninstalled mods or clean invalid items.",
+      "no_actionable_items": "There are no uninstalled items to handle.",
+      "no_related_to_disable": "There are no related mods to deactivate",
+      "no_selected_downloadable": "No downloadable items are selected",
+      "no_selected_subscribable": "No subscribable items are selected",
+      "no_supported_versions_tip": "No supported version information provided",
+      "no_unknown_to_cleanup": "There are no unknown items to clean",
+      "open_source": "Open source",
+      "optional_count": "Optional {count}",
+      "precheck_required_message": "Found {count} uninstalled items{unknownText}.",
+      "precheck_required_title": "Uninstalled items found before {action}",
+      "precheck_unknown_dependency_message": "Found {count} unknown dependency targets.",
+      "precheck_unknown_dependency_title": "Unknown dependency targets found before {action}",
+      "precheck_unknown_message": "Found {count} items with no available source for now.",
+      "precheck_unknown_title": "Unknown items found before {action}",
+      "reason": {
+        "installed_replacement": "Installed replacement",
+        "missing_dependency": "Missing dependency",
+        "missing_item": "Missing item",
+        "optional_install": "Optional add-on",
+        "unknown_dependency": "Unknown dependency",
+        "version_mismatch": "Version mismatch"
+      },
+      "replacement_title": "Replacement for {name}",
+      "required_count": "Required {count}",
+      "required_unknown_suffix": ", plus {count} items with no available source for now",
+      "selected_count": "{selected} / {total} selected",
+      "subscribe_selected": "Subscribe selected",
+      "subscribing": "Subscribing...",
+      "suggested_count": "Suggested {count}",
+      "supported_versions_tip": "Supported versions: {versions}",
+      "title": "Missing item install manager",
+      "unknown_count": "Unknown {count}",
+      "unknown_dependency_count": "Unknown dependencies {count}",
+      "unknown_dependency_details": "Unknown dependencies: {items}",
+      "unknown_items": "Unknown items",
+      "unknown_items_desc": "These items do not currently have an available source or dependency target.",
+      "unknown_only_desc": "These items cannot be handled directly right now.",
+      "unknown_only_title": "Only unknown items"
+    },
+    "mod_alias_review": {
+      "ai_alias": "AI alias",
+      "ai_notes": "AI notes",
+      "alias_placeholder": "Enter manually or retry generation...",
+      "apply_all": "Apply all ({count})",
+      "apply_group": "Apply this group ({count})",
+      "attempt_count": "Attempt: {current}/{max}",
+      "clear_all": "Clear all",
+      "clear_all_message": "Clear all {count} review groups?\nAll unapplied aliases and notes will be discarded.",
+      "created_at": "Created: {time}",
+      "default_task_title": "Mod alias generation task",
+      "description": "Review tasks: {taskCount} groups, pending entries: {itemCount}.",
+      "empty": "There are no batch results waiting for review",
+      "failed_count": "Failed: {count}",
+      "footer_tip": "Until applied, results stay here so you can return and continue reviewing later.",
+      "generation_failed_badge": "Generation failed. Fill manually or retry",
+      "input_count": "Input: {count}",
+      "later": "Handle later",
+      "no_description": "No description available...",
+      "notes_placeholder": "Enter manually or regenerate...",
+      "original_info": "Original info",
+      "regenerate": "Regenerate",
+      "remove_group": "Remove this group",
+      "remove_group_message": "Remove \"{title}\"?\nUnapplied aliases and notes in this group will be discarded.",
+      "status": {
+        "pending_review": "Pending review"
+      },
+      "success_count": "Succeeded: {count}",
+      "task_id": "Task ID: {taskId}",
+      "title": "Mod alias review"
+    },
+    "mod_residue": {
+      "add_whitelist": "Add to whitelist",
+      "add_whitelist_tip": "After adding, future scans will not show this path again.",
+      "clean_message": "{count} selected residue items will be cleaned. Next you can choose recycle bin or permanent deletion.",
+      "clean_selected": "Clean selected residue",
+      "clean_selected_count": "Clean selected {count}",
+      "clean_selected_tip": "Clean selected residue folders and settings files",
+      "clean_success_force": "Permanently deleted {count} residue items",
+      "clean_success_recycle": "Moved {count} residue items to recycle bin",
+      "clean_title": "Clean uninstall residue",
+      "clear_selection_tip": "Clear current selection",
+      "confidence": {
+        "high": "Identified mod",
+        "low": "Reference only",
+        "medium": "Possible match",
+        "unknown": "Unidentified mod"
+      },
+      "description": "Lists folders and settings files left by uninstalled mods. Select items to move them to recycle bin or delete permanently.",
+      "empty": "No cleanable uninstall residue was found in the scanned folders",
+      "file_count": "Files {count}",
+      "folder_count": "Folders {count}",
+      "loading": "Checking uninstall residue...",
+      "mod_count": "Mods {count}",
+      "modified_time": "Modified {time}",
+      "open_residue_folder_tip": "Open residue folder",
+      "open_settings_parent_tip": "Open settings file folder",
+      "open_whitelist_tip": "Open this whitelist path",
+      "open_workshop_tip": "Open this mod on Steam Workshop",
+      "package_badge": "Package ID {packageId}",
+      "path": "Path: {path}",
+      "pending_count": "Pending cleanup {count}",
+      "recheck": "Recheck",
+      "recheck_tip": "Recheck uninstall residue in the current environment",
+      "remove_whitelist_tip": "Remove from whitelist so future scans can show it again",
+      "select_all_tip": "Select all residue in the current list",
+      "settings_file_count": "Settings files {count}",
+      "settings_file_path_tip": "Settings file: {path}\nFolder: {parentPath}",
+      "size": "Size {size}",
+      "size_total": "Uses {size}",
+      "title": "Uninstall residue cleanup",
+      "toggle_group_tip": "Select or clear all residue under this mod",
+      "toggle_item_tip": "Select or clear this residue",
+      "whitelist_count": "Whitelist {count}",
+      "whitelist_desc": "Whitelisted paths are skipped and will no longer appear in the uninstall residue list.",
+      "whitelist_empty": "No whitelist items yet",
+      "whitelist_search_placeholder": "Search name or full path",
+      "whitelist_tip": "View residue that will no longer be shown, and remove it from the whitelist if needed",
+      "whitelist_title": "Whitelist",
+      "workshop_badge": "Workshop {workshopId}"
+    },
+    "mod_settings": {
+      "cleanup_success_force": "Permanently deleted {count} settings files",
+      "cleanup_success_recycle": "Moved {count} settings files to recycle bin",
+      "cleanup_unknown": "Clean residue configs",
+      "cleanup_unknown_message": "Delete {count} settings files from uninstalled or unknown mods?",
+      "confidence": {
+        "assisted": "Assisted match",
+        "low": "Low confidence",
+        "medium": "Medium confidence"
+      },
+      "config_dir": "Config folder: {path}",
+      "confirm_overwrite_button": "Overwrite active file",
+      "confirm_overwrite_message": "Replace active file {activeName} with content from {sourceName}.",
+      "confirm_overwrite_title": "Confirm overwrite",
+      "delete_setting_file": "Delete this settings file",
+      "description": "Organize settings files in the current environment by mod, and handle duplicate configs or uninstalled mod residue.",
+      "duplicate_count": "Duplicates {count}",
+      "empty": "No manageable mod settings files in the current environment",
+      "file_count": "Files {count}",
+      "file_path": "File path: {path}",
+      "filter": {
+        "all": "All states"
+      },
+      "filtered_count": "Showing {shown} / {total} files",
+      "identity": {
+        "class": "Settings class",
+        "filename_fallback": "Filename fallback"
+      },
+      "load_failed": "Failed to read mod settings files. Confirm the game user data folder is accessible and check current environment path settings.",
+      "loading": "Reading settings files...",
+      "loading_workshop_details": "Loading Workshop details...",
+      "matched_mod_count": "Installed mods {count}",
+      "mod_disabled_tip": "This mod is installed but not currently active",
+      "no_match": "No matching settings files",
+      "no_selected_file": "No settings file selected",
+      "open_preview_file": "Open current preview file",
+      "open_setting_file": "Open settings file",
+      "overwrite_active_file": "Overwrite current active settings file",
+      "preview_empty": "Select a file on the left to preview it here",
+      "preview_title": "File preview",
+      "preview_truncated": "Content is too long. Showing the first 2 MB only",
+      "search_placeholder": "Search mod, package ID, setting, or file",
+      "setting_count": "Settings {count}",
+      "size_modified": "Size: {size} | Modified: {time}",
+      "source_folder": "Source folder: {folder}",
+      "state": {
+        "active": "Currently active",
+        "coexist_disabled": "Coexist disabled",
+        "inactive": "Inactive",
+        "mod_disabled": "Mod inactive"
+      },
+      "status": {
+        "disabled": "Deactivated",
+        "enabled": "Activated",
+        "uninstalled": "Uninstalled",
+        "unknown_source": "Unknown source"
+      },
+      "sync_failed": "Failed to overwrite mod settings file. Check whether the target file is in use by the game or path permissions allow writing.",
+      "sync_success": "Current active file overwritten",
+      "title": "Mod settings files",
+      "tooltip": {
+        "detail_source_database": "Detail source: local Workshop database",
+        "detail_unavailable": "Workshop details unavailable",
+        "status": "Status: {status}"
+      },
+      "unknown_file_count": "Residue/unknown files {count}",
+      "unrecognized_setting": "Unrecognized setting"
+    },
+    "recommendation_export": {
+      "body": {
+        "description": "Original description",
+        "notes": "Notes"
+      },
+      "body_source": "Body content",
+      "completed_message": "Export path: {path}",
+      "completed_title": "Recommendation export complete",
+      "cover_plain_desc": "Plain text and TXT do not include images.",
+      "cover_rich_desc": "Markdown copies images; DOCX/PDF/image-only exports embed cover images.",
+      "default_name": "Mod recommendation list",
+      "default_name_with_source": "{sourceName} recommendation list",
+      "description": "Export descriptions for {count} mods from \"{sourceName}\".",
+      "export_name": "Export name",
+      "export_name_placeholder": "Example: Essential RimWorld mod recommendations",
+      "exporting": "Exporting...",
+      "footer_tip": "Markdown creates an <span class=\"font-bold text-accent-special\">img</span> folder in the export folder; image-only export creates a folder named after the export, with one image per mod.",
+      "format": {
+        "clipboard": "Copy plain text",
+        "image": "Images only"
+      },
+      "image_name": {
+        "alias": "Alias",
+        "original": "Original name"
+      },
+      "image_name_source": "Image filename",
+      "mod_count": "{count} mods",
+      "open_output_dir": "Open export folder",
+      "option": {
+        "authors": "Authors",
+        "authors_desc": "Export mod author names.",
+        "cover": "Cover image",
+        "groups": "Groups",
+        "groups_desc": "Export group names that contain this mod.",
+        "language_packs": "Add language packs",
+        "language_packs_desc": "Attach matching language pack names and URLs after the corresponding mod.",
+        "package_id": "Package ID",
+        "package_id_desc": "Hidden by default; enable when exact identification is needed.",
+        "sequence": "Sequence",
+        "sequence_desc": "Show 001, 002 style sequence numbers before each mod.",
+        "supported_versions": "Supported versions",
+        "supported_versions_desc": "Export supported game versions for each mod.",
+        "tags": "Tags",
+        "tags_desc": "Export as #tag1 #tag2.",
+        "url": "URL",
+        "url_desc": "Export mod source URL.",
+        "workshop_id": "Workshop ID",
+        "workshop_id_desc": "Export Steam Workshop ID."
+      },
+      "preview": {
+        "authors": "Authors: {authors}",
+        "groups": "Groups: {groups}",
+        "intro": "Description: {text}",
+        "language_pack": "Language pack: {name}",
+        "language_pack_url": "Language pack URL: {url}",
+        "name": "Name: {name}",
+        "original_name": "Original name: {name}",
+        "package_id": "Package ID: {packageId}",
+        "supported_versions": "Supported versions: {versions}",
+        "url": "URL: {url}",
+        "workshop_id": "Workshop ID: {workshopId}"
+      },
+      "preview_empty": "There are no mods to export.",
+      "start_export": "Start export",
+      "title": "Recommendation export",
+      "format_label": "Export format",
+      "preview_title": "Preview"
+    },
+    "supplement": {
+      "action_cancelled_remaining": "Cancelled {action}; {count} items are still unresolved.",
+      "add_to_current_list": "Add to current list",
+      "apply_selected": "Apply selected",
+      "autosort_cancelled_remaining": "Auto-sort was cancelled; {count} items are still unresolved.",
+      "autosort_precheck_message": "Some installed mods should be enabled before sorting.",
+      "autosort_precheck_title": "Inactive items found before sorting",
+      "cancel_action": "Cancel {action}",
+      "cancel_sort": "Cancel sorting",
+      "category": {
+        "core": {
+          "description": "The game core mod is not active."
+        },
+        "dependency": {
+          "description": "These mods are dependencies of currently active mods.",
+          "title": "Dependencies"
+        },
+        "language_pack": {
+          "description": "There are available language packs for the current language that are not active.",
+          "title": "Language pack"
+        },
+        "official_dlc": {
+          "description": "The current list references inactive official expansions.",
+          "title": "Official DLC"
+        },
+        "optional_replacement": {
+          "description": "The current mod is already usable. Other installed replacements can be enabled if needed.",
+          "title": "Optional enable"
+        },
+        "tool_mod": {
+          "description": "Tool mods allowed by current settings are not active.",
+          "title": "Tool mods"
+        },
+        "version_replacement": {
+          "description": "Better replacement mods can be preferred for the current version.",
+          "title": "Replacement suggestions"
+        }
+      },
+      "continue_sort_without_fix": "Continue sorting without fixing",
+      "continue_without_fix": "Continue {action} without fixing",
+      "detail": {
+        "alternative_dependency": "Alternative mod that can satisfy the dependency",
+        "can_switch_to": "Can switch to: {names}",
+        "complete_before_save_or_launch": "Recommended before saving or launching the game.",
+        "language_not_declared": "This language pack does not declare the current language",
+        "original_dependency": "Original dependency",
+        "tool_mod_inactive": "The tool mod is installed but inactive.",
+        "version_may_not_fit": "May not fit the current version"
+      },
+      "enable_selected": "Enable selected",
+      "enable_selected_and_continue": "Enable selected and continue {action}",
+      "enable_selected_and_continue_sort": "Enable selected and continue sorting",
+      "enabled_success": "Enabled {count} additional mods{suffix}",
+      "enabled_success_removed_suffix": ", and removed {count} original items",
+      "history": {
+        "enable": "Enable {count} additional items",
+        "enable_and_replace": "Enable {enableCount} additional items and replace {removeCount} items"
+      },
+      "keep_current_state": "Keep current state.",
+      "message": "Select mods to enable.",
+      "no_items": "There are no inactive mods to add",
+      "optional_count": "{count} optional",
+      "precheck_message": "Some installed mods should be enabled before {action}.",
+      "precheck_title": "Inactive items found before {action}",
+      "reason": {
+        "language_pack_for_current": "Can add current language pack",
+        "language_pack_for_many": "Can provide current language support for {count} mods",
+        "missing_core": "The current active list is missing Core",
+        "missing_dependency": "The current list is missing dependencies",
+        "mod_can_switch_replacement": "The current mod can switch to an installed replacement",
+        "required_by_many": "Required by {count} mods",
+        "tool_mod_enabled": "Tool mod support is enabled in settings",
+        "version_can_switch_replacement": "The current version can switch to an installed replacement"
+      },
+      "relation": {
+        "alternative_dependency": "Alternative dependency",
+        "dependency": "Dependency",
+        "language_pack": "Language pack",
+        "replacement": "Replacement",
+        "tool": "Tool"
+      },
+      "replacement_detail": {
+        "replace_current": "Replaces the current mod after enabling",
+        "replace_named": "Replaces {name} after enabling",
+        "switch_to": "Switches to {name} after enabling"
+      },
+      "required_count": "{count} required",
+      "select_required_only": "Required only",
+      "selected_count": "{selected} / {total} selected",
+      "severity": {
+        "danger": "Required",
+        "info": "Optional",
+        "warn": "Suggested"
+      },
+      "skip_enable": "Do not enable",
+      "suffix": {
+        "dependency_of": " dependency",
+        "language_pack": " language pack",
+        "possible_language_pack": " possible related language pack"
+      },
+      "suggested_count": "{count} suggested",
+      "title": "Add inactive items"
     }
   },
   "api": {
@@ -3078,9 +3581,32 @@
       "checking": "Checking",
       "default": "Default",
       "inactive": "Inactive",
-      "reading": "Reading"
+      "reading": "Reading",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "pending": "Queued",
+      "processing": "Processing"
     },
-    "task": "Task"
+    "task": "Task",
+    "clear": "Clear",
+    "clear_all": "Clear all",
+    "clear_filter": "Clear filter",
+    "clear_selection": "Clear selection",
+    "close": "Close",
+    "default": "Default",
+    "delete_permanently": "Delete permanently",
+    "got_it": "Got it",
+    "item_count": "{count} items",
+    "open": "Open",
+    "open_folder": "Open containing folder",
+    "open_path": "Open path",
+    "open_workshop": "Open Workshop",
+    "refresh": "Refresh",
+    "remove": "Remove",
+    "save": "Save",
+    "select_all": "Select all",
+    "unknown": "Unknown",
+    "workshop": "Workshop"
   },
   "confirm": {
     "settings": {
@@ -3319,7 +3845,8 @@
       "read_user_themes": "Read user themes",
       "save_one": "Save setting",
       "save_user_theme": "Save user theme"
-    }
+    },
+    "recommendation_export": "Recommendation export"
   },
   "command": {
     "category": {

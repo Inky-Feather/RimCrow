@@ -142,6 +142,7 @@
       "more_actions": "更多操作",
       "move": "移动",
       "no_changes": "无变化",
+      "no_description": "暂无介绍",
       "no_record": "无记录",
       "none": "无",
       "open_folder": "打开文件夹",
@@ -156,6 +157,7 @@
       "restore_default": "恢复默认",
       "save": "保存",
       "unknown": "未知",
+      "unknown_mod": "未知模组",
       "unknown_time": "未知时间"
     },
     "diff_view": {
@@ -289,6 +291,13 @@
         "before_refresh_unsaved": "刷新前未保存改动",
         "before_refresh_working": "刷新前工作序列",
         "unsaved_changes": "未保存改动"
+      }
+    },
+    "mod": {
+      "field": {
+        "authors": "作者: {authors}",
+        "package_id": "包名: {packageId}",
+        "workshop_id": "工坊 ID: {workshopId}"
       }
     },
     "mod_details": {
@@ -1408,6 +1417,16 @@
       "provider": {
         "ai_default": "AI 翻译"
       }
+    },
+    "update_modal": {
+      "empty": "没有找到更新记录...",
+      "full_history": "完整历史",
+      "full_history_desc": "查看当前版本线的完整变更记录",
+      "in_development": "开发中",
+      "title": "更新日志",
+      "upgrade_prefix": "从",
+      "upgrade_success": "版本升级成功",
+      "upgrade_to": "跃升至"
     },
     "workshop_action": {
       "download": "下载",
@@ -2545,6 +2564,19 @@
       "share_code_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。",
       "share_code_imported": "分享码已导入"
     },
+    "log_viewer": {
+      "global_scan_failed": "全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。",
+      "no_log_file_selected": "未选中任何日志文件。",
+      "scan_complete_notice": "压缩完成：保留 {tocCount} 条错误摘要，共覆盖 {repeatCount} 次错误，当前占用约 {tokenText}。",
+      "scanning_all_logs": "正在扫描全部日志，请稍候。",
+      "starting_ai_analysis": "{notice} 正在启动 AI 分析。"
+    },
+    "mod_alias_review": {
+      "no_valid_result": "当前任务还没有可应用的有效结果",
+      "regenerate_failed": "重新生成失败",
+      "regenerate_failed_detail": "重新生成失败。请检查 AI 配置、网络连接和当前模组数据后重试。",
+      "regenerated": "[{name}] 已重新生成"
+    },
     "mod_details": {
       "filter_applied": "已按{label}筛选：{text}",
       "filter_cleared": "已清除列表筛选"
@@ -2581,6 +2613,11 @@
       "user_data_path_required": "请输入用户数据目录",
       "workshop_path_incomplete": "创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。",
       "workshop_path_problem": "创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。"
+    },
+    "recommendation_export": {
+      "completed": "推荐导出完成",
+      "copied": "推荐文本已复制到剪贴板",
+      "copy_failed": "复制失败，可能是浏览器权限限制"
     },
     "rule_panel": {
       "name_required": "请输入规则名称",
@@ -2627,6 +2664,9 @@
       "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
       "tool_ready_no_download": "todds 已就绪，无需下载"
     },
+    "update_modal": {
+      "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！"
+    },
     "workspace": {
       "cleanup_deleted_done": "已清理 {count} 条已删除记录",
       "collection_duplicate": "该合集已在你的记录中。",
@@ -2651,6 +2691,45 @@
     "action": {
       "cancel": "取消",
       "confirm": "确定"
+    },
+    "ai_trace": {
+      "answer_body": "回复正文",
+      "assistant": "所属助手：{assistant}",
+      "attachments": "附件信息",
+      "extra_metrics": "补充指标",
+      "forced_summary": "总结补充",
+      "loading": "正在加载链路...",
+      "main_completion_output": "主回复输出",
+      "main_prompt_input": "主对话输入",
+      "message_input_total": "消息输入总计",
+      "message_output_total": "消息输出总计",
+      "message_usage": "消息累计",
+      "message_usage_tip": "这里显示的是这条消息对应请求的^^估算Token^^消耗量，包含固定说明、上下文、附件、用户输入和工具补充内容。",
+      "metric": {
+        "message_input": "消息输入"
+      },
+      "model": "当前模型：{model}",
+      "no_session_trace": "当前会话暂无链路数据",
+      "raw_json": "原始 JSON",
+      "reasoning": "深度思考",
+      "reasoning_stream": "思考流",
+      "request_count": "请求数量：{count}",
+      "request_total_usage": "总请求消耗",
+      "session_memory": "会话记忆",
+      "session_overview": "会话概览",
+      "status": "会话状态：{status}",
+      "system_prompt": "系统提示",
+      "temperature": "当前随机性：{temperature}",
+      "timeline": "统一时间轴",
+      "timeline_empty": "当前会话没有可展示的链路数据",
+      "title": "会话请求链路",
+      "tool_calls": "工具调用",
+      "tool_context": "工具调用",
+      "tool_rounds": "工具轮次",
+      "unknown_time": "未知时间",
+      "untitled_session": "未命名会话",
+      "user_input": "用户输入",
+      "view_raw_data": "查看原始数据"
     },
     "backup_list": {
       "delete": {
@@ -2726,6 +2805,141 @@
         "generated_title": "分享码已生成"
       }
     },
+    "log_viewer": {
+      "ai_analyze": "AI 分析",
+      "auto_analyze": "一键分析",
+      "copy_selection": "复制选中内容",
+      "estimating": "估算中...",
+      "hide_ai_assistant": "隐藏 AI 助手",
+      "open_ai_assistant": "打开 AI 助手",
+      "selected_count_prefix": "已选",
+      "selected_count_suffix": "条",
+      "tab": {
+        "app": "系统日志",
+        "game": "游戏日志"
+      },
+      "use_tool_mods": "使用辅助工具模组",
+      "use_tool_mods_desc": "开启后，将在保存或自动排序时自动启用辅助工具模组，为软件提供更加详细的游戏日志获取功能。"
+    },
+    "missing_install": {
+      "auto_switch_badge": "点击订阅或下载时会自动切换",
+      "can_cleanup": "可清理",
+      "cancel_action": "取消{action}",
+      "choice": {
+        "current": "当前",
+        "installed": "已安装",
+        "original": "原版",
+        "replacement": "替代版"
+      },
+      "cleanup_unknown": "清理未知项",
+      "cleanup_unknown_and_continue": "清理未知项并继续{action}",
+      "cleanup_unknown_still_has_issues": "已清理未知项，但当前仍有其它问题需要处理。",
+      "cleanup_unknown_success": "已清理 {count} 个未知项",
+      "continue_without_fix": "不处理继续{action}",
+      "disable_related": "停用相关模组",
+      "disable_related_and_continue": "停用相关模组并继续{action}",
+      "download_selected": "下载选中项",
+      "downloading": "下载中...",
+      "group": {
+        "installed_replacement": {
+          "description": "当前已有可用替代。点击订阅或下载时会自动切换为已装替代。",
+          "title": "已装替代"
+        },
+        "missing_install": {
+          "description": "这些模组还没安装，现在可以直接处理。",
+          "title": "可直接安装"
+        },
+        "optional_install": {
+          "description": "当前模组已可用，如有需要也可补装其它版本。",
+          "title": "可选补装"
+        },
+        "replacement_choice": {
+          "description": "可安装原模组，也可改装替代模组。",
+          "title": "原版或替代"
+        },
+        "version_replacement": {
+          "description": "当前模组可能不适配，可改装更合适的替代模组。",
+          "title": "版本替代"
+        }
+      },
+      "history": {
+        "cleanup_unknown": "清理 {count} 个未知项",
+        "switch_replacements": "切换 {count} 个已装替代"
+      },
+      "installed_replacement_tip": "选中已安装替代后，点击订阅或下载时会自动替换当前缺失项。",
+      "invalid_item_details": "无效项：{items}",
+      "message": "处理未安装模组。",
+      "message_with_unknown": "处理未安装模组，或清理无效项。",
+      "no_actionable_items": "当前没有可处理的未安装项。",
+      "no_related_to_disable": "当前没有可停用的相关模组",
+      "no_selected_downloadable": "当前没有选中的可下载项",
+      "no_selected_subscribable": "当前没有选中的可订阅项",
+      "no_supported_versions_tip": "未提供支持版本信息",
+      "no_unknown_to_cleanup": "当前没有可清理的未知项",
+      "open_source": "访问来源",
+      "optional_count": "可选 {count}",
+      "precheck_required_message": "发现 {count} 项未安装{unknownText}。",
+      "precheck_required_title": "{action}前发现未安装项",
+      "precheck_unknown_dependency_message": "发现 {count} 项未知依赖目标。",
+      "precheck_unknown_dependency_title": "{action}前发现未知依赖目标",
+      "precheck_unknown_message": "发现 {count} 项暂时找不到可用来源。",
+      "precheck_unknown_title": "{action}前发现未知项",
+      "reason": {
+        "installed_replacement": "已装替代",
+        "missing_dependency": "依赖缺失",
+        "missing_item": "缺失项",
+        "optional_install": "可选补装",
+        "unknown_dependency": "依赖未知",
+        "version_mismatch": "版本不符"
+      },
+      "replacement_title": "{name} 的替代项",
+      "required_count": "必要 {count}",
+      "required_unknown_suffix": "，另有 {count} 项暂时找不到可用来源",
+      "selected_count": "{selected} / {total} 已选",
+      "subscribe_selected": "订阅选中项",
+      "subscribing": "订阅中...",
+      "suggested_count": "建议 {count}",
+      "supported_versions_tip": "支持版本：{versions}",
+      "title": "缺失项安装管理",
+      "unknown_count": "未知 {count}",
+      "unknown_dependency_count": "未知依赖 {count}",
+      "unknown_dependency_details": "未知依赖：{items}",
+      "unknown_items": "未知项",
+      "unknown_items_desc": "这些项目暂时找不到可用来源或依赖目标。",
+      "unknown_only_desc": "这些项目暂时无法直接处理。",
+      "unknown_only_title": "只有未知项"
+    },
+    "mod_alias_review": {
+      "ai_alias": "AI 别名",
+      "ai_notes": "AI 备注",
+      "alias_placeholder": "请输入或点击重试生成...",
+      "apply_all": "应用全部 ({count})",
+      "apply_group": "应用本组 ({count})",
+      "attempt_count": "轮次: {current}/{max}",
+      "clear_all": "清空全部",
+      "clear_all_message": "确定要清空全部 {count} 组待审结果吗？\n所有未应用的别名和备注结果都会被丢弃。",
+      "created_at": "创建时间: {time}",
+      "default_task_title": "模组别名生成任务",
+      "description": "待检阅任务 {taskCount} 组，待检阅条目 {itemCount} 项。",
+      "empty": "当前没有待检阅的批量结果",
+      "failed_count": "失败: {count}",
+      "footer_tip": "未确认应用前，结果会一直保留在这里，可随时回来继续检阅。",
+      "generation_failed_badge": "生成失败，请手填或重试",
+      "input_count": "输入: {count}",
+      "later": "稍后处理",
+      "no_description": "暂无描述信息...",
+      "notes_placeholder": "请输入或点击重新生成...",
+      "original_info": "原始信息",
+      "regenerate": "重新生成",
+      "remove_group": "移除此组",
+      "remove_group_message": "确定要移除「{title}」吗？\n这组未应用的别名和备注结果会被丢弃。",
+      "status": {
+        "pending_review": "待检阅"
+      },
+      "success_count": "成功: {count}",
+      "task_id": "任务ID: {taskId}",
+      "title": "模组别名检阅"
+    },
     "mod_item": {
       "export_package": {
         "description": "可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。",
@@ -2736,6 +2950,56 @@
         "source": "已选模组",
         "title": "推荐导出已选模组{count}"
       }
+    },
+    "mod_residue": {
+      "add_whitelist": "加入白名单",
+      "add_whitelist_tip": "加入后，之后扫描不会再提示这个路径",
+      "clean_message": "将清理 {count} 个已选残留。下一步可以选择移入回收站或彻底删除。",
+      "clean_selected": "清理已选残留",
+      "clean_selected_count": "清理已选 {count}",
+      "clean_selected_tip": "清理已勾选的残留文件夹和设置文件",
+      "clean_success_force": "已彻底删除 {count} 个残留",
+      "clean_success_recycle": "已移入回收站 {count} 个残留",
+      "clean_title": "清理卸载残留",
+      "clear_selection_tip": "取消当前选择",
+      "confidence": {
+        "high": "已识别模组",
+        "low": "仅供参考",
+        "medium": "可能匹配",
+        "unknown": "未识别模组"
+      },
+      "description": "这里会列出已卸载模组留下的文件夹和设置文件。勾选后可移入回收站或彻底删除。",
+      "empty": "当前已扫描目录内没有发现可清理的卸载残留",
+      "file_count": "文件 {count}",
+      "folder_count": "文件夹 {count}",
+      "loading": "正在检查卸载残留...",
+      "mod_count": "模组 {count}",
+      "modified_time": "修改 {time}",
+      "open_residue_folder_tip": "打开残留文件夹",
+      "open_settings_parent_tip": "打开设置文件所在目录",
+      "open_whitelist_tip": "打开这个白名单路径",
+      "open_workshop_tip": "打开这个模组的 Steam 创意工坊页面",
+      "package_badge": "包名 {packageId}",
+      "path": "路径：{path}",
+      "pending_count": "待清理 {count}",
+      "recheck": "重新检查",
+      "recheck_tip": "重新检查当前环境的卸载残留",
+      "remove_whitelist_tip": "从白名单移除，之后扫描会再次提示它",
+      "select_all_tip": "勾选当前列表里的所有残留",
+      "settings_file_count": "设置文件 {count}",
+      "settings_file_path_tip": "设置文件：{path}\n所在目录：{parentPath}",
+      "size": "大小 {size}",
+      "size_total": "占用 {size}",
+      "title": "卸载残留清理",
+      "toggle_group_tip": "勾选或取消这个模组下的全部残留",
+      "toggle_item_tip": "勾选或取消这个残留",
+      "whitelist_count": "白名单 {count}",
+      "whitelist_desc": "白名单里的路径会被跳过，不会再出现在卸载残留列表里。",
+      "whitelist_empty": "白名单里还没有项目",
+      "whitelist_search_placeholder": "搜索名称或完整路径",
+      "whitelist_tip": "查看不会再提示的残留，也可以从白名单移除",
+      "whitelist_title": "白名单",
+      "workshop_badge": "工坊 {workshopId}"
     },
     "mod_rule_editor": {
       "comment": {
@@ -2749,6 +3013,74 @@
         "top_title": "设为置顶"
       }
     },
+    "mod_settings": {
+      "cleanup_success_force": "已彻底删除 {count} 个设置文件",
+      "cleanup_success_recycle": "已移入回收站 {count} 个设置文件",
+      "cleanup_unknown": "清理残留配置",
+      "cleanup_unknown_message": "确定要删除 {count} 个已卸载或未知模组的设置文件吗？",
+      "confidence": {
+        "assisted": "辅助识别",
+        "low": "低置信度",
+        "medium": "中置信度"
+      },
+      "config_dir": "配置目录: {path}",
+      "confirm_overwrite_button": "覆盖激活文件",
+      "confirm_overwrite_message": "将用 {sourceName} 的内容替换当前激活文件 {activeName}。",
+      "confirm_overwrite_title": "确认覆盖",
+      "delete_setting_file": "删除该设置文件",
+      "description": "按模组整理当前环境里的设置文件，处理重复配置和已卸载模组残留。",
+      "duplicate_count": "重复 {count}",
+      "empty": "当前环境里还没有可管理的模组设置文件",
+      "file_count": "文件 {count}",
+      "file_path": "文件位置: {path}",
+      "filter": {
+        "all": "全部状态"
+      },
+      "filtered_count": "显示 {shown} / {total} 个文件",
+      "identity": {
+        "class": "设置类",
+        "filename_fallback": "文件名兜底"
+      },
+      "load_failed": "读取模组设置文件失败。请确认游戏用户数据目录可访问，并检查当前环境路径配置。",
+      "loading": "正在读取设置文件...",
+      "loading_workshop_details": "正在补全工坊信息...",
+      "matched_mod_count": "已安装模组 {count}",
+      "mod_disabled_tip": "该模组已安装但当前没有启用",
+      "no_match": "没有匹配的设置文件",
+      "no_selected_file": "未选择配置文件",
+      "open_preview_file": "打开当前预览文件",
+      "open_setting_file": "打开设置文件",
+      "overwrite_active_file": "覆盖当前激活设置文件",
+      "preview_empty": "点左侧文件即可在这里查看内容",
+      "preview_title": "文件预览",
+      "preview_truncated": "内容过长，仅显示前 2 MB",
+      "search_placeholder": "搜索模组、包名、设置或文件",
+      "setting_count": "设置 {count}",
+      "size_modified": "大小: {size} | 修改时间: {time}",
+      "source_folder": "来源文件夹: {folder}",
+      "state": {
+        "active": "当前激活",
+        "coexist_disabled": "共存停用",
+        "inactive": "未启用",
+        "mod_disabled": "模组停用"
+      },
+      "status": {
+        "disabled": "已停用",
+        "enabled": "已启用",
+        "uninstalled": "已卸载",
+        "unknown_source": "未知来源"
+      },
+      "sync_failed": "覆盖模组设置文件失败。请检查目标文件是否被游戏占用、路径权限是否允许写入。",
+      "sync_success": "已覆盖当前激活文件",
+      "title": "模组设置文件",
+      "tooltip": {
+        "detail_source_database": "详情来源: 本地工坊数据库",
+        "detail_unavailable": "工坊详情不可用",
+        "status": "状态: {status}"
+      },
+      "unknown_file_count": "残留/未知文件 {count}",
+      "unrecognized_setting": "未识别设置"
+    },
     "profiles": {
       "delete": {
         "force": "强制删除隔离区数据",
@@ -2761,6 +3093,74 @@
         "title": "创建桌面快捷方式"
       }
     },
+    "recommendation_export": {
+      "body": {
+        "description": "原始描述",
+        "notes": "备注"
+      },
+      "body_source": "介绍内容",
+      "completed_message": "导出路径：{path}",
+      "completed_title": "推荐导出完成",
+      "cover_plain_desc": "纯文本和 TXT 不包含图片。",
+      "cover_rich_desc": "Markdown 会复制图片，DOCX/PDF/纯图片会嵌入封面。",
+      "default_name": "模组推荐清单",
+      "default_name_with_source": "{sourceName}推荐清单",
+      "description": "导出「{sourceName}」中的 {count} 个模组介绍。",
+      "export_name": "导出名称",
+      "export_name_placeholder": "例如：RimWorld 必备模组推荐",
+      "exporting": "导出中...",
+      "footer_tip": "Markdown 会在导出目录内创建 <span class=\"font-bold text-accent-special\">img</span> 文件夹；纯图片会按导出名称新建文件夹，每个模组一张图。",
+      "format": {
+        "clipboard": "复制纯文本",
+        "image": "纯图片"
+      },
+      "format_label": "导出格式",
+      "image_name": {
+        "alias": "别名",
+        "original": "原名"
+      },
+      "image_name_source": "图片文件名",
+      "mod_count": "{count} 个模组",
+      "open_output_dir": "打开导出目录",
+      "option": {
+        "authors": "作者",
+        "authors_desc": "导出模组作者名称。",
+        "cover": "封面图",
+        "groups": "分组",
+        "groups_desc": "导出该模组所属分组名称。",
+        "language_packs": "附加语言包",
+        "language_packs_desc": "把匹配的语言包名称和网址附在对应模组后。",
+        "package_id": "包名",
+        "package_id_desc": "默认隐藏，适合需要精确定位时开启。",
+        "sequence": "序号",
+        "sequence_desc": "在每个模组前显示 001、002 这类序号。",
+        "supported_versions": "支持版本",
+        "supported_versions_desc": "导出模组支持的游戏版本。",
+        "tags": "标签",
+        "tags_desc": "导出为 #tag1 #tag2 形式。",
+        "url": "网址",
+        "url_desc": "导出模组来源网址。",
+        "workshop_id": "工坊 ID",
+        "workshop_id_desc": "导出 Steam 创意工坊 ID。"
+      },
+      "preview": {
+        "authors": "作者：{authors}",
+        "groups": "分组：{groups}",
+        "intro": "介绍：{text}",
+        "language_pack": "语言包：{name}",
+        "language_pack_url": "语言包网址：{url}",
+        "name": "名称：{name}",
+        "original_name": "原名：{name}",
+        "package_id": "包名：{packageId}",
+        "supported_versions": "支持版本：{versions}",
+        "url": "网址：{url}",
+        "workshop_id": "工坊ID：{workshopId}"
+      },
+      "preview_empty": "当前没有可导出的模组。",
+      "preview_title": "预览",
+      "start_export": "开始导出",
+      "title": "推荐导出"
+    },
     "rule_panel": {
       "delete": {
         "title": "确认删除"
@@ -2771,6 +3171,109 @@
       "delete_mod": {
         "message": "确定删除该 Mod 规则吗？"
       }
+    },
+    "supplement": {
+      "action_cancelled_remaining": "已取消{action}，还有 {count} 项未处理。",
+      "add_to_current_list": "加入当前列表",
+      "apply_selected": "应用选中项",
+      "autosort_cancelled_remaining": "自动排序已取消，还有 {count} 项未处理。",
+      "autosort_precheck_message": "有些已安装模组建议先启用再排序。",
+      "autosort_precheck_title": "排序前发现未启用项",
+      "cancel_action": "取消{action}",
+      "cancel_sort": "取消排序",
+      "category": {
+        "core": {
+          "description": "游戏核心模组未启用。"
+        },
+        "dependency": {
+          "description": "这些模组是当前启用模组的依赖。",
+          "title": "依赖项"
+        },
+        "language_pack": {
+          "description": "存在可用但未启用的当前语言语言包。",
+          "title": "语言包"
+        },
+        "official_dlc": {
+          "description": "当前序列引用了未启用的官方扩展。",
+          "title": "官方 DLC"
+        },
+        "optional_replacement": {
+          "description": "当前模组已可用，如有需要也可启用其它已安装替代项。",
+          "title": "可选启用"
+        },
+        "tool_mod": {
+          "description": "当前设置允许的工具模组未启用。",
+          "title": "工具模组"
+        },
+        "version_replacement": {
+          "description": "当前版本可优先启用更合适的替代模组。",
+          "title": "替代建议"
+        }
+      },
+      "continue_sort_without_fix": "不处理继续排序",
+      "continue_without_fix": "不处理继续{action}",
+      "detail": {
+        "alternative_dependency": "可用于满足依赖的备选模组",
+        "can_switch_to": "可切换到：{names}",
+        "complete_before_save_or_launch": "保存或启动游戏前建议补齐。",
+        "language_not_declared": "该语言包未标注当前语言",
+        "original_dependency": "原始依赖项",
+        "tool_mod_inactive": "工具模组已安装但未启用。",
+        "version_may_not_fit": "当前版本可能不适配"
+      },
+      "enable_selected": "启用选中项",
+      "enable_selected_and_continue": "启用选中项后继续{action}",
+      "enable_selected_and_continue_sort": "启用选中项后继续排序",
+      "enabled_success": "已补充启用 {count} 个模组{suffix}",
+      "enabled_success_removed_suffix": "，并移除了 {count} 个原项",
+      "history": {
+        "enable": "补充启用 {count} 项",
+        "enable_and_replace": "补充启用 {enableCount} 项并替换 {removeCount} 项"
+      },
+      "keep_current_state": "保持当前状态。",
+      "message": "选择要启用的模组。",
+      "no_items": "当前没有可补齐的未启用模组",
+      "optional_count": "{count} 项可选",
+      "precheck_message": "有些已安装模组建议先启用再{action}。",
+      "precheck_title": "{action}前发现未启用项",
+      "reason": {
+        "language_pack_for_current": "可补充当前语言包",
+        "language_pack_for_many": "可为 {count} 个模组提供当前语言支持",
+        "missing_core": "当前启用序列缺少 Core",
+        "missing_dependency": "当前序列缺少依赖项",
+        "mod_can_switch_replacement": "当前模组可切换到已安装替代模组",
+        "required_by_many": "被 {count} 个模组同时依赖",
+        "tool_mod_enabled": "当前设置启用了工具模组支持",
+        "version_can_switch_replacement": "当前版本可切换到已安装替代模组"
+      },
+      "relation": {
+        "alternative_dependency": "备选依赖",
+        "dependency": "依赖",
+        "language_pack": "语言包",
+        "replacement": "替代版",
+        "tool": "工具"
+      },
+      "replacement_detail": {
+        "replace_current": "启用后替换当前模组",
+        "replace_named": "启用后替换 {name}",
+        "switch_to": "启用后切换到 {name}"
+      },
+      "required_count": "{count} 项必要",
+      "select_required_only": "仅选必要",
+      "selected_count": "{selected} / {total} 已选",
+      "severity": {
+        "danger": "必要",
+        "info": "可选",
+        "warn": "建议"
+      },
+      "skip_enable": "暂不启用",
+      "suffix": {
+        "dependency_of": " 的依赖",
+        "language_pack": " 的语言包",
+        "possible_language_pack": " 的可能相关语言包"
+      },
+      "suggested_count": "{count} 项建议",
+      "title": "补齐启用项"
     },
     "workspace": {
       "cleanup_deleted": {
@@ -2926,6 +3429,7 @@
       "update": "更新环境 \"{profileId}\"",
       "write_steam_shortcut_config": "写入 Steam 快捷方式配置"
     },
+    "recommendation_export": "推荐导出",
     "settings": {
       "apply": "应用设置",
       "clear_secret": "清除密钥",
@@ -3150,15 +3654,38 @@
       "save": "保存"
     },
     "cancel": "取消",
+    "clear": "清空",
+    "clear_all": "全部清空",
+    "clear_filter": "清空筛选",
+    "clear_selection": "取消选择",
+    "close": "关闭",
     "continue": "继续",
+    "default": "默认",
+    "delete_permanently": "彻底删除",
     "file": "文件",
+    "got_it": "我知道了",
+    "item_count": "{count} 项",
+    "open": "打开",
+    "open_folder": "打开所在目录",
+    "open_path": "打开路径",
+    "open_workshop": "打开工坊",
+    "refresh": "刷新",
+    "remove": "移除",
+    "save": "保存",
+    "select_all": "全选",
     "status": {
+      "cancelled": "已取消",
       "checking": "检查中",
       "default": "默认",
+      "failed": "失败",
       "inactive": "未激活",
+      "pending": "排队中",
+      "processing": "处理中",
       "reading": "读取中"
     },
-    "task": "任务"
+    "task": "任务",
+    "unknown": "未知",
+    "workshop": "工坊"
   },
   "confirm": {
     "settings": {
