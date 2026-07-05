@@ -5,6 +5,34 @@
       "delete": "Delete",
       "operation": "Operation"
     },
+    "drag": {
+      "default_item": "Draggable item"
+    },
+    "header": {
+      "debug_page": "Test",
+      "folder": {
+        "game_config": "Game config folder",
+        "game_dlc": "Game DLC folder",
+        "game_install": "Game install folder",
+        "game_saves": "Game saves folder",
+        "local_mods": "Local mods folder",
+        "manager_mods": "Manager mods folder",
+        "user_data": "User data folder",
+        "workshop_mods": "Workshop mods folder"
+      },
+      "load_order": {
+        "export_modlist": "Export share list",
+        "export_modsconfig": "Export load order",
+        "export_rml": "Export native share",
+        "export_share_code": "Copy share code",
+        "exporting": "Exporting",
+        "generating": "Generating",
+        "import": "Import load order",
+        "import_share_code": "Import share code",
+        "importing": "Importing"
+      },
+      "workspace_hub": "Inventory hub"
+    },
     "kv": {
       "add_item": "+ Add item",
       "key_placeholder": "Domain",
@@ -13,6 +41,35 @@
     "path": {
       "open_in_explorer": "Open in File Explorer",
       "placeholder": "Enter or paste a path..."
+    },
+    "search": {
+      "mod": {
+        "field": {
+          "alias_name": "alias_name",
+          "author": "author",
+          "coexist_variant": "coexist_variant",
+          "groups": "groups",
+          "ignored_issues": "ignored_issues",
+          "last_active": "last_active",
+          "mod_type": "mod_type",
+          "multiplayer_compat": "multiplayer_compat",
+          "name": "name",
+          "package_id": "package_id",
+          "replacement": "replacement",
+          "save_breaking": "save_breaking",
+          "shadow_paths": "shadow_paths",
+          "sign_color": "sign_color",
+          "source": "source",
+          "store": "store",
+          "supported_languages": "supported_languages",
+          "supported_versions": "supported_versions",
+          "tags": "tags",
+          "workshop_id": "workshop_id"
+        },
+        "value": {
+          "none": "none"
+        }
+      }
     },
     "secret": {
       "pending_clear_placeholder": "Saving will clear it; you can also enter a new secret",
@@ -24,8 +81,78 @@
       "placeholder": "Select...",
       "use_custom_value": "Use \"{value}\""
     },
+    "status_bar": {
+      "mods_actived": "Actived",
+      "history": "History",
+      "last_app_run": "Last app run",
+      "last_game_run": "Last game run",
+      "mods_total": "Total",
+      "never_run": "Never",
+      "none": "None",
+      "ready": "Ready",
+      "selected": "Selected",
+      "unknown_version": "Unknown version",
+      "unsaved_changes": "Unsaved changes"
+    },
+    "store_type": {
+      "local": "local",
+      "other": "other",
+      "self": "self",
+      "unknown": "unknown",
+      "workshop": "workshop"
+    },
     "tag": {
       "placeholder": "Type and press Enter..."
+    },
+    "tag_search": {
+      "action": {
+        "clear_all": "Clear all",
+        "expand_tokens": "Show entered search conditions"
+      },
+      "boolean": {
+        "false_label": "Empty / No",
+        "null_label": "Unknown / Null",
+        "true_label": "Has value / Yes"
+      },
+      "description": {
+        "boolean": "Check field state",
+        "text": "Match field content"
+      },
+      "field_usage": {
+        "text": "{key}:keyword"
+      },
+      "html": {
+        "and_help": "AND: all conditions must match",
+        "available_fields": "Available category fields",
+        "badge": "Search command reference",
+        "boolean_help": "Boolean search supports three states: true / false / null  ( + / - / _ )",
+        "default_search_title": "Included in fuzzy search by default",
+        "loading": "Loading...",
+        "logic_help": "Multiple search conditions can use \"AND\" or \"OR\" logic",
+        "or_help": "OR: any condition may match",
+        "syntax": {
+          "boolean_search": "State",
+          "direct_search": "Keyword",
+          "exclude_search": "Exclude",
+          "field": "Field",
+          "field_search": "Field",
+          "keyword": "Keyword"
+        },
+        "syntax_title": "Basic search syntax",
+        "title": "Search help"
+      },
+      "input_help": "Enter a keyword and press Enter\nYou can search directly, or use Category:keyword\n[[(Press Tab to apply suggestions)]]",
+      "logic": {
+        "and_tooltip": "Current logic is ^^AND^^. Results must match ^^all^^ conditions\n[[(Click to switch to ^^OR^^ logic)]]",
+        "or_tooltip": "Current logic is ^^OR^^. Results may match ^^any^^ condition\n[[(Click to switch to ^^AND^^ logic)]]"
+      },
+      "placeholder": {
+        "add_condition": "Add condition...",
+        "input_keyword_or_condition": "Enter keyword or condition"
+      },
+      "suggestion": {
+        "tooltip": "**{description}**\nOriginal format: {fullKey}\nOther formats: {aliases}\nExample: {usage}"
+      }
     },
     "workshop_action": {
       "download": "Download",
@@ -46,6 +173,34 @@
     "command": {
       "missing": "Command not found: {commandId}"
     },
+    "header": {
+      "ai_generation_manager": "AI generation manager",
+      "debug_page": "Test page",
+      "file_search": "File content search",
+      "load_order": {
+        "export_modlist": "Export as ModList.xml (includes package IDs and Workshop IDs)",
+        "export_modsconfig": "Export as ModsConfig.xml (package IDs only)",
+        "export_rml": "Export as RML (game-native export format)",
+        "export_share_code": "Generate an RC- share code and copy it to the clipboard",
+        "exporting_modlist": "Exporting ModList",
+        "exporting_modsconfig": "Exporting ModsConfig",
+        "exporting_rml": "Exporting RML",
+        "generating_share_code": "Generating share code",
+        "import": "Import load order (supports ModsConfig.xml / ModList.xml / .rml / saved game .rws / RimPy XML / RimSort JSON / text list / Workshop ID list)",
+        "import_share_code": "Paste an RC- share code and import it into the compare view",
+        "importing": "Importing load order",
+        "importing_share_code": "Importing share code",
+        "menu": "Load order"
+      },
+      "log_viewer": "Logs",
+      "mod_residue_cleanup": "View and clean uninstalled residues",
+      "mod_settings": "View mod config",
+      "open_folder": "Open folder",
+      "rules": "Rules",
+      "settings": "Settings",
+      "texture_opt": "Texture optimization",
+      "workspace_hub": "Inventory management hub"
+    },
     "secret": {
       "clear_saved": "Clear saved secret",
       "hide": "Hide",
@@ -53,6 +208,9 @@
       "preserve_saved": "Keep saved value",
       "reveal_saved": "Show saved secret",
       "show": "Show"
+    },
+    "status_bar": {
+      "history_state": "List history position for the current session.\nShown as \"current position / total history count\".\n\nTracks operations that may change the list state, for example:\n- Moving between lists\n- Sorting within a list\n- Batch adding or removing\n- Auto sorting\n- Importing or applying list results\n- Syncing list state after scan\n\nDoes not track search, filtering, scrolling, folding, or other view state.\nShortcuts: Ctrl+Z to undo, Ctrl+Y to redo."
     },
     "path": {
       "browse": "Browse path",
@@ -176,7 +334,24 @@
       "write_result": "Writing task result"
     },
     "type": {
+      "ai_task": "AI generation task",
+      "download": "Download task",
       "download_short": "Download",
+      "file_delete": "Delete files",
+      "file_search": "File content search",
+      "file_transfer": "Transfer files",
+      "localize": "Local coexistence task",
+      "mod_export": "Export mod package",
+      "mod_import": "Import mod package",
+      "scan": "Mod scan",
+      "steam_subscribe": "Steam subscribe",
+      "steam_unsubscribe": "Steam unsubscribe",
+      "steam_workshop_download": "Steam Workshop download",
+      "steamcmd_download": "SteamCMD download",
+      "steamcmd_init": "SteamCMD initialization",
+      "texture_opt": "Texture optimization",
+      "texture_opt_analyze": "Texture analysis",
+      "update": "Software update",
       "update_short": "Update"
     }
   },

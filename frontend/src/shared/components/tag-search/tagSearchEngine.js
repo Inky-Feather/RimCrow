@@ -1,3 +1,5 @@
+import { t } from '../../i18n'
+
 export const TAG_FIELD_TYPES = {
   STRING: 'string',
   LIST: 'list',
@@ -21,7 +23,10 @@ export const DEFAULT_TAG_FIELD_CONFIG = {
   color_getter: null,
 }
 
-export const DEFAULT_TAG_SEARCH_INPUT_HELP_TEXT = '输入关键词并回车确认\n可直接输入关键词，或使用 类别:关键词 格式\n[[(使用 Tab 键应用输入建议)]]'
+export const getDefaultTagSearchInputHelpText = () => t(
+  'ui.tag_search.input_help',
+  '输入关键词并回车确认\n可直接输入关键词，或使用 类别:关键词 格式\n[[(使用 Tab 键应用输入建议)]]'
+)
 
 // =============================================================================
 // 基础归一化：把外部配置整理成引擎内部统一使用的格式
@@ -151,7 +156,7 @@ export class TagSearchEngine {
     const options = normalizeTagSearchOptions(dataOrOptions, maybeOptions)
     this.rawData = options.data || []
     this.valueOptions = options.valueOptions || {}
-    this.inputHelpText = options.inputHelpText === undefined ? DEFAULT_TAG_SEARCH_INPUT_HELP_TEXT : options.inputHelpText
+    this.inputHelpText = options.inputHelpText
     this.schema = {}
     this.indices = new Map()
     this.defaultSearchFields = []
@@ -160,21 +165,26 @@ export class TagSearchEngine {
     this.initSchema(options.schema || {}, options.autoDetect !== false, options.autoAlias !== false)
     this.parser = new TagQueryParser(this.schema)
     this.buildIndices()
-    this.searchHelpText = options.searchHelpText === undefined ? generateTagSearchHtmlHelp(this) : options.searchHelpText
+    this.searchHelpText = options.searchHelpText
     this.controller = this.createInputController()
   }
 
   // 输入组件只需要解析、建议和帮助文本；用窄接口避免 UI 依赖完整搜索实现。
   createInputController() {
+    const engine = this
     return {
       schema: this.schema,
-      inputHelpText: this.inputHelpText,
-      searchHelpText: this.searchHelpText,
+      get inputHelpText() {
+        return engine.inputHelpText === undefined ? getDefaultTagSearchInputHelpText() : engine.inputHelpText
+      },
+      get searchHelpText() {
+        return engine.searchHelpText === undefined ? generateTagSearchHtmlHelp(engine) : engine.searchHelpText
+      },
       parse: (input) => this.parse(input),
       getSuggestions: (input) => this.getSuggestions(input),
       getFieldUsage: (config, key) => this.getFieldUsage(config, key),
       getPreferredKey: (key) => this.getPreferredKey(key),
-      getSearchHelpText: () => this.searchHelpText,
+      getSearchHelpText: () => engine.searchHelpText === undefined ? generateTagSearchHtmlHelp(engine) : engine.searchHelpText,
     }
   }
 
@@ -409,7 +419,7 @@ export class TagSearchEngine {
 
   getFieldUsage(config, key) {
     if (config.type === TAG_FIELD_TYPES.BOOLEAN) return `${key}:+ | ${key}:- | ${key}:_`
-    return `${key}:关键词`
+    return t('ui.tag_search.field_usage.text', '{key}:关键词', { key })
   }
 
   // 搜索建议
@@ -477,9 +487,9 @@ export class TagSearchEngine {
   getBooleanSuggestions(config, prefix, shortKey, valueRaw) {
     const valueLower = String(valueRaw || '').toLowerCase()
     const options = [
-      { label: '有值 / 是', value: config.trueValues[0], values: config.trueValues },
-      { label: '无值 / 否', value: config.falseValues[0], values: config.falseValues },
-      { label: '未知 / 空', value: config.nullValues[0], values: config.nullValues },
+      { label: t('ui.tag_search.boolean.true_label', '有值 / 是'), value: config.trueValues[0], values: config.trueValues },
+      { label: t('ui.tag_search.boolean.false_label', '无值 / 否'), value: config.falseValues[0], values: config.falseValues },
+      { label: t('ui.tag_search.boolean.null_label', '未知 / 空'), value: config.nullValues[0], values: config.nullValues },
     ]
     return options
       .filter(item => item.values.some(value => value.startsWith(valueLower)))
@@ -521,7 +531,9 @@ export const generateTagSearchHelp = (engine) => {
       key,
       aliases: normalizeAliases(config.alias).join(', '),
       usage: engine.getFieldUsage(config, key),
-      description: config.type === TAG_FIELD_TYPES.BOOLEAN ? '判断字段状态' : '按字段内容匹配',
+      description: config.type === TAG_FIELD_TYPES.BOOLEAN
+        ? t('ui.tag_search.description.boolean', '判断字段状态')
+        : t('ui.tag_search.description.text', '按字段内容匹配'),
       isDefault: config.defaultSearch,
     }))
 }
@@ -533,7 +545,7 @@ export const generateTagSearchHelp = (engine) => {
  * 生成极简、高密度的 HUD 风格帮助文档 (HTML)
  */
 export const generateTagSearchHtmlHelp = (engine) => {
-  if (!engine?.schema) return '<div class="p-2 text-xs">Loading...</div>'
+  if (!engine?.schema) return `<div class="p-2 text-xs">${escapeHelpHtml(t('ui.tag_search.html.loading', 'Loading...'))}</div>`
 
   const entries = Object.entries(engine.schema).filter(([, config]) => config.searchable !== false)
   // 1. 字段排序：默认搜索的在前 -> 布尔值在前 -> 其他按首字母
@@ -547,48 +559,64 @@ export const generateTagSearchHtmlHelp = (engine) => {
 
   // 2. 样式常量 (Tailwind)
   const C = {
-    box: 'text-xs text-text-soft font-sans overflow-hidden',
-    header: 'py-1 px-2 border-b border-border-base/10 flex items-center justify-between',
+    box: 'w-full max-w-full min-w-0 text-xs text-text-soft font-sans overflow-hidden',
+    header: 'py-1 px-2 border-b border-border-base/10 flex items-center justify-between gap-2 min-w-0',
     sectionTitle: 'text-[0.65rem] uppercase tracking-wider opacity-40 font-bold mt-2 mb-1 px-1',
-    syntaxGrid: 'grid grid-cols-4 gap-1 px-1',
-    syntaxItem: 'bg-bg-overlay/5 rounded px-0.5 py-0.5 flex flex-col items-center justify-center text-center border border-border-base/5',
-    fieldGrid: 'grid grid-cols-2 gap-x-2 gap-y-1 px-1 pb-2',
-    fieldRow: 'flex items-center border-l-2 border-border-base/10 pl-1 group',
+    syntaxGrid: 'grid grid-cols-[repeat(auto-fit,minmax(min(7.5rem,100%),1fr))] gap-1 px-1',
+    syntaxItem: 'bg-bg-overlay/5 rounded px-1 py-0.5 flex flex-col items-center justify-center text-center border border-border-base/5 min-w-0',
+    fieldGrid: 'grid grid-cols-[repeat(2,minmax(0,1fr))] gap-x-2 gap-y-1 px-1 pb-2',
+    fieldRow: 'flex min-w-0 items-center border-l-2 border-border-base/10 pl-1 group',
     keyBadge: 'font-mono font-bold text-accent-primary bg-accent-primary/10 px-1.5 rounded text-xs min-w-[20px] text-center border border-accent-primary/20 group-hover:bg-accent-primary/20 transition-colors',
     label: 'text-text-dim text-xs text-end truncate flex-1',
   }
   // 是否是默认搜索字段
-  const defaultMarker = '<span class="text-accent-highlight ml-1" title="默认包含在模糊搜索中">•</span>'
+  const defaultMarker = `<span class="text-accent-highlight ml-1" title="${escapeHelpHtml(t('ui.tag_search.html.default_search_title', '默认包含在模糊搜索中'))}">•</span>`
+  const text = {
+    title: escapeHelpHtml(t('ui.tag_search.html.title', '搜索说明')),
+    badge: escapeHelpHtml(t('ui.tag_search.html.badge', '搜索指令速查')),
+    syntaxTitle: escapeHelpHtml(t('ui.tag_search.html.syntax_title', '基础搜索语法')),
+    directSearch: escapeHelpHtml(t('ui.tag_search.html.syntax.direct_search', '直接搜索')),
+    keyword: escapeHelpHtml(t('ui.tag_search.html.syntax.keyword', '关键词')),
+    fieldSearch: escapeHelpHtml(t('ui.tag_search.html.syntax.field_search', '类别搜索')),
+    field: escapeHelpHtml(t('ui.tag_search.html.syntax.field', '类别')),
+    excludeSearch: escapeHelpHtml(t('ui.tag_search.html.syntax.exclude_search', '排除搜索')),
+    booleanSearch: escapeHelpHtml(t('ui.tag_search.html.syntax.boolean_search', '判断搜索')),
+    availableFields: escapeHelpHtml(t('ui.tag_search.html.available_fields', '可用类别字段')),
+    booleanHelp: escapeHelpHtml(t('ui.tag_search.html.boolean_help', '判断搜索支持三态搜索：true / false / null  ( + / - / _ )')),
+    logicHelp: escapeHelpHtml(t('ui.tag_search.html.logic_help', '多个搜索条件关系可选 “与”/ “或” 逻辑')),
+    andHelp: escapeHelpHtml(t('ui.tag_search.html.and_help', '与：多个条件同时满足')),
+    orHelp: escapeHelpHtml(t('ui.tag_search.html.or_help', '或：满足任意一个条件即可')),
+  }
   // 3. 构建 HTML
   // 这里拼接的是固定模板和转义后的字段文本，避免 schema label 破坏帮助浮层结构。
   let html = `<div class="${C.box}">`
   // === 顶部：标题 + 状态 ===
   html += `<div class="${C.header}">
-      <span class="font-bold text-text-main">搜索说明</span>
-      <span class="text-[0.65rem] bg-accent-highlight/5 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">搜索指令速查</span>
+      <span class="font-bold text-text-main shrink-0">${text.title}</span>
+      <span class="min-w-0 truncate text-[0.65rem] bg-accent-highlight/5 text-accent-highlight px-1.5 rounded border border-accent-highlight/10">${text.badge}</span>
     </div>`;
-  // === 区域 1：基础语法 (3个核心卡片) ===
-  html += `<div class="${C.sectionTitle}">基础搜索语法</div>`
+  // === 区域 1：基础语法 ===
+  html += `<div class="${C.sectionTitle}">${text.syntaxTitle}</div>`
   html += `<div class="${C.syntaxGrid}">
     <div class="${C.syntaxItem}">
-      <span class="opacity-60">直接搜索${defaultMarker}</span>
-      <span class="font-mono bg-bg-overlay/10 px-1.5 rounded text-text-main">关键词</span>
+      <span class="opacity-60 max-w-full truncate whitespace-nowrap">${text.directSearch}${defaultMarker}</span>
+      <span class="font-mono bg-bg-overlay/10 px-1 rounded text-text-main max-w-full truncate whitespace-nowrap">${text.keyword}</span>
     </div>
     <div class="${C.syntaxItem}">
-      <span class="opacity-60">类别搜索</span>
-      <span class="font-mono bg-bg-overlay/10 px-1.5 rounded"><span class="text-accent-primary">类别</span>:关键词</span>
+      <span class="opacity-60 max-w-full truncate whitespace-nowrap">${text.fieldSearch}</span>
+      <span class="font-mono bg-bg-overlay/10 px-1 rounded max-w-full truncate whitespace-nowrap"><span class="text-accent-primary">${text.field}</span>:${text.keyword}</span>
     </div>
     <div class="${C.syntaxItem}">
-      <span class="opacity-60">排除搜索</span>
-      <span class="font-mono bg-bg-overlay/10 px-1.5 rounded text-accent-danger">-<span class="text-accent-primary">类别</span><span class="text-text-main">:关键词</span></span>
+      <span class="opacity-60 max-w-full truncate whitespace-nowrap">${text.excludeSearch}</span>
+      <span class="font-mono bg-bg-overlay/10 px-1 rounded text-accent-danger max-w-full truncate whitespace-nowrap">-<span class="text-accent-primary">${text.field}</span><span class="text-text-main">:${text.keyword}</span></span>
     </div>
     <div class="${C.syntaxItem}">
-      <span class="opacity-60">判断搜索</span>
-      <span class="font-mono bg-bg-overlay/10 px-1.5 rounded"><span class="text-accent-primary">类别</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span>/<span class="text-accent-warn">_</span></span>
+      <span class="opacity-60 max-w-full truncate whitespace-nowrap">${text.booleanSearch}</span>
+      <span class="font-mono bg-bg-overlay/10 px-1 rounded max-w-full truncate whitespace-nowrap"><span class="text-accent-primary">${text.field}</span>:<span class="text-accent-success">+</span>/<span class="text-accent-danger">-</span>/<span class="text-accent-warn">_</span></span>
     </div>
   </div>`
   // === 区域 2：字段列表 (高密度双栏) ===
-  html += `<div class="${C.sectionTitle}">可用类别字段</div><div class="${C.fieldGrid}">`
+  html += `<div class="${C.sectionTitle}">${text.availableFields}</div><div class="${C.fieldGrid}">`
 
   entries.forEach(([realKey, config]) => {
     const shortKey = engine.getPreferredKey(realKey)
@@ -600,10 +628,10 @@ export const generateTagSearchHtmlHelp = (engine) => {
   })
   html += `</div>`; // 字段区块结束
 
-  html += `<div>判断搜索支持三态搜索：true / false / null  ( + / - / _ )</div>`;
-  html += `<div>多个搜索条件关系可选 “与”/ “或” 逻辑</div>`;
-  html += `<div class="text-xs text-text-dim">与：多个条件同时满足</div>`;
-  html += `<div class="text-xs text-text-dim">或：满足任意一个条件即可</div>`;
+  html += `<div>${text.booleanHelp}</div>`;
+  html += `<div>${text.logicHelp}</div>`;
+  html += `<div class="text-xs text-text-dim">${text.andHelp}</div>`;
+  html += `<div class="text-xs text-text-dim">${text.orHelp}</div>`;
   html += `</div>`;
   return html
 }

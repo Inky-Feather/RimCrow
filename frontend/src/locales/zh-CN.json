@@ -5,6 +5,34 @@
       "delete": "删除",
       "operation": "操作"
     },
+    "drag": {
+      "default_item": "拖拽项目"
+    },
+    "header": {
+      "debug_page": "测试",
+      "folder": {
+        "game_config": "游戏配置目录",
+        "game_dlc": "游戏DLC目录",
+        "game_install": "游戏安装目录",
+        "game_saves": "游戏存档目录",
+        "local_mods": "本地Mod目录",
+        "manager_mods": "管理器Mod目录",
+        "user_data": "用户数据目录",
+        "workshop_mods": "工坊Mod目录"
+      },
+      "load_order": {
+        "export_modlist": "导出分享列表",
+        "export_modsconfig": "导出加载序列",
+        "export_rml": "导出原生分享",
+        "export_share_code": "复制分享码",
+        "exporting": "导出中",
+        "generating": "生成中",
+        "import": "导入加载序列",
+        "import_share_code": "导入分享码",
+        "importing": "导入中"
+      },
+      "workspace_hub": "库存枢纽"
+    },
     "kv": {
       "add_item": "+ 新增条目",
       "key_placeholder": "域名",
@@ -13,6 +41,35 @@
     "path": {
       "open_in_explorer": "在资源管理器中打开",
       "placeholder": "请输入或粘贴路径..."
+    },
+    "search": {
+      "mod": {
+        "field": {
+          "alias_name": "别名",
+          "author": "作者",
+          "coexist_variant": "存在共存",
+          "groups": "分组",
+          "ignored_issues": "忽略问题",
+          "last_active": "最近启用",
+          "mod_type": "类型",
+          "multiplayer_compat": "联机模组兼容性",
+          "name": "名称",
+          "package_id": "包名",
+          "replacement": "存在替代",
+          "save_breaking": "是否坏档",
+          "shadow_paths": "存在禁用",
+          "sign_color": "颜色",
+          "source": "来源",
+          "store": "位置",
+          "supported_languages": "支持语言",
+          "supported_versions": "支持版本",
+          "tags": "标签",
+          "workshop_id": "工坊ID"
+        },
+        "value": {
+          "none": "无"
+        }
+      }
     },
     "secret": {
       "pending_clear_placeholder": "保存后会清除；也可以直接填写新密钥",
@@ -24,8 +81,78 @@
       "placeholder": "请选择...",
       "use_custom_value": "使用 \"{value}\""
     },
+    "status_bar": {
+      "mods_actived": "已启用",
+      "history": "历史状态",
+      "last_app_run": "上次软件运行",
+      "last_game_run": "上次游戏运行",
+      "mods_total": "模组总数",
+      "never_run": "未运行",
+      "none": "无",
+      "ready": "就绪",
+      "selected": "已选择",
+      "unknown_version": "未知版本",
+      "unsaved_changes": "未保存更改"
+    },
+    "store_type": {
+      "local": "本地",
+      "other": "其它",
+      "self": "管理器",
+      "unknown": "未知",
+      "workshop": "工坊"
+    },
     "tag": {
       "placeholder": "输入并回车..."
+    },
+    "tag_search": {
+      "action": {
+        "clear_all": "清除全部",
+        "expand_tokens": "展开已输入的搜索条件"
+      },
+      "boolean": {
+        "false_label": "无值 / 否",
+        "null_label": "未知 / 空",
+        "true_label": "有值 / 是"
+      },
+      "description": {
+        "boolean": "判断字段状态",
+        "text": "按字段内容匹配"
+      },
+      "field_usage": {
+        "text": "{key}:关键词"
+      },
+      "html": {
+        "and_help": "与：多个条件同时满足",
+        "available_fields": "可用类别字段",
+        "badge": "搜索指令速查",
+        "boolean_help": "判断搜索支持三态搜索：true / false / null  ( + / - / _ )",
+        "default_search_title": "默认包含在模糊搜索中",
+        "loading": "Loading...",
+        "logic_help": "多个搜索条件关系可选 “与”/ “或” 逻辑",
+        "or_help": "或：满足任意一个条件即可",
+        "syntax": {
+          "boolean_search": "判断搜索",
+          "direct_search": "直接搜索",
+          "exclude_search": "排除搜索",
+          "field": "类别",
+          "field_search": "类别搜索",
+          "keyword": "关键词"
+        },
+        "syntax_title": "基础搜索语法",
+        "title": "搜索说明"
+      },
+      "input_help": "输入关键词并回车确认\n可直接输入关键词，或使用 类别:关键词 格式\n[[(使用 Tab 键应用输入建议)]]",
+      "logic": {
+        "and_tooltip": "当前为^^与^^逻辑，检索满足^^所有^^条件的项\n[[(点击切换为^^或^^逻辑)]]",
+        "or_tooltip": "当前为^^或^^逻辑，检索满足^^任意^^条件的项\n[[(点击切换为^^与^^逻辑)]]"
+      },
+      "placeholder": {
+        "add_condition": "添加条件...",
+        "input_keyword_or_condition": "输入关键词或条件"
+      },
+      "suggestion": {
+        "tooltip": "**{description}**\n原始格式：{fullKey}\n其它格式：{aliases}\n使用示例：{usage}"
+      }
     },
     "workshop_action": {
       "download": "下载",
@@ -46,6 +173,34 @@
     "command": {
       "missing": "命令不存在：{commandId}"
     },
+    "header": {
+      "ai_generation_manager": "AI生成管理",
+      "debug_page": "测试页面",
+      "file_search": "文件内容搜索",
+      "load_order": {
+        "export_modlist": "导出为 ModList.xml（含包名和工坊ID）",
+        "export_modsconfig": "导出为 ModsConfig.xml（仅含包名）",
+        "export_rml": "导出为 RML（游戏原生导出格式）",
+        "export_share_code": "生成 RC- 分享码并复制到剪贴板",
+        "exporting_modlist": "正在导出 ModList",
+        "exporting_modsconfig": "正在导出 ModsConfig",
+        "exporting_rml": "正在导出 RML",
+        "generating_share_code": "正在生成分享码",
+        "import": "导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）",
+        "import_share_code": "粘贴 RC- 分享码并导入到对比视图",
+        "importing": "正在导入加载序列",
+        "importing_share_code": "正在导入分享码",
+        "menu": "加载序列"
+      },
+      "log_viewer": "日志页面",
+      "mod_residue_cleanup": "查看和清理卸载残留",
+      "mod_settings": "查看模组配置",
+      "open_folder": "打开文件夹",
+      "rules": "规则页面",
+      "settings": "设置",
+      "texture_opt": "贴图优化",
+      "workspace_hub": "库存管理中枢"
+    },
     "path": {
       "browse": "浏览路径",
       "check_correct": "请检查路径是否正确！",
@@ -62,6 +217,9 @@
       "preserve_saved": "保留原值",
       "reveal_saved": "查看已保存密钥",
       "show": "显示"
+    },
+    "status_bar": {
+      "history_state": "当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。"
     },
     "task": {
       "cancel": "取消任务",
@@ -176,7 +334,24 @@
       "write_result": "写入任务结果"
     },
     "type": {
+      "ai_task": "AI 生成任务",
+      "download": "下载任务",
       "download_short": "下载",
+      "file_delete": "删除文件",
+      "file_search": "文件内容搜索",
+      "file_transfer": "转移文件",
+      "localize": "本地共存任务",
+      "mod_export": "导出模组包",
+      "mod_import": "导入模组包",
+      "scan": "模组扫描",
+      "steam_subscribe": "Steam 订阅",
+      "steam_unsubscribe": "Steam 取消订阅",
+      "steam_workshop_download": "Steam 工坊下载",
+      "steamcmd_download": "SteamCMD 下载",
+      "steamcmd_init": "SteamCMD 初始化",
+      "texture_opt": "贴图优化",
+      "texture_opt_analyze": "贴图分析",
+      "update": "软件更新",
       "update_short": "更新"
     }
   },

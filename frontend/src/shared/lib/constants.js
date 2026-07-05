@@ -2,6 +2,7 @@
 
 import { h, markRaw } from 'vue'
 import defaultLogoUrl from '../../../../icon.svg'
+import { t } from '../i18n'
 
 export const RIMWORLD_STEAM_APP_ID = 294100
 
@@ -184,6 +185,13 @@ export const STORE_TYPE_MAP = {
   'local': '本地',
   'self': '管理器',
   'other': '其它'
+}
+export const getStoreTypeLabel = (store) => {
+  if (store === 'local') return t('ui.store_type.local', '本地')
+  if (store === 'self') return t('ui.store_type.self', '管理器')
+  if (store === 'workshop') return t('ui.store_type.workshop', '工坊')
+  if (store === 'other') return t('ui.store_type.other', '其它')
+  return t('ui.store_type.unknown', '未知')
 }
 
 

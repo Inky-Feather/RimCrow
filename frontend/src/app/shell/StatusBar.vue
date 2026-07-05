@@ -4,27 +4,27 @@
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-accent-warn' : 'bg-accent-success']"></div>
-        <span>{{ modStore.isDirty ? '未保存更改' : '就绪' }}</span>
+        <span>{{ modStore.isDirty ? t('ui.status_bar.unsaved_changes', '未保存更改') : t('ui.status_bar.ready', '就绪') }}</span>
       </div>
 
       <div>
-        模组总数: <span class="text-text-main">{{ modStore.allModsMap.size }}</span>
+        {{ t('ui.status_bar.mods_total', '模组总数') }}: <span class="text-text-main">{{ modStore.allModsMap.size }}</span>
       </div>
 
       <div>
-        已启用: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
+        {{ t('ui.status_bar.mods_actived', '已启用') }}: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
       </div>
 
       <div v-tooltip="historyStateTooltip">
-        历史状态:
+        {{ t('ui.status_bar.history', '历史状态') }}:
         <template v-if="modStore.listHistoryTotal > 0">
           <span class="text-text-main font-bold">{{ modStore.listHistoryPosition }}</span>/<span class="text-text-dim">{{ modStore.listHistoryTotal }}</span>
         </template>
-        <span v-else class="text-text-disabled">无</span>
+        <span v-else class="text-text-disabled">{{ t('ui.status_bar.none', '无') }}</span>
       </div>
 
       <div v-show="modStore.selectedIds.length > 0">
-        已选择: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
+        {{ t('ui.status_bar.selected', '已选择') }}: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
       </div>
     </div>
 
@@ -112,9 +112,9 @@
     </Teleport>
 
     <div class="flex items-center gap-2 hover:text-text-main">
-      <span>上次软件运行：{{ formatDate(appStore.settings.last_run_time) || '未运行' }}</span> |
-      <span>上次游戏运行：{{ formatDate(profileStore.currentProfile?.last_played_time) || '未运行' }}</span> |
-      <span>RimWorld {{ profileStore.activeContext.game_version || '未知版本' }}</span>
+      <span>{{ t('ui.status_bar.last_app_run', '上次软件运行') }}：{{ formatDate(appStore.settings.last_run_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
+      <span>{{ t('ui.status_bar.last_game_run', '上次游戏运行') }}：{{ formatDate(profileStore.currentProfile?.last_played_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
+      <span>RimWorld {{ profileStore.activeContext.game_version || t('ui.status_bar.unknown_version', '未知版本') }}</span>
     </div>
   </div>
 </template>
@@ -137,23 +137,23 @@ const taskStore = useTaskStore()
 const activeTask = computed(() => taskStore.latestTask)
 
 const taskTypeMeta = {
-  scan: { titleKey: 'tasks.type.scan', title: '模组扫描', icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  download: { titleKey: 'tasks.type.download', title: '下载任务', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  update: { titleKey: 'tasks.type.update', title: '软件更新', icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-download': { titleKey: 'tasks.type.steamcmd_download', title: 'SteamCMD 下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'steam-subscribe': { titleKey: 'tasks.type.steam_subscribe', title: 'Steam 订阅', icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'steam-unsubscribe': { titleKey: 'tasks.type.steam_unsubscribe', title: 'Steam 取消订阅', icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'steam-workshop-download': { titleKey: 'tasks.type.steam_workshop_download', title: 'Steam 工坊下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'texture-opt': { titleKey: 'tasks.type.texture_opt', title: '贴图优化', icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'texture-opt-analyze': { titleKey: 'tasks.type.texture_opt_analyze', title: '贴图分析', icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'ai-task': { titleKey: 'tasks.type.ai_task', title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  localize: { titleKey: 'tasks.type.localize', title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'mod-import': { titleKey: 'tasks.type.mod_import', title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'mod-export': { titleKey: 'tasks.type.mod_export', title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  'file-delete': { titleKey: 'tasks.type.file_delete', title: '删除文件', icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'file-transfer': { titleKey: 'tasks.type.file_transfer', title: '转移文件', icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-init': { titleKey: 'tasks.type.steamcmd_init', title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
-  'file-search': { titleKey: 'tasks.type.file_search', title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  scan: { title: () => t('tasks.type.scan', '模组扫描'), icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  download: { title: () => t('tasks.type.download', '下载任务'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  update: { title: () => t('tasks.type.update', '软件更新'), icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-download': { title: () => t('tasks.type.steamcmd_download', 'SteamCMD 下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'steam-subscribe': { title: () => t('tasks.type.steam_subscribe', 'Steam 订阅'), icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'steam-unsubscribe': { title: () => t('tasks.type.steam_unsubscribe', 'Steam 取消订阅'), icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'steam-workshop-download': { title: () => t('tasks.type.steam_workshop_download', 'Steam 工坊下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'texture-opt': { title: () => t('tasks.type.texture_opt', '贴图优化'), icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'texture-opt-analyze': { title: () => t('tasks.type.texture_opt_analyze', '贴图分析'), icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'ai-task': { title: () => t('tasks.type.ai_task', 'AI 生成任务'), icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  localize: { title: () => t('tasks.type.localize', '本地共存任务'), icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'mod-import': { title: () => t('tasks.type.mod_import', '导入模组包'), icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'mod-export': { title: () => t('tasks.type.mod_export', '导出模组包'), icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  'file-delete': { title: () => t('tasks.type.file_delete', '删除文件'), icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'file-transfer': { title: () => t('tasks.type.file_transfer', '转移文件'), icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-init': { title: () => t('tasks.type.steamcmd_init', 'SteamCMD 初始化'), icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
+  'file-search': { title: () => t('tasks.type.file_search', '文件内容搜索'), icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
 }
 
 const resolveTaskMeta = (task) => taskTypeMeta[task?.type] || taskTypeMeta.download
@@ -173,7 +173,7 @@ const taskTitle = (task) => {
   if (type === 'download') return t('tasks.type.download_short', '下载')
   if (type === 'update') return t('tasks.type.update_short', '更新')
   const meta = resolveTaskMeta(task)
-  return String(task?.metrics?.title || t(meta.titleKey, meta.title))
+  return String(task?.metrics?.title || meta.title())
 }
 
 const taskMessage = (task) => {
@@ -211,7 +211,10 @@ const taskExtra = (task) => {
   return parts.join(' ')
 }
 
-const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
+const historyStateTooltip = computed(() => t(
+  'tooltip.status_bar.history_state',
+  '当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。'
+))
 </script>
 
 <style scoped>

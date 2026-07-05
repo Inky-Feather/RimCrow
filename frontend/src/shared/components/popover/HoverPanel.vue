@@ -189,7 +189,7 @@ watch(() => hoverStore.isHovering, (hovering) => {
 const containerClasses = computed(() => {
   if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
-    return 'max-h-[calc(100vh-2rem)] max-w-[30dvw] overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-all whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
+    return ' max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-words whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
   }
   // 让组件自己决定长什么样
   if (hoverStore.type === 'component') {
