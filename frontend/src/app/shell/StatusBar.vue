@@ -57,7 +57,7 @@
               class="shrink-0 rounded-md p-1 transition-colors disabled:cursor-wait"
               :class="appStore.canCancelTask(activeTask) ? 'text-text-disabled hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
               :disabled="!appStore.canCancelTask(activeTask)"
-              :title="appStore.isTaskCancelPending(activeTask?.id) ? '正在尝试取消任务' : '取消任务'"
+              :title="appStore.isTaskCancelPending(activeTask?.id) ? t('tooltip.task.cancelling', '正在尝试取消任务') : t('tooltip.task.cancel', '取消任务')"
               @click.stop="cancelTask(activeTask)"
             >
               <component :is="appStore.isTaskCancelPending(activeTask?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(activeTask?.id) }" />
@@ -66,8 +66,8 @@
 
           <div class="absolute bottom-full left-1/2 mb-2 w-120 max-w-[90vw] -translate-x-1/2 rounded-2xl border border-border-base/10 bg-glass-heavy backdrop-blur-md shadow-2xl p-3 opacity-0 invisible transition-all duration-200 group-hover/status:opacity-100 group-hover/status:visible group-hover/status:translate-y-0">
             <div class="mb-2 flex items-center justify-between">
-              <div class="text-[0.7rem] font-bold tracking-wider text-text-soft">任务队列</div>
-              <div class="text-[0.65rem] text-text-disabled">{{ taskStore.tasks.length }} 个任务</div>
+              <div class="text-[0.7rem] font-bold tracking-wider text-text-soft">{{ t('tasks.queue.title', '任务队列') }}</div>
+              <div class="text-[0.65rem] text-text-disabled">{{ t('tasks.queue.count', '{count} 个任务', { count: taskStore.tasks.length }) }}</div>
             </div>
 
             <div class="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
@@ -83,7 +83,7 @@
                           class="rounded-md p-1 transition-colors disabled:cursor-wait"
                           :class="appStore.canCancelTask(task) ? 'text-text-disabled hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
                           :disabled="!appStore.canCancelTask(task)"
-                          :title="appStore.isTaskCancelPending(task?.id) ? '正在尝试取消任务' : '取消任务'"
+                          :title="appStore.isTaskCancelPending(task?.id) ? t('tooltip.task.cancelling', '正在尝试取消任务') : t('tooltip.task.cancel', '取消任务')"
                           @click.stop="cancelTask(task)"
                         >
                           <component :is="appStore.isTaskCancelPending(task?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(task?.id) }" />
@@ -127,6 +127,7 @@ import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useTaskStore } from '../stores/taskStore'
 import { formatDate } from '../../shared/lib/format'
+import { t, translateMessagePayload } from '../../shared/i18n'
 
 const modStore = useModStore()
 const appStore = useAppStore()
@@ -136,23 +137,23 @@ const taskStore = useTaskStore()
 const activeTask = computed(() => taskStore.latestTask)
 
 const taskTypeMeta = {
-  scan: { title: '模组扫描', icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  download: { title: '下载任务', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  update: { title: '软件更新', icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-download': { title: 'SteamCMD 下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'steam-subscribe': { title: 'Steam 订阅', icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'steam-unsubscribe': { title: 'Steam 取消订阅', icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'steam-workshop-download': { title: 'Steam 工坊下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'texture-opt': { title: '贴图优化', icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'texture-opt-analyze': { title: '贴图分析', icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'ai-task': { title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  localize: { title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'mod-import': { title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'mod-export': { title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  'file-delete': { title: '删除文件', icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'file-transfer': { title: '转移文件', icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
-  'file-search': { title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  scan: { titleKey: 'tasks.type.scan', title: '模组扫描', icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  download: { titleKey: 'tasks.type.download', title: '下载任务', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  update: { titleKey: 'tasks.type.update', title: '软件更新', icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-download': { titleKey: 'tasks.type.steamcmd_download', title: 'SteamCMD 下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'steam-subscribe': { titleKey: 'tasks.type.steam_subscribe', title: 'Steam 订阅', icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'steam-unsubscribe': { titleKey: 'tasks.type.steam_unsubscribe', title: 'Steam 取消订阅', icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'steam-workshop-download': { titleKey: 'tasks.type.steam_workshop_download', title: 'Steam 工坊下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'texture-opt': { titleKey: 'tasks.type.texture_opt', title: '贴图优化', icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'texture-opt-analyze': { titleKey: 'tasks.type.texture_opt_analyze', title: '贴图分析', icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'ai-task': { titleKey: 'tasks.type.ai_task', title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  localize: { titleKey: 'tasks.type.localize', title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'mod-import': { titleKey: 'tasks.type.mod_import', title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'mod-export': { titleKey: 'tasks.type.mod_export', title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  'file-delete': { titleKey: 'tasks.type.file_delete', title: '删除文件', icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'file-transfer': { titleKey: 'tasks.type.file_transfer', title: '转移文件', icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-init': { titleKey: 'tasks.type.steamcmd_init', title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
+  'file-search': { titleKey: 'tasks.type.file_search', title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
 }
 
 const resolveTaskMeta = (task) => taskTypeMeta[task?.type] || taskTypeMeta.download
@@ -169,14 +170,15 @@ const cancelTask = async (task) => {
 
 const taskTitle = (task) => {
   const type = String(task?.type || '')
-  if (type === 'download') return '下载'
-  if (type === 'update') return '更新'
-  return String(task?.metrics?.title || resolveTaskMeta(task).title)
+  if (type === 'download') return t('tasks.type.download_short', '下载')
+  if (type === 'update') return t('tasks.type.update_short', '更新')
+  const meta = resolveTaskMeta(task)
+  return String(task?.metrics?.title || t(meta.titleKey, meta.title))
 }
 
 const taskMessage = (task) => {
-  const raw = String(task?.message || '')
-  if (!raw) return '处理中...'
+  const raw = String(translateMessagePayload(task, task?.message) || '')
+  if (!raw) return t('tasks.message.processing', '处理中...')
   if (task?.type === 'scan' && (raw.includes('/') || raw.includes('\\'))) {
     return raw.split(/[/\\]/).pop() || raw
   }
@@ -199,8 +201,8 @@ const taskSizeProgress = (task) => {
 
 const taskExtra = (task) => {
   const phase = String(task?.metrics?.phase || '')
-  if (appStore.isTaskCancelPending(task?.id) || phase === 'cancelling') return '正在取消'
-  if (phase === 'verifying') return '校验中'
+  if (appStore.isTaskCancelPending(task?.id) || phase === 'cancelling') return t('tasks.phase.cancelling', '正在取消')
+  if (phase === 'verifying') return t('tasks.phase.verifying', '校验中')
   const parts = []
   const sizeProgress = taskSizeProgress(task)
   if (sizeProgress) parts.push(sizeProgress)

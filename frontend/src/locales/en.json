@@ -1,0 +1,130 @@
+{
+  "ui": {
+    "secret": {
+      "pending_clear_placeholder": "Saving will clear it; you can also enter a new secret",
+      "saved": "Secret saved",
+      "saved_with_hint": "Saved {hint}"
+    }
+  },
+  "tooltip": {
+    "secret": {
+      "clear_saved": "Clear saved secret",
+      "hide": "Hide",
+      "hide_saved": "Hide secret",
+      "preserve_saved": "Keep saved value",
+      "reveal_saved": "Show saved secret",
+      "show": "Show"
+    },
+    "task": {
+      "cancel": "Cancel task",
+      "cancelling": "Trying to cancel task"
+    }
+  },
+  "toast": {
+    "api": {
+      "error": "{workname} failed:\n{message}",
+      "success": "{workname} completed",
+      "warning": "{workname} needs attention:\n{message}"
+    },
+    "texture": {
+      "tool_download_started_watch_status": "todds download started. Watch the status bar.",
+      "tool_ready_no_download": "todds is ready; no download needed"
+    }
+  },
+  "dialog": {
+    "action": {
+      "cancel": "Cancel",
+      "confirm": "OK"
+    },
+    "delete": {
+      "confirm": "Delete",
+      "force_option": "Delete permanently",
+      "options_hint": "By default files are moved to the system recycle bin. Permanent delete cannot be undone.",
+      "trash_option": "Move to recycle bin"
+    }
+  },
+  "api": {
+    "texture": {
+      "analysis_started": "Texture analysis started in the background",
+      "task_queued": "{task_name} task has been queued",
+      "todds_found": "Found todds executable",
+      "tool_download_started": "Tool download task started",
+      "tool_ready": "Tool is ready"
+    }
+  },
+  "errors": {
+    "fallback": {
+      "operation_unfinished": "The operation did not complete. Network, path permission, configuration, or runtime environment may be unavailable. Details were written to the system log.",
+      "operation_warning": "The operation completed, but some items need attention. Details were written to the system log.",
+      "work_failed": "{workname} did not complete. Network, path permission, configuration, or runtime environment may be unavailable. Details were written to the system log."
+    },
+    "i18n": {
+      "user_locale_load_failed": "Failed to read the user language file. Check the language file format under data/locales."
+    },
+    "secret": {
+      "reveal_failed_preserve": "Could not read the saved secret. The saved value will be kept when saving."
+    },
+    "texture": {
+      "analysis_start_failed": "Failed to start texture analysis. Check the selected mod paths, tool status, and file permissions. Details were written to the system log.",
+      "no_analysis_targets": "No mods selected for analysis",
+      "no_residue_targets": "No uninstalled residue mod folders containing {format} were found",
+      "no_valid_mod_paths": "No valid physical paths were found for the selected mods",
+      "prepare_tool_failed": "Failed to prepare the texture tool. Check network connection, proxy settings, tool directory permissions, and disk space. Details were written to the system log.",
+      "status_failed": "Failed to read texture tool status. Check the tool path and runtime environment. Details were written to the system log.",
+      "task_start_failed": "Failed to start the texture task. Check selected mod paths, tool status, disk space, and file permissions. Details were written to the system log.",
+      "tool_download_failed": "Failed to start texture tool download. Check network connection, proxy settings, and tool directory write permission. Details were written to the system log."
+    }
+  },
+  "tasks": {
+    "message": {
+      "cancelling_request": "Trying to stop the task...",
+      "processing": "Processing..."
+    },
+    "phase": {
+      "cancelling": "Cancelling",
+      "verifying": "Verifying"
+    },
+    "queue": {
+      "count": "{count} tasks",
+      "title": "Task queue"
+    },
+    "texture": {
+      "analysis_completed_elapsed": "Statistics completed in {elapsed}",
+      "cancelled": "Texture optimization task cancelled",
+      "clean_completed": "{target_label} cleanup completed",
+      "clean_finishing": "Cleanup completed, finishing task",
+      "clean_progress": "Cleaning {target_label}: {mod_name}, checked {checked}, deleted {deleted}",
+      "clean_start": "Starting cleanup for {target_label}",
+      "completed_elapsed": "{message}, elapsed {elapsed}",
+      "encode_batch": "Generating {output_label}: batch {batch_index}/{batch_total} ({scale_label})",
+      "encode_batch_wait": "Waiting for todds to finish writing batch {batch_index}/{batch_total} ({scale_label})",
+      "encode_completed": "{output_label} generation completed{details}",
+      "encode_record_batch": "Recording generated files: batch {batch_index}/{batch_total} ({scale_label})",
+      "encode_start": "Starting {output_label} generation",
+      "failed": "Texture optimization failed",
+      "prepare_generate_mod": "Preparing generation: {mod_name}",
+      "prepare_task": "Preparing task...",
+      "queue_running": "Running texture queue...",
+      "ready": "Ready",
+      "retry_recoverable": "Retrying recoverable failed items",
+      "retry_start": "Main batches completed; retrying recoverable failed items",
+      "scan_cancelled": "Texture scan task cancelled",
+      "scan_failed": "Texture scan task failed: {reason}",
+      "scanned_mod": "Scanned {mod_name}",
+      "summarize_encode_result": "Summarizing generation result",
+      "update_encode_state": "Updating generation state",
+      "write_result": "Writing task result"
+    },
+    "type": {
+      "download_short": "Download",
+      "update_short": "Update"
+    }
+  },
+  "logs": {},
+  "ai": {
+    "definitions": {},
+    "tools": {},
+    "actions": {},
+    "prompts": {}
+  }
+}

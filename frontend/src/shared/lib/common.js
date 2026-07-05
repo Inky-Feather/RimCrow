@@ -1,4 +1,5 @@
 import { createToastInterface, globalEventBus } from 'vue-toastification'
+import { t, translateMessagePayload } from '../i18n'
 
 // -----------------------------------------------------------------
 // 文本与列表工具 (Text / Collection Utils)
@@ -164,14 +165,14 @@ export const isTechnicalErrorMessage = (value = '') => {
   return chars.length >= 18 && chineseCount === 0 && asciiCount / Math.max(chars.length, 1) > 0.85
 }
 
-export const toUserMessage = (value = '', fallback = '操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。') => {
+export const toUserMessage = (value = '', fallback = t('errors.fallback.operation_unfinished', '操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。')) => {
   const text = normalizeText(value)
   if (!text || isTechnicalErrorMessage(text)) return fallback
   return text
 }
 
 export const getApiResponseMessage = (res, fallback = '') => {
-  const candidate = normalizeText(res?.user_message) || normalizeText(res?.message)
+  const candidate = normalizeText(translateMessagePayload(res, fallback))
   return toUserMessage(candidate, fallback)
 }
 
@@ -182,16 +183,16 @@ export const checkResult = (res, workname, showSuccess = false, options = {}) =>
   const silent = !!options?.silent
   if (debugMode) console.debug('API 结果检查:', workname, res)
   if (res?.status === 'success') {
-    if (showSuccess && !silent) toast.success(`${workname}已完成`, { timeout: 1000 })
+    if (showSuccess && !silent) toast.success(t('toast.api.success', '{workname}已完成', { workname }), { timeout: 1000 })
     return true
   }
   if (silent) return false
   if (res?.status === 'warning') {
-    const message = getApiResponseMessage(res, '操作已完成，但有部分情况需要确认。详细原因已写入系统日志。')
-    toast.warning(`${workname}需要确认：\n${message}`)
+    const message = getApiResponseMessage(res, t('errors.fallback.operation_warning', '操作已完成，但有部分情况需要确认。详细原因已写入系统日志。'))
+    toast.warning(t('toast.api.warning', '{workname}需要确认：\n{message}', { workname, message }))
   } else {
-    const message = getApiResponseMessage(res, `${workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。`)
-    toast.error(`${workname}失败：\n${message}`)
+    const message = getApiResponseMessage(res, t('errors.fallback.work_failed', '{workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。', { workname }))
+    toast.error(t('toast.api.error', '{workname}失败：\n{message}', { workname, message }))
   }
   return false
 }

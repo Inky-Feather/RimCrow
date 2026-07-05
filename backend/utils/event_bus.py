@@ -3,6 +3,7 @@ import threading
 
 from webview import WebViewException, Window
 
+from backend.i18n.messages import localized_key, localized_params
 from backend.utils.tools import current_ms
 
 class EventBus:
@@ -139,7 +140,7 @@ class EventBus:
         return normalized
     
     @classmethod
-    def emit_progress(cls, task_id, task_type, status="running", progress=0, message="", metrics=None):
+    def emit_progress(cls, task_id, task_type, status="running", progress=0, message="", metrics=None, message_key="", message_params=None):
         """
         统一进度发送器
         :param task_id: 任务唯一ID (uuid)
@@ -150,15 +151,22 @@ class EventBus:
         :param metrics: 额外指标数据 (如 {'speed': '2MB/s', 'eta': '10s', 'count': '10/100'})
         """
         now = current_ms()
+        key = str(message_key or localized_key(message) or "").strip()
+        params = dict(message_params or localized_params(message))
         payload = {
             "id": task_id,
             "type": str(task_type or "").strip().lower(),
             "status": cls._normalize_progress_status(status),
             "progress": max(0, min(100, int(progress or 0))),
-            "message": message,
+            "message": str(message or ""),
             "metrics": dict(metrics or {}),
             "timestamp": now
         }
+        # message 保持旧字段兼容；key/params 只在声明时附加，前端可按当前语言即时渲染。
+        if key:
+            payload["message_key"] = key
+        if params:
+            payload["message_params"] = params
         payload["metrics"].setdefault("task_created_at", now)
         cls.emit('global-progress', payload)
         

@@ -50,6 +50,7 @@ from backend.utils.tools import open_system_uri as open_uri_with_system_handler
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import normalize_language_code
+from backend.i18n.messages import DEFAULT_LOCALE, load_user_locale, localized_key, localized_params, tr
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
@@ -270,14 +271,33 @@ class ApiResponse:
     data: Any = None         # 数据载体 (可以是 dict, list, None)
 
     @classmethod
-    def success(cls, data=None, message=""):
-        # logger.debug(f"API Success: {message}, data={cls.serialize_data(data)}")
-        return asdict(cls(status="success", data=cls.serialize_data(data), message=message))
+    def _message_meta(cls, message: Any, *, message_key: str = "", message_params: dict[str, Any] | None = None) -> tuple[str, str, dict[str, Any]]:
+        text = str(message or "")
+        key = str(message_key or localized_key(message) or "").strip()
+        params = dict(message_params or localized_params(message))
+        return text, key, params
 
     @classmethod
-    def error(cls, message, data=None, *, code="APP.UNKNOWN_ERROR", detail=None, user_message=None, context=None):
+    def _attach_message_meta(cls, payload: dict[str, Any], message_key: str, message_params: dict[str, Any]) -> dict[str, Any]:
+        # 只在调用方声明了 key 时写入，避免全量 API 响应突然多出空字段。
+        if message_key:
+            payload["message_key"] = message_key
+        if message_params:
+            payload["message_params"] = cls.serialize_data(message_params)
+        return payload
+
+    @classmethod
+    def success(cls, data=None, message="", *, message_key: str = "", message_params: dict[str, Any] | None = None):
+        # logger.debug(f"API Success: {message}, data={cls.serialize_data(data)}")
+        public_message, key, params = cls._message_meta(message, message_key=message_key, message_params=message_params)
+        payload = asdict(cls(status="success", data=cls.serialize_data(data), message=public_message))
+        return cls._attach_message_meta(payload, key, params)
+
+    @classmethod
+    def error(cls, message, data=None, *, code="APP.UNKNOWN_ERROR", detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None):
         has_exc = sys.exc_info()[0] is not None
         public_message = str(user_message or _default_user_error_message(message)).strip()
+        _, key, params = cls._message_meta(user_message or message, message_key=message_key, message_params=message_params)
         error_detail = _build_error_detail(detail, context)
         log_context = error_detail or None
         logger.error(
@@ -289,13 +309,15 @@ class ApiResponse:
         )
         payload = asdict(cls(status="error", message=public_message, data=cls.serialize_data(data)))
         payload["error_code"] = code
+        cls._attach_message_meta(payload, key, params)
         if error_detail:
             payload["detail"] = cls.serialize_data(error_detail)
         return payload
     
     @classmethod
-    def warning(cls, message, data=None, *, code="APP.WARNING", detail=None, user_message=None, context=None):
+    def warning(cls, message, data=None, *, code="APP.WARNING", detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None):
         public_message = str(user_message or _default_user_error_message(message or "操作已完成，但有部分情况需要确认。")).strip()
+        _, key, params = cls._message_meta(user_message or message, message_key=message_key, message_params=message_params)
         warning_detail = _build_error_detail(detail, context)
         logger.warning(
             "API 返回警告：%s",
@@ -305,6 +327,7 @@ class ApiResponse:
         )
         payload = asdict(cls(status="warning", message=public_message, data=cls.serialize_data(data)))
         payload["error_code"] = code
+        cls._attach_message_meta(payload, key, params)
         if warning_detail:
             payload["detail"] = cls.serialize_data(warning_detail)
         return payload
@@ -1256,6 +1279,24 @@ class API:
             EventBus.emit('game-status-changed', {'running': self.game_monitor.is_game_running, 'runtime_session': self._get_runtime_session_data()})
         logger.info("[EventBus] 收到前端就绪信号，事件总线已恢复")
         return ApiResponse.success()
+
+    @log_api_call
+    def locale_load_user_messages(self, language: str = DEFAULT_LOCALE):
+        """读取用户覆盖语言包。内置默认语言包由前端打包，后端只返回 data/locales 下的增量覆盖。"""
+        locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+        try:
+            return ApiResponse.success({"language": locale, "messages": load_user_locale(locale)})
+        except Exception as e:
+            return ApiResponse.error(
+                "读取用户语言文件失败",
+                code="I18N.LOCALE_LOAD_FAILED",
+                detail=e,
+                context={"language": locale},
+                user_message=tr(
+                    "errors.i18n.user_locale_load_failed",
+                    "读取用户语言文件失败。请检查 data/locales 下的语言文件格式。",
+                ),
+            )
     
     
     # =========================================================================
@@ -7595,7 +7636,12 @@ class API:
             status = self.texture_mgr.get_backend_status(options)
             return ApiResponse.success(status)
         except Exception as e:
-            return ApiResponse.error("读取贴图工具状态失败", code="TEXTURE.STATUS_FAILED", detail=e, user_message="读取贴图工具状态失败。请检查工具路径和运行环境，详细原因已写入系统日志。")
+            return ApiResponse.error(
+                "读取贴图工具状态失败",
+                code="TEXTURE.STATUS_FAILED",
+                detail=e,
+                user_message=tr("errors.texture.status_failed", "读取贴图工具状态失败。请检查工具路径和运行环境，详细原因已写入系统日志。"),
+            )
 
     @log_api_call
     def texture_prepare_download(self, options: dict|None = None):
@@ -7603,10 +7649,15 @@ class API:
         try:
             res = self.texture_mgr.prepare_tool_download(self.download_mgr, options)
             if res.get("already_ready"):
-                return ApiResponse.success(res, message="工具已经就绪")
-            return ApiResponse.success(res, message="已启动工具下载任务")
+                return ApiResponse.success(res, message=tr("api.texture.tool_ready", "工具已经就绪"))
+            return ApiResponse.success(res, message=tr("api.texture.tool_download_started", "已启动工具下载任务"))
         except Exception as e:
-            return ApiResponse.error("启动贴图工具下载失败", code="TEXTURE.TOOL_DOWNLOAD_FAILED", detail=e, user_message="启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。")
+            return ApiResponse.error(
+                "启动贴图工具下载失败",
+                code="TEXTURE.TOOL_DOWNLOAD_FAILED",
+                detail=e,
+                user_message=tr("errors.texture.tool_download_failed", "启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。"),
+            )
 
     @log_api_call
     def texture_analyze_mods(self, package_ids: List[str], options: dict|None = None):
@@ -7618,17 +7669,22 @@ class API:
         single_mod_target = request_options.get("single_mod_target")
         direct_targets = [single_mod_target] if isinstance(single_mod_target, dict) else None
         if not direct_targets and not package_ids and target_scope != "all":
-            return ApiResponse.error("未指定要分析的模组")
+            return ApiResponse.error(tr("errors.texture.no_analysis_targets", "未指定要分析的模组"))
         targets = direct_targets or self.texture_mgr.resolve_targets(package_ids, target_scope, self.active_context)
         if not targets:
-            return ApiResponse.error("未能找到指定模组的有效物理路径")
+            return ApiResponse.error(tr("errors.texture.no_valid_mod_paths", "未能找到指定模组的有效物理路径"))
 
         try:
             res = self.texture_mgr.start_analysis_task(targets, request_options)
-            return ApiResponse.success(res, message="贴图分析任务已在后台启动")
+            return ApiResponse.success(res, message=tr("api.texture.analysis_started", "贴图分析任务已在后台启动"))
         except Exception as e:
             logger.error("贴图分析启动失败", exc_info=True)
-            return ApiResponse.error("启动贴图分析失败", code="TEXTURE.ANALYSIS_START_FAILED", detail=e, user_message="启动贴图分析失败。请检查所选模组路径、工具状态和文件权限，详细原因已写入系统日志。")
+            return ApiResponse.error(
+                "启动贴图分析失败",
+                code="TEXTURE.ANALYSIS_START_FAILED",
+                detail=e,
+                user_message=tr("errors.texture.analysis_start_failed", "启动贴图分析失败。请检查所选模组路径、工具状态和文件权限，详细原因已写入系统日志。"),
+            )
 
     @log_api_call
     def texture_start_task(self, package_ids: List[str], action: str = "optimize", options: dict|None = None):
@@ -7662,7 +7718,11 @@ class API:
         )
         if not targets:
             residue_label = "ZSTD" if clean_output_format == "zstd" else "DDS"
-            message = f"未找到包含 {residue_label} 的卸载残留模组目录" if residue_clean_only else "未能找到指定模组的有效物理路径"
+            message = (
+                tr("errors.texture.no_residue_targets", "未找到包含 {format} 的卸载残留模组目录", {"format": residue_label})
+                if residue_clean_only
+                else tr("errors.texture.no_valid_mod_paths", "未能找到指定模组的有效物理路径")
+            )
             return ApiResponse.error(message)
 
         try:
@@ -7676,10 +7736,16 @@ class API:
                     if residue_clean_only
                     else (f"清理已生成 {clean_output_label}" if action == "clean_generated" else "贴图优化")
                 )
-            return ApiResponse.success(res, message=f"{msg}任务已加入队列")
+            return ApiResponse.success(res, message=tr("api.texture.task_queued", "{task_name}任务已加入队列", {"task_name": msg}))
         except Exception as e:
             logger.error("贴图优化任务启动失败", exc_info=True)
-            return ApiResponse.error("启动贴图任务失败", code="TEXTURE.TASK_START_FAILED", detail=e, context={"action": action}, user_message="启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限，详细原因已写入系统日志。")
+            return ApiResponse.error(
+                "启动贴图任务失败",
+                code="TEXTURE.TASK_START_FAILED",
+                detail=e,
+                context={"action": action},
+                user_message=tr("errors.texture.task_start_failed", "启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限，详细原因已写入系统日志。"),
+            )
 
     @log_api_call
     def texture_get_result_history(self, limit: int = 3):

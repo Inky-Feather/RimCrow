@@ -1,13 +1,14 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toUserMessage } from '../../shared/lib/common'
+import { translateMessagePayload } from '../../shared/i18n'
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
 const TASK_RETENTION_MS = 3000
 
 const getTaskFailureMessage = (task = {}) => toUserMessage(
-  task.message || task.metrics?.error || task.metrics?.original_error,
+  translateMessagePayload(task, task.message) || task.metrics?.error || task.metrics?.original_error,
   '任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。',
 )
 
@@ -62,6 +63,10 @@ export const useTaskStore = defineStore('tasks', () => {
       status: String(payload.status || existing?.status || 'pending'),
       progress: Number(payload.progress ?? existing?.progress ?? 0),
       message: payload.message ?? existing?.message ?? '',
+      message_key: payload.message_key ?? existing?.message_key ?? '',
+      message_params: payload.message_params ?? existing?.message_params ?? {},
+      error_key: payload.error_key ?? existing?.error_key ?? '',
+      error_params: payload.error_params ?? existing?.error_params ?? {},
       metrics,
       joinedAt,
       updatedAt,
@@ -94,6 +99,8 @@ export const useTaskStore = defineStore('tasks', () => {
       status,
       progress,
       message,
+      message_key: '',
+      message_params: {},
       metrics,
       timestamp: Date.now(),
     })
@@ -186,6 +193,8 @@ export const useTaskStore = defineStore('tasks', () => {
         status,
         progress: task.progress ?? 0,
         message: message || task.message,
+        message_key: task.message_key || '',
+        message_params: task.message_params || {},
         metrics: {
           ...(task.metrics || {}),
           ...(metrics || {}),

@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
+from backend.i18n.messages import localized_key, localized_params, tr
 from backend.load_order.package_tokens import parse_package_token
 from backend.paths.core import path_key
 from backend.settings import DATA_DIR, TOOLS_DIR, settings
@@ -305,11 +306,15 @@ class TextureTask:
     status: str = "pending"
     progress: int = 0
     message: str = ""
+    message_key: str = ""
+    message_params: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
     created_at: int = field(default_factory=current_ms)
     updated_at: int = field(default_factory=current_ms)
     summary: dict[str, Any] = field(default_factory=dict)
     error: str = ""
+    error_key: str = ""
+    error_params: dict[str, Any] = field(default_factory=dict)
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def __post_init__(self) -> None:
@@ -343,9 +348,13 @@ class TextureTask:
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
+            "message_key": self.message_key,
+            "message_params": dict(self.message_params),
             "metrics": dict(self.metrics),
             "summary": dict(self.summary),
             "error": self.error,
+            "error_key": self.error_key,
+            "error_params": dict(self.error_params),
             "mod_paths": list(self.mod_paths),
             "mod_targets": [dict(item) for item in self.mod_targets],
             "created_at": self.created_at,
@@ -1106,7 +1115,7 @@ class TextureOptimizationManager:
                     task_id,
                     status="cancelled",
                     progress=0,
-                    message="贴图扫描任务已取消",
+                    message=tr("tasks.texture.scan_cancelled", "贴图扫描任务已取消"),
                     processed_mods=0,
                     total_mods=len(normalized_targets),
                     summary=self._create_empty_stat(include_mod_count=True, mod_count=len(normalized_targets)),
@@ -1117,7 +1126,7 @@ class TextureOptimizationManager:
                     task_id,
                     status="failed",
                     progress=0,
-                    message=f"贴图扫描任务失败: {exc}",
+                    message=tr("tasks.texture.scan_failed", "贴图扫描任务失败: {reason}", {"reason": str(exc)}),
                     processed_mods=0,
                     total_mods=len(normalized_targets),
                     summary=self._create_empty_stat(include_mod_count=True, mod_count=len(normalized_targets)),
@@ -1150,7 +1159,7 @@ class TextureOptimizationManager:
 
         worker = threading.Thread(target=self._run_task, args=(task,), daemon=True, name=f"TextureOpt-{task_id[:8]}")
         worker.start()
-        self._emit_progress(task, status="pending", progress=0, message="准备任务...")
+        self._emit_progress(task, status="pending", progress=0, message=tr("tasks.texture.prepare_task", "准备任务..."))
         return task.to_payload()
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:
@@ -1158,7 +1167,7 @@ class TextureOptimizationManager:
         if task:
             task._cancel_event.set()
             if task.status == "pending":
-                self._set_task_state(task, status="cancelled", message="贴图优化任务已取消")
+                self._set_task_state(task, status="cancelled", message=tr("tasks.texture.cancelled", "贴图优化任务已取消"))
             return task.to_payload()
 
         analysis_event = self._analysis_tasks.get(task_id)
@@ -1176,10 +1185,13 @@ class TextureOptimizationManager:
         merged_options = self._build_options(options)
         try:
             executable = ToddsEncoder(merged_options).resolve_executable()
+            message = tr("api.texture.todds_found", "已找到 todds 可执行文件")
             return {
                 "available": True,
                 "resolved_path": str(executable),
-                "message": "已找到 todds 可执行文件",
+                "message": str(message),
+                "message_key": localized_key(message),
+                "message_params": localized_params(message),
             }
         except TextureOptError as exc:
             return {
@@ -1260,7 +1272,7 @@ class TextureOptimizationManager:
             analysis_task_id,
             status="success",
             progress=100,
-            message=f"统计完成，用时 {self._format_elapsed_ms(elapsed_ms)}",
+            message=tr("tasks.texture.analysis_completed_elapsed", "统计完成，用时 {elapsed}", {"elapsed": self._format_elapsed_ms(elapsed_ms)}),
             processed_mods=len(normalized_targets),
             total_mods=len(normalized_targets),
             summary=summary,
@@ -1278,7 +1290,7 @@ class TextureOptimizationManager:
 
     def _run_task(self, task: TextureTask) -> None:
         try:
-            self._set_task_state(task, status="running", message="正在执行贴图队列...")
+            self._set_task_state(task, status="running", message=tr("tasks.texture.queue_running", "正在执行贴图队列..."))
             summary = self._clean_generated(task) if task.action == "clean_generated" else self._optimize(task)
             success_message = str(summary.pop("message", "贴图优化任务完成"))
             final_status = str(summary.pop("final_status", "success") or "success")
@@ -1302,7 +1314,7 @@ class TextureOptimizationManager:
                     task,
                     status="running",
                     progress=max(int(task.progress or 0), 99),
-                    message="写入任务结果",
+                    message=tr("tasks.texture.write_result", "写入任务结果"),
                     metrics={
                         **metrics,
                         "phase": "finalize",
@@ -1335,16 +1347,16 @@ class TextureOptimizationManager:
                 task,
                 status=final_status,
                 progress=100,
-                message=f"{success_message}，用时 {self._format_elapsed_ms(elapsed_ms)}",
+                message=tr("tasks.texture.completed_elapsed", "{message}，用时 {elapsed}", {"message": success_message, "elapsed": self._format_elapsed_ms(elapsed_ms)}),
                 summary=summary,
                 metrics=metrics,
             )
         except TextureOptCancelled as exc:
             logger.warning("贴图优化任务已取消：id=%s action=%s", task.id, task.action)
-            self._set_task_state(task, status="cancelled", message=str(exc), error="")
+            self._set_task_state(task, status="cancelled", message=tr("tasks.texture.cancelled", "贴图优化任务已取消"), error="")
         except Exception as exc:
             logger.error("贴图优化任务失败", exc_info=True)
-            self._set_task_state(task, status="failed", message="贴图优化失败", error=str(exc))
+            self._set_task_state(task, status="failed", message=tr("tasks.texture.failed", "贴图优化失败"), error=str(exc))
 
     def _optimize(self, task: TextureTask) -> dict[str, Any]:
         options = self._build_options(task.options)
@@ -1442,7 +1454,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=25,
-            message=f"开始生成 {output_label}",
+            message=tr("tasks.texture.encode_start", "开始生成 {output_label}", {"output_label": output_label}),
             metrics={
                 "done": 0,
                 "total": total_pending,
@@ -1495,9 +1507,17 @@ class TextureOptimizationManager:
                     status="running",
                     progress=min(90, max(25, 25 + int((cumulative_done / max(1, total_pending)) * 65))),
                     message=(
-                        f"等待 todds 完成本批写入: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
+                        tr(
+                            "tasks.texture.encode_batch_wait",
+                            "等待 todds 完成本批写入: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                            {"batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                        )
                         if batch_finishing
-                        else f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
+                        else tr(
+                            "tasks.texture.encode_batch",
+                            "生成 {output_label}: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                            {"output_label": output_label, "batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                        )
                     ),
                     metrics={
                         "done": cumulative_done,
@@ -1548,7 +1568,11 @@ class TextureOptimizationManager:
                     task,
                     status="running",
                     progress=min(95, max(25, 25 + int((batch_done / max(1, total_pending)) * 65))),
-                    message=f"登记生成结果: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                    message=tr(
+                        "tasks.texture.encode_record_batch",
+                        "登记生成结果: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                        {"batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                    ),
                     metrics={
                         "done": batch_completed_base,
                         "total": total_pending,
@@ -1585,7 +1609,11 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=min(90, max(25, 25 + int((processed_done / max(1, total_pending)) * 65))),
-                message=f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                message=tr(
+                    "tasks.texture.encode_batch",
+                    "生成 {output_label}: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                    {"output_label": output_label, "batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                ),
                 metrics={
                     "done": processed_done,
                     "total": total_pending,
@@ -1614,7 +1642,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=90,
-                message="主批次完成，开始统一重试可恢复失败项",
+                message=tr("tasks.texture.retry_start", "主批次完成，开始统一重试可恢复失败项"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1669,7 +1697,7 @@ class TextureOptimizationManager:
                         task,
                         status="running",
                         progress=min(95, 90 + int((retry_done / max(1, len(retry_candidates))) * 5)),
-                        message="统一重试可恢复失败项",
+                        message=tr("tasks.texture.retry_recoverable", "统一重试可恢复失败项"),
                         metrics={
                             "done": optimized + failed,
                             "total": total_pending,
@@ -1691,7 +1719,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=96,
-                message="更新生成状态",
+                message=tr("tasks.texture.update_encode_state", "更新生成状态"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1711,7 +1739,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=98,
-                message="统计生成结果",
+                message=tr("tasks.texture.summarize_encode_result", "统计生成结果"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1744,7 +1772,11 @@ class TextureOptimizationManager:
             "final_summary": final_summary,
             "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": f"{output_label} 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
+            "message": tr(
+                "tasks.texture.encode_completed",
+                "{output_label} 生成完成{details}",
+                {"output_label": output_label, "details": f"，{', '.join(message_parts)}" if message_parts else ""},
+            ),
         }
 
     @staticmethod
@@ -1941,7 +1973,7 @@ class TextureOptimizationManager:
                     analysis_task_id,
                     status="running",
                     progress=min(99, phase_percent),
-                    message=f"已扫描 {result['mod_name']}",
+                    message=tr("tasks.texture.scanned_mod", "已扫描 {mod_name}", {"mod_name": result["mod_name"]}),
                     processed_mods=completed,
                     total_mods=total_mods,
                     summary=partial_summary,
@@ -1953,7 +1985,11 @@ class TextureOptimizationManager:
                     progress_task,
                     status="running",
                     progress=min(24, max(1, int((completed / total_mods) * 24))),
-                    message=f"准备生成: {result['mod_name']}" if progress_kind == "optimize" else f"已扫描 {result['mod_name']}",
+                    message=(
+                        tr("tasks.texture.prepare_generate_mod", "准备生成: {mod_name}", {"mod_name": result["mod_name"]})
+                        if progress_kind == "optimize"
+                        else tr("tasks.texture.scanned_mod", "已扫描 {mod_name}", {"mod_name": result["mod_name"]})
+                    ),
                     metrics={
                         "done": completed,
                         "total": len(normalized_targets),
@@ -2050,7 +2086,11 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=max(1, min(99, phase_percent)),
-                message=f"清理{clean_target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+                message=tr(
+                    "tasks.texture.clean_progress",
+                    "清理{target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+                    {"target_label": clean_target_label, "mod_name": mod_name, "checked": checked, "deleted": deleted},
+                ),
                 metrics={
                     "checked_outputs": checked,
                     "orphan_deleted": deleted,
@@ -2074,7 +2114,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=1,
-            message=f"开始清理{clean_target_label}",
+            message=tr("tasks.texture.clean_start", "开始清理{target_label}", {"target_label": clean_target_label}),
             metrics={
                 "checked_outputs": 0,
                 "orphan_deleted": 0,
@@ -2138,7 +2178,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=99,
-            message="清理完成，正在结束任务",
+            message=tr("tasks.texture.clean_finishing", "清理完成，正在结束任务"),
             metrics={
                 "checked_outputs": checked,
                 "orphan_deleted": deleted,
@@ -2169,7 +2209,7 @@ class TextureOptimizationManager:
             "clean_output_format": clean_output_format,
             "clean_without_source": clean_without_source,
             "refresh_after_analyze": clean_without_source,
-            "message": f"{clean_target_label} 清理完成",
+            "message": tr("tasks.texture.clean_completed", "{target_label} 清理完成", {"target_label": clean_target_label}),
         }
 
     def _scan_mods(
@@ -3383,15 +3423,17 @@ class TextureOptimizationManager:
         *,
         status: str | None = None,
         progress: int | None = None,
-        message: str | None = None,
+        message: Any | None = None,
         metrics: dict[str, Any] | None = None,
         summary: dict[str, Any] | None = None,
-        error: str | None = None,
+        error: Any | None = None,
     ) -> None:
         if summary is not None:
             task.summary = summary
         if error is not None:
-            task.error = error
+            task.error = str(error or "")
+            task.error_key = localized_key(error)
+            task.error_params = localized_params(error)
         final_status = status or task.status
         self._emit_progress(
             task,
@@ -3404,11 +3446,15 @@ class TextureOptimizationManager:
             setattr(task, "_cleanup_scheduled", True)
             self._schedule_task_cleanup(task.id)
 
-    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: str, metrics: dict[str, Any] | None = None) -> None:
+    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: Any, metrics: dict[str, Any] | None = None) -> None:
         updated_at = current_ms()
+        key = localized_key(message)
+        params = localized_params(message)
         task.status = status
         task.progress = progress
-        task.message = message
+        task.message = str(message or "")
+        task.message_key = key
+        task.message_params = params
         task.metrics = metrics or {}
         task.updated_at = updated_at
         task_created_at = int(getattr(task, "created_at", updated_at))
@@ -3416,7 +3462,16 @@ class TextureOptimizationManager:
         task.metrics["task_updated_at"] = updated_at
         task.metrics.setdefault("task_action", str(getattr(task, "action", "")))
         task.metrics["task_status"] = status
-        EventBus.emit_progress(task.id, TEXTURE_TASK_TYPE, status=status, progress=progress, message=message, metrics=task.metrics)
+        EventBus.emit_progress(
+            task.id,
+            TEXTURE_TASK_TYPE,
+            status=status,
+            progress=progress,
+            message=task.message,
+            metrics=task.metrics,
+            message_key=key,
+            message_params=params,
+        )
 
     def _emit_analysis_progress(
         self,
@@ -3424,7 +3479,7 @@ class TextureOptimizationManager:
         *,
         status: str,
         progress: int,
-        message: str,
+        message: Any,
         processed_mods: int,
         total_mods: int,
         summary: dict[str, Any],
@@ -3447,7 +3502,16 @@ class TextureOptimizationManager:
             metrics["current_entry"] = current_entry
         if final_mods is not None:
             metrics["final_mods"] = final_mods
-        EventBus.emit_progress(task_id, TEXTURE_ANALYSIS_TASK_TYPE, status=status, progress=progress, message=message, metrics=metrics)
+        EventBus.emit_progress(
+            task_id,
+            TEXTURE_ANALYSIS_TASK_TYPE,
+            status=status,
+            progress=progress,
+            message=str(message or ""),
+            metrics=metrics,
+            message_key=localized_key(message),
+            message_params=localized_params(message),
+        )
 
     def _schedule_task_cleanup(self, task_id: str, delay_seconds: float = TEXTURE_TASK_RETENTION_SECONDS) -> None:
         def _cleanup() -> None:

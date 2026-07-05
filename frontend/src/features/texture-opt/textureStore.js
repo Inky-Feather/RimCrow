@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
+import { t, translateMessagePayload } from '../../shared/i18n'
 
 export const useTextureStore = defineStore('texture', () => {
   const appStore = useAppStore()
@@ -227,7 +228,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!task) {
       return {
         percent: 0,
-        message: '就绪',
+        message: t('tasks.texture.ready', '就绪'),
         details: {
           local_started_at: 0,
           local_finished_at: 0,
@@ -243,7 +244,7 @@ export const useTextureStore = defineStore('texture', () => {
       : Math.max(0, Date.now() - startedAt)
     return {
       percent: Number(task.progress || 0),
-      message: task.message || '处理中...',
+      message: translateMessagePayload(task, task.message) || t('tasks.message.processing', '处理中...'),
       details: {
         ...(task.metrics || {}),
         local_started_at: startedAt,
@@ -275,7 +276,9 @@ export const useTextureStore = defineStore('texture', () => {
   const toolStatus = ref({
     available: false,
     resolved_path: '',
-    message: ''
+    message: '',
+    message_key: '',
+    message_params: {},
   })
 
   // === 动作 Actions ===
@@ -299,6 +302,8 @@ export const useTextureStore = defineStore('texture', () => {
       status: payload.status || 'pending',
       progress: payload.progress || 0,
       message: payload.message || '',
+      message_key: payload.message_key || '',
+      message_params: payload.message_params || {},
       metrics: payload.metrics || {},
       timestamp: payload.updated_at || Date.now(),
     })
@@ -313,7 +318,9 @@ export const useTextureStore = defineStore('texture', () => {
     taskStore.upsertTask({
       ...task,
       status: 'running',
-      message: '正在尝试中止任务...',
+      message: t('tasks.message.cancelling_request', '正在尝试中止任务...'),
+      message_key: 'tasks.message.cancelling_request',
+      message_params: {},
       metrics: {
         ...(task.metrics || {}),
         phase: 'cancelling',
@@ -502,7 +509,10 @@ export const useTextureStore = defineStore('texture', () => {
     try {
       const res = await window.pywebview.api.texture_get_env_status(appStore.settings.texture_opt)
       if (checkResult(res, "检查贴图工具", false)) {
-        toolStatus.value = res.data
+        toolStatus.value = {
+          ...(res.data || {}),
+          message: translateMessagePayload(res.data || {}, res.data?.message || ''),
+        }
       }
     } catch (e) {
       console.error('检查贴图工具状态失败:', e)
@@ -517,14 +527,14 @@ export const useTextureStore = defineStore('texture', () => {
       const res = await window.pywebview.api.texture_prepare_download(appStore.settings.texture_opt)
       if (res.status === 'success') {
         if (!res.data.already_ready) {
-          toast.info("已启动 todds 下载任务，请留意底部状态栏。")
+          toast.info(t('toast.texture.tool_download_started_watch_status', '已启动 todds 下载任务，请留意底部状态栏。'))
           scheduleToolStatusRefresh(0)
         } else {
-          toast.success("todds 已就绪，无需下载")
+          toast.success(t('toast.texture.tool_ready_no_download', 'todds 已就绪，无需下载'))
           await checkToolStatus()
         }
       } else {
-        toast.error(toUserMessage(res?.message, '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。'))
+        toast.error(toUserMessage(translateMessagePayload(res, res?.message), t('errors.texture.prepare_tool_failed', '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。')))
       }
     } finally {
       appStore.isLoading = false

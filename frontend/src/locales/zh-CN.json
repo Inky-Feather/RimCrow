@@ -1,0 +1,130 @@
+{
+  "ui": {
+    "secret": {
+      "pending_clear_placeholder": "保存后会清除；也可以直接填写新密钥",
+      "saved": "已保存密钥",
+      "saved_with_hint": "已保存 {hint}"
+    }
+  },
+  "tooltip": {
+    "secret": {
+      "clear_saved": "清除已保存密钥",
+      "hide": "隐藏",
+      "hide_saved": "隐藏密钥",
+      "preserve_saved": "保留原值",
+      "reveal_saved": "查看已保存密钥",
+      "show": "显示"
+    },
+    "task": {
+      "cancel": "取消任务",
+      "cancelling": "正在尝试取消任务"
+    }
+  },
+  "toast": {
+    "api": {
+      "error": "{workname}失败：\n{message}",
+      "success": "{workname}已完成",
+      "warning": "{workname}需要确认：\n{message}"
+    },
+    "texture": {
+      "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
+      "tool_ready_no_download": "todds 已就绪，无需下载"
+    }
+  },
+  "dialog": {
+    "action": {
+      "cancel": "取消",
+      "confirm": "确定"
+    },
+    "delete": {
+      "confirm": "确认删除",
+      "force_option": "强制删除",
+      "options_hint": "默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。",
+      "trash_option": "移入回收站"
+    }
+  },
+  "api": {
+    "texture": {
+      "analysis_started": "贴图分析任务已在后台启动",
+      "task_queued": "{task_name}任务已加入队列",
+      "todds_found": "已找到 todds 可执行文件",
+      "tool_download_started": "已启动工具下载任务",
+      "tool_ready": "工具已经就绪"
+    }
+  },
+  "errors": {
+    "fallback": {
+      "operation_unfinished": "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。",
+      "operation_warning": "操作已完成，但有部分情况需要确认。详细原因已写入系统日志。",
+      "work_failed": "{workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。"
+    },
+    "i18n": {
+      "user_locale_load_failed": "读取用户语言文件失败。请检查 data/locales 下的语言文件格式。"
+    },
+    "secret": {
+      "reveal_failed_preserve": "无法读取已保存密钥，保存时会保留原值"
+    },
+    "texture": {
+      "analysis_start_failed": "启动贴图分析失败。请检查所选模组路径、工具状态和文件权限，详细原因已写入系统日志。",
+      "no_analysis_targets": "未指定要分析的模组",
+      "no_residue_targets": "未找到包含 {format} 的卸载残留模组目录",
+      "no_valid_mod_paths": "未能找到指定模组的有效物理路径",
+      "prepare_tool_failed": "准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。",
+      "status_failed": "读取贴图工具状态失败。请检查工具路径和运行环境，详细原因已写入系统日志。",
+      "task_start_failed": "启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限，详细原因已写入系统日志。",
+      "tool_download_failed": "启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。"
+    }
+  },
+  "tasks": {
+    "message": {
+      "cancelling_request": "正在尝试中止任务...",
+      "processing": "处理中..."
+    },
+    "phase": {
+      "cancelling": "正在取消",
+      "verifying": "校验中"
+    },
+    "queue": {
+      "count": "{count} 个任务",
+      "title": "任务队列"
+    },
+    "texture": {
+      "analysis_completed_elapsed": "统计完成，用时 {elapsed}",
+      "cancelled": "贴图优化任务已取消",
+      "clean_completed": "{target_label} 清理完成",
+      "clean_finishing": "清理完成，正在结束任务",
+      "clean_progress": "清理{target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+      "clean_start": "开始清理{target_label}",
+      "completed_elapsed": "{message}，用时 {elapsed}",
+      "encode_batch": "生成 {output_label}: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+      "encode_batch_wait": "等待 todds 完成本批写入: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+      "encode_completed": "{output_label} 生成完成{details}",
+      "encode_record_batch": "登记生成结果: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+      "encode_start": "开始生成 {output_label}",
+      "failed": "贴图优化失败",
+      "prepare_generate_mod": "准备生成: {mod_name}",
+      "prepare_task": "准备任务...",
+      "queue_running": "正在执行贴图队列...",
+      "ready": "就绪",
+      "retry_recoverable": "统一重试可恢复失败项",
+      "retry_start": "主批次完成，开始统一重试可恢复失败项",
+      "scan_cancelled": "贴图扫描任务已取消",
+      "scan_failed": "贴图扫描任务失败: {reason}",
+      "scanned_mod": "已扫描 {mod_name}",
+      "summarize_encode_result": "统计生成结果",
+      "update_encode_state": "更新生成状态",
+      "write_result": "写入任务结果"
+    },
+    "type": {
+      "download_short": "下载",
+      "update_short": "更新"
+    }
+  },
+  "logs": {},
+  "ai": {
+    "definitions": {},
+    "tools": {},
+    "actions": {},
+    "prompts": {}
+  }
+}

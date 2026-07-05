@@ -22,6 +22,7 @@ import { usePackageTransferActions } from './app/packageTransferActions'
 import { useSteamWorkshopActions } from './app/steamWorkshopActions'
 import { useMaintenanceActions } from './app/maintenanceActions'
 import { useUpdateActions } from './app/updateActions'
+import { setLocale } from '../../shared/i18n'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
@@ -100,6 +101,7 @@ export const useAppStore = defineStore('app', () => {
   let suspendRecoveryTimer = null
   let suspendRecoveryPromise = null
   let modResidueCheckTimer = null
+  let localeSwitchVersion = 0
 
   const upgradeContext = ref({}); // 升级上下文
   let modEnrichmentRequestVersion = 0
@@ -585,6 +587,18 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_DEBUG_MODE__ = !!enabled
     }
   }, { immediate: true });
+  const syncCurrentLocale = async () => {
+    const version = ++localeSwitchVersion
+    try {
+      const locale = await setLocale(settings.value.language || 'zh-CN')
+      if (version === localeSwitchVersion) settings.value.language = locale
+    } catch (error) {
+      console.warn('切换界面语言失败，继续使用默认中文:', error)
+    }
+  }
+  watch(() => settings.value.language, () => {
+    void syncCurrentLocale()
+  }, { immediate: true })
   watch(currentTheme, (theme) => {
     applyTheme(theme)
   }, { immediate: true, deep: true })
@@ -663,6 +677,7 @@ export const useAppStore = defineStore('app', () => {
     if (payload.settings) {
       settings.value.translation = normalizeTranslationSettings(settings.value.translation)
       settingsReady.value = true
+      void syncCurrentLocale()
     }
     if (Array.isArray(payload.user_themes)) {
       userThemes.value = payload.user_themes
@@ -700,6 +715,7 @@ export const useAppStore = defineStore('app', () => {
       settings.value.asset_port = payload.asset_port || 0
       settings.value.translation = normalizeTranslationSettings(settings.value.translation)
       settingsReady.value = true
+      void syncCurrentLocale()
     }
     upgradeContext.value = payload.upgrade_context || {}
     if (Array.isArray(payload.user_themes)) {

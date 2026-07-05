@@ -7,7 +7,7 @@
                 </h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4">
-                    <CommonSelect class="pointer-events-none opacity-50" label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-CN'}, {label:'English', value:'en'}]" />
+                    <CommonSelect label="界面语言" v-model="formData.language" :options="[{label:'简体中文', value:'zh-CN'}, {label:'English', value:'en'}]" />
                     <ThemeSelect v-if="formData.ui" v-model="currentThemeId" :themes="appStore.themes"
                       @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
                     />
