@@ -6,7 +6,7 @@
 
     <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
       <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
-      <span class="text-accent-tip">原始规则 ({{ nativeRules.length || 0 }})</span>
+      <span class="text-accent-tip">{{ t('ui.rule_relation.native_rules', '原始规则 ({count})', { count: nativeRules.length || 0 }) }}</span>
       <div class="flex-1 h-px border-b border-accent-tip/30"></div>
     </div>
     <div class="px-2 relative">
@@ -16,7 +16,7 @@
 
     <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
       <div class="w-1 h-1 rounded-full bg-accent-cool shadow-[0_0_8px_var(--color-accent-cool)]"></div>
-      <span class="text-accent-cool">社区规则 ({{ Object.keys(communityRules).length || 0 }})</span>
+      <span class="text-accent-cool">{{ t('ui.rule_relation.community_rules', '社区规则 ({count})', { count: Object.keys(communityRules).length || 0 }) }}</span>
       <div class="flex-1 h-px border-b border-accent-cool/30"></div>
     </div>
     <div class="px-2 relative">
@@ -32,7 +32,7 @@
     <template v-if="showWorkshop">
       <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
         <div class="w-1 h-1 rounded-full bg-accent-warning shadow-[0_0_8px_var(--color-accent-warning)]"></div>
-        <span class="text-accent-warning">工坊规则 ({{ Object.keys(workshopRules).length || 0 }})</span>
+        <span class="text-accent-warning">{{ t('ui.rule_relation.workshop_rules', '工坊规则 ({count})', { count: Object.keys(workshopRules).length || 0 }) }}</span>
         <div class="flex-1 h-px border-b border-accent-warning/30"></div>
       </div>
       <div class="px-2 relative">
@@ -48,13 +48,13 @@
 
     <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
       <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
-      <span class="text-accent-special">用户规则 ({{ userRules.length || 0 }})</span>
+      <span class="text-accent-special">{{ t('ui.rule_relation.user_rules', '用户规则 ({count})', { count: userRules.length || 0 }) }}</span>
       <div class="flex-1 h-px border-b border-accent-special/30"></div>
     </div>
     <div class="px-2 min-h-15 relative">
       <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
       <div v-show="userRules.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
-        可拖拽模组到此
+        {{ t('ui.rule_relation.drop_here', '可拖拽模组到此') }}
         <!-- 点阵背景 -->
         <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(var(--color-text-main) 1px, transparent 1px); background-size: 20px 20px;"></div>
       </div>
@@ -72,7 +72,7 @@
                 text-text-dim bg-accent-primary/10
                 hover:bg-accent-primary/60 hover:text-text-main hover:scale-110 active:scale-100
                 group-hover:bg-accent-primary/40 group-hover:text-text-dim group-hover:shadow-2xl/20"
-                v-tooltip="record.comment || '[[__点击添加说明__]]'">
+                v-tooltip="record.comment || t('tooltip.rule_relation.add_comment', '[[__点击添加说明__]]')">
                 <span class="relative transition duration-300 only:-mx-6">
                   <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                 </span>
@@ -83,7 +83,7 @@
                 hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
                 group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
                 group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                v-tooltip="'移除'">
+                v-tooltip="t('ui.common.remove', '移除')">
                 <span class="relative only:-mx-5">
                   <svg class="size-4" xmlns="http://www.w3.org/2000/svg"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                 </span>
@@ -99,6 +99,7 @@
 <script setup>
 import ModItem from '../mod/ModItem.vue'
 import SimpleDropList from '../../shared/components/list/SimpleDropList.vue'
+import { t } from '../../shared/i18n'
 
 defineProps({
   title: { type: String, required: true },

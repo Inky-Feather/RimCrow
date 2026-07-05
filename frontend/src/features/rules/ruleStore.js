@@ -3,36 +3,37 @@ import { ref, computed } from 'vue'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { deepClone, toast, checkResult, toUserMessage } from '../../shared/lib/common'
+import { t } from '../../shared/i18n'
 
 // 动态规则支持属性映射
-const DYNAMIC_RULE_PROPS = {
-  'package_id': '包名',
-  'name': '名称',
-  'alias_name': '别名',
-  'author': '作者',
-  'tags': '标签',
-  'groups': '分组',
-  'mod_type': '类型'
-}
+const getDynamicRuleProps = () => ({
+  package_id: t('ui.rule.dynamic.field.package_id', '包名'),
+  name: t('ui.rule.dynamic.field.name', '名称'),
+  alias_name: t('ui.rule.dynamic.field.alias_name', '别名'),
+  author: t('ui.rule.dynamic.field.author', '作者'),
+  tags: t('ui.rule.dynamic.field.tags', '标签'),
+  groups: t('ui.rule.dynamic.field.groups', '分组'),
+  mod_type: t('ui.rule.dynamic.field.mod_type', '类型'),
+})
 // 动态规则动作映射
-const DYNAMIC_RULE_ACTIONS = {
-  'weight_shift': '权重偏移 (Shift)',
-  'weight_set': '设定权重 (Set)',
-  'load_after': '必须在某ID后',
-  'load_before': '必须在某ID前',
-  'top': '强制置顶',
-  'bottom': '强制置底',
-}
+const getDynamicRuleActions = () => ({
+  weight_shift: t('ui.rule.dynamic.action.weight_shift', '权重偏移 (Shift)'),
+  weight_set: t('ui.rule.dynamic.action.weight_set', '设定权重 (Set)'),
+  load_after: t('ui.rule.dynamic.action.load_after', '必须在某ID后'),
+  load_before: t('ui.rule.dynamic.action.load_before', '必须在某ID前'),
+  top: t('ui.rule.dynamic.action.top', '强制置顶'),
+  bottom: t('ui.rule.dynamic.action.bottom', '强制置底'),
+})
 // 动态规则支持运算符映射
-const DYNAMIC_RULE_OPERATORS = {
-  'equals': '等于',
-  'not_equals': '不等于',
-  'contains': '包含',
-  'not_contains': '不包含',
-  'starts_with': '以...开头',
-  'ends_with': '以...结尾',
-  'regex': '正则匹配',
-}
+const getDynamicRuleOperators = () => ({
+  equals: t('ui.rule.dynamic.operator.equals', '等于'),
+  not_equals: t('ui.rule.dynamic.operator.not_equals', '不等于'),
+  contains: t('ui.rule.dynamic.operator.contains', '包含'),
+  not_contains: t('ui.rule.dynamic.operator.not_contains', '不包含'),
+  starts_with: t('ui.rule.dynamic.operator.starts_with', '以...开头'),
+  ends_with: t('ui.rule.dynamic.operator.ends_with', '以...结尾'),
+  regex: t('ui.rule.dynamic.operator.regex', '正则匹配'),
+})
 
 
 
@@ -64,6 +65,9 @@ export const useRuleStore = defineStore('rules', () => {
   const currentId = ref(null)
   const isLoading = ref(false)
   const hasLoaded = ref(false)
+  const DYNAMIC_RULE_PROPS = computed(getDynamicRuleProps)
+  const DYNAMIC_RULE_ACTIONS = computed(getDynamicRuleActions)
+  const DYNAMIC_RULE_OPERATORS = computed(getDynamicRuleOperators)
   const refreshRuleState = async () => {
     await fetchRules()
     await appStore.refreshModCoreData('规则变更后同步模组状态', {

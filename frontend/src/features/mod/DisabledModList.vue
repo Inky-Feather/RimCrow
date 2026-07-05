@@ -3,7 +3,7 @@
     <div class="flex h-8 items-center justify-between border-b border-border-base/5 bg-accent-danger/10 px-3">
       <span class="flex items-center gap-1 text-sm font-bold uppercase tracking-wider text-accent-danger">
         <div class="mr-1 h-1.5 w-1.5 rounded-full bg-accent-danger shadow-lg shadow-accent-danger"></div>
-        已禁用
+        {{ t('ui.disabled_mod_list.title', '已禁用') }}
       </span>
       <span class="rounded bg-bg-inset/70 px-2 py-0.5 text-xs text-accent-danger">
         {{ displayMods.length }} / {{ modStore.disabledMods.length }}
@@ -11,7 +11,7 @@
     </div>
 
     <div class="flex flex-col gap-2 bg-bg-deep/20 px-2 py-2 shadow-xl">
-      <input v-model="searchQuery" placeholder="筛选名称、包名、工坊 ID、路径..."
+      <input v-model="searchQuery" :placeholder="t('ui.disabled_mod_list.search_placeholder', '筛选名称、包名、工坊 ID、路径...')"
         class="w-full rounded-lg border border-border-base/10 bg-bg-inset px-3 py-1.5 text-xs text-text-main outline-none transition-colors focus:border-accent-danger" />
       <div class="flex items-center justify-end gap-2">
         <CommonSelect v-model="sourceFilter" mini :options="sourceOptions" />
@@ -21,7 +21,7 @@
           :animate="{ rotateX: isSortDesc ? 0 : 180 }"
           :transition="{ type: 'spring', stiffness: 300, damping: 20 }"
           @click="isSortDesc = !isSortDesc"
-          v-tooltip="isSortDesc ? '切换为升序排列' : '切换为降序排列'">
+          v-tooltip="isSortDesc ? t('tooltip.common.sort_asc', '切换为升序排列') : t('tooltip.common.sort_desc', '切换为降序排列')">
           <span v-if="isSortDesc" class="rotate-x-180">
             <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
           </span>
@@ -63,10 +63,10 @@
                     <svg class="size-6 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                   </div>
                   <div class="absolute -left-1 -top-2 flex items-center gap-0.5">
-                    <span class="flex items-center justify-center rounded-sm bg-glass-medium/70" v-tooltip="`类型：${getModType(displayMods[virtualRow.index])}`">
+                    <span class="flex items-center justify-center rounded-sm bg-glass-medium/70" v-tooltip="t('tooltip.disabled_mod_list.mod_type', '类型：{type}', { type: getModTypeLabel(getModType(displayMods[virtualRow.index])) })">
                       <component :is="getTypeIcon(displayMods[virtualRow.index])" class="size-4" />
                     </span>
-                    <span class="flex items-center justify-center rounded-sm bg-glass-medium/70" v-tooltip="`储存位置：${getSourceLabel(displayMods[virtualRow.index])}`">
+                    <span class="flex items-center justify-center rounded-sm bg-glass-medium/70" v-tooltip="t('tooltip.disabled_mod_list.source', '储存位置：{source}', { source: getSourceLabel(displayMods[virtualRow.index]) })">
                       <IconSteam v-if="isWorkshopMod(displayMods[virtualRow.index])" class="size-4 fill-current" />
                       <IconSelf v-else-if="isManagerMod(displayMods[virtualRow.index])" class="size-4 grayscale-20" />
                       <Folder v-else class="size-4" />
@@ -97,7 +97,7 @@
       </div>
 
       <div v-else class="absolute inset-1 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border-base/18 bg-bg-deep/90 text-xs text-text-subtle/70">
-        <span>{{ modStore.disabledMods.length ? '没有符合筛选条件的禁用 Mod' : '当前环境没有已禁用 Mod' }}</span>
+        <span>{{ modStore.disabledMods.length ? t('ui.disabled_mod_list.empty.filtered', '没有符合筛选条件的禁用 Mod') : t('ui.disabled_mod_list.empty.no_disabled', '当前环境没有已禁用 Mod') }}</span>
       </div>
     </div>
   </div>
@@ -112,9 +112,10 @@ import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useModStore } from './stores/modStore'
-import { IconSelf, IconSteam, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
+import { IconSelf, IconSteam, MOD_TYPE_ICON_MAP, getModTypeLabel, getSourceTypeLabel } from '../../shared/lib/constants'
 import { formatFileSize } from '../../shared/lib/format'
 import { buildModExternalMenuItem, copyTextToClipboard } from './lib/modContextMenuItems'
+import { t } from '../../shared/i18n'
 
 const appStore = useAppStore()
 const menuStore = useContextMenuStore()
@@ -127,18 +128,18 @@ const isSortDesc = ref(true)
 const selectedPathHashes = ref([])
 const scrollRef = ref(null)
 
-const sourceOptions = [
-  { label: '全部来源', value: 'all' },
-  { label: '游戏本地', value: 'local' },
-  { label: '创意工坊', value: 'workshop' },
-  { label: '管理器库', value: 'self' },
-]
-const sortOptions = [
-  { label: '按修改时间', value: 'mtime' },
-  { label: '按创建时间', value: 'ctime' },
-  { label: '按文件体积', value: 'size' },
-  { label: '按名称 A-Z', value: 'name' },
-]
+const sourceOptions = computed(() => [
+  { label: t('ui.disabled_mod_list.source.all', '全部来源'), value: 'all' },
+  { label: t('ui.disabled_mod_list.source.local', '游戏本地'), value: 'local' },
+  { label: t('ui.disabled_mod_list.source.workshop', '创意工坊'), value: 'workshop' },
+  { label: t('ui.disabled_mod_list.source.self', '管理器库'), value: 'self' },
+])
+const sortOptions = computed(() => [
+  { label: t('ui.disabled_mod_list.sort.mtime', '按修改时间'), value: 'mtime' },
+  { label: t('ui.disabled_mod_list.sort.ctime', '按创建时间'), value: 'ctime' },
+  { label: t('ui.disabled_mod_list.sort.size', '按文件体积'), value: 'size' },
+  { label: t('ui.disabled_mod_list.sort.name', '按名称 A-Z'), value: 'name' },
+])
 const getStoreType = (mod = {}) => {
   const domain = String(mod?.runtime_domain || mod?.store || '').toLowerCase()
   if (domain === 'workshop') return 'workshop'
@@ -149,9 +150,9 @@ const isWorkshopMod = (mod = {}) => getStoreType(mod) === 'workshop'
 const isManagerMod = (mod = {}) => getStoreType(mod) === 'self'
 const getSourceLabel = (mod = {}) => {
   const domain = String(mod?.runtime_domain || mod?.store || '').toLowerCase()
-  if (domain === 'dlc') return 'DLC'
-  if (domain === 'tool') return '管理器库'
-  return SOURCE_TYPE_MAP[getStoreType(mod)] || domain || '未知来源'
+  if (domain === 'dlc') return getSourceTypeLabel('dlc')
+  if (domain === 'tool') return t('ui.disabled_mod_list.source.self', '管理器库')
+  return getSourceTypeLabel(getStoreType(mod)) || domain || t('ui.source_type.unknown', '未知来源')
 }
 const getModType = (mod = {}) => modStore.displayModType(mod)
 const getTypeIcon = (mod = {}) => MOD_TYPE_ICON_MAP[getModType(mod)] || MOD_TYPE_ICON_MAP.Unknown
@@ -162,8 +163,8 @@ const getLatestSupportedVersion = (mod = {}) => {
 const getStrictDisableRestoreTooltip = (mod = {}) => {
   const failure = modStore.strictDisableRestoreFailures?.[mod?.path_hash]
   if (!failure) return ''
-  const reason = String(failure.message || '').trim() || '文件操作失败'
-  return `严格禁用恢复失败：${reason}。该 Mod 仍按禁用记录保留，请检查文件权限或是否被占用。`
+  const reason = String(failure.message || '').trim() || t('ui.disabled_mod_list.restore_failure.default_reason', '文件操作失败')
+  return t('tooltip.disabled_mod_list.restore_failure', '严格禁用恢复失败：{reason}。该 Mod 仍按禁用记录保留，请检查文件权限或是否被占用。', { reason })
 }
 const formatTime = (ts) => {
   if (!ts) return 'N/A'
@@ -239,25 +240,25 @@ const deleteSelectedMods = async () => {
   if (ok) clearSelection()
 }
 const buildSelectedDisabledCopyMenuItem = (selectedMods) => {
-  const selectedCountText = selectedMods.length > 1 ? ` (${selectedMods.length} 项)` : ''
+  const selectedCountText = selectedMods.length > 1 ? t('ui.common.count_suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
   const copyField = (label, getter) => {
     const lines = selectedMods.map(mod => String(getter(mod) || '').trim()).filter(Boolean)
     return {
-      label: `复制${label}${selectedCountText}`,
+      label: t('menu.disabled_mod_list.copy_field', '复制{label}{countText}', { label, countText: selectedCountText }),
       icon: Copy,
       disabled: lines.length === 0,
       action: () => copyTextToClipboard(lines.join('\n'), label),
     }
   }
   return {
-    label: '复制模组信息' + selectedCountText,
+    label: t('menu.disabled_mod_list.copy_mod_info', '复制模组信息{countText}', { countText: selectedCountText }),
     icon: Copy,
     disabled: selectedMods.length === 0,
     children: [
-      copyField('名称', mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
-      copyField('包名', mod => mod.package_id),
-      copyField('工坊 ID', mod => mod.workshop_id),
-      copyField('路径', mod => mod.path),
+      copyField(t('ui.mod_info.name', '名称'), mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
+      copyField(t('ui.mod_info.package_id', '包名'), mod => mod.package_id),
+      copyField(t('ui.mod_info.workshop_id', '工坊ID'), mod => mod.workshop_id),
+      copyField(t('ui.mod_info.path', '路径'), mod => mod.path),
     ],
   }
 }
@@ -269,18 +270,18 @@ const handleContextMenu = (event, targetMod) => {
   }
 
   const selectedMods = getSelectedMods()
-  const selectedCountText = selectedMods.length > 1 ? ` (${selectedMods.length} 项)` : ''
+  const selectedCountText = selectedMods.length > 1 ? t('ui.common.count_suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
   const hasPath = selectedMods.some(mod => !!mod.path)
   const hasWorkshop = selectedMods.some(mod => !!mod.workshop_id)
   menuStore.open(event, [
-    { label: '解除禁用' + selectedCountText, icon: LockOpen, level: 'success', action: enableSelectedMods },
-    { label: '打开文件夹', icon: FolderInput, disabled: !targetMod.path, action: () => appStore.openPath(targetMod.path) },
+    { label: t('menu.disabled_mod_list.restore', '解除禁用{countText}', { countText: selectedCountText }), icon: LockOpen, level: 'success', action: enableSelectedMods },
+    { label: t('ui.common.open_folder', '打开文件夹'), icon: FolderInput, disabled: !targetMod.path, action: () => appStore.openPath(targetMod.path) },
     { divider: true },
     buildSelectedDisabledCopyMenuItem(selectedMods),
-    buildModExternalMenuItem(targetMod, appStore, { label: '访问页面' }),
+    buildModExternalMenuItem(targetMod, appStore, { label: t('menu.disabled_mod_list.visit_page', '访问页面') }),
     { divider: true },
-    { label: '取消订阅' + selectedCountText, icon: FlagOff, level: 'danger', disabled: !hasWorkshop, action: unsubscribeSelectedMods },
-    { label: '删除文件' + selectedCountText, icon: Trash2, level: 'danger', disabled: !hasPath, action: deleteSelectedMods },
+    { label: t('menu.disabled_mod_list.unsubscribe', '取消订阅{countText}', { countText: selectedCountText }), icon: FlagOff, level: 'danger', disabled: !hasWorkshop, action: unsubscribeSelectedMods },
+    { label: t('menu.disabled_mod_list.delete_files', '删除文件{countText}', { countText: selectedCountText }), icon: Trash2, level: 'danger', disabled: !hasPath, action: deleteSelectedMods },
   ])
 }
 

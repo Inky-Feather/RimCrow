@@ -10,12 +10,12 @@
           <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-primary/35 bg-accent-primary/15 text-accent-primary shadow-[0_0_25px_rgba(var(--rgb-accent-primary),0.18)]">
             <svg class="size-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
           </div>
-          <div class="text-base font-bold tracking-wide text-text-main">拖入加载序列文件</div>
+          <div class="text-base font-bold tracking-wide text-text-main">{{ t('ui.backup_list.drop.title', '拖入加载序列文件') }}</div>
           <div class="mt-2 text-sm leading-relaxed text-text-dim">
-            松手后将自动尝试导入到对比视图
+            {{ t('ui.backup_list.drop.description', '松手后将自动尝试导入到对比视图') }}
           </div>
           <div class="mt-3 text-xs text-text-dim">
-            支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`
+            {{ t('ui.backup_list.drop.formats', '支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`') }}
           </div>
         </div>
       </div>
@@ -25,7 +25,7 @@
     <div class="px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-bg-muted/50">
       <span :class="`text-sm font-bold text-accent-primary uppercase tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--color-accent-primary)]`"></div>
-        备份
+        {{ t('ui.backup_list.title', '备份') }}
       </span>
       <span :class="`text-xs bg-bg-inset/70 px-2 py-0.5 rounded text-accent-primary`">
         {{ dataCount.total }}
@@ -37,7 +37,7 @@
         <HelpCircle v-tooltip="backupRulesTooltip" class="size-5 m-1 text-text-dim transition-colors duration-200 cursor-help hover:text-accent-primary"></HelpCircle>
       </div>
       <div class="flex items-center justify-end gap-1">
-      <CommonSelect v-model="selectedBackupProfileId" mini  placeholder="选择环境" description="切换其它环境备份"
+      <CommonSelect v-model="selectedBackupProfileId" mini  :placeholder="t('ui.backup_list.profile.placeholder', '选择环境')" :description="t('ui.backup_list.profile.description', '切换其它环境备份')"
         :options="backupProfileOptions" @change="handleBackupProfileChange" />
       <div class="relative w-6 h-6 flex items-center justify-center">
         <div class="absolute top-0 overflow-visible gap-1 group text-sm font-medium flex flex-col items-center rtl:space-y-reverse">
@@ -47,7 +47,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
           :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-          @click="runBackupToolbarAction('import-file', () => loadOrder('0'))" v-tooltip="isToolbarActionPending('import-file') ? '正在导入加载序列' : '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'">
+          @click="runBackupToolbarAction('import-file', () => loadOrder('0'))" v-tooltip="isToolbarActionPending('import-file') ? t('tooltip.backup_list.import_file.loading', '正在导入加载序列') : t('tooltip.backup_list.import_file.ready', '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）')">
             <span class="relative transition duration-300 only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('import-file')" class="size-5 animate-spin" />
               <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>
@@ -60,7 +60,7 @@
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
             :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-            @click="importShareCode()" v-tooltip="isToolbarActionPending('import-share-code') ? '正在导入分享码' : '导入分享码（粘贴 RC- 分享码）'" >
+            @click="importShareCode()" v-tooltip="isToolbarActionPending('import-share-code') ? t('tooltip.backup_list.import_share_code.loading', '正在导入分享码') : t('tooltip.backup_list.import_share_code.ready', '导入分享码（粘贴 RC- 分享码）')" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('import-share-code')" class="size-5 animate-spin" />
               <ClipboardPlus v-else class="size-5" />
@@ -77,7 +77,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
           :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-          @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? '正在导出 ModsConfig' : '导出为 ModsConfig.xml（仅含包名）'">
+          @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? t('tooltip.backup_list.export_modsconfig.loading', '正在导出 ModsConfig') : t('tooltip.backup_list.export_modsconfig.ready', '导出为 ModsConfig.xml（仅含包名）')">
             <span class="relative transition duration-300 only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-order')" class="size-5 animate-spin" />
               <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
@@ -90,7 +90,7 @@
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
             :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-            @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? '正在导出 RML' : '导出为 RML 游戏原生格式（含包名和工坊ID）'" >
+            @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? t('tooltip.backup_list.export_rml.loading', '正在导出 RML') : t('tooltip.backup_list.export_rml.ready', '导出为 RML 游戏原生格式（含包名和工坊ID）')" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-rml')" class="size-5 animate-spin" />
               <svg v-else class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="m648-140 112-112v92h40v-160H640v40h92L620-168l28 28Zm-448 20q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Z"/></svg>
@@ -103,7 +103,7 @@
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
             :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-            @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? '正在生成分享码' : '生成当前启用序列的分享码并复制到剪贴板'" >
+            @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? t('tooltip.backup_list.export_share_code.loading', '正在生成分享码') : t('tooltip.backup_list.export_share_code.ready', '生成当前启用序列的分享码并复制到剪贴板')" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-share-code')" class="size-5 animate-spin" />
               <Copy v-else class="size-5" />
@@ -111,11 +111,11 @@
           </button>
         </div>
       </div>
-      <button @click="orderStore.openBackupPath()" v-tooltip="'打开备份文件夹'"
+      <button @click="orderStore.openBackupPath()" v-tooltip="t('tooltip.backup_list.open_backup_folder', '打开备份文件夹')"
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <svg class="size-5"  xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
-      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'app-action-disabled' : ''" v-tooltip="loading ? '正在刷新备份列表' : '刷新'"
+      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'app-action-disabled' : ''" v-tooltip="loading ? t('tooltip.backup_list.refresh.loading', '正在刷新备份列表') : t('ui.common.refresh', '刷新')"
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <LoaderCircle v-if="loading" class="size-5 animate-spin" />
         <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -129,7 +129,7 @@
       <!-- 0. 临时导入 (import) -->
       <section v-if="parsedData.import.length > 0">
         <div class="px-2 mb-2 text-xs font-bold text-accent-warn uppercase opacity-80 flex items-center gap-2">
-          <span>临时导入</span>
+          <span>{{ t('ui.backup_list.section.import', '临时导入') }}</span>
           <div class="h-px flex-1 bg-accent-warn/20"></div>
         </div>
         <div class="space-y-1">
@@ -144,7 +144,7 @@
 
       <section v-if="parsedData.last_backup.length > 0">
         <div class="px-2 mb-2 text-xs font-bold text-accent-warn uppercase opacity-80 flex items-center gap-2">
-          <span>最新备份</span>
+          <span>{{ t('ui.backup_list.section.latest', '最新备份') }}</span>
           <div class="h-px flex-1 bg-accent-warn/20"></div>
         </div>
         <div class="space-y-1">
@@ -159,7 +159,7 @@
       <!-- 1. 今日备份 (Today) -->
       <section v-if="parsedData.today.length > 0">
         <div class="px-2 mb-2 text-xs font-bold text-accent-primary uppercase opacity-80 flex items-center gap-2">
-          <span>今日动态</span>
+          <span>{{ t('ui.backup_list.section.today', '今日动态') }}</span>
           <div class="h-px flex-1 bg-accent-primary/20"></div>
         </div>
         <div class="space-y-1">
@@ -179,7 +179,7 @@
       <!-- 2. 早期归档 (Earlier) -->
       <section v-if="parsedData.earlier.length > 0">
         <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim uppercase opacity-60 flex items-center gap-2">
-          <span>历史归档</span>
+          <span>{{ t('ui.backup_list.section.history', '历史归档') }}</span>
           <div class="h-px flex-1 bg-bg-overlay/5"></div>
         </div>
         <div class="space-y-1">
@@ -199,7 +199,7 @@
       <!-- 3. 其他备份 (Other) -->
       <section v-if="parsedData.other.length > 0">
         <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim uppercase opacity-60 flex items-center gap-2">
-          <span>手动备份</span>
+          <span>{{ t('ui.backup_list.section.manual', '手动备份') }}</span>
           <div class="h-px flex-1 bg-bg-overlay/5"></div>
         </div>
         <div class="space-y-1">
@@ -217,7 +217,7 @@
       <!-- 空状态 -->
       <div v-if="isEmpty" class="flex flex-col items-center justify-center h-40 text-text-disabled">
         <svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span class="text-sm">暂无备份记录</span>
+        <span class="text-sm">{{ t('ui.backup_list.empty', '暂无备份记录') }}</span>
       </div>
 
     </div>
@@ -233,12 +233,13 @@ import { useConfirmStore } from '../../shared/components/modal/confirmStore.js'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore.js'
 import { useProfileStore } from '../profiles/profileStore.js'
 import { parse, formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
+import { enUS, zhCN } from 'date-fns/locale'
 import { ClipboardPlus, Copy, Download, Edit3, FileInput, FileText, FolderOpen, HelpCircle, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
 import { isBrowserRuntime as detectBrowserRuntime } from '../../app/bridge/runtimeBridge.js'
 import { copyTextToClipboard } from '../mod/lib/modContextMenuItems.js'
+import { getCurrentLocale, t } from '../../shared/i18n'
 
 const appStore = useAppStore()
 const orderStore = useOrderStore()
@@ -267,6 +268,7 @@ let nativeDropBindTimer = null
 const selectedPath = computed(() => orderStore.currentBackupFile)
 const currentProfileId = computed(() => profileStore.currentProfileId || appStore.settings.current_profile_id || 'default')
 const isBrowserRuntime = computed(() => detectBrowserRuntime())
+const dateLocale = computed(() => getCurrentLocale().startsWith('en') ? enUS : zhCN)
 const selectedBackupProfileId = computed({
   get: () => orderStore.backupProfileId || currentProfileId.value,
   set: (value) => orderStore.setBackupProfile(value),
@@ -316,12 +318,7 @@ const parseFileTime = (filename) => {
 
 // 备份规则说明
 const backupRulesTooltip = computed(() => {
-    return `**[[自动备份与手动备份说明：]]**
-^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。
-^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。
-^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。
-__自动列表备份格式：RML_YYYYMMDD_HHMMSS.rml__
-__手动导出支持：ModsConfig.xml / ModList.rml__`
+    return t('tooltip.backup_list.rules', '**[[自动备份与手动备份说明：]]**\n^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。\n^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。\n^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。\n__自动列表备份格式：RML_YYYYMMDD_HHMMSS.rml__\n__手动导出支持：ModsConfig.xml / ModList.rml__')
 })
 
 // 核心：处理数据并生成显示文本
@@ -332,8 +329,8 @@ const parsedData = computed(() => {
       const time = parseFileTime(name) || new Date(file.modify_time) || null
 
       let displayTitle = file.list_name || ''
-      let displayTime = '未知时间'
-      let distanceNow = '未知时间'
+      let displayTime = t('ui.common.unknown_time', '未知时间')
+      let distanceNow = t('ui.common.unknown_time', '未知时间')
       // 用短标签提示当前条目来自哪种排序文件格式。
       const formatLabelMap = {
         modsconfig: 'ModsConfig',
@@ -352,7 +349,7 @@ const parsedData = computed(() => {
       if (time) {
         const now = new Date()
         // 生成 displayTime (具体时间)
-        displayTime = time.toLocaleString('zh-CN', {
+        displayTime = time.toLocaleString(getCurrentLocale(), {
           year: 'numeric', month: '2-digit', day: '2-digit',
           hour: '2-digit', minute: '2-digit', second: '2-digit'
         })
@@ -360,13 +357,13 @@ const parsedData = computed(() => {
         // 生成 displayTitle (相对时间)
         if (type === 'today') {
           // Today: 刚刚, xx分钟前, xx小时前
-          distanceNow = formatDistanceToNow(time, { locale: zhCN, addSuffix: true }).replace('大约 ', '')
+          distanceNow = formatDistanceToNow(time, { locale: dateLocale.value, addSuffix: true }).replace('大约 ', '')
         } else if (type === 'earlier') {
           // Earlier: 昨天, 前天, xx天前
           const diffDays = differenceInCalendarDays(now, time)
-          if (diffDays === 1) distanceNow = '昨天'
-          else if (diffDays === 2) distanceNow = '前天'
-          else distanceNow = `${diffDays} 天前`
+          if (diffDays === 1) distanceNow = t('ui.time.yesterday', '昨天')
+          else if (diffDays === 2) distanceNow = t('ui.time.before_yesterday', '前天')
+          else distanceNow = t('ui.time.days_ago', '{count} 天前', { count: diffDays })
         } else if (!displayTitle) {
           // Other: 直接显示文件名去后缀。这里把常见导入扩展名一起处理掉。
           displayTitle = name.replace(/\.(xml|rws|json|txt|list|rml)$/i, '')
@@ -435,7 +432,7 @@ const sanitizeBackupName = (name) => {
     .replace(/^\.+|\.+$/g, '')
     .trim()
   if (sanitizedName && sanitizedName !== normalizedName) {
-    toast.warning('文件名中的特殊字符已替换为下划线')
+    toast.warning(t('toast.backup_list.name_sanitized', '文件名中的特殊字符已替换为下划线'))
   }
   return sanitizedName
 }
@@ -451,11 +448,11 @@ const handleOpenFolder = (item) => {
 const resolveBackupExportOrder = async (item) => {
   if (Array.isArray(item?.active_ids) && item.active_ids.length > 0) return item
   if (!isLocalFilePath(item?.path)) {
-    toast.warning('该条目没有可导出的包名序列')
+    toast.warning(t('toast.backup_list.no_exportable_order', '该条目没有可导出的包名序列'))
     return null
   }
   const res = await window.pywebview.api.load_order_file_open(item.path, item.source_profile_id || selectedBackupProfileId.value || null)
-  if (!checkResult(res, '读取备份文件')) return null
+  if (!checkResult(res, t('check.backup_list.read_backup_file', '读取备份文件'))) return null
   return res.data || null
 }
 
@@ -464,20 +461,20 @@ const exportBackupItemAsFile = async (item, format = 'modlist') => {
   const order = await resolveBackupExportOrder(item)
   const activeIds = (order?.active_ids || []).filter(Boolean)
   if (activeIds.length === 0) {
-    toast.warning('该备份没有可导出的包名序列')
+    toast.warning(t('toast.backup_list.backup_no_exportable_order', '该备份没有可导出的包名序列'))
     return false
   }
 
   const pickRes = await window.pywebview.api.load_order_export_pick_path(format)
   if (pickRes?.status === 'warning') return false
-  if (!checkResult(pickRes, '选择导出路径')) return false
+  if (!checkResult(pickRes, t('check.backup_list.pick_export_path', '选择导出路径'))) return false
   const targetPath = pickRes.data?.path || ''
   if (!targetPath) return false
 
   const listName = order?.list_name || item?.displayTitle || item?.name || null
   const res = await window.pywebview.api.load_order_export(activeIds, targetPath, false, format, listName, true)
-  if (checkResult(res, format === 'rml' ? '导出 RML' : '导出 ModList')) {
-    toast.success(format === 'rml' ? '备份已导出为 RML' : '备份已导出为 ModList')
+  if (checkResult(res, format === 'rml' ? t('check.backup_list.export_rml', '导出 RML') : t('check.backup_list.export_modlist', '导出 ModList'))) {
+    toast.success(format === 'rml' ? t('toast.backup_list.exported_rml', '备份已导出为 RML') : t('toast.backup_list.exported_modlist', '备份已导出为 ModList'))
     await refresh(selectedBackupProfileId.value)
     return true
   }
@@ -489,48 +486,48 @@ const exportBackupItemShareCode = async (item) => {
   const order = await resolveBackupExportOrder(item)
   const activeIds = (order?.active_ids || []).filter(Boolean)
   if (activeIds.length === 0) {
-    toast.warning('该备份没有可生成分享码的包名序列')
+    toast.warning(t('toast.backup_list.no_share_code_order', '该备份没有可生成分享码的包名序列'))
     return ''
   }
 
   const listName = order?.list_name || item?.displayTitle || item?.name || 'Shared Load Order'
   const res = await window.pywebview.api.load_order_share_export(activeIds, listName)
-  if (!checkResult(res, '生成分享码')) return ''
+  if (!checkResult(res, t('check.backup_list.generate_share_code', '生成分享码'))) return ''
   const shareCode = res.data?.share_code || ''
   if (!shareCode) {
-    toast.error('后端没有返回有效的分享码')
+    toast.error(t('toast.backup_list.empty_share_code', '后端没有返回有效的分享码'))
     return ''
   }
-  await copyTextToClipboard(shareCode, '分享码')
+  await copyTextToClipboard(shareCode, t('ui.backup_list.share_code', '分享码'))
   await confirmStore.open({
-    title: '分享码已生成',
-    message: `已生成 ${res.data?.count || activeIds.length} 个模组的分享码。`,
+    title: t('dialog.backup_list.share_code.title', '分享码已生成'),
+    message: t('dialog.backup_list.share_code.message', '已生成 {count} 个模组的分享码。', { count: res.data?.count || activeIds.length }),
     mode: 'prompt',
     type: 'success',
     inputValue: shareCode,
     placeholder: 'RC-...',
-    confirmText: '关闭',
-    cancelText: '取消',
+    confirmText: t('ui.common.close', '关闭'),
+    cancelText: t('ui.common.cancel', '取消'),
   })
   return shareCode
 }
 
 const handleRename = async (event, item) => {
   const inputName = await confirmStore.open({
-    title: '重命名备份',
-    message: '请输入新的备份名称。',
+    title: t('dialog.backup_list.rename.title', '重命名备份'),
+    message: t('dialog.backup_list.rename.message', '请输入新的备份名称。'),
     mode: 'prompt',
     type: 'info',
     inputValue: getBackupBaseName(item),
-    placeholder: '备份名称',
-    confirmText: '保存',
-    cancelText: '取消',
+    placeholder: t('dialog.backup_list.rename.placeholder', '备份名称'),
+    confirmText: t('ui.common.save', '保存'),
+    cancelText: t('ui.common.cancel', '取消'),
   }, event?.target)
   if (!inputName) return
 
   const nextName = sanitizeBackupName(inputName)
   if (!nextName) {
-    toast.warning('请输入新的备份名称')
+    toast.warning(t('toast.backup_list.rename_empty', '请输入新的备份名称'))
     return
   }
 
@@ -546,20 +543,20 @@ const buildBackupMenuItems = (item) => {
   const isManualBackup = item?.type === 'other'
   const canExportOrder = canUsePath || (Array.isArray(item?.active_ids) && item.active_ids.length > 0)
   return [
-    { label: '加载文件', icon: FileInput, action: () => handleLoad(null, item) },
-    { label: '打开文件', icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
-    { label: '打开所在目录', icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
-    { label: '复制文件路径', icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, '文件路径') },
-    { label: '导出为...', icon: Download, disabled: !canExportOrder, children: [
-      { label: '分享码', icon: ClipboardPlus, action: () => exportBackupItemShareCode(item) },
+    { label: t('menu.backup_list.load_file', '加载文件'), icon: FileInput, action: () => handleLoad(null, item) },
+    { label: t('menu.backup_list.open_file', '打开文件'), icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
+    { label: t('menu.backup_list.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
+    { label: t('menu.backup_list.copy_path', '复制文件路径'), icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, t('ui.mod_info.file_path', '文件路径')) },
+    { label: t('menu.backup_list.export_as', '导出为...'), icon: Download, disabled: !canExportOrder, children: [
+      { label: t('ui.backup_list.share_code', '分享码'), icon: ClipboardPlus, action: () => exportBackupItemShareCode(item) },
       { label: 'ModList', icon: FileText, action: () => exportBackupItemAsFile(item, 'modlist') },
       { label: 'RML', icon: FileText, action: () => exportBackupItemAsFile(item, 'rml') },
     ] },
-    { label: '重命名', icon: Edit3, disabled: !isManualBackup, action: () => handleRename(null, item) },
+    { label: t('ui.common.rename', '重命名'), icon: Edit3, disabled: !isManualBackup, action: () => handleRename(null, item) },
     { divider: true },
     isTempImport
-      ? { label: '从列表移除', icon: X, level: 'warn', action: () => handleRemove(item) }
-      : { label: '删除文件', icon: Trash2, level: 'danger', action: () => handleDelete(null, item) },
+      ? { label: t('menu.backup_list.remove_from_list', '从列表移除'), icon: X, level: 'warn', action: () => handleRemove(item) }
+      : { label: t('menu.backup_list.delete_file', '删除文件'), icon: Trash2, level: 'danger', action: () => handleDelete(null, item) },
   ]
 }
 
@@ -632,7 +629,7 @@ const importDroppedFile = async (filePath, source = 'dom') => {
   if (!normalizedPath || shouldSkipDuplicateDrop(normalizedPath)) return false
 
   if (activeDroppedFile.value && activeDroppedFile.value !== normalizedPath) {
-    toast.info('上一个拖入文件仍在处理中，请稍候')
+    toast.info(t('toast.backup_list.drop_busy', '上一个拖入文件仍在处理中，请稍候'))
     return false
   }
 
@@ -655,7 +652,7 @@ const importDroppedBrowserFile = async (file) => {
   if (!dropKey || shouldSkipDuplicateDrop(dropKey)) return false
 
   if (activeDroppedFile.value && activeDroppedFile.value !== dropKey) {
-    toast.info('上一个拖入文件仍在处理中，请稍候')
+    toast.info(t('toast.backup_list.drop_busy', '上一个拖入文件仍在处理中，请稍候'))
     return false
   }
 
@@ -686,12 +683,12 @@ const handleNativeBackupDrop = async (paths = []) => {
     : []
 
   if (normalizedPaths.length === 0) {
-    toast.warning('原生拖放未返回有效文件路径')
+    toast.warning(t('toast.backup_list.native_drop_no_path', '原生拖放未返回有效文件路径'))
     return
   }
 
   if (normalizedPaths.length > 1) {
-    toast.warning('一次只能导入一个文件，已自动使用第一个文件')
+    toast.warning(t('toast.backup_list.only_one_file', '一次只能导入一个文件，已自动使用第一个文件'))
   }
 
   await importDroppedFile(normalizedPaths[0], 'native')
@@ -766,11 +763,11 @@ const handleDrop = async (event) => {
   resetDropState()
   const files = Array.from(event?.dataTransfer?.files || [])
   if (files.length === 0) {
-    toast.warning('未检测到可导入文件')
+    toast.warning(t('toast.backup_list.no_drop_file', '未检测到可导入文件'))
     return
   }
   if (files.length > 1) {
-    toast.warning('一次只能导入一个文件，已自动使用第一个文件')
+    toast.warning(t('toast.backup_list.only_one_file', '一次只能导入一个文件，已自动使用第一个文件'))
   }
 
   const filePath = extractDroppedFilePath(event)
@@ -792,8 +789,8 @@ const selectItem = async (item) => {
 // 从备份列表加载
 const handleLoad = async (e, item) => {
   const confirmed = await confirmStore.open({
-    title: '加载确认',
-    message: `确定要恢复到此备份文件的状态吗？\n当前未保存的更改将丢失。`,
+    title: t('dialog.backup_list.load.title', '加载确认'),
+    message: t('dialog.backup_list.load.message', '确定要恢复到此备份文件的状态吗？\n当前未保存的更改将丢失。'),
     mode: 'confirm',
     type: 'warning'
   }, e?.target)
@@ -803,8 +800,8 @@ const handleLoad = async (e, item) => {
 // 删除备份文件
 const handleDelete = async (e, item) => {
   const confirmed = await confirmStore.open({
-    title: '删除确认',
-    message: '确定要删除此备份文件吗？',
+    title: t('dialog.backup_list.delete.title', '删除确认'),
+    message: t('dialog.backup_list.delete.message', '确定要删除此备份文件吗？'),
     mode: 'confirm',
     type: 'error'
   }, e?.target)

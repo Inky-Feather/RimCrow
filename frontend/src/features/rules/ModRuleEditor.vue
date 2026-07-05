@@ -7,7 +7,7 @@
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
       </span>
-      <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-disabled hover:text-text-dim transition-colors">关闭</button>
+      <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-disabled hover:text-text-dim transition-colors">{{ t('ui.common.close', '关闭') }}</button>
     </div>
     <!-- 当前选中的MOD -->
     <div class="px-2 py-2 w-full flex items-center gap-2 shadow-xl/10">
@@ -27,9 +27,9 @@
         <div class="flex items-center justify-between w-full">
 
           <span class="text-sm font-bold text-text-main flex items-center gap-2">
-            加载位置
-            <label v-tooltip="'强制让此 Mod 在启用列表中前置顶或置底。'" class="text-text-dim cursor-help italic underline hover:text-text-main">?</label>
-            <span v-if="absPos.source === 'community'" class="text-[0.6rem] px-1.5 py-0.5 bg-accent-cool/20 text-accent-cool rounded border border-accent-cool/30">社区建议</span>
+            {{ t('ui.mod_rule_editor.load_position', '加载位置') }}
+            <label v-tooltip="t('tooltip.mod_rule_editor.load_position', '强制让此 Mod 在启用列表中前置顶或置底。')" class="text-text-dim cursor-help italic underline hover:text-text-main">?</label>
+            <span v-if="absPos.source === 'community'" class="text-[0.6rem] px-1.5 py-0.5 bg-accent-cool/20 text-accent-cool rounded border border-accent-cool/30">{{ t('ui.mod_rule_editor.community_suggestion', '社区建议') }}</span>
           </span>
           <!-- 开关组 (Segmented Control) -->
           <div class="flex items-center bg-bg-inset/80 rounded-lg p-1 border border-border-base/10 shadow-inner">
@@ -37,19 +37,19 @@
             <button @click="handlePosChange('top')"
               class="px-1 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1"
               :class="absPos.pos === 'top' ? 'bg-accent-warn text-on-accent-warn shadow-lg' : 'text-text-dim hover:text-text-main'">
-              <ArrowUpToLine class="size-3" /> 置顶
+              <ArrowUpToLine class="size-3" /> {{ t('ui.rule.dynamic.action.top_short', '置顶') }}
             </button>
             <!-- 默认 -->
             <button @click="handlePosChange('none')"
               class="px-1 py-1 text-xs font-bold rounded-md transition-all"
               :class="absPos.pos === 'none' ? 'bg-bg-overlay/10 text-text-main shadow-lg' : 'text-text-dim hover:text-text-main'">
-              默认
+              {{ t('ui.common.default', '默认') }}
             </button>
             <!-- 置底 -->
             <button @click="handlePosChange('bottom')"
               class="px-1 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1"
               :class="absPos.pos === 'bottom' ? 'bg-accent-primary text-on-accent-primary shadow-lg' : 'text-text-dim hover:text-text-main'">
-              <ArrowDownToLine class="size-3" /> 置底
+              <ArrowDownToLine class="size-3" /> {{ t('ui.rule.dynamic.action.bottom_short', '置底') }}
             </button>
           </div>
         </div>
@@ -65,8 +65,8 @@
       <div v-if="isLanguagePackMod" class="min-h-20 m-1 pb-2 bg-accent-highlight/10 rounded-lg relative">
         <div class="sticky top-0 z-30 px-2 py-1 text-sm font-bold bg-accent-highlight/50 backdrop-blur-2xl text-text-main rounded-t-lg flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <span>语言包所属</span>
-            <label v-tooltip="'默认分析所属来自后端统一判定。用户可以指定所属，右侧按钮切换覆盖或并入模式，开启覆盖后，用户指定所属将替代默认分析所属，关闭时则并入默认分析所属。'" class="text-text-dim cursor-help italic underline hover:text-text-main">?</label>
+            <span>{{ t('ui.mod_rule_editor.language_owner.title', '语言包所属') }}</span>
+            <label v-tooltip="t('tooltip.mod_rule_editor.language_owner', '默认分析所属来自后端统一判定。用户可以指定所属，右侧按钮切换覆盖或并入模式，开启覆盖后，用户指定所属将替代默认分析所属，关闭时则并入默认分析所属。')" class="text-text-dim cursor-help italic underline hover:text-text-main">?</label>
           </div>
           <label class="flex items-center gap-2 cursor-pointer select-none">
             <div class="relative">
@@ -76,34 +76,34 @@
               <div class="w-9 h-5 bg-bg-overlay/10 rounded-full transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-bg-contrast after:border-border-base/18 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-bg-contrast peer-checked:bg-accent-special peer-disabled:opacity-40"></div>
             </div>
             <span class="text-xs font-bold text-text-dim">
-              {{ isLanguagePackOwnerReplaceEnabled ? '覆盖默认分析' : '并入默认分析' }}
+              {{ isLanguagePackOwnerReplaceEnabled ? t('ui.mod_rule_editor.language_owner.replace', '覆盖默认分析') : t('ui.mod_rule_editor.language_owner.merge', '并入默认分析') }}
             </span>
           </label>
         </div>
 
         <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
           <div class="w-1 h-1 rounded-full bg-accent-tip shadow-[0_0_8px_var(--color-accent-tip)]"></div>
-          <span class="text-accent-tip">默认分析所属 ({{ analyzedLanguagePackOwnerRows.length }})</span>
+          <span class="text-accent-tip">{{ t('ui.mod_rule_editor.language_owner.analyzed', '默认分析所属 ({count})', { count: analyzedLanguagePackOwnerRows.length }) }}</span>
           <div class="flex-1 h-px border-b border-accent-tip/30"></div>
           <span class="text-[0.65rem] text-text-dim">{{ analyzedLanguagePackOwnerSummary }}</span>
         </div>
         <div class="px-2 relative">
           <div class="absolute top-0 left-0 h-full w-full bg-accent-tip/20 blur-lg pointer-events-none"></div>
           <div v-if="analyzedLanguagePackOwnerRows.length === 0" class="px-2 py-3 text-xs text-text-dim">
-            当前未分析出可靠所属
+            {{ t('ui.mod_rule_editor.language_owner.empty_analyzed', '当前未分析出可靠所属') }}
           </div>
           <ModItem v-for="(owner, index) in analyzedLanguagePackOwnerRows" :key="owner.id" :item_id="owner.id" :index="index" simple :showIndex="false" />
         </div>
 
         <div class="flex items-center text-xs text-text-dim px-2 py-1 gap-1">
           <div class="w-1 h-1 rounded-full bg-accent-special shadow-[0_0_8px_var(--color-accent-special)]"></div>
-          <span class="text-accent-special">用户指定所属 ({{ languagePackOwnerOverrideRows.length }})</span>
+          <span class="text-accent-special">{{ t('ui.mod_rule_editor.language_owner.user_override', '用户指定所属 ({count})', { count: languagePackOwnerOverrideRows.length }) }}</span>
           <div class="flex-1 h-px border-b border-accent-special/30"></div>
         </div>
         <div class="px-2 min-h-15 relative">
           <div class="absolute top-0 left-0 h-full w-full bg-accent-special/20 blur-lg select-none pointer-events-none"></div>
           <div v-show="languagePackOwnerOverrideRows.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed text-text-dim text-xs select-none pointer-events-none">
-            可拖拽模组到此
+            {{ t('ui.rule_relation.drop_here', '可拖拽模组到此') }}
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(var(--color-text-main) 1px, transparent 1px); background-size: 20px 20px;"></div>
           </div>
 
@@ -121,7 +121,7 @@
                     hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
                     group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
                     group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                    v-tooltip="'移除'">
+                    v-tooltip="t('ui.common.remove', '移除')">
                     <span class="relative only:-mx-5">
                       <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                     </span>
@@ -134,7 +134,7 @@
       </div>
 
       <RuleRelationSection
-        title="前置"
+        :title="t('ui.rule_panel.relation.load_after_title', '前置')"
         rule-type="loadAfter"
         color="warn"
         :native-rules="getNativeRules('loadAfter')"
@@ -149,7 +149,7 @@
       />
 
       <RuleRelationSection
-        title="后置"
+        :title="t('ui.rule_panel.relation.load_before_title', '后置')"
         rule-type="loadBefore"
         color="primary"
         :native-rules="getNativeRules('loadBefore')"
@@ -162,7 +162,7 @@
       />
 
       <RuleRelationSection
-        title="冲突"
+        :title="t('ui.rule_panel.relation.incompatible_title', '冲突')"
         rule-type="incompatibleWith"
         color="danger"
         :native-rules="getNativeRules('incompatibleWith')"
@@ -189,6 +189,7 @@ import ModItem from '../mod/ModItem.vue'
 import SimpleDropList from '../../shared/components/list/SimpleDropList.vue'
 import RuleRelationSection from './RuleRelationSection.vue'
 import { useAppStore } from '../../app/stores/appStore'
+import { t } from '../../shared/i18n'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -302,9 +303,9 @@ const removeUserRule = async (ruleType, otherId) => {
 // 添加说明
 const addRuleComm = async (ruleType, otherId, e) => {
   const comment = await confirmStore.open({
-    title: '添加说明',
-    placeholder: '请输入说明:',
-    message: `为规则添加一段说明`,
+    title: t('dialog.mod_rule_editor.comment.title', '添加说明'),
+    placeholder: t('dialog.mod_rule_editor.comment.placeholder', '请输入说明:'),
+    message: t('dialog.mod_rule_editor.comment.message', '为规则添加一段说明'),
     mode: 'prompt',
     type: 'info'
   }, e.target)
@@ -367,8 +368,8 @@ const handlePosChange = async (pos) => {
   if (pos !== 'none') {
     // 弹出输入框要求写个备注（可选）
     comment = await confirmStore.open({
-      title: pos === 'top' ? '设为置顶' : '设为置底',
-      placeholder: '选填：为什么要强制放到这？',
+      title: pos === 'top' ? t('dialog.mod_rule_editor.position.top_title', '设为置顶') : t('dialog.mod_rule_editor.position.bottom_title', '设为置底'),
+      placeholder: t('dialog.mod_rule_editor.position.placeholder', '选填：为什么要强制放到这？'),
       mode: 'prompt'
     })
     if (comment === null) return // 用户点击了取消
