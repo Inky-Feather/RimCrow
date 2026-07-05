@@ -44,7 +44,7 @@ RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管
 
 ## 运行环境
 
-当前项目主要按 **Windows 桌面应用** 设计和验证。
+当前项目主要按 **Windows 桌面应用** 设计和验证，同时支持 macOS 的核心运行路径。
 
 运行前建议准备：
 
@@ -54,6 +54,18 @@ RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管
 - Windows 上可用的 **WebView2 Runtime**
 - RimWorld 本体与需要管理的模组环境
 - 如需使用 Steam 客户端工坊订阅能力，需要准备 Steamworks 运行库，见下方“Steamworks 运行库”
+
+当前 macOS 核心运行范围包括：
+
+- 主程序启动
+- RimWorld / Steam / 用户数据 / Player.log 定位
+- 基础 Steam 启动路径
+
+当前仍未承诺：
+
+- macOS 上 `todds` 自动安装与使用
+- SteamworksPy 的 macOS 编译产物随仓库直接提供
+- 打包分发产物质量保证
 
 ## 快速开始
 

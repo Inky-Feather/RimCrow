@@ -1,10 +1,12 @@
 from types import SimpleNamespace
 
 from dataclasses import asdict
+from unittest.mock import patch
 
 from backend.window_state import (
     DisplayInfo,
     WindowGeometry,
+    enable_per_monitor_dpi_awareness,
     WindowStateManager,
     resolve_launch_geometry,
 )
@@ -163,3 +165,21 @@ def test_window_state_serializes_only_required_fields():
     assert set(payload) == {"version", "placement", "normal", "display"}
     assert set(payload["normal"]) == {"x", "y", "width", "height"}
     assert set(payload["display"]) == {"id", "work_x", "work_y", "work_width", "work_height"}
+
+
+def test_enable_per_monitor_dpi_awareness_is_noop_on_non_windows():
+    with patch("backend.window_state.is_windows", return_value=False):
+        enable_per_monitor_dpi_awareness()
+
+
+def test_manager_can_resolve_launch_geometry_without_display_enumerator():
+    config = SimpleNamespace(window_state=make_state())
+    manager = WindowStateManager(
+        SimpleNamespace(config=config, save=lambda: None),
+        displays_provider=lambda: [],
+    )
+
+    launch = manager.resolve_launch_geometry()
+
+    assert launch.width >= 1100
+    assert launch.height >= 700

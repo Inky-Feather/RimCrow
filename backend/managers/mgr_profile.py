@@ -13,6 +13,7 @@ from backend.database.models import GameProfile, db
 from backend.managers.mgr_files import PathChecker
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.managers.mgr_game import GameManager
+from backend.paths.rimworld_layout import normalize_rimworld_install_root, resolve_rimworld_layout
 from backend.profile import UserDataRoot
 from backend.utils.profile_runtime import (
     normalize_profile_runtime_flags,
@@ -46,11 +47,11 @@ class ProfileContext:
     @property
     def local_mods_path(self):
         install_path = str(self.game_install_path or "").strip()
-        return str(Path(install_path) / "Mods") if install_path else ""
+        return resolve_rimworld_layout(install_path).local_mods_root if install_path else ""
     @property
     def game_dlc_path(self):
         install_path = str(self.game_install_path or "").strip()
-        return str(Path(install_path) / "Data") if install_path else ""
+        return resolve_rimworld_layout(install_path).official_data_root if install_path else ""
     @property
     def _user_data_root(self):
         user_data_path = str(self.user_data_path or "").strip()
@@ -230,7 +231,7 @@ class ProfileManager:
         创建新版本环境
         :param copy_current_data: 是否从当前环境复制 Config 和 Saves 到新环境作为初始状态
         """
-        game_install_path = normalize_path_for_storage(data.get('game_install_path'))
+        game_install_path = normalize_rimworld_install_root(data.get('game_install_path'))
         # 验证游戏安装路径是否存在
         if not GameManager.detect_executable(game_install_path):
             raise ValueError(f"Game executable not found: {game_install_path}")
@@ -292,7 +293,7 @@ class ProfileManager:
         if 'user_data_path' in clean_data:
             clean_data['user_data_path'] = self._ensure_user_data_structure(clean_data['user_data_path'])
         if 'game_install_path' in clean_data:
-            clean_data['game_install_path'] = normalize_path_for_storage(clean_data['game_install_path'])
+            clean_data['game_install_path'] = normalize_rimworld_install_root(clean_data['game_install_path'])
             if not os.path.exists(clean_data['game_install_path']):
                 raise ValueError(f"Path not found: {clean_data['game_install_path']}")
             if not GameManager.detect_executable(clean_data['game_install_path']):
@@ -644,4 +645,3 @@ class ProfileManager:
             return True, "导入成功"
         except Exception as e: return False, str(e)
             
-

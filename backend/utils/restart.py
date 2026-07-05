@@ -1,9 +1,9 @@
 import os
 import subprocess
 import sys
-from pathlib import Path
 from typing import Dict
 
+from backend.platform.runtime import get_restart_command, is_windows
 from backend.settings import HOME_DIR
 from backend.utils.logger import logger
 
@@ -63,6 +63,13 @@ def _build_restart_environment() -> Dict[str, str]:
     原因：更新重启和手动重启都可能发生在 PyInstaller onefile 运行时环境里，
     若直接继承当前环境，可能把失效的解包路径和内部状态一并带给新实例。
     """
+    if not is_windows():
+        clean_env = dict(os.environ)
+        for key in PYINSTALLER_ENV_VARS_TO_CLEAR:
+            clean_env.pop(key, None)
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+        return clean_env
+
     clean_env: Dict[str, str] = {}
 
     for key in RESTART_ENV_WHITELIST:
@@ -92,7 +99,8 @@ def _reset_windows_dll_directory():
     原因：PyInstaller onefile 会临时改写 DLL 搜索目录，不重置的话，
     当前进程拉起的更新器或新实例可能继续引用已经失效的临时目录。
     """
-    if sys.platform != "win32": return
+    if not is_windows():
+        return
     try:
         import ctypes
         ctypes.windll.kernel32.SetDllDirectoryW(None)
@@ -107,17 +115,7 @@ def _resolve_restart_command(executable_path: str = ""):
     1. 打包环境直接启动当前 exe。
     2. 开发环境优先使用 pythonw.exe，避免重启时弹出控制台窗口。
     """
-    if executable_path:
-        return [os.path.abspath(executable_path)]
-    if getattr(sys, 'frozen', False):
-        return [os.path.abspath(sys.executable)]
-
-    python_executable = Path(sys.executable).resolve()
-    pythonw_executable = python_executable.with_name("pythonw.exe")
-    if pythonw_executable.exists():
-        return [str(pythonw_executable), str(HOME_DIR / 'main.py')]
-
-    return [os.path.abspath(sys.executable), str(HOME_DIR / 'main.py')]
+    return get_restart_command(executable_path, main_script=HOME_DIR / "main.py")
 
 
 def launch_new_application(executable_path: str = ""):

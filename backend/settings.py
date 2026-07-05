@@ -2,6 +2,7 @@
 
 import json
 import os
+import platform
 import shutil
 import threading
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
@@ -12,6 +13,7 @@ from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, normalize_languag
 from backend.migrations.app_relocation import apply_config_relocation
 from backend.utils.json_io import write_json_atomic
 from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_store
+from backend.paths.game_locations import normalize_steam_root
 from backend.utils.tools import normalize_path_for_storage, same_path
 from backend.window_state import WindowStateConfig
 
@@ -565,7 +567,7 @@ class SettingsManager:
             self.last_relocation = relocation
         self.config.home_path = str(HOME_DIR)
         self.config.current_profile_id = str(self.config.current_profile_id or "").strip() or "default"
-        self.config.steam_path = normalize_path_for_storage(self.config.steam_path)
+        self.config.steam_path = normalize_steam_root(self.config.steam_path, system_name=platform.system())
         self.config.workshop_mods_path = normalize_path_for_storage(self.config.workshop_mods_path)
         self.config.steamcmd_path = normalize_path_for_storage(self.config.steamcmd_path) or str(TOOLS_DIR / "steamcmd")
         self.config.self_mods_path = normalize_path_for_storage(self.config.self_mods_path) or str(MODS_DIR)
