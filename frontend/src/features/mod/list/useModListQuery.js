@@ -1,18 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { ISSUE_TYPE } from '../../../shared/lib/constants'
-
-const SORT_MODE_MAP = {
-  'default': '默认',
-  'name': '名称',
-  'package_id': '包名',
-  'author': '作者',
-  'last_active_time': '启用时间',
-  'last_moved_time': '移动时间',
-  'file_create_time': '创建时间',
-  'file_modify_time': '修改时间',
-  'file_size': '文件大小',
-  'multiplayer_compat': '联机兼容性',
-}
+import { t } from '../../../shared/i18n'
 
 export function useModListQuery({
   props,
@@ -43,6 +31,18 @@ export function useModListQuery({
   const isSortChange = ref(false) // 是否排序切换
   const engine = computed(() => searchStore.engine)
   const searchResultSet = computed(() => new Set(searchResults.value))
+  const SORT_MODE_MAP = computed(() => ({
+    default: t('ui.mod_list.sort.default', '默认'),
+    name: t('ui.mod_list.sort.name', '名称'),
+    package_id: t('ui.mod_list.sort.package_id', '包名'),
+    author: t('ui.mod_list.sort.author', '作者'),
+    last_active_time: t('ui.mod_list.sort.last_active_time', '启用时间'),
+    last_moved_time: t('ui.mod_list.sort.last_moved_time', '移动时间'),
+    file_create_time: t('ui.mod_list.sort.file_create_time', '创建时间'),
+    file_modify_time: t('ui.mod_list.sort.file_modify_time', '修改时间'),
+    file_size: t('ui.mod_list.sort.file_size', '文件大小'),
+    multiplayer_compat: t('ui.mod_list.sort.multiplayer_compat', '联机兼容性'),
+  }))
 
   const normalizeExactText = (value) => String(value ?? '').trim().toLowerCase()
   const getExactTagValues = (mod, tag) => {
@@ -142,21 +142,21 @@ export function useModListQuery({
 
   // 排序提示
   const sortTooltip = computed(() => {
-    let text = `按${SORT_MODE_MAP[sortMode.value]}排序`
-    text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
-    text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
-    text += `\n\n__[[(点击恢复默认排序)]]__`
+    let text = t('tooltip.mod_list.sort.by_mode', '按{mode}排序', { mode: SORT_MODE_MAP.value[sortMode.value] || SORT_MODE_MAP.value.default })
+    text += isSortAsc.value ? t('tooltip.mod_list.sort.asc', '（升序）') : t('tooltip.mod_list.sort.desc', '（降序）')
+    text += '\n' + t('tooltip.mod_list.visual_only', '__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__')
+    text += '\n\n' + t('tooltip.mod_list.sort.clear', '__[[(点击恢复默认排序)]]__')
     return text
   })
   // 筛选提示
   const filterTooltip = computed(() => {
     let text = ''
-    if (filterQuery.value.length > 0) { text += `已筛选检索关键词` }
-    if (isFilterByIssue.value) { text += '\n已筛选问题项' }
-    if (filterByLine.value.length > 0) { text += `\n已筛选依赖组` }
+    if (filterQuery.value.length > 0) { text += t('tooltip.mod_list.filter.keyword', '已筛选检索关键词') }
+    if (isFilterByIssue.value) { text += '\n' + t('tooltip.mod_list.filter.issue', '已筛选问题项') }
+    if (filterByLine.value.length > 0) { text += '\n' + t('tooltip.mod_list.filter.dependency_group', '已筛选依赖组') }
     text = text.trim()
-    text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
-    text += `\n\n__[[(点击清除所有筛选)]]__`
+    text += '\n' + t('tooltip.mod_list.visual_only', '__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__')
+    text += '\n\n' + t('tooltip.mod_list.filter.clear', '__[[(点击清除所有筛选)]]__')
     return text
   })
   // 处理点击依赖图线路（筛选依赖组）
@@ -240,7 +240,7 @@ export function useModListQuery({
   })
 
   const sortIcon = computed(() => {
-    return SORT_MODE_MAP[sortMode.value] || '默认'
+    return SORT_MODE_MAP.value[sortMode.value] || t('ui.mod_list.sort.default', '默认')
   })
 
   // 执行搜索
@@ -269,7 +269,7 @@ export function useModListQuery({
       index++
       if (index >= results.length) {
         index = 0 // 循环
-        toast.info("已到达最后一个搜索结果，循环回到第一个", { timeout: 2000 })
+        toast.info(t('toast.mod_list.search.loop_to_first', '已到达最后一个搜索结果，循环回到第一个'), { timeout: 2000 })
       }
     }
     // 定位
@@ -296,7 +296,7 @@ export function useModListQuery({
       // 2. 检查是否被当前的筛选器过滤掉了
       if (!displayList.value.includes(resolvedTargetId)) {
         console.info(`目标项被当前列表筛选器过滤: ${resolvedTargetId}，列表=${props.title}`)
-        toast.warning(`搜索项 ${resolvedTargetId} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
+        toast.warning(t('toast.mod_list.search.filtered_out', '搜索项 {id} 已被 {list} 列表筛选器过滤，请清除筛选后重试。', { id: resolvedTargetId, list: props.title }))
       }
       await revealCollapsedSectionFor(resolvedTargetId)
 

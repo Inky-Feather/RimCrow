@@ -4,7 +4,7 @@
     
     <!-- 滑动滑块 (Indicator) -->
     <!-- 1. 宽度 = 100% / 选项数量 2. 位置 = 当前索引 * 100% (相对于自身宽度位移) -->
-    <div class="absolute top-0.5 bottom-0.5 left-0.5 bg-accent-highlight/60 rounded-[7px] border-[0.5px] border-border-base/10
+    <div class="absolute top-0.5 bottom-0.5 left-0.5 bg-accent-highlight/60 rounded-md border border-border-base/10
              shadow-[0px_2px_2px_var(--shadow-color),0px_1px_1px_var(--shadow-color)]
              transition-transform duration-200 ease-out z-0"
       :style="{

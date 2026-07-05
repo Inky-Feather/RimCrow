@@ -11,11 +11,11 @@
         <!-- 状态提示 -->
         <span v-if="isFiltered" v-tooltip="filterTooltip" @click="clearFilter"
           class="text-xs text-text-soft bg-accent-highlight/30 px-1 rounded-full ring-1 ring-accent-special/70 cursor-pointer hover:bg-accent-highlight/60 hover:text-text-main active:scale-95 transition-all">
-          已筛选
+          {{ t('ui.mod_list.badge.filtered', '已筛选') }}
         </span>
         <span v-if="sortMode !== 'default' || !isSortAsc" v-tooltip="sortTooltip" @click="clearSort"
           class="text-xs text-text-soft bg-accent-highlight/30 px-1 rounded-full ring-1 ring-accent-special/70 cursor-pointer hover:bg-accent-highlight/60 hover:text-text-main active:scale-95 transition-all">
-          已排序
+          {{ t('ui.mod_list.badge.sorted', '已排序') }}
         </span>
       </span>
 
@@ -51,21 +51,21 @@
       <div class="flex items-center justify-center gap-1 relative">
         <!-- 搜索定位 (Find) -->
         <TagSearchInput :list-color="listColor" v-model="searchQuery" v-model:logic="searchLogic" ref="searchTagsRef" class="z-10"
-          :controller="engine?.controller" @search="executeSearch(true)" placeholder="输入关键词定位Mod位置……">
+          :controller="engine?.controller" @search="executeSearch(true)" :placeholder="t('ui.mod_list.search.placeholder', '输入关键词定位Mod位置……')">
           <template #right>
             <div class="flex gap-1 items-center justify-center">
               <!-- 定位按钮 -->
-              <button @click="searchTagsRef?.addTag();executeSearch(true)" v-tooltip="'搜索定位下一个符合条件的结果'"
+              <button @click="searchTagsRef?.addTag();executeSearch(true)" v-tooltip="t('tooltip.mod_list.search_next', '搜索定位下一个符合条件的结果')"
                 :class="`px-2.5 py-1 m-0 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
-                transition-all cursor-pointer hover:scale-105 active:scale-95`">定位
+                transition-all cursor-pointer hover:scale-105 active:scale-95`">{{ t('ui.mod_list.action.locate', '定位') }}
                 <div v-if="currentSearchIndex !== -1 && searchQuery.length > 0" class="text-[0.55rem] absolute -top-2 -left-1 text-text-main bg-accent-highlight px-1 rounded-lg">{{ currentSearchIndex + 1 }} / {{ searchResults.length }}</div>
               </button>
               <!-- 视图切换按钮 -->
               <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
                 :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
                 :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-                @click="isSimpleView = !isSimpleView" v-tooltip="'切换列表视图'" >
+                @click="isSimpleView = !isSimpleView" v-tooltip="t('tooltip.mod_list.toggle_view', '切换列表视图')" >
                 <svg v-if="!isSimpleView" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
                 <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
               </Motion>
@@ -77,7 +77,7 @@
       <div class="flex items-center justify-center gap-1">
         <!-- 筛选过滤 (Filter) -->
         <TagSearchInput :list-color="listColor" v-model="filterQuery" v-model:logic="filterLogic" class="z-5"
-          :controller="engine?.controller" search-help-text="" placeholder="输入关键词筛选Mod……">
+          :controller="engine?.controller" search-help-text="" :placeholder="t('ui.mod_list.filter.placeholder', '输入关键词筛选Mod……')">
           <template #icon>
             <svg class="w-3 h-3 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
           </template>
@@ -89,7 +89,7 @@
                 :class="`px-2.5 py-1 m-0 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all relative`">
                 {{ sortIcon }}
-                <div v-show="isSortChange" class="absolute min-w-20 h-auto p-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
+                <div v-show="isSortChange" class="absolute min-w-20 w-fit px-1 h-auto py-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
                   <div v-for="(icon, mode) in SORT_MODE_MAP" :key="mode" @click="sortMode = mode" class="w-full rounded-md hover:bg-bg-overlay/10 hover:text-text-main">{{ icon }}</div>
                 </div>
               </button>
@@ -97,7 +97,7 @@
               <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
                 :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
                 :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-                @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc?'切换为降序排列':'切换为升序排列'" >
+                @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc ? t('tooltip.mod_list.sort_desc', '切换为降序排列') : t('tooltip.mod_list.sort_asc', '切换为升序排列')" >
                 <svg v-if="isSortAsc" class="size-4 rotate-x-180" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
                 <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
               </Motion>
@@ -126,7 +126,7 @@
       <div @click.self="modStore.clearSelection()" class="flex-1 h-full min-h-0 pl-1 pr-1 min-w-0 relative" :data-tour="listId=='active'?'list-modItem':null">
         <!-- 列表为空时的提示 -->
         <div v-show="modelValue.length === 0" class="absolute flex rounded-lg top-0 bottom-0 left-0 right-0 m-1 items-center justify-center border-2 border-dashed border-border-base/18 text-text-subtle/70 text-xs bg-bg-deep/90 select-none pointer-events-none">
-          可拖拽模组到此
+          {{ t('ui.mod_list.empty.drop_here', '可拖拽模组到此') }}
           <!-- 点阵背景 -->
           <div class="absolute inset-0 opacity-[0.05] pointer-events-none" style="background-image: radial-gradient(var(--color-text-main) 1px, transparent 1px); background-size: 20px 20px;"></div>
         </div>
@@ -174,7 +174,7 @@
                 @collapse-all-sections="collapseAllSections"
                 @move-selected="handleMoveSelected">
               </ModItem>
-              <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="'最近启用（距上一次软件运行）'"
+              <div v-if="!isSectionHeaderId(dataKey) && modStore.takeModById(dataKey).last_active_time>appStore.settings.last_run_time && listId=='active'" v-tooltip="t('tooltip.mod_list.new_since_last_run', '最近启用（距上一次软件运行）')"
                 class="absolute top-0 right-0 rounded-md bg-accent-primary text-text-main px-1 py-0.5 text-[0.6rem] text-center flex items-center justify-center">
                 NEW
               </div>
@@ -207,7 +207,7 @@ import { Motion } from 'motion-v';
 import { useAppStore } from '../../../app/stores/appStore';
 import { useModStore } from '../stores/modStore';
 import { useSearchStore } from '../stores/searchStore';
-import { ISSUE_TITLE_MAP } from '../../../shared/lib/constants';
+import { getIssueTitle } from '../../../shared/lib/constants';
 import ModItem from '../ModItem.vue';
 import ModListQuickActions from './ModListQuickActions.vue';
 import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue';
@@ -222,6 +222,7 @@ import { useModListDrag } from './useModListDrag'
 import { setActiveKeyScope } from '../../../shared/commands/keyScopeStore'
 import { registerModListActions } from '../../../app/commands/modListActions'
 import { Megaphone, MegaphoneOff, SearchAlert } from 'lucide-vue-next'
+import { t } from '../../../shared/i18n'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({
@@ -278,12 +279,12 @@ const issuesSummary = computed(() => modStore.getListIssues(props.listId))
 const issueTooltip = computed(() => {
   const summary = issuesSummary.value
   if (summary.count === 0) return null
-  const errorInfo = summary.errorCount > 0 ? `!!${summary.errorCount} 个错误!!` : ''
-  const warningInfo = summary.warnCount > 0 ? `^^${summary.warnCount} 个警告^^` : ''
-  let text = `**发现 ${summary.count} 个问题Mod**（${errorInfo} ${warningInfo}）`
+  const errorInfo = summary.errorCount > 0 ? t('tooltip.mod_list.issue.error_count', '!!{count} 个错误!!', { count: summary.errorCount }) : ''
+  const warningInfo = summary.warnCount > 0 ? t('tooltip.mod_list.issue.warn_count', '^^{count} 个警告^^', { count: summary.warnCount }) : ''
+  let text = t('tooltip.mod_list.issue.summary', '**发现 {count} 个问题Mod**（{errors} {warnings}）', { count: summary.count, errors: errorInfo, warnings: warningInfo })
   for (const [type, ids] of Object.entries(summary.stats)) {
     if ((ids as string[]).length === 0) continue
-    const typeName = ISSUE_TITLE_MAP[type] || type
+    const typeName = getIssueTitle(type)
     const isError = ['missing_dependency', 'inactive_dependency', 'missing_file', 'incompatible', 'wrong_order', 'multiplayer_incompatible'].includes(type)
     const titleMark = isError ? '!!' : '^^'
     text += `\n${titleMark}${typeName} (${(ids as string[]).length}):${titleMark}`
@@ -291,12 +292,12 @@ const issueTooltip = computed(() => {
       text += `\n  • ${modStore.displayModName(id)}`
     })
     if ((ids as string[]).length > 3) {
-      text += `\n  __...及其他 ${(ids as string[]).length - 3} 项__`
+      text += '\n  ' + t('tooltip.mod_list.issue.more', '__...及其他 {count} 项__', { count: (ids as string[]).length - 3 })
     }
   }
-  text += isFilterByIssue.value ? '\n\n__[[(再次点击取消筛选)]]__' : '\n\n__[[(点击筛选查看全部问题项)]]__'
-  text += '\n__[[(可从^^右键菜单^^筛选单项问题)]]__'
-  text += appStore.settings.check_language_support ? '\n__(可在设置中关闭语言支持检查)__' : ''
+  text += isFilterByIssue.value ? '\n\n' + t('tooltip.mod_list.issue.cancel_filter', '__[[(再次点击取消筛选)]]__') : '\n\n' + t('tooltip.mod_list.issue.filter_all', '__[[(点击筛选查看全部问题项)]]__')
+  text += '\n' + t('tooltip.mod_list.issue.context_filter', '__[[(可从^^右键菜单^^筛选单项问题)]]__')
+  text += appStore.settings.check_language_support ? '\n' + t('tooltip.mod_list.issue.language_check_hint', '__(可在设置中关闭语言支持检查)__') : ''
   return text
 })
 const issueContextMenu = async (event) => {
@@ -309,20 +310,24 @@ const issueContextMenu = async (event) => {
   const issueManagementItems = []
   if (uniqueIssueTypes.length > 0) {
     issueManagementItems.push({
-      label: props.modelValue.length > 1 ? `筛选单项问题 (${uniqueIssueTypes.length})...` : '筛选单项问题...',
+      label: props.modelValue.length > 1
+        ? t('menu.mod_list.issue.filter_type_count', '筛选单项问题 ({count})...', { count: uniqueIssueTypes.length })
+        : t('menu.mod_list.issue.filter_type', '筛选单项问题...'),
       icon: SearchAlert,
       children: uniqueIssueTypes.map(type => ({
-        label: `单独筛选：${ISSUE_TITLE_MAP[type] || type}`,
+        label: t('menu.mod_list.issue.filter_one', '单独筛选：{type}', { type: getIssueTitle(type) }),
         level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
         action: () => toggleIssueTypeFilter(type)
       }))
     })
     issueManagementItems.push({ divider: true })
     issueManagementItems.push({
-      label: props.modelValue.length > 1 ? `忽略所有问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
+      label: props.modelValue.length > 1
+        ? t('menu.mod_list.issue.ignore_all_count', '忽略所有问题 ({count})...', { count: uniqueIssueTypes.length })
+        : t('menu.mod_list.issue.ignore', '忽略问题...'),
       icon: MegaphoneOff,
       children: uniqueIssueTypes.map(type => ({
-        label: `忽略：${ISSUE_TITLE_MAP[type] || type}`,
+        label: t('menu.mod_list.issue.ignore_one', '忽略：{type}', { type: getIssueTitle(type) }),
         level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
         action: () => modStore.batchIgnoreIssues(props.modelValue, type)
       }))
@@ -331,7 +336,7 @@ const issueContextMenu = async (event) => {
   if (anyModHasIgnored) {
     if (issueManagementItems.length === 0) issueManagementItems.push({ divider: true })
     issueManagementItems.push({
-      label: props.modelValue.length > 1 ? '恢复所有警告' : '恢复警告',
+      label: props.modelValue.length > 1 ? t('menu.mod_list.issue.restore_all', '恢复所有警告') : t('menu.mod_list.issue.restore', '恢复警告'),
       icon: Megaphone,
       level: 'warn',
       action: () => modStore.batchIgnoreIssues(props.modelValue, null)
@@ -375,9 +380,10 @@ const canMoveWithinSplitGroup = computed(() => (
   && !selectedHasSplitHeader.value
   && !!currentSplitGroupId.value
 ))
-const SECTION_TARGET_MENU_LABEL_MAP = {
-  active: '启用列表分割组...',
-  inactive: '停用列表分割组...',
+const getSectionTargetMenuLabel = (listId: string) => {
+  if (listId === 'active') return t('menu.mod_list.move.active_section_groups', '启用列表分割组...')
+  if (listId === 'inactive') return t('menu.mod_list.move.inactive_section_groups', '停用列表分割组...')
+  return t('menu.mod_list.move.other_section_groups', '其它列表分割组...')
 }
 const splitGroupTargets = computed(() => {
   if (!canMoveListItems.value || selectedHasSplitHeader.value) return []
@@ -388,7 +394,7 @@ const splitGroupTargets = computed(() => {
   if (currentGroups.length) {
     targets.push({
       listId: props.listId,
-      label: props.listId === 'active' ? '其他分割组...' : '当前列表其他分割组...',
+      label: props.listId === 'active' ? t('menu.mod_list.move.other_groups', '其他分割组...') : t('menu.mod_list.move.current_other_groups', '当前列表其他分割组...'),
       groups: currentGroups.map(group => ({
         groupId: group.groupId,
         label: group.label,
@@ -402,7 +408,7 @@ const splitGroupTargets = computed(() => {
     if (!targetGroups.length) return
     targets.push({
       listId,
-      label: SECTION_TARGET_MENU_LABEL_MAP[listId] || '其它列表分割组...',
+      label: getSectionTargetMenuLabel(listId),
       groups: targetGroups.map(group => ({
         groupId: group.groupId,
         label: group.label,

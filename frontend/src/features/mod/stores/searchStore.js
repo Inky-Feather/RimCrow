@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, shallowRef, watch } from 'vue'
 import { useModStore } from './modStore'
 import { TagSearchEngine, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
-import { getStoreTypeLabel, MOD_SIGN_COLOR_MAP } from '../../../shared/lib/constants'
+import { getModSignColorLabel, getModTypeLabel, getSourceTypeLabel, getStoreTypeLabel } from '../../../shared/lib/constants'
 import { useAppStore } from '../../../app/stores/appStore'
 import { i18n, t } from '../../../shared/i18n'
 
@@ -24,7 +24,7 @@ export const useSearchStore = defineStore('search', () => {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
       label: t('ui.search.mod.field.sign_color', '颜色'),
-      label_getter: (color) => MOD_SIGN_COLOR_MAP[color] || color || t('ui.search.mod.value.none', '无'),
+      label_getter: getModSignColorLabel,
       color_getter: (color) => color || 'var(--color-text-main)',
     },
     tags: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('ui.search.mod.field.tags', '标签') },
@@ -35,12 +35,14 @@ export const useSearchStore = defineStore('search', () => {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
       label: t('ui.search.mod.field.mod_type', '类型'),
+      label_getter: getModTypeLabel,
       getter: (mod) => modStore.displayModType(mod)
     },
     source: {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
       label: t('ui.search.mod.field.source', '来源'),
+      label_getter: getSourceTypeLabel,
     },
     store: {
       type: TAG_FIELD_TYPES.STRING,

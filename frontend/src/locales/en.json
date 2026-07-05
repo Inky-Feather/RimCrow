@@ -66,9 +66,7 @@
           "tags": "tags",
           "workshop_id": "workshop_id"
         },
-        "value": {
-          "none": "none"
-        }
+        "value": {}
       }
     },
     "secret": {
@@ -95,11 +93,13 @@
       "unsaved_changes": "Unsaved changes"
     },
     "store_type": {
-      "local": "local",
-      "other": "other",
-      "self": "self",
-      "unknown": "unknown",
-      "workshop": "workshop"
+      "local": "Local",
+      "other": "Other",
+      "self": "Manager",
+      "unknown": "Unknown",
+      "workshop": "Workshop",
+      "core": "Core",
+      "dlc": "DLC"
     },
     "tag": {
       "placeholder": "Type and press Enter..."
@@ -125,7 +125,7 @@
         "and_help": "AND: all conditions must match",
         "available_fields": "Available category fields",
         "badge": "Search command reference",
-        "boolean_help": "Boolean search supports three states: true / false / null  ( + / - / _ )",
+        "boolean_help": "State search supports three values: true / false / null  ( + / - / _ )",
         "default_search_title": "Included in fuzzy search by default",
         "loading": "Loading...",
         "logic_help": "Multiple search conditions can use \"AND\" or \"OR\" logic",
@@ -141,7 +141,7 @@
         "syntax_title": "Basic search syntax",
         "title": "Search help"
       },
-      "input_help": "Enter a keyword and press Enter\nYou can search directly, or use Category:keyword\n[[(Press Tab to apply suggestions)]]",
+      "input_help": "Enter a keyword and press Enter\nSearch directly, or use field:keyword\n[[(Press Tab to apply suggestions)]]",
       "logic": {
         "and_tooltip": "Current logic is ^^AND^^. Results must match ^^all^^ conditions\n[[(Click to switch to ^^OR^^ logic)]]",
         "or_tooltip": "Current logic is ^^OR^^. Results may match ^^any^^ condition\n[[(Click to switch to ^^AND^^ logic)]]"
@@ -161,6 +161,302 @@
       "subscribe": "Subscribe",
       "unsubscribe": "Unsubscribe",
       "web": "Web"
+    },
+    "common": {
+      "clear": "Clear",
+      "collapse": "Collapse",
+      "count_suffix": " ({count} items)",
+      "count_suffix_with_unit": " ({count})",
+      "delete": "Delete",
+      "none": "None",
+      "position": {
+        "bottom": "bottom",
+        "top": "top"
+      },
+      "restore_default": "Restore default",
+      "unknown": "Unknown"
+    },
+    "issue": {
+      "default": "Other issue",
+      "inactive_dependency": "Deactivated dependency",
+      "incompatible": "Mod conflict",
+      "info_alternative_used": "Dependency replacement used",
+      "link_mod_missing": "Linked mod missing",
+      "link_wrong_order": "Linked load order issue",
+      "missing_dependency": "Missing dependency",
+      "missing_file": "Missing file",
+      "multiplayer_barely_compatible": "Barely compatible with Multiplayer",
+      "multiplayer_incompatible": "Incompatible with Multiplayer",
+      "multiplayer_unknown": "Multiplayer compatibility unknown",
+      "version_mismatch": "Version mismatch",
+      "warn_inactive_language_pack": "Language pack deactivated",
+      "warn_inactive_target": "Language pack target deactivated",
+      "warn_missing_language": "Missing language support",
+      "warn_multiplayer_compatibility": "Multiplayer compatibility",
+      "warn_unknown_target": "Language pack target unknown",
+      "wrong_order": "Wrong order"
+    },
+    "mod_details": {
+      "ai_generate": "Generate with AI",
+      "alias_placeholder": "Add a custom alias here",
+      "description": "Description",
+      "description_empty": "This mod did not provide a description.",
+      "empty_select_mod": "Select a Mod",
+      "expand_all_count": "Expand all ({count})",
+      "file_size": "Size: {size}",
+      "group_search_placeholder": "Search groups...",
+      "groups": "Groups*",
+      "icon": "Icon",
+      "image_missing": "Image not found",
+      "info_incomplete_hint": "* Some mod information may not be fully available due to format and consistency limits.",
+      "no_available_groups": "No available groups",
+      "notes_placeholder": "Add custom notes here",
+      "relation": {
+        "dependencies": "Depends on",
+        "inactive": "Inactive",
+        "incompatible": "Conflicts with",
+        "load_after": "Load after",
+        "load_before": "Load before"
+      },
+      "shadow_paths": "Deactivated mods with the same package ID",
+      "sign_color": "Color marker*",
+      "tags": "Tags*",
+      "time": {
+        "file_create": "File created:",
+        "file_modify": "File modified:",
+        "last_active": "Last activated:",
+        "workshop_update": "Workshop updated:"
+      },
+      "unknown_version": "Unknown version",
+      "view_all_compact": "View all ({count})"
+    },
+    "mod_info": {
+      "author": "Author",
+      "file_path": "File path",
+      "language": "Language",
+      "name": "Name",
+      "package_id": "Package ID",
+      "path": "Path",
+      "source_url": "Source URL",
+      "supported_languages": "Supported languages",
+      "url": "URL",
+      "workshop_id": "Workshop ID"
+    },
+    "mod_item": {
+      "section": {
+        "collapsed_hint": "Dragging the section divider mod moves the whole group; insertions land at the group end by default",
+        "expanded_hint": "Currently expanded; dragging the section divider mod only moves that item"
+      }
+    },
+    "mod_list": {
+      "action": {
+        "locate": "Locate"
+      },
+      "badge": {
+        "filtered": "Filtered",
+        "sorted": "Sorted"
+      },
+      "empty": {
+        "drop_here": "Drag mods here"
+      },
+      "filter": {
+        "placeholder": "Enter keywords to filter mods..."
+      },
+      "list": {
+        "active": "Actived list",
+        "inactive": "Deactivated list",
+        "temp": "Temp list"
+      },
+      "quick_action": {
+        "supplement": {
+          "message": "Select mods to activate."
+        }
+      },
+      "search": {
+        "placeholder": "Enter keywords to locate mod positions..."
+      },
+      "section": {
+        "unnamed": "Unnamed section group"
+      },
+      "sort": {
+        "author": "Author",
+        "default": "Default",
+        "file_create_time": "Created time",
+        "file_modify_time": "Modified time",
+        "file_size": "File size",
+        "last_active_time": "Last activated",
+        "last_moved_time": "Moved time",
+        "multiplayer_compat": "Multiplayer compatibility",
+        "name": "Name",
+        "package_id": "Package ID"
+      }
+    },
+    "mod_sign_color": {
+      "blue": "Blue",
+      "cyan": "Cyan",
+      "green": "Green",
+      "lime": "Lime",
+      "orange": "Orange",
+      "pink": "Pink",
+      "purple": "Purple",
+      "red": "Red",
+      "yellow": "Yellow"
+    },
+    "mod_type": {
+      "Assembly": "Assembly mod",
+      "Audio": "Audio pack",
+      "LanguagePack": "Language pack",
+      "Mixed": "Mixed",
+      "Texture": "Texture pack",
+      "Unknown": "Unknown type",
+      "XML": "XML-only"
+    },
+    "source_type": {
+      "core": "Core game",
+      "dlc": "DLC",
+      "github": "Git repository",
+      "local": "Local mod",
+      "other": "Other source",
+      "self": "Manager download",
+      "unknown": "Unknown source",
+      "workshop": "Steam Workshop"
+    },
+    "workspace": {
+      "back_home": "Main",
+      "sync_ready": "Changes detected",
+      "tab": {
+        "collection": "Collection subscriptions",
+        "github": "Git repository subscriptions",
+        "library": "Library data",
+        "workshop": "Workshop search"
+      },
+      "workshop": {
+        "days": {
+          "0": "All time",
+          "0_short": "All",
+          "30": "Past month",
+          "30_short": "Month",
+          "365": "Past year",
+          "365_short": "Year",
+          "7": "Past week",
+          "7_short": "Week",
+          "90": "Past quarter",
+          "90_short": "Quarter"
+        },
+        "sort": {
+          "created": "Recently published",
+          "latest": "Recently updated",
+          "popular": "Most popular",
+          "rating": "Highest rated",
+          "relevance": "Most relevant",
+          "subscriptions": "Most subscribed",
+          "votes_up": "Most upvoted"
+        },
+        "sort_state": {
+          "days": "{days} days",
+          "until_now": "{sort} (all time)",
+          "with_days": "{sort} ({days})"
+        },
+        "text_target": {
+          "0": "Title and description",
+          "1": "Title only",
+          "2": "Description only"
+        }
+      }
+    },
+    "app": {
+      "actions": {
+        "autosort": "Auto sort",
+        "force_scan": "Force scan",
+        "launch_game": "Launch game",
+        "launching": "Launching...",
+        "save": "Save",
+        "save_changes": "Save changes",
+        "saving": "Saving...",
+        "scan": "Scan",
+        "scanning": "Scanning...",
+        "sorting": "Sorting..."
+      },
+      "diff": {
+        "compare_file": "Comparison file",
+        "current_active": "Currently actived"
+      },
+      "layout": {
+        "details": {
+          "basic_info": {
+            "desc": "Show or hide the Mod author and source section on the details page.",
+            "label": "Basic info"
+          },
+          "description": {
+            "desc": "Show or hide the Mod description section on the details page.",
+            "label": "Mod description"
+          },
+          "files_info": {
+            "desc": "Show or hide the Mod file statistics section on the details page.",
+            "label": "File statistics"
+          },
+          "relations_info": {
+            "desc": "Show or hide the Mod dependency section on the details page.",
+            "label": "Dependencies"
+          },
+          "time_info": {
+            "desc": "Show or hide the other Mod information section on the details page.",
+            "label": "Other info"
+          },
+          "user_info": {
+            "desc": "Show or hide the custom Mod information section on the details page.",
+            "label": "Custom info"
+          }
+        },
+        "main": {
+          "active": {
+            "desc": "Show or hide the actived Mod list on the main screen.",
+            "label": "Actived list"
+          },
+          "details": {
+            "desc": "Show or hide the Mod details panel on the main screen.",
+            "label": "Mod details"
+          },
+          "library": {
+            "desc": "Show or hide the deactivated Mod list on the main screen.",
+            "label": "Deactivated list"
+          },
+          "sidebar": {
+            "desc": "Show or hide the side tools column on the main screen.",
+            "label": "Sidebar"
+          }
+        }
+      },
+      "main_list": {
+        "active": "Actived",
+        "group": "Groups",
+        "rules": "Rules",
+        "temp": "Temp",
+        "deactivated": "Deactivated"
+      },
+      "recommendation_export": {
+        "source_selected_mods": "Selected mods",
+        "title": "Recommendation export"
+      },
+      "running_indicator": {
+        "sleep": "Resume low-power sleep",
+        "title": "Game is running in the background"
+      },
+      "sidebar": {
+        "backup": "Backups",
+        "disabled": "Disabled",
+        "group": "Groups",
+        "temp": "Temp"
+      },
+      "sleep": {
+        "badge": "RimWorld Running",
+        "description": "The manager has switched to silent browser suspension. The main interface will restore automatically after the game exits, or you can wake it manually.",
+        "title": "RimWorld is running",
+        "wake": "Wake manager"
+      },
+      "translation": {
+        "provider_ai_default": "AI translation"
+      }
     }
   },
   "tooltip": {
@@ -234,6 +530,145 @@
       "subscribe_pending": "Sending subscribe request",
       "unsubscribe": "Unsubscribe this Workshop item",
       "unsubscribe_pending": "Sending unsubscribe request"
+    },
+    "mod_details": {
+      "add_group": "Add a new group",
+      "add_tag": "Add a new tag",
+      "author_item": "Author: {author}\n[[Left-click to filter / right-click to copy]]",
+      "clear_sign_color": "Clear color marker",
+      "coexist": "This mod has both local and Workshop copies",
+      "custom_color": "Use another custom color",
+      "expand_collapse": "Expand/collapse",
+      "file_stats": {
+        "audio": "Audio file count",
+        "defs": "Definition XML file count",
+        "dlls": "Assembly DLL file count",
+        "langs": "Language XML file count",
+        "patches": "Patch XML file count",
+        "textures": "Image texture file count"
+      },
+      "file_stats_scope": "Note: this count only includes shared files and files for the highest supported game version of the mod. Files for other game versions are not included.",
+      "generate_alias": "Generate mod aliases and notes with AI. AI must be configured first.",
+      "groups": "Manage the groups this mod belongs to",
+      "icon_missing": "Could not find this mod icon",
+      "language_item": "Language: {lang}\n[[Left-click to filter / right-click to copy]]",
+      "locate_current": "Locate the current mod in its list",
+      "locate_mod": "Locate mod position",
+      "mod_type": "Mod type: {type}\n__(rough estimate)__",
+      "mod_version": "Mod version",
+      "open_workshop": "Open Workshop page",
+      "relation": {
+        "active": "This relation is currently active",
+        "inactive_current": "Inactive in current version {currentVersion}\nOnly active in {versions}",
+        "only_versions": "Only active in {versions}"
+      },
+      "remove_from_group": "Remove from group",
+      "remove_tag": "Remove tag",
+      "save_breaking": {
+        "danger": "Danger: enabling or disabling this mod mid-save can break the save!",
+        "safe": "Safe: this mod should not break saves and can be added or removed safely.",
+        "unknown": "Unknown: cannot determine whether this mod can break saves."
+      },
+      "set_sign_color": "Set {color} as the marker color",
+      "sign_color": "Customize the color marker",
+      "supported_versions": "Supported game versions",
+      "tags": "Manage custom tags for this mod"
+    },
+    "mod_item": {
+      "coexist": {
+        "outdated": "The Workshop copy has been updated. Right-click to sync the local coexisting copy.",
+        "synced": "The local coexisting copy matches the Workshop copy"
+      },
+      "group": {
+        "open": "Group: {name}\nClick to open the group page"
+      },
+      "mp_compat": {
+        "no_conclusion": "The official compatibility table has no clear conclusion yet.",
+        "notes": "Notes: {notes}",
+        "official": "From the official Multiplayer compatibility table.",
+        "patch_active": "A matching patch exists in Multiplayer Compatibility and is active because this mod is activated.",
+        "patch_available": "A matching patch exists in Multiplayer Compatibility and will take effect after this mod is activated.",
+        "title": "Multiplayer compatibility: {status}",
+        "xml_only": "No assembly detected; treated as fully compatible by Multiplayer XML-only rules."
+      },
+      "replacement": {
+        "available": "Replacement version available: ##{name}## ({workshopId})\nSubscribe from the context menu",
+        "installed": "Replacement version installed: ##{name}## ({workshopId})"
+      },
+      "section": {
+        "collapse": "Collapse section group",
+        "expand": "Expand section group"
+      },
+      "type": "Type: {type}",
+      "store": {
+        "title": "Storage location: {source}",
+        "switch_local": "Storage location: {source}\nClick to switch to local copy",
+        "switch_workshop": "Storage location: {source}\nClick to switch to Workshop copy"
+      }
+    },
+    "mod_list": {
+      "filter": {
+        "clear": "__[[(Click to clear all filters)]]__",
+        "dependency_group": "Dependency group filter applied",
+        "issue": "Issue filter applied",
+        "keyword": "Keyword filter applied"
+      },
+      "issue": {
+        "cancel_filter": "__[[(Click again to clear this filter)]]__",
+        "context_filter": "__[[(Use the right-click menu to filter by a single issue type)]]__",
+        "error_count": "!!{count} errors!!",
+        "filter_all": "__[[(Click to show all issue items)]]__",
+        "language_check_hint": "__(Language support check can be turned off in Settings)__",
+        "more": "__...and {count} more__",
+        "summary": "**Found {count} problematic mods** ({errors} {warnings})",
+        "warn_count": "^^{count} warnings^^"
+      },
+      "new_since_last_run": "Recently activated since the last app run",
+      "quick_action": {
+        "missing_install": {
+          "danger": "!!{count} items need handling!!",
+          "danger_item": "- Required: {count}",
+          "empty": "No install items to handle",
+          "open": "__[[(Click to open install actions)]]__",
+          "unknown": "!!{count} unknown-source items!!",
+          "unknown_item": "• Unknown source: {count}",
+          "warn": "^^{count} items recommended for handling^^",
+          "warn_item": "• Warnings: {count}"
+        },
+        "remove_invalid": "^^Remove {count} invalid mods^^",
+        "supplement": {
+          "danger": "!!{count} items need handling!!",
+          "danger_item": "- Required: {count}",
+          "empty": "No deactivated mods available to add",
+          "found": "Found {count} items that can be added",
+          "group_item": "• {title}: {count} items",
+          "open": "__[[(Click to open add-missing-mods dialog)]]__",
+          "warn": "^^{count} items recommended for handling^^",
+          "warn_item": "• Recommended: {count}"
+        }
+      },
+      "search_next": "Find the next matching result",
+      "sort": {
+        "asc": "(ascending)",
+        "by_mode": "Sort by {mode}",
+        "clear": "__[[(Click to restore default sorting)]]__",
+        "desc": "(descending)"
+      },
+      "sort_asc": "Switch to ascending order",
+      "sort_desc": "Switch to descending order",
+      "toggle_view": "Switch list view",
+      "visual_only": "__Filtering and sorting are only for visual review, ^^do not affect the real order^^,\nand ^^drag sorting or insertion is disabled^^ in this state__"
+    },
+    "workspace": {
+      "back_home": "Back to main screen (Esc)",
+      "sync_ready": "New changes detected since the last launch time"
+    },
+    "app": {
+      "actions": {
+        "autosort": "Automatically sort all actived mods by rules. If the result is worse than the old behavior, switch back to the legacy sorting logic in Settings.",
+        "force_scan": "Recheck all files, including unchanged files. This may take longer.",
+        "scan": "Scan file changes and sync the current profile mod list"
+      }
     }
   },
   "toast": {
@@ -245,6 +680,28 @@
     "texture": {
       "tool_download_started_watch_status": "todds download started. Watch the status bar.",
       "tool_ready_no_download": "todds is ready; no download needed"
+    },
+    "copy": {
+      "failed_with_label": "Failed to copy {label}. Check clipboard permission, or select and copy the text manually.",
+      "label_failed": "Failed to copy {label}",
+      "label_success": "{label} copied",
+      "success": "Copied {label}"
+    },
+    "mod_details": {
+      "filter_applied": "Filtered by {label}: {text}",
+      "filter_cleared": "List filter cleared"
+    },
+    "mod_item": {
+      "alias": {
+        "skip_all_language_packs": "Skipped language packs; no mods need batch alias and note generation",
+        "skipped_language_packs": "Skipped {count} language pack mods"
+      }
+    },
+    "mod_list": {
+      "search": {
+        "filtered_out": "Search item {id} is filtered out by the {list} list filter. Clear filters and try again.",
+        "loop_to_first": "Reached the last search result; wrapped to the first one"
+      }
     }
   },
   "dialog": {
@@ -259,6 +716,17 @@
       "options_hint": "By default files are moved to the system recycle bin. Permanent delete cannot be undone.",
       "trash_description": "Safer. Files go to the system recycle bin and can be restored there.",
       "trash_option": "Move to recycle bin"
+    },
+    "mod_item": {
+      "export_package": {
+        "description": "Optionally include dependencies, linked items, and language packs. Items missing disk files will be skipped and reported.",
+        "summary": "{count} mods selected. Coexisting items will be resolved to the currently actived copy or the latest copy during export.",
+        "title": "Export selected mods{count}"
+      },
+      "export_recommendation": {
+        "source": "Selected mods",
+        "title": "Export recommendations for selected mods{count}"
+      }
     }
   },
   "api": {
@@ -296,7 +764,10 @@
   "tasks": {
     "message": {
       "cancelling_request": "Trying to stop the task...",
-      "processing": "Processing..."
+      "processing": "Processing...",
+      "scan_complete": "Scan complete",
+      "scan_interrupted_by_suspend": "Scan was interrupted because the interface was suspended. Refresh again.",
+      "texture_task": "Texture task"
     },
     "phase": {
       "cancelling": "Cancelling",
@@ -340,7 +811,7 @@
       "file_delete": "Delete files",
       "file_search": "File content search",
       "file_transfer": "Transfer files",
-      "localize": "Local coexistence task",
+      "localize": "Local coexisting copy task",
       "mod_export": "Export mod package",
       "mod_import": "Import mod package",
       "scan": "Mod scan",
@@ -361,5 +832,266 @@
     "tools": {},
     "actions": {},
     "prompts": {}
+  },
+  "error": {
+    "clipboard": {
+      "unsupported": "Clipboard is not supported in the current environment"
+    }
+  },
+  "history": {
+    "mod_item": {
+      "remove_missing": "Remove {count} missing items"
+    },
+    "mod_list": {
+      "drag_move_between": "Move {count} items to {list}",
+      "drag_reorder": "Reorder {list} list",
+      "move_to_boundary": "Move {count} items to the {position} of {list}",
+      "move_to_section": "Move {count} items to {position} of section group \"{group}\" in {list}",
+      "remove_invalid": "Remove {count} invalid mods",
+      "reorder": "Reorder {list}"
+    }
+  },
+  "menu": {
+    "mod_item": {
+      "coexist": {
+        "switch": "Switch coexisting copy",
+        "switch_local": "Switch to local copy",
+        "switch_workshop": "Switch to Workshop copy"
+      },
+      "copy_info": "Copy info",
+      "disable_files": "Disable",
+      "edit_rule": "Edit rules",
+      "export_package": "Export mod package",
+      "export_recommendation": "Export recommendations",
+      "generate_alias_notes": "Generate aliases and notes",
+      "interlock": {
+        "create": "Create linked set",
+        "download_invalid": "Download unavailable linked items",
+        "missing": "Missing linked item actions",
+        "remove_invalid": "Remove unavailable linked items",
+        "subscribe_invalid": "Subscribe unavailable linked items",
+        "unlink": "Unlink mods"
+      },
+      "issue": {
+        "batch_ignore": "Batch ignore issues ({count})...",
+        "ignore": "Ignore issue...",
+        "ignore_one": "Ignore: {type}",
+        "restore": "Restore warnings",
+        "restore_selected": "Restore warnings for all selected items"
+      },
+      "move": {
+        "group_bottom": "Bottom of group",
+        "group_top": "Top of group",
+        "list_bottom": "Bottom of list",
+        "list_top": "Top of list",
+        "other_section_group": "Other section groups..."
+      },
+      "move_to": "Move to",
+      "open_folder": "Open folder",
+      "open_url": "Open web page",
+      "open_workshop": "Open Workshop",
+      "section": {
+        "collapse_all": "Collapse all section groups",
+        "collapse_current": "Collapse this section group",
+        "collapse_current_with_name": "Collapse this section group: {name}",
+        "collapse_selected": "Collapse selected section groups",
+        "collapsed_count": " ({count} collapsed)",
+        "expand_all": "Expand all section groups",
+        "expand_current": "Expand this section group",
+        "expand_current_with_name": "Expand this section group: {name}",
+        "expand_selected": "Expand selected section groups",
+        "expanded_count": " ({count} expanded)"
+      },
+      "steam": "Steam actions",
+      "subscribe": "Subscribe to mod",
+      "type": "Change type",
+      "unsubscribe": "Unsubscribe",
+      "unsubscribe_delete": "Unsubscribe and delete files",
+      "color": {
+        "title": "Marker color",
+        "batch_set": "Batch set marker color",
+        "custom": "Custom color",
+        "custom_for_selection": "Set one custom marker color for the current selection"
+      },
+      "groups": {
+        "title": "Group management",
+        "batch_join": "Batch add to groups"
+      },
+      "missing": {
+        "title": "Missing items",
+        "download": "Download missing items",
+        "remove": "Remove missing items",
+        "subscribe": "Subscribe missing items"
+      },
+      "replacement": {
+        "title": "Replacement",
+        "download": "Download replacement version",
+        "jump": "Go to replacement mod",
+        "subscribe": "Subscribe replacement version"
+      },
+      "tags": {
+        "title": "Tag management",
+        "batch_assign": "Batch assign tags"
+      },
+      "activate": "Activate",
+      "deactivate": "Deactivate"
+    },
+    "mod_list": {
+      "issue": {
+        "filter_one": "Filter separately: {type}",
+        "filter_type": "Filter one issue type...",
+        "filter_type_count": "Filter one issue type ({count})...",
+        "ignore": "Ignore issue...",
+        "ignore_all_count": "Ignore all issues ({count})...",
+        "ignore_one": "Ignore: {type}",
+        "restore": "Restore warning",
+        "restore_all": "Restore all warnings"
+      },
+      "move": {
+        "active_section_groups": "Actived list section groups...",
+        "current_other_groups": "Other section groups in this list...",
+        "inactive_section_groups": "Deactivated list section groups...",
+        "other_groups": "Other section groups...",
+        "other_section_groups": "Other list section groups..."
+      }
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "file": "File",
+    "task": "Task"
+  },
+  "messages": {
+    "app": {
+      "action": {
+        "add_download_task": "Add download task",
+        "cancel_task": "Cancel {displayName}",
+        "check_steam_status": "Check Steam status",
+        "clear_remote_image_cache": "Clear remote image cache",
+        "database_cleanup": "Clean invalid database data",
+        "get_remote_image_cache_stats": "Get remote image cache stats",
+        "get_translation_providers": "Get translation providers",
+        "launch_game_program": "Launch game program",
+        "load_mod_list": "Load mod list",
+        "load_startup_config": "Load startup config",
+        "refresh_data": "Refresh data",
+        "refresh_mod_enrichment": "Load list markers",
+        "repair_database": "Repair database",
+        "reset_database": "Reset database",
+        "restart_application": "Restart application",
+        "run_game": "Run",
+        "startup_inventory_check": "Check startup inventory",
+        "sync_mod_core_data": "Sync mod core data",
+        "sync_mod_data": "Sync mod data"
+      },
+      "backend_popup": {
+        "title": "System message"
+      },
+      "database": {
+        "cleanup_done": "Invalid data cleaned. Refreshing the list.",
+        "reset_done": "Database has been reset."
+      },
+      "download": {
+        "complete": "Download complete: {filename}",
+        "failed": "{filename} download failed. Check your network connection, proxy settings, download source, or disk permissions. Details were written to the system log."
+      },
+      "error": {
+        "cancel_task_failed": "Failed to cancel the task. The task may already be finished or the backend may be unavailable. Refresh the status and try again.",
+        "game_status_failed": "Game launch state is abnormal. The game path, launch arguments, or runtime environment may be unavailable. Details were written to the system log.",
+        "initialize_failed": "Initialization failed. Configuration, database, or runtime environment may be unavailable. Details were written to the system log.",
+        "refresh_data_failed": "Failed to refresh data. The scanner, database, or current profile may be unavailable. Try again later.",
+        "refresh_mod_enrichment_failed": "Failed to refresh list markers. Some issue hints, replacements, or online compatibility status may not appear for now.",
+        "resume_failed": "Failed to restore the interface. Refresh the interface or restart the app, then try again. Details were written to the system log.",
+        "sync_mod_core_data_failed": "Failed to sync mod core data. Database, scan results, or runtime environment may be unavailable. Details were written to the system log.",
+        "sync_mod_data_failed": "Failed to sync mod data. Database, scan results, or runtime environment may be unavailable. Details were written to the system log."
+      },
+      "game": {
+        "launching_profile": "Launching “{profile}” environment. Waiting for the game process to confirm."
+      },
+      "game_launch": {
+        "action": {
+          "check_steam_status": "Check Steam status",
+          "continue_run": "Continue running",
+          "direct_once": "Launch directly this time",
+          "disable_steam_launch": "Disable Steam-first launch"
+        },
+        "confirm": {
+          "message": "This environment needs confirmation before launch can continue.",
+          "title": "Confirm before launch"
+        },
+        "steam_not_ready": {
+          "fallback": "Steam did not become available.",
+          "message": "{message}\nYou can launch directly for this run, check Steam status, or disable this option and save.",
+          "title": "Steam is temporarily unavailable"
+        },
+        "steam_path_invalid": {
+          "message": "This environment is set to launch through Steam first, but no valid Steam executable path was detected.\nYou can launch directly for this run, check Steam status, or disable this option and save.",
+          "title": "Steam launch unavailable"
+        },
+        "steam_running_conflict": {
+          "message": "This environment is set to launch the game executable directly, and Workshop mods have been linked into the local mod folder.\nSteam is currently running. If you continue now, Steam will take over this launch and the game will show two copies of Workshop mods.\nThe local-folder copy is usually loaded first, so gameplay is usually unaffected, but the in-game list and later management can become confusing.\nYou can quit Steam manually. This window will keep waiting and launch the game automatically after Steam fully exits.\nIf you understand the impact, you can continue anyway.",
+          "title": "Quit Steam first"
+        },
+        "steam_status": {
+          "complete": "Steam status check completed.",
+          "title": "Steam status"
+        }
+      },
+      "history": {
+        "refresh_after_game_exit": "Refresh disk state after game exit",
+        "refresh_disk_state": "Refresh disk state",
+        "startup_load_core_data": "Load startup core data",
+        "sync_after_database_cleanup": "Sync mod data after invalid data cleanup",
+        "sync_mod_core_data": "Sync mod core data",
+        "sync_mods_after_scan": "Sync mod data after scan"
+      },
+      "localize": {
+        "cancelled": "{title} cancelled",
+        "complete_log": "{title} completed. {success} succeeded, {failed} failed.",
+        "complete_success": "{title} completed: {count} mods",
+        "complete_with_errors": "{title} completed. {success} succeeded, {failed} failed. Failure details were written to the system log."
+      },
+      "mod_export": {
+        "cancelled": "Mod package export cancelled",
+        "failed": "Mod package export failed. Check export folder permissions, disk space, and selected mod status. Details were written to the system log.",
+        "title": "Mod package export"
+      },
+      "mod_import": {
+        "cancelled": "Mod package import cancelled",
+        "complete": "Mod package import completed",
+        "failed": "Mod package import failed. Check whether the file is complete, target folder permissions, and disk space. Details were written to the system log."
+      },
+      "mod_residue": {
+        "check_incomplete": "Uninstall leftovers check did not finish. You can open residue cleanup manually later."
+      },
+      "profile": {
+        "current": "Current environment"
+      },
+      "startup": {
+        "confirm_paths": "Path configuration needs confirmation. Auto-detected paths were filled in Settings. Confirm and save them.",
+        "first_db_init": "The database is being initialized for the first time. This may take a while. Please wait."
+      },
+      "steam_subscribe": {
+        "complete": "Steam subscription complete",
+        "failed": "Steam subscription failed. Make sure Steam is logged in, the network is available, and the Workshop item is still accessible."
+      },
+      "steam_unsubscribe": {
+        "failed": "Unsubscribe failed. Make sure Steam is logged in and the network is available, then try again later."
+      },
+      "steam_workshop_download": {
+        "complete": "Steam download complete",
+        "failed": "Steam download failed. Make sure Steam is logged in and online, or check proxy settings and Workshop item status."
+      },
+      "steamcmd_download": {
+        "failed": "SteamCMD download failed. Check network connection, proxy settings, source availability, and target folder permissions. Details were written to the system log."
+      },
+      "suspend": {
+        "cleared_scan_tasks": "Cleared scan tasks left before suspension. Refresh again if needed."
+      },
+      "update": {
+        "download_failed": "Failed to download update package. Check network connection, proxy settings, and disk space, then try again later."
+      }
+    }
   }
 }

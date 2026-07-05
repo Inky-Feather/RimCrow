@@ -96,6 +96,28 @@ export const ISSUE_TITLE_MAP = {
   'default': '其他问题'
 
 }
+export const getIssueTitle = (type) => {
+  const key = String(type || 'default')
+  if (key === 'missing_file') return t('ui.issue.missing_file', '文件缺失')
+  if (key === 'missing_dependency') return t('ui.issue.missing_dependency', '依赖缺失')
+  if (key === 'inactive_dependency') return t('ui.issue.inactive_dependency', '依赖未启用')
+  if (key === 'incompatible') return t('ui.issue.incompatible', '模组冲突')
+  if (key === 'wrong_order') return t('ui.issue.wrong_order', '排序错误')
+  if (key === 'version_mismatch') return t('ui.issue.version_mismatch', '版本不符')
+  if (key === 'link_mod_missing') return t('ui.issue.link_mod_missing', '联锁模组缺失')
+  if (key === 'link_wrong_order') return t('ui.issue.link_wrong_order', '联锁排序错误')
+  if (key === 'info_alternative_used') return t('ui.issue.info_alternative_used', '依赖替代')
+  if (key === 'warn_missing_language') return t('ui.issue.warn_missing_language', '缺少语言支持')
+  if (key === 'warn_inactive_language_pack') return t('ui.issue.warn_inactive_language_pack', '语言包未启用')
+  if (key === 'warn_unknown_target') return t('ui.issue.warn_unknown_target', '语言包指向未知')
+  if (key === 'warn_inactive_target') return t('ui.issue.warn_inactive_target', '语言包指向未启用')
+  if (key === 'warn_multiplayer_compatibility') return t('ui.issue.warn_multiplayer_compatibility', '联机兼容性')
+  if (key === 'multiplayer_incompatible') return t('ui.issue.multiplayer_incompatible', '不兼容联机')
+  if (key === 'multiplayer_barely_compatible') return t('ui.issue.multiplayer_barely_compatible', '勉强兼容联机')
+  if (key === 'multiplayer_unknown') return t('ui.issue.multiplayer_unknown', '联机兼容性未知')
+  if (ISSUE_TITLE_MAP[key]) return ISSUE_TITLE_MAP[key]
+  return t('ui.issue.default', '其他问题')
+}
 
 // 模组类型映射
 export const MOD_TYPE_MAP = {
@@ -106,6 +128,16 @@ export const MOD_TYPE_MAP = {
   'Audio': '音频包',
   'Mixed': '混合',
   'Unknown': '未知类型'
+}
+export const getModTypeLabel = (type) => {
+  if (type === 'LanguagePack') return t('ui.mod_type.LanguagePack', '语言包')
+  if (type === 'XML') return t('ui.mod_type.XML', '纯XML')
+  if (type === 'Assembly') return t('ui.mod_type.Assembly', '含程序集')
+  if (type === 'Texture') return t('ui.mod_type.Texture', '纹理包')
+  if (type === 'Audio') return t('ui.mod_type.Audio', '音频包')
+  if (type === 'Mixed') return t('ui.mod_type.Mixed', '混合')
+  if (type === 'Unknown') return t('ui.mod_type.Unknown', '未知类型')
+  return type || t('ui.mod_type.Unknown', '未知类型')
 }
 export const MOD_TYPE_ICON_MAP = {
   LanguagePack: createIcon('text-accent-warn', [
@@ -168,6 +200,18 @@ export const MOD_SIGN_COLOR_MAP = {
   '#eab308': '黄色',
   '#f97316': '橙色',
 }
+export const getModSignColorLabel = (color) => {
+  if (color === '#ef4444') return t('ui.mod_sign_color.red', '红色')
+  if (color === '#ec4899') return t('ui.mod_sign_color.pink', '粉色')
+  if (color === '#8b5cf6') return t('ui.mod_sign_color.purple', '紫色')
+  if (color === '#3b82f6') return t('ui.mod_sign_color.blue', '蓝色')
+  if (color === '#06b6d4') return t('ui.mod_sign_color.cyan', '青色')
+  if (color === '#10b981') return t('ui.mod_sign_color.green', '绿色')
+  if (color === '#84cc16') return t('ui.mod_sign_color.lime', '草色')
+  if (color === '#eab308') return t('ui.mod_sign_color.yellow', '黄色')
+  if (color === '#f97316') return t('ui.mod_sign_color.orange', '橙色')
+  return color || t('ui.common.none', '无')
+}
 // 模组来源映射
 export const SOURCE_TYPE_MAP = {
   'core': '游戏本体',
@@ -178,6 +222,16 @@ export const SOURCE_TYPE_MAP = {
   'self': '管理器下载',
   'other': '其它来源'
 }
+export const getSourceTypeLabel = (source) => {
+  if (source === 'core') return t('ui.source_type.core', '游戏本体')
+  if (source === 'dlc') return t('ui.source_type.dlc', 'DLC')
+  if (source === 'github') return t('ui.source_type.github', 'Git 仓库')
+  if (source === 'workshop') return t('ui.source_type.workshop', 'Steam 创意工坊')
+  if (source === 'local') return t('ui.source_type.local', '本地模组')
+  if (source === 'self') return t('ui.source_type.self', '管理器下载')
+  if (source === 'other') return t('ui.source_type.other', '其它来源')
+  return source || t('ui.source_type.unknown', '未知来源')
+}
 export const STORE_TYPE_MAP = {
   'core': '本体',
   'dlc': 'DLC',
@@ -187,6 +241,8 @@ export const STORE_TYPE_MAP = {
   'other': '其它'
 }
 export const getStoreTypeLabel = (store) => {
+  if (store === 'core') return t('ui.store_type.core', '本体')
+  if (store === 'dlc') return t('ui.store_type.dlc', 'DLC')
   if (store === 'local') return t('ui.store_type.local', '本地')
   if (store === 'self') return t('ui.store_type.self', '管理器')
   if (store === 'workshop') return t('ui.store_type.workshop', '工坊')

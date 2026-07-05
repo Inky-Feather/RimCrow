@@ -1,4 +1,5 @@
 import { nextTick, ref } from 'vue'
+import { t } from '../../../shared/i18n'
 
 export function useModListDrag({
   props,
@@ -126,7 +127,9 @@ export function useModListDrag({
       const isCrossListMove = e.event.target !== e.event.from
       await modStore.runListHistoryTransaction({
         type: isCrossListMove ? 'move-between-lists' : 'reorder-list',
-        label: isCrossListMove ? `移动 ${movingIds.length} 项到 ${props.title}` : `调整 ${props.title} 列表顺序`,
+        label: isCrossListMove
+          ? t('history.mod_list.drag_move_between', '移动 {count} 项到 {list}', { count: movingIds.length, list: props.title })
+          : t('history.mod_list.drag_reorder', '调整 {list} 列表顺序', { list: props.title }),
         trackedModIds: movingIds
       }, async () => {
         // 同步 Store（移除旧位置的引用等，虽然这里逻辑上已经是新的了）

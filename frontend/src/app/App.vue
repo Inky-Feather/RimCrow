@@ -4,18 +4,18 @@
     <div class="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
       <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-accent-cool/20 bg-accent-cool/8 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.22em] text-accent-cool">
         <span class="h-2 w-2 rounded-full bg-accent-cool shadow-[0_0_12px_rgba(var(--rgb-accent-cool),0.8)] animate-pulse"></span>
-        RimWorld Running
+        {{ t('ui.app.sleep.badge', 'RimWorld Running') }}
       </div>
-      <h1 class="text-3xl font-black tracking-wide text-text-main">RimWorld 正在运行</h1>
+      <h1 class="text-3xl font-black tracking-wide text-text-main">{{ t('ui.app.sleep.title', 'RimWorld 正在运行') }}</h1>
       <p class="mt-4 max-w-2xl text-sm leading-7 text-text-dim">
-        管理器已切换到浏览器静默挂起状态。游戏退出后会自动恢复主界面；也可以手动唤醒。
+        {{ t('ui.app.sleep.description', '管理器已切换到浏览器静默挂起状态。游戏退出后会自动恢复主界面；也可以手动唤醒。') }}
       </p>
       <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
         <button
           class="rounded-full border border-accent-cool/30 bg-accent-cool/12 px-5 py-2.5 text-sm font-bold tracking-wide text-accent-cool transition-all hover:-translate-y-0.5 hover:bg-accent-cool/24 hover:text-text-main"
           @click="appStore.exitSleepMode()"
         >
-          唤醒管理界面
+          {{ t('ui.app.sleep.wake', '唤醒管理界面') }}
         </button>
       </div>
     </div>
@@ -41,12 +41,12 @@
 
             <!-- 2. 待选库 (Library) -->
             <div v-else-if="col.id === 'library'" class="h-full">
-              <ModList v-model="modStore.inactiveIds" title="停用" listColor="primary" listId="inactive" data-tour="inactive-list" />
+              <ModList v-model="modStore.inactiveIds" :title="t('ui.app.main_list.deactivated', '停用')" listColor="primary" listId="inactive" data-tour="inactive-list" />
             </div>
 
             <!-- 3. 启用/排序 (Active) - 包含规则编辑器逻辑 -->
             <div v-else-if="col.id === 'active'" class="h-full">
-              <ModList v-model="modStore.activeIds" title="启用" :hasSidebar="true" listColor="success" listId="active" data-tour="active-list" />
+              <ModList v-model="modStore.activeIds" :title="t('ui.app.main_list.active', '启用')" :hasSidebar="true" listColor="success" listId="active" data-tour="active-list" />
             </div>
 
             <!-- 4. 辅助/分组 (Sidebar Tabs) -->
@@ -54,7 +54,7 @@
               <div class="h-full flex flex-col relative" data-tour="sidebar-column">
                 <div class="flex-1 overflow-hidden grid grid-cols-1 grid-rows-1">
                   <!-- 如果有规则ID，显示编辑器，否则显示列表 -->
-                  <ModRuleEditor v-if="ruleStore.currentId" title="规则" listColor="warn" class="rounded-b-none col-start-1 row-start-1 w-full" />
+                  <ModRuleEditor v-if="ruleStore.currentId" :title="t('ui.app.main_list.rules', '规则')" listColor="warn" class="rounded-b-none col-start-1 row-start-1 w-full" />
                   <Transition v-else
                     enter-active-class="transition-opacity duration-300 ease-out"
                     enter-from-class="opacity-0"
@@ -65,9 +65,9 @@
                     <!-- 列表类标签页不使用 KeepAlive：
                       虚拟列表、框选指令和行组件缓存如果在后台保活，会让隐藏列表继续占用内存并保留全局事件监听。
                       切换标签时正常卸载，滚动位置由各列表自己的恢复逻辑处理。 -->
-                    <ModList v-if="appStore.activeSidebarTab === 'temp'" v-model="modStore.tempIds" title="临时" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                    <ModList v-if="appStore.activeSidebarTab === 'temp'" v-model="modStore.tempIds" :title="t('ui.app.main_list.temp', '临时')" listColor="warning" listId="temp" class="rounded-b-none col-start-1 row-start-1 w-full"/>
                     <DisabledModList v-else-if="appStore.activeSidebarTab === 'disabled'" class="rounded-b-none col-start-1 row-start-1 w-full"/>
-                    <GroupList v-else-if="appStore.activeSidebarTab === 'group'" v-model="groupStore.groupList" title="分组" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
+                    <GroupList v-else-if="appStore.activeSidebarTab === 'group'" v-model="groupStore.groupList" :title="t('ui.app.main_list.group', '分组')" listColor="special" class="rounded-b-none col-start-1 row-start-1 w-full"/>
                     <BackupList v-else-if="appStore.activeSidebarTab === 'backup'" class="rounded-b-none col-start-1 row-start-1 w-full"/>
                   </Transition>
                 </div>
@@ -82,7 +82,7 @@
 
                   <!-- 扫描按钮 -->
                   <div role="button" :aria-disabled="isBaseActionDisabled('scan')"
-                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'app-action-disabled' : '']" v-tooltip="'扫描文件变动，并同步当前环境的 Mod 列表'"
+                    :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'app-action-disabled' : '']" v-tooltip="t('tooltip.app.actions.scan', '扫描文件变动，并同步当前环境的 Mod 列表')"
                     data-tour="scan-button"
                     class="col-span-1 py-1 rounded-lg bg-bg-overlay/5 border border-border-base/5 group
                           text-sm text-text-soft font-bold uppercase tracking-wider relative cursor-pointer
@@ -91,15 +91,15 @@
                     @click="runBaseScan(false)"
                   >
                     <!-- 这里保留注释位，必要时可恢复独立图标 -->
-                    <span >{{ appStore.isScanRunning ? '扫描中...' : '扫描' }}</span>
+                    <span >{{ appStore.isScanRunning ? t('ui.app.actions.scanning', '扫描中...') : t('ui.app.actions.scan', '扫描') }}</span>
 
-                    <button v-show="!appStore.isScanRunning" v-tooltip="'重新检查所有文件，包括未变动的文件，比较耗时'"
+                    <button v-show="!appStore.isScanRunning" v-tooltip="t('tooltip.app.actions.force_scan', '重新检查所有文件，包括未变动的文件，比较耗时')"
                       :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'app-action-disabled' : ''"
                       class="absolute bottom-full py-1 px-2 mb-1.5 rounded-lg bg-accent-secondary/50 border border-border-base/10 transition-all duration-500
                           text-sm text-text-dim font-bold uppercase tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
                           hover:bg-accent-secondary/80 hover:text-text-main hover:border-border-base/18"
                           @click.stop="runBaseScan(true)">
-                      {{ baseActionPending === 'force-scan' ? '扫描中...' : '强制扫描' }}
+                      {{ baseActionPending === 'force-scan' ? t('ui.app.actions.scanning', '扫描中...') : t('ui.app.actions.force_scan', '强制扫描') }}
                     </button>
 
                   </div>
@@ -107,10 +107,10 @@
                   <button data-tour="autosort-button" :disabled="isBaseActionDisabled('autosort')" :class="isBaseActionDisabled('autosort') ? 'app-action-disabled' : ''"
                     class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
-                          @click="runBaseAction('autosort', () => modStore.autoSortMods())" v-tooltip="'根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。'"
+                          @click="runBaseAction('autosort', () => modStore.autoSortMods())" v-tooltip="t('tooltip.app.actions.autosort', '根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。')"
                   >
                     <LoaderCircle v-if="baseActionPending === 'autosort'" class="size-3 animate-spin" />
-                    <span>{{ baseActionPending === 'autosort' ? '排序中...' : '自动排序' }}</span>
+                    <span>{{ baseActionPending === 'autosort' ? t('ui.app.actions.sorting', '排序中...') : t('ui.app.actions.autosort', '自动排序') }}</span>
                   </button>
 
                   <!-- 保存按钮 (Dirty 状态提示) -->
@@ -130,7 +130,7 @@
                     <svg v-else-if="modStore.isDirty" class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
                     <svg v-else class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
 
-                    <span>{{ baseActionPending === 'save' ? '保存中...' : (modStore.isDirty ? '保存变动' : '保存') }}</span>
+                    <span>{{ baseActionPending === 'save' ? t('ui.app.actions.saving', '保存中...') : (modStore.isDirty ? t('ui.app.actions.save_changes', '保存变动') : t('ui.app.actions.save', '保存')) }}</span>
                   </button>
 
                   <!-- 启动游戏 -->
@@ -143,7 +143,7 @@
                   >
                     <LoaderCircle v-if="baseActionPending === 'launch'" class="size-4 animate-spin" />
                     <svg v-else class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
-                    {{ baseActionPending === 'launch' ? '启动中...' : '启动游戏' }}
+                    {{ baseActionPending === 'launch' ? t('ui.app.actions.launching', '启动中...') : t('ui.app.actions.launch_game', '启动游戏') }}
                   </button>
 
                 </div>
@@ -182,12 +182,12 @@
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-tip opacity-75"></span>
             <span class="relative inline-flex rounded-full h-3 w-3 bg-accent-tip shadow-[0_0_10px_#eab308]"></span>
           </span>
-          游戏正在后台运行
+          {{ t('ui.app.running_indicator.title', '游戏正在后台运行') }}
         </div>
 
         <button @click="appStore.enterSleepMode()"
           class="px-4 py-1.5 bg-accent-primary/20 hover:bg-accent-tip text-accent-tip hover:text-on-accent-tip rounded-full text-xs font-bold transition-all border border-accent-tip/30">
-          恢复低功耗休眠
+          {{ t('ui.app.running_indicator.sleep', '恢复低功耗休眠') }}
         </button>
       </div>
     </Transition>
@@ -195,7 +195,7 @@
     <!-- 列表对比抽屉 -->
     <ListDiffView v-if="appStore.uiState.showDiffDrawer"
       :list-a="modStore.activeIds"
-      title-a="当前启用"
+      :title-a="t('ui.app.diff.current_active', '当前启用')"
       :list-b="orderStore.backupDisplayIds || []"
       :title-b="currentBackupDisplayTitle"
       :name-map-a="modStore.nameMap"
@@ -326,6 +326,7 @@ import GuideCenter from '../features/guide/GuideCenter.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
 import { LoaderCircle } from 'lucide-vue-next'
 import { startupPerfMark } from '../shared/lib/startupPerf'
+import { t } from '../shared/i18n'
 
 // 首屏只同步加载主工作区需要的组件，其余弹窗/工具面板按需拆包，减少 WebView 首轮解析时间。
 const SettingsModal = defineAsyncComponent(() => import('../features/settings/SettingsPanel.vue'))
@@ -387,7 +388,7 @@ const currentBackupDisplayTitle = computed(() => {
   if (orderStore.currentBackupFile) {
     return orderStore.currentBackupFile.split(/[/\\]/).pop()
   }
-  return '对比文件'
+  return t('ui.app.diff.compare_file', '对比文件')
 })
 
 const baseActionPending = ref('')
