@@ -471,11 +471,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startupWorkshopChangeState.changes = Array.isArray(summary?.events) ? summary.events : []
     return startupWorkshopChangeState.changes
   }
-  const STARTUP_EVENT_GROUPS = [
-    ['deleted', t('ui.workspace.startup.group.deleted.title', '已删除模组'), t('ui.workspace.startup.group.deleted.description', '库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。')],
-    ['missing', t('ui.workspace.startup.group.missing.title', '缺失模组'), t('ui.workspace.startup.group.missing.description', '仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。')],
-    ['changed', t('ui.workspace.startup.group.changed.title', '已变更模组'), t('ui.workspace.startup.group.changed.description', '工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。')],
-  ]
+  const STARTUP_EVENT_STATUSES = ['deleted', 'missing', 'changed']
   const STARTUP_EVENT_FILTER_MAP = {
     deleted: 'deleted',
     missing: 'missing',
@@ -488,10 +484,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return shown ? `${shown}${more}` : ''
   }
   const formatStartupWorkshopChangeNames = (changes = [], limit = 8) => formatStartupEventNames(changes, 'changed', limit)
+  const getStartupEventGroupConfig = (status = '') => {
+    if (status === 'deleted') return {
+      id: 'deleted',
+      title: t('ui.workspace.startup.group.deleted.title', '已删除模组'),
+      description: t('ui.workspace.startup.group.deleted.description', '库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。')
+    }
+    if (status === 'missing') return {
+      id: 'missing',
+      title: t('ui.workspace.startup.group.missing.title', '缺失模组'),
+      description: t('ui.workspace.startup.group.missing.description', '仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。')
+    }
+    if (status === 'changed') return {
+      id: 'changed',
+      title: t('ui.workspace.startup.group.changed.title', '已变更模组'),
+      description: t('ui.workspace.startup.group.changed.description', '工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。')
+    }
+    return null
+  }
   const formatStartupInventorySummary = (changes = [], beforeScan = false) => {
     const prefix = beforeScan ? t('ui.workspace.startup.summary.before_scan', '检测到库存可能有变化。') : t('ui.workspace.startup.summary.after_scan', '库存检测完成。')
-    const counts = STARTUP_EVENT_GROUPS
-      .map(([status, title]) => {
+    const counts = STARTUP_EVENT_STATUSES
+      .map((status) => {
+        const title = getStartupEventGroupConfig(status)?.title || status
         const count = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status).length
         return count ? t('ui.workspace.startup.summary.group_count', '{title} {count} 项', { title, count }) : ''
       })
@@ -502,8 +517,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     .filter(item => item?.status === 'missing')
     .map(item => normalizeWorkshopId(item?.workshopId))
     .filter(Boolean))]
-  const getStartupEventGroupConfig = (status = '') => STARTUP_EVENT_GROUPS.find(([key]) => key === status)
-  const getStartupEventGroupLabel = (status = '') => getStartupEventGroupConfig(status)?.[1] || t('ui.workspace.startup.group.default', '库存状态')
+  const getStartupEventGroupLabel = (status = '') => getStartupEventGroupConfig(status)?.title || t('ui.workspace.startup.group.default', '库存状态')
   const buildStartupInventoryDialogItems = (changes = []) => (Array.isArray(changes) ? changes : []).map((item, index) => {
     const workshopId = normalizeWorkshopId(item?.workshopId)
     const status = String(item?.status || '').trim()
@@ -517,15 +531,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       raw: item,
     }
   })
-  const buildStartupInventoryDialogGroups = (items = []) => STARTUP_EVENT_GROUPS
-    .map(([status, title, description]) => {
+  const buildStartupInventoryDialogGroups = (items = []) => STARTUP_EVENT_STATUSES
+    .map((status) => {
+      const { title, description } = getStartupEventGroupConfig(status) || {}
       const groupItems = items.filter(item => item?.status === status)
       return groupItems.length ? { id: status, title, description, items: groupItems } : null
     })
     .filter(Boolean)
   const resolveStartupInventoryFilterState = (changes = []) => {
     const statuses = new Set((Array.isArray(changes) ? changes : []).map(item => item?.status).filter(Boolean))
-    const status = STARTUP_EVENT_GROUPS.find(([key]) => statuses.has(key))?.[0]
+    const status = STARTUP_EVENT_STATUSES.find(key => statuses.has(key))
     return STARTUP_EVENT_FILTER_MAP[status] || 'default'
   }
   const resolveStartupWorkshopChangePathHashes = (changes = []) => {

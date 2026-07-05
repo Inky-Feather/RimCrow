@@ -197,7 +197,8 @@
       "copy": "Copy",
       "loading": "Loading...",
       "move": "Move",
-      "no_record": "No record"
+      "no_record": "No record",
+      "create": "Create"
     },
     "issue": {
       "default": "Other issue",
@@ -1395,6 +1396,135 @@
       "before_yesterday": "2 days ago",
       "days_ago": "{count} days ago",
       "yesterday": "Yesterday"
+    },
+    "profiles": {
+      "action": {
+        "confirm_create": "Create",
+        "import_orphan": "Import",
+        "save_changes": "Save changes"
+      },
+      "badge": {
+        "default": "Default",
+        "manager_mods": "Manager mods",
+        "steam": "Steam",
+        "workshop_mods": "Workshop mods"
+      },
+      "current_profile": "Current profile",
+      "default_name": "Default",
+      "drawer": {
+        "orphaned_profiles": "Recoverable profiles",
+        "recorded_profiles": "Saved profiles",
+        "title_accent": "Manager",
+        "title_prefix": "Profile "
+      },
+      "export": {
+        "active_desc": "Export mods currently actived in this profile.",
+        "active_loading_desc": "Reading actived mod count for this profile.",
+        "active_mods": "Actived mods in current profile",
+        "description": "Choose effective mods or currently actived mods from this profile, and optionally include profile data.",
+        "effective_desc": "Export mods that can be used normally in this profile.",
+        "effective_loading_desc": "Reading exportable mod count for this profile.",
+        "effective_mods": "Effective mods in current profile",
+        "scope_loading": "{title} (loading)",
+        "scope_with_count": "{title} ({count})",
+        "title": "Export profile mods: {name}"
+      },
+      "form": {
+        "copy_current_data": "Copy current configuration",
+        "copy_current_data_desc": "Copy current game configuration to the new profile automatically",
+        "create_title": "Create new profile snapshot",
+        "description": "Profile description",
+        "description_placeholder": "Notes about this profile...",
+        "edit_title": "Edit profile properties",
+        "game_install_path": "Game executable directory",
+        "game_install_path_desc": "Game install directory, where the main executable is located",
+        "game_link_note": "Game installs and profiles are not directly bound. One game install can be linked to multiple profiles.",
+        "invalid_path_warning": "Note: if the game executable directory does not exist or the game files are damaged, the profile cannot launch normally.",
+        "isolation_note": "* Each profile has isolated saves, settings, and mod order files. The manager isolates data through launch arguments. Mod files still share the Mods directory under the game install.",
+        "name": "Display name",
+        "name_placeholder": "Example: 1.5 Medieval",
+        "prefer_steam_launch": "Prefer Steam launch",
+        "prefer_steam_launch_desc": "When enabled, the manager starts this profile through Steam first and uses Steam Workshop content directly. Incomplete paths will warn you, but the switch can still be enabled manually.",
+        "run_commands": "Game launch arguments",
+        "run_commands_desc": "Do not use the [[-savedatafolder]] argument. Multi-profile management already applies it automatically.",
+        "run_commands_placeholder": "Enter a complete argument and press Enter...",
+        "use_manager_mods": "Use manager mods",
+        "use_manager_mods_desc": "Automatically add manager mods to the game through links.",
+        "use_workshop_mods": "Use Workshop mods",
+        "use_workshop_mods_desc": "Connect Workshop mods to this profile's local Mods directory. Unavailable directories will warn you, but the switch can still be enabled manually.",
+        "user_data_path": "User data directory",
+        "user_data_path_create_placeholder": "Optional. Defaults to an auto-created folder under data/profiles",
+        "user_data_path_desc": "Game data directory. It can be any location, or left empty for automatic creation. It contains game settings, mod order, saves, and other user data.",
+        "user_data_path_edit_placeholder": "Required when editing."
+      },
+      "last_played": "Last played: {time}",
+      "never_played": "Never played",
+      "running": "Running",
+      "shortcut": {
+        "step": {
+          "close_steam": "Wait for Steam to be closed manually",
+          "finalize": "Confirm stable shortcut ID and create desktop shortcut",
+          "launch_steam": "Start Steam and wait for login",
+          "write_config": "Write Steam shortcut configuration"
+        },
+        "steps_title": "Steam shortcut creation steps:"
+      },
+      "switcher": {
+        "current_profile": "Current profile",
+        "open_manager": "Manage profiles"
+      },
+      "unknown_version": "Unknown version",
+      "unnamed_profile": "Unnamed profile",
+      "version_unknown": "Version unknown"
+    },
+    "settings": {
+      "paths": {
+        "auto_check_manager_mod_updates": "Automatically check manager mod updates",
+        "auto_check_manager_mod_updates_desc": "Check updates for Workshop mods downloaded by SteamCMD and Git repository subscriptions in the manager mod directory at the configured interval.",
+        "auto_detect": "Auto-detect paths",
+        "check_interval_days": "Check interval (days)",
+        "check_updates": "Check updates",
+        "checking_updates": "Checking",
+        "custom_export_start_dir": "Custom export start directory",
+        "custom_import_start_dir": "Custom import start directory",
+        "custom_start_dir_desc": "Only applies when directory mode is Custom. If the path is invalid, runtime falls back to the default directory.",
+        "dir_mode": {
+          "custom": "Custom",
+          "default": "Default",
+          "remember": "Remember"
+        },
+        "export_start_dir": "Export start directory",
+        "export_start_dir_desc": "Controls the initial folder for the export load order file picker. Default mode uses the other folder under the current profile backup directory; Remember uses the last successful export directory; Custom uses the fixed directory below.",
+        "game_install_path": "Game install directory",
+        "game_install_path_desc": "Game install directory, where the main executable is located. Location differs by system. On Windows the default Steam path is usually:\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld",
+        "import_start_dir": "Import start directory",
+        "import_start_dir_desc": "Controls the initial folder for the import load order file picker. Default mode always uses ModLists under the current profile user data directory; Remember uses the last successful import directory; Custom uses the fixed directory below.",
+        "load_order_dialog_paths": "Load order import/export start directory",
+        "local_mods_path": "Local Mods directory",
+        "local_mods_path_desc": "Generated from the game install directory automatically",
+        "manager_mods": "Manager mods",
+        "move_old_self_mods": "Move mods when path changes",
+        "move_old_self_mods_desc": "When enabled, existing mods are moved to the new path after changing it. When disabled, the existing file structure is kept.",
+        "prefer_steam_launch": "Prefer Steam launch",
+        "prefer_steam_launch_desc": "When enabled, the manager starts the current profile through Steam first and uses Steam Workshop content directly. Incomplete paths will warn you, but the switch can still be enabled manually.",
+        "run_commands": "Game launch arguments",
+        "run_commands_desc": "Do not use the [[-savedatafolder]] argument. Multi-profile management already applies it automatically.",
+        "run_commands_placeholder": "Enter a complete argument and press Enter...",
+        "searching": "Searching",
+        "self_mods_path": "Manager mod download path",
+        "self_mods_path_desc": "Directory for mods downloaded by the manager. You can customize it. If you set it to the game local Mods path, turn off the use switch.",
+        "steam_path": "Steam executable path",
+        "steam_path_desc": "Steam executable path, either the Steam install directory or the executable location. Location differs by system and can be left empty for auto-detection.",
+        "title": "Profile and path settings",
+        "use_manager_mods": "Use manager mods",
+        "use_manager_mods_desc": "Load manager mods into the game through links.",
+        "use_workshop_mods": "Use Workshop mods",
+        "use_workshop_mods_desc": "Connect Workshop mods to the current profile's local Mods directory. Unavailable directories will warn you, but the switch can still be enabled manually.",
+        "user_data_path": "User data directory",
+        "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
+        "workshop_mods_path": "Workshop directory",
+        "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles."
+      }
     }
   },
   "tooltip": {
@@ -1688,6 +1818,34 @@
     },
     "rule_relation": {
       "add_comment": "[[__Click to add a note__]]"
+    },
+    "profiles": {
+      "create": "Create new profile",
+      "create_shortcut": "Create desktop shortcut",
+      "create_shortcut_disabled": "Profile is invalid, shortcut cannot be created",
+      "default_profile": "Default profile",
+      "delete": "Delete profile",
+      "edit": "Edit profile",
+      "export_mod_package": "Export profile mod package",
+      "game_install_path": "Game install path:\n{path}",
+      "game_version": "Game version",
+      "run": "Run profile",
+      "runtime_current": "The game is running with this profile.",
+      "runtime_external": "The game was started externally. The backend has taken over with the default profile.",
+      "steam_managed": "The game is managed by Steam.",
+      "steam_profile": "This is a Steam-version profile.",
+      "unavailable": "Current profile is unavailable:\n^^{message}^^",
+      "user_data_path": "User data path:\n{path}",
+      "uses_manager_mods": "This profile uses manager mods",
+      "uses_workshop_mods": "This profile uses Workshop mods"
+    },
+    "settings": {
+      "paths": {
+        "auto_detect": "Try to find paths from system and Steam records",
+        "auto_detect_loading": "Auto-detecting paths",
+        "current_profile": "Current profile: {name}\nDescription: {description}",
+        "edit_current_profile": "This directly edits path settings for the current profile"
+      }
     }
   },
   "toast": {
@@ -1789,6 +1947,27 @@
       "workshop_retranslated": "Description retranslated",
       "workshop_translated": "Description translated",
       "workshop_translation_cleared": "Translation cleared"
+    },
+    "profiles": {
+      "choose_game_install_path": "Choose the game executable directory again",
+      "choose_workshop_path": "Choose the Workshop directory again in Settings first",
+      "game_install_path_invalid": "Choose a valid game executable directory",
+      "game_install_path_required": "Choose the game executable directory",
+      "imported_orphan": "Profile configuration restored",
+      "keep_steam_switch_warning": "{problem}\nThis switch will keep your choice. If launch fails, switch back to direct launch.",
+      "missing_game_path_for_steam": "Game executable directory is empty. Steam launch may not work.",
+      "missing_steam_path": "Steam executable path is empty. Steam launch may not work.",
+      "missing_workshop_path": "Workshop directory is empty. Workshop mods may not load.",
+      "name_required": "Enter a display name",
+      "set_steam_path": "Set the Steam.exe path in Settings first",
+      "steam_launch_game_path_problem": "Game executable directory may not work for Steam launch: {message}",
+      "steam_launch_steam_path_problem": "Steam executable path may not work: {message}",
+      "steam_version_unknown": "Could not confirm whether this game install is the Steam version. The manager will still try Steam launch first. If launch fails, switch back to direct launch.",
+      "switched": "Switched to profile: {name}",
+      "user_data_path_invalid": "Enter a valid user data directory",
+      "user_data_path_required": "Enter the user data directory",
+      "workshop_path_incomplete": "Workshop directory is incomplete. After saving, you may need to wait for Steam downloads to finish.",
+      "workshop_path_problem": "Workshop directory may not work: {message}\nThis switch will keep your choice. If loading fails, come back here to fix the path."
     }
   },
   "dialog": {
@@ -1917,6 +2096,18 @@
         "message": "Move selected mods by {action} to the [{target}] library?{warning}",
         "title": "Confirm transfer",
         "workshop_warning": "\nNote: Steam may modify items again after transfer to the Workshop folder"
+      }
+    },
+    "profiles": {
+      "delete": {
+        "force": "Permanently delete isolated data",
+        "message": "Delete profile \"{name}\"?\nThe profile record will be removed. Its isolated data is moved to Recycle Bin by default, or you can force permanent deletion.",
+        "title": "Dangerous action",
+        "trash": "Move to Recycle Bin"
+      },
+      "shortcut": {
+        "message": "Create a desktop shortcut for profile \"{name}\"?\nThe shortcut will use this profile's current launch mode and be placed on the desktop.\nIf this profile prefers Steam launch and its game path differs from the default profile, the manager will update Steam non-Steam game shortcut configuration and create a Steam protocol shortcut on the desktop. Steam must be fully closed before writing, and restarted afterwards for this to take effect.\nIf multiple profiles share the same game directory, the shortcut can only guarantee the launch target and arguments are correct. It cannot guarantee that directory links always match this profile.",
+        "title": "Create desktop shortcut"
       }
     }
   },
@@ -2369,6 +2560,18 @@
       "workshop_details_by_package": "Get Workshop details by package ID",
       "workshop_relation": "Get {label}",
       "workshop_search": "Workshop search"
+    },
+    "profiles": {
+      "create": "Create profile \"{name}\"",
+      "create_shortcut": "Create profile desktop shortcut",
+      "delete": "Delete profile",
+      "fetch": "Load profile list",
+      "import_orphaned": "Import profile",
+      "launch_steam_client": "Start Steam client",
+      "scan_orphaned": "Scan recoverable profiles",
+      "switch": "Switch profile",
+      "update": "Update profile \"{profileId}\"",
+      "write_steam_shortcut_config": "Write Steam shortcut configuration"
     }
   }
 }

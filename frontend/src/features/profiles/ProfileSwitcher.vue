@@ -10,11 +10,11 @@
       </div>
 
       <div class="flex flex-col items-start gap-0 ">
-        <span class="text-sm font-black text-text-soft tracking-wide">{{ profileStore.currentProfile?.name || 'Default' }}</span>
+        <span class="text-sm font-black text-text-soft tracking-wide">{{ profileStore.currentProfile?.name || t('ui.profiles.default_name', 'Default') }}</span>
         <div class="flex items-center gap-1">
-            <span class="text-[0.6rem] text-text-dim uppercase tracking-tighter opacity-60">当前环境</span>
-            <span class="text-[0.6rem] text-accent-tip bg-accent-success/20 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-60">{{ profileStore.currentProfile?.game_version || '未知版本' }}</span>
-            <span v-if="runtimeProfileId && runtimeProfileId === profileStore.currentProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.6rem] text-accent-primary bg-accent-primary/15 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-80">运行中</span>
+            <span class="text-[0.6rem] text-text-dim uppercase tracking-tighter opacity-60">{{ t('ui.profiles.switcher.current_profile', '当前环境') }}</span>
+            <span class="text-[0.6rem] text-accent-tip bg-accent-success/20 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-60">{{ profileStore.currentProfile?.game_version || t('ui.profiles.unknown_version', '未知版本') }}</span>
+            <span v-if="runtimeProfileId && runtimeProfileId === profileStore.currentProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.6rem] text-accent-primary bg-accent-primary/15 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-80">{{ t('ui.profiles.running', '运行中') }}</span>
         </div>
       </div>
 
@@ -37,12 +37,12 @@
             <div class="flex-1 text-left">
               <div class="flex items-center gap-2">
                 <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-soft'">{{ p.name }}</div>
-                <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.55rem] px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary uppercase tracking-tighter">运行中</span>
+                <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.55rem] px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary uppercase tracking-tighter">{{ t('ui.profiles.running', '运行中') }}</span>
               </div>
-              <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || '未知版本' }}</div>
+              <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || t('ui.profiles.unknown_version', '未知版本') }}</div>
             </div>
             <Quote v-if="p.description && p.check" v-tooltip="p.description" class="size-4 text-text-dim hover:text-accent-primary hover:scale-120 transition-all duration-300" />
-            <AlertOctagon v-if="!p.check" v-tooltip="`当前环境不可用：\n^^${p.msg}^^`" class="size-4 text-accent-danger hover:scale-120 transition-all duration-300 cursor-help" />
+            <AlertOctagon v-if="!p.check" v-tooltip="t('tooltip.profiles.unavailable', '当前环境不可用：\n^^{message}^^', { message: p.msg || '' })" class="size-4 text-accent-danger hover:scale-120 transition-all duration-300 cursor-help" />
             <div class="size-2 rounded-full bg-accent-primary shadow-[0_0_8px_rgba(var(--rgb-accent-primary),0.75)]" :class="{'opacity-5':p.id !== profileStore.currentProfileId}"></div>
           </button>
         </div>
@@ -50,7 +50,7 @@
         <div class="modal-footer p-1">
           <button @click="openManager" class="w-full py-2 rounded-lg flex items-center justify-center gap-2 text-xs font-black uppercase text-text-dim hover:text-text-main hover:bg-accent-primary/20 transition-all cursor-pointer">
             <Settings2 class="size-3" />
-            管理环境中心
+            {{ t('ui.profiles.switcher.open_manager', '管理环境中心') }}
           </button>
         </div>
       </div>
@@ -64,6 +64,7 @@ import { ChevronDown, Settings2, Folder, Quote, AlertOctagon } from 'lucide-vue-
 import { useProfileStore } from './profileStore'
 import { useAppStore } from '../../app/stores/appStore'
 import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
+import { t } from '../../shared/i18n'
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()

@@ -20,10 +20,10 @@
               <div>
                 <h2 class="text-xl font-black italic text-text-main flex items-center gap-2">
                   <Database class="size-5 text-accent-primary" />
-                  环境<span class="text-accent-primary">管理</span>
+                  {{ t('ui.profiles.drawer.title_prefix', '环境') }}<span class="text-accent-primary">{{ t('ui.profiles.drawer.title_accent', '管理') }}</span>
                 </h2>
               </div>
-              <button @click="openCreate" v-tooltip="'创建新环境'" data-tour="profile-create"
+              <button @click="openCreate" v-tooltip="t('tooltip.profiles.create', '创建新环境')" data-tour="profile-create"
                 class="p-2 rounded-xl bg-accent-primary/10 text-accent-primary hover:bg-accent-primary hover:text-on-accent-primary transition-all">
                 <Plus class="size-5" />
               </button>
@@ -33,7 +33,7 @@
           <!-- 列表区 -->
           <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" data-tour="profile-list">
             <!-- 当前激活标识 -->
-            <div class="px-2 text-[0.65rem] font-bold text-text-dim uppercase tracking-tighter opacity-60">已记录环境</div>
+            <div class="px-2 text-[0.65rem] font-bold text-text-dim uppercase tracking-tighter opacity-60">{{ t('ui.profiles.drawer.recorded_profiles', '已记录环境') }}</div>
 
             <div v-for="p in profileStore.profiles" :key="p.id"
               @click="p.check ? profileStore.switchProfile(p.id) : null"
@@ -64,13 +64,13 @@
                     </div>
                     <!-- 操作组 -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button @click.stop="openExportDialog(p)" v-tooltip="'导出环境模组包'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-special hover:bg-accent-special/15"
+                      <button @click.stop="openExportDialog(p)" v-tooltip="t('tooltip.profiles.export_mod_package', '导出环境模组包')" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-special hover:bg-accent-special/15"
                         :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'"><Package class="size-3.5" /></button>
-                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? '创建桌面快捷方式' : '环境无效，无法创建快捷方式'" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15"
+                      <button v-if="p.id !== 'default'" @click.stop="handleCreateShortcut(p)" v-tooltip="p.check ? t('tooltip.profiles.create_shortcut', '创建桌面快捷方式') : t('tooltip.profiles.create_shortcut_disabled', '环境无效，无法创建快捷方式')" class="p-1.5 rounded-lg text-text-dim transition-all hover:text-accent-primary hover:bg-accent-primary/15"
                         :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'" ><SquareArrowOutUpRight class="size-3.5" /></button>
-                      <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="'删除环境'" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
-                      <button @click.stop="handleEdit(p)" v-tooltip="'编辑环境'" class="p-1.5 rounded-lg hover:bg-bg-overlay/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
-                      <button @click.stop="handlePlay(p)" v-tooltip="'运行环境'" class="p-1.5 rounded-lg text-text-dim  transition-all hover:text-accent-success hover:bg-accent-success/20"
+                      <button v-if="p.id !== 'default'" @click.stop="handleDelete(p)" v-tooltip="t('tooltip.profiles.delete', '删除环境')" class="p-1.5 rounded-lg hover:bg-accent-danger/20 text-text-dim hover:text-accent-danger transition-all"><Trash2 class="size-3.5" /></button>
+                      <button @click.stop="handleEdit(p)" v-tooltip="t('tooltip.profiles.edit', '编辑环境')" class="p-1.5 rounded-lg hover:bg-bg-overlay/10 text-text-dim hover:text-text-main transition-all"><Settings2 class="size-3.5" /></button>
+                      <button @click.stop="handlePlay(p)" v-tooltip="t('tooltip.profiles.run', '运行环境')" class="p-1.5 rounded-lg text-text-dim  transition-all hover:text-accent-success hover:bg-accent-success/20"
                         :class="p.check ? '' : 'cursor-not-allowed pointer-events-none opacity-40'"><Play class="size-3.5" />
                       </button>
                     </div>
@@ -78,27 +78,27 @@
 
                   <!-- 标识 -->
                   <div class="flex items-center gap-1 min-w-0">
-                    <span v-tooltip="'游戏版本'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary border border-border-base/10 ">{{ p.game_version || '版本未知' }}</span>
-                    <span v-if="showSteamVersionBadge(p)" v-tooltip="p.is_steam_managed ? '游戏由 Steam 管理。' : '这是一个 Steam 版环境。'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-border-base/10 ">Steam 版</span>
-                    <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="'当前环境会使用创意工坊模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-border-base/10 ">工坊模组</span>
-                    <span v-if="p.use_self_mods" v-tooltip="'当前环境会使用管理器模组'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-border-base/10 ">管理器模组</span>
-                    <span v-if="p.id === 'default'" v-tooltip="'默认环境'" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-border-base/10 ">默认</span>
-                    <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" v-tooltip="runtimeProfileLabel" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/15 text-accent-primary border border-border-base/10 ">运行中</span>
+                    <span v-tooltip="t('tooltip.profiles.game_version', '游戏版本')" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary border border-border-base/10 ">{{ p.game_version || t('ui.profiles.version_unknown', '版本未知') }}</span>
+                    <span v-if="showSteamVersionBadge(p)" v-tooltip="p.is_steam_managed ? t('tooltip.profiles.steam_managed', '游戏由 Steam 管理。') : t('tooltip.profiles.steam_profile', '这是一个 Steam 版环境。')" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-border-base/10 ">{{ t('ui.profiles.badge.steam', 'Steam 版') }}</span>
+                    <span v-if="showWorkshopRuntimeBadge(p)" v-tooltip="t('tooltip.profiles.uses_workshop_mods', '当前环境会使用创意工坊模组')" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-border-base/10 ">{{ t('ui.profiles.badge.workshop_mods', '工坊模组') }}</span>
+                    <span v-if="p.use_self_mods" v-tooltip="t('tooltip.profiles.uses_manager_mods', '当前环境会使用管理器模组')" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success border border-border-base/10 ">{{ t('ui.profiles.badge.manager_mods', '管理器模组') }}</span>
+                    <span v-if="p.id === 'default'" v-tooltip="t('tooltip.profiles.default_profile', '默认环境')" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight border border-border-base/10 ">{{ t('ui.profiles.badge.default', '默认') }}</span>
+                    <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" v-tooltip="runtimeProfileLabel" class="text-[0.6rem] px-1.5 py-0.5 rounded bg-accent-primary/15 text-accent-primary border border-border-base/10 ">{{ t('ui.profiles.running', '运行中') }}</span>
                   </div>
 
                   <!-- 路径 -->
-                  <span class="flex items-center" v-tooltip="'游戏安装路径:\n' + p.game_install_path">
+                  <span class="flex items-center" v-tooltip="t('tooltip.profiles.game_install_path', '游戏安装路径:\n{path}', { path: p.game_install_path || '' })">
                     <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-cool/70 rounded-2xl">Game</span>
                     <span class="text-[0.7rem] px-1 text-text-dim font-mono opacity-50 truncate">{{ p.game_install_path }}</span>
                   </span>
 
-                  <span class="flex items-center" v-tooltip="'用户数据路径:\n' + p.user_data_path">
+                  <span class="flex items-center" v-tooltip="t('tooltip.profiles.user_data_path', '用户数据路径:\n{path}', { path: p.user_data_path || '' })">
                     <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-tip/70 rounded-2xl">Data</span>
                     <span class="text-[0.7rem] px-1 text-text-dim font-mono opacity-50 truncate">{{ p.user_data_path }}</span>
                   </span>
 
                   <div class=" w-fit bg-accent-special/70 backdrop-blur-xl px-1 py-0.5 rounded-sm text-[0.65rem] text-text-main">
-                    上次运行：{{ p.last_played_time ? formatDate(p.last_played_time) : '未运行' }}
+                    {{ t('ui.profiles.last_played', '上次运行：{time}', { time: p.last_played_time ? formatDate(p.last_played_time) : t('ui.profiles.never_played', '未运行') }) }}
                   </div>
 
                 </div>
@@ -108,7 +108,7 @@
 
             <!-- 待恢复/孤立环境 -->
             <div v-if="profileStore.orphanedProfiles.length > 0" class="mt-8 space-y-3">
-              <div class="px-2 text-[0.65rem] font-bold text-accent-warn uppercase tracking-tighter">待恢复环境</div>
+              <div class="px-2 text-[0.65rem] font-bold text-accent-warn uppercase tracking-tighter">{{ t('ui.profiles.drawer.orphaned_profiles', '待恢复环境') }}</div>
               <div v-for="orphan in profileStore.orphanedProfiles" :key="orphan.id"
                 class="p-4 rounded-xl border border-dashed border-accent-warn/30 bg-accent-warn/5 flex items-center justify-between group">
                 <div class="min-w-0">
@@ -116,7 +116,7 @@
                   <div class="text-[0.7rem] text-text-dim truncate w-48 mt-1">{{ orphan._folder_path }}</div>
                 </div>
                 <button @click="profileStore.importOrphan(orphan)" class="px-3 py-1.5 rounded-lg bg-accent-warn/20 hover:bg-accent-warn text-accent-warn hover:text-on-accent-warn text-[0.7rem] font-black transition-all">
-                  接入
+                  {{ t('ui.profiles.action.import_orphan', '接入') }}
                 </button>
               </div>
             </div>
@@ -126,7 +126,7 @@
           <footer class="bg-bg-elevated/90 flex items-center justify-between p-4">
             <div></div>
             <button @click="appStore.uiState.showProfileDrawer = false" class="px-4 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-text-main text-xs font-bold transition-all">
-              收起
+              {{ t('ui.common.collapse', '收起') }}
             </button>
           </footer>
 
@@ -148,37 +148,37 @@
     <div v-if="showModal" class="fixed inset-0 z-150 flex items-center justify-center bg-bg-deep/40 p-4 backdrop-blur-md">
       <div class="modal-surface flex max-h-[calc(100vh-2rem)] w-[min(52rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-bg-highlight/90 animate-scale-in">
         <header class="modal-header flex items-center justify-between px-6 py-4">
-          <h3 class="text-lg font-bold text-text-main">{{ isEditing ? '编辑环境属性' : '创建新环境快照' }}</h3>
+          <h3 class="text-lg font-bold text-text-main">{{ isEditing ? t('ui.profiles.form.edit_title', '编辑环境属性') : t('ui.profiles.form.create_title', '创建新环境快照') }}</h3>
           <button @click="showModal = false" class="text-text-dim hover:text-text-main"><X class="size-5" /></button>
         </header>
 
         <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 custom-scrollbar">
-          <CommonInput label="显示名称" v-model="form.name" placeholder="例如: 1.5 中世纪" />
-          <CommonInput label="环境描述" v-model="form.description" placeholder="这里可以写一些关于这个环境的说明..." />
-          <CommonPathInput label="游戏执行目录" v-model="form.game_install_path" @browse="browsePath('game_install_path')"
+          <CommonInput :label="t('ui.profiles.form.name', '显示名称')" v-model="form.name" :placeholder="t('ui.profiles.form.name_placeholder', '例如: 1.5 中世纪')" />
+          <CommonInput :label="t('ui.profiles.form.description', '环境描述')" v-model="form.description" :placeholder="t('ui.profiles.form.description_placeholder', '这里可以写一些关于这个环境的说明...')" />
+          <CommonPathInput :label="t('ui.profiles.form.game_install_path', '游戏执行目录')" v-model="form.game_install_path" @browse="browsePath('game_install_path')"
             :check="form.check_info?.game_install_path" @blur="checkPath('game_install_path', form.game_install_path)"
-            description="游戏安装目录，即游戏主程序所在的目录" />
-          <CommonPathInput label="用户数据目录" v-model="form.user_data_path" @browse="browsePath('user_data_path')"
+            :description="t('ui.profiles.form.game_install_path_desc', '游戏安装目录，即游戏主程序所在的目录')" />
+          <CommonPathInput :label="t('ui.profiles.form.user_data_path', '用户数据目录')" v-model="form.user_data_path" @browse="browsePath('user_data_path')"
             :check="form.check_info?.user_data_path" @blur="checkPath('user_data_path', form.user_data_path)"
-            description="游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。"
-            :placeholder= '(!isEditing?"可空，默认在软件 data/profiles 目录下自动生成":"编辑模式下不可留空！")' />
-          <CommonSwitch :disabled="steamLaunchChecking" label="优先使用 Steam 启动" :model-value="form.prefer_steam_launch" description="开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。" @update:modelValue="handlePreferSteamLaunchUpdate" />
-          <CommonSwitch :disabled="workshopModsChecking" label="使用创意工坊 Mod" :model-value="form.use_workshop_mods" description="开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。" @update:modelValue="handleWorkshopModsUpdate" />
-          <CommonSwitch v-if="appStore.settings.self_mods_path" label="使用管理器 Mod" v-model="form.use_self_mods" description="启用后将通过链接方式自动为游戏添加管理器模组。" />
-          <CommonSwitch v-if="!isEditing" label="继承当前配置" v-model="form.copy_current_data" description="自动复制当前的游戏配置到新环境" />
-          <CommonTagInput label="游戏启动参数" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" placeholder="请输入一个完整指令后回车确认……" description="注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。" />
+            :description="t('ui.profiles.form.user_data_path_desc', '游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。')"
+            :placeholder="isEditing ? t('ui.profiles.form.user_data_path_edit_placeholder', '编辑模式下不可留空！') : t('ui.profiles.form.user_data_path_create_placeholder', '可空，默认在软件 data/profiles 目录下自动生成')" />
+          <CommonSwitch :disabled="steamLaunchChecking" :label="t('ui.profiles.form.prefer_steam_launch', '优先使用 Steam 启动')" :model-value="form.prefer_steam_launch" :description="t('ui.profiles.form.prefer_steam_launch_desc', '开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。')" @update:modelValue="handlePreferSteamLaunchUpdate" />
+          <CommonSwitch :disabled="workshopModsChecking" :label="t('ui.profiles.form.use_workshop_mods', '使用创意工坊 Mod')" :model-value="form.use_workshop_mods" :description="t('ui.profiles.form.use_workshop_mods_desc', '开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。')" @update:modelValue="handleWorkshopModsUpdate" />
+          <CommonSwitch v-if="appStore.settings.self_mods_path" :label="t('ui.profiles.form.use_manager_mods', '使用管理器 Mod')" v-model="form.use_self_mods" :description="t('ui.profiles.form.use_manager_mods_desc', '启用后将通过链接方式自动为游戏添加管理器模组。')" />
+          <CommonSwitch v-if="!isEditing" :label="t('ui.profiles.form.copy_current_data', '继承当前配置')" v-model="form.copy_current_data" :description="t('ui.profiles.form.copy_current_data_desc', '自动复制当前的游戏配置到新环境')" />
+          <CommonTagInput :label="t('ui.profiles.form.run_commands', '游戏启动参数')" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" :placeholder="t('ui.profiles.form.run_commands_placeholder', '请输入一个完整指令后回车确认……')" :description="t('ui.profiles.form.run_commands_desc', '注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。')" />
 
           <div class="text-[0.7rem] text-text-disabled leading-relaxed">
-            * 每一个环境都拥有完全独立的存档、设置和 Mod 排序文件。系统将通过启动参数自动执行数据隔离。Mod 文件则会共用游戏本体所在的 Mods 目录。
-            <p class="ml-2">游戏本体与环境无直接关联，同一个游戏本体可以与多个环境同时建立联系。</p>
-            <p class="ml-2 text-accent-warning">注意：如果游戏执行目录不存在或游戏文件损坏，环境将无法正常启动。</p>
+            {{ t('ui.profiles.form.isolation_note', '* 每一个环境都拥有完全独立的存档、设置和 Mod 排序文件。系统将通过启动参数自动执行数据隔离。Mod 文件则会共用游戏本体所在的 Mods 目录。') }}
+            <p class="ml-2">{{ t('ui.profiles.form.game_link_note', '游戏本体与环境无直接关联，同一个游戏本体可以与多个环境同时建立联系。') }}</p>
+            <p class="ml-2 text-accent-warning">{{ t('ui.profiles.form.invalid_path_warning', '注意：如果游戏执行目录不存在或游戏文件损坏，环境将无法正常启动。') }}</p>
           </div>
         </div>
 
         <footer class="modal-footer flex justify-end gap-3 px-6 py-4">
-          <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">取消</button>
+          <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">{{ t('ui.common.cancel', '取消') }}</button>
           <button @click="submitForm" class="px-6 py-2 rounded-xl bg-accent-primary text-on-accent-primary font-black text-sm shadow-lg shadow-accent-primary/20 transition-all hover:scale-105 active:scale-95">
-            {{ isEditing ? '保存变更' : '确认创建' }}
+            {{ isEditing ? t('ui.profiles.action.save_changes', '保存变更') : t('ui.profiles.action.confirm_create', '确认创建') }}
           </button>
         </footer>
       </div>
@@ -200,6 +200,7 @@ import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonTagInput from '../../shared/components/input/CommonTagInput.vue'
 import { RUN_COMMAND_TAGS } from '../../shared/lib/constants'
 import { formatDate } from '../../shared/lib/format'
+import { t } from '../../shared/i18n'
 
 const profileStore = useProfileStore()
 const modStore = useModStore()
@@ -229,9 +230,9 @@ const showSteamVersionBadge = (profile) => !!profile?.is_steam
 const runtimeProfileId = computed(() => String(appStore.runtimeSession?.profile_id || '').trim())
 const runtimeProfileLabel = computed(() => {
   if (appStore.runtimeSession?.source === 'external') {
-    return '当前游戏由外部启动，后端已按 default 环境接管。'
+    return t('tooltip.profiles.runtime_external', '当前游戏由外部启动，后端已按 default 环境接管。')
   }
-  return '当前游戏正在按这个环境运行。'
+  return t('tooltip.profiles.runtime_current', '当前游戏正在按这个环境运行。')
 })
 const showWorkshopRuntimeBadge = (profile) => {
   const caps = profile?.runtime_capabilities || {}
@@ -293,25 +294,25 @@ const browsePath = async (type) => {
 
 const submitForm = async () => {
   if (!form.name) {
-    toast.warning('请输入显示名称')
+    toast.warning(t('toast.profiles.name_required', '请输入显示名称'))
     return
   }
   if (!form.game_install_path) {
-    toast.warning('请选择游戏执行目录')
+    toast.warning(t('toast.profiles.game_install_path_required', '请选择游戏执行目录'))
     return
   }
   if (!form.user_data_path && isEditing.value) {
-    toast.warning('请输入用户数据目录')
+    toast.warning(t('toast.profiles.user_data_path_required', '请输入用户数据目录'))
     return
   }
   await checkPath('user_data_path', form.user_data_path)
   await checkPath('game_install_path', form.game_install_path)
   if (form['check_info']['game_install_path'] && !form['check_info']['game_install_path']['pass']) {
-    toast.warning('请选择一个有效的游戏执行目录')
+    toast.warning(t('toast.profiles.game_install_path_invalid', '请选择一个有效的游戏执行目录'))
     return
   }
   if (form['check_info']['user_data_path'] && !form['check_info']['user_data_path']['pass'] && isEditing.value) {
-    toast.warning('请输入一个有效的用户数据目录')
+    toast.warning(t('toast.profiles.user_data_path_invalid', '请输入一个有效的用户数据目录'))
     return
   }
   if (form.prefer_steam_launch) {
@@ -343,8 +344,8 @@ const checkPath = async (type, path, options = {}) => {
 }
 
 const getSteamLaunchProblem = (installCheck, steamCheck) => {
-  if (!installCheck?.pass) return `游戏执行目录可能无法用于 Steam 启动：${installCheck?.msg || '请重新选择游戏执行目录'}`
-  if (!steamCheck?.pass) return `Steam 程序路径可能无法使用：${steamCheck?.msg || '请先到设置页填写 Steam.exe 所在目录'}`
+  if (!installCheck?.pass) return t('toast.profiles.steam_launch_game_path_problem', '游戏执行目录可能无法用于 Steam 启动：{message}', { message: installCheck?.msg || t('toast.profiles.choose_game_install_path', '请重新选择游戏执行目录') })
+  if (!steamCheck?.pass) return t('toast.profiles.steam_launch_steam_path_problem', 'Steam 程序路径可能无法使用：{message}', { message: steamCheck?.msg || t('toast.profiles.set_steam_path', '请先到设置页填写 Steam.exe 所在目录') })
   return ''
 }
 
@@ -352,22 +353,22 @@ const validateSteamLaunchEnable = async () => {
   const installPath = String(form.game_install_path || '').trim()
   const steamPath = String(appStore.settings?.steam_path || '').trim()
   if (!installPath) {
-    toast.warning('未填写游戏执行目录，Steam 启动可能无法使用')
+    toast.warning(t('toast.profiles.missing_game_path_for_steam', '未填写游戏执行目录，Steam 启动可能无法使用'))
     return false
   }
   if (!steamPath) {
-    toast.warning('未填写 Steam 程序路径，Steam 启动可能无法使用')
+    toast.warning(t('toast.profiles.missing_steam_path', '未填写 Steam 程序路径，Steam 启动可能无法使用'))
     return false
   }
   const installCheck = await checkPath('game_install_path', installPath, { force: true })
   const steamCheck = await checkPath('steam_path', steamPath)
   const problem = getSteamLaunchProblem(installCheck, steamCheck)
   if (problem) {
-    toast.warning(`${problem}\n此开关会按你的选择保留，启动失败时可改为直接启动。`)
+    toast.warning(t('toast.profiles.keep_steam_switch_warning', '{problem}\n此开关会按你的选择保留，启动失败时可改为直接启动。', { problem }))
     return false
   }
   if (!installCheck?.data?.is_steam) {
-    toast.warning('未能确认当前游戏本体是否为 Steam 版，仍会优先尝试通过 Steam 启动；如果启动失败，可改为直接启动。')
+    toast.warning(t('toast.profiles.steam_version_unknown', '未能确认当前游戏本体是否为 Steam 版，仍会优先尝试通过 Steam 启动；如果启动失败，可改为直接启动。'))
   }
   return true
 }
@@ -375,15 +376,15 @@ const validateSteamLaunchEnable = async () => {
 const validateWorkshopModsEnable = async () => {
   const workshopPath = String(appStore.settings?.workshop_mods_path || '').trim()
   if (!workshopPath) {
-    toast.warning('未填写创意工坊目录，工坊 Mod 可能无法加载')
+    toast.warning(t('toast.profiles.missing_workshop_path', '未填写创意工坊目录，工坊 Mod 可能无法加载'))
     return false
   }
   const workshopCheck = await checkPath('workshop_mods_path', workshopPath)
   if (workshopCheck?.pass && workshopCheck?.type === 'warn') {
-    toast.warning(workshopCheck.msg || '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。')
+    toast.warning(workshopCheck.msg || t('toast.profiles.workshop_path_incomplete', '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。'))
   }
   if (!workshopCheck?.pass) {
-    toast.warning(`创意工坊目录可能无法使用：${workshopCheck?.msg || '请先到设置页重新选择创意工坊目录'}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。`)
+    toast.warning(t('toast.profiles.workshop_path_problem', '创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。', { message: workshopCheck?.msg || t('toast.profiles.choose_workshop_path', '请先到设置页重新选择创意工坊目录') }))
     return false
   }
   return true
@@ -422,11 +423,11 @@ const handleWorkshopModsUpdate = async (value) => {
 
 const handleDelete = async (p) => {
   const decision = await confirmStore.confirmDeleteAction(
-    '危险操作',
-    `确定要删除环境 "${p.name}" 吗？\n环境记录会被移除；其隔离区数据默认移入回收站，也可选择强制彻底删除。`,
+    t('dialog.profiles.delete.title', '危险操作'),
+    t('dialog.profiles.delete.message', '确定要删除环境 "{name}" 吗？\n环境记录会被移除；其隔离区数据默认移入回收站，也可选择强制彻底删除。', { name: p.name }),
     {
-      trashOptionText: '移入回收站',
-      forceOptionText: '强制删除隔离区数据',
+      trashOptionText: t('dialog.profiles.delete.trash', '移入回收站'),
+      forceOptionText: t('dialog.profiles.delete.force', '强制删除隔离区数据'),
     }
   )
   if (decision?.confirmed) {
@@ -443,11 +444,11 @@ const handlePlay = (p) => {
 
 const handleCreateShortcut = async (p) => {
   const ok = await confirmStore.confirmAction(
-    '创建桌面快捷方式',
-    `确定要为环境 "${p.name}" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。`,
+    t('dialog.profiles.shortcut.title', '创建桌面快捷方式'),
+    t('dialog.profiles.shortcut.message', '确定要为环境 "{name}" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。', { name: p.name }),
     {
-      confirmText: '创建',
-      cancelText: '取消',
+      confirmText: t('ui.common.create', '创建'),
+      cancelText: t('ui.common.cancel', '取消'),
     }
   )
   if (!ok) return
@@ -460,12 +461,14 @@ const buildProfileExportScopeOptions = ({
   loading = false,
 } = {}) => {
   const formatLabel = (title, count) => {
-    if (loading) return `${title}（读取中）`
-    return Number.isFinite(count) ? `${title}（${count}）` : title
+    if (loading) return t('ui.profiles.export.scope_loading', '{title}（读取中）', { title })
+    return Number.isFinite(count) ? t('ui.profiles.export.scope_with_count', '{title}（{count}）', { title, count }) : title
   }
+  const effectiveTitle = t('ui.profiles.export.effective_mods', '当前环境有效模组')
+  const activeTitle = t('ui.profiles.export.active_mods', '当前环境启用模组')
   return [
-    { value: 'profile-effective', label: formatLabel('当前环境有效模组', effectiveCount), count: Number.isFinite(effectiveCount) ? effectiveCount : null, description: loading ? '正在读取这个环境里可导出的模组数量。' : '导出当前环境里能正常使用的模组。' },
-    { value: 'profile-active', label: formatLabel('当前环境启用模组', activeCount), count: Number.isFinite(activeCount) ? activeCount : null, description: loading ? '正在读取这个环境里已启用的模组数量。' : '导出当前环境里已经启用的模组。' },
+    { value: 'profile-effective', label: formatLabel(effectiveTitle, effectiveCount), count: Number.isFinite(effectiveCount) ? effectiveCount : null, description: loading ? t('ui.profiles.export.effective_loading_desc', '正在读取这个环境里可导出的模组数量。') : t('ui.profiles.export.effective_desc', '导出当前环境里能正常使用的模组。') },
+    { value: 'profile-active', label: formatLabel(activeTitle, activeCount), count: Number.isFinite(activeCount) ? activeCount : null, description: loading ? t('ui.profiles.export.active_loading_desc', '正在读取这个环境里已启用的模组数量。') : t('ui.profiles.export.active_desc', '导出当前环境里已经启用的模组。') },
   ]
 }
 
@@ -479,11 +482,11 @@ const openExportDialog = async (profile) => {
     })
     : buildProfileExportScopeOptions({ loading: true })
   appStore.openPackageTransferDialog('mod-export', {
-    title: `导出环境模组: ${profile?.name || '未命名环境'}`,
-    description: '可选择导出当前环境有效模组或当前启用模组，并按需附带环境数据。',
+    title: t('ui.profiles.export.title', '导出环境模组: {name}', { name: profile?.name || t('ui.profiles.unnamed_profile', '未命名环境') }),
+    description: t('ui.profiles.export.description', '可选择导出当前环境有效模组或当前启用模组，并按需附带环境数据。'),
     sourceProfile: true,
     profileId,
-    profileName: profile?.name || '当前环境',
+    profileName: profile?.name || t('ui.profiles.current_profile', '当前环境'),
     scopeOptions,
     scopeOptionsLoading: !isCurrentProfile,
     export_scope: 'profile-effective',

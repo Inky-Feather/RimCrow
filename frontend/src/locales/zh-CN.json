@@ -130,6 +130,7 @@
       "count_suffix": " ({count}项)",
       "count_suffix_spaced": " ({count} 项)",
       "count_suffix_with_unit": " ({count}个)",
+      "create": "创建",
       "default": "默认",
       "delete": "删除",
       "description": "说明",
@@ -421,6 +422,86 @@
       "open_in_explorer": "在资源管理器中打开",
       "placeholder": "请输入或粘贴路径..."
     },
+    "profiles": {
+      "action": {
+        "confirm_create": "确认创建",
+        "import_orphan": "接入",
+        "save_changes": "保存变更"
+      },
+      "badge": {
+        "default": "默认",
+        "manager_mods": "管理器模组",
+        "steam": "Steam 版",
+        "workshop_mods": "工坊模组"
+      },
+      "current_profile": "当前环境",
+      "default_name": "Default",
+      "drawer": {
+        "orphaned_profiles": "待恢复环境",
+        "recorded_profiles": "已记录环境",
+        "title_accent": "管理",
+        "title_prefix": "环境"
+      },
+      "export": {
+        "active_desc": "导出当前环境里已经启用的模组。",
+        "active_loading_desc": "正在读取这个环境里已启用的模组数量。",
+        "active_mods": "当前环境启用模组",
+        "description": "可选择导出当前环境有效模组或当前启用模组，并按需附带环境数据。",
+        "effective_desc": "导出当前环境里能正常使用的模组。",
+        "effective_loading_desc": "正在读取这个环境里可导出的模组数量。",
+        "effective_mods": "当前环境有效模组",
+        "scope_loading": "{title}（读取中）",
+        "scope_with_count": "{title}（{count}）",
+        "title": "导出环境模组: {name}"
+      },
+      "form": {
+        "copy_current_data": "继承当前配置",
+        "copy_current_data_desc": "自动复制当前的游戏配置到新环境",
+        "create_title": "创建新环境快照",
+        "description": "环境描述",
+        "description_placeholder": "这里可以写一些关于这个环境的说明...",
+        "edit_title": "编辑环境属性",
+        "game_install_path": "游戏执行目录",
+        "game_install_path_desc": "游戏安装目录，即游戏主程序所在的目录",
+        "game_link_note": "游戏本体与环境无直接关联，同一个游戏本体可以与多个环境同时建立联系。",
+        "invalid_path_warning": "注意：如果游戏执行目录不存在或游戏文件损坏，环境将无法正常启动。",
+        "isolation_note": "* 每一个环境都拥有完全独立的存档、设置和 Mod 排序文件。系统将通过启动参数自动执行数据隔离。Mod 文件则会共用游戏本体所在的 Mods 目录。",
+        "name": "显示名称",
+        "name_placeholder": "例如: 1.5 中世纪",
+        "prefer_steam_launch": "优先使用 Steam 启动",
+        "prefer_steam_launch_desc": "开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。",
+        "run_commands": "游戏启动参数",
+        "run_commands_desc": "注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。",
+        "run_commands_placeholder": "请输入一个完整指令后回车确认……",
+        "use_manager_mods": "使用管理器 Mod",
+        "use_manager_mods_desc": "启用后将通过链接方式自动为游戏添加管理器模组。",
+        "use_workshop_mods": "使用创意工坊 Mod",
+        "use_workshop_mods_desc": "开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。",
+        "user_data_path": "用户数据目录",
+        "user_data_path_create_placeholder": "可空，默认在软件 data/profiles 目录下自动生成",
+        "user_data_path_desc": "游戏数据目录，可随意指定位置，或者留空自动生成，包含游戏配置及排序存档等用户信息。",
+        "user_data_path_edit_placeholder": "编辑模式下不可留空！"
+      },
+      "last_played": "上次运行：{time}",
+      "never_played": "未运行",
+      "running": "运行中",
+      "shortcut": {
+        "step": {
+          "close_steam": "等待手动关闭 Steam 进程",
+          "finalize": "确认稳定快捷方式 ID 并创建桌面快捷方式",
+          "launch_steam": "启动 Steam 并等待登录完成",
+          "write_config": "写入 Steam 快捷方式配置"
+        },
+        "steps_title": "Steam 快捷方式创建步骤："
+      },
+      "switcher": {
+        "current_profile": "当前环境",
+        "open_manager": "管理环境中心"
+      },
+      "unknown_version": "未知版本",
+      "unnamed_profile": "未命名环境",
+      "version_unknown": "版本未知"
+    },
     "rule": {
       "dynamic": {
         "action": {
@@ -588,6 +669,55 @@
       "placeholder": "请选择...",
       "use_custom_value": "使用 \"{value}\""
     },
+    "settings": {
+      "paths": {
+        "auto_check_manager_mod_updates": "自动检查管理器模组更新",
+        "auto_check_manager_mod_updates_desc": "按设定间隔检查管理器模组目录中由 SteamCMD 下载的工坊模组和 Git 仓库订阅模组更新。",
+        "auto_detect": "自动搜索路径",
+        "check_interval_days": "检查间隔（天）",
+        "check_updates": "检查更新",
+        "checking_updates": "检查中",
+        "custom_export_start_dir": "自定义导出起始目录",
+        "custom_import_start_dir": "自定义导入起始目录",
+        "custom_start_dir_desc": "仅在导出目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。",
+        "dir_mode": {
+          "custom": "自定义",
+          "default": "默认",
+          "remember": "记忆"
+        },
+        "export_start_dir": "导出起始目录",
+        "export_start_dir_desc": "控制“导出加载序列”文件选择器的选择窗口初始目录。默认模式保持当前环境备份目录的 other 子目录；记忆模式使用上次成功导出的目录；自定义模式使用下方固定目录。",
+        "game_install_path": "游戏安装目录",
+        "game_install_path_desc": "游戏安装目录即游戏主程序所在的目录，不同系统位置不同，Windows下默认安装目录一般位于：\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld",
+        "import_start_dir": "导入起始目录",
+        "import_start_dir_desc": "控制“导入加载序列”文件选择器的选择窗口初始目录。默认模式始终使用当前环境用户数据目录下的 ModLists；记忆模式使用上次成功导入的目录；自定义模式使用下方固定目录。",
+        "load_order_dialog_paths": "排序导入/导出 起始选择窗口配置",
+        "local_mods_path": "本地模组目录",
+        "local_mods_path_desc": "根据游戏安装目录自动生成",
+        "manager_mods": "管理器模组",
+        "move_old_self_mods": "改变路径时移动模组",
+        "move_old_self_mods_desc": "开启后，修改路径时会将原有模组移动到新路径；不开启则保留原有的文件结构。",
+        "prefer_steam_launch": "优先使用 Steam 启动",
+        "prefer_steam_launch_desc": "开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。",
+        "run_commands": "游戏启动参数",
+        "run_commands_desc": "注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。",
+        "run_commands_placeholder": "请输入一个完整指令后回车确认……",
+        "searching": "搜索中",
+        "self_mods_path": "管理器下载模组路径",
+        "self_mods_path_desc": "由管理器下载的模组所在的目录，可自定义位置，如果将其设为游戏本地模组路径，请关闭该使用开关。",
+        "steam_path": "Steam程序路径",
+        "steam_path_desc": "Steam 程序路径即 Steam 安装目录或程序所在位置，不同系统位置不同，可留空使用自动检测。",
+        "title": "环境与路径配置",
+        "use_manager_mods": "使用管理器模组",
+        "use_manager_mods_desc": "开启后将通过链接方式自动为游戏加载管理器Mod。",
+        "use_workshop_mods": "使用创意工坊 Mod",
+        "use_workshop_mods_desc": "开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。",
+        "user_data_path": "用户数据目录",
+        "user_data_path_desc": "用户数据目录即游戏配置、存档和日志所在的目录，不同系统位置不同，可使用自动搜索或手动选择。\nWindows下默认数据目录一般位于：\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
+        "workshop_mods_path": "创意工坊目录",
+        "workshop_mods_path_desc": "创意工坊目录即创意工坊下载的模组所在的目录，该设置所有环境通用"
+      }
+    },
     "source_type": {
       "core": "游戏本体",
       "dlc": "DLC",
@@ -692,7 +822,7 @@
         "actions": {
           "apply_order": {
             "label": "应用加载顺序",
-            "tooltip": "应用合集列表顺序为加载顺序，请确保全部已下载！"
+            "tooltip": "应用合集列表顺序为加载顺序，请确保全部已下载！^^（注意别乱点，除非合集作者声明了合集顺序就是正确排序）^^"
           },
           "download_missing": {
             "label": "补齐下载 ({count})",
@@ -1648,6 +1778,26 @@
       "filled": "已填写路径",
       "not_configured": "未配置路径"
     },
+    "profiles": {
+      "create": "创建新环境",
+      "create_shortcut": "创建桌面快捷方式",
+      "create_shortcut_disabled": "环境无效，无法创建快捷方式",
+      "default_profile": "默认环境",
+      "delete": "删除环境",
+      "edit": "编辑环境",
+      "export_mod_package": "导出环境模组包",
+      "game_install_path": "游戏安装路径:\n{path}",
+      "game_version": "游戏版本",
+      "run": "运行环境",
+      "runtime_current": "当前游戏正在按这个环境运行。",
+      "runtime_external": "当前游戏由外部启动，后端已按 default 环境接管。",
+      "steam_managed": "游戏由 Steam 管理。",
+      "steam_profile": "这是一个 Steam 版环境。",
+      "unavailable": "当前环境不可用：\n^^{message}^^",
+      "user_data_path": "用户数据路径:\n{path}",
+      "uses_manager_mods": "当前环境会使用管理器模组",
+      "uses_workshop_mods": "当前环境会使用创意工坊模组"
+    },
     "rule_panel": {
       "disable_rule": "禁用规则",
       "enable_rule": "启用规则",
@@ -1665,6 +1815,14 @@
       "preserve_saved": "保留原值",
       "reveal_saved": "查看已保存密钥",
       "show": "显示"
+    },
+    "settings": {
+      "paths": {
+        "auto_detect": "尝试通过系统和 Steam 记录自动搜索路径",
+        "auto_detect_loading": "正在自动搜索路径",
+        "current_profile": "当前环境：{name}\n说明：{description}",
+        "edit_current_profile": "此处会直接修改当前环境的路径配置"
+      }
     },
     "status_bar": {
       "history_state": "当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。"
@@ -1761,6 +1919,27 @@
         "filtered_out": "搜索项 {id} 已被 {list} 列表筛选器过滤，请清除筛选后重试。",
         "loop_to_first": "已到达最后一个搜索结果，循环回到第一个"
       }
+    },
+    "profiles": {
+      "choose_game_install_path": "请重新选择游戏执行目录",
+      "choose_workshop_path": "请先到设置页重新选择创意工坊目录",
+      "game_install_path_invalid": "请选择一个有效的游戏执行目录",
+      "game_install_path_required": "请选择游戏执行目录",
+      "imported_orphan": "环境配置已恢复",
+      "keep_steam_switch_warning": "{problem}\n此开关会按你的选择保留，启动失败时可改为直接启动。",
+      "missing_game_path_for_steam": "未填写游戏执行目录，Steam 启动可能无法使用",
+      "missing_steam_path": "未填写 Steam 程序路径，Steam 启动可能无法使用",
+      "missing_workshop_path": "未填写创意工坊目录，工坊 Mod 可能无法加载",
+      "name_required": "请输入显示名称",
+      "set_steam_path": "请先到设置页填写 Steam.exe 所在目录",
+      "steam_launch_game_path_problem": "游戏执行目录可能无法用于 Steam 启动：{message}",
+      "steam_launch_steam_path_problem": "Steam 程序路径可能无法使用：{message}",
+      "steam_version_unknown": "未能确认当前游戏本体是否为 Steam 版，仍会优先尝试通过 Steam 启动；如果启动失败，可改为直接启动。",
+      "switched": "已切换至环境: {name}",
+      "user_data_path_invalid": "请输入一个有效的用户数据目录",
+      "user_data_path_required": "请输入用户数据目录",
+      "workshop_path_incomplete": "创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。",
+      "workshop_path_problem": "创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。"
     },
     "rule_panel": {
       "name_required": "请输入规则名称",
@@ -1890,6 +2069,18 @@
         "bottom_title": "设为置底",
         "placeholder": "选填：为什么要强制放到这？",
         "top_title": "设为置顶"
+      }
+    },
+    "profiles": {
+      "delete": {
+        "force": "强制删除隔离区数据",
+        "message": "确定要删除环境 \"{name}\" 吗？\n环境记录会被移除；其隔离区数据默认移入回收站，也可选择强制彻底删除。",
+        "title": "危险操作",
+        "trash": "移入回收站"
+      },
+      "shortcut": {
+        "message": "确定要为环境 \"{name}\" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。",
+        "title": "创建桌面快捷方式"
       }
     },
     "rule_panel": {
@@ -2044,6 +2235,18 @@
       "save_backup_as": "另存备份",
       "save_inactive_order": "保存停用列表顺序",
       "save_mod_order": "保存Mod加载顺序"
+    },
+    "profiles": {
+      "create": "创建环境 \"{name}\"",
+      "create_shortcut": "创建环境桌面快捷方式",
+      "delete": "删除环境",
+      "fetch": "获取环境列表",
+      "import_orphaned": "导入环境",
+      "launch_steam_client": "启动 Steam 客户端",
+      "scan_orphaned": "扫描待恢复环境",
+      "switch": "切换环境",
+      "update": "更新环境 \"{profileId}\"",
+      "write_steam_shortcut_config": "写入 Steam 快捷方式配置"
     },
     "workspace": {
       "all_libraries": "获取所有库数据",
