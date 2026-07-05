@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import platform
-from pathlib import Path
+import posixpath
+import re
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import vdf
 
@@ -17,6 +19,18 @@ from backend.utils.constants import RIMWORLD_APPMANIFEST_NAME, RIMWORLD_STEAM_AP
 
 def _resolved_system_name(system_name: str | None = None) -> str:
     return str(system_name or platform.system() or "").strip()
+
+
+def _join_path(system_name: str, base: str, *parts: str) -> str:
+    if system_name != "Windows" and str(base or "").startswith("/"):
+        return posixpath.join(base, *parts)
+    return os.path.join(base, *parts)
+
+
+def _pure_path(path: str, system_name: str):
+    if re.match(r"^[A-Za-z]:[\\/]", str(path or "")) or "\\" in str(path or ""):
+        return PureWindowsPath(path)
+    return PureWindowsPath(path) if system_name == "Windows" else PurePosixPath(path)
 
 
 def _read_windows_registry_value(root, key_path: str, value_name: str) -> str:
@@ -35,18 +49,18 @@ def get_default_user_data_paths(system_name: str | None = None) -> list[str]:
     if resolved_system_name == "Windows":
         user_profile = os.getenv("USERPROFILE") or os.path.expanduser("~")
         return unique_paths([
-            os.path.join(user_profile, "AppData", "LocalLow", "Ludeon Studios", "RimWorld by Ludeon Studios"),
+            _join_path(resolved_system_name, user_profile, "AppData", "LocalLow", "Ludeon Studios", "RimWorld by Ludeon Studios"),
         ], system_name=resolved_system_name)
 
     home = os.path.expanduser("~")
     if resolved_system_name == "Darwin":
         return unique_paths([
-            os.path.join(home, "Library", "Application Support", "RimWorld"),
+            _join_path(resolved_system_name, home, "Library", "Application Support", "RimWorld"),
         ], system_name=resolved_system_name)
 
     return unique_paths([
-        os.path.join(home, ".config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
-        os.path.join(home, ".var", "app", "com.valvesoftware.Steam", "config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
+        _join_path(resolved_system_name, home, ".config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
+        _join_path(resolved_system_name, home, ".var", "app", "com.valvesoftware.Steam", "config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
     ], system_name=resolved_system_name)
 
 
@@ -56,8 +70,8 @@ def get_default_player_log_paths(filename: str = "Player.log", system_name: str 
     if resolved_system_name == "Darwin":
         home = os.path.expanduser("~")
         return unique_paths([
-            os.path.join(home, "Library", "Logs", "Ludeon Studios", "RimWorld by Ludeon Studios", target_name),
-            os.path.join(home, "Library", "Logs", "Unity", target_name),
+            _join_path(resolved_system_name, home, "Library", "Logs", "Ludeon Studios", "RimWorld by Ludeon Studios", target_name),
+            _join_path(resolved_system_name, home, "Library", "Logs", "Unity", target_name),
         ], system_name=resolved_system_name)
 
     return unique_paths([
@@ -84,22 +98,22 @@ def get_default_steam_root_candidates(system_name: str | None = None) -> list[st
         home = os.path.expanduser("~")
         candidates.extend([
             "/Applications",
-            os.path.join(home, "Applications"),
+            _join_path(resolved_system_name, home, "Applications"),
         ])
     else:
         home = os.path.expanduser("~")
         xdg_data_home = os.getenv("XDG_DATA_HOME")
         candidates.extend([
-            os.path.join(home, ".steam", "steam"),
-            os.path.join(home, ".local", "share", "Steam"),
-            os.path.join(home, "snap", "steam", "common", ".local", "share", "Steam"),
-            os.path.join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+            _join_path(resolved_system_name, home, ".steam", "steam"),
+            _join_path(resolved_system_name, home, ".local", "share", "Steam"),
+            _join_path(resolved_system_name, home, "snap", "steam", "common", ".local", "share", "Steam"),
+            _join_path(resolved_system_name, home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
         ])
         if xdg_data_home:
-            candidates.append(os.path.join(xdg_data_home, "Steam"))
+            candidates.append(_join_path(resolved_system_name, xdg_data_home, "Steam"))
 
     return unique_paths([
-        normalize_path_for_storage(path) for path in candidates if path
+        normalize_path_for_storage(path, system_name=resolved_system_name) for path in candidates if path
     ], system_name=resolved_system_name)
 
 
@@ -108,7 +122,7 @@ def get_default_steam_data_root_candidates(system_name: str | None = None) -> li
     if resolved_system_name == "Darwin":
         home = os.path.expanduser("~")
         return unique_paths([
-            os.path.join(home, "Library", "Application Support", "Steam"),
+            _join_path(resolved_system_name, home, "Library", "Application Support", "Steam"),
         ], system_name=resolved_system_name)
     return get_default_steam_root_candidates(system_name=resolved_system_name)
 
@@ -165,27 +179,27 @@ def resolve_steam_executable_path(steam_root: str, system_name: str | None = Non
 
 
 def normalize_steam_root(path: str, system_name: str | None = None) -> str:
-    raw_value = normalize_path_for_storage(path)
+    resolved_system_name = _resolved_system_name(system_name)
+    raw_value = normalize_path_for_storage(path, system_name=resolved_system_name)
     if not raw_value:
         return ""
 
-    resolved_system_name = _resolved_system_name(system_name)
-    target = Path(raw_value)
+    target = _pure_path(raw_value, resolved_system_name)
 
     if resolved_system_name == "Darwin":
         if target.name == "steam_osx" and target.parent.name == "MacOS":
             app_bundle = target.parents[2]
             if app_bundle.name == "Steam.app":
-                return normalize_path_for_storage(app_bundle.parent)
+                return normalize_path_for_storage(app_bundle.parent, system_name=resolved_system_name)
         if target.name == "Steam.app":
-            return normalize_path_for_storage(target.parent)
+            return normalize_path_for_storage(target.parent, system_name=resolved_system_name)
         return raw_value
 
     if resolved_system_name == "Windows" and target.name.lower() == "steam.exe":
-        return normalize_path_for_storage(target.parent)
+        return normalize_path_for_storage(target.parent, system_name=resolved_system_name)
 
     if resolved_system_name != "Windows" and target.name in {"steam.sh", "steam"}:
-        return normalize_path_for_storage(target.parent)
+        return normalize_path_for_storage(target.parent, system_name=resolved_system_name)
 
     return raw_value
 
@@ -226,14 +240,14 @@ def _read_steam_appmanifest_install_dir(library_path: str) -> str:
 
 
 def _steam_library_candidates_from_vdf(steam_root: str, library_folders: dict, system_name: str) -> list[tuple[str, dict | None]]:
-    candidates: list[tuple[str, dict | None]] = [(normalize_path_for_storage(steam_root), None)]
+    candidates: list[tuple[str, dict | None]] = [(normalize_path_for_storage(steam_root, system_name=system_name), None)]
     for folder_data in library_folders.values():
         if isinstance(folder_data, dict):
-            library_path = normalize_path_for_storage(folder_data.get("path"))
+            library_path = normalize_path_for_storage(folder_data.get("path"), system_name=system_name)
             if library_path:
                 candidates.append((library_path, folder_data))
         elif isinstance(folder_data, str):
-            library_path = normalize_path_for_storage(folder_data)
+            library_path = normalize_path_for_storage(folder_data, system_name=system_name)
             if library_path:
                 candidates.append((library_path, None))
     deduped: list[tuple[str, dict | None]] = []
@@ -258,7 +272,7 @@ def _resolve_rimworld_install_from_library(library_path: str, folder_data: dict 
         "RimWorld",
     ], system_name=system_name)
     for install_dir in install_dirs:
-        install_path = normalize_path_for_storage(Path(library_path) / "steamapps" / "common" / install_dir)
+        install_path = normalize_path_for_storage(Path(library_path) / "steamapps" / "common" / install_dir, system_name=system_name)
         if os.path.exists(install_path):
             return install_path
     return ""
@@ -266,7 +280,7 @@ def _resolve_rimworld_install_from_library(library_path: str, folder_data: dict 
 
 def find_rimworld_install_from_steam(steam_root: str, system_name: str | None = None) -> str:
     resolved_system_name = _resolved_system_name(system_name)
-    normalized_steam_root = normalize_path_for_storage(steam_root)
+    normalized_steam_root = normalize_path_for_storage(steam_root, system_name=resolved_system_name)
     install_path = _resolve_rimworld_install_from_library(
         normalized_steam_root,
         system_name=resolved_system_name,

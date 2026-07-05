@@ -1356,8 +1356,6 @@ class SteamManager:
                 }
         except Exception as e:
             logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
-        except Exception as e:
-            logger.error(f"通过 URL 协议启动 Steam 失败：{e}", exc_info=True)
 
         return {
             "ok": False,
