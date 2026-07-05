@@ -31,8 +31,8 @@ def test_api_response_attaches_message_key_and_params():
     assert response["message_params"] == {"name": "任务"}
 
 
-def test_extract_locale_payload_overwrites_existing_key():
-    from scripts.extract_i18n_messages import build_locale_payload
+def test_extract_locale_payload_is_generated_from_source_keys():
+    from scripts.extract_i18n_messages import build_locale_payload, flatten_string_keys
 
     payload = build_locale_payload(
         {"ui": {"demo": {"title": "旧标题", "kept": "保留"}}},
@@ -40,4 +40,16 @@ def test_extract_locale_payload_overwrites_existing_key():
     )
 
     assert payload["ui"]["demo"]["title"] == "新标题"
-    assert payload["ui"]["demo"]["kept"] == "保留"
+    assert "ui.demo.kept" not in flatten_string_keys(payload)
+
+
+def test_flatten_string_keys_ignores_namespace_only_nodes():
+    from scripts.extract_i18n_messages import flatten_string_keys
+
+    assert flatten_string_keys({"ui": {"title": "标题", "empty": {}}, "logs": {}}) == {"ui.title"}
+
+
+def test_extract_placeholders_reads_named_params():
+    from scripts.extract_i18n_messages import extract_placeholders
+
+    assert extract_placeholders("{name}处理中，已完成 {count}") == {"name", "count"}

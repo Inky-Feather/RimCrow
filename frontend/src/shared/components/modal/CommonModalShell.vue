@@ -25,7 +25,7 @@
 
             <div class="flex shrink-0 items-center gap-2">
               <slot name="header-actions"></slot>
-              <button v-if="showClose" class="modal-close-button" type="button" aria-label="关闭"  @click="requestClose('button')" >
+              <button v-if="showClose" class="modal-close-button" type="button" :aria-label="t('ui.action.close', '关闭')"  @click="requestClose('button')" >
                 <X class="size-4" />
               </button>
             </div>
@@ -48,6 +48,7 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useConfirmStore } from './confirmStore'
+import { t } from '../../i18n'
 
 const props = defineProps({
   show: { type: Boolean, default: false },

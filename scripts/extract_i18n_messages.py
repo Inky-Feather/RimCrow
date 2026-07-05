@@ -14,6 +14,7 @@ import pathspec
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCALE_PATH = ROOT / "frontend" / "src" / "locales" / "zh-CN.json"
+BUILTIN_LOCALES_DIR = ROOT / "frontend" / "src" / "locales"
 SCAN_ROOTS = (
     ROOT / "backend",
     ROOT / "frontend" / "src",
@@ -41,6 +42,7 @@ JS_CALL_PATTERN = re.compile(
     r"(?P<default>['\"`])(?P<default_text>(?:\\.|(?!\3).)*?)\3",
     re.DOTALL,
 )
+PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
 
 
 def load_gitignore_spec() -> pathspec.PathSpec:
@@ -168,10 +170,52 @@ def set_nested(payload: dict[str, Any], dotted_key: str, value: str) -> None:
     current[parts[-1]] = value
 
 
+def extract_placeholders(text: str) -> set[str]:
+    return set(PLACEHOLDER_PATTERN.findall(str(text or "")))
+
+
+def flatten_string_values(payload: Mapping[str, Any], prefix: str = "") -> dict[str, str]:
+    values: dict[str, str] = {}
+    for key, value in payload.items():
+        dotted = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, str):
+            values[dotted] = value
+        elif isinstance(value, Mapping):
+            values.update(flatten_string_values(value, dotted))
+    return values
+
+
+def flatten_string_keys(payload: Mapping[str, Any], prefix: str = "") -> set[str]:
+    return set(flatten_string_values(payload, prefix))
+
+
+def check_builtin_locale_keys(extracted: Mapping[str, str]) -> list[str]:
+    expected = set(extracted)
+    errors: list[str] = []
+    for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
+        if path.name == DEFAULT_LOCALE_PATH.name:
+            continue
+        actual_values = flatten_string_values(load_locale(path))
+        actual = set(actual_values)
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        if missing:
+            errors.append(f"{path.relative_to(ROOT).as_posix()} 缺少 key: {', '.join(missing[:20])}{' ...' if len(missing) > 20 else ''}")
+        if extra:
+            errors.append(f"{path.relative_to(ROOT).as_posix()} 存在未使用 key: {', '.join(extra[:20])}{' ...' if len(extra) > 20 else ''}")
+        for key in sorted(expected & actual):
+            default_params = extract_placeholders(extracted[key])
+            locale_params = extract_placeholders(actual_values[key])
+            if default_params != locale_params:
+                errors.append(
+                    f"{path.relative_to(ROOT).as_posix()} 参数不一致: {key} "
+                    f"默认={sorted(default_params)} 翻译={sorted(locale_params)}"
+                )
+    return errors
+
+
 def build_locale_payload(existing: Mapping[str, Any], extracted: Mapping[str, str]) -> dict[str, Any]:
     payload = json.loads(json.dumps(BASE_LOCALE_SHAPE, ensure_ascii=False))
-    for key, value in dict(existing or {}).items():
-        payload[key] = value
     for key in sorted(extracted):
         set_nested(payload, key, extracted[key])
     return payload
@@ -196,6 +240,10 @@ def main() -> int:
     if args.check:
         if current_text != next_text:
             print(f"{locale_path.relative_to(ROOT).as_posix()} 未同步，请运行：uv run python scripts/extract_i18n_messages.py", file=sys.stderr)
+            return 1
+        locale_errors = check_builtin_locale_keys(extracted)
+        if locale_errors:
+            print("\n".join(locale_errors), file=sys.stderr)
             return 1
         print(f"i18n 默认语言包已同步，共 {len(extracted)} 条。")
         return 0

@@ -1,12 +1,60 @@
 {
   "ui": {
+    "action": {
+      "close": "关闭",
+      "delete": "删除",
+      "operation": "操作"
+    },
+    "kv": {
+      "add_item": "+ 新增条目",
+      "key_placeholder": "域名",
+      "value_placeholder": "IP"
+    },
+    "path": {
+      "open_in_explorer": "在资源管理器中打开",
+      "placeholder": "请输入或粘贴路径..."
+    },
     "secret": {
       "pending_clear_placeholder": "保存后会清除；也可以直接填写新密钥",
       "saved": "已保存密钥",
       "saved_with_hint": "已保存 {hint}"
+    },
+    "select": {
+      "empty": "暂无选项",
+      "placeholder": "请选择...",
+      "use_custom_value": "使用 \"{value}\""
+    },
+    "tag": {
+      "placeholder": "输入并回车..."
+    },
+    "workshop_action": {
+      "download": "下载",
+      "open_steam": "打开 Steam 客户端工坊页面",
+      "open_web": "打开网页工坊页面",
+      "subscribe": "订阅",
+      "unsubscribe": "取订",
+      "web": "网页"
     }
   },
   "tooltip": {
+    "action": {
+      "processing": "{label}处理中"
+    },
+    "color": {
+      "custom": "自定义颜色"
+    },
+    "command": {
+      "missing": "命令不存在：{commandId}"
+    },
+    "path": {
+      "browse": "浏览路径",
+      "check_correct": "请检查路径是否正确！",
+      "check_valid": "请检查路径是否有效！",
+      "choose_with_browser": "通过文件浏览器选择",
+      "empty_may_fail": "路径为空，可能导致功能失效",
+      "filled": "已填写路径",
+      "not_configured": "未配置路径"
+    },
     "secret": {
       "clear_saved": "清除已保存密钥",
       "hide": "隐藏",
@@ -18,6 +66,16 @@
     "task": {
       "cancel": "取消任务",
       "cancelling": "正在尝试取消任务"
+    },
+    "workshop": {
+      "download": "下载该工坊项目到管理器",
+      "download_pending": "正在发送下载请求",
+      "open_steam": "打开 Steam 客户端页面",
+      "open_web": "打开网页工坊页面",
+      "subscribe": "订阅该工坊项目到 Steam",
+      "subscribe_pending": "正在发送订阅请求",
+      "unsubscribe": "取消订阅该工坊项目",
+      "unsubscribe_pending": "正在发送取消订阅请求"
     }
   },
   "toast": {
@@ -38,8 +96,10 @@
     },
     "delete": {
       "confirm": "确认删除",
+      "force_description": "直接彻底删除，不进入回收站，通常无法恢复。",
       "force_option": "强制删除",
       "options_hint": "默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。",
+      "trash_description": "更安全，文件会进入系统回收站，可在系统中恢复。",
       "trash_option": "移入回收站"
     }
   },

@@ -1,12 +1,51 @@
 {
   "ui": {
+    "action": {
+      "close": "Close",
+      "delete": "Delete",
+      "operation": "Operation"
+    },
+    "kv": {
+      "add_item": "+ Add item",
+      "key_placeholder": "Domain",
+      "value_placeholder": "IP"
+    },
+    "path": {
+      "open_in_explorer": "Open in File Explorer",
+      "placeholder": "Enter or paste a path..."
+    },
     "secret": {
       "pending_clear_placeholder": "Saving will clear it; you can also enter a new secret",
       "saved": "Secret saved",
       "saved_with_hint": "Saved {hint}"
+    },
+    "select": {
+      "empty": "No options",
+      "placeholder": "Select...",
+      "use_custom_value": "Use \"{value}\""
+    },
+    "tag": {
+      "placeholder": "Type and press Enter..."
+    },
+    "workshop_action": {
+      "download": "Download",
+      "open_steam": "Open Steam client Workshop page",
+      "open_web": "Open web Workshop page",
+      "subscribe": "Subscribe",
+      "unsubscribe": "Unsubscribe",
+      "web": "Web"
     }
   },
   "tooltip": {
+    "action": {
+      "processing": "{label} processing"
+    },
+    "color": {
+      "custom": "Custom color"
+    },
+    "command": {
+      "missing": "Command not found: {commandId}"
+    },
     "secret": {
       "clear_saved": "Clear saved secret",
       "hide": "Hide",
@@ -15,9 +54,28 @@
       "reveal_saved": "Show saved secret",
       "show": "Show"
     },
+    "path": {
+      "browse": "Browse path",
+      "check_correct": "Check whether the path is correct.",
+      "check_valid": "Check whether the path is valid.",
+      "choose_with_browser": "Choose with file browser",
+      "empty_may_fail": "Path is empty; related features may not work",
+      "filled": "Path entered",
+      "not_configured": "Path not configured"
+    },
     "task": {
       "cancel": "Cancel task",
       "cancelling": "Trying to cancel task"
+    },
+    "workshop": {
+      "download": "Download this Workshop item to the manager",
+      "download_pending": "Sending download request",
+      "open_steam": "Open Steam client page",
+      "open_web": "Open web Workshop page",
+      "subscribe": "Subscribe this Workshop item in Steam",
+      "subscribe_pending": "Sending subscribe request",
+      "unsubscribe": "Unsubscribe this Workshop item",
+      "unsubscribe_pending": "Sending unsubscribe request"
     }
   },
   "toast": {
@@ -38,8 +96,10 @@
     },
     "delete": {
       "confirm": "Delete",
+      "force_description": "Delete permanently without using the recycle bin. This usually cannot be undone.",
       "force_option": "Delete permanently",
       "options_hint": "By default files are moved to the system recycle bin. Permanent delete cannot be undone.",
+      "trash_description": "Safer. Files go to the system recycle bin and can be restored there.",
       "trash_option": "Move to recycle bin"
     }
   },

@@ -10,42 +10,42 @@
     </template>
 
     <button v-if="!showUnsubscribe" type="button" :class="[buttonClass, builtInActionClass.primary]"
-      :disabled="isPendingAction('subscribe') || !canSubscribe" aria-label="订阅" v-tooltip="isPendingAction('subscribe') ? '正在发送订阅请求' : '订阅该工坊项目到 Steam'" @click.stop="subscribe">
+      :disabled="isPendingAction('subscribe') || !canSubscribe" :aria-label="t('ui.workshop_action.subscribe', '订阅')" v-tooltip="isPendingAction('subscribe') ? t('tooltip.workshop.subscribe_pending', '正在发送订阅请求') : t('tooltip.workshop.subscribe', '订阅该工坊项目到 Steam')" @click.stop="subscribe">
       <LoaderCircle v-if="isPendingAction('subscribe')" :class="[iconSizeClass, 'animate-spin']" />
       <Flag v-else :class="iconSizeClass" />
-      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">订阅</span>
+      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ t('ui.workshop_action.subscribe', '订阅') }}</span>
     </button>
 
     <button v-if="showUnsubscribe" type="button" :class="[buttonClass, builtInActionClass.danger]"
-      :disabled="isPendingAction('unsubscribe') || !canUnsubscribe" aria-label="取订" v-tooltip="isPendingAction('unsubscribe') ? '正在发送取消订阅请求' : '取消订阅该工坊项目'"  @click.stop="unsubscribe">
+      :disabled="isPendingAction('unsubscribe') || !canUnsubscribe" :aria-label="t('ui.workshop_action.unsubscribe', '取订')" v-tooltip="isPendingAction('unsubscribe') ? t('tooltip.workshop.unsubscribe_pending', '正在发送取消订阅请求') : t('tooltip.workshop.unsubscribe', '取消订阅该工坊项目')"  @click.stop="unsubscribe">
       <LoaderCircle v-if="isPendingAction('unsubscribe')" :class="[iconSizeClass, 'animate-spin']" />
       <FlagOff v-else :class="iconSizeClass" />
-      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">取订</span>
+      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ t('ui.workshop_action.unsubscribe', '取订') }}</span>
     </button>
 
     <button type="button" :class="[buttonClass, builtInActionClass.success]"
-      :disabled="isPendingAction('download') || !canDownload" aria-label="下载" v-tooltip="isPendingAction('download') ? '正在发送下载请求' : '下载该工坊项目到管理器'" @click.stop="download">
+      :disabled="isPendingAction('download') || !canDownload" :aria-label="t('ui.workshop_action.download', '下载')" v-tooltip="isPendingAction('download') ? t('tooltip.workshop.download_pending', '正在发送下载请求') : t('tooltip.workshop.download', '下载该工坊项目到管理器')" @click.stop="download">
       <LoaderCircle v-if="isPendingAction('download')" :class="[iconSizeClass, 'animate-spin']" />
       <Download v-else :class="iconSizeClass" />
-      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">下载</span>
+      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ t('ui.workshop_action.download', '下载') }}</span>
     </button>
 
     <button v-if="showLink" type="button" :class="[buttonClass, builtInActionClass.cool]"
-      :disabled="!canOpenWeb" aria-label="打开网页工坊页面" v-tooltip="'打开网页工坊页面'" @click.stop="openWeb">
+      :disabled="!canOpenWeb" :aria-label="t('ui.workshop_action.open_web', '打开网页工坊页面')" v-tooltip="t('tooltip.workshop.open_web', '打开网页工坊页面')" @click.stop="openWeb">
       <Link :class="iconSizeClass" />
-      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">网页</span>
+      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ t('ui.workshop_action.web', '网页') }}</span>
     </button>
 
     <button v-if="showLink" type="button" :class="[buttonClass, builtInActionClass.special]"
-      :disabled="!canOpenSteam" aria-label="打开 Steam 客户端工坊页面" v-tooltip="'打开 Steam 客户端页面'" @click.stop="openSteam">
+      :disabled="!canOpenSteam" :aria-label="t('ui.workshop_action.open_steam', '打开 Steam 客户端工坊页面')" v-tooltip="t('tooltip.workshop.open_steam', '打开 Steam 客户端页面')" @click.stop="openSteam">
       <IconSteam :class="iconSizeClass" />
       <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">Steam</span>
     </button>
 
     <button v-if="showDelete" type="button" :class="[buttonClass, builtInActionClass.danger]"
-      :disabled="deleteDisabled" :aria-label="deleteLabel" v-tooltip="deleteTooltip || deleteLabel" @click.stop="deleteItem">
+      :disabled="deleteDisabled" :aria-label="effectiveDeleteLabel" v-tooltip="deleteTooltip || effectiveDeleteLabel" @click.stop="deleteItem">
       <Trash2 :class="iconSizeClass" />
-      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ deleteLabel }}</span>
+      <span v-if="showLabels" class="text-[0.68rem] font-bold leading-none">{{ effectiveDeleteLabel }}</span>
     </button>
 
     <template v-for="action in normalizedAfterActions" :key="action.key">
@@ -65,6 +65,7 @@ import { Download, Flag, FlagOff, Link, LoaderCircle, Trash2 } from 'lucide-vue-
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
 import { IconSteam } from '../lib/constants'
+import { t } from '../i18n'
 
 const props = defineProps({
   workshopId: { type: [String, Number], default: '' },
@@ -77,7 +78,7 @@ const props = defineProps({
   showLink: { type: Boolean, default: true },
   showUnsubscribe: { type: Boolean, default: false },
   showDelete: { type: Boolean, default: false },
-  deleteLabel: { type: String, default: '删除' },
+  deleteLabel: { type: String, default: '' },
   deletePayload: { type: null, default: undefined },
   deleteDisabled: { type: Boolean, default: false },
   deleteTooltip: { type: String, default: '' },
@@ -107,6 +108,7 @@ const canOpenSteam = computed(() => !!(normalizedWorkshopId.value || normalizedW
 const canSubscribe = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
 const canUnsubscribe = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
 const canDownload = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
+const effectiveDeleteLabel = computed(() => props.deleteLabel || t('ui.action.delete', '删除'))
 
 const groupClass = computed(() => ([
   'inline-flex w-fit items-center',
@@ -198,7 +200,7 @@ const setPendingAction = (key, pending) => {
   pendingActions.value = next
 }
 const actionTooltip = (action) => (
-  isPendingAction(action?.key) ? `${action?.label || '操作'}处理中` : (action?.tooltip || action?.label || '')
+  isPendingAction(action?.key) ? t('tooltip.action.processing', '{label}处理中', { label: action?.label || t('ui.action.operation', '操作') }) : (action?.tooltip || action?.label || '')
 )
 const getTaskIdFromResult = (result) => String(result?.taskId || result?.task_id || result?.data?.task_id || '')
 const waitForActionTask = async (types, startedAt, result) => {

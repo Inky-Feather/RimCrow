@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { getCommand } from '../../commands/commandRegistry'
 import { useCommandStore } from '../../commands/commandStore'
 import { formatKeybindingLabel } from '../../commands/keybindingParser'
+import { t } from '../../i18n'
 
 export const getVisibleMenuItems = (items = []) => (items || []).filter(item => item && !item.hidden)
 
@@ -25,7 +26,7 @@ const normalizeMenuItem = (item, commandStore) => {
   if (!commandId) return { ...item, children }
 
   const command = getCommand(commandId)
-  if (!command) return { ...item, children, disabled: true, tooltip: item.tooltip || `命令不存在：${commandId}` }
+  if (!command) return { ...item, children, disabled: true, tooltip: item.tooltip || t('tooltip.command.missing', '命令不存在：{commandId}', { commandId }) }
 
   const args = item.args || {}
   const commandDisabled = !commandStore.isCommandEnabled(commandId, args)

@@ -29,7 +29,7 @@
           @blur="handleBlur"
           @keydown.enter.prevent="confirmAddTag"
           @keydown.backspace="handleBackspace"
-          :placeholder="placeholder || '输入并回车...'"
+          :placeholder="placeholder || t('ui.tag.placeholder', '输入并回车...')"
           class="flex-1 min-w-20 bg-transparent border-none outline-none text-sm text-text-main py-1 px-1"
         />
         
@@ -54,6 +54,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { sortByDisplayName } from '../../lib/common'
+import { t } from '../../i18n'
 
 const props = defineProps({
   label: String,

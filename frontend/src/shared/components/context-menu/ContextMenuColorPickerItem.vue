@@ -1,5 +1,5 @@
 <template>
-  <div v-tooltip="item.tooltip || '自定义颜色'"
+  <div v-tooltip="item.tooltip || t('tooltip.color.custom', '自定义颜色')"
     class="context-color-picker relative flex items-center justify-center aspect-square w-[33px] rounded-md border border-border-base/10 bg-bg-overlay/5 hover:border-border-base/18 hover:bg-bg-overlay/10 transition-all duration-200"
     @click.stop @mousedown.stop>
     <!-- 把弹层挂回当前菜单节点内，避免 Teleport 到 body 后触发父级菜单的 mouseleave 关闭链路。 -->
@@ -10,6 +10,7 @@
 
 <script setup>
 import { defineAsyncComponent } from 'vue'
+import { t } from '../../i18n'
 
 const ColorPicker = defineAsyncComponent(async () => {
   await import('vue3-colorpicker/style.css')
