@@ -129,23 +129,32 @@
               <!-- 主体内容 -->
               <div class="flex-1 min-w-0 py-0.5 pr-2 select-text">
                 <!-- 诊断标签区 -->
-                <div v-if="item.context && (sourceType === 'game' || appStore.settings.debug_mode)" class="flex flex-wrap gap-1 mb-1 items-center">
+                <div v-if="item.context && (sourceType === 'game' || appStore.settings.debug_mode || item.error_code)" class="flex flex-wrap gap-1 mb-1 items-center">
                   <!-- App 模块标签 -->
-                  <span v-if="item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-xs font-bold border border-accent-cool/30">
+                  <span v-if="appStore.settings.debug_mode && item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-xs font-bold border border-accent-cool/30">
                     {{ item.context.module }} <span v-if="item.context.func" class="opacity-60">:: {{ item.context.func }}</span>
                   </span>
                   <!-- App 源文件路径 -->
-                  <span v-if="item.context.source === 'app' && item.context.path"
+                  <span v-if="appStore.settings.debug_mode && item.context.source === 'app' && item.context.path"
                     class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18 max-w-[18rem] truncate"
                     v-tooltip="item.context.path">
                     {{ item.context.path }}
                   </span>
-                  <!-- 游戏 错误类型 -->
-                  <span v-if="item.context.inferredType" class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30">
-                    {{ item.context.inferredType }}
-                  </span>
+                  <!-- 游戏 阶段 -->
                   <span v-if="item.context.phase" class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18">
                     {{ formatLogPhase(item.context.phase) }}
+                  </span>
+                  <!-- 游戏 错误类型 -->
+                  <span v-if="item.context.inferredType"
+                    class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30"
+                    v-tooltip="item.context.diagnosisExplanation">
+                    {{ item.context.inferredType }}
+                  </span>
+                  <!-- 错误码 -->
+                  <span v-if="item.error_code"
+                    class="px-1.5 py-0.5 rounded bg-accent-warn/15 text-accent-warn text-xs font-bold border border-accent-warn/30"
+                    v-tooltip="formatErrorCodeTooltip(item)">
+                    {{ item.error_code }}
                   </span>
                   <!-- 关联文件 -->
                   <span v-for="file in (item.context.relatedFiles || []).slice(0,3)"
@@ -164,6 +173,7 @@
                     class="px-1.5 py-0.5 rounded bg-accent-primary/20 hover:bg-accent-primary/40 text-accent-primary text-xs cursor-pointer border border-accent-primary/30 transition-colors"
                     v-tooltip="'点击查看 Mod 详情'">[Mod: {{ modId }}]
                   </button>
+                  <!-- 可疑来源 -->
                   <span v-for="namespace in (item.context.relatedNamespaces || []).slice(0,3)"
                     :key="namespace"
                     class="px-1.5 py-0.5 rounded bg-accent-warning/12 text-accent-warning text-xs border border-accent-warning/25 max-w-56 truncate"
@@ -182,14 +192,14 @@
                   展开完整日志
                 </button>
                 <!-- 展开详情 -->
-                <div v-if="item.details || formatLogDiagnosticDetails(item)" class="mt-1">
+                <div v-if="item.details" class="mt-1">
                   <button @click="item._expanded = !item._expanded"
                     class="flex items-center gap-1 text-xs text-text-dim hover:text-text-main transition-colors select-none mb-0.5">
                     <svg class="w-3 h-3 transition-transform" :class="item._expanded ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                     <span>{{ item._expanded ? '收起详情' : '展开详情' }}</span>
                   </button>
                   <div v-if="item._expanded" class="pl-2 border-l border-border-base/10 text-text-dim text-xs bg-bg-inset/70 rounded p-1.5 overflow-x-auto whitespace-pre-wrap">
-                    {{ [item.details, formatLogDiagnosticDetails(item)].filter(Boolean).join('\n\n') }}
+                    {{ item.details }}
                   </div>
                 </div>
 
@@ -381,7 +391,11 @@ function formatLogPhase(value) {
   return '阶段未知'
 }
 
-function formatLogDiagnosticDetails(log) {
+function formatErrorCodeTooltip(log) {
+  return stringifyDiagnosticValue(log?.extra_context)
+}
+
+function formatLogSearchDiagnostics(log) {
   const parts = []
   const context = log?.context || {}
   if (context.phase) {
@@ -408,8 +422,7 @@ const copyLogContent = async (logsArray) => {
   if (!logsArray || logsArray.length === 0) return;
   const textToCopy = logsArray.map(l => {
     const msg = l.message || '';
-    const detailsText = [l.details, formatLogDiagnosticDetails(l)].filter(Boolean).join('\n\n');
-    const details = detailsText ? `\n[详情]\n${detailsText}` : '';
+    const details = l.details ? `\n\n${l.details}` : '';
     return `${msg}${details}`;
   }).join('\n\n------\n\n');
 
@@ -736,7 +749,7 @@ const filteredLogs = computed(() => {
       const re = new RegExp(searchQuery.value, 'i')
       result = result.filter(l => {
         const ctx = l.context || {};
-        const diagnostics = formatLogDiagnosticDetails(l);
+        const diagnostics = formatLogSearchDiagnostics(l);
         return re.test(l.message || '') ||
                re.test(l.details || '') ||
                re.test(diagnostics) ||
@@ -751,7 +764,7 @@ const filteredLogs = computed(() => {
         const ctx = l.context || {};
         const msg = (l.message || '').toLowerCase();
         const det = (l.details || '').toLowerCase();
-        const diagnostics = formatLogDiagnosticDetails(l).toLowerCase();
+        const diagnostics = formatLogSearchDiagnostics(l).toLowerCase();
         const inferred = (ctx.inferredType || '').toLowerCase();
         const mods = (ctx.relatedModIds || []).map(x => (x || '').toLowerCase());
         const files = (ctx.relatedFiles || []).map(x => (x || '').toLowerCase());

@@ -107,6 +107,9 @@ class LogAnalyzer:
             'system', 'microsoft', 'mono', 'mscorlib', 'unityengine',
             'verse', 'rimworld', 'harmonylib', 'runtime',
         }
+        self.ignored_namespace_prefixes = (
+            'rimcrowcompanion.rimcrowcompanionmod',
+        )
 
     def analyze(self, block, is_realtime_json=False, active_mods=None):
         """
@@ -230,7 +233,8 @@ class LogAnalyzer:
         namespaces = []
         for match in self.namespace_pattern.findall(full_text or ''):
             root = match.split('.', 1)[0].lower()
-            if root in self.ignored_namespaces:
+            normalized = match.lower()
+            if root in self.ignored_namespaces or normalized.startswith(self.ignored_namespace_prefixes):
                 continue
             namespaces.append(match)
         if namespaces and not context.get('relatedNamespaces'):

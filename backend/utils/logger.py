@@ -220,6 +220,18 @@ class BaseLogReader:
     
 
 # 定义日志格式
+DEFAULT_EXTRA_CONTEXT_ERROR_CODE = "LOG.EXTRA_CONTEXT"
+
+
+def _resolve_log_error_meta(record):
+    error_code = getattr(record, "error_code", "")
+    extra_context = getattr(record, "extra_context", None)
+    # 有诊断上下文时必须有错误码，前端才能把两者作为同一组信息展示。
+    if extra_context and not error_code:
+        error_code = DEFAULT_EXTRA_CONTEXT_ERROR_CODE
+    return error_code, extra_context
+
+
 class JSONFormatter(logging.Formatter):
     """
     结构化 JSON 格式化器
@@ -245,8 +257,7 @@ class JSONFormatter(logging.Formatter):
                 "path": record.pathname
             }
         }
-        error_code = getattr(record, "error_code", "")
-        extra_context = getattr(record, "extra_context", None)
+        error_code, extra_context = _resolve_log_error_meta(record)
         if error_code:
             log_record["error_code"] = error_code
         if extra_context:
@@ -318,8 +329,7 @@ class WebviewHandler(logging.Handler):
                     "func": record.funcName
                 }
             }
-            error_code = getattr(record, "error_code", "")
-            extra_context = getattr(record, "extra_context", None)
+            error_code, extra_context = _resolve_log_error_meta(record)
             if error_code:
                 log_entry["error_code"] = error_code
             if extra_context:

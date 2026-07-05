@@ -98,6 +98,20 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertIn("代码访问了不存在的对象", context["diagnosisExplanation"])
         self.assertEqual(context["relatedNamespaces"], ["ExampleMod.Core.Worker"])
 
+    def test_log_analyzer_filters_companion_warning_prefix_namespace(self):
+        block = {
+            "level": "ERROR",
+            "message": "System.NullReferenceException: Object reference not set to an instance of an object",
+            "details": "\n".join([
+                "  at RimCrowCompanion.RimCrowCompanionMod.LogWarningPrefix.Prefix ()",
+                "  at ExampleMod.Core.Worker.Tick ()",
+            ]),
+        }
+
+        LogAnalyzer().analyze(block)
+
+        self.assertEqual(block["context"]["relatedNamespaces"], ["ExampleMod.Core.Worker"])
+
     def test_player_log_analysis_marks_startup_and_runtime_phase(self):
         default_root = self.temp_dir / "default-userdata"
         profile_root = self.temp_dir / "profile-userdata"
