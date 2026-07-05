@@ -670,6 +670,418 @@
       "use_custom_value": "使用 \"{value}\""
     },
     "settings": {
+      "about": {
+        "auto_update_check": "自动检查更新",
+        "auto_update_check_desc": "开启后，软件启动时会自动提醒新版本。",
+        "changelog": "更新日志",
+        "check_update": "检查更新",
+        "close_donate_modal": "关闭打赏弹窗",
+        "credits": "致谢",
+        "donate_desc": "感谢支持！微信和支付宝都可以扫 ~",
+        "donate_qr_alt": "打赏收款码",
+        "donate_title": "打赏支持",
+        "downloads": "下载地址",
+        "downloads_desc": "查看源码、发布包和备用下载地址。",
+        "feedback": "反馈与交流",
+        "feedback_desc": "遇到问题时，建议带上截图、日志和复现步骤。",
+        "github_releases": "GitHub 发布页",
+        "github_releases_note": "下载 GitHub 发布包，或查看每个版本的发布内容。",
+        "github_repo": "GitHub 仓库",
+        "github_repo_note": "查看发布包、问题反馈和源码。",
+        "issue_feedback": "问题反馈",
+        "issue_feedback_note": "适合记录需要跟进的问题和建议。",
+        "lanzou_mirror": "蓝奏云分流",
+        "lanzou_mirror_note": "网络不稳定时，可以尝试从这里下载备用包。",
+        "password": "密码：",
+        "qq_group": "QQ群",
+        "qq_group_note": "适合快速反馈和补充截图。",
+        "references": "参考项目",
+        "references_desc": "这些项目为排序、日志分析和管理功能提供了参考。",
+        "tieba_thread": "贴吧主贴",
+        "tieba_thread_note": "查看集中说明和公开讨论。",
+        "title": "关于项目",
+        "view_donate_qr": "查看收款码"
+      },
+      "ai": {
+        "api_key_placeholder": "接口需要时填写 API Key；本地部署通常可以留空。",
+        "base_url_desc": "留空时使用当前协议的默认地址。Ollama 默认连接本机 127.0.0.1:11434；中转服务或非默认本地地址需要手动填写。",
+        "base_url_placeholder": "留空使用协议默认地址；也可填写 http://127.0.0.1:11434 或 https://api.deepseek.com/v1",
+        "context_window_tokens": "上下文窗口",
+        "context_window_tokens_desc": "模型总上下文窗口。0 表示按模型名自动预设；本地模型如果服务端限制了上下文，建议填实际值。",
+        "default_test_prompt": "介绍一下自己",
+        "definition_manager": "AI 定义管理",
+        "empty_response_help": "模型已返回，但内容为空。可尝试切换模型、检查代理兼容策略或改用正式助手会话测试。",
+        "enable": "启用 AI 功能",
+        "enable_desc": "用于日志分析、模组说明和 AI 助手对话等功能。",
+        "endpoint_mode": "接口模式",
+        "endpoint_mode_desc": "用于指定 OpenAI-compatible 接口应走哪一类 endpoint。`Auto` 会根据模型能力和请求结构自动选择更稳妥的路径；只有在排查特定中转服务或本地运行时兼容问题时，才建议手动切换。",
+        "experimental": "实验性",
+        "max_concurrency": "最大并发数",
+        "max_concurrency_desc": "同时发出的请求数量。大多数情况下设为 3 到 5 就够了。",
+        "max_input_tokens": "最大输入预算",
+        "max_input_tokens_desc": "日志、附件、批量任务最多喂给模型的输入预算。0 表示自动按上下文窗口扣除输出预算。",
+        "max_output_tokens": "最大输出预算",
+        "max_output_tokens_desc": "单次回复的输出保护阀。0 表示按模型预设自动控制；只有排查成本、延迟或长回复截断时才需要手动设置。",
+        "model": "模型",
+        "model_placeholder": "下拉选择或手动输入模型名称",
+        "provider": "接口协议",
+        "provider_desc": "大多数中转服务、本地运行时、国产模型平台都优先兼容 OpenAI-compatible 接口。只有目标服务没有稳定的 OpenAI-compatible API 时，才建议切换到原生协议。",
+        "response_result": "AI 响应结果：",
+        "start_test": "发起测试",
+        "temperature": "输出随机性",
+        "temperature_desc": "值越低越稳定，值越高越发散。一般用 0.7 左右即可。",
+        "test_prompt": "测试内容",
+        "test_prompt_placeholder": "输入一句简单的话测试连接，例如：你好",
+        "title": "人工智能",
+        "view_raw_response": "查看原始返回内容"
+      },
+      "data_export": {
+        "description": "勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。",
+        "excluded_data": "路径绑定、敏感信息、当前激活环境 ID",
+        "excluded_data_notice": "不会导出。",
+        "export_selected": "导出当前选择",
+        "import_conflicts": "环境导入冲突",
+        "import_conflicts_notice": "会在导入面板统一处理新建/覆盖。",
+        "no_user_data_dir": "未检测到可打包的用户数据目录",
+        "pack_full_profile_dir": "将打包整个环境目录",
+        "profile_data": "环境数据",
+        "profile_data_desc": "选择要打包的环境。",
+        "profile_data_notice": "会打包整个环境目录；",
+        "title": "导出软件数据"
+      },
+      "dev": {
+        "auto_enter_silent_mode": "自动进入静默模式",
+        "auto_enter_silent_mode_desc": "开启后，检测到 RimWorld 运行时会自动切换到静默模式；关闭后仅保留手动进入能力。",
+        "browser_mode": "浏览器模式启动",
+        "browser_mode_desc": "默认仍使用内置 WebView。开启后，无启动参数时将改为在本机浏览器中启动；关闭浏览器主页面后程序会自动退出。",
+        "bundle_compress_level": "打包压缩级别",
+        "bundle_compress_level_desc": "0 最快，9 最省空间。默认 6。压缩级别越高，导出越慢，但包体通常更小。",
+        "bundle_mod_folder_name_type": "Mod 文件夹重命名",
+        "bundle_mod_folder_name_type_desc": "影响打包 Mod 时的文件夹名称，默认原文件夹名称，处理优先级是 别名>模组名>默认，或者 工坊 ID>包名>默认，所以即使 Mod 没有别名，也能按模组原名创建文件夹。",
+        "cache_size": "占用 {size}",
+        "cached_images": "已缓存 {count} 张",
+        "clear_cached_images": "清理缓存图片",
+        "current_profile": "当前环境：",
+        "current_profile_fallback": "当前环境",
+        "danger_zone": "危险操作区",
+        "danger_zone_desc": "修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。",
+        "data_migration": "软件数据迁移",
+        "data_migration_desc": "导入现有数据包，或打开导出面板选择要打包的软件数据。环境数据会包含对应环境的完整目录。",
+        "debug_mode": "调试模式",
+        "debug_mode_desc": "开启调试模式后重启软件将会出现开发者工具窗口，可查看问题详情。",
+        "default_silent_page": "默认页面",
+        "default_silent_page_desc": "控制自动进入静默模式时，默认先显示主页还是直接进入日志页。",
+        "export_current_profile_mods_desc": "可在导出前选择当前环境有效模组或当前启用模组，并按需附带环境数据。",
+        "export_current_profile_mods_title": "导出当前环境模组",
+        "export_data_bundle": "导出软件数据",
+        "export_profile_mods": "导出环境模组",
+        "folder_name": {
+          "alias": "按别名",
+          "default": "默认",
+          "name": "按原模组名",
+          "package_id": "按包名",
+          "workshop_id": "按工坊 ID"
+        },
+        "force_repair_database": "强制修复本地数据库",
+        "import_data_bundle": "导入数据包",
+        "import_data_bundle_title": "导入软件数据包",
+        "import_mod_package": "导入模组包",
+        "import_mod_package_title": "导入模组包",
+        "log_level": "日志等级",
+        "log_retention_days": "日志保留天数",
+        "profile_mod_package": "环境与模组打包",
+        "profile_mod_package_desc": "导入导出模组实体包。支持当前环境有效模组、当前启用模组导出，也支持附带环境数据的模组包导入。",
+        "remote_image_cache": "网络图片缓存",
+        "remote_image_cache_desc": "远程封面图、截图和富文本图片会先写入本地缓存，再由前端通过本地资源服务读取。",
+        "reset_database_now": "立即重置本地数据库",
+        "scope": {
+          "profile_active": "当前环境启用模组（{count}）",
+          "profile_active_desc": "只导出当前环境里已经启用的模组。",
+          "profile_effective": "当前环境有效模组（{count}）",
+          "profile_effective_desc": "导出当前环境里能正常使用的模组。"
+        },
+        "silent_mode_help": "游戏运行时可切到更轻量的界面，减少资源占用，并可直接查看游戏日志。",
+        "silent_view": {
+          "home": "静默主页",
+          "logs": "游戏日志"
+        },
+        "title": "开发与调试"
+      },
+      "external": {
+        "auto_data_update_check": "自动检查外部库更新",
+        "auto_data_update_check_desc": "按设定间隔检查规则库、工坊数据库、替代库、联机兼容数据和 Git 推荐清单是否有更新。",
+        "auto_tool_check": "自动检查外部工具",
+        "auto_tool_check_desc": "按设定间隔检查 SteamCMD、todds 等外部工具是否缺失或未就绪。",
+        "check_data_updates": "检查外部库更新",
+        "check_interval_days": "检查间隔（天）",
+        "check_tools": "检查外部工具",
+        "community_rules_path": "社区规则库路径",
+        "community_rules_path_desc": "社区规则库的本地缓存文件。",
+        "community_rules_url": "社区规则库 URL",
+        "community_rules_url_desc": "RimSort 维护的规则库文件，用来补充排序、依赖和冲突规则。",
+        "data_libraries": "外部库与规则",
+        "data_libraries_desc": "规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。",
+        "git_provider_catalog_desc": "Git 模组推荐清单，用来提供可订阅的仓库来源。",
+        "git_provider_catalog_sources": "Git 推荐清单来源",
+        "instead_db_path": "替代 Mod 数据库路径",
+        "instead_db_path_desc": "替代 Mod 数据库的本地缓存文件。",
+        "instead_db_url": "替代 Mod 数据库 URL",
+        "instead_db_url_desc": "替代 Mod 数据库，用来提示失效、重制或推荐替代项。来源：社区缓存文件。",
+        "mp_compat_package_ids_path": "联机兼容修正模组支持表路径",
+        "mp_compat_package_ids_path_desc": "联机兼容修正模组支持表的本地缓存文件。",
+        "mp_compat_package_ids_url": "联机兼容修正模组支持表 URL",
+        "mp_compat_package_ids_url_desc": "Multiplayer Compatibility 的修正支持表，用来标记可由辅助模组修正的模组。来源：源码解析。",
+        "multiplayer_compatibility_path": "联机模组兼容表路径",
+        "multiplayer_compatibility_path_desc": "联机模组兼容表的本地缓存文件。",
+        "multiplayer_compatibility_url": "联机模组兼容表 URL",
+        "multiplayer_compatibility_url_desc": "Multiplayer 的兼容等级表，用来显示联机兼容状态。来源：官方接口。",
+        "reading": "读取中",
+        "reset_default_paths": "重置为默认路径",
+        "ripgrep_path": "文本搜索工具目录",
+        "ripgrep_path_desc": "文件内容搜索优先使用的 ripgrep 工具目录，应选择包含 rg.exe 的文件夹。",
+        "silent_data_update": "静默更新外部库",
+        "silent_data_update_desc": "开启后，自动检查发现外部库更新时会直接刷新，不再弹窗询问；手动检查仍会让你确认。",
+        "silent_data_update_disabled_desc": "需要先开启自动检查外部库更新。",
+        "steamcmd_path": "模组下载工具目录",
+        "steamcmd_path_desc": "管理器下载和更新工坊模组使用的 SteamCMD 目录，应选择包含 steamcmd.exe 的文件夹。",
+        "texture_tools_path": "贴图优化工具目录",
+        "texture_tools_path_desc": "贴图优化使用的 todds 工具目录，应选择包含 todds.exe 的文件夹。",
+        "title": "外部依赖",
+        "tools": "外部工具",
+        "tools_desc": "SteamCMD、贴图工具等由管理器调用的外部程序配置与状态检查。",
+        "user_rules_path": "用户规则路径",
+        "user_rules_path_desc": "本地用户规则文件，用来保存自定义排序、依赖和冲突规则。",
+        "workshop_db_path": "工坊数据库路径",
+        "workshop_db_path_desc": "工坊信息数据库的本地缓存文件。",
+        "workshop_db_url": "工坊数据库 URL",
+        "workshop_db_url_desc": "工坊信息数据库，用来补充模组名称、作者和简介。来源：社区缓存文件。"
+      },
+      "features": {
+        "action_prechecks": "关键动作前必要检查",
+        "action_prechecks_desc": "开启后，保存、运行、自动排序前会检查未安装项和未启用项；关闭后将直接执行，不再弹出检查窗口。",
+        "auto_scan_on_startup": "启动时自动扫描 Mod 目录",
+        "auto_scan_on_startup_desc": "关闭后，需要手动点击扫描按钮才能更新 Mod 列表。",
+        "auto_sort_logic": "自动排序逻辑",
+        "auto_sort_logic_desc": "控制自动排序的整体策略、同档顺序和依赖贴靠效果。",
+        "auto_sort_strategy": {
+          "classic": "经典自动排序（旧版）",
+          "edge_enhanced": "两端强化排序（新版）"
+        },
+        "auto_sort_strategy_desc": "旧版更保守、更接近传统手工整理结果，但对带有置顶/置底倾向的模组及其关联链的处理效果较差；新版会更积极地把带有置顶/置底倾向的模组及其关联链推向列表两端。",
+        "auto_sort_strategy_label": "自动排序策略",
+        "backup_retention_days": "自动备份保留天数",
+        "backup_retention_days_desc": "管理自动备份的最长保留时间，手动备份不受影响。",
+        "check_language_support": "检查语言支持",
+        "check_language_support_desc": "开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。",
+        "coexist_folder_name_type": "共存 Mod 文件夹生成方式",
+        "coexist_folder_name_type_desc": "影响创建共存 Mod 时的文件夹名称，处理优先级是 别名>原名>包名>工坊 ID，所以即使 Mod 没有别名，也能按原名创建文件夹。",
+        "configure": "设置",
+        "default_translation_settings": "默认翻译设置",
+        "default_translation_settings_desc": "没有单独指定语言或翻译器的翻译功能，会使用这里的设置。",
+        "delete_missing_mods_data": "自动清理缺失的 Mod 数据",
+        "delete_missing_mods_data_desc": "关闭后，缺失的 Mod 数据将保留在数据库中，列表内可以重新订阅。",
+        "enable_tool_mods": "使用辅助工具模组",
+        "enable_tool_mods_desc": "开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。",
+        "file_generation_deploy": "文件生成与部署",
+        "file_generation_deploy_desc": "控制共存 Mod 的文件夹命名，以及运行前链接部署方式。",
+        "file_size_scan": "扫描时检查文件大小",
+        "file_size_scan_desc": "开启后，扫描时会自动检查 Mod 的文件大小，以此识别新增或更新的内容。该功能会增加扫描耗时，但能显著提高文件变动的识别精度。",
+        "folder_name": {
+          "alias": "按别名",
+          "name": "按原名",
+          "package_id": "按包名",
+          "workshop_id": "按工坊 ID"
+        },
+        "language_packs_follow_targets": "语言包贴紧前置",
+        "language_packs_follow_targets_desc": "开启后，自动排序会尽量让语言包紧跟在它已启用的最后一个前置/依赖模组后方；如果找不到目标，就保持原来的默认底层位置。",
+        "launch_profile_quick_scan": "环境直启前检查同步",
+        "launch_profile_quick_scan_desc": "从环境列表直接启动非当前环境时，会先检查并同步运行前所需的链接。开启后会先做一次轻量扫描再同步；关闭后只按当前数据库缓存和环境配置强制同步。",
+        "link_deployment": {
+          "full": "完全重建",
+          "incremental": "增量部署（默认）"
+        },
+        "link_deployment_mode": "链接部署模式",
+        "link_deployment_mode_desc": "影响启用管理器 Mod 或多环境下使用创意工坊 Mod 时的链接部署行为模式，增量部署会尽量保留已正确的链接，只处理变化项；完全重建会先移除全部旧链接，再按当前扫描结果重新部署。",
+        "list_action_checks": "列表操作问题检查",
+        "list_action_checks_desc": "控制保存、运行和列表显示时的提醒与辅助行为。",
+        "mod_residue_scan": "扫描后检查残留",
+        "mod_residue_scan_desc": "开启后，全量扫描结束会在后台检查卸载后留下的文件夹和设置文件；关闭后只在手动打开残留清理时检查。",
+        "multiplayer_compatibility_check": "检查 Multiplayer 联机兼容性",
+        "multiplayer_compatibility_check_desc": "开启后，在库存中检测到 Multiplayer 时，会为 Mod 列表显示联机兼容等级和辅助修正提示。",
+        "name_sort": {
+          "alias": "按别名",
+          "name": "按原名",
+          "package_id": "按包名"
+        },
+        "persist_temp_mod_list": "保存临时列表",
+        "persist_temp_mod_list_desc": "开启后，临时列表会按当前环境保存，下次进入该环境时自动恢复；关闭后，保存时会把临时列表里的 Mod 放回停用列表顶部。",
+        "regular_mods_follow_dependencies": "普通模组贴紧依赖",
+        "regular_mods_follow_dependencies_desc": "开启后，自动排序会尽量让普通 Mod 紧跟在同权重内已启用的最后一个依赖后方，让同一系列的模组更聚拢。",
+        "scan_maintenance": "扫描与数据维护",
+        "scan_maintenance_desc": "控制 Mod 列表刷新、文件变动识别和缺失数据处理。",
+        "show_coexistence_message": "显示共存冲突提示",
+        "show_coexistence_message_desc": "关闭后，将不会显示共存 Mod 的冲突提示信息。",
+        "skip_language_pack_alias_generation": "跳过语言包生成别名备注",
+        "skip_language_pack_alias_generation_desc": "开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。",
+        "sort_mods_by": "排序顺序",
+        "sort_mods_by_desc": "影响自动排序时同档次的 Mod 顺序，处理优先级是 别名>原名>包名，所以即使 Mod 没有别名，也能按原名参与排序。",
+        "startup_prompt_new_only": "启动时只提醒新异常",
+        "startup_prompt_new_only_desc": "开启后，启动库存提醒只显示新发现的变更、缺失和已删除项；关闭后，只要问题仍存在就会继续提醒。",
+        "strict_disabled_mode": "严格禁用模式",
+        "strict_disabled_mode_desc": "开启后，扫描时会按管理器记录保持禁用状态；被外部恢复启用的 Mod 会自动重新禁用。手动解除禁用不受影响。",
+        "title": "功能设置",
+        "translation": "翻译",
+        "translation_desc": "设置默认翻译偏好，以及工坊说明翻译的单独策略。",
+        "workshop_description_translation": "工坊说明翻译",
+        "workshop_description_translation_desc": "设置工坊详情页说明翻译的语言、翻译器和自动翻译策略。",
+        "workshop_description_translation_only_desc": "只影响工坊详情页的标题和说明翻译。"
+      },
+      "general": {
+        "active_section_support": "“启用列表”分割组支持",
+        "active_section_support_desc": "开启后，启用列表会支持分割组折叠、整组拖动和右键分割组移动。",
+        "default_collapse_active_sections": "启用列表默认折叠分割组",
+        "default_collapse_active_sections_desc": "开启后，启用列表中的分割组会在初始显示时默认折叠。",
+        "default_collapse_inactive_sections": "停用列表默认折叠分割组",
+        "default_collapse_inactive_sections_desc": "开启后，停用列表中的分割组会在初始显示时默认折叠。",
+        "dependency_graph": "依赖关系图",
+        "dependency_graph_desc": "控制启用列表中依赖关系图的显示。",
+        "detail_delay": "详情页加载延迟",
+        "detail_delay_desc": "控制 Mod 详情页加载的延迟时间，单位是毫秒，默认值为 200 毫秒。",
+        "double_click_toggle_mod": "双击启用/停用 Mod",
+        "double_click_toggle_mod_desc": "控制 Mod 列表中双击启用/停用 Mod 动作。",
+        "drag_delay": "拖动判定延迟",
+        "drag_delay_desc": "控制列表项拖动操作的判定延迟，单位是毫秒，默认值为 30 毫秒，为 0 时可能使点击操作出现抖动。",
+        "font_size": "字体大小",
+        "font_size_desc": "控制界面字体大小，影响所有控件的内容显示",
+        "group_icon": "分组图标",
+        "group_icon_desc": "控制分组列表中 Mod 图标的显示。",
+        "group_index": "分组索引",
+        "group_index_desc": "控制分组列表中 Mod 索引的显示。",
+        "group_settings": "分组设定",
+        "home_layout": "主页布局",
+        "icons_cloud": "动态图标云",
+        "icons_cloud_desc": "控制详情页闲置时的动态图标云显示。",
+        "inactive_section_support": "“停用列表”分割组支持",
+        "inactive_section_support_desc": "开启后，停用列表会支持分割组折叠、整组拖动和右键分割组移动。",
+        "interface_language": "界面语言",
+        "language": {
+          "en": "English",
+          "zh_cn": "简体中文"
+        },
+        "list_icons": "列表图标",
+        "list_icons_desc": "控制列表中的所有图标显示，包括简单视图和详细视图。",
+        "list_index": "列表索引",
+        "list_index_desc": "控制列表中索引列的显示。",
+        "list_mod_icon": "列表 Mod 图标",
+        "list_mod_icon_desc": "控制列表中 Mod 图标显示，不影响详细视图。",
+        "list_mod_type_icon": "列表 Mod 类型图标",
+        "list_mod_type_icon_desc": "控制列表中 Mod 类型图标显示，不影响详细视图。",
+        "list_settings": "列表设定",
+        "mod_details_layout": "Mod 详情布局",
+        "mod_details_panel": "Mod 详情面板",
+        "mod_details_panel_desc": "可关闭 Mod 详情栏。",
+        "mod_hover_panel": "Mod 悬停面板",
+        "mod_hover_panel_desc": "控制 Mod 列表中悬停时的面板显示。",
+        "open_url_in_system_browser": "在系统浏览器中打开 URL",
+        "open_url_in_system_browser_desc": "关闭则使用内置浏览器",
+        "reset_guides": "重置界面引导",
+        "section_collapse": "列表分割组功能",
+        "section_label_collection": "分类排列标签合集",
+        "section_sort_collection": "分类排序合集",
+        "smooth_target_scroll": "平滑定位滚动",
+        "smooth_target_scroll_desc": "开启后，搜索定位或移动后定位会平滑滚动到目标项；关闭后直接跳到目标位置。",
+        "title": "界面与布局",
+        "tooltip_hover_time": "提示悬停时间",
+        "tooltip_hover_time_desc": "控制悬浮提示信息的等待时间，单位是毫秒",
+        "visit": "访问",
+        "workshop_page": "工坊页面"
+      },
+      "keybindings": {
+        "all_categories": "全部分类",
+        "caution": "需谨慎",
+        "command": "命令",
+        "conflict_badge": "[{keybinding}] 冲突",
+        "conflict_count": "发现 {count} 处快捷键复用",
+        "conflict_desc": "严重冲突会影响触发结果；跨区域复用允许保留，运行时会按浮层、当前区域、最近区域、全局的顺序执行。",
+        "conflict_level": {
+          "critical": "严重",
+          "high": "较高",
+          "low": "轻微",
+          "medium": "提示"
+        },
+        "description": "管理全局命令的键盘入口；分区命令和插件命令会继续复用这里的规则。",
+        "empty": "没有匹配的命令",
+        "keybinding": "快捷键",
+        "locked": "锁定",
+        "main_key": {
+          "modifier_only": "无主键（仅修饰键）",
+          "mouse_back": "鼠标后退键",
+          "mouse_forward": "鼠标前进键",
+          "mouse_left": "鼠标左键",
+          "mouse_middle": "鼠标中键",
+          "mouse_right": "鼠标右键",
+          "space": "空格"
+        },
+        "main_key_placeholder": "选择主键或鼠标键",
+        "operation": "操作",
+        "plugin": "插件",
+        "readonly_desc": "固定操作，仅用于说明和冲突提示。",
+        "reset_all": "恢复全部默认",
+        "scope": {
+          "global": "全局"
+        },
+        "search_placeholder": "搜索命令名称、ID 或分类",
+        "title": "快捷键",
+        "unbound": "未绑定"
+      },
+      "network": {
+        "custom_hosts": "自定义 Hosts 映射",
+        "enable_proxy": "启用代理服务",
+        "enable_proxy_desc": "启用代理服务，所有网络请求将通过代理服务器处理，部分外置数据下载、更新检查、简介图片加载、内部浏览器访问等功能可能需要该配置才能正常使用。\n\n也可以在软件外部自行配置全局网络环境。",
+        "enable_steam_enhanced_api": "启用工坊增强信息",
+        "enable_steam_enhanced_api_desc": "开启并填写 Key 后，工坊页会优先使用在线增强信息；没有 Key 或关闭此项时会自动使用本地缓存搜索。",
+        "get_page": "获取页面",
+        "host": "主机地址",
+        "password": "密码",
+        "port": "端口",
+        "protocol": "协议",
+        "proxy_bypass_domains": "不走代理的域名",
+        "proxy_password_placeholder": "代理密码（可选）",
+        "proxy_username_placeholder": "代理用户名（可选）",
+        "steam_web_api_key": "Steam Web API Key",
+        "steam_web_api_key_desc": "Key 会安全保存在本机凭据库。没有 Key 时会自动回到缓存搜索。",
+        "steam_web_api_key_help": "开启并填写 Key 后，会使用 Steam Web API 获取更完整的工坊搜索、合集搜索、作者作品和依赖关联信息。关闭时仍可使用本地缓存工坊数据库。",
+        "steam_web_api_key_placeholder": "填写后启用增强搜索",
+        "steam_web_api_key_risk": "任何人一旦获取了此 Key，就可以在不触发 Steam 令牌的情况下，暗中取消玩家的真实交易，并替换为发给骗子的假交易。绝对不要将 API 密钥分享给任何人或任何未经验证的第三方网站。",
+        "steam_web_api_key_warning": "注意！“API 密钥（API Key）相当于你的 Steam 账号后门钥匙”。可以读取账号公开数据/库存信息 以及 管理与监听交易报价。",
+        "title": "网络协议与代理",
+        "use_proxy_on_ai": "为 AI 请求使用代理",
+        "use_proxy_on_ai_desc": "如果启用，AI 将通过代理服务器进行。已经是国内代理后的端口不用开此选项。",
+        "use_proxy_on_steamcmd": "为 SteamCMD 使用代理",
+        "use_proxy_on_steamcmd_desc": "SteamCMD 是否使用代理服务器。\n\n如果启用，SteamCMD 下载、更新、安装等操作将通过代理服务器进行。",
+        "username": "用户名",
+        "visit": "访问",
+        "write_to_system_hosts": "将自定义 Hosts 写入系统 hosts 文件",
+        "write_to_system_hosts_desc": "注意：这将直接修改系统 hosts 文件，可能需要管理员权限。"
+      },
+      "panel": {
+        "apply_and_save": "应用并保存配置",
+        "discard_changes": "放弃修改",
+        "path_empty": "未填写路径",
+        "settings": "设置",
+        "system": "系统",
+        "tab": {
+          "about": "关于项目",
+          "ai": "AI 集成",
+          "community": "外部依赖",
+          "dev": "开发调试",
+          "features": "功能设置",
+          "general": "界面设置",
+          "keybindings": "快捷键",
+          "network": "网络连接",
+          "paths": "路径配置"
+        }
+      },
       "paths": {
         "auto_check_manager_mod_updates": "自动检查管理器模组更新",
         "auto_check_manager_mod_updates_desc": "按设定间隔检查管理器模组目录中由 SteamCMD 下载的工坊模组和 Git 仓库订阅模组更新。",
@@ -716,6 +1128,163 @@
         "user_data_path_desc": "用户数据目录即游戏配置、存档和日志所在的目录，不同系统位置不同，可使用自动搜索或手动选择。\nWindows下默认数据目录一般位于：\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "创意工坊目录",
         "workshop_mods_path_desc": "创意工坊目录即创意工坊下载的模组所在的目录，该设置所有环境通用"
+      },
+      "theme": {
+        "builtin": "内置",
+        "copy_name": "{name} 副本",
+        "create": "创建配色",
+        "custom": "自定义",
+        "editor": {
+          "create_title": "创建主题配色",
+          "description": "可随意拖动窗口，边看界面边调颜色。",
+          "edit_title": "编辑主题配色",
+          "name": "主题名称",
+          "name_placeholder": "例如：我的主题",
+          "save_desc": "保存后会保留为自定义主题。"
+        },
+        "none_selected": "未选择主题",
+        "scheme": "配色方案",
+        "tokens": {
+          "accent": {
+            "cool": {
+              "label": "信息色",
+              "usage": "影响链接和补充信息。"
+            },
+            "danger": {
+              "label": "危险色",
+              "usage": "影响删除、错误和危险确认。"
+            },
+            "highlight": {
+              "label": "高亮色",
+              "usage": "影响搜索命中和重点标记。"
+            },
+            "label": "主题色",
+            "primary": {
+              "label": "主操作色",
+              "usage": "影响保存、确认和当前选中。"
+            },
+            "secondary": {
+              "label": "辅助强调色",
+              "usage": "影响分组和次要操作。"
+            },
+            "special": {
+              "label": "特殊功能色",
+              "usage": "影响 AI、高级功能和特殊入口。"
+            },
+            "success": {
+              "label": "成功色",
+              "usage": "影响完成、可用和成功状态。"
+            },
+            "tip": {
+              "label": "提示色",
+              "usage": "影响推荐、提示和轻量成功。"
+            },
+            "warn": {
+              "label": "注意色",
+              "usage": "影响引导、提醒和轻警告。"
+            },
+            "warning": {
+              "label": "警告色",
+              "usage": "影响待处理和中等警告。"
+            }
+          },
+          "bg": {
+            "contrast": {
+              "label": "反差背景色",
+              "usage": "影响高反差按钮、开关滑块和需要突出显示的小控件。"
+            },
+            "deep": {
+              "label": "主背景色",
+              "usage": "影响主界面和大面积背景。"
+            },
+            "elevated": {
+              "label": "浮起背景色",
+              "usage": "影响浮窗、突出卡片和强调面板。"
+            },
+            "highlight": {
+              "label": "层级背景色",
+              "usage": "影响选中、重点区域和较强层次。"
+            },
+            "inset": {
+              "label": "内嵌背景色",
+              "usage": "影响输入框、代码区和日志区。"
+            },
+            "label": "背景色",
+            "muted": {
+              "label": "弱背景色",
+              "usage": "影响悬停、标签和轻量分区。"
+            },
+            "neutral": {
+              "label": "中性填充色",
+              "usage": "影响非强调色的小圆点、开关滑块和状态标记。"
+            },
+            "overlay": {
+              "label": "叠加背景色",
+              "usage": "影响悬停、选中、按下和轻量控件反馈，可通过透明度控制强弱。"
+            },
+            "surface": {
+              "label": "面板背景色",
+              "usage": "影响弹窗、列表面板和卡片底色。"
+            }
+          },
+          "border": {
+            "base": {
+              "label": "边框基础色",
+              "usage": "影响分隔线、输入框和卡片边界，可通过透明度控制强弱。"
+            },
+            "label": "边框色"
+          },
+          "glass": {
+            "heavy": {
+              "label": "重透明背景",
+              "usage": "影响遮罩弹窗和强覆盖区域。"
+            },
+            "label": "玻璃背景",
+            "light": {
+              "label": "轻透明背景",
+              "usage": "影响轻量覆盖和细微层次。"
+            },
+            "medium": {
+              "label": "常规透明背景",
+              "usage": "影响常用玻璃面板。"
+            }
+          },
+          "overlay": {
+            "label": "覆盖层",
+            "scrim": {
+              "label": "遮罩背景",
+              "usage": "影响弹窗后方遮罩和压暗区域。"
+            }
+          },
+          "text": {
+            "dim": {
+              "label": "次要文字色",
+              "usage": "影响说明、提示和弱化信息。"
+            },
+            "disabled": {
+              "label": "不可用文字色",
+              "usage": "影响禁用、空状态和最低优先级提示。"
+            },
+            "inverse": {
+              "label": "反差文字色",
+              "usage": "影响深浅反差按钮和特殊徽标。"
+            },
+            "label": "字体色",
+            "main": {
+              "label": "主要文字色",
+              "usage": "影响标题、正文和常用图标。"
+            },
+            "soft": {
+              "label": "柔和正文色",
+              "usage": "影响弱化正文、非焦点标题和仍需清晰阅读的信息。"
+            },
+            "subtle": {
+              "label": "弱提示文字色",
+              "usage": "影响占位、禁用和最弱提示。"
+            }
+          }
+        },
+        "unnamed": "未命名主题"
       }
     },
     "source_type": {
@@ -807,6 +1376,38 @@
       "before_yesterday": "前天",
       "days_ago": "{count} 天前",
       "yesterday": "昨天"
+    },
+    "translation": {
+      "controls": {
+        "auto_translate_missing": "缺少译文自动翻译",
+        "auto_translate_missing_desc": "当前没有目标语言译文时自动请求翻译。默认关闭，避免意外消耗请求。",
+        "clear_translation": "清理翻译",
+        "display_language": "显示语言",
+        "prefer_translation": "优先显示译文",
+        "prefer_translation_desc": "打开详情时，如果已有目标语言译文，会优先显示译文。",
+        "provider": "翻译器",
+        "retranslate": "重新翻译",
+        "settings": "翻译设置",
+        "show_original": "原文",
+        "skip_source_terms": "识别原文时跳过",
+        "skip_source_terms_desc": "自动翻译前检测原文，命中规则时不请求翻译。",
+        "source_detection_mode": "识别逻辑",
+        "source_detection_mode_and": "全部命中（AND）",
+        "source_detection_mode_or": "任一命中（OR）",
+        "source_detection_terms": "原文识别词",
+        "source_detection_terms_desc": "这些字符或短语会按字面量匹配，命中后认为原文不需要自动翻译。",
+        "source_detection_terms_placeholder": "输入并回车，例如：的、模组、。",
+        "target_language": "目标语言",
+        "translate": "翻译",
+        "use_default_provider": "使用默认翻译器",
+        "use_default_target_language": "使用默认目标语言"
+      },
+      "language": {
+        "follow_ui": "跟随界面语言"
+      },
+      "provider": {
+        "ai_default": "AI 翻译"
+      }
     },
     "workshop_action": {
       "download": "下载",
@@ -1817,6 +2418,41 @@
       "show": "显示"
     },
     "settings": {
+      "ai": {
+        "refresh_models": "重新获取模型列表"
+      },
+      "data_export": {
+        "dependencies": "依赖：{dependencies}"
+      },
+      "external": {
+        "git_provider_catalog_sources": "每行一个来源，格式：名称|URL。留空时使用默认推荐清单。",
+        "reading_default_paths": "正在读取默认路径",
+        "refresh_git_catalog": "刷新 Git 推荐清单",
+        "refresh_mp_compat_package_ids": "刷新 Multiplayer Compatibility 支持表",
+        "refresh_multiplayer_compatibility": "刷新 Multiplayer 兼容表",
+        "refreshing_git_catalog": "正在刷新 Git 推荐清单",
+        "refreshing_mp_compat_package_ids": "正在刷新 Multiplayer Compatibility 支持表",
+        "refreshing_multiplayer_compatibility": "正在刷新 Multiplayer 兼容表",
+        "reset_default_paths": "将外部依赖相关路径重置为默认值",
+        "update_community_rules": "下载更新社区规则",
+        "update_instead_db": "下载更新社区替代 Mod 数据库",
+        "update_workshop_db": "下载更新社区工坊数据库",
+        "updating_community_rules": "正在下载更新社区规则",
+        "updating_instead_db": "正在下载更新社区替代 Mod 数据库",
+        "updating_workshop_db": "正在下载更新社区工坊数据库"
+      },
+      "general": {
+        "drag_layout_order": "可拖动切换布局顺序",
+        "group_settings": "可调整分组列表的显示方式",
+        "list_settings": "可调整列表的显示方式与辅助功能",
+        "reset_guides": "重置界面引导，将界面引导重置为默认值",
+        "section_collapse": "为列表支持分割线折叠分组的功能，需要安装了分割线模组才能启用。开启后，列表会识别名称或别名满足 `=标题=`、`/*标题*/` 的纯分割线模组，并支持折叠、整组拖动和右键分割组移动。"
+      },
+      "keybindings": {
+        "conflict_title": "[[{leftTitle}]] 和 [[{rightTitle}]] 的 ^^[{keybinding}]^^ 快捷键冲突。",
+        "jump": "__点击跳转到另一条冲突命令。__",
+        "scopes": "作用域：{scopes}"
+      },
       "paths": {
         "auto_detect": "尝试通过系统和 Steam 记录自动搜索路径",
         "auto_detect_loading": "正在自动搜索路径",
@@ -1830,6 +2466,11 @@
     "task": {
       "cancel": "取消任务",
       "cancelling": "正在尝试取消任务"
+    },
+    "translation": {
+      "controls": {
+        "settings": "点击可设置翻译语言、翻译器和自动翻译策略。"
+      }
     },
     "workshop": {
       "download": "下载该工坊项目到管理器",
@@ -1944,6 +2585,43 @@
     "rule_panel": {
       "name_required": "请输入规则名称",
       "weight_clamped": "动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。"
+    },
+    "settings": {
+      "about": {
+        "copied": "已复制：{text}",
+        "copy_failed": "复制失败，请手动复制。",
+        "open_failed": "打开失败，请手动复制链接。"
+      },
+      "ai": {
+        "empty_response": "模型返回了空内容",
+        "test_failed": "模型测试失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。",
+        "test_success": "模型测试成功"
+      },
+      "apply_failed": "应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入，详细原因已写入系统日志。",
+      "data_export": {
+        "no_module_selected": "请至少勾选一个要导出的数据模块",
+        "no_profile_selected": "已勾选环境数据，请至少选择一个环境"
+      },
+      "dev": {
+        "database_recreated": "未找到本地数据库，已重新创建。",
+        "remote_image_cache_cleared": "已清理 {count} 张缓存图片，释放 {size}",
+        "repair_complete_restart_later": "修复已完成，重启软件后生效。"
+      },
+      "panel": {
+        "game_install_path_missing": "未填写游戏安装目录，Steam 启动可能无法使用",
+        "path_problem_switch_kept": "{problem}\n此开关会按你的选择保留，启动失败时请回到这里修正路径。",
+        "select_game_install_path": "请重新选择游戏安装目录",
+        "select_steam_path": "请重新选择 Steam.exe 所在目录",
+        "select_workshop_path": "请重新选择创意工坊目录",
+        "steam_launch_game_path_problem": "游戏安装目录可能无法用于 Steam 启动：{message}",
+        "steam_launch_steam_path_problem": "Steam 程序路径可能无法使用：{message}",
+        "steam_path_missing": "未填写 Steam 程序路径，Steam 启动可能无法使用",
+        "steam_version_unknown": "未能确认当前游戏本体是否为 Steam 版，仍会优先尝试通过 Steam 启动；如果启动失败，可改为直接启动。",
+        "workshop_path_incomplete": "创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。",
+        "workshop_path_missing": "未填写创意工坊目录，工坊 Mod 可能无法加载",
+        "workshop_path_problem": "创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。"
+      },
+      "save_failed": "保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。"
     },
     "texture": {
       "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
@@ -2248,6 +2926,15 @@
       "update": "更新环境 \"{profileId}\"",
       "write_steam_shortcut_config": "写入 Steam 快捷方式配置"
     },
+    "settings": {
+      "apply": "应用设置",
+      "clear_secret": "清除密钥",
+      "delete_user_theme": "删除用户主题",
+      "read_saved_secret": "读取已保存密钥",
+      "read_user_themes": "读取用户主题",
+      "save_one": "保存单项设置",
+      "save_user_theme": "保存用户主题"
+    },
     "workspace": {
       "all_libraries": "获取所有库数据",
       "cleanup_deleted": "清理已删除记录",
@@ -2274,11 +2961,240 @@
       "workshop_search": "工坊检索"
     }
   },
+  "command": {
+    "app": {
+      "launch_game": {
+        "description": "启动当前环境对应的 RimWorld。",
+        "title": "启动游戏"
+      },
+      "open_file_search": {
+        "description": "打开文件内容搜索；如果当前选中了文本，会带入搜索词并直接搜索。",
+        "title": "打开文件内容搜索"
+      },
+      "open_logs": {
+        "description": "打开运行日志页面。",
+        "title": "打开日志页面"
+      },
+      "open_mod_settings_manager": {
+        "description": "打开模组配置查看器。",
+        "title": "打开模组配置"
+      },
+      "open_rules": {
+        "description": "打开规则管理页面。",
+        "title": "打开规则页面"
+      },
+      "open_settings": {
+        "description": "打开系统设置面板。",
+        "title": "打开设置"
+      },
+      "open_texture_opt": {
+        "description": "打开贴图优化面板。",
+        "title": "打开贴图优化"
+      },
+      "open_workspace": {
+        "description": "打开库存管理中枢。",
+        "title": "打开库存枢纽"
+      }
+    },
+    "category": {
+      "app": "应用",
+      "load_order": "加载顺序",
+      "mod_list": "Mod 列表",
+      "mod_management": "Mod 管理",
+      "other": "其他",
+      "selection": "列表选择"
+    },
+    "load_order": {
+      "export_file": {
+        "description": "导出为 ModList.xml，包含包名和工坊 ID。",
+        "title": "导出分享列表"
+      },
+      "export_share_code": {
+        "description": "生成当前启用列表的排序分享码。",
+        "title": "导出排序分享码"
+      },
+      "import_file": {
+        "description": "选择并导入一个加载序列文件。",
+        "title": "导入排序文件"
+      },
+      "import_share_code": {
+        "description": "粘贴排序分享码，导入后打开差异对比。",
+        "title": "导入排序分享码"
+      },
+      "save": {
+        "description": "保存当前启用列表到游戏配置。",
+        "title": "保存加载顺序"
+      }
+    },
+    "mods": {
+      "auto_sort_active": {
+        "description": "根据当前规则自动排序启用列表。",
+        "title": "自动排序启用列表"
+      },
+      "delete_selected_files": {
+        "description": "删除选中 Mod 的本地文件；完成后从列表移除已处理项目。",
+        "title": "删除选中 Mod 文件"
+      },
+      "disable_selected_files": {
+        "description": "禁用选中 Mod 的 About 文件，避免游戏识别与加载；可在已禁用列表重新启用。",
+        "title": "禁用选中 Mod"
+      },
+      "edit_selected_rule": {
+        "description": "打开最后选中 Mod 的规则编辑页。",
+        "title": "编辑选中 Mod 规则"
+      },
+      "force_refresh": {
+        "description": "重新检查所有文件，适合文件状态不确定时使用。",
+        "title": "强制扫描 Mod"
+      },
+      "move_selected_to_bottom": {
+        "description": "把当前选中的 Mod 移到所在列表底部。",
+        "title": "移动选中项到列表底部"
+      },
+      "move_selected_to_top": {
+        "description": "把当前选中的 Mod 移到所在列表顶部。",
+        "title": "移动选中项到列表顶部"
+      },
+      "open_selected_folder": {
+        "description": "打开最后选中 Mod 的本地文件夹。",
+        "title": "打开选中 Mod 文件夹"
+      },
+      "open_selected_url": {
+        "description": "打开目标 Mod 配置的网页链接。",
+        "title": "访问 Mod 网页"
+      },
+      "open_selected_web_page": {
+        "description": "优先打开 Mod 链接，没有链接时打开创意工坊页面。",
+        "title": "打开选中 Mod 页面"
+      },
+      "open_selected_workshop_page": {
+        "description": "打开目标 Mod 对应的 Steam 创意工坊页面。",
+        "title": "访问创意工坊"
+      },
+      "redo_list_history": {
+        "description": "重做当前会话内刚撤销的 Mod 列表变更。",
+        "title": "重做列表操作"
+      },
+      "refresh": {
+        "description": "增量扫描 Mod 目录，并阻止浏览器默认刷新页面。",
+        "title": "扫描 Mod"
+      },
+      "reveal_first_selected": {
+        "description": "定位到当前选中的第一个 Mod，多选时只处理第一项。",
+        "title": "返回选中 Mod 位置"
+      },
+      "toggle_selected_active": {
+        "description": "根据当前选中项状态，在启用和停用之间切换。",
+        "title": "启用或停用选中 Mod"
+      },
+      "toggle_selected_coexistence_source": {
+        "description": "以第一个可切换的选中项为准，将所有可共存的选中 Mod 统一切到另一版本。只处理存在共存版本的 Mod。",
+        "title": "切换选中 Mod 工坊/本地版本"
+      },
+      "undo_list_history": {
+        "description": "撤销当前会话内最近一次 Mod 列表变更。",
+        "title": "撤销列表操作"
+      },
+      "unsubscribe_and_delete_selected_workshop": {
+        "description": "取消订阅选中的创意工坊 Mod，并删除对应本地文件。",
+        "title": "取消订阅并删除选中 Mod"
+      },
+      "unsubscribe_selected_workshop": {
+        "description": "取消订阅选中的创意工坊 Mod；完成后从列表移除已处理项目。",
+        "title": "取消订阅选中 Mod"
+      }
+    },
+    "selection": {
+      "add_range_select": {
+        "description": "保留已有选择，并追加一段连续范围。",
+        "title": "追加连续选择"
+      },
+      "extend_focus": {
+        "description": "在列表获得焦点时，用方向键扩展连续选择范围。",
+        "title": "键盘连续选择"
+      },
+      "move_focus": {
+        "description": "在列表获得焦点时，上下移动当前选择。",
+        "title": "移动列表选择"
+      },
+      "range_select": {
+        "description": "从上一次选择锚点连续选到当前点击项目。",
+        "title": "连续选择"
+      },
+      "select_all_in_list": {
+        "description": "选中当前列表或当前分组内的全部项目。",
+        "title": "全选当前列表"
+      },
+      "toggle_item": {
+        "description": "在不清空已有选择的情况下，加入或移除点击的项目。",
+        "title": "切换单项选择"
+      }
+    }
+  },
   "common": {
+    "action": {
+      "add": "添加",
+      "cancel": "取消",
+      "clear": "清空",
+      "close": "关闭",
+      "collapse": "收起",
+      "copy_group_number": "复制群号",
+      "copy_password": "复制密码",
+      "copy_url": "复制地址",
+      "delete": "删除",
+      "edit": "编辑",
+      "expand": "展开",
+      "later": "稍后处理",
+      "open_link": "打开链接",
+      "restart_later": "稍后重启",
+      "save": "保存"
+    },
     "cancel": "取消",
     "continue": "继续",
     "file": "文件",
+    "status": {
+      "checking": "检查中",
+      "default": "默认",
+      "inactive": "未激活",
+      "reading": "读取中"
+    },
     "task": "任务"
+  },
+  "confirm": {
+    "settings": {
+      "dev": {
+        "clear_remote_image_cache": {
+          "confirm": "立即清理",
+          "message": "这会删除当前已缓存的远程图片文件。后续再次显示这些图片时，会按需重新下载。",
+          "title": "确认清理网络图片缓存"
+        },
+        "repair_complete": {
+          "confirm": "立即重启",
+          "message": "数据库修复已完成。现在重启软件即可生效；如果暂不重启，当前仍会继续使用旧状态。",
+          "title": "修复完成"
+        },
+        "repair_database": {
+          "confirm": "开始修复",
+          "message": "这会尝试修复当前数据库。修复成功后需要重启软件才能生效。\n确定继续吗？",
+          "title": "确认修复"
+        },
+        "repair_failed": {
+          "confirm": "立即重置",
+          "message": "数据库修复失败，当前数据可能无法正常使用。建议立即重置数据库。",
+          "title": "修复失败"
+        },
+        "reset_database": {
+          "message": "重置后，分组、备注等本地数据将被清空，且无法撤销。确定继续吗？",
+          "title": "确认重置"
+        }
+      },
+      "general": {
+        "delete_theme": {
+          "message": "确定要删除自定义主题「{name}」吗？此操作不可撤销。",
+          "title": "删除主题"
+        }
+      }
+    }
   },
   "error": {
     "clipboard": {
@@ -2449,6 +3365,7 @@
         "clear_remote_image_cache": "清理网络图片缓存",
         "database_cleanup": "数据库深度清理",
         "get_remote_image_cache_stats": "获取网络图片缓存统计",
+        "get_translation_languages": "获取翻译语言列表",
         "get_translation_providers": "获取翻译器列表",
         "launch_game_program": "启动游戏程序",
         "load_mod_list": "加载模组列表",

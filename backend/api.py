@@ -49,7 +49,7 @@ from backend.utils.tools import normalize_companion_package_ids, normalize_packa
 from backend.utils.tools import open_system_uri as open_uri_with_system_handler
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
-from backend.i18n.language_registry import normalize_language_code
+from backend.i18n.language_registry import get_language_options, normalize_language_code
 from backend.i18n.messages import DEFAULT_LOCALE, load_user_locale, localized_key, localized_params, tr
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
@@ -6770,6 +6770,11 @@ class API:
     def translation_get_providers(self):
         """获取当前可用翻译器。"""
         return ApiResponse.success(self.translation_mgr.list_providers())
+
+    @log_api_call
+    def translation_get_language_options(self):
+        """获取翻译目标语言选项。"""
+        return ApiResponse.success(get_language_options(include_follow=False))
 
     @log_api_call
     def translation_translate_document(self, document: dict | None, target_language: str, provider: str = DEFAULT_TRANSLATION_PROVIDER):

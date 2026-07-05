@@ -100,6 +100,8 @@ export const useAppStore = defineStore('app', () => {
   })
   const translationProviders = ref(createDefaultTranslationProviders())
   const isTranslationProvidersLoaded = ref(false)
+  const translationLanguageOptions = ref([])
+  const isTranslationLanguageOptionsLoaded = ref(false)
   const cancelPendingTaskIds = ref(new Set())
   const cancelPendingTimers = new Map()
   const CANCELLATION_PENDING_TIMEOUT_MS = 15000
@@ -1714,17 +1716,34 @@ export const useAppStore = defineStore('app', () => {
     return translationProviders.value
   }
 
+  const ensureTranslationLanguageOptions = async () => {
+    if (!window.pywebview || isTranslationLanguageOptionsLoaded.value) return translationLanguageOptions.value
+    const res = await window.pywebview.api.translation_get_language_options()
+    if (checkResult(res, t('messages.app.action.get_translation_languages', '获取翻译语言列表'), false, { silent: true })) {
+      translationLanguageOptions.value = Array.isArray(res.data)
+        ? res.data.map(item => ({
+            label: item?.label || item?.name || item?.code || item?.value,
+            value: item?.code || item?.value,
+            code: item?.code || item?.value,
+            name: item?.name || '',
+          })).filter(item => item.label && item.value)
+        : []
+      isTranslationLanguageOptionsLoaded.value = true
+    }
+    return translationLanguageOptions.value
+  }
+
   return {
     // 基础状态
     appVersion, buildMode, uiState, settings, settingsReady, isLoading, isDownloading, isScanRunning, updateState,
     themes, currentTheme, userThemes, themeEditor, packageTransferDialog, recommendationExportDialog,
     // 布局与运行态
-    remoteImageCache, translationProviders, isTranslationProvidersLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
+    remoteImageCache, translationProviders, isTranslationProvidersLoaded, translationLanguageOptions, isTranslationLanguageOptionsLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     // 生命周期与通用工具
     initialize, checkResult, refreshData, loadStartupCoreData, refreshRuleData, refreshBackupData, loadStartupInventorySummary, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     refreshModsData, refreshModCoreData, refreshModEnrichment, requestModScan,
     // 图片与缓存
-    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
+    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, ensureTranslationLanguageOptions, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
     // 路径与游戏启动
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     // 下载与工坊

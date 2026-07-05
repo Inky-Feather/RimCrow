@@ -1303,7 +1303,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const code = normalizeDetailTranslationLanguage(language)
     if (!code) return t('ui.workspace.translation.original', '原文')
     if (code === 'follow_ui') return t('ui.workspace.translation.follow_ui_with_language', '跟随界面语言（{language}）', { language: getTranslationLanguageLabel(getUiTranslationLanguage()) })
-    const option = workshopSearch.languageOptions.find(item => item.code === code || item.value === code)
+    const option = appStore.translationLanguageOptions.find(item => item.code === code || item.value === code)
     return option?.label || code
   }
   const getWorkshopTranslationEntry = (translations = {}, language = '') => {

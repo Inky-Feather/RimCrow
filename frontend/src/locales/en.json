@@ -357,14 +357,14 @@
       "workshop": {
         "days": {
           "0": "All time",
-          "0_short": "All",
-          "30": "Past month",
-          "30_short": "Month",
-          "365": "Past year",
-          "365_short": "Year",
           "7": "Past week",
-          "7_short": "Week",
+          "30": "Past month",
           "90": "Past quarter",
+          "365": "Past year",
+          "0_short": "All",
+          "30_short": "Month",
+          "365_short": "Year",
+          "7_short": "Week",
           "90_short": "Quarter"
         },
         "sort": {
@@ -1524,6 +1524,607 @@
         "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "Workshop directory",
         "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles."
+      },
+      "general": {
+        "active_section_support": "\"Actived list\" section group support",
+        "active_section_support_desc": "When enabled, the actived list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
+        "default_collapse_active_sections": "Collapse actived list section groups by default",
+        "default_collapse_active_sections_desc": "When enabled, section groups in the actived list are collapsed on initial display.",
+        "default_collapse_inactive_sections": "Collapse deactivated list section groups by default",
+        "default_collapse_inactive_sections_desc": "When enabled, section groups in the deactivated list are collapsed on initial display.",
+        "dependency_graph": "Dependency graph",
+        "dependency_graph_desc": "Controls whether the dependency graph is shown in the actived list.",
+        "detail_delay": "Details loading delay",
+        "detail_delay_desc": "Controls the delay before loading Mod details, in milliseconds. Default is 200 ms.",
+        "double_click_toggle_mod": "Double-click to activate/deactivate Mod",
+        "double_click_toggle_mod_desc": "Controls double-click activation and deactivation in the Mod list.",
+        "drag_delay": "Drag detection delay",
+        "drag_delay_desc": "Controls the delay before a list item drag is recognized, in milliseconds. Default is 30 ms; 0 may make clicks jitter.",
+        "font_size": "Font size",
+        "font_size_desc": "Controls the app font size and affects text in all controls",
+        "group_icon": "Group icons",
+        "group_icon_desc": "Controls whether Mod icons are shown in the group list.",
+        "group_index": "Group index",
+        "group_index_desc": "Controls whether Mod indexes are shown in the group list.",
+        "group_settings": "Group settings",
+        "home_layout": "Home layout",
+        "icons_cloud": "Animated icon cloud",
+        "icons_cloud_desc": "Controls the animated icon cloud shown on the details page when idle.",
+        "inactive_section_support": "\"Deactivated list\" section group support",
+        "inactive_section_support_desc": "When enabled, the deactivated list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
+        "interface_language": "Interface language",
+        "language": {
+          "zh_cn": "Simplified Chinese",
+          "en": "English"
+        },
+        "list_icons": "List icons",
+        "list_icons_desc": "Controls all icons in lists, including simple and detailed views.",
+        "list_index": "List index",
+        "list_index_desc": "Controls whether the index column is shown in lists.",
+        "list_mod_icon": "List Mod icon",
+        "list_mod_icon_desc": "Controls Mod icons in lists. Does not affect the details view.",
+        "list_mod_type_icon": "List Mod type icon",
+        "list_mod_type_icon_desc": "Controls Mod type icons in lists. Does not affect the details view.",
+        "list_settings": "List settings",
+        "mod_details_layout": "Mod details layout",
+        "mod_details_panel": "Mod details panel",
+        "mod_details_panel_desc": "Allows closing the Mod details panel.",
+        "mod_hover_panel": "Mod hover panel",
+        "mod_hover_panel_desc": "Controls whether the hover panel appears in the Mod list.",
+        "open_url_in_system_browser": "Open URLs in system browser",
+        "open_url_in_system_browser_desc": "When disabled, URLs open in the built-in browser",
+        "reset_guides": "Reset UI guides",
+        "section_collapse": "List section groups",
+        "section_label_collection": "Category label collection",
+        "section_sort_collection": "Category sorting collection",
+        "smooth_target_scroll": "Smooth target scrolling",
+        "smooth_target_scroll_desc": "When enabled, locating search results or moved items scrolls smoothly to the target. When disabled, the list jumps directly.",
+        "title": "Interface and layout",
+        "tooltip_hover_time": "Tooltip hover delay",
+        "tooltip_hover_time_desc": "Controls how long to wait before showing tooltips, in milliseconds",
+        "visit": "Visit",
+        "workshop_page": "Workshop page"
+      },
+      "features": {
+        "action_prechecks": "Required checks before key actions",
+        "action_prechecks_desc": "When enabled, saving, launching, and auto-sorting check for uninstalled and unactived items first. When disabled, actions run directly without the check dialog.",
+        "auto_scan_on_startup": "Auto-scan Mod directories on startup",
+        "auto_scan_on_startup_desc": "When disabled, you need to click the scan button manually to update the Mod list.",
+        "auto_sort_logic": "Auto-sort logic",
+        "auto_sort_logic_desc": "Controls the overall auto-sort strategy, ordering within the same tier, and dependency clustering.",
+        "auto_sort_strategy": {
+          "classic": "Classic auto-sort (legacy)",
+          "edge_enhanced": "Edge-enhanced auto-sort (new)"
+        },
+        "auto_sort_strategy_label": "Auto-sort strategy",
+        "auto_sort_strategy_desc": "Legacy is more conservative and closer to traditional manual ordering, but handles top/bottom-biased mods and their related chains less effectively. The new strategy more aggressively pushes top/bottom-biased mods and their chains toward both ends of the list.",
+        "backup_retention_days": "Auto-backup retention days",
+        "backup_retention_days_desc": "Controls how long automatic backups are kept. Manual backups are not affected.",
+        "check_language_support": "Check language support",
+        "check_language_support_desc": "When enabled, Mod issue hints include a language support warning showing whether a Mod supports the current language.",
+        "coexist_folder_name_type": "Coexisting Mod folder naming",
+        "coexist_folder_name_type_desc": "Controls folder names for coexisting Mods. Priority is alias > original name > package ID > Workshop ID, so Mods without aliases can still use their original name.",
+        "configure": "Configure",
+        "default_translation_settings": "Default translation settings",
+        "default_translation_settings_desc": "Translation features without their own language or provider settings use these defaults.",
+        "delete_missing_mods_data": "Auto-clean missing Mod data",
+        "delete_missing_mods_data_desc": "When disabled, missing Mod data is kept in the database so you can resubscribe from the list.",
+        "enable_tool_mods": "Use helper tool mods",
+        "enable_tool_mods_desc": "When enabled, helper tool mods, such as log collection helpers, are automatically activated while saving or auto-sorting.",
+        "file_generation_deploy": "File generation and deployment",
+        "file_generation_deploy_desc": "Controls coexisting Mod folder naming and link deployment before launch.",
+        "file_size_scan": "Check file size during scan",
+        "file_size_scan_desc": "When enabled, scans automatically check Mod file sizes to detect new or updated content. This increases scan time but significantly improves file change detection.",
+        "folder_name": {
+          "alias": "By alias",
+          "name": "By original name",
+          "package_id": "By package ID",
+          "workshop_id": "By Workshop ID"
+        },
+        "language_packs_follow_targets": "Place language packs next to targets",
+        "language_packs_follow_targets_desc": "When enabled, auto-sort tries to place language packs after their last actived prerequisite or dependency. If no target is found, the original default lower position is kept.",
+        "launch_profile_quick_scan": "Check sync before direct profile launch",
+        "launch_profile_quick_scan_desc": "When launching a non-current profile directly from the profile list, required links are checked and synced first. When enabled, a lightweight scan runs before syncing; when disabled, sync is forced from the current database cache and profile config.",
+        "link_deployment": {
+          "full": "Full rebuild",
+          "incremental": "Incremental deployment (default)"
+        },
+        "link_deployment_mode": "Link deployment mode",
+        "link_deployment_mode_desc": "Controls link deployment when using manager Mods or Workshop Mods across profiles. Incremental deployment keeps correct existing links and only processes changes. Full rebuild removes all old links first, then recreates them from the current scan result.",
+        "list_action_checks": "List action checks",
+        "list_action_checks_desc": "Controls reminders and helper behavior while saving, launching, and displaying lists.",
+        "mod_residue_scan": "Check residues after scan",
+        "mod_residue_scan_desc": "When enabled, a full scan checks in the background for folders and settings left after uninstalls. When disabled, residues are checked only when you open residue cleanup manually.",
+        "multiplayer_compatibility_check": "Check Multiplayer compatibility",
+        "multiplayer_compatibility_check_desc": "When enabled, if Multiplayer is found in the inventory, the Mod list shows compatibility levels and helper fix hints.",
+        "name_sort": {
+          "alias": "By alias",
+          "name": "By original name",
+          "package_id": "By package ID"
+        },
+        "persist_temp_mod_list": "Save temporary list",
+        "persist_temp_mod_list_desc": "When enabled, the temporary list is saved per profile and restored next time you enter that profile. When disabled, Mods in the temporary list are returned to the top of the deactivated list when saving.",
+        "regular_mods_follow_dependencies": "Keep regular Mods near dependencies",
+        "regular_mods_follow_dependencies_desc": "When enabled, auto-sort tries to place regular Mods after the last actived dependency within the same weight tier, keeping related series closer together.",
+        "scan_maintenance": "Scan and data maintenance",
+        "scan_maintenance_desc": "Controls Mod list refresh, file change detection, and missing data handling.",
+        "show_coexistence_message": "Show coexisting conflict hints",
+        "show_coexistence_message_desc": "When disabled, coexisting Mod conflict hints are not shown.",
+        "skip_language_pack_alias_generation": "Skip alias notes for language packs",
+        "skip_language_pack_alias_generation_desc": "When enabled, batch alias and note generation skips language packs. Manual generation for a single Mod is not affected.",
+        "sort_mods_by": "Sort order",
+        "sort_mods_by_desc": "Affects Mod order within the same tier during auto-sort. Priority is alias > original name > package ID, so Mods without aliases can still be sorted by original name.",
+        "startup_prompt_new_only": "Only warn about new startup issues",
+        "startup_prompt_new_only_desc": "When enabled, startup inventory reminders show only newly found changes, missing items, and deleted items. When disabled, existing unresolved issues continue to be shown.",
+        "strict_disabled_mode": "Strict deactivation mode",
+        "strict_disabled_mode_desc": "When enabled, scans keep Mods deactivated according to manager records. Mods reactivated externally are automatically deactivated again. Manual deactivation removal is not affected.",
+        "title": "Feature settings",
+        "translation": "Translation",
+        "translation_desc": "Set default translation preferences and separate behavior for Workshop description translation.",
+        "workshop_description_translation": "Workshop description translation",
+        "workshop_description_translation_desc": "Set the language, provider, and auto-translation strategy for Workshop detail descriptions.",
+        "workshop_description_translation_only_desc": "Only affects title and description translation on Workshop detail pages."
+      },
+      "external": {
+        "auto_data_update_check": "Automatically check external library updates",
+        "auto_data_update_check_desc": "Check rules, Workshop database, replacement database, Multiplayer compatibility data, and Git recommendation list updates at the configured interval.",
+        "auto_tool_check": "Automatically check external tools",
+        "auto_tool_check_desc": "Check at the configured interval whether external tools such as SteamCMD and todds are missing or not ready.",
+        "check_data_updates": "Check external library updates",
+        "check_interval_days": "Check interval (days)",
+        "check_tools": "Check external tools",
+        "community_rules_path": "Community rules path",
+        "community_rules_path_desc": "Local cache file for the community rules library.",
+        "community_rules_url": "Community rules URL",
+        "community_rules_url_desc": "Rules library maintained by RimSort, used to supplement sorting, dependency, and conflict rules.",
+        "data_libraries": "External libraries and rules",
+        "data_libraries_desc": "Sources, paths, and update checks for external data files such as rules, Workshop database, and replacement database.",
+        "git_provider_catalog_desc": "Git Mod recommendation list, used to provide subscribable repository sources.",
+        "git_provider_catalog_sources": "Git recommendation sources",
+        "instead_db_path": "Replacement Mod database path",
+        "instead_db_path_desc": "Local cache file for the replacement Mod database.",
+        "instead_db_url": "Replacement Mod database URL",
+        "instead_db_url_desc": "Replacement Mod database used to hint removed, remade, or recommended replacement items. Source: community cache file.",
+        "mp_compat_package_ids_path": "Multiplayer Compatibility support list path",
+        "mp_compat_package_ids_path_desc": "Local cache file for the Multiplayer Compatibility support list.",
+        "mp_compat_package_ids_url": "Multiplayer Compatibility support list URL",
+        "mp_compat_package_ids_url_desc": "Support list from Multiplayer Compatibility, used to mark Mods that can be fixed by the helper Mod. Source: source-code parsing.",
+        "multiplayer_compatibility_path": "Multiplayer compatibility table path",
+        "multiplayer_compatibility_path_desc": "Local cache file for the Multiplayer compatibility table.",
+        "multiplayer_compatibility_url": "Multiplayer compatibility table URL",
+        "multiplayer_compatibility_url_desc": "Multiplayer compatibility-level table used to show online compatibility status. Source: official endpoint.",
+        "reading": "Reading",
+        "reset_default_paths": "Reset to default paths",
+        "ripgrep_path": "Text search tool directory",
+        "ripgrep_path_desc": "ripgrep tool directory used first for file content search. Choose the folder containing rg.exe.",
+        "silent_data_update": "Silently update external libraries",
+        "silent_data_update_desc": "When enabled, automatically detected external library updates are refreshed directly without asking. Manual checks still ask for confirmation.",
+        "silent_data_update_disabled_desc": "Enable automatic external library update checks first.",
+        "steamcmd_path": "Mod download tool directory",
+        "steamcmd_path_desc": "SteamCMD directory used by the manager to download and update Workshop Mods. Choose the folder containing steamcmd.exe.",
+        "texture_tools_path": "Texture optimization tool directory",
+        "texture_tools_path_desc": "todds tool directory used for texture optimization. Choose the folder containing todds.exe.",
+        "title": "External dependencies",
+        "tools": "External tools",
+        "tools_desc": "External program configuration and status checks for tools called by the manager, such as SteamCMD and texture tools.",
+        "user_rules_path": "User rules path",
+        "user_rules_path_desc": "Local user rules file used to save custom sorting, dependency, and conflict rules.",
+        "workshop_db_path": "Workshop database path",
+        "workshop_db_path_desc": "Local cache file for the Workshop information database.",
+        "workshop_db_url": "Workshop database URL",
+        "workshop_db_url_desc": "Workshop information database used to supplement Mod names, authors, and descriptions. Source: community cache file."
+      },
+      "network": {
+        "custom_hosts": "Custom Hosts mapping",
+        "enable_proxy": "Enable proxy service",
+        "enable_proxy_desc": "Enable proxy service. All network requests will go through the proxy server. Some external data downloads, update checks, description image loading, built-in browser access, and similar features may need this to work.\n\nYou can also configure a global network environment outside the app.",
+        "enable_steam_enhanced_api": "Enable enhanced Workshop information",
+        "enable_steam_enhanced_api_desc": "After enabling and filling in the Key, Workshop pages prefer online enhanced information. Without a Key or when disabled, local cache search is used automatically.",
+        "get_page": "page",
+        "host": "Host",
+        "password": "Password",
+        "port": "Port",
+        "protocol": "Protocol",
+        "proxy_bypass_domains": "Domains that bypass proxy",
+        "proxy_password_placeholder": "Proxy password (optional)",
+        "proxy_username_placeholder": "Proxy username (optional)",
+        "steam_web_api_key": "Steam Web API Key",
+        "steam_web_api_key_desc": "The Key is stored securely in the local credential vault. Without a Key, search automatically falls back to the cache.",
+        "steam_web_api_key_help": "After enabling and filling in the Key, Steam Web API is used to fetch more complete Workshop search, collection search, author works, and dependency relationship information. When disabled, the local cached Workshop database is still available.",
+        "steam_web_api_key_placeholder": "Enables enhanced search when filled",
+        "steam_web_api_key_risk": "Anyone who obtains this Key can silently cancel a player's real trades without triggering Steam Guard, and replace them with fake trades sent to a scammer. Never share your API key with anyone or any unverified third-party website.",
+        "steam_web_api_key_warning": "Warning: your API key is effectively a backdoor key to your Steam account. It can read public account data/inventory information and manage or listen to trade offers.",
+        "title": "Network protocol and proxy",
+        "use_proxy_on_ai": "Use proxy for AI requests",
+        "use_proxy_on_ai_desc": "When enabled, AI requests go through the proxy server. Do not enable this if the configured endpoint is already a local/domestic proxy.",
+        "use_proxy_on_steamcmd": "Use proxy for SteamCMD",
+        "use_proxy_on_steamcmd_desc": "Whether SteamCMD uses the proxy server.\n\nWhen enabled, SteamCMD download, update, and install operations go through the proxy server.",
+        "username": "Username",
+        "visit": "Visit",
+        "write_to_system_hosts": "Write custom Hosts to the system hosts file",
+        "write_to_system_hosts_desc": "Warning: this directly modifies the system hosts file and may require administrator permission."
+      },
+      "about": {
+        "auto_update_check": "Automatically check for updates",
+        "auto_update_check_desc": "When enabled, the app reminds you about new versions on startup.",
+        "changelog": "Changelog",
+        "check_update": "Check updates",
+        "close_donate_modal": "Close donation dialog",
+        "credits": "Credits",
+        "donate_desc": "Thanks for the support. WeChat and Alipay QR codes are both available.",
+        "donate_qr_alt": "Donation QR code",
+        "donate_title": "Support with a donation",
+        "downloads": "Downloads",
+        "downloads_desc": "View source code, release packages, and mirror download links.",
+        "feedback": "Feedback and community",
+        "feedback_desc": "When reporting an issue, screenshots, logs, and reproduction steps are recommended.",
+        "github_releases": "GitHub releases",
+        "github_releases_note": "Download GitHub release packages or view release notes for each version.",
+        "github_repo": "GitHub repository",
+        "github_repo_note": "View releases, issue tracking, and source code.",
+        "issue_feedback": "Issue feedback",
+        "issue_feedback_note": "Best for problems and suggestions that need tracking.",
+        "lanzou_mirror": "Lanzou mirror",
+        "lanzou_mirror_note": "If the network is unstable, try downloading the mirror package here.",
+        "password": "Password: ",
+        "qq_group": "QQ group",
+        "qq_group_note": "Best for quick feedback and extra screenshots.",
+        "references": "Referenced projects",
+        "references_desc": "These projects provide references for sorting, log analysis, and management features.",
+        "tieba_thread": "Tieba thread",
+        "tieba_thread_note": "View centralized notes and public discussion.",
+        "title": "About",
+        "view_donate_qr": "View donation QR code"
+      },
+      "ai": {
+        "api_key_placeholder": "Enter an API Key if the endpoint requires one. Local deployments can usually leave this empty.",
+        "base_url_desc": "When empty, the current protocol default address is used. Ollama connects to local 127.0.0.1:11434 by default; relay services or non-default local addresses must be entered manually.",
+        "base_url_placeholder": "Leave empty to use protocol default; e.g. http://127.0.0.1:11434 or https://api.deepseek.com/v1",
+        "context_window_tokens": "Context window",
+        "context_window_tokens_desc": "Total model context window. 0 uses the preset inferred from model name. For local models with server-side limits, enter the actual value.",
+        "default_test_prompt": "Introduce yourself",
+        "definition_manager": "AI definition manager",
+        "empty_response_help": "The model responded, but the content is empty. Try another model, check proxy compatibility, or test in a normal assistant session.",
+        "enable": "Enable AI features",
+        "enable_desc": "Used for log analysis, Mod descriptions, AI assistant chat, and related features.",
+        "endpoint_mode": "Endpoint mode",
+        "endpoint_mode_desc": "Specifies which endpoint an OpenAI-compatible interface should use. Auto selects a safer path from model capability and request shape. Manual switching is recommended only when diagnosing relay service or local runtime compatibility.",
+        "experimental": "Experimental",
+        "max_concurrency": "Max concurrency",
+        "max_concurrency_desc": "Number of requests sent at the same time. In most cases, 3 to 5 is enough.",
+        "max_input_tokens": "Max input budget",
+        "max_input_tokens_desc": "Maximum input budget sent to the model for logs, attachments, and batch tasks. 0 automatically subtracts output budget from the context window.",
+        "max_output_tokens": "Max output budget",
+        "max_output_tokens_desc": "Output guardrail for a single reply. 0 uses model presets. Manual setting is usually needed only when diagnosing cost, latency, or long reply truncation.",
+        "model": "Model",
+        "model_placeholder": "Select from the list or enter a model name manually",
+        "provider": "API protocol",
+        "provider_desc": "Most relay services, local runtimes, and domestic model platforms prefer OpenAI-compatible APIs. Switch to a native protocol only when the target service has no stable OpenAI-compatible API.",
+        "response_result": "AI response:",
+        "start_test": "Run test",
+        "temperature": "Output randomness",
+        "temperature_desc": "Lower values are more stable; higher values are more divergent. Around 0.7 is usually fine.",
+        "test_prompt": "Test prompt",
+        "test_prompt_placeholder": "Enter a simple sentence to test the connection, e.g. hello",
+        "title": "Artificial intelligence",
+        "view_raw_response": "View raw response"
+      },
+      "data_export": {
+        "description": "Select the data to package. If profile data is selected, the full directory of each selected profile is included.",
+        "excluded_data": "Path bindings, sensitive information, and current active profile ID",
+        "excluded_data_notice": "will not be exported.",
+        "export_selected": "Export selected",
+        "import_conflicts": "Profile import conflicts",
+        "import_conflicts_notice": "are handled in the import panel with create/overwrite options.",
+        "no_user_data_dir": "No packageable user data directory was found",
+        "pack_full_profile_dir": "The whole profile directory will be packaged",
+        "profile_data": "Profile data",
+        "profile_data_desc": "Select profiles to package.",
+        "profile_data_notice": "packages the whole profile directory;",
+        "title": "Export app data"
+      },
+      "dev": {
+        "auto_enter_silent_mode": "Automatically enter silent mode",
+        "auto_enter_silent_mode_desc": "When enabled, the app automatically switches to silent mode when RimWorld is detected running. When disabled, only manual entry remains available.",
+        "browser_mode": "Start in browser mode",
+        "browser_mode_desc": "The built-in WebView is still used by default. When enabled and no launch arguments are provided, the app starts in the local browser; closing the main browser page exits the program.",
+        "bundle_compress_level": "Package compression level",
+        "bundle_compress_level_desc": "0 is fastest, 9 saves the most space. Default is 6. Higher compression exports more slowly but usually creates smaller packages.",
+        "bundle_mod_folder_name_type": "Rename Mod folders",
+        "bundle_mod_folder_name_type_desc": "Affects folder names when packaging Mods. Default keeps the original folder name. Priority is alias > mod name > default, or Workshop ID > package ID > default, so Mods without aliases can still use their original names.",
+        "cache_size": "Size {size}",
+        "cached_images": "{count} cached images",
+        "clear_cached_images": "Clear cached images",
+        "current_profile": "Current profile: ",
+        "current_profile_fallback": "Current profile",
+        "danger_zone": "Danger zone",
+        "danger_zone_desc": "Repair tries to restore current local data. A successful repair requires restarting the app. If repair fails, resetting the database is recommended. Reset clears local data such as groups and notes and cannot be undone.",
+        "data_migration": "App data migration",
+        "data_migration_desc": "Import an existing data package, or open the export panel to choose app data to package. Profile data includes the complete directory of the corresponding profile.",
+        "debug_mode": "Debug mode",
+        "debug_mode_desc": "After debug mode is enabled, restarting the app opens developer tools so you can inspect problem details.",
+        "default_silent_page": "Default page",
+        "default_silent_page_desc": "Controls whether silent mode opens the home page first or goes directly to the log page.",
+        "export_current_profile_mods_desc": "Before export, choose effective Mods or currently actived Mods from the current profile, and optionally include profile data.",
+        "export_current_profile_mods_title": "Export current profile Mods",
+        "export_data_bundle": "Export app data",
+        "export_profile_mods": "Export profile Mods",
+        "folder_name": {
+          "alias": "By alias",
+          "default": "Default",
+          "name": "By original Mod name",
+          "package_id": "By package ID",
+          "workshop_id": "By Workshop ID"
+        },
+        "force_repair_database": "Force repair local database",
+        "import_data_bundle": "Import data package",
+        "import_data_bundle_title": "Import app data package",
+        "import_mod_package": "Import Mod package",
+        "import_mod_package_title": "Import Mod package",
+        "log_level": "Log level",
+        "log_retention_days": "Log retention days",
+        "profile_mod_package": "Profile and Mod packaging",
+        "profile_mod_package_desc": "Import and export physical Mod packages. Supports exporting effective Mods or currently actived Mods from the current profile, and importing Mod packages with profile data.",
+        "remote_image_cache": "Remote image cache",
+        "remote_image_cache_desc": "Remote cover images, screenshots, and rich text images are written to local cache first, then read by the frontend through the local asset service.",
+        "reset_database_now": "Reset local database now",
+        "scope": {
+          "profile_active": "Current profile actived Mods ({count})",
+          "profile_active_desc": "Export only Mods already actived in the current profile.",
+          "profile_effective": "Current profile effective Mods ({count})",
+          "profile_effective_desc": "Export Mods that can be used normally in the current profile."
+        },
+        "silent_mode_help": "When the game is running, you can switch to a lighter interface to reduce resource usage and view game logs directly.",
+        "silent_view": {
+          "home": "Silent home",
+          "logs": "Game log"
+        },
+        "title": "Development and debugging"
+      },
+      "keybindings": {
+        "all_categories": "All categories",
+        "caution": "Caution",
+        "command": "Command",
+        "conflict_badge": "[{keybinding}] conflict",
+        "conflict_count": "{count} keybinding conflicts found",
+        "conflict_desc": "Critical conflicts affect triggering. Cross-area reuse is allowed; runtime resolves in order: overlay, current area, recent area, then global.",
+        "conflict_level": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Notice"
+        },
+        "description": "Manage keyboard entry points for global commands. Area commands and plugin commands reuse these rules.",
+        "empty": "No matching commands",
+        "keybinding": "Keybinding",
+        "locked": "Locked",
+        "main_key": {
+          "modifier_only": "No main key (modifiers only)",
+          "mouse_back": "Mouse Back",
+          "mouse_forward": "Mouse Forward",
+          "mouse_left": "Left mouse button",
+          "mouse_middle": "Middle mouse button",
+          "mouse_right": "Right mouse button",
+          "space": "Space"
+        },
+        "main_key_placeholder": "Select a main key or mouse button",
+        "operation": "Action",
+        "plugin": "Plugin",
+        "readonly_desc": "Fixed action, only shown for description and conflict hints.",
+        "reset_all": "Restore all defaults",
+        "scope": {
+          "global": "Global"
+        },
+        "search_placeholder": "Search command name, ID, or category",
+        "title": "Keybindings",
+        "unbound": "Unbound"
+      },
+      "panel": {
+        "apply_and_save": "Apply and save settings",
+        "discard_changes": "Discard changes",
+        "path_empty": "Path is empty",
+        "settings": "Settings",
+        "system": "System",
+        "tab": {
+          "about": "About",
+          "ai": "AI integration",
+          "community": "External dependencies",
+          "dev": "Development",
+          "features": "Feature settings",
+          "general": "Interface",
+          "keybindings": "Keybindings",
+          "network": "Network",
+          "paths": "Path settings"
+        }
+      },
+      "theme": {
+        "builtin": "Built-in",
+        "create": "Create theme",
+        "copy_name": "{name} copy",
+        "custom": "Custom",
+        "editor": {
+          "create_title": "Create theme colors",
+          "description": "Drag this window freely while adjusting colors against the live interface.",
+          "edit_title": "Edit theme colors",
+          "name": "Theme name",
+          "name_placeholder": "Example: My theme",
+          "save_desc": "After saving, it will be kept as a custom theme."
+        },
+        "none_selected": "No theme selected",
+        "scheme": "Color scheme",
+        "unnamed": "Unnamed theme",
+        "tokens": {
+          "accent": {
+            "label": "Accent colors",
+            "cool": {
+              "label": "Info color",
+              "usage": "Affects links and supplemental information."
+            },
+            "danger": {
+              "label": "Danger color",
+              "usage": "Affects delete, errors, and dangerous confirmations."
+            },
+            "highlight": {
+              "label": "Highlight color",
+              "usage": "Affects search hits and important markers."
+            },
+            "primary": {
+              "label": "Primary action color",
+              "usage": "Affects save, confirm, and current selection."
+            },
+            "secondary": {
+              "label": "Secondary accent color",
+              "usage": "Affects groups and secondary actions."
+            },
+            "special": {
+              "label": "Special feature color",
+              "usage": "Affects AI, advanced features, and special entries."
+            },
+            "success": {
+              "label": "Success color",
+              "usage": "Affects complete, available, and success states."
+            },
+            "tip": {
+              "label": "Tip color",
+              "usage": "Affects recommendations, tips, and light success states."
+            },
+            "warn": {
+              "label": "Notice color",
+              "usage": "Affects guides, reminders, and light warnings."
+            },
+            "warning": {
+              "label": "Warning color",
+              "usage": "Affects pending and medium warnings."
+            }
+          },
+          "bg": {
+            "label": "Background colors",
+            "contrast": {
+              "label": "Contrast background color",
+              "usage": "Affects high-contrast buttons, switch thumbs, and small controls that need emphasis."
+            },
+            "deep": {
+              "label": "Main background color",
+              "usage": "Affects the main interface and large background areas."
+            },
+            "elevated": {
+              "label": "Elevated background color",
+              "usage": "Affects floating panels, raised cards, and emphasized panels."
+            },
+            "highlight": {
+              "label": "Layer background color",
+              "usage": "Affects selected states, important areas, and stronger hierarchy."
+            },
+            "inset": {
+              "label": "Inset background color",
+              "usage": "Affects inputs, code areas, and log areas."
+            },
+            "muted": {
+              "label": "Muted background color",
+              "usage": "Affects hover states, tags, and lightweight sections."
+            },
+            "neutral": {
+              "label": "Neutral fill color",
+              "usage": "Affects non-accent dots, switch thumbs, and status marks."
+            },
+            "overlay": {
+              "label": "Overlay background color",
+              "usage": "Affects hover, selected, pressed, and lightweight control feedback. Alpha controls strength."
+            },
+            "surface": {
+              "label": "Panel background color",
+              "usage": "Affects dialogs, list panels, and card backgrounds."
+            }
+          },
+          "border": {
+            "label": "Border colors",
+            "base": {
+              "label": "Base border color",
+              "usage": "Affects separators, inputs, and card edges. Alpha controls strength."
+            }
+          },
+          "glass": {
+            "label": "Glass backgrounds",
+            "heavy": {
+              "label": "Heavy translucent background",
+              "usage": "Affects modal masks and strong overlays."
+            },
+            "light": {
+              "label": "Light translucent background",
+              "usage": "Affects lightweight overlays and subtle hierarchy."
+            },
+            "medium": {
+              "label": "Normal translucent background",
+              "usage": "Affects common glass panels."
+            }
+          },
+          "overlay": {
+            "label": "Overlays",
+            "scrim": {
+              "label": "Scrim background",
+              "usage": "Affects the dimmed area behind dialogs."
+            }
+          },
+          "text": {
+            "label": "Text colors",
+            "dim": {
+              "label": "Secondary text color",
+              "usage": "Affects descriptions, hints, and muted information."
+            },
+            "disabled": {
+              "label": "Disabled text color",
+              "usage": "Affects disabled, empty, and lowest-priority hints."
+            },
+            "inverse": {
+              "label": "Contrast text color",
+              "usage": "Affects high-contrast buttons and special badges."
+            },
+            "main": {
+              "label": "Primary text color",
+              "usage": "Affects titles, body text, and common icons."
+            },
+            "soft": {
+              "label": "Soft body text color",
+              "usage": "Affects muted body text, unfocused titles, and information that still needs to be readable."
+            },
+            "subtle": {
+              "label": "Subtle hint text color",
+              "usage": "Affects placeholders, disabled text, and weakest hints."
+            }
+          }
+        }
+      }
+    },
+    "translation": {
+      "controls": {
+        "auto_translate_missing": "Auto-translate missing text",
+        "auto_translate_missing_desc": "Request translation automatically when there is no text in the target language. Off by default to avoid unexpected requests.",
+        "clear_translation": "Clear translation",
+        "display_language": "Display language",
+        "prefer_translation": "Prefer translated text",
+        "prefer_translation_desc": "When opening details, show the target-language translation first if one already exists.",
+        "provider": "Provider",
+        "retranslate": "Retranslate",
+        "settings": "Translation settings",
+        "show_original": "Original",
+        "skip_source_terms": "Skip when source terms match",
+        "skip_source_terms_desc": "Detect the source text before auto-translation and skip the request when the rules match.",
+        "source_detection_mode": "Detection logic",
+        "source_detection_mode_and": "All terms match (AND)",
+        "source_detection_mode_or": "Any term matches (OR)",
+        "source_detection_terms": "Source detection terms",
+        "source_detection_terms_desc": "These characters or phrases are matched literally. When matched, the source text is treated as not needing auto-translation.",
+        "source_detection_terms_placeholder": "Enter a term and press Enter, e.g. the, mod, .",
+        "target_language": "Target language",
+        "translate": "Translate",
+        "use_default_provider": "Use default provider",
+        "use_default_target_language": "Use default target language"
+      },
+      "language": {
+        "follow_ui": "Follow interface language"
+      },
+      "provider": {
+        "ai_default": "AI translation"
       }
     }
   },
@@ -1840,11 +2441,51 @@
       "uses_workshop_mods": "This profile uses Workshop mods"
     },
     "settings": {
+      "external": {
+        "git_provider_catalog_sources": "One source per line, format: Name|URL. Leave empty to use the default recommendation list.",
+        "reading_default_paths": "Reading default paths",
+        "refresh_git_catalog": "Refresh Git recommendation list",
+        "refresh_mp_compat_package_ids": "Refresh Multiplayer Compatibility support list",
+        "refresh_multiplayer_compatibility": "Refresh Multiplayer compatibility table",
+        "refreshing_git_catalog": "Refreshing Git recommendation list",
+        "refreshing_mp_compat_package_ids": "Refreshing Multiplayer Compatibility support list",
+        "refreshing_multiplayer_compatibility": "Refreshing Multiplayer compatibility table",
+        "reset_default_paths": "Reset external dependency paths to their default values",
+        "update_community_rules": "Download community rules update",
+        "update_instead_db": "Download replacement mod database update",
+        "update_workshop_db": "Download community Workshop database update",
+        "updating_community_rules": "Downloading community rules update",
+        "updating_instead_db": "Downloading replacement mod database update",
+        "updating_workshop_db": "Downloading community Workshop database update"
+      },
+      "general": {
+        "drag_layout_order": "Drag to reorder layout items",
+        "group_settings": "Adjust how the group list is displayed",
+        "list_settings": "Adjust list display and helper behavior",
+        "reset_guides": "Reset UI guides to their defaults",
+        "section_collapse": "Adds collapsible section groups to lists. Requires separator mods. When enabled, the list recognizes pure separator mods whose name or alias matches `=Title=` or `/*Title*/`, and supports collapsing, dragging whole groups, and moving section groups from the context menu."
+      },
       "paths": {
         "auto_detect": "Try to find paths from system and Steam records",
         "auto_detect_loading": "Auto-detecting paths",
         "current_profile": "Current profile: {name}\nDescription: {description}",
         "edit_current_profile": "This directly edits path settings for the current profile"
+      },
+      "ai": {
+        "refresh_models": "Refresh model list"
+      },
+      "data_export": {
+        "dependencies": "Dependencies: {dependencies}"
+      },
+      "keybindings": {
+        "conflict_title": "[[{leftTitle}]] and [[{rightTitle}]] conflict on ^^[{keybinding}]^^.",
+        "jump": "__Click to jump to the other conflicting command.__",
+        "scopes": "Scopes: {scopes}"
+      }
+    },
+    "translation": {
+      "controls": {
+        "settings": "Click to set the translation language, provider, and auto-translation behavior."
       }
     }
   },
@@ -1968,6 +2609,43 @@
       "user_data_path_required": "Enter the user data directory",
       "workshop_path_incomplete": "Workshop directory is incomplete. After saving, you may need to wait for Steam downloads to finish.",
       "workshop_path_problem": "Workshop directory may not work: {message}\nThis switch will keep your choice. If loading fails, come back here to fix the path."
+    },
+    "settings": {
+      "about": {
+        "copied": "Copied: {text}",
+        "copy_failed": "Copy failed. Copy it manually.",
+        "open_failed": "Open failed. Copy the link manually."
+      },
+      "ai": {
+        "empty_response": "The model returned empty content",
+        "test_failed": "Model test failed. Check model configuration, network connection, proxy settings, and whether the API Key is usable.",
+        "test_success": "Model test succeeded"
+      },
+      "data_export": {
+        "no_module_selected": "Select at least one data module to export",
+        "no_profile_selected": "Profile data is selected. Select at least one profile."
+      },
+      "dev": {
+        "database_recreated": "Local database was not found and has been recreated.",
+        "remote_image_cache_cleared": "Cleared {count} cached images and freed {size}",
+        "repair_complete_restart_later": "Repair is complete and will take effect after restart."
+      },
+      "panel": {
+        "game_install_path_missing": "Game install directory is empty. Steam launch may not work.",
+        "path_problem_switch_kept": "{problem}\nThis switch will keep your choice. If launch fails, come back here to fix the path.",
+        "select_game_install_path": "Select the game install directory again",
+        "select_steam_path": "Select the Steam.exe directory again",
+        "select_workshop_path": "Select the Workshop directory again",
+        "steam_launch_game_path_problem": "Game install directory may not work for Steam launch: {message}",
+        "steam_launch_steam_path_problem": "Steam executable path may not work: {message}",
+        "steam_path_missing": "Steam executable path is empty. Steam launch may not work.",
+        "steam_version_unknown": "Could not confirm whether this game install is the Steam version. The manager will still try Steam launch first. If launch fails, switch back to direct launch.",
+        "workshop_path_incomplete": "Workshop directory is incomplete. After saving, you may need to wait for Steam downloads to finish.",
+        "workshop_path_missing": "Workshop directory is empty. Workshop Mods may not load.",
+        "workshop_path_problem": "Workshop directory may not work: {message}\nThis switch will keep your choice. If loading fails, come back here to fix the path."
+      },
+      "apply_failed": "Failed to apply settings. The configuration may be invalid, a path may be inaccessible, or the configuration file may not be writable. Details have been written to the system log.",
+      "save_failed": "Failed to save settings. The backend service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later."
     }
   },
   "dialog": {
@@ -2376,10 +3054,69 @@
     }
   },
   "common": {
+    "action": {
+      "collapse": "Collapse",
+      "add": "Add",
+      "cancel": "Cancel",
+      "clear": "Clear",
+      "close": "Close",
+      "copy_group_number": "Copy group number",
+      "copy_password": "Copy password",
+      "copy_url": "Copy URL",
+      "delete": "Delete",
+      "edit": "Edit",
+      "expand": "Expand",
+      "later": "Handle later",
+      "open_link": "Open link",
+      "restart_later": "Restart later",
+      "save": "Save"
+    },
     "cancel": "Cancel",
     "continue": "Continue",
     "file": "File",
+    "status": {
+      "checking": "Checking",
+      "default": "Default",
+      "inactive": "Inactive",
+      "reading": "Reading"
+    },
     "task": "Task"
+  },
+  "confirm": {
+    "settings": {
+      "general": {
+        "delete_theme": {
+          "message": "Delete custom theme \"{name}\"? This cannot be undone.",
+          "title": "Delete theme"
+        }
+      },
+      "dev": {
+        "clear_remote_image_cache": {
+          "confirm": "Clear now",
+          "message": "This deletes currently cached remote image files. These images will be downloaded again when they are shown later.",
+          "title": "Clear remote image cache?"
+        },
+        "repair_complete": {
+          "confirm": "Restart now",
+          "message": "Database repair is complete. Restart the app now to apply it; if you do not restart, the current old state will keep being used.",
+          "title": "Repair complete"
+        },
+        "repair_database": {
+          "confirm": "Start repair",
+          "message": "This will try to repair the current database. If repair succeeds, the app must restart before it takes effect.\nContinue?",
+          "title": "Confirm repair"
+        },
+        "repair_failed": {
+          "confirm": "Reset now",
+          "message": "Database repair failed, and current data may not work correctly. Resetting the database now is recommended.",
+          "title": "Repair failed"
+        },
+        "reset_database": {
+          "message": "After reset, local data such as groups and notes will be cleared and cannot be restored. Continue?",
+          "title": "Confirm reset"
+        }
+      }
+    }
   },
   "messages": {
     "app": {
@@ -2390,6 +3127,7 @@
         "clear_remote_image_cache": "Clear remote image cache",
         "database_cleanup": "Clean invalid database data",
         "get_remote_image_cache_stats": "Get remote image cache stats",
+        "get_translation_languages": "Get translation languages",
         "get_translation_providers": "Get translation providers",
         "launch_game_program": "Launch game program",
         "load_mod_list": "Load mod list",
@@ -2572,6 +3310,185 @@
       "switch": "Switch profile",
       "update": "Update profile \"{profileId}\"",
       "write_steam_shortcut_config": "Write Steam shortcut configuration"
+    },
+    "settings": {
+      "apply": "Apply settings",
+      "clear_secret": "Clear secret",
+      "delete_user_theme": "Delete user theme",
+      "read_saved_secret": "Read saved secret",
+      "read_user_themes": "Read user themes",
+      "save_one": "Save setting",
+      "save_user_theme": "Save user theme"
+    }
+  },
+  "command": {
+    "category": {
+      "app": "Application",
+      "load_order": "Load Order",
+      "mod_list": "Mod List",
+      "mod_management": "Mod Management",
+      "other": "Other",
+      "selection": "Selection"
+    },
+    "app": {
+      "launch_game": {
+        "title": "Launch game",
+        "description": "Launch RimWorld for the current profile."
+      },
+      "open_file_search": {
+        "title": "Open file content search",
+        "description": "Open file content search. If text is currently selected, it will be used as the search term and searched immediately."
+      },
+      "open_logs": {
+        "title": "Open logs",
+        "description": "Open the runtime log page."
+      },
+      "open_mod_settings_manager": {
+        "title": "Open mod settings",
+        "description": "Open the mod settings viewer."
+      },
+      "open_rules": {
+        "title": "Open rules",
+        "description": "Open the rule management page."
+      },
+      "open_settings": {
+        "title": "Open settings",
+        "description": "Open the application settings panel."
+      },
+      "open_texture_opt": {
+        "title": "Open texture optimization",
+        "description": "Open the texture optimization panel."
+      },
+      "open_workspace": {
+        "title": "Open Inventory Hub",
+        "description": "Open the inventory management hub."
+      }
+    },
+    "load_order": {
+      "export_file": {
+        "title": "Export share list",
+        "description": "Export as ModList.xml, including package IDs and Workshop IDs."
+      },
+      "export_share_code": {
+        "title": "Export load order share code",
+        "description": "Generate a load order share code for the current active list."
+      },
+      "import_file": {
+        "title": "Import load order file",
+        "description": "Select and import a load order file."
+      },
+      "import_share_code": {
+        "title": "Import load order share code",
+        "description": "Paste a load order share code, then open the diff view after import."
+      },
+      "save": {
+        "title": "Save load order",
+        "description": "Save the current active list to the game configuration."
+      }
+    },
+    "mods": {
+      "auto_sort_active": {
+        "title": "Auto-sort active list",
+        "description": "Automatically sort the active list using the current rules."
+      },
+      "delete_selected_files": {
+        "title": "Delete selected Mod files",
+        "description": "Delete local files for the selected Mods. Processed items will be removed from the list when finished."
+      },
+      "disable_selected_files": {
+        "title": "Disable selected Mods",
+        "description": "Disable the About files of the selected Mods so the game will not recognize or load them. They can be re-enabled from the disabled list."
+      },
+      "edit_selected_rule": {
+        "title": "Edit selected Mod rule",
+        "description": "Open the rule editor for the last selected Mod."
+      },
+      "force_refresh": {
+        "title": "Force scan Mods",
+        "description": "Recheck all files. Use this when the file state is uncertain."
+      },
+      "move_selected_to_bottom": {
+        "title": "Move selected items to bottom",
+        "description": "Move the selected Mods to the bottom of their list."
+      },
+      "move_selected_to_top": {
+        "title": "Move selected items to top",
+        "description": "Move the selected Mods to the top of their list."
+      },
+      "open_selected_folder": {
+        "title": "Open selected Mod folder",
+        "description": "Open the local folder of the last selected Mod."
+      },
+      "open_selected_url": {
+        "title": "Visit Mod webpage",
+        "description": "Open the webpage link configured for the target Mod."
+      },
+      "open_selected_web_page": {
+        "title": "Open selected Mod page",
+        "description": "Open the Mod link first; if there is no link, open the Workshop page."
+      },
+      "open_selected_workshop_page": {
+        "title": "Visit Workshop",
+        "description": "Open the Steam Workshop page for the target Mod."
+      },
+      "redo_list_history": {
+        "title": "Redo list operation",
+        "description": "Redo the Mod list change that was just undone in this session."
+      },
+      "refresh": {
+        "title": "Scan Mods",
+        "description": "Incrementally scan Mod directories and prevent the browser default page refresh."
+      },
+      "reveal_first_selected": {
+        "title": "Reveal selected Mod position",
+        "description": "Locate the first selected Mod. When multiple items are selected, only the first one is used."
+      },
+      "toggle_selected_active": {
+        "title": "Activate or deactivate selected Mods",
+        "description": "Switch selected items between the active and deactivated lists based on their current state."
+      },
+      "toggle_selected_coexistence_source": {
+        "title": "Switch selected Mod Workshop/local version",
+        "description": "Use the first switchable selected item as the reference and switch all selected coexistence Mods to the other version. Only Mods with coexistence versions are affected."
+      },
+      "undo_list_history": {
+        "title": "Undo list operation",
+        "description": "Undo the most recent Mod list change in the current session."
+      },
+      "unsubscribe_and_delete_selected_workshop": {
+        "title": "Unsubscribe and delete selected Mods",
+        "description": "Unsubscribe the selected Workshop Mods and delete their local files."
+      },
+      "unsubscribe_selected_workshop": {
+        "title": "Unsubscribe selected Mods",
+        "description": "Unsubscribe the selected Workshop Mods. Processed items will be removed from the list when finished."
+      }
+    },
+    "selection": {
+      "add_range_select": {
+        "title": "Add range selection",
+        "description": "Keep the current selection and add a continuous range."
+      },
+      "extend_focus": {
+        "title": "Keyboard range selection",
+        "description": "When the list has focus, extend the continuous selection range with the arrow keys."
+      },
+      "move_focus": {
+        "title": "Move list selection",
+        "description": "When the list has focus, move the current selection up or down."
+      },
+      "range_select": {
+        "title": "Range selection",
+        "description": "Select a continuous range from the previous selection anchor to the clicked item."
+      },
+      "select_all_in_list": {
+        "title": "Select all in current list",
+        "description": "Select every item in the current list or current group."
+      },
+      "toggle_item": {
+        "title": "Toggle item selection",
+        "description": "Add or remove the clicked item without clearing the current selection."
+      }
     }
   }
 }

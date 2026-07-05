@@ -15,6 +15,7 @@ import pathspec
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCALE_PATH = ROOT / "frontend" / "src" / "locales" / "zh-CN.json"
 BUILTIN_LOCALES_DIR = ROOT / "frontend" / "src" / "locales"
+BUILTIN_COMMANDS_PATH = ROOT / "frontend" / "src" / "app" / "commands" / "builtinCommands.js"
 SCAN_ROOTS = (
     ROOT / "backend",
     ROOT / "frontend" / "src",
@@ -42,6 +43,19 @@ JS_CALL_PATTERN = re.compile(
     r"(?P<default>['\"`])(?P<default_text>(?:\\.|(?!\3).)*?)\3",
     re.DOTALL,
 )
+BUILTIN_COMMAND_CATEGORY_PATTERN = re.compile(
+    r"(?P<name>\w+):\s*\{\s*key:\s*(?P<key>['\"`])(?P<key_text>(?:\\.|(?!(?P=key)).)*?)(?P=key)\s*,\s*"
+    r"defaultText:\s*(?P<default>['\"`])(?P<default_text>(?:\\.|(?!(?P=default)).)*?)(?P=default)\s*\}",
+    re.DOTALL,
+)
+BUILTIN_COMMAND_TEXT_PATTERN = re.compile(
+    r"id:\s*(?P<id>['\"`])(?P<id_text>(?:\\.|(?!(?P=id)).)*?)(?P=id)\s*,\s*"
+    r"title:\s*(?P<title>['\"`])(?P<title_text>(?:\\.|(?!(?P=title)).)*?)(?P=title)\s*,\s*"
+    r"category:\s*COMMAND_CATEGORIES\.(?P<category>\w+)\s*,\s*"
+    r"description:\s*(?P<description>['\"`])(?P<description_text>(?:\\.|(?!(?P=description)).)*?)(?P=description)",
+    re.DOTALL,
+)
+COMMAND_ID_CAMEL_PATTERN = re.compile(r"([a-z0-9])([A-Z])")
 PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
 
 
@@ -93,6 +107,38 @@ def decode_js_string(raw: str, quote: str) -> str:
     return ast.literal_eval(f'"{body}"')
 
 
+def command_id_to_locale_base(command_id: str) -> str:
+    segments = []
+    for segment in str(command_id or "").split("."):
+        normalized = COMMAND_ID_CAMEL_PATTERN.sub(r"\1_\2", segment)
+        normalized = re.sub(r"[\s-]+", "_", normalized).lower().strip("_")
+        if normalized:
+            segments.append(normalized)
+    return ".".join(segments)
+
+
+def extract_builtin_command_messages(path: Path, source: str) -> dict[str, str]:
+    if path != BUILTIN_COMMANDS_PATH:
+        return {}
+    messages: dict[str, str] = {}
+    for match in BUILTIN_COMMAND_CATEGORY_PATTERN.finditer(source):
+        key = decode_js_string(match.group("key_text"), match.group("key"))
+        default_text = decode_js_string(match.group("default_text"), match.group("default"))
+        if key.strip():
+            messages[key.strip()] = default_text
+    for match in BUILTIN_COMMAND_TEXT_PATTERN.finditer(source):
+        command_id = decode_js_string(match.group("id_text"), match.group("id"))
+        base_key = command_id_to_locale_base(command_id)
+        if not base_key:
+            continue
+        messages[f"command.{base_key}.title"] = decode_js_string(match.group("title_text"), match.group("title"))
+        messages[f"command.{base_key}.description"] = decode_js_string(
+            match.group("description_text"),
+            match.group("description"),
+        )
+    return messages
+
+
 def extract_js_messages(path: Path) -> dict[str, str]:
     source = path.read_text(encoding="utf-8")
     messages: dict[str, str] = {}
@@ -101,6 +147,7 @@ def extract_js_messages(path: Path) -> dict[str, str]:
         default_text = decode_js_string(match.group("default_text"), match.group("default"))
         if key.strip():
             messages[key.strip()] = default_text
+    messages.update(extract_builtin_command_messages(path, source))
     return messages
 
 

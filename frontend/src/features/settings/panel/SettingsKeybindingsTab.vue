@@ -2,21 +2,21 @@
   <section class="animate-in fade-in slide-in-from-right-4">
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h3 class="text-lg font-bold text-text-main">快捷键</h3>
+        <h3 class="text-lg font-bold text-text-main">{{ t('ui.settings.keybindings.title', '快捷键') }}</h3>
         <p class="mt-1 text-xs leading-5 text-text-dim">
-          管理全局命令的键盘入口；分区命令和插件命令会继续复用这里的规则。
+          {{ t('ui.settings.keybindings.description', '管理全局命令的键盘入口；分区命令和插件命令会继续复用这里的规则。') }}
         </p>
       </div>
       <button class="rounded-lg border border-accent-warn/20 bg-accent-warn/10 px-3 py-1.5 text-xs font-bold text-accent-warn transition-colors hover:bg-accent-warn/18"
         @click="resetAllKeybindings" >
-        恢复全部默认
+        {{ t('ui.settings.keybindings.reset_all', '恢复全部默认') }}
       </button>
     </div>
 
     <div class="mb-4 grid grid-cols-[minmax(0,1fr)_180px] gap-3">
       <div class="relative">
         <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-disabled" />
-        <input v-model="searchQuery" placeholder="搜索命令名称、ID 或分类" class="input-glass h-10 w-full pl-9 pr-3 text-sm text-text-main outline-none" >
+        <input v-model="searchQuery" :placeholder="t('ui.settings.keybindings.search_placeholder', '搜索命令名称、ID 或分类')" class="input-glass h-10 w-full pl-9 pr-3 text-sm text-text-main outline-none" >
       </div>
       <CommonSelect v-model="selectedCategory" :options="categoryOptions" mini />
     </div>
@@ -24,22 +24,22 @@
     <div v-if="conflicts.length" class="mb-4 rounded-md border border-accent-warn/20 bg-accent-warn/8 px-4 py-3 text-xs leading-5 text-accent-warn" >
       <div class="mb-1 flex items-center gap-2 font-bold text-text-main">
         <AlertTriangle class="size-4 text-accent-warn" />
-        发现 {{ conflicts.length }} 处快捷键复用
+        {{ t('ui.settings.keybindings.conflict_count', '发现 {count} 处快捷键复用', { count: conflicts.length }) }}
       </div>
       <div class="text-text-dim">
-        严重冲突会影响触发结果；跨区域复用允许保留，运行时会按浮层、当前区域、最近区域、全局的顺序执行。
+        {{ t('ui.settings.keybindings.conflict_desc', '严重冲突会影响触发结果；跨区域复用允许保留，运行时会按浮层、当前区域、最近区域、全局的顺序执行。') }}
       </div>
     </div>
 
     <div class="overflow-hidden rounded-md border border-border-base/10 bg-bg-muted/35">
       <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(220px,0.9fr)_120px] border-b border-border-base/10 bg-bg-surface/70 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-text-disabled">
-        <div>命令</div>
-        <div>快捷键</div>
-        <div class="text-right">操作</div>
+        <div>{{ t('ui.settings.keybindings.command', '命令') }}</div>
+        <div>{{ t('ui.settings.keybindings.keybinding', '快捷键') }}</div>
+        <div class="text-right">{{ t('ui.settings.keybindings.operation', '操作') }}</div>
       </div>
 
       <div v-if="filteredRows.length === 0" class="px-4 py-10 text-center text-sm text-text-dim">
-        没有匹配的命令
+        {{ t('ui.settings.keybindings.empty', '没有匹配的命令') }}
       </div>
 
       <div v-for="row in filteredRows" :key="row.command.id" :ref="el => { if (el) rowRefs[row.command.id] = el }" class="grid grid-cols-[minmax(0,1.3fr)_minmax(220px,0.9fr)_120px] items-center gap-3 border-b border-border-base/5 px-4 py-3 last:border-b-0" >
@@ -49,10 +49,10 @@
             <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim">{{ row.command.category }}</span>
             <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim">{{ scopeLabel(row.command.scope) }}</span>
             <span v-if="row.command.source !== 'builtin'" class="rounded border border-accent-cool/20 bg-accent-cool/10 px-1.5 py-0.5 text-[10px] text-accent-cool">
-              插件
+              {{ t('ui.settings.keybindings.plugin', '插件') }}
             </span>
             <span v-if="row.command.dangerLevel !== 'normal'" class="rounded border border-accent-warn/20 bg-accent-warn/10 px-1.5 py-0.5 text-[10px] text-accent-warn">
-              需谨慎
+              {{ t('ui.settings.keybindings.caution', '需谨慎') }}
             </span>
           </div>
           <div class="mt-1 truncate font-mono text-[11px] text-text-disabled">{{ row.command.id }}</div>
@@ -64,7 +64,7 @@
               :class="conflictClass(conflict.level)"
               v-tooltip="conflictTooltip(conflict)"
               @click="jumpToConflictTarget(row.command.id, conflict)" >
-              [{{ formatKeybindingLabel(conflict.keybinding) }}] 冲突
+              {{ t('ui.settings.keybindings.conflict_badge', '[{keybinding}] 冲突', { keybinding: formatKeybindingLabel(conflict.keybinding) }) }}
             </span>
           </div>
         </div>
@@ -80,10 +80,10 @@
                 ×
               </button>
             </span>
-            <span v-if="row.keys.length === 0" class="text-xs text-text-disabled">未绑定</span>
+            <span v-if="row.keys.length === 0" class="text-xs text-text-disabled">{{ t('ui.settings.keybindings.unbound', '未绑定') }}</span>
           </div>
           <div v-if="row.command.keybindingReadonly" class="mt-2 text-xs text-text-dim">
-            固定操作，仅用于说明和冲突提示。
+            {{ t('ui.settings.keybindings.readonly_desc', '固定操作，仅用于说明和冲突提示。') }}
           </div>
           <div v-else class="mt-2 flex flex-wrap items-center gap-1.5">
             <button v-for="modifier in modifierOptions" :key="`${row.command.id}:${modifier.value}`" class="rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors"
@@ -93,31 +93,31 @@
             </button>
             <span class="text-xs font-black text-text-disabled">+</span>
             <div class="min-w-34 flex-1">
-              <CommonSelect :model-value="getDraftMainKey(row.command.id)" :options="mainKeyOptions" mini editable placeholder="选择主键或鼠标键"
+              <CommonSelect :model-value="getDraftMainKey(row.command.id)" :options="mainKeyOptions" mini editable :placeholder="t('ui.settings.keybindings.main_key_placeholder', '选择主键或鼠标键')"
                 @update:model-value="setDraftMainKey(row.command.id, $event)"
               />
             </div>
             <button class="rounded-md border border-accent-primary/20 bg-accent-primary/10 px-2 py-1 text-xs font-bold text-accent-primary transition-colors hover:bg-accent-primary/18 disabled:cursor-not-allowed disabled:opacity-40"
               :disabled="!buildDraftKeybinding(row.command.id)"
               @click="addDraftKeybinding(row.command)" >
-              添加
+              {{ t('common.action.add', '添加') }}
             </button>
           </div>
         </div>
 
         <div v-if="row.command.keybindingReadonly" class="flex justify-end">
           <span class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-xs font-bold text-text-disabled">
-            锁定
+            {{ t('ui.settings.keybindings.locked', '锁定') }}
           </span>
         </div>
         <div v-else class="flex justify-end gap-2">
           <button class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-xs font-bold text-text-dim transition-colors hover:text-text-main"
             @click="resetCommandKeybindings(row.command.id)" >
-            默认
+            {{ t('common.status.default', '默认') }}
           </button>
           <button class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-xs font-bold text-text-dim transition-colors hover:text-accent-danger"
             @click="clearCommandKeybindings(row.command.id)" >
-            清空
+            {{ t('common.action.clear', '清空') }}
           </button>
         </div>
       </div>
@@ -132,6 +132,7 @@ import { getAllCommands } from '../../../shared/commands/commandRegistry'
 import { createDefaultKeybindingConfig, detectKeybindingConflicts, getCommandDisplayKeys, getCommandEffectiveKeys } from '../../../shared/commands/keybindingConflicts'
 import { formatKeybindingLabel, normalizeKeybinding, normalizeKeybindingList } from '../../../shared/commands/keybindingParser'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
+import { t } from '../../../shared/i18n'
 
 const props = defineProps({
   formData: { type: Object, required: true },
@@ -162,10 +163,19 @@ const ensureKeybindingConfig = () => {
 
 const keybindingConfig = computed(() => ensureKeybindingConfig())
 const commands = computed(() => getAllCommands())
-const categories = computed(() => [...new Set(commands.value.map(command => command.category))].sort((left, right) => left.localeCompare(right, 'zh-CN')))
+const commandCategoryValue = (command = {}) => String(command.categoryKey || command.categoryDefault || command.category || '').trim()
+const categories = computed(() => {
+  const map = new Map()
+  commands.value.forEach(command => {
+    const value = commandCategoryValue(command)
+    if (!value || map.has(value)) return
+    map.set(value, { label: command.category, value })
+  })
+  return Array.from(map.values()).sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+})
 const categoryOptions = computed(() => [
-  { label: '全部分类', value: 'all' },
-  ...categories.value.map(category => ({ label: category, value: category })),
+  { label: t('ui.settings.keybindings.all_categories', '全部分类'), value: 'all' },
+  ...categories.value,
 ])
 const conflicts = computed(() => detectKeybindingConflicts(commands.value, keybindingConfig.value))
 
@@ -175,13 +185,13 @@ const modifierOptions = [
   { label: 'Shift', value: 'Shift' },
 ]
 
-const mainKeyOptions = [
-  { label: '无主键（仅修饰键）', value: '__modifier_only__' },
+const mainKeyOptions = computed(() => [
+  { label: t('ui.settings.keybindings.main_key.modifier_only', '无主键（仅修饰键）'), value: '__modifier_only__' },
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(key => ({ label: key, value: key })),
   ...'0123456789'.split('').map(key => ({ label: key, value: key })),
   ...Array.from({ length: 12 }, (_, index) => ({ label: `F${index + 1}`, value: `F${index + 1}` })),
   { label: 'Enter', value: 'Enter' },
-  { label: '空格', value: 'Space' },
+  { label: t('ui.settings.keybindings.main_key.space', '空格'), value: 'Space' },
   { label: 'Tab', value: 'Tab' },
   { label: 'ESC', value: 'Escape' },
   { label: 'Backspace', value: 'Backspace' },
@@ -194,12 +204,12 @@ const mainKeyOptions = [
   { label: 'End', value: 'End' },
   { label: 'PageUp', value: 'PageUp' },
   { label: 'PageDown', value: 'PageDown' },
-  { label: '鼠标左键', value: 'MouseLeft' },
-  { label: '鼠标中键', value: 'MouseMiddle' },
-  { label: '鼠标右键', value: 'MouseRight' },
-  { label: '鼠标后退键', value: 'MouseBack' },
-  { label: '鼠标前进键', value: 'MouseForward' },
-]
+  { label: t('ui.settings.keybindings.main_key.mouse_left', '鼠标左键'), value: 'MouseLeft' },
+  { label: t('ui.settings.keybindings.main_key.mouse_middle', '鼠标中键'), value: 'MouseMiddle' },
+  { label: t('ui.settings.keybindings.main_key.mouse_right', '鼠标右键'), value: 'MouseRight' },
+  { label: t('ui.settings.keybindings.main_key.mouse_back', '鼠标后退键'), value: 'MouseBack' },
+  { label: t('ui.settings.keybindings.main_key.mouse_forward', '鼠标前进键'), value: 'MouseForward' },
+])
 
 const conflictsByCommand = computed(() => {
   // 冲突按命令反查，列表行只关心自己相关的提示，点击时再跳到另一个命令。
@@ -222,7 +232,7 @@ const commandRows = computed(() => commands.value.map(command => ({
 const filteredRows = computed(() => {
   const query = String(searchQuery.value || '').trim().toLowerCase()
   return commandRows.value.filter(({ command }) => {
-    if (selectedCategory.value !== 'all' && command.category !== selectedCategory.value) return false
+    if (selectedCategory.value !== 'all' && commandCategoryValue(command) !== selectedCategory.value) return false
     if (!query) return true
     return [
       command.title,
@@ -234,13 +244,18 @@ const filteredRows = computed(() => {
 })
 
 const scopeLabel = (scope = '') => {
-  if (scope === 'global') return '全局'
+  if (scope === 'global') return t('ui.settings.keybindings.scope.global', '全局')
   return scope
 }
 
 const conflictLevelLabel = (level = '') => {
-  const labels = { critical: '严重', high: '较高', medium: '提示', low: '轻微' }
-  return labels[level] || '提示'
+  const labels = {
+    critical: t('ui.settings.keybindings.conflict_level.critical', '严重'),
+    high: t('ui.settings.keybindings.conflict_level.high', '较高'),
+    medium: t('ui.settings.keybindings.conflict_level.medium', '提示'),
+    low: t('ui.settings.keybindings.conflict_level.low', '轻微'),
+  }
+  return labels[level] || t('ui.settings.keybindings.conflict_level.medium', '提示')
 }
 
 const conflictClass = (level = '') => {
@@ -255,12 +270,11 @@ const conflictClass = (level = '') => {
 
 const conflictTooltip = (conflict) => {
   const [leftTitle, rightTitle] = conflict.commandTitles
-  const [leftId, rightId] = conflict.commandIds
   return [
-    `[[${leftTitle}]] 和 [[${rightTitle}]] 的 ^^[${formatKeybindingLabel(conflict.keybinding)}]^^ 快捷键冲突。`,
+    t('tooltip.settings.keybindings.conflict_title', '[[{leftTitle}]] 和 [[{rightTitle}]] 的 ^^[{keybinding}]^^ 快捷键冲突。', { leftTitle, rightTitle, keybinding: formatKeybindingLabel(conflict.keybinding) }),
     conflict.message,
-    `作用域：${conflict.scopes.join(' / ')}`,
-    '__点击跳转到另一条冲突命令。__',
+    t('tooltip.settings.keybindings.scopes', '作用域：{scopes}', { scopes: conflict.scopes.join(' / ') }),
+    t('tooltip.settings.keybindings.jump', '__点击跳转到另一条冲突命令。__'),
   ].join('\n')
 }
 

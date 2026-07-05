@@ -10,12 +10,12 @@
         <header class="relative z-10 flex cursor-move select-none items-center justify-between gap-3 border-b border-border-base/10 px-4 py-3"
           @pointerdown="handleDragStart" >
           <div class="min-w-0">
-            <h3 class="truncate text-base font-black text-text-main">{{ draft.id ? '编辑主题配色' : '创建主题配色' }}</h3>
-            <p class="mt-0.5 text-xs text-text-dim">可随意拖动窗口，边看界面边调颜色。</p>
+            <h3 class="truncate text-base font-black text-text-main">{{ draft.id ? t('ui.settings.theme.editor.edit_title', '编辑主题配色') : t('ui.settings.theme.editor.create_title', '创建主题配色') }}</h3>
+            <p class="mt-0.5 text-xs text-text-dim">{{ t('ui.settings.theme.editor.description', '可随意拖动窗口，边看界面边调颜色。') }}</p>
           </div>
           <div class="flex shrink-0 items-center gap-2" @pointerdown.stop>
             <button class="modal-close-button"
-              aria-label="关闭"
+              :aria-label="t('common.action.close', '关闭')"
               @click="$emit('close')" >
               <X class="size-4" />
           </button>
@@ -24,11 +24,11 @@
 
         <div class="relative z-10 flex-1 overflow-y-auto p-3 custom-scrollbar">
           <label>
-            <span class="mb-1 block px-1 text-xs font-bold uppercase tracking-widest text-text-dim">主题名称</span>
-            <input v-model="draft.name" class="input-glass h-9 w-full px-3 text-sm text-text-main focus:outline-none" placeholder="例如：我的主题">
+            <span class="mb-1 block px-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.settings.theme.editor.name', '主题名称') }}</span>
+            <input v-model="draft.name" class="input-glass h-9 w-full px-3 text-sm text-text-main focus:outline-none" :placeholder="t('ui.settings.theme.editor.name_placeholder', '例如：我的主题')">
           </label>
 
-          <section v-for="group in THEME_TOKEN_GROUPS" :key="group.key" class="modal-section mt-2 p-2.5">
+          <section v-for="group in themeTokenGroups" :key="group.key" class="modal-section mt-2 p-2.5">
             <h4 class="mb-2 text-sm font-black text-text-main">{{ group.label }}</h4>
             <div class="grid gap-1" :style="{ gridTemplateColumns: groupGridTemplate(group.key) }">
               <div v-for="token in group.tokens" :key="`${group.key}-${token.key}`" class="rounded-xl bg-bg-inset/45 px-2 py-0.5">
@@ -51,12 +51,12 @@
         </div>
 
         <footer class="modal-footer relative z-10 flex items-center justify-between gap-3 px-4 py-3">
-          <p class="text-xs text-text-dim">保存后会保留为自定义主题。</p>
+          <p class="text-xs text-text-dim">{{ t('ui.settings.theme.editor.save_desc', '保存后会保留为自定义主题。') }}</p>
           <div class="flex shrink-0 gap-2">
-            <button class="text-sm font-bold text-text-dim hover:text-text-main" @click="$emit('close')">取消</button>
+            <button class="text-sm font-bold text-text-dim hover:text-text-main" @click="$emit('close')">{{ t('common.action.cancel', '取消') }}</button>
             <button class="rounded-xl bg-accent-primary px-4 py-1.5 text-sm font-black text-on-accent-primary transition-all hover:bg-accent-primary/85"
               @click="handleSave"
-            >保存</button>
+            >{{ t('common.action.save', '保存') }}</button>
           </div>
         </footer>
       </div>
@@ -75,8 +75,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import GlobalColorPicker from '../../../shared/components/GlobalColorPicker.vue'
-import { THEME_TOKEN_GROUPS, applyTheme, createEditableThemeFrom, normalizeTheme } from './themeManager'
+import { createThemeTokenGroups, applyTheme, createEditableThemeFrom, normalizeTheme } from './themeManager'
 import { X } from 'lucide-vue-next'
+import { t } from '../../../shared/i18n'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -97,6 +98,7 @@ const panelStyle = computed(() => ({
   left: `${panelPosition.value.x}px`,
   top: `${panelPosition.value.y}px`,
 }))
+const themeTokenGroups = computed(() => createThemeTokenGroups())
 
 const colorFieldKey = (groupKey, tokenKey) => `${groupKey}.${tokenKey}`
 

@@ -1,5 +1,6 @@
 import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useProfileStore } from '../../../features/profiles/profileStore'
+import { t } from '../../../shared/i18n'
 
 const SETTING_KEYS_REQUIRING_LIST_SCAN = [
   'workshop_mods_path',
@@ -47,14 +48,14 @@ export const useSettingsActions = ({
     isLoading.value = true
     try {
       const res = await window.pywebview.api.save_setting(key, value)
-      if (checkResult(res, "保存单项设置", true)) {
+      if (checkResult(res, t('check.settings.save_one', '保存单项设置'), true)) {
         const nextSettings = res.data?.settings || null
         if (nextSettings) Object.assign(settings.value, nextSettings)
         else settings.value[key] = value
       }
     } catch (e) {
       console.error("保存单项设置异常:", e)
-      toast.error(toUserMessage(e?.message || e, '保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.settings.save_failed', '保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。')))
     } finally {
       isLoading.value = false
     }
@@ -63,7 +64,7 @@ export const useSettingsActions = ({
   const refreshUserThemes = async () => {
     if (!window.pywebview) return userThemes.value
     const res = await window.pywebview.api.theme_list_user()
-    if (checkResult(res, "读取用户主题", true)) {
+    if (checkResult(res, t('check.settings.read_user_themes', '读取用户主题'), true)) {
       userThemes.value = res.data?.themes || []
       applyCurrentTheme()
     }
@@ -73,7 +74,7 @@ export const useSettingsActions = ({
   const saveUserTheme = async (theme) => {
     if (!window.pywebview) return null
     const res = await window.pywebview.api.theme_save_user(theme)
-    if (!checkResult(res, "保存用户主题")) return null
+    if (!checkResult(res, t('check.settings.save_user_theme', '保存用户主题'))) return null
     const savedTheme = res.data?.theme
     if (savedTheme) {
       const nextThemes = userThemes.value.filter(item => item.id !== savedTheme.id)
@@ -86,7 +87,7 @@ export const useSettingsActions = ({
   const deleteUserTheme = async (themeId) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.theme_delete_user(themeId)
-    if (!checkResult(res, "删除用户主题")) return false
+    if (!checkResult(res, t('check.settings.delete_user_theme', '删除用户主题'))) return false
     userThemes.value = userThemes.value.filter(item => item.id !== themeId)
     applyCurrentTheme()
     return !!res.data?.deleted
@@ -95,14 +96,14 @@ export const useSettingsActions = ({
   const revealSecret = async (secretKey, options = {}) => {
     if (!window.pywebview) return null
     const res = await window.pywebview.api.settings_reveal_secret(secretKey)
-    if (!checkResult(res, '读取已保存密钥', false, { ...options, debugMode: false })) return null
+    if (!checkResult(res, t('check.settings.read_saved_secret', '读取已保存密钥'), false, { ...options, debugMode: false })) return null
     return res.data || null
   }
 
   const clearSecret = async (secretKey) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.settings_clear_secret(secretKey)
-    if (!checkResult(res, '清除密钥', true)) return false
+    if (!checkResult(res, t('check.settings.clear_secret', '清除密钥'), true)) return false
     if (res.data?.settings) Object.assign(settings.value, res.data.settings)
     return true
   }
@@ -115,7 +116,7 @@ export const useSettingsActions = ({
       const profileStore = useProfileStore()
       const previousListSnapshot = takeModListSettingsSnapshot(settings.value, profileStore.activeContext)
       const res = await window.pywebview.api.save_all_settings(newSettings)
-      if (checkResult(res, "应用设置")) {
+      if (checkResult(res, t('check.settings.apply', '应用设置'))) {
         const nextSettings = res.data.settings || {}
         const nextContext = res.data.active_context || profileStore.activeContext
         // 更新本地 store
@@ -142,7 +143,7 @@ export const useSettingsActions = ({
       }
     } catch (e) {
       console.error("应用设置异常:", e)
-      toast.error(toUserMessage(e?.message || e, '应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.settings.apply_failed', '应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入，详细原因已写入系统日志。')))
     } finally {
       isLoading.value = false
     }

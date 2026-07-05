@@ -1,15 +1,15 @@
 <template>
   <div class="relative">
     <div class="mb-1 flex items-center justify-between px-1">
-      <label class="text-xs font-bold uppercase tracking-widest text-text-dim">配色方案</label>
+      <label class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.settings.theme.scheme', '配色方案') }}</label>
       <button type="button" class="text-xs font-bold text-accent-primary hover:text-text-main transition-colors" @click="$emit('create')">
-        创建配色
+        {{ t('ui.settings.theme.create', '创建配色') }}
       </button>
     </div>
 
     <button ref="triggerRef" type="button" class="input-glass flex h-9 w-full items-center justify-between gap-3 px-3 bg-glass-light text-left text-sm text-text-main"
       @click="isOpen = !isOpen" >
-      <span class="min-w-0 flex-1 truncate font-bold">{{ selectedTheme?.name || '未选择主题' }}</span>
+      <span class="min-w-0 flex-1 truncate font-bold">{{ selectedTheme?.name || t('ui.settings.theme.none_selected', '未选择主题') }}</span>
       <span v-if="selectedTheme" class="flex shrink-0 items-center gap-1">
         <span v-for="color in getThemeSwatchColors(selectedTheme)" :key="color" class="size-4 rounded-full border border-border-base/18 shadow-sm"
           :style="{ backgroundColor: color }"
@@ -31,7 +31,7 @@
             <div class="flex items-center gap-2">
               <span class="truncate text-sm font-black text-text-main">{{ theme.name }}</span>
               <span class="rounded border border-border-base/10 px-1.5 py-0.5 text-[0.65rem] text-text-dim">
-                {{ theme.builtin ? '内置' : '自定义' }}
+                {{ theme.builtin ? t('ui.settings.theme.builtin', '内置') : t('ui.settings.theme.custom', '自定义') }}
               </span>
             </div>
             <div class="mt-1 font-mono text-[0.65rem] text-text-dim">{{ theme.id }}</div>
@@ -44,9 +44,9 @@
 
           <div v-if="!theme.builtin" class="absolute shrink-0 gap-1 opacity-0 group-hover:opacity-100 right-3 bg-bg-surface/60 px-2 py-1 rounded-md shadow-sm/20 backdrop-blur-sm border border-border-base/5">
             <button type="button" class="rounded-lg px-2 py-1 text-xs font-bold text-accent-primary hover:bg-accent-primary/15"
-              @click.stop="$emit('edit', theme)" >编辑</button>
+              @click.stop="$emit('edit', theme)" >{{ t('common.action.edit', '编辑') }}</button>
             <button type="button" class="rounded-lg px-2 py-1 text-xs font-bold text-accent-danger hover:bg-accent-danger/15"
-              @click.stop="$emit('delete', theme)" >删除</button>
+              @click.stop="$emit('delete', theme)" >{{ t('common.action.delete', '删除') }}</button>
           </div>
 
         </div>
@@ -58,6 +58,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import FixedPopover from '../../../shared/components/popover/FixedPopover.vue'
+import { t } from '../../../shared/i18n'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

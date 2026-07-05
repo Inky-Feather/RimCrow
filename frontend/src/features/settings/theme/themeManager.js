@@ -1,53 +1,55 @@
 import builtinThemes from '../../../app/styles/builtinThemes.json'
 import { hexToRgbComponents, normalizeHexColor } from '../../../shared/lib/color'
+import { t } from '../../../shared/i18n'
 
 export const DEFAULT_THEME_ID = 'obsidian-cyan'
 export const BUILTIN_THEMES = builtinThemes.map(theme => ({ ...theme, builtin: true }))
 
-export const THEME_TOKEN_GROUPS = [
-  { key: 'bg', label: '背景色', tokens: [
-    { key: 'deep', label: '主背景色', usage: '影响主界面和大面积背景。' },
-    { key: 'surface', label: '面板背景色', usage: '影响弹窗、列表面板和卡片底色。' },
-    { key: 'elevated', label: '浮起背景色', usage: '影响浮窗、突出卡片和强调面板。' },
-    { key: 'highlight', label: '层级背景色', usage: '影响选中、重点区域和较强层次。' },
-    { key: 'muted', label: '弱背景色', usage: '影响悬停、标签和轻量分区。' },
-    { key: 'inset', label: '内嵌背景色', usage: '影响输入框、代码区和日志区。' },
-    { key: 'overlay', label: '叠加背景色', usage: '影响悬停、选中、按下和轻量控件反馈，可通过透明度控制强弱。' },
-    { key: 'contrast', label: '反差背景色', usage: '影响高反差按钮、开关滑块和需要突出显示的小控件。' },
-    { key: 'neutral', label: '中性填充色', usage: '影响非强调色的小圆点、开关滑块和状态标记。' },
+export const createThemeTokenGroups = () => [
+  { key: 'bg', label: t('ui.settings.theme.tokens.bg.label', '背景色'), tokens: [
+    { key: 'deep', label: t('ui.settings.theme.tokens.bg.deep.label', '主背景色'), usage: t('ui.settings.theme.tokens.bg.deep.usage', '影响主界面和大面积背景。') },
+    { key: 'surface', label: t('ui.settings.theme.tokens.bg.surface.label', '面板背景色'), usage: t('ui.settings.theme.tokens.bg.surface.usage', '影响弹窗、列表面板和卡片底色。') },
+    { key: 'elevated', label: t('ui.settings.theme.tokens.bg.elevated.label', '浮起背景色'), usage: t('ui.settings.theme.tokens.bg.elevated.usage', '影响浮窗、突出卡片和强调面板。') },
+    { key: 'highlight', label: t('ui.settings.theme.tokens.bg.highlight.label', '层级背景色'), usage: t('ui.settings.theme.tokens.bg.highlight.usage', '影响选中、重点区域和较强层次。') },
+    { key: 'muted', label: t('ui.settings.theme.tokens.bg.muted.label', '弱背景色'), usage: t('ui.settings.theme.tokens.bg.muted.usage', '影响悬停、标签和轻量分区。') },
+    { key: 'inset', label: t('ui.settings.theme.tokens.bg.inset.label', '内嵌背景色'), usage: t('ui.settings.theme.tokens.bg.inset.usage', '影响输入框、代码区和日志区。') },
+    { key: 'overlay', label: t('ui.settings.theme.tokens.bg.overlay.label', '叠加背景色'), usage: t('ui.settings.theme.tokens.bg.overlay.usage', '影响悬停、选中、按下和轻量控件反馈，可通过透明度控制强弱。') },
+    { key: 'contrast', label: t('ui.settings.theme.tokens.bg.contrast.label', '反差背景色'), usage: t('ui.settings.theme.tokens.bg.contrast.usage', '影响高反差按钮、开关滑块和需要突出显示的小控件。') },
+    { key: 'neutral', label: t('ui.settings.theme.tokens.bg.neutral.label', '中性填充色'), usage: t('ui.settings.theme.tokens.bg.neutral.usage', '影响非强调色的小圆点、开关滑块和状态标记。') },
   ] },
-  { key: 'text', label: '字体色', tokens: [
-    { key: 'main', label: '主要文字色', usage: '影响标题、正文和常用图标。' },
-    { key: 'soft', label: '柔和正文色', usage: '影响弱化正文、非焦点标题和仍需清晰阅读的信息。' },
-    { key: 'dim', label: '次要文字色', usage: '影响说明、提示和弱化信息。' },
-    { key: 'subtle', label: '弱提示文字色', usage: '影响占位、禁用和最弱提示。' },
-    { key: 'disabled', label: '不可用文字色', usage: '影响禁用、空状态和最低优先级提示。' },
-    { key: 'inverse', label: '反差文字色', usage: '影响深浅反差按钮和特殊徽标。' },
+  { key: 'text', label: t('ui.settings.theme.tokens.text.label', '字体色'), tokens: [
+    { key: 'main', label: t('ui.settings.theme.tokens.text.main.label', '主要文字色'), usage: t('ui.settings.theme.tokens.text.main.usage', '影响标题、正文和常用图标。') },
+    { key: 'soft', label: t('ui.settings.theme.tokens.text.soft.label', '柔和正文色'), usage: t('ui.settings.theme.tokens.text.soft.usage', '影响弱化正文、非焦点标题和仍需清晰阅读的信息。') },
+    { key: 'dim', label: t('ui.settings.theme.tokens.text.dim.label', '次要文字色'), usage: t('ui.settings.theme.tokens.text.dim.usage', '影响说明、提示和弱化信息。') },
+    { key: 'subtle', label: t('ui.settings.theme.tokens.text.subtle.label', '弱提示文字色'), usage: t('ui.settings.theme.tokens.text.subtle.usage', '影响占位、禁用和最弱提示。') },
+    { key: 'disabled', label: t('ui.settings.theme.tokens.text.disabled.label', '不可用文字色'), usage: t('ui.settings.theme.tokens.text.disabled.usage', '影响禁用、空状态和最低优先级提示。') },
+    { key: 'inverse', label: t('ui.settings.theme.tokens.text.inverse.label', '反差文字色'), usage: t('ui.settings.theme.tokens.text.inverse.usage', '影响深浅反差按钮和特殊徽标。') },
   ] },
-  { key: 'accent', label: '主题色', tokens: [
-    { key: 'primary', label: '主操作色', usage: '影响保存、确认和当前选中。' },
-    { key: 'danger', label: '危险色', usage: '影响删除、错误和危险确认。' },
-    { key: 'highlight', label: '高亮色', usage: '影响搜索命中和重点标记。' },
-    { key: 'special', label: '特殊功能色', usage: '影响 AI、高级功能和特殊入口。' },
-    { key: 'cool', label: '信息色', usage: '影响链接和补充信息。' },
-    { key: 'success', label: '成功色', usage: '影响完成、可用和成功状态。' },
-    { key: 'tip', label: '提示色', usage: '影响推荐、提示和轻量成功。' },
-    { key: 'warn', label: '注意色', usage: '影响引导、提醒和轻警告。' },
-    { key: 'secondary', label: '辅助强调色', usage: '影响分组和次要操作。' },
-    { key: 'warning', label: '警告色', usage: '影响待处理和中等警告。' },
+  { key: 'accent', label: t('ui.settings.theme.tokens.accent.label', '主题色'), tokens: [
+    { key: 'primary', label: t('ui.settings.theme.tokens.accent.primary.label', '主操作色'), usage: t('ui.settings.theme.tokens.accent.primary.usage', '影响保存、确认和当前选中。') },
+    { key: 'danger', label: t('ui.settings.theme.tokens.accent.danger.label', '危险色'), usage: t('ui.settings.theme.tokens.accent.danger.usage', '影响删除、错误和危险确认。') },
+    { key: 'highlight', label: t('ui.settings.theme.tokens.accent.highlight.label', '高亮色'), usage: t('ui.settings.theme.tokens.accent.highlight.usage', '影响搜索命中和重点标记。') },
+    { key: 'special', label: t('ui.settings.theme.tokens.accent.special.label', '特殊功能色'), usage: t('ui.settings.theme.tokens.accent.special.usage', '影响 AI、高级功能和特殊入口。') },
+    { key: 'cool', label: t('ui.settings.theme.tokens.accent.cool.label', '信息色'), usage: t('ui.settings.theme.tokens.accent.cool.usage', '影响链接和补充信息。') },
+    { key: 'success', label: t('ui.settings.theme.tokens.accent.success.label', '成功色'), usage: t('ui.settings.theme.tokens.accent.success.usage', '影响完成、可用和成功状态。') },
+    { key: 'tip', label: t('ui.settings.theme.tokens.accent.tip.label', '提示色'), usage: t('ui.settings.theme.tokens.accent.tip.usage', '影响推荐、提示和轻量成功。') },
+    { key: 'warn', label: t('ui.settings.theme.tokens.accent.warn.label', '注意色'), usage: t('ui.settings.theme.tokens.accent.warn.usage', '影响引导、提醒和轻警告。') },
+    { key: 'secondary', label: t('ui.settings.theme.tokens.accent.secondary.label', '辅助强调色'), usage: t('ui.settings.theme.tokens.accent.secondary.usage', '影响分组和次要操作。') },
+    { key: 'warning', label: t('ui.settings.theme.tokens.accent.warning.label', '警告色'), usage: t('ui.settings.theme.tokens.accent.warning.usage', '影响待处理和中等警告。') },
   ] },
-  { key: 'glass', label: '玻璃背景', tokens: [
-    { key: 'light', label: '轻透明背景', usage: '影响轻量覆盖和细微层次。' },
-    { key: 'medium', label: '常规透明背景', usage: '影响常用玻璃面板。' },
-    { key: 'heavy', label: '重透明背景', usage: '影响遮罩弹窗和强覆盖区域。' },
+  { key: 'glass', label: t('ui.settings.theme.tokens.glass.label', '玻璃背景'), tokens: [
+    { key: 'light', label: t('ui.settings.theme.tokens.glass.light.label', '轻透明背景'), usage: t('ui.settings.theme.tokens.glass.light.usage', '影响轻量覆盖和细微层次。') },
+    { key: 'medium', label: t('ui.settings.theme.tokens.glass.medium.label', '常规透明背景'), usage: t('ui.settings.theme.tokens.glass.medium.usage', '影响常用玻璃面板。') },
+    { key: 'heavy', label: t('ui.settings.theme.tokens.glass.heavy.label', '重透明背景'), usage: t('ui.settings.theme.tokens.glass.heavy.usage', '影响遮罩弹窗和强覆盖区域。') },
   ] },
-  { key: 'border', label: '边框色', tokens: [
-    { key: 'base', label: '边框基础色', usage: '影响分隔线、输入框和卡片边界，可通过透明度控制强弱。' },
+  { key: 'border', label: t('ui.settings.theme.tokens.border.label', '边框色'), tokens: [
+    { key: 'base', label: t('ui.settings.theme.tokens.border.base.label', '边框基础色'), usage: t('ui.settings.theme.tokens.border.base.usage', '影响分隔线、输入框和卡片边界，可通过透明度控制强弱。') },
   ] },
-  { key: 'overlay', label: '覆盖层', tokens: [
-    { key: 'scrim', label: '遮罩背景', usage: '影响弹窗后方遮罩和压暗区域。' },
+  { key: 'overlay', label: t('ui.settings.theme.tokens.overlay.label', '覆盖层'), tokens: [
+    { key: 'scrim', label: t('ui.settings.theme.tokens.overlay.scrim.label', '遮罩背景'), usage: t('ui.settings.theme.tokens.overlay.scrim.usage', '影响弹窗后方遮罩和压暗区域。') },
   ] },
 ]
+export const THEME_TOKEN_GROUPS = createThemeTokenGroups()
 
 const RGB_COLOR_PATTERN = /^rgba?\(([^)]+)\)$/i
 
@@ -100,7 +102,7 @@ const mergeTokensWithDefault = (tokens = {}) => {
 
 export const normalizeTheme = (theme = {}) => ({
   id: String(theme.id || '').trim(),
-  name: String(theme.name || '').trim() || '未命名主题',
+  name: String(theme.name || '').trim() || t('ui.settings.theme.unnamed', '未命名主题'),
   builtin: !!theme.builtin,
   tokens: mergeTokensWithDefault(theme.tokens),
 })
@@ -109,7 +111,7 @@ export const createEditableThemeFrom = (baseTheme = getDefaultTheme()) => {
   const normalized = normalizeTheme(baseTheme)
   return {
     id: '',
-    name: `${normalized.name} 副本`,
+    name: t('ui.settings.theme.copy_name', '{name} 副本', { name: normalized.name }),
     builtin: false,
     tokens: deepClone(normalized.tokens),
   }

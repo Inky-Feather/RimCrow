@@ -555,7 +555,7 @@ const normalSortOptions = computed(() => [
   { label: t('ui.workspace.workshop.cache_sort.author', '作者排序'), value: 'author' },
 ])
 const languageOptions = computed(() => workspaceStore.workshopSearch.languageOptions)
-const translationLanguageOptions = computed(() => languageOptions.value
+const translationLanguageOptions = computed(() => appStore.translationLanguageOptions
   .map(item => ({ label: item.label, value: item.code || item.value }))
   .filter(item => item.value))
 const translationDisplayOptions = computed(() => [
@@ -620,6 +620,7 @@ onMounted(async () => {
   await workspaceStore.ensureWorkshopSearchReady()
   void workspaceStore.loadSteamLanguageOptions()
   void workspaceStore.loadTranslationProviders()
+  void appStore.ensureTranslationLanguageOptions()
   void workspaceStore.loadWorkshopDlcOptions()
   if (workspaceStore.workshopSearch.results.length === 0) {
     void workspaceStore.doWorkshopSearch('')
