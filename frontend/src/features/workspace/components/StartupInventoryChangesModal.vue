@@ -14,14 +14,14 @@
       <CircleAlert class="size-5 text-accent-warn" />
     </template>
 
-    <div class="max-h-[min(62vh,560px)] min-h-0 overflow-y-auto py-1">
+    <div class="max-h-[min(62vh,35rem)] min-h-0 overflow-y-auto py-1">
       <div v-if="dialog.groups.length" class="space-y-3">
         <section v-for="group in dialog.groups" :key="group.id" class="overflow-hidden rounded-xl border border-border-base/10 bg-bg-inset/60">
           <div class="flex items-start justify-between gap-3 border-b border-border-base/10 bg-bg-elevated px-3 py-2">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <div class="text-sm font-black" :class="groupTitleClass(group.id)">{{ group.title }}</div>
-                <span class="rounded-md border bg-bg-overlay/5 px-1.5 py-0.5 text-[10px]" :class="groupCountClass(group.id)">{{ group.items.length }} 项</span>
+                <span class="rounded-md border bg-bg-overlay/5 px-1.5 py-0.5 text-[0.6rem]" :class="groupCountClass(group.id)">{{ t('ui.workspace.startup.item_count', '{count} 项', { count: group.items.length }) }}</span>
               </div>
               <div class="mt-1 text-xs leading-relaxed text-text-dim">{{ group.description }}</div>
             </div>
@@ -41,7 +41,7 @@
                 <div class="break-all text-sm font-bold text-text-main">{{ item.title }}</div>
                 <div v-if="item.description" class="mt-1 break-all text-xs leading-relaxed text-text-dim">{{ item.description }}</div>
                 <div v-if="item.meta.length" class="mt-1 flex flex-wrap gap-1">
-                  <span v-for="meta in item.meta" :key="meta" class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim" >
+                  <span v-for="meta in item.meta" :key="meta" class="rounded-md border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[0.6rem] text-text-dim" >
                     {{ meta }}
                   </span>
                 </div>
@@ -62,7 +62,7 @@
       </div>
 
       <div v-else class="rounded-xl border border-border-base/10 bg-bg-inset/60 px-3 py-4 text-sm text-text-dim">
-        当前没有需要处理的库存项。
+        {{ t('ui.workspace.startup.empty', '当前没有需要处理的库存项。') }}
       </div>
     </div>
 
@@ -75,7 +75,7 @@
         @click="runAllAction('deleted', 'cleanup_deleted')"
       >
         <Loader2 v-if="isPending('cleanup_deleted', 'all:deleted')" class="size-3.5 animate-spin" />
-        <span>清理删除项数据</span>
+        <span>{{ t('ui.workspace.startup.action.cleanup_deleted_all', '清理删除项数据') }}</span>
       </button>
       <button
         v-if="hasMissingItems"
@@ -85,14 +85,14 @@
         @click="runAllAction('missing', 'download_missing')"
       >
         <Loader2 v-if="isBatchActionPending('download_missing', 'all:missing')" class="size-3.5 animate-spin" />
-        <span>重新下载缺失项</span>
+        <span>{{ t('ui.workspace.startup.action.download_missing_all', '重新下载缺失项') }}</span>
       </button>
       <button
         class="inventory-action px-4 py-1.5"
         :class="actionClass('secondary')"
         @click="workspaceStore.closeStartupInventoryDialog"
       >
-        确认
+        {{ t('ui.common.confirm', '确认') }}
       </button>
     </template>
   </CommonModalShell>
@@ -103,6 +103,7 @@ import { computed } from 'vue'
 import { CircleAlert, Loader2 } from 'lucide-vue-next'
 import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import { useWorkspaceStore } from '../workspaceStore'
+import { t } from '../../../shared/i18n'
 
 const workspaceStore = useWorkspaceStore()
 const dialog = workspaceStore.startupInventoryDialog
@@ -135,15 +136,15 @@ const groupCountClass = (groupId) => {
 
 const groupActions = (group) => {
   const actions = []
-  if (group.id === 'deleted') actions.push({ id: 'cleanup_deleted', label: `清理残留数据（${group.items.length}项）`, kind: 'danger' })
-  if (group.id === 'missing') actions.push({ id: 'download_missing', label: `重新下载（${group.items.length}项）`, kind: 'primary' })
-  actions.push({ id: 'details', label: '查看详情', kind: 'secondary' })
+  if (group.id === 'deleted') actions.push({ id: 'cleanup_deleted', label: t('ui.workspace.startup.action.cleanup_deleted_count', '清理残留数据（{count}项）', { count: group.items.length }), kind: 'danger' })
+  if (group.id === 'missing') actions.push({ id: 'download_missing', label: t('ui.workspace.startup.action.download_missing_count', '重新下载（{count}项）', { count: group.items.length }), kind: 'primary' })
+  actions.push({ id: 'details', label: t('ui.workspace.startup.action.details', '查看详情'), kind: 'secondary' })
   return actions
 }
 
 const itemAction = (groupId, item) => {
-  if (groupId === 'deleted') return { id: 'cleanup_deleted', label: '清理数据', kind: 'danger' }
-  if (groupId === 'missing' && item.workshopId) return { id: 'download_missing', label: '重新下载', kind: 'primary' }
+  if (groupId === 'deleted') return { id: 'cleanup_deleted', label: t('ui.workspace.startup.action.cleanup_deleted', '清理数据'), kind: 'danger' }
+  if (groupId === 'missing' && item.workshopId) return { id: 'download_missing', label: t('ui.workspace.startup.action.download_missing', '重新下载'), kind: 'primary' }
   return null
 }
 

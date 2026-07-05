@@ -26,10 +26,10 @@
         <div class="text-xs font-bold text-text-main truncate group-hover:text-text-inverse transition-colors">
           {{ mod.name || mod.package_id }}
         </div>
-        <div v-if="mod.package_id" title="包名" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
+        <div v-if="mod.package_id" :title="t('ui.mod_info.package_id', '包名')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.package_id }}
         </div>
-        <div v-if="mod.workshop_id" title="创意工坊ID" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
+        <div v-if="mod.workshop_id" :title="t('ui.mod_info.workshop_id', '工坊ID')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.workshop_id }}
         </div>
       </div>
@@ -40,7 +40,7 @@
           {{ entry.label }}：{{ formatTime(entry.timestamp) }}
         </span>
         <span v-if="!summaryTimeEntries.length" class="text-[0.65rem] font-mono text-text-dim">
-          时间：无记录
+          {{ t('ui.workspace.matrix.time_empty', '时间：无记录') }}
         </span>
         <span class="text-[0.6rem] font-mono text-text-dim opacity-50 bg-bg-inset/80 px-1 rounded">
           {{ formatFileSize(mod.file_size) }}
@@ -49,13 +49,13 @@
 
       <!-- 状态角标 -->
       <div class="absolute top-0 left-1 z-100 scale-90 flex items-center justify-center gap-1">
-        <span v-if="matrixState.isNew" title="新增" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-primary bg-accent-primary animate-pulse">
+        <span v-if="matrixState.isNew" :title="t('ui.workspace.matrix.badge.new', '新增')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-primary bg-accent-primary animate-pulse">
           NEW
         </span>
-        <span v-if="matrixState.isChange" title="变更" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-success bg-accent-success animate-pulse">
+        <span v-if="matrixState.isChange" :title="t('ui.workspace.matrix.badge.changed', '变更')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-success bg-accent-success animate-pulse">
           CHANGE
         </span>
-        <span v-if="matrixState.isUpdate" title="可更新" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warn animate-pulse">
+        <span v-if="matrixState.isUpdate" :title="t('ui.workspace.matrix.badge.update', '可更新')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warn animate-pulse">
           UPDATE
         </span>
         <span v-if="matrixState.isSame" :title="sameItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-special bg-accent-special animate-pulse">
@@ -67,17 +67,17 @@
         <span v-if="matrixState.isReplace" :title="replacementItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-tip bg-accent-tip animate-pulse">
           REPLACE
         </span>
-        <span v-if="matrixState.isDisabled" title="已禁用" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warning animate-pulse">
+        <span v-if="matrixState.isDisabled" :title="t('ui.workspace.matrix.badge.disabled', '已禁用')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warning animate-pulse">
           DISABLED
         </span>
-        <span v-if="matrixState.isMissing" title="工坊记录存在，但本地没有有效模组文件" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isMissing" :title="t('ui.workspace.matrix.badge.missing', '工坊记录存在，但本地没有有效模组文件')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           MISSING
         </span>
-        <span v-if="matrixState.isDeleted" title="库存记录存在，但本地模组目录已删除或失效" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+        <span v-if="matrixState.isDeleted" :title="t('ui.workspace.matrix.badge.deleted', '库存记录存在，但本地模组目录已删除或失效')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           DELETED
         </span>
-        <span v-if="matrixState.isWorkshopUnavailable" title="Steam 已无法获取该工坊项目详情，可能已下架或不可访问" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
-          失效
+        <span v-if="matrixState.isWorkshopUnavailable" :title="t('ui.workspace.matrix.badge.unavailable_tooltip', 'Steam 已无法获取该工坊项目详情，可能已下架或不可访问')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
+          {{ t('ui.workspace.matrix.badge.unavailable', '失效') }}
         </span>
       </div>
     </div>
@@ -104,19 +104,19 @@
             <div class="space-y-1.5 text-xs text-text-dim font-mono">
               <div v-for="entry in detailTimeEntries" :key="entry.key" class="flex justify-between gap-3">
                 <span class="opacity-60">{{ entry.label }}:</span>
-                <span class="text-right">{{ formatTime(entry.timestamp, true) || '无记录' }}</span>
+                <span class="text-right">{{ formatTime(entry.timestamp, true) || t('ui.common.no_record', '无记录') }}</span>
               </div>
-              <div class="flex justify-between"><span class="opacity-60">储存占用:</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">跨库同项:</span> <span>{{ sameTargets.length || '无' }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">同库冲突:</span> <span>{{ conflictTargets.length || '无' }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">替代项:</span> <span>{{ replacementTargets.length || '无' }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.storage', '储存占用:') }}</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.same', '跨库同项:') }}</span> <span>{{ sameTargets.length || t('ui.common.none', '无') }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.conflict', '同库冲突:') }}</span> <span>{{ conflictTargets.length || t('ui.common.none', '无') }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.replacement', '替代项:') }}</span> <span>{{ replacementTargets.length || t('ui.common.none', '无') }}</span></div>
             </div>
 
           <div v-if="mod.path" class="mt-2 p-2 bg-bg-inset/80 rounded-lg border border-border-base/5 text-[0.7rem] text-text-dim break-all cursor-text select-text">
             {{ mod.path }}
           </div>
           
-          <div class="text-[0.65rem] text-text-disabled mt-1 italic text-center">右键点击卡片可查看变动时间线与更多操作</div>
+          <div class="text-[0.65rem] text-text-disabled mt-1 italic text-center">{{ t('ui.workspace.matrix.context_hint', '右键点击卡片可查看变动时间线与更多操作') }}</div>
         </div>
 
       </Transition>
@@ -131,7 +131,8 @@ import { Folder, CloudDownload, Disc } from 'lucide-vue-next'
 import { formatFileSize } from '../../../shared/lib/format'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
-import { SOURCE_TYPE_MAP } from '../../../shared/lib/constants'
+import { getSourceTypeLabel } from '../../../shared/lib/constants'
+import { getCurrentLocale, t } from '../../../shared/i18n'
 import { getMatrixItemState, normalizeMatrixTimestamp } from '../lib/matrixItemState'
 
 const appStore = useAppStore()
@@ -174,22 +175,22 @@ const replacementTargets = computed(() => matrixState.value.replacementTargets)
 const formatRelationTooltip = (title, items) => {
   if (!items?.length) return null
   return `${title}：\n${items.map(item => {
-    const storeLabel = SOURCE_TYPE_MAP[item.store] || item.store || '未知'
-    const nameLabel = item.name || item.package_id || '未命名模组'
-    const pathLabel = item.path || '缺失记录'
+    const storeLabel = getSourceTypeLabel(item.store)
+    const nameLabel = item.name || item.package_id || t('ui.workspace.common.unnamed_mod', '未命名模组')
+    const pathLabel = item.path || t('ui.workspace.common.missing_record', '缺失记录')
     return `${storeLabel} · ${nameLabel}\n${pathLabel}`
   }).join('\n')}`
 }
-const sameItemsTooltip = computed(() => formatRelationTooltip('其它库存在相同项', sameTargets.value))
-const conflictItemsTooltip = computed(() => formatRelationTooltip('当前库存在同包名冲突项', conflictTargets.value))
-const replacementItemsTooltip = computed(() => formatRelationTooltip('已检测到替代项', replacementTargets.value))
+const sameItemsTooltip = computed(() => formatRelationTooltip(t('ui.workspace.matrix.tooltip.same', '其它库存在相同项'), sameTargets.value))
+const conflictItemsTooltip = computed(() => formatRelationTooltip(t('ui.workspace.matrix.tooltip.conflict', '当前库存在同包名冲突项'), conflictTargets.value))
+const replacementItemsTooltip = computed(() => formatRelationTooltip(t('ui.workspace.matrix.tooltip.replacement', '已检测到替代项'), replacementTargets.value))
 
 const formatTime = (value, full = false) => {
   const timestamp = normalizeMatrixTimestamp(value)
   if (!timestamp) return ''
   const date = new Date(timestamp)
   if (full) {
-    return date.toLocaleString('zh-CN', {
+    return date.toLocaleString(getCurrentLocale(), {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -199,7 +200,7 @@ const formatTime = (value, full = false) => {
       hour12: false,
     })
   }
-  return date.toLocaleDateString('zh-CN', {
+  return date.toLocaleDateString(getCurrentLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -215,22 +216,22 @@ const appendLatestVersionTimeEntry = (entries, latestVersionTime, installedVersi
   const latestTimestamp = normalizeMatrixTimestamp(latestVersionTime)
   const installedTimestamp = normalizeMatrixTimestamp(installedVersionTime)
   if (!latestTimestamp || latestTimestamp === installedTimestamp) return
-  appendUniqueTimeEntry(entries, { key: 'latest', label: '可用版本', timestamp: latestTimestamp })
+  appendUniqueTimeEntry(entries, { key: 'latest', label: t('ui.workspace.matrix.time.latest', '可用版本'), timestamp: latestTimestamp })
 }
 const appendWorkshopActionTimeEntry = (entries, steamStatus) => {
   const subscribedTimestamp = normalizeMatrixTimestamp(steamStatus.time_subscribed)
   const unsubscribedTimestamp = normalizeMatrixTimestamp(steamStatus.time_unsubscribed)
   if (!subscribedTimestamp && !unsubscribedTimestamp) return
   if (unsubscribedTimestamp > subscribedTimestamp) {
-    appendUniqueTimeEntry(entries, { key: 'unsubscribed', label: '取消订阅', timestamp: unsubscribedTimestamp })
+    appendUniqueTimeEntry(entries, { key: 'unsubscribed', label: t('ui.workspace.matrix.time.unsubscribed', '取消订阅'), timestamp: unsubscribedTimestamp })
     return
   }
-  appendUniqueTimeEntry(entries, { key: 'subscribed', label: '订阅时间', timestamp: subscribedTimestamp })
+  appendUniqueTimeEntry(entries, { key: 'subscribed', label: t('ui.workspace.matrix.time.subscribed', '订阅时间'), timestamp: subscribedTimestamp })
 }
 const appendDownloadTimeEntry = (entries, mod) => {
   appendUniqueTimeEntry(entries, {
     key: 'download',
-    label: '下载时间',
+    label: t('ui.workspace.matrix.time.download', '下载时间'),
     timestamp: normalizeMatrixTimestamp(mod.download_status?.download_time)
   })
 }
@@ -241,17 +242,17 @@ const detailTimeEntries = computed(() => {
 
   if (props.storeType === 'workshop') {
     appendDownloadTimeEntry(entries, mod)
-    appendUniqueTimeEntry(entries, buildTimeEntry('installed', '当前版本', steamStatus.installed_version_time))
+    appendUniqueTimeEntry(entries, buildTimeEntry('installed', t('ui.workspace.matrix.time.installed', '当前版本'), steamStatus.installed_version_time))
     appendLatestVersionTimeEntry(entries, steamStatus.latest_version_time, steamStatus.installed_version_time)
     appendWorkshopActionTimeEntry(entries, steamStatus)
   } else if (props.storeType === 'self') {
     appendDownloadTimeEntry(entries, mod)
-    appendUniqueTimeEntry(entries, buildTimeEntry('installed', '当前版本', steamStatus.installed_version_time))
+    appendUniqueTimeEntry(entries, buildTimeEntry('installed', t('ui.workspace.matrix.time.installed', '当前版本'), steamStatus.installed_version_time))
     appendLatestVersionTimeEntry(entries, steamStatus.latest_version_time, steamStatus.installed_version_time)
   }
 
-  appendUniqueTimeEntry(entries, buildTimeEntry('modify', '文件修改', mod.file_modify_time))
-  appendUniqueTimeEntry(entries, buildTimeEntry('create', '文件创建', mod.file_create_time))
+  appendUniqueTimeEntry(entries, buildTimeEntry('modify', t('ui.workspace.matrix.time.modify', '文件修改'), mod.file_modify_time))
+  appendUniqueTimeEntry(entries, buildTimeEntry('create', t('ui.workspace.matrix.time.create', '文件创建'), mod.file_create_time))
   return entries
 })
 const summaryTimeEntries = computed(() => {

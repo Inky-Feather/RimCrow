@@ -174,7 +174,30 @@
         "top": "top"
       },
       "restore_default": "Restore default",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "cancel": "Cancel",
+      "close": "Close",
+      "count_suffix_spaced": " ({count} items)",
+      "default": "Default",
+      "description": "Description",
+      "edit": "Edit",
+      "got_it": "Got it",
+      "group": "Group",
+      "import": "Import",
+      "more_actions": "More actions",
+      "no_changes": "No changes",
+      "open_folder": "Open folder",
+      "refresh": "Refresh",
+      "remove": "Remove",
+      "rename": "Rename",
+      "reset": "Reset",
+      "save": "Save",
+      "unknown_time": "Unknown time",
+      "confirm": "Confirm",
+      "copy": "Copy",
+      "loading": "Loading...",
+      "move": "Move",
+      "no_record": "No record"
     },
     "issue": {
       "default": "Other issue",
@@ -361,6 +384,672 @@
           "0": "Title and description",
           "1": "Title only",
           "2": "Description only"
+        },
+        "advanced": {
+          "cache_limited": "Cache search uses the local database and does not support query language or search scope.",
+          "language": "Query language",
+          "order": "Order",
+          "sort": "Sort",
+          "text_target": "Search scope",
+          "time": "Time",
+          "tooltip": "Sort and advanced search"
+        },
+        "cache_sort": {
+          "author": "Sort by author",
+          "latest": "Recently updated",
+          "name": "Sort by name",
+          "subscriptions": "Most subscribed"
+        },
+        "copy": {
+          "failed": "Failed to copy {label}",
+          "success": "{label} copied"
+        },
+        "detail": {
+          "author": {
+            "title": "Author",
+            "tooltip": "Author name. In enhanced mode, the public name from the author profile cache is preferred. Click to copy."
+          },
+          "back": "Back",
+          "collection_children": {
+            "title": "Collection items"
+          },
+          "comments": {
+            "title": "Comments",
+            "tooltip": "Public Steam Workshop comment count."
+          },
+          "content_warning": {
+            "sensitive": "Sensitive content flag",
+            "title": "Content",
+            "tooltip": "Steam marked this item as possibly containing sensitive content. Review it yourself before using."
+          },
+          "copy_name_tooltip": "Click to copy item name",
+          "created": {
+            "title": "Created",
+            "tooltip": "Time this item was first published to Steam Workshop."
+          },
+          "dependencies": {
+            "download_all": "Download all dependencies",
+            "downloading": "Downloading",
+            "subscribe_all": "Subscribe all dependencies",
+            "subscribing": "Subscribing",
+            "title": "Dependencies",
+            "unsubscribe_all": "Unsubscribe all dependencies",
+            "unsubscribing": "Unsubscribing"
+          },
+          "dependents": {
+            "title": "Ecosystem links"
+          },
+          "empty_hint": "Search and sort state is kept on the left. Click an item to view description, dependencies, screenshots, and related items.",
+          "empty_title": "Select a Workshop item to view details",
+          "favorites": {
+            "title": "Favorites",
+            "tooltip": "Times this item was added to favorites. Useful for judging long-term interest."
+          },
+          "loading": "Fetching details from Steam...",
+          "no_description": "This mod did not provide a detailed description.",
+          "original_name": "Original name",
+          "package_id": {
+            "title": "Package ID",
+            "tooltip": "Mod package identifier. Usually used for local rule matching and same-mod recognition. Click to copy."
+          },
+          "project_name": "Item name",
+          "rating": {
+            "title": "Rating",
+            "tooltip": "Overall score returned by Steam. Useful for quickly judging user feedback."
+          },
+          "same_author": {
+            "title": "Same author"
+          },
+          "screenshots": {
+            "title": "Screenshots"
+          },
+          "size": {
+            "title": "Size",
+            "tooltip": "File size returned by Steam. Useful for roughly estimating download time and disk usage."
+          },
+          "status": {
+            "banned": "Banned",
+            "title": "Status",
+            "tooltip": "This item has an abnormal status. It usually means Steam has restricted or banned it."
+          },
+          "steam_details": {
+            "title": "Steam details"
+          },
+          "subscriptions": {
+            "title": "Subscribers",
+            "tooltip": "Public Steam Workshop subscriber count."
+          },
+          "tag": {
+            "empty_tooltip": "This item returned no displayable Workshop tags.",
+            "hidden_tooltip": "Other tags: {tags}",
+            "title": "Tag",
+            "tooltip": "Workshop tag: {tag}"
+          },
+          "updated": {
+            "title": "Updated",
+            "tooltip": "Most recent update time on Steam Workshop."
+          },
+          "version": {
+            "title": "Version",
+            "tooltip": "RimWorld versions marked for this item. This merges backend cache and version tags."
+          },
+          "view_all": "View all",
+          "votes_down": {
+            "title": "Downvotes",
+            "tooltip": "Public downvote count."
+          },
+          "votes_up": {
+            "title": "Upvotes",
+            "tooltip": "Public upvote count. Useful together with rating for reputation."
+          },
+          "workshop_id": {
+            "title": "Workshop ID",
+            "tooltip": "Unique ID of the Steam Workshop item. Click to copy."
+          }
+        },
+        "enhanced_mode": {
+          "description": "When enabled, a dedicated interface fetches more complete Workshop information. When disabled, the app uses local Workshop cache and public endpoints. Results are limited by the local cache and may not include newly published mods.",
+          "label": "Enhanced mode"
+        },
+        "image": {
+          "background_alt": "Workshop item background",
+          "cover_alt": "Workshop item cover",
+          "screenshot_alt": "{title} screenshot"
+        },
+        "item": {
+          "subscribed": "Subscribed",
+          "subscribers_tooltip": "Subscribers",
+          "unknown_mod": "Unknown mod",
+          "workshop_id_tooltip": "Workshop ID",
+          "workshop_project": "Workshop item"
+        },
+        "relation": {
+          "collection_children": "Collection items",
+          "dependencies": "Dependencies",
+          "dependents": "Ecosystem links",
+          "same_author": "Same author",
+          "title_with_author": "{kind}: {author}",
+          "title_with_item": "{kind}: {title}"
+        },
+        "results": {
+          "all_loaded": "All results displayed",
+          "count": "{count} results",
+          "empty_hint": "Try another keyword, tag, or sort condition.",
+          "empty_title": "No results",
+          "loading_more": "Loading more...",
+          "loading_settings": "Reading Workshop settings...",
+          "searching": "Searching..."
+        },
+        "search": {
+          "button": "Search",
+          "field": {
+            "author": "Author",
+            "dependency": "Mod dependency",
+            "dlc": "DLC dependency",
+            "tag": "Tag",
+            "text": "Search text"
+          },
+          "help": {
+            "basic": "Enter keywords directly, or use category:keyword format",
+            "example": "Example: (red ^^|^^ !!-!!blue) means: match red or exclude blue.",
+            "logic": "Search text supports grouping conditions with English parentheses. Use [[+]], ^^|^^, and !!-!! for [[must include]], ^^any match^^, and !!exclude match!!.",
+            "tab": "\n[[(Press Tab to apply suggestions)]]",
+            "title": "**Enter keywords and press Enter**"
+          },
+          "placeholder_cache": "Search cache, supports t:tag d:DLC_AppID m:dependencyWorkshopID a:author",
+          "placeholder_enhanced": "Search Workshop, supports t:tag d:DLC_AppID m:dependencyWorkshopID"
+        },
+        "source": {
+          "cache": "Cached Workshop search",
+          "enhanced": "Enhanced Workshop search",
+          "loading_settings": "Reading Workshop settings"
+        },
+        "tags": {
+          "mod": "Mod",
+          "scenario": "Scenario",
+          "translation": "Translation"
+        },
+        "transient": {
+          "back_to_results": "Back to search results"
+        },
+        "translation": {
+          "original": "Original",
+          "quick_original_tooltip": "Click to switch back to the Workshop original\nLong press to retranslate the current language",
+          "quick_translate_tooltip": "Click to show or generate translation for current target language: {language}\nLong press to retranslate the current language",
+          "settings_tooltip": "{stale}Current display: {language}\nCurrent translator: {provider}\n\nClick to switch display language and translator, retranslate, or clear current translation.",
+          "stale_prefix": "^^Original text has changed; retranslation is available.^^\n",
+          "translate": "Translate"
+        }
+      },
+      "library": {
+        "scanning_all_locations": "Scanning all storage locations...",
+        "column": {
+          "workshop": {
+            "title": "Steam Workshop",
+            "tooltip": "Mods managed and automatically updated by the Steam client."
+          },
+          "self": {
+            "title": "Manager (SteamCMD)",
+            "tooltip": "Mod library downloaded and managed by RimCrow through SteamCMD/Git."
+          },
+          "local": {
+            "title": "Game local mods",
+            "tooltip": "The Mods folder under the game install. Changes here directly affect the game."
+          }
+        },
+        "summary": {
+          "count": "Total count: {count}",
+          "size": "Total size: {size}",
+          "status": "Status: {status}"
+        },
+        "status": {
+          "scanning": "Scanning...",
+          "ready": "Ready"
+        },
+        "refresh": {
+          "tooltip": "Reload current three-library matrix data",
+          "button": "Refresh data"
+        },
+        "timeline": {
+          "local_unavailable": "This mod is in the game local folder, so its change timeline is unavailable",
+          "no_workshop_id": "This mod has no Workshop ID, so its change timeline is unavailable"
+        }
+      },
+      "matrix": {
+        "switch": {
+          "workshop": {
+            "description": "For non-Steam environments. Use Workshop mods for the current environment; when enabled, the manager links Workshop mods into the game automatically. This requires the account to own the game, or the Workshop content to be otherwise usable."
+          },
+          "self": {
+            "description": "Use manager mods for the current environment; when enabled, the manager links managed mods into the game automatically."
+          },
+          "show_official": {
+            "label": "* Show official",
+            "description": "Core/DLC and other official items are hidden by default; hidden items are not included in the local list, multi-select, or select-all range."
+          }
+        },
+        "column": {
+          "item_count": "{count} items"
+        },
+        "search": {
+          "placeholder": "Search in this library..."
+        },
+        "sort": {
+          "to_ascending": "Switch to ascending order",
+          "to_descending": "Switch to descending order",
+          "change": "By change time",
+          "mtime": "By modified time",
+          "ctime": "By created time",
+          "size": "By file size",
+          "name": "By name A-Z"
+        },
+        "empty": "No data in this library",
+        "path": {
+          "missing_record": "Missing record"
+        },
+        "menu": {
+          "count_suffix": " ({count} items)",
+          "jump_group_label": "{label} ({count} items)",
+          "jump_target_label": "{source} · {path}",
+          "copy_field": "Copy {field}{count}",
+          "copy_info": "Copy info{count}",
+          "field": {
+            "name": "Name",
+            "package_id": "Package ID",
+            "workshop_id": "Workshop ID",
+            "path": "Path"
+          },
+          "copy_to_local": "Copy to game local library",
+          "copy_to_self": "Copy to manager library",
+          "move_to_local": "Move to game local library",
+          "move_to_self": "Move to manager library",
+          "copy_to_workshop": "Copy to Workshop library",
+          "move_to_workshop": "Move to Workshop library",
+          "view_timeline": "View changes",
+          "open_folder": "Open folder",
+          "open_page": "Open page",
+          "jump_same": "Go to same item",
+          "jump_replacement": "Go to replacement",
+          "transfer": "Transfer...{count}",
+          "update_resubscribe": "Update mod [resubscribe]{count}",
+          "update_redownload": "Update mod [redownload]{count}",
+          "download_to_self": "Download to manager{count}",
+          "open_workshop": "Open Workshop",
+          "subscribe_mod": "Subscribe mod{count}",
+          "unsubscribe": "Unsubscribe{count}",
+          "steam_actions": "Steam actions",
+          "activate": "Reactivate{count}",
+          "deactivate": "Deactivate{count}",
+          "delete_files": "Delete files{count}",
+          "redownload_missing": {
+            "label": "Redownload missing items{count}",
+            "tooltip": "Directly ask Steam to redownload or verify these missing items."
+          },
+          "resubscribe_missing": {
+            "label": "Resubscribe missing items{count}",
+            "tooltip": "Unsubscribe first, then subscribe again so Steam can queue these missing items again.\nThis changes subscription state. If the network fails, unsubscribe may succeed while resubscribe fails. Use with care."
+          },
+          "clean_invalid_unsubscribe": "Clean invalid items and unsubscribe{count}",
+          "clean_records": "Clean data records{count}"
+        },
+        "refresh_after_inventory_change": "Sync mod data after inventory change",
+        "refresh_after_unsubscribe": "Sync mod data after unsubscribe",
+        "cleanup_invalid_unsubscribe": {
+          "title": "Clean invalid items and unsubscribe",
+          "message": "Unsubscribe these abnormal missing Workshop items and clean their local records? ({count} items)"
+        },
+        "action": {
+          "clean_missing_records": "Clean missing data records",
+          "clean_records": "Clean data records"
+        },
+        "refresh_after_clean_missing_records": "Sync mod data after cleaning missing records",
+        "resubscribe_missing": {
+          "title": "Resubscribe missing items",
+          "message": "This will process {count} Workshop items that are still subscribed but missing local files.\n\nThe manager will first send unsubscribe requests to Steam and wait for success, then subscribe again so Steam can fetch these items again.\n\nBecause Steam client and network state are outside the manager's control, unsubscribe may succeed while resubscribe fails, downloads may queue for a long time, or list refresh may be delayed. After running this, wait for Steam downloads to complete, then refresh inventory or scan again.",
+          "confirm": "Start resubscribe",
+          "success": "Resubscribe requests sent for {count} missing items. Wait for Steam downloads to finish."
+        },
+        "download_missing": {
+          "title": "Download missing items with Steam",
+          "message": "This will process {count} Workshop items that are still subscribed but missing local files.\n\nThis will not unsubscribe them. It directly asks the Steam client to redownload or verify these items, then waits in the task bar until Steam confirms the local files are downloaded.\n\nIf Steam network is unavailable, downloads stay queued too long, or the item itself is unavailable, the task will fail.",
+          "confirm": "Request Steam download"
+        },
+        "clean_records": {
+          "title": "Clean data records",
+          "message": "Clean the selected abnormal item records? ({count} items)\nThis will not cancel Steam subscriptions or delete any existing files.",
+          "success": "Cleaned {count} data records"
+        },
+        "refresh_after_clean_records": "Sync mod data after cleaning inventory records",
+        "filter": {
+          "default": "Show all",
+          "new": "Only new",
+          "change": "Only changed",
+          "update": "Only updatable",
+          "same": "Only same items across libraries",
+          "conflict": "Only conflicts in same library",
+          "replace": "Only replacements",
+          "disabled": "Only deactivated",
+          "missing": "Only missing",
+          "deleted": "Only deleted"
+        },
+        "badge": {
+          "changed": "Changed",
+          "deleted": "Inventory record exists, but the local mod folder was deleted or is invalid",
+          "disabled": "Deactivated",
+          "missing": "Workshop record exists, but there is no valid local mod file",
+          "new": "New",
+          "unavailable": "Unavailable",
+          "unavailable_tooltip": "Steam can no longer fetch this Workshop item. It may be removed or inaccessible.",
+          "update": "Updatable"
+        },
+        "context_hint": "Right-click a card to view the change timeline and more actions",
+        "detail": {
+          "conflict": "Conflict in same library:",
+          "replacement": "Replacement:",
+          "same": "Same item across libraries:",
+          "storage": "Storage used:"
+        },
+        "time": {
+          "create": "File created",
+          "download": "Download time",
+          "installed": "Current version",
+          "latest": "Available version",
+          "modify": "File modified",
+          "subscribed": "Subscribed time",
+          "unsubscribed": "Unsubscribed time"
+        },
+        "time_empty": "Time: no record",
+        "tooltip": {
+          "conflict": "Conflicting item exists in the current library",
+          "replacement": "Replacement item detected",
+          "same": "Same item exists in another library"
+        }
+      },
+      "collection": {
+        "actions": {
+          "apply_order": {
+            "label": "Apply load order",
+            "tooltip": "Apply the collection list order as the load order. Make sure everything is downloaded first."
+          },
+          "download_missing": {
+            "label": "Download missing ({count})",
+            "tooltip": "Use SteamCMD to download only missing items into the manager library"
+          },
+          "import": "Import collection",
+          "subscribe_all": {
+            "label": "Subscribe all",
+            "tooltip": "Add the whole collection to the Steam subscription queue"
+          },
+          "unsubscribe_all": {
+            "label": "Unsubscribe all",
+            "tooltip": "Remove the whole collection from the Steam subscription queue"
+          }
+        },
+        "apply_order": {
+          "duplicate_skipped": "Skipped {count} duplicate package IDs to avoid duplicate load nodes.",
+          "history_label": "Override active list by collection order",
+          "missing_message": "This collection has {count} uninstalled mods.\nForcing this order may create ghost nodes (empty items). Downloading missing items first is strongly recommended.\nContinue anyway?",
+          "no_package_id": "Could not extract package IDs. The backend may not have returned package_id.",
+          "success": "Current active list has been overridden by collection order.\nOfficial Core/DLC entries are kept according to the current active state. Return to the main page and click Save to apply.",
+          "unresolved_skipped": "{count} collection items could not resolve package IDs, possibly because cache is missing or they are not installed locally. They were skipped.",
+          "warning_title": "Warning"
+        },
+        "card": {
+          "delete_record": "Delete record",
+          "missing_short": "Missing {count}",
+          "no_description": "No description",
+          "not_synced": "Not synced",
+          "save_collection": "Save collection",
+          "sync_tooltip": "Local cache synced: {time}",
+          "sync_unknown": "Not synced to local cache yet",
+          "synced": "Synced: {time}",
+          "total_short": "Total {count}",
+          "unknown": "Unknown collection",
+          "updated": "Updated: {time}",
+          "updated_tooltip": "Workshop last updated: {time}",
+          "updated_unknown": "Update time not available yet"
+        },
+        "child": {
+          "pending": "Missing"
+        },
+        "detail": {
+          "all_installed": "All installed",
+          "empty_select": "Select a collection on the right to view details",
+          "missing_count": "Missing {count} items",
+          "no_description": "This collection did not provide a detailed description.",
+          "total_count": "{count} items total",
+          "view_description": "View collection description"
+        },
+        "download_missing": {
+          "none": "All mods are ready. No download needed."
+        },
+        "empty": {
+          "saved_hint": "Paste a link above to connect collection data",
+          "saved_title": "No collections in your records",
+          "search_hint": "Try another keyword, or loosen tags and time range",
+          "search_title": "No collection search results",
+          "searching_hint": "Fetching matching collections from Steam",
+          "searching_title": "Searching collections..."
+        },
+        "input": {
+          "placeholder": "Paste a Steam collection URL or enter an ID..."
+        },
+        "load_more": "Load more collections",
+        "loading_more": "Loading more collections...",
+        "reached_end": "- End reached -",
+        "remove": {
+          "message": "Remove collection \"{title}\" from records?\n(This will not delete any downloaded Mod files)",
+          "title": "Delete record"
+        },
+        "search": {
+          "button": "Search",
+          "field": {
+            "tag": "Tag",
+            "text": "Search text"
+          },
+          "help": {
+            "basic": "Enter keywords directly, or use category:keyword format",
+            "example": "Example: (red ^^|^^ !!-!!blue) means: match red or exclude blue.",
+            "logic": "Search text supports grouping conditions with English parentheses. Use [[+]], ^^|^^, and !!-!! for [[must include]], ^^any match^^, and !!exclude match!!.",
+            "tab": "\n[[(Press Tab to apply suggestions)]]",
+            "title": "**Enter keywords and press Enter**"
+          },
+          "placeholder": "Search Steam collections...",
+          "sort": "Sort",
+          "sort_tooltip": "Sort and time range",
+          "time": "Time"
+        },
+        "tabs": {
+          "saved": "Saved collections",
+          "search": "Search collections online"
+        },
+        "tooltip": {
+          "body": "**{title}**\n\n{description}\n\n[[{count} mods]]{missing}",
+          "missing_suffix": " | ^^Need download/subscribe: {count}^^"
+        }
+      },
+      "common": {
+        "missing_record": "Missing record",
+        "no_cover": "No cover",
+        "subscribed": "Subscribed",
+        "unknown_author": "Unknown author",
+        "unknown_mod": "Unknown mod",
+        "unnamed_mod": "Unnamed mod"
+      },
+      "startup": {
+        "action": {
+          "cleanup_deleted": "Clean data",
+          "cleanup_deleted_all": "Clean deleted item data",
+          "cleanup_deleted_count": "Clean leftover data ({count} items)",
+          "details": "View details",
+          "download_missing": "Redownload",
+          "download_missing_all": "Redownload missing items",
+          "download_missing_count": "Redownload ({count} items)"
+        },
+        "empty": "There are no inventory items that need attention.",
+        "group": {
+          "changed": {
+            "description": "Workshop content was updated by the author. Rescan to refresh size, time, and status.",
+            "title": "Changed mods"
+          },
+          "default": "Inventory status",
+          "deleted": {
+            "description": "The inventory record still exists, but the local folder is gone. Clean the leftover record after confirming.",
+            "title": "Deleted mods"
+          },
+          "missing": {
+            "description": "These items are still in the Workshop subscription list, but local files are incomplete or missing. When there are many subscriptions, Steam sync may miss a few items; this is more common above 1000 Workshop subscriptions. Redownload to fill them in.",
+            "title": "Missing mods"
+          }
+        },
+        "item_count": "{count} items",
+        "more_items": "\nand {count} more mods.",
+        "summary": {
+          "after_scan": "Inventory check completed.",
+          "before_scan": "Possible inventory changes detected.",
+          "group_count": "{title} {count} items"
+        }
+      },
+      "timeline": {
+        "empty": "Steam local logs did not record changes for this item",
+        "title_highlight": "Timeline",
+        "title_prefix": "Change"
+      },
+      "translation": {
+        "follow_ui": "Follow UI language",
+        "follow_ui_with_language": "Follow UI language ({language})",
+        "original": "Original"
+      },
+      "github": {
+        "title": "Git repository subscriptions",
+        "tabs": {
+          "subscribed": "Subscribed",
+          "recommend": "Recommended"
+        },
+        "refresh": {
+          "tooltip": "Refresh current list"
+        },
+        "catalog": {
+          "filter_placeholder": "Filter by name, package ID, author, or version",
+          "source_summary": "Recommended sources: {total} items / {sourceCount} sources",
+          "cache_badge": "Cached",
+          "loading": "Reading recommended list...",
+          "empty": "No matching recommended items",
+          "git_subscribed": "Git subscription added",
+          "workshop_subscribed": "Workshop subscribed",
+          "official": "Official content",
+          "not_recommended": "Not recommended currently",
+          "source_all": "All",
+          "source_catalog": "Catalog",
+          "unsupported": "Unsupported",
+          "official_tooltip": "Base game or official DLC does not need subscription",
+          "not_recommended_tooltip": "This item may be temporarily incompatible. Check the description before adding it.",
+          "unsupported_tooltip": "This item has no usable download URL",
+          "add_zip_subscription": "Add as Git subscription and deploy zip",
+          "add_git_subscription": "Add as Git subscription"
+        },
+        "actions": {
+          "open_original": "Open original URL",
+          "open_local": "Open local folder",
+          "remove_subscription": "Remove subscription"
+        },
+        "workshop": {
+          "unsubscribe": "Unsubscribe from Workshop",
+          "subscribe": "Subscribe to Workshop"
+        },
+        "input": {
+          "supported_tooltip": "Supported repositories: GitHub, GitLab, GitGud.",
+          "placeholder": "Paste public Git repository URL, e.g. https://github.com/user/repo (supports GitHub / GitLab / GitGud)",
+          "parse": "Parse URL"
+        },
+        "preview": {
+          "meta": "Author: {owner} | Default branch: {branch}",
+          "source": {
+            "title": "Sync source branch (Source)",
+            "description": "Fetch the latest branch code. Good for test mods that update frequently or have no Release."
+          },
+          "release": {
+            "title": "Fetch release build (Release)",
+            "description": "Fetch the stable package published by the author.",
+            "none": "This repository has no Release yet"
+          }
+        },
+        "readme": {
+          "loading": "Reading README...",
+          "error": "Failed to read README. Check network connection, repository URL, and branch name, then try again."
+        },
+        "detail": {
+          "source": "Source",
+          "install_type": "Install type",
+          "default_branch": "Default branch",
+          "author": "Author",
+          "dependencies": "Dependencies"
+        },
+        "install_type": {
+          "zip_link": "Zip direct link",
+          "git_repo": "Git repository"
+        },
+        "dependency": {
+          "git_already_added": "This dependency already has a Git subscription",
+          "add_git": "Add Git subscription",
+          "unsubscribe_workshop": "Unsubscribe Workshop dependency",
+          "subscribe_workshop": "Subscribe Workshop dependency",
+          "official": "Base game or official DLC; no subscription needed",
+          "can_add_git": "Can add Git subscription",
+          "can_subscribe_workshop": "Can subscribe to Workshop",
+          "missing_source": "No directly addable source found"
+        },
+        "active": {
+          "current_mode": "Current mode: {mode}",
+          "installed_version": "Deployed version: {version}",
+          "deploy_tooltip": "Fetch and deploy current subscription",
+          "deploy_latest": "Fetch and deploy latest",
+          "deploy_now": "Deploy now",
+          "local_audit_log": "Local audit log",
+          "no_logs": "No audit records"
+        },
+        "empty": {
+          "select_or_add": "Select or Add a Repository"
+        },
+        "time": {
+          "published": "Published: {time}",
+          "updated": "Updated: {time}"
+        },
+        "tooltip": {
+          "package_id": "Package ID: {packageId}",
+          "author": "Author: {author}"
+        },
+        "action": {
+          "parse_repo": "Parse Git repository URL",
+          "parse_recommended_repo": "Parse recommended repository",
+          "create_catalog_subscription": "Create catalog subscription",
+          "create_subscription": "Create subscription",
+          "remove_subscription": "Remove subscription",
+          "request_transfer": "Request data transfer"
+        },
+        "subscribe": {
+          "catalog_success": "Catalog item subscribed successfully",
+          "repo_success": "Repository subscribed successfully"
+        },
+        "remove": {
+          "title": "Remove subscription",
+          "message": "Remove Git subscription “{name}”?\nDownloaded local files will not be deleted.",
+          "confirm": "Remove"
+        },
+        "deploy": {
+          "started": "Data transfer started. Check progress in the bottom status bar.",
+          "no_release_cache": "Could not fetch Release version info, and no usable cache is available",
+          "use_cached_release": "Git repository info query failed. Continuing deployment with cached Release version.",
+          "skip_metadata_refresh": "Git repository info query failed. Skipping metadata refresh and deploying the current branch directly."
+        },
+        "status": {
+          "branch_changed": "Tracked branch changed",
+          "current": "Up to date",
+          "installed": "Installed",
+          "missing": "Local files missing",
+          "not_deployed": "Not deployed",
+          "unknown": "Status unknown",
+          "upgrade": "Upgrade available"
         }
       }
     },
@@ -457,6 +1146,255 @@
       "translation": {
         "provider_ai_default": "AI translation"
       }
+    },
+    "backup_list": {
+      "drop": {
+        "description": "Release to import it into the comparison view",
+        "formats": "Supports `xml` / `rws` / `rml` / `json` / `txt` / `list`",
+        "title": "Drop a load order file"
+      },
+      "empty": "No backup records",
+      "profile": {
+        "description": "Switch to backups from another profile",
+        "placeholder": "Select profile"
+      },
+      "section": {
+        "history": "History archive",
+        "import": "Temporary imports",
+        "latest": "Latest backup",
+        "manual": "Manual backups",
+        "today": "Today"
+      },
+      "share_code": "Share code",
+      "title": "Backups"
+    },
+    "diff_view": {
+      "action": {
+        "apply_file_order": "Apply file order",
+        "download_missing": "Download missing items ({count})",
+        "download_other_version": "Download other versions ({count})",
+        "download_replacement": "Download replacements ({count})",
+        "remove_missing": "Remove missing items ({count})",
+        "remove_unknown": "Remove unknown items ({count})",
+        "subscribe_missing": "Subscribe missing items ({count})",
+        "subscribe_other_version": "Subscribe other versions ({count})",
+        "subscribe_replacement": "Subscribe replacements ({count})"
+      },
+      "default_title": {
+        "current": "Current order",
+        "imported": "Imported order"
+      },
+      "folded_items": "··· {count} items folded ···",
+      "import_status": {
+        "missing": "Missing",
+        "other_version": "Other version",
+        "replacement": "Replacement",
+        "replacement_installed": "Replacement installed",
+        "unknown": "Unknown"
+      },
+      "legend": {
+        "added": "Added {count}",
+        "missing": "Missing {count}",
+        "moved": "Moved {count}",
+        "offset": "Offset {count}",
+        "same": "Same {count}"
+      },
+      "option": {
+        "colorful_blocks": "Color blocks",
+        "hide_identical": "Fold long blocks"
+      },
+      "title": "Mod order comparison"
+    },
+    "disabled_mod_list": {
+      "empty": {
+        "filtered": "No deactivated mods match the filter",
+        "no_disabled": "No deactivated mods in this profile"
+      },
+      "restore_failure": {
+        "default_reason": "File operation failed"
+      },
+      "search_placeholder": "Filter by name, package ID, Workshop ID, or path...",
+      "sort": {
+        "ctime": "By created time",
+        "mtime": "By modified time",
+        "name": "By name A-Z",
+        "size": "By file size"
+      },
+      "source": {
+        "all": "All sources",
+        "local": "Game local",
+        "self": "Manager library",
+        "workshop": "Workshop"
+      },
+      "title": "Deactivated"
+    },
+    "load_order": {
+      "conflict": {
+        "before_refresh_unsaved": "Unsaved changes before refresh",
+        "before_refresh_working": "Working order before refresh",
+        "unsaved_changes": "Unsaved changes"
+      }
+    },
+    "group_list": {
+      "action": {
+        "clear_group": "Clear",
+        "locate": "Locate"
+      },
+      "empty": {
+        "create_hint": "Click the “+” button to create a group",
+        "drop_here": "Drop mods here"
+      },
+      "search_placeholder": "Search group name, mod name/package ID/author...",
+      "selected_mods": "Selected mods",
+      "unnamed_group": "Unnamed group"
+    },
+    "mod_rule_editor": {
+      "community_suggestion": "Community suggestion",
+      "language_owner": {
+        "analyzed": "Detected owners ({count})",
+        "empty_analyzed": "No reliable owner detected",
+        "merge": "Merge with detected",
+        "replace": "Override detected",
+        "title": "Language pack owner",
+        "user_override": "User owners ({count})"
+      },
+      "load_position": "Load position"
+    },
+    "rule": {
+      "dynamic": {
+        "action": {
+          "bottom": "Pin to bottom",
+          "bottom_short": "Bottom",
+          "load_after": "Must load after ID",
+          "load_before": "Must load before ID",
+          "top": "Pin to top",
+          "top_short": "Top",
+          "weight_set": "Set weight",
+          "weight_shift": "Shift weight"
+        },
+        "field": {
+          "alias_name": "Alias",
+          "author": "Author",
+          "groups": "Groups",
+          "mod_type": "Type",
+          "name": "Name",
+          "package_id": "Package ID",
+          "tags": "Tags"
+        },
+        "operator": {
+          "contains": "Contains",
+          "ends_with": "Ends with",
+          "ends_with_short": "Ends with",
+          "equals": "Equals",
+          "not_contains": "Does not contain",
+          "not_contains_short": "Not contains",
+          "not_equals": "Not equals",
+          "regex": "Regex match",
+          "regex_short": "Regex",
+          "starts_with": "Starts with",
+          "starts_with_short": "Starts with"
+        }
+      }
+    },
+    "rule_panel": {
+      "action": {
+        "as_strict_dependency": "As hard dependency",
+        "create_rule": "New rule",
+        "enable_rules": "Enable rules",
+        "export_bundle": "Export config bundle",
+        "import_bundle": "Import config bundle",
+        "update_library": "Update library"
+      },
+      "action_text": {
+        "load_after": "After {name}",
+        "load_before": "Before {name}",
+        "weight_set": "Set weight to {value}",
+        "weight_shift": "Weight {value}"
+      },
+      "community": {
+        "description": "Community-maintained sorting suggestions. Disable “installed only” to browse the full rule library.",
+        "title": "Community rule library (RimSort)"
+      },
+      "editor": {
+        "action_label": "Action",
+        "add_condition": "Add condition",
+        "close": "Close editor",
+        "create_title": "New dynamic rule",
+        "description_label": "Description (optional)",
+        "description_placeholder": "Rule notes...",
+        "edit_title": "Edit rule",
+        "empty_conditions": "Use the button above to add a filter condition",
+        "logic_all": "Match all (AND)",
+        "logic_any": "Match any (OR)",
+        "logic_label": "Trigger condition",
+        "name_label": "Rule name",
+        "name_placeholder": "Example: put language packs last",
+        "no_param_bottom": "No parameter needed. Matched items will move to the end of the list.",
+        "no_param_top": "No parameter needed. Matched items will move to the start of the list.",
+        "priority_label": "Priority",
+        "priority_placeholder": "Example: 100",
+        "save_rule": "Save rule",
+        "value_placeholder": "Value...",
+        "weight_set_hint": "({min}-{max}; smaller values load earlier)",
+        "weight_shift_hint": "({min} to {max}; negative moves earlier, positive moves later, final value is clamped to {weightMin}-{weightMax})"
+      },
+      "empty": {
+        "dynamic_rules": "No dynamic rules",
+        "no_rules": "No matching rules found"
+      },
+      "filter": {
+        "installed_only": "Installed only"
+      },
+      "priority": {
+        "hint": "* Effective priority: top to bottom, highest to lowest.",
+        "title": "Effective priority"
+      },
+      "relation": {
+        "dependencies": "Dependencies:",
+        "incompatible": "Conflicts:",
+        "incompatible_title": "Conflicts",
+        "load_after": "Load after:",
+        "load_after_title": "Load after",
+        "load_before": "Load before:",
+        "load_before_title": "Load before"
+      },
+      "rule": {
+        "disabled": "Disabled",
+        "not_installed": "Not installed"
+      },
+      "search_placeholder": "Search rules, mod name, or ID...",
+      "source": {
+        "community": "Community rules",
+        "dynamic": "Dynamic rules",
+        "native": "Native rules",
+        "user": "User rules",
+        "workshop": "Workshop rules"
+      },
+      "subtitle": "Manage sorting logic and constraints",
+      "tab": {
+        "community": "Community mod rules",
+        "dynamic": "Dynamic group rules",
+        "user": "User mod rules",
+        "workshop": "Workshop dependency rules"
+      },
+      "title": "Rule center",
+      "updated_at": "Updated: {time}",
+      "workshop": {
+        "description": "Community-maintained offline Workshop mod data, updated regularly.",
+        "title": "Workshop offline database"
+      }
+    },
+    "rule_relation": {
+      "community_rules": "Community rules ({count})",
+      "drop_here": "Drop mods here",
+      "native_rules": "Native rules ({count})",
+      "user_rules": "User rules ({count})",
+      "workshop_rules": "Workshop rules ({count})"
+    },
+    "time": {
+      "before_yesterday": "2 days ago",
+      "days_ago": "{count} days ago",
+      "yesterday": "Yesterday"
     }
   },
   "tooltip": {
@@ -468,6 +1406,20 @@
     },
     "command": {
       "missing": "Command not found: {commandId}"
+    },
+    "diff_view": {
+      "colorful_blocks": "Use different colors for different moved blocks",
+      "download_item": {
+        "loading": "Downloading this Workshop item",
+        "ready": "Download the Workshop item for this imported entry into the manager"
+      },
+      "hide_identical": "Fold long unchanged and moved blocks",
+      "open_source": "Open source page",
+      "remove_item": "Remove this item from the current imported order",
+      "subscribe_item": {
+        "loading": "Subscribing to this Workshop item",
+        "ready": "Subscribe to the Workshop item for this imported entry"
+      }
     },
     "header": {
       "ai_generation_manager": "AI generation manager",
@@ -661,7 +1613,8 @@
     },
     "workspace": {
       "back_home": "Back to main screen (Esc)",
-      "sync_ready": "New changes detected since the last launch time"
+      "sync_ready": "New changes detected since the last launch time",
+      "open_detail": "Click to view details"
     },
     "app": {
       "actions": {
@@ -669,6 +1622,72 @@
         "force_scan": "Recheck all files, including unchanged files. This may take longer.",
         "scan": "Scan file changes and sync the current profile mod list"
       }
+    },
+    "backup_list": {
+      "export_modsconfig": {
+        "ready": "Export as ModsConfig.xml (package IDs only)",
+        "loading": "Exporting ModsConfig"
+      },
+      "export_rml": {
+        "ready": "Export as RML, the native RimWorld format (package IDs and Workshop IDs)",
+        "loading": "Exporting RML"
+      },
+      "export_share_code": {
+        "ready": "Generate a share code for the current activated list and copy it to clipboard",
+        "loading": "Generating share code"
+      },
+      "import_file": {
+        "ready": "Import load order (supports ModsConfig.xml / ModList.xml / .rml / save .rws / RimPy XML / RimSort JSON / text list / Workshop ID list)",
+        "loading": "Importing load order"
+      },
+      "import_share_code": {
+        "ready": "Import share code (paste an RC- share code)",
+        "loading": "Importing share code"
+      },
+      "open_backup_folder": "Open backup folder",
+      "refresh": {
+        "loading": "Refreshing backup list"
+      },
+      "rules": "**[[Automatic and manual backups]]**\n^^Short-term backups:^^ After each save or run action, the current config file is backed up when it changed. Short-term backups are kept for 1 day by default, cleaned on startup, and only the latest daily backup is kept as a long-term backup.\n^^Long-term backups:^^ Automatic long-term backups are kept for the last 30 days by default. Expired files are removed.\n^^Manual backups:^^ Manually created backups are saved to the selected directory and are not removed automatically.\n__Automatic list backup format: RML_YYYYMMDD_HHMMSS.rml__\n__Manual export support: ModsConfig.xml / ModList.rml__"
+    },
+    "common": {
+      "sort_asc": "Switch to ascending order",
+      "sort_desc": "Switch to descending order"
+    },
+    "disabled_mod_list": {
+      "mod_type": "Type: {type}",
+      "restore_failure": "Strict deactivation restore failed: {reason}. This mod is still kept in the deactivated records. Check file permissions or whether the file is in use.",
+      "source": "Storage: {source}"
+    },
+    "group_item": {
+      "change_color": "Change color",
+      "delete": "Delete group",
+      "edit_name": "Edit group name",
+      "move": "Move",
+      "package_export": "Package export group mods"
+    },
+    "group_list": {
+      "active_mod": "Activated",
+      "collapse_all": "Collapse all groups",
+      "create": "Create group",
+      "expand_all": "Expand all groups",
+      "help": "**Group management**\nDrag mods from lists into any group.\nRight-click a list to quickly move mods into or out of existing groups.\nOn the mod details page, you can manage all groups that contain that mod.\n\nGroups work like a clipboard. Moving into or out of groups is a [[copy]] operation:\n - ^^Removing^^ from a group does not remove the mod itself;\n - Dragging mods between groups copies them and skips members already in the target group.\n\nWhole groups can also be dragged:\n - Drag a group into the activated list to activate every mod in it;\n - Drag a group into the deactivated list to deactivate every mod in it.",
+      "remove_from_group": "Remove",
+      "search_next": "Search and locate the next matching result"
+    },
+    "mod_rule_editor": {
+      "language_owner": "Detected owners come from backend analysis by default. You can set owners manually. The right-side switch controls override or merge mode: when override is on, user owners replace detected owners; when off, they are merged with detected owners.",
+      "load_position": "Force this mod to the top or bottom of the activated list."
+    },
+    "rule_panel": {
+      "disable_rule": "Disable rule",
+      "enable_rule": "Enable rule",
+      "priority": "Rule priority affects autosort and issue detection decisions.",
+      "save_priority": "Save priority changes",
+      "weight": "**Mod weight rules**\nNormal mods use weight 500 by default.\n“Set weight” accepts 1-999. Smaller values sort earlier.\n“Shift weight” accepts -999 to 999. Negative moves earlier, positive moves later, and the final value is clamped to 1-999.\n“Top / Bottom” are effectively 0 and 1000 with higher priority. Use them only when a mod must be first or last.\n\nNote: Top/bottom weights override other weight settings, including default and shifted weights.\n      Weight shift is based on the normal mod weight by default. If another weight is set, shift is based on that value. Multiple shifts stack. Total weight is clamped to 1-999.\n\nSuggested weight ranges:\n\n[[Range]]\t\t[[Category]]\t\t\t\t\t\t[[Examples]]\n0\t\t\t\tPinned top\t\t\t\t\t\tHarmony or manual top\n1 - 49\t\t\tVery early frameworks\t\t\tFrameworks near Harmony\n50 - 99\t\t\tOfficial content\t\t\t\t\t\tCore, Royalty, Ideology, Anomaly\n100 - 199\t\tCommon base libraries\t\t\t\t\tVanilla Expanded Framework\n201 - 700\t\tNormal gameplay/content mods\t\tMost content mods (items, races, factions)\n701 - 800\t\tUI enhancements\t\t\t\tRimHUD, Numbers, InventoryTab\n801 - 899\t\tVisual/audio/patches\t\t\tTexture and audio replacements\n900 - 949\t\tLanguage/localization\t\t\t\tLanguagePack\n950 - 999\t\tLate optimizers/logic\t\tRocketman, Performance Optimize\n1000\t\t\tPinned bottom\t\t\t\t\t\tManual bottom"
+    },
+    "rule_relation": {
+      "add_comment": "[[__Click to add a note__]]"
     }
   },
   "toast": {
@@ -702,6 +1721,74 @@
         "filtered_out": "Search item {id} is filtered out by the {list} list filter. Clear filters and try again.",
         "loop_to_first": "Reached the last search result; wrapped to the first one"
       }
+    },
+    "backup_list": {
+      "backup_no_exportable_order": "This backup has no package ID sequence to export",
+      "drop_busy": "The previous dropped file is still being processed. Please wait.",
+      "empty_share_code": "Backend did not return a valid share code",
+      "exported_modlist": "Backup exported as ModList",
+      "exported_rml": "Backup exported as RML",
+      "name_sanitized": "Special characters in the file name were replaced with underscores",
+      "native_drop_no_path": "Native drag-and-drop did not return a valid file path",
+      "no_drop_file": "No importable file detected",
+      "no_exportable_order": "This entry has no package ID sequence to export",
+      "no_share_code_order": "This backup has no package ID sequence for a share code",
+      "only_one_file": "Only one file can be imported at a time. The first file was used.",
+      "rename_empty": "Enter a new backup name"
+    },
+    "load_order": {
+      "applied": "Mod order applied",
+      "backup_renamed": "Backup renamed",
+      "backup_saved_as": "Backup saved as:\n{path}",
+      "disk_changed_handle_conflict": "The disk load order changed. Resolve the conflict first.",
+      "empty_share_code": "Backend did not return a valid share code",
+      "export_failed": "Failed to export the Mod order. Check target folder permissions, disk space, and the current actived list. Details were written to the system log.",
+      "exported": "Mod order exported",
+      "import_items_removed": "Removed {count} imported items",
+      "imported_with_warnings": "Imported with {count} warnings",
+      "loaded": "Mod order loaded",
+      "no_downloadable_sources": "No downloadable target sources in the current filtered result",
+      "no_shareable_active_order": "There is no actived order to share",
+      "no_subscribable_workshop_items": "No subscribable Workshop items in the current filtered result",
+      "runtime_refreshed_diff": "After the game exited, the disk load order differed from the manager working order, so the comparison view was opened.",
+      "runtime_refreshed_unsaved": "After the game exited, the disk load order refreshed and unsaved changes were moved into the comparison view.",
+      "save_skipped_disk_changed": "The disk load order was changed externally. Save was skipped.",
+      "share_code_empty": "Share code cannot be empty",
+      "share_code_failed": "Failed to generate the share code. Check whether the current actived list is valid, or try again later. Details were written to the system log.",
+      "share_code_imported": "Share code imported"
+    },
+    "group_item": {
+      "rename_duplicate": "Group name already exists. Added suffix {index}"
+    },
+    "group_list": {
+      "drop": {
+        "copied": "Copied {count} items to “{name}”{suffix}",
+        "duplicate_skipped_all": "Target group already contains {count} mods. Skipped.",
+        "duplicate_suffix": ", skipped {count} duplicates"
+      }
+    },
+    "rule_panel": {
+      "name_required": "Enter a rule name",
+      "weight_clamped": "Dynamic weight was clamped to the allowed range (weight {weightMin}-{weightMax}, shift {shiftMin} to {shiftMax})."
+    },
+    "workspace": {
+      "cleanup_deleted_done": "Cleaned {count} deleted records",
+      "collection_duplicate": "This collection is already in your records.",
+      "collection_invalid_id": "Collection ID or link is invalid. Enter a numeric ID, or paste a Steam collection link containing id=xxx.",
+      "collection_load_failed": "Failed to load collection. Network, Steam service, or local cache may be temporarily unavailable. Try again later.",
+      "collection_parsing": "Parsing and connecting collection data.",
+      "collection_remove_failed": "Failed to remove collection. The backend may be unavailable or local records could not be written. Details were written to the system log.",
+      "collection_removed": "Collection removed from records",
+      "collection_search_need_key": "Collection search requires a Steam Web API Key",
+      "enable_workshop_enhanced_first": "Enable enhanced Workshop info and fill in the Steam Web API Key in Settings first",
+      "github_catalog_failed": "Failed to fetch recommended list. Check network connection, proxy settings, and recommendation source URL.",
+      "github_subscription_missing_url": "Subscription record has no repository URL, so timeline cannot be loaded",
+      "github_subscription_not_found": "Subscription not found",
+      "no_missing_workshop_downloads": "No downloadable missing Workshop items",
+      "workshop_relation_failed": "Failed to load {label}. Check network connection, Steam service status, or try again later.",
+      "workshop_retranslated": "Description retranslated",
+      "workshop_translated": "Description translated",
+      "workshop_translation_cleared": "Translation cleared"
     }
   },
   "dialog": {
@@ -726,6 +1813,110 @@
       "export_recommendation": {
         "source": "Selected mods",
         "title": "Export recommendations for selected mods{count}"
+      }
+    },
+    "backup_list": {
+      "delete": {
+        "message": "Delete this backup file?",
+        "title": "Delete confirmation"
+      },
+      "load": {
+        "message": "Restore the state from this backup file?\nUnsaved changes will be lost.",
+        "title": "Load confirmation"
+      },
+      "rename": {
+        "message": "Enter a new backup name.",
+        "placeholder": "Backup name",
+        "title": "Rename backup"
+      },
+      "share_code": {
+        "message": "Generated a share code for {count} mods.",
+        "title": "Share code generated"
+      }
+    },
+    "load_order": {
+      "import_share_code": {
+        "message": "Paste an RC- share code. After parsing, it will open in the comparison view.",
+        "title": "Import share code"
+      },
+      "import_stripping": {
+        "blocked_message": "This file contains {count} WorkshopID-only entries.\nThe game load order only accepts package IDs, so these entries would be stripped automatically.\nAfter stripping, there are no package ID entries to import. Handle subscription or download actions in the comparison list first.",
+        "blocked_title": "Cannot import directly",
+        "message": "This file contains {count} WorkshopID-only entries.\nThese entries are only used for comparison, subscription, and download hints. They will not be written into the game load order.\nIf you continue, they will be stripped automatically. Continue?",
+        "title": "Import notice"
+      },
+      "share_code": {
+        "copied_message": "Generated a share code for {count} mods and copied it to the clipboard.",
+        "copied_title": "Share code copied",
+        "copy_failed_message": "Automatic copy failed. Copy the share code below manually.",
+        "generated_title": "Share code generated"
+      }
+    },
+    "group_item": {
+      "export": {
+        "description": "Optionally include dependencies, linked mods, and language packs.",
+        "summary": "{count} mods in this group.",
+        "title": "Export group mods: {name}"
+      }
+    },
+    "group_list": {
+      "clear": {
+        "message": "Remove all {count} mods from “{name}”?\nOnly group contents are cleared. Mod files are not deleted.",
+        "title": "Clear group mods"
+      },
+      "delete": {
+        "message": "Delete group “{name}”?\nThe group record will be removed. Mod files are not deleted.",
+        "title": "Delete group"
+      },
+      "export": {
+        "summary": "{count} mods. Coexisting items will be resolved by the currently activated version or latest version during export."
+      },
+      "package_export": {
+        "description": "Optionally include dependencies, linked mods, and language packs.",
+        "group_title": "Package export group: {name}",
+        "selected_title": "Package export group mods{countText}",
+        "source_group": "Source group: {name}."
+      },
+      "recommendation_export": {
+        "title": "Recommendation export for selected mods{countText}"
+      }
+    },
+    "mod_rule_editor": {
+      "comment": {
+        "message": "Add a note for this rule",
+        "placeholder": "Enter note:",
+        "title": "Add note"
+      },
+      "position": {
+        "bottom_title": "Pin to bottom",
+        "placeholder": "Optional: why force this position?",
+        "top_title": "Pin to top"
+      }
+    },
+    "rule_panel": {
+      "delete": {
+        "title": "Confirm deletion"
+      },
+      "delete_dynamic": {
+        "message": "Delete this dynamic rule?"
+      },
+      "delete_mod": {
+        "message": "Delete this mod rule?"
+      }
+    },
+    "workspace": {
+      "cleanup_deleted": {
+        "message": "Clean these deleted/invalid inventory records? ({count} items)\nThis will not delete files, user tags, notes, or groups.",
+        "title": "Clean deleted records"
+      },
+      "startup_inventory": {
+        "after_scan_title": "Inventory status refreshed",
+        "before_scan_title": "Inventory status changes detected"
+      },
+      "transfer": {
+        "message": "Move selected mods by {action} to the [{target}] library?{warning}",
+        "title": "Confirm transfer",
+        "workshop_warning": "\nNote: Steam may modify items again after transfer to the Workshop folder"
       }
     }
   },
@@ -839,6 +2030,10 @@
     }
   },
   "history": {
+    "load_order": {
+      "apply_file_order": "Apply file order",
+      "load_file_order": "Load file order"
+    },
     "mod_item": {
       "remove_missing": "Remove {count} missing items"
     },
@@ -954,6 +2149,39 @@
         "other_groups": "Other section groups...",
         "other_section_groups": "Other list section groups..."
       }
+    },
+    "backup_list": {
+      "copy_path": "Copy file path",
+      "delete_file": "Delete file",
+      "export_as": "Export as...",
+      "load_file": "Load file",
+      "open_file": "Open file",
+      "open_folder": "Open containing folder",
+      "remove_from_list": "Remove from list"
+    },
+    "disabled_mod_list": {
+      "copy_field": "Copy {label}{countText}",
+      "copy_mod_info": "Copy mod info{countText}",
+      "delete_files": "Delete files{countText}",
+      "restore": "Reactivate{countText}",
+      "unsubscribe": "Unsubscribe{countText}",
+      "visit_page": "Open page"
+    },
+    "group_list": {
+      "activate": "Activate{countText}",
+      "activate_whole_group": "Activate group ({count} items)",
+      "clear_group": "Clear group",
+      "collapse_group": "Collapse group",
+      "deactivate": "Deactivate{countText}",
+      "deactivate_whole_group": "Deactivate group ({count} items)",
+      "expand_group": "Expand group",
+      "locate_main_list": "Locate in main list",
+      "package_export": "Package export{countText}",
+      "package_whole_group": "Package whole group",
+      "recommend_whole_group": "Recommend whole group",
+      "recommendation_export": "Recommendation export{countText}",
+      "remove_from_named_group": "Remove from “{name}”{countText}",
+      "select_group": "Select whole group"
     }
   },
   "common": {
@@ -983,7 +2211,8 @@
         "run_game": "Run",
         "startup_inventory_check": "Check startup inventory",
         "sync_mod_core_data": "Sync mod core data",
-        "sync_mod_data": "Sync mod data"
+        "sync_mod_data": "Sync mod data",
+        "sync_after_inventory_cleanup": "Sync mod data after cleaning inventory records"
       },
       "backend_popup": {
         "title": "System message"
@@ -1092,6 +2321,54 @@
       "update": {
         "download_failed": "Failed to download update package. Check network connection, proxy settings, and disk space, then try again later."
       }
+    }
+  },
+  "check": {
+    "backup_list": {
+      "export_modlist": "Export ModList",
+      "export_rml": "Export RML",
+      "generate_share_code": "Generate share code",
+      "pick_export_path": "Choose export path",
+      "read_backup_file": "Read backup file"
+    },
+    "load_order": {
+      "export_mod_order": "Export Mod order",
+      "generate_share_code": "Generate share code",
+      "get_backup_files": "Get backup files",
+      "import_load_order": "Import load order",
+      "import_share_code": "Import share code",
+      "open_load_order": "Open load order",
+      "pick_export_path": "Choose export path",
+      "pick_save_dir": "Choose save folder",
+      "rename_backup": "Rename backup",
+      "save_backup_as": "Save backup as",
+      "save_inactive_order": "Save deactivated list order",
+      "save_mod_order": "Save Mod load order"
+    },
+    "workspace": {
+      "all_libraries": "Get all library data",
+      "cleanup_deleted": "Clean deleted records",
+      "clear_workshop_translation": "Clear Workshop translation",
+      "collection_add": "Parse and connect collection",
+      "collection_online_search": "Online collection search",
+      "collection_remove": "Remove collection",
+      "collections": "Get collection records",
+      "dlc_options": "Get DLC options",
+      "github_catalog": "Get Git repository recommendations",
+      "github_subscriptions": "Get Git repository subscriptions",
+      "github_timeline": "Get Git repository mod timeline",
+      "install_sources_by_package": "Get install sources by package ID",
+      "lifecycle_updates": "Check mod update status in libraries",
+      "load_workshop_relation": "Load {label}",
+      "mod_timeline": "Get mod change timeline",
+      "steam_languages": "Get Steam language list",
+      "transfer_mods": "Transfer between libraries",
+      "translate_workshop_detail": "Translate Workshop description",
+      "workshop_author_profiles": "Get author information",
+      "workshop_details": "Get cloud details",
+      "workshop_details_by_package": "Get Workshop details by package ID",
+      "workshop_relation": "Get {label}",
+      "workshop_search": "Workshop search"
     }
   }
 }

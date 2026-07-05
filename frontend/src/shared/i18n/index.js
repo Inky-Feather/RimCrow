@@ -27,6 +27,17 @@ const formatFallback = (text = '', params = {}) => String(text ?? '').replace(/\
   Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name] ?? '') : match
 ))
 
+const getMessageByPath = (messages = {}, key = '') => {
+  if (!key) return undefined
+  const segments = String(key).split('.')
+  let current = messages
+  for (const segment of segments) {
+    if (!isPlainObject(current) || !Object.prototype.hasOwnProperty.call(current, segment)) return undefined
+    current = current[segment]
+  }
+  return typeof current === 'string' || typeof current === 'number' ? String(current) : undefined
+}
+
 const normalizeLocale = (language = '') => {
   const value = String(language || '').trim()
   if (!value) return DEFAULT_LOCALE
@@ -72,8 +83,11 @@ export const t = (key = '', defaultText = '', params = {}) => {
   const normalizedKey = String(key || '').trim()
   const safeParams = params && typeof params === 'object' ? params : {}
   if (!normalizedKey) return formatFallback(defaultText, safeParams)
-  const translated = i18n.global.t(normalizedKey, safeParams)
-  if (translated && translated !== normalizedKey) return translated
+  // 项目只使用 {param} 简单插值，直接读取原始 message 可避免 vue-i18n 将 | 解析为复数分支。
+  const locale = i18n.global.locale.value || DEFAULT_LOCALE
+  const translated = getMessageByPath(i18n.global.getLocaleMessage(locale), normalizedKey)
+    ?? getMessageByPath(i18n.global.getLocaleMessage(DEFAULT_LOCALE), normalizedKey)
+  if (translated !== undefined) return formatFallback(translated, safeParams)
   return formatFallback(defaultText, safeParams)
 }
 

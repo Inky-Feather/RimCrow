@@ -6,7 +6,7 @@
     <!-- 封面图 -->
     <div class="h-24 w-full bg-bg-inset relative overflow-hidden">
       <img v-if="mod.preview_url" :src="appStore.getRemoteUrl(mod.preview_url)" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-      <div v-else class="absolute inset-0 flex items-center justify-center text-text-dim text-xs">无封面</div>
+      <div v-else class="absolute inset-0 flex items-center justify-center text-text-dim text-xs">{{ t('ui.workspace.common.no_cover', '无封面') }}</div>
       
       <!-- 悬浮操作层 -->
       <div class="absolute inset-0 rounded-t-xl bg-bg-inset/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-sm" @click.stop>
@@ -14,7 +14,7 @@
       </div>
       
       <div v-if="isSubscribed" class="absolute top-0 left-0 bg-accent-primary/80 text-on-accent-primary text-xs px-1 rounded-full">
-        已订阅
+        {{ t('ui.workspace.common.subscribed', '已订阅') }}
       </div>
     </div>
 
@@ -36,6 +36,7 @@ import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
 import { cleanRichText } from '../../../shared/lib/text'
 import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
+import { t } from '../../../shared/i18n'
 
 const props = defineProps({
   mod: { type: Object, required: true }
@@ -51,6 +52,6 @@ const displayTitle = computed(() => String(props.mod.display_title || props.mod.
 const showsTranslatedTitle = computed(() => !!(props.mod.shows_translated_title && originalTitle.value && displayTitle.value !== originalTitle.value))
 const descriptionTooltip = computed(() => {
   const text = String(props.mod.display_description || props.mod.short_description || props.mod.description || '').trim()
-  return text ? cleanRichText(text, 220).replace(/\n+/g, '\n').trim() : '点击查看详情'
+  return text ? cleanRichText(text, 220).replace(/\n+/g, '\n').trim() : t('tooltip.workspace.open_detail', '点击查看详情')
 })
 </script>

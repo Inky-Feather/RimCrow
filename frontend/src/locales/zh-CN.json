@@ -99,22 +99,139 @@
         "provider_ai_default": "AI 翻译"
       }
     },
+    "backup_list": {
+      "drop": {
+        "description": "松手后将自动尝试导入到对比视图",
+        "formats": "支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`",
+        "title": "拖入加载序列文件"
+      },
+      "empty": "暂无备份记录",
+      "profile": {
+        "description": "切换其它环境备份",
+        "placeholder": "选择环境"
+      },
+      "section": {
+        "history": "历史归档",
+        "import": "临时导入",
+        "latest": "最新备份",
+        "manual": "手动备份",
+        "today": "今日动态"
+      },
+      "share_code": "分享码",
+      "title": "备份"
+    },
     "common": {
+      "cancel": "取消",
       "clear": "清除",
+      "close": "关闭",
       "collapse": "收起",
+      "confirm": "确认",
+      "copy": "复制",
       "count_suffix": " ({count}项)",
+      "count_suffix_spaced": " ({count} 项)",
       "count_suffix_with_unit": " ({count}个)",
+      "default": "默认",
       "delete": "删除",
+      "description": "说明",
+      "edit": "编辑",
+      "got_it": "知道了",
+      "group": "分组",
+      "import": "导入",
+      "loading": "加载中...",
+      "more_actions": "更多操作",
+      "move": "移动",
+      "no_changes": "无变化",
+      "no_record": "无记录",
       "none": "无",
+      "open_folder": "打开文件夹",
       "position": {
         "bottom": "底部",
         "top": "顶部"
       },
+      "refresh": "刷新",
+      "remove": "移除",
+      "rename": "重命名",
+      "reset": "重置",
       "restore_default": "恢复默认",
-      "unknown": "未知"
+      "save": "保存",
+      "unknown": "未知",
+      "unknown_time": "未知时间"
+    },
+    "diff_view": {
+      "action": {
+        "apply_file_order": "应用文件序列",
+        "download_missing": "下载缺失项 ({count})",
+        "download_other_version": "下载其它版本 ({count})",
+        "download_replacement": "下载替代项 ({count})",
+        "remove_missing": "移除缺失项 ({count})",
+        "remove_unknown": "移除未知项 ({count})",
+        "subscribe_missing": "订阅缺失项 ({count})",
+        "subscribe_other_version": "订阅其它版本 ({count})",
+        "subscribe_replacement": "订阅替代项 ({count})"
+      },
+      "default_title": {
+        "current": "当前序列",
+        "imported": "导入序列"
+      },
+      "folded_items": "··· 已折叠{count}项 ···",
+      "import_status": {
+        "missing": "缺失",
+        "other_version": "其它版本",
+        "replacement": "替代",
+        "replacement_installed": "已安装替代",
+        "unknown": "未知"
+      },
+      "legend": {
+        "added": "新增{count}",
+        "missing": "缺失{count}",
+        "moved": "移动{count}",
+        "offset": "偏移{count}",
+        "same": "一致{count}"
+      },
+      "option": {
+        "colorful_blocks": "多彩区块",
+        "hide_identical": "折叠长区块"
+      },
+      "title": "Mod序列对比"
+    },
+    "disabled_mod_list": {
+      "empty": {
+        "filtered": "没有符合筛选条件的禁用 Mod",
+        "no_disabled": "当前环境没有已禁用 Mod"
+      },
+      "restore_failure": {
+        "default_reason": "文件操作失败"
+      },
+      "search_placeholder": "筛选名称、包名、工坊 ID、路径...",
+      "sort": {
+        "ctime": "按创建时间",
+        "mtime": "按修改时间",
+        "name": "按名称 A-Z",
+        "size": "按文件体积"
+      },
+      "source": {
+        "all": "全部来源",
+        "local": "游戏本地",
+        "self": "管理器库",
+        "workshop": "创意工坊"
+      },
+      "title": "已禁用"
     },
     "drag": {
       "default_item": "拖拽项目"
+    },
+    "group_list": {
+      "action": {
+        "clear_group": "清空",
+        "locate": "定位"
+      },
+      "empty": {
+        "create_hint": "可点击 “ + ” 按钮新建分组",
+        "drop_here": "可拖拽模组到此"
+      },
+      "search_placeholder": "搜索分组名称、模组名称/包名/作者...",
+      "selected_mods": "已选模组",
+      "unnamed_group": "未命名分组"
     },
     "header": {
       "debug_page": "测试",
@@ -165,6 +282,13 @@
       "add_item": "+ 新增条目",
       "key_placeholder": "域名",
       "value_placeholder": "IP"
+    },
+    "load_order": {
+      "conflict": {
+        "before_refresh_unsaved": "刷新前未保存改动",
+        "before_refresh_working": "刷新前工作序列",
+        "unsaved_changes": "未保存改动"
+      }
     },
     "mod_details": {
       "ai_generate": "AI生成",
@@ -261,6 +385,18 @@
         "package_id": "包名"
       }
     },
+    "mod_rule_editor": {
+      "community_suggestion": "社区建议",
+      "language_owner": {
+        "analyzed": "默认分析所属 ({count})",
+        "empty_analyzed": "当前未分析出可靠所属",
+        "merge": "并入默认分析",
+        "replace": "覆盖默认分析",
+        "title": "语言包所属",
+        "user_override": "用户指定所属 ({count})"
+      },
+      "load_position": "加载位置"
+    },
     "mod_sign_color": {
       "blue": "蓝色",
       "cyan": "青色",
@@ -284,6 +420,137 @@
     "path": {
       "open_in_explorer": "在资源管理器中打开",
       "placeholder": "请输入或粘贴路径..."
+    },
+    "rule": {
+      "dynamic": {
+        "action": {
+          "bottom": "强制置底",
+          "bottom_short": "置底",
+          "load_after": "必须在某ID后",
+          "load_before": "必须在某ID前",
+          "top": "强制置顶",
+          "top_short": "置顶",
+          "weight_set": "设定权重 (Set)",
+          "weight_shift": "权重偏移 (Shift)"
+        },
+        "field": {
+          "alias_name": "别名",
+          "author": "作者",
+          "groups": "分组",
+          "mod_type": "类型",
+          "name": "名称",
+          "package_id": "包名",
+          "tags": "标签"
+        },
+        "operator": {
+          "contains": "包含",
+          "ends_with": "以...结尾",
+          "ends_with_short": "结尾是",
+          "equals": "等于",
+          "not_contains": "不包含",
+          "not_contains_short": "不含",
+          "not_equals": "不等于",
+          "regex": "正则匹配",
+          "regex_short": "正则",
+          "starts_with": "以...开头",
+          "starts_with_short": "开头是"
+        }
+      }
+    },
+    "rule_panel": {
+      "action": {
+        "as_strict_dependency": "作为强依赖",
+        "create_rule": "新建规则",
+        "enable_rules": "启用规则",
+        "export_bundle": "导出配置包",
+        "import_bundle": "导入配置包",
+        "update_library": "手动更新库"
+      },
+      "action_text": {
+        "load_after": "在 {name} 之后",
+        "load_before": "在 {name} 之前",
+        "weight_set": "权重设为 {value}",
+        "weight_shift": "权重 {value}"
+      },
+      "community": {
+        "description": "包含众多由社区维护的排序建议。关闭“仅显示已安装”后可浏览完整规则库。",
+        "title": "社区规则库 (RimSort)"
+      },
+      "editor": {
+        "action_label": "执行动作",
+        "add_condition": "添加条件",
+        "close": "关闭编辑面板",
+        "create_title": "新建动态规则",
+        "description_label": "描述 (可选)",
+        "description_placeholder": "规则的备注说明...",
+        "edit_title": "编辑规则",
+        "empty_conditions": "点击右上角添加筛选条件",
+        "logic_all": "满足所有 (AND)",
+        "logic_any": "满足任一 (OR)",
+        "logic_label": "触发条件",
+        "name_label": "规则名称",
+        "name_placeholder": "例如: 汉化包置底",
+        "no_param_bottom": "无需参数，匹配项将被移至列表最后端。",
+        "no_param_top": "无需参数，匹配项将被移至列表最前端。",
+        "priority_label": "优先级 (Priority)",
+        "priority_placeholder": "例如: 100",
+        "save_rule": "保存规则",
+        "value_placeholder": "值...",
+        "weight_set_hint": "({min}-{max}，越小越靠前)",
+        "weight_shift_hint": "({min} 到 {max}；负数向前，正数向后，最终结果仍会限制在 {weightMin}-{weightMax})"
+      },
+      "empty": {
+        "dynamic_rules": "暂无动态规则",
+        "no_rules": "没有找到相关规则"
+      },
+      "filter": {
+        "installed_only": "仅显示已安装"
+      },
+      "priority": {
+        "hint": "* 生效优先级：从上到下，优先级从高到低。",
+        "title": "生效优先级"
+      },
+      "relation": {
+        "dependencies": "依赖:",
+        "incompatible": "冲突:",
+        "incompatible_title": "冲突",
+        "load_after": "前置:",
+        "load_after_title": "前置",
+        "load_before": "后置:",
+        "load_before_title": "后置"
+      },
+      "rule": {
+        "disabled": "已禁用",
+        "not_installed": "未安装"
+      },
+      "search_placeholder": "搜索规则、Mod名称或ID...",
+      "source": {
+        "community": "社区规则",
+        "dynamic": "动态规则",
+        "native": "原版规则",
+        "user": "用户规则",
+        "workshop": "创意工坊规则"
+      },
+      "subtitle": "管理排序逻辑与约束",
+      "tab": {
+        "community": "社区Mod规则",
+        "dynamic": "动态群组规则",
+        "user": "用户Mod规则",
+        "workshop": "创意工坊依赖规则"
+      },
+      "title": "规则中心",
+      "updated_at": "更新时间: {time}",
+      "workshop": {
+        "description": "社区维护定期更新的创意工坊离线模组数据。",
+        "title": "创意工坊离线数据库"
+      }
+    },
+    "rule_relation": {
+      "community_rules": "社区规则 ({count})",
+      "drop_here": "可拖拽模组到此",
+      "native_rules": "原始规则 ({count})",
+      "user_rules": "用户规则 ({count})",
+      "workshop_rules": "工坊规则 ({count})"
     },
     "search": {
       "mod": {
@@ -406,6 +673,11 @@
         "tooltip": "**{description}**\n原始格式：{fullKey}\n其它格式：{aliases}\n使用示例：{usage}"
       }
     },
+    "time": {
+      "before_yesterday": "前天",
+      "days_ago": "{count} 天前",
+      "yesterday": "昨天"
+    },
     "workshop_action": {
       "download": "下载",
       "open_steam": "打开 Steam 客户端工坊页面",
@@ -416,6 +688,467 @@
     },
     "workspace": {
       "back_home": "主界面",
+      "collection": {
+        "actions": {
+          "apply_order": {
+            "label": "应用加载顺序",
+            "tooltip": "应用合集列表顺序为加载顺序，请确保全部已下载！"
+          },
+          "download_missing": {
+            "label": "补齐下载 ({count})",
+            "tooltip": "使用 SteamCMD 仅下载缺失项到管理器目录"
+          },
+          "import": "导入合集",
+          "subscribe_all": {
+            "label": "订阅全部",
+            "tooltip": "将整个合集添加到 Steam 订阅队列"
+          },
+          "unsubscribe_all": {
+            "label": "取订全部",
+            "tooltip": "将整个合集从 Steam 订阅队列中移除"
+          }
+        },
+        "apply_order": {
+          "duplicate_skipped": "已跳过 {count} 个重复包名项，避免生成重复加载节点。",
+          "history_label": "按合集顺序覆盖启用列表",
+          "missing_message": "当前合集有 {count} 个模组未安装。\n强行应用会导致排序中出现幽灵节点（空项）。强烈建议先下载补齐。\n是否继续强行应用？",
+          "no_package_id": "无法提取包名。可能后端接口未返回 package_id。",
+          "success": "已按合集顺序覆盖当前启用列表。\n官方 Core/DLC 会按当前启用状态保留，请返回主界面点击【保存】生效。",
+          "unresolved_skipped": "有 {count} 个合集项无法解析包名，可能是缓存缺失或本地未安装，已跳过这些项。",
+          "warning_title": "警示"
+        },
+        "card": {
+          "delete_record": "删除记录",
+          "missing_short": "缺 {count}",
+          "no_description": "暂无说明",
+          "not_synced": "未同步",
+          "save_collection": "收藏合集",
+          "sync_tooltip": "本地缓存同步：{time}",
+          "sync_unknown": "尚未同步到本地缓存",
+          "synced": "同步: {time}",
+          "total_short": "共 {count}",
+          "unknown": "未知合集",
+          "updated": "更新: {time}",
+          "updated_tooltip": "工坊最后更新：{time}",
+          "updated_unknown": "暂未获取更新时间"
+        },
+        "child": {
+          "pending": "待补充"
+        },
+        "detail": {
+          "all_installed": "已全部安装",
+          "empty_select": "选择右侧合集以查看详情",
+          "missing_count": "缺失 {count} 项",
+          "no_description": "该合集没有提供详细描述。",
+          "total_count": "共 {count} 项",
+          "view_description": "查看合集说明"
+        },
+        "download_missing": {
+          "none": "所有模组均已就绪，无需下载！"
+        },
+        "empty": {
+          "saved_hint": "请在上方粘贴链接以接入数据",
+          "saved_title": "您的记录中暂无合集",
+          "search_hint": "可以换个关键词，或放宽标签和时间范围",
+          "search_title": "暂无合集搜索结果",
+          "searching_hint": "正在从 Steam 获取匹配的合集",
+          "searching_title": "正在搜索合集..."
+        },
+        "input": {
+          "placeholder": "粘贴 Steam 合集 URL 或直接输入 ID..."
+        },
+        "load_more": "加载更多合集",
+        "loading_more": "加载更多合集...",
+        "reached_end": "- 已经到底啦 -",
+        "remove": {
+          "message": "确定要将合集 \"{title}\" 移出记录吗？\n(这不会删除你已经下载的 Mod 文件)",
+          "title": "删除记录"
+        },
+        "search": {
+          "button": "搜索",
+          "field": {
+            "tag": "标签",
+            "text": "搜索文本"
+          },
+          "help": {
+            "basic": "可直接输入关键词，或使用 类别:关键词 格式",
+            "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
+            "logic": "搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。",
+            "tab": "\n[[(使用 Tab 键应用输入建议)]]",
+            "title": "**输入关键词并回车确认**"
+          },
+          "placeholder": "搜索 Steam 合集...",
+          "sort": "排序",
+          "sort_tooltip": "排序与时间范围",
+          "time": "时间"
+        },
+        "tabs": {
+          "saved": "已收藏合集",
+          "search": "在线搜索合集"
+        },
+        "tooltip": {
+          "body": "**{title}**\n\n{description}\n\n[[共 {count} 个模组]]{missing}",
+          "missing_suffix": " | ^^需要下载/订阅: {count}^^"
+        }
+      },
+      "common": {
+        "missing_record": "缺失记录",
+        "no_cover": "无封面",
+        "subscribed": "已订阅",
+        "unknown_author": "未知作者",
+        "unknown_mod": "未知模组",
+        "unnamed_mod": "未命名模组"
+      },
+      "github": {
+        "action": {
+          "create_catalog_subscription": "建立清单订阅",
+          "create_subscription": "建立订阅",
+          "parse_recommended_repo": "解析推荐仓库",
+          "parse_repo": "解析 Git 仓库链接",
+          "remove_subscription": "移除订阅",
+          "request_transfer": "请求数据传输"
+        },
+        "actions": {
+          "open_local": "打开本地目录",
+          "open_original": "打开原始地址",
+          "remove_subscription": "移除订阅"
+        },
+        "active": {
+          "current_mode": "当前模式: {mode}",
+          "deploy_latest": "获取并部署最新",
+          "deploy_now": "立即部署",
+          "deploy_tooltip": "获取并部署当前订阅",
+          "installed_version": "已部署版本: {version}",
+          "local_audit_log": "本地执行追踪 (Local Audit Log)",
+          "no_logs": "暂无追踪记录"
+        },
+        "catalog": {
+          "add_git_subscription": "添加为 Git 订阅",
+          "add_zip_subscription": "添加为 Git 订阅并部署 zip",
+          "cache_badge": "缓存",
+          "empty": "没有匹配的推荐项",
+          "filter_placeholder": "筛选名称、包名、作者或版本",
+          "git_subscribed": "已添加 Git 订阅",
+          "loading": "正在读取推荐列表...",
+          "not_recommended": "当前不建议使用",
+          "not_recommended_tooltip": "该项目可能暂时不兼容，建议确认说明后再添加",
+          "official": "官方内容",
+          "official_tooltip": "游戏本体或官方 DLC 不需要订阅",
+          "source_all": "全部",
+          "source_catalog": "清单",
+          "source_summary": "推荐来源: {total} 项 / {sourceCount} 个来源",
+          "unsupported": "暂不支持",
+          "unsupported_tooltip": "该项目缺少可用下载地址",
+          "workshop_subscribed": "已订阅创意工坊"
+        },
+        "dependency": {
+          "add_git": "添加 Git 订阅",
+          "can_add_git": "可添加 Git 订阅",
+          "can_subscribe_workshop": "可订阅创意工坊",
+          "git_already_added": "该依赖已添加 Git 订阅",
+          "missing_source": "没有找到可直接添加的来源",
+          "official": "游戏本体或官方 DLC，不需要订阅",
+          "subscribe_workshop": "订阅创意工坊依赖",
+          "unsubscribe_workshop": "取消订阅创意工坊依赖"
+        },
+        "deploy": {
+          "no_release_cache": "无法获取 Release 版本信息，当前也没有可用缓存",
+          "skip_metadata_refresh": "Git 仓库信息查询失败，已跳过元数据刷新，直接按当前分支继续部署",
+          "started": "已开始获取数据流，请在底部状态栏查看进度",
+          "use_cached_release": "Git 仓库信息查询失败，已改用本地缓存的 Release 版本继续部署"
+        },
+        "detail": {
+          "author": "作者",
+          "default_branch": "默认分支",
+          "dependencies": "依赖项",
+          "install_type": "安装类型",
+          "source": "来源"
+        },
+        "empty": {
+          "select_or_add": "Select or Add a Repository"
+        },
+        "input": {
+          "parse": "解析地址",
+          "placeholder": "粘贴公开 Git 仓库地址 如: https://github.com/user/repo (支持 GitHub / GitLab / GitGud)",
+          "supported_tooltip": "支持以下仓库：GitHub、GitLab、GitGud。"
+        },
+        "install_type": {
+          "git_repo": "Git 仓库",
+          "zip_link": "Zip 直链"
+        },
+        "preview": {
+          "meta": "作者: {owner} | 默认分支: {branch}",
+          "release": {
+            "description": "获取作者打包的稳定版。",
+            "none": "该仓库尚未发布任何 Release",
+            "title": "获取发行版 (Release)"
+          },
+          "source": {
+            "description": "获取分支最新代码。适合频繁更新或未发布 Release 的测试版模组。",
+            "title": "同步源码分支 (Source)"
+          }
+        },
+        "readme": {
+          "error": "读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。",
+          "loading": "正在读取 README..."
+        },
+        "refresh": {
+          "tooltip": "刷新当前列表"
+        },
+        "remove": {
+          "confirm": "移除",
+          "message": "确定要移除 Git 订阅「{name}」吗？\n本地已下载文件不会被删除。",
+          "title": "移除订阅"
+        },
+        "status": {
+          "branch_changed": "跟踪分支不同",
+          "current": "已是最新",
+          "installed": "已安装",
+          "missing": "本地文件缺失",
+          "not_deployed": "未部署",
+          "unknown": "状态未知",
+          "upgrade": "可升级"
+        },
+        "subscribe": {
+          "catalog_success": "清单项已成功订阅",
+          "repo_success": "仓库已成功订阅"
+        },
+        "tabs": {
+          "recommend": "推荐列表",
+          "subscribed": "已订阅"
+        },
+        "time": {
+          "published": "发布: {time}",
+          "updated": "更新: {time}"
+        },
+        "title": "Git 仓库订阅",
+        "tooltip": {
+          "author": "作者: {author}",
+          "package_id": "包名: {packageId}"
+        },
+        "workshop": {
+          "subscribe": "订阅创意工坊",
+          "unsubscribe": "取消订阅创意工坊"
+        }
+      },
+      "library": {
+        "column": {
+          "local": {
+            "title": "游戏本地模组",
+            "tooltip": "游戏本体所在的 Mods 目录。此处的变动会直接影响游戏。"
+          },
+          "self": {
+            "title": "管理器 (SteamCMD)",
+            "tooltip": "由 RimCrow 通过 SteamCMD/Git 下载管理的模组库。"
+          },
+          "workshop": {
+            "title": "Steam 创意工坊",
+            "tooltip": "由 Steam 客户端管理和自动更新的模组。"
+          }
+        },
+        "refresh": {
+          "button": "刷新数据",
+          "tooltip": "重新读取当前三域矩阵数据"
+        },
+        "scanning_all_locations": "正在扫描所有存储位置...",
+        "status": {
+          "ready": "就绪",
+          "scanning": "扫描中..."
+        },
+        "summary": {
+          "count": "总计数量: {count}",
+          "size": "总计大小：{size}",
+          "status": "状态: {status}"
+        },
+        "timeline": {
+          "local_unavailable": "该 Mod 位于游戏本地目录中，无法获取变动轨迹",
+          "no_workshop_id": "该 Mod 没有绑定工坊 ID，无法获取变动轨迹"
+        }
+      },
+      "matrix": {
+        "action": {
+          "clean_missing_records": "清理缺失数据记录",
+          "clean_records": "清理数据记录"
+        },
+        "badge": {
+          "changed": "变更",
+          "deleted": "库存记录存在，但本地模组目录已删除或失效",
+          "disabled": "已禁用",
+          "missing": "工坊记录存在，但本地没有有效模组文件",
+          "new": "新增",
+          "unavailable": "失效",
+          "unavailable_tooltip": "Steam 已无法获取该工坊项目详情，可能已下架或不可访问",
+          "update": "可更新"
+        },
+        "clean_records": {
+          "message": "确定要清理选中异常项的数据记录吗？（{count} 项）\n这不会取消 Steam 订阅，也不会删除任何仍存在的文件。",
+          "success": "已清理 {count} 条数据记录",
+          "title": "清理数据记录"
+        },
+        "cleanup_invalid_unsubscribe": {
+          "message": "确定要取消订阅这些异常缺失的工坊项并清理本地记录吗？（{count} 项）",
+          "title": "清理失效并取消订阅"
+        },
+        "column": {
+          "item_count": "{count} 项"
+        },
+        "context_hint": "右键点击卡片可查看变动时间线与更多操作",
+        "detail": {
+          "conflict": "同库冲突:",
+          "replacement": "替代项:",
+          "same": "跨库同项:",
+          "storage": "储存占用:"
+        },
+        "download_missing": {
+          "confirm": "请求 Steam 下载",
+          "message": "将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作不会取消订阅，而是直接请求 Steam 客户端重新下载或校验这些项目，并在任务栏等待 Steam 确认本地文件已下载完成。\n\n如果 Steam 网络异常、下载排队过久或项目本身不可用，任务会显示失败。",
+          "title": "Steam 下载缺失项"
+        },
+        "empty": "库内暂无数据",
+        "filter": {
+          "change": "仅看变更",
+          "conflict": "仅看同库冲突",
+          "default": "显示所有",
+          "deleted": "仅看已删除",
+          "disabled": "仅看已禁用",
+          "missing": "仅看缺失",
+          "new": "仅看新增",
+          "replace": "仅看替代项",
+          "same": "仅看跨库同项",
+          "update": "仅看可更新"
+        },
+        "menu": {
+          "activate": "解禁{count}",
+          "clean_invalid_unsubscribe": "清理失效并取消订阅{count}",
+          "clean_records": "清理数据记录{count}",
+          "copy_field": "复制{field}{count}",
+          "copy_info": "复制信息{count}",
+          "copy_to_local": "复制到 游戏本地库",
+          "copy_to_self": "复制到 管理器库",
+          "copy_to_workshop": "复制到 创意工坊库",
+          "count_suffix": " ({count} 项)",
+          "deactivate": "禁用{count}",
+          "delete_files": "删除文件{count}",
+          "download_to_self": "下载到管理器{count}",
+          "field": {
+            "name": "名称",
+            "package_id": "包名",
+            "path": "路径",
+            "workshop_id": "工坊 ID"
+          },
+          "jump_group_label": "{label} ({count} 项)",
+          "jump_replacement": "跳转到替代项",
+          "jump_same": "跳转到相同项",
+          "jump_target_label": "{source} · {path}",
+          "move_to_local": "移动到 游戏本地库",
+          "move_to_self": "移动到 管理器库",
+          "move_to_workshop": "移动到 创意工坊库",
+          "open_folder": "打开文件夹",
+          "open_page": "访问页面",
+          "open_workshop": "访问创意工坊",
+          "redownload_missing": {
+            "label": "重新下载缺失项{count}",
+            "tooltip": "直接请求 Steam 重新下载或校验这些缺失项。"
+          },
+          "resubscribe_missing": {
+            "label": "重新订阅缺失项{count}",
+            "tooltip": "先取消订阅，再重新订阅，让 Steam 重新排队获取这些缺失项。\n此操作会改变订阅状态，网络异常时可能出现取消成功但重新订阅失败，请谨慎使用。"
+          },
+          "steam_actions": "Steam操作",
+          "subscribe_mod": "订阅模组{count}",
+          "transfer": "转移...{count}",
+          "unsubscribe": "取消订阅{count}",
+          "update_redownload": "更新模组[再次下载]{count}",
+          "update_resubscribe": "更新模组[再次订阅]{count}",
+          "view_timeline": "查看变动"
+        },
+        "path": {
+          "missing_record": "缺失记录"
+        },
+        "refresh_after_clean_missing_records": "清理缺失记录后同步模组数据",
+        "refresh_after_clean_records": "清理库存记录后同步模组数据",
+        "refresh_after_inventory_change": "库存变更后同步模组数据",
+        "refresh_after_unsubscribe": "取消订阅后同步模组数据",
+        "resubscribe_missing": {
+          "confirm": "开始重新订阅",
+          "message": "将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作会先向 Steam 发送取消订阅请求，并等待 Steam 返回成功；随后再重新发送订阅请求，让 Steam 重新拉取这些项目。\n\n由于 Steam 客户端和网络状态不可控，过程中可能出现取消订阅成功但重新订阅失败、Steam 下载排队较久、或列表刷新延迟。执行后请等待 Steam 下载完成，再刷新库存或重新扫描。",
+          "success": "已重新发送 {count} 个缺失项的订阅请求，请等待 Steam 下载完成",
+          "title": "重新订阅缺失项"
+        },
+        "search": {
+          "placeholder": "在此域检索..."
+        },
+        "sort": {
+          "change": "按变动时间",
+          "ctime": "按创建时间",
+          "mtime": "按修改时间",
+          "name": "按名称 A-Z",
+          "size": "按文件体积",
+          "to_ascending": "切换为升序排列",
+          "to_descending": "切换为降序排列"
+        },
+        "switch": {
+          "self": {
+            "description": "为当前环境使用管理器Mod，启用后将通过链接方式自动为游戏添加管理器 Mod。"
+          },
+          "show_official": {
+            "description": "默认隐藏 Core/DLC 等官方项目；隐藏时不会进入本地列表和多选范围。",
+            "label": "· 显示官方"
+          },
+          "workshop": {
+            "description": "适用于非 Steam 版环境。为当前环境使用创意工坊模组，启用后将通过链接方式自动为游戏添加创意工坊模组。（前提是账号拥有游戏，或创意工坊内容本身可正常使用。）"
+          }
+        },
+        "time": {
+          "create": "文件创建",
+          "download": "下载时间",
+          "installed": "当前版本",
+          "latest": "可用版本",
+          "modify": "文件修改",
+          "subscribed": "订阅时间",
+          "unsubscribed": "取消订阅"
+        },
+        "time_empty": "时间：无记录",
+        "tooltip": {
+          "conflict": "当前库存在同包名冲突项",
+          "replacement": "已检测到替代项",
+          "same": "其它库存在相同项"
+        }
+      },
+      "startup": {
+        "action": {
+          "cleanup_deleted": "清理数据",
+          "cleanup_deleted_all": "清理删除项数据",
+          "cleanup_deleted_count": "清理残留数据（{count}项）",
+          "details": "查看详情",
+          "download_missing": "重新下载",
+          "download_missing_all": "重新下载缺失项",
+          "download_missing_count": "重新下载（{count}项）"
+        },
+        "empty": "当前没有需要处理的库存项。",
+        "group": {
+          "changed": {
+            "description": "工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。",
+            "title": "已变更模组"
+          },
+          "default": "库存状态",
+          "deleted": {
+            "description": "库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。",
+            "title": "已删除模组"
+          },
+          "missing": {
+            "description": "仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。",
+            "title": "缺失模组"
+          }
+        },
+        "item_count": "{count} 项",
+        "more_items": "\n等 {count} 个模组。",
+        "summary": {
+          "after_scan": "库存检测完成。",
+          "before_scan": "检测到库存可能有变化。",
+          "group_count": "{title} {count} 项"
+        }
+      },
       "sync_ready": "同步就绪",
       "tab": {
         "collection": "合集订阅管理",
@@ -423,7 +1156,36 @@
         "library": "全库数据管理",
         "workshop": "创意工坊检索"
       },
+      "timeline": {
+        "empty": "Steam 本地日志未记录该项目的变动",
+        "title_highlight": "时间线",
+        "title_prefix": "变动"
+      },
+      "translation": {
+        "follow_ui": "跟随界面语言",
+        "follow_ui_with_language": "跟随界面语言（{language}）",
+        "original": "原文"
+      },
       "workshop": {
+        "advanced": {
+          "cache_limited": "缓存搜索使用本地数据库内容，不支持查询语言和查询范围。",
+          "language": "查询语言",
+          "order": "顺序",
+          "sort": "排序",
+          "text_target": "查询范围",
+          "time": "时间",
+          "tooltip": "排序与高级搜索"
+        },
+        "cache_sort": {
+          "author": "作者排序",
+          "latest": "最近更新",
+          "name": "名称排序",
+          "subscriptions": "最多订阅"
+        },
+        "copy": {
+          "failed": "{label}复制失败",
+          "success": "{label}已复制"
+        },
         "days": {
           "0": "至今",
           "0_short": "至今",
@@ -435,6 +1197,161 @@
           "7_short": "周内",
           "90": "季内",
           "90_short": "季内"
+        },
+        "detail": {
+          "author": {
+            "title": "作者",
+            "tooltip": "作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。"
+          },
+          "back": "返回上一层",
+          "collection_children": {
+            "title": "合集子项"
+          },
+          "comments": {
+            "title": "评论",
+            "tooltip": "Steam 工坊公开评论数量。"
+          },
+          "content_warning": {
+            "sensitive": "含敏感标记",
+            "title": "内容",
+            "tooltip": "项目被 Steam 标记为可能含有敏感内容，展示前建议自行确认。"
+          },
+          "copy_name_tooltip": "点击可复制项目名称",
+          "created": {
+            "title": "创建",
+            "tooltip": "项目首次发布到 Steam 工坊的时间。"
+          },
+          "dependencies": {
+            "download_all": "下载全部依赖",
+            "downloading": "下载中",
+            "subscribe_all": "订阅全部依赖",
+            "subscribing": "订阅中",
+            "title": "依赖项目",
+            "unsubscribe_all": "取消订阅全部依赖",
+            "unsubscribing": "取消中"
+          },
+          "dependents": {
+            "title": "生态关联"
+          },
+          "empty_hint": "左侧结果会保留搜索和排序状态，点击项目后可查看说明、依赖、截图和关联项目。",
+          "empty_title": "选择一个工坊项目查看详情",
+          "favorites": {
+            "title": "收藏",
+            "tooltip": "被加入收藏的次数。适合判断长期关注度。"
+          },
+          "loading": "从 Steam 获取详情中...",
+          "no_description": "该模组没有提供详细描述。",
+          "original_name": "原始名称",
+          "package_id": {
+            "title": "包名",
+            "tooltip": "模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。"
+          },
+          "project_name": "项目名称",
+          "rating": {
+            "title": "评分",
+            "tooltip": "Steam 返回的综合评分。适合快速判断整体用户反馈。"
+          },
+          "same_author": {
+            "title": "同作者作品"
+          },
+          "screenshots": {
+            "title": "截图"
+          },
+          "size": {
+            "title": "大小",
+            "tooltip": "Steam 返回的文件体积，可用来粗略判断下载耗时和磁盘占用。"
+          },
+          "status": {
+            "banned": "已封禁",
+            "title": "状态",
+            "tooltip": "项目当前状态异常。通常表示该项目已被 Steam 限制或封禁。"
+          },
+          "steam_details": {
+            "title": "Steam 详情数据"
+          },
+          "subscriptions": {
+            "title": "订阅数",
+            "tooltip": "当前 Steam 工坊公开订阅人数。"
+          },
+          "tag": {
+            "empty_tooltip": "该项目没有返回可展示的工坊标签。",
+            "hidden_tooltip": "其余标签：{tags}",
+            "title": "标签",
+            "tooltip": "工坊标签：{tag}"
+          },
+          "updated": {
+            "title": "更新",
+            "tooltip": "项目最近一次在 Steam 工坊更新的时间。"
+          },
+          "version": {
+            "title": "版本",
+            "tooltip": "该项目标注的 RimWorld 适用版本。这里会合并后端缓存和标签中的版本信息。"
+          },
+          "view_all": "查看全部",
+          "votes_down": {
+            "title": "点踩",
+            "tooltip": "公开点踩数量。"
+          },
+          "votes_up": {
+            "title": "点赞",
+            "tooltip": "公开点赞数量。适合结合评分一起看口碑。"
+          },
+          "workshop_id": {
+            "title": "工坊 ID",
+            "tooltip": "Steam 工坊项目的唯一编号。单击可复制。"
+          }
+        },
+        "enhanced_mode": {
+          "description": "开启后使用专用接口获取更完整的工坊信息；关闭该功能后，系统会依靠本地缓存工坊库以及公开接口来读取工坊相关信息；受本地缓存库的局限，查询到的结果并不完整，也无法获取刚发布的最新模组。",
+          "label": "增强模式"
+        },
+        "image": {
+          "background_alt": "工坊项目背景",
+          "cover_alt": "工坊项目封面",
+          "screenshot_alt": "{title}截图"
+        },
+        "item": {
+          "subscribed": "已订阅",
+          "subscribers_tooltip": "订阅人数",
+          "unknown_mod": "未知模组",
+          "workshop_id_tooltip": "工坊ID",
+          "workshop_project": "工坊项目"
+        },
+        "relation": {
+          "collection_children": "合集子项",
+          "dependencies": "依赖项目",
+          "dependents": "生态关联",
+          "same_author": "同作者作品",
+          "title_with_author": "{kind}: {author}",
+          "title_with_item": "{kind}: {title}"
+        },
+        "results": {
+          "all_loaded": "已显示全部结果",
+          "count": "{count} 项结果",
+          "empty_hint": "换一个关键词、标签或排序条件再试。",
+          "empty_title": "暂无结果",
+          "loading_more": "加载更多...",
+          "loading_settings": "正在读取工坊设置...",
+          "searching": "正在检索..."
+        },
+        "search": {
+          "button": "搜索",
+          "field": {
+            "author": "作者",
+            "dependency": "模组依赖",
+            "dlc": "DLC依赖",
+            "tag": "标签",
+            "text": "搜索文本"
+          },
+          "help": {
+            "basic": "可直接输入关键词，或使用 类别:关键词 格式",
+            "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
+            "logic": "搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。",
+            "tab": "\n[[(使用 Tab 键应用输入建议)]]",
+            "title": "**输入关键词并回车确认**"
+          },
+          "placeholder_cache": "搜索缓存，支持 t:标签 d:DLC_AppID m:依赖工坊ID a:作者",
+          "placeholder_enhanced": "搜索工坊，支持 t:标签 d:DLC_AppID m:依赖工坊ID"
         },
         "sort": {
           "created": "最近发布",
@@ -450,10 +1367,31 @@
           "until_now": "{sort}（至今）",
           "with_days": "{sort}（{days}）"
         },
+        "source": {
+          "cache": "缓存工坊搜索",
+          "enhanced": "增强工坊搜索",
+          "loading_settings": "读取工坊设置"
+        },
+        "tags": {
+          "mod": "Mod（普通模组）",
+          "scenario": "Scenario（剧本）",
+          "translation": "Translation（翻译）"
+        },
         "text_target": {
           "0": "标题与说明",
           "1": "仅标题",
           "2": "仅说明"
+        },
+        "transient": {
+          "back_to_results": "返回搜索结果"
+        },
+        "translation": {
+          "original": "原文",
+          "quick_original_tooltip": "点击切换回工坊原文\n长按可重新翻译当前语言",
+          "quick_translate_tooltip": "点击按当前翻译目标语言显示或生成译文：{language}\n长按可重新翻译当前语言",
+          "settings_tooltip": "{stale}当前显示：{language}\n当前翻译器：{provider}\n\n点击可切换显示语言和翻译器，也可以重新翻译或清理当前译文。",
+          "stale_prefix": "^^原文已更新，可重新翻译。^^\n",
+          "translate": "翻译"
         }
       }
     }
@@ -469,11 +1407,77 @@
         "scan": "扫描文件变动，并同步当前环境的 Mod 列表"
       }
     },
+    "backup_list": {
+      "export_modsconfig": {
+        "loading": "正在导出 ModsConfig",
+        "ready": "导出为 ModsConfig.xml（仅含包名）"
+      },
+      "export_rml": {
+        "loading": "正在导出 RML",
+        "ready": "导出为 RML 游戏原生格式（含包名和工坊ID）"
+      },
+      "export_share_code": {
+        "loading": "正在生成分享码",
+        "ready": "生成当前启用序列的分享码并复制到剪贴板"
+      },
+      "import_file": {
+        "loading": "正在导入加载序列",
+        "ready": "导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）"
+      },
+      "import_share_code": {
+        "loading": "正在导入分享码",
+        "ready": "导入分享码（粘贴 RC- 分享码）"
+      },
+      "open_backup_folder": "打开备份文件夹",
+      "refresh": {
+        "loading": "正在刷新备份列表"
+      },
+      "rules": "**[[自动备份与手动备份说明：]]**\n^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。\n^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。\n^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。\n__自动列表备份格式：RML_YYYYMMDD_HHMMSS.rml__\n__手动导出支持：ModsConfig.xml / ModList.rml__"
+    },
     "color": {
       "custom": "自定义颜色"
     },
     "command": {
       "missing": "命令不存在：{commandId}"
+    },
+    "common": {
+      "sort_asc": "切换为升序排列",
+      "sort_desc": "切换为降序排列"
+    },
+    "diff_view": {
+      "colorful_blocks": "为不同的区块使用不同颜色便于区分",
+      "download_item": {
+        "loading": "正在下载该工坊项目",
+        "ready": "下载该导入项对应的工坊项目到管理器"
+      },
+      "hide_identical": "折叠一致和整体移动的长区块",
+      "open_source": "打开来源页面",
+      "remove_item": "从当前导入序列中移除该项",
+      "subscribe_item": {
+        "loading": "正在订阅该工坊项目",
+        "ready": "订阅该导入项对应的工坊项目"
+      }
+    },
+    "disabled_mod_list": {
+      "mod_type": "类型：{type}",
+      "restore_failure": "严格禁用恢复失败：{reason}。该 Mod 仍按禁用记录保留，请检查文件权限或是否被占用。",
+      "source": "储存位置：{source}"
+    },
+    "group_item": {
+      "change_color": "改变颜色",
+      "delete": "删除分组",
+      "edit_name": "编辑分组名称",
+      "move": "移动",
+      "package_export": "打包导出分组模组"
+    },
+    "group_list": {
+      "active_mod": "已启用",
+      "collapse_all": "收拢全部分组",
+      "create": "新建分组",
+      "expand_all": "展开全部分组",
+      "help": "**分组管理说明：**\n支持直接将 Mod 从列表中拖拽至任意分组。\n在列表上点击右键，可通过菜单快速将 Mod 移入或移出已有分组。\n在 Mod 详情页面，可统一管理该 Mod 所属的所有分组。\n\n分组功能类似剪贴板，移入、移出分组均为[[复制]]操作：\n - 无法通过^^移出^^分组来移除 Mod；\n - 分组之间拖拽 Mod 会执行[[复制]]，并自动跳过目标分组已有成员。\n\n分组支持整体拖拽操作：\n - 将分组整体拖入启用列表，可一次性启用该分组下所有 Mod；\n - 将分组整体拖入停用列表，可一次性停用该分组下所有 Mod。",
+      "remove_from_group": "移除",
+      "search_next": "搜索定位下一个符合条件的结果"
     },
     "header": {
       "ai_generation_manager": "AI生成管理",
@@ -631,6 +1635,10 @@
       "toggle_view": "切换列表视图",
       "visual_only": "__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
     },
+    "mod_rule_editor": {
+      "language_owner": "默认分析所属来自后端统一判定。用户可以指定所属，右侧按钮切换覆盖或并入模式，开启覆盖后，用户指定所属将替代默认分析所属，关闭时则并入默认分析所属。",
+      "load_position": "强制让此 Mod 在启用列表中前置顶或置底。"
+    },
     "path": {
       "browse": "浏览路径",
       "check_correct": "请检查路径是否正确！",
@@ -639,6 +1647,16 @@
       "empty_may_fail": "路径为空，可能导致功能失效",
       "filled": "已填写路径",
       "not_configured": "未配置路径"
+    },
+    "rule_panel": {
+      "disable_rule": "禁用规则",
+      "enable_rule": "启用规则",
+      "priority": "规则生效优先级，影响自动排序和问题检测的判定。",
+      "save_priority": "保存优先级修改",
+      "weight": "**MOD权重设置规则**\n普通 MOD 默认权重为 500。\n“设定权重”只能填 1-999，数值越小，自动排序时越靠前。\n“权重偏移”可以填 -999 到 999，负数向前、正数向后，生效结果会限制在 1-999。\n“置顶 / 置底”本质上等于0 和 1000 ，拥有较高优先级。需要 MOD 排在列表最前或最后时使用。\n\n注意：置顶/置底权重会覆盖其他权重设置，包括默认权重、偏移权重等。\n      权重偏移默认以普通MOD的权重为基准；如果设定了其他权重，会以该设定权重为基准进行偏移；并且多项偏移效果会叠加。总权重会限制在 1-999。\n\n建议按照以下权重区间对 MOD 进行分类设置，具体如下：\n\n[[权重区间]]\t\t[[类别描述]]\t\t\t\t\t\t[[典型例子]]\n0\t\t\t\t强制置顶\t\t\t\t\t\tHarmony 或手动置顶\n1 - 49\t\t\t极早期底层框架\t\t\tHarmony 附近的前段框架权重\n50 - 99\t\t\t官方内容\t\t\t\t\t\tCore, Royalty, Ideology, Anomaly\n100 - 199\t\t通用基础库\t\t\t\t\tVanilla Expanded Framework\n201 - 700\t\t普通功能/内容模组\t\t大多数内容 Mod (物品、种族、派系)\n701 - 800\t\tUI与界面增强\t\t\t\tRimHUD, Numbers, InventoryTab\n801 - 899\t\t视觉/音频/补丁\t\t\t纹理替换、音频替换\n900 - 949\t\t语言包/本地化\t\t\t\tLanguagePack\n950 - 999\t\t末端优化/逻辑处理\t\tRocketman, Performance Optimize\n1000\t\t\t强制置底\t\t\t\t\t\t手动置底"
+    },
+    "rule_relation": {
+      "add_comment": "[[__点击添加说明__]]"
     },
     "secret": {
       "clear_saved": "清除已保存密钥",
@@ -667,6 +1685,7 @@
     },
     "workspace": {
       "back_home": "返回主界面 (Esc)",
+      "open_detail": "点击查看详情",
       "sync_ready": "基于上次启动时间，检测出新变化"
     }
   },
@@ -676,11 +1695,56 @@
       "success": "{workname}已完成",
       "warning": "{workname}需要确认：\n{message}"
     },
+    "backup_list": {
+      "backup_no_exportable_order": "该备份没有可导出的包名序列",
+      "drop_busy": "上一个拖入文件仍在处理中，请稍候",
+      "empty_share_code": "后端没有返回有效的分享码",
+      "exported_modlist": "备份已导出为 ModList",
+      "exported_rml": "备份已导出为 RML",
+      "name_sanitized": "文件名中的特殊字符已替换为下划线",
+      "native_drop_no_path": "原生拖放未返回有效文件路径",
+      "no_drop_file": "未检测到可导入文件",
+      "no_exportable_order": "该条目没有可导出的包名序列",
+      "no_share_code_order": "该备份没有可生成分享码的包名序列",
+      "only_one_file": "一次只能导入一个文件，已自动使用第一个文件",
+      "rename_empty": "请输入新的备份名称"
+    },
     "copy": {
       "failed_with_label": "复制{label}失败。请检查剪贴板权限，或手动选中文本复制。",
       "label_failed": "{label}复制失败",
       "label_success": "{label}已复制",
       "success": "已复制{label}"
+    },
+    "group_item": {
+      "rename_duplicate": "分组名称已存在，已添加序号 {index}"
+    },
+    "group_list": {
+      "drop": {
+        "copied": "已复制 {count} 项到「{name}」{suffix}",
+        "duplicate_skipped_all": "目标分组已包含 {count} 个模组，已跳过",
+        "duplicate_suffix": "，跳过 {count} 个重复项"
+      }
+    },
+    "load_order": {
+      "applied": "已应用Mod序列",
+      "backup_renamed": "备份已重命名",
+      "backup_saved_as": "备份已另存为: \n{path}",
+      "disk_changed_handle_conflict": "检测到磁盘序列已变化，请先处理冲突。",
+      "empty_share_code": "后端没有返回有效的分享码",
+      "export_failed": "导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态，详细原因已写入系统日志。",
+      "exported": "Mod序列已导出",
+      "import_items_removed": "已移除 {count} 个导入项",
+      "imported_with_warnings": "导入完成，但有 {count} 条提示",
+      "loaded": "Mod序列已加载",
+      "no_downloadable_sources": "当前筛选结果中没有可下载的目标来源",
+      "no_shareable_active_order": "当前没有可分享的启用序列",
+      "no_subscribable_workshop_items": "当前筛选结果中没有可订阅的工坊项目",
+      "runtime_refreshed_diff": "游戏退出后磁盘序列与管理器工作序列不同，已打开差异对比。",
+      "runtime_refreshed_unsaved": "游戏退出后磁盘序列已刷新，未保存改动已转入差异对比。",
+      "save_skipped_disk_changed": "磁盘加载顺序已被外部修改，未执行保存。",
+      "share_code_empty": "分享码不能为空",
+      "share_code_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。",
+      "share_code_imported": "分享码已导入"
     },
     "mod_details": {
       "filter_applied": "已按{label}筛选：{text}",
@@ -698,15 +1762,57 @@
         "loop_to_first": "已到达最后一个搜索结果，循环回到第一个"
       }
     },
+    "rule_panel": {
+      "name_required": "请输入规则名称",
+      "weight_clamped": "动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。"
+    },
     "texture": {
       "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
       "tool_ready_no_download": "todds 已就绪，无需下载"
+    },
+    "workspace": {
+      "cleanup_deleted_done": "已清理 {count} 条已删除记录",
+      "collection_duplicate": "该合集已在你的记录中。",
+      "collection_invalid_id": "合集 ID 或链接无效，请输入纯数字 ID，或粘贴包含 id=xxx 的 Steam 合集链接。",
+      "collection_load_failed": "加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。",
+      "collection_parsing": "正在解析并接入合集数据。",
+      "collection_remove_failed": "移除合集失败。可能是后端服务暂时不可用或本地记录无法写入，详细原因已写入系统日志。",
+      "collection_removed": "已从记录中移除该合集",
+      "collection_search_need_key": "合集搜索需要填写 Steam Web API Key",
+      "enable_workshop_enhanced_first": "请先在设置中启用工坊增强信息并填写 Steam Web API Key",
+      "github_catalog_failed": "获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。",
+      "github_subscription_missing_url": "订阅记录缺少仓库地址，无法获取时间线",
+      "github_subscription_not_found": "未找到该订阅",
+      "no_missing_workshop_downloads": "没有可下载的工坊缺失项",
+      "workshop_relation_failed": "{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。",
+      "workshop_retranslated": "已重新翻译说明",
+      "workshop_translated": "已翻译说明",
+      "workshop_translation_cleared": "已清理翻译"
     }
   },
   "dialog": {
     "action": {
       "cancel": "取消",
       "confirm": "确定"
+    },
+    "backup_list": {
+      "delete": {
+        "message": "确定要删除此备份文件吗？",
+        "title": "删除确认"
+      },
+      "load": {
+        "message": "确定要恢复到此备份文件的状态吗？\n当前未保存的更改将丢失。",
+        "title": "加载确认"
+      },
+      "rename": {
+        "message": "请输入新的备份名称。",
+        "placeholder": "备份名称",
+        "title": "重命名备份"
+      },
+      "share_code": {
+        "message": "已生成 {count} 个模组的分享码。",
+        "title": "分享码已生成"
+      }
     },
     "delete": {
       "confirm": "确认删除",
@@ -715,6 +1821,53 @@
       "options_hint": "默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。",
       "trash_description": "更安全，文件会进入系统回收站，可在系统中恢复。",
       "trash_option": "移入回收站"
+    },
+    "group_item": {
+      "export": {
+        "description": "可按需附带依赖、联锁项和语言包。",
+        "summary": "分组内共 {count} 个模组。",
+        "title": "导出分组模组: {name}"
+      }
+    },
+    "group_list": {
+      "clear": {
+        "message": "确定要从「{name}」移除全部 {count} 个模组吗？\n只会清空分组内容，不会删除模组文件。",
+        "title": "清空分组模组"
+      },
+      "delete": {
+        "message": "确定要删除分组「{name}」吗？\n分组记录会被移除，模组文件不会删除。",
+        "title": "删除分组"
+      },
+      "export": {
+        "summary": "共 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。"
+      },
+      "package_export": {
+        "description": "可按需附带依赖、联锁项和语言包。",
+        "group_title": "打包导出分组: {name}",
+        "selected_title": "打包导出分组模组{countText}",
+        "source_group": "来源分组：{name}。"
+      },
+      "recommendation_export": {
+        "title": "推荐导出已选模组{countText}"
+      }
+    },
+    "load_order": {
+      "import_share_code": {
+        "message": "请粘贴 RC- 开头的分享码，解析后会进入差异对比视图。",
+        "title": "导入分享码"
+      },
+      "import_stripping": {
+        "blocked_message": "该文件包含 {count} 个纯 WorkshopID 条目。\n游戏加载序列只识别包名，这些条目会被自动剔除。\n剔除后当前没有可导入的包名项，请先在对比列表里处理订阅/下载。",
+        "blocked_title": "无法直接导入",
+        "message": "该文件包含 {count} 个纯 WorkshopID 条目。\n这些条目只会用于对比和订阅/下载提示，不会写入游戏加载序列。\n继续时将自动剔除它们，是否继续？",
+        "title": "导入提示"
+      },
+      "share_code": {
+        "copied_message": "已生成 {count} 个模组的分享码，并已复制到剪贴板。",
+        "copied_title": "分享码已复制",
+        "copy_failed_message": "自动复制失败，请手动复制下面的分享码。",
+        "generated_title": "分享码已生成"
+      }
     },
     "mod_item": {
       "export_package": {
@@ -725,6 +1878,44 @@
       "export_recommendation": {
         "source": "已选模组",
         "title": "推荐导出已选模组{count}"
+      }
+    },
+    "mod_rule_editor": {
+      "comment": {
+        "message": "为规则添加一段说明",
+        "placeholder": "请输入说明:",
+        "title": "添加说明"
+      },
+      "position": {
+        "bottom_title": "设为置底",
+        "placeholder": "选填：为什么要强制放到这？",
+        "top_title": "设为置顶"
+      }
+    },
+    "rule_panel": {
+      "delete": {
+        "title": "确认删除"
+      },
+      "delete_dynamic": {
+        "message": "确定删除该动态规则吗？"
+      },
+      "delete_mod": {
+        "message": "确定删除该 Mod 规则吗？"
+      }
+    },
+    "workspace": {
+      "cleanup_deleted": {
+        "message": "确定要清理这些已删除/失效的库存记录吗？（{count} 项）\n这不会删除任何文件，也不会清理用户标签、笔记和分组。",
+        "title": "清理已删除记录"
+      },
+      "startup_inventory": {
+        "after_scan_title": "库存状态已刷新",
+        "before_scan_title": "检测到库存状态变化"
+      },
+      "transfer": {
+        "message": "确定要将选中的模组 {action} 到 [{target}] 库吗？{warning}",
+        "title": "确认转移",
+        "workshop_warning": "\n注意：转移到创意工坊目录后可能会被 Steam 再次改变"
       }
     }
   },
@@ -832,6 +2023,54 @@
     "actions": {},
     "prompts": {}
   },
+  "check": {
+    "backup_list": {
+      "export_modlist": "导出 ModList",
+      "export_rml": "导出 RML",
+      "generate_share_code": "生成分享码",
+      "pick_export_path": "选择导出路径",
+      "read_backup_file": "读取备份文件"
+    },
+    "load_order": {
+      "export_mod_order": "导出Mod加载顺序",
+      "generate_share_code": "生成分享码",
+      "get_backup_files": "获取备份文件",
+      "import_load_order": "导入加载顺序",
+      "import_share_code": "导入分享码",
+      "open_load_order": "打开加载顺序",
+      "pick_export_path": "选择导出路径",
+      "pick_save_dir": "选择保存目录",
+      "rename_backup": "重命名备份",
+      "save_backup_as": "另存备份",
+      "save_inactive_order": "保存停用列表顺序",
+      "save_mod_order": "保存Mod加载顺序"
+    },
+    "workspace": {
+      "all_libraries": "获取所有库数据",
+      "cleanup_deleted": "清理已删除记录",
+      "clear_workshop_translation": "清理工坊翻译",
+      "collection_add": "解析并接入合集",
+      "collection_online_search": "在线合集搜索",
+      "collection_remove": "移除合集",
+      "collections": "获取合集记录",
+      "dlc_options": "获取 DLC 选项",
+      "github_catalog": "获取 Git 仓库推荐列表",
+      "github_subscriptions": "获取 Git 仓库订阅",
+      "github_timeline": "获取 Git 仓库模组时间线",
+      "install_sources_by_package": "根据包名获取安装来源",
+      "lifecycle_updates": "检查库内模组更新状态",
+      "load_workshop_relation": "加载{label}",
+      "mod_timeline": "获取模组变更时间线",
+      "steam_languages": "获取 Steam 语言列表",
+      "transfer_mods": "库间转移",
+      "translate_workshop_detail": "翻译工坊说明",
+      "workshop_author_profiles": "获取作者信息",
+      "workshop_details": "获取云端详情",
+      "workshop_details_by_package": "根据包名获取工坊详情",
+      "workshop_relation": "获取{label}",
+      "workshop_search": "工坊检索"
+    }
+  },
   "common": {
     "cancel": "取消",
     "continue": "继续",
@@ -844,6 +2083,10 @@
     }
   },
   "history": {
+    "load_order": {
+      "apply_file_order": "应用文件序列",
+      "load_file_order": "加载文件序列"
+    },
     "mod_item": {
       "remove_missing": "移除 {count} 个缺失项"
     },
@@ -857,6 +2100,39 @@
     }
   },
   "menu": {
+    "backup_list": {
+      "copy_path": "复制文件路径",
+      "delete_file": "删除文件",
+      "export_as": "导出为...",
+      "load_file": "加载文件",
+      "open_file": "打开文件",
+      "open_folder": "打开所在目录",
+      "remove_from_list": "从列表移除"
+    },
+    "disabled_mod_list": {
+      "copy_field": "复制{label}{countText}",
+      "copy_mod_info": "复制模组信息{countText}",
+      "delete_files": "删除文件{countText}",
+      "restore": "解除禁用{countText}",
+      "unsubscribe": "取消订阅{countText}",
+      "visit_page": "访问页面"
+    },
+    "group_list": {
+      "activate": "启用{countText}",
+      "activate_whole_group": "启用整组 ({count}项)",
+      "clear_group": "清空分组",
+      "collapse_group": "收缩分组",
+      "deactivate": "停用{countText}",
+      "deactivate_whole_group": "停用整组 ({count}项)",
+      "expand_group": "展开分组",
+      "locate_main_list": "定位到主列表",
+      "package_export": "打包导出{countText}",
+      "package_whole_group": "打包整组",
+      "recommend_whole_group": "推荐整组",
+      "recommendation_export": "推荐导出{countText}",
+      "remove_from_named_group": "从「{name}」移除{countText}",
+      "select_group": "选中整组"
+    },
     "mod_item": {
       "activate": "启用",
       "coexist": {
@@ -981,6 +2257,7 @@
         "restart_application": "重启应用",
         "run_game": "运行",
         "startup_inventory_check": "启动库存检测",
+        "sync_after_inventory_cleanup": "清理库存记录后同步模组数据",
         "sync_mod_core_data": "同步模组核心数据",
         "sync_mod_data": "同步模组数据"
       },
