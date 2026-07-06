@@ -4,6 +4,7 @@ import { normalizeInstallSource, normalizeInstallSources } from '../../../featur
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useTaskStore } from '../taskStore'
 import { dispatchSteamUri, openWorkshopPage } from '../../../shared/lib/steamUri'
+import { t } from '../../../shared/i18n'
 
 export const useSteamWorkshopActions = ({
   openUrl,
@@ -11,7 +12,7 @@ export const useSteamWorkshopActions = ({
   const showSteamNotReadyHint = (res) => {
     const statusHint = res?.data?.steam_status?.user_hint
     if (res?.data?.action === 'steam_not_ready' && statusHint?.message) {
-      toast.warning(`${statusHint.title || 'Steam 未就绪'}\n${statusHint.message}`, { timeout: 6000 })
+      toast.warning(`${statusHint.title || t('steam.status.not_ready', 'Steam 未就绪')}\n${statusHint.message}`, { timeout: 6000 })
     }
   }
 
@@ -19,8 +20,8 @@ export const useSteamWorkshopActions = ({
   const downloadWorkshopItems = async (workshop_ids) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.steamcmd_download(workshop_ids)
-    if (checkResult(res, "下载创意工坊项目")) {
-      toast.success(`开始下载 ${workshop_ids.length} 个创意工坊项目`)
+    if (checkResult(res, t('check.steam.download_workshop_items', '下载创意工坊项目'))) {
+      toast.success(t('toast.steam.download_started', '开始下载 {count} 个创意工坊项目', { count: workshop_ids.length }))
       return { success: true, taskId: String(res?.data?.task_id || '') }
     }
     return false
@@ -29,7 +30,7 @@ export const useSteamWorkshopActions = ({
   const downloadWorkshopItemsViaSteam = async (workshop_ids, options = {}) => {
     if (!window.pywebview) return false
     if (!workshop_ids || workshop_ids.length === 0) return false
-    toast.info('正在连接 Steam。', { timeout: 2500 })
+    toast.info(t('toast.steam.connecting', '正在连接 Steam。'), { timeout: 2500 })
     const res = await window.pywebview.api.steam_workshop_download(
       workshop_ids,
       options.highPriority !== false,
@@ -38,12 +39,12 @@ export const useSteamWorkshopActions = ({
     if (res?.status === 'success') {
       const taskId = String(res?.data?.task_id || '')
       let task = null
-      toast.info(`已向 Steam 提交 ${workshop_ids.length} 个创意工坊项目的下载请求，正在等待下载完成。`, { timeout: 3500 })
+      toast.info(t('toast.steam.download_submitted_waiting', '已向 Steam 提交 {count} 个创意工坊项目的下载请求，正在等待下载完成。', { count: workshop_ids.length }), { timeout: 3500 })
       if (taskId) {
         try {
           task = await useTaskStore().waitForTaskCompletion(taskId)
         } catch (e) {
-        toast.error(toUserMessage(e?.message || e, 'Steam 下载未完成。请确认 Steam 已登录并正常联网，或稍后在 Steam 下载队列中查看进度。'))
+        toast.error(toUserMessage(e?.message || e, t('toast.steam.download_incomplete', 'Steam 下载未完成。请确认 Steam 已登录并正常联网，或稍后在 Steam 下载队列中查看进度。')))
           return false
         }
       }
@@ -53,11 +54,11 @@ export const useSteamWorkshopActions = ({
       if (res?.data?.action === 'steam_not_ready') {
         showSteamNotReadyHint(res)
       } else {
-        toast.warning(toUserMessage(res?.message, 'Steam 暂时无法处理工坊下载请求。请确认 Steam 已登录、网络可用，稍后重试。'))
+        toast.warning(toUserMessage(res?.message, t('toast.steam.download_temporarily_unavailable', 'Steam 暂时无法处理工坊下载请求。请确认 Steam 已登录、网络可用，稍后重试。')))
       }
       return false
     }
-    toast.error(toUserMessage(res?.message, 'Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
+    toast.error(toUserMessage(res?.message, t('toast.steam.download_failed', 'Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))
     return false
   }
 
@@ -71,7 +72,7 @@ export const useSteamWorkshopActions = ({
     if (res?.status === 'success') return res.data
     if (res?.status === 'warning') {
       if (res?.data?.action === 'steam_not_ready') showSteamNotReadyHint(res)
-      else toast.warning(toUserMessage(res?.message, 'Steam 暂时无法查询工坊详情。请确认 Steam 已登录、网络可用，稍后重试。'))
+      else toast.warning(toUserMessage(res?.message, t('toast.steam.details_temporarily_unavailable', 'Steam 暂时无法查询工坊详情。请确认 Steam 已登录、网络可用，稍后重试。')))
     }
     return null
   }
@@ -114,13 +115,13 @@ export const useSteamWorkshopActions = ({
     const skippedUrlCount = normalizedSources.filter(source => source.kind === 'url').length
     if (workshopIds.length === 0) {
       if (skippedUrlCount > 0) {
-        toast.info('URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。')
+        toast.info(t('toast.steam.url_source_subscribe_unsupported', 'URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。'))
       }
       return false
     }
     const success = await subscribeWorkshopIds(workshopIds)
     if (success && skippedUrlCount > 0) {
-      toast.info(`已跳过 ${skippedUrlCount} 个 URL 来源订阅项`)
+      toast.info(t('toast.steam.url_source_subscribe_skipped', '已跳过 {count} 个 URL 来源订阅项', { count: skippedUrlCount }))
     }
     return success
   }
@@ -141,7 +142,7 @@ export const useSteamWorkshopActions = ({
     }
     if (urlSources.length > 0) {
       urlSources.forEach(source => openUrl(source.url))
-      toast.info(`已打开 ${urlSources.length} 个外部来源，后续可接入专门下载流程。`)
+      toast.info(t('toast.steam.url_sources_opened', '已打开 {count} 个外部来源，后续可接入专门下载流程。', { count: urlSources.length }))
     }
     return downloadResult || urlSources.length > 0
   }
@@ -175,14 +176,14 @@ export const useSteamWorkshopActions = ({
     if (!workshop_ids || workshop_ids.length === 0) return
     const res = await window.pywebview.api.steam_subscribe(workshop_ids)
     if (res?.status === 'success') {
-      toast.info(`已发送 ${workshop_ids.length} 个创意工坊项目的订阅请求`, { timeout: 2500 })
+      toast.info(t('toast.steam.subscribe_submitted', '已发送 {count} 个创意工坊项目的订阅请求', { count: workshop_ids.length }), { timeout: 2500 })
       return { success: true, taskId: String(res?.data?.task_id || '') }
     }
     if (res?.status === 'warning') {
       showSteamNotReadyHint(res)
       return false
     }
-    toast.error(toUserMessage(res?.message, '订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
+    toast.error(toUserMessage(res?.message, t('toast.steam.subscribe_failed', '订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))
     return false
   }
 
@@ -201,45 +202,45 @@ export const useSteamWorkshopActions = ({
     if (!options.skipConfirm) {
       const confirmStore = useConfirmStore()
       const message = shouldDeleteFiles
-        ? `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目，并删除对应的本地文件吗？\n删除的文件会移入回收站。`
-        : `确定要取消订阅 ${workshop_ids.length} 个创意工坊项目吗？\nSteam 完成处理后，列表会自动更新。`
-      const ok = await confirmStore.confirmAction('取消订阅', message, {
+        ? t('dialog.steam.unsubscribe_delete_message', '确定要取消订阅 {count} 个创意工坊项目，并删除对应的本地文件吗？\n删除的文件会移入回收站。', { count: workshop_ids.length })
+        : t('dialog.steam.unsubscribe_message', '确定要取消订阅 {count} 个创意工坊项目吗？\nSteam 完成处理后，列表会自动更新。', { count: workshop_ids.length })
+      const ok = await confirmStore.confirmAction(t('dialog.steam.unsubscribe_title', '取消订阅'), message, {
         type: shouldDeleteFiles ? 'error' : 'warning',
-        confirmText: '确认取消订阅',
+        confirmText: t('dialog.steam.unsubscribe_confirm', '确认取消订阅'),
       })
       if (!ok) return false
     }
-    toast.info('正在连接 Steam。', { timeout: 2500 })
+    toast.info(t('toast.steam.connecting', '正在连接 Steam。'), { timeout: 2500 })
     const res = await window.pywebview.api.steam_unsubscribe(workshop_ids)
     if (res?.status === 'success') {
       const taskId = String(res?.data?.task_id || '')
       let task = null
       toast.info(
         shouldDeleteFiles
-          ? '已向 Steam 提交取消订阅，正在删除本地文件。'
-          : '已向 Steam 提交取消订阅，正在等待 Steam 完成处理。',
+          ? t('toast.steam.unsubscribe_submitted_deleting', '已向 Steam 提交取消订阅，正在删除本地文件。')
+          : t('toast.steam.unsubscribe_submitted_waiting', '已向 Steam 提交取消订阅，正在等待 Steam 完成处理。'),
         { timeout: 3500 }
       )
       if (shouldWaitForSteamTask && taskId) {
         try {
           task = await useTaskStore().waitForTaskCompletion(taskId)
         } catch (e) {
-          toast.error(toUserMessage(e?.message || e, '取消订阅未完成。请确认 Steam 已登录并正常联网，稍后刷新订阅状态。'))
+          toast.error(toUserMessage(e?.message || e, t('toast.steam.unsubscribe_incomplete', '取消订阅未完成。请确认 Steam 已登录并正常联网，稍后刷新订阅状态。')))
           return false
         }
-        toast.success('取消订阅成功，正在更新列表。', { timeout: 2500 })
+        toast.success(t('toast.steam.unsubscribe_success_refreshing', '取消订阅成功，正在更新列表。'), { timeout: 2500 })
       }
       if (shouldDeleteFiles || shouldCleanupRecordsOnly) {
         const deleteRes = await window.pywebview.api.mods_delete(normalizedDeleteHashes, !!options.force, shouldDeleteFiles)
         if (deleteRes?.status !== 'success') {
-          const actionName = shouldDeleteFiles ? '本地文件删除' : '库存记录清理'
-          toast.error(toUserMessage(deleteRes?.message, `已向 Steam 提交取消订阅，但${actionName}失败。请检查本地文件权限、文件占用状态和目标路径是否可访问。`))
+          const actionName = shouldDeleteFiles ? t('steam.action.local_file_delete', '本地文件删除') : t('steam.action.inventory_cleanup', '库存记录清理')
+          toast.error(toUserMessage(deleteRes?.message, t('toast.steam.unsubscribe_followup_failed', '已向 Steam 提交取消订阅，但{action}失败。请检查本地文件权限、文件占用状态和目标路径是否可访问。', { action: actionName })))
           return false
         }
         toast.info(
           shouldDeleteFiles
-            ? `已发送取消订阅请求，并删除 ${deleteRes.data?.success_count || normalizedDeleteHashes.length} 个本地文件`
-            : `已取消订阅，并清理 ${deleteRes.data?.success_count || normalizedDeleteHashes.length} 条库存记录`,
+            ? t('toast.steam.unsubscribe_deleted_files', '已发送取消订阅请求，并删除 {count} 个本地文件', { count: deleteRes.data?.success_count || normalizedDeleteHashes.length })
+            : t('toast.steam.unsubscribe_cleaned_records', '已取消订阅，并清理 {count} 条库存记录', { count: deleteRes.data?.success_count || normalizedDeleteHashes.length }),
           { timeout: 2500 }
         )
         return { success: true, taskId, task }
@@ -250,7 +251,7 @@ export const useSteamWorkshopActions = ({
       showSteamNotReadyHint(res)
       return false
     }
-    toast.error(toUserMessage(res?.message, '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。'))
+    toast.error(toUserMessage(res?.message, t('toast.steam.unsubscribe_failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。')))
     return false
   }
 
@@ -258,7 +259,7 @@ export const useSteamWorkshopActions = ({
   const getCollectionItems = async (collection_id) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.lifecycle_fetch_collection(collection_id)
-    if (checkResult(res, `获取订阅合集列表 ${collection_id}`)) {
+    if (checkResult(res, t('check.steam.fetch_collection_items', '获取订阅合集列表 {collectionId}', { collectionId: collection_id }))) {
       return res.data?.children || []
     }
   }

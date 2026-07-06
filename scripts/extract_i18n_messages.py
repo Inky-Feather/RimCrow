@@ -61,6 +61,19 @@ BUILTIN_COMMAND_TEXT_PATTERN = re.compile(
 )
 COMMAND_ID_CAMEL_PATTERN = re.compile(r"([a-z0-9])([A-Z])")
 PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
+CHINESE_PATTERN = re.compile(r"[\u4e00-\u9fff]")
+I18N_CALL_LINE_PATTERN = re.compile(r"\b(?:t|tr)\s*\(")
+BARE_CHINESE_EXCLUDED_PARTS = {
+    "frontend/src/locales/",
+    "backend/ai/def_entries.py",
+}
+BARE_CHINESE_EXCLUDED_LINE_PREFIXES = (
+    "#",
+    "//",
+    "/*",
+    "*",
+    "<!--",
+)
 
 
 def load_gitignore_spec() -> pathspec.PathSpec:
@@ -581,11 +594,61 @@ def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def is_bare_chinese_candidate(path: Path, line: str) -> bool:
+    rel = path.relative_to(ROOT).as_posix()
+    if any(part in rel for part in BARE_CHINESE_EXCLUDED_PARTS):
+        return False
+    stripped = line.strip()
+    if not stripped or stripped.startswith(BARE_CHINESE_EXCLUDED_LINE_PREFIXES):
+        return False
+    if I18N_CALL_LINE_PATTERN.search(line):
+        return False
+    if "logger." in line or "console." in line:
+        return False
+    return bool(CHINESE_PATTERN.search(line))
+
+
+def report_bare_chinese(limit: int) -> int:
+    hits: list[str] = []
+    for path in iter_source_files():
+        in_python_docstring = False
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if path.suffix == ".py":
+                stripped = line.strip()
+                if (stripped.startswith('"""') and stripped.endswith('"""') and len(stripped) > 3) or (stripped.startswith("'''") and stripped.endswith("'''") and len(stripped) > 3):
+                    continue
+                delimiter_count = line.count('"""') + line.count("'''")
+                if in_python_docstring:
+                    if delimiter_count % 2 == 1:
+                        in_python_docstring = False
+                    continue
+                if delimiter_count % 2 == 1:
+                    in_python_docstring = True
+                    continue
+            if is_bare_chinese_candidate(path, line):
+                hits.append(f"{path.relative_to(ROOT).as_posix()}:{lineno}: {line.strip()}")
+                if len(hits) >= limit:
+                    break
+        if len(hits) >= limit:
+            break
+    if not hits:
+        print("未发现疑似裸中文。")
+        return 0
+    print(f"疑似裸中文 {len(hits)} 条（最多显示 {limit} 条，注释/日志/Prompt 已粗略过滤）：")
+    print("\n".join(hits))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="扫描 t/tr 调用并增量生成默认中文语言包。")
     parser.add_argument("--check", action="store_true", help="只检查 zh-CN.json 是否已同步，不写入文件。")
+    parser.add_argument("--report-bare-chinese", action="store_true", help="报告疑似未接入 i18n 的裸中文，不阻断构建。")
+    parser.add_argument("--report-limit", type=int, default=120, help="裸中文报告最多显示条数。")
     parser.add_argument("--locale-file", type=Path, default=DEFAULT_LOCALE_PATH, help="默认中文语言包路径。")
     args = parser.parse_args()
+
+    if args.report_bare_chinese:
+        return report_bare_chinese(max(args.report_limit, 1))
 
     locale_path = args.locale_file if args.locale_file.is_absolute() else ROOT / args.locale_file
     extracted = merge_extracted_messages()

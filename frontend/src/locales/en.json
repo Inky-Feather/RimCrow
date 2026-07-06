@@ -2141,6 +2141,20 @@
       "current_mod": "current mod",
       "name": "Mod"
     },
+    "update": {
+      "available_desc": "An update is available.",
+      "downloaded": "Downloaded",
+      "file_size_meta": "File size: {size}",
+      "ignore_version": "Ignore this version",
+      "install_now": "Install now",
+      "later": "Later",
+      "multiple_sources_message": "Multiple sources were found for the same version: {sources}. The first source will be used first, and fallback sources will be tried automatically if it fails.",
+      "new_version_title": "New version v{version} available",
+      "single_source_message": "Source: {source}. File size: {size}.",
+      "source_meta": "Source: {source}",
+      "unknown_source": "Unknown source",
+      "update_now": "Update now"
+    },
     "update_modal": {
       "empty": "No update records found...",
       "full_history": "Full history",
@@ -2534,6 +2548,30 @@
       "next_match": "Next search result",
       "previous_match": "Previous search result",
       "xml_only": "Search XML files only"
+    },
+    "conflict": {
+      "apply_batch": "Apply the current scope, keep rule, and handling action to all target conflict groups",
+      "close": "Close conflict handling and deal with these duplicate copies later",
+      "created_time": "Created: {value}",
+      "defer": "Close the dialog and leave these conflicts unchanged for now",
+      "delete_copy": "Move this copy to the recycle bin and stop keeping its files",
+      "delete_scope": "Move all unkept copies in the current scope to the recycle bin",
+      "disable_copy": "Keep the files but deactivate this copy",
+      "disable_scope": "Deactivate all unkept copies in the current scope",
+      "hard_group": "!!Duplicate files were found in the same directory. This may cause conflicts and should be handled.!!",
+      "highest_supported_version": "Highest supported version: {value}",
+      "mod_source": "Source: {value}",
+      "mod_version": "Mod version: {value}",
+      "modified_time": "Modified: {value}",
+      "open_copy_folder": "Open the folder containing this copy",
+      "path": "Path: {value}",
+      "restore_recommended": "Restore the recommended plan: keep the copy most likely to take effect and deactivate the rest",
+      "skip_copy": "Do not process this copy this time. It may still be reported after the next scan.",
+      "soft_group": "Duplicate files were found in different directories. This is normal; you can choose whether to handle them, and the game usually uses the local version first.",
+      "submit": "Run the configured deactivate/delete actions, then rescan automatically",
+      "supported_versions": "Supported versions: {value}",
+      "visit_copy_page": "Visit this copy's page",
+      "workshop_id": "Workshop ID: {value}"
     }
   },
   "toast": {
@@ -2542,9 +2580,56 @@
       "success": "{workname} completed",
       "warning": "{workname} needs attention:\n{message}"
     },
+    "startup": {
+      "auxiliary_warmup_failed": "Some background data could not be warmed up yet. Related hints may appear later.",
+      "background_checks_failed": "Startup background checks did not finish. Some list markers or automatic scans may need a manual refresh later.",
+      "background_data_partial_failed": "Some startup data could not be filled in yet. List markers may appear later.",
+      "upgrade_actions_done": "Upgrade completed: {actions}"
+    },
     "texture": {
       "tool_download_started_watch_status": "todds download started. Watch the status bar.",
       "tool_ready_no_download": "todds is ready; no download needed"
+    },
+    "update": {
+      "download_started": "Update download started. Watch the status bar for progress.",
+      "install_cancelled": "Update installation cancelled.",
+      "partial_no_update": "Some update sources are temporarily unavailable. No new version was found from the available sources.",
+      "start_failed": "Failed to start the update. Check your network connection, proxy settings, and installation directory permissions. Details have been written to the system log.",
+      "up_to_date": "You are already on the latest version."
+    },
+    "maintenance": {
+      "external_data_failed_summary": "External library check did not finish: {summary}{remain} failed. Try again later or check your network environment.",
+      "external_data_up_to_date": "External library check completed. Everything is up to date.",
+      "external_data_update_failed": "Failed to update external libraries. Check network connection, proxy settings, and local file write permissions. Details have been written to the system log.",
+      "git_catalog_refreshed": "Git recommendations refreshed.",
+      "git_deploy_started": "Git repository deployment task started. Watch the status bar.",
+      "managed_mods_up_to_date": "Manager mod check completed. Everything is up to date.",
+      "ripgrep_download_started": "ripgrep download task started. Watch the status bar.",
+      "steamcmd_tasks_started": "SteamCMD related tasks have started. Watch the status bar.",
+      "todds_download_started": "todds download task started. Watch the status bar.",
+      "tools_ready": "Tool environment check completed. Everything is ready."
+    },
+    "steam": {
+      "connecting": "Connecting to Steam.",
+      "details_temporarily_unavailable": "Steam cannot query Workshop details right now. Make sure Steam is logged in and the network is available, then try again later.",
+      "download_failed": "Steam Workshop download request failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
+      "download_incomplete": "Steam download did not finish. Make sure Steam is logged in and online, or check Steam's download queue later.",
+      "download_started": "Started downloading {count} Workshop items",
+      "download_submitted_waiting": "Submitted {count} Workshop download requests to Steam. Waiting for the download to finish.",
+      "download_temporarily_unavailable": "Steam cannot process Workshop download requests right now. Make sure Steam is logged in and the network is available, then try again later.",
+      "subscribe_failed": "Subscription failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
+      "subscribe_submitted": "Sent subscription requests for {count} Workshop items",
+      "unsubscribe_cleaned_records": "Unsubscribed and cleaned {count} inventory records",
+      "unsubscribe_deleted_files": "Sent unsubscribe request and deleted {count} local files",
+      "unsubscribe_failed": "Unsubscribe failed. Make sure Steam is logged in and the network is available, then try again later.",
+      "unsubscribe_followup_failed": "The unsubscribe request was sent to Steam, but {action} failed. Check local file permissions, file locks, and target path accessibility.",
+      "unsubscribe_incomplete": "Unsubscribe did not finish. Make sure Steam is logged in and online, then refresh subscription status later.",
+      "unsubscribe_submitted_deleting": "Submitted unsubscribe request to Steam. Deleting local files.",
+      "unsubscribe_submitted_waiting": "Submitted unsubscribe request to Steam. Waiting for Steam to finish.",
+      "unsubscribe_success_refreshing": "Unsubscribed successfully. Updating the list.",
+      "url_source_subscribe_skipped": "Skipped {count} URL source subscriptions",
+      "url_source_subscribe_unsupported": "URL sources cannot be subscribed yet. Open the source page instead, or extend a dedicated download flow later.",
+      "url_sources_opened": "Opened {count} external sources. A dedicated download flow can be added later."
     },
     "copy": {
       "failed_with_label": "Failed to copy {label}. Check clipboard permission, or select and copy the text manually.",
@@ -2731,6 +2816,16 @@
     "texture_opt": {
       "image_opt_not_enabled": "Image Opt was not detected in the active mod list. ZSTD textures will still be generated, but the game may not read them.",
       "unmatched_paths": "{count} paths could not be matched to installed mod directories"
+    },
+    "conflict": {
+      "batch_applied": "Applied rules to {count} conflict groups",
+      "empty_scope": "There are no conflict groups to process in the current scope",
+      "no_operations": "There are no copies to process",
+      "recommended_restored": "Recommended handling plan restored",
+      "resolve_exception": "Conflict handling request failed. Make sure the backend service is still running, then rescan and try again.",
+      "resolve_failed": "Conflict handling failed. The target file may be in use, permissions may be insufficient, or the list state may have changed. Rescan and try again.",
+      "resolved_partial": "Processed {successCount} items, {errorCount} failed. Remaining issues will be shown again after the rescan.",
+      "resolved_success": "Processed {count} conflict copies. Rescanning now."
     }
   },
   "dialog": {
@@ -2745,6 +2840,20 @@
       "options_hint": "By default files are moved to the system recycle bin. Permanent delete cannot be undone.",
       "trash_description": "Safer. Files go to the system recycle bin and can be restored there.",
       "trash_option": "Move to recycle bin"
+    },
+    "update": {
+      "confirm_install": "Install",
+      "confirm_install_message": "The archive has been downloaded to:\n{path}\nContinue installing the update? The app will restart after installation.",
+      "confirm_install_title": "Install update?",
+      "ready_restart_message": "The installer is ready. Confirm to close the current app and install the update automatically.",
+      "ready_restart_title": "Ready to restart",
+      "restart_install": "Restart and install"
+    },
+    "steam": {
+      "unsubscribe_confirm": "Confirm unsubscribe",
+      "unsubscribe_delete_message": "Unsubscribe {count} Workshop items and delete the corresponding local files?\nDeleted files will be moved to the recycle bin.",
+      "unsubscribe_message": "Unsubscribe {count} Workshop items?\nThe list will update automatically after Steam finishes.",
+      "unsubscribe_title": "Unsubscribe"
     },
     "mod_item": {
       "export_package": {
@@ -3720,6 +3829,107 @@
       "submitted": "Submitted",
       "item_failed": "Processing failed. Check network connection and file permissions, or try again later. Details were written to the system log.",
       "bulk_failed": "{label} failed. Check network connection and file permissions, or try again later. Details were written to the system log."
+    },
+    "conflict": {
+      "action": {
+        "delete_all": "Delete all others",
+        "delete_all_desc": "Move the other copies to the recycle bin.",
+        "disable_all": "Deactivate all others",
+        "disable_all_desc": "Deactivate the other copies."
+      },
+      "apply_batch": "Apply selection",
+      "badge": {
+        "delete": "Delete {count}",
+        "disable": "Deactivate {count}",
+        "hard": "Hard conflicts {count}",
+        "pending": "Pending {count}",
+        "skip": "Skip {count}",
+        "soft": "Coexist {count}"
+      },
+      "batch_desc": "Choose a scope, pick which copy to keep, then decide what to do with the rest.",
+      "batch_title": "Batch Selection",
+      "confirm": {
+        "action_counts": "Deactivate {disableCount}, delete {deleteCount}.",
+        "cancel_text": "Check Again",
+        "confirm_text": "Confirm",
+        "delete_hint": "This option only affects copies marked as Delete; deactivated items will only have their file state adjusted.",
+        "force_option": "Permanently delete copies",
+        "rescan_notice": "After submitting, the database will refresh and the file system will be scanned again. Any remaining failed items will be shown again after the next scan.",
+        "skip_count": "{count} copies have been skipped and will not be processed this time.",
+        "summary": "This will process {operationCount} unkept copies across {groupCount} conflict groups.",
+        "title": "Confirm Conflict Handling",
+        "trash_option": "Delete copies to recycle bin",
+        "workshop_delete": "{count} Workshop copies will be deleted, and Steam may download them again later."
+      },
+      "copy_count": "{count} copies",
+      "defer": "Handle Later",
+      "delete_scope": "Delete Current Scope",
+      "disable_scope": "Deactivate Current Scope",
+      "feedback_error": "Processing Failed",
+      "feedback_warning": "Processing Notice",
+      "footer_delete_disable_desc": "Deleting removes files directly to the recycle bin and cannot be undone here. Deactivating renames the load file (About.xml) so the game cannot detect it while keeping the files.",
+      "footer_disabled_hint": "After deactivating a mod, you can find or reactivate it from the Disabled filter in the Inventory Hub.",
+      "footer_workshop_warning": "Note: Steam may download Workshop mods again after you delete them directly.",
+      "group_type": {
+        "hard": "Hard Conflict",
+        "soft": "Coexist"
+      },
+      "hard_note": "For conflicting mods in the same directory, the game will choose one to load. Depending on several factors, it may not be the correct one, so it is safer to manually keep the right copy and deactivate or delete the rest.",
+      "keep": "Keep",
+      "keep_label": "Keep",
+      "keep_rule": {
+        "earliest_created": "Keep earliest created",
+        "earliest_created_desc": "Prefer the copy with the earliest creation time.",
+        "earliest_modified": "Keep earliest modified",
+        "earliest_modified_desc": "Prefer the copy modified earlier.",
+        "highest_mod_version": "Keep highest mod version",
+        "highest_mod_version_desc": "Prefer the copy with the highest mod version number.",
+        "highest_supported_version": "Keep highest supported version",
+        "highest_supported_version_desc": "Prefer the copy that supports the highest RimWorld version.",
+        "latest_created": "Keep latest created",
+        "latest_created_desc": "Prefer the copy with the latest creation time.",
+        "latest_modified": "Keep latest modified",
+        "latest_modified_desc": "Prefer the copy changed most recently.",
+        "longest_path": "Keep longer path",
+        "longest_path_desc": "Prefer the copy with the longer path.",
+        "prefer_local": "Keep local copy",
+        "prefer_local_desc": "If a local copy exists, keep it first.",
+        "prefer_self": "Keep manager copy",
+        "prefer_self_desc": "If a manager copy exists, keep it first.",
+        "prefer_workshop": "Keep Workshop copy",
+        "prefer_workshop_desc": "If a Workshop copy exists, keep it first.",
+        "recommended": "Recommended",
+        "recommended_desc": "Prefer the copy that is more likely to take effect in game.",
+        "shortest_path": "Keep shorter path",
+        "shortest_path_desc": "Prefer the copy with the shorter path."
+      },
+      "loser_label": "Others",
+      "menu": {
+        "localize_coexistence": "Localize Coexistence",
+        "open_folder": "Open Folder",
+        "sync_local_coexistence": "Sync Local Coexistence",
+        "unsubscribe_delete": "Unsubscribe and Delete"
+      },
+      "recommended_order": "The recommended plan keeps the copy that is more likely to take effect: Local > Manager > Workshop.",
+      "restore_recommended": "Restore Default",
+      "scope": {
+        "all": "All conflicts",
+        "all_desc": "Handle both hard conflicts and version coexistence.",
+        "hard": "Hard conflicts only",
+        "hard_desc": "Only handle duplicate package IDs in the same directory level.",
+        "soft": "Coexist only",
+        "soft_desc": "Only handle same package IDs coexisting across different directories."
+      },
+      "scope_group_count": "Current scope {count} groups",
+      "scope_label": "Scope",
+      "show_coexistence": "Show coexistence notices",
+      "show_coexistence_desc": "When off, only same-level hard conflicts are shown.",
+      "soft_note": "For coexisting mods in different directories, the game itself usually loads the local directory version first.",
+      "submit": "Run Handling",
+      "subtitle": "Choose the copy to keep, then decide whether to deactivate or delete the other copies.",
+      "supported_version": "Supports {version}",
+      "title": "Handle Duplicate Mods",
+      "workshop_delete_warning": "After deleting Workshop copies, Steam may download them again later."
     }
   },
   "api": {
@@ -3729,6 +3939,451 @@
       "todds_found": "Found todds executable",
       "tool_download_started": "Tool download task started",
       "tool_ready": "Tool is ready"
+    },
+    "cache": {
+      "remote_images_cleared": "Remote image cache cleared"
+    },
+    "data_bundle": {
+      "inspect_failed": "Failed to read the data bundle summary. Make sure the file exists, uses the correct format, and is not being used by another program.",
+      "schema_failed": "Failed to read data bundle settings. Check whether the app data folder is accessible; details were written to the system log.",
+      "export_done": "Export complete",
+      "export_failed": "Failed to export data bundle. Check the target folder permissions, disk space, and selected data modules; details were written to the system log.",
+      "import_done": "Import complete",
+      "import_done_with_warnings": "Import complete with {count} warning(s)",
+      "import_failed": "Failed to import data bundle. Make sure the file is complete, uses the correct format, and the target folder permissions are valid; details were written to the system log."
+    },
+    "database": {
+      "background_busy": "A background database refresh is still running. Try again later.",
+      "cleanup_done": "Database cleanup complete",
+      "cleanup_failed": "Database cleanup failed. Close programs that may be using data files and try again; details were written to the system log.",
+      "maintenance_busy": "A database operation is already running. Try again later.",
+      "recreated_missing": "No local database was found, so a new one has been created.",
+      "repair_done_restart": "Repair complete. Restart the app to apply it.",
+      "repair_failed": "Database repair failed. Check database file permissions and disk space; details were written to the system log.",
+      "repair_failed_retry": "Repair failed. Try again later.",
+      "reset_close_busy": "Reset failed. Close related operations and try again.",
+      "reset_done": "Database reset complete.",
+      "reset_failed": "Database reset failed. Close operations that may be using data files and try again; details were written to the system log.",
+      "reset_recreate_failed": "Reset failed. The database could not be recreated.",
+      "restarting": "The app will restart now.",
+      "scan_busy": "A scan task is currently running. Try again later.",
+      "texture_busy": "A texture task is currently running. Try again later."
+    },
+    "errors": {
+      "internal_api_failed": "The operation could not finish because an internal app API failed. Details were written to the system log. Try again later or restart the app.",
+      "operation_unfinished": "The operation could not finish. Network, path permissions, settings, or the runtime environment may be temporarily unavailable. Details were written to the system log."
+    },
+    "paths": {
+      "auto_detect_failed": "Could not automatically detect the game path. Set it manually.",
+      "auto_detect_partial": "Only some paths were detected. Set the remaining paths manually."
+    },
+    "settings": {
+      "save_done": "Settings saved",
+      "save_failed": "Failed to save settings. Check the settings, path permissions, and whether the config file is writable; details were written to the system log.",
+      "secret_clear_failed": "Could not delete the saved secret. Make sure secure storage is available on this machine and try again; details were written to the system log.",
+      "secret_cleared": "Secret cleared",
+      "secret_reveal_failed": "Could not read the saved secret. Make sure secure storage is available on this machine and try again; details were written to the system log.",
+      "update_failed": "Failed to update settings"
+    },
+    "theme": {
+      "delete_failed": "Failed to delete the user theme. Check whether the theme file is in use or cannot be deleted due to permissions; details were written to the system log.",
+      "deleted": "Theme deleted",
+      "load_failed": "Failed to read user themes. Check whether the theme file is accessible; details were written to the system log.",
+      "not_found": "Theme not found",
+      "save_failed": "Failed to save the user theme. Check the theme content and file write permissions; details were written to the system log.",
+      "saved": "Theme saved"
+    },
+    "warnings": {
+      "partial_success": "The operation completed, but some items need attention."
+    },
+    "common": {
+      "cancelled": "Cancelled",
+      "save_cancelled": "Save cancelled",
+      "delete_failed": "Delete failed",
+      "operation_failed": "Operation failed",
+      "save_failed": "Save failed",
+      "setting_failed": "Setting failed",
+      "setting_failed_invalid_key": "Setting failed: invalid key",
+      "toggle_failed": "Toggle failed",
+      "unknown_action": "Unknown action: {action}"
+    },
+    "guide": {
+      "mark_done_failed": "Failed to save guide state. Check whether the config file is writable; details were written to the system log.",
+      "reset_failed": "Failed to reset guide state. Check whether the config file is writable; details were written to the system log."
+    },
+    "mod_package": {
+      "export_failed": "Failed to export mod package. Check target folder permissions, disk space, and the files for the selected mods; details were written to the system log.",
+      "export_started": "Export task started",
+      "import_failed": "Failed to import mod package. Make sure the file is complete, the target folder is writable, and disk space is sufficient; details were written to the system log.",
+      "import_started": "Import task started",
+      "prepare_import_failed": "Failed to precheck mod package. Make sure the file is complete, uses the correct format, and is not being used by another program.",
+      "profile_summary_failed": "Failed to read profile export stats. Make sure the profile still exists and its paths are accessible.",
+      "schema_failed": "Failed to read mod package settings. Check whether the current profile and app data folder are accessible."
+    },
+    "mods": {
+      "no_active_profile": "No active profile, so Mods cannot be scanned",
+      "no_scan_paths": "No valid scan paths are configured",
+      "scan_busy": "A scan is already running",
+      "scan_failed": "Mod scan failed. Check whether game, Workshop, and local Mod paths exist and are accessible; details were written to the system log.",
+      "scan_started": "Background scan started",
+      "scanner_not_ready": "Scanner is not initialized",
+      "action_activate": "activate",
+      "action_deactivate": "deactivate",
+      "activate_state_done": "Mod {action} completed for {count} item(s)",
+      "activate_state_done_with_failed": "Mod {action} completed for {success_count} item(s), failed {failed_count} item(s)",
+      "activate_state_failed": "Mod {action} failed: {reason}",
+      "color_updated": "Color updated",
+      "conflict_item_failed": "This item could not be processed. Details were written to the system log.",
+      "conflict_missing_target_hash": "Missing target_path_hash, so this duplicate cannot be deleted",
+      "conflict_no_deletable_record": "No deletable mod record was found",
+      "conflict_no_operation": "No operation can be applied",
+      "conflict_resolve_partial_failed": "Some operations failed: {count} item(s) were not processed, and the rest were applied.",
+      "conflict_resolved": "Conflict processing complete",
+      "conflict_unsupported_action": "Unsupported action type: {action}",
+      "interlock_healed": "Interlock repaired",
+      "record_not_found": "Mod record not found",
+      "tags_added": "Tags added",
+      "tags_removed": "Tags removed",
+      "time_updated": "Last operation time updated",
+      "type_updated": "Type updated",
+      "user_data_applied": "Applied {count} item(s) successfully",
+      "user_data_updated": "User data updated"
+    },
+    "delete": {
+      "no_target": "No {target} selected for deletion",
+      "partial_failed": "Some {target} deletion failed: {count} item(s) were not deleted"
+    },
+    "native_drag": {
+      "drop_zone_not_ready": "Drop area is not mounted yet. It will retry shortly.",
+      "main_window_not_ready": "Main window is not ready yet"
+    },
+    "backup": {
+      "rename_duplicate_name": "A backup with this name already exists. Choose another name.",
+      "rename_invalid_name": "Invalid backup name",
+      "rename_manual_only": "Only manual backups can be renamed",
+      "rename_name_required": "Enter a new backup name"
+    },
+    "file": {
+      "invalid_save_dir": "Choose a valid save folder",
+      "no_export_path_selected": "No export path selected",
+      "no_file_selected": "No file selected",
+      "no_save_dir_selected": "No save folder selected",
+      "parse_failed": "Failed to parse the file.",
+      "no_folder_selected": "No folder selected"
+    },
+    "game": {
+      "direct_launch_after_invalid_steam_path": "No valid Steam executable path was found, so this launch used the game executable directly.",
+      "direct_launch_started": "Game launch started. Waiting for the game process to confirm.",
+      "invalid_launch_warning_action": "Invalid launch confirmation action",
+      "launch_after_steam_exit": "Steam has exited. Game launch started. Waiting for the game process to confirm.",
+      "launch_cancelled": "Launch cancelled",
+      "launch_prepare_active_done": "Startup check sync is complete for the current environment.",
+      "launch_prepare_active_failed": "Startup check sync failed for the current environment.",
+      "launch_prepare_cache_sync_done": "Startup check sync completed using the current cached state.",
+      "launch_prepare_cache_sync_failed": "Startup check sync failed while using the current cached state.",
+      "launch_prepare_failed": "Launch preparation failed",
+      "launch_prepare_missing_context": "Could not build the target environment context. Check whether the environment exists.",
+      "launch_prepare_missing_scan_paths": "The target environment has no mod paths available for startup check sync.",
+      "launch_prepare_no_context_builder": "Environment context builder is unavailable, so startup check sync was skipped.",
+      "launch_prepare_scan_sync_done": "Startup check sync is complete and links were updated from the latest scan results.",
+      "launch_prepare_scan_sync_failed": "Startup check scan completed, but link sync failed.",
+      "launch_prepare_sync_failed": "Startup sync failed",
+      "launch_prepare_unhealthy_context": "The target environment path is unavailable. Complete path setup first.",
+      "launch_steam_started": "Steam launch started. Waiting for the game process to confirm.",
+      "launch_steam_url_fallback": "No directly launchable Steam client was found. The Steam system protocol was used to start the game instead. If it fails, check Steam client status or turn off Prefer Steam Launch.",
+      "launch_steam_url_started": "Steam URL launch started. Waiting for the game process to confirm.",
+      "steam_not_ready": "Steam did not become ready.",
+      "steam_path_invalid": "This environment is set to prefer Steam launch, but no valid Steam executable path was found.",
+      "steam_ready_launch_started": "Steam is ready. Game launch started. Waiting for the game process to confirm.",
+      "steam_ready_wait_game": "Steam is ready. Waiting for the game process to confirm.",
+      "steam_running_workshop_conflict": "Steam is already running. Confirm the Workshop link conflict before continuing launch.",
+      "steam_still_running": "Steam is still running. Waiting for it to exit."
+    },
+    "load_order": {
+      "active_mods_empty": "The active mod list is empty, or the file could not be read.",
+      "disk_changed": "The load order on disk was changed externally. Resolve the conflict first.",
+      "game_config_missing": "Game config path is not specified",
+      "manager_not_initialized": "Load order manager is not initialized"
+    },
+    "mod_residue": {
+      "whitelist_added": "Added to whitelist. Future scans will skip it.",
+      "whitelist_removed": "Removed from whitelist. Future scans will show it again."
+    },
+    "mod_settings": {
+      "sync_done": "Configuration overwrite complete"
+    },
+    "profile": {
+      "context_missing": "Environment config context is missing",
+      "context_not_initialized": "Current environment is not initialized",
+      "id_missing": "Profile ID is not specified",
+      "shortcut_created": "Environment shortcut created on the desktop ({mode})",
+      "shortcut_created_after_steam_fallback": "No valid Steam path was found, so the environment shortcut was created as a direct game shortcut ({mode})",
+      "shortcut_invalid_paths": "Environment paths are invalid, so the shortcut cannot be created",
+      "steam_shortcut_flow_required": "This environment must first register a Steam non-Steam game entry. The frontend will wait for Steam to exit, write the config, then confirm the stable shortcut ID after Steam starts.",
+      "context_not_specified": "Environment is not specified",
+      "steam_desktop_shortcut_created": "Steam desktop shortcut created",
+      "steam_shortcut_finalize_timeout": "Steam has started, but no usable shortcut ID was generated within the time limit. Try again later, or check Steam custom games and create a desktop shortcut manually.",
+      "steam_shortcut_not_enabled": "Steam launch is not enabled for this environment, so no Steam shortcut registration is needed",
+      "steam_shortcut_registered": "Steam shortcut configuration written",
+      "steam_shortcut_same_install": "This environment uses the same game executable as the default environment, so no Steam non-Steam shortcut registration is needed",
+      "steam_shortcut_unsupported_platform": "This platform does not support automatic Steam non-Steam shortcut writing. Use a regular desktop shortcut or add it manually in Steam.",
+      "activate_failed_fallback": "Failed to switch to profile {profile_id}; reverted to default: {reason}",
+      "activate_failed_fallback_failed": "Failed to switch to profile {profile_id}, and reverting to default also failed: {reason}; fallback error: {fallback_error}",
+      "activated": "Switched to profile: {profile_id}",
+      "create_failed": "Failed to create the profile. Check the profile name, path settings, and file permissions. Details have been written to the system log.",
+      "created": "Profile created",
+      "delete_failed": "Failed to delete the profile. Make sure it has no running tasks. Details have been written to the system log.",
+      "deleted": "Profile deleted",
+      "update_failed": "Failed to update the profile. Check the path settings and file permissions. Details have been written to the system log.",
+      "updated": "Settings updated"
+    },
+    "steam": {
+      "auto_start_failed": "Could not start Steam automatically. Check the Steam path setting or system protocol association.",
+      "ready_timeout": "Steam was started automatically, but did not become logged-in and ready within the time limit.",
+      "status": {
+        "not_logged_in_message": "Steam is running but not logged in yet. Log in to Steam before continuing.",
+        "not_logged_in_title": "Steam Not Logged In",
+        "not_running_message": "Steam client is not running. Check the Steam path setting or start Steam manually.",
+        "not_running_title": "Steam Not Running",
+        "ready_message": "Steam client is running and logged in. You can continue the current action.",
+        "ready_title": "Steam Ready",
+        "unknown_message": "Steam status cannot be determined accurately right now. Try again later, or check Steam login status and client integrity if the issue continues.",
+        "unknown_title": "Steam Status Unknown",
+        "waiting_ready_message": "Steam has started and is waiting to become available. If it takes too long, check whether Steam is stuck at login or initialization.",
+        "waiting_ready_title": "Waiting for Steam"
+      },
+      "status_probe_failed": "Failed to check Steam status: {reason}",
+      "client_ready": "Steam client is running and ready.",
+      "open_workshop_page_requested": "Requested Steam client to open the current page",
+      "subscribe_submitted": "Subscription request submitted to Steam.",
+      "unsubscribe_submitted": "Unsubscribe request submitted to Steam",
+      "workshop_details_loaded": "Workshop details loaded",
+      "workshop_details_not_ready": "Steam client cannot query Workshop details right now",
+      "workshop_download_submitted": "Workshop download request submitted to Steam"
+    },
+    "export": {
+      "done": "Export complete"
+    },
+    "image": {
+      "content_empty": "Image content is empty",
+      "no_content_to_save": "No image content to save",
+      "saved": "Image saved"
+    },
+    "path": {
+      "no_paths": "No path information was provided",
+      "not_found_or_not_deletable": "Path does not exist or cannot be deleted",
+      "target_name": "path",
+      "type_or_path_missing": "Path type or path is not specified"
+    },
+    "recommendation": {
+      "text_generated": "Recommendation text generated"
+    },
+    "rule": {
+      "engine_not_initialized": "Rule engine is not initialized",
+      "invalid_rule_type": "Operation failed: invalid Rule Type",
+      "import_done": "Rule package imported successfully",
+      "import_done_with_warnings": "Rule package imported successfully with {count} warning(s)."
+    },
+    "sort": {
+      "auto_activated_suffix": " (automatically activated {count} interlock item(s))",
+      "done": "Sorting complete",
+      "engine_not_initialized": "Sorting failed, sort engine is not initialized",
+      "smart_insert_failed": "Insert failed",
+      "smart_insert_missing_input": "Enter mod IDs or the current active list"
+    },
+    "workspace": {
+      "local_mods_path_missing": "Local mod path is not specified",
+      "localize_started": "Local coexist task started in the background",
+      "no_localizable_mods": "No {store} mods available to sync",
+      "transfer_action_copy": "copy mods",
+      "transfer_action_move": "move mods",
+      "transfer_done": "Transferred {count} mod(s) successfully.",
+      "transfer_failed_suffix": " {count} failed.",
+      "transfer_preparing": "Preparing to {action}...",
+      "transfer_running": "{action}: {name}",
+      "transfer_source_missing": "Specified source files were not found",
+      "no_refreshable_workshop_items": "No Workshop items available to refresh",
+      "online_refresh_started": "Background update check started"
+    },
+    "ai": {
+      "cancel_failed": "Cancel failed. The request may have already completed or no longer exist.",
+      "config_saved": "AI configuration saved",
+      "app_log_requires_debug": "Application log analysis is available only in Debug mode.",
+      "assistant_estimate_failed": "AI request estimation failed. The log content, attachments, or model settings may not be processable right now. Details have been written to the system log.",
+      "assistant_session_failed": "The AI assistant session did not complete. Check the model settings, network connection, proxy settings, and API key. Details have been written to the system log.",
+      "default_task_title": "AI task",
+      "definition_assistant_save_failed": "Failed to save the AI assistant. Check that the tools, prompt, and output format settings are complete. Details have been written to the system log.",
+      "definition_prompt_delete_failed": "Failed to delete the AI prompt. Make sure the prompt still exists. Details have been written to the system log.",
+      "definition_prompt_save_failed": "Failed to save the AI prompt. Check that the content format is valid. Details have been written to the system log.",
+      "definition_task_save_failed": "Failed to save the AI task. Check that the task input, prompt, and output format settings are complete. Details have been written to the system log.",
+      "invalid_analysis_request": "Invalid analysis request: missing log line numbers or file name.",
+      "selected_log_unavailable": "Could not read the selected log content. The file may have been cleaned up.",
+      "task_failed": "AI task failed. Check the model settings, network connection, and API key. Details have been written to the system log.",
+      "task_failed_title": "AI task failed",
+      "task_queued": "Task added to the background queue",
+      "task_started": "AI task started in the background",
+      "trace_load_failed": "Failed to read AI request trace records. Try again later. Details have been written to the system log."
+    },
+    "download": {
+      "task_added": "Download task added"
+    },
+    "log": {
+      "game_not_ready_for_files": "Game environment is not ready, so game logs cannot be listed",
+      "game_not_ready_for_read": "Game environment is not ready, so game logs cannot be read",
+      "file_not_found": "Log file not found",
+      "filename_required": "File name is required",
+      "global_scan_not_supported": "The current log reader does not support global scanning",
+      "no_analyzable_content": "The current log file has no content available for analysis.",
+      "read_failed_refresh": "Failed to read the log. The file may have been cleaned up, moved, or be temporarily unavailable. Refresh the log list and try again.",
+      "reader_not_initialized": "Log reader is not initialized"
+    },
+    "scan": {
+      "scanner_not_initialized": "Scanner is not initialized"
+    },
+    "steamcmd": {
+      "download_started": "SteamCMD download task started"
+    },
+    "task": {
+      "cancel_ai_requested": "AI task cancellation requested",
+      "cancel_download_requested": "Download task cancellation requested",
+      "cancel_file_search_requested": "File search task cancellation requested",
+      "cancel_localize_requested": "Local coexist task cancellation requested",
+      "cancel_mod_export_requested": "Mod export task cancellation requested",
+      "cancel_mod_import_requested": "Mod import task cancellation requested",
+      "cancel_scan_requested": "Scan task cancellation requested",
+      "cancel_steam_requested": "Steam task cancellation requested",
+      "cancel_steamcmd_requested": "SteamCMD task cancellation requested",
+      "cancel_texture_requested": "Texture task cancellation requested",
+      "cancel_type_unsupported": "This task type does not support cancellation: {type}",
+      "id_missing": "Task ID is missing",
+      "no_ai_task_to_cancel": "There is no AI task to cancel right now",
+      "no_file_search_task_to_cancel": "There is no file search task to cancel right now",
+      "no_localize_task_to_cancel": "There is no local coexist task to cancel right now",
+      "no_mod_export_task_to_cancel": "There is no mod export task to cancel right now",
+      "no_mod_import_task_to_cancel": "There is no mod import task to cancel right now",
+      "no_scan_task_to_cancel": "There is no scan task to cancel right now",
+      "no_steam_task_to_cancel": "There is no Steam task to cancel right now",
+      "no_steamcmd_task_to_cancel": "There is no SteamCMD task to cancel right now"
+    },
+    "update": {
+      "download_started": "Started downloading update package",
+      "installing_restart": "Restarting and installing the update.",
+      "no_available_info": "No update information is available. Check for updates first."
+    },
+    "uri": {
+      "no_link_to_open": "No link to open.",
+      "no_url_to_open": "No URL to open.",
+      "opened_original_in_browser": "Original page opened in the system browser",
+      "target_url_missing": "Target page URL was not provided"
+    },
+    "workshop": {
+      "id_missing": "No valid Workshop ID was provided",
+      "id_unrecognized": "Could not identify the Workshop ID for the current page",
+      "author_profile_failed": "Failed to get author information. Check the network connection, Steam Web API key, or try again later.",
+      "author_profile_invalid": "Invalid author information request. Check the Steam user ID or Steam Web API key and try again.",
+      "collection_search_failed": "Collection search failed. Check the network connection, Steam service status, and filters, then try again.",
+      "collection_search_invalid": "Invalid collection search conditions. Check the keyword, filters, or Steam Web API key and try again.",
+      "delete_file_failed": "Failed to delete the Workshop file. Make sure the current account can manage this item and check the network connection.",
+      "delete_file_invalid": "Invalid Workshop file deletion parameters. Check the Workshop item ID, Steam login status, and Steam Web API key, then try again.",
+      "dependencies_failed": "Failed to get dependencies. Check whether the external Workshop database has been updated, or try again later.",
+      "dependencies_invalid": "Invalid dependency request. Check the Workshop ID or Steam Web API key and try again.",
+      "dependencies_network_failed": "Failed to get dependencies. Check the network connection, Steam service status, or try again later.",
+      "dependents_failed": "Failed to get related ecosystem items. Check whether the external Workshop database has been updated, or try again later.",
+      "dependents_invalid": "Invalid related item request. Check the Workshop ID, filters, or Steam Web API key and try again.",
+      "dependents_network_failed": "Failed to get related ecosystem items. Check the network connection, Steam service status, or try again later.",
+      "detail_failed": "Failed to get Workshop details. Check the network connection, Steam service status, or try again later.",
+      "detail_invalid": "Invalid Workshop detail request. Check the Workshop ID or Steam Web API key and try again.",
+      "detail_not_found": "Mod details not found",
+      "developer_metadata_failed": "Failed to set Workshop developer metadata. Make sure the current account can manage this item and check the network connection.",
+      "developer_metadata_invalid": "Invalid Workshop developer metadata parameters. Check the metadata, Workshop item ID, and Steam Web API key, then try again.",
+      "install_source_map_failed": "Failed to read install sources. Check whether the external Workshop database is complete. Details have been written to the system log.",
+      "invalid_id": "Workshop ID is required or has an invalid format",
+      "invalid_package_id": "Invalid PackageID",
+      "invalid_workshop_id": "Invalid Workshop ID",
+      "no_replacement_suggestion": "Mod {package_id} has no replacement suggestion",
+      "no_translatable_detail": "This Workshop item has no title or description available for translation",
+      "package_detail_map_failed": "Failed to read Workshop mapping details. Check whether the external Workshop database is complete. Details have been written to the system log.",
+      "publish_failed": "Failed to publish the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. Details have been written to the system log.",
+      "publish_invalid": "Invalid Workshop file publishing parameters. Check the Workshop form, file paths, and Steam Web API key, then try again.",
+      "same_author_failed": "Failed to get works by the same author. Check the network connection or external Workshop database status and try again.",
+      "same_author_invalid": "Invalid author works request. Check the author information, filters, or Steam Web API key and try again.",
+      "same_author_network_failed": "Failed to get works by the same author. Check the network connection, Steam service status, or try again later.",
+      "search_failed": "Workshop search failed. Check the network connection, Steam service status, and filters, then try again.",
+      "search_invalid": "Invalid Workshop search conditions. Check the keyword, filters, or Steam Web API key and try again.",
+      "steam_detail_unavailable": "Could not get this Mod detail from Steam",
+      "subscribe_check_failed": "Failed to check subscription permission. Make sure Steam is signed in, the network is available, and the Workshop item is still accessible.",
+      "subscribe_check_invalid": "Invalid subscription permission check request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
+      "translation_clear_failed": "Failed to clear the Workshop translation cache. Try again later. Details have been written to the system log.",
+      "translation_clear_invalid": "Invalid Workshop translation cache cleanup parameters. Check the Workshop ID and target language, then try again.",
+      "translation_failed": "Workshop detail translation failed. Check the translation service settings, AI settings, or network connection. Details have been written to the system log.",
+      "translation_invalid": "Invalid Workshop detail translation parameters. Make sure this item has translatable content and check the target language and translation service settings.",
+      "update_file_failed": "Failed to update the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. Details have been written to the system log.",
+      "update_file_invalid": "Invalid Workshop file update parameters. Check the Workshop form, file paths, and Steam Web API key, then try again.",
+      "update_key_value_tags_failed": "Failed to update Workshop key-value tags. Make sure the current account can manage this item and check the network connection.",
+      "update_key_value_tags_invalid": "Invalid Workshop key-value tag parameters. Check the tags, Workshop item ID, and Steam Web API key, then try again.",
+      "update_tags_failed": "Failed to update Workshop tags. Make sure the current account can manage this item and check the network connection.",
+      "update_tags_invalid": "Invalid Workshop tag parameters. Check the tags, Workshop item ID, and Steam Web API key, then try again.",
+      "user_file_count_failed": "Failed to get author work count. Check the network connection, Steam Web API key, or try again later.",
+      "user_file_count_invalid": "Invalid author work count request. Check the Steam user ID, filters, or Steam Web API key and try again.",
+      "user_files_failed": "Failed to get author works. Check the network connection, Steam Web API key, or try again later.",
+      "user_files_invalid": "Invalid author works request. Check the Steam user ID, filters, or Steam Web API key and try again.",
+      "vote_summary_failed": "Failed to get vote summary. Check the network connection, Steam login status, or try again later.",
+      "vote_summary_invalid": "Invalid vote summary request. Check the Workshop ID list, Steam login status, or Steam Web API key and try again.",
+      "webapi_subscribe_failed": "WebAPI subscription failed. Make sure Steam is signed in, the network is available, and the API key has subscription permission.",
+      "webapi_subscribe_invalid": "Invalid WebAPI subscription request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
+      "webapi_unsubscribe_failed": "WebAPI unsubscribe failed. Make sure Steam is signed in, the network is available, then try again later.",
+      "webapi_unsubscribe_invalid": "Invalid WebAPI unsubscribe request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
+      "workshop_id_not_found": "Matching WorkshopID not found"
+    },
+    "collection": {
+      "invalid_or_empty": "Invalid collection, empty collection, or collection details could not be retrieved",
+      "removed": "Collection removed from the catalog"
+    },
+    "dependencies": {
+      "complete": "All required dependencies are present."
+    },
+    "external_data": {
+      "community_rules_done": "Community rules database updated.",
+      "community_rules_failed": "Failed to update the community rules database.",
+      "community_rules_started": "Community rules database update started",
+      "download_failed_hint": "{message} Check the network connection, proxy settings, and target folder permissions.",
+      "instead_db_done": "Replacement Mod database updated.",
+      "instead_db_failed": "Failed to update the replacement Mod database.",
+      "instead_db_started": "Replacement Mod database update started",
+      "invalid_type": "Cannot update external data: invalid data type. Refresh the page and try again.",
+      "mp_compat_package_ids_done": "Multiplayer Compatibility package cache generated.",
+      "mp_compat_package_ids_failed": "Failed to generate the Multiplayer Compatibility package cache.",
+      "mp_compat_package_ids_started": "Multiplayer Compatibility package cache generation started",
+      "multiplayer_compatibility_done": "Multiplayer compatibility table updated.",
+      "multiplayer_compatibility_failed": "Failed to update the Multiplayer compatibility table.",
+      "multiplayer_compatibility_started": "Multiplayer compatibility table update started",
+      "path_or_url_missing": "Update URL or target path is not configured",
+      "reload_failed_after_success": "{message} Cache reload failed. Refresh manually later.",
+      "update_start_failed": "Failed to start the external data update. Check the update URL, network connection, proxy settings, and target folder write permissions. Details have been written to the system log.",
+      "workshop_db_done": "Community Workshop database updated.",
+      "workshop_db_failed": "Failed to update the community Workshop database.",
+      "workshop_db_started": "Community Workshop database update started"
+    },
+    "file_search": {
+      "manager_not_initialized": "File search manager is not initialized",
+      "ripgrep_download_failed": "Failed to start downloading the file search tool. Check the network connection, proxy settings, and tool folder write permissions. Details have been written to the system log.",
+      "ripgrep_download_started": "ripgrep download task started",
+      "search_started": "Search task started",
+      "start_failed": "Failed to start file search. Check the search paths, ripgrep status, and file access permissions. Details have been written to the system log.",
+      "tool_ready": "Tool is already ready"
+    },
+    "github": {
+      "deploy_started": "Git subscription deployment task started",
+      "provider_catalog_failed": "Failed to get the Git recommendation list. Check the network connection, proxy settings, and recommendation source URL, then try again.",
+      "readme_fetch_failed": "Failed to get the Git repository README. Check the network connection, repository URL, and branch name, then try again.",
+      "subscription_removed": "Subscription record removed",
+      "url_required": "URL is required"
+    },
+    "translation": {
+      "document_failed": "Translation failed. Check the translation service settings, network connection, and target language. Details have been written to the system log.",
+      "document_invalid": "Invalid translation request. Check the text to translate, target language, and translation service settings.",
+      "empty_result": "The translator did not return a valid translation",
+      "target_language_required": "Target language is required"
     }
   },
   "errors": {
@@ -3751,7 +4406,220 @@
       "prepare_tool_failed": "Failed to prepare the texture tool. Check network connection, proxy settings, tool directory permissions, and disk space. Details were written to the system log.",
       "status_failed": "Failed to read texture tool status. Check the tool path and runtime environment. Details were written to the system log.",
       "task_start_failed": "Failed to start the texture task. Check selected mod paths, tool status, disk space, and file permissions. Details were written to the system log.",
-      "tool_download_failed": "Failed to start texture tool download. Check network connection, proxy settings, and tool directory write permission. Details were written to the system log."
+      "tool_download_failed": "Failed to start texture tool download. Check network connection, proxy settings, and tool directory write permission. Details were written to the system log.",
+      "exclusions_load_failed": "Failed to read texture exclusion rules. Check whether the configuration file is accessible. Details have been written to the system log.",
+      "file_exclusion_save_failed": "Failed to save the file texture exclusion rule. Check configuration file permissions. Details have been written to the system log.",
+      "history_load_failed": "Failed to read texture task history. Try again later. Details have been written to the system log.",
+      "mod_exclusion_save_failed": "Failed to save the Mod texture exclusion rule. Check configuration file permissions. Details have been written to the system log."
+    },
+    "mods": {
+      "color_update_failed": "Failed to set the mod color. The previous state was kept. Please try again later.",
+      "conflict_resolve_failed": "Failed to process scan conflicts. Refresh the mod list and try again. Details were written to the system log.",
+      "conflict_resolve_failed_with_reason": "Failed to process scan conflicts: {reason}. Check whether the related mod files still exist, or refresh and try again later.",
+      "delete_failed": "Failed to delete the mod. Check whether files are in use and whether path permissions are valid. Details were written to the system log.",
+      "enable_disable_failed": "Failed to activate or deactivate mods in batch. The current list state was kept where possible. Refresh and try again later. Details were written to the system log.",
+      "interlock_heal_failed": "Failed to repair the mod interlock. Refresh the list and try again. Details were written to the system log.",
+      "interlock_link_failed": "Failed to create the mod interlock. Make sure the selected mods are still in the current list, then try again later.",
+      "interlock_missing_load_failed": "Failed to load missing interlock items. Refresh the list and try again. Details were written to the system log.",
+      "interlock_unlink_failed": "Failed to remove the mod interlock. Make sure the selected mods are still in the current list, then try again later.",
+      "issue_ignore_update_failed": "Failed to update ignored issue state. Refresh the list and try again later. Details were written to the system log.",
+      "tags_add_failed": "Failed to add mod tags. The previous state was kept. Please try again later.",
+      "tags_remove_failed": "Failed to remove mod tags. The previous state was kept. Please try again later.",
+      "time_update_failed": "Failed to update the mod last operation time. Check the database state and try again. Details were written to the system log.",
+      "type_update_failed": "Failed to set the mod type. The previous state was kept. Please try again later.",
+      "user_data_batch_update_failed": "Failed to update mod user data in batch. Refresh the list and try again later. Details were written to the system log."
+    },
+    "backup": {
+      "list_failed": "Failed to get backup files. Check whether the backup folder is accessible. Details were written to the system log.",
+      "pick_save_dir_failed": "Failed to choose the save folder. Try again later. Details were written to the system log.",
+      "rename_failed": "Failed to rename the backup. Check the backup name, file usage state, and folder permissions.",
+      "save_as_failed": "Failed to save the backup as a copy. Check target folder permissions and disk space. Details were written to the system log."
+    },
+    "game": {
+      "launch_failed": "Failed to launch the game. Check the game path, launch arguments, and current environment link state. Details were written to the system log.",
+      "launch_warning_resolve_failed": "Failed to handle the launch confirmation. Try launching again, or refresh the current environment state first.",
+      "steam_url_launch_failed": "Failed to launch through Steam URL. Make sure Steam is installed and the system protocol association works. Details were written to the system log."
+    },
+    "group": {
+      "create_failed": "Failed to create the group. Check whether the group name is valid, then try again later."
+    },
+    "load_order": {
+      "export_failed": "Failed to export the load order. Check target folder permissions, disk space, and the current active list state.",
+      "export_pick_path_failed": "Failed to choose the export path. Try again later. Details were written to the system log.",
+      "inactive_save_failed": "Failed to save inactive list order. Check whether the environment config file is writable. Details were written to the system log.",
+      "read_failed": "Failed to read load order. Make sure the game config file exists and is accessible. Details were written to the system log.",
+      "save_failed": "Failed to save load order. Make sure the game is not using the config file and check folder write permissions.",
+      "share_export_failed": "Failed to generate the share code. Check whether the current active list is valid, or try again later.",
+      "share_import_failed": "Failed to parse the share code. Make sure the share code is complete and correctly formatted."
+    },
+    "mod_residue": {
+      "overview_failed": "Failed to read the uninstalled residue list. Check current environment paths and file permissions. Details were written to the system log.",
+      "whitelist_add_failed": "Failed to add to whitelist. Check config file permissions and try again. Details were written to the system log.",
+      "whitelist_remove_failed": "Failed to remove from whitelist. Check config file permissions and try again. Details were written to the system log."
+    },
+    "mod_settings": {
+      "overview_failed": "Failed to read mod settings overview. Make sure the game user data folder is accessible and check current environment path settings.",
+      "sync_failed": "Failed to overwrite mod settings. Check whether the target file is used by the game and whether path permissions allow writing.",
+      "workshop_detail_failed": "Failed to get Workshop information. Check network connection and Steam service status, or try again later."
+    },
+    "profile": {
+      "shortcut_create_failed": "Failed to create the environment shortcut. Check desktop folder permissions and environment path settings."
+    },
+    "steam": {
+      "client_status_failed": "Failed to get Steam status. Make sure Steam client can start normally. Details were written to the system log.",
+      "process_status_failed": "Failed to get Steam process status. Try again later. Details were written to the system log.",
+      "shortcut_finalize_failed": "Failed to confirm the Steam shortcut. Make sure Steam is running and logged in, then try again later.",
+      "shortcut_register_failed": "Failed to write Steam shortcut configuration. Make sure Steam is closed or the config file is not in use, and check file permissions.",
+      "subscribe_api_not_ready": "Subscription request was not sent. Make sure Steam is running and logged in, then try again.",
+      "subscribe_failed": "Steam subscription request failed. Make sure Steam is logged in, network is available, and the Workshop item is still accessible.",
+      "unsubscribe_api_not_ready": "Unsubscribe request was not sent. Make sure Steam is running and logged in, then try again.",
+      "unsubscribe_failed": "Steam unsubscribe request failed. Make sure Steam is logged in and network is available, then try again later.",
+      "workshop_details_failed": "Failed to query Steam Workshop details. Make sure Steam is logged in and network is available, then try again later.",
+      "workshop_download_failed": "Steam Workshop download request failed. Make sure Steam is logged in and network is available, then try again later.",
+      "workshop_download_rejected": "Steam did not accept the Workshop download request. Make sure Steam is logged in, network is available, and the target Workshop item is still accessible.",
+      "workshop_status_failed": "Failed to check Steam Workshop install status. Make sure Steam is running and logged in, then try again later."
+    },
+    "dialog": {
+      "file_save_failed": "Failed to choose the save file. Try again later. Details were written to the system log.",
+      "file_select_failed": "Failed to choose the file. Try again later. Details were written to the system log.",
+      "folder_select_failed": "Failed to choose the folder. Try again later. Details were written to the system log."
+    },
+    "image": {
+      "save_as_failed": "Failed to save the image. Check target folder permissions, disk space, or whether the file name is valid."
+    },
+    "path": {
+      "batch_check_failed": "Failed to check paths in batch. Make sure paths exist, permissions allow access, then try again later.",
+      "batch_delete_failed": "Failed to delete paths in batch. Check whether files are in use, path permissions, and recycle bin state.",
+      "check_failed": "Failed to check the path. Make sure the path exists, permissions allow access, then try again later.",
+      "delete_failed": "Failed to delete the path. Check whether files are in use, path permissions, and recycle bin state.",
+      "open_failed": "Failed to open the path. Make sure it exists and the current system allows access.",
+      "open_file_failed": "Failed to open the file. Make sure the file exists and has a default app.",
+      "read_text_failed": "Failed to read the text file. Make sure the file exists, its encoding is readable, and it does not exceed the size limit."
+    },
+    "recommendation": {
+      "export_failed": "Recommendation export failed. Check target folder permissions, disk space, and selected mod data state."
+    },
+    "rule": {
+      "dynamic_delete_failed": "Failed to delete the dynamic rule. Check whether the rule config file is writable. Details were written to the system log.",
+      "dynamic_save_failed": "Failed to save the dynamic rule. Check rule content and rule file permissions. Details were written to the system log.",
+      "dynamic_toggle_failed": "Failed to toggle the dynamic rule. Check whether the rule config file is writable. Details were written to the system log.",
+      "global_enable_failed": "Failed to save the rule switch. Check whether the rule config file is writable. Details were written to the system log.",
+      "language_pack_owner_failed": "Failed to save language pack owner rules. Check whether the rule config file is writable. Details were written to the system log.",
+      "mod_toggle_failed": "Failed to toggle mod rule state. Check whether the rule config file is writable. Details were written to the system log.",
+      "source_priority_failed": "Failed to save rule source priority. Check whether the rule config file is writable. Details were written to the system log.",
+      "user_mod_delete_failed": "Failed to delete the user rule. Check whether the rule config file is writable. Details were written to the system log.",
+      "user_mod_position_failed": "Failed to save fixed position rule. Check whether the rule config file is writable. Details were written to the system log.",
+      "user_mod_save_failed": "Failed to save the user rule. Check rule content and rule file permissions. Details were written to the system log.",
+      "import_failed": "Failed to import rule package. Make sure the file is complete and correctly formatted. Details were written to the system log."
+    },
+    "sort": {
+      "auto_sort_failed": "Auto sort failed. Check rule configuration and current active list state. Details were written to the system log.",
+      "smart_insert_failed": "Smart insert failed. Check target Mod IDs, current active list, and rule configuration. Details were written to the system log."
+    },
+    "workspace": {
+      "localize_failed": "Failed to start the local coexist task. Check target library path, file permissions, and disk space.",
+      "transfer_target_missing": "Target folder is not configured or does not exist. Check that the local mod folder or manager mod folder is available in Settings."
+    },
+    "ai": {
+      "config_save_failed": "Failed to save AI configuration. Check configuration content, secret storage state, and config file write permissions.",
+      "disabled": "AI is not enabled. Turn on AI in Settings and complete model configuration first.",
+      "model_capability_load_failed": "Failed to load AI model capabilities. You can still configure the model manually, but reasoning mode and API compatibility may need manual confirmation.",
+      "models_load_failed": "Failed to load AI model list. Make sure the model service is running, Base URL is reachable, API Key is valid, and proxy settings are correct.",
+      "providers_load_failed": "Failed to load AI protocol list. Local configuration or AI definition files may be temporarily unavailable. Details were written to the system log."
+    },
+    "log": {
+      "files_load_failed": "Failed to load log file list. Make sure the log folder is accessible. Details were written to the system log.",
+      "page_read_failed": "Failed to read logs. The file may have been cleaned up, moved, or temporarily unavailable. Refresh the log list and try again."
+    },
+    "maintenance": {
+      "external_data_check_failed": "Failed to check external library updates. Check network connection, proxy settings, and external data source status.",
+      "managed_mod_check_failed": "Failed to check manager mod updates. Check network connection, Git/Steam service status, and local folder permissions.",
+      "steamcmd_mod_check_failed": "Failed to check SteamCMD mod updates. Check network connection, SteamCMD status, and manager mod folder.",
+      "tools_check_failed": "Failed to check tool environment. Check tool folder permissions and network connection. Details were written to the system log."
+    },
+    "steamcmd": {
+      "download_start_failed": "Failed to start SteamCMD download. Check network connection, proxy settings, SteamCMD status, and target folder permissions.",
+      "not_ready": "SteamCMD is not ready. Complete installation or repair in tool environment check, then try downloading again."
+    },
+    "task": {
+      "texture_cancel_failed": "Failed to cancel the texture task. The task may have already finished. Refresh status later."
+    },
+    "update": {
+      "action_failed": "Failed to execute update action. Check network connection, disk space, and install folder permissions. Details were written to the system log.",
+      "check_failed": "Failed to check for updates. Check network connection, proxy settings, and update source status, then try again later."
+    },
+    "uri": {
+      "open_failed": "Failed to open the current link through the system. Make sure system protocol association works, or try again later."
+    }
+  },
+  "maintenance": {
+    "action": {
+      "handle_all": "Handle all",
+      "skip_all": "Skip all",
+      "update_all": "Update all"
+    },
+    "common": {
+      "current_version": "Current version {version}",
+      "latest_version": "Latest version {version}",
+      "more_count_suffix": " and {count} more"
+    },
+    "external_data": {
+      "default_description": "Remote file differs from the local file.",
+      "fallback_title": "External library",
+      "meta": {
+        "local_cache_missing": "Local cache missing",
+        "local_file_missing": "Local file missing",
+        "local_signature": "Local signature {signature}",
+        "local_size": "Local size {size}",
+        "local_time": "Local time {time}",
+        "local_version": "Local version {version}",
+        "remote_items": "{count} remote items",
+        "remote_signature": "Remote signature {signature}",
+        "remote_size": "Remote size {size}",
+        "remote_time": "Remote time {time}",
+        "remote_version": "Remote version {version}",
+        "sources": "Sources {sources}"
+      },
+      "prompt": {
+        "message": "The following external library files have updates. You can update them one by one or in batch.",
+        "partial_failed": "{count} external libraries could not be checked. Only updates with successfully fetched remote status are shown.",
+        "title": "External library updates found"
+      },
+      "update_fallback": "External library update"
+    },
+    "managed_mods": {
+      "prompt": {
+        "message": "{count} mods maintained by the manager have new versions.",
+        "title": "Manager mod updates found"
+      }
+    },
+    "schedule": {
+      "external_data": "External libraries",
+      "managed_mods": "Manager mod updates",
+      "tools": "External tools"
+    },
+    "tool": {
+      "action": {
+        "handle": "Handle",
+        "initialize": "Initialize",
+        "install": "Install",
+        "upgrade": "Upgrade"
+      },
+      "fallback_title": "Tool",
+      "need_handle": "Needs attention",
+      "prompt": {
+        "message": "The following tools are not ready. Handle them one by one or in batch.",
+        "title": "Tool environment needs attention"
+      }
+    }
+  },
+  "steam": {
+    "action": {
+      "inventory_cleanup": "inventory record cleanup",
+      "local_file_delete": "local file deletion"
+    },
+    "status": {
+      "not_ready": "Steam is not ready"
     }
   },
   "tasks": {
@@ -4347,6 +5215,10 @@
       "apply_file_order": "Apply file order",
       "load_file_order": "Load file order"
     },
+    "maintenance": {
+      "external_data_refresh_after_named_update": "Sync mod data after {name}",
+      "external_data_refresh_after_update": "Sync mod data after external library update"
+    },
     "mod_item": {
       "remove_missing": "Remove {count} missing items"
     },
@@ -4497,6 +5369,13 @@
       "select_group": "Select whole group"
     }
   },
+  "bridge": {
+    "browser": {
+      "connect_failed": "Could not connect to the backend service. The backend process may have exited, the browser bridge port may be unavailable, or local security software may have blocked it. Restart the app and try again.",
+      "request_failed_with_status": "Browser bridge request failed with status {status}. Make sure the backend service is still running, or restart the app and try again.",
+      "session_create_failed": "Failed to create a browser bridge session. Restart the app and try again."
+    }
+  },
   "common": {
     "action": {
       "collapse": "Collapse",
@@ -4573,6 +5452,7 @@
     "confirm": "Confirm",
     "later": "Later",
     "ok": "OK",
+    "update": "Update",
     "unknown_mod": "Unknown Mod",
     "not_selected": "Not selected",
     "id": "ID",
@@ -4580,7 +5460,10 @@
     "description": "Description",
     "no_description": "No description",
     "category": "Category",
-    "uncategorized": "Uncategorized"
+    "uncategorized": "Uncategorized",
+    "deactivate": "Deactivate",
+    "delete": "Delete",
+    "skip": "Skip"
   },
   "confirm": {
     "settings": {
@@ -4827,6 +5710,30 @@
     },
     "file_search": {
       "start": "Start file search"
+    },
+    "update": {
+      "check": "Check for updates",
+      "start_download": "Start update download"
+    },
+    "maintenance": {
+      "external_data": "Check external library updates",
+      "handle_ripgrep": "Prepare ripgrep",
+      "handle_steamcmd": "Prepare SteamCMD",
+      "handle_todds": "Prepare todds",
+      "managed_mod_updates": "Check manager mod updates",
+      "refresh_git_catalog": "Refresh Git recommendations",
+      "tools": "Check tool environment",
+      "update_community_rules": "Update community rule database",
+      "update_external_db_type": "Update external library {type}",
+      "update_git_mod": "Update Git repository mod {title}",
+      "update_instead_db": "Update replacement mod database",
+      "update_mp_compat_package_ids": "Generate Multiplayer Compatibility cache",
+      "update_multiplayer_compatibility": "Update Multiplayer compatibility table",
+      "update_workshop_db": "Update community Workshop database"
+    },
+    "steam": {
+      "download_workshop_items": "Download Workshop items",
+      "fetch_collection_items": "Get collection items {collectionId}"
     }
   },
   "command": {

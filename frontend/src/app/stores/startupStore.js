@@ -5,6 +5,7 @@ import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPer
 import { useAiStore } from '../../features/ai/aiStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
+import { t } from '../../shared/i18n'
 
 // 启动编排只负责“先后顺序”和“阻塞/后台”的取舍，具体业务仍由各自 store/API 执行。
 export const useStartupStore = defineStore('startup', () => {
@@ -47,7 +48,7 @@ export const useStartupStore = defineStore('startup', () => {
         scanForce = true
       }
       if (context.actions_taken?.length > 0) {
-        toast.info(`升级完成: ${context.actions_taken.join(', ')}`)
+        toast.info(t('toast.startup.upgrade_actions_done', '升级完成: {actions}', { actions: context.actions_taken.join(', ') }))
       }
     }
     if (context.messages?.length > 0) {
@@ -116,7 +117,7 @@ export const useStartupStore = defineStore('startup', () => {
             }
           })
           if (failedCount > 0) {
-            toast.warning('部分启动数据暂时未能补齐，列表标记可能稍后才会出现。', { timeout: 3000 })
+            toast.warning(t('toast.startup.background_data_partial_failed', '部分启动数据暂时未能补齐，列表标记可能稍后才会出现。'), { timeout: 3000 })
           }
           return results
         })
@@ -132,13 +133,13 @@ export const useStartupStore = defineStore('startup', () => {
             const res = await window.pywebview.api.startup_warm_auxiliary_data()
             if (res?.status && res.status !== 'success') {
               console.warn('启动辅助缓存预热失败:', res)
-              toast.warning('部分后台数据暂时未能预热，相关提示可能稍后才会出现。', { timeout: 3000 })
+              toast.warning(t('toast.startup.auxiliary_warmup_failed', '部分后台数据暂时未能预热，相关提示可能稍后才会出现。'), { timeout: 3000 })
               return false
             }
             return true
           }).catch((error) => {
             console.warn('启动辅助缓存预热失败:', error)
-            toast.warning('部分后台数据暂时未能预热，相关提示可能稍后才会出现。', { timeout: 3000 })
+            toast.warning(t('toast.startup.auxiliary_warmup_failed', '部分后台数据暂时未能预热，相关提示可能稍后才会出现。'), { timeout: 3000 })
           })
         }, delayMs)
       }
@@ -193,7 +194,7 @@ export const useStartupStore = defineStore('startup', () => {
       }, 3000)
     } catch (error) {
       console.error('启动后台流程失败:', error)
-      toast.warning('启动后的后台检查未完成。部分列表标记或自动扫描可能需要稍后手动刷新。', { timeout: 4000 })
+      toast.warning(t('toast.startup.background_checks_failed', '启动后的后台检查未完成。部分列表标记或自动扫描可能需要稍后手动刷新。'), { timeout: 4000 })
     }
   }
 
