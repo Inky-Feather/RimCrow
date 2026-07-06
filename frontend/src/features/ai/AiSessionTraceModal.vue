@@ -17,7 +17,7 @@
     </template>
 
         <div class="h-full min-h-0 overflow-x-auto custom-scrollbar">
-          <div class="grid h-full min-h-0 min-w-[64rem] grid-cols-[22rem_minmax(0,1fr)_24rem]">
+          <div class="grid h-full min-h-0 min-w-5xl grid-cols-[22rem_minmax(0,1fr)_24rem]">
           <!-- 左栏：会话概览与累计 token 指标 -->
           <div class="sidebar-surface min-h-0 overflow-y-auto p-4">
 	            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.session_overview', '会话概览') }}</div>

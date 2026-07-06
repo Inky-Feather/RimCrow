@@ -1,7 +1,7 @@
 <template>
   <CommonModalShell :show="supplementStore.isVisible" :show-header="false" size="custom" :z-index="9999" accent="tip" panel-class="w-[62rem] max-h-[86vh] max-w-[94vw]" content-class="h-full flex flex-col"
     @close="supplementStore.cancel()" >
-          <div class="absolute inset-x-0 top-0 h-[0.0625rem] bg-linear-to-r from-transparent via-accent-tip to-transparent opacity-80"></div>
+          <div class="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-accent-tip to-transparent opacity-80"></div>
           <div class="absolute -top-20 right-10 h-44 w-44 rounded-full bg-accent-tip/10 blur-[4.5rem] pointer-events-none"></div>
 
           <div class="relative z-10 flex items-start justify-between gap-3 border-b border-border-base/5 px-5 py-4">

@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCALE_PATH = ROOT / "frontend" / "src" / "locales" / "zh-CN.json"
 BUILTIN_LOCALES_DIR = ROOT / "frontend" / "src" / "locales"
 BUILTIN_COMMANDS_PATH = ROOT / "frontend" / "src" / "app" / "commands" / "builtinCommands.js"
+GUIDE_STORE_PATH = ROOT / "frontend" / "src" / "features" / "guide" / "guideStore.js"
+GUIDE_CONFIG_PATH = ROOT / "frontend" / "src" / "features" / "guide" / "guideConfig.js"
 AI_ACTION_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_actions.py"
 AI_ENTRY_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_entries.py"
 AI_ATTACHMENT_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_attachments.py"
@@ -56,6 +58,22 @@ BUILTIN_COMMAND_TEXT_PATTERN = re.compile(
     r"id:\s*(?P<id>['\"`])(?P<id_text>(?:\\.|(?!(?P=id)).)*?)(?P=id)\s*,\s*"
     r"title:\s*(?P<title>['\"`])(?P<title_text>(?:\\.|(?!(?P=title)).)*?)(?P=title)\s*,\s*"
     r"category:\s*COMMAND_CATEGORIES\.(?P<category>\w+)\s*,\s*"
+    r"description:\s*(?P<description>['\"`])(?P<description_text>(?:\\.|(?!(?P=description)).)*?)(?P=description)",
+    re.DOTALL,
+)
+GUIDE_ENTRY_TEXT_PATTERN = re.compile(
+    r"key:\s*(?P<key>['\"`])(?P<key_text>(?:\\.|(?!(?P=key)).)*?)(?P=key)\s*,\s*"
+    r"title:\s*(?P<title>['\"`])(?P<title_text>(?:\\.|(?!(?P=title)).)*?)(?P=title)\s*,\s*"
+    r"description:\s*(?P<description>['\"`])(?P<description_text>(?:\\.|(?!(?P=description)).)*?)(?P=description)",
+    re.DOTALL,
+)
+GUIDE_STEPS_EXPORT_PATTERN = re.compile(
+    r"export\s+const\s+(?P<name>\w+GuideSteps)\s*=\s*\[(?P<body>.*?)\n\];",
+    re.DOTALL,
+)
+GUIDE_STEP_POPOVER_PATTERN = re.compile(
+    r"popover:\s*\{.*?"
+    r"title:\s*(?P<title>['\"`])(?P<title_text>(?:\\.|(?!(?P=title)).)*?)(?P=title)\s*,\s*"
     r"description:\s*(?P<description>['\"`])(?P<description_text>(?:\\.|(?!(?P=description)).)*?)(?P=description)",
     re.DOTALL,
 )
@@ -134,6 +152,28 @@ def command_id_to_locale_base(command_id: str) -> str:
     return ".".join(segments)
 
 
+GUIDE_STEPS_EXPORT_KEYS = {
+    "mainGuideSteps": "main",
+    "workflowGuideSteps": "workflow",
+    "modListGuideSteps": "modList",
+    "searchGuideSteps": "search",
+    "issueGuideSteps": "issues",
+    "profileGuideSteps": "profile",
+    "groupGuideSteps": "group",
+    "backupGuideSteps": "backup",
+    "workspaceGuideSteps": "workspace",
+    "workshopBrowserGuideSteps": "workspaceWorkshop",
+    "collectionGuideSteps": "workspaceCollection",
+    "githubGuideSteps": "workspaceGithub",
+    "ruleCenterGuideSteps": "rules",
+    "conflictGuideSteps": "conflict",
+    "aiConfigGuideSteps": "aiConfig",
+    "textureOptGuideSteps": "textureOpt",
+    "aiReviewGuideSteps": "aiReview",
+    "logAnalysisGuideSteps": "logAnalysis",
+}
+
+
 def extract_builtin_command_messages(path: Path, source: str) -> dict[str, str]:
     if path != BUILTIN_COMMANDS_PATH:
         return {}
@@ -156,6 +196,35 @@ def extract_builtin_command_messages(path: Path, source: str) -> dict[str, str]:
     return messages
 
 
+def extract_guide_messages(path: Path, source: str) -> dict[str, str]:
+    messages: dict[str, str] = {}
+    if path == GUIDE_STORE_PATH:
+        for match in GUIDE_ENTRY_TEXT_PATTERN.finditer(source):
+            guide_key = decode_js_string(match.group("key_text"), match.group("key"))
+            if not guide_key.strip():
+                continue
+            messages[f"guide.entries.{guide_key}.title"] = decode_js_string(match.group("title_text"), match.group("title"))
+            messages[f"guide.entries.{guide_key}.description"] = decode_js_string(
+                match.group("description_text"),
+                match.group("description"),
+            )
+    if path == GUIDE_CONFIG_PATH:
+        for match in GUIDE_STEPS_EXPORT_PATTERN.finditer(source):
+            guide_key = GUIDE_STEPS_EXPORT_KEYS.get(match.group("name"))
+            if not guide_key:
+                continue
+            for index, popover_match in enumerate(GUIDE_STEP_POPOVER_PATTERN.finditer(match.group("body"))):
+                messages[f"guide.steps.{guide_key}.{index}.title"] = decode_js_string(
+                    popover_match.group("title_text"),
+                    popover_match.group("title"),
+                )
+                messages[f"guide.steps.{guide_key}.{index}.description"] = decode_js_string(
+                    popover_match.group("description_text"),
+                    popover_match.group("description"),
+                )
+    return messages
+
+
 def extract_js_messages(path: Path) -> dict[str, str]:
     source = path.read_text(encoding="utf-8")
     messages: dict[str, str] = {}
@@ -165,6 +234,7 @@ def extract_js_messages(path: Path) -> dict[str, str]:
         if key.strip():
             messages[key.strip()] = default_text
     messages.update(extract_builtin_command_messages(path, source))
+    messages.update(extract_guide_messages(path, source))
     return messages
 
 

@@ -5895,5 +5895,489 @@
       "xml_field_error": "XML field error",
       "xml_syntax_error": "XML syntax error"
     }
+  },
+  "guide": {
+    "blocked": {
+      "default": "This guide needs a prerequisite before it can start.",
+      "log_analysis_ai_required": "Enable and configure AI in Settings -> AI Integration first. A successful connection test is recommended before starting the log analysis guide.",
+      "scene_required": "Open the related area before starting this guide."
+    },
+    "center": {
+      "capsule": "Guide Center",
+      "capsule_with_count": "Guides ({count})",
+      "completed_count": "Completed ({count})",
+      "description": "Click an item below to learn how to use the app.",
+      "reset_all": "Reset All",
+      "reset_all_tooltip": "Reset all guide records so they appear again",
+      "skip": "Skip",
+      "skip_all": "Skip All",
+      "title": "Guide Center"
+    },
+    "driver": {
+      "done": "Got it",
+      "next": "Next",
+      "prev": "Back",
+      "skip": "Skip"
+    },
+    "entries": {
+      "aiConfig": {
+        "description": "Learn how to enable AI, configure the endpoint, and run a connection test.",
+        "title": "AI Setup Basics"
+      },
+      "aiReview": {
+        "description": "Review batch results, edit individual items, and write everything back at once.",
+        "title": "AI Result Review"
+      },
+      "backup": {
+        "description": "Learn how to back up and manage load order files.",
+        "title": "Backup Management Basics"
+      },
+      "conflict": {
+        "description": "Learn how to keep the right copy, then disable or delete the other copies in batch.",
+        "title": "Duplicate Mod Conflict Handling"
+      },
+      "issues": {
+        "description": "Learn to read issue summaries, fix missing items quickly, and inspect problems one by one.",
+        "title": "Issue Handling and Quick Fixes"
+      },
+      "logAnalysis": {
+        "description": "Learn how to switch logs, start AI analysis, and keep troubleshooting from the sidebar.",
+        "title": "Log Analysis Basics"
+      },
+      "main": {
+        "description": "Learn the main features, where they are, and a few common operations.",
+        "title": "Main Screen Basics"
+      },
+      "modList": {
+        "description": "Learn how to view, activate, deactivate, and search mods in the mod list.",
+        "title": "Mod List Basics"
+      },
+      "profile": {
+        "description": "Learn how to manage game environments, paths, and related settings.",
+        "title": "Environment Management Basics"
+      },
+      "rules": {
+        "description": "Learn rule sources, priority, dynamic rules, and global enable switches.",
+        "title": "Rule Center Basics"
+      },
+      "textureOpt": {
+        "description": "Learn what the texture optimizer statistics mean, how generation and cleanup work, and the basics of todds.",
+        "title": "Texture Optimization Basics"
+      },
+      "workflow": {
+        "description": "Learn the standard Scan -> Sort -> Save -> Launch workflow.",
+        "title": "Main Workflow Loop"
+      },
+      "workspace": {
+        "description": "Learn how to view, manage, and operate inventory in the Inventory Hub.",
+        "title": "Inventory Hub Tour"
+      },
+      "workspaceCollection": {
+        "description": "Learn how to import collections, fill missing items, and apply collection order.",
+        "title": "Collection Subscription Management"
+      },
+      "workspaceGithub": {
+        "description": "Learn how to parse repositories, subscribe to sources, and view deployment timelines.",
+        "title": "Git Repository Subscriptions"
+      },
+      "workspaceWorkshop": {
+        "description": "Learn how to search Workshop mods and decide whether to subscribe, download, or inspect dependencies.",
+        "title": "Workshop Search"
+      }
+    },
+    "steps": {
+      "aiConfig": {
+        "0": {
+          "description": "The settings panel has a dedicated AI entry. All model, endpoint, and prompt-related settings are managed here.",
+          "title": "AI Integration Page"
+        },
+        "1": {
+          "description": "Turn on this main switch first. Log analysis and batch alias/notes generation only show full settings after AI is enabled.",
+          "title": "Enable AI Features"
+        },
+        "2": {
+          "description": "Choose the protocol and model first, then fill in Base URL and API Key for the service type. Local services usually focus on the address; cloud services usually focus on the key.",
+          "title": "Endpoint and Credentials"
+        },
+        "3": {
+          "description": "Max tokens, concurrency, and randomness directly affect cost, speed, and output stability. Start conservative, then adjust gradually.",
+          "title": "Advanced Parameters"
+        },
+        "4": {
+          "description": "Run a test before real use. If it returns a result, the model name, endpoint, and authentication are usually correct.",
+          "title": "Connection Test"
+        },
+        "5": {
+          "description": "After the test passes, remember to save. Otherwise these changes are not written to the active settings.",
+          "title": "Save Settings"
+        }
+      },
+      "aiReview": {
+        "0": {
+          "description": "A number badge appears here after a batch AI task finishes. Even if you close the review window later, you can open it again from here.",
+          "title": "Result Entry"
+        },
+        "1": {
+          "description": "Check total, succeeded, and failed tasks first. Failed or blank items usually need manual edits or a separate retry.",
+          "title": "Task Summary"
+        },
+        "2": {
+          "description": "Batch results are expanded item by item here. Handle highlighted warnings first to reduce the risk of writing back wrong notes in batch.",
+          "title": "Item Review Area"
+        },
+        "3": {
+          "description": "Each card lets you edit the alias and notes directly. Hover the top-right corner to retry or discard just that result.",
+          "title": "Single Item Edits"
+        },
+        "4": {
+          "description": "Save everything only after confirming the results. This writes the current review results back to custom mod data in batch.",
+          "title": "Confirm Write Back"
+        }
+      },
+      "backup": {
+        "0": {
+          "description": "The backup page handles load order import, export, diff review, restore, and cleanup.",
+          "title": "Switch to Backups"
+        },
+        "1": {
+          "description": "This list includes temporary imports, automatic backups, and manual backups. Compare before restoring to avoid overwriting unsaved changes. You can also drag load order files into the list to load them.",
+          "title": "Backup List"
+        },
+        "2": {
+          "description": "Import or export external load order files, open the backup folder, and refresh the list here. You can switch environments and operate on their backups.",
+          "title": "Backup Actions"
+        }
+      },
+      "conflict": {
+        "0": {
+          "description": "Check here first to see whether this is a hard conflict or a coexistence case, then decide the cleanup range. Always confirm the source before deleting.",
+          "title": "Conflict Overview"
+        },
+        "1": {
+          "description": "Choose the copy to keep first, then assign disable or delete actions to the other copies.",
+          "title": "Copy Selection Area"
+        },
+        "2": {
+          "description": "If there are many conflicts, set who to keep and what to do with the rest, then apply it to the current range in one action.",
+          "title": "Batch Rules"
+        },
+        "3": {
+          "description": "Submitting will refresh and rescan automatically. Be extra careful with delete actions, because this directly changes file state.",
+          "title": "Apply Handling"
+        }
+      },
+      "group": {
+        "0": {
+          "description": "Switch between temporary lists, groups, and backups here. This guide focuses on groups for long-term organization of your mod collection.",
+          "title": "Sidebar Entry"
+        },
+        "1": {
+          "description": "The header shows the current group count. Groups work more like favorites or clipboards, useful for theme packs, test sets, and common combinations.",
+          "title": "Group Overview"
+        },
+        "2": {
+          "description": "Type a keyword to cycle through matching groups. When you have many groups, search first and edit next instead of scrolling manually.",
+          "title": "Search and Locate"
+        },
+        "3": {
+          "description": "Expand all, collapse all, and create group actions are collected here. When building structure for the first time, create group names first, then file mods gradually.",
+          "title": "Expand, Collapse, and Create"
+        },
+        "4": {
+          "description": "The help button explains group drag rules: moving into a group usually copies the idea and does not directly replace the mod state in the original list.",
+          "title": "Group Rule Help"
+        },
+        "5": {
+          "description": "Groups support drag sorting, and an entire group can be dragged into the active or inactive list for batch activation changes. This is useful for switching whole packs.",
+          "title": "Group Body"
+        }
+      },
+      "issues": {
+        "0": {
+          "description": "Errors and warnings for the current active list are summarized here. When something looks wrong, start here before filtering issue items.",
+          "title": "Issue Summary"
+        },
+        "1": {
+          "description": "Quick actions appear here based on current status, such as subscribing to missing items, downloading, filling dependencies, adding language packs, or removing invalid items.",
+          "title": "Quick Fix Area"
+        },
+        "2": {
+          "description": "If quick fixes are not enough, right-click list items and combine rule editing, ignored warnings, and locate actions to narrow issues one by one.",
+          "title": "Inspect Items One by One"
+        }
+      },
+      "logAnalysis": {
+        "0": {
+          "description": "The log analysis guide starts here. Before starting, make sure AI has been configured in Settings -> AI Integration.",
+          "title": "Log Center Entry"
+        },
+        "1": {
+          "description": "Switch between system logs and game logs here. AI analysis is mainly for game logs; system logs usually need debug mode before AI controls appear.",
+          "title": "Log Source Switch"
+        },
+        "2": {
+          "description": "Find the most relevant error file or log section in the text area first. You can manually select key log lines, then let the AI on the right analyze them.",
+          "title": "Locate Error Logs First"
+        },
+        "3": {
+          "description": "When errors are numerous and scattered, use one-click analysis first. It compresses global exceptions, then starts an AI diagnosis suited to large logs.",
+          "title": "One-Click Global Error Analysis"
+        },
+        "4": {
+          "description": "If you have selected some logs or only want to discuss one error, open the AI assistant sidebar from here.",
+          "title": "Open AI Assistant Manually"
+        },
+        "5": {
+          "description": "This sidebar holds log attachments, conversation history, and AI conclusions. For long troubleshooting sessions, keep asking follow-up questions in the same session.",
+          "title": "AI Analysis Sidebar"
+        },
+        "6": {
+          "description": "This controls whether AI may actively read log context, mod data, sorting rules, and other backend information. For complex problems, keep the default enabled.",
+          "title": "Tool Permissions"
+        },
+        "7": {
+          "description": "Besides sending logs directly, you can add requests such as \"give repair steps by priority\" or \"identify the most suspicious mod first\".",
+          "title": "Add Your Question"
+        },
+        "8": {
+          "description": "After attaching logs or entering a clear question, click send. A disabled send button usually means no log is selected or token precheck has not finished.",
+          "title": "Send Analysis Request"
+        }
+      },
+      "main": {
+        "0": {
+          "description": "This is the list of all inactive mods you own. Drag them to the right, or double-click to activate them.",
+          "title": "Inactive List"
+        },
+        "1": {
+          "description": "This is the actual game load order. You can drag to sort manually, or let automatic sorting handle it. Red and yellow hints indicate dependency, order, or compatibility issues that should be handled first.",
+          "title": "Active List"
+        },
+        "2": {
+          "description": "This area shows the selected mod description, dependencies, author, path, and custom information.",
+          "title": "Mod Details"
+        },
+        "3": {
+          "description": "This area holds temporary lists, groups, backups, and the rule editor entry for a single mod.",
+          "title": "Sidebar"
+        },
+        "4": {
+          "description": "Scan, auto sort, save, and launch are all here. After fixing issues, remember to save before launching.",
+          "title": "Main Actions"
+        },
+        "5": {
+          "description": "You can maintain separate environments for different play styles, such as a clean setup, a mod pack, or a testing setup. Each environment keeps its settings and load order isolated.",
+          "title": "Environment Isolation"
+        },
+        "6": {
+          "description": "This hub manages Workshop, local, and manager-downloaded mods. It also includes Workshop search, collection management, and Git repository subscriptions.",
+          "title": "Inventory Hub"
+        },
+        "7": {
+          "description": "This area manages sorting rules, community rules, dynamic rules, and their effective priority.",
+          "title": "Rule Center"
+        }
+      },
+      "modList": {
+        "0": {
+          "description": "This bar shows the list name, item count, and current filter, sort, and issue summary status.",
+          "title": "List Status Bar"
+        },
+        "1": {
+          "description": "The upper part focuses on locating items, while the lower part focuses on filtering. It supports fuzzy search, field search, exclusion search, and AND/OR combinations.",
+          "title": "Search and Filters"
+        },
+        "2": {
+          "description": "Items support dragging, double-click activation changes, Ctrl multi-select, Shift range select, Ctrl+A select all, and batch actions from the right-click menu. Alt+left-click opens rule editing directly.",
+          "title": "List Item Interaction"
+        },
+        "3": {
+          "description": "The index column shows position, and can also be swiped for range selection and quick positioning of search results.",
+          "title": "Index Column"
+        }
+      },
+      "profile": {
+        "0": {
+          "description": "Switch environments from here. Each environment has its own load order, save, and configuration context.",
+          "title": "Environment Entry"
+        },
+        "1": {
+          "description": "View environment paths, versions, and enabled sources here. You can also edit, delete, or run a specific environment directly.",
+          "title": "Environment List"
+        },
+        "2": {
+          "description": "A new environment can inherit the current configuration or use a custom user data folder. Deleting an environment clears its isolated data, so be careful.",
+          "title": "Create Environment"
+        }
+      },
+      "rules": {
+        "0": {
+          "description": "The left side separates dynamic rules, user rules, community rules, and Workshop dependency rules. Different sources participate in sorting decisions together.",
+          "title": "Rule Categories"
+        },
+        "1": {
+          "description": "Source priority decreases from top to bottom. This affects who wins when automatic sorting or issue detection finds conflicts.",
+          "title": "Effective Priority"
+        },
+        "2": {
+          "description": "If you maintain your own rule set or need to move configuration between machines, this is the unified entry.",
+          "title": "Import and Export Rule Packs"
+        },
+        "3": {
+          "description": "Dynamic rules are useful for automation written as \"when these conditions match -> apply this sorting action\".",
+          "title": "Dynamic Rules"
+        },
+        "4": {
+          "description": "Search by rule name, mod name, or package ID to quickly locate rule items to inspect.",
+          "title": "Search Rules"
+        },
+        "5": {
+          "description": "This controls whether the current rule source is enabled overall, plus a few category-specific options.",
+          "title": "Current Category Switches"
+        },
+        "6": {
+          "description": "View, activate/deactivate, edit, or delete rules one by one here. When investigating unusual sorting, start by checking source notes here.",
+          "title": "Rule Item List"
+        }
+      },
+      "search": {
+        "0": {
+          "description": "Type keywords directly to fuzzy-match default fields. This is best for quickly narrowing a result set.",
+          "title": "Direct Search"
+        },
+        "1": {
+          "description": "For advanced use, search with the \"field:keyword\" format. This works better than plain language when checking large lists.",
+          "title": "Field Search"
+        },
+        "2": {
+          "description": "Use \"-field:keyword\" to exclude matches. Boolean fields also support + / - / _ for yes/no/empty checks, and can be combined with AND/OR logic.",
+          "title": "Exclude, Test, and Combine"
+        },
+        "3": {
+          "description": "After filtering, check the count and status here. If the result is wrong, return to the toolbar and narrow or broaden the query.",
+          "title": "Verify Filter Results"
+        }
+      },
+      "textureOpt": {
+        "0": {
+          "description": "This opens the texture optimizer. It pre-generates texture outputs from real PNG source images so the game can read them more efficiently. DDS can be read natively from RimWorld 1.6; ZSTD creates smaller .dds.zstd files, but requires Image Opt to read them.",
+          "title": "Texture Optimizer Entry"
+        },
+        "1": {
+          "description": "This summarizes source image count, existing outputs, pending outputs, invalid PNG files, scale distribution, and estimated VRAM for the current scope. Check this before deciding whether to generate or clean up.",
+          "title": "Summary Stats"
+        },
+        "2": {
+          "description": "The left list summarizes texture size share by mod. You can switch between All / PNG / DDS / ZSTD views, search mod names or paths, and sort by share, pending output count, optimized VRAM, or VRAM savings.",
+          "title": "List Filters and Sorting"
+        },
+        "3": {
+          "description": "This list summarizes texture status by mod. Usually check mods with many pending outputs, large size, or high VRAM savings first. Invalid PNG files or output files without source images also surface here.",
+          "title": "Mod Detail List"
+        },
+        "4": {
+          "description": "Adjust output format and scaling here. These options affect disk usage, VRAM usage, and visual clarity. DDS is closer to direct loading; ZSTD compresses DDS again to save space, but requires Image Opt to read.",
+          "title": "Optimization Options"
+        },
+        "5": {
+          "description": "Generate, scan statistics, cleanup, and other main actions are here. After setting options, you can generate directly; scan statistics analyzes source images, output files, size, and estimated VRAM in the current scope.",
+          "title": "Main Actions"
+        }
+      },
+      "workflow": {
+        "0": {
+          "description": "Scan the mod list first. Normal scan only handles file changes; hovering also lets you trigger a deeper force scan.",
+          "title": "Step 1: Scan"
+        },
+        "1": {
+          "description": "Let the app reorder the active list based on rules and dependencies. After sorting, check warnings before deciding whether to continue.",
+          "title": "Step 2: Auto Sort"
+        },
+        "2": {
+          "description": "Auto sorting and manual dragging only change the in-memory list. You must click Save before it is written to the load order file.",
+          "title": "Step 3: Save"
+        },
+        "3": {
+          "description": "Launch the game only after confirming there are no critical issues. This reduces the chance of bringing a bad sequence into a save.",
+          "title": "Step 4: Launch Game"
+        }
+      },
+      "workspace": {
+        "0": {
+          "description": "This lists Steam Workshop inventory. You can view mod timelines and run inventory actions such as activate, deactivate, and delete.",
+          "title": "Workshop Inventory"
+        },
+        "1": {
+          "description": "Search, filter, sort, missing checks, and update checks are here. This is the main workspace for daily inventory review. For example, filter all deactivated mods, select several, then activate them in batch.",
+          "title": "Inventory Toolbar"
+        },
+        "2": {
+          "description": "This is the mod library downloaded by the manager. Before using these mods, confirm that the manager mod switch is enabled for the environment.",
+          "title": "Manager Inventory"
+        },
+        "3": {
+          "description": "The top tabs also switch to Workshop search, collection subscriptions, and Git repository subscriptions.",
+          "title": "Other Workspace Pages"
+        }
+      },
+      "workspaceCollection": {
+        "0": {
+          "description": "The collections page is useful for importing a mod pack link shared by others, then quickly filling missing mods.",
+          "title": "Switch to Collections"
+        },
+        "1": {
+          "description": "Paste a Steam collection URL or enter a collection ID directly to add the collection record locally.",
+          "title": "Import Collection"
+        },
+        "2": {
+          "description": "After selecting a collection on the right, the left side shows the mods it contains and their missing status.",
+          "title": "Collection Card"
+        },
+        "3": {
+          "description": "Typical flow: import collection -> select a record -> subscribe or fill missing items -> decide whether to overwrite the current active list with the collection order.",
+          "title": "Collection Workflow"
+        }
+      },
+      "workspaceGithub": {
+        "0": {
+          "description": "This page is for subscribing to mods that have no Workshop page but are continuously released as source code or releases in a Git repository.",
+          "title": "Switch to Git Repositories"
+        },
+        "1": {
+          "description": "Paste the Git repository URL first. The system parses repository information, then lets you choose Source or Release mode.",
+          "title": "Parse Repository Link"
+        },
+        "2": {
+          "description": "The left list shows subscribed repositories, current install mode, and version status.",
+          "title": "Subscribed Repositories"
+        },
+        "3": {
+          "description": "The right area shows parse results, deployment entry points, and the local execution timeline.",
+          "title": "Deployment and Tracking"
+        }
+      },
+      "workspaceWorkshop": {
+        "0": {
+          "description": "The top workspace tabs switch between the inventory matrix and Workshop search.",
+          "title": "Switch to Workshop Search"
+        },
+        "1": {
+          "description": "Search by mod name, package ID, or Workshop ID. This is useful for checking existence before subscribing or downloading to the manager.",
+          "title": "Workshop Search"
+        },
+        "2": {
+          "description": "Cached results appear on the left. Click any item to load its details on the right.",
+          "title": "Result List"
+        },
+        "3": {
+          "description": "This area shows description, dependencies, screenshots, and author information. You can subscribe, unsubscribe, download to the manager, or keep drilling into dependencies.",
+          "title": "Details Area"
+        }
+      }
+    },
+    "toast": {
+      "reset_all": "All guide records have been reset.",
+      "skipped_all": "All guides have been skipped. You can reset guides from UI settings at any time."
+    }
   }
 }

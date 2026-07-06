@@ -12,7 +12,7 @@
         </span>
         <!-- 给文字加上跳动类 -->
         <span class="guide-text text-sm font-black text-on-accent-primary z-10 uppercase tracking-tight">
-          {{ uncompletedCount > 0 ? `使用指引 (${uncompletedCount})` : '教程中心' }}
+          {{ guideCapsuleText }}
         </span>
       </div>
 
@@ -23,8 +23,8 @@
           :class="panelPositionClass" >
           <!-- Header -->
           <div class="px-2 pb-2 mb-2 border-b border-border-base/10">
-            <h4 class="font-bold text-text-main">使用引导中心</h4>
-            <p class="text-xs text-text-dim">点击下方条目开始了解软件操作。</p>
+            <h4 class="font-bold text-text-main">{{ t('guide.center.title', '使用引导中心') }}</h4>
+            <p class="text-xs text-text-dim">{{ t('guide.center.description', '点击下方条目开始了解软件操作。') }}</p>
           </div>
 
           <!-- 教程列表 -->
@@ -44,7 +44,7 @@
               <!-- 跳过按钮 -->
               <button class="shrink-0 px-2 py-1 rounded-md text-xs font-bold text-text-dim hover:bg-accent-warn/15 hover:text-accent-warn transition-colors" 
                 @click.stop="skipGuide(guide.key)" >
-                跳过
+                {{ t('guide.center.skip', '跳过') }}
               </button>
             </div>
 
@@ -53,7 +53,7 @@
               <button class="w-full text-left text-xs text-text-dim px-2 py-1.5 mt-2 flex items-center gap-1 hover:text-text-main"
                 @click="showCompleted = !showCompleted" >
                 <ChevronRight class="size-3 transition-transform" :class="{ 'rotate-90': showCompleted }" />
-                已完成 ({{ completedGuides.length }})
+                {{ t('guide.center.completed_count', '已完成 ({count})', { count: completedGuides.length }) }}
               </button>
 
               <transition name="list-fade">
@@ -72,11 +72,11 @@
           <div class="mt-2 pt-2 border-t border-border-base/10 flex items-center justify-between gap-3">
             <button class="text-xs text-text-dim hover:text-accent-warn transition-colors"
               @click="skipAllGuides" >
-              全部跳过
+              {{ t('guide.center.skip_all', '全部跳过') }}
             </button>
             <button class="text-xs text-text-dim hover:text-accent-danger transition-colors"
-              @click="resetAllGuides" v-tooltip="'重置所有引导记录，它们将重新出现'" >
-              全部重置
+              @click="resetAllGuides" v-tooltip="t('guide.center.reset_all_tooltip', '重置所有引导记录，它们将重新出现')" >
+              {{ t('guide.center.reset_all', '全部重置') }}
             </button>
           </div>
         </div>
@@ -88,10 +88,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
-import { useGuideStore, allGuides } from './guideStore'
+import { useGuideStore, getAllGuides } from './guideStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { Check, Play, ChevronRight } from 'lucide-vue-next'
 import { GUIDE_VERSION } from './guideConfig'
+import { t } from '../../shared/i18n'
 
 const DRAG_THRESHOLD = 4
 const PANEL_WIDTH = 320
@@ -127,10 +128,14 @@ const isGuideCompleted = (guideKey) => {
   return appStore.settings.completed_guides?.[uniqueKey] === 'done'
 }
 
-const uncompletedGuides = computed(() => allGuides.filter(g => !isGuideCompleted(g.key)))
-const completedGuides = computed(() => allGuides.filter(g => isGuideCompleted(g.key)))
+const localizedGuides = computed(() => getAllGuides())
+const uncompletedGuides = computed(() => localizedGuides.value.filter(g => !isGuideCompleted(g.key)))
+const completedGuides = computed(() => localizedGuides.value.filter(g => isGuideCompleted(g.key)))
 const hasGuides = computed(() => uncompletedGuides.value.length > 0)
 const uncompletedCount = computed(() => uncompletedGuides.value.length)
+const guideCapsuleText = computed(() => uncompletedCount.value > 0
+  ? t('guide.center.capsule_with_count', '使用指引 ({count})', { count: uncompletedCount.value })
+  : t('guide.center.capsule', '教程中心'))
 const rootStyle = computed(() => ({
   transform: `translate3d(${dragOffset.value.x}px, ${dragOffset.value.y}px, 0)`,
 }))
