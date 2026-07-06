@@ -121,7 +121,7 @@
                     hover:bg-accent-danger/60 hover:text-text-main hover:scale-110 active:scale-100
                     group-hover:bg-accent-danger/40 group-hover:text-text-dim group-hover:shadow-2xl/20
                     group-hover:h-5 group-hover:w-5 group-hover:translate-x-0 group-hover:opacity-100"
-                    v-tooltip="t('ui.common.remove', '移除')">
+                    v-tooltip="t('common.action.remove', '移除')">
                     <span class="relative only:-mx-5">
                       <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
                     </span>

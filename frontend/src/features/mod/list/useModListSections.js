@@ -197,7 +197,7 @@ export function useModListSections({
       label: t('history.mod_list.move_to_boundary', '移动 {count} 项到{list}{position}', {
         count: normalizeMoveIds(ids).length,
         list: getListLabel(listId),
-        position: position === 'top' ? t('ui.common.position.top', '顶部') : t('ui.common.position.bottom', '底部'),
+        position: position === 'top' ? t('common.position.top', '顶部') : t('common.position.bottom', '底部'),
       }),
     })
   }
@@ -211,7 +211,7 @@ export function useModListSections({
     const targetBaseList = takeListIdsById(targetListId).filter(id => !movingIds.some(movingId => sameId(movingId, id)))
     const insertIndex = resolveSectionInsertIndex(targetBaseList, targetGroupId, position, targetListId)
     if (insertIndex < 0) return false
-    const groupPositionText = position === 'top' ? t('ui.common.position.top', '顶部') : t('ui.common.position.bottom', '底部')
+    const groupPositionText = position === 'top' ? t('common.position.top', '顶部') : t('common.position.bottom', '底部')
     return await moveIdsToList({
       ids: movingIds,
       targetListId,

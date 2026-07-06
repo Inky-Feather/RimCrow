@@ -50,7 +50,7 @@
                   :placeholder="t('dialog.mod_settings.search_placeholder', '搜索模组、包名、设置或文件')" />
               </div>
               <button v-if="hasActiveFilter" class="rounded-full p-2 m-0 hover:bg-bg-overlay/10 hover:text-accent-danger"
-                v-tooltip="t('common.clear_filter', '清空筛选')" @click="clearFilters">
+                v-tooltip="t('common.action.clear_filter', '清空筛选')" @click="clearFilters">
                 <CircleX class="size-4" />
               </button>
             </div>
@@ -102,7 +102,7 @@
                   </div>
                   <button v-if="modGroup.workshop_id" class="shrink-0 rounded-md border border-border-base/10 px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-primary"
                     @click.stop="appStore.openSteamWorkshopById(modGroup.workshop_id)">
-                    {{ t('common.workshop', '工坊') }}
+                    {{ t('common.store.workshop', '工坊') }}
                   </button>
                 </div>
 
@@ -157,7 +157,7 @@
                             <FileSymlink class="size-4" />
                           </button>
                           <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 p-2 text-text-dim transition-colors hover:bg-bg-overlay/10 hover:text-text-main"
-                            v-tooltip="t('common.open_folder', '打开所在目录')" @click.stop="appStore.openPath(item.file_path)">
+                            v-tooltip="t('common.action.open_containing_folder', '打开所在目录')" @click.stop="appStore.openPath(item.file_path)">
                             <FolderInput class="size-4" />
                           </button>
                           <button v-if="canSyncItem(settingGroup, item)" class="rounded-lg border border-accent-warning/35 bg-accent-warning/10 p-2 text-accent-warning transition-colors hover:bg-accent-warning/18 disabled:opacity-50"
@@ -236,7 +236,7 @@ const stateFilterOptions = computed(() => [
   { value: 'coexist_disabled', label: t('dialog.mod_settings.state.coexist_disabled', '共存停用') },
   { value: 'mod_disabled', label: t('dialog.mod_settings.state.mod_disabled', '模组停用') },
   { value: 'uninstalled', label: t('dialog.mod_settings.status.uninstalled', '已卸载') },
-  { value: 'unknown', label: t('dialog.mod_settings.status.unknown_source', '未知来源') },
+  { value: 'unknown', label: t('common.source.unknown', '未知来源') },
 ])
 const hasActiveFilter = computed(() => !!filterQuery.value.trim() || stateFilter.value !== 'all')
 const normalizeFilterText = (value) => String(value || '').toLowerCase()
@@ -538,7 +538,7 @@ const confidenceText = (confidence) => {
   return {
     medium: t('dialog.mod_settings.confidence.medium', '中置信度'),
     low: t('dialog.mod_settings.confidence.low', '低置信度'),
-    unknown: t('dialog.mod_settings.status.unknown_source', '未知来源'),
+    unknown: t('common.source.unknown', '未知来源'),
   }[String(confidence || '').toLowerCase()] || t('dialog.mod_settings.confidence.assisted', '辅助识别')
 }
 

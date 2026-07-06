@@ -37,7 +37,7 @@
       <div v-if="hasActionableRows" class="flex flex-wrap items-center gap-1.5">
         <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
           :disabled="missingInstallStore.isActionPending" @click="missingInstallStore.selectAll()" >
-          {{ t('common.select_all', '全选') }}
+          {{ t('common.action.select_all', '全选') }}
         </button>
         <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
           :disabled="missingInstallStore.isActionPending" @click="missingInstallStore.clearSelection()" >
@@ -58,7 +58,7 @@
               <div class="flex flex-wrap items-center gap-1.5">
                 <h4 class="text-sm font-black tracking-wide text-text-main">{{ t('dialog.missing_install.unknown_items', '未知项') }}</h4>
                 <span class="rounded-full border border-accent-danger/20 bg-accent-danger/12 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger">
-                  {{ t('common.item_count', '{count} 项', { count: missingInstallStore.state.unknownItems.length }) }}
+                  {{ t('common.count.items', '{count} 项', { count: missingInstallStore.state.unknownItems.length }) }}
                 </span>
               </div>
               <p class="mt-1 text-[0.625rem] leading-4 text-text-dim">{{ t('dialog.missing_install.unknown_items_desc', '这些项目暂时找不到可用来源或依赖目标。') }}</p>
@@ -98,7 +98,7 @@
               <div class="flex flex-wrap items-center gap-1.5">
                 <h4 class="text-sm font-black tracking-wide text-text-main">{{ group.title }}</h4>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
-                  {{ t('common.item_count', '{count} 项', { count: group.rows.length }) }}
+                  {{ t('common.count.items', '{count} 项', { count: group.rows.length }) }}
                 </span>
                 <span v-if="group.key === 'missing_with_installed_replacement'" class="rounded-full border border-accent-primary/20 bg-accent-primary/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-primary" >
                   {{ t('dialog.missing_install.auto_switch_badge', '点击订阅或下载时会自动切换') }}

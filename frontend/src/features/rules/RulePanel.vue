@@ -35,11 +35,11 @@
                     <label v-tooltip="t('tooltip.rule_panel.priority', '规则生效优先级，影响自动排序和问题检测的判定。')" class="text-xs text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                   </span>
                   <div class="flex gap-2">
-                    <button v-if="isPriorityDirty" @click="resetPriority" v-tooltip="t('ui.common.reset', '重置')"
+                    <button v-if="isPriorityDirty" @click="resetPriority" v-tooltip="t('common.action.reset', '重置')"
                       class="text-text-dim hover:text-text-main transition-colors">
                       <RotateCcw class="w-3.5 h-3.5" />
                     </button>
-                    <button @click="savePriority" v-tooltip="isPriorityDirty ? t('tooltip.rule_panel.save_priority', '保存优先级修改') : t('ui.common.no_changes', '无变化')"
+                    <button @click="savePriority" v-tooltip="isPriorityDirty ? t('tooltip.rule_panel.save_priority', '保存优先级修改') : t('common.status.no_changes', '无变化')"
                       :class="[isPriorityDirty ? 'text-accent-success scale-110' : 'text-text-dim opacity-50']"
                       class="transition-all duration-300">
                       <Save class="w-4 h-4" />
@@ -185,7 +185,7 @@
                         <CircleCheckBig v-if="rule.enabled" class="w-4 h-4" />
                         <CircleOff v-else class="w-4 h-4" />
                       </button>
-                      <button @click="editDynamicRule(rule)" v-tooltip="t('ui.common.edit', '编辑')" class="p-2 rounded-lg hover:bg-bg-overlay/10 text-text-dim hover:text-text-main">
+                      <button @click="editDynamicRule(rule)" v-tooltip="t('common.action.edit', '编辑')" class="p-2 rounded-lg hover:bg-bg-overlay/10 text-text-dim hover:text-text-main">
                         <Edit3 class="w-4 h-4" />
                       </button>
                       <button @click="deleteDynamicRule(rule, $event)" v-tooltip="t('common.action.delete', '删除')" class="p-2 rounded-lg hover:bg-accent-danger/10 text-text-dim hover:text-accent-danger">
@@ -763,9 +763,9 @@ const getDisplayName = (id, defaultName) => modStore.displayModName(id, defaultN
 const formatTooltip = (targetId, info) => {
   let text = `ID: ${targetId}`
   if (!info) return text
-  if (typeof info === 'string') return `${text}\n\n${t('ui.common.description', '说明')}:\n${info}`
+  if (typeof info === 'string') return `${text}\n\n${t('common.field.explanation', '说明')}:\n${info}`
   if (info.name) text += `\nName: ${Array.isArray(info.name) ? info.name[0] : info.name}`
-  if (info.comment) text += `\n\n${t('ui.common.description', '说明')}:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
+  if (info.comment) text += `\n\n${t('common.field.explanation', '说明')}:\n${Array.isArray(info.comment) ? info.comment.join('\n') : info.comment}`
   return text
 }
 

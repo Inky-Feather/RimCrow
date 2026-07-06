@@ -14,14 +14,14 @@
       <div class="mt-4 grid grid-cols-2 gap-2">
         <CommonSwitch :label="t('dialog.recommendation_export.option.sequence', '序号')" v-model="form.includeSequence" :description="t('dialog.recommendation_export.option.sequence_desc', '在每个模组前显示 001、002 这类序号。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.cover', '封面图')" v-model="form.includeCover" :description="coverDescription" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.tags', '标签')" v-model="form.includeTags" :description="t('dialog.recommendation_export.option.tags_desc', '导出为 #tag1 #tag2 形式。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.groups', '分组')" v-model="form.includeGroupNames" :description="t('dialog.recommendation_export.option.groups_desc', '导出该模组所属分组名称。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.authors', '作者')" v-model="form.includeAuthors" :description="t('dialog.recommendation_export.option.authors_desc', '导出模组作者名称。')" />
+        <CommonSwitch :label="t('common.field.tags', '标签')" v-model="form.includeTags" :description="t('dialog.recommendation_export.option.tags_desc', '导出为 #tag1 #tag2 形式。')" />
+        <CommonSwitch :label="t('common.field.groups', '分组')" v-model="form.includeGroupNames" :description="t('dialog.recommendation_export.option.groups_desc', '导出该模组所属分组名称。')" />
+        <CommonSwitch :label="t('common.field.author', '作者')" v-model="form.includeAuthors" :description="t('dialog.recommendation_export.option.authors_desc', '导出模组作者名称。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.supported_versions', '支持版本')" v-model="form.includeSupportedVersions" :description="t('dialog.recommendation_export.option.supported_versions_desc', '导出模组支持的游戏版本。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.language_packs', '附加语言包')" v-model="form.includeLanguagePacks" :description="t('dialog.recommendation_export.option.language_packs_desc', '把匹配的语言包名称和网址附在对应模组后。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.workshop_id', '工坊 ID')" v-model="form.includeWorkshopId" :description="t('dialog.recommendation_export.option.workshop_id_desc', '导出 Steam 创意工坊 ID。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.url', '网址')" v-model="form.includeUrl" :description="t('dialog.recommendation_export.option.url_desc', '导出模组来源网址。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.package_id', '包名')" v-model="form.includePackageId" :description="t('dialog.recommendation_export.option.package_id_desc', '默认隐藏，适合需要精确定位时开启。')" />
+        <CommonSwitch :label="t('common.field.package_id', '包名')" v-model="form.includePackageId" :description="t('dialog.recommendation_export.option.package_id_desc', '默认隐藏，适合需要精确定位时开启。')" />
       </div>
 
       <div class="mt-4 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2">
@@ -227,7 +227,7 @@ const previewText = computed(() => {
   if (form.includeAuthors && authors.length) lines.push(t('dialog.recommendation_export.preview.authors', '作者：{authors}', { authors: authors.join('、') }))
   const supportedVersions = normalizeTextList(mod.supported_versions || [])
   if (form.includeSupportedVersions && supportedVersions.length) lines.push(t('dialog.recommendation_export.preview.supported_versions', '支持版本：{versions}', { versions: supportedVersions.join('、') }))
-  lines.push(t('dialog.recommendation_export.preview.intro', '介绍：{text}', { text: form.bodySource === 'description' ? (mod.description || t('ui.common.no_description', '暂无介绍')) : (mod.notes || t('ui.common.no_description', '暂无介绍')) }))
+  lines.push(t('dialog.recommendation_export.preview.intro', '介绍：{text}', { text: form.bodySource === 'description' ? (mod.description || t('dialog.recommendation_export.preview.no_description', '暂无介绍')) : (mod.notes || t('dialog.recommendation_export.preview.no_description', '暂无介绍')) }))
   if (form.includePackageId) lines.push(t('dialog.recommendation_export.preview.package_id', '包名：{packageId}', { packageId: mod.package_id_raw || mod.package_id }))
   if (form.includeWorkshopId && mod.workshop_id) lines.push(t('dialog.recommendation_export.preview.workshop_id', '工坊ID：{workshopId}', { workshopId: mod.workshop_id }))
   if (form.includeUrl && mod.url) lines.push(t('dialog.recommendation_export.preview.url', '网址：{url}', { url: mod.url }))

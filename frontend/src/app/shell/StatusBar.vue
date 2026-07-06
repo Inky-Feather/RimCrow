@@ -4,7 +4,7 @@
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-accent-warn' : 'bg-accent-success']"></div>
-        <span>{{ modStore.isDirty ? t('ui.status_bar.unsaved_changes', '未保存更改') : t('ui.status_bar.ready', '就绪') }}</span>
+        <span>{{ modStore.isDirty ? t('ui.status_bar.unsaved_changes', '未保存更改') : t('common.status.ready', '就绪') }}</span>
       </div>
 
       <div>

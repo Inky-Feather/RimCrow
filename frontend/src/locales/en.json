@@ -75,19 +75,9 @@
       "mods_total": "Total",
       "never_run": "Never",
       "none": "None",
-      "ready": "Ready",
       "selected": "Selected",
       "unknown_version": "Unknown version",
       "unsaved_changes": "Unsaved changes"
-    },
-    "store_type": {
-      "local": "Local",
-      "other": "Other",
-      "self": "Manager",
-      "unknown": "Unknown",
-      "workshop": "Workshop",
-      "core": "Core",
-      "dlc": "DLC"
     },
     "version": {
       "supported": "Supports current version",
@@ -156,35 +146,7 @@
       "web": "Web"
     },
     "common": {
-      "clear": "Clear",
-      "collapse": "Collapse",
-      "count_suffix": " ({count} items)",
-      "count_suffix_with_unit": " ({count})",
-      "position": {
-        "bottom": "bottom",
-        "top": "top"
-      },
-      "restore_default": "Restore default",
-      "count_suffix_spaced": " ({count} items)",
-      "description": "Description",
-      "edit": "Edit",
-      "got_it": "Got it",
-      "group": "Group",
-      "import": "Import",
-      "more_actions": "More actions",
-      "no_changes": "No changes",
-      "open_folder": "Open folder",
-      "remove": "Remove",
-      "rename": "Rename",
-      "reset": "Reset",
-      "unknown_time": "Unknown time",
-      "confirm": "Confirm",
-      "copy": "Copy",
-      "loading": "Loading...",
-      "move": "Move",
-      "no_record": "No record",
-      "create": "Create",
-      "no_description": "No description"
+      "position": {}
     },
     "issue": {
       "default": "Other issue",
@@ -282,7 +244,7 @@
         "file_create_time": "Created time",
         "file_modify_time": "Modified time",
         "file_size": "File size",
-        "last_active_time": "Last activated",
+        "last_active_time": "Activation time",
         "last_moved_time": "Moved time",
         "multiplayer_compat": "Multiplayer compatibility",
         "name": "Name",
@@ -309,16 +271,6 @@
       "Unknown": "Unknown type",
       "XML": "XML-only"
     },
-    "source_type": {
-      "core": "Core game",
-      "dlc": "DLC",
-      "github": "Git repository",
-      "local": "Local mod",
-      "other": "Other source",
-      "self": "Manager download",
-      "unknown": "Unknown source",
-      "workshop": "Steam Workshop"
-    },
     "workspace": {
       "back_home": "Main",
       "sync_ready": "Changes detected",
@@ -341,15 +293,6 @@
           "7_short": "Week",
           "90_short": "Quarter"
         },
-        "sort": {
-          "created": "Recently published",
-          "latest": "Recently updated",
-          "popular": "Most popular",
-          "rating": "Highest rated",
-          "relevance": "Most relevant",
-          "subscriptions": "Most subscribed",
-          "votes_up": "Most upvoted"
-        },
         "sort_state": {
           "days": "{days} days",
           "until_now": "{sort} (all time)",
@@ -369,15 +312,8 @@
           "time": "Time",
           "tooltip": "Sort and advanced search"
         },
-        "cache_sort": {
-          "author": "Sort by author",
-          "latest": "Recently updated",
-          "name": "Sort by name",
-          "subscriptions": "Most subscribed"
-        },
         "detail": {
           "author": {
-            "title": "Author",
             "tooltip": "Author name. In enhanced mode, the public name from the author profile cache is preferred. Click to copy."
           },
           "back": "Back",
@@ -420,7 +356,6 @@
           "no_description": "This mod did not provide a detailed description.",
           "original_name": "Original name",
           "package_id": {
-            "title": "Package ID",
             "tooltip": "Mod package identifier. Usually used for local rule matching and same-mod recognition. Click to copy."
           },
           "project_name": "Item name",
@@ -453,7 +388,6 @@
           "tag": {
             "empty_tooltip": "This item returned no displayable Workshop tags.",
             "hidden_tooltip": "Other tags: {tags}",
-            "title": "Tag",
             "tooltip": "Workshop tag: {tag}"
           },
           "updated": {
@@ -490,7 +424,6 @@
         "item": {
           "subscribed": "Subscribed",
           "subscribers_tooltip": "Subscribers",
-          "unknown_mod": "Unknown mod",
           "workshop_id_tooltip": "Workshop ID",
           "workshop_project": "Workshop item"
         },
@@ -512,7 +445,6 @@
           "searching": "Searching..."
         },
         "search": {
-          "button": "Search",
           "field": {
             "author": "Author",
             "dependency": "Mod dependency",
@@ -550,6 +482,21 @@
           "settings_tooltip": "{stale}Current display: {language}\nCurrent translator: {provider}\n\nClick to switch display language and translator, retranslate, or clear current translation.",
           "stale_prefix": "^^Original text has changed; retranslation is available.^^\n",
           "translate": "Translate"
+        },
+        "cache_sort": {
+          "author": "Sort by author",
+          "latest": "Recently updated",
+          "name": "Sort by name",
+          "subscriptions": "Most subscribed"
+        },
+        "sort": {
+          "created": "Recently published",
+          "latest": "Recently updated",
+          "popular": "Most popular",
+          "rating": "Highest rated",
+          "relevance": "Most relevant",
+          "subscriptions": "Most subscribed",
+          "votes_up": "Most upvoted"
         }
       },
       "library": {
@@ -574,8 +521,7 @@
           "status": "Status: {status}"
         },
         "status": {
-          "scanning": "Scanning...",
-          "ready": "Ready"
+          "scanning": "Scanning..."
         },
         "refresh": {
           "tooltip": "Reload current three-library matrix data",
@@ -605,15 +551,6 @@
         "search": {
           "placeholder": "Search in this library..."
         },
-        "sort": {
-          "to_ascending": "Switch to ascending order",
-          "to_descending": "Switch to descending order",
-          "change": "By change time",
-          "mtime": "By modified time",
-          "ctime": "By created time",
-          "size": "By file size",
-          "name": "By name A-Z"
-        },
         "empty": "No data in this library",
         "path": {
           "missing_record": "Missing record"
@@ -625,10 +562,7 @@
           "copy_field": "Copy {field}{count}",
           "copy_info": "Copy info{count}",
           "field": {
-            "name": "Name",
-            "package_id": "Package ID",
-            "workshop_id": "Workshop ID",
-            "path": "Path"
+            "workshop_id": "Workshop ID"
           },
           "copy_to_local": "Copy to game local library",
           "copy_to_self": "Copy to manager library",
@@ -637,8 +571,6 @@
           "copy_to_workshop": "Copy to Workshop library",
           "move_to_workshop": "Move to Workshop library",
           "view_timeline": "View changes",
-          "open_folder": "Open folder",
-          "open_page": "Open page",
           "jump_same": "Go to same item",
           "jump_replacement": "Go to replacement",
           "transfer": "Transfer...{count}",
@@ -734,6 +666,15 @@
           "conflict": "Conflicting item exists in the current library",
           "replacement": "Replacement item detected",
           "same": "Same item exists in another library"
+        },
+        "sort": {
+          "change": "By change time",
+          "ctime": "By created time",
+          "mtime": "By modified time",
+          "name": "Name A-Z",
+          "size": "By file size",
+          "to_ascending": "Switch to ascending order",
+          "to_descending": "Switch to descending order"
         }
       },
       "collection": {
@@ -813,7 +754,6 @@
           "title": "Delete record"
         },
         "search": {
-          "button": "Search",
           "field": {
             "tag": "Tag",
             "text": "Search text"
@@ -844,7 +784,6 @@
         "no_cover": "No cover",
         "subscribed": "Subscribed",
         "unknown_author": "Unknown author",
-        "unknown_mod": "Unknown mod",
         "unnamed_mod": "Unnamed mod"
       },
       "startup": {
@@ -1185,19 +1124,19 @@
         "default_reason": "File operation failed"
       },
       "search_placeholder": "Filter by name, package ID, Workshop ID, or path...",
-      "sort": {
-        "ctime": "By created time",
-        "mtime": "By modified time",
-        "name": "By name A-Z",
-        "size": "By file size"
-      },
       "source": {
         "all": "All sources",
         "local": "Game local",
         "self": "Manager library",
         "workshop": "Workshop"
       },
-      "title": "Deactivated"
+      "title": "Deactivated",
+      "sort": {
+        "ctime": "By created time",
+        "mtime": "By modified time",
+        "name": "Name A-Z",
+        "size": "By file size"
+      }
     },
     "load_order": {
       "conflict": {
@@ -2114,7 +2053,6 @@
       "new_version_title": "New version v{version} available",
       "single_source_message": "Source: {source}. File size: {size}.",
       "source_meta": "Source: {source}",
-      "unknown_source": "Unknown source",
       "update_now": "Update now"
     },
     "update_modal": {
@@ -2179,7 +2117,6 @@
       "log_viewer": "Logs",
       "mod_residue_cleanup": "View and clean uninstalled residues",
       "mod_settings": "View mod config",
-      "open_folder": "Open folder",
       "rules": "Rules",
       "settings": "Settings",
       "texture_opt": "Texture optimization",
@@ -2292,6 +2229,9 @@
         "title": "Storage location: {source}",
         "switch_local": "Storage location: {source}\nClick to switch to local copy",
         "switch_workshop": "Storage location: {source}\nClick to switch to Workshop copy"
+      },
+      "color": {
+        "clear": "Clear"
       }
     },
     "mod_list": {
@@ -3225,8 +3165,7 @@
       "status": {
         "disabled": "Deactivated",
         "enabled": "Activated",
-        "uninstalled": "Uninstalled",
-        "unknown_source": "Unknown source"
+        "uninstalled": "Uninstalled"
       },
       "sync_failed": "Failed to overwrite mod settings file. Check whether the target file is in use by the game or path permissions allow writing.",
       "sync_success": "Current active file overwritten",
@@ -3268,20 +3207,16 @@
       "mod_count": "{count} mods",
       "open_output_dir": "Open export folder",
       "option": {
-        "authors": "Authors",
         "authors_desc": "Export mod author names.",
         "cover": "Cover image",
-        "groups": "Groups",
         "groups_desc": "Export group names that contain this mod.",
         "language_packs": "Add language packs",
         "language_packs_desc": "Attach matching language pack names and URLs after the corresponding mod.",
-        "package_id": "Package ID",
         "package_id_desc": "Hidden by default; enable when exact identification is needed.",
         "sequence": "Sequence",
         "sequence_desc": "Show 001, 002 style sequence numbers before each mod.",
         "supported_versions": "Supported versions",
         "supported_versions_desc": "Export supported game versions for each mod.",
-        "tags": "Tags",
         "tags_desc": "Export as #tag1 #tag2.",
         "url": "URL",
         "url_desc": "Export mod source URL.",
@@ -3299,7 +3234,8 @@
         "package_id": "Package ID: {packageId}",
         "supported_versions": "Supported versions: {versions}",
         "url": "URL: {url}",
-        "workshop_id": "Workshop ID: {workshopId}"
+        "workshop_id": "Workshop ID: {workshopId}",
+        "no_description": "No introduction"
       },
       "preview_empty": "There are no mods to export.",
       "start_export": "Start export",
@@ -4624,7 +4560,6 @@
       "prepare_generate_mod": "Preparing generation: {mod_name}",
       "prepare_task": "Preparing task...",
       "queue_running": "Running texture queue...",
-      "ready": "Ready",
       "retry_recoverable": "Retrying recoverable failed items",
       "retry_start": "Main batches completed; retrying recoverable failed items",
       "scan_cancelled": "Texture scan task cancelled",
@@ -5236,7 +5171,6 @@
         "other_section_group": "Other section groups..."
       },
       "move_to": "Move to",
-      "open_folder": "Open folder",
       "open_url": "Open web page",
       "open_workshop": "Open Workshop",
       "section": {
@@ -5318,8 +5252,7 @@
       "copy_mod_info": "Copy mod info{countText}",
       "delete_files": "Delete files{countText}",
       "restore": "Reactivate{countText}",
-      "unsubscribe": "Unsubscribe{countText}",
-      "visit_page": "Open page"
+      "unsubscribe": "Unsubscribe{countText}"
     },
     "group_list": {
       "activate": "Activate{countText}",
@@ -5362,11 +5295,45 @@
       "open_link": "Open link",
       "restart_later": "Restart later",
       "save": "Save",
-      "refresh": "Refresh"
+      "refresh": "Refresh",
+      "confirm": "Confirm",
+      "confirm_delete": "Confirm delete",
+      "copy": "Copy",
+      "create": "Create",
+      "deactivate": "Deactivate",
+      "import": "Import",
+      "more_actions": "More actions",
+      "move": "Move",
+      "open_folder": "Open folder",
+      "remove": "Remove",
+      "rename": "Rename",
+      "reset": "Reset",
+      "restore_default": "Restore default",
+      "search": "Search",
+      "skip": "Skip",
+      "update": "Update",
+      "visit_page": "Visit page",
+      "clear_all": "Clear all",
+      "clear_filter": "Clear filter",
+      "clear_selection": "Clear selection",
+      "continue": "Continue",
+      "copy_file_path": "Copy file path",
+      "copy_full_path": "Copy full path",
+      "copy_relative_path": "Copy relative path",
+      "delete_permanently": "Delete permanently",
+      "got_it": "Got it",
+      "got_it_verbose": "I understand",
+      "later_short": "Later",
+      "ok": "OK",
+      "open": "Open",
+      "open_containing_folder": "Open containing folder",
+      "open_file": "Open file",
+      "open_mod_folder": "Open mod folder",
+      "open_path": "Open path",
+      "open_workshop": "Open Workshop",
+      "select_all": "Select all",
+      "select_file": "Select file"
     },
-    "continue": "Continue",
-    "content": "content",
-    "file": "File",
     "status": {
       "checking": "Checking",
       "default": "Default",
@@ -5377,59 +5344,31 @@
       "pending": "Queued",
       "processing": "Processing",
       "none": "None",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "loading": "Loading...",
+      "ready": "Ready",
+      "unknown_path": "Unknown path",
+      "unknown_version": "Unknown version",
+      "no_changes": "No changes",
+      "no_record": "No record",
+      "not_selected": "Not selected",
+      "processing_dots": "Processing...",
+      "uncategorized": "Uncategorized",
+      "unknown_time": "Unknown time"
     },
-    "task": "Task",
-    "clear_all": "Clear all",
-    "clear_filter": "Clear filter",
-    "clear_selection": "Clear selection",
-    "delete_permanently": "Delete permanently",
-    "got_it": "Got it",
-    "item_count": "{count} items",
-    "open": "Open",
-    "open_folder": "Open containing folder",
-    "open_path": "Open path",
-    "open_workshop": "Open Workshop",
-    "remove": "Remove",
-    "select_all": "Select all",
-    "workshop": "Workshop",
-    "confirm_delete": "Confirm delete",
-    "copy_file_path": "Copy file path",
-    "copy_full_path": "Copy full path",
-    "copy_relative_path": "Copy relative path",
-    "file_path": "File path",
-    "full_path": "Full path",
-    "item": "item",
-    "open_file": "Open file",
-    "open_mod_folder": "Open mod folder",
-    "processing": "Processing...",
-    "ready": "Ready",
-    "relative_path": "Relative path",
-    "search": "Search",
-    "select_file": "Select file",
     "store": {
       "local": "Local",
       "self": "Manager",
-      "workshop": "Workshop"
+      "workshop": "Workshop",
+      "core": "Core",
+      "dlc": "DLC",
+      "other": "Other",
+      "unknown": "Unknown"
     },
-    "unknown_path": "Unknown path",
-    "unknown_version": "Unknown version",
-    "visit_page": "Visit page",
-    "confirm": "Confirm",
-    "later": "Later",
-    "ok": "OK",
-    "update": "Update",
-    "not_selected": "Not selected",
-    "id": "ID",
-    "name": "Name",
-    "description": "Description",
-    "no_description": "No description",
-    "category": "Category",
-    "uncategorized": "Uncategorized",
-    "deactivate": "Deactivate",
-    "skip": "Skip",
     "entity": {
-      "unknown_mod": "Unknown mod"
+      "unknown_mod": "Unknown mod",
+      "file": "File",
+      "task": "Task"
     },
     "field": {
       "alias_name": "Alias",
@@ -5448,7 +5387,40 @@
       "tags": "Tags",
       "type": "Type",
       "url": "URL",
-      "workshop_id": "Workshop ID"
+      "workshop_id": "Workshop ID",
+      "category": "Category",
+      "content": "Content",
+      "description": "Description",
+      "explanation": "Notes",
+      "full_path": "Full path",
+      "id": "ID",
+      "relative_path": "Relative path"
+    },
+    "source": {
+      "core": "Game core",
+      "dlc": "DLC",
+      "github": "Git repository",
+      "local": "Local mod",
+      "other": "Other source",
+      "self": "Manager download",
+      "unknown": "Unknown source",
+      "workshop": "Steam Workshop"
+    },
+    "count": {
+      "items": "{count} items",
+      "suffix": " ({count} items)",
+      "suffix_spaced": " ({count} items)",
+      "suffix_unit": " ({count})"
+    },
+    "empty": {
+      "no_description": "No description"
+    },
+    "position": {
+      "bottom": "Bottom",
+      "top": "Top"
+    },
+    "unit": {
+      "item": "item"
     }
   },
   "confirm": {

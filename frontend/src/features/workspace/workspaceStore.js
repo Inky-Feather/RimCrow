@@ -523,7 +523,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const status = String(item?.status || '').trim()
     return {
       id: `${status}:${item?.pathHash || workshopId || index}`,
-      title: item?.name || workshopId || t('ui.workspace.common.unknown_mod', '未知模组'),
+      title: item?.name || workshopId || t('common.entity.unknown_mod', '未知模组'),
       description: item?.path || (workshopId ? `Workshop ID: ${workshopId}` : ''),
       meta: [getStartupEventGroupLabel(status), workshopId ? `Workshop ID: ${workshopId}` : ''].filter(Boolean),
       status,
@@ -1404,7 +1404,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       ...item,
       workshop_id: workshopId,
       title: rawTitle,
-      name: String(item.name || rawTitle || t('ui.workspace.common.unknown_mod', '未知模组')).trim(),
+      name: String(item.name || rawTitle || t('common.entity.unknown_mod', '未知模组')).trim(),
       original_title: rawTitle,
       package_id: String(item.package_id || '').trim(),
       author,
@@ -2434,7 +2434,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const check = await confirmStore.confirmAction(
       t('dialog.workspace.transfer.title', '确认转移'),
       t('dialog.workspace.transfer.message', '确定要将选中的模组 {action} 到 [{target}] 库吗？{warning}', {
-        action: mode === 'move' ? t('ui.common.move', '移动') : t('ui.common.copy', '复制'),
+        action: mode === 'move' ? t('common.action.move', '移动') : t('common.action.copy', '复制'),
         target: getSourceTypeLabel(target_store),
         warning: target_store === 'workshop' ? t('dialog.workspace.transfer.workshop_warning', '\n注意：转移到创意工坊目录后可能会被 Steam 再次改变') : '',
       }),

@@ -92,7 +92,7 @@
         :class="actionClass('secondary')"
         @click="workspaceStore.closeStartupInventoryDialog"
       >
-        {{ t('ui.common.confirm', '确认') }}
+        {{ t('common.action.confirm', '确认') }}
       </button>
     </template>
   </CommonModalShell>

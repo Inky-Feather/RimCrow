@@ -513,7 +513,7 @@ const reasoningMode = computed({
 })
 const sessionModelTooltip = computed(() => {
   const provider = String(sessionModelConfig.value.provider || 'unknown')
-  const model = String(sessionModel.value || t('common.not_selected', '未选择'))
+  const model = String(sessionModel.value || t('common.status.not_selected', '未选择'))
   return [
     t('ai.panel.model_tip_intro', '当前助手面板临时使用的模型。'),
     t('ai.panel.model_tip_provider', '服务类型 ^^{provider}^^', { provider }),

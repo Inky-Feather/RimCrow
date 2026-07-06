@@ -493,10 +493,10 @@ const buildMatrixCopyMenuItem = (selectedMods) => {
     icon: Copy,
     disabled: selectedMods.length === 0,
     children: [
-      copyField(t('ui.workspace.matrix.menu.field.name', '名称'), mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
-      copyField(t('ui.workspace.matrix.menu.field.package_id', '包名'), mod => mod.package_id),
+      copyField(t('common.field.name', '名称'), mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
+      copyField(t('common.field.package_id', '包名'), mod => mod.package_id),
       copyField(t('ui.workspace.matrix.menu.field.workshop_id', '工坊 ID'), mod => mod.workshop_id),
-      copyField(t('ui.workspace.matrix.menu.field.path', '路径'), mod => mod.path),
+      copyField(t('common.field.path', '路径'), mod => mod.path),
     ],
   }
 }
@@ -554,10 +554,10 @@ const handleContextMenu = async (event, targetMod) => {
   // 1. 常规信息操作
   if (!targetUnavailable) {
     menuItems.push({ label: t('ui.workspace.matrix.menu.view_timeline', '查看变动'), icon: Activity, action: () => emit('open-timeline', targetMod) })
-    menuItems.push({ label: t('ui.workspace.matrix.menu.open_folder', '打开文件夹'), icon: FolderInput, action: () => appStore.openPath(targetMod.path) })
+    menuItems.push({ label: t('common.action.open_folder', '打开文件夹'), icon: FolderInput, action: () => appStore.openPath(targetMod.path) })
   }
   menuItems.push(buildMatrixCopyMenuItem(selectedMods))
-  menuItems.push(buildModExternalMenuItem(targetMod, appStore, { label: t('ui.workspace.matrix.menu.open_page', '访问页面') }))
+  menuItems.push(buildModExternalMenuItem(targetMod, appStore, { label: t('common.action.visit_page', '访问页面') }))
 
   const sameJumpItem = buildJumpMenuItem(t('ui.workspace.matrix.menu.jump_same', '跳转到相同项'), CornerUpRight, sameTargets)
   if (sameJumpItem) menuItems.push(sameJumpItem)

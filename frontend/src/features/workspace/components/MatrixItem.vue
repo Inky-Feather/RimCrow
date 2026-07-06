@@ -104,7 +104,7 @@
             <div class="space-y-1.5 text-xs text-text-dim font-mono">
               <div v-for="entry in detailTimeEntries" :key="entry.key" class="flex justify-between gap-3">
                 <span class="opacity-60">{{ entry.label }}:</span>
-                <span class="text-right">{{ formatTime(entry.timestamp, true) || t('ui.common.no_record', '无记录') }}</span>
+                <span class="text-right">{{ formatTime(entry.timestamp, true) || t('common.status.no_record', '无记录') }}</span>
               </div>
               <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.storage', '储存占用:') }}</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
               <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.same', '跨库同项:') }}</span> <span>{{ sameTargets.length || t('common.status.none', '无') }}</span></div>

@@ -29,7 +29,7 @@
 
             <button v-show="!fileSearchStore.isBusy" class="flex shrink-0 px-2 py-1.5 items-center justify-center gap-2 rounded-xl bg-accent-primary text-sm font-black text-on-accent-primary transition-colors hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-55"
               :disabled="fileSearchStore.isBusy" @click="fileSearchStore.startSearch()" >
-              <Search class="size-4" />{{ t('common.search', '搜索') }}
+              <Search class="size-4" />{{ t('common.action.search', '搜索') }}
             </button>
             <button v-show="fileSearchStore.isRunning" class="flex shrink-0 px-2 py-1.5 items-center justify-center gap-2 rounded-xl border border-accent-danger/28 bg-accent-danger/10 text-sm font-bold text-accent-danger transition-colors hover:bg-accent-danger/16 disabled:cursor-not-allowed disabled:opacity-45"
               :disabled="!fileSearchStore.isRunning" @click="fileSearchStore.cancelSearch()" >
@@ -192,11 +192,11 @@
                       {{ t('dialog.file_search.file_truncated', '文件过大已截断') }}
                     </span>
                     <button class="flex items-center justify-center text-xs transition-colors text-text-dim hover:text-text-main disabled:opacity-40"
-                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFolder" v-tooltip="t('common.open_folder', '打开所在目录')" >
+                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFolder" v-tooltip="t('common.action.open_containing_folder', '打开所在目录')" >
                       <FolderInput class="size-5" />
                     </button>
                     <button class="flex items-center justify-center text-xs text-text-dim transition-colors hover:text-text-main disabled:opacity-40"
-                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFile" v-tooltip="t('common.open_file', '打开文件')" >
+                      :disabled="!fileSearchStore.viewerState.filePath" @click="openCurrentFile" v-tooltip="t('common.action.open_file', '打开文件')" >
                       <FileSymlink class="size-5" />
                     </button>
                   </div>
@@ -747,10 +747,10 @@ const selectTreeMatch = async (row) => {
 const openModMenu = (event, group) => {
   const modSource = buildFileSearchModSource(group)
   contextMenuStore.open(event, [
-    { label: t('common.open_mod_folder', '打开模组目录'), icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
+    { label: t('common.action.open_mod_folder', '打开模组目录'), icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
     { divider: true },
     buildModInfoCopyMenuItem(modSource, { label: t('ui.mod.action.copy_info', '复制模组信息') }),
-    buildModExternalMenuItem(modSource, appStore, { label: t('common.visit_page', '访问页面') }),
+    buildModExternalMenuItem(modSource, appStore, { label: t('common.action.visit_page', '访问页面') }),
   ], group)
 }
 
@@ -758,12 +758,12 @@ const openFileMenu = (event, group, file) => {
   const firstRow = file.rows?.[0]
   const relativePath = getRelativeSearchFilePath(group, file)
   contextMenuStore.open(event, [
-    { label: t('common.open_file', '打开文件'), icon: FileCode2, disabled: !firstRow, action: () => fileSearchStore.openResultFile(firstRow) },
-    { label: t('common.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !firstRow, action: () => fileSearchStore.openResultFolder(firstRow) },
-    { label: t('common.open_mod_folder', '打开模组目录'), icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
+    { label: t('common.action.open_file', '打开文件'), icon: FileCode2, disabled: !firstRow, action: () => fileSearchStore.openResultFile(firstRow) },
+    { label: t('common.action.open_containing_folder', '打开所在目录'), icon: FolderOpen, disabled: !firstRow, action: () => fileSearchStore.openResultFolder(firstRow) },
+    { label: t('common.action.open_mod_folder', '打开模组目录'), icon: FolderOpen, action: () => fileSearchStore.openResultModFolder(group) },
     { divider: true },
-    { label: t('common.copy_file_path', '复制文件路径'), icon: Copy, disabled: !file?.file_path, action: () => copyTextToClipboard(file.file_path, t('common.file_path', '文件路径')) },
-    { label: t('common.copy_relative_path', '复制相对路径'), icon: Copy, disabled: !relativePath, action: () => copyTextToClipboard(relativePath, t('common.relative_path', '相对路径')) },
+    { label: t('common.action.copy_file_path', '复制文件路径'), icon: Copy, disabled: !file?.file_path, action: () => copyTextToClipboard(file.file_path, t('common.field.file_path', '文件路径')) },
+    { label: t('common.action.copy_relative_path', '复制相对路径'), icon: Copy, disabled: !relativePath, action: () => copyTextToClipboard(relativePath, t('common.field.relative_path', '相对路径')) },
     { label: t('dialog.file_search.copy_matched_line', '复制匹配行'), icon: Copy, disabled: !firstRow?.matched_line, action: () => copyTextToClipboard(firstRow.matched_line, t('dialog.file_search.matched_line', '匹配行')) },
   ], { group, file })
 }

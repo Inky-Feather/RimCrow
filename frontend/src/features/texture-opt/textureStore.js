@@ -228,7 +228,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!task) {
       return {
         percent: 0,
-        message: t('tasks.texture.ready', '就绪'),
+        message: t('common.status.ready', '就绪'),
         details: {
           local_started_at: 0,
           local_finished_at: 0,

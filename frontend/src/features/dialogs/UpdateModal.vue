@@ -88,7 +88,7 @@
         <footer class="px-8 py-4 border-t border-border-base/5 bg-bg-overlay/5 flex justify-end shrink-0 relative z-10">
           <button @click="closeModal" 
             class="px-8 py-2.5 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary text-sm font-bold rounded-xl shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.4)] hover:scale-105 active:scale-95 transition-all">
-            {{ t('common.got_it', '我知道了') }}
+            {{ t('common.action.got_it_verbose', '我知道了') }}
           </button>
         </footer>
   </CommonModalShell>

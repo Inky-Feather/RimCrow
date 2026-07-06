@@ -85,7 +85,7 @@
                       <svg v-else class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
                     </button>
                     <button class="p-2 rounded-md hover:bg-accent-danger/20 text-accent-danger transition-colors" @click="removeItem(group.taskId, index)">
-	                      <Trash2 class="size-4" v-tooltip="t('common.remove', '移除')" />
+	                      <Trash2 class="size-4" v-tooltip="t('common.action.remove', '移除')" />
                     </button>
                   </div>
                 </div>
@@ -223,7 +223,7 @@ const removeTaskGroup = async (taskId) => {
 	  const ok = await confirmStore.confirmAction(
 	    t('dialog.mod_alias_review.remove_group', '移除此组'),
 	    t('dialog.mod_alias_review.remove_group_message', '确定要移除「{title}」吗？\n这组未应用的别名和备注结果会被丢弃。', { title: group?.title || t('dialog.mod_alias_review.default_task_title', '模组别名生成任务') }),
-	    { type: 'error', confirmText: t('common.remove', '移除') }
+	    { type: 'error', confirmText: t('common.action.remove', '移除') }
 	  )
   if (!ok) return
   aiStore.removeModAliasReviewTask(taskId)

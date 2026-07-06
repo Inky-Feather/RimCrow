@@ -83,7 +83,7 @@
                 <Copy class="w-4 h-4" />
               </button>
               
-	              <button @click="clearLogSelection" class="rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-accent-danger" v-tooltip="t('common.clear_selection', '取消选择')">
+	              <button @click="clearLogSelection" class="rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-accent-danger" v-tooltip="t('common.action.clear_selection', '取消选择')">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>

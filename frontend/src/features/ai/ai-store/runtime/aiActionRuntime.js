@@ -414,7 +414,7 @@ export const createActionExecutorRegistry = ({
     const confirmed = await confirmStore.confirmAction(
       confirmMeta.title || t('ai.actions.fallback.confirm_title', '确认执行操作'),
       confirmMeta.message || getActionPreview(action) || getActionDescription(action),
-      { type: 'warning', confirmText: confirmMeta.confirmText || t('common.confirm', '确认'), cancelText: t('common.action.cancel', '取消') },
+      { type: 'warning', confirmText: confirmMeta.confirmText || t('common.action.confirm', '确认'), cancelText: t('common.action.cancel', '取消') },
     )
     if (!confirmed) return
 
@@ -424,7 +424,7 @@ export const createActionExecutorRegistry = ({
     if (postSuccessMeta.message && await confirmStore.confirmAction(
       postSuccessMeta.title || t('ai.actions.fallback.applied_title', '操作已应用'),
       postSuccessMeta.message,
-      { type: 'success', confirmText: postSuccessMeta.confirmText || t('common.ok', '确定'), cancelText: t('common.later', '稍后') },
+      { type: 'success', confirmText: postSuccessMeta.confirmText || t('common.action.ok', '确定'), cancelText: t('common.action.later_short', '稍后') },
     )) {
       await modStore.autoSortMods()
       return

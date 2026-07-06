@@ -120,37 +120,6 @@
       "share_code": "分享码",
       "title": "备份"
     },
-    "common": {
-      "clear": "清除",
-      "collapse": "收起",
-      "confirm": "确认",
-      "copy": "复制",
-      "count_suffix": " ({count}项)",
-      "count_suffix_spaced": " ({count} 项)",
-      "count_suffix_with_unit": " ({count}个)",
-      "create": "创建",
-      "description": "说明",
-      "edit": "编辑",
-      "got_it": "知道了",
-      "group": "分组",
-      "import": "导入",
-      "loading": "加载中...",
-      "more_actions": "更多操作",
-      "move": "移动",
-      "no_changes": "无变化",
-      "no_description": "暂无介绍",
-      "no_record": "无记录",
-      "open_folder": "打开文件夹",
-      "position": {
-        "bottom": "底部",
-        "top": "顶部"
-      },
-      "remove": "移除",
-      "rename": "重命名",
-      "reset": "重置",
-      "restore_default": "恢复默认",
-      "unknown_time": "未知时间"
-    },
     "diff_view": {
       "action": {
         "apply_file_order": "应用文件序列",
@@ -1267,16 +1236,6 @@
         "unnamed": "未命名主题"
       }
     },
-    "source_type": {
-      "core": "游戏本体",
-      "dlc": "DLC",
-      "github": "Git 仓库",
-      "local": "本地模组",
-      "other": "其它来源",
-      "self": "管理器下载",
-      "unknown": "未知来源",
-      "workshop": "Steam 创意工坊"
-    },
     "status_bar": {
       "history": "历史状态",
       "last_app_run": "上次软件运行",
@@ -1285,19 +1244,9 @@
       "mods_total": "模组总数",
       "never_run": "未运行",
       "none": "无",
-      "ready": "就绪",
       "selected": "已选择",
       "unknown_version": "未知版本",
       "unsaved_changes": "未保存更改"
-    },
-    "store_type": {
-      "core": "本体",
-      "dlc": "DLC",
-      "local": "本地",
-      "other": "其它",
-      "self": "管理器",
-      "unknown": "未知",
-      "workshop": "工坊"
     },
     "tag": {
       "placeholder": "输入并回车..."
@@ -1400,7 +1349,6 @@
       "new_version_title": "发现新版本 v{version}",
       "single_source_message": "来源: {source}。文件大小: {size}。",
       "source_meta": "来源: {source}",
-      "unknown_source": "未知来源",
       "update_now": "立即更新"
     },
     "update_modal": {
@@ -1505,7 +1453,6 @@
           "title": "删除记录"
         },
         "search": {
-          "button": "搜索",
           "field": {
             "tag": "标签",
             "text": "搜索文本"
@@ -1536,7 +1483,6 @@
         "no_cover": "无封面",
         "subscribed": "已订阅",
         "unknown_author": "未知作者",
-        "unknown_mod": "未知模组",
         "unnamed_mod": "未命名模组"
       },
       "github": {
@@ -1692,7 +1638,6 @@
         },
         "scanning_all_locations": "正在扫描所有存储位置...",
         "status": {
-          "ready": "就绪",
           "scanning": "扫描中..."
         },
         "summary": {
@@ -1771,9 +1716,6 @@
           "delete_files": "删除文件{count}",
           "download_to_self": "下载到管理器{count}",
           "field": {
-            "name": "名称",
-            "package_id": "包名",
-            "path": "路径",
             "workshop_id": "工坊 ID"
           },
           "jump_group_label": "{label} ({count} 项)",
@@ -1783,8 +1725,6 @@
           "move_to_local": "移动到 游戏本地库",
           "move_to_self": "移动到 管理器库",
           "move_to_workshop": "移动到 创意工坊库",
-          "open_folder": "打开文件夹",
-          "open_page": "访问页面",
           "open_workshop": "访问创意工坊",
           "redownload_missing": {
             "label": "重新下载缺失项{count}",
@@ -1936,7 +1876,6 @@
         },
         "detail": {
           "author": {
-            "title": "作者",
             "tooltip": "作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。"
           },
           "back": "返回上一层",
@@ -1979,7 +1918,6 @@
           "no_description": "该模组没有提供详细描述。",
           "original_name": "原始名称",
           "package_id": {
-            "title": "包名",
             "tooltip": "模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。"
           },
           "project_name": "项目名称",
@@ -2012,7 +1950,6 @@
           "tag": {
             "empty_tooltip": "该项目没有返回可展示的工坊标签。",
             "hidden_tooltip": "其余标签：{tags}",
-            "title": "标签",
             "tooltip": "工坊标签：{tag}"
           },
           "updated": {
@@ -2049,7 +1986,6 @@
         "item": {
           "subscribed": "已订阅",
           "subscribers_tooltip": "订阅人数",
-          "unknown_mod": "未知模组",
           "workshop_id_tooltip": "工坊ID",
           "workshop_project": "工坊项目"
         },
@@ -2071,7 +2007,6 @@
           "searching": "正在检索..."
         },
         "search": {
-          "button": "搜索",
           "field": {
             "author": "作者",
             "dependency": "模组依赖",
@@ -2268,7 +2203,6 @@
       "log_viewer": "日志页面",
       "mod_residue_cleanup": "查看和清理卸载残留",
       "mod_settings": "查看模组设置文件",
-      "open_folder": "打开文件夹",
       "rules": "规则页面",
       "settings": "设置",
       "texture_opt": "贴图优化",
@@ -2332,6 +2266,9 @@
       "coexist": {
         "outdated": "工坊版本已更新，可右键同步本地共存模组",
         "synced": "本地共存副本与工坊版本一致"
+      },
+      "color": {
+        "clear": "清除"
       },
       "group": {
         "open": "分组：{name}\n点击打开分组页"
@@ -3401,8 +3338,7 @@
       "status": {
         "disabled": "已停用",
         "enabled": "已启用",
-        "uninstalled": "已卸载",
-        "unknown_source": "未知来源"
+        "uninstalled": "已卸载"
       },
       "sync_failed": "覆盖模组设置文件失败。请检查目标文件是否被游戏占用、路径权限是否允许写入。",
       "sync_success": "已覆盖当前激活文件",
@@ -3589,20 +3525,16 @@
       "mod_count": "{count} 个模组",
       "open_output_dir": "打开导出目录",
       "option": {
-        "authors": "作者",
         "authors_desc": "导出模组作者名称。",
         "cover": "封面图",
-        "groups": "分组",
         "groups_desc": "导出该模组所属分组名称。",
         "language_packs": "附加语言包",
         "language_packs_desc": "把匹配的语言包名称和网址附在对应模组后。",
-        "package_id": "包名",
         "package_id_desc": "默认隐藏，适合需要精确定位时开启。",
         "sequence": "序号",
         "sequence_desc": "在每个模组前显示 001、002 这类序号。",
         "supported_versions": "支持版本",
         "supported_versions_desc": "导出模组支持的游戏版本。",
-        "tags": "标签",
         "tags_desc": "导出为 #tag1 #tag2 形式。",
         "url": "网址",
         "url_desc": "导出模组来源网址。",
@@ -3616,6 +3548,7 @@
         "language_pack": "语言包：{name}",
         "language_pack_url": "语言包网址：{url}",
         "name": "名称：{name}",
+        "no_description": "暂无介绍",
         "original_name": "原名：{name}",
         "package_id": "包名：{packageId}",
         "supported_versions": "支持版本：{versions}",
@@ -4563,7 +4496,6 @@
       "prepare_generate_mod": "准备生成: {mod_name}",
       "prepare_task": "准备任务...",
       "queue_running": "正在执行贴图队列...",
-      "ready": "就绪",
       "retry_recoverable": "统一重试可恢复失败项",
       "retry_start": "主批次完成，开始统一重试可恢复失败项",
       "scan_cancelled": "贴图扫描任务已取消",
@@ -5386,46 +5318,87 @@
       "add": "添加",
       "cancel": "取消",
       "clear": "清空",
+      "clear_all": "全部清空",
+      "clear_filter": "清空筛选",
+      "clear_selection": "取消选择",
       "close": "关闭",
       "collapse": "收起",
+      "confirm": "确认",
+      "confirm_delete": "确认删除",
+      "continue": "继续",
+      "copy": "复制",
+      "copy_file_path": "复制文件路径",
+      "copy_full_path": "复制完整路径",
       "copy_group_number": "复制群号",
       "copy_password": "复制密码",
+      "copy_relative_path": "复制相对路径",
       "copy_url": "复制地址",
+      "create": "创建",
+      "deactivate": "禁用",
       "delete": "删除",
+      "delete_permanently": "彻底删除",
       "edit": "编辑",
       "expand": "展开",
+      "got_it": "知道了",
+      "got_it_verbose": "我知道了",
+      "import": "导入",
       "later": "稍后处理",
+      "later_short": "稍后",
+      "more_actions": "更多操作",
+      "move": "移动",
+      "ok": "确定",
+      "open": "打开",
+      "open_containing_folder": "打开所在目录",
+      "open_file": "打开文件",
+      "open_folder": "打开文件夹",
       "open_link": "打开链接",
+      "open_mod_folder": "打开模组目录",
+      "open_path": "打开路径",
+      "open_workshop": "打开工坊",
       "refresh": "刷新",
+      "remove": "移除",
+      "rename": "重命名",
+      "reset": "重置",
       "restart_later": "稍后重启",
-      "save": "保存"
+      "restore_default": "恢复默认",
+      "save": "保存",
+      "search": "搜索",
+      "select_all": "全选",
+      "select_file": "选择文件",
+      "skip": "跳过",
+      "update": "更新",
+      "visit_page": "访问页面"
     },
-    "category": "分类",
-    "clear_all": "全部清空",
-    "clear_filter": "清空筛选",
-    "clear_selection": "取消选择",
-    "confirm": "确认",
-    "confirm_delete": "确认删除",
-    "content": "内容",
-    "continue": "继续",
-    "copy_file_path": "复制文件路径",
-    "copy_full_path": "复制完整路径",
-    "copy_relative_path": "复制相对路径",
-    "deactivate": "禁用",
-    "delete_permanently": "彻底删除",
-    "description": "描述",
+    "count": {
+      "items": "{count} 项",
+      "suffix": " ({count}项)",
+      "suffix_spaced": " ({count} 项)",
+      "suffix_unit": " ({count}个)"
+    },
+    "empty": {
+      "no_description": "无描述"
+    },
     "entity": {
+      "file": "文件",
+      "task": "任务",
       "unknown_mod": "未知模组"
     },
     "field": {
       "alias_name": "别名",
       "author": "作者",
+      "category": "分类",
+      "content": "内容",
+      "description": "描述",
+      "explanation": "说明",
       "file_path": "文件路径",
+      "full_path": "完整路径",
       "groups": "分组",
+      "id": "ID",
       "language": "语言",
       "name": "名称",
       "package_id": "包名",
       "path": "路径",
+      "relative_path": "相对路径",
       "source": "来源",
       "source_url": "来源地址",
       "store": "位置",
@@ -5436,56 +5409,54 @@
       "url": "网址",
       "workshop_id": "工坊ID"
     },
-    "file": "文件",
-    "file_path": "文件路径",
-    "full_path": "完整路径",
-    "got_it": "我知道了",
-    "id": "ID",
-    "item": "项",
-    "item_count": "{count} 项",
-    "later": "稍后",
-    "name": "名称",
-    "no_description": "无描述",
-    "not_selected": "未选择",
-    "ok": "确定",
-    "open": "打开",
-    "open_file": "打开文件",
-    "open_folder": "打开所在目录",
-    "open_mod_folder": "打开模组目录",
-    "open_path": "打开路径",
-    "open_workshop": "打开工坊",
-    "processing": "处理中...",
-    "ready": "就绪",
-    "relative_path": "相对路径",
-    "remove": "移除",
-    "search": "搜索",
-    "select_all": "全选",
-    "select_file": "选择文件",
-    "skip": "跳过",
+    "position": {
+      "bottom": "底部",
+      "top": "顶部"
+    },
+    "source": {
+      "core": "游戏本体",
+      "dlc": "DLC",
+      "github": "Git 仓库",
+      "local": "本地模组",
+      "other": "其它来源",
+      "self": "管理器下载",
+      "unknown": "未知来源",
+      "workshop": "Steam 创意工坊"
+    },
     "status": {
       "cancelled": "已取消",
       "checking": "检查中",
       "default": "默认",
       "failed": "失败",
       "inactive": "未激活",
+      "loading": "加载中...",
+      "no_changes": "无变化",
+      "no_record": "无记录",
       "none": "无",
+      "not_selected": "未选择",
       "pending": "排队中",
       "processing": "处理中",
+      "processing_dots": "处理中...",
       "reading": "读取中",
-      "unknown": "未知"
+      "ready": "就绪",
+      "uncategorized": "未分类",
+      "unknown": "未知",
+      "unknown_path": "路径未知",
+      "unknown_time": "未知时间",
+      "unknown_version": "版本未知"
     },
     "store": {
+      "core": "本体",
+      "dlc": "DLC",
       "local": "本地",
+      "other": "其它",
       "self": "管理器",
+      "unknown": "未知",
       "workshop": "工坊"
     },
-    "task": "任务",
-    "uncategorized": "未分类",
-    "unknown_path": "路径未知",
-    "unknown_version": "版本未知",
-    "update": "更新",
-    "visit_page": "访问页面",
-    "workshop": "工坊"
+    "unit": {
+      "item": "项"
+    }
   },
   "confirm": {
     "settings": {
@@ -5657,8 +5628,7 @@
       "copy_mod_info": "复制模组信息{countText}",
       "delete_files": "删除文件{countText}",
       "restore": "解除禁用{countText}",
-      "unsubscribe": "取消订阅{countText}",
-      "visit_page": "访问页面"
+      "unsubscribe": "取消订阅{countText}"
     },
     "group_list": {
       "activate": "启用{countText}",
@@ -5729,7 +5699,6 @@
         "other_section_group": "其它分割组..."
       },
       "move_to": "移动到",
-      "open_folder": "打开文件夹",
       "open_url": "访问网页",
       "open_workshop": "访问创意工坊",
       "replacement": {

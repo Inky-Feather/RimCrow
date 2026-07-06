@@ -34,7 +34,7 @@
             <div class="flex flex-wrap items-center gap-1.5">
               <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
                 @click="supplementStore.selectAll()" >
-                {{ t('common.select_all', '全选') }}
+                {{ t('common.action.select_all', '全选') }}
               </button>
               <button class="rounded-lg border border-accent-danger/18 bg-accent-danger/10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-accent-danger transition-all hover:bg-accent-danger/16"
                 @click="supplementStore.selectRequiredOnly()" >
@@ -42,7 +42,7 @@
               </button>
               <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
                 @click="supplementStore.clearSelection()" >
-                {{ t('common.clear_all', '全部清空') }}
+                {{ t('common.action.clear_all', '全部清空') }}
               </button>
             </div>
           </div>
@@ -59,7 +59,7 @@
                         {{ severityLabel(group.severity) }}
                       </span>
                       <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
-                        {{ t('common.item_count', '{count} 项', { count: group.rows.length }) }}
+                        {{ t('common.count.items', '{count} 项', { count: group.rows.length }) }}
                       </span>
                     </div>
                     <p v-if="group.description" class="mt-1 text-[0.625rem] leading-4 text-text-dim">{{ group.description }}</p>

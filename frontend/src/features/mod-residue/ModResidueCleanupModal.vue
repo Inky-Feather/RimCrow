@@ -34,11 +34,11 @@
           <div class="flex items-center gap-2">
             <button class="rounded-md border border-border-base/10 px-3 py-1.5 text-xs font-bold text-text-dim hover:text-text-main disabled:opacity-50"
               :disabled="flatItems.length === 0" v-tooltip="t('dialog.mod_residue.select_all_tip', '勾选当前列表里的所有残留')" @click="selectAll">
-              {{ t('common.select_all', '全选') }}
+              {{ t('common.action.select_all', '全选') }}
             </button>
             <button class="rounded-md border border-border-base/10 px-3 py-1.5 text-xs font-bold text-text-dim hover:text-text-main disabled:opacity-50"
               :disabled="selectedItems.length === 0" v-tooltip="t('dialog.mod_residue.clear_selection_tip', '取消当前选择')" @click="clearSelection">
-              {{ t('common.clear_selection', '取消选择') }}
+              {{ t('common.action.clear_selection', '取消选择') }}
             </button>
           </div>
         </div>
@@ -77,7 +77,7 @@
                   <button v-if="group.workshop_id" class="shrink-0 rounded-md border border-border-base/10 px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-primary"
                     v-tooltip="t('dialog.mod_residue.open_workshop_tip', '打开这个模组的 Steam 创意工坊页面')"
                     @click="appStore.openSteamWorkshopById(group.workshop_id)">
-                    {{ t('common.open_workshop', '打开工坊') }}
+                    {{ t('common.action.open_workshop', '打开工坊') }}
                   </button>
                 </div>
               </header>
@@ -112,7 +112,7 @@
                       <button class="flex items-center rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2 py-1 text-[0.7rem] font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
                         v-tooltip="openPathTooltip(item)" @click="openItemPath(item)">
                         <FolderOpen class="mr-1 inline size-3.5" />
-                        {{ t('common.open_path', '打开路径') }}
+                        {{ t('common.action.open_path', '打开路径') }}
                       </button>
                       <button v-if="item.can_whitelist" class="flex items-center rounded-lg border border-accent-warning/35 bg-accent-warning/10 px-2 py-1 text-[0.7rem] font-bold text-accent-warning transition-colors hover:bg-accent-warning/18"
                         v-tooltip="t('dialog.mod_residue.add_whitelist_tip', '加入后，之后扫描不会再提示这个路径')" @click="addWhitelist(item)">
@@ -146,12 +146,12 @@
               <div class="mt-3 flex justify-end gap-2">
                 <button class="rounded-md border border-border-base/10 px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-text-main"
                   v-tooltip="t('dialog.mod_residue.open_whitelist_tip', '打开这个白名单路径')" @click="openWhitelistPath(item)">
-                  {{ t('common.open', '打开') }}
+                  {{ t('common.action.open', '打开') }}
                 </button>
                 <button class="rounded-md border border-accent-danger/35 bg-accent-danger/10 px-2 py-1 text-[0.65rem] font-bold text-accent-danger hover:bg-accent-danger/18"
                   v-tooltip="t('dialog.mod_residue.remove_whitelist_tip', '从白名单移除，之后扫描会再次提示它')" @click="removeWhitelist(item)">
                   <ShieldX class="mr-1 inline size-3" />
-                  {{ t('common.remove', '移除') }}
+                  {{ t('common.action.remove', '移除') }}
                 </button>
               </div>
             </div>
@@ -243,7 +243,7 @@ const cleanSelected = async () => {
     const ok = await appStore.deletePaths(paths, {
       title: t('dialog.mod_residue.clean_title', '清理卸载残留'),
       message: t('dialog.mod_residue.clean_message', '将清理 {count} 个已选残留。下一步可以选择移入回收站或彻底删除。', { count: paths.length }),
-      forceOptionText: t('common.delete_permanently', '彻底删除'),
+      forceOptionText: t('common.action.delete_permanently', '彻底删除'),
       checkLabel: t('dialog.mod_residue.clean_selected', '清理已选残留'),
       successMessage: ({ paths, force }) => cleanSuccessMessage(force, paths.length),
       reScan: false,

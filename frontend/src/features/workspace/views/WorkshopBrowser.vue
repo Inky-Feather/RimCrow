@@ -31,7 +31,7 @@
             <div class="flex items-center justify-center gap-1">
               <button @click="submitWorkshopSearch" :disabled="!workshopSearchReady || workspaceStore.workshopSearch.isLoading"
                 class="inline-flex h-[1.85rem] shrink-0 items-center justify-center rounded-lg border border-accent-primary/40 bg-accent-primary/15 px-2.5 text-[0.7rem] font-extrabold text-accent-primary transition-all hover:bg-accent-primary hover:text-on-accent-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
-                {{ t('ui.workspace.workshop.search.button', '搜索') }}
+                {{ t('common.action.search', '搜索') }}
               </button>
               <button ref="advancedButtonRef" @click="toggleAdvancedPanel" v-tooltip="t('ui.workspace.workshop.advanced.tooltip', '排序与高级搜索')"
                 class="inline-flex h-[1.85rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border-base/10 bg-bg-inset/85 px-2.5 text-[0.7rem] text-text-dim transition-all hover:border-accent-primary/40 hover:text-accent-primary active:scale-[0.98]">
@@ -139,7 +139,7 @@
                   </div>
                   <div class="truncate text-sm font-bold leading-snug transition-colors"
                     :class="workspaceStore.workshopSearch.selectedId === item.workshop_id ? 'text-text-main' : 'text-text-soft group-hover:text-accent-primary'">
-                    {{ item.display_title || item.title || item.name || t('ui.workspace.workshop.item.unknown_mod', '未知模组') }}
+                    {{ item.display_title || item.title || item.name || t('common.entity.unknown_mod', '未知模组') }}
                   </div>
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex min-w-0 items-center gap-1.5">
@@ -249,15 +249,15 @@
                 <span class="workshop-detail-chip__value">{{ selectedIdLabel }}</span>
                 <Copy class="size-3 text-text-dim " />
               </button>
-              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.package_id.tooltip', '模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。')" class="group relative workshop-detail-chip border-accent-cool/20 bg-accent-cool/10 pr-7 text-left transition-colors hover:border-accent-cool/30 hover:bg-accent-cool/12 active:scale-[0.99]" @click.stop="copyHeaderValue(t('ui.workspace.workshop.detail.package_id.title', '包名'), selectedPackageId)">
+              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.package_id.tooltip', '模组包标识。通常用于本地规则匹配和同模组识别。单击可复制。')" class="group relative workshop-detail-chip border-accent-cool/20 bg-accent-cool/10 pr-7 text-left transition-colors hover:border-accent-cool/30 hover:bg-accent-cool/12 active:scale-[0.99]" @click.stop="copyHeaderValue(t('common.field.package_id', '包名'), selectedPackageId)">
                 <Package class="workshop-detail-chip__icon text-accent-cool" />
-                <span class="workshop-detail-chip__title">{{ t('ui.workspace.workshop.detail.package_id.title', '包名') }}</span>
+                <span class="workshop-detail-chip__title">{{ t('common.field.package_id', '包名') }}</span>
                 <span class="workshop-detail-chip__value">{{ selectedPackageId }}</span>
                 <Copy class="size-3 text-text-dim " />
               </button>
-              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.author.tooltip', '作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。')" class="group relative workshop-detail-chip border-accent-success/20 bg-accent-success/10 pr-7 text-left transition-colors hover:border-accent-success/30 hover:bg-accent-success/12 active:scale-[0.99]" @click.stop="copyHeaderValue(t('ui.workspace.workshop.detail.author.title', '作者'), selectedAuthorLabel)">
+              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.author.tooltip', '作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。')" class="group relative workshop-detail-chip border-accent-success/20 bg-accent-success/10 pr-7 text-left transition-colors hover:border-accent-success/30 hover:bg-accent-success/12 active:scale-[0.99]" @click.stop="copyHeaderValue(t('common.field.author', '作者'), selectedAuthorLabel)">
                 <UserRound class="workshop-detail-chip__icon text-accent-success" />
-                <span class="workshop-detail-chip__title">{{ t('ui.workspace.workshop.detail.author.title', '作者') }}</span>
+                <span class="workshop-detail-chip__title">{{ t('common.field.author', '作者') }}</span>
                 <span class="workshop-detail-chip__value">{{ selectedAuthorLabel }}</span>
                 <Copy class="size-3 text-text-dim " />
               </button>
@@ -321,12 +321,12 @@
               <span v-for="tag in selectedDisplayTags" :key="`${selectedId}-${tag}`"
                 v-tooltip="t('ui.workspace.workshop.detail.tag.tooltip', '工坊标签：{tag}', { tag })" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
                 <Tag class="workshop-detail-chip__icon text-accent-cool" />
-                <span class="workshop-detail-chip__title">{{ t('ui.workspace.workshop.detail.tag.title', '标签') }}</span>
+                <span class="workshop-detail-chip__title">{{ t('common.field.tags', '标签') }}</span>
                 <strong class="workshop-detail-chip__value">{{ tag }}</strong>
               </span>
               <span v-if="!selectedDisplayTags.length" v-tooltip="t('ui.workspace.workshop.detail.tag.empty_tooltip', '该项目没有返回可展示的工坊标签。')" class="workshop-detail-chip border-accent-cool/20 bg-accent-cool/10">
                 <Tag class="workshop-detail-chip__icon text-accent-cool" />
-                <span class="workshop-detail-chip__title">{{ t('ui.workspace.workshop.detail.tag.title', '标签') }}</span>
+                <span class="workshop-detail-chip__title">{{ t('common.field.tags', '标签') }}</span>
                 <strong class="workshop-detail-chip__value">-</strong>
               </span>
               <span v-if="selectedHiddenTagCount > 0" v-tooltip="selectedHiddenTagTooltip" class="workshop-detail-chip border-border-base/16 bg-bg-deep/38">
@@ -353,7 +353,7 @@
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-warn">
                 <Link class="size-3" /> {{ t('ui.workspace.workshop.detail.dependencies.title', '依赖项目') }}
               </h4>
-              <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('ui.common.loading', '加载中...') }}</span>
+              <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
               <div class="flex flex-wrap justify-end gap-1.5">
                 <button @click="handleUnsubscribe(dependencyIds)" :disabled="isDependencyActionPending('unsubscribe')" :class="isDependencyActionPending('unsubscribe') ? 'app-action-disabled' : ''"
                   class="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-accent-danger/30 bg-accent-danger/15 px-2.5 py-1.5 text-[0.65rem] font-extrabold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger active:scale-[0.98]">
@@ -432,7 +432,7 @@
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-tip">
                 <Link class="size-3" /> {{ t('ui.workspace.workshop.detail.collection_children.title', '合集子项') }}
               </h4>
-              <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('ui.common.loading', '加载中...') }}</span>
+              <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
             </div>
             <div class="flex flex-wrap gap-2">
               <button v-for="child in relatedCollectionChildren" :key="child.workshop_id" v-tooltip="buildResultTooltip(child)"
@@ -453,7 +453,7 @@
                 @click="showRelatedList('dependents')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-primary">
                 {{ t('ui.workspace.workshop.detail.view_all', '查看全部') }}
               </button>
-              <span v-else-if="workspaceStore.workshopSearch.relatedLoading.dependents" class="text-[0.65rem] text-text-dim">{{ t('ui.common.loading', '加载中...') }}</span>
+              <span v-else-if="workspaceStore.workshopSearch.relatedLoading.dependents" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
             </div>
             <div v-if="workspaceStore.workshopSearch.relatedErrors.dependents" class="text-xs text-accent-danger">{{ workspaceStore.workshopSearch.relatedErrors.dependents }}</div>
             <div class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
@@ -472,7 +472,7 @@
                 @click="showRelatedList('same_author')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-success">
                 {{ t('ui.workspace.workshop.detail.view_all', '查看全部') }}
               </button>
-              <span v-else-if="workspaceStore.workshopSearch.relatedLoading.same_author" class="text-[0.65rem] text-text-dim">{{ t('ui.common.loading', '加载中...') }}</span>
+              <span v-else-if="workspaceStore.workshopSearch.relatedLoading.same_author" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
             </div>
             <div v-if="workspaceStore.workshopSearch.relatedErrors.same_author" class="text-xs text-accent-danger">{{ workspaceStore.workshopSearch.relatedErrors.same_author }}</div>
             <div class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
@@ -743,7 +743,7 @@ const selectedTranslationEntry = computed(() => (
     ? workspaceStore.getWorkshopTranslationEntry(selectedMod.value?.translations, selectedResolvedTranslationLanguage.value)
     : null
 ))
-const selectedDisplayTitle = computed(() => String(selectedTranslationEntry.value?.title || selectedOriginalTitle.value || selectedMod.value?.name || t('ui.workspace.workshop.item.unknown_mod', '未知模组')).trim())
+const selectedDisplayTitle = computed(() => String(selectedTranslationEntry.value?.title || selectedOriginalTitle.value || selectedMod.value?.name || t('common.entity.unknown_mod', '未知模组')).trim())
 const selectedDisplayDescription = computed(() => String(selectedTranslationEntry.value?.description || selectedOriginalDescription.value || '').trim())
 const selectedShowsTranslatedTitle = computed(() => (
   !!selectedTranslationEntry.value?.title

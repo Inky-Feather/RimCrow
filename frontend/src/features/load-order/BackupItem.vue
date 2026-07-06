@@ -48,7 +48,7 @@
           hover:bg-bg-overlay/12 hover:text-text-main hover:scale-110 active:scale-100
           group-hover:bg-bg-overlay/10 group-hover:text-text-dim group-hover:shadow-2xl/20
           group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
-          v-tooltip="t('ui.common.more_actions', '更多操作')">
+          v-tooltip="t('common.action.more_actions', '更多操作')">
           <span class="relative only:-mx-6">
             <MoreHorizontal class="size-4" />
           </span>

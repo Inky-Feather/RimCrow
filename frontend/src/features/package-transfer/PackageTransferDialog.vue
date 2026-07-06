@@ -17,7 +17,7 @@
               </div>
               <button class="shrink-0 rounded-xl bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary transition-all hover:bg-accent-primary/85"
                 @click="pickImportBundle" >
-                {{ t('common.select_file', '选择文件') }}
+                {{ t('common.action.select_file', '选择文件') }}
               </button>
             </div>
           </section>
@@ -479,7 +479,7 @@ const availableInstalls = computed(() => {
 const availableInstallOptions = computed(() => {
   const options = availableInstalls.value.map(install => ({
     value: String(install.install_path || ''),
-    label: `${install.game_version || t('common.unknown_version', '版本未知')} | ${install.install_path || t('common.unknown_path', '路径未知')}`,
+    label: `${install.game_version || t('common.status.unknown_version', '版本未知')} | ${install.install_path || t('common.status.unknown_path', '路径未知')}`,
   }))
   return [
     {
@@ -491,7 +491,7 @@ const availableInstallOptions = computed(() => {
 })
 const profileAvailableInstallOptions = computed(() => availableInstalls.value.map(install => ({
   value: String(install.install_path || ''),
-  label: `${install.game_version || t('common.unknown_version', '版本未知')} | ${install.install_path || t('common.unknown_path', '路径未知')}`,
+  label: `${install.game_version || t('common.status.unknown_version', '版本未知')} | ${install.install_path || t('common.status.unknown_path', '路径未知')}`,
 })))
 const selfModsPath = computed(() => String(modPackageSchema.value?.self_mods_path || appStore.settings.self_mods_path || '').trim())
 const archiveSummary = computed(() => {
@@ -807,7 +807,7 @@ const buildProfileConflictOptions = (row) => [
   { value: '', label: t('dialog.package_transfer.select_profile_to_overwrite', '请选择要覆盖的环境') },
   ...(row.conflicts || []).map(item => ({
     value: String(item.profile_id || ''),
-    label: `${item.name || t('ui.profile.unnamed', '未命名环境')} | ${item.game_version || t('common.unknown_version', '版本未知')} | ${item.game_install_path || t('ui.profile.no_game_dir', '暂未绑定游戏目录')}`,
+    label: `${item.name || t('ui.profile.unnamed', '未命名环境')} | ${item.game_version || t('common.status.unknown_version', '版本未知')} | ${item.game_install_path || t('ui.profile.no_game_dir', '暂未绑定游戏目录')}`,
   })),
 ]
 

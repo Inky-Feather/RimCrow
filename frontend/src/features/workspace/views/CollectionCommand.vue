@@ -157,7 +157,7 @@
               <button @click="submitCollectionSearch" :disabled="wsStore.collections.isSearchLoading"
                 class="px-2.5 py-1 m-0 rounded-lg bg-accent-primary/20 hover:bg-accent-primary text-accent-primary hover:text-on-accent-primary text-xs font-bold border border-accent-primary/30 transition-all disabled:opacity-50 flex items-center gap-1">
                 <span v-if="wsStore.collections.isSearchLoading" class="animate-spin">⟳</span>
-                <span v-else>{{ t('ui.workspace.collection.search.button', '搜索') }}</span>
+                <span v-else>{{ t('common.action.search', '搜索') }}</span>
               </button>
               <!-- 合集搜索复用 FixedPopover，避免排序面板撑开订阅/搜索卡片列表。 -->
               <FixedPopover :is-open="collectionSortPanelOpen" :trigger-ref="collectionSortButtonRef"

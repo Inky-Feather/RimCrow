@@ -116,7 +116,7 @@
                         <ExternalLink class="size-3.5" />
                       </button>
                       <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-border-base/18 hover:text-text-main"
-                        v-tooltip="t('ui.common.more_actions', '更多操作')" @click="openConflictItemMenu($event, group, mod)" >
+                        v-tooltip="t('common.action.more_actions', '更多操作')" @click="openConflictItemMenu($event, group, mod)" >
                         <EllipsisVertical class="size-3.5" />
                       </button>
 
@@ -128,7 +128,7 @@
                           @click.stop v-tooltip="t('tooltip.conflict.disable_copy', '保留文件，只把该副本改为禁用状态')">
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'disable'"
                             @change="setItemAction(group, mod, 'disable')" >
-                          {{ t('common.deactivate', '禁用') }}
+                          {{ t('common.action.deactivate', '禁用') }}
                         </label>
                         <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'delete' ? 'bg-accent-danger text-on-accent-danger'  : 'text-text-dim hover:text-accent-danger'" 
@@ -142,7 +142,7 @@
                             : 'text-text-dim hover:text-text-main'"
                           @click.stop v-tooltip="t('tooltip.conflict.skip_copy', '本次不处理该副本，重新扫描后可能仍会提示冲突')" >
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'skip'" @change="setItemAction(group, mod, 'skip')" >
-                          {{ t('common.skip', '跳过') }}
+                          {{ t('common.action.skip', '跳过') }}
                         </label>
                       </div>
                     </div>
@@ -242,7 +242,7 @@
             <button class="rounded-xl bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary transition-colors hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="processing" v-tooltip="t('tooltip.conflict.submit', '执行当前配置的禁用/删除操作，并在完成后自动重新扫描')" @click="submit"
             >
-              {{ processing ? t('common.processing', '处理中...') : t('dialog.conflict.submit', '执行处理') }}
+              {{ processing ? t('common.status.processing_dots', '处理中...') : t('dialog.conflict.submit', '执行处理') }}
             </button>
           </div>
         </div>
@@ -326,7 +326,7 @@ const normalizeStore = (store) => {
 const storeLabel = (store) => {
   const value = normalizeStore(store)
   if (['local', 'self', 'workshop'].includes(value)) return getStoreTypeLabel(value)
-  return store || t('ui.store_type.unknown', '未知')
+  return store || t('common.store.unknown', '未知')
 }
 
 const storeBadgeClass = (store) => {
@@ -625,7 +625,7 @@ const openConflictItemMenu = (event, group, mod) => {
   event?.stopPropagation?.()
   contextMenuStore.open(event, [
     buildModInfoCopyMenuItem(mod, { label: t('ui.mod.action.copy_info', '复制模组信息') }),
-    buildModExternalMenuItem(mod, appStore, { label: t('common.visit_page', '访问页面') }),
+    buildModExternalMenuItem(mod, appStore, { label: t('common.action.visit_page', '访问页面') }),
     { divider: true },
     { label: t('dialog.conflict.menu.open_folder', '打开目录'), icon: Folder, disabled: !mod?.path, action: () => appStore.openPath(mod.path) },
     { divider: true },

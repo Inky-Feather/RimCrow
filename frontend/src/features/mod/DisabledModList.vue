@@ -152,7 +152,7 @@ const getSourceLabel = (mod = {}) => {
   const domain = String(mod?.runtime_domain || mod?.store || '').toLowerCase()
   if (domain === 'dlc') return getSourceTypeLabel('dlc')
   if (domain === 'tool') return t('ui.disabled_mod_list.source.self', '管理器库')
-  return getSourceTypeLabel(getStoreType(mod)) || domain || t('ui.source_type.unknown', '未知来源')
+  return getSourceTypeLabel(getStoreType(mod)) || domain || t('common.source.unknown', '未知来源')
 }
 const getModType = (mod = {}) => modStore.displayModType(mod)
 const getTypeIcon = (mod = {}) => MOD_TYPE_ICON_MAP[getModType(mod)] || MOD_TYPE_ICON_MAP.Unknown
@@ -240,7 +240,7 @@ const deleteSelectedMods = async () => {
   if (ok) clearSelection()
 }
 const buildSelectedDisabledCopyMenuItem = (selectedMods) => {
-  const selectedCountText = selectedMods.length > 1 ? t('ui.common.count_suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
+  const selectedCountText = selectedMods.length > 1 ? t('common.count.suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
   const copyField = (label, getter) => {
     const lines = selectedMods.map(mod => String(getter(mod) || '').trim()).filter(Boolean)
     return {
@@ -270,15 +270,15 @@ const handleContextMenu = (event, targetMod) => {
   }
 
   const selectedMods = getSelectedMods()
-  const selectedCountText = selectedMods.length > 1 ? t('ui.common.count_suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
+  const selectedCountText = selectedMods.length > 1 ? t('common.count.suffix_spaced', ' ({count} 项)', { count: selectedMods.length }) : ''
   const hasPath = selectedMods.some(mod => !!mod.path)
   const hasWorkshop = selectedMods.some(mod => !!mod.workshop_id)
   menuStore.open(event, [
     { label: t('menu.disabled_mod_list.restore', '解除禁用{countText}', { countText: selectedCountText }), icon: LockOpen, level: 'success', action: enableSelectedMods },
-    { label: t('ui.common.open_folder', '打开文件夹'), icon: FolderInput, disabled: !targetMod.path, action: () => appStore.openPath(targetMod.path) },
+    { label: t('common.action.open_folder', '打开文件夹'), icon: FolderInput, disabled: !targetMod.path, action: () => appStore.openPath(targetMod.path) },
     { divider: true },
     buildSelectedDisabledCopyMenuItem(selectedMods),
-    buildModExternalMenuItem(targetMod, appStore, { label: t('menu.disabled_mod_list.visit_page', '访问页面') }),
+    buildModExternalMenuItem(targetMod, appStore, { label: t('common.action.visit_page', '访问页面') }),
     { divider: true },
     { label: t('menu.disabled_mod_list.unsubscribe', '取消订阅{countText}', { countText: selectedCountText }), icon: FlagOff, level: 'danger', disabled: !hasWorkshop, action: unsubscribeSelectedMods },
     { label: t('menu.disabled_mod_list.delete_files', '删除文件{countText}', { countText: selectedCountText }), icon: Trash2, level: 'danger', disabled: !hasPath, action: deleteSelectedMods },

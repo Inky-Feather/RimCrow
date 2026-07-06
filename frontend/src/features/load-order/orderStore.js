@@ -602,7 +602,7 @@ export const useOrderStore = defineStore('order', () => {
       mode: 'prompt',
       type: 'info',
       placeholder: 'RC-...',
-      confirmText: t('ui.common.import', '导入'),
+      confirmText: t('common.action.import', '导入'),
       cancelText: t('common.action.cancel', '取消'),
     })
     if (!shareCode) return null
@@ -629,7 +629,7 @@ export const useOrderStore = defineStore('order', () => {
         message: t('dialog.load_order.import_stripping.blocked_message', '该文件包含 {count} 个纯 WorkshopID 条目。\n游戏加载序列只识别包名，这些条目会被自动剔除。\n剔除后当前没有可导入的包名项，请先在对比列表里处理订阅/下载。', { count: workshopOnlyItems.length }),
         mode: 'alert',
         type: 'warning',
-        confirmText: t('ui.common.got_it', '知道了'),
+        confirmText: t('common.action.got_it', '知道了'),
       })
       return false
     }

@@ -126,7 +126,7 @@
           <footer class="bg-bg-elevated/90 flex items-center justify-between p-4">
             <div></div>
             <button @click="appStore.uiState.showProfileDrawer = false" class="px-4 py-1.5 rounded-lg bg-bg-overlay/5 hover:bg-bg-overlay/10 text-text-main text-xs font-bold transition-all">
-              {{ t('ui.common.collapse', '收起') }}
+              {{ t('common.action.collapse', '收起') }}
             </button>
           </footer>
 
@@ -447,7 +447,7 @@ const handleCreateShortcut = async (p) => {
     t('dialog.profiles.shortcut.title', '创建桌面快捷方式'),
     t('dialog.profiles.shortcut.message', '确定要为环境 "{name}" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。', { name: p.name }),
     {
-      confirmText: t('ui.common.create', '创建'),
+      confirmText: t('common.action.create', '创建'),
       cancelText: t('common.action.cancel', '取消'),
     }
   )

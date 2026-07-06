@@ -168,23 +168,23 @@ export const getModSignColorLabel = (color) => {
   return color || t('common.status.none', '无')
 }
 export const getSourceTypeLabel = (source) => {
-  if (source === 'core') return t('ui.source_type.core', '游戏本体')
-  if (source === 'dlc') return t('ui.source_type.dlc', 'DLC')
-  if (source === 'github') return t('ui.source_type.github', 'Git 仓库')
-  if (source === 'workshop') return t('ui.source_type.workshop', 'Steam 创意工坊')
-  if (source === 'local') return t('ui.source_type.local', '本地模组')
-  if (source === 'self') return t('ui.source_type.self', '管理器下载')
-  if (source === 'other') return t('ui.source_type.other', '其它来源')
-  return source || t('ui.source_type.unknown', '未知来源')
+  if (source === 'core') return t('common.source.core', '游戏本体')
+  if (source === 'dlc') return t('common.source.dlc', 'DLC')
+  if (source === 'github') return t('common.source.github', 'Git 仓库')
+  if (source === 'workshop') return t('common.source.workshop', 'Steam 创意工坊')
+  if (source === 'local') return t('common.source.local', '本地模组')
+  if (source === 'self') return t('common.source.self', '管理器下载')
+  if (source === 'other') return t('common.source.other', '其它来源')
+  return source || t('common.source.unknown', '未知来源')
 }
 export const getStoreTypeLabel = (store) => {
-  if (store === 'core') return t('ui.store_type.core', '本体')
-  if (store === 'dlc') return t('ui.store_type.dlc', 'DLC')
-  if (store === 'local') return t('ui.store_type.local', '本地')
-  if (store === 'self') return t('ui.store_type.self', '管理器')
-  if (store === 'workshop') return t('ui.store_type.workshop', '工坊')
-  if (store === 'other') return t('ui.store_type.other', '其它')
-  return store || t('ui.store_type.unknown', '未知')
+  if (store === 'core') return t('common.store.core', '本体')
+  if (store === 'dlc') return t('common.store.dlc', 'DLC')
+  if (store === 'local') return t('common.store.local', '本地')
+  if (store === 'self') return t('common.store.self', '管理器')
+  if (store === 'workshop') return t('common.store.workshop', '工坊')
+  if (store === 'other') return t('common.store.other', '其它')
+  return store || t('common.store.unknown', '未知')
 }
 
 

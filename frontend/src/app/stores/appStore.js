@@ -1194,7 +1194,7 @@ export const useAppStore = defineStore('app', () => {
         textureStore.handleDownloadEvent(task)
       }
       if (task.type === 'download' && task.status === 'failed') {
-        const filename = task.metrics?.filename || task.message || t('common.file', '文件')
+        const filename = task.metrics?.filename || task.message || t('common.entity.file', '文件')
         toast.error(t('messages.app.download.failed', '{filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题，详细原因已写入系统日志。', { filename }))
       }
       if (task.type === 'steamcmd-download' && task.status === 'failed') {
@@ -1345,7 +1345,7 @@ export const useAppStore = defineStore('app', () => {
     if (isTaskCancelPending(task.id)) return true
     markTaskCancelPending(task.id)
     try {
-      const displayName = task?.metrics?.title || task?.message || t('common.task', '任务')
+      const displayName = task?.metrics?.title || task?.message || t('common.entity.task', '任务')
       const res = await window.pywebview.api.cancel_progress_task(task.id, task.type)
       if (checkResult(res, t('messages.app.action.cancel_task', '取消{displayName}', { displayName }), false)) {
         return true
@@ -1510,7 +1510,7 @@ export const useAppStore = defineStore('app', () => {
             mode: 'confirm',
             title: t('messages.app.game_launch.confirm.title', '启动前确认'),
             message: fallbackMessage || t('messages.app.game_launch.confirm.message', '当前环境需要先确认后再继续启动。'),
-            confirmText: t('common.continue', '继续'),
+            confirmText: t('common.action.continue', '继续'),
             cancelText: t('common.action.cancel', '取消'),
             action: 'continue',
           }

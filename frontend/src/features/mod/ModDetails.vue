@@ -263,7 +263,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.dependencies_mods.length > 5" @click="showAllDependencies = !showAllDependencies"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-highlight transition-all group" >
-                {{ showAllDependencies ? t('ui.common.collapse', '收起') : t('ui.mod_details.view_all_compact', '查看全部({count})', { count: selectedMod.dependencies_mods.length }) }}
+                {{ showAllDependencies ? t('common.action.collapse', '收起') : t('ui.mod_details.view_all_compact', '查看全部({count})', { count: selectedMod.dependencies_mods.length }) }}
                 <svg :class="{'rotate-180': showAllDependencies}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -293,7 +293,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.incompatible_mods.length > 5" @click="showAllIncompatible = !showAllIncompatible"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-danger transition-all group" >
-                {{ showAllIncompatible ? t('ui.common.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.incompatible_mods.length }) }}
+                {{ showAllIncompatible ? t('common.action.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.incompatible_mods.length }) }}
                 <svg :class="{'rotate-180': showAllIncompatible}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -323,7 +323,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.load_after_mods.length > 5" @click="showAllLoadAfter = !showAllLoadAfter"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-warn transition-all group" >
-                {{ showAllLoadAfter ? t('ui.common.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.load_after_mods.length }) }}
+                {{ showAllLoadAfter ? t('common.action.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.load_after_mods.length }) }}
                 <svg :class="{'rotate-180': showAllLoadAfter}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -353,7 +353,7 @@
               <!-- 展开/收起按钮（只有当数量超过5个时显示） -->
               <button v-if="selectedMod.load_before_mods.length > 5" @click="showAllLoadBefore = !showAllLoadBefore"
                 class="w-full py-1.5 mt-1 flex items-center justify-center gap-1 rounded bg-bg-overlay/5 hover:bg-bg-overlay/10 text-xs text-text-dim hover:text-accent-primary transition-all group" >
-                {{ showAllLoadBefore ? t('ui.common.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.load_before_mods.length }) }}
+                {{ showAllLoadBefore ? t('common.action.collapse', '收起') : t('ui.mod_details.expand_all_count', '展开全部 ({count})', { count: selectedMod.load_before_mods.length }) }}
                 <svg :class="{'rotate-180': showAllLoadBefore}" class="w-3 h-3 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>

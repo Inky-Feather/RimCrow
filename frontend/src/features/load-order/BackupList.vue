@@ -329,8 +329,8 @@ const parsedData = computed(() => {
       const time = parseFileTime(name) || new Date(file.modify_time) || null
 
       let displayTitle = file.list_name || ''
-      let displayTime = t('ui.common.unknown_time', '未知时间')
-      let distanceNow = t('ui.common.unknown_time', '未知时间')
+      let displayTime = t('common.status.unknown_time', '未知时间')
+      let distanceNow = t('common.status.unknown_time', '未知时间')
       // 用短标签提示当前条目来自哪种排序文件格式。
       const formatLabelMap = {
         modsconfig: 'ModsConfig',
@@ -552,7 +552,7 @@ const buildBackupMenuItems = (item) => {
       { label: 'ModList', icon: FileText, action: () => exportBackupItemAsFile(item, 'modlist') },
       { label: 'RML', icon: FileText, action: () => exportBackupItemAsFile(item, 'rml') },
     ] },
-    { label: t('ui.common.rename', '重命名'), icon: Edit3, disabled: !isManualBackup, action: () => handleRename(null, item) },
+    { label: t('common.action.rename', '重命名'), icon: Edit3, disabled: !isManualBackup, action: () => handleRename(null, item) },
     { divider: true },
     isTempImport
       ? { label: t('menu.backup_list.remove_from_list', '从列表移除'), icon: X, level: 'warn', action: () => handleRemove(item) }

@@ -184,7 +184,7 @@ export const useProfileStore = defineStore('profile', () => {
       confirmStore.state.isHtml = true
       confirmStore.state.mode = 'confirm'
       confirmStore.state.type = 'warning'
-      confirmStore.state.confirmText = t('ui.common.confirm', '确认')
+      confirmStore.state.confirmText = t('common.action.confirm', '确认')
       confirmStore.state.cancelText = t('common.action.cancel', '取消')
       confirmStore.state.actionButtons = [{ label: t('common.action.cancel', '取消'), value: 'cancel', kind: 'secondary' }]
     }

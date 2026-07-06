@@ -18,7 +18,7 @@ const getUpdateSources = (info = {}) => {
 const buildUpdatePromptItems = (info = {}, manual = true) => {
   const sources = getUpdateSources(info)
   return sources.map((source, index) => {
-    const sourceName = source.source_name || t('ui.update.unknown_source', '未知来源')
+    const sourceName = source.source_name || t('common.source.unknown', '未知来源')
     const meta = [
       t('ui.update.source_meta', '来源: {source}', { source: sourceName }),
       t('ui.update.file_size_meta', '文件大小: {size}', { size: source.file_size || t('common.status.unknown', '未知') }),
@@ -60,14 +60,14 @@ export const useUpdateActions = ({
           updateState.hasUpdate = true
           updateState.info = info
           const sources = getUpdateSources(info)
-          const sourceNames = sources.map(source => source.source_name || t('ui.update.unknown_source', '未知来源')).join('、')
+          const sourceNames = sources.map(source => source.source_name || t('common.source.unknown', '未知来源')).join('、')
           const promptQueue = usePromptQueueStore()
           await promptQueue.enqueue({
             category: 'startup-app-update',
             title: t('ui.update.new_version_title', '发现新版本 v{version}', { version: info.version }),
             message: sources.length > 1
               ? t('ui.update.multiple_sources_message', '检测到多个同版本来源: {sources}。将优先使用第一个来源，失败后自动尝试候补来源。', { sources: sourceNames })
-              : t('ui.update.single_source_message', '来源: {source}。文件大小: {size}。', { source: sourceNames || t('ui.update.unknown_source', '未知来源'), size: info.file_size || t('common.status.unknown', '未知') }),
+              : t('ui.update.single_source_message', '来源: {source}。文件大小: {size}。', { source: sourceNames || t('common.source.unknown', '未知来源'), size: info.file_size || t('common.status.unknown', '未知') }),
             type: 'success',
             priority: manual ? 20 : 50,
             items: buildUpdatePromptItems(info, manual),

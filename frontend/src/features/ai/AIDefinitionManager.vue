@@ -91,7 +91,7 @@
               <div class="toolbar-surface flex h-12 shrink-0 items-center justify-between px-6">
                 <div class="flex items-center gap-2">
                   <span class="rounded border border-accent-special/20 bg-accent-special/10 px-2 py-0.5 font-mono text-xs text-accent-special">
-                    {{ t('common.id', 'ID') }}: {{ currentEntryId }}
+                    {{ t('common.field.id', 'ID') }}: {{ currentEntryId }}
                   </span>
                   <span class="rounded border border-border-base/10 bg-bg-inset/70 px-2 py-0.5 text-[0.7rem] text-text-dim">
                     {{ currentEntryKindLabel }}
@@ -105,13 +105,13 @@
               <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <div class="grid grid-cols-[1fr_1fr] gap-x-8 gap-y-5">
                   <div>
-                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.name', '名称') }}</div>
+                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.name', '名称') }}</div>
                     <div class="text-sm font-bold text-text-main">{{ currentEntry?.name || t('dialog.ai_definitions.unnamed_entry', '未命名入口') }}</div>
                   </div>
                   <CommonSelect v-model="currentEntryForm.prompt_id" :label="t('dialog.ai_definitions.prompt_used', '使用的模板')" :options="currentEntryPromptOptions" />
                   <div class="col-span-2">
-                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.description', '描述') }}</div>
-                    <div class="text-sm text-text-main">{{ currentEntry?.description || t('common.no_description', '无描述') }}</div>
+                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.description', '描述') }}</div>
+                    <div class="text-sm text-text-main">{{ currentEntry?.description || t('common.empty.no_description', '无描述') }}</div>
                   </div>
                 </div>
 
@@ -144,7 +144,7 @@
               <div class="toolbar-surface flex h-12 shrink-0 items-center justify-between px-6">
                 <div class="flex items-center gap-2">
                   <span class="rounded border border-accent-special/20 bg-accent-special/10 px-2 py-0.5 font-mono text-xs text-accent-special">
-                    {{ t('common.id', 'ID') }}: {{ currentPromptId || t('dialog.ai_definitions.auto_id_after_save', '保存后自动生成') }}
+                    {{ t('common.field.id', 'ID') }}: {{ currentPromptId || t('dialog.ai_definitions.auto_id_after_save', '保存后自动生成') }}
                   </span>
                   <span class="rounded border px-2 py-0.5 text-[0.7rem]" :class="currentPromptForm.is_system ? 'border-border-base/10 bg-bg-inset/70 text-text-dim' : 'border-accent-primary/20 bg-accent-primary/10 text-accent-primary'">
                     {{ currentPromptForm.is_system ? t('dialog.ai_definitions.system_prompt', '系统模板') : t('dialog.ai_definitions.custom_prompt', '自定义模板') }}
@@ -168,17 +168,17 @@
                     <div class="text-sm font-bold text-text-main">{{ getPromptName(currentPromptId, currentPromptForm) }}</div>
                   </div>
                   <div class="space-y-1">
-                    <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.category', '分类') }}</div>
-                    <div class="text-sm text-text-main">{{ selectedPromptCategory?.label || currentPromptForm.category || t('common.uncategorized', '未分类') }}</div>
+                    <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.category', '分类') }}</div>
+                    <div class="text-sm text-text-main">{{ selectedPromptCategory?.label || currentPromptForm.category || t('common.status.uncategorized', '未分类') }}</div>
                   </div>
                   <div class="space-y-1 col-span-2">
                     <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.ai_definitions.prompt_description', '模板描述') }}</div>
-                    <div class="text-sm text-text-main">{{ getPromptDescription(currentPromptId, currentPromptForm) || t('common.no_description', '无描述') }}</div>
+                    <div class="text-sm text-text-main">{{ getPromptDescription(currentPromptId, currentPromptForm) || t('common.empty.no_description', '无描述') }}</div>
                   </div>
                 </div>
                 <div v-else class="grid grid-cols-2 gap-4">
                   <CommonInput v-model="currentPromptForm.name" :label="t('dialog.ai_definitions.prompt_name', '模板名称')" />
-                  <CommonSelect v-model="currentPromptForm.category" :label="t('common.category', '分类')" :options="promptCategoryOptions" :editable="false" />
+                  <CommonSelect v-model="currentPromptForm.category" :label="t('common.field.category', '分类')" :options="promptCategoryOptions" :editable="false" />
                   <CommonInput class="col-span-2" v-model="currentPromptForm.description" :label="t('dialog.ai_definitions.prompt_description', '模板描述')" />
                 </div>
 
@@ -437,7 +437,7 @@ const getActionDescription = (actionType) => t(`ai.actions.${actionType}.descrip
 const getToolTooltip = (tool = {}) => {
   const title = normalizeText(tool?.label || tool?.id, tool?.id || t('dialog.ai_definitions.tool', '工具'))
   const details = [
-    normalizeText(tool?.id) ? `${t('common.id', 'ID')}: ${normalizeText(tool.id)}` : '',
+    normalizeText(tool?.id) ? `${t('common.field.id', 'ID')}: ${normalizeText(tool.id)}` : '',
     normalizeText(tool?.description),
   ].filter(Boolean)
   return details.length > 0 ? `${title}\n\n${details.join('\n')}` : title

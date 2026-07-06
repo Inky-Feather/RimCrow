@@ -28,7 +28,7 @@
       <div class="text-xs font-mono text-text-disabled uppercase tracking-widest">
         {{ t('ui.workspace.library.summary.count', '总计数量: {count}', { count: visibleTotalCount }) }}
         | {{ t('ui.workspace.library.summary.size', '总计大小：{size}', { size: formatFileSize(visibleTotalSize) }) }}
-        | {{ t('ui.workspace.library.summary.status', '状态: {status}', { status: workspaceStore.isFetching ? t('ui.workspace.library.status.scanning', '扫描中...') : t('ui.workspace.library.status.ready', '就绪') }) }}
+        | {{ t('ui.workspace.library.summary.status', '状态: {status}', { status: workspaceStore.isFetching ? t('ui.workspace.library.status.scanning', '扫描中...') : t('common.status.ready', '就绪') }) }}
       </div>
       <button @click="workspaceStore.fetchLibrariesMods" :disabled="workspaceStore.isFetching" v-tooltip="t('ui.workspace.library.refresh.tooltip', '重新读取当前三域矩阵数据')"
         class="flex items-center gap-2 px-3 py-2 bg-bg-overlay/5 hover:bg-bg-overlay/10 rounded-lg text-xs font-bold transition-all"

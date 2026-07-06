@@ -269,7 +269,7 @@ export const useMaintenanceActions = ({
         raw: item,
         actions: [
           { id: 'install', label: getToolIssueActionLabel(item), kind: 'primary' },
-          { id: 'skip', label: t('common.later', '稍后'), kind: 'secondary' },
+          { id: 'skip', label: t('common.action.later_short', '稍后'), kind: 'secondary' },
         ],
       })),
       bulkActions: [
@@ -338,8 +338,8 @@ export const useMaintenanceActions = ({
         meta: buildExternalDataMeta(item),
         raw: item,
         actions: [
-          { id: 'update', label: t('common.update', '更新'), kind: 'primary' },
-          { id: 'skip', label: t('common.later', '稍后'), kind: 'secondary' },
+          { id: 'update', label: t('common.action.update', '更新'), kind: 'primary' },
+          { id: 'skip', label: t('common.action.later_short', '稍后'), kind: 'secondary' },
         ],
       })),
       bulkActions: [
@@ -393,8 +393,8 @@ export const useMaintenanceActions = ({
         ].filter(Boolean),
         raw: item,
         actions: [
-          { id: 'update', label: t('common.update', '更新'), kind: 'primary' },
-          { id: 'skip', label: t('common.later', '稍后'), kind: 'secondary' },
+          { id: 'update', label: t('common.action.update', '更新'), kind: 'primary' },
+          { id: 'skip', label: t('common.action.later_short', '稍后'), kind: 'secondary' },
         ],
       })),
       bulkActions: [

@@ -142,7 +142,7 @@
 
               <div v-else class="flex items-center gap-2 text-xs text-text-dim">
                 <CheckCircle2 class="w-4 h-4 text-accent-success" />
-                {{ t('common.ready', '就绪') }}
+                {{ t('common.status.ready', '就绪') }}
               </div>
             </footer>
           </section>
@@ -190,7 +190,7 @@
                       </div>
                       <button v-if="!isImageOptInstalled" class="shrink-0 rounded-md border border-accent-warning/30 px-2 py-1 font-bold text-accent-warning hover:bg-accent-warning/10"
                         @click="openImageOptWorkshop">
-                        {{ t('common.open_workshop', '打开工坊') }}
+                        {{ t('common.action.open_workshop', '打开工坊') }}
                       </button>
                     </div>
                   </div>
@@ -329,11 +329,11 @@
                     <div class="mt-1 text-accent-warning">{{ item.error }}</div>
                     <div class="mt-2 flex justify-end gap-2">
                       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
-                        @click="handleOpenTextureFile(item)" v-tooltip="t('common.open_file', '打开文件')" >
+                        @click="handleOpenTextureFile(item)" v-tooltip="t('common.action.open_file', '打开文件')" >
                         <FileText class="w-4 h-4" />
                       </button>
                       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
-                        @click="handleOpenTextureFolder(item)" v-tooltip="t('common.open_folder', '打开所在目录')" >
+                        @click="handleOpenTextureFolder(item)" v-tooltip="t('common.action.open_containing_folder', '打开所在目录')" >
                         <FolderOpen class="w-4 h-4" />
                       </button>
                       <button v-if="getFailedItemLogPath(item)" v-tooltip="t('dialog.texture_opt.open_todds_log', '打开 todds 日志')"
@@ -400,11 +400,11 @@
                     <div class="mt-1 break-all text-text-dim">{{ item.mod_path }}</div>
                     <div class="mt-2 flex justify-end gap-2">
                       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
-                        @click="handleOpenTextureFile(item)" v-tooltip="t('common.open_file', '打开文件')" >
+                        @click="handleOpenTextureFile(item)" v-tooltip="t('common.action.open_file', '打开文件')" >
                         <FileText class="w-4 h-4" />
                       </button>
                       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:text-text-main"
-                        @click="handleOpenTextureFolder(item)" v-tooltip="t('common.open_folder', '打开所在目录')" >
+                        @click="handleOpenTextureFolder(item)" v-tooltip="t('common.action.open_containing_folder', '打开所在目录')" >
                         <FolderOpen class="w-4 h-4" />
                       </button>
                       <button class="rounded-lg border border-accent-danger/20 bg-accent-danger/10 p-1.5 text-accent-danger transition-colors hover:bg-accent-danger/20"
@@ -642,12 +642,12 @@ const processModeLabel = computed(() => {
 const progressCountLabel = computed(() => {
   if (!totalCount.value) return ''
   const details = progressState.value.details || {}
-  const unit = String(details.phase_unit || (details.total_mods != null || details.processed_mods != null ? t('ui.mod.name', '模组') : t('common.item', '项')))
+  const unit = String(details.phase_unit || (details.total_mods != null || details.processed_mods != null ? t('ui.mod.name', '模组') : t('common.unit.item', '项')))
   const phase = progressPhaseLabel.value ? `${progressPhaseLabel.value} ` : ''
   return `${phase}${processedCount.value}/${totalCount.value} ${unit}`
 })
 
-const progressFullMessage = computed(() => String(progressState.value.message || t('common.processing', '处理中...')))
+const progressFullMessage = computed(() => String(progressState.value.message || t('common.status.processing_dots', '处理中...')))
 const showProgressBlock = computed(() => isBusy.value || showFinishedProgress.value)
 const progressDisplayPercent = computed(() => {
   if (showFinishedProgress.value) return 100
@@ -885,7 +885,7 @@ const handleCleanWithoutSource = async () => {
     t('dialog.texture_opt.confirm_delete_orphan_message', '将删除当前范围内找不到同名 PNG 源图的 {format} 输出文件。部分模组本来就会直接提供 DDS 或 ZSTD 贴图，这类文件也可能被误删；建议确认目标范围后再继续。', { format: cleanOutputLabel.value }),
     {
       type: 'error',
-      confirmText: t('common.confirm_delete', '确认删除'),
+      confirmText: t('common.action.confirm_delete', '确认删除'),
       cancelText: t('common.action.cancel', '取消'),
     },
   )
@@ -941,7 +941,7 @@ const handleCleanSingleModWithoutSource = async (item, outputFormat = cleanOutpu
   const ok = await confirmStore.confirmAction(
     t('dialog.texture_opt.confirm_delete_orphan_title', '删除无对应源图 {format}', { format: outputLabel }),
     t('dialog.texture_opt.confirm_delete_orphan_single_message', '将删除「{modName}」中找不到同名 PNG 源图的 {format} 输出文件。部分模组本来就会直接提供 DDS 或 ZSTD 贴图，这类文件也可能被误删。', { modName: item.mod_name || t('ui.mod.current_mod', '当前模组'), format: outputLabel }),
-    { type: 'error', confirmText: t('common.confirm_delete', '确认删除'), cancelText: t('common.action.cancel', '取消') },
+    { type: 'error', confirmText: t('common.action.confirm_delete', '确认删除'), cancelText: t('common.action.cancel', '取消') },
   )
   if (!ok) return
   await textureStore.startOptimization(getSingleTargetIds(item), 'clean_generated', 'single', {
@@ -976,7 +976,7 @@ const openTextureModMenu = (event, item) => {
     },
     { divider: true },
     { label: textureStore.isModExcluded(item?.package_id) ? t('dialog.texture_opt.menu.unexclude_mod', '取消排除模组') : t('dialog.texture_opt.menu.exclude_mod', '排除模组'), icon: Ban, disabled: !item?.package_id, action: () => handleToggleModExclusion(item) },
-    { label: t('common.open_mod_folder', '打开模组目录'), icon: FolderOpen, disabled: !item?.mod_path, action: () => appStore.openPath(item.mod_path) },
+    { label: t('common.action.open_mod_folder', '打开模组目录'), icon: FolderOpen, disabled: !item?.mod_path, action: () => appStore.openPath(item.mod_path) },
   ], item)
 }
 
@@ -984,15 +984,15 @@ const buildTextureFileCopyItems = (item) => {
   const fullPath = item?.file_path || buildTextureFilePath(item?.mod_path, item?.rel_path)
   const relPath = String(item?.rel_path || '').trim()
   return [
-    { label: t('common.copy_full_path', '复制完整路径'), icon: Copy, disabled: !fullPath, action: () => copyTextToClipboard(fullPath, t('common.full_path', '完整路径')) },
-    { label: t('common.copy_relative_path', '复制相对路径'), icon: Copy, disabled: !relPath, action: () => copyTextToClipboard(relPath, t('common.relative_path', '相对路径')) },
+    { label: t('common.action.copy_full_path', '复制完整路径'), icon: Copy, disabled: !fullPath, action: () => copyTextToClipboard(fullPath, t('common.field.full_path', '完整路径')) },
+    { label: t('common.action.copy_relative_path', '复制相对路径'), icon: Copy, disabled: !relPath, action: () => copyTextToClipboard(relPath, t('common.field.relative_path', '相对路径')) },
   ]
 }
 
 const openTextureFailedItemMenu = (event, item) => {
   contextMenuStore.open(event, [
-    { label: t('common.open_file', '打开文件'), icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
-    { label: t('common.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
+    { label: t('common.action.open_file', '打开文件'), icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
+    { label: t('common.action.open_containing_folder', '打开所在目录'), icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
     { label: t('dialog.texture_opt.open_todds_log', '打开 todds 日志'), icon: ScrollText, disabled: !getFailedItemLogPath(item), action: () => handleOpenToddsLog(item) },
     { divider: true },
     { label: t('dialog.texture_opt.menu.add_file_exclusion', '加入文件排除'), icon: Plus, disabled: !item?.mod_path || !item?.rel_path, action: () => handleAddFailedItemExclusion(item) },
@@ -1003,8 +1003,8 @@ const openTextureFailedItemMenu = (event, item) => {
 
 const openTextureFileExclusionMenu = (event, item) => {
   contextMenuStore.open(event, [
-    { label: t('common.open_file', '打开文件'), icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
-    { label: t('common.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
+    { label: t('common.action.open_file', '打开文件'), icon: FileText, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFile(item) },
+    { label: t('common.action.open_containing_folder', '打开所在目录'), icon: FolderOpen, disabled: !(item?.file_path || (item?.mod_path && item?.rel_path)), action: () => handleOpenTextureFolder(item) },
     { divider: true },
     { label: t('dialog.texture_opt.remove_file_exclusion', '移除文件排除'), icon: Trash2, level: 'danger', disabled: !item?.mod_path || !item?.rel_path, action: () => handleRemoveFileExclusion(item) },
     { divider: true },

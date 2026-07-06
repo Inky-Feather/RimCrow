@@ -248,8 +248,8 @@ const commandStore = useCommandStore()
 const queueSetModsColor = useDebounceFn((modIds, color) => {
   modStore.setModsColor(modIds, color)
 }, 120)
-const countSuffix = (count) => Number(count) > 1 ? t('ui.common.count_suffix', ' ({count}项)', { count }) : ''
-const countSuffixWithUnit = (count) => t('ui.common.count_suffix_with_unit', ' ({count}个)', { count })
+const countSuffix = (count) => Number(count) > 1 ? t('common.count.suffix', ' ({count}项)', { count }) : ''
+const countSuffixWithUnit = (count) => t('common.count.suffix_unit', ' ({count}个)', { count })
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
@@ -666,7 +666,7 @@ const handleContextMenu = async (event) => {
             active: stats.color === c, action: () => modStore.setModsColor(selectedIds, c)
           })), { type: 'color-picker', color: pickerColor, tooltip: stats.color === 'mixed' ? t('menu.mod_item.color.custom_for_selection', '为当前多选项设置统一自定义颜色') : t('menu.mod_item.color.custom', '自定义颜色'),
             action: (color) => queueSetModsColor(selectedIds, normalizeHexColor(color, DEFAULT_ACCENT_HEX))
-          }, { icon: X, color: 'transparent', tooltip: t('ui.common.clear', '清除'), action: () => modStore.setModsColor(selectedIds, null) }
+          }, { icon: X, color: 'transparent', tooltip: t('tooltip.mod_item.color.clear', '清除'), action: () => modStore.setModsColor(selectedIds, null) }
         ]
       }]
     },
@@ -674,7 +674,7 @@ const handleContextMenu = async (event) => {
       children: [...Object.entries(MOD_TYPE_ICON_MAP).map(([key, icon]) => ({
         icon,
         label: getModTypeLabel(key), action: () => modStore.setModsType(selectedIds, key)
-      })),{ label: t('ui.common.restore_default', '恢复默认'), icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
+      })),{ label: t('common.action.restore_default', '恢复默认'), icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },
     { label: t('menu.mod_item.copy_info', '复制信息') + selectedCountStr, icon: Copy, children: copyInfoMenuItems },
     ...(moveMenu ? [{ label: t('menu.mod_item.move_to', '移动到') + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
@@ -720,7 +720,7 @@ const handleContextMenu = async (event) => {
   // 文件处理菜单
   const fileMenuItems = [
     { divider: true },
-    { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: t('menu.mod_item.open_folder', '打开文件夹'), icon: FolderInput },
+    { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: t('common.action.open_folder', '打开文件夹'), icon: FolderInput },
     { label: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length,
       action: () => modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: selectedCoexistWorkshopCount }) },
     { label: t('menu.mod_item.coexist.switch', '切换共存版本'), icon: SquaresExclude, disabled: !coexistSelectedIds.length,

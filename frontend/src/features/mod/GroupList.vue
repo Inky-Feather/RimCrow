@@ -204,7 +204,7 @@ const flatRows = computed(() => {
       group,
       mod_ids: modIds,
       dragGroup: 'groups',
-      dragLabel: group?.name || t('ui.common.group', '分组'),
+      dragLabel: group?.name || t('common.field.groups', '分组'),
       rowSize: groupRowHeight.value,
     })
     if (!visualExpandedIds.value.has(group.group_id)) return
@@ -588,17 +588,17 @@ const openRecommendationExport = (ids: string[]) => {
     modIds: [...ids],
   })
 }
-const countSuffix = (count: number) => Number(count) > 1 ? t('ui.common.count_suffix', ' ({count}项)', { count }) : ''
+const countSuffix = (count: number) => Number(count) > 1 ? t('common.count.suffix', ' ({count}项)', { count }) : ''
 const buildGroupModMenuItems = ({ ids, clickedId, groupId, groupName, groupSize = 0 }) => {
   const countText = countSuffix(ids.length)
   const clickedMod = modStore.takeModById(clickedId)
-  const safeGroupName = groupName || t('ui.common.group', '分组')
+  const safeGroupName = groupName || t('common.field.groups', '分组')
   return [
     { label: t('menu.group_list.activate', '启用{countText}', { countText }), icon: CircleCheckBig, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, true) },
     { label: t('menu.group_list.deactivate', '停用{countText}', { countText }), icon: CircleSlash2, disabled: ids.length === 0, action: () => modStore.changeModsActive(ids, false) },
     { divider: true },
     { label: t('menu.group_list.locate_main_list', '定位到主列表'), icon: Crosshair, disabled: !clickedId, action: () => locateModInMainLists(clickedId) },
-    { label: t('ui.common.open_folder', '打开文件夹'), icon: FolderInput, disabled: !clickedMod?.path, action: () => appStore.openPath(clickedMod.path) },
+    { label: t('common.action.open_folder', '打开文件夹'), icon: FolderInput, disabled: !clickedMod?.path, action: () => appStore.openPath(clickedMod.path) },
     { divider: true },
     { label: expandedIds.value.has(groupId) ? t('menu.group_list.collapse_group', '收缩分组') : t('menu.group_list.expand_group', '展开分组'), icon: expandedIds.value.has(groupId) ? ChevronsDownUp : ChevronsUpDown, action: () => toggle(groupId) },
     { label: t('menu.group_list.select_group', '选中整组'), icon: CopyCheck, disabled: !groupId || groupSize === 0, action: async () => {
@@ -657,7 +657,7 @@ const getFlatRowDragMeta = (row) => {
   if (row?.row_type === 'group') {
     return {
       dragCount: Math.max(1, getGroupModCount(row.group_id)),
-      dragLabel: row.group?.name || t('ui.common.group', '分组'),
+      dragLabel: row.group?.name || t('common.field.groups', '分组'),
     }
   }
   if (row?.row_type === 'mod') {

@@ -13,7 +13,7 @@ const takeFirstText = (...values) => {
   return ''
 }
 
-export const copyTextToClipboard = async (text = '', label = t('common.content', '内容')) => {
+export const copyTextToClipboard = async (text = '', label = t('common.field.content', '内容')) => {
   const value = String(text || '')
   if (!value) {
     toast.warning(t('toast.common.copy_empty', '没有可复制的{label}', { label }))
@@ -66,7 +66,7 @@ export const buildModInfoCopyMenuItem = (mod = {}, options = {}) => {
 export const buildModExternalMenuItem = (mod = {}, appStore, options = {}) => {
   const info = normalizeModMenuSource(mod)
   return {
-    label: options.label || t('common.visit_page', '访问页面'),
+    label: options.label || t('common.action.visit_page', '访问页面'),
     icon: ExternalLink,
     disabled: !info.url && !info.workshopId,
     children: [
