@@ -452,7 +452,7 @@
             <div class="flex items-center">
               <label v-tooltip="t('tooltip.mod_details.sign_color', '可自定义颜色标识')" class="flex-none text-xs uppercase text-text-dim font-bold tracking-wider">{{ t('ui.mod_details.sign_color', '颜色标记*') }}</label>
               <div class="flex-1 flex ml-2 min-w-20 gap-1.5 items-center justify-end">
-                <button v-for="(name, c) in presetColors" :key="c" @click="updateColor(c)"
+                <button v-for="c in presetColors" :key="c" @click="updateColor(c)"
                   :class="['w-4 h-4 min-w-1 rounded-full border border-border-base/10 transition-transform hover:scale-125',
                           selectedMod.sign_color === c ? 'ring-2 ring-bg-contrast scale-110' : '']"
                   :style="{backgroundColor: c}" v-tooltip="t('tooltip.mod_details.set_sign_color', '点击将{color}颜色设为标记颜色', { color: getModSignColorLabel(c) })">
@@ -540,7 +540,7 @@
 <script setup >
 import { computed, defineAsyncComponent, ref, watch, nextTick } from 'vue'
 import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // 引入防抖函数
-import { MOD_SIGN_COLOR_MAP, MOD_TYPE_ICON_MAP, getModSignColorLabel, getModTypeLabel, getSourceTypeLabel } from '../../shared/lib/constants'
+import { MOD_SIGN_COLORS, MOD_TYPE_ICON_MAP, getModSignColorLabel, getModTypeLabel, getSourceTypeLabel } from '../../shared/lib/constants'
 import { useModStore } from './stores/modStore'
 import { useSearchStore } from './stores/searchStore'
 import { useAppStore } from '../../app/stores/appStore'
@@ -591,7 +591,7 @@ const userAliasName = ref('')
 const userNotes = ref('')
 const newTagInput = ref('')
 const customSignColor = ref(DEFAULT_ACCENT_HEX)
-const presetColors = MOD_SIGN_COLOR_MAP
+const presetColors = MOD_SIGN_COLORS
 const isUsingAI = ref(false)
 
 // === 标签管理逻辑 ===

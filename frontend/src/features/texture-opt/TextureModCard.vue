@@ -85,7 +85,7 @@
 import { computed } from 'vue'
 import { FolderOpen, MoreVertical } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
-import { STORE_TYPE_MAP } from '../../shared/lib/constants'
+import { getStoreTypeLabel } from '../../shared/lib/constants'
 
 const props = defineProps({
   mod: { type: Object, required: true },
@@ -111,10 +111,7 @@ const unsupportedTooltip = computed(() => {
 
 const storeLabel = computed(() => {
   const store = String(props.mod?.store || '').trim().toLowerCase()
-  if (store in STORE_TYPE_MAP) {
-    return STORE_TYPE_MAP[store]
-  }
-  return store ? store : ''
+  return store ? getStoreTypeLabel(store) : ''
 })
 
 const scaleTags = computed(() => {

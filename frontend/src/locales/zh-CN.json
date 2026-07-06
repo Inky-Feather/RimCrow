@@ -295,7 +295,10 @@
     },
     "mod": {
       "action": {
-        "copy_info": "复制模组信息"
+        "copy_field": "复制{field}",
+        "copy_info": "复制模组信息",
+        "visit_url": "访问网页",
+        "visit_workshop": "访问创意工坊"
       },
       "current_mod": "当前模组",
       "field": {
@@ -1452,6 +1455,11 @@
       "upgrade_success": "版本升级成功",
       "upgrade_to": "跃升至"
     },
+    "version": {
+      "supported": "支持当前版本",
+      "unknown": "版本未注明",
+      "unsupported": "可能不支持当前版本"
+    },
     "workshop_action": {
       "download": "下载",
       "open_steam": "打开 Steam 客户端工坊页面",
@@ -2593,6 +2601,11 @@
       "only_one_file": "一次只能导入一个文件，已自动使用第一个文件",
       "rename_empty": "请输入新的备份名称"
     },
+    "common": {
+      "copied_label": "{label}已复制",
+      "copy_empty": "没有可复制的{label}",
+      "copy_label_failed": "{label}复制失败"
+    },
     "conflict": {
       "batch_applied": "已按条件处理 {count} 组冲突",
       "empty_scope": "当前作用范围内没有可处理的冲突组",
@@ -2874,6 +2887,10 @@
       "system_prompt_readonly": "系统模板只读",
       "system_prompt_view_only": "系统模板只能查看，不能直接修改。你仍然可以查看它会使用哪些附件和变量。",
       "system_prompts": "系统模板",
+      "tabs": {
+        "entries": "入口",
+        "prompts": "模板"
+      },
       "title": "AI 定义管理",
       "tool": "工具",
       "unnamed_entry": "未命名入口",
@@ -5439,6 +5456,7 @@
     "close": "关闭",
     "confirm": "确认",
     "confirm_delete": "确认删除",
+    "content": "内容",
     "continue": "继续",
     "copy_file_path": "复制文件路径",
     "copy_full_path": "复制完整路径",

@@ -50,7 +50,7 @@
             <div class="flex flex-col gap-3">
             <template v-if="workspaceStore.workshopSearch.isEnhancedMode">
               <CommonSelect v-model="workspaceStore.workshopSearch.language" :options="languageOptions" :label="t('ui.workspace.workshop.advanced.language', '查询语言')" mini class="min-w-0" />
-              <CommonSelect v-model="workspaceStore.workshopSearch.searchTextTarget" :options="WORKSHOP_TEXT_TARGET_OPTIONS" :label="t('ui.workspace.workshop.advanced.text_target', '查询范围')" mini class="min-w-0" />
+              <CommonSelect v-model="workspaceStore.workshopSearch.searchTextTarget" :options="workshopTextTargetOptions" :label="t('ui.workspace.workshop.advanced.text_target', '查询范围')" mini class="min-w-0" />
             </template>
             <div v-else class="rounded-lg border border-border-base/10 bg-bg-inset/60 px-2 py-1.5 text-xs text-text-dim">
               {{ t('ui.workspace.workshop.advanced.cache_limited', '缓存搜索使用本地数据库内容，不支持查询语言和查询范围。') }}
@@ -75,7 +75,7 @@
                 </div>
                 <div class="space-y-1">
                   <div class="text-[0.65rem] font-bold text-text-dim">{{ t('ui.workspace.workshop.advanced.time', '时间') }}</div>
-                  <button v-for="option in WORKSHOP_DAY_RANGE_OPTIONS" :key="option.value" type="button"
+                  <button v-for="option in workshopDayRangeOptions" :key="option.value" type="button"
                     class="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors"
                     :class="[
                       isWorkshopDayOptionDisabled(option) ? 'text-text-disabled cursor-not-allowed opacity-45' : 'hover:text-text-main',
@@ -523,7 +523,7 @@ import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.
 import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue'
 import { createTagSearchController, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
 import {
-  WORKSHOP_DAY_RANGE_OPTIONS, WORKSHOP_SORT_OPTIONS, WORKSHOP_TEXT_TARGET_OPTIONS,
+  getLocalizedWorkshopDayRangeOptions, getLocalizedWorkshopSortOptions, getLocalizedWorkshopTextTargetOptions,
   allowsWorkshopUntilNow, formatWorkshopSortStateLabel, hasWorkshopSearchText, resolveWorkshopSortSelection, supportsWorkshopDayRange,
 } from '../workshopSearchOptions'
 import { getCurrentLocale, t } from '../../../shared/i18n'
@@ -554,6 +554,9 @@ const normalSortOptions = computed(() => [
   { label: t('ui.workspace.workshop.cache_sort.name', '名称排序'), value: 'name' },
   { label: t('ui.workspace.workshop.cache_sort.author', '作者排序'), value: 'author' },
 ])
+const workshopSortOptions = computed(() => getLocalizedWorkshopSortOptions())
+const workshopDayRangeOptions = computed(() => getLocalizedWorkshopDayRangeOptions())
+const workshopTextTargetOptions = computed(() => getLocalizedWorkshopTextTargetOptions())
 const languageOptions = computed(() => workspaceStore.workshopSearch.languageOptions)
 const translationLanguageOptions = computed(() => appStore.translationLanguageOptions
   .map(item => ({ label: item.label, value: item.code || item.value }))
@@ -574,7 +577,7 @@ const workshopSourceTitle = computed(() => {
     : t('ui.workspace.workshop.source.cache', '缓存工坊搜索')
 })
 const workshopSortPanelOptions = computed(() => (
-  workspaceStore.workshopSearch.isEnhancedMode ? WORKSHOP_SORT_OPTIONS : normalSortOptions.value
+  workspaceStore.workshopSearch.isEnhancedMode ? workshopSortOptions.value : normalSortOptions.value
 ))
 const knownTagOptions = computed(() => ([
   { label: t('ui.workspace.workshop.tags.mod', 'Mod（普通模组）'), value: 'Mod' },

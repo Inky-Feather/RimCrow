@@ -101,6 +101,11 @@
       "core": "Core",
       "dlc": "DLC"
     },
+    "version": {
+      "supported": "Supports current version",
+      "unknown": "Version not specified",
+      "unsupported": "May not support current version"
+    },
     "tag": {
       "placeholder": "Type and press Enter..."
     },
@@ -2136,7 +2141,10 @@
         "workshop_id": "Workshop ID: {workshopId}"
       },
       "action": {
-        "copy_info": "Copy mod info"
+        "copy_field": "Copy {field}",
+        "copy_info": "Copy mod info",
+        "visit_url": "Open web page",
+        "visit_workshop": "Open Workshop"
       },
       "current_mod": "current mod",
       "name": "Mod"
@@ -2579,6 +2587,11 @@
       "error": "{workname} failed:\n{message}",
       "success": "{workname} completed",
       "warning": "{workname} needs attention:\n{message}"
+    },
+    "common": {
+      "copied_label": "{label} copied",
+      "copy_empty": "No {label} to copy",
+      "copy_label_failed": "Failed to copy {label}"
     },
     "startup": {
       "auxiliary_warmup_failed": "Some background data could not be warmed up yet. Related hints may appear later.",
@@ -3814,6 +3827,10 @@
       "entry_type": {
         "assistant": "System Assistant",
         "task": "System Task"
+      },
+      "tabs": {
+        "entries": "Entries",
+        "prompts": "Templates"
       },
       "search_entries": "Search system entry name or ID",
       "search_prompts": "Search template name or ID",
@@ -5396,6 +5413,7 @@
     },
     "cancel": "Cancel",
     "continue": "Continue",
+    "content": "content",
     "file": "File",
     "status": {
       "checking": "Checking",

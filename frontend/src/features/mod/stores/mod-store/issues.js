@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { deepClone, toast, checkResult, toUserMessage } from '../../../../shared/lib/common'
-import { ISSUE_LEVEL, ISSUE_TYPE, ISSUE_TITLE_MAP } from '../../../../shared/lib/constants'
+import { ISSUE_LEVEL, ISSUE_TYPE, getIssueTitle } from '../../../../shared/lib/constants'
 import { useProfileStore } from '../../../profiles/profileStore'
 
 const POSITION_WEIGHT_TOP = 0
@@ -65,7 +65,7 @@ export const useModIssues = ({
         const gameVerMajor = profileStore.activeContext.game_version.substring(0, 3)
         if (mod.supported_versions && mod.supported_versions.length > 0 && !mod.supported_versions.includes(gameVerMajor)) {
           _add(id, ISSUE_TYPE.WARN_VERSION_MISMATCH, ISSUE_LEVEL.WARN,
-            `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_VERSION_MISMATCH]}^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${(mod.supported_versions || []).join('··, ··')}··)__`)
+            `^^${getIssueTitle(ISSUE_TYPE.WARN_VERSION_MISMATCH)}^^：不支持当前游戏版本··[[${gameVerMajor}]]·· \n __(支持: ··${(mod.supported_versions || []).join('··, ··')}··)__`)
         }
       }
     }
@@ -157,10 +157,10 @@ export const useModIssues = ({
           const level = status === 1 ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
           const fixText = hasPatch ? '；可启用 Multiplayer Compatibility 辅助修正' : ''
           _add(currentToken, type, level,
-            `${status === 1 ? '!!' : '^^'}${ISSUE_TITLE_MAP[type]}${status === 1 ? '!!' : '^^'}：Multiplayer 兼容等级为 [[${label}]]${fixText}`)
+            `${status === 1 ? '!!' : '^^'}${getIssueTitle(type)}${status === 1 ? '!!' : '^^'}：Multiplayer 兼容等级为 [[${label}]]${fixText}`)
         } else if (status === 0) {
           _add(currentToken, ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN, ISSUE_LEVEL.INFO,
-            `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN]}__：Multiplayer 暂无明确兼容等级`)
+            `__${getIssueTitle(ISSUE_TYPE.INFO_MULTIPLAYER_UNKNOWN)}__：Multiplayer 暂无明确兼容等级`)
         }
       }
       if(!mod.rules) continue // 如果没有 rules 数据（可能未初始化），跳过
@@ -230,7 +230,7 @@ export const useModIssues = ({
             const baseName = displayModName(baseTargetId)
             const altName = displayModName(activeTargetId)
             _add(currentToken, ISSUE_TYPE.INFO_ALTERNATIVE_USED, ISSUE_LEVEL.INFO,
-              `__${ISSUE_TITLE_MAP[ISSUE_TYPE.INFO_ALTERNATIVE_USED]}__：前置依赖 [[${baseName}]] 已由备选模组 [[${altName}]] 替代`, activeTargetToken)
+              `__${getIssueTitle(ISSUE_TYPE.INFO_ALTERNATIVE_USED)}__：前置依赖 [[${baseName}]] 已由备选模组 [[${altName}]] 替代`, activeTargetToken)
           } else {
             // 缺失或停用
             const baseMod = allModsMap.value.get(baseTargetId)
@@ -242,15 +242,15 @@ export const useModIssues = ({
               const localAlt = alts.find(alt => hasRealModById(alt))
               if (localAlt) {
                 _add(currentToken, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR,
-                  `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]}!!：未启用备选前置模组 [[${displayModName(localAlt)}]]`, activeTokenMap.get(normalizeCanonicalId(localAlt)) || normalizeCanonicalId(localAlt))
+                  `!!${getIssueTitle(ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY)}!!：未启用备选前置模组 [[${displayModName(localAlt)}]]`, activeTokenMap.get(normalizeCanonicalId(localAlt)) || normalizeCanonicalId(localAlt))
               } else {
                 // 全都不在本地，彻底缺失
                 _add(currentToken, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY, ISSUE_LEVEL.ERROR,
-                  `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_MISSING_DEPENDENCY]}!!：缺少前置模组 [[${baseName}]]`, baseTargetId)
+                  `!!${getIssueTitle(ISSUE_TYPE.ERROR_MISSING_DEPENDENCY)}!!：缺少前置模组 [[${baseName}]]`, baseTargetId)
               }
             } else {
               _add(currentToken, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR,
-                `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY]}!!：未启用前置模组 [[${baseName}]]`, baseTargetId)
+                `!!${getIssueTitle(ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY)}!!：未启用前置模组 [[${baseName}]]`, baseTargetId)
             }
             continue // 基础依赖和备选依赖都没满足，不用查排序了
           }
@@ -308,7 +308,7 @@ export const useModIssues = ({
           const sourceName = rule.source?.name || '未知规则'
           const extra = rule.source?.detail?.comment ? ` (${rule.source.detail.comment})` : ''
           _add(currentToken, ISSUE_TYPE.ERROR_INCOMPATIBLE, ISSUE_LEVEL.ERROR,
-            `!!${ISSUE_TITLE_MAP[ISSUE_TYPE.ERROR_INCOMPATIBLE]}!!：__${sourceName}__ 指出与 [[${targetName}]] 不兼容${extra}`, activeTokenMap.get(targetId) || targetId)
+            `!!${getIssueTitle(ISSUE_TYPE.ERROR_INCOMPATIBLE)}!!：__${sourceName}__ 指出与 [[${targetName}]] 不兼容${extra}`, activeTokenMap.get(targetId) || targetId)
         }
       }
 
@@ -363,16 +363,16 @@ export const useModIssues = ({
                 const localPack = availablePacks[0] // 取第一个本地找到的语言包
                 const packName = displayModName(localPack.package_id)
                 _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在语言包 [[${packName}]]`, activeTokenMap.get(normalizeCanonicalId(localPack.package_id)) || normalizeCanonicalId(localPack.package_id))
+                  `^^${getIssueTitle(ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK)}^^：不支持当前语言，但本地存在语言包 [[${packName}]]`, activeTokenMap.get(normalizeCanonicalId(localPack.package_id)) || normalizeCanonicalId(localPack.package_id))
               } else if (fallbackPacks.length > 0) {
                 const fallbackPack = fallbackPacks[0]
                 const packName = displayModName(fallbackPack.package_id)
                 _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK]}^^：不支持当前语言，但本地存在可能相关的语言包 [[${packName}]]（该语言包未声明支持当前语言）`, activeTokenMap.get(normalizeCanonicalId(fallbackPack.package_id)) || normalizeCanonicalId(fallbackPack.package_id))
+                  `^^${getIssueTitle(ISSUE_TYPE.WARN_INACTIVE_LANGUAGE_PACK)}^^：不支持当前语言，但本地存在可能相关的语言包 [[${packName}]]（该语言包未声明支持当前语言）`, activeTokenMap.get(normalizeCanonicalId(fallbackPack.package_id)) || normalizeCanonicalId(fallbackPack.package_id))
               } else {
                 // 本地彻底没有相关语言包
                 _add(currentToken, ISSUE_TYPE.WARN_MISSING_LANGUAGE, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_MISSING_LANGUAGE]}^^：不支持当前语言，且未在本地发现相关语言包`)
+                  `^^${getIssueTitle(ISSUE_TYPE.WARN_MISSING_LANGUAGE)}^^：不支持当前语言，且未在本地发现相关语言包`)
               }
             }
           } // 自身是语言包，检查是否存在前置或依赖，且目标Mod是否启用
@@ -380,7 +380,7 @@ export const useModIssues = ({
             const allRelatedModIds = getLanguagePackOwnerIds(mod)
             if(allRelatedModIds.length === 0) {
               _add(currentToken, ISSUE_TYPE.WARN_UNKNOWN_TARGET, ISSUE_LEVEL.WARN,
-                `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_UNKNOWN_TARGET]}^^：语言包指向对象未知，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
+                `^^${getIssueTitle(ISSUE_TYPE.WARN_UNKNOWN_TARGET)}^^：语言包指向对象未知，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
             }
             // 如果存在依赖或前置，检测是否有任意一个启用(部分语言包支持多个Mod，只要有一个启用即可)，
             // 如果未启用则提示用户存在多余的语言包，或者提示指向对象未启用
@@ -388,7 +388,7 @@ export const useModIssues = ({
               const anyActive = allRelatedModIds.some(id => activeIndexMap.has(id))
               if(!anyActive) {
                 _add(currentToken, ISSUE_TYPE.WARN_INACTIVE_TARGET, ISSUE_LEVEL.WARN,
-                  `^^${ISSUE_TITLE_MAP[ISSUE_TYPE.WARN_INACTIVE_TARGET]}^^：语言包指向对象未启用，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
+                  `^^${getIssueTitle(ISSUE_TYPE.WARN_INACTIVE_TARGET)}^^：语言包指向对象未启用，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象`)
               }
             }
 

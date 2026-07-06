@@ -12,11 +12,11 @@
           <div class="sidebar-surface flex w-88 shrink-0 flex-col">
             <div class="space-y-3 border-b border-border-base/5 p-4">
               <div class="flex gap-2">
-                <button v-for="tab in TABS" :key="tab.id" @click="activeTab = tab.id"
+                <button v-for="tab in TABS" :key="tab" @click="activeTab = tab"
                   class="flex-1 rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
-                  :class="activeTab === tab.id ? 'border-accent-special/30 bg-accent-special/15 text-accent-special' : 'border-border-base/10 bg-bg-inset/70 text-text-dim hover:text-text-main'"
+                  :class="activeTab === tab ? 'border-accent-special/30 bg-accent-special/15 text-accent-special' : 'border-border-base/10 bg-bg-inset/70 text-text-dim hover:text-text-main'"
                 >
-                  {{ t(tab.key, tab.label) }}
+                  {{ getTabLabel(tab) }}
                 </button>
               </div>
               <button v-if="activeTab === 'prompts'" @click="createNewPrompt" class="flex w-full items-center justify-center gap-2 rounded-lg border border-accent-special/30 bg-accent-special/10 py-2 text-sm font-bold text-accent-special transition-all hover:bg-accent-special/20" >
@@ -303,8 +303,8 @@ const confirmStore = useConfirmStore()
 // 视图配置 (View Config)
 // -----------------------------------------------------------------
 const TABS = [
-  { id: 'entries', label: '入口', key: 'dialog.ai_definitions.tabs.entries' },
-  { id: 'prompts', label: '模板', key: 'dialog.ai_definitions.tabs.prompts' },
+  'entries',
+  'prompts',
 ]
 
 // -----------------------------------------------------------------
@@ -351,6 +351,11 @@ const toolDefinitionEntries = computed(() => (
 const getEntryTypeLabel = (entryType = '') => (entryType === 'assistant'
   ? t('dialog.ai_definitions.entry_type.assistant', '系统助手')
   : t('dialog.ai_definitions.entry_type.task', '系统任务'))
+const getTabLabel = (id = '') => {
+  if (id === 'entries') return t('dialog.ai_definitions.tabs.entries', '入口')
+  if (id === 'prompts') return t('dialog.ai_definitions.tabs.prompts', '模板')
+  return id
+}
 
 const entryList = computed(() => {
   const assistantEntries = Object.entries(assistants.value || {}).map(([id, data]) => ({

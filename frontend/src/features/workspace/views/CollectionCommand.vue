@@ -166,7 +166,7 @@
                   <div class="grid grid-cols-2 gap-4 text-xs">
                   <div class="space-y-1">
                     <div class="text-[0.7rem] font-black text-text-main">{{ t('ui.workspace.collection.search.sort', '排序') }}</div>
-                    <button v-for="option in WORKSHOP_SORT_OPTIONS" :key="option.value" type="button"
+                    <button v-for="option in workshopSortOptions" :key="option.value" type="button"
                       class="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors"
                       :class="[
                         isCollectionSortOptionDisabled(option) ? 'text-text-disabled cursor-not-allowed opacity-45' : 'hover:text-text-main',
@@ -181,7 +181,7 @@
                   </div>
                   <div class="space-y-1">
                     <div class="text-[0.7rem] font-black text-text-main">{{ t('ui.workspace.collection.search.time', '时间') }}</div>
-                    <button v-for="option in WORKSHOP_DAY_RANGE_OPTIONS" :key="option.value" type="button"
+                    <button v-for="option in workshopDayRangeOptions" :key="option.value" type="button"
                       class="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left transition-colors"
                       :class="[
                         isCollectionDayOptionDisabled(option) ? 'text-text-disabled cursor-not-allowed opacity-45' : 'hover:text-text-main',
@@ -304,7 +304,7 @@ import { createTagSearchController, TAG_FIELD_TYPES } from '../../../shared/comp
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import {
-  WORKSHOP_DAY_RANGE_OPTIONS, WORKSHOP_SORT_OPTIONS,
+  getLocalizedWorkshopDayRangeOptions, getLocalizedWorkshopSortOptions,
   allowsWorkshopUntilNow, formatWorkshopSortStateLabel, hasWorkshopSearchText, resolveWorkshopSortSelection, supportsWorkshopDayRange,
 } from '../workshopSearchOptions'
 import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
@@ -315,6 +315,8 @@ const wsStore = useWorkspaceStore()
 const appStore = useAppStore()
 const modStore = useModStore()
 const confirmStore = useConfirmStore()
+const workshopSortOptions = computed(() => getLocalizedWorkshopSortOptions())
+const workshopDayRangeOptions = computed(() => getLocalizedWorkshopDayRangeOptions())
 
 // 本地 UI 状态
 const newCollectionInput = ref('')

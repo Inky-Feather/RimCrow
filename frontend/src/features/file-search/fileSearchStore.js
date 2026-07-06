@@ -30,9 +30,6 @@ export const getFileSearchExcludeOptions = () => [
   { key: 'skip_textures', label: t('dialog.file_search.exclude.textures', '排除 Textures'), desc: t('dialog.file_search.exclude.textures_desc', '排除贴图目录，避免无意义大文件树。') },
 ]
 
-export const FILE_SEARCH_SCOPE_OPTIONS = getFileSearchScopeOptions()
-export const FILE_SEARCH_EXCLUDE_OPTIONS = getFileSearchExcludeOptions()
-
 export const useFileSearchStore = defineStore('fileSearch', () => {
   const appStore = useAppStore()
   const taskStore = useTaskStore()

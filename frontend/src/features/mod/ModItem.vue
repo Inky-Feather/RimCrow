@@ -199,7 +199,7 @@
 <script setup>
 import { computed, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, MOD_TYPE_ICON_MAP, IconSteam, IconSelf, getIssueTitle, getModSignColorLabel, getModTypeLabel, getStoreTypeLabel } from '../../shared/lib/constants'
+import { MOD_SIGN_COLORS, ISSUE_TYPE, MOD_TYPE_ICON_MAP, IconSteam, IconSelf, getIssueTitle, getModSignColorLabel, getModTypeLabel, getStoreTypeLabel } from '../../shared/lib/constants'
 import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useModStore } from './stores/modStore'
@@ -662,7 +662,7 @@ const handleContextMenu = async (event) => {
       }))}]
     },
     { label: t('menu.mod_item.color.title', '标记颜色') + selectedCountStr, icon: Palette, children: [{ type: 'grid', columns: 5, label: t('menu.mod_item.color.batch_set', '批量设置颜色'),
-        children:[...Object.entries(MOD_SIGN_COLOR_MAP).map(([c]) => ({ tooltip: getModSignColorLabel(c), color: c,
+        children:[...MOD_SIGN_COLORS.map(c => ({ tooltip: getModSignColorLabel(c), color: c,
             active: stats.color === c, action: () => modStore.setModsColor(selectedIds, c)
           })), { type: 'color-picker', color: pickerColor, tooltip: stats.color === 'mixed' ? t('menu.mod_item.color.custom_for_selection', '为当前多选项设置统一自定义颜色') : t('menu.mod_item.color.custom', '自定义颜色'),
             action: (color) => queueSetModsColor(selectedIds, normalizeHexColor(color, DEFAULT_ACCENT_HEX))
@@ -671,8 +671,8 @@ const handleContextMenu = async (event) => {
       }]
     },
     { label: t('menu.mod_item.type', '修改类型') + selectedCountStr, icon: ChessPawn,
-      children: [...Object.entries(MOD_TYPE_MAP).map(([key]) => ({
-        icon: MOD_TYPE_ICON_MAP[key],
+      children: [...Object.entries(MOD_TYPE_ICON_MAP).map(([key, icon]) => ({
+        icon,
         label: getModTypeLabel(key), action: () => modStore.setModsType(selectedIds, key)
       })),{ label: t('ui.common.restore_default', '恢复默认'), icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },

@@ -13,7 +13,6 @@ export const getMatrixFilterStateOptions = () => [
   { label: t('ui.workspace.matrix.filter.missing', '仅看缺失'), value: 'missing' },
   { label: t('ui.workspace.matrix.filter.deleted', '仅看已删除'), value: 'deleted' },
 ]
-export const MATRIX_FILTER_STATE_OPTIONS = getMatrixFilterStateOptions()
 
 export const isMatrixModDeleted = (mod) => !!mod?.is_deleted || mod?.state === 'deleted'
 export const isMatrixModMissing = (mod) => !!mod?.is_missing && !isMatrixModDeleted(mod)

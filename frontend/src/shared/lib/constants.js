@@ -72,30 +72,6 @@ export const ISSUE_TYPE = {
 
 }
 
-// 定义类型到中文标题的映射
-export const ISSUE_TITLE_MAP = {
-  'missing_file': '文件缺失',
-  'missing_dependency': '依赖缺失',
-  'inactive_dependency': '依赖未启用',
-  'incompatible': '模组冲突',
-  'wrong_order': '排序错误',
-  'version_mismatch': '版本不符',
-  'link_mod_missing': '联锁模组缺失',
-  'link_wrong_order': '联锁排序错误',
-  'info_alternative_used': '依赖替代',
-
-  'warn_missing_language': '缺少语言支持',
-  'warn_inactive_language_pack': '语言包未启用',
-  'warn_unknown_target': '语言包指向未知',
-  'warn_inactive_target': '语言包指向未启用',
-  'warn_multiplayer_compatibility': '联机兼容性',
-  'multiplayer_incompatible': '不兼容联机',
-  'multiplayer_barely_compatible': '勉强兼容联机',
-  'multiplayer_unknown': '联机兼容性未知',
-
-  'default': '其他问题'
-
-}
 export const getIssueTitle = (type) => {
   const key = String(type || 'default')
   if (key === 'missing_file') return t('ui.issue.missing_file', '文件缺失')
@@ -115,20 +91,9 @@ export const getIssueTitle = (type) => {
   if (key === 'multiplayer_incompatible') return t('ui.issue.multiplayer_incompatible', '不兼容联机')
   if (key === 'multiplayer_barely_compatible') return t('ui.issue.multiplayer_barely_compatible', '勉强兼容联机')
   if (key === 'multiplayer_unknown') return t('ui.issue.multiplayer_unknown', '联机兼容性未知')
-  if (ISSUE_TITLE_MAP[key]) return ISSUE_TITLE_MAP[key]
   return t('ui.issue.default', '其他问题')
 }
 
-// 模组类型映射
-export const MOD_TYPE_MAP = {
-  'LanguagePack': '语言包',
-  'XML': '纯XML',
-  'Assembly': '含程序集',
-  'Texture': '纹理包',
-  'Audio': '音频包',
-  'Mixed': '混合',
-  'Unknown': '未知类型'
-}
 export const getModTypeLabel = (type) => {
   if (type === 'LanguagePack') return t('ui.mod_type.LanguagePack', '语言包')
   if (type === 'XML') return t('ui.mod_type.XML', '纯XML')
@@ -189,17 +154,7 @@ export const MOD_TYPE_ICON_MAP = {
   ]),
 }
 // 模组颜色列表
-export const MOD_SIGN_COLOR_MAP = {
-  '#ef4444': '红色',
-  '#ec4899': '粉色',
-  '#8b5cf6': '紫色',
-  '#3b82f6': '蓝色',
-  '#06b6d4': '青色',
-  '#10b981': '绿色',
-  '#84cc16': '草色',
-  '#eab308': '黄色',
-  '#f97316': '橙色',
-}
+export const MOD_SIGN_COLORS = ['#ef4444', '#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#eab308', '#f97316']
 export const getModSignColorLabel = (color) => {
   if (color === '#ef4444') return t('ui.mod_sign_color.red', '红色')
   if (color === '#ec4899') return t('ui.mod_sign_color.pink', '粉色')
@@ -212,16 +167,6 @@ export const getModSignColorLabel = (color) => {
   if (color === '#f97316') return t('ui.mod_sign_color.orange', '橙色')
   return color || t('ui.common.none', '无')
 }
-// 模组来源映射
-export const SOURCE_TYPE_MAP = {
-  'core': '游戏本体',
-  'dlc': 'DLC',
-  'github': 'Git 仓库',
-  'workshop': 'Steam 创意工坊',
-  'local': '本地模组',
-  'self': '管理器下载',
-  'other': '其它来源'
-}
 export const getSourceTypeLabel = (source) => {
   if (source === 'core') return t('ui.source_type.core', '游戏本体')
   if (source === 'dlc') return t('ui.source_type.dlc', 'DLC')
@@ -232,14 +177,6 @@ export const getSourceTypeLabel = (source) => {
   if (source === 'other') return t('ui.source_type.other', '其它来源')
   return source || t('ui.source_type.unknown', '未知来源')
 }
-export const STORE_TYPE_MAP = {
-  'core': '本体',
-  'dlc': 'DLC',
-  'workshop': '工坊',
-  'local': '本地',
-  'self': '管理器',
-  'other': '其它'
-}
 export const getStoreTypeLabel = (store) => {
   if (store === 'core') return t('ui.store_type.core', '本体')
   if (store === 'dlc') return t('ui.store_type.dlc', 'DLC')
@@ -247,7 +184,7 @@ export const getStoreTypeLabel = (store) => {
   if (store === 'self') return t('ui.store_type.self', '管理器')
   if (store === 'workshop') return t('ui.store_type.workshop', '工坊')
   if (store === 'other') return t('ui.store_type.other', '其它')
-  return t('ui.store_type.unknown', '未知')
+  return store || t('ui.store_type.unknown', '未知')
 }
 
 

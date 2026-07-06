@@ -64,7 +64,7 @@
               <span v-if="hoverStore.data.version" class="text-accent-primary">v{{ hoverStore.data.version }}</span>
               <!-- Mod类型徽章 -->
               <span class="px-1.5 rounded-sm bg-bg-overlay/5 border border-border-base/10 text-text-soft">
-                {{ MOD_TYPE_MAP[modStore.displayModType(hoverStore.data)] || 'MOD' }}
+                {{ MOD_TYPE_SHORT_LABELS[modStore.displayModType(hoverStore.data)] || 'MOD' }}
               </span>
             </div>
           </div>
@@ -443,8 +443,8 @@ const saveBreakingIcon = computed(() => {
   return IconUnknown
 })
 
-// Mod 类型简写映射
-const MOD_TYPE_MAP = {
+// Mod 类型简写映射：预览卡片空间有限，保留稳定英文缩写，不走全局完整标签。
+const MOD_TYPE_SHORT_LABELS = {
   'LanguagePack': 'LANG',
   'XML': 'XML',
   'Assembly': 'DLL',

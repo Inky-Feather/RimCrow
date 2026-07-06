@@ -9,7 +9,6 @@ export const getLocalizedWorkshopSortOptions = () => [
   { label: t('ui.workspace.workshop.sort.latest', '最近更新'), value: 'latest' },
   { label: t('ui.workspace.workshop.sort.created', '最近发布'), value: 'created' },
 ]
-export const WORKSHOP_SORT_OPTIONS = getLocalizedWorkshopSortOptions()
 
 export const getLocalizedWorkshopDayRangeOptions = () => [
   { label: t('ui.workspace.workshop.days.7', '周内'), shortLabel: t('ui.workspace.workshop.days.7_short', '周内'), value: 7 },
@@ -18,14 +17,12 @@ export const getLocalizedWorkshopDayRangeOptions = () => [
   { label: t('ui.workspace.workshop.days.365', '年内'), shortLabel: t('ui.workspace.workshop.days.365_short', '年内'), value: 365 },
   { label: t('ui.workspace.workshop.days.0', '至今'), shortLabel: t('ui.workspace.workshop.days.0_short', '至今'), value: 0 },
 ]
-export const WORKSHOP_DAY_RANGE_OPTIONS = getLocalizedWorkshopDayRangeOptions()
 
 export const getLocalizedWorkshopTextTargetOptions = () => [
   { label: t('ui.workspace.workshop.text_target.0', '标题与说明'), value: 0 },
   { label: t('ui.workspace.workshop.text_target.1', '仅标题'), value: 1 },
   { label: t('ui.workspace.workshop.text_target.2', '仅说明'), value: 2 },
 ]
-export const WORKSHOP_TEXT_TARGET_OPTIONS = getLocalizedWorkshopTextTargetOptions()
 
 export const hasWorkshopSearchText = (tokens = []) => (
   (tokens || []).some(token => (
