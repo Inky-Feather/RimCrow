@@ -2506,6 +2506,17 @@
       "controls": {
         "settings": "Click to set the translation language, provider, and auto-translation behavior."
       }
+    },
+    "log_panel": {
+      "clear_time_filter": "Clear time filter",
+      "copy_log": "Copy log content",
+      "disable_auto_scroll": "Disable auto-scroll",
+      "enable_auto_scroll": "Auto-scroll to bottom",
+      "end_time": "End time",
+      "open_mod_details": "Open Mod details",
+      "reload": "Force reload",
+      "start_time": "Start time",
+      "suspect_namespace": "Suspect source found in the error stack"
     }
   },
   "toast": {
@@ -2686,6 +2697,14 @@
     },
     "update_modal": {
       "recommend_scan": "Run a full scan to apply the new version's core engine features."
+    },
+    "log_panel": {
+      "copy_failed": "Copy failed, possibly due to browser permission restrictions",
+      "copy_success": "Copied {count} log entries",
+      "fetch_files_action": "Fetch log files",
+      "fetch_files_failed": "Failed to load the log file list. Try again later, or check whether the log directory is accessible.",
+      "querying_mod": "Looking up Mod: {modId}",
+      "read_failed": "Failed to read the log. Confirm the file still exists and is not locked by another program."
     }
   },
   "dialog": {
@@ -3290,6 +3309,33 @@
       },
       "suggested_count": "{count} suggested",
       "title": "Add inactive items"
+    },
+    "log_panel": {
+      "collapse_details": "Collapse details",
+      "empty_filtered": "No logs match the current filters.",
+      "expand_details": "Expand details",
+      "expand_full_log": "Expand full log",
+      "live_mode": "Live mode",
+      "load_more_hint": "Scroll up to load more...",
+      "more_files": "+{count} more files...",
+      "no_log_file": "No log file",
+      "phase": {
+        "runtime": "Runtime phase",
+        "startup": "Startup phase",
+        "unknown": "Unknown phase"
+      },
+      "runtime_profile_prefix": "The running game environment is",
+      "runtime_profile_suffix": ". Switch to the active game environment to view live logs.",
+      "search": {
+        "diagnostics": "Diagnostics:\n{diagnostics}",
+        "error_code": "Error code: {code}",
+        "explanation": "Note: {text}",
+        "phase": "Phase: {phase}",
+        "suspect_namespace": "Suspect source: {namespaces}"
+      },
+      "search_placeholder": "Regex search (for example Exception|Crash)...",
+      "switch_runtime_profile": "Switch to running game environment",
+      "switch_to_live": "Switch to live"
     }
   },
   "api": {
@@ -3846,7 +3892,11 @@
       "save_one": "Save setting",
       "save_user_theme": "Save user theme"
     },
-    "recommendation_export": "Recommendation export"
+    "recommendation_export": "Recommendation export",
+    "log_panel": {
+      "global_scan": "Global scan",
+      "token_estimate": "Token estimate"
+    }
   },
   "command": {
     "category": {
@@ -4016,6 +4066,38 @@
         "title": "Toggle item selection",
         "description": "Add or remove the clicked item without clearing the current selection."
       }
+    }
+  },
+  "game_log": {
+    "diagnosis": {
+      "missing_def": "A Mod is referencing a missing definition. This is usually caused by a missing dependency, version mismatch, or old save residue.",
+      "xml_unknown_field": "An XML field is not recognized by the current game or target type. Common causes are an outdated Mod, game version mismatch, or invalid configuration.",
+      "config_error": "A definition configuration does not meet game requirements. Check the object mentioned in the log and its related Mod.",
+      "cross_reference_missing": "The game could not find a referenced object. Common causes are missing dependencies, load order issues, or save data referencing removed content.",
+      "could_not_load_reference": "An object reference in the log failed to load. First check whether the related Mod is enabled and its dependencies are present.",
+      "missing_texture": "The game could not find a texture asset. This is usually caused by an invalid resource path, missing Mod files, or an incomplete package.",
+      "null_reference_exception": "Code tried to access an object that does not exist. This error alone has limited context; check the stack source to narrow it down.",
+      "type_load_exception": "An assembly, method, or field does not match. Common causes are incompatible Mod versions, dependency library conflicts, or old DLLs after a game update.",
+      "translation_data_error": "Translation files contain format or field issues. This may not always crash the game, but it can affect displayed text.",
+      "package_id_format": "The Mod packageId format is invalid. This may affect dependency detection, load order, and manager matching.",
+      "patch_obsolete_method": "A patch targets an obsolete or unstable method. This usually means the related Mod needs an update."
+    },
+    "inferred_type": {
+      "assembly_conflict": "Assembly conflict",
+      "cross_ref_error": "Missing reference",
+      "def_config_error": "Definition config error",
+      "draw_exception": "Draw exception",
+      "missing_def": "Missing definition",
+      "missing_reference": "Reference load failed",
+      "missing_texture": "Missing texture",
+      "null_reference": "Null reference exception",
+      "out_of_memory": "Out of memory",
+      "package_id_error": "Package ID format error",
+      "patch_warning": "Patch warning",
+      "tick_exception": "Tick exception",
+      "translation_error": "Translation data error",
+      "xml_field_error": "XML field error",
+      "xml_syntax_error": "XML syntax error"
     }
   }
 }

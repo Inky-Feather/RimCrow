@@ -94,7 +94,10 @@ class TestGameLogPathResolution(unittest.TestCase):
 
         context = block["context"]
         self.assertEqual(context["inferredType"], "NullReference")
+        self.assertEqual(context["inferredTypeKey"], "game_log.inferred_type.null_reference")
+        self.assertEqual(context["inferredTypeLabel"], "空引用异常")
         self.assertEqual(context["knownPattern"], "null_reference_exception")
+        self.assertEqual(context["diagnosisKey"], "game_log.diagnosis.null_reference_exception")
         self.assertIn("代码访问了不存在的对象", context["diagnosisExplanation"])
         self.assertEqual(context["relatedNamespaces"], ["ExampleMod.Core.Worker"])
 

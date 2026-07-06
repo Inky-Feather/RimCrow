@@ -2257,6 +2257,17 @@
       "texture_opt": "贴图优化",
       "workspace_hub": "库存管理中枢"
     },
+    "log_panel": {
+      "clear_time_filter": "清除时间限制",
+      "copy_log": "复制日志内容",
+      "disable_auto_scroll": "禁用自动滚动",
+      "enable_auto_scroll": "启用自动滚动到底部",
+      "end_time": "结束时间",
+      "open_mod_details": "点击查看 Mod 详情",
+      "reload": "强制重新读取",
+      "start_time": "开始时间",
+      "suspect_namespace": "错误堆栈中出现的可疑来源"
+    },
     "mod_details": {
       "add_group": "添加新分组",
       "add_tag": "添加新标签",
@@ -2564,6 +2575,14 @@
       "share_code_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。",
       "share_code_imported": "分享码已导入"
     },
+    "log_panel": {
+      "copy_failed": "复制失败，可能是浏览器权限限制",
+      "copy_success": "成功复制 {count} 条日志",
+      "fetch_files_action": "获取日志文件",
+      "fetch_files_failed": "获取日志文件列表失败。请稍后重试，或检查日志目录是否可访问。",
+      "querying_mod": "正在查询 Mod: {modId}",
+      "read_failed": "读取日志失败。请确认日志文件仍存在且没有被其它程序占用。"
+    },
     "log_viewer": {
       "global_scan_failed": "全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。",
       "no_log_file_selected": "未选中任何日志文件。",
@@ -2804,6 +2823,33 @@
         "copy_failed_message": "自动复制失败，请手动复制下面的分享码。",
         "generated_title": "分享码已生成"
       }
+    },
+    "log_panel": {
+      "collapse_details": "收起详情",
+      "empty_filtered": "暂无与当前筛选条件匹配的日志。",
+      "expand_details": "展开详情",
+      "expand_full_log": "展开完整日志",
+      "live_mode": "实时模式",
+      "load_more_hint": "向上滚动加载更多...",
+      "more_files": "+{count} 更多文件…",
+      "no_log_file": "无日志文件",
+      "phase": {
+        "runtime": "运行阶段",
+        "startup": "启动阶段",
+        "unknown": "阶段未知"
+      },
+      "runtime_profile_prefix": "当前运行的游戏环境是",
+      "runtime_profile_suffix": "，点击切换到当前实际运行的游戏环境，获取实时日志。",
+      "search": {
+        "diagnostics": "诊断信息:\n{diagnostics}",
+        "error_code": "错误码: {code}",
+        "explanation": "说明: {text}",
+        "phase": "阶段: {phase}",
+        "suspect_namespace": "可疑来源: {namespaces}"
+      },
+      "search_placeholder": "正则搜索（如 Exception|Crash）...",
+      "switch_runtime_profile": "切换到当前运行的游戏环境",
+      "switch_to_live": "切到实时"
     },
     "log_viewer": {
       "ai_analyze": "AI 分析",
@@ -3417,6 +3463,10 @@
       "save_inactive_order": "保存停用列表顺序",
       "save_mod_order": "保存Mod加载顺序"
     },
+    "log_panel": {
+      "global_scan": "全局扫描",
+      "token_estimate": "Token检测"
+    },
     "profiles": {
       "create": "创建环境 \"{name}\"",
       "create_shortcut": "创建环境桌面快捷方式",
@@ -3726,6 +3776,38 @@
   "error": {
     "clipboard": {
       "unsupported": "当前环境不支持剪贴板"
+    }
+  },
+  "game_log": {
+    "diagnosis": {
+      "config_error": "某个定义配置不符合游戏要求，通常需要检查日志提到的对象和对应 Mod。",
+      "could_not_load_reference": "日志中的对象引用没有加载成功，优先检查相关 Mod 是否启用、依赖是否齐全。",
+      "cross_reference_missing": "游戏无法找到被引用的对象，常见原因是缺少依赖、加载顺序不对或存档里引用了已移除内容。",
+      "missing_def": "有 Mod 正在引用不存在的定义，通常是缺少前置、版本不匹配或旧存档残留引用。",
+      "missing_texture": "游戏找不到贴图资源，通常是资源路径写错、Mod 文件缺失或版本包不完整。",
+      "null_reference_exception": "有代码访问了不存在的对象。单独看这类错误信息量有限，需要结合错误堆栈里的来源继续判断。",
+      "package_id_format": "Mod 的 packageId 格式不规范，可能影响依赖识别、加载顺序和管理器匹配。",
+      "patch_obsolete_method": "有补丁作用在过时或不稳定的方法上，通常说明相关 Mod 需要更新。",
+      "translation_data_error": "翻译文件存在格式或字段问题，通常不一定导致崩溃，但会影响文本显示。",
+      "type_load_exception": "程序集或方法字段不匹配，常见原因是 Mod 版本不兼容、依赖库版本冲突或游戏更新后旧 DLL 未适配。",
+      "xml_unknown_field": "某个 XML 字段不被当前游戏或目标类型识别，常见原因是 Mod 版本过旧、游戏版本不匹配或配置写错。"
+    },
+    "inferred_type": {
+      "assembly_conflict": "程序集冲突",
+      "cross_ref_error": "引用缺失",
+      "def_config_error": "定义配置错误",
+      "draw_exception": "绘制异常",
+      "missing_def": "定义缺失",
+      "missing_reference": "引用加载失败",
+      "missing_texture": "贴图缺失",
+      "null_reference": "空引用异常",
+      "out_of_memory": "内存不足",
+      "package_id_error": "包名格式错误",
+      "patch_warning": "补丁警告",
+      "tick_exception": "Tick 异常",
+      "translation_error": "翻译数据错误",
+      "xml_field_error": "XML 字段错误",
+      "xml_syntax_error": "XML 语法错误"
     }
   },
   "history": {

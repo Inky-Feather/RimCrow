@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { checkResult, normalizeText } from '../../shared/lib/common'
 import { useAiStore } from '../ai/aiStore'
+import { t } from '../../shared/i18n'
 
 // -----------------------------------------------------------------
 // 日志分析选择态 Store
@@ -28,11 +29,6 @@ const createEmptySourceState = () => ({
   selectionRequestSeq: 0,
   attachmentKey: '',
 })
-
-const LOG_SOURCE_LABELS = {
-  game: '游戏日志',
-  app: '系统日志',
-}
 
 const cloneLogSnapshot = (log = {}) => ({
   /**
@@ -91,7 +87,9 @@ export const useLogStore = defineStore('log', () => {
   }
 
   const getSourceLabel = (sourceType = 'game') => (
-    LOG_SOURCE_LABELS[normalizeText(sourceType, 'game')] || '日志'
+    normalizeText(sourceType, 'game') === 'app'
+      ? t('dialog.log_viewer.tab.app', '系统日志')
+      : t('dialog.log_viewer.tab.game', '游戏日志')
   )
 
   const getSelectedLogs = (sourceType = 'game') => {
@@ -341,7 +339,7 @@ export const useLogStore = defineStore('log', () => {
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
-      if (!checkResult(res, 'Token检测')) {
+      if (!checkResult(res, t('check.log_panel.token_estimate', 'Token检测'))) {
         const emptyInfo = createEmptyTokenInfo()
         setTokenInfo(normalizedSourceType, emptyInfo, { syncAttachment: true })
         return emptyInfo
@@ -357,7 +355,7 @@ export const useLogStore = defineStore('log', () => {
       setTokenInfo(normalizedSourceType, nextTokenInfo, { syncAttachment: true })
       return nextTokenInfo
     } catch (error) {
-      console.error('Token 计算失败:', error)
+      console.error('Token calculation failed:', error)
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
@@ -401,7 +399,7 @@ export const useLogStore = defineStore('log', () => {
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
-      if (!checkResult(res, '全局扫描')) {
+      if (!checkResult(res, t('check.log_panel.global_scan', '全局扫描'))) {
         clearSelection(normalizedSourceType)
         return null
       }
