@@ -4,6 +4,7 @@ import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
 
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
+import { t } from '../../shared/i18n'
 
 const DEFAULT_FILE_TYPES = ['.xml']
 const DEFAULT_EXCLUDE_OPTIONS = {
@@ -15,19 +16,22 @@ const DEFAULT_EXCLUDE_OPTIONS = {
   skip_binary_like: true,
 }
 
-export const FILE_SEARCH_SCOPE_OPTIONS = [
-  { value: 'current-effective', label: '当前环境有效模组', desc: '搜索当前环境里实际可见的全部模组。' },
-  { value: 'current-active', label: '当前启用模组', desc: '只搜索当前已启用并实际可见的模组。' },
-  { value: 'workshop', label: '工坊模组', desc: '只搜索当前环境有效的工坊模组。' },
-  { value: 'local', label: '本地模组', desc: '只搜索当前环境有效的本地与官方内容。' },
-  { value: 'self', label: '管理器模组', desc: '只搜索当前环境有效的管理器模组。' },
+export const getFileSearchScopeOptions = () => [
+  { value: 'current-effective', label: t('dialog.file_search.scope.current_effective', '当前环境有效模组'), desc: t('dialog.file_search.scope.current_effective_desc', '搜索当前环境里实际可见的全部模组。') },
+  { value: 'current-active', label: t('dialog.file_search.scope.current_active', '当前启用模组'), desc: t('dialog.file_search.scope.current_active_desc', '只搜索当前已启用并实际可见的模组。') },
+  { value: 'workshop', label: t('dialog.file_search.scope.workshop', '工坊模组'), desc: t('dialog.file_search.scope.workshop_desc', '只搜索当前环境有效的工坊模组。') },
+  { value: 'local', label: t('dialog.file_search.scope.local', '本地模组'), desc: t('dialog.file_search.scope.local_desc', '只搜索当前环境有效的本地与官方内容。') },
+  { value: 'self', label: t('dialog.file_search.scope.self', '管理器模组'), desc: t('dialog.file_search.scope.self_desc', '只搜索当前环境有效的管理器模组。') },
 ]
 
-export const FILE_SEARCH_EXCLUDE_OPTIONS = [
-  { key: 'skip_languages', label: '排除 Languages', desc: '默认排除语言包目录，避免翻译文本淹没定义结果。' },
-  { key: 'skip_source', label: '排除 Source', desc: '默认排除源码目录，先聚焦运行期文本资源。' },
-  { key: 'skip_textures', label: '排除 Textures', desc: '排除贴图目录，避免无意义大文件树。' },
+export const getFileSearchExcludeOptions = () => [
+  { key: 'skip_languages', label: t('dialog.file_search.exclude.languages', '排除 Languages'), desc: t('dialog.file_search.exclude.languages_desc', '默认排除语言包目录，避免翻译文本淹没定义结果。') },
+  { key: 'skip_source', label: t('dialog.file_search.exclude.source', '排除 Source'), desc: t('dialog.file_search.exclude.source_desc', '默认排除源码目录，先聚焦运行期文本资源。') },
+  { key: 'skip_textures', label: t('dialog.file_search.exclude.textures', '排除 Textures'), desc: t('dialog.file_search.exclude.textures_desc', '排除贴图目录，避免无意义大文件树。') },
 ]
+
+export const FILE_SEARCH_SCOPE_OPTIONS = getFileSearchScopeOptions()
+export const FILE_SEARCH_EXCLUDE_OPTIONS = getFileSearchExcludeOptions()
 
 export const useFileSearchStore = defineStore('fileSearch', () => {
   const appStore = useAppStore()
@@ -65,7 +69,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
   })
   const searchState = reactive({
     status: 'idle',
-    message: '准备搜索',
+    message: t('tasks.file_search.ready', '准备搜索'),
     matchedCount: 0,
     done: false,
   })
@@ -87,7 +91,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
   })
 
   const scopeLabel = computed(() => {
-    return FILE_SEARCH_SCOPE_OPTIONS.find(option => option.value === form.scope)?.label || '未知范围'
+    return getFileSearchScopeOptions().find(option => option.value === form.scope)?.label || t('dialog.file_search.scope.unknown', '未知范围')
   })
 
   const resetResults = () => {
@@ -107,7 +111,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
     viewerState.encoding = ''
     viewerState.fileSize = 0
     searchState.status = 'idle'
-    searchState.message = '准备搜索'
+    searchState.message = t('tasks.file_search.ready', '准备搜索')
     searchState.matchedCount = 0
     searchState.done = false
   }
@@ -117,18 +121,18 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
     if (isBusy.value) return false
     const query = String(form.query || '').trim()
     if (!query) {
-      toast.warning('请输入搜索词')
+      toast.warning(t('toast.file_search.empty_query', '请输入搜索词'))
       return false
     }
     const requestedFileTypes = buildRequestedFileTypes()
     if (!Array.isArray(requestedFileTypes) || requestedFileTypes.length === 0) {
-      toast.warning('请至少选择一种文件类型')
+      toast.warning(t('toast.file_search.no_file_type', '请至少选择一种文件类型'))
       return false
     }
 
     results.value = []
     searchState.status = 'pending'
-    searchState.message = '搜索任务已提交'
+    searchState.message = t('tasks.file_search.submitted', '搜索任务已提交')
     searchState.matchedCount = 0
     searchState.done = false
 
@@ -145,16 +149,16 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       }
 
       const res = await window.pywebview.api.search_files_start(payload)
-      if (!checkResult(res, '启动文件搜索')) {
+      if (!checkResult(res, t('check.file_search.start', '启动文件搜索'))) {
         searchState.status = 'failed'
-        searchState.message = res?.message || '启动失败'
+        searchState.message = res?.message || t('tasks.file_search.start_failed_short', '启动失败')
         return false
       }
 
       const taskId = String(res?.data?.task_id || '')
       if (!taskId) {
         searchState.status = 'failed'
-        searchState.message = '后端未返回任务 ID'
+        searchState.message = t('tasks.file_search.no_task_id', '后端未返回任务 ID')
         return false
       }
 
@@ -164,9 +168,9 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
         type: 'file-search',
         status: 'pending',
         progress: 0,
-        message: '任务已加入后台队列',
+        message: t('tasks.file_search.queued', '任务已加入后台队列'),
         metrics: {
-          title: '文件内容搜索',
+          title: t('dialog.file_search.title', '文件内容搜索'),
           query,
           scope: form.scope,
           effective_only: form.effective_only,
@@ -175,7 +179,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       return true
     } catch (error) {
       searchState.status = 'failed'
-      searchState.message = toUserMessage(error?.message || error, '启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。')
+      searchState.message = toUserMessage(error?.message || error, t('toast.file_search.start_failed', '启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。'))
       toast.error(searchState.message)
       return false
     } finally {
@@ -274,7 +278,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
     try {
       const data = await readResultFile(row.file_path)
       if (!data) {
-        viewerState.error = '无法读取该文件'
+        viewerState.error = t('dialog.file_search.viewer_read_failed', '无法读取该文件')
         viewerState.content = ''
         return false
       }

@@ -2134,7 +2134,12 @@
         "authors": "Authors: {authors}",
         "package_id": "Package ID: {packageId}",
         "workshop_id": "Workshop ID: {workshopId}"
-      }
+      },
+      "action": {
+        "copy_info": "Copy mod info"
+      },
+      "current_mod": "current mod",
+      "name": "Mod"
     },
     "update_modal": {
       "empty": "No update records found...",
@@ -2145,6 +2150,11 @@
       "upgrade_prefix": "From",
       "upgrade_success": "Version upgraded successfully",
       "upgrade_to": "to"
+    },
+    "profile": {
+      "current": "Current environment",
+      "no_game_dir": "No game directory bound",
+      "unnamed": "Unnamed environment"
     }
   },
   "tooltip": {
@@ -2517,6 +2527,13 @@
       "reload": "Force reload",
       "start_time": "Start time",
       "suspect_namespace": "Suspect source found in the error stack"
+    },
+    "file_search": {
+      "effective_only": "Some mods load different files by game version or DLC. When enabled, only files effective for the current setup are searched.",
+      "file_type_filter": "Limit search by file extension. Enter . for all files. Separate multiple types with English , ; or |.",
+      "next_match": "Next search result",
+      "previous_match": "Previous search result",
+      "xml_only": "Search XML files only"
     }
   },
   "toast": {
@@ -2705,6 +2722,15 @@
       "fetch_files_failed": "Failed to load the log file list. Try again later, or check whether the log directory is accessible.",
       "querying_mod": "Looking up Mod: {modId}",
       "read_failed": "Failed to read the log. Confirm the file still exists and is not locked by another program."
+    },
+    "file_search": {
+      "empty_query": "Enter a search term",
+      "no_file_type": "Select at least one file type",
+      "start_failed": "Failed to start file search. Check whether the current environment path is accessible, or try again later."
+    },
+    "texture_opt": {
+      "image_opt_not_enabled": "Image Opt was not detected in the active mod list. ZSTD textures will still be generated, but the game may not read them.",
+      "unmatched_paths": "{count} paths could not be matched to installed mod directories"
     }
   },
   "dialog": {
@@ -3336,6 +3362,310 @@
       "search_placeholder": "Regex search (for example Exception|Crash)...",
       "switch_runtime_profile": "Switch to running game environment",
       "switch_to_live": "Switch to live"
+    },
+    "file_search": {
+      "case_sensitive": "Case sensitive",
+      "copy_matched_line": "Copy matched line",
+      "effective_only": "Effective files only",
+      "empty": {
+        "no_results": "No search results yet",
+        "no_results_desc": "Run a search to show matched results here.",
+        "no_visible_results": "No visible results after filtering",
+        "no_visible_results_desc": "Clear the filter or adjust the search conditions and run again.",
+        "searching": "Searching",
+        "searching_desc": "Results will stream into this list as the background scan runs."
+      },
+      "exclude": {
+        "languages": "Exclude Languages",
+        "languages_desc": "Exclude language pack folders by default so translated text does not bury definition results.",
+        "source": "Exclude Source",
+        "source_desc": "Exclude source folders by default and focus on runtime text resources first.",
+        "textures": "Exclude Textures",
+        "textures_desc": "Exclude texture folders to avoid large irrelevant file trees."
+      },
+      "file_truncated": "File truncated because it is too large",
+      "file_type_filter": "File types:",
+      "file_type_placeholder": "Example: cs, txt; json | yaml. Enter . for all files",
+      "matched_line": "Matched line",
+      "no_file_selected": "No file selected",
+      "query_placeholder": "Enter a search term or regular expression",
+      "result_filter_placeholder": "Filter mods, filenames, paths, or matched text",
+      "results_title": "Search results",
+      "scope": {
+        "current_active": "Current active mods",
+        "current_active_desc": "Search only currently active and actually visible mods.",
+        "current_effective": "Current effective mods",
+        "current_effective_desc": "Search all mods actually visible in the current environment.",
+        "local": "Local mods",
+        "local_desc": "Search local and official content effective in the current environment.",
+        "self": "Manager mods",
+        "self_desc": "Search manager mods effective in the current environment.",
+        "unknown": "Unknown scope",
+        "workshop": "Workshop mods",
+        "workshop_desc": "Search Workshop mods effective in the current environment."
+      },
+      "scope_label": "Scope:",
+      "title": "File Content Search",
+      "use_regex": "Regular expression",
+      "viewer_read_failed": "Unable to read this file",
+      "viewer_search_placeholder": "Search inside the current file",
+      "wrap_lines": "Wrap lines",
+      "xml_files": "XML files"
+    },
+    "package_transfer": {
+      "apply_environment_data": "Apply environment data too",
+      "apply_environment_data_desc": "When overwriting an existing environment, only its actual data is replaced. Name, description, and bindings stay unchanged. New environments try to keep the original package information.",
+      "batch_handling": "Batch handling",
+      "bundle_size": "Package size",
+      "bundle_summary": "Package summary",
+      "contains_items": "Contains {count} items",
+      "data_import_summary": "Selected {selected}/{total} items",
+      "data_import_summary_with_profiles": "Selected {selected}/{total} items, including {profiles} environments",
+      "data_source_desc": "Contains import data for this data source.",
+      "desc": {
+        "data_import": "Import application data and resolve same-name environments as configured.",
+        "mod_export": "Pack mod files into one archive and optionally include current environment data.",
+        "mod_import": "Import a mod package into a game directory or the manager mod directory."
+      },
+      "disk_space_text": "Free space: {free}. Recommended for this import: at least {recommended}.",
+      "environment_data": "Environment data",
+      "expansion_ratio": "About {ratio}x the compressed size after extraction",
+      "export_plan": "{selected} mods selected. Estimated export: {resolved} mods.",
+      "export_plan_compact": "{selected} selected. Estimated export: {resolved}.",
+      "export_plan_extra": "{selected} mods selected. Estimated export: {resolved} mods, including {extra} additional related mods.",
+      "export_plan_extra_compact": "{selected} selected. {extra} related mods will be added, {resolved} total.",
+      "export_scope": "Export scope",
+      "export_source": "Export source",
+      "export_source_loading": "Source: {profileName}. Reading mod statistics for this environment.",
+      "export_source_need_scope": "Source: {profileName}. Select a valid export scope.",
+      "export_source_summary": "Source: {profileName}. {summary}",
+      "export_with_current_settings": "Export with the current settings.",
+      "exported_at": "Exported at",
+      "extra_export_options": "Additional export options",
+      "folder_name": {
+        "alias": "By alias",
+        "original": "By original mod name",
+        "package_id": "By package ID",
+        "workshop_id": "By Workshop ID"
+      },
+      "folder_name_type": "Mod folder names inside package",
+      "folder_name_type_desc": "Only affects folder names inside the exported package. Original mod directories are not changed. Invalid filename characters are replaced and duplicates get a suffix.",
+      "footer": {
+        "data_import": "Same-name environments will be handled according to your choices. Other data follows the normal import flow.",
+        "mod_export": "If the same mod has multiple sources, the version currently in use is preferred and duplicate copies are skipped.",
+        "mod_import": "Importing into the current environment or manager directory refreshes the current mod list automatically. Mods missing local files are skipped and reported."
+      },
+      "format": "Format",
+      "game_dir_to_use": "Game directory to use",
+      "handle_mode": "Handling mode",
+      "import_bundle_file": "Import package file",
+      "import_mod_files": "Import mod files",
+      "import_mod_files_desc": "Same-name folders are handled by the rules on the right. After importing into the manager directory, the target environment must enable manager mods.",
+      "import_settings": "Import settings",
+      "import_settings_desc": "Environment and mod data can be handled together. Importing into the current environment or manager directory refreshes the current list automatically.",
+      "import_to_game_mods": "Import to game Mods directory",
+      "import_to_game_mods_desc": "Files will be placed directly into the selected game directory.",
+      "import_to_self_mods": "Import to manager mod directory",
+      "include_current_environment": "Include current environment data",
+      "include_current_environment_desc": "Include current environment data such as mod order and configuration files, so another machine can continue from it.",
+      "include_dependencies": "Include dependencies",
+      "include_dependencies_desc": "Bring related dependencies to reduce missing items after import.",
+      "include_interlocks": "Include linked mods",
+      "include_interlocks_desc": "Bring related mods that are meant to be used together.",
+      "include_language_packs": "Include language packs",
+      "include_language_packs_desc": "Bring related translations or language packs.",
+      "included_data": "Included data",
+      "inspect_warning_title": "Some package information could not be read",
+      "item_will_skip": "This item will be skipped.",
+      "mod_conflict_handling": "Same-name mod handling",
+      "mod_conflict_handling_desc": "Only same-name folders are handled here. You can replace all, skip all, save as new folders, or adjust each item.",
+      "mod_conflicts_found": "{count} same-name mods found. They will be handled by these rules during import.",
+      "mod_count": "Mod count",
+      "mode": {
+        "rename": "Save as new folder",
+        "replace_original": "Replace original files",
+        "skip": "Skip"
+      },
+      "new_folder_name": "New folder name",
+      "no_file_selected": "No file selected",
+      "no_game_install": "No available game install",
+      "no_mod_conflicts": "No same-name mods found. Import will write directly to the target directory.",
+      "no_mod_import_selected": "Mod file import is not selected, so only environment data needs handling here.",
+      "no_profile_conflict": "No same-name local environment",
+      "no_valid_game_install": "No valid game install was found. You can still import into the manager mod directory, or configure a valid install first.",
+      "not_included": "Not included",
+      "overwrite_folder_desc": "Import will directly replace the local same-name folder.",
+      "overwrite_profile_warning": "Overwriting an environment replaces game settings, mod settings, save order, and related data in that environment.",
+      "overwrite_to": "Overwrite to",
+      "profile_conflicts_found": "{count} same-name local environments found",
+      "profile_data_count_desc": "Contains {count} environment data entries.",
+      "profile_data_handling": "Environment data handling",
+      "profile_data_handling_desc": "Same-name environments are matched by name. Overwrite only replaces actual data, and creating a new one keeps package environment information where possible.",
+      "profile_import_conflict_desc": "Handle all same-name environments here. Overwrite only replaces actual environment data; create keeps package environment information where possible.",
+      "profile_import_conflict_handling": "Environment import conflict handling",
+      "profile_import_hint": "This package includes {count} environments. Enable “Apply environment data too” and then choose how to handle same-name environments here.",
+      "profile_mode": {
+        "create": "Create environment",
+        "overwrite": "Overwrite existing environment",
+        "skip": "Skip"
+      },
+      "rename_placeholder": "Leave empty to generate a new name automatically",
+      "select_game_install": "Select an available game install",
+      "select_profile_to_overwrite": "Select environment to overwrite",
+      "selected_mod_count": "{count} mods selected.",
+      "self_mods_not_configured": "Manager mod directory is not configured yet",
+      "self_mods_usage_prefix": "After importing into the manager mod directory, enable",
+      "self_mods_usage_suffix": "in the target environment to use them.",
+      "size_change": "Size change",
+      "start_export": "Start export",
+      "start_import": "Start import",
+      "strategy": {
+        "create_all": "Create all",
+        "overwrite_all": "Overwrite all",
+        "per_item": "Handle individually",
+        "rename_all": "Rename all",
+        "replace_all": "Replace all",
+        "skip_all": "Skip all"
+      },
+      "target_disk_space": "Target disk space",
+      "target_game_install": "Target game install",
+      "title": {
+        "data_import": "Import application data package",
+        "mod_export": "Export mod package",
+        "mod_import": "Import mod package"
+      },
+      "unknown_size_change": "Unable to estimate size change",
+      "unpacked_size": "Estimated unpacked size",
+      "use_self_mods": "Use manager mods"
+    },
+    "texture_opt": {
+      "add_file_exclusion": "Add file to exclusions",
+      "auto_fallback": "Auto fallback",
+      "checking_environment": "Checking environment...",
+      "clean_desc": "Main cleanup deletes generated {format} files in the current scope when a same-name PNG source exists. Uninstalled residue and outputs without a source image must be handled separately.",
+      "clean_description_title": "Cleanup notes",
+      "clean_generated_label": "Clean generated {format}",
+      "clean_old_dds_desc": "Automatically delete same-name old DDS files after ZSTD generation.",
+      "clean_old_dds_label": "Clean old DDS after generation",
+      "clean_residue_label": "Clean uninstalled residue {format}",
+      "clean_task": "Cleanup task",
+      "clean_zstd_desc": "Off cleans only DDS; on cleans only .dds.zstd. The two output types are not mixed.",
+      "clean_zstd_label": "Clean ZSTD",
+      "confirm_delete_orphan_message": "This will delete {format} output files in the current scope when no same-name PNG source can be found. Some mods may ship DDS or ZSTD textures directly, so these files can be deleted by mistake. Confirm the target scope before continuing.",
+      "confirm_delete_orphan_single_message": "This will delete {format} output files in “{modName}” when no same-name PNG source can be found. Some mods may ship DDS or ZSTD textures directly, so these files can be deleted by mistake.",
+      "confirm_delete_orphan_title": "Delete outputs without source {format}",
+      "count_images": "{count} images",
+      "current_scale": "Current scale",
+      "current_status": "Current status",
+      "delete_orphan_label": "Delete no-source {format}",
+      "download_todds": "Download todds",
+      "elapsed": "Elapsed {elapsed}",
+      "empty": "No data yet. Scan statistics first or start generation directly.",
+      "exclude_file": "Exclude file",
+      "excluded": "Excluded",
+      "exclusion_filter_placeholder": "Filter exclusions",
+      "failed_filter_placeholder": "Filter failed items",
+      "failed_items": "Failed items",
+      "file_exclusions": "File exclusions",
+      "generate_options": "Generation options",
+      "generate_task": "Generation task",
+      "help": "Pre-generate PNG textures into DDS texture outputs that are easier for the game to load.\nDDS mainly reduces VRAM pressure and speeds up loading. In large mod lists it can reduce stutter and out-of-VRAM risk. The tradeoff is slower generation and DDS often uses more disk space than source PNG files.\nRimWorld 1.6 and later can read DDS natively. Earlier versions usually need [[ Graphics Settings+ ]] to load .dds files.\n\nZSTD generates .dds.zstd files. It is essentially an extra compressed layer over generated DDS files, mainly to save disk space, and requires [[ Image Opt ]] for the game to read it.\n\nScale support thanks to Tieba user ##贴吧用户_0CWt68M##.",
+      "hide_result_panel": "Hide result panel",
+      "image_opt_not_enabled": "Image Opt is not enabled in the current list",
+      "image_opt_not_enabled_desc": "ZSTD compressed textures require Image Opt to be enabled in the current list. They can still be generated, but the game may not read them.",
+      "image_opt_not_installed": "Image Opt is not installed",
+      "image_opt_not_installed_desc": "ZSTD compressed textures require Image Opt for the game to read them. They can still be generated, but the game will keep using PNG or other readable outputs.",
+      "invalid_png": "Invalid PNG",
+      "keep_original_size": "Keep original size",
+      "max_size_desc": "When scaling, try to keep the shortest side no smaller than this target so images are not compressed too far.",
+      "max_size_disabled_desc": "Scaling is disabled, so minimum clarity is not used.",
+      "max_size_label": "Minimum clarity",
+      "menu": {
+        "add_file_exclusion": "Add file exclusion",
+        "clean_dds_only": "Clean DDS only",
+        "clean_generated": "Clean generated outputs",
+        "clean_zstd_only": "Clean ZSTD only",
+        "delete_orphan": "Delete outputs without source image",
+        "delete_orphan_dds_only": "Delete no-source DDS only",
+        "delete_orphan_zstd_only": "Delete no-source ZSTD only",
+        "exclude_mod": "Exclude mod",
+        "generate_current_config": "Generate {format} with current config",
+        "refresh_mod_stats": "Refresh this mod statistics",
+        "unexclude_mod": "Remove mod exclusion"
+      },
+      "mipmap_desc": "Mipmaps are smaller levels for distant rendering. Enabling them makes distant textures smoother with less shimmering, but increases generation time and file size.",
+      "mipmap_label": "Generate Mipmap",
+      "mod_exclusions": "Mod exclusions",
+      "no_failed_items": "The current result has no failed items",
+      "no_file_exclusions": "No file exclusions",
+      "no_history": "No history results",
+      "no_matched_file_exclusions": "No matching excluded files",
+      "no_matched_mod_exclusions": "No matching excluded mods",
+      "no_mod_exclusions": "No mod exclusions",
+      "no_progress": "No task progress",
+      "open_todds_log": "Open todds log",
+      "out_of_range_unscaled": "Out-of-range unscaled",
+      "output_format_desc": "DDS: RimWorld 1.6 and later can read it natively. Earlier versions usually need Graphics Settings+ to load .dds files.\nZSTD: generate DDS first, then compress it into .dds.zstd to mainly save disk space. Requires Image Opt for the game to read it.",
+      "output_format_label": "Output format",
+      "path_exclusion_placeholder": "Paste full file paths, one per line",
+      "pending_generate": "Pending",
+      "process": {
+        "all_overwrite": "Process all textures (overwrite)",
+        "all_skip_existing": "Only process new textures (incremental)",
+        "scaled_only_overwrite": "Only process scalable images (overwrite)"
+      },
+      "process_label": {
+        "all_overwrite": "Full overwrite generation",
+        "all_skip_existing": "Incremental generation",
+        "scaled_only_overwrite": "Only generate scalable images"
+      },
+      "process_mode_desc": "Process all textures by fully regenerating everything, only fill missing textures incrementally without regenerating existing optimized textures, or only process images that need scaling while leaving non-scalable existing optimized textures alone.",
+      "process_mode_label": "Generation scope",
+      "recent_results": "Recent results",
+      "recognize": "Recognize",
+      "remove_file_exclusion": "Remove file exclusion",
+      "remove_mod_exclusion": "Remove mod exclusion",
+      "result_count": "{count} results",
+      "result_panel": "Result panel",
+      "result_panel_desc": "Current task, last 3 task results, and exclusion rules",
+      "result_summary": "Success {success} / Failed {failed}",
+      "scale": {
+        "none": "No scaling"
+      },
+      "scale_factor_desc": "Use the selected ratio first. If some images are not suitable for it, automatically fall back to a safer ratio or keep the original size when needed.",
+      "scale_factor_label": "Scale ratio",
+      "scale_options": "Scaling options (save more VRAM)",
+      "scan_stats": "Scan statistics",
+      "scope": {
+        "active": "Only currently active mods",
+        "all": "All installed mods"
+      },
+      "scope_title": "Processing scope",
+      "search_placeholder": "Filter mod name or path",
+      "show_result_panel": "Show result panel",
+      "skip_small_desc": "Images that are too small or too large will still generate DDS, but keep their original size and are not included in scale-ratio calculation.",
+      "skip_small_label": "Do not scale out-of-range images",
+      "sort": {
+        "impact": "By total size impact",
+        "name": "By name",
+        "pending": "By pending count",
+        "vram": "By estimated VRAM",
+        "vram_saved": "By saved VRAM"
+      },
+      "stop_current_task": "Stop current task",
+      "title": "Texture Optimization",
+      "tool_not_ready": "Tool not ready",
+      "tool_ready": "Tool ready",
+      "total_elapsed": "Total time {elapsed}",
+      "unsupported_summary_empty": "Some files look like images but are not valid images, so they were skipped automatically.",
+      "unsupported_summary_title": "The following fake PNG files were excluded automatically:",
+      "view": {
+        "all": "Overview",
+        "dds": "DDS only",
+        "png": "PNG only",
+        "zstd": "ZSTD only"
+      },
+      "vram_estimate": "Estimated VRAM usage"
     }
   },
   "api": {
@@ -3433,6 +3763,13 @@
       "texture_opt_analyze": "Texture analysis",
       "update": "Software update",
       "update_short": "Update"
+    },
+    "file_search": {
+      "no_task_id": "Backend did not return a task ID",
+      "queued": "Task queued in background",
+      "ready": "Ready to search",
+      "start_failed_short": "Failed to start",
+      "submitted": "Search task submitted"
     }
   },
   "logs": {},
@@ -3652,7 +3989,29 @@
     "save": "Save",
     "select_all": "Select all",
     "unknown": "Unknown",
-    "workshop": "Workshop"
+    "workshop": "Workshop",
+    "confirm_delete": "Confirm delete",
+    "copy_file_path": "Copy file path",
+    "copy_full_path": "Copy full path",
+    "copy_relative_path": "Copy relative path",
+    "file_path": "File path",
+    "full_path": "Full path",
+    "item": "item",
+    "open_file": "Open file",
+    "open_mod_folder": "Open mod folder",
+    "processing": "Processing...",
+    "ready": "Ready",
+    "relative_path": "Relative path",
+    "search": "Search",
+    "select_file": "Select file",
+    "store": {
+      "local": "Local",
+      "self": "Manager",
+      "workshop": "Workshop"
+    },
+    "unknown_path": "Unknown path",
+    "unknown_version": "Unknown version",
+    "visit_page": "Visit page"
   },
   "confirm": {
     "settings": {
@@ -3896,6 +4255,9 @@
     "log_panel": {
       "global_scan": "Global scan",
       "token_estimate": "Token estimate"
+    },
+    "file_search": {
+      "start": "Start file search"
     }
   },
   "command": {

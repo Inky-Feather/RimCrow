@@ -294,11 +294,16 @@
       }
     },
     "mod": {
+      "action": {
+        "copy_info": "复制模组信息"
+      },
+      "current_mod": "当前模组",
       "field": {
         "authors": "作者: {authors}",
         "package_id": "包名: {packageId}",
         "workshop_id": "工坊 ID: {workshopId}"
-      }
+      },
+      "name": "模组"
     },
     "mod_details": {
       "ai_generate": "AI生成",
@@ -430,6 +435,11 @@
     "path": {
       "open_in_explorer": "在资源管理器中打开",
       "placeholder": "请输入或粘贴路径..."
+    },
+    "profile": {
+      "current": "当前环境",
+      "no_game_dir": "暂未绑定游戏目录",
+      "unnamed": "未命名环境"
     },
     "profiles": {
       "action": {
@@ -2213,6 +2223,13 @@
       "restore_failure": "严格禁用恢复失败：{reason}。该 Mod 仍按禁用记录保留，请检查文件权限或是否被占用。",
       "source": "储存位置：{source}"
     },
+    "file_search": {
+      "effective_only": "部分模组会按照游戏版本或 DLC 加载不同的文件，开启后仅会搜索当前有效的文件",
+      "file_type_filter": "可自定义搜索限定文件，直接输入文件后缀名即可；. 表示全部文件，多文件类型可用英文 , ; | 分割",
+      "next_match": "下一个搜索结果",
+      "previous_match": "上一个搜索结果",
+      "xml_only": "仅搜索 XML 文件"
+    },
     "group_item": {
       "change_color": "改变颜色",
       "delete": "删除分组",
@@ -2544,6 +2561,11 @@
       "label_success": "{label}已复制",
       "success": "已复制{label}"
     },
+    "file_search": {
+      "empty_query": "请输入搜索词",
+      "no_file_type": "请至少选择一种文件类型",
+      "start_failed": "启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。"
+    },
     "group_item": {
       "rename_duplicate": "分组名称已存在，已添加序号 {index}"
     },
@@ -2683,6 +2705,10 @@
       "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
       "tool_ready_no_download": "todds 已就绪，无需下载"
     },
+    "texture_opt": {
+      "image_opt_not_enabled": "当前启用模组里未检测到 Image Opt。ZSTD 贴图仍会生成，但游戏可能不会读取这些文件。",
+      "unmatched_paths": "有 {count} 条路径无法匹配到已安装模组目录"
+    },
     "update_modal": {
       "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！"
     },
@@ -2776,6 +2802,55 @@
       "options_hint": "默认移入系统回收站；选择强制删除后将直接彻底删除，无法恢复。",
       "trash_description": "更安全，文件会进入系统回收站，可在系统中恢复。",
       "trash_option": "移入回收站"
+    },
+    "file_search": {
+      "case_sensitive": "大小写敏感",
+      "copy_matched_line": "复制匹配行",
+      "effective_only": "只限当前有效文件",
+      "empty": {
+        "no_results": "还没有搜索结果",
+        "no_results_desc": "输入搜索词并执行搜索后，这里会显示命中结果。",
+        "no_visible_results": "过滤后没有可见结果",
+        "no_visible_results_desc": "尝试清空筛选词，或调整搜索条件后重新执行。",
+        "searching": "正在搜索中",
+        "searching_desc": "结果会随着后台扫描流式追加到这里。"
+      },
+      "exclude": {
+        "languages": "排除 Languages",
+        "languages_desc": "默认排除语言包目录，避免翻译文本淹没定义结果。",
+        "source": "排除 Source",
+        "source_desc": "默认排除源码目录，先聚焦运行期文本资源。",
+        "textures": "排除 Textures",
+        "textures_desc": "排除贴图目录，避免无意义大文件树。"
+      },
+      "file_truncated": "文件过大已截断",
+      "file_type_filter": "限定文件类型：",
+      "file_type_placeholder": "例如 cs, txt; json | yaml，输入 . 表示全部文件",
+      "matched_line": "匹配行",
+      "no_file_selected": "未选择文件",
+      "query_placeholder": "输入搜索词或正则表达式进行搜索",
+      "result_filter_placeholder": "筛选模组、文件名、路径、命中内容",
+      "results_title": "搜索结果",
+      "scope": {
+        "current_active": "当前启用模组",
+        "current_active_desc": "只搜索当前已启用并实际可见的模组。",
+        "current_effective": "当前环境有效模组",
+        "current_effective_desc": "搜索当前环境里实际可见的全部模组。",
+        "local": "本地模组",
+        "local_desc": "只搜索当前环境有效的本地与官方内容。",
+        "self": "管理器模组",
+        "self_desc": "只搜索当前环境有效的管理器模组。",
+        "unknown": "未知范围",
+        "workshop": "工坊模组",
+        "workshop_desc": "只搜索当前环境有效的工坊模组。"
+      },
+      "scope_label": "范围:",
+      "title": "文件内容搜索",
+      "use_regex": "正则表达式",
+      "viewer_read_failed": "无法读取该文件",
+      "viewer_search_placeholder": "在当前文件中搜索定位",
+      "wrap_lines": "自动换行",
+      "xml_files": "XML 文件"
     },
     "group_item": {
       "export": {
@@ -3127,6 +3202,132 @@
       "unknown_file_count": "残留/未知文件 {count}",
       "unrecognized_setting": "未识别设置"
     },
+    "package_transfer": {
+      "apply_environment_data": "同时应用环境数据",
+      "apply_environment_data_desc": "覆盖现有环境时，只会替换这个环境的实际使用数据，不会改名称、说明和绑定关系。新建环境时，会尽量保留原来的环境信息。",
+      "batch_handling": "批量处理",
+      "bundle_size": "压缩包大小",
+      "bundle_summary": "包摘要",
+      "contains_items": "包含 {count} 项",
+      "data_import_summary": "已选择 {selected}/{total} 项",
+      "data_import_summary_with_profiles": "已选择 {selected}/{total} 项，含 {profiles} 个环境",
+      "data_source_desc": "包含该数据源的导入内容。",
+      "desc": {
+        "data_import": "导入软件数据，遇到重名环境时按你的选择处理。",
+        "mod_export": "把模组文件打成一个包，按需把当前环境数据一起带上。",
+        "mod_import": "导入模组包，目标可选游戏目录或管理器模组目录。"
+      },
+      "disk_space_text": "当前剩余 {free}，按这次导入建议至少预留 {recommended}",
+      "environment_data": "环境数据",
+      "expansion_ratio": "解压后约为压缩内容的 {ratio} 倍",
+      "export_plan": "当前选中 {selected} 个模组，预计导出 {resolved} 个。",
+      "export_plan_compact": "当前选中 {selected} 个，预计导出 {resolved} 个。",
+      "export_plan_extra": "当前选中 {selected} 个模组，预计导出 {resolved} 个，其中附加带上 {extra} 个。",
+      "export_plan_extra_compact": "当前选中 {selected} 个，预计会多带上 {extra} 个相关模组，合计导出 {resolved} 个。",
+      "export_scope": "导出范围",
+      "export_source": "导出来源",
+      "export_source_loading": "当前来源：{profileName}。正在读取这个环境的模组统计。",
+      "export_source_need_scope": "当前来源：{profileName}。请选择有效导出范围。",
+      "export_source_summary": "当前来源：{profileName}。{summary}",
+      "export_with_current_settings": "将按当前设置导出。",
+      "exported_at": "导出时间",
+      "extra_export_options": "附加导出选项",
+      "folder_name": {
+        "alias": "按别名",
+        "original": "按原模组名",
+        "package_id": "按包名",
+        "workshop_id": "按工坊ID"
+      },
+      "folder_name_type": "包内Mod文件夹命名",
+      "folder_name_type_desc": "只影响导出包里的文件夹名称，不会改动原始Mod目录。遇到不适合作为文件名的字符会自动替换，重名会自动追加序号。",
+      "footer": {
+        "data_import": "环境重名时会按你的选择处理，其它数据仍按原流程导入。",
+        "mod_export": "如果同一个模组有多个来源，会优先带上你当前正在使用的版本，重复副本会自动跳过。",
+        "mod_import": "导入到当前环境目录或管理器目录时会自动刷新当前模组列表。缺少本地文件的模组会跳过并提醒你。"
+      },
+      "format": "格式",
+      "game_dir_to_use": "要使用的游戏目录",
+      "handle_mode": "处理方式",
+      "import_bundle_file": "导入包文件",
+      "import_mod_files": "导入模组文件",
+      "import_mod_files_desc": "如果遇到同名文件夹，会按右侧规则处理。导入到管理器目录后，对应环境需要开启“使用管理器模组”。",
+      "import_settings": "导入设置",
+      "import_settings_desc": "可以同时处理环境和模组。导入到当前环境目录或管理器目录时，当前列表会自动刷新。",
+      "import_to_game_mods": "导入到游戏模组目录",
+      "import_to_game_mods_desc": "会直接放进你选中的游戏目录里。",
+      "import_to_self_mods": "导入到管理器模组目录",
+      "include_current_environment": "附带当前环境数据",
+      "include_current_environment_desc": "会把当前环境数据一起带上，包括模组排序、配置文件等，方便在另一台机器上继续使用。",
+      "include_dependencies": "附带依赖",
+      "include_dependencies_desc": "把相关依赖一起带上，减少导入后缺项。",
+      "include_interlocks": "附带联锁项",
+      "include_interlocks_desc": "把成套使用的相关模组一起带上。",
+      "include_language_packs": "附带语言包",
+      "include_language_packs_desc": "把相关汉化或语言包一起带上。",
+      "included_data": "包含数据",
+      "inspect_warning_title": "这个包的部分信息无法读取",
+      "item_will_skip": "这项将跳过。",
+      "mod_conflict_handling": "同名模组处理",
+      "mod_conflict_handling_desc": "这里只处理同名文件夹。你可以统一替换、跳过、另存为新文件夹，也可以逐项调整。",
+      "mod_conflicts_found": "当前发现 {count} 个同名模组，导入时会按这里的规则处理。",
+      "mod_count": "模组数量",
+      "mode": {
+        "rename": "另存为新文件夹",
+        "replace_original": "替换原文件",
+        "skip": "跳过"
+      },
+      "new_folder_name": "新文件夹名",
+      "no_file_selected": "尚未选择文件",
+      "no_game_install": "当前无可用游戏本体",
+      "no_mod_conflicts": "当前没有发现同名模组，导入时会直接写入目标目录。",
+      "no_mod_import_selected": "本次未勾选“导入模组文件”，这里只需要处理环境数据。",
+      "no_profile_conflict": "本地没有重名环境",
+      "no_valid_game_install": "当前未发现有效游戏本体。仍可导入到管理器模组目录，或先配置有效本体后再导入。",
+      "not_included": "未附带",
+      "overwrite_folder_desc": "导入后会直接替换本地同名文件夹。",
+      "overwrite_profile_warning": "覆盖环境会替换这个环境里的游戏设置、模组设置和存档排序等内容。",
+      "overwrite_to": "覆盖到",
+      "profile_conflicts_found": "本地找到 {count} 个同名环境",
+      "profile_data_count_desc": "包含 {count} 个环境数据。",
+      "profile_data_handling": "环境数据处理",
+      "profile_data_handling_desc": "环境重名时按名称判断。覆盖只替换实际使用数据，新建会尽量保留导入包里的环境信息。",
+      "profile_import_conflict_desc": "这里统一处理所有同名环境。覆盖时只替换环境里的实际使用数据；新建时会尽量保留导入包里的环境信息。",
+      "profile_import_conflict_handling": "环境导入冲突处理",
+      "profile_import_hint": "当前包附带 {count} 个环境。勾选“同时应用环境数据”后，再在这里选择重名环境的处理方式。",
+      "profile_mode": {
+        "create": "新建环境",
+        "overwrite": "覆盖现有环境",
+        "skip": "跳过"
+      },
+      "rename_placeholder": "留空会自动补一个新名字",
+      "select_game_install": "请选择一个可用游戏本体",
+      "select_profile_to_overwrite": "请选择要覆盖的环境",
+      "selected_mod_count": "已选 {count} 个模组。",
+      "self_mods_not_configured": "还没有设置管理器模组目录",
+      "self_mods_usage_prefix": "导入到管理器模组目录后，需要在对应环境开启",
+      "self_mods_usage_suffix": "才能正常使用。",
+      "size_change": "体积变化",
+      "start_export": "开始导出",
+      "start_import": "开始导入",
+      "strategy": {
+        "create_all": "全部新建",
+        "overwrite_all": "全部覆盖",
+        "per_item": "逐项处理",
+        "rename_all": "全部另存",
+        "replace_all": "全部替换",
+        "skip_all": "全部跳过"
+      },
+      "target_disk_space": "目标磁盘空间",
+      "target_game_install": "目标游戏本体",
+      "title": {
+        "data_import": "导入软件数据包",
+        "mod_export": "导出模组打包",
+        "mod_import": "导入模组打包"
+      },
+      "unknown_size_change": "当前无法估算体积变化",
+      "unpacked_size": "预计解压后大小",
+      "use_self_mods": "使用管理器模组"
+    },
     "profiles": {
       "delete": {
         "force": "强制删除隔离区数据",
@@ -3321,6 +3522,135 @@
       "suggested_count": "{count} 项建议",
       "title": "补齐启用项"
     },
+    "texture_opt": {
+      "add_file_exclusion": "添加文件到排除列表",
+      "auto_fallback": "自动回退",
+      "checking_environment": "正在检测环境...",
+      "clean_desc": "主清理会删除当前范围内、且能找到同名 PNG 源图的已生成 {format}；卸载残留和无对应源图的输出需要单独处理。",
+      "clean_description_title": "清理说明",
+      "clean_generated_label": "清理已生成 {format}",
+      "clean_old_dds_desc": "ZSTD 生成后自动删除同名旧 DDS。",
+      "clean_old_dds_label": "生成后清理旧 DDS",
+      "clean_residue_label": "清理卸载残留 {format}",
+      "clean_task": "清理任务",
+      "clean_zstd_desc": "关闭时只清理 DDS；开启时只清理 .dds.zstd，两种输出不会混合清理。",
+      "clean_zstd_label": "清理 ZSTD",
+      "confirm_delete_orphan_message": "将删除当前范围内找不到同名 PNG 源图的 {format} 输出文件。部分模组本来就会直接提供 DDS 或 ZSTD 贴图，这类文件也可能被误删；建议确认目标范围后再继续。",
+      "confirm_delete_orphan_single_message": "将删除「{modName}」中找不到同名 PNG 源图的 {format} 输出文件。部分模组本来就会直接提供 DDS 或 ZSTD 贴图，这类文件也可能被误删。",
+      "confirm_delete_orphan_title": "删除无对应源图 {format}",
+      "count_images": "{count} 张",
+      "current_scale": "当前比例",
+      "current_status": "当前状态",
+      "delete_orphan_label": "删除无对应源图 {format}",
+      "download_todds": "下载 todds",
+      "elapsed": "已用时 {elapsed}",
+      "empty": "暂无数据，请先扫描统计或直接开始生成。",
+      "exclude_file": "排除文件",
+      "excluded": "已排除",
+      "exclusion_filter_placeholder": "筛选已排除",
+      "failed_filter_placeholder": "筛选失败项",
+      "failed_items": "失败项",
+      "file_exclusions": "文件排除",
+      "generate_options": "生成选项",
+      "generate_task": "生成任务",
+      "help": "把 PNG 贴图预先生成为更适合游戏读取的 DDS 贴图输出。\nDDS 主要用来减少显存压力、加快加载；通常情况下，DDS 能在大型模组环境下减少卡顿和爆显存风险；代价是生成比较耗时，DDS 也往往会比源 PNG 更占磁盘空间。\nRimWorld 1.6 起游戏可原生读取 DDS，1.6 以前通常需要[[ Graphics Settings+ ]]才能加载。\n\nZSTD 会生成 .dds.zstd，本质上相当于把已经生成好的 DDS 再打包压缩一层，主要作用是进一步节省磁盘空间，但需要[[ Image Opt ]]才能被游戏读取。\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助",
+      "hide_result_panel": "隐藏结果面板",
+      "image_opt_not_enabled": "Image Opt 未在当前列表启用",
+      "image_opt_not_enabled_desc": "ZSTD 压缩贴图需要当前已启用 Image Opt 才会生效；未启用时仍可生成，但游戏可能不会读取这些文件。",
+      "image_opt_not_installed": "未安装 Image Opt",
+      "image_opt_not_installed_desc": "ZSTD 压缩贴图需要 Image Opt 才能被游戏读取；未安装时仍可生成，但游戏会继续使用原图或其它可读取的输出。",
+      "invalid_png": "无效 PNG",
+      "keep_original_size": "保留原尺寸",
+      "max_size_desc": "缩放时会尽量保证最短边不低于这个目标，避免图片被压得过小。",
+      "max_size_disabled_desc": "当前为不缩放，最小清晰度不会参与处理。",
+      "max_size_label": "最小清晰度",
+      "menu": {
+        "add_file_exclusion": "加入文件排除",
+        "clean_dds_only": "只清理 DDS",
+        "clean_generated": "清理已生成",
+        "clean_zstd_only": "只清理 ZSTD",
+        "delete_orphan": "删除无对应源图",
+        "delete_orphan_dds_only": "只删除无对应源图 DDS",
+        "delete_orphan_zstd_only": "只删除无对应源图 ZSTD",
+        "exclude_mod": "排除模组",
+        "generate_current_config": "生成 {format}（当前配置）",
+        "refresh_mod_stats": "刷新该模组统计",
+        "unexclude_mod": "取消排除模组"
+      },
+      "mipmap_desc": "Mipmap 是给远距离显示准备的缩小层级。开启后远看更平滑、闪烁更少，但生成时间和文件体积会增加一些。",
+      "mipmap_label": "生成 Mipmap",
+      "mod_exclusions": "模组排除",
+      "no_failed_items": "当前结果没有失败项",
+      "no_file_exclusions": "暂无文件排除",
+      "no_history": "暂无历史结果",
+      "no_matched_file_exclusions": "没有匹配的已排除文件",
+      "no_matched_mod_exclusions": "没有匹配的已排除模组",
+      "no_mod_exclusions": "暂无模组排除",
+      "no_progress": "暂无任务进度",
+      "open_todds_log": "打开 todds 日志",
+      "out_of_range_unscaled": "超范围未缩放",
+      "output_format_desc": "DDS：RimWorld 1.6 起游戏可原生读取；1.6 以前通常需要搭配 Graphics Settings+ 才能加载 .dds。\nZSTD：先生成 DDS，再额外压缩成 .dds.zstd，主要节省磁盘空间；需要搭配 Image Opt 后游戏才能读取。",
+      "output_format_label": "输出格式",
+      "path_exclusion_placeholder": "粘贴完整文件路径，可多行",
+      "pending_generate": "待生成",
+      "process": {
+        "all_overwrite": "处理全部贴图（覆盖）",
+        "all_skip_existing": "只处理新增贴图（增量）",
+        "scaled_only_overwrite": "只处理可缩放图片（覆盖）"
+      },
+      "process_label": {
+        "all_overwrite": "完全覆盖生成",
+        "all_skip_existing": "增量生成",
+        "scaled_only_overwrite": "只处理需缩放图片"
+      },
+      "process_mode_desc": "全部处理（完全覆盖重新生成所有贴图），只补缺失的贴图（增量处理，不重新生成已存在的优化贴图），只处理需要缩放的图片（已经存在的无法缩放的优化贴图不用重新生成，可缩放的覆盖生成）。",
+      "process_mode_label": "生成范围",
+      "recent_results": "最近结果",
+      "recognize": "识别",
+      "remove_file_exclusion": "移除文件排除",
+      "remove_mod_exclusion": "移除模组排除",
+      "result_count": "共 {count} 个结果",
+      "result_panel": "结果面板",
+      "result_panel_desc": "当前任务、最近 3 次任务历史和排除规则",
+      "result_summary": "成功 {success} / 失败 {failed}",
+      "scale": {
+        "none": "不缩放"
+      },
+      "scale_factor_desc": "优先按当前选定的比例处理；如果某些图片不适合这个比例，会自动回退到更稳妥的比例，必要时保持原尺寸。",
+      "scale_factor_label": "缩放比例",
+      "scale_options": "缩放选项（进一步节省显存）",
+      "scan_stats": "扫描统计",
+      "scope": {
+        "active": "仅当前启用的模组",
+        "all": "全部已安装模组"
+      },
+      "scope_title": "处理范围",
+      "search_placeholder": "筛选模组名称或路径",
+      "show_result_panel": "显示结果面板",
+      "skip_small_desc": "太小或太大的图片仍会生成 DDS，但会保留原尺寸，不参与缩放比例计算。",
+      "skip_small_label": "超范围图片不参与缩放",
+      "sort": {
+        "impact": "按总体积占比",
+        "name": "按名称",
+        "pending": "按待生成数量",
+        "vram": "按预估显存",
+        "vram_saved": "按节省显存"
+      },
+      "stop_current_task": "停止当前任务",
+      "title": "贴图优化",
+      "tool_not_ready": "工具未就绪",
+      "tool_ready": "工具已就绪",
+      "total_elapsed": "总用时 {elapsed}",
+      "unsupported_summary_empty": "有些文件看起来像图片，其实不是正常图片，已经自动跳过。",
+      "unsupported_summary_title": "以下伪装 PNG 已从任务中自动排除：",
+      "view": {
+        "all": "综合视图",
+        "dds": "仅看 DDS",
+        "png": "仅看 PNG",
+        "zstd": "仅看 ZSTD"
+      },
+      "vram_estimate": "显存占用预估"
+    },
     "workspace": {
       "cleanup_deleted": {
         "message": "确定要清理这些已删除/失效的库存记录吗？（{count} 项）\n这不会删除任何文件，也不会清理用户标签、笔记和分组。",
@@ -3370,6 +3700,13 @@
     }
   },
   "tasks": {
+    "file_search": {
+      "no_task_id": "后端未返回任务 ID",
+      "queued": "任务已加入后台队列",
+      "ready": "准备搜索",
+      "start_failed_short": "启动失败",
+      "submitted": "搜索任务已提交"
+    },
     "message": {
       "cancelling_request": "正在尝试中止任务...",
       "processing": "处理中...",
@@ -3448,6 +3785,9 @@
       "generate_share_code": "生成分享码",
       "pick_export_path": "选择导出路径",
       "read_backup_file": "读取备份文件"
+    },
+    "file_search": {
+      "start": "启动文件搜索"
     },
     "load_order": {
       "export_mod_order": "导出Mod加载顺序",
@@ -3709,20 +4049,34 @@
     "clear_filter": "清空筛选",
     "clear_selection": "取消选择",
     "close": "关闭",
+    "confirm_delete": "确认删除",
     "continue": "继续",
+    "copy_file_path": "复制文件路径",
+    "copy_full_path": "复制完整路径",
+    "copy_relative_path": "复制相对路径",
     "default": "默认",
     "delete_permanently": "彻底删除",
     "file": "文件",
+    "file_path": "文件路径",
+    "full_path": "完整路径",
     "got_it": "我知道了",
+    "item": "项",
     "item_count": "{count} 项",
     "open": "打开",
+    "open_file": "打开文件",
     "open_folder": "打开所在目录",
+    "open_mod_folder": "打开模组目录",
     "open_path": "打开路径",
     "open_workshop": "打开工坊",
+    "processing": "处理中...",
+    "ready": "就绪",
     "refresh": "刷新",
+    "relative_path": "相对路径",
     "remove": "移除",
     "save": "保存",
+    "search": "搜索",
     "select_all": "全选",
+    "select_file": "选择文件",
     "status": {
       "cancelled": "已取消",
       "checking": "检查中",
@@ -3733,8 +4087,16 @@
       "processing": "处理中",
       "reading": "读取中"
     },
+    "store": {
+      "local": "本地",
+      "self": "管理器",
+      "workshop": "工坊"
+    },
     "task": "任务",
     "unknown": "未知",
+    "unknown_path": "路径未知",
+    "unknown_version": "版本未知",
+    "visit_page": "访问页面",
     "workshop": "工坊"
   },
   "confirm": {

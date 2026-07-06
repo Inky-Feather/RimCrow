@@ -75,7 +75,7 @@ const modStore = useModStore()
 
 const isExporting = ref(false)
 const form = reactive({
-  exportName: '模组推荐清单',
+  exportName: '',
   format: 'markdown',
   bodySource: 'notes',
   imageNameSource: 'alias',
