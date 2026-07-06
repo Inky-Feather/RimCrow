@@ -246,7 +246,7 @@
                 <LoaderCircle v-if="isDiffActionPending('apply-backup')" class="size-3 animate-spin" />
                 {{ t('ui.diff_view.action.apply_file_order', '应用文件序列') }}
               </button>
-              <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-border-base/10 text-xs font-bold transition-all">{{ t('ui.common.close', '关闭') }}</button>
+              <button @click="appStore.uiState.showDiffDrawer = false" class="px-3 py-1.5 rounded-lg bg-accent-danger/10 hover:bg-accent-danger/20 text-text-dim border border-border-base/10 text-xs font-bold transition-all">{{ t('common.action.close', '关闭') }}</button>
             </div>
           </div>
 

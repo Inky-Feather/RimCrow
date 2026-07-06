@@ -87,7 +87,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   const state = reactive({
     title: t('dialog.missing_install.title', '缺失项安装管理'),
     message: t('dialog.missing_install.message', '处理未安装模组。'),
-    cancelText: t('common.cancel', '取消'),
+    cancelText: t('common.action.cancel', '取消'),
     cleanupText: '',
     cleanupShouldContinue: false,
     continueText: '',
@@ -614,7 +614,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
     pendingAction.value = ''
     state.title = t('dialog.missing_install.title', '缺失项安装管理')
     state.message = t('dialog.missing_install.message', '处理未安装模组。')
-    state.cancelText = t('common.cancel', '取消')
+    state.cancelText = t('common.action.cancel', '取消')
     state.cleanupText = ''
     state.cleanupShouldContinue = false
     state.continueText = ''
@@ -929,7 +929,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const ensureResolvedBeforeAction = async ({
     activeIds = modStore.activeIds,
-    actionLabel = t('common.save', '保存'),
+    actionLabel = t('common.action.save', '保存'),
   } = {}) => {
     if (appStore.settings.enable_action_prechecks === false) return true
     const analysis = await buildAnalysis(activeIds)

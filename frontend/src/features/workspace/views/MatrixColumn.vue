@@ -421,7 +421,7 @@ const resubscribeMissingWorkshopItems = async (mods) => {
   const check = await confirmStore.confirmAction(
     t('ui.workspace.matrix.resubscribe_missing.title', '重新订阅缺失项'),
     t('ui.workspace.matrix.resubscribe_missing.message', '将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作会先向 Steam 发送取消订阅请求，并等待 Steam 返回成功；随后再重新发送订阅请求，让 Steam 重新拉取这些项目。\n\n由于 Steam 客户端和网络状态不可控，过程中可能出现取消订阅成功但重新订阅失败、Steam 下载排队较久、或列表刷新延迟。执行后请等待 Steam 下载完成，再刷新库存或重新扫描。', { count: workshopIds.length }),
-    { type: 'warning', confirmText: t('ui.workspace.matrix.resubscribe_missing.confirm', '开始重新订阅'), cancelText: t('ui.common.cancel', '取消') }
+    { type: 'warning', confirmText: t('ui.workspace.matrix.resubscribe_missing.confirm', '开始重新订阅'), cancelText: t('common.action.cancel', '取消') }
   )
   if (!check) return false
 
@@ -444,7 +444,7 @@ const downloadMissingWorkshopItemsViaSteam = async (mods) => {
   const check = await confirmStore.confirmAction(
     t('ui.workspace.matrix.download_missing.title', 'Steam 下载缺失项'),
     t('ui.workspace.matrix.download_missing.message', '将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作不会取消订阅，而是直接请求 Steam 客户端重新下载或校验这些项目，并在任务栏等待 Steam 确认本地文件已下载完成。\n\n如果 Steam 网络异常、下载排队过久或项目本身不可用，任务会显示失败。', { count: workshopIds.length }),
-    { type: 'warning', confirmText: t('ui.workspace.matrix.download_missing.confirm', '请求 Steam 下载'), cancelText: t('ui.common.cancel', '取消') }
+    { type: 'warning', confirmText: t('ui.workspace.matrix.download_missing.confirm', '请求 Steam 下载'), cancelText: t('common.action.cancel', '取消') }
   )
   if (!check) return false
 

@@ -12,7 +12,7 @@
   >
     <template #header-actions>
       <button @click="refresh" class="rounded border border-border-base/10 bg-bg-overlay/5 px-3 py-1.5 text-xs text-text-dim transition-colors hover:text-accent-special">
-        {{ t('common.refresh', '刷新') }}
+        {{ t('common.action.refresh', '刷新') }}
       </button>
     </template>
 
@@ -27,7 +27,7 @@
             <div v-else class="space-y-3 text-xs text-text-dim">
               <div class="modal-section-subtle p-3">
 	                <div class="mb-2 text-sm font-bold text-text-main">{{ activeSession.title || t('dialog.ai_trace.untitled_session', '未命名会话') }}</div>
-	                <div>{{ t('dialog.ai_trace.assistant', '所属助手：{assistant}', { assistant: activeSession.assistant_id || t('common.unknown', '未知') }) }}</div>
+	                <div>{{ t('dialog.ai_trace.assistant', '所属助手：{assistant}', { assistant: activeSession.assistant_id || t('common.status.unknown', '未知') }) }}</div>
 	                <div>{{ t('dialog.ai_trace.model', '当前模型：{model}', { model: sessionRequestMeta.model }) }}</div>
 	                <div>{{ t('dialog.ai_trace.temperature', '当前随机性：{temperature}', { temperature: sessionRequestMeta.temperature }) }}</div>
 	                <div>{{ t('dialog.ai_trace.request_count', '请求数量：{count}', { count: activeSession.request_count || 0 }) }}</div>
@@ -394,8 +394,8 @@ const sessionRequestMeta = computed(() => {
   const rawTemperature = overrideConfig?.temperature
   const numericTemperature = Number(rawTemperature)
 	  return {
-	    model: String(latestTrace?.model || t('common.unknown', '未知')),
-	    temperature: Number.isFinite(numericTemperature) ? `${numericTemperature.toFixed(1)}` : t('common.default', '默认'),
+	    model: String(latestTrace?.model || t('common.status.unknown', '未知')),
+	    temperature: Number.isFinite(numericTemperature) ? `${numericTemperature.toFixed(1)}` : t('common.status.default', '默认'),
 	  }
 	})
 

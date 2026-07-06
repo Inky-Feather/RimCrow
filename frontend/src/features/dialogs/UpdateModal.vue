@@ -29,7 +29,7 @@
           
           <div class="flex items-center gap-2">
             <common-switch v-model="showFullHistory" mini :label="t('ui.update_modal.full_history', '完整历史')" class="w-35" />
-            <button class="modal-close-button" :aria-label="t('common.close', '关闭')" @click="closeModal">
+            <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" @click="closeModal">
               <X class="size-4" />
             </button>
           </div>

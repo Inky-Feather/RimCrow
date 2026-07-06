@@ -134,7 +134,7 @@
               </div>
 
               <div class="flex-1 flex justify-end">
-                <button class="modal-close-button" type="button" :aria-label="t('ui.common.close', '关闭')"  @click="appStore.uiState.showRuleDrawer = false" >
+                <button class="modal-close-button" type="button" :aria-label="t('common.action.close', '关闭')"  @click="appStore.uiState.showRuleDrawer = false" >
                   <X class="size-4" />
                 </button>
               </div>
@@ -188,7 +188,7 @@
                       <button @click="editDynamicRule(rule)" v-tooltip="t('ui.common.edit', '编辑')" class="p-2 rounded-lg hover:bg-bg-overlay/10 text-text-dim hover:text-text-main">
                         <Edit3 class="w-4 h-4" />
                       </button>
-                      <button @click="deleteDynamicRule(rule, $event)" v-tooltip="t('ui.common.delete', '删除')" class="p-2 rounded-lg hover:bg-accent-danger/10 text-text-dim hover:text-accent-danger">
+                      <button @click="deleteDynamicRule(rule, $event)" v-tooltip="t('common.action.delete', '删除')" class="p-2 rounded-lg hover:bg-accent-danger/10 text-text-dim hover:text-accent-danger">
                         <Trash2 class="w-4 h-4" />
                       </button>
                     </div>
@@ -213,7 +213,7 @@
                       {{ t('ui.rule_panel.action.update_library', '手动更新库') }}
                     </button>
                     <span class="text-xs px-2 py-0.5 rounded bg-bg-overlay/5 text-text-dim border border-border-base/5">
-                      {{ t('ui.rule_panel.updated_at', '更新时间: {time}', { time: ruleStore.communityRulesUpdateTime ? new Date(ruleStore.communityRulesUpdateTime).toLocaleString(getCurrentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('ui.common.none', '无') }) }}
+                      {{ t('ui.rule_panel.updated_at', '更新时间: {time}', { time: ruleStore.communityRulesUpdateTime ? new Date(ruleStore.communityRulesUpdateTime).toLocaleString(getCurrentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('common.status.none', '无') }) }}
                       <!-- 更新时间: {{ ruleStore.communityRulesUpdateTime }} -->
                     </span>
                   </div>
@@ -229,7 +229,7 @@
                       {{ t('ui.rule_panel.action.update_library', '手动更新库') }}
                     </button>
                     <span class="text-xs px-2 py-0.5 rounded bg-bg-overlay/5 text-text-dim border border-border-base/5">
-                      {{ t('ui.rule_panel.updated_at', '更新时间: {time}', { time: ruleStore.workshopRulesUpdateTime ? new Date(ruleStore.workshopRulesUpdateTime).toLocaleString(getCurrentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('ui.common.none', '无') }) }}
+                      {{ t('ui.rule_panel.updated_at', '更新时间: {time}', { time: ruleStore.workshopRulesUpdateTime ? new Date(ruleStore.workshopRulesUpdateTime).toLocaleString(getCurrentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : t('common.status.none', '无') }) }}
                       <!-- 更新时间: {{ ruleStore.communityRulesUpdateTime }} -->
                     </span>
                   </div>
@@ -429,7 +429,7 @@
               </div>
 
               <footer class="modal-footer flex justify-end gap-3 p-4">
-                <button @click="editingRule = null" class="px-5 py-2 rounded-lg hover:bg-bg-overlay/5 text-sm font-bold text-text-dim transition-colors">{{ t('ui.common.cancel', '取消') }}</button>
+                <button @click="editingRule = null" class="px-5 py-2 rounded-lg hover:bg-bg-overlay/5 text-sm font-bold text-text-dim transition-colors">{{ t('common.action.cancel', '取消') }}</button>
                 <button @click="saveDynamicRule" class="px-6 py-2 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary rounded-lg text-sm font-bold shadow-lg transition-transform active:scale-95">{{ t('ui.rule_panel.editor.save_rule', '保存规则') }}</button>
               </footer>
             </div>

@@ -32,7 +32,7 @@
         <!-- 大小：{{ computedFontSize }}
         字数：{{ selectedMod.name.length }} -->
         <h2 class="font-bold leading-tight line-clamp-2 text-shadow wrap-break-word adaptive-text"
-          @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.name', '名称'), selectedMod.name)"
+          @contextmenu.prevent.stop="copyDetailValue(t('common.field.name', '名称'), selectedMod.name)"
           :style="{ fontSize: computedFontSize }" v-tooltip="selectedMod.name">{{ selectedMod.name }}</h2>
       </div>
     </div>
@@ -41,7 +41,7 @@
     <div class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-3 space-y-4">
       <!-- 包ID -->
       <div class="px-2 text-xs flex items-center justify-between gap-1 text-text-dim tracking-wider border-b border-border-base/5 pb-1" v-tooltip="selectedMod.package_id"
-        @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.package_id', '包名'), selectedMod.package_id_raw || selectedMod.package_id)">
+        @contextmenu.prevent.stop="copyDetailValue(t('common.field.package_id', '包名'), selectedMod.package_id_raw || selectedMod.package_id)">
         <div class="flex min-w-0 flex-1 items-center gap-1">
           <svg class="size-4 shrink-0" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M44 14L24 4L4 14V34L24 44L44 34V14Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M4 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 44V24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 14L24 24" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 9L14 19" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="truncate flex-1 min-w-0">{{ selectedMod.package_id_raw || selectedMod.package_id }}</span>
@@ -66,17 +66,17 @@
               <div class="col-span-2 flex items-center gap-1 bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 space-y-1">
                 <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24 20C27.866 20 31 16.866 31 13C31 9.13401 27.866 6 24 6C20.134 6 17 9.13401 17 13C17 16.866 20.134 20 24 20Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 40.8V42H42V40.8C42 36.3196 42 34.0794 41.1281 32.3681C40.3611 30.8628 39.1372 29.6389 37.6319 28.8719C35.9206 28 33.6804 28 29.2 28H18.8C14.3196 28 12.0794 28 10.3681 28.8719C8.86278 29.6389 7.63893 30.8628 6.87195 32.3681C6 34.0794 6 36.3196 6 40.8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0 space-y-1">
-                  <div class="text-xs text-text-dim uppercase">{{ t('ui.mod_info.author', '作者') }}</div>
+                  <div class="text-xs text-text-dim uppercase">{{ t('common.field.author', '作者') }}</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.author?.join(', ')">
                     <span v-if="selectedMod.author?.length" v-for="author in selectedMod.author" :key="author"
                       v-tooltip="t('tooltip.mod_details.author_item', '作者：{author}\n[[左键筛选/右键复制]]', { author })"
-                      @click.stop="toggleMainListExactFilter('author', author, t('ui.mod_info.author', '作者'))"
-                      @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.author', '作者'), author)"
+                      @click.stop="toggleMainListExactFilter('author', author, t('common.field.author', '作者'))"
+                      @contextmenu.prevent.stop="copyDetailValue(t('common.field.author', '作者'), author)"
                       class="px-1 rounded bg-accent-highlight/20 text-text-soft text-sm border border-accent-highlight/20 flex items-center gap-1 group cursor-pointer">
                       {{ author }}
                     </span>
-                    <span v-else v-tooltip="t('ui.common.unknown', '未知')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
-                      {{ t('ui.common.unknown', '未知') }}
+                    <span v-else v-tooltip="t('common.status.unknown', '未知')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
+                      {{ t('common.status.unknown', '未知') }}
                     </span>
                   </div>
                 </div>
@@ -85,17 +85,17 @@
               <div class="col-span-2 flex items-center gap-1 bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5">
                 <svg class="text-text-dim size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0 space-y-1">
-                  <div class="text-xs text-text-dim uppercase">{{ t('ui.mod_info.supported_languages', '支持语言') }}</div>
+                  <div class="text-xs text-text-dim uppercase">{{ t('common.field.supported_languages', '支持语言') }}</div>
                   <div class="flex flex-wrap gap-1" v-tooltip="selectedMod.supported_languages?.join(', ')">
                     <span v-if="selectedMod.supported_languages?.length" v-for="lang in selectedMod.supported_languages" :key="lang"
                       v-tooltip="t('tooltip.mod_details.language_item', '语言：{lang}\n[[左键筛选/右键复制]]', { lang })"
-                      @click.stop="toggleMainListExactFilter('supported_languages', lang, t('ui.mod_info.language', '语言'))"
-                      @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.language', '语言'), lang)"
+                      @click.stop="toggleMainListExactFilter('supported_languages', lang, t('common.field.language', '语言'))"
+                      @contextmenu.prevent.stop="copyDetailValue(t('common.field.language', '语言'), lang)"
                       class="px-1 rounded bg-accent-secondary/20 text-accent-secondary text-sm border border-accent-secondary/20 flex items-center gap-1 group cursor-pointer">
                       {{ lang }}
                     </span>
-                    <span v-else v-tooltip="t('ui.common.unknown', '未知')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
-                      {{ t('ui.common.unknown', '未知') }}
+                    <span v-else v-tooltip="t('common.status.unknown', '未知')" class="px-1 rounded bg-bg-overlay/10 text-text-dim text-sm border border-border-base/18 flex items-center gap-1 group">
+                      {{ t('common.status.unknown', '未知') }}
                     </span>
                   </div>
                 </div>
@@ -103,7 +103,7 @@
               <!-- Url显示 -->
               <div v-tooltip="selectedMod.url" class="flex gap-1 justify-between items-center bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 "
                 :class="[selectedMod.source === 'local' || !selectedMod.url ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-bg-overlay/10']"
-                @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.source_url', '来源地址'), selectedMod.url)"
+                @contextmenu.prevent.stop="copyDetailValue(t('common.field.source_url', '来源地址'), selectedMod.url)"
                 @click="openUrl(selectedMod.url)">
                 <svg v-if="selectedMod.source==='workshop'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M568 320C568 457 456.8 568 319.6 568C205.8 568 110 491.7 80.6 387.6L175.8 426.9C182.2 459 210.7 483.3 244.7 483.3C283.9 483.3 316.6 450.9 314.9 409.8L399.4 349.6C451.5 350.9 495.2 308.7 495.2 256.1C495.2 204.5 453.2 162.6 401.5 162.6C349.8 162.6 307.8 204.6 307.8 256.1L307.8 257.3L248.6 343C233.1 342.1 217.9 346.4 205.1 355.1L72 300.1C82.2 172.4 189.1 72 319.6 72C456.8 72 568 183 568 320zM227.7 448.3L197.2 435.7C202.8 447.3 212.5 456.5 224.4 461.5C251.3 472.7 282.2 459.9 293.4 433.1C298.8 420.1 298.9 405.8 293.5 392.8C288.1 379.8 278 369.6 265 364.2C252.1 358.8 238.3 359 226.1 363.6L257.6 376.6C277.4 384.8 286.8 407.5 278.5 427.3C270.2 447.2 247.5 456.5 227.7 448.3zM401.5 193.8C435.9 193.8 463.8 221.7 463.8 256.1C463.8 290.5 435.9 318.4 401.5 318.4C367.1 318.4 339.2 290.5 339.2 256.1C339.2 221.7 367.1 193.8 401.5 193.8zM401.6 302.8C427.4 302.8 448.4 281.8 448.4 256C448.4 230.2 427.4 209.2 401.6 209.2C375.8 209.2 354.8 230.2 354.8 256C354.8 281.8 375.8 302.8 401.6 302.8z"/></svg>
                 <svg v-else-if="selectedMod.source==='github'" class="fill-current -m-0.5 size-7" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M237.9 461.4C237.9 463.4 235.6 465 232.7 465C229.4 465.3 227.1 463.7 227.1 461.4C227.1 459.4 229.4 457.8 232.3 457.8C235.3 457.5 237.9 459.1 237.9 461.4zM206.8 456.9C206.1 458.9 208.1 461.2 211.1 461.8C213.7 462.8 216.7 461.8 217.3 459.8C217.9 457.8 216 455.5 213 454.6C210.4 453.9 207.5 454.9 206.8 456.9zM251 455.2C248.1 455.9 246.1 457.8 246.4 460.1C246.7 462.1 249.3 463.4 252.3 462.7C255.2 462 257.2 460.1 256.9 458.1C256.6 456.2 253.9 454.9 251 455.2zM316.8 72C178.1 72 72 177.3 72 316C72 426.9 141.8 521.8 241.5 555.2C254.3 557.5 258.8 549.6 258.8 543.1C258.8 536.9 258.5 502.7 258.5 481.7C258.5 481.7 188.5 496.7 173.8 451.9C173.8 451.9 162.4 422.8 146 415.3C146 415.3 123.1 399.6 147.6 399.9C147.6 399.9 172.5 401.9 186.2 425.7C208.1 464.3 244.8 453.2 259.1 446.6C261.4 430.6 267.9 419.5 275.1 412.9C219.2 406.7 162.8 398.6 162.8 302.4C162.8 274.9 170.4 261.1 186.4 243.5C183.8 237 175.3 210.2 189 175.6C209.9 169.1 258 202.6 258 202.6C278 197 299.5 194.1 320.8 194.1C342.1 194.1 363.6 197 383.6 202.6C383.6 202.6 431.7 169 452.6 175.6C466.3 210.3 457.8 237 455.2 243.5C471.2 261.2 481 275 481 302.4C481 398.9 422.1 406.6 366.2 412.9C375.4 420.8 383.2 435.8 383.2 459.3C383.2 493 382.9 534.7 382.9 542.9C382.9 549.4 387.5 557.3 400.2 555C500.2 521.8 568 426.9 568 316C568 177.3 455.5 72 316.8 72zM169.2 416.9C167.9 417.9 168.2 420.2 169.9 422.1C171.5 423.7 173.8 424.4 175.1 423.1C176.4 422.1 176.1 419.8 174.4 417.9C172.8 416.3 170.5 415.6 169.2 416.9zM158.4 408.8C157.7 410.1 158.7 411.7 160.7 412.7C162.3 413.7 164.3 413.4 165 412C165.7 410.7 164.7 409.1 162.7 408.1C160.7 407.5 159.1 407.8 158.4 408.8zM190.8 444.4C189.2 445.7 189.8 448.7 192.1 450.6C194.4 452.9 197.3 453.2 198.6 451.6C199.9 450.3 199.3 447.3 197.3 445.4C195.1 443.1 192.1 442.8 190.8 444.4zM179.4 429.7C177.8 430.7 177.8 433.3 179.4 435.6C181 437.9 183.7 438.9 185 437.9C186.6 436.6 186.6 434 185 431.7C183.6 429.4 181 428.4 179.4 429.7z"/></svg>
@@ -111,7 +111,7 @@
                 <svg v-else="selectedMod.source==='other'" class="fill-current size-6" viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg"><path d="M451.5 160C434.9 160 418.8 164.5 404.7 172.7C388.9 156.7 370.5 143.3 350.2 133.2C378.4 109.2 414.3 96 451.5 96C537.9 96 608 166 608 252.5C608 294 591.5 333.8 562.2 363.1L491.1 434.2C461.8 463.5 422 480 380.5 480C294.1 480 224 410 224 323.5C224 322 224 320.5 224.1 319C224.6 301.3 239.3 287.4 257 287.9C274.7 288.4 288.6 303.1 288.1 320.8C288.1 321.7 288.1 322.6 288.1 323.4C288.1 374.5 329.5 415.9 380.6 415.9C405.1 415.9 428.6 406.2 446 388.8L517.1 317.7C534.4 300.4 544.2 276.8 544.2 252.3C544.2 201.2 502.8 159.8 451.7 159.8zM307.2 237.3C305.3 236.5 303.4 235.4 301.7 234.2C289.1 227.7 274.7 224 259.6 224C235.1 224 211.6 233.7 194.2 251.1L123.1 322.2C105.8 339.5 96 363.1 96 387.6C96 438.7 137.4 480.1 188.5 480.1C205 480.1 221.1 475.7 235.2 467.5C251 483.5 269.4 496.9 289.8 507C261.6 530.9 225.8 544.2 188.5 544.2C102.1 544.2 32 474.2 32 387.7C32 346.2 48.5 306.4 77.8 277.1L148.9 206C178.2 176.7 218 160.2 259.5 160.2C346.1 160.2 416 230.8 416 317.1C416 318.4 416 319.7 416 321C415.6 338.7 400.9 352.6 383.2 352.2C365.5 351.8 351.6 337.1 352 319.4C352 318.6 352 317.9 352 317.1C352 283.4 334 253.8 307.2 237.5z"/></svg>
                 <div class="flex-1 min-w-0 m-0">
                   <div class="text-xs text-text-dim uppercase flex justify-between items-center">
-                    <span class="min-w-0 truncate">{{ t('ui.mod_info.source_url', '来源地址') }}</span>
+                    <span class="min-w-0 truncate">{{ t('common.field.source_url', '来源地址') }}</span>
                     <svg class="shrink-0 size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 32L33 15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15H33V33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </div>
                   <div class="text-sm text-accent-cool truncate direction-rtl ">{{ displaySourceType }}</div>
@@ -121,12 +121,12 @@
               <!-- 路径显示 -->
               <div v-tooltip="selectedMod.path" class="flex gap-1 justify-between items-center bg-bg-overlay/5 rounded-lg p-1.5 border border-border-base/5 "
                 :class="[!selectedMod.path ? 'text-text-dim pointer-events-none' : 'cursor-pointer hover:bg-bg-overlay/10']"
-                @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_info.path', '路径'), selectedMod.path)"
+                @contextmenu.prevent.stop="copyDetailValue(t('common.field.path', '路径'), selectedMod.path)"
                 @click="openPath(selectedMod.path)">
                 <svg class="size-6" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 8C5 6.89543 5.89543 6 7 6H19L24 12H41C42.1046 12 43 12.8954 43 14V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V8Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M21 23L16 28L21 33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 28H32V22" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <div class="flex-1 min-w-0 m-0">
                   <div class="text-xs text-text-dim uppercase flex justify-between items-center">
-                    <span class="min-w-0 truncate flex gap-2 items-center">{{ t('ui.mod_info.file_path', '文件路径') }}<Copy v-if="selectedMod.is_coexistence" class="size-3 cursor-help text-accent-primary hover:text-text-main" v-tooltip="t('tooltip.mod_details.coexist', '该Mod为共存状态，在创意工坊目录同样存在')" /></span>
+                    <span class="min-w-0 truncate flex gap-2 items-center">{{ t('common.field.file_path', '文件路径') }}<Copy v-if="selectedMod.is_coexistence" class="size-3 cursor-help text-accent-primary hover:text-text-main" v-tooltip="t('tooltip.mod_details.coexist', '该Mod为共存状态，在创意工坊目录同样存在')" /></span>
                     <svg class="shrink-0 size-4" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16 32L33 15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 15H33V33" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </div>
                   <div class="text-sm text-accent-cool truncate direction-rtl m-0">{{ selectedMod.path }}</div>
@@ -622,7 +622,7 @@ const modType = computed(() => modStore.displayModType(selectedMod.value))
 const detailDateFormatterOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }
 const formatDetailDate = (value) => value
   ? new Date(value).toLocaleString(getCurrentLocale(), detailDateFormatterOptions)
-  : t('ui.common.none', '无')
+  : t('common.status.none', '无')
 
 const copyDetailValue = async (label, value) => {
   const text = Array.isArray(value)
@@ -631,9 +631,9 @@ const copyDetailValue = async (label, value) => {
   if (!text || !navigator?.clipboard?.writeText) return
   try {
     await navigator.clipboard.writeText(text)
-    toast.success(t('toast.copy.label_success', '{label}已复制', { label }), { timeout: 600 })
+    toast.success(t('toast.common.copied_label', '{label}已复制', { label }), { timeout: 600 })
   } catch {
-    toast.error(t('toast.copy.label_failed', '{label}复制失败', { label }), { timeout: 1500 })
+    toast.error(t('toast.common.copy_label_failed', '{label}复制失败', { label }), { timeout: 1500 })
   }
 }
 

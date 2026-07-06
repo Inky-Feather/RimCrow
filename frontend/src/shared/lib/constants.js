@@ -165,7 +165,7 @@ export const getModSignColorLabel = (color) => {
   if (color === '#84cc16') return t('ui.mod_sign_color.lime', '草色')
   if (color === '#eab308') return t('ui.mod_sign_color.yellow', '黄色')
   if (color === '#f97316') return t('ui.mod_sign_color.orange', '橙色')
-  return color || t('ui.common.none', '无')
+  return color || t('common.status.none', '无')
 }
 export const getSourceTypeLabel = (source) => {
   if (source === 'core') return t('ui.source_type.core', '游戏本体')

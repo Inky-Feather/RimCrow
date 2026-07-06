@@ -353,7 +353,7 @@ export const useOrderStore = defineStore('order', () => {
     return false
   }
   // 保存Mod加载顺序
-  const saveLoadOrder = async ({ actionLabel = t('ui.common.save', '保存') } = {}) => {
+  const saveLoadOrder = async ({ actionLabel = t('common.action.save', '保存') } = {}) => {
     const modStore = useModStore()
     // if (!modStore.isDirty) {
     //   setTimeout(() => {
@@ -529,8 +529,8 @@ export const useOrderStore = defineStore('order', () => {
         type: copied ? 'success' : 'warning',
         inputValue: shareCode,
         placeholder: 'RC-...',
-        confirmText: t('ui.common.close', '关闭'),
-        cancelText: t('ui.common.cancel', '取消'),
+        confirmText: t('common.action.close', '关闭'),
+        cancelText: t('common.action.cancel', '取消'),
       })
       return shareCode
     } catch (e) {
@@ -603,7 +603,7 @@ export const useOrderStore = defineStore('order', () => {
       type: 'info',
       placeholder: 'RC-...',
       confirmText: t('ui.common.import', '导入'),
-      cancelText: t('ui.common.cancel', '取消'),
+      cancelText: t('common.action.cancel', '取消'),
     })
     if (!shareCode) return null
 

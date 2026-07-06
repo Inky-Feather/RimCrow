@@ -210,7 +210,7 @@ const previewText = computed(() => {
   // 预览只展示第一个模组，用来确认字段顺序和开关效果，不渲染完整清单以免弹窗过重。
   const lines = []
   const name = modStore.displayModName(mod)
-  const originalName = mod.name || mod.package_id || t('ui.common.unknown_mod', '未知模组')
+  const originalName = mod.name || mod.package_id || t('common.entity.unknown_mod', '未知模组')
   const titleOnlyFormat = ['markdown', 'docx', 'pdf', 'image'].includes(form.format)
   if (form.includeSequence || titleOnlyFormat) {
     lines.push(`${form.includeSequence ? '001. ' : ''}${name}`)
@@ -269,7 +269,7 @@ const showExportComplete = async (result) => {
       type: 'success',
       actionButtons: [
         { label: t('dialog.recommendation_export.open_output_dir', '打开导出目录'), value: 'open', kind: 'primary' },
-        { label: t('common.close', '关闭'), value: 'close', kind: 'secondary' },
+        { label: t('common.action.close', '关闭'), value: 'close', kind: 'secondary' },
       ],
     }
   )

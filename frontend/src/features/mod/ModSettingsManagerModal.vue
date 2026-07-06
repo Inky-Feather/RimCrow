@@ -9,14 +9,14 @@
       </button>
       <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 py-2 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10 disabled:opacity-50"
         :disabled="loading" @click="loadOverview()">
-        {{ t('common.refresh', '刷新') }}
+        {{ t('common.action.refresh', '刷新') }}
       </button>
     </template>
 
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <div class="grid grid-cols-5 border-b border-border-base/10 bg-bg-muted">
         <div class="col-span-3 px-4 py-3 text-[0.7rem] text-text-dim">
-          <div class="truncate text-xs">{{ t('dialog.mod_settings.config_dir', '配置目录: {path}', { path: overview?.config_path || t('common.unknown', '未知') }) }}</div>
+          <div class="truncate text-xs">{{ t('dialog.mod_settings.config_dir', '配置目录: {path}', { path: overview?.config_path || t('common.status.unknown', '未知') }) }}</div>
           <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>{{ t('dialog.mod_settings.file_count', '文件 {count}', { count: overview?.total_files || 0 }) }}</span>
             <span>{{ t('dialog.mod_settings.matched_mod_count', '已安装模组 {count}', { count: overview?.matched_mod_count || 0 }) }}</span>
@@ -145,7 +145,7 @@
                             </span>
                           </div>
                           <div class="mt-2 space-y-1 text-[0.7rem] text-text-dim">
-                            <div>{{ t('dialog.mod_settings.source_folder', '来源文件夹: {folder}', { folder: item.folder_name || t('common.unknown', '未知') }) }}</div>
+                            <div>{{ t('dialog.mod_settings.source_folder', '来源文件夹: {folder}', { folder: item.folder_name || t('common.status.unknown', '未知') }) }}</div>
                             <div class="truncate">{{ t('dialog.mod_settings.file_path', '文件位置: {path}', { path: item.file_path }) }}</div>
                             <div>{{ t('dialog.mod_settings.size_modified', '大小: {size} | 修改时间: {time}', { size: formatSize(item.file_size), time: formatTime(item.modified_time) }) }}</div>
                           </div>
@@ -436,7 +436,7 @@ const syncToActive = async (settingGroup, sourceItem) => {
   const confirmed = await confirmStore.confirmAction(
     t('dialog.mod_settings.confirm_overwrite_title', '确认覆盖'),
     t('dialog.mod_settings.confirm_overwrite_message', '将用 {sourceName} 的内容替换当前激活文件 {activeName}。', { sourceName: sourceItem.name, activeName: activeItem.name }),
-    { confirmText: t('dialog.mod_settings.confirm_overwrite_button', '覆盖激活文件'), cancelText: t('common.cancel', '取消'), type: 'warning' }
+    { confirmText: t('dialog.mod_settings.confirm_overwrite_button', '覆盖激活文件'), cancelText: t('common.action.cancel', '取消'), type: 'warning' }
   )
   if (!confirmed) return
 
@@ -485,7 +485,7 @@ const deleteUnknownFiles = async () => {
 }
 
 const modDisplayName = (modGroup) => {
-  return modGroup?.workshop_detail?.title || modGroup?.mod_name || t('ui.common.unknown_mod', '未知模组')
+  return modGroup?.workshop_detail?.title || modGroup?.mod_name || t('common.entity.unknown_mod', '未知模组')
 }
 
 const cleanupSuccessMessage = (force, count) => (
@@ -499,8 +499,8 @@ const modStatusText = (modGroup) => {
     enabled: t('dialog.mod_settings.status.enabled', '已启用'),
     disabled: t('dialog.mod_settings.status.disabled', '已停用'),
     uninstalled: t('dialog.mod_settings.status.uninstalled', '已卸载'),
-    unknown: t('common.unknown', '未知'),
-  }[modGroup?.status] || t('common.unknown', '未知')
+    unknown: t('common.status.unknown', '未知'),
+  }[modGroup?.status] || t('common.status.unknown', '未知')
 }
 
 const modStatusClass = (modGroup) => {
@@ -566,11 +566,11 @@ const itemStateClass = (item) => {
 
 const formatTime = (timestamp) => {
   const value = Number(timestamp || 0)
-  if (!value) return t('common.unknown', '未知')
+  if (!value) return t('common.status.unknown', '未知')
   try {
     return new Date(value).toLocaleString(getCurrentLocale())
   } catch {
-    return t('common.unknown', '未知')
+    return t('common.status.unknown', '未知')
   }
 }
 

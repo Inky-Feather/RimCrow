@@ -176,7 +176,7 @@
         </div>
 
         <footer class="modal-footer flex justify-end gap-3 px-6 py-4">
-          <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">{{ t('ui.common.cancel', '取消') }}</button>
+          <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">{{ t('common.action.cancel', '取消') }}</button>
           <button @click="submitForm" class="px-6 py-2 rounded-xl bg-accent-primary text-on-accent-primary font-black text-sm shadow-lg shadow-accent-primary/20 transition-all hover:scale-105 active:scale-95">
             {{ isEditing ? t('ui.profiles.action.save_changes', '保存变更') : t('ui.profiles.action.confirm_create', '确认创建') }}
           </button>
@@ -448,7 +448,7 @@ const handleCreateShortcut = async (p) => {
     t('dialog.profiles.shortcut.message', '确定要为环境 "{name}" 创建桌面快捷方式吗？\n快捷方式会按当前环境的启动方式生成，并放到桌面。\n若当前环境优先使用 Steam 启动，且游戏本体路径不同于默认环境，管理器会改写 Steam 的非 Steam 游戏快捷方式配置并在桌面生成 Steam 协议入口；该流程需要 Steam 完全退出，并在写入后重启 Steam 才会生效。\n若多个环境共用同一个游戏目录，快捷方式只能保证启动目标和参数准确，不能保证目录中的链接状态始终与该环境完全一致。', { name: p.name }),
     {
       confirmText: t('ui.common.create', '创建'),
-      cancelText: t('ui.common.cancel', '取消'),
+      cancelText: t('common.action.cancel', '取消'),
     }
   )
   if (!ok) return

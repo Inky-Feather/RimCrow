@@ -26,10 +26,10 @@
         <div class="text-xs font-bold text-text-main truncate group-hover:text-text-inverse transition-colors">
           {{ mod.name || mod.package_id }}
         </div>
-        <div v-if="mod.package_id" :title="t('ui.mod_info.package_id', '包名')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
+        <div v-if="mod.package_id" :title="t('common.field.package_id', '包名')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.package_id }}
         </div>
-        <div v-if="mod.workshop_id" :title="t('ui.mod_info.workshop_id', '工坊ID')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
+        <div v-if="mod.workshop_id" :title="t('common.field.workshop_id', '工坊ID')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.workshop_id }}
         </div>
       </div>
@@ -107,9 +107,9 @@
                 <span class="text-right">{{ formatTime(entry.timestamp, true) || t('ui.common.no_record', '无记录') }}</span>
               </div>
               <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.storage', '储存占用:') }}</span> <span>{{ formatFileSize(mod.file_size) }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.same', '跨库同项:') }}</span> <span>{{ sameTargets.length || t('ui.common.none', '无') }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.conflict', '同库冲突:') }}</span> <span>{{ conflictTargets.length || t('ui.common.none', '无') }}</span></div>
-              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.replacement', '替代项:') }}</span> <span>{{ replacementTargets.length || t('ui.common.none', '无') }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.same', '跨库同项:') }}</span> <span>{{ sameTargets.length || t('common.status.none', '无') }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.conflict', '同库冲突:') }}</span> <span>{{ conflictTargets.length || t('common.status.none', '无') }}</span></div>
+              <div class="flex justify-between"><span class="opacity-60">{{ t('ui.workspace.matrix.detail.replacement', '替代项:') }}</span> <span>{{ replacementTargets.length || t('common.status.none', '无') }}</span></div>
             </div>
 
           <div v-if="mod.path" class="mt-2 p-2 bg-bg-inset/80 rounded-lg border border-border-base/5 text-[0.7rem] text-text-dim break-all cursor-text select-text">

@@ -11,7 +11,7 @@
           {{ missingInstallStore.state.message }}
         </p>
       </div>
-      <button class="modal-close-button" :aria-label="t('common.close', '关闭')" @click="missingInstallStore.close(false)" >
+      <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" @click="missingInstallStore.close(false)" >
         <X class="size-4" />
       </button>
     </div>
@@ -41,7 +41,7 @@
         </button>
         <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
           :disabled="missingInstallStore.isActionPending" @click="missingInstallStore.clearSelection()" >
-          {{ t('common.clear', '清空') }}
+          {{ t('common.action.clear', '清空') }}
         </button>
       </div>
     </div>
@@ -236,7 +236,7 @@ const versionBadgeClass = (versionInfo = {}) => {
 }
 
 const sourceLabel = (source = null) => {
-  if (!source) return t('common.unknown', '未知')
+  if (!source) return t('common.status.unknown', '未知')
   if (source.kind === 'workshop') {
     return source.workshopId || 'Workshop'
   }

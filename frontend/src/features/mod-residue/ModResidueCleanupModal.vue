@@ -301,7 +301,7 @@ const itemPathTooltip = (item) => {
 }
 
 const groupTitle = (group) => {
-  return group?.workshop_detail?.title || group?.mod_name || group?.package_id || group?.workshop_id || t('ui.common.unknown_mod', '未知模组')
+  return group?.workshop_detail?.title || group?.mod_name || group?.package_id || group?.workshop_id || t('common.entity.unknown_mod', '未知模组')
 }
 
 const confidenceText = (confidence) => {
@@ -315,7 +315,7 @@ const confidenceText = (confidence) => {
 
 const formatTime = (timestamp) => {
   const value = Number(timestamp || 0)
-  if (!value) return t('common.unknown', '未知')
+  if (!value) return t('common.status.unknown', '未知')
   return new Date(value).toLocaleString(getCurrentLocale())
 }
 

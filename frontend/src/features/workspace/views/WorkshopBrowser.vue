@@ -1009,15 +1009,15 @@ const handleScroll = async (event) => {
 }
 
 
-const formatDate = (ts) => ts ? new Date(ts).toLocaleDateString(getCurrentLocale()) : t('ui.common.unknown', '未知')
+const formatDate = (ts) => ts ? new Date(ts).toLocaleDateString(getCurrentLocale()) : t('common.status.unknown', '未知')
 const copyHeaderValue = async (label, value) => {
   const text = String(value || '').trim()
   if (!text || text === '-' || !navigator?.clipboard?.writeText) return
   try {
     await navigator.clipboard.writeText(text)
-    toast.success(t('ui.workspace.workshop.copy.success', '{label}已复制', { label }), { timeout: 600 })
+    toast.success(t('toast.common.copied_label', '{label}已复制', { label }), { timeout: 600 })
   } catch (error) {
-    toast.error(t('ui.workspace.workshop.copy.failed', '{label}复制失败', { label }))
+    toast.error(t('toast.common.copy_label_failed', '{label}复制失败', { label }))
   }
 }
 

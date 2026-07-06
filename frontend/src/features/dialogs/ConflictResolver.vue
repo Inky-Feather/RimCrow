@@ -36,7 +36,7 @@
                 @update:modelValue="handleCoexistenceToggle" :label="t('dialog.conflict.show_coexistence', '显示共存提示')" mini
                 :description="t('dialog.conflict.show_coexistence_desc', '关闭后只显示同级硬冲突')"
               />
-              <button class="modal-close-button" :aria-label="t('common.close', '关闭')" v-tooltip="t('tooltip.conflict.close', '关闭冲突处理弹窗，稍后再处理这些重复副本')" @click="visible = false" >
+              <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" v-tooltip="t('tooltip.conflict.close', '关闭冲突处理弹窗，稍后再处理这些重复副本')" @click="visible = false" >
                 <X class="size-4" />
               </button>
             </div>
@@ -85,7 +85,7 @@
                     <div class="min-w-0 flex-1" tabindex="0" v-tooltip="getModTooltip(mod)">
                       <div class="flex flex-wrap items-center gap-1.5">
                         <span class="truncate text-sm font-bold text-text-main">
-                          {{ mod.name || mod.package_id || t('ui.common.unknown_mod', '未知模组') }}
+                          {{ mod.name || mod.package_id || t('common.entity.unknown_mod', '未知模组') }}
                         </span>
                         <span class="rounded-full border px-2 py-0.5 text-[0.7rem] font-bold" :class="storeBadgeClass(mod.store)" >
                           {{ storeLabel(mod.store) }}
@@ -134,7 +134,7 @@
                           :class="actionMap[getItemKey(mod)] === 'delete' ? 'bg-accent-danger text-on-accent-danger'  : 'text-text-dim hover:text-accent-danger'" 
                           @click.stop v-tooltip="t('tooltip.conflict.delete_copy', '将该副本移到回收站，不再保留文件')" >
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'delete'" @change="setItemAction(group, mod, 'delete')" >
-                          {{ t('common.delete', '删除') }}
+                          {{ t('common.action.delete', '删除') }}
                         </label>
                         <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'skip'

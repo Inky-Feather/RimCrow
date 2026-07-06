@@ -185,8 +185,8 @@ export const useProfileStore = defineStore('profile', () => {
       confirmStore.state.mode = 'confirm'
       confirmStore.state.type = 'warning'
       confirmStore.state.confirmText = t('ui.common.confirm', '确认')
-      confirmStore.state.cancelText = t('ui.common.cancel', '取消')
-      confirmStore.state.actionButtons = [{ label: t('ui.common.cancel', '取消'), value: 'cancel', kind: 'secondary' }]
+      confirmStore.state.cancelText = t('common.action.cancel', '取消')
+      confirmStore.state.actionButtons = [{ label: t('common.action.cancel', '取消'), value: 'cancel', kind: 'secondary' }]
     }
 
     const setActiveStep = (index) => {
@@ -209,7 +209,7 @@ export const useProfileStore = defineStore('profile', () => {
       isHtml: true,
       mode: 'confirm',
       type: 'warning',
-      actionButtons: [{ label: t('ui.common.cancel', '取消'), value: 'cancel', kind: 'secondary' }],
+      actionButtons: [{ label: t('common.action.cancel', '取消'), value: 'cancel', kind: 'secondary' }],
     }).then(() => {
       cancelled = true
       return null

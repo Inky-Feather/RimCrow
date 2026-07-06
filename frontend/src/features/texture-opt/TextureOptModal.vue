@@ -63,7 +63,7 @@
             </div>
 
             <div class="flex justify-end">
-              <button @click="closeModal" class="modal-close-button" :aria-label="t('common.close', '关闭')">
+              <button @click="closeModal" class="modal-close-button" :aria-label="t('common.action.close', '关闭')">
                 <X class="w-5 h-5" />
               </button>
             </div>
@@ -299,7 +299,7 @@
                 <section class="modal-section space-y-2 p-3">
                   <div class="flex items-center justify-between gap-2">
                     <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.recent_results', '最近结果') }}</h3>
-                    <button class="text-text-dim hover:text-text-main" @click="textureStore.loadResultHistory()">{{ t('common.refresh', '刷新') }}</button>
+                    <button class="text-text-dim hover:text-text-main" @click="textureStore.loadResultHistory()">{{ t('common.action.refresh', '刷新') }}</button>
                   </div>
                   <div v-if="resultHistory.length === 0" class="text-text-dim">{{ t('dialog.texture_opt.no_history', '暂无历史结果') }}</div>
                   <button v-for="item in resultHistory" :key="item.result_path" class="w-full rounded-lg border px-3 py-2 text-left transition-colors"
@@ -324,7 +324,7 @@
                   <div v-if="filteredFailedItems.length === 0" class="text-text-dim">{{ t('dialog.texture_opt.no_failed_items', '当前结果没有失败项') }}</div>
                   <div v-for="item in filteredFailedItems" :key="`${item.mod_path}-${item.rel_path}-${item.error}`" class="modal-section-subtle p-2"
                     @contextmenu.prevent="openTextureFailedItemMenu($event, item)">
-                    <div class="font-bold text-text-main">{{ item.mod_name || item.package_id || t('ui.common.unknown_mod', '未知模组') }}</div>
+                    <div class="font-bold text-text-main">{{ item.mod_name || item.package_id || t('common.entity.unknown_mod', '未知模组') }}</div>
                     <div class="mt-1 break-all font-mono text-text-dim">{{ item.rel_path }}</div>
                     <div class="mt-1 text-accent-warning">{{ item.error }}</div>
                     <div class="mt-2 flex justify-end gap-2">
@@ -751,7 +751,7 @@ const pathExclusionCandidates = computed(() => {
     rows.push({
       mod_path: modPath,
       package_id: item?.package_id || '',
-      mod_name: item?.mod_name || item?.alias_name || item?.display_name || item?.name || item?.package_id || t('ui.common.unknown_mod', '未知模组'),
+      mod_name: item?.mod_name || item?.alias_name || item?.display_name || item?.name || item?.package_id || t('common.entity.unknown_mod', '未知模组'),
     })
   }
   resolvedRows.value.forEach(pushCandidate)
@@ -808,7 +808,7 @@ const fileExclusionRows = computed(() => {
       mod_path: modPath,
       rel_path: relPath,
       file_path: buildTextureFilePath(modPath, relPath),
-      mod_name: statsRow?.mod_name || installedMod?.alias_name || installedMod?.display_name || installedMod?.name || installedMod?.package_id || t('ui.common.unknown_mod', '未知模组'),
+      mod_name: statsRow?.mod_name || installedMod?.alias_name || installedMod?.display_name || installedMod?.name || installedMod?.package_id || t('common.entity.unknown_mod', '未知模组'),
     })
   }
   return rows.sort((left, right) => (
@@ -886,7 +886,7 @@ const handleCleanWithoutSource = async () => {
     {
       type: 'error',
       confirmText: t('common.confirm_delete', '确认删除'),
-      cancelText: t('common.cancel', '取消'),
+      cancelText: t('common.action.cancel', '取消'),
     },
   )
   if (!ok) return
@@ -941,7 +941,7 @@ const handleCleanSingleModWithoutSource = async (item, outputFormat = cleanOutpu
   const ok = await confirmStore.confirmAction(
     t('dialog.texture_opt.confirm_delete_orphan_title', '删除无对应源图 {format}', { format: outputLabel }),
     t('dialog.texture_opt.confirm_delete_orphan_single_message', '将删除「{modName}」中找不到同名 PNG 源图的 {format} 输出文件。部分模组本来就会直接提供 DDS 或 ZSTD 贴图，这类文件也可能被误删。', { modName: item.mod_name || t('ui.mod.current_mod', '当前模组'), format: outputLabel }),
-    { type: 'error', confirmText: t('common.confirm_delete', '确认删除'), cancelText: t('common.cancel', '取消') },
+    { type: 'error', confirmText: t('common.confirm_delete', '确认删除'), cancelText: t('common.action.cancel', '取消') },
   )
   if (!ok) return
   await textureStore.startOptimization(getSingleTargetIds(item), 'clean_generated', 'single', {
@@ -1104,7 +1104,7 @@ function getFailedItemLogPath(item) {
 
 function resolveModName(item) {
   const match = Array.from(modStore.allModsMap.values()).find(mod => mod?.path === item.mod_path)
-  return match?.alias_name || match?.display_name || match?.name || item.mod_name || t('ui.common.unknown_mod', '未知模组')
+  return match?.alias_name || match?.display_name || match?.name || item.mod_name || t('common.entity.unknown_mod', '未知模组')
 }
 
 function buildTextureFilePath(modPath, relPath) {

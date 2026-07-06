@@ -45,26 +45,14 @@
     "search": {
       "mod": {
         "field": {
-          "alias_name": "alias_name",
-          "author": "author",
           "coexist_variant": "coexist_variant",
-          "groups": "groups",
           "ignored_issues": "ignored_issues",
           "last_active": "last_active",
-          "mod_type": "mod_type",
           "multiplayer_compat": "multiplayer_compat",
-          "name": "name",
-          "package_id": "package_id",
           "replacement": "replacement",
           "save_breaking": "save_breaking",
           "shadow_paths": "shadow_paths",
-          "sign_color": "sign_color",
-          "source": "source",
-          "store": "store",
-          "supported_languages": "supported_languages",
-          "supported_versions": "supported_versions",
-          "tags": "tags",
-          "workshop_id": "workshop_id"
+          "sign_color": "sign_color"
         },
         "value": {}
       }
@@ -172,18 +160,12 @@
       "collapse": "Collapse",
       "count_suffix": " ({count} items)",
       "count_suffix_with_unit": " ({count})",
-      "delete": "Delete",
-      "none": "None",
       "position": {
         "bottom": "bottom",
         "top": "top"
       },
       "restore_default": "Restore default",
-      "unknown": "Unknown",
-      "cancel": "Cancel",
-      "close": "Close",
       "count_suffix_spaced": " ({count} items)",
-      "default": "Default",
       "description": "Description",
       "edit": "Edit",
       "got_it": "Got it",
@@ -192,11 +174,9 @@
       "more_actions": "More actions",
       "no_changes": "No changes",
       "open_folder": "Open folder",
-      "refresh": "Refresh",
       "remove": "Remove",
       "rename": "Rename",
       "reset": "Reset",
-      "save": "Save",
       "unknown_time": "Unknown time",
       "confirm": "Confirm",
       "copy": "Copy",
@@ -204,8 +184,7 @@
       "move": "Move",
       "no_record": "No record",
       "create": "Create",
-      "no_description": "No description",
-      "unknown_mod": "Unknown mod"
+      "no_description": "No description"
     },
     "issue": {
       "default": "Other issue",
@@ -260,18 +239,6 @@
       },
       "unknown_version": "Unknown version",
       "view_all_compact": "View all ({count})"
-    },
-    "mod_info": {
-      "author": "Author",
-      "file_path": "File path",
-      "language": "Language",
-      "name": "Name",
-      "package_id": "Package ID",
-      "path": "Path",
-      "source_url": "Source URL",
-      "supported_languages": "Supported languages",
-      "url": "URL",
-      "workshop_id": "Workshop ID"
     },
     "mod_item": {
       "section": {
@@ -407,10 +374,6 @@
           "latest": "Recently updated",
           "name": "Sort by name",
           "subscriptions": "Most subscribed"
-        },
-        "copy": {
-          "failed": "Failed to copy {label}",
-          "success": "{label} copied"
         },
         "detail": {
           "author": {
@@ -1279,15 +1242,6 @@
           "top_short": "Top",
           "weight_set": "Set weight",
           "weight_shift": "Shift weight"
-        },
-        "field": {
-          "alias_name": "Alias",
-          "author": "Author",
-          "groups": "Groups",
-          "mod_type": "Type",
-          "name": "Name",
-          "package_id": "Package ID",
-          "tags": "Tags"
         },
         "operator": {
           "contains": "Contains",
@@ -2646,8 +2600,6 @@
     },
     "copy": {
       "failed_with_label": "Failed to copy {label}. Check clipboard permission, or select and copy the text manually.",
-      "label_failed": "Failed to copy {label}",
-      "label_success": "{label} copied",
       "success": "Copied {label}"
     },
     "mod_details": {
@@ -5409,9 +5361,9 @@
       "later": "Handle later",
       "open_link": "Open link",
       "restart_later": "Restart later",
-      "save": "Save"
+      "save": "Save",
+      "refresh": "Refresh"
     },
-    "cancel": "Cancel",
     "continue": "Continue",
     "content": "content",
     "file": "File",
@@ -5423,15 +5375,14 @@
       "cancelled": "Cancelled",
       "failed": "Failed",
       "pending": "Queued",
-      "processing": "Processing"
+      "processing": "Processing",
+      "none": "None",
+      "unknown": "Unknown"
     },
     "task": "Task",
-    "clear": "Clear",
     "clear_all": "Clear all",
     "clear_filter": "Clear filter",
     "clear_selection": "Clear selection",
-    "close": "Close",
-    "default": "Default",
     "delete_permanently": "Delete permanently",
     "got_it": "Got it",
     "item_count": "{count} items",
@@ -5439,11 +5390,8 @@
     "open_folder": "Open containing folder",
     "open_path": "Open path",
     "open_workshop": "Open Workshop",
-    "refresh": "Refresh",
     "remove": "Remove",
-    "save": "Save",
     "select_all": "Select all",
-    "unknown": "Unknown",
     "workshop": "Workshop",
     "confirm_delete": "Confirm delete",
     "copy_file_path": "Copy file path",
@@ -5471,7 +5419,6 @@
     "later": "Later",
     "ok": "OK",
     "update": "Update",
-    "unknown_mod": "Unknown Mod",
     "not_selected": "Not selected",
     "id": "ID",
     "name": "Name",
@@ -5480,8 +5427,29 @@
     "category": "Category",
     "uncategorized": "Uncategorized",
     "deactivate": "Deactivate",
-    "delete": "Delete",
-    "skip": "Skip"
+    "skip": "Skip",
+    "entity": {
+      "unknown_mod": "Unknown mod"
+    },
+    "field": {
+      "alias_name": "Alias",
+      "author": "Author",
+      "file_path": "File path",
+      "groups": "Groups",
+      "language": "Language",
+      "name": "Name",
+      "package_id": "Package ID",
+      "path": "Path",
+      "source": "Source",
+      "source_url": "Source URL",
+      "store": "Location",
+      "supported_languages": "Supported languages",
+      "supported_versions": "Supported versions",
+      "tags": "Tags",
+      "type": "Type",
+      "url": "URL",
+      "workshop_id": "Workshop ID"
+    }
   },
   "confirm": {
     "settings": {

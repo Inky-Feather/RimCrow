@@ -1469,7 +1469,7 @@ export const useAppStore = defineStore('app', () => {
     { label: t('messages.app.game_launch.action.direct_once', '本次直启游戏'), value: GAME_LAUNCH_ACTION.CONTINUE, kind: 'primary' },
     { label: t('messages.app.game_launch.action.check_steam_status', '检查 Steam 状态'), value: GAME_LAUNCH_ACTION.CHECK_STEAM_STATUS, kind: 'secondary' },
     { label: t('messages.app.game_launch.action.disable_steam_launch', '关闭 Steam 优先启动'), value: GAME_LAUNCH_ACTION.DISABLE_STEAM_LAUNCH, kind: 'danger' },
-    { label: t('common.cancel', '取消'), value: GAME_LAUNCH_ACTION.CANCEL, kind: 'secondary' },
+    { label: t('common.action.cancel', '取消'), value: GAME_LAUNCH_ACTION.CANCEL, kind: 'secondary' },
   ]
 
   const buildGameLaunchWarningConfig = (gameRes) => {
@@ -1500,7 +1500,7 @@ export const useAppStore = defineStore('app', () => {
           message: t('messages.app.game_launch.steam_running_conflict.message', '当前环境配置为直接启动游戏本体，且已将创意工坊模组链接部署到本地模组目录。\n检测到 Steam 已在运行，如果现在继续启动游戏，Steam 会接管本次启动，游戏内将同时出现两套创意工坊模组。\n默认会优先加载本地目录中的那一套，一般不会影响实际游戏，但界面显示和后续管理会变得混乱。\n你可以手动退出 Steam；当前窗口会保持等待，Steam 完全退出后将自动启动游戏。\n如果你清楚影响，也可以直接继续运行。'),
           actionButtons: [
             { label: t('messages.app.game_launch.action.continue_run', '继续运行'), value: 'continue', kind: 'primary' },
-            { label: t('common.cancel', '取消'), value: 'cancel', kind: 'secondary' },
+            { label: t('common.action.cancel', '取消'), value: 'cancel', kind: 'secondary' },
           ],
         }
       default:
@@ -1511,7 +1511,7 @@ export const useAppStore = defineStore('app', () => {
             title: t('messages.app.game_launch.confirm.title', '启动前确认'),
             message: fallbackMessage || t('messages.app.game_launch.confirm.message', '当前环境需要先确认后再继续启动。'),
             confirmText: t('common.continue', '继续'),
-            cancelText: t('common.cancel', '取消'),
+            cancelText: t('common.action.cancel', '取消'),
             action: 'continue',
           }
         }
@@ -1597,7 +1597,7 @@ export const useAppStore = defineStore('app', () => {
         ? warningConfig.actionButtons
         : [
             { label: t('messages.app.game_launch.action.continue_run', '继续运行'), value: 'continue', kind: 'primary' },
-            { label: t('common.cancel', '取消'), value: 'cancel', kind: 'secondary' },
+            { label: t('common.action.cancel', '取消'), value: 'cancel', kind: 'secondary' },
           ],
     })
 

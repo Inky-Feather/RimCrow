@@ -309,7 +309,7 @@ const multiplayerCompatBadgeClass = computed(() => {
 const multiplayerCompatTooltip = computed(() => {
   const info = multiplayerCompat.value || {}
   if (!info.enabled) return ''
-  const parts = [t('tooltip.mod_item.mp_compat.title', '联机兼容性：{status}', { status: info.effective_label || t('ui.common.unknown', '未知') })]
+  const parts = [t('tooltip.mod_item.mp_compat.title', '联机兼容性：{status}', { status: info.effective_label || t('common.status.unknown', '未知') })]
   if (info.status_source === 'official') parts.push(info.status_description || t('tooltip.mod_item.mp_compat.official', '来自 Multiplayer 官方兼容表。'))
   else if (info.status_source === 'xml_only') parts.push(t('tooltip.mod_item.mp_compat.xml_only', '未检测到程序集，按 Multiplayer 的 XML-only 规则视为完全可用。'))
   else parts.push(t('tooltip.mod_item.mp_compat.no_conclusion', '官方兼容表暂无明确结论。'))
@@ -558,11 +558,11 @@ const generateAliasNotes = async () => {
   })
 }
 const getCopyInfoFields = () => [
-  { key: 'name', label: t('ui.mod_info.name', '名称') },
-  { key: 'package_id', label: t('ui.mod_info.package_id', '包名') },
-  { key: 'workshop_id', label: t('ui.mod_info.workshop_id', '工坊ID') },
-  { key: 'url', label: t('ui.mod_info.url', '网址') },
-  { key: 'path', label: t('ui.mod_info.path', '路径') },
+  { key: 'name', label: t('common.field.name', '名称') },
+  { key: 'package_id', label: t('common.field.package_id', '包名') },
+  { key: 'workshop_id', label: t('common.field.workshop_id', '工坊ID') },
+  { key: 'url', label: t('common.field.url', '网址') },
+  { key: 'path', label: t('common.field.path', '路径') },
 ]
 const normalizeCopyInfoValue = (value) => String(value ?? '').trim()
 const getModCopyInfoValue = (mod, fieldKey) => {
@@ -730,7 +730,7 @@ const handleContextMenu = async (event) => {
       ]
     },
     { commandId: 'mods.disableSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.disable_files', '禁用') + selectedCountStr, icon: Lock, level: 'warn', disabled: !selectedHasPathHash },
-    { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('ui.common.delete', '删除') + selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
+    { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('common.action.delete', '删除') + selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
   ]
 
   // 多选菜单

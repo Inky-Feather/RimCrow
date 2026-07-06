@@ -27,11 +27,11 @@
             <div class="mt-3 grid grid-cols-6 gap-3 text-xs text-text-dim">
               <div class="modal-section-subtle col-span-2 px-3 py-2">
                 <div class="text-text-dim">{{ t('dialog.package_transfer.format', '格式') }}</div>
-                <div class="mt-1 font-mono text-text-main">{{ inspectData.format || t('common.unknown', '未知') }}</div>
+                <div class="mt-1 font-mono text-text-main">{{ inspectData.format || t('common.status.unknown', '未知') }}</div>
               </div>
               <div class="modal-section-subtle col-span-2 px-3 py-2">
                 <div class="text-text-dim">{{ t('dialog.package_transfer.exported_at', '导出时间') }}</div>
-                <div class="mt-1 font-mono text-text-main">{{ inspectData.exported_at || t('common.unknown', '未知') }}</div>
+                <div class="mt-1 font-mono text-text-main">{{ inspectData.exported_at || t('common.status.unknown', '未知') }}</div>
               </div>
               <div v-if="dialogMode === 'mod-import'" class="modal-section-subtle px-3 py-2">
                 <div class="text-text-dim">{{ t('dialog.package_transfer.mod_count', '模组数量') }}</div>
@@ -385,7 +385,7 @@
         <div class="flex items-center gap-2">
           <button class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-main transition-all hover:bg-bg-overlay/10"
             @click="closeDialog" >
-            {{ t('common.close', '关闭') }}
+            {{ t('common.action.close', '关闭') }}
           </button>
           <button class="rounded-xl bg-accent-primary px-5 py-2 text-sm font-black text-on-accent-primary transition-all hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="!canSubmit" @click="handleSubmit" >
@@ -436,7 +436,7 @@ const exportForm = reactive({
 })
 
 const modFolderNameTypeOptions = computed(() => [
-  { label: t('common.default', '默认'), value: 'default' },
+  { label: t('common.status.default', '默认'), value: 'default' },
   { label: t('dialog.package_transfer.folder_name.alias', '按别名'), value: 'alias_name' },
   { label: t('dialog.package_transfer.folder_name.original', '按原模组名'), value: 'name' },
   { label: t('dialog.package_transfer.folder_name.workshop_id', '按工坊ID'), value: 'workshop_id' },

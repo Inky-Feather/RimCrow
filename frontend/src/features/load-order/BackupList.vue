@@ -115,7 +115,7 @@
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <svg class="size-5"  xmlns="http://www.w3.org/2000/svg"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
       </button>
-      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'app-action-disabled' : ''" v-tooltip="loading ? t('tooltip.backup_list.refresh.loading', '正在刷新备份列表') : t('ui.common.refresh', '刷新')"
+      <button @click="refresh()" :disabled="loading || isToolbarBusy" :class="(loading || isToolbarBusy) ? 'app-action-disabled' : ''" v-tooltip="loading ? t('tooltip.backup_list.refresh.loading', '正在刷新备份列表') : t('common.action.refresh', '刷新')"
         class="rounded-lg hover:bg-bg-overlay/5 size-7 text-text-dim transition-colors cursor-pointer flex items-center justify-center hover:scale-110 active:scale-100 duration-300">
         <LoaderCircle v-if="loading" class="size-5 animate-spin" />
         <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -506,8 +506,8 @@ const exportBackupItemShareCode = async (item) => {
     type: 'success',
     inputValue: shareCode,
     placeholder: 'RC-...',
-    confirmText: t('ui.common.close', '关闭'),
-    cancelText: t('ui.common.cancel', '取消'),
+    confirmText: t('common.action.close', '关闭'),
+    cancelText: t('common.action.cancel', '取消'),
   })
   return shareCode
 }
@@ -520,8 +520,8 @@ const handleRename = async (event, item) => {
     type: 'info',
     inputValue: getBackupBaseName(item),
     placeholder: t('dialog.backup_list.rename.placeholder', '备份名称'),
-    confirmText: t('ui.common.save', '保存'),
-    cancelText: t('ui.common.cancel', '取消'),
+    confirmText: t('common.action.save', '保存'),
+    cancelText: t('common.action.cancel', '取消'),
   }, event?.target)
   if (!inputName) return
 
@@ -546,7 +546,7 @@ const buildBackupMenuItems = (item) => {
     { label: t('menu.backup_list.load_file', '加载文件'), icon: FileInput, action: () => handleLoad(null, item) },
     { label: t('menu.backup_list.open_file', '打开文件'), icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
     { label: t('menu.backup_list.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
-    { label: t('menu.backup_list.copy_path', '复制文件路径'), icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, t('ui.mod_info.file_path', '文件路径')) },
+    { label: t('menu.backup_list.copy_path', '复制文件路径'), icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, t('common.field.file_path', '文件路径')) },
     { label: t('menu.backup_list.export_as', '导出为...'), icon: Download, disabled: !canExportOrder, children: [
       { label: t('ui.backup_list.share_code', '分享码'), icon: ClipboardPlus, action: () => exportBackupItemShareCode(item) },
       { label: 'ModList', icon: FileText, action: () => exportBackupItemAsFile(item, 'modlist') },

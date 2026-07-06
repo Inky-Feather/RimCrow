@@ -36,17 +36,17 @@ export const useMaintenanceActions = ({
 
   const formatDateTime = (timestamp) => {
     const value = Number(timestamp || 0)
-    if (!value) return t('common.unknown', '未知')
+    if (!value) return t('common.status.unknown', '未知')
     try {
       return new Date(value).toLocaleString(getCurrentLocale())
     } catch {
-      return t('common.unknown', '未知')
+      return t('common.status.unknown', '未知')
     }
   }
 
   const formatFileSize = (value) => {
     const size = Number(value || 0)
-    if (!size) return t('common.unknown', '未知')
+    if (!size) return t('common.status.unknown', '未知')
     if (size < 1024) return `${size} B`
     if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
     return `${(size / 1024 / 1024).toFixed(1)} MB`
@@ -384,7 +384,7 @@ export const useMaintenanceActions = ({
       priority: manual ? 40 : 70,
       items: updates.map(item => ({
         id: `${item.source || 'mod'}:${item.workshop_id || item.repo_url || item.title}`,
-        title: item.title || item.workshop_id || t('ui.common.unknown_mod', '未知模组'),
+        title: item.title || item.workshop_id || t('common.entity.unknown_mod', '未知模组'),
         description: item.message || (item.workshop_id ? `Workshop ID: ${item.workshop_id}` : item.repo_url || ''),
         meta: [
           item.source_label || item.source,

@@ -129,7 +129,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     title: '',
     message: '',
     confirmText: t('dialog.supplement.apply_selected', '应用选中项'),
-    cancelText: t('common.cancel', '取消'),
+    cancelText: t('common.action.cancel', '取消'),
     continueText: '',
     groups: [],
     summary: {
@@ -874,7 +874,7 @@ const createEmptySummary = () => ({
     title = '',
     message = '',
     confirmText = t('dialog.supplement.apply_selected', '应用选中项'),
-    cancelText = t('common.cancel', '取消'),
+    cancelText = t('common.action.cancel', '取消'),
     continueText = '',
   } = {}) => {
     state.title = title
@@ -896,7 +896,7 @@ const createEmptySummary = () => ({
     state.title = ''
     state.message = ''
     state.confirmText = t('dialog.supplement.apply_selected', '应用选中项')
-    state.cancelText = t('common.cancel', '取消')
+    state.cancelText = t('common.action.cancel', '取消')
     state.continueText = ''
     state.groups = []
     state.summary = createEmptySummary()
@@ -937,7 +937,7 @@ const createEmptySummary = () => ({
 	    title = t('dialog.supplement.title', '补齐启用项'),
     message = '',
 	    confirmText = t('dialog.supplement.enable_selected', '启用选中项'),
-	    cancelText = t('common.cancel', '取消'),
+	    cancelText = t('common.action.cancel', '取消'),
     continueText = '',
     prepared = null,
   } = {}) => {
@@ -1053,7 +1053,7 @@ const createEmptySummary = () => ({
       title,
       message,
 	      confirmText: t('dialog.supplement.add_to_current_list', '加入当前列表'),
-	      cancelText: t('common.cancel', '取消'),
+	      cancelText: t('common.action.cancel', '取消'),
       prepared,
     })
     if (!payload) return false
@@ -1063,7 +1063,7 @@ const createEmptySummary = () => ({
   // 保存前只强提示必需项；用户仍可明确确认后跳过。
   const ensureRequiredBeforeSave = async ({
     activeIds = modStore.activeIds,
-	    actionLabel = t('common.save', '保存'),
+	    actionLabel = t('common.action.save', '保存'),
   } = {}) => {
     if (appStore.settings.enable_action_prechecks === false) return true
     const prepared = await prepareDialogPlan(activeIds)

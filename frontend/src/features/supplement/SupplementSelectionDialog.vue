@@ -11,7 +11,7 @@
                 {{ supplementStore.state.message }}
               </p>
             </div>
-            <button class="modal-close-button" :aria-label="t('common.close', '关闭')" @click="supplementStore.cancel()" >
+            <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" @click="supplementStore.cancel()" >
               <X class="size-4" />
             </button>
           </div>

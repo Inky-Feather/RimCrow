@@ -176,11 +176,11 @@ const countFailed = (items = []) => items.filter(item => item && item._failed).l
 const formatTime = (value) => {
 	  /** 把任务时间戳转成检阅面板里的人类可读文本。 */
 	  const numeric = Number(value || 0)
-	  if (!numeric) return t('common.unknown', '未知')
+	  if (!numeric) return t('common.status.unknown', '未知')
 	  try {
 	    return new Date(numeric).toLocaleString(getCurrentLocale())
 	  } catch {
-	    return t('common.unknown', '未知')
+	    return t('common.status.unknown', '未知')
 	  }
 	}
 
@@ -328,7 +328,7 @@ const clearAll = async () => {
 	  const ok = await confirmStore.confirmAction(
 	    t('dialog.mod_alias_review.clear_all', '清空全部'),
 	    t('dialog.mod_alias_review.clear_all_message', '确定要清空全部 {count} 组待审结果吗？\n所有未应用的别名和备注结果都会被丢弃。', { count: totalTaskCount.value }),
-	    { type: 'error', confirmText: t('common.clear', '清空') }
+	    { type: 'error', confirmText: t('common.action.clear', '清空') }
 	  )
   if (!ok) return
   aiStore.clearModAliasReviewTaskPool()

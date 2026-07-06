@@ -414,7 +414,7 @@ export const createActionExecutorRegistry = ({
     const confirmed = await confirmStore.confirmAction(
       confirmMeta.title || t('ai.actions.fallback.confirm_title', '确认执行操作'),
       confirmMeta.message || getActionPreview(action) || getActionDescription(action),
-      { type: 'warning', confirmText: confirmMeta.confirmText || t('common.confirm', '确认'), cancelText: t('common.cancel', '取消') },
+      { type: 'warning', confirmText: confirmMeta.confirmText || t('common.confirm', '确认'), cancelText: t('common.action.cancel', '取消') },
     )
     if (!confirmed) return
 

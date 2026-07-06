@@ -13,11 +13,11 @@ export const useSearchStore = defineStore('search', () => {
   // 路径、描述、规则等长文本不进入语法字段，避免建议列表变脏、搜索结果难解释。
   const createSearchSchema = () => ({
     // 基础信息
-    name: { type: TAG_FIELD_TYPES.STRING, defaultSearch: true, label: t('ui.search.mod.field.name', '名称') },
-    alias_name: { type: TAG_FIELD_TYPES.STRING, defaultSearch: true, label: t('ui.search.mod.field.alias_name', '别名') },
-    author: { type: TAG_FIELD_TYPES.STRING, suggest: true, defaultSearch: true, label: t('ui.search.mod.field.author', '作者') },
-    package_id: { type: TAG_FIELD_TYPES.STRING, label: t('ui.search.mod.field.package_id', '包名') },
-    workshop_id: { type: TAG_FIELD_TYPES.STRING, label: t('ui.search.mod.field.workshop_id', '工坊ID') },
+    name: { type: TAG_FIELD_TYPES.STRING, defaultSearch: true, label: t('common.field.name', '名称') },
+    alias_name: { type: TAG_FIELD_TYPES.STRING, defaultSearch: true, label: t('common.field.alias_name', '别名') },
+    author: { type: TAG_FIELD_TYPES.STRING, suggest: true, defaultSearch: true, label: t('common.field.author', '作者') },
+    package_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.package_id', '包名') },
+    workshop_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.workshop_id', '工坊ID') },
 
     // 用户标记
     sign_color: {
@@ -27,33 +27,33 @@ export const useSearchStore = defineStore('search', () => {
       label_getter: getModSignColorLabel,
       color_getter: (color) => color || 'var(--color-text-main)',
     },
-    tags: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('ui.search.mod.field.tags', '标签') },
-    groups: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('ui.search.mod.field.groups', '分组') },
+    tags: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('common.field.tags', '标签') },
+    groups: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('common.field.groups', '分组') },
 
     // 来源与类型
     mod_type: {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
-      label: t('ui.search.mod.field.mod_type', '类型'),
+      label: t('common.field.type', '类型'),
       label_getter: getModTypeLabel,
       getter: (mod) => modStore.displayModType(mod)
     },
     source: {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
-      label: t('ui.search.mod.field.source', '来源'),
+      label: t('common.field.source', '来源'),
       label_getter: getSourceTypeLabel,
     },
     store: {
       type: TAG_FIELD_TYPES.STRING,
       suggest: true,
-      label: t('ui.search.mod.field.store', '位置'),
+      label: t('common.field.store', '位置'),
       label_getter: getStoreTypeLabel
     },
 
     // 支持信息
-    supported_versions: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('ui.search.mod.field.supported_versions', '支持版本') },
-    supported_languages: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('ui.search.mod.field.supported_languages', '支持语言') },
+    supported_versions: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('common.field.supported_versions', '支持版本') },
+    supported_languages: { type: TAG_FIELD_TYPES.LIST, suggest: true, label: t('common.field.supported_languages', '支持语言') },
     multiplayer_compat: {
       type: TAG_FIELD_TYPES.LIST,
       suggest: true,

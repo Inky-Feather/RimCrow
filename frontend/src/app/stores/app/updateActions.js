@@ -21,7 +21,7 @@ const buildUpdatePromptItems = (info = {}, manual = true) => {
     const sourceName = source.source_name || t('ui.update.unknown_source', '未知来源')
     const meta = [
       t('ui.update.source_meta', '来源: {source}', { source: sourceName }),
-      t('ui.update.file_size_meta', '文件大小: {size}', { size: source.file_size || t('common.unknown', '未知') }),
+      t('ui.update.file_size_meta', '文件大小: {size}', { size: source.file_size || t('common.status.unknown', '未知') }),
       source.local_status === 'ready' ? t('ui.update.downloaded', '已下载') : '',
     ].filter(Boolean)
 
@@ -67,7 +67,7 @@ export const useUpdateActions = ({
             title: t('ui.update.new_version_title', '发现新版本 v{version}', { version: info.version }),
             message: sources.length > 1
               ? t('ui.update.multiple_sources_message', '检测到多个同版本来源: {sources}。将优先使用第一个来源，失败后自动尝试候补来源。', { sources: sourceNames })
-              : t('ui.update.single_source_message', '来源: {source}。文件大小: {size}。', { source: sourceNames || t('ui.update.unknown_source', '未知来源'), size: info.file_size || t('common.unknown', '未知') }),
+              : t('ui.update.single_source_message', '来源: {source}。文件大小: {size}。', { source: sourceNames || t('ui.update.unknown_source', '未知来源'), size: info.file_size || t('common.status.unknown', '未知') }),
             type: 'success',
             priority: manual ? 20 : 50,
             items: buildUpdatePromptItems(info, manual),
@@ -132,7 +132,7 @@ export const useUpdateActions = ({
     const ok = await confirmStore.confirmAction(
       t('dialog.update.confirm_install_title', '确认安装更新？'),
       t('dialog.update.confirm_install_message', '压缩包已经下载到：{path}\n是否继续安装更新？安装后将重启应用程序。', { path: data.path }),
-      { confirmText: t('dialog.update.confirm_install', '确认安装'), cancelText: t('common.cancel', '取消'), type: 'warning' }
+      { confirmText: t('dialog.update.confirm_install', '确认安装'), cancelText: t('common.action.cancel', '取消'), type: 'warning' }
     )
     if (!ok) return toast.info(t('toast.update.install_cancelled', '已取消安装更新。'))
     await _performUpdateAction()

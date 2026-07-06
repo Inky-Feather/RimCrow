@@ -7,7 +7,7 @@
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
       </span>
-      <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-disabled hover:text-text-dim transition-colors">{{ t('ui.common.close', '关闭') }}</button>
+      <button @click="ruleStore.currentId = null" class="text-xs font-bold text-text-disabled hover:text-text-dim transition-colors">{{ t('common.action.close', '关闭') }}</button>
     </div>
     <!-- 当前选中的MOD -->
     <div class="px-2 py-2 w-full flex items-center gap-2 shadow-xl/10">
@@ -43,7 +43,7 @@
             <button @click="handlePosChange('none')"
               class="px-1 py-1 text-xs font-bold rounded-md transition-all"
               :class="absPos.pos === 'none' ? 'bg-bg-overlay/10 text-text-main shadow-lg' : 'text-text-dim hover:text-text-main'">
-              {{ t('ui.common.default', '默认') }}
+              {{ t('common.status.default', '默认') }}
             </button>
             <!-- 置底 -->
             <button @click="handlePosChange('bottom')"

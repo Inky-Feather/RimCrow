@@ -33,7 +33,7 @@
             </button>
             <button v-show="fileSearchStore.isRunning" class="flex shrink-0 px-2 py-1.5 items-center justify-center gap-2 rounded-xl border border-accent-danger/28 bg-accent-danger/10 text-sm font-bold text-accent-danger transition-colors hover:bg-accent-danger/16 disabled:cursor-not-allowed disabled:opacity-45"
               :disabled="!fileSearchStore.isRunning" @click="fileSearchStore.cancelSearch()" >
-              <Square class="size-3.5" />{{ t('common.cancel', '取消') }}
+              <Square class="size-3.5" />{{ t('common.action.cancel', '取消') }}
             </button>
           </div>
 
@@ -278,7 +278,7 @@ const storeLabel = (store) => {
   if (value === 'workshop') return t('common.store.workshop', '工坊')
   if (value === 'core') return 'Core'
   if (value === 'dlc') return 'DLC'
-  return t('common.unknown', '未知')
+  return t('common.status.unknown', '未知')
 }
 
 const storeBadgeClass = (store) => {

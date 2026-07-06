@@ -505,7 +505,7 @@ const deleteGroup = async (groupId: string, event?: Event) => {
     message: t('dialog.group_list.delete.message', '确定要删除分组「{name}」吗？\n分组记录会被移除，模组文件不会删除。', { name: group?.name || t('ui.group_list.unnamed_group', '未命名分组') }),
     mode: 'confirm',
     type: 'error',
-    confirmText: t('ui.common.delete', '删除'),
+    confirmText: t('common.action.delete', '删除'),
   }, event)
   if (!ok) return
   groupStore.deleteGroup(groupId);

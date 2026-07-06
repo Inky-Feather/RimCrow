@@ -372,8 +372,8 @@ const actionPresentation = createActionPresentationRuntime({
     const definition = aiStore.getActionDefinitions()?.[actionType] || null
     return definition ? { type: actionType, ...definition } : null
   },
-  getModDisplayName: (modId) => modStore.displayModName(modId, t('common.unknown_mod', '未知模组')),
-  getModPreviewData: (modId) => modStore.takeModById(modId, t('common.unknown_mod', '未知模组')),
+  getModDisplayName: (modId) => modStore.displayModName(modId, t('common.entity.unknown_mod', '未知模组')),
+  getModPreviewData: (modId) => modStore.takeModById(modId, t('common.entity.unknown_mod', '未知模组')),
 })
 const {
   // 动作基础信息
@@ -938,7 +938,7 @@ const executeAction = async (action) => {
   /** 执行一条助手返回的前端动作。 */
   const executor = ACTION_EXECUTORS[getActionType(action)]
   if (!executor) {
-    toast.warning(t('ai.panel.unsupported_action_type', '暂不支持的操作类型: {type}', { type: getActionType(action) || t('common.unknown', '未知') }))
+    toast.warning(t('ai.panel.unsupported_action_type', '暂不支持的操作类型: {type}', { type: getActionType(action) || t('common.status.unknown', '未知') }))
     return
   }
   try {

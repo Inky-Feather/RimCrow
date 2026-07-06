@@ -362,7 +362,7 @@ const normalizeCollectionCard = (coll = {}, source = 'saved') => {
     displayDescription,
     fullDescription,
     updatedTime, syncTime,
-    updatedLabel: updatedTime ? formatDate(updatedTime) : t('ui.common.unknown', '未知'),
+    updatedLabel: updatedTime ? formatDate(updatedTime) : t('common.status.unknown', '未知'),
     syncLabel: syncTime ? formatDate(syncTime) : t('ui.workspace.collection.card.not_synced', '未同步'),
     updatedTooltip: updatedTime ? t('ui.workspace.collection.card.updated_tooltip', '工坊最后更新：{time}', { time: formatDate(updatedTime) }) : t('ui.workspace.collection.card.updated_unknown', '暂未获取更新时间'),
     syncTooltip: syncTime ? t('ui.workspace.collection.card.sync_tooltip', '本地缓存同步：{time}', { time: formatDate(syncTime) }) : t('ui.workspace.collection.card.sync_unknown', '尚未同步到本地缓存'),

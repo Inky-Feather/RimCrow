@@ -7,13 +7,13 @@ import { t } from '../../shared/i18n'
 
 // 动态规则支持属性映射
 const getDynamicRuleProps = () => ({
-  package_id: t('ui.rule.dynamic.field.package_id', '包名'),
-  name: t('ui.rule.dynamic.field.name', '名称'),
-  alias_name: t('ui.rule.dynamic.field.alias_name', '别名'),
-  author: t('ui.rule.dynamic.field.author', '作者'),
-  tags: t('ui.rule.dynamic.field.tags', '标签'),
-  groups: t('ui.rule.dynamic.field.groups', '分组'),
-  mod_type: t('ui.rule.dynamic.field.mod_type', '类型'),
+  package_id: t('common.field.package_id', '包名'),
+  name: t('common.field.name', '名称'),
+  alias_name: t('common.field.alias_name', '别名'),
+  author: t('common.field.author', '作者'),
+  tags: t('common.field.tags', '标签'),
+  groups: t('common.field.groups', '分组'),
+  mod_type: t('common.field.type', '类型'),
 })
 // 动态规则动作映射
 const getDynamicRuleActions = () => ({
