@@ -9,7 +9,7 @@
           </div>
           <div class="flex flex-col">
             <span class="font-bold text-sm text-text-main leading-tight">{{ title }}</span>
-            <div class="flex items-center gap-1.5" v-tooltip="'当前会话累计消耗的 token。数值过高时，AI 更容易忽略前面的内容。'">
+            <div class="flex items-center gap-1.5" v-tooltip="t('ai.panel.session_token_tip', '当前会话累计消耗的 token。数值过高时，AI 更容易忽略前面的内容。')">
               <div class="w-1.5 h-1.5 rounded-full" :class="sessionTokenIndicatorClass"></div>
               <span class="text-[0.7rem] text-text-dim font-mono">{{ sessionTokenDisplay }}</span>
             </div>
@@ -19,10 +19,10 @@
         <div class="flex items-center gap-1.5">
           <button class="rounded border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1 text-xs transition-colors hover:border-accent-special/30 hover:text-accent-special"
             v-if="showTraceButton" @click="openTracePanel" >
-            查看请求记录
+            {{ t('ai.panel.view_trace', '查看请求记录') }}
           </button>
           <div class="relative group/tools">
-            <button @click="showToolSelector = !showToolSelector" class="p-1.5 transition-all rounded-md relative" v-tooltip="enabledTools.length === 0 ? '当前不会调用工具，只根据现有内容回答。' : '选择本轮允许 AI 使用的工具'"
+            <button @click="showToolSelector = !showToolSelector" class="p-1.5 transition-all rounded-md relative" v-tooltip="enabledTools.length === 0 ? t('ai.panel.no_tools_tip', '当前不会调用工具，只根据现有内容回答。') : t('ai.panel.tool_selector_tip', '选择本轮允许 AI 使用的工具')"
               :class="enabledTools.length === 0 ? 'text-accent-warn hover:bg-accent-warn/10' : 'text-text-dim hover:text-accent-special hover:bg-bg-overlay/5'" >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
               <span v-if="enabledTools.length === 0" class="absolute top-1 right-1 w-1.5 h-1.5 bg-accent-warn rounded-full"></span>
@@ -32,10 +32,10 @@
               <!-- 工具选择浮层：控制本轮请求允许使用的工具集合 -->
               <div v-if="showToolSelector" class="absolute right-0 top-full mt-2 w-64 bg-glass-heavy backdrop-blur-2xl border border-border-base/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
                 <div class="px-3 py-2 border-b border-border-base/10 bg-bg-inset/80 flex items-center justify-between">
-                  <span class="text-xs font-bold text-text-main">AI 可用工具</span>
+                  <span class="text-xs font-bold text-text-main">{{ t('ai.panel.available_tools', 'AI 可用工具') }}</span>
                   <div class="flex gap-2">
-                    <button @click="toggleAllTools(true)" class="text-[0.7rem] text-accent-special hover:text-text-inverse transition-colors">全部开启</button>
-                    <button @click="toggleAllTools(false)" class="text-[0.7rem] text-text-dim hover:text-accent-warn transition-colors">关闭工具</button>
+                    <button @click="toggleAllTools(true)" class="text-[0.7rem] text-accent-special hover:text-text-inverse transition-colors">{{ t('ai.panel.enable_all_tools', '全部开启') }}</button>
+                    <button @click="toggleAllTools(false)" class="text-[0.7rem] text-text-dim hover:text-accent-warn transition-colors">{{ t('ai.panel.disable_tools', '关闭工具') }}</button>
                   </div>
                 </div>
 
@@ -45,7 +45,7 @@
                       class="mt-0.5 accent-accent-special w-3.5 h-3.5 bg-bg-inset/90 border border-border-base/18 rounded cursor-pointer" />
                     <div class="flex flex-col min-w-0">
                       <span class="text-xs font-bold transition-colors" :class="enabledTools.includes(tool.id) ? 'text-text-main' : 'text-text-disabled'">{{ tool.label || tool.id }}</span>
-                      <span class="text-[0.7rem] text-text-disabled leading-tight mt-0.5 group-hover:text-text-dim transition-colors">{{ tool.description || '暂无说明' }}</span>
+                      <span class="text-[0.7rem] text-text-disabled leading-tight mt-0.5 group-hover:text-text-dim transition-colors">{{ tool.description || t('ai.panel.no_tool_description', '暂无说明') }}</span>
                     </div>
                   </label>
                 </div>
@@ -53,7 +53,7 @@
             </transition>
           </div>
 
-          <button @click="clearChat" class="p-1.5 text-text-dim hover:text-accent-danger hover:bg-bg-overlay/5 transition-all rounded-md" v-tooltip="'清空当前会话，重新开始'">
+          <button @click="clearChat" class="p-1.5 text-text-dim hover:text-accent-danger hover:bg-bg-overlay/5 transition-all rounded-md" v-tooltip="t('ai.panel.clear_chat_tip', '清空当前会话，重新开始')">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           </button>
           <button @click="emit('update:modelValue', false)" class="p-1.5 text-text-dim hover:text-text-main hover:bg-accent-danger/25 transition-all rounded-md">
@@ -75,16 +75,16 @@
         <div v-for="(msg, idx) in chatHistory" :key="idx" class="flex flex-col relative" :class="msg.role === 'user' ? 'items-end' : 'items-start'">
           <!-- 单条消息卡片：角色标签 + 内容主体 -->
           <div class="text-[0.7rem] text-text-dim mb-1 ml-1 mr-1 transition-opacity">
-            <p :class="[msg.role === 'user' ? 'text-right' : 'text-left']">{{ msg.role === 'user' ? '你' : 'AI' }}</p>
+            <p :class="[msg.role === 'user' ? 'text-right' : 'text-left']">{{ msg.role === 'user' ? t('ai.panel.role_user', '你') : 'AI' }}</p>
           </div>
 
           <div class="max-w-[92%] w-full rounded-2xl px-3.5 py-2.5 text-sm shadow-sm group/msg relative"
               :class="msg.role === 'user' ? 'bg-bg-highlight text-text-main rounded-tr-xs' : 'bg-accent-special/15 backdrop-blur-md border border-border-base/10 text-text-main rounded-tl-xs'">
             <div v-if="hasAssistantText(msg)" class="absolute top-2 right-2 flex items-center gap-2 py-0.5 px-1.5 ring-1 ring-border-base/5 bg-bg-overlay/10 rounded-md shadow-md/20 backdrop-blur-sm opacity-0 group-hover/msg:opacity-100 text-xs transition-opacity">
               <Copy class="size-3" />
-              <button @click="copyMessage(msg, false)" class="text-text-main hover:text-accent-primary transition-colors flex items-center gap-1" v-tooltip="'复制纯文本'">纯文本</button>
+              <button @click="copyMessage(msg, false)" class="text-text-main hover:text-accent-primary transition-colors flex items-center gap-1" v-tooltip="t('ai.panel.copy_plain_tip', '复制纯文本')">{{ t('ai.panel.plain_text', '纯文本') }}</button>
               /
-              <button @click="copyMessage(msg, true)" class="text-text-main hover:text-accent-primary transition-colors flex items-center gap-1" v-tooltip="'复制 Markdown'">Markdown</button>
+              <button @click="copyMessage(msg, true)" class="text-text-main hover:text-accent-primary transition-colors flex items-center gap-1" v-tooltip="t('ai.panel.copy_markdown_tip', '复制 Markdown')">Markdown</button>
             </div>
 
             <div v-if="msg.attachments && msg.attachments.length > 0" class="mb-2 flex flex-wrap gap-2">
@@ -101,30 +101,30 @@
 
             <div v-if="msg.tools && msg.tools.length > 0" class="mb-3 flex flex-col gap-1.5">
               <!-- 工具调用折叠区：展示参数、摘要和结果 -->
-              <div v-for="t in msg.tools" :key="t.id" class="rounded-md border border-border-base/10 bg-bg-inset/80 overflow-hidden">
-                <button class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left hover:bg-bg-overlay/5 transition-colors" @click="toggleToolExpanded(t)">
+              <div v-for="toolCall in msg.tools" :key="toolCall.id" class="rounded-md border border-border-base/10 bg-bg-inset/80 overflow-hidden">
+                <button class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left hover:bg-bg-overlay/5 transition-colors" @click="toggleToolExpanded(toolCall)">
                   <div class="flex items-center gap-2 min-w-0">
-                    <svg v-if="t.status === 'running'" class="w-3.5 h-3.5 animate-spin text-accent-special shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    <svg v-else-if="t.status === 'error'" class="w-3.5 h-3.5 text-accent-danger shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <svg v-if="toolCall.status === 'running'" class="w-3.5 h-3.5 animate-spin text-accent-special shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <svg v-else-if="toolCall.status === 'error'" class="w-3.5 h-3.5 text-accent-danger shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-7.938 4h15.876c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L2.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                     <svg v-else class="w-3.5 h-3.5 text-accent-success shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <div class="min-w-0">
-                      <div class="text-text-dim font-mono truncate">{{ t.displayName || t.name || '系统工具' }}<span v-if="t.argumentsPreview" class="text-text-disabled"> {{ t.argumentsPreview }}</span></div>
-                      <div v-if="t.summary" class="text-[0.7rem] text-text-dim truncate">{{ t.summary }}</div>
+                      <div class="text-text-dim font-mono truncate">{{ toolCall.displayName || toolCall.name || t('ai.panel.system_tool', '系统工具') }}<span v-if="toolCall.argumentsPreview" class="text-text-disabled"> {{ toolCall.argumentsPreview }}</span></div>
+                      <div v-if="toolCall.summary" class="text-[0.7rem] text-text-dim truncate">{{ toolCall.summary }}</div>
                     </div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
-                    <span v-if="t.durationMs != null" class="text-[0.7rem] text-text-disabled font-mono">{{ t.durationMs }}ms</span>
-                    <svg class="w-3.5 h-3.5 text-text-dim transition-transform" :class="t.expanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                    <span v-if="toolCall.durationMs != null" class="text-[0.7rem] text-text-disabled font-mono">{{ toolCall.durationMs }}ms</span>
+                    <svg class="w-3.5 h-3.5 text-text-dim transition-transform" :class="toolCall.expanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                   </div>
                 </button>
-                <div v-if="t.expanded" class="px-2.5 pb-2.5 pt-1 border-t border-border-base/10 bg-bg-inset/70 space-y-2">
+                <div v-if="toolCall.expanded" class="px-2.5 pb-2.5 pt-1 border-t border-border-base/10 bg-bg-inset/70 space-y-2">
                   <div>
-                      <div class="text-[0.7rem] text-text-dim mb-1">工具输入</div>
-                    <pre class="text-[0.7rem] select-text leading-relaxed whitespace-pre-wrap break-all bg-bg-inset/80 rounded-md p-2 border border-border-base/10 text-text-soft">{{ t.argumentsPretty || t.arguments || '无输入内容' }}</pre>
+                      <div class="text-[0.7rem] text-text-dim mb-1">{{ t('ai.panel.tool_input', '工具输入') }}</div>
+                    <pre class="text-[0.7rem] select-text leading-relaxed whitespace-pre-wrap break-all bg-bg-inset/80 rounded-md p-2 border border-border-base/10 text-text-soft">{{ toolCall.argumentsPretty || toolCall.arguments || t('ai.panel.no_tool_input', '无输入内容') }}</pre>
                   </div>
                   <div>
-                    <div class="text-[0.7rem] text-text-dim mb-1">工具结果</div>
-                    <pre class="text-[0.7rem] select-text leading-relaxed whitespace-pre-wrap break-all bg-bg-inset/80 rounded-md p-2 border border-border-base/10" :class="t.status === 'error' ? 'text-accent-danger' : 'text-text-soft'">{{ t.resultPretty || t.result || '暂无结果' }}</pre>
+                    <div class="text-[0.7rem] text-text-dim mb-1">{{ t('ai.panel.tool_result', '工具结果') }}</div>
+                    <pre class="text-[0.7rem] select-text leading-relaxed whitespace-pre-wrap break-all bg-bg-inset/80 rounded-md p-2 border border-border-base/10" :class="toolCall.status === 'error' ? 'text-accent-danger' : 'text-text-soft'">{{ toolCall.resultPretty || toolCall.result || t('ai.panel.no_tool_result', '暂无结果') }}</pre>
                   </div>
                 </div>
               </div>
@@ -144,11 +144,11 @@
                 <summary class="flex items-center gap-2">
                   <template v-if="isThinking && msg === chatHistory[chatHistory.length - 1]">
                     <LoaderCircle class="w-3.5 h-3.5 animate-spin text-accent-special" />
-                    <span class="text-accent-special animate-pulse">正在思考...</span>
+                    <span class="text-accent-special animate-pulse">{{ t('ai.panel.thinking', '正在思考...') }}</span>
                   </template>
                   <template v-else>
                     <svg class="w-3.5 h-3.5 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    <span class="text-text-dim">思考过程</span>
+                    <span class="text-text-dim">{{ t('ai.panel.reasoning', '思考过程') }}</span>
                   </template>
                 </summary>
                 <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none select-text text-text-dim mt-2" v-html="renderMarkdown(msg.reasoning)"></div>
@@ -157,7 +157,7 @@
               <div v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 max-w-none select-text text-wrap break-all relative">
                 <div v-if="shouldShowAssistantLoading(msg)" class="flex items-center gap-2 py-1 text-text-dim">
                   <LoaderCircle class="w-4 h-4 animate-spin text-accent-special shrink-0"></LoaderCircle>
-                  <span class="text-xs font-mono">正在生成回答...</span>
+                  <span class="text-xs font-mono">{{ t('ai.panel.generating', '正在生成回答...') }}</span>
                 </div>
                 <div v-else-if="hasAssistantText(msg)" v-html="renderMarkdown(msg.content)"></div>
               </div>
@@ -165,13 +165,13 @@
               <div v-if="shouldShowAssistantUsage(msg)" class="mt-3 pt-3 border-t border-border-base/10 text-[0.7rem] font-mono text-text-dim space-y-2">
                 <div class="flex flex-wrap gap-5">
                   <div class="flex items-center gap-1 text-text-soft">
-                    <span>消息输出 {{ formatTokenCount(getAssistantMessageTokenTotal(msg)) }} token</span>
+                    <span>{{ t('ai.panel.message_output_tokens', '消息输出 {count} token', { count: formatTokenCount(getAssistantMessageTokenTotal(msg)) }) }}</span>
                     <button class="text-text-dim hover:text-accent-special transition-colors" :data-no-copy="true" v-tooltip="assistantMessageUsageTooltip(msg)">
                       <CircleHelp class="w-3 h-3" />
                     </button>
                   </div>
                   <div class="flex items-center gap-1 text-text-soft">
-                    <span>本轮总请求 {{ formatTokenCount(msg.tokenUsage.estimated_total_tokens || 0) }} token</span>
+                    <span>{{ t('ai.panel.request_total_tokens', '本轮总请求 {count} token', { count: formatTokenCount(msg.tokenUsage.estimated_total_tokens || 0) }) }}</span>
                     <button class="text-text-dim hover:text-accent-special transition-colors" :data-no-copy="true" v-tooltip="requestTotalUsageTooltip(msg)">
                       <CircleHelp class="w-3 h-3" />
                     </button>
@@ -184,7 +184,7 @@
               <div class="whitespace-pre-wrap select-text leading-relaxed text-sm">{{ msg.content }}</div>
               <div v-if="shouldShowUserUsage(msg)" class="mt-3 pt-3 border-t border-border-base/10 text-[0.7rem] font-mono text-text-dim">
                 <div class="flex items-center gap-1 text-text-soft">
-                  <span>消息输入 {{ formatTokenCount(getUserMessageTokenTotal(msg)) }} token</span>
+                  <span>{{ t('ai.panel.message_input_tokens', '消息输入 {count} token', { count: formatTokenCount(getUserMessageTokenTotal(msg)) }) }}</span>
                   <button class="text-text-dim hover:text-accent-special transition-colors" :data-no-copy="true" v-tooltip="userMessageUsageTooltip(msg)">
                     <CircleHelp class="w-3 h-3" />
                   </button>
@@ -195,7 +195,7 @@
             <div v-if="getRenderableActions(msg).length > 0" class="mt-4 pt-3 border-t border-border-base/10 flex flex-col gap-2.5">
               <p class="text-xs text-text-dim font-bold flex items-center gap-1.5 mb-1">
                 <svg class="w-3.5 h-3.5 text-accent-special" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                可直接操作
+                {{ t('ai.panel.executable_actions', '可直接操作') }}
               </p>
               <AiActionCard v-for="(action, aIdx) in getRenderableActions(msg)"
                 :key="action._renderKey || aIdx" :action="action"
@@ -226,7 +226,7 @@
                     <span class="text-xs text-accent-special font-bold">{{ getAttachmentDisplayMeta(entry.draft).summary }}</span>
                     <span v-if="getAttachmentDisplayMeta(entry.draft).detail" class="text-[0.7rem] text-text-dim">{{ getAttachmentDisplayMeta(entry.draft).detail }}</span>
                   </div>
-                  <button @click="removeComposerAttachment(entry.key)" class="text-text-dim hover:text-accent-danger p-0.5 rounded-full bg-bg-overlay/5 transition-colors" v-tooltip="'本轮不发送这条附件'">
+                  <button @click="removeComposerAttachment(entry.key)" class="text-text-dim hover:text-accent-danger p-0.5 rounded-full bg-bg-overlay/5 transition-colors" v-tooltip="t('ai.panel.remove_attachment_tip', '本轮不发送这条附件')">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
@@ -254,9 +254,9 @@
         </div>
 
         <div class="mt-2 flex items-center gap-1 w-full px-1 text-xs text-text-dim">
-          <CommonNumber v-model="sessionTemperature" mini :step="0.1" :min="0" :max="2" label="随机性" :description="sessionTemperatureTooltip" />
-          <CommonSelect :key="`assistant-model-${globalConnectionSignature}`" mini v-model="sessionModel" :options="availableModelOptions" label="模型" :description="sessionModelTooltip" placeholder="跟随全局模型" />
-          <CommonSelect mini v-model="reasoningMode" :options="reasoningOptions" label="思考模式" :description="reasoningModeTooltip" />
+          <CommonNumber v-model="sessionTemperature" mini :step="0.1" :min="0" :max="2" :label="t('ai.panel.temperature', '随机性')" :description="sessionTemperatureTooltip" />
+          <CommonSelect :key="`assistant-model-${globalConnectionSignature}`" mini v-model="sessionModel" :options="availableModelOptions" :label="t('ai.panel.model', '模型')" :description="sessionModelTooltip" :placeholder="t('ai.panel.follow_global_model', '跟随全局模型')" />
+          <CommonSelect mini v-model="reasoningMode" :options="reasoningOptions" :label="t('ai.panel.reasoning_mode', '思考模式')" :description="reasoningModeTooltip" />
         </div>
       </div>
     </div>
@@ -279,6 +279,7 @@ import AiActionCard from './AiActionCard.vue'
 import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
 import { toUserMessage } from '../../shared/lib/common'
+import { t } from '../../shared/i18n'
 import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
   buildAssistantMessageUsageTooltip, buildRequestTotalUsageTooltip,
@@ -293,10 +294,10 @@ const props = defineProps({
   assistantId: { type: String, required: true },
   ownerType: { type: String, default: 'assistant' },
   ownerKey: { type: String, required: true },
-  title: { type: String, default: 'AI 助手' },
-  emptyTitle: { type: String, default: '需要 AI 帮助吗？' },
-  emptyDescription: { type: String, default: '输入问题后直接发送给 AI。' },
-  inputPlaceholder: { type: String, default: '输入消息...' },
+  title: { type: String, default: () => t('ai.panel.default_title', 'AI 助手') },
+  emptyTitle: { type: String, default: () => t('ai.panel.empty_title', '需要 AI 帮助吗？') },
+  emptyDescription: { type: String, default: () => t('ai.panel.empty_description', '输入问题后直接发送给 AI。') },
+  inputPlaceholder: { type: String, default: () => t('ai.panel.input_placeholder', '输入消息...') },
   sessionMeta: { type: Object, default: () => ({}) },
   requestPayload: { type: Object, default: () => ({}) },
   autoStartRequest: { type: Object, default: null },
@@ -327,8 +328,8 @@ const reasoningCapabilities = ref({
   supports_reasoning_effort: false,
   reasoning_mode_kind: 'pending',
   reasoning_options: [
-    { value: 'off', label: '关闭' },
-    { value: 'auto', label: '自动' },
+    { value: 'off', label: t('ai.reasoning.off', '关闭') },
+    { value: 'auto', label: t('ai.reasoning.auto', '自动') },
   ],
   default_session_reasoning_mode: 'auto',
 })
@@ -371,8 +372,8 @@ const actionPresentation = createActionPresentationRuntime({
     const definition = aiStore.getActionDefinitions()?.[actionType] || null
     return definition ? { type: actionType, ...definition } : null
   },
-  getModDisplayName: (modId) => modStore.displayModName(modId, '未知模组'),
-  getModPreviewData: (modId) => modStore.takeModById(modId, '未知模组'),
+  getModDisplayName: (modId) => modStore.displayModName(modId, t('common.unknown_mod', '未知模组')),
+  getModPreviewData: (modId) => modStore.takeModById(modId, t('common.unknown_mod', '未知模组')),
 })
 const {
   // 动作基础信息
@@ -486,7 +487,11 @@ const reasoningOptions = computed(() => {
   const options = Array.isArray(reasoningCapabilities.value?.reasoning_options)
     ? reasoningCapabilities.value.reasoning_options
     : []
-  return options.length > 0 ? options : [{ value: 'off', label: '关闭' }]
+  const normalized = options.map(item => {
+    const value = String(item?.value || '').trim()
+    return { ...item, label: t(`ai.reasoning.${value}`, item?.label || value) }
+  })
+  return normalized.length > 0 ? normalized : [{ value: 'off', label: t('ai.reasoning.off', '关闭') }]
 })
 const reasoningMode = computed({
   get: () => {
@@ -508,41 +513,41 @@ const reasoningMode = computed({
 })
 const sessionModelTooltip = computed(() => {
   const provider = String(sessionModelConfig.value.provider || 'unknown')
-  const model = String(sessionModel.value || '未选择')
+  const model = String(sessionModel.value || t('common.not_selected', '未选择'))
   return [
-    '当前助手面板临时使用的模型。',
-    `服务类型 ^^${provider}^^`,
-    `模型 ^^${model}^^`,
-    '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。',
+    t('ai.panel.model_tip_intro', '当前助手面板临时使用的模型。'),
+    t('ai.panel.model_tip_provider', '服务类型 ^^{provider}^^', { provider }),
+    t('ai.panel.model_tip_model', '模型 ^^{model}^^', { model }),
+    t('ai.panel.model_tip_inherit', '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。'),
   ].join('\n')
 })
 const sessionTemperatureTooltip = computed(() => {
   const temperature = Number(sessionTemperature.value).toFixed(1)
   return [
-    '当前助手面板临时使用的输出随机性。',
+    t('ai.panel.temperature_tip_intro', '当前助手面板临时使用的输出随机性。'),
     `temperature ^^${temperature}^^`,
-    '值越低越稳定，适合需要精确回答的情况，值越高越发散，适合需要创意回答的情况。',
-    '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。',
+    t('ai.panel.temperature_tip_range', '值越低越稳定，适合需要精确回答的情况，值越高越发散，适合需要创意回答的情况。'),
+    t('ai.panel.model_tip_inherit', '没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。'),
   ].join('\n')
 })
 const reasoningModeTooltip = computed(() => {
   const kind = String(reasoningCapabilities.value?.reasoning_mode_kind || 'unsupported')
   if (kind === 'pending') {
     return [
-      '正在检查当前模型支持哪些思考模式。',
-      '暂时会先按“自动”处理。',
+      t('ai.panel.reasoning_tip_pending', '正在检查当前模型支持哪些思考模式。'),
+      t('ai.panel.reasoning_tip_pending_fallback', '暂时会先按“自动”处理。'),
     ].join('\n')
   }
   if (kind === 'unsupported') {
     return [
-      '当前模型不支持思考模式。',
-      '发送时会按普通回答处理。',
+      t('ai.panel.reasoning_tip_unsupported', '当前模型不支持思考模式。'),
+      t('ai.panel.reasoning_tip_unsupported_fallback', '发送时会按普通回答处理。'),
     ].join('\n')
   }
   return [
-    '当前助手面板临时使用的思考模式。',
-    '自动：由系统按当前模型选择合适方式。',
-    '如果模型支持更多等级，这里会显示对应选项。',
+    t('ai.panel.reasoning_tip_intro', '当前助手面板临时使用的思考模式。'),
+    t('ai.panel.reasoning_tip_auto', '自动：由系统按当前模型选择合适方式。'),
+    t('ai.panel.reasoning_tip_more', '如果模型支持更多等级，这里会显示对应选项。'),
   ].join('\n')
 })
 const enabledTools = computed({
@@ -661,7 +666,7 @@ const refreshReasoningCapability = () => {
     reasoning_mode_kind: String(capabilities?.reasoning_mode_kind || 'pending'),
     reasoning_options: Array.isArray(capabilities?.reasoning_options) && capabilities.reasoning_options.length > 0
       ? capabilities.reasoning_options
-      : [{ value: 'off', label: '关闭' }],
+      : [{ value: 'off', label: t('ai.reasoning.off', '关闭') }],
     default_session_reasoning_mode: String(capabilities?.default_session_reasoning_mode || 'auto'),
   }
 }
@@ -759,9 +764,9 @@ const copyMessage = async (msg, isMarkdown = false) => {
     const rawText = getAssistantText(msg.content)
     const finalOutput = isMarkdown ? rawText : stripMarkdownToPlainText(rawText)
     await navigator.clipboard.writeText(finalOutput)
-    toast.success(isMarkdown ? '已复制 Markdown 格式' : '已复制纯文本格式')
+    toast.success(isMarkdown ? t('ai.panel.copy_markdown_success', '已复制 Markdown 格式') : t('ai.panel.copy_plain_success', '已复制纯文本格式'))
   } catch (err) {
-    toast.error(toUserMessage(err?.message || err, '复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。'))
+    toast.error(toUserMessage(err?.message || err, t('ai.panel.copy_failed', '复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。')))
   }
 }
 
@@ -864,9 +869,9 @@ const sessionTokenIndicatorClass = computed(() => {
 })
 const sessionTokenDisplay = computed(() => {
   if (sessionTokenTotal.value <= 0) {
-    return isThinking.value ? '会话总计 计算中' : '会话总计 暂无'
+    return isThinking.value ? t('ai.panel.session_total_calculating', '会话总计 计算中') : t('ai.panel.session_total_empty', '会话总计 暂无')
   }
-  return `会话总计 ${(sessionTokenTotal.value / 1000).toFixed(1)}k token`
+  return t('ai.panel.session_total_tokens', '会话总计 {count}k token', { count: (sessionTokenTotal.value / 1000).toFixed(1) })
 })
 
 const getMainPromptTokenTotal = (message) => Number(message?.tokenUsage?.estimated_prompt_tokens || 0)
@@ -933,13 +938,13 @@ const executeAction = async (action) => {
   /** 执行一条助手返回的前端动作。 */
   const executor = ACTION_EXECUTORS[getActionType(action)]
   if (!executor) {
-    toast.warning(`暂不支持的操作类型: ${getActionType(action) || '未知'}`)
+    toast.warning(t('ai.panel.unsupported_action_type', '暂不支持的操作类型: {type}', { type: getActionType(action) || t('common.unknown', '未知') }))
     return
   }
   try {
     await executor(action.payload || {}, action)
   } catch (error) {
-    toast.error(toUserMessage(error?.message || error, '操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。'))
+    toast.error(toUserMessage(error?.message || error, t('ai.panel.action_failed', '操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。')))
   }
 }
 
@@ -988,7 +993,7 @@ const sendMessage = async () => {
     requestPayload: { ...(props.requestPayload || {}) },
   })
   if (requestMeta?.error) {
-    toast.error(toUserMessage(requestMeta.error?.message || requestMeta.error, 'AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。'))
+    toast.error(toUserMessage(requestMeta.error?.message || requestMeta.error, t('ai.panel.request_failed', 'AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。')))
   }
 }
 
@@ -1006,7 +1011,7 @@ const cancelCurrentRequest = async ({ keepBubble = true, silent = false } = {}) 
   // 先在当前气泡上写入中断提示，避免取消成功但界面看起来像“无响应”。
   if (keepBubble && aiMessage) {
     const currentText = getAssistantText(aiMessage.content)
-    const tip = '🛑 本次分析已由用户手动中断。'
+    const tip = t('ai.panel.cancelled_tip', '🛑 本次分析已由用户手动中断。')
     if (!currentText && !aiMessage.reasoning && (!aiMessage.tools || aiMessage.tools.length === 0)) {
       aiMessage.content = tip
     } else if (!currentText.includes(tip)) {
@@ -1015,10 +1020,10 @@ const cancelCurrentRequest = async ({ keepBubble = true, silent = false } = {}) 
   }
   try {
     await aiStore.cancelAssistantSession(session.id)
-    if (!silent) toast.info('已请求中断本次 AI 分析')
+    if (!silent) toast.info(t('ai.panel.cancel_requested', '已请求中断本次 AI 分析'))
   } catch (error) {
     console.warn('取消 AI 助手会话失败:', error)
-    if (!silent) toast.warning(toUserMessage(error?.message || error, '已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。'))
+    if (!silent) toast.warning(toUserMessage(error?.message || error, t('ai.panel.cancel_not_confirmed', '已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。')))
   }
 }
 

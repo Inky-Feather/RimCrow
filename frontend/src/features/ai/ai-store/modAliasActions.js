@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { checkResult, normalizeText, toast } from '../../../shared/lib/common'
 import { normalizeNumber, normalizeTimestamp } from './factories'
 import { useAppStore } from '../../../app/stores/appStore'
+import { t } from '../../../shared/i18n'
 
 export const useModAliasActions = ({
   taskStore,
@@ -35,12 +36,12 @@ export const useModAliasActions = ({
     if (!window.pywebview) return ''
     const appStore = useAppStore()
     if (!appStore.settings.ai.enabled) {
-      toast.warning('AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。')
+      toast.warning(t('ai.session.disabled_warning', 'AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。'))
       return ''
     }
     const normalizedMods = normalizeModAliasTaskInputItems(mods)
     if (normalizedMods.length === 0) {
-      toast.warning('没有可供处理的模组输入')
+      toast.warning(t('ai.mod_alias.no_mod_input', '没有可供处理的模组输入'))
       return ''
     }
     const isBatch = normalizedMods.length > 1
@@ -49,7 +50,7 @@ export const useModAliasActions = ({
     const prepared = prepareModAliasTaskAttachment({ mods: normalizedMods, ownerType, mode: attachmentMode })
     const payload = { attachments: prepared.attachments, needs_review: normalizedNeedsReview }
     const res = await window.pywebview.api.ai_start_task('task.mod_alias_generation', payload)
-    if (!checkResult(res, '启动 AI 别名生成任务')) {
+    if (!checkResult(res, t('ai.mod_alias.start_task_action', '启动 AI 别名生成任务'))) {
       prepared.attachmentKeys.forEach(removeGlobalAttachmentDraft)
       return ''
     }
@@ -68,7 +69,7 @@ export const useModAliasActions = ({
       needsReview: normalizedNeedsReview,
       inputCount: normalizedMods.length,
       inputPackageIds: normalizedMods.map(item => item.package_id),
-      title: normalizedMods.length > 1 ? 'AI 别名批量生成' : 'AI 别名生成',
+      title: normalizedMods.length > 1 ? t('ai.mod_alias.batch_generation_title', 'AI 别名批量生成') : t('ai.mod_alias.generation_title', 'AI 别名生成'),
     }
 
     taskStore.createPlaceholderTask({
@@ -76,7 +77,7 @@ export const useModAliasActions = ({
       type: 'ai-task',
       status: 'pending',
       progress: 0,
-      message: '任务已加入后台队列',
+      message: t('ai.mod_alias.task_queued', '任务已加入后台队列'),
       metrics: {
         task_id: taskId,
         task_key: 'task.mod_alias_generation',
@@ -204,7 +205,7 @@ export const useModAliasActions = ({
 
   const createModAliasReviewTaskResult = (taskId = '', patch = {}) => ({
     taskId: normalizeText(taskId),
-    title: normalizeText(patch?.title, '模组别名批量检阅'),
+    title: normalizeText(patch?.title, t('ai.mod_alias.review_title', '模组别名批量检阅')),
     status: normalizeText(patch?.status, 'success'),
     ownerType: normalizeText(patch?.ownerType, 'task'),
     createdAt: normalizeTimestamp(patch?.createdAt, Date.now()),
@@ -224,11 +225,11 @@ export const useModAliasActions = ({
     const normalizedItems = normalizeModAliasReviewResultItems({
       items: Array.isArray(payload?.results) ? payload.results : [],
       requestedPackageIds,
-      fallbackError: message || (status === 'error' ? '任务执行失败' : ''),
+      fallbackError: message || (status === 'error' ? t('tasks.status.execution_failed', '任务执行失败') : ''),
     })
     return {
       taskId: normalizeText(taskId),
-      title: normalizeText(requestMeta?.title, '模组别名批量检阅'),
+      title: normalizeText(requestMeta?.title, t('ai.mod_alias.review_title', '模组别名批量检阅')),
       status: normalizeText(status, 'success'),
       ownerType: normalizeText(requestMeta?.ownerType, 'task'),
       createdAt: normalizeTimestamp(meta?.created_at, requestMeta?.createdAt || Date.now()),
@@ -256,7 +257,7 @@ export const useModAliasActions = ({
     const next = existing ? {
       ...existing, ...patch,
       taskId: normalizedTaskId,
-      title: normalizeText(patch?.title, existing.title || '模组别名批量检阅'),
+      title: normalizeText(patch?.title, existing.title || t('ai.mod_alias.review_title', '模组别名批量检阅')),
       status: normalizeText(patch?.status, existing.status || 'success'),
       ownerType: normalizeText(patch?.ownerType, existing.ownerType || 'task'),
       createdAt: normalizeTimestamp(patch?.createdAt, existing.createdAt || Date.now()),

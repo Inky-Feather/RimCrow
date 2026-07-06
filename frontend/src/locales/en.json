@@ -3666,6 +3666,60 @@
         "zstd": "ZSTD only"
       },
       "vram_estimate": "Estimated VRAM usage"
+    },
+    "ai_definitions": {
+      "title": "AI Definition Manager",
+      "description": "Manage AI assistants, tasks, and templates in one place.",
+      "create_custom_prompt": "Create Custom Template",
+      "loading_detail": "Loading AI definitions...",
+      "system_prompts": "System Template",
+      "custom_prompts": "Custom Template",
+      "loading": "Loading AI definitions",
+      "load_failed": "Read Failed",
+      "save_entry": "Save Entry Config",
+      "unnamed_entry": "Unnamed Entry",
+      "prompt_used": "Template Used",
+      "available_actions": "Returnable Actions",
+      "no_actions": "This assistant only answers questions and will not return directly executable actions.",
+      "available_tools": "Available Tools",
+      "available_tools_desc": "This controls which tools the assistant can use. New sessions enable all by default, and you can temporarily disable some tools in a session.",
+      "auto_id_after_save": "Generated after saving",
+      "system_prompt": "System Template",
+      "custom_prompt": "Custom Template",
+      "system_prompt_readonly": "System template is read-only",
+      "delete_prompt": "Delete Template",
+      "save_prompt": "Save Template",
+      "prompt_name": "Template Name",
+      "prompt_description": "Template Description",
+      "system_prompt_view_only": "System templates are read-only. You can still view which attachments and variables they use.",
+      "available_attachments": "Available Attachments",
+      "attachment_projection_title": "Attachment Content Sent to AI",
+      "attachment_projection_desc": "Control which attachment fields are sent to AI. Unchecked content is usually not sent.",
+      "available_variables": "Available Variables",
+      "base_variables": "Base Variables",
+      "system_prompt_body": "System Prompt",
+      "system_prompt_body_hint": "Fixed instructions for AI",
+      "user_template": "User Input Template",
+      "user_template_hint": "Input format used for each send",
+      "select_left_item": "Select an item on the left",
+      "entry_type": {
+        "assistant": "System Assistant",
+        "task": "System Task"
+      },
+      "search_entries": "Search system entry name or ID",
+      "search_prompts": "Search template name or ID",
+      "tool": "Tool",
+      "not_ready": "AI definitions are not ready yet. Try again later.",
+      "read_failed": "Failed to read AI definitions. Try again later.",
+      "new_custom_prompt_name": "New Custom Prompt",
+      "delete_title": "Dangerous Action",
+      "delete_message": "Delete template {id}? This cannot be undone."
+    },
+    "prompt_queue": {
+      "system_title": "System Notice",
+      "submitted": "Submitted",
+      "item_failed": "Processing failed. Check network connection and file permissions, or try again later. Details were written to the system log.",
+      "bulk_failed": "{label} failed. Check network connection and file permissions, or try again later. Details were written to the system log."
     }
   },
   "api": {
@@ -3770,14 +3824,518 @@
       "ready": "Ready to search",
       "start_failed_short": "Failed to start",
       "submitted": "Search task submitted"
+    },
+    "status": {
+      "execution_failed": "Task execution failed"
     }
   },
   "logs": {},
   "ai": {
-    "definitions": {},
-    "tools": {},
-    "actions": {},
-    "prompts": {}
+    "definitions": {
+      "attachments": {
+        "diagnosis_context": {
+          "label": "Selected Log",
+          "description": "Diagnostic context compressed by the backend for the selected log.",
+          "prompt_variables": {
+            "diagnosis_context": {
+              "source_type": {
+                "label": "Log Source",
+                "description": "Source type of the current diagnostic log, such as game or app."
+              },
+              "filename": {
+                "label": "Log Filename",
+                "description": "Filename of the current diagnostic target log."
+              }
+            },
+            "diagnosis_context_block": {
+              "label": "Log Attachment Block",
+              "description": "Main data block for the current log attachment, containing only error summaries and a few necessary statistics."
+            }
+          },
+          "projection_options": {
+            "source_type": {
+              "label": "Log Source Type",
+              "description": "Source type of the current diagnostic log, such as game or app."
+            },
+            "filename": {
+              "label": "Log Filename",
+              "description": "Filename of the current diagnostic target log."
+            },
+            "errors": {
+              "label": "Error Summary List",
+              "description": "Compressed error entries. Each item includes target_line, error type, message preview, stack preview, and related files."
+            },
+            "total_repeat_count": {
+              "label": "Total Repeat Count",
+              "description": "Total repeat count covered by the selected log summary."
+            },
+            "selected_error_count": {
+              "label": "Summary Entries",
+              "description": "Number of error summary entries kept in the final attachment."
+            },
+            "truncated": {
+              "label": "Truncated",
+              "description": "Whether some error summaries were truncated due to the length budget."
+            }
+          }
+        },
+        "mod_selection": {
+          "label": "Selected Mods",
+          "description": "One or more mods selected on the current page.",
+          "prompt_variables": {
+            "mod_selection": {
+              "package_ids": {
+                "label": "Selected mod package ID list",
+                "description": "packageId list included in the current mod selection."
+              }
+            },
+            "mod_selection_block": {
+              "label": "Mod Attachment Block",
+              "description": "Main data block for the current mod attachment, containing only selection mode and the mod list."
+            }
+          },
+          "projection_options": {
+            "selection_mode": {
+              "label": "Selection Mode",
+              "description": "single / multiple / all selection mode."
+            },
+            "mods[]": {
+              "package_id": {
+                "label": "Mod Details: Package ID",
+                "description": "packageId of each selected mod."
+              },
+              "name": {
+                "label": "Mod Details: Name",
+                "description": "Display name of each selected mod."
+              },
+              "description": {
+                "label": "Mod Details: Description",
+                "description": "Short description of each selected mod."
+              },
+              "alias_name": {
+                "label": "Mod Details: User Alias",
+                "description": "User alias for this mod in the manager."
+              },
+              "workshop_id": {
+                "label": "Mod Details: Workshop ID",
+                "description": "Steam Workshop ID."
+              },
+              "author": {
+                "label": "Mod Details: Author",
+                "description": "Author list."
+              },
+              "is_active": {
+                "label": "Mod Details: Active State",
+                "description": "Whether this mod is active in the current environment."
+              }
+            }
+          }
+        }
+      },
+      "assistants": {
+        "log_game": {
+          "name": "Game Log Assistant",
+          "description": "Multi-turn enhanced diagnostic assistant for RimWorld game logs."
+        },
+        "log_app": {
+          "name": "App Log Assistant",
+          "description": "Multi-turn diagnostic assistant for RimCrow runtime logs."
+        },
+        "mod_general": {
+          "name": "Mod Assistant",
+          "description": "General multi-turn assistant for one or more mods."
+        }
+      },
+      "tasks": {
+        "mod_alias_generation": {
+          "name": "Alias Generation",
+          "description": "Generate readable aliases and notes for one or more mods."
+        },
+        "translation": {
+          "name": "Text Translation",
+          "description": "Translate titles, descriptions, definition names, and other text segments passed by business logic."
+        }
+      },
+      "categories": {
+        "assistant": {
+          "label": "Assistant Template",
+          "description": "Prompt templates for multi-turn assistant entries.",
+          "base_variables": {
+            "message": {
+              "label": "User Input",
+              "description": "Current user input for this turn."
+            },
+            "target_lang": {
+              "label": "Target Language",
+              "description": "Human-readable name for the current UI language."
+            },
+            "attachments_block": {
+              "label": "Attachment Overview",
+              "description": "General fallback summary block for all attachments. Suitable for generic templates, but not recommended as a replacement for specific attachment variables."
+            }
+          }
+        },
+        "task": {
+          "label": "Task Template",
+          "description": "Prompt templates for one-shot task entries.",
+          "base_variables": {
+            "message": {
+              "label": "Input Text",
+              "description": "Main text passed into the task entry."
+            },
+            "target_lang": {
+              "label": "Target Language",
+              "description": "Human-readable name for the current UI language."
+            },
+            "attachments_block": {
+              "label": "Attachment Overview",
+              "description": "General fallback summary block for all attachments. Suitable for generic templates, but not recommended as a replacement for specific attachment variables."
+            },
+            "mod_alias_input_json": {
+              "label": "Mod Data JSON",
+              "description": "JSON text input for the mod alias task."
+            },
+            "translation_input_json": {
+              "label": "Translation Input JSON",
+              "description": "Text segment JSON input for the general translation task."
+            },
+            "required_segment_keys": {
+              "label": "Required Segment Keys",
+              "description": "List of segment keys that must be returned completely in the translation result."
+            },
+            "translation_context": {
+              "label": "Translation Context",
+              "description": "Describe the text source, purpose, or display location."
+            },
+            "source_format": {
+              "label": "Source Format",
+              "description": "Source format or markup type, such as plain_text or steam_rich_text."
+            },
+            "glossary_block": {
+              "label": "Glossary",
+              "description": "Terminology constraints available for this translation."
+            }
+          }
+        }
+      },
+      "save_prompt_action": "Save Template",
+      "save_assistant_action": "Save Assistant",
+      "save_task_action": "Save Task",
+      "delete_prompt_action": "Delete Template"
+    },
+    "tools": {
+      "get_log_context": {
+        "label": "Log Context",
+        "description": "Get detailed context for a specific error log, including full error information and core stack trace. Use only when stack_preview in the summary is not enough to reach a conclusion."
+      },
+      "search_mods": {
+        "label": "Search Mods",
+        "description": "Use this fuzzy search tool only when you are unsure of a mod package_id. Enter a name, alias, or partial ID to find possible package_ids."
+      },
+      "get_active_mod_list": {
+        "label": "Current Active List",
+        "description": "Get the active mod list from the current load order file for high-level load order checks. Returns package IDs."
+      },
+      "get_mod_info": {
+        "label": "Mod Metadata",
+        "description": "Get metadata for installed mods in the current environment. simple returns required basics: ('package_id', 'name', 'workshop_id', 'supported_versions', 'is_active', 'path'). all returns all information; specific returns selected optional fields: ('package_id', 'name', 'author', 'workshop_id', 'version', 'description', 'path', 'url', 'source', 'store', 'supported_versions', 'supported_languages', 'mod_type', 'is_active', 'dependencies_mods', 'load_after_mods', 'load_before_mods', 'incompatible_mods', 'save_breaking', 'last_active_time', 'last_moved_time')."
+      },
+      "get_mod_rules": {
+        "label": "Mod Rules",
+        "description": "Get dependency, load-before/load-after, and incompatibility rules for this mod to understand explicit relationships with other mods. Call only when missing dependencies, load order errors, or incompatible mods are suspected."
+      },
+      "get_mod_user_data": {
+        "label": "Mod User Data",
+        "description": "Get manager-side user context for this installed mod: alias, tags, notes, color, custom type, and groups. This only helps understand player organization and is specific to the mod manager, unrelated to game mechanics."
+      },
+      "get_group_mods": {
+        "label": "Group Mods",
+        "description": "Query mods in a group by group name. Group information only helps understand the player's organization and is specific to the manager, not game mechanics."
+      }
+    },
+    "actions": {
+      "MOD_RULE": {
+        "description": "Add a load order or compatibility rule.",
+        "execute_label": "Apply mod rule",
+        "execution_failed_message": "Failed to apply mod rule: {error}",
+        "label": "Mod rule",
+        "unsupported_message": "The current frontend does not support this mod rule action yet.",
+        "variants": {
+          "incompatibleWith": {
+            "confirm_confirm_text": "Apply rule",
+            "confirm_message": "{target_id_display} will be set as incompatible with {mod_id_display}",
+            "confirm_title": "Confirm incompatible rule",
+            "description": "Suggest creating an incompatible rule.",
+            "execute_label": "Apply incompatible rule",
+            "label": "Mod rule",
+            "missing_payload_message": "This rule action is missing required fields and was skipped.",
+            "post_success_confirm_text": "Sort now",
+            "post_success_message": "Run auto-sort now so the rule takes effect?",
+            "post_success_title": "Rule applied",
+            "preview_template": "Set {target_id_display} as incompatible with {mod_id_display}.",
+            "title": "Incompatible rule"
+          },
+          "loadAfter": {
+            "confirm_confirm_text": "Apply rule",
+            "confirm_message": "{target_id_display} will be set as a prerequisite of {mod_id_display}",
+            "confirm_title": "Confirm prerequisite rule",
+            "description": "Suggest creating a prerequisite rule.",
+            "execute_label": "Apply prerequisite rule",
+            "label": "Mod rule",
+            "missing_payload_message": "This rule action is missing required fields and was skipped.",
+            "post_success_confirm_text": "Sort now",
+            "post_success_message": "Run auto-sort now so the rule takes effect?",
+            "post_success_title": "Rule applied",
+            "preview_template": "Set {target_id_display} as a prerequisite of {mod_id_display}.",
+            "title": "Prerequisite rule"
+          },
+          "loadBefore": {
+            "confirm_confirm_text": "Apply rule",
+            "confirm_message": "{target_id_display} will be set to load after {mod_id_display}",
+            "confirm_title": "Confirm load-after rule",
+            "description": "Suggest creating a load-after rule.",
+            "execute_label": "Apply load-after rule",
+            "label": "Mod rule",
+            "missing_payload_message": "This rule action is missing required fields and was skipped.",
+            "post_success_confirm_text": "Sort now",
+            "post_success_message": "Run auto-sort now so the rule takes effect?",
+            "post_success_title": "Rule applied",
+            "preview_template": "Set {target_id_display} to load after {mod_id_display}.",
+            "title": "Load-after rule"
+          }
+        }
+      },
+      "MOD_STATE": {
+        "description": "Adjust the enabled state of one or more mods.",
+        "execute_label": "Apply mod state change",
+        "execution_failed_message": "Failed to apply mod state action: {error}",
+        "label": "Mod enabled state",
+        "unsupported_message": "The current frontend does not support this mod state action yet.",
+        "variants": {
+          "disable": {
+            "description": "Remove the specified mod from the active list.",
+            "execute_label": "Disable this mod",
+            "label": "Mod enabled state",
+            "missing_payload_message": "This disable action has no valid mod_ids and was skipped.",
+            "preview_template": "Set {mod_ids_display_joined} to disabled.",
+            "success_message": "Disabled: {mod_ids_display_csv}",
+            "title": "Disable mod"
+          },
+          "enable": {
+            "description": "Add the specified mod to the active list.",
+            "execute_label": "Enable this mod",
+            "label": "Mod enabled state",
+            "missing_payload_message": "This enable action has no valid mod_ids and was skipped.",
+            "preview_template": "Set {mod_ids_display_joined} to enabled.",
+            "success_message": "Enabled: {mod_ids_display_csv}",
+            "title": "Enable mod"
+          }
+        }
+      },
+      "SETTING_UPDATE": {
+        "description": "Change a registered setting.",
+        "execute_label": "Apply setting change",
+        "execution_failed_message": "Failed to apply setting change: {error}",
+        "label": "Setting update",
+        "unsupported_message": "The current frontend does not support this setting action yet.",
+        "variants": {
+          "set_value": {
+            "blocked_message": "AI is not allowed to modify this setting: {setting_key}",
+            "description": "Suggest changing a registered setting that AI is allowed to trigger.",
+            "execute_label": "Apply setting change",
+            "label": "Setting update",
+            "missing_payload_message": "This setting action is missing setting_key and was skipped.",
+            "preview_template": "{setting_key} => {value_json}",
+            "success_message": "Updated setting: {setting_key}",
+            "title": "Change setting"
+          }
+        }
+      },
+      "TEXT_TRANSFER": {
+        "description": "Send a text block to the frontend for copying or handoff.",
+        "execute_label": "Copy text",
+        "execution_failed_message": "Failed to copy text: {error}",
+        "label": "Text transfer",
+        "unsupported_message": "The current frontend does not support this text action yet.",
+        "variants": {
+          "copy_report": {
+            "description": "Copy a ready-to-send issue note for the author or community.",
+            "execute_label": "Copy to clipboard",
+            "label": "Text transfer",
+            "missing_payload_message": "This text action has no copyable content and was skipped.",
+            "preview_template": "{text}",
+            "success_message": "Text copied to clipboard.",
+            "title": "Copy feedback text"
+          }
+        }
+      },
+      "fallback": {
+        "applied_title": "Operation applied",
+        "confirm_title": "Confirm operation",
+        "description": "Execute this AI suggestion.",
+        "execute": "Execute action",
+        "missing_payload": "This action is missing required fields and was skipped.",
+        "setting_blocked": "This setting change action is not allowed."
+      }
+    },
+    "prompts": {
+      "mod_alias_generation": {
+        "name": "Mod Alias and Notes Generation",
+        "description": "Generate readable aliases and notes for one or more mods"
+      },
+      "translation_general": {
+        "name": "General Text Translation",
+        "description": "Translate arbitrary text segments while preserving original formatting and terminology consistency as much as possible."
+      },
+      "app_log_analysis": {
+        "name": "App Log Analysis",
+        "description": "Analyze RimCrow Python/Vue error logs for developers."
+      },
+      "game_log_analysis": {
+        "name": "Game Log Analysis",
+        "description": "Analyze RimWorld game logs to help players resolve mod conflicts and errors."
+      },
+      "mod_general_assistant": {
+        "name": "General Mod Assistant",
+        "description": "Default multi-turn assistant template for mod information, load order, compatibility, dependencies, and usage suggestions."
+      }
+    },
+    "diagnostic": {
+      "app_log_title": "Application Log Analysis",
+      "game_log_title": "Game Log Analysis",
+      "empty_title": "Need help troubleshooting?",
+      "empty_description": "Select logs on the left and send them directly to AI for analysis.",
+      "input_placeholder": "Enter extra requirements, or click send to start analysis...",
+      "footer_hint": "Deep thinking usually increases latency and token usage, but is more reliable for complex troubleshooting."
+    },
+    "panel": {
+      "session_token_tip": "Total token usage in the current session. If it gets too high, AI is more likely to miss earlier content.",
+      "view_trace": "View Request Trace",
+      "no_tools_tip": "No tools will be called; AI will answer from existing context only.",
+      "tool_selector_tip": "Choose tools AI may use in this turn",
+      "available_tools": "AI Tools",
+      "enable_all_tools": "Enable All",
+      "disable_tools": "Disable Tools",
+      "no_tool_description": "No description",
+      "clear_chat_tip": "Clear the current session and start over",
+      "role_user": "You",
+      "copy_plain_tip": "Copy Plain Text",
+      "plain_text": "Plain Text",
+      "copy_markdown_tip": "Copy Markdown",
+      "system_tool": "System Tool",
+      "tool_input": "Tool Input",
+      "no_tool_input": "No input",
+      "tool_result": "Tool Result",
+      "no_tool_result": "No result",
+      "thinking": "Thinking...",
+      "reasoning": "Reasoning",
+      "generating": "Generating response...",
+      "message_output_tokens": "Message output {count} tokens",
+      "request_total_tokens": "Total request this turn {count} tokens",
+      "message_input_tokens": "Message input {count} tokens",
+      "executable_actions": "Executable Actions",
+      "remove_attachment_tip": "Do not send this attachment in this turn",
+      "temperature": "Temperature",
+      "model": "Model",
+      "follow_global_model": "Follow Global Model",
+      "reasoning_mode": "Reasoning Mode",
+      "default_title": "AI Assistant",
+      "empty_title": "Need AI help?",
+      "empty_description": "Enter a question and send it directly to AI.",
+      "input_placeholder": "Type a message...",
+      "model_tip_intro": "Temporary model used by this assistant panel.",
+      "model_tip_provider": "Service type ^^{provider}^^",
+      "model_tip_model": "Model ^^{model}^^",
+      "model_tip_inherit": "When not changed here, the global AI settings are used. This panel keeps its temporary choice for new sessions.",
+      "temperature_tip_intro": "Temporary output randomness for this assistant panel.",
+      "temperature_tip_range": "Lower values are steadier for precise answers; higher values are more varied for creative answers.",
+      "reasoning_tip_pending": "Checking which reasoning modes the current model supports.",
+      "reasoning_tip_pending_fallback": "It will temporarily use Auto.",
+      "reasoning_tip_unsupported": "The current model does not support reasoning mode.",
+      "reasoning_tip_unsupported_fallback": "It will be sent as a normal response.",
+      "reasoning_tip_intro": "Temporary reasoning mode for this assistant panel.",
+      "reasoning_tip_auto": "Auto: the system chooses the suitable mode for the current model.",
+      "reasoning_tip_more": "If the model supports more levels, they will appear here.",
+      "copy_markdown_success": "Copied as Markdown",
+      "copy_plain_success": "Copied as plain text",
+      "copy_failed": "Copy failed. Check browser clipboard permission, or select the text and copy it manually.",
+      "session_total_calculating": "Session total: calculating",
+      "session_total_empty": "Session total: none",
+      "session_total_tokens": "Session total {count}k tokens",
+      "unsupported_action_type": "Unsupported action type: {type}",
+      "action_failed": "Action failed. Current data may have changed, the target item may be unavailable, or the backend may be unable to process it. Refresh and try again.",
+      "request_failed": "AI request failed. Check model configuration, network connection, proxy settings, and API key. Details were written to the system log.",
+      "cancelled_tip": "🛑 This analysis was manually interrupted by the user.",
+      "cancel_requested": "Requested interruption of this AI analysis",
+      "cancel_not_confirmed": "Stopped waiting for this reply, but the backend did not confirm cancellation. Refresh the session status later."
+    },
+    "reasoning": {
+      "off": "Off",
+      "auto": "Auto"
+    },
+    "session": {
+      "default_global_scan_question": "Start troubleshooting from this global scan result and provide the most likely root cause, evidence, and fix suggestions.",
+      "default_log_question": "Deeply analyze the log data I submitted and provide fix suggestions.",
+      "no_tool_args": "No parameters",
+      "fetch_trace_action": "Fetch AI Request Trace",
+      "disabled_warning": "AI is not enabled. Enable AI in Settings and finish model configuration first.",
+      "send_action": "Send AI Chat",
+      "run_failed": "AI assistant session failed. The backend may be unavailable, the model service may not respond, or the network request may have been interrupted. Try again later.",
+      "request_failed_message": "AI request failed. Check the model service, API key, Base URL, proxy settings, and current network status. Details were written to the system log.",
+      "cancelled_message": "This analysis was interrupted.",
+      "analysis_failed_message": "An error occurred during analysis. The model service, network connection, or internal app state may be temporarily unavailable. Details were written to the system log.",
+      "cancel_action": "Cancel AI Reply",
+      "new_session": "New Session"
+    },
+    "usage": {
+      "detail_line": " - ··{label} [[{count}]] token··",
+      "user_input_intro": "Message input is the ^^estimated token^^ usage for one real request, including system prompt, session memory, attachments, user input, tool context, and required summary supplements.",
+      "main_prompt_input": "Main chat input ^^{count}^^ tokens",
+      "system_prompt": "System Notice",
+      "session_memory": "Session memory",
+      "attachments": "Attachments",
+      "user_input": "User Input",
+      "tool_context": "Tool Calls",
+      "forced_summary": "Forced summary",
+      "assistant_output_intro": "Message output is the ^^estimated token^^ usage for one real request, including main completion output, tool calls, reasoning, and answer body.",
+      "main_completion_output": "Main response output ^^{count}^^ tokens",
+      "reasoning": "Reasoning",
+      "tool_calls": "Tool Calls",
+      "answer_body": "Answer body",
+      "request_total_intro": "Total request usage is the sum of ^^estimated tokens^^ for this full request.",
+      "request_total": "Total request usage ^^{count}^^ tokens",
+      "main_prompt_input_label": "Main chat input",
+      "main_completion_output_label": "Main response output",
+      "tool_rounds": "Tool rounds [[{count}]]"
+    },
+    "mod_alias": {
+      "no_mod_input": "No mod input to process",
+      "start_task_action": "Start AI alias generation task",
+      "batch_generation_title": "AI Alias Batch Generation",
+      "generation_title": "AI Alias Generation",
+      "task_queued": "Task added to the background queue",
+      "review_title": "Mod Alias Batch Review"
+    },
+    "config": {
+      "fetch_action": "Fetch AI Config",
+      "save_action": "Save AI config",
+      "fetch_models_action": "Fetch AI Models",
+      "empty_model_list_warning": "No AI model list was returned. Make sure the {provider} service is running, Base URL is reachable, API key is valid, and proxy settings are correct: {baseUrl}",
+      "ui_not_ready": "The UI has not finished initializing",
+      "test_reply_action": "Test AI Reply",
+      "empty_reply": "The model returned, but the content is empty",
+      "test_failed": "AI test request failed. Check the model name, Base URL, API key, proxy settings, and service status. Details were written to the system log.",
+      "test_exception": "AI test request failed unexpectedly. The backend may be unavailable, the network may be down, or the model service may not respond. Try again later."
+    },
+    "attachments": {
+      "token_estimate": "About {count}k tokens",
+      "attachment": "Attachment",
+      "summary_prefix": "Attachment: {summary}",
+      "context": "Context",
+      "log_summary": "{source} summary",
+      "log": "log",
+      "selected_logs": "{count} selected {source}"
+    }
   },
   "error": {
     "clipboard": {
@@ -4011,7 +4569,18 @@
     },
     "unknown_path": "Unknown path",
     "unknown_version": "Unknown version",
-    "visit_page": "Visit page"
+    "visit_page": "Visit page",
+    "confirm": "Confirm",
+    "later": "Later",
+    "ok": "OK",
+    "unknown_mod": "Unknown Mod",
+    "not_selected": "Not selected",
+    "id": "ID",
+    "name": "Name",
+    "description": "Description",
+    "no_description": "No description",
+    "category": "Category",
+    "uncategorized": "Uncategorized"
   },
   "confirm": {
     "settings": {

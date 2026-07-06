@@ -13,6 +13,7 @@ import { useAttachmentActions } from './ai-store/attachmentActions'
 import { useModAliasActions } from './ai-store/modAliasActions'
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
+import { t } from '../../shared/i18n'
 
 // -----------------------------------------------------------------
 // 工具函数 (Utils)
@@ -126,8 +127,8 @@ export const useAiStore = defineStore('ai', () => {
     const label = normalizeText(tool?.label)
     return {
       id: normalizedId,
-      label: label || normalizedId,
-      description: normalizeText(tool?.description),
+      label: t(`ai.tools.${normalizedId}.label`, label || normalizedId),
+      description: t(`ai.tools.${normalizedId}.description`, normalizeText(tool?.description)),
       parameters: tool?.parameters && typeof tool.parameters === 'object' ? { ...tool.parameters } : {},
     }
   }
@@ -227,8 +228,8 @@ export const useAiStore = defineStore('ai', () => {
       : {}
     const selectorMode = normalizeText(selector.mode).toLowerCase()
     return selectorMode === 'all'
-      ? '请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。'
-      : '请深度分析我提交的日志数据，并给出修复建议。'
+      ? t('ai.session.default_global_scan_question', '请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。')
+      : t('ai.session.default_log_question', '请深度分析我提交的日志数据，并给出修复建议。')
   }
 
   const createSessionId = () => `ai_session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -527,10 +528,10 @@ export const useAiStore = defineStore('ai', () => {
     message.tools.push({
       id: payload.tool_id,
       name: payload.name,
-      displayName: payload.display_name || payload.name || '系统工具',
+      displayName: payload.display_name || payload.name || t('ai.panel.system_tool', '系统工具'),
       arguments: payload.arguments || '',
       argumentsPreview: payload.arguments_preview || '',
-      argumentsPretty: payload.arguments_pretty || payload.arguments || '无参数',
+      argumentsPretty: payload.arguments_pretty || payload.arguments || t('ai.session.no_tool_args', '无参数'),
       status: 'running',
       summary: '',
       result: '',
@@ -548,10 +549,10 @@ export const useAiStore = defineStore('ai', () => {
     const tool = message.tools.find(item => item.id === payload.tool_id)
     if (!tool) return null
     tool.status = payload.status || 'done'
-    tool.displayName = payload.display_name || tool.displayName || tool.name || '系统工具'
+    tool.displayName = payload.display_name || tool.displayName || tool.name || t('ai.panel.system_tool', '系统工具')
     tool.summary = payload.summary || ''
     tool.result = payload.result || ''
-    tool.resultPretty = payload.result_pretty || payload.result || '暂无结果'
+    tool.resultPretty = payload.result_pretty || payload.result || t('ai.panel.no_tool_result', '暂无结果')
     tool.durationMs = payload.duration_ms ?? null
     message.updatedAt = Date.now()
     return tool
@@ -603,7 +604,7 @@ export const useAiStore = defineStore('ai', () => {
     const normalizedSessionId = normalizeText(sessionId)
     if (!normalizedSessionId) return null
     const res = await window.pywebview.api.ai_get_trace_records(normalizedSessionId)
-    if (!checkResult(res, '获取AI请求链记录')) return traceBySessionId[normalizedSessionId] || null
+    if (!checkResult(res, t('ai.session.fetch_trace_action', '获取AI请求链记录'))) return traceBySessionId[normalizedSessionId] || null
     const records = Array.isArray(res.data) ? res.data : []
     const traceSession = records[0] || null
     if (traceSession) {
@@ -636,19 +637,19 @@ export const useAiStore = defineStore('ai', () => {
     const appStore = useAppStore()
     isLoading.value = true
     if (!appStore.settings.ai.enabled) {
-      toast.warning('AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。')
+      toast.warning(t('ai.session.disabled_warning', 'AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。'))
       isLoading.value = false
       return null
     }
     try {
       const res = await window.pywebview.api.ai_execute_assistant_session(payload)
-      if (checkResult(res, '发送 AI 对话')) {
+      if (checkResult(res, t('ai.session.send_action', '发送 AI 对话'))) {
         return normalizeAssistantSessionResult(res.data)
       }
       return null
     } catch (error) {
       console.error('AI 助手会话异常:', error)
-      toast.error(toUserMessage(error?.message || error, 'AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。'))
+      toast.error(toUserMessage(error?.message || error, t('ai.session.run_failed', 'AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。')))
       return null
     } finally {
       isLoading.value = false
@@ -752,19 +753,19 @@ export const useAiStore = defineStore('ai', () => {
       const result = await runAssistantSession(payload)
       if (!result) {
         delete pendingConsumedAttachmentKeysByRequest[requestId]
-        assistantMessage.content = 'AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。'
+        assistantMessage.content = t('ai.session.request_failed_message', 'AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。')
         assistantMessage.updatedAt = Date.now()
         return { requestId, userMessage, assistantMessage, response: null }
       }
 
       applyAssistantSessionResult(session.id, requestId, result)
       if (result.cancelled && !String(assistantMessage.content || '').trim()) {
-        assistantMessage.content = '本次分析已中断。'
+        assistantMessage.content = t('ai.session.cancelled_message', '本次分析已中断。')
       }
       return { requestId, userMessage, assistantMessage, response: result }
     } catch (error) {
       delete pendingConsumedAttachmentKeysByRequest[requestId]
-      assistantMessage.content = toUserMessage(error?.message || error, '分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。')
+      assistantMessage.content = toUserMessage(error?.message || error, t('ai.session.analysis_failed_message', '分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。'))
       assistantMessage.updatedAt = Date.now()
       return { requestId, userMessage, assistantMessage, response: null, error }
     } finally {
@@ -776,7 +777,7 @@ export const useAiStore = defineStore('ai', () => {
     if (!window.pywebview || !sessionId) return false
     try {
       const res = await window.pywebview.api.cancel_ai_session(sessionId)
-      return !!checkResult(res, '取消 AI 回答')
+      return !!checkResult(res, t('ai.session.cancel_action', '取消 AI 回答'))
     } catch (error) {
       console.error('取消 AI 助手会话失败:', error)
       return false
@@ -789,25 +790,25 @@ export const useAiStore = defineStore('ai', () => {
   const savePrompt = async (id, data) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.ai_save_prompt(id, data)
-    return checkResult(res, '保存模板', true) ? res.data : false
+    return checkResult(res, t('ai.definitions.save_prompt_action', '保存模板'), true) ? res.data : false
   }
 
   const saveAssistant = async (id, data) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.ai_save_assistant(id, data)
-    return checkResult(res, '保存助手', true) ? res.data : false
+    return checkResult(res, t('ai.definitions.save_assistant_action', '保存助手'), true) ? res.data : false
   }
 
   const saveTask = async (id, data) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.ai_save_task(id, data)
-    return checkResult(res, '保存任务', true) ? res.data : false
+    return checkResult(res, t('ai.definitions.save_task_action', '保存任务'), true) ? res.data : false
   }
 
   const deletePrompt = async (id) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.ai_delete_prompt(id)
-    return checkResult(res, '删除模板', true) ? res.data : false
+    return checkResult(res, t('ai.definitions.delete_prompt_action', '删除模板'), true) ? res.data : false
   }
 
   // -----------------------------------------------------------------

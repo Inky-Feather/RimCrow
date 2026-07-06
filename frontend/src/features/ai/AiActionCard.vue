@@ -31,6 +31,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { t } from '../../shared/i18n'
 
 // -----------------------------------------------------------------
 // Props / Emits
@@ -41,7 +42,7 @@ const props = defineProps({
   description: { type: String, default: '' },
   preview: { type: String, default: '' },
   previewParts: { type: Array, default: () => [] },
-  executeLabel: { type: String, default: '执行操作' },
+  executeLabel: { type: String, default: () => t('ai.actions.fallback.execute', '执行操作') },
   tone: { type: String, default: 'accent' },
 })
 

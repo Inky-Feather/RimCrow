@@ -2737,6 +2737,54 @@
       "cancel": "取消",
       "confirm": "确定"
     },
+    "ai_definitions": {
+      "attachment_projection_desc": "控制附件里哪些信息会发给 AI。取消勾选后，这部分内容通常不会发送。",
+      "attachment_projection_title": "发送给 AI 的附件内容",
+      "auto_id_after_save": "保存后自动生成",
+      "available_actions": "可返回的操作",
+      "available_attachments": "可用附件",
+      "available_tools": "可用工具",
+      "available_tools_desc": "这里决定这个助手能使用哪些工具。新会话默认会全部开启，你也可以在会话里临时关闭部分工具。",
+      "available_variables": "可用变量",
+      "base_variables": "通用变量",
+      "create_custom_prompt": "创建自定义模板",
+      "custom_prompt": "自定义模板",
+      "custom_prompts": "自定义模板",
+      "delete_message": "确定要删除模板 {id} 吗？此操作不可逆。",
+      "delete_prompt": "删除模板",
+      "delete_title": "危险操作",
+      "description": "在这里集中管理 AI 助手、任务和模板。",
+      "entry_type": {
+        "assistant": "系统助手",
+        "task": "系统任务"
+      },
+      "load_failed": "读取失败",
+      "loading": "正在加载 AI 定义",
+      "loading_detail": "正在加载 AI 定义...",
+      "new_custom_prompt_name": "新建自定义提示词",
+      "no_actions": "这个助手只回答问题，不会给出可直接执行的操作。",
+      "not_ready": "AI 定义暂时还没准备好，请稍后重试。",
+      "prompt_description": "模板描述",
+      "prompt_name": "模板名称",
+      "prompt_used": "使用的模板",
+      "read_failed": "读取 AI 定义失败，请稍后重试。",
+      "save_entry": "保存入口配置",
+      "save_prompt": "保存模板",
+      "search_entries": "搜索系统入口名称或 ID",
+      "search_prompts": "搜索模板名称或 ID",
+      "select_left_item": "请选择左侧项目",
+      "system_prompt": "系统模板",
+      "system_prompt_body": "系统提示词",
+      "system_prompt_body_hint": "给 AI 的固定说明",
+      "system_prompt_readonly": "系统模板只读",
+      "system_prompt_view_only": "系统模板只能查看，不能直接修改。你仍然可以查看它会使用哪些附件和变量。",
+      "system_prompts": "系统模板",
+      "title": "AI 定义管理",
+      "tool": "工具",
+      "unnamed_entry": "未命名入口",
+      "user_template": "用户输入模板",
+      "user_template_hint": "每次发送时的输入格式"
+    },
     "ai_trace": {
       "answer_body": "回复正文",
       "assistant": "所属助手：{assistant}",
@@ -3340,6 +3388,12 @@
         "title": "创建桌面快捷方式"
       }
     },
+    "prompt_queue": {
+      "bulk_failed": "{label}失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
+      "item_failed": "处理失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
+      "submitted": "已提交处理",
+      "system_title": "系统提示"
+    },
     "recommendation_export": {
       "body": {
         "description": "原始描述",
@@ -3722,6 +3776,9 @@
       "count": "{count} 个任务",
       "title": "任务队列"
     },
+    "status": {
+      "execution_failed": "任务执行失败"
+    },
     "texture": {
       "analysis_completed_elapsed": "统计完成，用时 {elapsed}",
       "cancelled": "贴图优化任务已取消",
@@ -3773,10 +3830,511 @@
   },
   "logs": {},
   "ai": {
-    "definitions": {},
-    "tools": {},
-    "actions": {},
-    "prompts": {}
+    "definitions": {
+      "assistants": {
+        "log_app": {
+          "description": "面向 RimCrow 自身运行日志的多轮诊断助手。",
+          "name": "软件日志助手"
+        },
+        "log_game": {
+          "description": "面向 RimWorld 游戏日志的多轮强化诊断助手。",
+          "name": "游戏日志助手"
+        },
+        "mod_general": {
+          "description": "面向单个或多个模组信息的通用多轮助手。",
+          "name": "模组助手"
+        }
+      },
+      "attachments": {
+        "diagnosis_context": {
+          "description": "当前选中日志经过后端压缩后的诊断上下文。",
+          "label": "已选中日志",
+          "projection_options": {
+            "errors": {
+              "description": "压缩后的错误目录项，每项包含 target_line、错误类型、消息预览、堆栈预览和关联文件。",
+              "label": "错误摘要列表"
+            },
+            "filename": {
+              "description": "当前诊断目标日志文件名。",
+              "label": "日志文件名"
+            },
+            "selected_error_count": {
+              "description": "当前附件最终保留的错误摘要条目数。",
+              "label": "摘要条目数"
+            },
+            "source_type": {
+              "description": "当前诊断日志的来源类型，例如 game 或 app。",
+              "label": "日志来源类型"
+            },
+            "total_repeat_count": {
+              "description": "当前选中日志摘要覆盖的总重复次数。",
+              "label": "总重复次数"
+            },
+            "truncated": {
+              "description": "是否因长度预算而截断了部分错误摘要。",
+              "label": "是否截断"
+            }
+          },
+          "prompt_variables": {
+            "diagnosis_context": {
+              "filename": {
+                "description": "当前诊断目标日志文件名。",
+                "label": "日志文件名"
+              },
+              "source_type": {
+                "description": "当前诊断日志的来源类型，例如 game 或 app。",
+                "label": "日志来源"
+              }
+            },
+            "diagnosis_context_block": {
+              "description": "当前日志附件的主数据块，仅包含错误摘要与少量必要统计。",
+              "label": "日志附件块"
+            }
+          }
+        },
+        "mod_selection": {
+          "description": "当前页面选中的一个或多个模组。",
+          "label": "已选中模组",
+          "projection_options": {
+            "mods[]": {
+              "alias_name": {
+                "description": "该模组在管理器中的用户别名。",
+                "label": "模组详情: 用户别名"
+              },
+              "author": {
+                "description": "作者列表。",
+                "label": "模组详情: 作者"
+              },
+              "description": {
+                "description": "每个已选模组的精简描述。",
+                "label": "模组详情: 描述"
+              },
+              "is_active": {
+                "description": "当前环境下该模组是否为启用状态。",
+                "label": "模组详情: 是否启用"
+              },
+              "name": {
+                "description": "每个已选模组的显示名称。",
+                "label": "模组详情: 名称"
+              },
+              "package_id": {
+                "description": "每个已选模组的 packageId。",
+                "label": "模组详情: 包名"
+              },
+              "workshop_id": {
+                "description": "Steam Workshop ID。",
+                "label": "模组详情: 工坊 ID"
+              }
+            },
+            "selection_mode": {
+              "description": "single / multiple / all 选择模式。",
+              "label": "选择模式"
+            }
+          },
+          "prompt_variables": {
+            "mod_selection": {
+              "package_ids": {
+                "description": "当前模组选择包含的 packageId 列表。",
+                "label": "已选模组包名列表"
+              }
+            },
+            "mod_selection_block": {
+              "description": "当前模组附件的主数据块，仅包含选择模式与模组列表。",
+              "label": "模组附件块"
+            }
+          }
+        }
+      },
+      "categories": {
+        "assistant": {
+          "base_variables": {
+            "attachments_block": {
+              "description": "所有附件的通用兜底摘要块。适合通用模板，不建议替代具体附件变量。",
+              "label": "附件总览"
+            },
+            "message": {
+              "description": "当前用户本轮输入内容。",
+              "label": "用户输入"
+            },
+            "target_lang": {
+              "description": "当前应用界面语言对应的人类可读名称。",
+              "label": "目标语言"
+            }
+          },
+          "description": "用于多轮助手入口的提示词模板。",
+          "label": "助手模板"
+        },
+        "task": {
+          "base_variables": {
+            "attachments_block": {
+              "description": "所有附件的通用兜底摘要块。适合通用模板，不建议替代具体附件变量。",
+              "label": "附件总览"
+            },
+            "glossary_block": {
+              "description": "当前翻译可参考的术语约束。",
+              "label": "术语表"
+            },
+            "message": {
+              "description": "任务入口传入的主文本。",
+              "label": "输入文本"
+            },
+            "mod_alias_input_json": {
+              "description": "模组别名任务输入的 JSON 文本。",
+              "label": "模组数据 JSON"
+            },
+            "required_segment_keys": {
+              "description": "翻译结果必须完整返回的 segments key 列表。",
+              "label": "必需段落键"
+            },
+            "source_format": {
+              "description": "原文格式或标记类型，例如 plain_text、steam_rich_text。",
+              "label": "原文格式"
+            },
+            "target_lang": {
+              "description": "当前应用界面语言对应的人类可读名称。",
+              "label": "目标语言"
+            },
+            "translation_context": {
+              "description": "说明文本来源、用途或显示位置。",
+              "label": "翻译上下文"
+            },
+            "translation_input_json": {
+              "description": "通用翻译任务输入的文本段 JSON。",
+              "label": "翻译输入 JSON"
+            }
+          },
+          "description": "用于单次任务入口的提示词模板。",
+          "label": "任务模板"
+        }
+      },
+      "delete_prompt_action": "删除模板",
+      "save_assistant_action": "保存助手",
+      "save_prompt_action": "保存模板",
+      "save_task_action": "保存任务",
+      "tasks": {
+        "mod_alias_generation": {
+          "description": "为一个或多个模组生成通俗别名与备注。",
+          "name": "别名生成"
+        },
+        "translation": {
+          "description": "翻译业务传入的标题、说明、定义名称等文本段。",
+          "name": "文本翻译"
+        }
+      }
+    },
+    "tools": {
+      "get_active_mod_list": {
+        "description": "获取当前排序文件中的已激活模组列表，用于宏观检查模组顺序，返回模组包名列表。",
+        "label": "当前启用列表"
+      },
+      "get_group_mods": {
+        "description": "按分组名查询分组所含模组。分组信息只用于辅助理解玩家归类，属于模组管理器专有信息，与游戏机制无关。",
+        "label": "分组模组"
+      },
+      "get_log_context": {
+        "description": "获取指定错误日志的详细上下文（包含完整错误信息和核心堆栈）。仅当摘要中的 stack_preview 无法让你得出结论时才使用。",
+        "label": "日志上下文"
+      },
+      "get_mod_info": {
+        "description": "获取当前环境中已安装模组的元数据。simple 返回基本必要信息：('package_id', 'name', 'workshop_id', 'supported_versions', 'is_active', 'path')。all 返回全部信息；specific 返回可选字段信息：('package_id', 'name', 'author', 'workshop_id', 'version', 'description', 'path', 'url', 'source', 'store', 'supported_versions', 'supported_languages', 'mod_type', 'is_active', 'dependencies_mods', 'load_after_mods', 'load_before_mods', 'incompatible_mods', 'save_breaking', 'last_active_time', 'last_moved_time')。",
+        "label": "模组元数据"
+      },
+      "get_mod_rules": {
+        "description": "获取该模组的依赖模组、前置/后置模组和不兼容模组规则，以了解该模组与其它模组之间的显性关系。只有在怀疑缺失前置、加载顺序错误或存在不兼容模组时再调用。",
+        "label": "模组规则"
+      },
+      "get_mod_user_data": {
+        "description": "获取该已安装模组在管理器中的用户态上下文：别名、标签、备注、颜色、自定义类型和所属分组。这些信息只用于辅助理解玩家归类，属于模组管理器专有信息，与游戏机制无关。",
+        "label": "模组用户数据"
+      },
+      "search_mods": {
+        "description": "当且仅当你不确定某个 Mod 的准确 package_id 时，使用此工具模糊搜索。可输入名字、别名或部分 ID 查找可能对应的 package_id。",
+        "label": "搜索模组"
+      }
+    },
+    "actions": {
+      "MOD_RULE": {
+        "description": "添加一条加载顺序或兼容性规则。",
+        "execute_label": "应用模组规则",
+        "execution_failed_message": "应用模组规则失败：{error}",
+        "label": "模组规则",
+        "unsupported_message": "当前前端暂不支持执行这种模组规则动作。",
+        "variants": {
+          "incompatibleWith": {
+            "confirm_confirm_text": "应用规则",
+            "confirm_message": "{target_id_display} 将被设置为 {mod_id_display} 的冲突模组",
+            "confirm_title": "确认应用冲突规则",
+            "description": "建议建立一条冲突规则。",
+            "execute_label": "应用冲突规则",
+            "label": "模组规则",
+            "missing_payload_message": "这条规则动作缺少必要字段，已跳过。",
+            "post_success_confirm_text": "立即排序",
+            "post_success_message": "是否立即重新执行自动排序以使规则生效？",
+            "post_success_title": "规则已应用",
+            "preview_template": "建议将 {target_id_display} 设置为 {mod_id_display} 的冲突模组。",
+            "title": "冲突规则"
+          },
+          "loadAfter": {
+            "confirm_confirm_text": "应用规则",
+            "confirm_message": "{target_id_display} 将被设置为 {mod_id_display} 的前置模组",
+            "confirm_title": "确认应用前置规则",
+            "description": "建议建立一条前置规则。",
+            "execute_label": "应用前置规则",
+            "label": "模组规则",
+            "missing_payload_message": "这条规则动作缺少必要字段，已跳过。",
+            "post_success_confirm_text": "立即排序",
+            "post_success_message": "是否立即重新执行自动排序以使规则生效？",
+            "post_success_title": "规则已应用",
+            "preview_template": "建议将 {target_id_display} 设置为 {mod_id_display} 的前置模组。",
+            "title": "前置规则"
+          },
+          "loadBefore": {
+            "confirm_confirm_text": "应用规则",
+            "confirm_message": "{target_id_display} 将被设置为 {mod_id_display} 的后置模组",
+            "confirm_title": "确认应用后置规则",
+            "description": "建议建立一条后置规则。",
+            "execute_label": "应用后置规则",
+            "label": "模组规则",
+            "missing_payload_message": "这条规则动作缺少必要字段，已跳过。",
+            "post_success_confirm_text": "立即排序",
+            "post_success_message": "是否立即重新执行自动排序以使规则生效？",
+            "post_success_title": "规则已应用",
+            "preview_template": "建议将 {target_id_display} 设置为 {mod_id_display} 的后置模组。",
+            "title": "后置规则"
+          }
+        }
+      },
+      "MOD_STATE": {
+        "description": "调整一个或多个模组的启用状态。",
+        "execute_label": "应用模组状态调整",
+        "execution_failed_message": "应用模组状态动作失败：{error}",
+        "label": "模组启用状态",
+        "unsupported_message": "当前前端暂不支持执行这种模组状态动作。",
+        "variants": {
+          "disable": {
+            "description": "将指定模组从启用列表移除。",
+            "execute_label": "停用这个模组",
+            "label": "模组启用状态",
+            "missing_payload_message": "这条停用动作缺少有效的 mod_ids，已跳过。",
+            "preview_template": "建议将 {mod_ids_display_joined} 调整为停用状态。",
+            "success_message": "已停用: {mod_ids_display_csv}",
+            "title": "停用模组"
+          },
+          "enable": {
+            "description": "将指定模组加入启用列表。",
+            "execute_label": "启用这个模组",
+            "label": "模组启用状态",
+            "missing_payload_message": "这条启用动作缺少有效的 mod_ids，已跳过。",
+            "preview_template": "建议将 {mod_ids_display_joined} 调整为启用状态。",
+            "success_message": "已启用: {mod_ids_display_csv}",
+            "title": "启用模组"
+          }
+        }
+      },
+      "SETTING_UPDATE": {
+        "description": "修改一个已注册的设置项。",
+        "execute_label": "应用设置修改",
+        "execution_failed_message": "应用设置修改失败：{error}",
+        "label": "设置更新",
+        "unsupported_message": "当前前端暂不支持执行这种设置动作。",
+        "variants": {
+          "set_value": {
+            "blocked_message": "不允许通过 AI 修改该设置项: {setting_key}",
+            "description": "建议修改一个已注册且允许 AI 触发的设置项。",
+            "execute_label": "应用设置修改",
+            "label": "设置更新",
+            "missing_payload_message": "这条设置动作缺少 setting_key，已跳过。",
+            "preview_template": "{setting_key} => {value_json}",
+            "success_message": "已更新设置: {setting_key}",
+            "title": "修改设置项"
+          }
+        }
+      },
+      "TEXT_TRANSFER": {
+        "description": "把一段文本交给前端进行复制或转交。",
+        "execute_label": "复制文本",
+        "execution_failed_message": "复制文本失败：{error}",
+        "label": "文本转移",
+        "unsupported_message": "当前前端暂不支持执行这种文本动作。",
+        "variants": {
+          "copy_report": {
+            "description": "复制一段可直接反馈给作者或社区的问题说明。",
+            "execute_label": "复制到剪贴板",
+            "label": "文本转移",
+            "missing_payload_message": "这条文本动作缺少可复制内容，已跳过。",
+            "preview_template": "{text}",
+            "success_message": "文本已复制到剪贴板。",
+            "title": "复制反馈文本"
+          }
+        }
+      },
+      "fallback": {
+        "applied_title": "操作已应用",
+        "confirm_title": "确认执行操作",
+        "description": "执行这条 AI 建议。",
+        "execute": "执行操作",
+        "missing_payload": "这条动作缺少必要字段，已跳过。",
+        "setting_blocked": "当前不允许执行这条设置修改动作。"
+      }
+    },
+    "prompts": {
+      "app_log_analysis": {
+        "description": "分析 RimCrow 自身的 Python/Vue 报错日志，供开发者使用。",
+        "name": "软件日志分析"
+      },
+      "game_log_analysis": {
+        "description": "分析 RimWorld 游戏日志，帮助玩家解决 Mod 冲突和报错。",
+        "name": "游戏日志分析"
+      },
+      "mod_alias_generation": {
+        "description": "为一个或多个 Mod 统一生成通俗别名和备注",
+        "name": "模组别名与备注生成"
+      },
+      "mod_general_assistant": {
+        "description": "面向模组信息、排序、兼容、依赖与使用建议的多轮助手默认模板。",
+        "name": "模组通用助手"
+      },
+      "translation_general": {
+        "description": "翻译任意业务传入的文本段，并尽量保留原文格式与术语一致性。",
+        "name": "通用文本翻译"
+      }
+    },
+    "attachments": {
+      "attachment": "附件",
+      "context": "上下文",
+      "log": "日志",
+      "log_summary": "{source}摘要",
+      "selected_logs": "{count} 条已选{source}",
+      "summary_prefix": "附件: {summary}",
+      "token_estimate": "约 {count}k token"
+    },
+    "config": {
+      "empty_model_list_warning": "未获取到 AI 模型列表。请确认 {provider} 服务已启动、Base URL 可访问、API Key 有效，并检查代理设置：{baseUrl}",
+      "empty_reply": "模型已返回，但内容为空",
+      "fetch_action": "获取AI配置",
+      "fetch_models_action": "获取AI模型",
+      "save_action": "保存AI配置",
+      "test_exception": "AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。",
+      "test_failed": "AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态，详细原因已写入系统日志。",
+      "test_reply_action": "测试 AI 回复",
+      "ui_not_ready": "界面尚未完成初始化"
+    },
+    "diagnostic": {
+      "app_log_title": "软件日志分析",
+      "empty_description": "在左侧勾选日志后，可以直接发送给 AI 做分析。",
+      "empty_title": "需要排错帮助吗？",
+      "footer_hint": "深度思考通常会增加时延与 token 消耗，但对复杂排错更稳。",
+      "game_log_title": "游戏日志分析",
+      "input_placeholder": "输入其它要求或直接点击右下角发送分析..."
+    },
+    "mod_alias": {
+      "batch_generation_title": "AI 别名批量生成",
+      "generation_title": "AI 别名生成",
+      "no_mod_input": "没有可供处理的模组输入",
+      "review_title": "模组别名批量检阅",
+      "start_task_action": "启动 AI 别名生成任务",
+      "task_queued": "任务已加入后台队列"
+    },
+    "panel": {
+      "action_failed": "操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。",
+      "available_tools": "AI 可用工具",
+      "cancel_not_confirmed": "已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。",
+      "cancel_requested": "已请求中断本次 AI 分析",
+      "cancelled_tip": "🛑 本次分析已由用户手动中断。",
+      "clear_chat_tip": "清空当前会话，重新开始",
+      "copy_failed": "复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。",
+      "copy_markdown_success": "已复制 Markdown 格式",
+      "copy_markdown_tip": "复制 Markdown",
+      "copy_plain_success": "已复制纯文本格式",
+      "copy_plain_tip": "复制纯文本",
+      "default_title": "AI 助手",
+      "disable_tools": "关闭工具",
+      "empty_description": "输入问题后直接发送给 AI。",
+      "empty_title": "需要 AI 帮助吗？",
+      "enable_all_tools": "全部开启",
+      "executable_actions": "可直接操作",
+      "follow_global_model": "跟随全局模型",
+      "generating": "正在生成回答...",
+      "input_placeholder": "输入消息...",
+      "message_input_tokens": "消息输入 {count} token",
+      "message_output_tokens": "消息输出 {count} token",
+      "model": "模型",
+      "model_tip_inherit": "没有单独修改时，会沿用全局 AI 设置；新建会话后仍保留本面板的临时选择。",
+      "model_tip_intro": "当前助手面板临时使用的模型。",
+      "model_tip_model": "模型 ^^{model}^^",
+      "model_tip_provider": "服务类型 ^^{provider}^^",
+      "no_tool_description": "暂无说明",
+      "no_tool_input": "无输入内容",
+      "no_tool_result": "暂无结果",
+      "no_tools_tip": "当前不会调用工具，只根据现有内容回答。",
+      "plain_text": "纯文本",
+      "reasoning": "思考过程",
+      "reasoning_mode": "思考模式",
+      "reasoning_tip_auto": "自动：由系统按当前模型选择合适方式。",
+      "reasoning_tip_intro": "当前助手面板临时使用的思考模式。",
+      "reasoning_tip_more": "如果模型支持更多等级，这里会显示对应选项。",
+      "reasoning_tip_pending": "正在检查当前模型支持哪些思考模式。",
+      "reasoning_tip_pending_fallback": "暂时会先按“自动”处理。",
+      "reasoning_tip_unsupported": "当前模型不支持思考模式。",
+      "reasoning_tip_unsupported_fallback": "发送时会按普通回答处理。",
+      "remove_attachment_tip": "本轮不发送这条附件",
+      "request_failed": "AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。",
+      "request_total_tokens": "本轮总请求 {count} token",
+      "role_user": "你",
+      "session_token_tip": "当前会话累计消耗的 token。数值过高时，AI 更容易忽略前面的内容。",
+      "session_total_calculating": "会话总计 计算中",
+      "session_total_empty": "会话总计 暂无",
+      "session_total_tokens": "会话总计 {count}k token",
+      "system_tool": "系统工具",
+      "temperature": "随机性",
+      "temperature_tip_intro": "当前助手面板临时使用的输出随机性。",
+      "temperature_tip_range": "值越低越稳定，适合需要精确回答的情况，值越高越发散，适合需要创意回答的情况。",
+      "thinking": "正在思考...",
+      "tool_input": "工具输入",
+      "tool_result": "工具结果",
+      "tool_selector_tip": "选择本轮允许 AI 使用的工具",
+      "unsupported_action_type": "暂不支持的操作类型: {type}",
+      "view_trace": "查看请求记录"
+    },
+    "reasoning": {
+      "auto": "自动",
+      "off": "关闭"
+    },
+    "session": {
+      "analysis_failed_message": "分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。",
+      "cancel_action": "取消 AI 回答",
+      "cancelled_message": "本次分析已中断。",
+      "default_global_scan_question": "请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。",
+      "default_log_question": "请深度分析我提交的日志数据，并给出修复建议。",
+      "disabled_warning": "AI 功能未启用。请先在设置中开启 AI 功能并完成模型配置。",
+      "fetch_trace_action": "获取AI请求链记录",
+      "new_session": "新会话",
+      "no_tool_args": "无参数",
+      "request_failed_message": "AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。",
+      "run_failed": "AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。",
+      "send_action": "发送 AI 对话"
+    },
+    "usage": {
+      "answer_body": "回复正文",
+      "assistant_output_intro": "消息输出按一次真实请求统计的^^估算Token^^，包含主回复输出、工具调用、深度思考和回复正文等内容的总和。",
+      "attachments": "附件信息",
+      "detail_line": " - ··{label} [[{count}]] token··",
+      "forced_summary": "总结补充",
+      "main_completion_output": "主回复输出 ^^{count}^^ token",
+      "main_completion_output_label": "主回复输出",
+      "main_prompt_input": "主对话输入 ^^{count}^^ token",
+      "main_prompt_input_label": "主对话输入",
+      "reasoning": "深度思考",
+      "request_total": "总请求消耗 ^^{count}^^ token",
+      "request_total_intro": "总请求消耗是本轮完整请求的^^估算Token^^总和。",
+      "session_memory": "会话记忆",
+      "system_prompt": "系统提示",
+      "tool_calls": "工具调用",
+      "tool_context": "工具调用",
+      "tool_rounds": "工具轮次 [[{count}]] 轮",
+      "user_input": "用户输入",
+      "user_input_intro": "消息输入按一次真实请求统计的^^估算Token^^，包含系统提示词、会话记忆、附件信息、用户输入、工具回灌和必要的总结补充。"
+    }
   },
   "check": {
     "backup_list": {
@@ -4044,11 +4602,13 @@
       "save": "保存"
     },
     "cancel": "取消",
+    "category": "分类",
     "clear": "清空",
     "clear_all": "全部清空",
     "clear_filter": "清空筛选",
     "clear_selection": "取消选择",
     "close": "关闭",
+    "confirm": "确认",
     "confirm_delete": "确认删除",
     "continue": "继续",
     "copy_file_path": "复制文件路径",
@@ -4056,12 +4616,19 @@
     "copy_relative_path": "复制相对路径",
     "default": "默认",
     "delete_permanently": "彻底删除",
+    "description": "描述",
     "file": "文件",
     "file_path": "文件路径",
     "full_path": "完整路径",
     "got_it": "我知道了",
+    "id": "ID",
     "item": "项",
     "item_count": "{count} 项",
+    "later": "稍后",
+    "name": "名称",
+    "no_description": "无描述",
+    "not_selected": "未选择",
+    "ok": "确定",
     "open": "打开",
     "open_file": "打开文件",
     "open_folder": "打开所在目录",
@@ -4093,7 +4660,9 @@
       "workshop": "工坊"
     },
     "task": "任务",
+    "uncategorized": "未分类",
     "unknown": "未知",
+    "unknown_mod": "未知模组",
     "unknown_path": "路径未知",
     "unknown_version": "版本未知",
     "visit_page": "访问页面",

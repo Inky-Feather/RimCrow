@@ -1,4 +1,5 @@
 import { normalizeText } from '../../../../shared/lib/common'
+import { t } from '../../../../shared/i18n'
 
 // -----------------------------------------------------------------
 // AI 附件显示与草稿构造
@@ -11,7 +12,7 @@ const formatTokenEstimateText = (tokenInfo = null) => {
   /** 把 token 预估结果压成适合标签展示的短文本。 */
   const estimated = Number(tokenInfo?.estimated || 0)
   if (!Number.isFinite(estimated) || estimated <= 0) return ''
-  return `约 ${(estimated / 1000).toFixed(1)}k token`
+  return t('ai.attachments.token_estimate', '约 {count}k token', { count: (estimated / 1000).toFixed(1) })
 }
 
 export const buildAttachmentDisplayMeta = (attachment, getAttachmentDefinition) => {
@@ -24,7 +25,7 @@ export const buildAttachmentDisplayMeta = (attachment, getAttachmentDefinition) 
   // 摘要优先使用用户当前看到的 snapshot 文案，
   // 这样即使后端真正解析前，输入框里的附件标签也不会突然跳变。
   if (!attachment) {
-    return { summary: '附件', detail: '' }
+    return { summary: t('ai.attachments.attachment', '附件'), detail: '' }
   }
   if (typeof attachment === 'string') {
     return { summary: attachment, detail: '' }
@@ -36,14 +37,14 @@ export const buildAttachmentDisplayMeta = (attachment, getAttachmentDefinition) 
   const detail = normalizeText(snapshot.detail || snapshot.token_estimate_text || snapshot.meta)
   if (summary) {
     return {
-      summary: `附件: ${summary}`,
+      summary: t('ai.attachments.summary_prefix', '附件: {summary}', { summary }),
       detail,
     }
   }
   const kind = normalizeText(attachment.kind || attachment.type)
   const definition = typeof getAttachmentDefinition === 'function' ? getAttachmentDefinition(kind) : null
   return {
-    summary: `附件: ${definition?.label || '上下文'}`,
+    summary: t('ai.attachments.summary_prefix', '附件: {summary}', { summary: definition?.label || t('ai.attachments.context', '上下文') }),
     detail,
   }
 }
@@ -84,8 +85,8 @@ export const buildDiagnosisContextAttachmentDraft = ({
   snapshot: {
     summary: normalizeText(summaryText) || (
       isGlobalSummary
-        ? `${normalizeText(sourceLabel, '日志')}摘要`
-        : `${Number(selectedLogCount || 0)} 条已选${normalizeText(sourceLabel, '日志')}`
+        ? t('ai.attachments.log_summary', '{source}摘要', { source: normalizeText(sourceLabel, t('ai.attachments.log', '日志')) })
+        : t('ai.attachments.selected_logs', '{count} 条已选{source}', { count: Number(selectedLogCount || 0), source: normalizeText(sourceLabel, t('ai.attachments.log', '日志')) })
     ),
     detail: normalizeText(detailText) || formatTokenEstimateText(tokenInfo),
     token_estimate: Number(tokenInfo?.estimated || 0),

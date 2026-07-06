@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCALE_PATH = ROOT / "frontend" / "src" / "locales" / "zh-CN.json"
 BUILTIN_LOCALES_DIR = ROOT / "frontend" / "src" / "locales"
 BUILTIN_COMMANDS_PATH = ROOT / "frontend" / "src" / "app" / "commands" / "builtinCommands.js"
+AI_ACTION_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_actions.py"
+AI_ENTRY_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_entries.py"
+AI_ATTACHMENT_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "def_attachments.py"
+AI_TOOL_DEFINITIONS_PATH = ROOT / "backend" / "ai" / "ai_tools.py"
 SCAN_ROOTS = (
     ROOT / "backend",
     ROOT / "frontend" / "src",
@@ -172,6 +176,310 @@ def extract_python_messages(path: Path) -> dict[str, str]:
         default_text = literal_string(node.args[1])
         if key and default_text is not None:
             messages[key.strip()] = default_text
+    messages.update(extract_ai_action_messages(path, tree))
+    messages.update(extract_ai_entry_messages(path, tree))
+    messages.update(extract_ai_attachment_messages(path, tree))
+    messages.update(extract_ai_tool_messages(path, tree))
+    return messages
+
+
+AI_ACTION_FIELDS = {
+    "label",
+    "description",
+    "execute_label",
+    "unsupported_message",
+    "execution_failed_message",
+}
+AI_ACTION_VARIANT_FIELDS = {
+    "label",
+    "title",
+    "description",
+    "preview_template",
+    "execute_label",
+    "missing_payload_message",
+    "success_message",
+    "confirm_title",
+    "confirm_message",
+    "confirm_confirm_text",
+    "post_success_title",
+    "post_success_message",
+    "post_success_confirm_text",
+    "blocked_message",
+}
+
+
+def call_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def call_keywords(node: ast.Call) -> dict[str, ast.AST]:
+    return {kw.arg: kw.value for kw in node.keywords if kw.arg}
+
+
+def module_constants(tree: ast.AST) -> dict[str, Any]:
+    constants: dict[str, Any] = {}
+    for node in getattr(tree, "body", []):
+        if not isinstance(node, ast.Assign):
+            continue
+        try:
+            value = ast.literal_eval(node.value)
+        except Exception:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = value
+    return constants
+
+
+def static_string(node: ast.AST | None, constants: Mapping[str, Any] | None = None) -> str | None:
+    if node is None:
+        return None
+    literal = literal_string(node)
+    if literal is not None:
+        return literal
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value_node in node.values:
+            if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str):
+                parts.append(value_node.value)
+            elif isinstance(value_node, ast.FormattedValue) and isinstance(value_node.value, ast.Name):
+                const_value = (constants or {}).get(value_node.value.id)
+                if const_value is None:
+                    return None
+                parts.append(str(const_value))
+            else:
+                return None
+        return "".join(parts)
+    return None
+
+
+def iter_literal_dict_items(node: ast.AST | None) -> Iterable[tuple[str, ast.AST]]:
+    if not isinstance(node, ast.Dict):
+        return []
+    items: list[tuple[str, ast.AST]] = []
+    for key_node, value_node in zip(node.keys, node.values):
+        key = literal_string(key_node) if key_node else None
+        if key:
+            items.append((key, value_node))
+    return items
+
+
+def unwrap_model_dump_call(node: ast.AST) -> ast.AST:
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "model_dump"
+        and isinstance(node.func.value, ast.Call)
+    ):
+        return node.func.value
+    return node
+
+
+def extract_ai_action_messages(path: Path, tree: ast.AST) -> dict[str, str]:
+    if path != AI_ACTION_DEFINITIONS_PATH:
+        return {}
+    messages: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        for key_node, value_node in zip(node.keys, node.values):
+            action_type = literal_string(key_node) if key_node else None
+            value_node = unwrap_model_dump_call(value_node)
+            if not action_type or not isinstance(value_node, ast.Call) or call_name(value_node.func) != "ActionDefinition":
+                continue
+            action_base = f"ai.actions.{action_type}"
+            keywords = call_keywords(value_node)
+            for field in AI_ACTION_FIELDS:
+                default_text = static_string(keywords.get(field))
+                if default_text is not None:
+                    messages[f"{action_base}.{field}"] = default_text
+            variants_node = keywords.get("variants")
+            if not isinstance(variants_node, ast.Dict):
+                continue
+            for variant_key_node, variant_value_node in zip(variants_node.keys, variants_node.values):
+                variant = literal_string(variant_key_node) if variant_key_node else None
+                if not variant or not isinstance(variant_value_node, ast.Call) or call_name(variant_value_node.func) != "ActionVariantDefinition":
+                    continue
+                variant_base = f"{action_base}.variants.{variant}"
+                variant_keywords = call_keywords(variant_value_node)
+                for field in AI_ACTION_VARIANT_FIELDS:
+                    default_text = static_string(variant_keywords.get(field))
+                    if default_text is not None:
+                        messages[f"{variant_base}.{field}"] = default_text
+    return messages
+
+
+def extract_prompt_definition_messages(prompt_id: str, node: ast.AST, messages: dict[str, str]) -> None:
+    call = unwrap_model_dump_call(node)
+    if isinstance(call, ast.Call) and call_name(call.func) == "_with_prompt_meta" and call.args:
+        payload = call.args[0]
+    else:
+        payload = call
+    if not isinstance(payload, ast.Dict):
+        return
+    fields = dict(iter_literal_dict_items(payload))
+    for field in ("name", "description"):
+        default_text = static_string(fields.get(field))
+        if default_text is not None:
+            messages[f"ai.prompts.{prompt_id}.{field}"] = default_text
+
+
+def ai_entry_locale_id(group: str, entry_id: str) -> str:
+    """去掉定义 ID 中和分组重复的业务前缀，避免生成 assistants.assistant.* 这类冗余路径。"""
+    prefixes = {
+        "assistants": "assistant.",
+        "tasks": "task.",
+    }
+    prefix = prefixes.get(group, "")
+    return entry_id.removeprefix(prefix) if prefix else entry_id
+
+
+def extract_entry_definition_messages(group: str, entry_id: str, node: ast.AST, messages: dict[str, str]) -> None:
+    call = unwrap_model_dump_call(node)
+    if not isinstance(call, ast.Call):
+        return
+    locale_id = ai_entry_locale_id(group, entry_id)
+    keywords = call_keywords(call)
+    for field in ("name", "description"):
+        default_text = static_string(keywords.get(field))
+        if default_text is not None:
+            messages[f"ai.definitions.{group}.{locale_id}.{field}"] = default_text
+
+
+def extract_prompt_category_messages(category_id: str, node: ast.AST, messages: dict[str, str]) -> None:
+    call = unwrap_model_dump_call(node)
+    if not isinstance(call, ast.Call) or call_name(call.func) != "PromptCategoryDefinition":
+        return
+    base_key = f"ai.definitions.categories.{category_id}"
+    keywords = call_keywords(call)
+    for field in ("label", "description"):
+        default_text = static_string(keywords.get(field))
+        if default_text is not None:
+            messages[f"{base_key}.{field}"] = default_text
+    variables_node = keywords.get("base_variables")
+    if not isinstance(variables_node, ast.List):
+        return
+    for variable_node in variables_node.elts:
+        if not isinstance(variable_node, ast.Call) or call_name(variable_node.func) != "PromptVariableDefinition":
+            continue
+        variable_keywords = call_keywords(variable_node)
+        variable_key = static_string(variable_keywords.get("key"))
+        if not variable_key:
+            continue
+        for field in ("label", "description"):
+            default_text = static_string(variable_keywords.get(field))
+            if default_text is not None:
+                messages[f"{base_key}.base_variables.{variable_key}.{field}"] = default_text
+
+
+def extract_ai_entry_messages(path: Path, tree: ast.AST) -> dict[str, str]:
+    if path != AI_ENTRY_DEFINITIONS_PATH:
+        return {}
+    messages: dict[str, str] = {}
+    function_groups = {
+        "get_default_ai_prompts": "prompts",
+        "get_default_assistant_definitions": "assistants",
+        "get_default_task_definitions": "tasks",
+        "get_prompt_category_definitions": "categories",
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name not in function_groups:
+            continue
+        group = function_groups[node.name]
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Return):
+                continue
+            for item_id, item_node in iter_literal_dict_items(child.value):
+                if group == "prompts":
+                    extract_prompt_definition_messages(item_id, item_node, messages)
+                elif group == "categories":
+                    extract_prompt_category_messages(item_id, item_node, messages)
+                else:
+                    extract_entry_definition_messages(group, item_id, item_node, messages)
+    return messages
+
+
+def extract_prompt_variable_messages(base_key: str, list_node: ast.AST | None, messages: dict[str, str]) -> None:
+    if not isinstance(list_node, ast.List):
+        return
+    for variable_node in list_node.elts:
+        if not isinstance(variable_node, ast.Call) or call_name(variable_node.func) != "PromptVariableDefinition":
+            continue
+        keywords = call_keywords(variable_node)
+        variable_key = static_string(keywords.get("key"))
+        if not variable_key:
+            continue
+        for field in ("label", "description"):
+            default_text = static_string(keywords.get(field))
+            if default_text is not None:
+                messages[f"{base_key}.prompt_variables.{variable_key}.{field}"] = default_text
+
+
+def extract_projection_option_messages(base_key: str, list_node: ast.AST | None, messages: dict[str, str]) -> None:
+    if not isinstance(list_node, ast.List):
+        return
+    for field_node in list_node.elts:
+        if not isinstance(field_node, ast.Call) or call_name(field_node.func) != "AttachmentProjectionFieldDefinition":
+            continue
+        keywords = call_keywords(field_node)
+        path_key = static_string(keywords.get("path"))
+        if not path_key:
+            continue
+        for field in ("label", "description"):
+            default_text = static_string(keywords.get(field))
+            if default_text is not None:
+                messages[f"{base_key}.projection_options.{path_key}.{field}"] = default_text
+
+
+def extract_ai_attachment_messages(path: Path, tree: ast.AST) -> dict[str, str]:
+    if path != AI_ATTACHMENT_DEFINITIONS_PATH:
+        return {}
+    messages: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != "get_attachment_definitions":
+            continue
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Return):
+                continue
+            for kind, item_node in iter_literal_dict_items(child.value):
+                call = unwrap_model_dump_call(item_node)
+                if not isinstance(call, ast.Call) or call_name(call.func) != "AttachmentDefinition":
+                    continue
+                base_key = f"ai.definitions.attachments.{kind}"
+                keywords = call_keywords(call)
+                for field in ("label", "description"):
+                    default_text = static_string(keywords.get(field))
+                    if default_text is not None:
+                        messages[f"{base_key}.{field}"] = default_text
+                extract_prompt_variable_messages(base_key, keywords.get("prompt_variables"), messages)
+                extract_projection_option_messages(base_key, keywords.get("projection_options"), messages)
+    return messages
+
+
+def extract_ai_tool_messages(path: Path, tree: ast.AST) -> dict[str, str]:
+    if path != AI_TOOL_DEFINITIONS_PATH:
+        return {}
+    messages: dict[str, str] = {}
+    constants = module_constants(tree)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        for tool_id, item_node in iter_literal_dict_items(node):
+            call = unwrap_model_dump_call(item_node)
+            if not isinstance(call, ast.Call) or call_name(call.func) != "ToolDefinition":
+                continue
+            base_key = f"ai.tools.{tool_id}"
+            keywords = call_keywords(call)
+            label = static_string(keywords.get("label"), constants)
+            description = static_string(keywords.get("ui_description"), constants)
+            if label is not None:
+                messages[f"{base_key}.label"] = label
+            if description is not None:
+                messages[f"{base_key}.description"] = description
     return messages
 
 

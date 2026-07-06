@@ -5,6 +5,8 @@
 // 1. 把后端动作定义翻译成前端可渲染的卡片/提示/确认文案
 // 2. 把最终确认后的动作路由到具体 store 执行
 
+import { t } from '../../../../shared/i18n'
+
 // -----------------------------------------------------------------
 // 基础归一化 (Normalization)
 // -----------------------------------------------------------------
@@ -76,6 +78,14 @@ export const createActionPresentationRuntime = ({
 
   const getActionType = (action) => String(action?.type || '').trim()
   const getActionVariant = (action) => String(action?.variant || '').trim()
+  const getActionI18nKey = (action, field) => {
+    const actionType = getActionType(action)
+    if (!actionType || !field) return ''
+    const variant = getActionVariant(action)
+    return variant
+      ? `ai.actions.${actionType}.variants.${variant}.${field}`
+      : `ai.actions.${actionType}.${field}`
+  }
   const getActionVariantDefinition = (action) => {
     const definition = resolveActionDefinition(getActionType(action))
     const variants = definition?.variants && typeof definition.variants === 'object' ? definition.variants : {}
@@ -130,15 +140,16 @@ export const createActionPresentationRuntime = ({
   const getActionMetaText = (action, field) => {
     const variantDefinition = getActionVariantDefinition(action)
     const variantValue = String(variantDefinition?.[field] || '').trim()
-    if (variantValue) return variantValue
+    if (variantValue) return t(getActionI18nKey(action, field), variantValue)
     const definition = resolveActionDefinition(getActionType(action))
-    return String(definition?.[field] || '').trim()
+    const definitionValue = String(definition?.[field] || '').trim()
+    return definitionValue ? t(`ai.actions.${getActionType(action)}.${field}`, definitionValue) : ''
   }
-  const getActionExecuteLabel = (action) => getActionMetaText(action, 'execute_label') || getActionMetaText(action, 'label') || '执行操作'
-  const getActionTitle = (action) => getActionMetaText(action, 'title') || getActionMetaText(action, 'label') || '执行操作'
-  const getActionDescription = (action) => getActionMetaText(action, 'description') || '执行这条 AI 建议。'
+  const getActionExecuteLabel = (action) => getActionMetaText(action, 'execute_label') || getActionMetaText(action, 'label') || t('ai.actions.fallback.execute', '执行操作')
+  const getActionTitle = (action) => getActionMetaText(action, 'title') || getActionMetaText(action, 'label') || t('ai.actions.fallback.execute', '执行操作')
+  const getActionDescription = (action) => getActionMetaText(action, 'description') || t('ai.actions.fallback.description', '执行这条 AI 建议。')
   const getActionPreview = (action) => formatActionTemplate(getActionMetaText(action, 'preview_template'), action)
-  const getActionMissingPayloadMessage = (action) => getActionMetaText(action, 'missing_payload_message') || '这条动作缺少必要字段，已跳过。'
+  const getActionMissingPayloadMessage = (action) => getActionMetaText(action, 'missing_payload_message') || t('ai.actions.fallback.missing_payload', '这条动作缺少必要字段，已跳过。')
   const getActionBlockedMessage = (action) => formatActionTemplate(getActionMetaText(action, 'blocked_message'), action)
   const getActionConfirmMeta = (action) => ({
     title: getActionMetaText(action, 'confirm_title'),
@@ -401,9 +412,9 @@ export const createActionExecutorRegistry = ({
 
     const confirmMeta = getActionConfirmMeta(action)
     const confirmed = await confirmStore.confirmAction(
-      confirmMeta.title || '确认执行操作',
+      confirmMeta.title || t('ai.actions.fallback.confirm_title', '确认执行操作'),
       confirmMeta.message || getActionPreview(action) || getActionDescription(action),
-      { type: 'warning', confirmText: confirmMeta.confirmText || '确认', cancelText: '取消' },
+      { type: 'warning', confirmText: confirmMeta.confirmText || t('common.confirm', '确认'), cancelText: t('common.cancel', '取消') },
     )
     if (!confirmed) return
 
@@ -411,9 +422,9 @@ export const createActionExecutorRegistry = ({
 
     const postSuccessMeta = getActionPostSuccessMeta(action)
     if (postSuccessMeta.message && await confirmStore.confirmAction(
-      postSuccessMeta.title || '操作已应用',
+      postSuccessMeta.title || t('ai.actions.fallback.applied_title', '操作已应用'),
       postSuccessMeta.message,
-      { type: 'success', confirmText: postSuccessMeta.confirmText || '确定', cancelText: '稍后' },
+      { type: 'success', confirmText: postSuccessMeta.confirmText || t('common.ok', '确定'), cancelText: t('common.later', '稍后') },
     )) {
       await modStore.autoSortMods()
       return
@@ -459,7 +470,7 @@ export const createActionExecutorRegistry = ({
         : []
     )
     if (allowedSettingKeys.size > 0 && !allowedSettingKeys.has(settingKey)) {
-      toast.warning(getActionBlockedMessage(action) || '当前不允许执行这条设置修改动作。')
+      toast.warning(getActionBlockedMessage(action) || t('ai.actions.fallback.setting_blocked', '当前不允许执行这条设置修改动作。'))
       return
     }
     await appStore.saveSetting(settingKey, payload.value)

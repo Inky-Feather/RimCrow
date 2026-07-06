@@ -1,12 +1,13 @@
 import { checkResult, getApiResponseMessage, normalizeText, toast, toUserMessage } from '../../../shared/lib/common'
+import { t } from '../../../shared/i18n'
 
 const PENDING_REASONING_CAPABILITIES = {
   supports_reasoning: false,
   supports_reasoning_effort: false,
   reasoning_mode_kind: 'pending',
   reasoning_options: [
-    { value: 'off', label: '关闭' },
-    { value: 'auto', label: '自动' },
+    { value: 'off', label: t('ai.reasoning.off', '关闭') },
+    { value: 'auto', label: t('ai.reasoning.auto', '自动') },
   ],
   default_session_reasoning_mode: 'auto',
 }
@@ -16,7 +17,7 @@ const UNSUPPORTED_REASONING_CAPABILITIES = {
   supports_reasoning_effort: false,
   reasoning_mode_kind: 'unsupported',
   reasoning_options: [
-    { value: 'off', label: '关闭' },
+    { value: 'off', label: t('ai.reasoning.off', '关闭') },
   ],
   default_session_reasoning_mode: 'off',
 }
@@ -74,9 +75,9 @@ const normalizeReasoningCapabilityResult = (payload = {}, fallback = UNSUPPORTED
   reasoning_options: Array.isArray(payload?.reasoning_options) && payload.reasoning_options.length > 0
     ? payload.reasoning_options.map(item => ({
       value: normalizeText(item?.value),
-      label: normalizeText(item?.label, normalizeText(item?.value)),
+      label: t(`ai.reasoning.${normalizeText(item?.value)}`, normalizeText(item?.label, normalizeText(item?.value))),
     })).filter(item => item.value)
-    : [...(fallback.reasoning_options || [{ value: 'off', label: '关闭' }])],
+    : [...(fallback.reasoning_options || [{ value: 'off', label: t('ai.reasoning.off', '关闭') }])],
   default_session_reasoning_mode: normalizeText(
     payload?.default_session_reasoning_mode,
     fallback.default_session_reasoning_mode || 'off',
@@ -100,7 +101,7 @@ export const useModelConfigActions = ({
     const api = await waitForPywebviewApi()
     if (!api?.ai_get_config) return null
     const res = await api.ai_get_config()
-    if (checkResult(res, '获取AI配置', false, { silent })) {
+    if (checkResult(res, t('ai.config.fetch_action', '获取AI配置'), false, { silent })) {
       runtimeAiConfig.value = res.data || null
       return res.data
     }
@@ -110,7 +111,7 @@ export const useModelConfigActions = ({
   const saveAIConfig = async (configData) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.ai_save_config(configData)
-    if (checkResult(res, '保存AI配置', true)) {
+    if (checkResult(res, t('ai.config.save_action', '保存AI配置'), true)) {
       return true
     }
   }
@@ -142,13 +143,13 @@ export const useModelConfigActions = ({
     isLoading.value = true
     try {
       const res = await window.pywebview.api.ai_get_models(tempConfig)
-      if (checkResult(res, '获取AI模型', false, { silent })) {
+      if (checkResult(res, t('ai.config.fetch_models_action', '获取AI模型'), false, { silent })) {
         const models = Array.isArray(res.data) ? res.data.map(item => normalizeText(item)).filter(Boolean) : []
         modelListCache[cacheKey] = [...new Set(models)].sort((a, b) => a.localeCompare(b))
         if (warnOnEmpty && modelListCache[cacheKey].length === 0) {
           const provider = normalizeText(tempConfig?.provider, 'unknown')
           const baseUrl = resolveAiProviderBaseUrl(tempConfig?.provider, tempConfig?.base_url)
-          toast.warning(`未获取到 AI 模型列表。请确认 ${provider} 服务已启动、Base URL 可访问、API Key 有效，并检查代理设置：${baseUrl}`, { timeout: 8000 })
+          toast.warning(t('ai.config.empty_model_list_warning', '未获取到 AI 模型列表。请确认 {provider} 服务已启动、Base URL 可访问、API Key 有效，并检查代理设置：{baseUrl}', { provider, baseUrl }), { timeout: 8000 })
         }
         return getCachedAiModels(tempConfig)
       }
@@ -212,12 +213,12 @@ export const useModelConfigActions = ({
 
   const chatWithAI = async (prompt, tempConfig) => {
     if (!window.pywebview) {
-      return { ok: false, text: '', error: '界面尚未完成初始化', isEmpty: false }
+      return { ok: false, text: '', error: t('ai.config.ui_not_ready', '界面尚未完成初始化'), isEmpty: false }
     }
     isLoading.value = true
     try {
       const res = await window.pywebview.api.ai_chat(prompt, tempConfig)
-      if (checkResult(res, '测试 AI 回复')) {
+      if (checkResult(res, t('ai.config.test_reply_action', '测试 AI 回复'))) {
         const payload = res.data
         const text = typeof payload === 'string'
           ? payload
@@ -225,7 +226,7 @@ export const useModelConfigActions = ({
         return {
           ok: text.trim().length > 0,
           text,
-          error: text.trim().length > 0 ? '' : '模型已返回，但内容为空',
+          error: text.trim().length > 0 ? '' : t('ai.config.empty_reply', '模型已返回，但内容为空'),
           isEmpty: text.trim().length === 0,
           raw: payload,
         }
@@ -233,7 +234,7 @@ export const useModelConfigActions = ({
       return {
         ok: false,
         text: '',
-        error: getApiResponseMessage(res, 'AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态，详细原因已写入系统日志。'),
+        error: getApiResponseMessage(res, t('ai.config.test_failed', 'AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态，详细原因已写入系统日志。')),
         isEmpty: false,
       }
     } catch (error) {
@@ -241,7 +242,7 @@ export const useModelConfigActions = ({
       return {
         ok: false,
         text: '',
-        error: toUserMessage(error?.message || String(error), 'AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。'),
+        error: toUserMessage(error?.message || String(error), t('ai.config.test_exception', 'AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。')),
         isEmpty: false,
       }
     } finally {
