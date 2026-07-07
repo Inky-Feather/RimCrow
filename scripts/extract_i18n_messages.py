@@ -80,10 +80,23 @@ GUIDE_STEP_POPOVER_PATTERN = re.compile(
 COMMAND_ID_CAMEL_PATTERN = re.compile(r"([a-z0-9])([A-Z])")
 PLACEHOLDER_PATTERN = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
 CHINESE_PATTERN = re.compile(r"[\u4e00-\u9fff]")
-I18N_CALL_LINE_PATTERN = re.compile(r"\b(?:t|tr)\s*\(")
+I18N_CALL_LINE_PATTERN = re.compile(r"\b(?:t|tr|_tr|_plain_text|_html_text)\s*\(")
+UNTRANSLATED_PREFIX = "[UNTRANSLATED] "
 BARE_CHINESE_EXCLUDED_PARTS = {
     "frontend/src/locales/",
+    "frontend/src/dev/",
+    "backend/ai/ai_tools.py",
+    "backend/ai/assistant_runtime.py",
+    "backend/ai/def_output_contracts.py",
+    "backend/ai/def_actions.py",
+    "backend/ai/def_attachments.py",
     "backend/ai/def_entries.py",
+}
+BARE_CHINESE_EXCLUDED_FILES = {
+    "backend/_version.py",
+    "frontend/src/app/commands/builtinCommands.js",
+    "frontend/src/features/guide/guideConfig.js",
+    "frontend/src/features/guide/guideStore.js",
 }
 BARE_CHINESE_EXCLUDED_LINE_PREFIXES = (
     "#",
@@ -91,6 +104,22 @@ BARE_CHINESE_EXCLUDED_LINE_PREFIXES = (
     "/*",
     "*",
     "<!--",
+)
+BARE_CHINESE_LOG_MARKERS = (
+    "logger.",
+    "logging.",
+    "console.",
+    "print(",
+    "_log_startup_perf(",
+)
+BARE_CHINESE_CONTEXT_SKIP_MARKERS = (
+    "logger.",
+    "ApiResponse.error(",
+    "ApiResponse.warning(",
+    "_log_startup_perf(",
+    "mark_launch_failed(",
+    "logStartupCheck(",
+    "logMaintenanceCheck(",
 )
 
 
@@ -244,7 +273,7 @@ def literal_string(node: ast.AST) -> str | None:
 
 def is_tr_call(node: ast.Call) -> bool:
     return (
-        isinstance(node.func, ast.Name) and node.func.id == "tr"
+        isinstance(node.func, ast.Name) and node.func.id in {"tr", "_tr"}
         or isinstance(node.func, ast.Attribute) and node.func.attr == "tr"
     )
 
@@ -693,32 +722,123 @@ def build_locale_payload(existing: Mapping[str, Any], extracted: Mapping[str, st
     return payload
 
 
+def untranslated_fallback(source_text: str) -> str:
+    text = str(source_text or "")
+    return f"{UNTRANSLATED_PREFIX}{text}" if CHINESE_PATTERN.search(text) else text
+
+
+def build_translated_locale_payload(existing: Mapping[str, Any], previous_default: Mapping[str, str], extracted: Mapping[str, str]) -> tuple[dict[str, Any], int]:
+    existing_values = flatten_string_values(existing)
+    payload: dict[str, Any] = {}
+    reset_count = 0
+    ordered_keys = [key for key in existing_values if key in extracted]
+    ordered_keys.extend(key for key in sorted(extracted) if key not in existing_values)
+    for key in ordered_keys:
+        source_text = extracted[key]
+        translated = existing_values.get(key)
+        source_changed = previous_default.get(key) != source_text
+        params_changed = translated is not None and extract_placeholders(translated) != extract_placeholders(source_text)
+        if translated is None or source_changed or params_changed:
+            translated = untranslated_fallback(source_text)
+            reset_count += 1
+        elif translated == source_text and CHINESE_PATTERN.search(source_text):
+            translated = untranslated_fallback(source_text)
+            reset_count += 1
+        set_nested(payload, key, translated)
+    return payload, reset_count
+
+
+def sync_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping[str, str]) -> list[str]:
+    results: list[str] = []
+    for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
+        if path.name == DEFAULT_LOCALE_PATH.name:
+            continue
+        payload, reset_count = build_translated_locale_payload(load_locale(path), previous_default, extracted)
+        write_json(path, payload)
+        results.append(f"{path.relative_to(ROOT).as_posix()}：同步 {len(extracted)} 条，重置 {reset_count} 条")
+    return results
+
+
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def strip_inline_comment(line: str, suffix: str) -> str:
+    """剥掉行内注释，避免把配置注释当作界面文案。"""
+    markers = ("#",) if suffix == ".py" else ("//",)
+    quote = ""
+    escaped = False
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = ""
+        elif char in {"'", '"', "`"}:
+            quote = char
+        elif any(line.startswith(marker, index) for marker in markers):
+            return line[:index]
+        index += 1
+    return line
+
+
+def paren_delta(line: str) -> int:
+    return line.count("(") - line.count(")")
+
+
 def is_bare_chinese_candidate(path: Path, line: str) -> bool:
     rel = path.relative_to(ROOT).as_posix()
+    if rel in BARE_CHINESE_EXCLUDED_FILES:
+        return False
     if any(part in rel for part in BARE_CHINESE_EXCLUDED_PARTS):
         return False
     stripped = line.strip()
     if not stripped or stripped.startswith(BARE_CHINESE_EXCLUDED_LINE_PREFIXES):
         return False
-    if I18N_CALL_LINE_PATTERN.search(line):
+    code_line = strip_inline_comment(line, path.suffix).strip()
+    if not code_line or not CHINESE_PATTERN.search(code_line):
         return False
-    if "logger." in line or "console." in line:
+    if I18N_CALL_LINE_PATTERN.search(code_line):
         return False
-    return bool(CHINESE_PATTERN.search(line))
+    if "record_timeline(" in code_line:
+        return False
+    if "text.startswith(" in code_line or "text ==" in code_line:
+        return False
+    if any(marker in code_line for marker in BARE_CHINESE_LOG_MARKERS):
+        return False
+    if path.suffix in {".py", ".js"} and not any(quote in code_line for quote in ("'", '"', "`")):
+        return False
+    return True
 
 
 def report_bare_chinese(limit: int) -> int:
     hits: list[str] = []
     for path in iter_source_files():
         in_python_docstring = False
+        in_block_comment = False
+        skip_call_depth = 0
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            stripped = line.strip()
+            if skip_call_depth > 0:
+                skip_call_depth = max(0, skip_call_depth + paren_delta(line))
+                continue
+            if any(marker in line for marker in BARE_CHINESE_CONTEXT_SKIP_MARKERS):
+                skip_call_depth = max(0, paren_delta(line))
+                continue
+            if in_block_comment:
+                if "*/" in stripped or "-->" in stripped:
+                    in_block_comment = False
+                continue
+            if stripped.startswith(("/*", "<!--")):
+                if not ("*/" in stripped or "-->" in stripped):
+                    in_block_comment = True
+                continue
             if path.suffix == ".py":
-                stripped = line.strip()
                 if (stripped.startswith('"""') and stripped.endswith('"""') and len(stripped) > 3) or (stripped.startswith("'''") and stripped.endswith("'''") and len(stripped) > 3):
                     continue
                 delimiter_count = line.count('"""') + line.count("'''")
@@ -756,7 +876,9 @@ def main() -> int:
 
     locale_path = args.locale_file if args.locale_file.is_absolute() else ROOT / args.locale_file
     extracted = merge_extracted_messages()
-    next_payload = build_locale_payload(load_locale(locale_path), extracted)
+    current_locale = load_locale(locale_path)
+    previous_default = flatten_string_values(current_locale)
+    next_payload = build_locale_payload(current_locale, extracted)
     next_text = json.dumps(next_payload, ensure_ascii=False, indent=2) + "\n"
     current_text = locale_path.read_text(encoding="utf-8") if locale_path.exists() else ""
     if args.check:
@@ -770,7 +892,10 @@ def main() -> int:
         print(f"i18n 默认语言包已同步，共 {len(extracted)} 条。")
         return 0
     write_json(locale_path, next_payload)
+    synced_locales = sync_builtin_locales(previous_default, extracted) if locale_path.resolve() == DEFAULT_LOCALE_PATH.resolve() else []
     print(f"已更新 {locale_path.relative_to(ROOT).as_posix()}，共 {len(extracted)} 条。")
+    for item in synced_locales:
+        print(item)
     return 0
 
 

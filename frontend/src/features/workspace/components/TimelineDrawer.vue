@@ -53,13 +53,13 @@
                 </span>
                 <span class="px-2 py-0.5 rounded-full text-[0.7rem] font-black uppercase tracking-wider bg-bg-overlay/5 border border-border-base/5"
                   :class="getColorClass(log.color, 'text')">
-                  {{ log.title }}
+                  {{ timelineTitle(log) }}
                 </span>
               </div>
               
               <!-- 具体描述 -->
               <div class="modal-section-subtle mt-2 break-all p-2.5 text-xs leading-relaxed text-text-dim">
-                {{ log.desc }}
+                {{ timelineDesc(log) }}
               </div>
             </div>
           </div>
@@ -94,6 +94,9 @@ watch(() => props.isOpen, (val) => {
 const formatDate = (ts) => {
   return new Date(ts).toLocaleString(getCurrentLocale(), {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
+
+const timelineTitle = (log) => t(log?.title_key || '', log?.title || '', log?.title_params || {})
+const timelineDesc = (log) => t(log?.desc_key || '', log?.desc || '', log?.desc_params || {})
 // 监听点击外侧事件
 onClickOutside(drawerRef, (event) => {
   if (props.isOpen && !event.target.closest('.timeline-trigger')) {

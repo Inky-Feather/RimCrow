@@ -21,7 +21,7 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <div class="text-sm font-black" :class="groupTitleClass(group.id)">{{ group.title }}</div>
-                <span class="rounded-md border bg-bg-overlay/5 px-1.5 py-0.5 text-[0.6rem]" :class="groupCountClass(group.id)">{{ t('ui.workspace.startup.item_count', '{count} 项', { count: group.items.length }) }}</span>
+                <span class="rounded-md border bg-bg-overlay/5 px-1.5 py-0.5 text-[0.6rem]" :class="groupCountClass(group.id)">{{ t('common.count.items', '{count} 项', { count: group.items.length }) }}</span>
               </div>
               <div class="mt-1 text-xs leading-relaxed text-text-dim">{{ group.description }}</div>
             </div>

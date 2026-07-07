@@ -1,8 +1,6 @@
 {
   "ui": {
     "action": {
-      "close": "关闭",
-      "delete": "删除",
       "operation": "操作"
     },
     "app": {
@@ -11,7 +9,6 @@
         "force_scan": "强制扫描",
         "launch_game": "启动游戏",
         "launching": "启动中...",
-        "save": "保存",
         "save_changes": "保存变动",
         "saving": "保存中...",
         "scan": "扫描",
@@ -1667,6 +1664,29 @@
           "published": "发布: {time}",
           "updated": "更新: {time}"
         },
+        "timeline": {
+          "desc": {
+            "deploy_failed": "部署失败: {reason}",
+            "deploy_success": "部署成功！已安装版本: {version}",
+            "download_archive": "开始获取压缩包: {filename}",
+            "download_catalog": "开始获取清单压缩包: {filename}",
+            "download_failed": "下载失败: {reason}",
+            "extract": "压缩包获取成功，正在执行安装计划...",
+            "missing": "扫描时发现本地目录已不存在",
+            "remove": "已移除 Git 仓库订阅记录",
+            "subscribe": "已添加 Git 仓库监听记录"
+          },
+          "title": {
+            "download": "下载",
+            "error": "错误",
+            "extract": "解压",
+            "missing": "本地缺失",
+            "remove": "移除",
+            "subscribe": "订阅",
+            "success": "部署成功",
+            "update": "更新"
+          }
+        },
         "title": "Git 仓库订阅",
         "tooltip": {
           "author": "作者: {author}",
@@ -1733,9 +1753,6 @@
         "cleanup_invalid_unsubscribe": {
           "message": "确定要取消订阅这些异常缺失的工坊项并清理本地记录吗？（{count} 项）",
           "title": "清理失效并取消订阅"
-        },
-        "column": {
-          "item_count": "{count} 项"
         },
         "context_hint": "右键点击卡片可查看变动时间线与更多操作",
         "detail": {
@@ -1823,9 +1840,7 @@
           "ctime": "按创建时间",
           "mtime": "按修改时间",
           "name": "按名称 A-Z",
-          "size": "按文件体积",
-          "to_ascending": "切换为升序排列",
-          "to_descending": "切换为降序排列"
+          "size": "按文件体积"
         },
         "switch": {
           "self": {
@@ -1881,7 +1896,6 @@
             "title": "缺失模组"
           }
         },
-        "item_count": "{count} 项",
         "more_items": "\n等 {count} 个模组。",
         "summary": {
           "after_scan": "库存检测完成。",
@@ -2418,8 +2432,6 @@
         "clear": "__[[(点击恢复默认排序)]]__",
         "desc": "（降序）"
       },
-      "sort_asc": "切换为升序排列",
-      "sort_desc": "切换为降序排列",
       "toggle_view": "切换列表视图",
       "visual_only": "__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
     },
@@ -2877,10 +2889,6 @@
     }
   },
   "dialog": {
-    "action": {
-      "cancel": "取消",
-      "confirm": "确定"
-    },
     "ai_definitions": {
       "attachment_projection_desc": "控制附件里哪些信息会发给 AI。取消勾选后，这部分内容通常不会发送。",
       "attachment_projection_title": "发送给 AI 的附件内容",
@@ -4373,7 +4381,12 @@
     },
     "texture": {
       "analysis_started": "贴图分析任务已在后台启动",
-      "task_queued": "{task_name}任务已加入队列",
+      "task_queued": {
+        "clean_generated": "清理已生成 {format}任务已加入队列",
+        "clean_residue": "清理卸载残留 {format}任务已加入队列",
+        "delete_orphan": "删除无源 {format}任务已加入队列",
+        "optimize": "贴图优化任务已加入队列"
+      },
       "todds_found": "已找到 todds 可执行文件",
       "tool_download_started": "已启动工具下载任务",
       "tool_ready": "工具已经就绪"

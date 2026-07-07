@@ -1,8 +1,6 @@
 {
   "ui": {
     "action": {
-      "close": "Close",
-      "delete": "Delete",
       "operation": "Operation"
     },
     "drag": {
@@ -53,8 +51,7 @@
           "save_breaking": "save_breaking",
           "shadow_paths": "shadow_paths",
           "sign_color": "sign_color"
-        },
-        "value": {}
+        }
       }
     },
     "secret": {
@@ -144,9 +141,6 @@
       "subscribe": "Subscribe",
       "unsubscribe": "Unsubscribe",
       "web": "Web"
-    },
-    "common": {
-      "position": {}
     },
     "issue": {
       "default": "Other issue",
@@ -545,9 +539,6 @@
             "description": "Core/DLC and other official items are hidden by default; hidden items are not included in the local list, multi-select, or select-all range."
           }
         },
-        "column": {
-          "item_count": "{count} items"
-        },
         "search": {
           "placeholder": "Search in this library..."
         },
@@ -672,9 +663,7 @@
           "ctime": "By created time",
           "mtime": "By modified time",
           "name": "Name A-Z",
-          "size": "By file size",
-          "to_ascending": "Switch to ascending order",
-          "to_descending": "Switch to descending order"
+          "size": "By file size"
         }
       },
       "collection": {
@@ -812,7 +801,6 @@
             "title": "Missing mods"
           }
         },
-        "item_count": "{count} items",
         "more_items": "\nand {count} more mods.",
         "summary": {
           "after_scan": "Inventory check completed.",
@@ -960,6 +948,29 @@
           "not_deployed": "Not deployed",
           "unknown": "Status unknown",
           "upgrade": "Upgrade available"
+        },
+        "timeline": {
+          "title": {
+            "subscribe": "Subscribe",
+            "download": "Download",
+            "update": "Update",
+            "extract": "Extract",
+            "success": "Deployed",
+            "error": "Error",
+            "remove": "Remove",
+            "missing": "Missing locally"
+          },
+          "desc": {
+            "subscribe": "Added Git repository watch record",
+            "missing": "Local directory was missing during scan",
+            "remove": "Removed Git repository subscription record",
+            "download_archive": "Started fetching archive: {filename}",
+            "download_catalog": "Started fetching catalog archive: {filename}",
+            "deploy_success": "Deployment succeeded. Installed version: {version}",
+            "deploy_failed": "Deployment failed: {reason}",
+            "download_failed": "Download failed: {reason}",
+            "extract": "Archive fetched. Running install plan..."
+          }
         }
       }
     },
@@ -969,7 +980,6 @@
         "force_scan": "Force scan",
         "launch_game": "Launch game",
         "launching": "Launching...",
-        "save": "Save",
         "save_changes": "Save changes",
         "saving": "Saving...",
         "scan": "Scan",
@@ -2342,8 +2352,6 @@
         "clear": "__[[(Click to restore default sorting)]]__",
         "desc": "(descending)"
       },
-      "sort_asc": "Switch to ascending order",
-      "sort_desc": "Switch to descending order",
       "toggle_view": "Switch list view",
       "visual_only": "__Filtering and sorting are only for visual review, ^^do not affect the real order^^,\nand ^^drag sorting or insertion is disabled^^ in this state__"
     },
@@ -2881,10 +2889,6 @@
     }
   },
   "dialog": {
-    "action": {
-      "cancel": "Cancel",
-      "confirm": "OK"
-    },
     "delete": {
       "confirm": "Delete",
       "force_description": "Delete permanently without using the recycle bin. This usually cannot be undone.",
@@ -4033,10 +4037,15 @@
   "api": {
     "texture": {
       "analysis_started": "Texture analysis started in the background",
-      "task_queued": "{task_name} task has been queued",
       "todds_found": "Found todds executable",
       "tool_download_started": "Tool download task started",
-      "tool_ready": "Tool is ready"
+      "tool_ready": "Tool is ready",
+      "task_queued": {
+        "delete_orphan": "Delete orphan {format} task has been queued",
+        "clean_residue": "Clean uninstalled residue {format} task has been queued",
+        "clean_generated": "Clean generated {format} task has been queued",
+        "optimize": "Texture optimization task has been queued"
+      }
     },
     "cache": {
       "remote_images_cleared": "Remote image cache cleared"
@@ -4865,7 +4874,6 @@
       "timeout": "Task timed out"
     }
   },
-  "logs": {},
   "ai": {
     "definitions": {
       "attachments": {

@@ -97,7 +97,7 @@
               <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
                 :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSortAsc ? 0 : 180 /*切换时旋转180度*/}" 
                 :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-                @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc ? t('tooltip.mod_list.sort_desc', '切换为降序排列') : t('tooltip.mod_list.sort_asc', '切换为升序排列')" >
+                @click="isSortAsc=!isSortAsc" v-tooltip="isSortAsc ? t('tooltip.common.sort_desc', '切换为降序排列') : t('tooltip.common.sort_asc', '切换为升序排列')" >
                 <svg v-if="isSortAsc" class="size-4 rotate-x-180" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h4"/><path d="M11 8h7"/><path d="M11 12h10"/></svg>
                 <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
               </Motion>

@@ -22,7 +22,7 @@
             {{ formatFileSize(columnSize) }}
           </span>
           <span class="text-[0.65rem] font-mono text-text-main bg-bg-inset/80 px-2 py-0.5 rounded-md border border-border-base/5">
-            {{ t('ui.workspace.matrix.column.item_count', '{count} 项', { count: mods.length }) }}
+            {{ t('common.count.items', '{count} 项', { count: mods.length }) }}
           </span>
         </div>
       </div>
@@ -45,7 +45,7 @@
             :animate="{ rotateX: isSortDsc ? 0 : 180 }"
             :transition="{ type: 'spring', stiffness: 300, damping: 20 }"
             @click="isSortDsc=!isSortDsc"
-            v-tooltip="isSortDsc ? t('ui.workspace.matrix.sort.to_ascending', '切换为升序排列') : t('ui.workspace.matrix.sort.to_descending', '切换为降序排列')"
+            v-tooltip="isSortDsc ? t('tooltip.common.sort_asc', '切换为升序排列') : t('tooltip.common.sort_desc', '切换为降序排列')"
           >
             <span v-if="isSortDsc" class="rotate-x-180">
               <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>

@@ -108,7 +108,7 @@ const canOpenSteam = computed(() => !!(normalizedWorkshopId.value || normalizedW
 const canSubscribe = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
 const canUnsubscribe = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
 const canDownload = computed(() => !!(normalizedWorkshopId.value || normalizedWebUrl.value))
-const effectiveDeleteLabel = computed(() => props.deleteLabel || t('ui.action.delete', '删除'))
+const effectiveDeleteLabel = computed(() => props.deleteLabel || t('common.action.delete', '删除'))
 
 const groupClass = computed(() => ([
   'inline-flex w-fit items-center',

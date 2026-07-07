@@ -8114,14 +8114,51 @@ class API:
         """获取某仓库的本地操作时间线"""
         logs = list(GithubTimeline.select().where(GithubTimeline.repo_url == url).order_by(GithubTimeline.time.desc()).dicts())
         result=[]
-        title_map = {"subscribe": "订阅", "download": "下载", "update": "更新", "extract": "解压", "success":'部署成功', "error": "错误", "remove": "移除", "missing": "本地缺失"}
+        title_map = {
+            "subscribe": tr("ui.workspace.github.timeline.title.subscribe", "订阅"),
+            "download": tr("ui.workspace.github.timeline.title.download", "下载"),
+            "update": tr("ui.workspace.github.timeline.title.update", "更新"),
+            "extract": tr("ui.workspace.github.timeline.title.extract", "解压"),
+            "success": tr("ui.workspace.github.timeline.title.success", "部署成功"),
+            "error": tr("ui.workspace.github.timeline.title.error", "错误"),
+            "remove": tr("ui.workspace.github.timeline.title.remove", "移除"),
+            "missing": tr("ui.workspace.github.timeline.title.missing", "本地缺失"),
+        }
         color_map = {"subscribe": "primary", "download": "info", "update": "tip", "extract": "info", "success": "success", "error": "danger", "remove": "danger", "missing": "danger"}
+        def timeline_desc_payload(action: str, message: str) -> dict[str, Any]:
+            text = str(message or "")
+            if action == "subscribe" and text == "已添加 Git 仓库监听记录":
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.subscribe", "已添加 Git 仓库监听记录"))
+            if action == "missing" and text == "扫描时发现本地目录已不存在":
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.missing", "扫描时发现本地目录已不存在"))
+            if action == "remove" and text == "已移除 Git 仓库订阅记录":
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.remove", "已移除 Git 仓库订阅记录"))
+            if text.startswith("开始获取压缩包: "):
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.download_archive", "开始获取压缩包: {filename}", {"filename": text.removeprefix("开始获取压缩包: ")}))
+            if text.startswith("开始获取清单压缩包: "):
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.download_catalog", "开始获取清单压缩包: {filename}", {"filename": text.removeprefix("开始获取清单压缩包: ")}))
+            if text.startswith("部署成功！已安装版本: "):
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.deploy_success", "部署成功！已安装版本: {version}", {"version": text.removeprefix("部署成功！已安装版本: ")}))
+            if text.startswith("部署失败: "):
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.deploy_failed", "部署失败: {reason}", {"reason": text.removeprefix("部署失败: ")}))
+            if text.startswith("下载失败: "):
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.download_failed", "下载失败: {reason}", {"reason": text.removeprefix("下载失败: ")}))
+            if action == "extract" and text == "压缩包获取成功，正在执行安装计划...":
+                return _localized_message_payload(tr("ui.workspace.github.timeline.desc.extract", "压缩包获取成功，正在执行安装计划..."))
+            return {"message": text}
         for log in logs:
+            title = title_map.get(log["action"], log["action"])
+            title_payload = _localized_message_payload(title)
+            desc_payload = timeline_desc_payload(log["action"], log["message"])
             result.append({
                 "time": log["time"],
                 "type": log["action"],
-                "desc": log["message"],
-                "title": title_map.get(log["action"], log["action"]),
+                "desc": desc_payload["message"],
+                "desc_key": desc_payload.get("message_key", ""),
+                "desc_params": desc_payload.get("message_params", {}),
+                "title": title_payload["message"],
+                "title_key": title_payload.get("message_key", ""),
+                "title_params": title_payload.get("message_params", {}),
                 "color": color_map.get(log["action"], "info"),
             })
         return ApiResponse.success(result)
@@ -8238,14 +8275,14 @@ class API:
             res = self.texture_mgr.start_task(targets, action=action, options=request_options)
             clean_output_label = "ZSTD" if clean_output_format == "zstd" else "DDS"
             if clean_without_source:
-                msg = f"删除无源 {clean_output_label}"
+                message = tr("api.texture.task_queued.delete_orphan", "删除无源 {format}任务已加入队列", {"format": clean_output_label})
+            elif residue_clean_only:
+                message = tr("api.texture.task_queued.clean_residue", "清理卸载残留 {format}任务已加入队列", {"format": clean_output_label})
+            elif action == "clean_generated":
+                message = tr("api.texture.task_queued.clean_generated", "清理已生成 {format}任务已加入队列", {"format": clean_output_label})
             else:
-                msg = (
-                    f"清理卸载残留 {clean_output_label}"
-                    if residue_clean_only
-                    else (f"清理已生成 {clean_output_label}" if action == "clean_generated" else "贴图优化")
-                )
-            return ApiResponse.success(res, message=tr("api.texture.task_queued", "{task_name}任务已加入队列", {"task_name": msg}))
+                message = tr("api.texture.task_queued.optimize", "贴图优化任务已加入队列")
+            return ApiResponse.success(res, message=message)
         except Exception as e:
             logger.error("贴图优化任务启动失败", exc_info=True)
             return ApiResponse.error(

@@ -15,8 +15,8 @@ export const useConfirmStore = defineStore('confirm', () => {
     isHtml: false,     // 是否允许 HTML 内容
     inputValue: '',    // Prompt 模式下的输入值
     placeholder: '',
-    confirmText: t('dialog.action.confirm', '确定'),
-    cancelText: t('dialog.action.cancel', '取消'),
+    confirmText: t('common.action.ok', '确定'),
+    cancelText: t('common.action.cancel', '取消'),
     targetRect: null,  // 目标元素的位置信息 (用于迷弹窗)
     validation: null,  // 输入验证函数 (val) => boolean
     showDeleteOptions: false,
@@ -62,8 +62,8 @@ export const useConfirmStore = defineStore('confirm', () => {
     Object.assign(state, {
       type: 'info',
       mode: 'alert',
-      confirmText: t('dialog.action.confirm', '确定'),
-      cancelText: t('dialog.action.cancel', '取消'),
+      confirmText: t('common.action.ok', '确定'),
+      cancelText: t('common.action.cancel', '取消'),
       ...options
     })
 
@@ -149,7 +149,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     mode: 'confirm',
     type: 'error',
     confirmText: t('dialog.delete.confirm', '确认删除'),
-    cancelText: t('dialog.action.cancel', '取消'),
+    cancelText: t('common.action.cancel', '取消'),
     showDeleteOptions: true,
     trashOptionText: t('dialog.delete.trash_option', '移入回收站'),
     forceOptionText: t('dialog.delete.force_option', '强制删除'),
