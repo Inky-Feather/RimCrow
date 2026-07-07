@@ -66,6 +66,8 @@ const getMessageByPath = (messages = {}, key = '') => {
   return typeof current === 'string' || typeof current === 'number' ? String(current) : undefined
 }
 
+export const getBuiltinLocaleOptions = () => Object.keys(builtinMessages).map(code => ({ value: code, code, builtin: true, user: false }))
+
 const normalizeLocale = (language = '') => {
   const value = String(language || '').trim()
   if (!value) return DEFAULT_LOCALE
@@ -92,6 +94,19 @@ const loadUserMessages = async (locale) => {
   const res = await window.pywebview.api.locale_load_user_messages(locale)
   if (res?.status !== 'success') return {}
   return res.data?.messages && typeof res.data.messages === 'object' ? res.data.messages : {}
+}
+
+export const getLocaleMessagesForManagement = async (language = DEFAULT_LOCALE) => {
+  const locale = normalizeLocale(language)
+  const builtin = builtinMessages[locale] || {}
+  const userMessages = await loadUserMessages(locale)
+  return {
+    language: locale,
+    base: builtinMessages[DEFAULT_LOCALE] || {},
+    builtin,
+    user: userMessages,
+    merged: deepMerge(builtin, userMessages),
+  }
 }
 
 export const setLocale = async (language = DEFAULT_LOCALE) => {

@@ -1,3 +1,5 @@
+import json
+
 from backend.i18n.messages import deep_merge, localized_key, localized_params, tr
 
 
@@ -53,3 +55,20 @@ def test_extract_placeholders_reads_named_params():
     from scripts.extract_i18n_messages import extract_placeholders
 
     assert extract_placeholders("{name}处理中，已完成 {count}") == {"name", "count"}
+
+
+def test_user_locale_options_skip_translation_workfiles(tmp_path, monkeypatch):
+    import backend.i18n.messages as messages
+
+    locales_dir = tmp_path / "locales"
+    locales_dir.mkdir()
+    (locales_dir / "ja.json").write_text(json.dumps({"_meta": {"type": "user_locale", "language": "ja", "label": "日本語"}}), encoding="utf-8")
+    (locales_dir / "legacy.json").write_text(json.dumps({"ui": {"demo": "旧语言包"}}), encoding="utf-8")
+    (locales_dir / "rimcrow-locale-ko.work.json").write_text(json.dumps({"_meta": {"type": "translation_workfile", "language": "ko"}}), encoding="utf-8")
+
+    monkeypatch.setattr(messages, "USER_LOCALES_DIR", locales_dir)
+
+    values = {item["value"] for item in messages.list_user_locale_options()}
+    assert "ja" in values
+    assert "legacy" in values
+    assert "ko" not in values

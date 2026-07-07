@@ -250,6 +250,9 @@
     <!-- 设置弹窗 -->
     <SettingsModal v-if="appStore.uiState.showSettingsPanel" />
 
+    <!-- 翻译管理弹窗 -->
+    <TranslationManagerModal v-if="appStore.uiState.showTranslationManager" />
+
     <!-- 模组包/数据包传输弹窗 -->
     <PackageTransferDialog v-if="appStore.uiState.showPackageTransferDialog" />
 
@@ -356,6 +359,7 @@ const MissingInstallDialog = defineAsyncComponent(() => import('../features/supp
 const PackageTransferDialog = defineAsyncComponent(() => import('../features/package-transfer/PackageTransferDialog.vue'))
 const RecommendationExportModal = defineAsyncComponent(() => import('../features/mod/RecommendationExportModal.vue'))
 const ThemeEditorModal = defineAsyncComponent(() => import('../features/settings/theme/ThemeEditorModal.vue'))
+const TranslationManagerModal = defineAsyncComponent(() => import('../shared/components/translation/TranslationManagerModal.vue'))
 
 const updateModal = ref(null);
 

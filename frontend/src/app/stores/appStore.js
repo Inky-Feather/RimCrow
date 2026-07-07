@@ -22,7 +22,7 @@ import { usePackageTransferActions } from './app/packageTransferActions'
 import { useSteamWorkshopActions } from './app/steamWorkshopActions'
 import { useMaintenanceActions } from './app/maintenanceActions'
 import { useUpdateActions } from './app/updateActions'
-import { setLocale, t, translateMessagePayload } from '../../shared/i18n'
+import { DEFAULT_LOCALE, getBuiltinLocaleOptions, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload } from '../../shared/i18n'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
@@ -69,6 +69,7 @@ export const useAppStore = defineStore('app', () => {
     showFileSearchWorkbench: false, // 是否显示文件内容搜索工作台
     showPackageTransferDialog: false, // 是否显示模组包/数据包传输弹窗
     showRecommendationExportDialog: false, // 是否显示推荐导出弹窗
+    showTranslationManager: false, // 是否显示翻译管理弹窗
   })
   const packageTransferDialog = reactive({
     mode: 'mod-import',
@@ -103,6 +104,11 @@ export const useAppStore = defineStore('app', () => {
   const isTranslationProvidersLoaded = ref(false)
   const translationLanguageOptions = ref([])
   const isTranslationLanguageOptionsLoaded = ref(false)
+  const uiLanguageOptions = ref(getBuiltinLocaleOptions().map(item => ({
+    ...item,
+    label: item?.code || item?.value,
+  })))
+  const isUiLanguageOptionsLoaded = ref(false)
   const cancelPendingTaskIds = ref(new Set())
   const cancelPendingTimers = new Map()
   const CANCELLATION_PENDING_TIMEOUT_MS = 15000
@@ -160,6 +166,13 @@ export const useAppStore = defineStore('app', () => {
   const ensureTranslationSettingsShape = () => {
     settings.value.translation = normalizeTranslationSettings(settings.value.translation)
     return settings.value.translation
+  }
+
+  const countLocaleStrings = (value, skipMeta = true) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
+    return Object.entries(value).reduce((count, [key, child]) => (
+      count + (skipMeta && key === '_meta' ? 0 : (child && typeof child === 'object' && !Array.isArray(child) ? countLocaleStrings(child, skipMeta) : 1))
+    ), 0)
   }
 
   const getTranslationFeatureSettings = (feature = 'workshop_detail') => {
@@ -601,6 +614,18 @@ export const useAppStore = defineStore('app', () => {
       const locale = await setLocale(settings.value.language || 'zh-CN')
       if (version !== localeSwitchVersion) return
       settings.value.language = locale
+      const options = await ensureUiLanguageOptions()
+      const languageInfo = options.find(item => item.value === locale || item.code === locale)
+      if (locale !== DEFAULT_LOCALE && languageInfo?.user && !languageInfo?.builtin) {
+        const data = await getLocaleMessagesForManagement(locale)
+        const total = countLocaleStrings(data.base)
+        const translated = countLocaleStrings(data.user)
+        const progress = total > 0 ? Math.round((translated / total) * 100) : 0
+        const message = translated > 0
+          ? t('messages.app.language.partial_locale', '已切换到 {language}，当前语言包约完成 {progress}%，未翻译内容将显示默认中文。', { language: languageInfo.label || locale, progress })
+          : t('messages.app.language.empty_locale', '已切换到 {language}，该语言包暂无翻译，界面将暂时显示默认中文。', { language: languageInfo.label || locale })
+        toast.info(message, { timeout: 5000 })
+      }
       if (!isTranslationProvidersLoaded.value) translationProviders.value = createDefaultTranslationProviders()
       if (!uiState.showRecommendationExportDialog) {
         recommendationExportDialog.title = defaultRecommendationTitle()
@@ -1718,21 +1743,69 @@ export const useAppStore = defineStore('app', () => {
     return translationProviders.value
   }
 
-  const ensureTranslationLanguageOptions = async () => {
-    if (!window.pywebview || isTranslationLanguageOptionsLoaded.value) return translationLanguageOptions.value
-    const res = await window.pywebview.api.translation_get_language_options()
-    if (checkResult(res, t('messages.app.action.get_translation_languages', '获取翻译语言列表'), false, { silent: true })) {
-      translationLanguageOptions.value = Array.isArray(res.data)
-        ? res.data.map(item => ({
-            label: item?.label || item?.name || item?.code || item?.value,
-            value: item?.code || item?.value,
-            code: item?.code || item?.value,
-            name: item?.name || '',
-          })).filter(item => item.label && item.value)
-        : []
-      isTranslationLanguageOptionsLoaded.value = true
+  const normalizeRegistryLanguageOption = (item = {}) => ({
+    label: item?.label || item?.name || item?.code || item?.value,
+    value: item?.code || item?.value,
+    code: item?.code || item?.value,
+    name: item?.name || '',
+  })
+
+  const getLanguageLabel = (code, fallback = '') => {
+    const normalizedCode = String(code || '').trim()
+    return translationLanguageOptions.value.find(item => item.value === normalizedCode || item.code === normalizedCode)?.label || fallback || normalizedCode
+  }
+
+  const normalizeLanguageOption = (item = {}) => {
+    const code = String(item?.code || item?.value || '').trim()
+    return {
+      label: getLanguageLabel(code, item?.label || item?.name),
+      value: code,
+      code,
+      name: item?.name || '',
+      builtin: !!item?.builtin,
+      user: !!item?.user,
     }
+  }
+
+  const rebuildUiLanguageOptions = (userOptions = []) => {
+    const seen = new Set()
+    return [...getBuiltinLocaleOptions(), ...(Array.isArray(userOptions) ? userOptions : [])]
+      .map(normalizeLanguageOption)
+      .filter((item) => {
+        if (!item.value || seen.has(item.value)) return false
+        seen.add(item.value)
+        return true
+      })
+  }
+
+  async function ensureLanguageOptions(force = false) {
+    if (!window.pywebview) return uiLanguageOptions.value
+    if (!force && isTranslationLanguageOptionsLoaded.value && isUiLanguageOptionsLoaded.value) return uiLanguageOptions.value
+    const res = await window.pywebview.api.locale_get_language_options()
+    if (checkResult(res, t('messages.app.action.get_ui_languages', '获取界面语言列表'), false, { silent: true })) {
+      translationLanguageOptions.value = Array.isArray(res.data?.registry_options)
+        ? res.data.registry_options.map(normalizeRegistryLanguageOption).filter(item => item.label && item.value)
+        : []
+      uiLanguageOptions.value = rebuildUiLanguageOptions(res.data?.user_locale_options)
+      isTranslationLanguageOptionsLoaded.value = true
+      isUiLanguageOptionsLoaded.value = true
+    }
+    return uiLanguageOptions.value
+  }
+
+  const ensureTranslationLanguageOptions = async (force = false) => {
+    await ensureLanguageOptions(force)
     return translationLanguageOptions.value
+  }
+
+  const ensureUiLanguageOptions = async (force = false) => ensureLanguageOptions(force)
+
+  const createUserLocale = async (language, label = '') => {
+    const res = await window.pywebview.api.locale_create_user_language(language, label)
+    if (!checkResult(res, t('messages.app.action.create_user_locale', '创建语言包'))) return null
+    isUiLanguageOptionsLoaded.value = false
+    await ensureUiLanguageOptions(true)
+    return res.data
   }
 
   return {
@@ -1740,12 +1813,12 @@ export const useAppStore = defineStore('app', () => {
     appVersion, buildMode, uiState, settings, settingsReady, isLoading, isDownloading, isScanRunning, updateState, translationModeEnabled,
     themes, currentTheme, userThemes, themeEditor, packageTransferDialog, recommendationExportDialog,
     // 布局与运行态
-    remoteImageCache, translationProviders, isTranslationProvidersLoaded, translationLanguageOptions, isTranslationLanguageOptionsLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
+    remoteImageCache, translationProviders, isTranslationProvidersLoaded, translationLanguageOptions, isTranslationLanguageOptionsLoaded, uiLanguageOptions, isUiLanguageOptionsLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,
     // 生命周期与通用工具
     initialize, checkResult, refreshData, loadStartupCoreData, refreshRuleData, refreshBackupData, loadStartupInventorySummary, toggleUiState, scalePx, performDatabaseCleanup, recordScroll, getScroll, enterSleepMode, exitSleepMode,
     refreshModsData, refreshModCoreData, refreshModEnrichment, requestModScan,
     // 图片与缓存
-    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, ensureTranslationLanguageOptions, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
+    getThumbUrl, getLocalUrl, getRemoteUrl, refreshRemoteImageCacheStats, clearRemoteImageCache, ensureTranslationProviders, ensureLanguageOptions, ensureTranslationLanguageOptions, ensureUiLanguageOptions, createUserLocale, normalizeTranslationSettings, getTranslationFeatureSettings, saveTranslationFeatureSettings,
     // 路径与游戏启动
     checkPath, checkPaths, launchGame, autoDetectPaths, getDefaultExternalPaths, openPath, openFile, readTextFile, getFilePath, getFolderPath, deletePath, deletePaths, openUrl,
     // 下载与工坊

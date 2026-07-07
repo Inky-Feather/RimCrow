@@ -117,6 +117,11 @@
       "share_code": "分享码",
       "title": "备份"
     },
+    "common": {
+      "status": {
+        "processing": "处理中"
+      }
+    },
     "dependency_graph": {
       "manager": {
         "child_count": "{count}项",
@@ -932,6 +937,7 @@
       "general": {
         "active_section_support": "“启用列表”分割组支持",
         "active_section_support_desc": "开启后，启用列表会支持分割组折叠、整组拖动和右键分割组移动。",
+        "create_language_pack": "创建语言包",
         "default_collapse_active_sections": "启用列表默认折叠分割组",
         "default_collapse_active_sections_desc": "开启后，启用列表中的分割组会在初始显示时默认折叠。",
         "default_collapse_inactive_sections": "停用列表默认折叠分割组",
@@ -957,10 +963,6 @@
         "inactive_section_support": "“停用列表”分割组支持",
         "inactive_section_support_desc": "开启后，停用列表会支持分割组折叠、整组拖动和右键分割组移动。",
         "interface_language": "界面语言",
-        "language": {
-          "en": "English",
-          "zh_cn": "简体中文"
-        },
         "list_icons": "列表图标",
         "list_icons_desc": "控制列表中的所有图标显示，包括简单视图和详细视图。",
         "list_index": "列表索引",
@@ -986,8 +988,9 @@
         "title": "界面与布局",
         "tooltip_hover_time": "提示悬停时间",
         "tooltip_hover_time_desc": "控制悬浮提示信息的等待时间，单位是毫秒",
+        "translation_manager": "翻译管理",
         "translation_mode": "翻译模式",
-        "translation_mode_desc": "开启后显示翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。",
+        "translation_mode_desc": "开启后显示界面翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。",
         "visit": "访问",
         "workshop_page": "工坊页面"
       },
@@ -2564,6 +2567,10 @@
         "settings": "点击可设置翻译语言、翻译器和自动翻译策略。"
       }
     },
+    "translation_manager": {
+      "export_workfile": "导出当前目标语言的完整待翻译文件，包含中文原文和当前译文，适合交给外部翻译工具处理后再导入。",
+      "import_workfile": "导入外部翻译后的文件，并把有效译文写入当前目标语言的用户语言包。"
+    },
     "workshop": {
       "download": "下载该工坊项目到管理器",
       "download_pending": "正在发送下载请求",
@@ -3208,6 +3215,15 @@
       "recommendation_export": {
         "title": "推荐导出已选模组{countText}"
       }
+    },
+    "language_pack": {
+      "create_hint": "创建后会出现在界面语言和翻译管理中，但不会自动生成译文。你可以在翻译管理中逐条修改，也可以开启翻译模式，点选界面文本后实时翻译。",
+      "create_title": "创建语言包",
+      "created": "已创建语言包：{label}",
+      "custom_language": "自定义语言",
+      "display_name": "显示名称",
+      "language_code": "语言代码",
+      "select_language": "选择语言"
     },
     "load_order": {
       "import_share_code": {
@@ -4033,6 +4049,46 @@
       },
       "vram_estimate": "显存占用预估"
     },
+    "translation_manager": {
+      "auto_translate_batch": "翻译未译({count})",
+      "auto_translate_one": "自动翻译此项",
+      "batch_empty_result": "翻译器没有返回可保存的译文。",
+      "batch_save_unavailable": "当前运行环境不支持批量保存翻译。",
+      "batch_saved": "已翻译并保存 {count} 条。",
+      "blank_resets_hint": "留空保存会重置为内置译文。",
+      "current_builtin": "内置译文",
+      "description": "浏览和修改当前语言的界面翻译；保存后只写入用户语言覆盖文件。",
+      "edit_translation": "编辑译文",
+      "empty": "没有可编辑的翻译项",
+      "export_workfile": "导出待翻译文件",
+      "import_workfile": "导入翻译文件",
+      "key": "文本 key",
+      "language": "目标语言",
+      "namespace": "分类",
+      "no_batch_targets": "当前筛选范围内没有未翻译项。",
+      "no_user_override_hint": "保存后会写入用户语言覆盖文件。",
+      "provider": "翻译器",
+      "reset_saved": "翻译已重置并重新加载。",
+      "reset_unavailable": "当前运行环境不支持重置翻译。",
+      "result_count": "{count} 条",
+      "search_placeholder": "搜索 key / 原文 / 译文",
+      "source_text": "中文原文",
+      "status": "状态",
+      "status_builtin": "内置",
+      "status_overridden": "已覆盖",
+      "status_untranslated": "未翻译",
+      "title": "翻译管理",
+      "user_override_hint": "当前 key 已有用户覆盖。",
+      "workfile_empty": "没有可导入的有效译文。",
+      "workfile_export_failed": "导出翻译文件失败。",
+      "workfile_export_unavailable": "当前运行环境不支持导出翻译文件。",
+      "workfile_exported": "待翻译文件已导出。",
+      "workfile_exported_path": "导出路径：{path}",
+      "workfile_import_failed": "导入翻译文件失败。请确认文件格式正确。",
+      "workfile_import_unavailable": "当前运行环境不支持导入翻译文件。",
+      "workfile_imported": "已导入 {count} 条译文。",
+      "workfile_language_mismatch": "导入文件的目标语言是 {language}，请先切换到对应目标语言后再导入。"
+    },
     "update": {
       "confirm_install": "确认安装",
       "confirm_install_message": "压缩包已经下载到：{path}\n是否继续安装更新？安装后将重启应用程序。",
@@ -4222,9 +4278,22 @@
       "reset_failed": "重置引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。"
     },
     "i18n": {
+      "language_options_failed": "读取界面语言选项失败。请检查语言文件格式。",
+      "user_locale_create_failed": "创建语言包失败。请检查 data/locales 目录是否可写。",
+      "user_locale_create_invalid": "创建语言包失败。请确认语言代码有效。",
+      "user_locale_created": "已创建语言包：{label}",
+      "user_locale_message_delete_failed": "重置用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_message_delete_invalid": "重置用户语言文本失败。请确认文本 key 有效。",
+      "user_locale_message_deleted": "已重置翻译：{key}",
       "user_locale_message_invalid": "保存用户语言文本失败。请确认文本 key 有效。",
       "user_locale_message_save_failed": "保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
-      "user_locale_message_saved": "已保存翻译：{key}"
+      "user_locale_message_saved": "已保存翻译：{key}",
+      "user_locale_messages_invalid": "批量保存用户语言文本失败。请确认文本 key 和译文有效。",
+      "user_locale_messages_save_failed": "批量保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_messages_saved": "已保存 {count} 条翻译",
+      "workfile_export_failed": "导出翻译文件失败。请检查目标目录权限后重试。",
+      "workfile_exported": "翻译文件已导出",
+      "workfile_import_failed": "导入翻译文件失败。请确认文件格式正确后重试。"
     },
     "image": {
       "content_empty": "图片内容为空",
@@ -5869,6 +5938,9 @@
       "url": "网址",
       "workshop_id": "工坊ID"
     },
+    "option": {
+      "all": "全部"
+    },
     "position": {
       "bottom": "底部",
       "top": "顶部"
@@ -6789,10 +6861,11 @@
         "cancel_task": "取消{displayName}",
         "check_steam_status": "检查 Steam 状态",
         "clear_remote_image_cache": "清理网络图片缓存",
+        "create_user_locale": "创建语言包",
         "database_cleanup": "数据库深度清理",
         "get_remote_image_cache_stats": "获取网络图片缓存统计",
-        "get_translation_languages": "获取翻译语言列表",
         "get_translation_providers": "获取翻译器列表",
+        "get_ui_languages": "获取界面语言列表",
         "launch_game_program": "启动游戏程序",
         "load_mod_list": "加载模组列表",
         "load_startup_config": "加载启动配置",
@@ -6867,6 +6940,10 @@
         "sync_after_database_cleanup": "无效数据清理后同步模组数据",
         "sync_mod_core_data": "同步模组核心数据",
         "sync_mods_after_scan": "扫描后同步模组数据"
+      },
+      "language": {
+        "empty_locale": "已切换到 {language}，该语言包暂无翻译，界面将暂时显示默认中文。",
+        "partial_locale": "已切换到 {language}，当前语言包约完成 {progress}%，未翻译内容将显示默认中文。"
       },
       "localize": {
         "cancelled": "{title}已取消",

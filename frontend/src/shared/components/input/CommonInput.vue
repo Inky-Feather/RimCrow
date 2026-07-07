@@ -1,6 +1,6 @@
 <!-- components/common/input/CommonInput.vue -->
 <template>
-  <div class=" w-full">
+  <div class=" w-full" :class="{'opacity-85':readonly}">
     <div v-if="label" class="flex justify-between items-center  px-1 mb-1">
       <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
@@ -21,6 +21,7 @@
           :placeholder="placeholder"
           :readonly="readonly"
           class="w-full bg-transparent px-3 py-2 text-sm text-text-main focus:outline-none font-mono"
+          :class="{'cursor-default':readonly}"
         />
 
         <!-- 密码切换按钮 -->

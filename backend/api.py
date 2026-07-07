@@ -50,7 +50,7 @@ from backend.utils.tools import open_system_uri as open_uri_with_system_handler
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import get_language_options, normalize_language_code
-from backend.i18n.messages import DEFAULT_LOCALE, load_user_locale, localized_key, localized_params, save_user_locale_message, tr
+from backend.i18n.messages import DEFAULT_LOCALE, create_user_locale, delete_user_locale_message, list_user_locale_options, load_user_locale, localized_key, localized_params, save_user_locale_message, save_user_locale_messages, tr
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
@@ -1329,13 +1329,55 @@ class API:
             )
 
     @log_api_call
+    def locale_get_language_options(self):
+        """获取界面语言相关选项：完整语言映射 + 实际存在的用户语言包。"""
+        try:
+            return ApiResponse.success({
+                "registry_options": get_language_options(include_follow=False),
+                "user_locale_options": list_user_locale_options(),
+            })
+        except Exception as e:
+            return ApiResponse.error(
+                "读取界面语言选项失败",
+                code="I18N.LANGUAGE_OPTIONS_FAILED",
+                detail=e,
+                user_message=tr("api.i18n.language_options_failed", "读取界面语言选项失败。请检查语言文件格式。"),
+            )
+
+    @log_api_call
+    def locale_create_user_language(self, language: str, label: str = ""):
+        """创建用户语言包元数据文件；翻译正文仍按 key 增量写入。"""
+        try:
+            result = create_user_locale(language, label)
+            return ApiResponse.success(
+                result,
+                tr("api.i18n.user_locale_created", "已创建语言包：{label}", {"label": result.get("label") or result.get("language")}),
+            )
+        except ValueError as e:
+            return ApiResponse.warning(
+                "创建用户语言包失败",
+                code="I18N.USER_LOCALE_CREATE_INVALID",
+                detail=e,
+                context={"language": language, "label": label},
+                user_message=tr("api.i18n.user_locale_create_invalid", "创建语言包失败。请确认语言代码有效。"),
+            )
+        except Exception as e:
+            return ApiResponse.error(
+                "创建用户语言包失败",
+                code="I18N.USER_LOCALE_CREATE_FAILED",
+                detail=e,
+                context={"language": language, "label": label},
+                user_message=tr("api.i18n.user_locale_create_failed", "创建语言包失败。请检查 data/locales 目录是否可写。"),
+            )
+
+    @log_api_call
     def locale_save_user_message(self, language: str, key: str, value: str):
         """保存单条用户语言覆盖，供前端翻译模式即时更新界面文本。"""
         locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
         try:
             return ApiResponse.success(
                 save_user_locale_message(locale, key, value),
-                tr("api.i18n.user_locale_message_saved", "已保存翻译：{key}", key=key),
+                tr("api.i18n.user_locale_message_saved", "已保存翻译：{key}", {"key": key}),
             )
         except ValueError as e:
             return ApiResponse.warning(
@@ -1355,6 +1397,119 @@ class API:
                     "api.i18n.user_locale_message_save_failed",
                     "保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
                 ),
+            )
+
+    @log_api_call
+    def locale_delete_user_message(self, language: str, key: str):
+        """删除单条用户语言覆盖，让文本回到内置语言包。"""
+        locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+        try:
+            result = delete_user_locale_message(locale, key)
+            return ApiResponse.success(
+                result,
+                tr("api.i18n.user_locale_message_deleted", "已重置翻译：{key}", {"key": key}),
+            )
+        except ValueError as e:
+            return ApiResponse.warning(
+                "重置用户语言文本失败",
+                code="I18N.LOCALE_MESSAGE_DELETE_INVALID",
+                detail=e,
+                context={"language": locale, "key": key},
+                user_message=tr("api.i18n.user_locale_message_delete_invalid", "重置用户语言文本失败。请确认文本 key 有效。"),
+            )
+        except Exception as e:
+            return ApiResponse.error(
+                "重置用户语言文本失败",
+                code="I18N.LOCALE_MESSAGE_DELETE_FAILED",
+                detail=e,
+                context={"language": locale, "key": key},
+                user_message=tr(
+                    "api.i18n.user_locale_message_delete_failed",
+                    "重置用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+                ),
+            )
+
+    @log_api_call
+    def locale_save_user_messages(self, language: str, messages: dict | None):
+        """批量保存用户语言覆盖，供翻译管理一键写入多个文本。"""
+        locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+        try:
+            payload = messages if isinstance(messages, dict) else {}
+            result = save_user_locale_messages(locale, payload)
+            return ApiResponse.success(
+                result,
+                tr("api.i18n.user_locale_messages_saved", "已保存 {count} 条翻译", count=result.get("count", 0)),
+            )
+        except ValueError as e:
+            return ApiResponse.warning(
+                "批量保存用户语言文本失败",
+                code="I18N.LOCALE_MESSAGES_INVALID",
+                detail=e,
+                context={"language": locale},
+                user_message=tr("api.i18n.user_locale_messages_invalid", "批量保存用户语言文本失败。请确认文本 key 和译文有效。"),
+            )
+        except Exception as e:
+            return ApiResponse.error(
+                "批量保存用户语言文本失败",
+                code="I18N.LOCALE_MESSAGES_SAVE_FAILED",
+                detail=e,
+                context={"language": locale},
+                user_message=tr(
+                    "api.i18n.user_locale_messages_save_failed",
+                    "批量保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+                ),
+            )
+
+    @log_api_call
+    def locale_export_workfile(self, language: str, payload: dict | None, default_filename: str = ""):
+        """导出待翻译文件；默认打开 data/locales，方便用户外部翻译后再导入。"""
+        try:
+            locales_dir = DATA_DIR / "locales"
+            locales_dir.mkdir(parents=True, exist_ok=True)
+            filename = Path(str(default_filename or "")).name or f"rimcrow-locale-{normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE}.work.json"
+            target = file_mgr.save_file_dialog(
+                initial_dir=str(locales_dir),
+                default_filename=filename,
+                file_types=("JSON Files (*.json)", "All Files (*.*)"),
+            )
+            if not target:
+                return ApiResponse.warning(tr("api.file.no_file_selected", "未选择文件"))
+            target_path = Path(target)
+            if not target_path.suffix:
+                target_path = target_path.with_suffix(".json")
+            target_path.write_text(json.dumps(payload or {}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            return ApiResponse.success({"path": normalize_path_for_storage(str(target_path))}, tr("api.i18n.workfile_exported", "翻译文件已导出"))
+        except Exception as e:
+            return ApiResponse.error(
+                "导出翻译文件失败",
+                code="I18N.WORKFILE_EXPORT_FAILED",
+                detail=e,
+                user_message=tr("api.i18n.workfile_export_failed", "导出翻译文件失败。请检查目标目录权限后重试。"),
+            )
+
+    @log_api_call
+    def locale_import_workfile(self):
+        """从 data/locales 打开翻译文件并返回 JSON 内容，实际写入仍由前端确认后走批量保存。"""
+        try:
+            locales_dir = DATA_DIR / "locales"
+            locales_dir.mkdir(parents=True, exist_ok=True)
+            source = file_mgr.select_file_dialog(
+                initial_dir=str(locales_dir),
+                file_types=("JSON Files (*.json)", "All Files (*.*)"),
+            )
+            if not source:
+                return ApiResponse.warning(tr("api.file.no_file_selected", "未选择文件"))
+            with Path(source).open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            if not isinstance(payload, dict):
+                raise ValueError("翻译文件内容不是 JSON 对象")
+            return ApiResponse.success({"path": normalize_path_for_storage(source), "payload": payload})
+        except Exception as e:
+            return ApiResponse.error(
+                "导入翻译文件失败",
+                code="I18N.WORKFILE_IMPORT_FAILED",
+                detail=e,
+                user_message=tr("api.i18n.workfile_import_failed", "导入翻译文件失败。请确认文件格式正确后重试。"),
             )
     
     
@@ -7303,11 +7458,6 @@ class API:
     def translation_get_providers(self):
         """获取当前可用翻译器。"""
         return ApiResponse.success(self.translation_mgr.list_providers())
-
-    @log_api_call
-    def translation_get_language_options(self):
-        """获取翻译目标语言选项。"""
-        return ApiResponse.success(get_language_options(include_follow=False))
 
     @log_api_call
     def translation_translate_document(self, document: dict | None, target_language: str, provider: str = DEFAULT_TRANSLATION_PROVIDER):

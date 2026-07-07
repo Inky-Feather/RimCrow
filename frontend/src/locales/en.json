@@ -1463,10 +1463,6 @@
         "inactive_section_support": "\"Deactivated list\" section group support",
         "inactive_section_support_desc": "When enabled, the deactivated list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
         "interface_language": "Interface language",
-        "language": {
-          "zh_cn": "Simplified Chinese",
-          "en": "English"
-        },
         "list_icons": "List icons",
         "list_icons_desc": "Controls all icons in lists, including simple and detailed views.",
         "list_index": "List index",
@@ -1495,7 +1491,9 @@
         "visit": "Visit",
         "workshop_page": "Workshop page",
         "translation_mode": "Translation mode",
-        "translation_mode_desc": "Show the translation helper overlay. You can also press Ctrl + Shift + L to toggle it."
+        "translation_mode_desc": "Show the interface translation helper overlay. You can also press Ctrl + Shift + L to toggle it.",
+        "translation_manager": "Translation manager",
+        "create_language_pack": "Create language pack"
       },
       "features": {
         "action_prechecks": "Required checks before key actions",
@@ -2156,6 +2154,11 @@
         "translation": "Current translation",
         "provider": "Translator"
       }
+    },
+    "common": {
+      "status": {
+        "processing": "Processing"
+      }
     }
   },
   "tooltip": {
@@ -2578,6 +2581,10 @@
         "close": "Close translation mode",
         "minimize": "Minimize to floating button"
       }
+    },
+    "translation_manager": {
+      "export_workfile": "Export a full work file for the target language, including Chinese source text and current translations. Use it with external translation tools, then import it back.",
+      "import_workfile": "Import an externally translated file and save valid translations into the current target language pack."
     }
   },
   "toast": {
@@ -4055,6 +4062,55 @@
       "delete_batch": {
         "message": "Delete these {count} files/folders?"
       }
+    },
+    "translation_manager": {
+      "auto_translate_one": "Auto translate this item",
+      "current_builtin": "Built-in translation",
+      "description": "Browse and edit interface translations for the selected language. Saved changes are written only to the user locale override file.",
+      "edit_translation": "Edit translation",
+      "empty": "No editable translation items",
+      "key": "Text key",
+      "language": "Target language",
+      "namespace": "Category",
+      "no_user_override_hint": "Saving will write this text to the user locale override file.",
+      "provider": "Translator",
+      "result_count": "{count} items",
+      "search_placeholder": "Search key / source / translation",
+      "source_text": "Chinese source text",
+      "status": "Status",
+      "status_builtin": "Built-in",
+      "status_overridden": "Overridden",
+      "status_untranslated": "Untranslated",
+      "title": "Translation manager",
+      "user_override_hint": "This key already has a user override.",
+      "auto_translate_batch": "Translate missing ({count})",
+      "batch_save_unavailable": "Batch saving translations is not supported in the current runtime.",
+      "batch_saved": "Translated and saved {count} item(s).",
+      "no_batch_targets": "There are no untranslated items in the current filter.",
+      "batch_empty_result": "The translator did not return any text that can be saved.",
+      "blank_resets_hint": "Saving a blank value resets this item to the built-in translation.",
+      "reset_saved": "Translation reset and reloaded.",
+      "reset_unavailable": "Resetting translations is not supported in the current runtime.",
+      "export_workfile": "Export translation file",
+      "import_workfile": "Import translation file",
+      "workfile_empty": "No valid translations were found to import.",
+      "workfile_exported": "Translation work file exported.",
+      "workfile_import_failed": "Failed to import the translation file. Check that the file format is valid.",
+      "workfile_imported": "Imported {count} translation(s).",
+      "workfile_export_failed": "Failed to export the translation file.",
+      "workfile_export_unavailable": "This runtime does not support exporting translation files.",
+      "workfile_exported_path": "Export path: {path}",
+      "workfile_import_unavailable": "This runtime does not support importing translation files.",
+      "workfile_language_mismatch": "The imported file targets {language}. Switch to that target language before importing."
+    },
+    "language_pack": {
+      "create_hint": "After creation, this language appears in Interface language and Translation manager, but translations are not generated automatically. Edit them there one by one, or enable Translation mode and click UI text to translate it live.",
+      "create_title": "Create language pack",
+      "created": "Created language pack: {label}",
+      "display_name": "Display name",
+      "language_code": "Language code",
+      "select_language": "Select language",
+      "custom_language": "Custom language"
     }
   },
   "api": {
@@ -4525,7 +4581,20 @@
     "i18n": {
       "user_locale_message_invalid": "Failed to save the user locale text. Check that the text key is valid.",
       "user_locale_message_save_failed": "Failed to save the user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
-      "user_locale_message_saved": "Saved translation: {key}"
+      "user_locale_message_saved": "Saved translation: {key}",
+      "user_locale_messages_invalid": "Failed to batch save user locale text. Check that the text keys and translations are valid.",
+      "user_locale_messages_save_failed": "Failed to batch save user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_messages_saved": "Saved {count} translation(s)",
+      "user_locale_message_delete_failed": "Failed to reset the user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_message_delete_invalid": "Failed to reset the user locale text. Check that the text key is valid.",
+      "user_locale_message_deleted": "Reset translation: {key}",
+      "user_locale_create_failed": "Failed to create the language pack. Check whether the data/locales directory is writable.",
+      "user_locale_create_invalid": "Failed to create the language pack. Check that the language code is valid.",
+      "user_locale_created": "Created language pack: {label}",
+      "language_options_failed": "Failed to read interface language options. Check the language file format.",
+      "workfile_export_failed": "Failed to export the translation file. Check the target folder permissions and try again.",
+      "workfile_exported": "Translation file exported",
+      "workfile_import_failed": "Failed to import the translation file. Check that the file format is valid and try again."
     }
   },
   "errors": {
@@ -5771,6 +5840,9 @@
     "run_command": {
       "popup_window": "Borderless window mode",
       "quick_test": "Quick test"
+    },
+    "option": {
+      "all": "All"
     }
   },
   "confirm": {
@@ -5818,7 +5890,6 @@
         "clear_remote_image_cache": "Clear remote image cache",
         "database_cleanup": "Clean invalid database data",
         "get_remote_image_cache_stats": "Get remote image cache stats",
-        "get_translation_languages": "Get translation languages",
         "get_translation_providers": "Get translation providers",
         "launch_game_program": "Launch game program",
         "load_mod_list": "Load mod list",
@@ -5832,7 +5903,9 @@
         "startup_inventory_check": "Check startup inventory",
         "sync_mod_core_data": "Sync mod core data",
         "sync_mod_data": "Sync mod data",
-        "sync_after_inventory_cleanup": "Sync mod data after cleaning inventory records"
+        "sync_after_inventory_cleanup": "Sync mod data after cleaning inventory records",
+        "create_user_locale": "Create language pack",
+        "get_ui_languages": "Get interface language list"
       },
       "backend_popup": {
         "title": "System message"
@@ -5940,6 +6013,10 @@
       },
       "update": {
         "download_failed": "Failed to download update package. Check network connection, proxy settings, and disk space, then try again later."
+      },
+      "language": {
+        "empty_locale": "Switched to {language}. This language pack has no translations yet, so the interface will temporarily use default Chinese text.",
+        "partial_locale": "Switched to {language}. This language pack is about {progress}% translated; untranslated text will use default Chinese."
       }
     },
     "i18n": {

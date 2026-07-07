@@ -7,19 +7,29 @@
                 </h3>
                 <div class="space-y-6">
                   <div class="grid grid-cols-2 gap-4">
-                    <CommonSelect :label="t('ui.settings.general.interface_language', '界面语言')" v-model="formData.language" :options="languageOptions" />
+                    <div class="flex items-end gap-2">
+                      <CommonSelect class="min-w-0 flex-1" :label="t('ui.settings.general.interface_language', '界面语言')" v-model="formData.language" :options="languageOptions" />
+                      <button type="button" class="h-9 shrink-0 rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
+                        @click="openLanguageCreate">
+                        {{ t('ui.settings.general.create_language_pack', '创建语言包') }}
+                      </button>
+                      <button type="button" class="h-9 shrink-0 rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
+                        @click="appStore.uiState.showTranslationManager = true">
+                        {{ t('ui.settings.general.translation_manager', '翻译管理') }}
+                      </button>
+                    </div>
                     <ThemeSelect v-if="formData.ui" v-model="currentThemeId" :themes="appStore.themes"
                       @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
                     />
-                    <CommonSwitch :label="t('ui.settings.general.translation_mode', '翻译模式')" v-model="translationMode" :description="t('ui.settings.general.translation_mode_desc', '开启后显示翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。')" />
-                  </div>
-                  <CommonSwitch :label="t('ui.settings.general.open_url_in_system_browser', '在系统浏览器中打开 URL')" v-model="formData.open_url_on_system" :description="t('ui.settings.general.open_url_in_system_browser_desc', '关闭则使用内置浏览器')" />
-                  <div class="grid grid-cols-2 gap-4">
+                    <CommonSwitch class="flex-1" :label="t('ui.settings.general.translation_mode', '翻译模式')" v-model="translationMode" :description="t('ui.settings.general.translation_mode_desc', '开启后显示界面翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。')" />
                     <CommonNumber :label="t('ui.settings.general.font_size', '字体大小')" :description="t('ui.settings.general.font_size_desc', '控制界面字体大小，影响所有控件的内容显示')" v-model="formData.ui.font_size" :step="1" :min="8" :max="40" />
+                    
+                  </div>
+                  <div class="grid grid-cols-2 gap-4">
                     <CommonNumber :label="t('ui.settings.general.tooltip_hover_time', '提示悬停时间')" :description="t('ui.settings.general.tooltip_hover_time_desc', '控制悬浮提示信息的等待时间，单位是毫秒')" v-model="formData.ui.tooltip_hover_time" :step="100" :min="100" :max="5000" />
                     <CommonNumber :label="t('ui.settings.general.drag_delay', '拖动判定延迟')" :description="t('ui.settings.general.drag_delay_desc', '控制列表项拖动操作的判定延迟，单位是毫秒，默认值为 30 毫秒，为 0 时可能使点击操作出现抖动。')" v-model="formData.ui.drag_delay" :step="10" :min="0" :max="500" />
-                    <div></div>
-                    
+                    <CommonSwitch :label="t('ui.settings.general.open_url_in_system_browser', '在系统浏览器中打开 URL')" v-model="formData.open_url_on_system" :description="t('ui.settings.general.open_url_in_system_browser_desc', '关闭则使用内置浏览器')" />
+                  
                     <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
                       <span class="col-span-2 ml-2 mt-2 text-sm font-bold tracking-wide">{{ t('ui.settings.general.list_settings', '列表设定') }}
                         <label v-tooltip="t('tooltip.settings.general.list_settings', '可调整列表的显示方式与辅助功能')" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
@@ -112,20 +122,39 @@
                     
                   </div>
                 </div>
+                <CommonModalShell :show="showLanguageCreate" :title="t('dialog.language_pack.create_title', '创建语言包')" size="custom" panel-class="!h-fit w-[min(28rem,94vw)]" content-class="!flex-none !basis-auto !grow-0 px-5 pb-5" :z-index="180" accent="primary" @close="showLanguageCreate = false">
+                  <div class="space-y-3">
+                    <CommonSelect v-model="languagePreset" :label="t('dialog.language_pack.select_language', '选择语言')" :options="createLanguageOptions" show-bottom />
+                    <CommonInput v-model="languageCode" :label="t('dialog.language_pack.language_code', '语言代码')" placeholder="ja" :readonly="!isCustomLanguage" />
+                    <CommonInput v-model="languageLabel" :label="t('dialog.language_pack.display_name', '显示名称')" placeholder="日本語" :readonly="!isCustomLanguage" />
+                    <p class="text-xs leading-5 text-text-dim">{{ t('dialog.language_pack.create_hint', '创建后会出现在界面语言和翻译管理中，但不会自动生成译文。你可以在翻译管理中逐条修改，也可以开启翻译模式，点选界面文本后实时翻译。') }}</p>
+                    <div class="flex justify-end gap-2 pt-2">
+                      <button type="button" class="rounded-lg bg-bg-overlay/8 px-3 py-2 text-xs font-bold text-text-main hover:bg-bg-overlay/14" @click="showLanguageCreate = false">
+                        {{ t('common.action.cancel', '取消') }}
+                      </button>
+                      <button type="button" class="rounded-lg bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary hover:bg-accent-primary/85 disabled:opacity-50" :disabled="creatingLanguage || !languageCode.trim()" @click="createLanguagePack">
+                        {{ creatingLanguage ? t('ui.common.status.processing', '处理中') : t('common.action.create', '创建') }}
+                      </button>
+                    </div>
+                  </div>
+                </CommonModalShell>
               </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
+import CommonInput from '../../../shared/components/input/CommonInput.vue'
+import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import ThemeSelect from '../theme/ThemeSelect.vue'
 import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, normalizeTheme } from '../theme/themeManager'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useGuideStore } from '../../guide/guideStore'
 import { t } from '../../../shared/i18n'
+import { toast } from '../../../shared/lib/common'
 
 const props = defineProps({
   formData: { type: Object, required: true },
@@ -136,11 +165,58 @@ const guideStore = useGuideStore()
 const confirmStore = useConfirmStore()
 
 const layoutDragState = ref({ key: '', fromIndex: -1, overIndex: -1 })
+const showLanguageCreate = ref(false)
+const creatingLanguage = ref(false)
+const languagePreset = ref('')
+const languageCode = ref('')
+const languageLabel = ref('')
+const CUSTOM_LANGUAGE_VALUE = '__custom__'
 
-const languageOptions = computed(() => [
-  { label: t('ui.settings.general.language.zh_cn', '简体中文'), value: 'zh-CN' },
-  { label: t('ui.settings.general.language.en', 'English'), value: 'en' },
+const languageOptions = computed(() => appStore.uiLanguageOptions)
+const createLanguageOptions = computed(() => [
+  ...appStore.translationLanguageOptions.filter(item => !languageOptions.value.some(option => option.value === item.value)),
+  { label: t('dialog.language_pack.custom_language', '自定义语言'), value: CUSTOM_LANGUAGE_VALUE },
 ])
+const isCustomLanguage = computed(() => languagePreset.value === CUSTOM_LANGUAGE_VALUE)
+
+const openLanguageCreate = async () => {
+  await appStore.ensureLanguageOptions(true)
+  const first = createLanguageOptions.value[0] || {}
+  languagePreset.value = first.value || ''
+  languageCode.value = first.value === CUSTOM_LANGUAGE_VALUE ? '' : (first.value || '')
+  languageLabel.value = first.value === CUSTOM_LANGUAGE_VALUE ? '' : (first.label || '')
+  showLanguageCreate.value = true
+}
+
+const createLanguagePack = async () => {
+  if (!languageCode.value.trim()) return
+  creatingLanguage.value = true
+  try {
+    const result = await appStore.createUserLocale(languageCode.value, languageLabel.value)
+    if (!result) return
+    props.formData.language = result.language
+    toast.success(t('dialog.language_pack.created', '已创建语言包：{label}', { label: result.label || result.language }))
+    showLanguageCreate.value = false
+  } finally {
+    creatingLanguage.value = false
+  }
+}
+
+watch(languagePreset, (value) => {
+  if (value === CUSTOM_LANGUAGE_VALUE) {
+    languageCode.value = ''
+    languageLabel.value = ''
+    return
+  }
+  const option = appStore.translationLanguageOptions.find(item => item.value === value)
+  if (!option) return
+  languageCode.value = option.value
+  languageLabel.value = option.label
+})
+
+watch(() => appStore.uiState.showSettingsPanel, (visible) => {
+  if (visible) void appStore.ensureUiLanguageOptions(true)
+}, { immediate: true })
 
 const translationMode = computed({
   get: () => !!appStore.translationModeEnabled,
